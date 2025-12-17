@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    /* Language & runtime */
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    /* Node ESM compatibility */
+    "module": "Node16",
+    "moduleResolution": "node16",
+
+    /* Project structure */
+    "rootDir": "src",
+    "outDir": "dist",
+
+    /* Type safety */
+    "strict": true,
+
+    /* Interop */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* Build quality */
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* DX */
+    "sourceMap": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

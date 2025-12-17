@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: pixelet-db
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: pixelet
+      POSTGRES_PASSWORD: pixelet
+      POSTGRES_DB: pixelet
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
