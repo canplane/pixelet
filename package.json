@@ -1,0 +1,36 @@
+{
+  "name": "pixelet",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pixel, here.",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "pnpm -C apps/web dev",
+    "dev:api": "pnpm -C apps/api dev",
+    "dev": "concurrently -k -n web,api -c blue,green \"pnpm run dev:web\" \"pnpm run dev:api\"",
+    "build:web": "pnpm -C apps/web build",
+    "build:api": "pnpm -C apps/api build",
+    "build": "concurrently -k -n web,api -c blue,green \"pnpm run build:web\" \"pnpm run build:api\"",
+    "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\"",
+    "lint:fix": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\" --fix",
+    "format": "prettier \"**/*.{ts,tsx,js,jsx,json,md}\" --write",
+    "format:check": "prettier \"**/*.{ts,tsx,js,jsx,json,md}\" --check",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.8",
+    "concurrently": "^9.0.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "prettier": "^3.7.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.50.0"
+  }
+}
