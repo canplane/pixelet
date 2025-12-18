@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTimeout } from '@/shared/lib/hooks/use-timer';
+import { useSyncLocation } from '@/entities/device-location/model/use-sync-location';
 
 /**
  * Constants for initialization timing (in milliseconds)
@@ -30,6 +31,8 @@ type AppInitResult = {
  */
 export function useAppInit(): AppInitResult {
   const [loadState, setLoadState] = useState<LoadState>('success');
+
+  useSyncLocation();
 
   // // Use a ref to access the latest state within timeouts without re-triggering them
   // const loadStateRef = useRef(loadState);

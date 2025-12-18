@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 
-import { AppContext } from '@/app/providers/app-context';
+import { AppContext } from '../providers/app-context';
 
-import { useAppInit } from '@/app/hooks/use-app-init';
-import { useUiController } from '@/app/hooks/use-ui-controller';
-import { ModalManager } from '@/app/providers/modal-manager';
+import { useAppInit } from '../hooks/use-app-init';
+import { useUiController } from '../hooks/use-ui-controller';
+import { ModalManager } from '../providers/modal-manager';
 
 /** Loading page */
 function LoadingPage() {

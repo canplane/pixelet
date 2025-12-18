@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 
-import type { UiController } from '@/app/types/ui.types';
+import type { UiController } from '../types/ui.types';
 
 /**
  * Hook for managing the global UI controller.

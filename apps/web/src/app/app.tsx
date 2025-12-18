@@ -1,6 +1,6 @@
-import { AppRouter } from '@/app/router/app-router';
+import { AppRouter } from './router/app-router';
 
-import { DevPanel } from '@/app/dev/dev-panel';
+import { DevPanel } from './dev/dev-panel';
 
 const IS_DEV = import.meta.env.DEV;
 

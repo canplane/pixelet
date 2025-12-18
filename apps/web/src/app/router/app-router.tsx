@@ -6,10 +6,10 @@ import {
 } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 
-import { AppLayout } from '@/app/layouts/app-layout';
-import { ScrollToTop } from '@/app/router/helpers/scroll-to-top';
+import { ScrollToTop } from './helpers/scroll-to-top';
+import { devRoutes } from '../dev/dev-routes';
+import { AppLayout } from '../ui/app-layout';
 import IndexPage from '@/pages/index-page';
-import { devRoutes } from '@/app/dev/dev-routes';
 
 const IS_DEV = import.meta.env.DEV;
 
