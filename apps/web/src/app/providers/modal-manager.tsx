@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 
-import type { UiController, ModalController } from '@/app/types/ui.types';
+import type { UiController, ModalController } from '../types/ui.types';
 
-import { EditFooModal } from '@/features/foo/components/edit-foo-modal';
-import type { EditFooProps } from '@/features/foo/components/edit-foo-modal';
+import { EditFooModal } from '@/features/manage-foo/ui/edit-foo-modal';
+import type { EditFooProps } from '@/features/manage-foo/ui/edit-foo-modal';
 
 /**
  * Represents the currently active modal state.

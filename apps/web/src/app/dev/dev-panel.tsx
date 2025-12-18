@@ -1,4 +1,4 @@
-import { LanguageToggleButton } from '@/app/dev/language-toggle-button';
+import { LanguageToggleButton } from './language-toggle-button';
 
 /** Debugging UI */
 export function DevPanel() {
