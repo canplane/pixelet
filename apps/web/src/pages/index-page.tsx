@@ -1,6 +1,6 @@
 import { useAppContext } from '@/app/providers/app-context';
 
-import { MapScene } from '@/features/map-three/ui/map-scene';
+import { MapScene } from '@/features/map-three/ui/scene/map-scene';
 import { MapTiler } from '@/features/map-tiler/ui/map-tiler';
 
 /** Index page */

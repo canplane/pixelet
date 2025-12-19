@@ -1,29 +1,30 @@
 {
   "compilerOptions": {
-    /* Language & runtime */
+    /* 프로젝트 참조 및 빌드 최적화 */
+    "composite": true, // 프로젝트 참조 기능을 활성화
+    "incremental": true, // 변경된 부분만 빌드하여 속도 향상
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo", // 증분 빌드 캐시 파일 경로
+
+    /* 언어 및 런타임 환경 */
     "target": "ES2022",
     "lib": ["ES2022"],
 
-    /* Node ESM compatibility */
+    /* 모듈 해석 전략 */
     "module": "Node16",
     "moduleResolution": "node16",
 
-    /* Project structure */
+    /* 출력 설정 */
     "rootDir": "src",
     "outDir": "dist",
 
-    /* Type safety */
+    /* 엄격한 타입 검사 */
     "strict": true,
-
-    /* Interop */
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-
-    /* Build quality */
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
 
-    /* DX */
+    /* 상호 운용성 및 기타 */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "resolveJsonModule": true
   },

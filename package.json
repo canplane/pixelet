@@ -21,7 +21,7 @@
     "lint:fix": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\" --fix",
     "format": "prettier \"**/*.{ts,tsx,js,jsx,json,md}\" --write",
     "format:check": "prettier \"**/*.{ts,tsx,js,jsx,json,md}\" --check",
-    "typecheck": "tsc -b"
+    "typecheck": "pnpm -r --parallel typecheck"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",

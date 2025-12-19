@@ -1,16 +1,15 @@
-/**
- * Node (점): 위도(lat)와 경도(lon)를 직접 가집니다.
- * Way (선/면): 여러 노드의 ID 목록(nodes: [123, 456, ...])만 가지고 있으며, 개별 노드의 좌표는 포함하지 않는 것이 기본 응답값입니다. [1, 2]
- * Relation (관계): 여러 노드, 선, 또는 다른 관계들의 묶음이므로 자체 좌표가 없습니다.
- */
+// 이 파일은 OpenStreetMap(OSM)의 Overpass API로부터 수신되는 지리 데이터의 구조를 정의합니다.
 
 /**
  * Overpass API의 개별 요소 타입
+ * - node: 점 데이터 (위경도 직접 보유)
+ * - way: 선 또는 면 데이터 (노드들의 집합)
+ * - relation: 여러 요소들의 논리적 묶음
  */
 export type ElementType = 'node' | 'way' | 'relation';
 
 /**
- * 위경도 좌표 객체
+ * 위경도 좌표 객체 (OSM 표준 규격: lat, lon)
  */
 export interface LatLng {
   lat: number;
@@ -19,6 +18,7 @@ export interface LatLng {
 
 /**
  * Overpass API 응답의 개별 요소 (Element)
+ * API 쿼리 옵션(out center, out geom 등)에 따라 포함되는 속성이 달라집니다.
  */
 export interface OverpassElement {
   type: ElementType;

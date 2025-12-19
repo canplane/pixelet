@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": true, // 다른 패키지에서 참조할 때 타입을 읽기 위함
+    "declarationMap": true, // IDE에서 소스 코드로 바로 이동하기 위함
+    "composite": true, // 모노레포의 다른 프로젝트가 참조할 때 성능 향상
+    "noEmit": true, // 타입 검사용으로만 사용
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src"]
+}
