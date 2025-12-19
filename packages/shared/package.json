@@ -2,6 +2,9 @@
   "name": "@pixelet/shared",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -11,5 +14,8 @@
       "types": "./src/types/index.ts",
       "default": "./src/types/index.ts"
     }
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

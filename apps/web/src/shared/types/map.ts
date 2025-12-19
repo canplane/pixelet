@@ -1,15 +1,16 @@
-/**
- * 실제 지구의 위경도 좌표 [longitude, latitude]
- */
-export type LngLat = [number, number];
+/** 지구상의 위경도 및 고도 좌표 */
+export type Location = {
+  lng: number;
+  alt?: number; // 고도 (단위: meter, 해수면 기준)
+  lat: number;
+};
 
-/**
- * Three.js 3D 공간에서의 좌표 [x, y, z]
- * 보통 y는 높이(0)를 의미합니다.
- */
-type WorldPos = [number, number, number];
-export type AbsoluteWorldPos = WorldPos; // 전역 고정 원점 기준
-export type RelativeWorldPos = WorldPos; // 현재 origin 기준
+/** 3D 월드 내 절대 좌표 (단위: meter) */
+export interface MeterPos {
+  x: number;
+  y: number; // 3D 공간에서의 높이값
+  z: number;
+}
 
 /**
  * 카메라 관련 데이터 (거리, 회전각 등)

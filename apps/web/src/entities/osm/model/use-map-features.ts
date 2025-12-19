@@ -1,65 +1,72 @@
+// 1. 외부 라이브러리 (External Libraries)
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchOsmData } from '../api/overpass.api';
+
+// 2. 프로젝트 공통 타입 및 설정 (Shared)
+import type { Location } from '@/shared/types/map';
+import { OSM_CONFIG } from '../config/osm-config';
+
+// 3. API 및 도메인 로직 (Entities / Features)
+import { requestOverpass } from '../api/overpass.api';
 import { MAP_QUERIES } from '../lib/overpass-queries';
 import type { OverpassElement, OverpassResponse } from '../model/types';
-import type { LngLat } from '@/shared/types/map';
-import { OSM_CONFIG } from '../config/osm-config';
 
 /**
  * 하버사인(Haversine) 공식을 이용한 두 위경도 사이의 직선 거리(m) 계산
  */
-function getDistance(pos1: LngLat, pos2: LngLat): number {
-  const R = 6371e3; // 지구 반지름 (meters)
-  const dLat = ((pos2[1] - pos1[1]) * Math.PI) / 180;
-  const dLon = ((pos2[0] - pos1[0]) * Math.PI) / 180;
+function getDistance(pos1: Location, pos2: Location): number {
+  const R = 6371e3; // 지구 반지름 (m)
+  const dLat = ((pos2.lat - pos1.lat) * Math.PI) / 180;
+  const dLon = ((pos2.lng - pos1.lng) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((pos1[1] * Math.PI) / 180) *
-      Math.cos((pos2[1] * Math.PI) / 180) *
+    Math.cos((pos1.lat * Math.PI) / 180) *
+      Math.cos((pos2.lat * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
+/**
+ * OSM 데이터를 관리하고 실시간 위치 변화에 따라 데이터를 점진적으로 로드하는 훅입니다.
+ * - 거리 기반 요청 제어 (Distance Threshold)
+ * - 시간 기반 요청 제어 (Throttle)
+ * - 거리 기반 메모리 정리 (Cleanup)
+ */
 export function useMapFeatures(
   queryName: keyof typeof MAP_QUERIES,
-  lngLat: LngLat | null,
+  location: Location | null,
   radius: number = OSM_CONFIG.DEFAULT_RADIUS,
 ) {
-  // 1. 초기값을 null이 아닌 빈 배열 객체로 설정 (에러 방지)
   const [osmData, setOsmData] = useState<OverpassResponse>({ elements: [] });
-  const [loading, setLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
   const [canRequest, setCanRequest] = useState<boolean>(true);
   const lastRequestTimeRef = useRef<number>(0);
-  const lastRequestPosRef = useRef<LngLat | null>(null);
+  const lastRequestPosRef = useRef<Location | null>(null);
 
-  // [보강] 데이터 병합 및 거리 기반 청소 로직
+  /**
+   * [데이터 병합 및 메모리 관리]
+   * 중복을 제거하고 현재 위치에서 임계치 이상 멀어진 데이터를 제거합니다.
+   */
   const mergeAndCleanup = useCallback(
-    (newElements: OverpassElement[], currentCenter: LngLat) => {
+    (newElements: OverpassElement[], currentCenter: Location) => {
       setOsmData((prev) => {
-        // 1. 기존 데이터 + 신규 데이터 합치기
         const combined = [...prev.elements, ...newElements];
 
-        // 2. ID 중복 제거 및 거리 기반 필터링 (CLEANUP_THRESHOLD 기준)
         const uniqueAndNearby = combined.filter((el, index, self) => {
-          // 중복 체크
+          // 1. ID 기반 중복 제거
           const isFirst = index === self.findIndex((t) => t.id === el.id);
           if (!isFirst) return false;
 
-          // 거리 체크용 좌표 추출 (center 우선, 없으면 geometry[0])
-          const coord = el.center
-            ? [el.center.lon, el.center.lat]
-            : el.geometry?.[0]
-              ? [el.geometry[0].lon, el.geometry[0].lat]
-              : null;
+          // 2. 현재 중심점으로부터의 거리 계산
+          const lat = el.center?.lat ?? el.lat ?? el.geometry?.[0]?.lat;
+          const lon = el.center?.lon ?? el.lon ?? el.geometry?.[0]?.lon;
 
-          if (coord) {
-            const dist = getDistance(coord as LngLat, currentCenter);
-            const isTooFar = dist > OSM_CONFIG.CLEANUP_THRESHOLD;
-            return !isTooFar; // 너무 멀면 버리고(false), 가까우면 유지(true)
+          if (lat !== undefined && lon !== undefined) {
+            const dist = getDistance({ lat, lng: lon }, currentCenter);
+            return dist <= OSM_CONFIG.CLEANUP_THRESHOLD;
           }
 
           return true;
@@ -72,50 +79,46 @@ export function useMapFeatures(
   );
 
   useEffect(() => {
-    // MapScene의 fetchCenter가 들어올 때까지 대기
-    if (!lngLat || !canRequest) return;
+    if (!location || !canRequest) return;
 
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTimeRef.current;
-
+    // A. 거리 기반 제어: 최소 이동 거리 검증
     if (lastRequestPosRef.current) {
-      const movedDistance = getDistance(lastRequestPosRef.current, lngLat);
+      const movedDistance = getDistance(lastRequestPosRef.current, location);
       if (movedDistance < OSM_CONFIG.DISTANCE_THRESHOLD) return;
     }
 
-    if (timeSinceLastRequest < OSM_CONFIG.REQUEST_INTERVAL) return;
+    // B. 시간 기반 제어: 최소 요청 간격 검증
+    const now = Date.now();
+    if (now - lastRequestTimeRef.current < OSM_CONFIG.REQUEST_INTERVAL) return;
 
     const loadData = async () => {
-      const query: string = MAP_QUERIES[queryName]({ lngLat, radius });
+      // 이전에 정의한 쿼리 매개변수 구조 { location, radius } 반영
+      const query = MAP_QUERIES[queryName]({ location, radius });
 
-      setLoading(true);
+      setIsLoading(true);
       setCanRequest(false);
-      lastRequestTimeRef.current = Date.now();
-      lastRequestPosRef.current = lngLat;
+      lastRequestTimeRef.current = now;
+      lastRequestPosRef.current = location;
 
       try {
-        const data: OverpassResponse = await fetchOsmData(query);
-        // [수정 포인트] mergeAndCleanup을 호출하여 데이터 누적 및 먼 데이터 삭제 실행
+        const data = await requestOverpass(query);
         if (data.elements) {
-          mergeAndCleanup(data.elements, lngLat);
+          mergeAndCleanup(data.elements, location);
         }
         setError(null);
       } catch (err) {
-        console.error('[OSM] 데이터 요청 실패:', err);
-        setError(err instanceof Error ? err : new Error('Unknown error'));
+        setError(
+          err instanceof Error ? err : new Error('Overpass request failed'),
+        );
       } finally {
-        setLoading(false);
+        setIsLoading(false);
+        // 인터벌 시간이 흐른 뒤 다시 요청이 가능하도록 락 해제
         setTimeout(() => setCanRequest(true), OSM_CONFIG.REQUEST_INTERVAL);
       }
     };
 
     loadData();
-  }, [lngLat, radius, canRequest, queryName, mergeAndCleanup]);
+  }, [location, radius, canRequest, queryName, mergeAndCleanup]);
 
-  return {
-    osmData,
-    loading,
-    error,
-    isWaiting: !canRequest && !loading,
-  };
+  return { osmData, isLoading, error, isWaiting: !canRequest && !isLoading };
 }

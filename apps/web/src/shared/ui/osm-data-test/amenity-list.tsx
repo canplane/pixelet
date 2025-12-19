@@ -1,43 +1,54 @@
-// import { useNearbyAmenities } from '../model/use-nearby-amenities';
+// 1. 엔티티 및 상태 관리 (Entities)
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
 import { useMapFeatures } from '@/entities/osm/model/use-map-features';
 
-/** Test OSM Data */
+/**
+ * 내 주변 편의시설 목록 테스트 컴포넌트
+ * 기기의 실시간 Location을 기반으로 OSM 데이터를 쿼리합니다.
+ */
 export const AmenityList = () => {
-  // 1. 기기 실제 GPS 위치
-  const { lngLat: deviceLngLat, status } = useDeviceLocationStore();
+  // 1. 기기 실제 GPS 위치 (Location 객체 구조: { lng, lat })
+  const { location: deviceLocation, status } = useDeviceLocationStore();
 
-  // 2. API 호출
+  // 2. OSM 데이터 호출 (쿼리 키와 위치 정보 전달)
   const {
     osmData: data,
-    loading,
+    isLoading,
     error,
-    isWaiting,
-  } = useMapFeatures('AMENITIES', deviceLngLat);
+  } = useMapFeatures('AMENITIES', deviceLocation);
 
-  if (loading) return <p>주변 시설 정보를 불러오는 중...</p>;
-  if (error) return <p>에러 발생: {error.message}</p>;
-  if (!data || !data.elements || data.elements.length === 0)
-    return <p>주변에 시설이 없습니다.</p>;
+  // 3. 상태별 렌더링 처리
+  if (status !== 'ready') return <p>📍 위치 권한을 확인하고 있습니다...</p>;
+  if (isLoading) return <p>🔍 주변 시설 정보를 불러오는 중...</p>;
+  if (error) return <p>⚠️ 에러 발생: {error.message}</p>;
+  if (!data?.elements || data.elements.length === 0)
+    return <p>📭 주변에 시설이 없습니다.</p>;
 
   return (
-    <div>
-      <h2>내 주변 편의시설 ({data.elements.length}곳)</h2>
-      <ul>
+    <div className="p-4 bg-white/90 rounded-lg shadow-lg max-h-[400px] overflow-y-auto">
+      <h2 className="text-lg font-bold mb-3">
+        내 주변 편의시설 ({data.elements.length}곳)
+      </h2>
+      <ul className="space-y-2 text-sm">
         {data.elements.map((item, index) => {
-          // center가 있는 경우와 직접 lat/lon이 있는 경우를 모두 체크
-          const pos = item.geometry ?? [item.lat, item.lon];
-          //   const latitude = element.lat ?? element.center?.lat;
-          //   const longitude = element.lon ?? element.center?.lon;
-          const { tags } = item;
+          const { tags, lat, lon } = item;
+
+          // Overpass 노드는 lat, lon이 직접 포함되며,
+          // geometry 옵션 사용 시 item.geometry[0] 등으로도 접근 가능합니다.
+          const displayLat = lat?.toFixed(5);
+          const displayLng = lon?.toFixed(5);
 
           return (
-            <li key={item.id}>
-              [{index}] {/* ID: {item.id} | */}
-              유형: {tags?.amenity || '알 수 없음'} | 이름: {tags?.name}
-              <br />
-              좌표: {JSON.stringify(pos)}
-              {/* 좌표: {latitude?.toFixed(4)}, {longitude?.toFixed(4)} */}
+            <li key={item.id} className="border-b pb-2 last:border-0">
+              <div className="font-medium text-blue-600">
+                [{index + 1}] {tags?.name || '이름 없음'}
+              </div>
+              <div className="text-gray-600">
+                유형: <span className="badge">{tags?.amenity || '기타'}</span>
+              </div>
+              <div className="text-[10px] text-gray-400">
+                위치: {displayLat}, {displayLng}
+              </div>
             </li>
           );
         })}
