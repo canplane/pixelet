@@ -3,14 +3,14 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import type { MapInfra } from '../../lib/osm-parser';
 import { THREE_CONFIG } from '../../model/three-config';
-import { useMapStore } from '../../model/map-store'; // 🚀 오프셋 구독을 위해 추가
+import { useMapNavigation } from '../../model/use-map-navigation';
 
 export const OsmInfraItem = React.memo(({ infra }: { infra: MapInfra }) => {
   const objectRef = useRef<THREE.Object3D>(null);
 
   // 🚀 [Floating Origin] 전역 오프셋 구독
   // 이 값이 변하면 OsmInfraItem이 리렌더링되며 위치를 재계산합니다.
-  const originOffset = useMapStore((state) => state.originOffset);
+  const { originOffset } = useMapNavigation();
 
   const isMeshType =
     (infra.type === 'building' ||

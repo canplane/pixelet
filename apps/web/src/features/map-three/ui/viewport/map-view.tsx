@@ -4,7 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 
 // 4. 현재 기능 전용 모델 및 설정 (Feature: map-three)
-import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { THREE_CONFIG } from '../../model/three-config';
 
 // 5. 현재 기능 내부 컴포넌트 및 오버레이 (Internal UI)
@@ -24,7 +24,8 @@ const { FAR_CLIP } = THREE_CONFIG.RENDERING;
 export function MapView() {
   const worldGroupRef = useRef<THREE.Group>(null);
 
-  const themeKey = useMapStore((state) => state.getThemeKey());
+  const { themeKey } = useMapNavigation();
+
   const currentTheme = MAP_THEMES[themeKey];
 
   return (

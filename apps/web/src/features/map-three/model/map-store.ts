@@ -26,6 +26,22 @@ export interface ViewState {
   altitude: number;
 }
 
+/**
+ * 🌐 [좌표 시스템 정의 가이드]
+ * * 1. center (절대 주소 / 스냅 NO)
+ * - 실제 지구상의 위경도를 미터로 변환한 "진짜 주소".
+ * - 부드러운 카메라 이동과 정밀한 GPS 추적을 위해 소수점 단위를 그대로 유지함.
+ * * 2. origin (절대 주소 / 스냅 YES)
+ * - 월드가 생성된 시점의 "기준 주소".
+ * - 격자(Grid) 시스템의 시작점이므로 반드시 GRID_SIZE(4)의 배수여야 함.
+ * * 3. originOffset (절대 주소 / 스냅 YES)
+ * - 현재 Three.js Scene의 (0,0,0) 지점이 실제 지구상에서 어디에 위치하는지 나타내는 값.
+ * - 카메라 리셋 시 4m 단위로 점프하며, 이 값이 스냅되어야 배경 그리드가 흔들리지 않음.
+ * * 4. 로컬 좌표 (상대 주소 / 계산값)
+ * - Three.js 공간에서 실제로 메쉬가 배치되는 좌표.
+ * - 계산식: [로컬 좌표 = 절대 주소 - originOffset]
+ */
+
 interface MapState {
   status: MapDataStatus;
   setStatus: (status: MapDataStatus) => void;
@@ -34,19 +50,21 @@ interface MapState {
 
   /** 3D 공간의 중심 좌표 (단위: 미터) */
   center: MeterPos | null;
-  /** 지도 초기화 시점의 기준 위경도 (초기 위치 기억용) */
-  origin: MeterPos | null;
-  /** 실시간 카메라 상태 데이터 */
-  viewState: ViewState;
-
-  // --- 액션 ---
   setCenter: (pos: MeterPos) => void;
   setCenterByLocation: (location: Location) => void;
+
+  /** 실시간 카메라 시각 상태 */
+  viewState: ViewState;
+  /** 카메라 시각 상태 업데이트 (일부 혹은 전체) */
+  setViewState: (view: Partial<ViewState>) => void;
+
+  /** 지도 초기화 시점의 기준 위경도 (초기 위치 기억용) */
+  origin: MeterPos | null;
   setOrigin: (pos: MeterPos) => void;
   setOriginByLocation: (location: Location) => void;
 
-  /** 카메라 시각 상태 업데이트 (일부 혹은 전체) */
-  setViewState: (view: Partial<ViewState>) => void;
+  originOffset: MeterPos;
+  setOriginOffset: (offset: MeterPos) => void;
 
   // --- 좌표 변환 유틸리티 ---
   project: (location: Location) => MeterPos;
@@ -75,9 +93,6 @@ interface MapState {
   isInteracting: boolean;
   setIsInteracting: (isInteracting: boolean) => void;
 
-  originOffset: MeterPos;
-  setOriginOffset: (offset: MeterPos) => void;
-
   currentHour: number;
   setCurrentHour: (hour: number) => void;
 
@@ -91,11 +106,15 @@ export const useMapStore = create<MapState>((set, get) => ({
   loadingStep: null,
   setLoadingStep: (loadingStep) => set({ loadingStep }),
 
-  /** 초기 상태 */
+  /** 📍 카메라 타겟 설정 (절대 주소 / 소수점 유지) */
   center: null,
-  origin: null,
+  setCenter: (pos) => set({ center: pos }),
+  setCenterByLocation: (location) => {
+    const meterPos = get().project(location);
+    set({ center: meterPos });
+  },
 
-  /** 초기 뷰 상태 (기본값) */
+  /** 실시간 뷰 상태 */
   viewState: {
     distance: 200, // 카메라 거리
     bearing: 0, // 정북향
@@ -103,25 +122,33 @@ export const useMapStore = create<MapState>((set, get) => ({
     // pitch: 60, // 30도 틸트 (지면 기준)
     altitude: 100, // 수직 고도
   },
-
-  setCenter: (pos) => set({ center: pos }),
-  /** 위경도(Location)를 즉시 미터 좌표로 변환하여 센터 설정 */
-  setCenterByLocation: (location) => {
-    const meterPos = get().project(location);
-    set({ center: meterPos });
-  },
-
-  setOrigin: (pos) => set({ origin: pos }),
-  setOriginByLocation: (location) => {
-    const meterPos = get().project(location);
-    set({ origin: meterPos });
-  },
-
-  /** 실시간 뷰 상태 업데이트: 기존 상태를 유지하며 부분 업데이트 가능 */
   setViewState: (view) =>
     set((state) => ({
       viewState: { ...state.viewState, ...view },
     })),
+
+  /** 🏁 월드 원점 설정 (절대 주소 / 4m 스냅 강제) */
+  origin: null,
+  setOrigin: (pos) => {
+    // 🚀 [Rule] 이제 projection에 정의된 snapToGrid를 직접 사용합니다.
+    const snappedPos = projection.snapToGrid(pos);
+
+    set({
+      origin: snappedPos, // 원점도 격자에 맞춤
+      originOffset: snappedPos, // 초기 렌더링 오프셋도 동일하게 정렬
+    });
+  },
+  setOriginByLocation: (location) => {
+    const meterPos = get().project(location);
+    get().setOrigin(meterPos); // 내부에서 snapToGrid가 적용됨
+  },
+
+  /** 징검다리 역할을 하는 현재 원점 오프셋 (절대 주소 / 4m 스냅 강제) */
+  originOffset: { x: 0, y: 0, z: 0 },
+  setOriginOffset: (offset) => {
+    // 🚀 카메라 리셋 시에도 유틸리티를 사용하여 일관성을 유지합니다.
+    set({ originOffset: projection.snapToGrid(offset) });
+  },
 
   /** 좌표 변환: 위경도 → 절대 미터 좌표 (Three.js Z-up/Y-up 고려) */
   project: (location: Location) => {
@@ -144,7 +171,6 @@ export const useMapStore = create<MapState>((set, get) => ({
   },
 
   cameraResetSignal: { distance: 0, orientation: 0 },
-
   triggerDistanceReset: () =>
     set((state) => ({
       cameraResetSignal: { ...state.cameraResetSignal, distance: Date.now() },
@@ -171,10 +197,6 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   isInteracting: false,
   setIsInteracting: (isInteracting) => set({ isInteracting }),
-
-  // 초기값은 (0,0,0)
-  originOffset: { x: 0, y: 0, z: 0 },
-  setOriginOffset: (offset) => set({ originOffset: offset }),
 
   currentHour: new Date().getHours(),
   setCurrentHour: (hour: number) => set({ currentHour: hour }),

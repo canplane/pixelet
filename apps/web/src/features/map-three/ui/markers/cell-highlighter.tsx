@@ -5,34 +5,45 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Line } from '@react-three/drei';
 
 // 2. 프로젝트 공통
-import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { projection } from '@/shared/lib/geo/projection';
 import { THREE_CONFIG } from '../../model/three-config';
+import { MAP_THEMES } from '../../model/map-theme'; // 🚀 테마 데이터 임포트
 
-const { GRID_SIZE } = projection;
+const { GRID_SIZE, HALF_GRID } = projection;
 const { FOG_FAR, FOG_NEAR } = THREE_CONFIG.RENDERING;
 
 export function CellHighlighter() {
   const { raycaster, pointer, camera } = useThree();
-  const { center, setCenter, hoveredPos, setHoveredPos } = useMapStore();
+  const {
+    center,
+    setCenter,
+    originOffset,
+    hoveredPos,
+    setHoveredPos,
+    themeKey,
+  } = useMapNavigation();
 
-  // 🚀 [추가] 오프셋 구독
-  const originOffset = useMapStore((state) => state.originOffset);
+  // 🚀 현재 테마 정보 가져오기
+  const targetTheme = MAP_THEMES[themeKey];
+  const themeColor = targetTheme.grid.section; // 하이라이트 메인 컬러 (격자의 굵은 선 색상을 추종)
 
-  const groundPlane = useMemo(() => new THREE.Plane(), []);
+  // 1. 레이캐스팅 평면 높이 보정 (지형 높이에 맞춤)
+  const groundPlane = useMemo(
+    // 🚀 지형이 0.005~0.15 사이에 있으므로, 0.1 정도에서 검출하는 것이 정확합니다.
+    () => new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1),
+    [],
+  );
+
   const intersectionPoint = useMemo(() => new THREE.Vector3(), []);
-  const localCenterVec = useMemo(() => new THREE.Vector3(), []);
 
-  const limitUnits = 100;
+  const localGroupRef = useRef<THREE.Group>(null);
+  const aniGroupRef = useRef<THREE.Group>(null);
 
-  const offset = GRID_SIZE / 2;
-  const localGroupRef = useRef<THREE.Group>(null); // 최상위 위치 보정용
-  const aniGroupRef = useRef<THREE.Group>(null); // 위아래 애니메이션용
-
-  // 🚀 1. 단정한 라운딩 프레임 경로 (Radius 0.15)
+  // 1. 라운딩 프레임 경로 계산
   const roundedPoints = useMemo(() => {
     const size = GRID_SIZE * 0.95;
-    const radius = size * 0.15; // 절반으로 줄인 라운딩
+    const radius = size * 0.15;
     const pts = [];
     const steps = 8;
     for (let i = 0; i <= steps * 4; i++) {
@@ -46,78 +57,79 @@ export function CellHighlighter() {
       pts.push(new THREE.Vector3(px, py, 0));
     }
     return pts;
-  }, [GRID_SIZE]);
+  }, []);
 
   useFrame((state) => {
-    // 1. 위치 보정 (Floating Origin 실시간 대응)
     if (localGroupRef.current && hoveredPos) {
-      // 렌더링 루프 안에서 직접 위치 수정 (React 리렌더링 없이)
       localGroupRef.current.position.set(
-        hoveredPos.x - originOffset.x + offset,
-        0,
-        hoveredPos.z - originOffset.z + offset,
+        hoveredPos.x - originOffset.x,
+        0.16, // 🚀 도로(0.15)보다 아주 살짝 위로 올림 (Z-fighting 방지)
+        hoveredPos.z - originOffset.z,
       );
     }
 
     if (!center) return;
 
-    // 2. 레이캐스팅 로직 (로컬 0점 기준)
-    groundPlane.setComponents(0, 1, 0, 0);
-    localCenterVec.set(center.x - originOffset.x, 0, center.z - originOffset.z);
     raycaster.setFromCamera(pointer, camera);
     const intersect = raycaster.ray.intersectPlane(
       groundPlane,
       intersectionPoint,
     );
 
-    // 🚀 [수정] 제한 거리를 CONFIG의 안개 끝 지점(FOG_FAR)으로 설정
-    if (intersect && localCenterVec.distanceTo(intersect) <= FOG_FAR) {
-      /**
-       * 🚀 [좌표 역산]
-       * 마우스가 찍은 곳은 '로컬'입니다. 여기에 오프셋을 더해 '절대 좌표'로 변환 후 저장합니다.
-       */
-      const absX = intersect.x + originOffset.x;
-      const absZ = intersect.z + originOffset.z;
-      const vX = Math.floor(absX / GRID_SIZE) * GRID_SIZE;
-      const vZ = Math.floor(absZ / GRID_SIZE) * GRID_SIZE;
+    if (intersect) {
+      const distToCamera = camera.position.distanceTo(intersect);
 
-      if (!hoveredPos || hoveredPos.x !== vX || hoveredPos.z !== vZ) {
-        setHoveredPos({ x: vX, y: center.y, z: vZ });
-      }
+      // 🚀 [수정] FOG_FAR가 너무 짧으면 하이라이터가 일찍 사라집니다. 여유를 둡니다.
+      if (distToCamera <= FOG_FAR * 1.5) {
+        const absolutePoint = {
+          x: intersect.x + originOffset.x,
+          y: 0,
+          z: intersect.z + originOffset.z,
+        };
 
-      // 🚀 [추가] 거리 기반 투명도 계산 (안개와 동기화)
-      if (localGroupRef.current) {
-        const dist = camera.position.distanceTo(localGroupRef.current.position);
-        const opacity = THREE.MathUtils.mapLinear(
-          dist,
-          FOG_NEAR,
-          FOG_FAR,
-          1,
-          0,
-        );
-        localGroupRef.current.visible = opacity > 0.05;
-        // 필요 시 group 내부의 재질 투명도 조절 로직 추가 가능
+        const snapped = projection.snapToGrid(absolutePoint);
+
+        if (
+          !hoveredPos ||
+          hoveredPos.x !== snapped.x ||
+          hoveredPos.z !== snapped.z
+        ) {
+          setHoveredPos({ x: snapped.x, y: center.y, z: snapped.z });
+        }
+
+        if (localGroupRef.current) {
+          // 안개 보정 수치 완화
+          const opacity = THREE.MathUtils.mapLinear(
+            distToCamera,
+            FOG_NEAR,
+            FOG_FAR * 1.2,
+            1,
+            0,
+          );
+          localGroupRef.current.visible = opacity > 0.01;
+        }
+      } else {
+        setHoveredPos(null);
       }
-    } else if (hoveredPos) {
-      setHoveredPos(null);
     }
 
-    // 3. 위아래 숨쉬기 애니메이션
+    // 3. 숨쉬기 애니메이션
     if (aniGroupRef.current) {
       const t = state.clock.getElapsedTime();
-      // Y축 애니메이션만 수행 (X, Z는 부모 group에서 보정됨)
-      aniGroupRef.current.position.y = 0.04 + Math.sin(t * 2) * 0.015;
+      aniGroupRef.current.position.y = 0.05 + Math.sin(t * 2.5) * 0.02;
     }
   });
 
   if (!hoveredPos) return null;
 
   return (
-    // 🚀 ref={localGroupRef}를 할당하여 useFrame에서 제어하게 합니다.
-    // 초기 position은 0으로 두어도 useFrame이 즉시 잡아줍니다.
     <group ref={localGroupRef}>
-      <group ref={aniGroupRef} rotation={[-Math.PI / 2, 0, 0]}>
-        {/* 🚀 3. 클릭 영역 (투명) */}
+      <group
+        ref={aniGroupRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[HALF_GRID, 0.02, HALF_GRID]} // 🚀 바닥에서 살짝 띄움
+      >
+        {/* 클릭 감지용 투명 메쉬 */}
         <mesh
           onClick={(e) => {
             e.stopPropagation();
@@ -130,43 +142,41 @@ export function CellHighlighter() {
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
 
-        {/* 🚀 4. 파스텔 프레임 라인 */}
+        {/* 🚀 renderOrder를 높여 다른 지형물 위에 확실히 그리게 함 */}
         <Line
           points={roundedPoints}
-          color="#FFB7B2"
-          lineWidth={2}
+          color={themeColor}
+          lineWidth={3} // 🚀 가독성을 위해 조금 더 두껍게
           transparent
-          opacity={0.6}
+          opacity={0.8}
+          renderOrder={100}
         />
 
-        {/* 🚀 5. 모서리 포인트들 */}
+        {/* 🚀 [테마 적용] 모서리 도트 포인트 */}
         {[
           [-1, -1],
           [-1, 1],
           [1, -1],
           [1, 1],
         ].map(([mx, my], i) => (
-          <mesh
-            key={i}
-            position={[
-              mx * ((GRID_SIZE / 2) * 0.75),
-              my * ((GRID_SIZE / 2) * 0.75),
-              0,
-            ]}
-          >
-            <circleGeometry args={[0.04, 16]} />
-            <meshBasicMaterial color="#FFB7B2" transparent opacity={0.5} />
+          <mesh key={i} renderOrder={101}>
+            <circleGeometry args={[0.06, 16]} />
+            <meshBasicMaterial color={themeColor} />
           </mesh>
         ))}
       </group>
 
-      {/* 🚀 6. 바닥의 아주 은은한 가이드 (그림자 대용) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <planeGeometry args={[GRID_SIZE * 0.9, GRID_SIZE * 0.9]} />
+      {/* 🚀 [테마 적용] 바닥 가이드 영역 */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[HALF_GRID, 0.01, HALF_GRID]}
+        renderOrder={99}
+      >
+        <planeGeometry args={[GRID_SIZE * 0.95, GRID_SIZE * 0.95]} />
         <meshBasicMaterial
-          color="#FFB7B2"
+          color={themeColor}
           transparent
-          opacity={0.05}
+          opacity={0.15} // 🚀 0.08은 너무 연해서 안 보일 수 있음
           depthWrite={false}
         />
       </mesh>

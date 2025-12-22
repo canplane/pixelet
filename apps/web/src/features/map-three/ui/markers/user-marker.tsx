@@ -1,28 +1,29 @@
 import { useMemo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber'; // 🚀 애니메이션을 위해 추가
-import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
-import { useMapStore } from '../../model/map-store';
+import { useFrame } from '@react-three/fiber';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { projection } from '@/shared/lib/geo/projection';
 import { THREE_CONFIG } from '../../model/three-config';
+import { MAP_THEMES } from '../../model/map-theme';
 
-const { GRID_SIZE } = projection;
+const { GRID_SIZE, HALF_GRID } = projection;
 const { FOG_NEAR, FOG_FAR } = THREE_CONFIG.RENDERING;
 
 function createRoundedRectGeometry(size: number, radius: number) {
   const shape = new THREE.Shape();
-  const x = -size / 2;
-  const y = -size / 2;
 
-  shape.moveTo(x, y + radius);
-  shape.lineTo(x, y + size - radius);
-  shape.quadraticCurveTo(x, y + size, x + radius, y + size);
-  shape.lineTo(x + size - radius, y + size);
-  shape.quadraticCurveTo(x + size, y + size, x + size, y + size - radius);
-  shape.lineTo(x + size, y + radius);
-  shape.quadraticCurveTo(x + size, y, x + size - radius, y);
-  shape.lineTo(x + radius, y);
-  shape.quadraticCurveTo(x, y, x, y + radius);
+  // 🚀 -size/2 로 시작하여 메쉬의 (0,0,0)이 정확히 사각형의 '중심'이 되게 합니다.
+  const h = size / 2;
+
+  shape.moveTo(-h, -h + radius);
+  shape.lineTo(-h, h - radius);
+  shape.quadraticCurveTo(-h, h, -h + radius, h);
+  shape.lineTo(h - radius, h);
+  shape.quadraticCurveTo(h, h, h, h - radius);
+  shape.lineTo(h, -h + radius);
+  shape.quadraticCurveTo(h, -h, h - radius, -h);
+  shape.lineTo(-h + radius, -h);
+  shape.quadraticCurveTo(-h, -h, -h, -h + radius);
 
   return new THREE.ShapeGeometry(shape);
 }
@@ -31,33 +32,47 @@ const ROUNDED_GEOMETRY = createRoundedRectGeometry(GRID_SIZE * 0.98, 0.8);
 const MAX_INSTANCES = 1500;
 
 export function UserMarker() {
-  const { location, accuracy } = useDeviceLocationStore();
-  const { project } = useMapStore();
+  const { devicePos, accuracy, originOffset, themeKey } = useMapNavigation();
 
-  // 🚀 [추가] 오프셋 구독
-  const originOffset = useMapStore((state) => state.originOffset);
+  // 1. 테마 및 야간 여부 정의 (정의되지 않았던 변수 추가)
+  const targetTheme = MAP_THEMES[themeKey];
+  const isNight = themeKey === 'night';
+  const themeAccent = targetTheme.grid.section;
 
-  // 내 실제 위치 (절대 좌표)
-  const absPosition = useMemo(
-    () => (location ? project(location) : null),
-    [location, project],
-  );
+  // 🚀 동화적 포인트 컬러 (낮에는 진한 핑크, 밤에는 빛나는 민트/하늘색)
+  const gemColor = isNight ? '#00f2ff' : '#ff1493';
 
-  /**
-   * 🚀 [보정] 내 로컬 위치 계산
-   * 절대 좌표에서 현재 월드의 오프셋을 뺍니다.
-   */
+  // 1. 내 로컬 위치 (Floating Origin 적용)
   const localPosition = useMemo(() => {
-    if (!absPosition) return null;
+    if (!devicePos) return null;
     return {
-      x: absPosition.x - originOffset.x,
-      y: absPosition.y - originOffset.y,
-      z: absPosition.z - originOffset.z,
+      x: devicePos.x - originOffset.x,
+      y: 0, // 바닥에 붙임
+      z: devicePos.z - originOffset.z,
     };
-  }, [absPosition, originOffset]);
+  }, [devicePos, originOffset]);
+
+  // 2. 내가 서 있는 '격자'의 로컬 좌표 스냅 (부모 그룹용)
+  const snappedLocalPos = useMemo(() => {
+    if (!devicePos) return null;
+    const snappedAbs = projection.snapToGrid(devicePos);
+    return {
+      x: snappedAbs.x - originOffset.x,
+      z: snappedAbs.z - originOffset.z,
+    };
+  }, [devicePos, originOffset]);
+
+  // 3. 보석의 상대 위치 (중앙 정렬 보정)
+  const gemOffset = useMemo(() => {
+    if (!localPosition || !snappedLocalPos) return { x: 0, z: 0 };
+    return {
+      x: localPosition.x - (snappedLocalPos.x + HALF_GRID),
+      z: localPosition.z - (snappedLocalPos.z + HALF_GRID),
+    };
+  }, [localPosition, snappedLocalPos]);
 
   const meshRef = useRef<THREE.InstancedMesh>(null);
-  const gemRef = useRef<THREE.Mesh>(null); // 🚀 보석 애니메이션을 위한 ref
+  const gemRef = useRef<THREE.Mesh>(null);
   const tempObject = useMemo(() => new THREE.Object3D(), []);
 
   // 🚀 보석 애니메이션 로직: 매 프레임마다 실행됩니다.
@@ -100,12 +115,15 @@ export function UserMarker() {
     meshRef.current.visible = isVisible;
   });
 
+  // 🚀 이제 gridOffsets 계산 시 accuracy를 안전하게 사용할 수 있어
   const gridOffsets = useMemo(() => {
-    const activeAccuracy = accuracy || 10;
-    const safeAccuracy = Math.min(activeAccuracy, 50);
+    const activeAccuracy = accuracy || 10; // 기본값 10m
+    const safeAccuracy = Math.min(activeAccuracy, 50); // 너무 넓어지지 않게 제한
+
     const offsets = [];
     const step = GRID_SIZE;
     const range = Math.ceil(safeAccuracy / step);
+
     for (let x = -range; x <= range; x++) {
       for (let z = -range; z <= range; z++) {
         const distanceSq = (x * step) ** 2 + (z * step) ** 2;
@@ -139,49 +157,53 @@ export function UserMarker() {
     meshRef.current.count = gridOffsets.length;
   }, [gridOffsets, tempObject]);
 
-  if (!localPosition) return null;
+  if (!snappedLocalPos || !localPosition) return null;
 
   return (
-    // 🚀 보정된 로컬 좌표를 적용합니다.
-    <group position={[localPosition.x, localPosition.y, localPosition.z]}>
-      {/* 바닥 정확도 그리드 */}
+    <group
+      position={[
+        snappedLocalPos.x + HALF_GRID,
+        0.16, // 🚀 도로(0.15)보다 살짝 위로 올려서 묻히지 않게 함
+        snappedLocalPos.z + HALF_GRID,
+      ]}
+    >
+      {/* 1. 바닥 정확도 그리드 (색상을 더 선명하게) */}
       <instancedMesh
         ref={meshRef}
         args={[ROUNDED_GEOMETRY, undefined, MAX_INSTANCES]}
-        frustumCulled={false}
+        renderOrder={5} // 지형보다는 위, 도로와는 비슷하게
       >
         <meshBasicMaterial
-          color="#AEC6FF"
+          color={isNight ? themeAccent : '#FFD700'} // 낮엔 금색 계열로 포인트
           transparent
-          opacity={0.4}
+          opacity={0.5} // 조금 더 진하게
           depthWrite={false}
-          side={THREE.DoubleSide}
         />
       </instancedMesh>
 
-      {/* 💎 보석 마커: 회전하며 반짝임 */}
+      {/* 2. 💎 보석 마커 (색상 강화) */}
       <mesh
         ref={gemRef}
-        position={[0, 2, 0]}
-        scale={[2.5, 2.5, 2.5]}
-        frustumCulled={false} // 🚀 확대 시 사라짐 방지 핵심
+        position={[gemOffset.x, 2, gemOffset.z]}
+        renderOrder={20}
       >
-        <octahedronGeometry args={[0.5, 0]} />
+        <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial
-          color="#D0E0FF"
-          emissive="#AEC6FF"
-          emissiveIntensity={1.0}
+          color={gemColor} // 🚀 하얀색 대신 실제 색상 주입
+          emissive={gemColor}
+          emissiveIntensity={isNight ? 2 : 0.5} // 낮에는 빛나기보다 색이 보여야 함
+          roughness={0.2}
+          metalness={0.8}
           flatShading
         />
       </mesh>
 
-      {/* 보석에서 나오는 은은한 빛 */}
+      {/* 3. 보석 조명 (색상 동기화) */}
       <pointLight
-        position={[0, 2, 0]}
-        // 🚀 FOG_FAR 설정에 맞춰 빛의 영향력도 opacity와 동기화하면 더 정교해집니다.
-        distance={10}
-        intensity={8 * (gemRef.current?.visible ? 1 : 0)} // 마커가 꺼지면 빛도 같이 끔
-        color="#AEC6FF"
+        position={[gemOffset.x, 2, gemOffset.z]}
+        distance={15}
+        intensity={isNight ? 10 : 3} // 낮엔 조명을 줄여야 색이 안 날아감
+        color={gemColor}
       />
     </group>
   );

@@ -1,17 +1,15 @@
 import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation'; // 🚀 커스텀 훅 임포트
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Compass, Box, Map as MapIcon, MousePointer2 } from 'lucide-react';
 import * as THREE from 'three';
 
-import { Card, CardContent } from '@/shared/ui/theme/glass/card';
 import { Badge } from '@/shared/ui/theme/glass/badge';
 import { Separator } from '@/shared/ui/theme/glass/separator';
 
 export function VoxelInspector() {
-  const center = useMapStore((state) => state.center);
-  const viewState = useMapStore((state) => state.viewState);
-  const hoveredPos = useMapStore((state) => state.hoveredPos);
+  const { center, viewState, hoveredPos } = useMapNavigation();
   const unproject = useMapStore((state) => state.unproject);
 
   const currentViewLocation = useMemo(

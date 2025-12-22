@@ -33,6 +33,24 @@ export const projection = {
    */
   GRID_SIZE: 4,
 
+  // 🚀 격자 칸 정중앙 정렬을 위한 핵심 상수
+  get HALF_GRID() {
+    return this.GRID_SIZE / 2;
+  },
+
+  /**
+   * 🚀 플로팅 오리진 및 격자 정렬을 위한 정밀도 스냅 함수
+   * 입력된 좌표를 GRID_SIZE(4)의 배수로 깔끔하게 내림/반올림합니다.
+   */
+  snapToGrid: (pos: { x: number; y: number; z: number }) => {
+    const { GRID_SIZE } = projection;
+    return {
+      x: Math.floor(pos.x / GRID_SIZE) * GRID_SIZE,
+      y: 0, // 지면 높이는 보통 격자 시스템에서 제외
+      z: Math.floor(pos.z / GRID_SIZE) * GRID_SIZE,
+    };
+  },
+
   /**
    * [Guard] 입력된 좌표가 한계를 넘지 않도록 보정 (alt가 없으면 객체에서 제거)
    */

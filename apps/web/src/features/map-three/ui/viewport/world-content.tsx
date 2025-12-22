@@ -6,14 +6,22 @@ import { CellHighlighter } from '../markers/cell-highlighter';
 import { OsmLayer } from '../osm/osm-layer';
 import { projection } from '@/shared/lib/geo/projection';
 import { THREE_CONFIG } from '../../model/three-config';
+import { useMapNavigation } from '../../model/use-map-navigation';
+import { MAP_THEMES } from '../../model/map-theme'; // 🚀 테마 데이터 임포트
 
-const { GRID_SIZE } = projection;
+const { GRID_SIZE, HALF_GRID } = projection;
 const { FOG_FAR } = THREE_CONFIG.RENDERING;
 
 export const WorldContent = forwardRef<
   THREE.Group,
   { children?: React.ReactNode }
 >(({ children }, ref) => {
+  // 1. 스토어에서 현재 시간대에 맞는 테마 키를 가져옵니다 ('morning', 'day' 등)
+  const { themeKey } = useMapNavigation();
+
+  // 2. 해당 키로 실제 테마 설정 객체를 추출합니다
+  const targetTheme = MAP_THEMES[themeKey];
+
   // 🚀 모든 3D 지형물은 이 그룹 내부에 위치해야 Floating Origin 보정을 받습니다
   return (
     <group ref={ref}>
@@ -28,44 +36,41 @@ export const WorldContent = forwardRef<
       {/* 확장성을 위한 추가 자식 (커스텀 핀 등) */}
       {children}
 
-      {/* 🚀 그리드를 땅(OSM 타일)과 함께 배치 */}
-      {/* <Grid
-        args={[FOG_FAR * 3, FOG_FAR * 3]} // 안개 거리보다 충분히 크게 설정
-        infiniteGrid={true} // 🚀 쉐이더 기반 안티앨리어싱 활성화
-        followCamera={false} // 🚀 위치는 worldGroup에 고정 (이중 이동 방지)
-        // 🚀 [핵심 수정]
-        // 1. Frustum Culling을 끕니다. (Drei Grid는 내부 mesh에 이 속성을 전달해야 함)
-        frustumCulled={false}
-        // 2. 렌더링 순서를 뒤로 밀어 안개나 다른 오브젝트와 겹칠 때 안정적으로 출력
-        renderOrder={-1}
-        fadeDistance={FOG_FAR}
+      {/* 🚀 [그리드 정렬] 
+          모든 Mesh가 정수 좌표(0, 4, 8...)에 배치될 때 
+          박스의 정중앙이 오도록 그리드 자체를 HALF_GRID만큼 밀어줍니다. */}
+      <Grid
+        // 🚀 너무 크면 지평선 끝까지 하얀 선이 뭉쳐 보입니다. 적당히 조절하세요.
+        args={[FOG_FAR, FOG_FAR]}
+        infiniteGrid={true}
+        // 🚀 안개(FOG_FAR)보다 먼저 그리드가 사라지게 해서 하늘과의 경계를 만듭니다.
+        fadeDistance={FOG_FAR * 0.8}
         fadeStrength={5}
         cellSize={GRID_SIZE}
-        sectionSize={GRID_SIZE * 10} // 10칸마다 굵은 선
-        // sectionColor={targetTheme.grid.section}
-        // cellColor={targetTheme.grid.cell}
-        // 🚀 색상을 테마보다 약간 더 흐릿하게(Muted) 가져가면 지직거림이 눈에 훨씬 덜 띕니다.
-        sectionColor="#2d5a27"
-        cellColor="#3e7a37"
-        cellThickness={0.8}
-        sectionThickness={1.5}
-        position={[0, -0.01, 0]}
-      /> */}
-
-      {/* 테스트용 빨간 사각형 (실제 100m x 100m) */}
-      {/* {center && (
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[center.x, center.y, center.z]}
-        >
-          <planeGeometry args={[100, 100]} />
-          <meshBasicMaterial color="red" wireframe />
-        </mesh>
-      )} */}
+        sectionSize={GRID_SIZE * 10}
+        sectionColor={targetTheme.grid.section}
+        cellColor={targetTheme.grid.cell}
+        cellThickness={0.5}
+        sectionThickness={1.0}
+        // 🚀 위치를 -0.1 이하로 내려서 지형(landuse) 아래로 확실히 보냅니다.
+        position={[HALF_GRID, -0.1, HALF_GRID]}
+      />
 
       {/* 추후 추가될 모든 지형물(건물, 도로, Voxel)은 
          여기에 배치되어야 카메라 리셋 시 함께 이동합니다.
       */}
+
+      {/* 🚀 [기준 테스트 박스] 
+          이 박스가 정수 좌표(0, 0, 0) 기준에서 HALF_GRID만큼 이동해 있으므로
+          그리드 칸 안에 완벽하게 들어맞게 됩니다. */}
+      <mesh position={[HALF_GRID, 0.1, HALF_GRID]}>
+        <boxGeometry args={[GRID_SIZE, 0.2, GRID_SIZE]} />
+        <meshBasicMaterial
+          color={targetTheme.grid.section}
+          transparent
+          opacity={0.4}
+        />
+      </mesh>
     </group>
   );
 });
