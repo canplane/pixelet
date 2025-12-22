@@ -3,15 +3,14 @@ import { Compass } from './compass';
 import { ScaleBar } from './scale-bar';
 import { VoxelInspector } from './voxel-inspector';
 import { LocationControl } from './location-control';
-import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { PoiDetailPanel } from '../osm/poi-detail-panel';
 import { MapSearchBar } from './map-location-header';
 
 import { Badge } from '@/shared/ui/theme/glass/badge';
 
 export function MapOverlays() {
-  const setCenter = useMapStore((state) => state.setCenter);
-  const isInteracting = useMapStore((state) => state.isInteracting);
+  const { setCenter, isInteracting } = useMapNavigation();
 
   const interactionStyle = cn(
     'transition-all duration-500 ease-in-out',

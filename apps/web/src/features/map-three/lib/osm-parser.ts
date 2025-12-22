@@ -97,15 +97,29 @@ export const parseOsmData = (
         return new THREE.Vector3(pt.x - center.x, y, pt.z - center.z);
       });
 
-      // 면(Face) 생성이 필요한 경우 Shape 생성
+      // --- [수정된 Shape 생성 로직] ---
       let shape: THREE.Shape | undefined;
-      if ((isBuilding || isWater || isLanduse) && points.length >= 3) {
+
+      // 1. 도로(isRoad)를 조건에 추가했습니다.
+      // 2. Three.js의 Shape는 2D(x, y) 좌표계입니다.
+      //    우리의 지도는 바닥면이 (x, z)이므로, z값을 Shape의 y축으로 매핑해야 합니다.
+      if (
+        (isBuilding || isWater || isLanduse || isRoad) &&
+        points.length >= 2
+      ) {
         shape = new THREE.Shape();
+
+        // Shape의 2D x, y를 (points.x, points.z)로 매핑
         shape.moveTo(points[0].x, points[0].z);
         for (let i = 1; i < points.length; i++) {
           shape.lineTo(points[i].x, points[i].z);
         }
-        shape.closePath();
+
+        // 도로는 선(Line)인 경우가 많으므로 닫지 않고,
+        // 건물, 물, 땅은 면(Area)이므로 닫아줍니다.
+        if (!isRoad && points.length >= 3) {
+          shape.closePath();
+        }
       }
 
       // 건물 높이 계산

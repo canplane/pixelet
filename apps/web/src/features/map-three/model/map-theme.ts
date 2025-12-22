@@ -32,13 +32,13 @@ export const MAP_THEMES: Record<ThemeKey, MapTheme> = {
     grid: { cell: '#e2e8f0', section: '#cbd5e1' },
   },
   day: {
-    background: '#f1f5f9', // 🚀 너무 하얗지 않은 연회색
-    fog: '#cbd5e1',
-    sky: { rayleigh: 2, mieCoefficient: 0.002, sunPosition: [0, 1000, 0] },
+    background: '#e0f2fe', // 🚀 맑은 하늘색 (Light Blue)
+    fog: '#bae6fd',
+    sky: { rayleigh: 1.5, mieCoefficient: 0.002, sunPosition: [50, 100, 50] },
     lighting: {
-      ambient: { color: '#ffffff', intensity: 1.2 },
-      hemisphere: { sky: '#ffffff', ground: '#94a3b8', intensity: 1.2 },
-      directional: { color: '#ffffff', intensity: 2.5 },
+      ambient: { color: '#ffffff', intensity: 0.4 },
+      hemisphere: { sky: '#ffffff', ground: '#94a3b8', intensity: 0.4 },
+      directional: { color: '#ffffff', intensity: 0.6 },
     },
     grid: { cell: '#cbd5e1', section: '#94a3b8' },
   },

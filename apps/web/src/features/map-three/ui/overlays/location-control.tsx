@@ -12,12 +12,13 @@ export function LocationControl() {
 
   // 1. 커스텀 훅 하나로 위치 관련 상태 모두 해결
   const {
+    canShowLocationControl, // 🚀 훅에서 가져오기
     setCenter,
     viewState,
     devicePos,
-    isOffCenter,
     isFollowMode,
     setIsFollowMode,
+    triggerOrientationReset,
   } = useMapNavigation();
   const { bearing } = viewState;
 
@@ -31,17 +32,21 @@ export function LocationControl() {
   const handleAction = async () => {
     if (!isEnabled || isLoading) return;
 
-    if (devicePos && isOffCenter) {
-      setCenter(devicePos);
+    // 1️⃣ 센터 이탈 상태라면? -> 내 위치로 즉시 복귀
+    if (canShowLocationControl) {
+      setCenter(devicePos!);
       setIsFollowMode(false);
       return;
     }
 
+    // 2️⃣ 센터에 있다면? -> 팔로우 모드(나침반 모드) 토글
     if (!isFollowMode) {
       const granted = isPermissionGranted || (await requestPermission());
       if (granted) setIsFollowMode(true);
     } else {
+      // 🚀 팔로우 모드 해제 시 북쪽 정렬도 함께 해주면 UX가 깔끔합니다.
       setIsFollowMode(false);
+      triggerOrientationReset();
     }
   };
 
@@ -49,26 +54,27 @@ export function LocationControl() {
     if (isLoading)
       return { Icon: Loader2, className: 'animate-spin opacity-40' };
 
-    if (isOffCenter)
+    // 🚀 센터 이탈 시: "내 위치로" 아이콘
+    if (canShowLocationControl)
       return {
         Icon: Locate,
         className: 'text-white/40 scale-90',
       };
 
+    // 🚀 팔로우 모드: 나침반 회전 아이콘
     if (isFollowMode) {
-      // 🚀 compassHeading이 null일 때는 회전하지 않도록 처리
       const rotation = compassHeading !== null ? compassHeading : 0;
-      // 🧭 실제 북쪽(rotation)에서 지도가 돌아간 만큼(bearing) 보정
       const finalRotation = rotation - bearing;
 
       return {
         Icon: Compass,
         style: { transform: `rotate(${finalRotation}deg)` },
         className:
-          'text-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] scale-110 transition-transform duration-200 ease-out',
+          'text-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] scale-110',
       };
     }
 
+    // 🚀 기본 상태: 길 찾기 화살표 아이콘
     return {
       Icon: Navigation,
       className:

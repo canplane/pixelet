@@ -1,5 +1,5 @@
 import { cn } from '@/shared/lib/utils';
-import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { THREE_CONFIG } from '../../model/three-config';
 import { CircularButton } from '@/shared/ui/theme/glass/circular-button';
 import { MotionContainer } from '@/shared/ui/layout/motion-container';
@@ -7,12 +7,8 @@ import { MotionContainer } from '@/shared/ui/layout/motion-container';
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 
 export function Compass() {
-  const { distance, bearing, polarAngle } = useMapStore(
-    (state) => state.viewState,
-  );
-  const triggerOrientationReset = useMapStore(
-    (state) => state.triggerOrientationReset,
-  );
+  const { viewState, triggerOrientationReset } = useMapNavigation();
+  const { distance, bearing, polarAngle } = viewState;
 
   /**
    * 🚀 임계값 최종 상향 (15도 기준)

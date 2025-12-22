@@ -23,17 +23,17 @@ interface OsmFeaturesProps {
  * 대량의 데이터를 효율적으로 관리하기 위해 필터링 및 거리 기반 컬링을 수행합니다.
  */
 export const OsmLayer = React.memo(({ options }: OsmFeaturesProps) => {
-  // 지형/OSM 데이터를 가져오는 로직을 훅으로 캡슐화
-  const { data } = useOsmDataFetcher();
-
-  const center = useMapStore((state) => state.center);
-  const project = useMapStore((state) => state.project);
-
   const {
     showBuildings = false,
     showRoads = true,
     showPois = true,
   } = options || {};
+
+  // 지형/OSM 데이터를 가져오는 로직을 훅으로 캡슐화
+  const { data } = useOsmDataFetcher();
+
+  const center = useMapStore((state) => state.center);
+  const project = useMapStore((state) => state.project);
 
   // 1. 데이터 파싱 (기존 로직 유지)
   const { infra, pois } = useMemo(() => {

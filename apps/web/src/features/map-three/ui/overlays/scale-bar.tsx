@@ -1,5 +1,5 @@
 import { THREE_CONFIG } from '@/features/map-three/model/three-config';
-import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 import { MotionContainer } from '@/shared/ui/layout/motion-container';
 
@@ -8,10 +8,8 @@ const { DEFAULT_DISTANCE } = THREE_CONFIG.CAMERA;
 const SCALE_BAR_WIDTH = 80;
 
 export function ScaleBar() {
-  const { distance } = useMapStore((state) => state.viewState);
-  const triggerDistanceReset = useMapStore(
-    (state) => state.triggerDistanceReset,
-  );
+  const { viewState, triggerDistanceReset } = useMapNavigation();
+  const { distance } = viewState;
 
   const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
   const fovRad = (THREE_CONFIG.CAMERA.FOV * Math.PI) / 180;

@@ -1,37 +1,56 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils';
-import { useMapStore } from '../../model/map-store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import type { MapInfra } from '../../lib/osm-parser';
-import { THREE_CONFIG } from '../../model/three-config';
 
-const { FOG_NEAR, FOG_FAR } = THREE_CONFIG.RENDERING;
+// 🌈 동화속 마을을 위한 파스텔 건물 팔레트
+const BUILDING_COLORS = [
+  '#FFD966',
+  '#FFADAD',
+  '#9BF6FF',
+  '#CAFFBF',
+  '#FFC6FF',
+  '#FDFFB6',
+];
+
+const ROAD_STYLES: Record<string, { width: number; opacity: number }> = {
+  motorway: { width: 4.5, opacity: 0.8 },
+  trunk: { width: 4.0, opacity: 0.7 },
+  primary: { width: 3.5, opacity: 0.6 },
+  secondary: { width: 2.5, opacity: 0.5 },
+  tertiary: { width: 2.0, opacity: 0.4 },
+  residential: { width: 1.5, opacity: 0.3 },
+  service: { width: 1.0, opacity: 0.2 },
+};
 
 export const OsmTileLayer = React.memo(({ infras }: { infras: MapInfra[] }) => {
-  const originOffset = useMapStore((state) => state.originOffset);
-  const center = useMapStore((state) => state.center); // 기준점 (보통 카메라가 보는 곳)
-  const groupRef = useRef<THREE.Group>(null);
+  const { originOffset, themeKey } = useMapNavigation();
+  const isNight = themeKey === 'night';
 
-  // 1. Mesh 타입 (건물, 물, 지면) 병합
-  const mergedMeshes = useMemo(() => {
-    const createLayer = (types: string[], color: string) => {
+  const layerColors = useMemo(
+    () => ({
+      landuse: isNight ? '#2D4C2D' : '#A8D672',
+      water: isNight ? '#1A365D' : '#7BC8F6',
+      road: isNight ? '#334155' : '#FFFFFF',
+    }),
+    [isNight],
+  );
+
+  const terrainMeshes = useMemo(() => {
+    const createLayer = (types: string[], depth: number, yPos: number) => {
       const filtered = infras.filter((f) => types.includes(f.type) && f.shape);
       if (filtered.length === 0) return null;
 
       const geometries = filtered.map((f) => {
-        const depth = f.type === 'building' ? f.height || 10 : 0.2; // 건물 외엔 낮게
+        // 🚀 ShapeGeometry 대신 ExtrudeGeometry를 사용하여 면을 꽉 채우고 두께를 줍니다.
         const geo = new THREE.ExtrudeGeometry(f.shape!, {
-          depth,
+          depth: depth, // 0.1 정도의 두께가 있어야 면이 확실히 보입니다.
           bevelEnabled: false,
         });
         geo.rotateX(-Math.PI / 2);
         geo.applyMatrix4(
-          new THREE.Matrix4().makeTranslation(
-            f.center.x,
-            f.center.y,
-            f.center.z,
-          ),
+          new THREE.Matrix4().makeTranslation(f.center.x, yPos, f.center.z),
         );
         return geo;
       });
@@ -42,129 +61,132 @@ export const OsmTileLayer = React.memo(({ infras }: { infras: MapInfra[] }) => {
     };
 
     return {
-      building: createLayer(['building'], '#4a4e54'),
-      water: createLayer(['water'], '#4da3ff'),
-      landuse: createLayer(['landuse'], '#82ad7d'),
+      // 🌳 땅: 가장 아래 (두께 0.1, 높이 0)
+      landuse: createLayer(['landuse', 'park', 'grass'], 0.1, 0),
+      // 💧 물: 땅보다 살짝 위 (두께 0.1, 높이 0.02) -> 땅 위에 파란 판이 덮임
+      water: createLayer(['water'], 0.1, 0.02),
     };
   }, [infras]);
 
-  // 2. Road (Line) 타입 병합
-  const mergedRoads = useMemo(() => {
-    const roads = infras.filter((f) => f.type === 'road' && f.points);
-    if (roads.length === 0) return null;
-
-    // Line은 Extrude 대신 BufferGeometry를 합칩니다.
-    const geometries = roads.map((f) => {
-      const geo = new THREE.BufferGeometry().setFromPoints(f.points);
-      const matrix = new THREE.Matrix4().makeTranslation(
-        f.center.x,
-        f.center.y,
-        f.center.z,
-      );
-      geo.applyMatrix4(matrix);
-      return geo;
-    });
-
-    const merged = BufferGeometryUtils.mergeGeometries(geometries);
-    geometries.forEach((g) => g.dispose());
-    return merged;
-  }, [infras]);
-
-  // 🚀 Floating Origin 보정 및 거리 기반 페이드 아웃
-  useFrame((state) => {
-    if (!groupRef.current) return;
-
-    // 1. 위치 보정 (Floating Origin)
-    groupRef.current.position.set(
-      -originOffset.x,
-      -originOffset.y,
-      -originOffset.z,
-    );
-
-    // 🚀 2. center가 null일 경우를 대비한 방어 로직
-    if (!center) {
-      // center가 없으면 투명도를 0으로 만들거나 계산을 스킵합니다.
-      groupRef.current.visible = false;
-      return;
-    }
-
-    // 3. 거리 기반 투명도 계산 (안전하게 계산)
-    const dist = state.camera.position.distanceTo(
-      new THREE.Vector3(
-        center.x - originOffset.x,
-        0,
-        center.z - originOffset.z,
-      ),
-    );
-
-    const opacityFactor = THREE.MathUtils.clamp(
-      THREE.MathUtils.mapLinear(dist, FOG_NEAR, FOG_FAR, 1, 0),
-      0,
-      1,
-    );
-
-    // 4. 레이어 가시성 및 투명도 반영
-    groupRef.current.visible = opacityFactor > 0.01;
-
-    if (groupRef.current.visible) {
-      groupRef.current.traverse((obj) => {
-        if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
-          const mat = obj.material as THREE.Material;
-          mat.transparent = true;
-
-          /**
-           * 🚀 [보정] 각 레이어의 기본 opacity 수치를 존중하며 factor를 곱합니다.
-           * obj.name이나 타입을 통해 기본값을 매핑하거나,
-           * 단순히 전체 factor만 조절해도 안개 효과로는 충분합니다.
-           */
-          if (obj.type === 'Mesh') {
-            // 건물(0.8), 물(0.7), 지면(0.5) 등 원래 의도한 투명도에 안개 계수를 곱함
-            // 여기서는 단순화를 위해 opacityFactor를 직접 주거나,
-            // 아예 material 자체의 opacity는 건드리지 않고 fog가 해결하게 두는 방법도 있습니다.
-          }
-        }
+  const renderBuildings = useMemo(() => {
+    return infras
+      .filter((f) => f.type === 'building' && f.shape)
+      .map((b, idx) => {
+        const color = isNight
+          ? '#4A5568'
+          : BUILDING_COLORS[idx % BUILDING_COLORS.length];
+        return (
+          <mesh
+            key={b.id}
+            position={[b.center.x, 0.04, b.center.z]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            {/* 🏢 건물도 얇은 판(Extrude)으로 만들면 면적이 꽉 찹니다. */}
+            <extrudeGeometry
+              args={[b.shape!, { depth: 0.1, bevelEnabled: false }]}
+            />
+            <meshBasicMaterial color={color} />
+          </mesh>
+        );
       });
-    }
-  });
+  }, [infras, isNight]);
+
+  // 4. 도로 렌더링
+  // 4. 도로 렌더링 부분 수정
+  const renderRoads = useMemo(() => {
+    return infras
+      .filter((f) => f.type === 'road' && f.points.length >= 2)
+      .flatMap((road) => {
+        const style =
+          ROAD_STYLES[road.tags.highway || 'residential'] ||
+          ROAD_STYLES.residential;
+
+        // 🚀 도로 등급에 따른 미세한 높이 차 (Z-fighting 방지)
+        // 0.15를 기본으로 두고, 넓은 도로가 아주 살짝 위에 오도록 합니다.
+        const ROAD_BASE_HEIGHT = 0.15;
+        const layerPriority = style.width * 0.001;
+
+        const segments = [];
+
+        for (let i = 0; i < road.points.length - 1; i++) {
+          const p1 = road.points[i];
+          const p2 = road.points[i + 1];
+          const len = p1.distanceTo(p2);
+          const angle = Math.atan2(p2.x - p1.x, p2.z - p1.z);
+
+          // 1. 직선 선분
+          segments.push(
+            <mesh
+              key={`${road.id}-${i}`}
+              renderOrder={10}
+              position={[
+                road.center.x + (p1.x + p2.x) / 2,
+                0.15 + layerPriority,
+                road.center.z + (p1.z + p2.z) / 2,
+              ]}
+              rotation={[-Math.PI / 2, 0, angle + Math.PI / 2]}
+            >
+              <planeGeometry args={[len, style.width]} />
+              <meshBasicMaterial
+                color={layerColors.road}
+                transparent
+                opacity={style.opacity}
+                depthWrite={false}
+              />
+            </mesh>,
+          );
+
+          // 2. 연결부 (Joint)
+          segments.push(
+            <mesh
+              key={`${road.id}-j-${i}`}
+              renderOrder={10}
+              position={[
+                road.center.x + p1.x,
+                0.15 + layerPriority,
+                road.center.z + p1.z,
+              ]}
+              rotation={[-Math.PI / 2, 0, 0]}
+            >
+              <circleGeometry args={[style.width / 2, 8]} />
+              <meshBasicMaterial
+                color={layerColors.road}
+                transparent
+                opacity={style.opacity}
+                depthWrite={false}
+              />
+            </mesh>,
+          );
+        }
+        return segments;
+      });
+  }, [infras, layerColors.road]);
 
   return (
-    <group ref={groupRef}>
-      {/* 건물 레이어 */}
-      {mergedMeshes.building && (
-        <mesh geometry={mergedMeshes.building}>
-          <meshStandardMaterial
-            color="#4a4e54"
-            roughness={0.7}
-            metalness={0.2}
+    <group position={[-originOffset.x, 0, -originOffset.z]}>
+      {/* 🌳 초록 동산 땅 */}
+      {terrainMeshes.landuse && (
+        <mesh geometry={terrainMeshes.landuse} renderOrder={1}>
+          <meshBasicMaterial color={layerColors.landuse} />
+        </mesh>
+      )}
+
+      {/* 💧 물줄기/강 */}
+      {terrainMeshes.water && (
+        <mesh geometry={terrainMeshes.water} renderOrder={2}>
+          <meshBasicMaterial
+            color={layerColors.water}
             transparent
-            opacity={0.8}
+            opacity={0.9}
           />
         </mesh>
       )}
-      {/* 물 레이어 */}
-      {mergedMeshes.water && (
-        <mesh geometry={mergedMeshes.water}>
-          <meshStandardMaterial
-            color="#4da3ff"
-            roughness={0.1}
-            metalness={0.5}
-            transparent
-            opacity={0.7}
-          />
-        </mesh>
-      )}
-      {/* 지면(공원 등) 레이어 */}
-      {mergedMeshes.landuse && (
-        <mesh geometry={mergedMeshes.landuse}>
-          <meshBasicMaterial color="#82ad7d" transparent opacity={0.5} />
-        </mesh>
-      )}
-      {/* 도로 레이어 (LineSegment) */}
-      {mergedRoads && (
-        <lineSegments geometry={mergedRoads}>
-          <lineBasicMaterial color="#ffffff" transparent opacity={0.3} />
-        </lineSegments>
-      )}
+
+      {/* 🏢 알록달록 평면 건물들 */}
+      {renderBuildings}
+
+      {/* 🛣️ 도로망 */}
+      {renderRoads}
     </group>
   );
 });

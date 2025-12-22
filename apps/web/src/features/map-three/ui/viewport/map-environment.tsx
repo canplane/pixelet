@@ -1,21 +1,17 @@
 import { useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber'; // 🚀 애니메이션을 위해 추가
-import { Sky, Grid } from '@react-three/drei';
-import { useMapStore } from '../../model/map-store';
-import { projection } from '@/shared/lib/geo/projection';
+import { Sky } from '@react-three/drei';
+import { useMapNavigation } from '../../model/use-map-navigation';
 import { MAP_THEMES } from '../../model/map-theme';
 import { THREE_CONFIG } from '../../model/three-config';
 
-const { GRID_SIZE } = projection;
 const { FOG_NEAR, FOG_FAR } = THREE_CONFIG.RENDERING;
 
 export function MapEnvironment() {
-  // 🚀 [추가] 오프셋 구독 (그리드 정렬용)
-  const originOffset = useMapStore((state) => state.originOffset);
+  const { themeKey } = useMapNavigation();
+  const isNight = themeKey === 'night';
 
-  // 🚀 현재 시간을 기반으로 테마 결정 (store에 저장하거나 로직 추가 가능)
-  const themeKey = useMapStore((state) => state.getThemeKey());
   const targetTheme = MAP_THEMES[themeKey];
 
   // 보간을 위한 내부 Ref들
@@ -102,11 +98,32 @@ export function MapEnvironment() {
           targetTheme.lighting.hemisphere.intensity,
         ]}
       />
-      {/* 초록색 배경 평면 (디버그) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+
+      {/* 🚀 초록색 평면을 세련된 디지털 캔버스로 교체 */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.1, 0]}
+        receiveShadow
+      >
         <planeGeometry args={[10000, 10000]} />
-        <meshBasicMaterial color="#4c9540" />
+        <meshStandardMaterial
+          // 🚀 밤에는 깊은 네이비/블랙, 낮에는 아주 밝은 그레이/오프화이트
+          color={isNight ? '#05070a' : '#f0f2f5'}
+          roughness={1}
+          metalness={0}
+        />
       </mesh>
+
+      {/* 🚀 (옵션) 무한 격자 보조도구: 지면이 너무 밋밋할 때 '눈금'을 줍니다. */}
+      {/* <gridHelper
+        args={[
+          10000,
+          500,
+          isNight ? '#1e293b' : '#e2e8f0',
+          isNight ? '#0f172a' : '#f1f5f9',
+        ]}
+        position={[0, -0.09, 0]}
+      /> */}
     </>
   );
 }
