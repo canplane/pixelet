@@ -34,11 +34,12 @@ function getDistance(pos1: Location, pos2: Location): number {
  * - 거리 기반 메모리 정리 (Cleanup)
  */
 export function useMapFeatures(
-  queryName: keyof typeof MAP_QUERIES,
+  // 🚀 1. 단일 또는 배열을 모두 받을 수 있도록 타입 확장
+  queryName: keyof typeof MAP_QUERIES | (keyof typeof MAP_QUERIES)[],
   location: Location | null,
   radius: number = OSM_CONFIG.DEFAULT_RADIUS,
 ) {
-  const [osmData, setOsmData] = useState<OverpassResponse>({ elements: [] });
+  const [data, setData] = useState<OverpassResponse>({ elements: [] });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -52,7 +53,7 @@ export function useMapFeatures(
    */
   const mergeAndCleanup = useCallback(
     (newElements: OverpassElement[], currentCenter: Location) => {
-      setOsmData((prev) => {
+      setData((prev) => {
         const combined = [...prev.elements, ...newElements];
 
         const uniqueAndNearby = combined.filter((el, index, self) => {
@@ -92,18 +93,28 @@ export function useMapFeatures(
     if (now - lastRequestTimeRef.current < OSM_CONFIG.REQUEST_INTERVAL) return;
 
     const loadData = async () => {
-      // 이전에 정의한 쿼리 매개변수 구조 { location, radius } 반영
-      const query = MAP_QUERIES[queryName]({ location, radius });
-
       setIsLoading(true);
       setCanRequest(false);
       lastRequestTimeRef.current = now;
       lastRequestPosRef.current = location;
 
+      // 🚀 2. 배열 쿼리 처리 로직
+      const queryNames = Array.isArray(queryName) ? queryName : [queryName];
+
       try {
-        const data = await requestOverpass(query);
-        if (data.elements) {
-          mergeAndCleanup(data.elements, location);
+        // 모든 쿼리를 병렬로 실행
+        const results = await Promise.all(
+          queryNames.map((name) => {
+            const query = MAP_QUERIES[name]({ location, radius });
+            return requestOverpass(query);
+          }),
+        );
+
+        // 결과 병합
+        const allElements = results.flatMap((res) => res.elements || []);
+
+        if (allElements.length > 0) {
+          mergeAndCleanup(allElements, location);
         }
         setError(null);
       } catch (err) {
@@ -118,7 +129,8 @@ export function useMapFeatures(
     };
 
     loadData();
+    // 🚀 3. queryName이 배열일 수 있으므로 의존성 비교를 위해 JSON.stringify 사용 고려
   }, [location, radius, canRequest, queryName, mergeAndCleanup]);
 
-  return { osmData, isLoading, error, isWaiting: !canRequest && !isLoading };
+  return { data, isLoading, error, isWaiting: !canRequest && !isLoading };
 }

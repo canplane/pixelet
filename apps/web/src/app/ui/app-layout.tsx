@@ -5,6 +5,7 @@ import { AppContext } from '../providers/app-context';
 import { useAppInit } from '../hooks/use-app-init';
 import { useUiController } from '../hooks/use-ui-controller';
 import { ModalManager } from '../providers/modal-manager';
+import { Toaster } from '@/shared/ui/theme/glass/sonner';
 
 /** Loading page */
 function LoadingPage() {
@@ -31,6 +32,8 @@ export function AppLayout(props: AppLayoutProps) {
 
   return (
     <AppContext.Provider value={{ store, ui: uiController }}>
+      <Toaster />
+
       <div className="min-h-screen flex flex-col items-center">
         {loadState === 'success' && children}
 

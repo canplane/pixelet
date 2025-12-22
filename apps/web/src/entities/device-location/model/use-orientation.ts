@@ -6,15 +6,19 @@ export function useDeviceOrientation() {
 
   // 1. 이벤트 핸들러 분리
   const handleOrientation = useCallback((e: DeviceOrientationEvent) => {
-    // iOS 전용 나침반 값
+    // 1. iOS (가장 정확한 절대 방위)
     const webkitHeading = (e as any).webkitCompassHeading;
-
     if (webkitHeading !== undefined) {
       setCompassHeading(webkitHeading);
+      return;
     }
-    // Android 및 표준: absolute 모드일 때 alpha 사용
-    else if (e.alpha !== null) {
-      // Android는 시계 반대방향이므로 변환 필요
+
+    // 2. Android / Chrome (deviceorientationabsolute 이벤트 대응)
+    // absolute가 true이거나 alpha가 존재할 때
+    if (e.alpha !== null) {
+      // 🚀 보통 Android는 시계 반대방향이므로 360 - alpha를 사용
+      // 하지만 센서 데이터를 더 부드럽게 쓰려면 그대로 사용하고
+      // UI에서 보정하는 것이 나을 때도 있습니다.
       const heading = (360 - e.alpha) % 360;
       setCompassHeading(heading);
     }

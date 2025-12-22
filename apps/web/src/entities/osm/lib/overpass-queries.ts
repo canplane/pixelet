@@ -24,83 +24,138 @@ type MapQueriesParams = {
  * out body geom: 요소의 속성(tags)과 기하학적 좌표(geometry)를 한 번에 포함
  */
 export const MAP_QUERIES = {
+  // /**
+  //  * 전체 지형지물 렌더링용 쿼리 (Heavy)
+  //  *
+  //  * 도로와 모든 건물을 가져옵니다. (기존 로직 유지)
+  //  */
+  // GEOMETRY_ALL: ({ location, radius }: MapQueriesParams) => {
+  //   const { lng, lat } = location;
+  //   return `
+  //   [out:json][timeout:25];
+  //   (way["highway"](around:${radius},${lat},${lng});
+  //   way["building"](around:${radius},${lat},${lng});
+  //   relation["building"](around:${radius},${lat},${lng}););
+  //   out body geom;
+  //   >;
+  //   out skel qt;
+  //   `;
+  // },
+
+  // /**
+  //  * 절충안 쿼리 (Balanced)
+  //  *
+  //  * 모든 도로는 가져오되, 건물은 '주요 건물'만 필터링해서 가져옵니다.
+  //  * 주택(house, apartments)을 제외한 상업, 공공, 랜드마크 위주로 구성됩니다.
+  //  */
+  // GEOMETRY_MAJOR: ({ location, radius }: MapQueriesParams) => {
+  //   const { lng, lat } = location;
+  //   // 주거용 건물 제외, 주요 도로(주간선, 보조간선 등) 위주 구성
+  //   const buildingFilter =
+  //     '"building"~"commercial|retail|public|civic|hospital|university|church|cathedral|government"';
+  //   // 골목길(service, footway 등) 제외 필터
+  //   const roadFilter =
+  //     '"highway"~"motorway|trunk|primary|secondary|tertiary|residential"';
+
+  //   return `
+  //   [out:json][timeout:25];
+  //   (
+  //     way[${roadFilter}](around:${radius},${lat},${lng});
+  //     way[${buildingFilter}](around:${radius},${lat},${lng});
+  //     relation[${buildingFilter}](around:${radius},${lat},${lng});
+  //   );
+  //   out body geom;
+  //   `;
+  // },
+
+  // /**
+  //  * 도로 전용 쿼리 (Ultra Light)
+  //  *
+  //  * 건물 데이터를 완전히 배제하고 도로망만 가져옵니다.
+  //  * 성능이 가장 좋으며 렌더링 부하가 거의 없습니다.
+  //  */
+  // GEOMETRY_ROADS_ALL: ({ location, radius }: MapQueriesParams) => {
+  //   const { lng, lat } = location;
+  //   return `
+  //   [out:json][timeout:25];
+  //   (way["highway"](around:${radius},${lat},${lng}););
+  //   out body geom;
+  //   >;
+  //   out skel qt;
+  //   `;
+  // },
+
   /**
-   * 1. [기존] 전체 지형지물 렌더링용 쿼리 (Heavy)
-   * 도로와 모든 건물을 가져옵니다. (기존 로직 유지)
+   * 주요 도로 전용 쿼리 (Mobile Optimized)
+   *
+   * 건물은 아예 제외하고, 골목길(service, footway)을 뺀 주요 간선 도로만 가져옵니다.
+   * 모바일에서 지도를 빠르게 훑을 때 가장 부드러운 프레임을 보장합니다.
    */
-  GEOMETRY_ALL: ({ location, radius }: MapQueriesParams) => {
+  GEOMETRY_ROADS_MAJOR: ({ location, radius }: MapQueriesParams) => {
     const { lng, lat } = location;
+    // 간선도로, 보조간선도로 등 주요 네트워크만 포함 (residential은 선택사항)
+    const majorRoadFilter =
+      '"highway"~"motorway|trunk|primary|secondary|tertiary"';
+
     return `
-    [out:json][timeout:25];
-    (way["highway"](around:${radius},${lat},${lng});
-    way["building"](around:${radius},${lat},${lng});
-    relation["building"](around:${radius},${lat},${lng}););
+    [out:json][timeout:20];
+    (way[${majorRoadFilter}](around:${radius},${lat},${lng}););
     out body geom;
     >;
     out skel qt;
     `;
   },
 
-  /**
-   * 2. [추가] 도로 전용 쿼리 (Ultra Light)
-   * 건물 데이터를 완전히 배제하고 도로망만 가져옵니다.
-   * 성능이 가장 좋으며 렌더링 부하가 거의 없습니다.
-   */
-  GEOMETRY_ROADS_ONLY: ({ location, radius }: MapQueriesParams) => {
-    const { lng, lat } = location;
-    return `
-    [out:json][timeout:25];
-    (way["highway"](around:${radius},${lat},${lng}););
-    out body geom;
-    >;
-    out skel qt;
-    `;
-  },
+  // POI_ALL: ({ location, radius }: MapQueriesParams) => {
+  //   const { lng, lat } = location;
+  //   return `
+  //   [out:json][timeout:30];
+  //   (
+  //     // 1. 생활 밀착형 랜드마크 (카페, 음식점 등 인기 스팟)
+  //     node["amenity"~"cafe|restaurant|pub|bar|bakery"](around:${radius},${lat},${lng});
+  //     way["amenity"~"cafe|restaurant|pub|bar|bakery"](around:${radius},${lat},${lng});
+
+  //     // 2. 관광 및 문화 거점 (박물관, 예술 센터, 전망대)
+  //     node["tourism"~"attraction|viewpoint|museum|art_gallery"](around:${radius},${lat},${lng});
+  //     node["amenity"~"arts_centre|theatre|cinema"](around:${radius},${lat},${lng});
+
+  //     // 3. 쇼핑 및 교통 허브 (대형 마트, 지하철역, 백화점)
+  //     node["shop"~"mall|department_store"](around:${radius},${lat},${lng});
+  //     way["shop"~"mall|department_store"](around:${radius},${lat},${lng});
+  //     node["railway"="station"](around:${radius},${lat},${lng});
+
+  //     // 4. 대규모 휴식 및 역사적 장소
+  //     way["leisure"~"park|garden"](around:${radius},${lat},${lng});
+  //     node["historic"~"memorial|monument|castle"](around:${radius},${lat},${lng});
+  //   );
+  //   out center; // 'center' 키워드를 사용해 영역 데이터도 하나의 좌표로 압축해서 가져옵니다.
+  // `;
+  // },
 
   /**
-   * 3. [추가] 절충안 쿼리 (Balanced)
-   * 모든 도로는 가져오되, 건물은 '주요 건물'만 필터링해서 가져옵니다.
-   * 주택(house, apartments)을 제외한 상업, 공공, 랜드마크 위주로 구성됩니다.
+   * 🚀 주요 POI 전용 쿼리 (Mobile Optimized)
+   * 수만 개의 카페/식당 대신, 길 찾기의 기준이 되는 주요 거점만 가져옵니다.
+   * 역, 관공서, 대형 쇼핑몰, 주요 문화시설 위주입니다.
    */
-  GEOMETRY_MAJOR_ONLY: ({ location, radius }: MapQueriesParams) => {
+  POI_MAJOR: ({ location, radius }: MapQueriesParams) => {
     const { lng, lat } = location;
-    // 필터링할 건물 태그: 상업, 소매, 공공, 병원, 대학, 종교 등
-    const buildingFilter =
-      '"building"~"commercial|retail|public|civic|hospital|university|church|cathedral|government"';
     return `
-    [out:json][timeout:25];
+    [out:json][timeout:20];
     (
-      way["highway"](around:${radius},${lat},${lng});
-      way[${buildingFilter}](around:${radius},${lat},${lng});
-      relation[${buildingFilter}](around:${radius},${lat},${lng});
+      // 1. 교통 허브 (역, 터미널) - 가장 중요
+      node["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});
+      
+      // 2. 주요 공공기관 및 대형 병원
+      node["amenity"~"townhall|hospital|university"](around:${radius},${lat},${lng});
+      
+      // 3. 대형 상업 시설 및 랜드마크
+      node["shop"~"mall|department_store"](around:${radius},${lat},${lng});
+      node["tourism"~"museum|viewpoint|attraction"](around:${radius},${lat},${lng});
+      
+      // 4. 대규모 녹지 (공원 등은 영역의 중심점만)
+      way["leisure"="park"](around:${radius},${lat},${lng});
     );
-    out body geom;
-    >;
-    out skel qt;
-    `;
-  },
-
-  /**
-   * 편의시설 마커 표시용 쿼리
-   */
-  AMENITIES: ({ location, radius }: MapQueriesParams) => {
-    const { lng, lat } = location;
-    return `
-    [out:json][timeout:25];
-    node["amenity"](around:${radius},${lat},${lng});
-    out body geom;
-    `;
-  },
-
-  /**
-   * 특정 카테고리(카페) 필터링 쿼리
-   */
-  CAFE: ({ location, radius }: MapQueriesParams) => {
-    const { lng, lat } = location;
-    return `
-    [out:json][timeout:25];
-    node["amenity"="cafe"](around:${radius},${lat},${lng});
-    out body geom;
+    out center; 
     `;
   },
 } as const;
