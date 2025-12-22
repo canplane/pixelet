@@ -5,67 +5,101 @@ import type {
 } from '@/entities/osm/model/types';
 import type { Location, MeterPos } from '@/shared/types/map';
 
-export interface ParsedFeature {
+/**
+ * 지도의 물리적 기반 시설 (3D Mesh 렌더링용)
+ */
+export interface MapInfra {
   id: string;
-  type: 'road' | 'building';
-  points: THREE.Vector3[];
-  center: THREE.Vector3; // [추가] 객체의 기준점이 될 절대 미터 좌표
-  shape?: THREE.Shape; // 건물 외곽선 Shape (ExtrudeGeometry용)
-  height: number; // 건물 높이(m)
-  tags?: Record<string, string | undefined>;
+  // 인프라의 세부 유형 (물, 땅의 용도 구획 추가)
+  type: 'building' | 'road' | 'water' | 'landuse';
+  points: THREE.Vector3[]; // 상대 좌표
+  center: THREE.Vector3; // 절대 좌표 기준점
+  shape?: THREE.Shape; // 건물을 위한 외곽선
+  height: number; // 건물일 경우의 높이
+  tags: Record<string, string | undefined>; // 원본 태그 (추후 확장성)
 }
 
+/**
+ * 지도의 정보성 지점 (HTML/Badge 라벨용)
+ */
+export interface MapPoi {
+  id: string;
+  type: 'poi';
+  category: string; // cafe, restaurant 등
+  name: string;
+  center: THREE.Vector3; // 라벨이 표시될 절대 좌표
+  tags: Record<string, string | undefined>;
+}
+
+// 최종 반환 구조
+export interface ParseResult {
+  infra: MapInfra[];
+  pois: MapPoi[];
+}
 export const parseOsmData = (
   data: OverpassResponse,
-  project: (loc: Location) => MeterPos | null, // Location 객체를 받는 project 함수
-): ParsedFeature[] => {
-  if (!data?.elements) return [];
+  project: (loc: Location) => MeterPos | null,
+): ParseResult => {
+  const result: ParseResult = { infra: [], pois: [] };
+  if (!data?.elements) return result;
 
-  return data.elements.reduce<ParsedFeature[]>(
-    (acc, item: OverpassElement, idx: number) => {
-      if (item.type !== 'way' || !item.geometry) return acc;
+  data.elements.forEach((item: OverpassElement, idx: number) => {
+    const tags = item.tags || {};
 
-      const isBuilding = !!item.tags?.building;
+    // --- [Part 1] POI 데이터 추출 (이름이 있는 모든 요소 대상) ---
+    const rawLat = item.lat || item.center?.lat;
+    const rawLng = item.lon || item.center?.lon;
 
-      /**
-       * 1. 좌표 변환 (Location -> MeterPos)
-       * OSM 데이터의 lon, lat을 객체로 감싸서 전달합니다.
-       */
+    if (tags.name && rawLat && rawLng) {
+      const poiPos = project({ lng: rawLng, lat: rawLat, alt: 0 });
+      if (poiPos) {
+        result.pois.push({
+          id: `poi-${item.id || idx}`,
+          type: 'poi',
+          category: tags.amenity || tags.shop || tags.tourism || 'place',
+          name: tags.name,
+          center: new THREE.Vector3(poiPos.x, 0, poiPos.z),
+          tags,
+        });
+      }
+    }
+
+    // --- [Part 2] Infrastructure 데이터 추출 (물리적 형체 위주) ---
+    if (item.type === 'way' && item.geometry) {
+      const isBuilding = !!tags.building;
+      const isRoad = !!tags.highway;
+      const isWater = !!(
+        tags.natural === 'water' ||
+        tags.waterway ||
+        tags.water
+      );
+      const isLanduse = !!tags.landuse;
+
+      // 물리적 실체가 없는 데이터는 스킵
+      if (!isBuilding && !isRoad && !isWater && !isLanduse) return;
+
       const absolutePoints = item.geometry
-        .map((pt) => {
-          // OSM geometry 포인트에는 고도 정보가 없는 경우가 많으므로 기본값 0 사용
-          const meterPos = project({ lng: pt.lon, lat: pt.lat, alt: 0 });
-          return meterPos;
-        })
+        .map((pt) => project({ lng: pt.lon, lat: pt.lat, alt: 0 }))
         .filter((v): v is MeterPos => v !== null);
 
-      if (absolutePoints.length < 2) return acc;
+      if (absolutePoints.length < 2) return;
 
-      /**
-       * [보강] 기준점(Center) 및 상대 좌표 계산
-       * Three.js의 정밀도 문제를 방지하기 위해 첫 번째 점을 center(절대좌표)로 잡고
-       * 나머지 점들은 center 기준의 상대 좌표로 변환합니다.
-       */
+      // 기준점 설정
       const first = absolutePoints[0];
       const center = new THREE.Vector3(first.x, 0, first.z);
 
+      // 타입별 높이 오프셋 (Z-fighting 방지)
       const points = absolutePoints.map((pt) => {
-        // 도로는 Z-fighting 방지를 위해 지면보다 살짝(0.05m) 띄웁니다.
-        const yOffset = isBuilding ? 0 : 0.05;
-        return new THREE.Vector3(
-          pt.x - center.x, // 절대 좌표에서 기준점 차감 (상대 좌표화)
-          0 + yOffset,
-          pt.z - center.z, // 절대 좌표에서 기준점 차감 (상대 좌표화)
-        );
+        let y = 0;
+        if (isRoad) y = 0.05; // 도로는 지면보다 위
+        if (isWater) y = -0.1; // 물은 지면보다 아래
+        if (isLanduse) y = 0.02; // 구획(공원 등)은 도로보다 아래
+        return new THREE.Vector3(pt.x - center.x, y, pt.z - center.z);
       });
 
-      /**
-       * 2. 건물을 위한 2D Shape 생성
-       * ExtrudeGeometry를 위해 XZ 평면의 좌표를 Three.js Shape의 XY 평면으로 매핑합니다.
-       * 이제 상대 좌표를 사용하므로 0,0 근처에서 Shape이 생성되어 정밀도가 유지됩니다.
-       */
+      // 면(Face) 생성이 필요한 경우 Shape 생성
       let shape: THREE.Shape | undefined;
-      if (isBuilding && points.length >= 3) {
+      if ((isBuilding || isWater || isLanduse) && points.length >= 3) {
         shape = new THREE.Shape();
         shape.moveTo(points[0].x, points[0].z);
         for (let i = 1; i < points.length; i++) {
@@ -74,31 +108,30 @@ export const parseOsmData = (
         shape.closePath();
       }
 
-      /**
-       * 3. 실제 미터 단위 높이 결정
-       * 1 unit = 1 meter 시스템이므로 파싱된 높이값을 그대로 사용합니다.
-       * - height 태그가 있으면 사용
-       * - 층수(levels) 태그가 있으면 층당 3.5m로 계산
-       * - 기본값 10m
-       */
-      const height = item.tags?.height
-        ? parseFloat(item.tags.height)
-        : item.tags?.['building:levels']
-          ? parseFloat(item.tags['building:levels']) * 3.5
+      // 건물 높이 계산
+      const height = tags.height
+        ? parseFloat(tags.height)
+        : tags['building:levels']
+          ? parseFloat(tags['building:levels']) * 3.5
           : 10;
 
-      acc.push({
-        id: `osm-${item.id || idx}`,
-        type: isBuilding ? 'building' : 'road',
+      result.infra.push({
+        id: `infra-${item.id || idx}`,
+        type: isBuilding
+          ? 'building'
+          : isRoad
+            ? 'road'
+            : isWater
+              ? 'water'
+              : 'landuse',
         points,
-        center, // 절대 좌표 기준점 보관
+        center,
         shape,
-        height,
-        tags: item.tags,
+        height: isBuilding ? height : 0,
+        tags,
       });
+    }
+  });
 
-      return acc;
-    },
-    [],
-  );
+  return result;
 };

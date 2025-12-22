@@ -11,37 +11,58 @@ import type { MeterPos } from '@/shared/types/map';
 
 // 3. 기능 전용 상태 관리 (Feature Store)
 import { useMapStore } from '../../model/map-store';
-import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
+import { useMapNavigation } from '../../model/use-map-navigation';
 
-const { DEFAULT_DISTANCE, DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
+const { DEFAULT_DISTANCE, DEFAULT_POLAR_ANGLE, MIN_DISTANCE, MAX_DISTANCE } =
+  THREE_CONFIG.CAMERA;
+const { FAR_CLIP, RESET_THRESHOLD } = THREE_CONFIG.RENDERING;
+interface Props {
+  worldGroupRef: React.RefObject<THREE.Group | null>;
+}
 
-export function MapCameraController() {
+export function MapCameraController({ worldGroupRef }: Props) {
   const { camera } = useThree();
   const controlsRef = useRef<OrbitControlsImpl>(null);
-  const isInitialized = useRef(false); // 초기 로딩 여부 체크
 
-  // 기기 실제 GPS 위치
-  const { location: deviceLocation, status } = useDeviceLocationStore();
+  /**
+   * 🚀 [Floating Origin의 핵심: 누적 오프셋]
+   * 지도의 '절대 원점'과 현재 Three.js '로컬 원점(0,0,0)' 사이의 거리 차이를 저장합니다.
+   * 이 값이 있어야만 수천 킬로미터 떨어진 곳에서도 정밀한 좌표 계산이 가능합니다.
+   */
+  const originOffset = useMapStore((state) => state.originOffset);
+  const setOriginOffset = useMapStore((state) => state.setOriginOffset);
 
-  // Store에서 필요한 상태와 액션 구독
-  const center = useMapStore((state) => state.center);
-  const setCenter = useMapStore((state) => state.setCenter);
-  const origin = useMapStore((state) => state.origin);
-  const setOrigin = useMapStore((state) => state.setOrigin);
-  const project = useMapStore((state) => state.project);
-  const setViewState = useMapStore((state) => state.setViewState);
+  const isInitialized = useRef(false);
+  const {
+    center,
+    setCenter,
+    setViewState,
+    origin,
+    setOrigin,
+    devicePos,
+    setIsFollowMode,
+    setIsInteracting,
+  } = useMapNavigation();
   const resetSignal = useMapStore((state) => state.cameraResetSignal);
 
-  // 3. 통합 위치 및 원점 관리 (절대 좌표계 초기화)
+  // 카메라의 가시거리를 설정값과 동기화
   useEffect(() => {
-    if (status !== 'ready' || !deviceLocation) return;
+    camera.far = FAR_CLIP;
+    camera.updateProjectionMatrix();
+  }, [camera]);
 
-    // 초기 상태: 기준점이 없으면 현재 위치를 기준점으로 잡음
+  useEffect(() => {
+    if (!devicePos) return;
     if (!origin) {
-      setOrigin(deviceLocation);
-      // 초기 카메라 중심을 내 위치의 절대 미터 좌표로 설정
-      const initialCenter = project(deviceLocation);
-      setCenter(initialCenter); // 카메라를 수백만 미터 지점으로 즉시 보냄
+      setOrigin(devicePos);
+
+      // 🚀 [추가] 앱이 처음 켜질 때, 초기 원점을 아예 누적 오프셋으로 설정합니다.
+      // 이렇게 해야 카메라가 (1400만, 0, -440만)이 아닌 (0, 0, 0)에서 시작합니다.
+      setOriginOffset({ x: devicePos.x, y: devicePos.y, z: devicePos.z });
+
+      // 타겟 센터는 (0,0,0)으로 시작하게 됩니다 (내 위치가 곧 원점)
+      const initialCenter = devicePos;
+      setCenter(initialCenter);
       return;
     }
 
@@ -51,7 +72,7 @@ export function MapCameraController() {
      * 만약 "내 위치 추적 모드"라면 아래 주석을 해제하세요.
      */
     // setCenter(project(deviceLocation));
-  }, [deviceLocation, origin, status, project, setOrigin, setCenter]);
+  }, [devicePos, origin, setOrigin, setCenter]);
 
   const lastProcessedCenter = useRef<string>('');
   const lastUpdate = useRef({ distance: 0, bearing: 0 });
@@ -74,7 +95,6 @@ export function MapCameraController() {
    */
   const syncCamera = (targetPos: MeterPos, distance: number) => {
     if (!controlsRef.current) return;
-
     const polar = controlsRef.current.getPolarAngle() || DEFAULT_POLAR_ANGLE;
     const azimuth = controlsRef.current.getAzimuthalAngle();
 
@@ -109,32 +129,33 @@ export function MapCameraController() {
   };
 
   /**
-   * [위치 동기화 로직]
-   * 초기 로딩 시에는 syncCamera(순간이동),
-   * 이후 데이터 업데이트 시에는 flyTo(부드러운 이동)를 사용합니다.
+   * 📡 [절대 좌표 -> 로컬 좌표 변환 동기화]
+   * Store에 저장된 '천만 단위 절대 좌표'를 현재 로컬 좌표계에 맞춰 변환하여 카메라를 이동시킵니다.
    */
   useEffect(() => {
+    // 🚀 controlsRef.current 가 null인지 먼저 체크합니다. (Type Guard)
+    if (!center || !origin || !controlsRef.current) return;
+
+    // OrbitControls의 내부 active 상태 체크 (애니메이션 중 간섭 방지)
     if (!center || !origin || (controlsRef.current as any).active) return;
 
-    const currentKey = JSON.stringify(center);
-    if (lastProcessedCenter.current === currentKey) return;
-    lastProcessedCenter.current = currentKey;
+    // 절대 좌표(center)에서 누적 오프셋(originOffset)을 빼서 현재 Scene에서의 위치를 구합니다.
+    const localTarget: MeterPos = {
+      x: center.x - originOffset.x,
+      y: center.y - originOffset.y,
+      z: center.z - originOffset.z,
+    };
 
-    // 현재 거리 계산
-    const currentDist = camera.position.distanceTo(
-      (controlsRef.current as any).target,
-    );
+    const currentDist = camera.position.distanceTo(controlsRef.current.target);
     const finalDistance = currentDist > 1 ? currentDist : DEFAULT_DISTANCE;
 
     if (!isInitialized.current) {
-      // 1. [초기 로딩] 앱이 처음 켜질 때는 순간이동!
-      syncCamera(center, finalDistance);
-      isInitialized.current = true; // 초기화 완료 표시
+      syncCamera(localTarget, finalDistance);
+      isInitialized.current = true;
     } else {
-      // 2. [이후 업데이트] GPS 이동이나 센터 변경 시에는 부드럽게 비행!
-      flyTo(center, finalDistance);
+      flyTo(localTarget, finalDistance);
     }
-  }, [center, origin]);
+  }, [center, origin, originOffset]); // 🚀 originOffset이 스토어 값이므로 의존성에 추가
 
   // 거리 리셋 감지
   useEffect(() => {
@@ -145,42 +166,89 @@ export function MapCameraController() {
   // 방향 리셋 감지
   useEffect(() => {
     if (!controlsRef.current || resetSignal.orientation === 0) return;
-    controlsRef.current.setAzimuthalAngle(0);
-    controlsRef.current.setPolarAngle(DEFAULT_POLAR_ANGLE);
-    const currentDist = camera.position.distanceTo(controlsRef.current.target); // 현재 거리는 유지한 채 각도만 리셋
-    flyTo(controlsRef.current.target, currentDist);
+
+    // 1. 즉시 변경(setPolarAngle)은 삭제하세요. (애니메이션과 충돌함)
+
+    const target = controlsRef.current.target;
+    const currentDist = camera.position.distanceTo(target);
+
+    // 2. 목표 위치(Dest)만 정확히 계산해서 flyState에 넘깁니다.
+    const polar = DEFAULT_POLAR_ANGLE;
+    const azimuth = 0; // 정북
+
+    const destX = target.x + currentDist * Math.sin(polar) * Math.sin(azimuth);
+    const destY = target.y + currentDist * Math.cos(polar);
+    const destZ = target.z + currentDist * Math.sin(polar) * Math.cos(azimuth);
+
+    flyState.current.position.set(destX, destY, destZ);
+    flyState.current.lookAt.set(target.x, target.y, target.z);
+    flyState.current.active = true; // 이제 useFrame이 부드럽게 옮겨줄 겁니다.
   }, [resetSignal.orientation]);
 
-  // 3. 외부 위치(Store/GPS) 동기화
-  useEffect(() => {
-    const targetCenter = center;
-    if (!targetCenter || !origin || (controlsRef.current as any).active) return;
-
-    const currentKey = JSON.stringify(targetCenter);
-    if (lastProcessedCenter.current === currentKey) return;
-    lastProcessedCenter.current = currentKey;
-
-    // 현재 사용자가 조절한 줌(거리)을 유지하며 중심점만 이동
-    const currentDist = camera.position.distanceTo(
-      (controlsRef.current as any).target,
-    );
-    const finalDistance = currentDist > 1 ? currentDist : DEFAULT_DISTANCE;
-
-    flyTo(targetCenter, finalDistance);
-  }, [center, origin]);
-
-  // --- 실시간 카메라 상태 업데이트 (ScaleBar, Compass용) ---
   useFrame((state) => {
-    if (!controlsRef.current) return;
+    if (!controlsRef.current || !worldGroupRef.current) return;
+
+    /**
+     * 🔄 [Floating Origin 실시간 감시]
+     * 카메라가 원점(0,0,0)에서 2,000m 이상 멀어지면 정밀도 저하(지터링, 흑백 현상)가 시작됩니다.
+     * 이때 세상을 반대 방향으로 밀어 카메라를 다시 원점으로 소환합니다.
+     */
+    if (camera.position.length() > RESET_THRESHOLD) {
+      // 1. 현재 카메라가 보고 있는 지점(Target)을 새로운 기준점으로 잡습니다.
+      const offset = controlsRef.current.target.clone();
+
+      // 2. 누적 오프셋에 더해줍니다. (이동한 만큼 기록)
+      // 🚀 [수정] 내부 Ref 대신 Store 업데이트
+      const newTotalOffset = {
+        x: originOffset.x + offset.x,
+        y: originOffset.y + offset.y,
+        z: originOffset.z + offset.z,
+      };
+      setOriginOffset(newTotalOffset);
+
+      // 3. [핵심] 세계 전체를 반대 방향으로 밀어버립니다.
+      // 자식 객체(OSM, 마커 등)들은 worldGroup 안에 있으므로 함께 이동합니다.
+      worldGroupRef.current.position.sub(offset);
+
+      // 4. 카메라와 컨트롤러 타겟도 동일한 만큼 이동시켜 상대적 시점은 유지합니다.
+      camera.position.sub(offset);
+      controlsRef.current.target.sub(offset);
+
+      // 5. [플루언트 디자인 정밀도 유지] 즉시 행렬 업데이트
+      // 한 프레임의 오차도 없이 위치를 동기화하여 깜빡임을 방지합니다.
+      worldGroupRef.current.updateMatrixWorld(true);
+      camera.updateMatrixWorld(true);
+
+      // 6. 비행 애니메이션 중이었다면 목표 좌표도 보정합니다.
+      if (flyState.current.active) {
+        flyState.current.position.sub(offset);
+        flyState.current.lookAt.sub(offset);
+      }
+
+      controlsRef.current.update();
+      console.log(
+        '🌐 Floating Origin Reset: Precision maintained at',
+        originOffset,
+      );
+    }
 
     // --- 부드러운 비행 처리 (Fly Animation) ---
     if (flyState.current.active) {
-      const lerpFactor = 0.1; // 0.1 ~ 0.2 사이가 쫀득합니다.
-      camera.position.lerp(flyState.current.position, lerpFactor);
-      controlsRef.current.target.lerp(flyState.current.lookAt, lerpFactor);
+      const { position: targetPos, lookAt: targetLookAt } = flyState.current;
+
+      // 🚀 기존 0.1에서 0.05로 변경 (숫자가 작을수록 더 느리고 부드러움)
+      const LERP_SPEED = 0.05;
+
+      // 1. 카메라 위치 보간
+      camera.position.lerp(targetPos, LERP_SPEED);
+
+      // 2. 컨트롤러 타겟(중심점) 보간
+      controlsRef.current.target.lerp(targetLookAt, LERP_SPEED);
+
       controlsRef.current.update();
 
-      if (camera.position.distanceTo(flyState.current.position) < 0.01) {
+      // 도착 판정 로직 (속도가 느려졌으므로 판정 거리를 조금 더 여유 있게 잡을 수도 있습니다)
+      if (camera.position.distanceTo(targetPos) < 0.1) {
         flyState.current.active = false;
       }
     }
@@ -192,36 +260,36 @@ export function MapCameraController() {
     const distance = camera.position.distanceTo(controlsRef.current.target); // 직선 거리 (줌 레벨)
     const altitude = camera.position.y - controlsRef.current.target.y; // 실제 수직 고도 (Altitude)
 
-    const vector = new THREE.Vector3(0, 0, -1).applyQuaternion(
-      camera.quaternion,
-    );
-    const bearing = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-    const pitch = (controlsRef.current.getPolarAngle() * 180) / Math.PI;
+    const azimuth = controlsRef.current.getAzimuthalAngle();
+    let bearing = azimuth * (180 / Math.PI);
+
+    // [중요] rotateSpeed={-1}일 때 나침반과 동기화
+    bearing = -bearing;
+
+    if (bearing <= -180) bearing += 360;
+    if (bearing > 180) bearing -= 360;
+    if (Math.abs(bearing) < 0.1) bearing = 0;
+
+    const polarAngle = controlsRef.current.getPolarAngle();
+    // const pitch = (polarAngle * 180) / Math.PI;
 
     const distanceDiff = Math.abs(lastUpdate.current.distance - distance);
     const bearingDiff = Math.abs(lastUpdate.current.bearing - bearing);
 
-    // 변화량이 일정 수준 이상일 때만 상위로 전달 (성능 최적화)
     if (distanceDiff > distance * 0.005 || bearingDiff > 0.1) {
       lastUpdate.current = { distance, bearing };
       lastUpdateTime.current = now;
-
-      // Store의 viewState 실시간 업데이트
-      setViewState({
-        distance,
-        altitude,
-        bearing,
-        pitch,
-      });
+      setViewState({ distance, altitude, bearing, polarAngle });
     }
   });
 
   return (
     <OrbitControls
       ref={controlsRef}
-      // 사용자가 조작을 시작하면 애니메이션 중단
       onStart={() => {
+        setIsFollowMode(false);
         flyState.current.active = false;
+        setIsInteracting(true); // 👈 UI를 투명하게 만들고 격리시킴
       }}
       makeDefault
       mouseButtons={{
@@ -235,27 +303,34 @@ export function MapCameraController() {
       }}
       // 회전 관련 세밀한 설정
       enableRotate={true} // 회전 활성화
-      rotateSpeed={0.5} // 회전 속도 (너무 빠르면 낮추세요)
+      rotateSpeed={1} // 🚀 수평 회전을 위해 -1 유지
       // 댐핑(관성) 설정
       enableDamping={true}
-      dampingFactor={0.05} // 너무 낮으면 줌 반응이 느려짐
-      // 기타 거리 제한 (축척 바가 10m ~ 1000m 사이에서만 움직이도록 제한)
-      minDistance={10}
-      maxDistance={1000} // 너무 크면 정밀도가 떨어질 수 있음
+      dampingFactor={0.08} // 관성을 적절히 주어 부드럽게 멈춤
+      // 기타 거리 제한
+      minDistance={MIN_DISTANCE}
+      maxDistance={MAX_DISTANCE} // 너무 크면 정밀도가 떨어질 수 있음
       // 이동 및 회전 제한
       screenSpacePanning={false} // 드래그 시 카메라가 화면 방향이 아닌 '지면(바닥)'을 따라 움직이게 합니다.
       maxPolarAngle={Math.PI / 2.1} // 수직 회전의 아래쪽 한계 (90도 직전)
       minPolarAngle={0} // 수직 회전의 위쪽 한계 (0도 근처)
       onEnd={() => {
+        setIsInteracting(false);
         if (controlsRef.current) {
           const t = controlsRef.current.target;
-          const newPos: MeterPos = { x: t.x, y: t.y, z: t.z };
 
-          // [중요] 사용자가 직접 움직인 좌표임을 기록하여 외부 업데이트 간섭 방지
-          lastProcessedCenter.current = JSON.stringify(newPos);
+          /**
+           * 📍 [로컬 좌표 -> 절대 좌표 변환 보고]
+           * 로컬의 작은 좌표(t)에 누적된 오프셋을 더해 '진짜 지구상의 좌표'를 추출합니다.
+           */
+          const absolutePos = {
+            x: t.x + originOffset.x,
+            y: t.y + originOffset.y,
+            z: t.z + originOffset.z,
+          };
 
-          // Store 업데이트
-          setCenter(newPos);
+          lastProcessedCenter.current = JSON.stringify(absolutePos);
+          setCenter(absolutePos); // 상용 서비스 수준의 절대 좌표 저장
         }
       }}
     />

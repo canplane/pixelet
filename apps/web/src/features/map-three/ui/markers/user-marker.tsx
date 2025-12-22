@@ -1,119 +1,188 @@
-// 1. 외부 라이브러리 (External Libraries)
-import { useMemo, useRef } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
-
-// 2. 엔티티 및 상태 관리 (Entities)
-// 기기 위치 정보는 지도를 넘어선 공통 엔티티로 유지됩니다.
+import { useFrame } from '@react-three/fiber'; // 🚀 애니메이션을 위해 추가
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
-
-// 3. 기능 전용 상태 관리 (Feature Store)
 import { useMapStore } from '../../model/map-store';
+import { projection } from '@/shared/lib/geo/projection';
+import { THREE_CONFIG } from '../../model/three-config';
+
+const { GRID_SIZE } = projection;
+const { FOG_NEAR, FOG_FAR } = THREE_CONFIG.RENDERING;
+
+function createRoundedRectGeometry(size: number, radius: number) {
+  const shape = new THREE.Shape();
+  const x = -size / 2;
+  const y = -size / 2;
+
+  shape.moveTo(x, y + radius);
+  shape.lineTo(x, y + size - radius);
+  shape.quadraticCurveTo(x, y + size, x + radius, y + size);
+  shape.lineTo(x + size - radius, y + size);
+  shape.quadraticCurveTo(x + size, y + size, x + size, y + size - radius);
+  shape.lineTo(x + size, y + radius);
+  shape.quadraticCurveTo(x + size, y, x + size - radius, y);
+  shape.lineTo(x + radius, y);
+  shape.quadraticCurveTo(x, y, x, y + radius);
+
+  return new THREE.ShapeGeometry(shape);
+}
+
+const ROUNDED_GEOMETRY = createRoundedRectGeometry(GRID_SIZE * 0.98, 0.8);
+const MAX_INSTANCES = 1500;
 
 export function UserMarker() {
-  const { location, gpsHeading, compassHeading, accuracy } =
-    useDeviceLocationStore();
+  const { location, accuracy } = useDeviceLocationStore();
   const { project } = useMapStore();
 
-  const compassGroupRef = useRef<THREE.Group>(null);
-  const gpsGroupRef = useRef<THREE.Group>(null);
+  // 🚀 [추가] 오프셋 구독
+  const originOffset = useMapStore((state) => state.originOffset);
 
-  /**
-   * 1. 위치 정보 변환
-   * location.alt가 포함된 절대 미터 좌표(MeterPos)를 생성합니다.
-   */
-  const position = useMemo(
+  // 내 실제 위치 (절대 좌표)
+  const absPosition = useMemo(
     () => (location ? project(location) : null),
     [location, project],
   );
 
   /**
-   * 2. 회전 애니메이션 보간 (Slerp)
-   * Three.js는 시계 반대 방향이 양수이므로 도(deg)를 라디안으로 바꿀 때 마이너스(-)를 적용합니다.
+   * 🚀 [보정] 내 로컬 위치 계산
+   * 절대 좌표에서 현재 월드의 오프셋을 뺍니다.
    */
-  useFrame(() => {
-    const toRad = (deg: number) => -(deg * Math.PI) / 180;
+  const localPosition = useMemo(() => {
+    if (!absPosition) return null;
+    return {
+      x: absPosition.x - originOffset.x,
+      y: absPosition.y - originOffset.y,
+      z: absPosition.z - originOffset.z,
+    };
+  }, [absPosition, originOffset]);
 
-    if (compassGroupRef.current && compassHeading !== null) {
-      const targetQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(0, toRad(compassHeading), 0),
-      );
-      compassGroupRef.current.quaternion.slerp(targetQuat, 0.1);
-    }
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const gemRef = useRef<THREE.Mesh>(null); // 🚀 보석 애니메이션을 위한 ref
+  const tempObject = useMemo(() => new THREE.Object3D(), []);
 
-    if (gpsGroupRef.current && gpsHeading !== null) {
-      const targetQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(0, toRad(gpsHeading), 0),
-      );
-      gpsGroupRef.current.quaternion.slerp(targetQuat, 0.1);
-    }
+  // 🚀 보석 애니메이션 로직: 매 프레임마다 실행됩니다.
+  useFrame((state) => {
+    if (!gemRef.current || !meshRef.current || !localPosition) return;
+
+    const t = state.clock.getElapsedTime();
+    gemRef.current.rotation.y = t * 1.2;
+    gemRef.current.position.y = 2 + Math.sin(t * 1.5) * 0.25;
+
+    // 🚀 [수정] 월드 좌표계를 기준으로 정확한 거리 계산
+    // 마커 메쉬가 실제로 렌더링되는 월드 위치를 가져옵니다.
+    const markerWorldPos = new THREE.Vector3();
+    gemRef.current.getWorldPosition(markerWorldPos);
+
+    const distance = state.camera.position.distanceTo(markerWorldPos);
+
+    // 🚀 안개 끝(1500)보다 더 여유 있게(2500) 잡아서 툭 끊기는 느낌 방지
+    const opacity = THREE.MathUtils.mapLinear(
+      distance,
+      FOG_NEAR,
+      FOG_FAR * 1.8,
+      1,
+      0,
+    );
+
+    const clampedOpacity = THREE.MathUtils.clamp(opacity, 0, 1);
+
+    // 재질 적용
+    const gemMat = gemRef.current.material as THREE.MeshStandardMaterial;
+    gemMat.opacity = clampedOpacity;
+    gemMat.transparent = true;
+
+    const gridMat = meshRef.current.material as THREE.MeshBasicMaterial;
+    gridMat.opacity = clampedOpacity * 0.4;
+
+    // 🚀 [최적화] 완전히 안 보일 때만 끄기
+    const isVisible = clampedOpacity > 0.001;
+    gemRef.current.visible = isVisible;
+    meshRef.current.visible = isVisible;
   });
 
-  if (!position) return null;
+  const gridOffsets = useMemo(() => {
+    const activeAccuracy = accuracy || 10;
+    const safeAccuracy = Math.min(activeAccuracy, 50);
+    const offsets = [];
+    const step = GRID_SIZE;
+    const range = Math.ceil(safeAccuracy / step);
+    for (let x = -range; x <= range; x++) {
+      for (let z = -range; z <= range; z++) {
+        const distanceSq = (x * step) ** 2 + (z * step) ** 2;
+        if (distanceSq <= safeAccuracy ** 2) {
+          offsets.push({ x: x * step, z: z * step });
+        }
+      }
+    }
+    return offsets.slice(0, MAX_INSTANCES);
+  }, [accuracy]);
 
-  /**
-   * 3. 물리적 크기 설정 (1 Unit = 1 Meter)
-   * 더 이상 mapConverter를 사용하지 않고 실제 미터 값을 그대로 입력합니다.
-   */
-  const markerRadius = 0.6; // 마커 지름 약 1.2m
-  const coneRadius = 0.3;
-  const coneHeight = 0.8;
-  const visualHeight = 0.2; // 바닥에서 살짝 띄움 (z-fighting 방지)
+  useEffect(() => {
+    if (!meshRef.current) return;
+
+    meshRef.current.instanceColor = null;
+
+    for (let i = 0; i < MAX_INSTANCES; i++) {
+      tempObject.position.set(0, -1000, 0);
+      tempObject.updateMatrix();
+      meshRef.current.setMatrixAt(i, tempObject.matrix);
+    }
+
+    gridOffsets.forEach((offset, i) => {
+      tempObject.position.set(offset.x, 0.1, offset.z);
+      tempObject.rotation.set(-Math.PI / 2, 0, 0);
+      tempObject.updateMatrix();
+      meshRef.current!.setMatrixAt(i, tempObject.matrix);
+    });
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    meshRef.current.count = gridOffsets.length;
+  }, [gridOffsets, tempObject]);
+
+  if (!localPosition) return null;
 
   return (
-    // position.y에 실제 GPS 고도값이 반영됩니다.
-    <group position={[position.x, position.y, position.z]}>
-      {/* 1. 정확도 범위 (GPS Accuracy Circle) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[accuracy || 0, 32]} />
-        <meshBasicMaterial color="#4285F4" transparent opacity={0.1} />
+    // 🚀 보정된 로컬 좌표를 적용합니다.
+    <group position={[localPosition.x, localPosition.y, localPosition.z]}>
+      {/* 바닥 정확도 그리드 */}
+      <instancedMesh
+        ref={meshRef}
+        args={[ROUNDED_GEOMETRY, undefined, MAX_INSTANCES]}
+        frustumCulled={false}
+      >
+        <meshBasicMaterial
+          color="#AEC6FF"
+          transparent
+          opacity={0.4}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </instancedMesh>
+
+      {/* 💎 보석 마커: 회전하며 반짝임 */}
+      <mesh
+        ref={gemRef}
+        position={[0, 2, 0]}
+        scale={[2.5, 2.5, 2.5]}
+        frustumCulled={false} // 🚀 확대 시 사라짐 방지 핵심
+      >
+        <octahedronGeometry args={[0.5, 0]} />
+        <meshStandardMaterial
+          color="#D0E0FF"
+          emissive="#AEC6FF"
+          emissiveIntensity={1.0}
+          flatShading
+        />
       </mesh>
 
-      {/* 2. 시선 방향 부채꼴 (Compass / Field of View) */}
-      {compassHeading !== null && (
-        <group ref={compassGroupRef}>
-          <mesh
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, 0.05, -2]} // 전방 2m 지점 중심
-          >
-            <ringGeometry
-              args={[
-                0,
-                4, // 부채꼴 반지름 4m
-                32,
-                1,
-                Math.PI * (0.5 - 0.1),
-                Math.PI * 0.2,
-              ]}
-            />
-            <meshBasicMaterial
-              color="#4285F4"
-              transparent
-              opacity={0.3}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-        </group>
-      )}
-
-      {/* 3. 이동 방향 화살표 (GPS Heading Arrow) */}
-      {gpsHeading !== null && (
-        <group ref={gpsGroupRef}>
-          <mesh
-            position={[0, visualHeight * 2.5, -1.2]}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <coneGeometry args={[coneRadius, coneHeight, 3]} />
-            <meshBasicMaterial color="white" />
-          </mesh>
-        </group>
-      )}
-
-      {/* 4. 내 위치 중심 점 (Sphere) */}
-      <mesh position={[0, visualHeight, 0]}>
-        <sphereGeometry args={[markerRadius, 16, 16]} />
-        <meshBasicMaterial color="#4285F4" />
-      </mesh>
+      {/* 보석에서 나오는 은은한 빛 */}
+      <pointLight
+        position={[0, 2, 0]}
+        // 🚀 FOG_FAR 설정에 맞춰 빛의 영향력도 opacity와 동기화하면 더 정교해집니다.
+        distance={10}
+        intensity={8 * (gemRef.current?.visible ? 1 : 0)} // 마커가 꺼지면 빛도 같이 끔
+        color="#AEC6FF"
+      />
     </group>
   );
 }

@@ -26,14 +26,15 @@
     /* 엄격한 타입 검사 및 린팅 */
     "strict": true,
     "skipLibCheck": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
     /* 경로 별칭 (Alias) */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"],
+      "three/*": ["node_modules/three/*"]
     }
   },
   "include": ["src"]

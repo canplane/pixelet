@@ -1,99 +1,95 @@
+import { cn } from '@/shared/lib/utils';
 import { Compass } from './compass';
 import { ScaleBar } from './scale-bar';
 import { VoxelInspector } from './voxel-inspector';
-import { RecenterButton } from './recenter-button';
-import { LoadingSpinner } from '../toasts/loading-spinner';
-import { LocationErrorToast } from '../toasts/location-error-toast';
+import { LocationControl } from './location-control';
 import { useMapStore } from '../../model/map-store';
-import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
-import { useState } from 'react';
-import { useDeviceOrientation } from '@/entities/device-location/model/use-orientation';
+import { PoiDetailPanel } from '../osm/poi-detail-panel';
+import { MapSearchBar } from './map-location-header';
+
+import { Badge } from '@/shared/ui/theme/glass/badge';
 
 export function MapOverlays() {
-  const status = useMapStore((state) => state.status);
-  const deviceStatus = useDeviceLocationStore((state) => state.status);
-  const isGlobalLoading = status === 'loading' || deviceStatus === 'loading';
+  const setCenter = useMapStore((state) => state.setCenter);
+  const isInteracting = useMapStore((state) => state.isInteracting);
 
-  const deviceLocation = useDeviceLocationStore((state) => state.location);
-  const message = useDeviceLocationStore((state) => state.message);
-
-  const { requestPermission } = useDeviceOrientation();
-  const [isPermissionGranted, setIsPermissionGranted] = useState(false);
-
-  const handleEnableCompass = async () => {
-    const granted = await requestPermission();
-    setIsPermissionGranted(granted);
-  };
-
-  const { project, setOrigin, setCenter } = useMapStore();
-
-  const handleRecenter = () => {
-    if (deviceStatus === 'ready' && deviceLocation) {
-      const newCenter = project(deviceLocation);
-      setOrigin(deviceLocation);
-      setCenter(newCenter);
-    }
-  };
+  const interactionStyle = cn(
+    'transition-all duration-500 ease-in-out',
+    isInteracting
+      ? 'pointer-events-none opacity-40 scale-[0.98] blur-[0.5px]'
+      : 'pointer-events-auto opacity-100 scale-100 blur-0',
+  );
 
   return (
     <>
-      {/* 시선 방향 센서 권한 요청 UI */}
-      {!isPermissionGranted && (
-        <button
-          onClick={handleEnableCompass}
-          className="absolute bottom-28 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-white/90 backdrop-blur-sm rounded-full shadow-xl border border-blue-100 flex items-center gap-2 transition-all active:scale-95"
-        >
-          <span style={{ fontSize: '18px' }}>📍</span>
-          <span
-            style={{ fontWeight: '600', color: '#007AFF', fontSize: '14px' }}
-          >
-            내 시선 방향 표시하기
-          </span>
-        </button>
-      )}
+      {/* 1. [Top-Center] 검색바 */}
+      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-4rem)] flex justify-center pointer-events-none">
+        {/* 🚀 pointer-events-auto를 통해 검색바 영역만 다시 클릭이 가능하게 만듭니다. */}
+        <MapSearchBar className={cn(interactionStyle, 'pointer-events-auto')} />
+      </div>
 
-      {/* 테스트용 버튼 */}
-      <button
-        onClick={() => setCenter({ x: 500, y: 0, z: 500 })}
-        style={{
-          position: 'absolute',
-          zIndex: 10,
-          top: 20,
-          left: 20,
-          padding: '8px 12px',
-        }}
+      {/* 2. [Top-Left] Voxel Inspector (시스템 모니터링) */}
+      <div
+        className={cn(
+          'absolute top-8 left-8 z-50 w-64 pointer-events-none',
+          interactionStyle,
+        )}
       >
-        동북쪽 500m 이동
-      </button>
-
-      {/* 1. 정보성 위젯 (좌측 상단/하단) */}
-      <div className="pointer-events-none absolute inset-0 z-50">
-        <div className="pointer-events-auto absolute top-24 left-5">
-          {/* 건물 표시 토글 등을 여기에 둘 수 있습니다 */}
-        </div>
-
-        <div className="pointer-events-auto absolute bottom-10 left-10 flex flex-col gap-4">
-          <ScaleBar />
-          <Compass />
-        </div>
-
-        <div className="pointer-events-auto absolute bottom-10 right-10">
+        <div className="pointer-events-auto">
           <VoxelInspector />
         </div>
       </div>
 
-      {/* 2. 제어 버튼 */}
-      <RecenterButton
-        status={deviceStatus}
-        deviceLocation={deviceLocation}
-        onRecenter={handleRecenter}
-      />
+      {/* 3. [Top-Right] POI Detail Panel (컨텐츠 상세) */}
+      <div
+        className={cn(
+          'absolute top-8 right-8 z-50 w-64 pointer-events-none',
+          interactionStyle,
+        )}
+      >
+        <div className="pointer-events-auto">
+          <PoiDetailPanel />
+        </div>
+      </div>
 
-      {/* 3. 상태 알림 (로딩/에러) */}
-      {isGlobalLoading && <LoadingSpinner />}
-      {deviceStatus === 'error' && (
-        <LocationErrorToast message={message || '위치 신호가 약합니다.'} />
-      )}
+      {/* 4. [Bottom-Left] 디버그 뱃지 */}
+      <div className={cn('absolute bottom-8 left-8 z-50', interactionStyle)}>
+        <Badge
+          variant="glass"
+          className="pointer-events-auto cursor-pointer px-4 py-1.5 bg-white/5 border-white/10 text-[9px] font-bold tracking-widest text-white/30 hover:text-white/80 transition-all rounded-full"
+          onClick={() => setCenter({ x: 500, y: 0, z: 500 })}
+        >
+          DEBUG: SHIFT ORIGIN
+        </Badge>
+      </div>
+
+      {/* 5. [Bottom-Right] 통합 제어 레이어 */}
+      <div
+        className={cn(
+          'absolute bottom-8 right-8 z-50 flex flex-col items-end gap-5 pointer-events-none',
+          interactionStyle,
+        )}
+      >
+        {/* Compass와 하단 그룹 사이는 Gap 5 유지 */}
+        <div className={cn(!isInteracting && 'pointer-events-auto')}>
+          <Compass />
+        </div>
+
+        {/* 🚀 ScaleBar와 LocationControl 사이만 Gap 6 적용 */}
+        <div
+          className={cn(
+            'flex items-end gap-6', // 이 부분만 6(24px)으로 확장
+            !isInteracting && 'pointer-events-auto',
+          )}
+        >
+          <div className="pb-4">
+            {' '}
+            {/* 스케일바 텍스트 높이를 고려한 하단 여백 */}
+            <ScaleBar />
+          </div>
+          <LocationControl />
+        </div>
+      </div>
     </>
   );
 }

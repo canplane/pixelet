@@ -2,14 +2,18 @@
 
 export const OSM_CONFIG = {
   // --- API 통신 제어 ---
-  REQUEST_INTERVAL: 8000, // API 재요청 최소 간격 (8초)
-  DISTANCE_THRESHOLD: 300, // 마지막 요청지 기준 이동 임계값 (300m)
-  DEFAULT_RADIUS: 1500, // 한 번에 요청할 데이터 반경 (1.5km): FADE_END(1.2km)보다 살짝 크게 잡아 여유분 확보
+  REQUEST_INTERVAL: 10000, // API 재요청 최소 간격 (ms)
+  DISTANCE_THRESHOLD: 400, // 마지막 요청지 기준 이동 임계값 (m)
+
+  // 🚀 핵심: 반경을 줄여야 합니다.
+  // 1.5km 반경은 면적으로 치면 엄청납니다. 안개(1.5km)를 살짝 포기하더라도
+  // 모바일에선 1.0km ~ 1.2km가 한계치입니다.
+  DEFAULT_RADIUS: 1000, // 한 번에 요청할 데이터 반경 (m)
 
   // --- 메모리 관리 (GC) ---
-  // 중심점에서 이 거리 이상 멀어진 데이터는 성능을 위해 삭제합니다.
-  // [중요] THREE_CONFIG.RENDERING.FOG_FAR(1200m)보다 커야 끊김이 없습니다.
-  CLEANUP_THRESHOLD: 2500, // 데이터 삭제 기준 거리 (2.5km)
+  // 🚀 모바일은 메모리가 적으므로 2.5km까지 들고 있을 여유가 없습니다.
+  // 시야에서 사라지면(1.5km) 거의 즉시(1.8km) 지워야 합니다.
+  CLEANUP_THRESHOLD: 1500,
 
   // --- 엔드포인트 로드 밸런싱 ---
   ENDPOINTS: [
