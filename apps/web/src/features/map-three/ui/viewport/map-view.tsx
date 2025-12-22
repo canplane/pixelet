@@ -32,6 +32,7 @@ export function MapView() {
     <div className="fixed inset-0">
       <MapToastController />
 
+      {/* 🚀 자식들에게 "여기는 월드 공간이야"라고 알림 */}
       <div
         className="absolute inset-0 transition-colors duration-[2000ms] ease-in-out"
         style={{

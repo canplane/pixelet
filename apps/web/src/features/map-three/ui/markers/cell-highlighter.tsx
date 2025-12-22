@@ -6,12 +6,11 @@ import { Line } from '@react-three/drei';
 
 // 2. 프로젝트 공통
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { projection } from '@/shared/lib/geo/projection';
+import { VOXEL_CONFIG } from '../../model/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
 import { MAP_THEMES } from '../../model/map-theme'; // 🚀 테마 데이터 임포트
 
-const { GRID_SIZE, HALF_GRID } = projection;
-const { FOG_FAR, FOG_NEAR } = THREE_CONFIG.RENDERING;
+const { FOG_DENSITY, FADE_END } = THREE_CONFIG.RENDERING;
 
 export function CellHighlighter() {
   const { raycaster, pointer, camera } = useThree();
@@ -42,7 +41,7 @@ export function CellHighlighter() {
 
   // 1. 라운딩 프레임 경로 계산
   const roundedPoints = useMemo(() => {
-    const size = GRID_SIZE * 0.95;
+    const size = VOXEL_CONFIG.SIZE * 0.95;
     const radius = size * 0.15;
     const pts = [];
     const steps = 8;
@@ -62,9 +61,9 @@ export function CellHighlighter() {
   useFrame((state) => {
     if (localGroupRef.current && hoveredPos) {
       localGroupRef.current.position.set(
-        hoveredPos.x - originOffset.x,
+        hoveredPos.x,
         0.16, // 🚀 도로(0.15)보다 아주 살짝 위로 올림 (Z-fighting 방지)
-        hoveredPos.z - originOffset.z,
+        hoveredPos.z,
       );
     }
 
@@ -79,34 +78,33 @@ export function CellHighlighter() {
     if (intersect) {
       const distToCamera = camera.position.distanceTo(intersect);
 
-      // 🚀 [수정] FOG_FAR가 너무 짧으면 하이라이터가 일찍 사라집니다. 여유를 둡니다.
-      if (distToCamera <= FOG_FAR * 1.5) {
+      // 🚀 [수정] FADE_END가 너무 짧으면 하이라이터가 일찍 사라집니다. 여유를 둡니다.
+      if (distToCamera <= FADE_END * 1.5) {
         const absolutePoint = {
           x: intersect.x + originOffset.x,
-          y: 0,
+          y: 0, // 🚀 이 값이 있어야 snapToVoxel이 정상적으로 y축 스냅을 계산합니다.
           z: intersect.z + originOffset.z,
         };
 
-        const snapped = projection.snapToGrid(absolutePoint);
+        const snapped = VOXEL_CONFIG.snapToVoxel(absolutePoint);
 
         if (
           !hoveredPos ||
           hoveredPos.x !== snapped.x ||
           hoveredPos.z !== snapped.z
         ) {
-          setHoveredPos({ x: snapped.x, y: center.y, z: snapped.z });
+          setHoveredPos({ x: snapped.x, y: 0, z: snapped.z });
         }
 
         if (localGroupRef.current) {
-          // 안개 보정 수치 완화
-          const opacity = THREE.MathUtils.mapLinear(
-            distToCamera,
-            FOG_NEAR,
-            FOG_FAR * 1.2,
-            1,
-            0,
-          );
-          localGroupRef.current.visible = opacity > 0.01;
+          // 🚀 2. UserMarker와 동일한 지수 안개 공식 적용
+          const visibility = Math.exp(-Math.pow(distToCamera * FOG_DENSITY, 2));
+
+          // 🚀 3. 단순 visible 여부뿐만 아니라 투명도(opacity)에도 직접 반영
+          // 이렇게 하면 안개 속에 하이라이터가 더 자연스럽게 스며듭니다.
+          localGroupRef.current.visible = visibility > 0.01;
+
+          // (선택사항) 내부 메테리얼들의 opacity를 visibility와 연동하면 금상첨화입니다.
         }
       } else {
         setHoveredPos(null);
@@ -127,7 +125,11 @@ export function CellHighlighter() {
       <group
         ref={aniGroupRef}
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[HALF_GRID, 0.02, HALF_GRID]} // 🚀 바닥에서 살짝 띄움
+        position={[
+          VOXEL_CONFIG.toCenter(0),
+          VOXEL_CONFIG.STEP + 0.125,
+          VOXEL_CONFIG.toCenter(0),
+        ]} // 🚀 바닥에서 살짝 띄움
       >
         {/* 클릭 감지용 투명 메쉬 */}
         <mesh
@@ -138,7 +140,7 @@ export function CellHighlighter() {
           onPointerOver={() => (document.body.style.cursor = 'pointer')}
           onPointerOut={() => (document.body.style.cursor = 'auto')}
         >
-          <planeGeometry args={[GRID_SIZE, GRID_SIZE]} />
+          <planeGeometry args={[VOXEL_CONFIG.SIZE, VOXEL_CONFIG.SIZE]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
 
@@ -169,10 +171,16 @@ export function CellHighlighter() {
       {/* 🚀 [테마 적용] 바닥 가이드 영역 */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[HALF_GRID, 0.01, HALF_GRID]}
+        position={[
+          VOXEL_CONFIG.toCenter(0),
+          VOXEL_CONFIG.STEP,
+          VOXEL_CONFIG.toCenter(0),
+        ]}
         renderOrder={99}
       >
-        <planeGeometry args={[GRID_SIZE * 0.95, GRID_SIZE * 0.95]} />
+        <planeGeometry
+          args={[VOXEL_CONFIG.SIZE * 0.95, VOXEL_CONFIG.SIZE * 0.95]}
+        />
         <meshBasicMaterial
           color={themeColor}
           transparent

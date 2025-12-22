@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { projection } from '@/shared/lib/geo/projection';
+import { VOXEL_CONFIG } from './voxel-config';
 import type { Location, MeterPos } from '@/shared/types/map';
 import type { MapPoi } from '../lib/osm-parser';
 import { THREE_CONFIG } from './three-config';
@@ -33,7 +34,7 @@ export interface ViewState {
  * - 부드러운 카메라 이동과 정밀한 GPS 추적을 위해 소수점 단위를 그대로 유지함.
  * * 2. origin (절대 주소 / 스냅 YES)
  * - 월드가 생성된 시점의 "기준 주소".
- * - 격자(Grid) 시스템의 시작점이므로 반드시 GRID_SIZE(4)의 배수여야 함.
+ * - 격자(Grid) 시스템의 시작점이므로 반드시 VOXEL_SIZE(4)의 배수여야 함.
  * * 3. originOffset (절대 주소 / 스냅 YES)
  * - 현재 Three.js Scene의 (0,0,0) 지점이 실제 지구상에서 어디에 위치하는지 나타내는 값.
  * - 카메라 리셋 시 4m 단위로 점프하며, 이 값이 스냅되어야 배경 그리드가 흔들리지 않음.
@@ -130,8 +131,8 @@ export const useMapStore = create<MapState>((set, get) => ({
   /** 🏁 월드 원점 설정 (절대 주소 / 4m 스냅 강제) */
   origin: null,
   setOrigin: (pos) => {
-    // 🚀 [Rule] 이제 projection에 정의된 snapToGrid를 직접 사용합니다.
-    const snappedPos = projection.snapToGrid(pos);
+    // 🚀 [Rule] 이제 VOXEL_CONFIG에 정의된 snapToVoxel를 직접 사용합니다.
+    const snappedPos = VOXEL_CONFIG.snapToVoxel(pos);
 
     set({
       origin: snappedPos, // 원점도 격자에 맞춤
@@ -140,14 +141,14 @@ export const useMapStore = create<MapState>((set, get) => ({
   },
   setOriginByLocation: (location) => {
     const meterPos = get().project(location);
-    get().setOrigin(meterPos); // 내부에서 snapToGrid가 적용됨
+    get().setOrigin(meterPos); // 내부에서 snapToVoxel가 적용됨
   },
 
   /** 징검다리 역할을 하는 현재 원점 오프셋 (절대 주소 / 4m 스냅 강제) */
   originOffset: { x: 0, y: 0, z: 0 },
   setOriginOffset: (offset) => {
     // 🚀 카메라 리셋 시에도 유틸리티를 사용하여 일관성을 유지합니다.
-    set({ originOffset: projection.snapToGrid(offset) });
+    set({ originOffset: VOXEL_CONFIG.snapToVoxel(offset) });
   },
 
   /** 좌표 변환: 위경도 → 절대 미터 좌표 (Three.js Z-up/Y-up 고려) */
@@ -165,8 +166,8 @@ export const useMapStore = create<MapState>((set, get) => ({
   unproject: (pos: MeterPos) => {
     return {
       lng: projection.xToLng(pos.x),
-      lat: projection.yToLat(-pos.z),
       alt: pos.y,
+      lat: projection.yToLat(-pos.z),
     };
   },
 

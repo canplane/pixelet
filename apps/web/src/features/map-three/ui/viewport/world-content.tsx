@@ -4,13 +4,13 @@ import { Grid } from '@react-three/drei';
 import { UserMarker } from '../markers/user-marker';
 import { CellHighlighter } from '../markers/cell-highlighter';
 import { OsmLayer } from '../osm/osm-layer';
-import { projection } from '@/shared/lib/geo/projection';
+import { VOXEL_CONFIG } from '../../model/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { MAP_THEMES } from '../../model/map-theme'; // 🚀 테마 데이터 임포트
+import { VoxelBlock } from '../voxels/voxel-block.box';
 
-const { GRID_SIZE, HALF_GRID } = projection;
-const { FOG_FAR } = THREE_CONFIG.RENDERING;
+const { FADE_END } = THREE_CONFIG.RENDERING;
 
 export const WorldContent = forwardRef<
   THREE.Group,
@@ -38,39 +38,50 @@ export const WorldContent = forwardRef<
 
       {/* 🚀 [그리드 정렬] 
           모든 Mesh가 정수 좌표(0, 4, 8...)에 배치될 때 
-          박스의 정중앙이 오도록 그리드 자체를 HALF_GRID만큼 밀어줍니다. */}
-      <Grid
+          박스의 정중앙이 오도록 그리드 자체를 HALF_VOXEL만큼 밀어줍니다. */}
+      {/* <Grid
         // 🚀 너무 크면 지평선 끝까지 하얀 선이 뭉쳐 보입니다. 적당히 조절하세요.
-        args={[FOG_FAR, FOG_FAR]}
-        infiniteGrid={true}
-        // 🚀 안개(FOG_FAR)보다 먼저 그리드가 사라지게 해서 하늘과의 경계를 만듭니다.
-        fadeDistance={FOG_FAR * 0.8}
+        args={[FADE_END, FADE_END]}
+        infiniteGrid
+        // 🚀 안개(FADE_END)보다 먼저 그리드가 사라지게 해서 하늘과의 경계를 만듭니다.
+        fadeDistance={FADE_END * 0.8}
         fadeStrength={5}
-        cellSize={GRID_SIZE}
-        sectionSize={GRID_SIZE * 10}
+        cellSize={VOXEL_CONFIG.SIZE}
+        sectionSize={VOXEL_CONFIG.SIZE * 10}
         sectionColor={targetTheme.grid.section}
         cellColor={targetTheme.grid.cell}
         cellThickness={0.5}
         sectionThickness={1.0}
         // 🚀 위치를 -0.1 이하로 내려서 지형(landuse) 아래로 확실히 보냅니다.
-        position={[HALF_GRID, -0.1, HALF_GRID]}
-      />
+        position={[VOXEL_CONFIG.toCenter(0), -0.1, VOXEL_CONFIG.toCenter(0)]}
+      /> */}
 
       {/* 추후 추가될 모든 지형물(건물, 도로, Voxel)은 
          여기에 배치되어야 카메라 리셋 시 함께 이동합니다.
       */}
 
       {/* 🚀 [기준 테스트 박스] 
-          이 박스가 정수 좌표(0, 0, 0) 기준에서 HALF_GRID만큼 이동해 있으므로
+          이 박스가 정수 좌표(0, 0, 0) 기준에서 HALF_VOXEL만큼 이동해 있으므로
           그리드 칸 안에 완벽하게 들어맞게 됩니다. */}
-      <mesh position={[HALF_GRID, 0.1, HALF_GRID]}>
-        <boxGeometry args={[GRID_SIZE, 0.2, GRID_SIZE]} />
+      <mesh
+        position={[VOXEL_CONFIG.toCenter(0), 0.1, VOXEL_CONFIG.toCenter(0)]}
+      >
+        <boxGeometry args={[VOXEL_CONFIG.SIZE, 0.2, VOXEL_CONFIG.SIZE]} />
         <meshBasicMaterial
           color={targetTheme.grid.section}
           transparent
           opacity={0.4}
         />
       </mesh>
+
+      {/* 오늘의 기념비적인 첫 복셀! */}
+      <VoxelBlock
+        gridPos={[4, 0, 0]}
+        color={targetTheme.grid.section} // 테마색과 맞추면 더 일체감 있습니다.
+      />
+
+      {/* 옆에 하나 더? */}
+      <VoxelBlock gridPos={[4, 1, 0]} color="#4ECDC4" />
     </group>
   );
 });

@@ -2,12 +2,10 @@ import { useMemo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { projection } from '@/shared/lib/geo/projection';
+import { VOXEL_CONFIG } from '../../model/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
 import { MAP_THEMES } from '../../model/map-theme';
-
-const { GRID_SIZE, HALF_GRID } = projection;
-const { FOG_NEAR, FOG_FAR } = THREE_CONFIG.RENDERING;
+const { FOG_DENSITY } = THREE_CONFIG.RENDERING;
 
 function createRoundedRectGeometry(size: number, radius: number) {
   const shape = new THREE.Shape();
@@ -28,22 +26,27 @@ function createRoundedRectGeometry(size: number, radius: number) {
   return new THREE.ShapeGeometry(shape);
 }
 
-const ROUNDED_GEOMETRY = createRoundedRectGeometry(GRID_SIZE * 0.98, 0.8);
+// ShapeGeometry는 기본적으로 세워져 있습니다. 아예 태어날 때부터 눕혀버리는 게 제일 속 편합니다.
+const ROUNDED_GEOMETRY = createRoundedRectGeometry(
+  VOXEL_CONFIG.SIZE * 0.98,
+  0.8,
+);
+// 🚀 생성 직후에 X축으로 90도 눕힙니다.
+ROUNDED_GEOMETRY.rotateX(-Math.PI / 2);
+
 const MAX_INSTANCES = 1500;
 
 export function UserMarker() {
   const { devicePos, accuracy, originOffset, themeKey } = useMapNavigation();
 
-  // 1. 테마 및 야간 여부 정의 (정의되지 않았던 변수 추가)
+  // 1. 테마 정의
   const targetTheme = MAP_THEMES[themeKey];
   const isNight = themeKey === 'night';
   const themeAccent = targetTheme.grid.section;
-
-  // 🚀 동화적 포인트 컬러 (낮에는 진한 핑크, 밤에는 빛나는 민트/하늘색)
   const gemColor = isNight ? '#00f2ff' : '#ff1493';
 
-  // 1. 내 로컬 위치 (Floating Origin 적용)
-  const localPosition = useMemo(() => {
+  // 2. 내 로컬 위치 (Floating Origin 적용)
+  const localPos = useMemo(() => {
     if (!devicePos) return null;
     return {
       x: devicePos.x - originOffset.x,
@@ -52,76 +55,61 @@ export function UserMarker() {
     };
   }, [devicePos, originOffset]);
 
-  // 2. 내가 서 있는 '격자'의 로컬 좌표 스냅 (부모 그룹용)
+  // 3. 격자 스냅 위치 계산 (snapToVoxel은 절대 좌표 기반이므로 그대로 유지 후 훅 적용)
   const snappedLocalPos = useMemo(() => {
     if (!devicePos) return null;
-    const snappedAbs = projection.snapToGrid(devicePos);
+    const snappedAbs = VOXEL_CONFIG.snapToVoxel(devicePos);
     return {
       x: snappedAbs.x - originOffset.x,
       z: snappedAbs.z - originOffset.z,
     };
   }, [devicePos, originOffset]);
 
-  // 3. 보석의 상대 위치 (중앙 정렬 보정)
+  // 4. 보석의 상대 위치 (중앙 정렬 보정)
   const gemOffset = useMemo(() => {
-    if (!localPosition || !snappedLocalPos) return { x: 0, z: 0 };
+    if (!localPos || !snappedLocalPos) return { x: 0, z: 0 };
     return {
-      x: localPosition.x - (snappedLocalPos.x + HALF_GRID),
-      z: localPosition.z - (snappedLocalPos.z + HALF_GRID),
+      x: localPos.x - VOXEL_CONFIG.toCenter(snappedLocalPos.x),
+      z: localPos.z - VOXEL_CONFIG.toCenter(snappedLocalPos.z),
     };
-  }, [localPosition, snappedLocalPos]);
+  }, [localPos, snappedLocalPos]);
 
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const gemRef = useRef<THREE.Mesh>(null);
   const tempObject = useMemo(() => new THREE.Object3D(), []);
 
-  // 🚀 보석 애니메이션 로직: 매 프레임마다 실행됩니다.
   useFrame((state) => {
-    if (!gemRef.current || !meshRef.current || !localPosition) return;
+    if (!gemRef.current || !meshRef.current || !localPos) return;
 
+    // 가시성 로직 (기존 유지)
+    const markerWorldPos = new THREE.Vector3();
+    gemRef.current.getWorldPosition(markerWorldPos);
+    const distance = state.camera.position.distanceTo(markerWorldPos);
+    const visibility = Math.exp(-Math.pow(distance * FOG_DENSITY, 2));
+
+    const isVisible = visibility > 0.01;
+    gemRef.current.visible = isVisible;
+    meshRef.current.visible = isVisible;
+
+    // 안개가 완전히 가리는 FADE_END * 1.5 너머라면 아예 보이지 않게 처리
+    if (distance > THREE_CONFIG.RENDERING.FADE_END * 1.5) {
+      gemRef.current.visible = false;
+      meshRef.current.visible = false;
+      return;
+    }
+
+    // 애니메이션
     const t = state.clock.getElapsedTime();
     gemRef.current.rotation.y = t * 1.2;
     gemRef.current.position.y = 2 + Math.sin(t * 1.5) * 0.25;
-
-    // 🚀 [수정] 월드 좌표계를 기준으로 정확한 거리 계산
-    // 마커 메쉬가 실제로 렌더링되는 월드 위치를 가져옵니다.
-    const markerWorldPos = new THREE.Vector3();
-    gemRef.current.getWorldPosition(markerWorldPos);
-
-    const distance = state.camera.position.distanceTo(markerWorldPos);
-
-    // 🚀 안개 끝(1500)보다 더 여유 있게(2500) 잡아서 툭 끊기는 느낌 방지
-    const opacity = THREE.MathUtils.mapLinear(
-      distance,
-      FOG_NEAR,
-      FOG_FAR * 1.8,
-      1,
-      0,
-    );
-
-    const clampedOpacity = THREE.MathUtils.clamp(opacity, 0, 1);
-
-    // 재질 적용
-    const gemMat = gemRef.current.material as THREE.MeshStandardMaterial;
-    gemMat.opacity = clampedOpacity;
-    gemMat.transparent = true;
-
-    const gridMat = meshRef.current.material as THREE.MeshBasicMaterial;
-    gridMat.opacity = clampedOpacity * 0.4;
-
-    // 🚀 [최적화] 완전히 안 보일 때만 끄기
-    const isVisible = clampedOpacity > 0.001;
-    gemRef.current.visible = isVisible;
-    meshRef.current.visible = isVisible;
   });
 
-  // 🚀 이제 gridOffsets 계산 시 accuracy를 안전하게 사용할 수 있어
+  // gridOffsets 계산 (기존 유지)
   const gridOffsets = useMemo(() => {
-    const activeAccuracy = accuracy || 10; // 기본값 10m
-    const safeAccuracy = Math.min(activeAccuracy, 50); // 너무 넓어지지 않게 제한
-
+    const activeAccuracy = accuracy || 10;
+    const safeAccuracy = Math.min(activeAccuracy, 50);
     const offsets = [];
-    const step = GRID_SIZE;
+    const step = VOXEL_CONFIG.SIZE;
     const range = Math.ceil(safeAccuracy / step);
 
     for (let x = -range; x <= range; x++) {
@@ -137,51 +125,45 @@ export function UserMarker() {
 
   useEffect(() => {
     if (!meshRef.current) return;
-
     meshRef.current.instanceColor = null;
-
     for (let i = 0; i < MAX_INSTANCES; i++) {
       tempObject.position.set(0, -1000, 0);
       tempObject.updateMatrix();
       meshRef.current.setMatrixAt(i, tempObject.matrix);
     }
-
     gridOffsets.forEach((offset, i) => {
-      tempObject.position.set(offset.x, 0.1, offset.z);
-      tempObject.rotation.set(-Math.PI / 2, 0, 0);
+      tempObject.position.set(offset.x, 0.125, offset.z); // y는 0에 가깝게
+      // tempObject.rotation.set(-Math.PI / 2, 0, 0); // 🚀 지오메트리를 이미 눕혔다면 이건 삭제!
       tempObject.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.matrix);
     });
-
     meshRef.current.instanceMatrix.needsUpdate = true;
     meshRef.current.count = gridOffsets.length;
   }, [gridOffsets, tempObject]);
 
-  if (!snappedLocalPos || !localPosition) return null;
+  if (!snappedLocalPos || !localPos) return null;
 
   return (
     <group
       position={[
-        snappedLocalPos.x + HALF_GRID,
-        0.16, // 🚀 도로(0.15)보다 살짝 위로 올려서 묻히지 않게 함
-        snappedLocalPos.z + HALF_GRID,
+        VOXEL_CONFIG.toCenter(snappedLocalPos.x),
+        VOXEL_CONFIG.SYSTEM_OFFSET, // 🚀 0.25m 시스템 층 안착
+        VOXEL_CONFIG.toCenter(snappedLocalPos.z),
       ]}
     >
-      {/* 1. 바닥 정확도 그리드 (색상을 더 선명하게) */}
       <instancedMesh
         ref={meshRef}
         args={[ROUNDED_GEOMETRY, undefined, MAX_INSTANCES]}
-        renderOrder={5} // 지형보다는 위, 도로와는 비슷하게
+        renderOrder={5}
       >
         <meshBasicMaterial
-          color={isNight ? themeAccent : '#FFD700'} // 낮엔 금색 계열로 포인트
+          color={isNight ? themeAccent : '#FFD700'}
           transparent
-          opacity={0.5} // 조금 더 진하게
+          opacity={0.5}
           depthWrite={false}
         />
       </instancedMesh>
 
-      {/* 2. 💎 보석 마커 (색상 강화) */}
       <mesh
         ref={gemRef}
         position={[gemOffset.x, 2, gemOffset.z]}
@@ -189,20 +171,19 @@ export function UserMarker() {
       >
         <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial
-          color={gemColor} // 🚀 하얀색 대신 실제 색상 주입
+          color={gemColor}
           emissive={gemColor}
-          emissiveIntensity={isNight ? 2 : 0.5} // 낮에는 빛나기보다 색이 보여야 함
+          emissiveIntensity={isNight ? 2 : 0.5}
           roughness={0.2}
           metalness={0.8}
           flatShading
         />
       </mesh>
 
-      {/* 3. 보석 조명 (색상 동기화) */}
       <pointLight
         position={[gemOffset.x, 2, gemOffset.z]}
-        distance={15}
-        intensity={isNight ? 10 : 3} // 낮엔 조명을 줄여야 색이 안 날아감
+        distance={16} // 15보다 16(2^4)이 더 기분 좋네요!
+        intensity={isNight ? 10 : 3}
         color={gemColor}
       />
     </group>

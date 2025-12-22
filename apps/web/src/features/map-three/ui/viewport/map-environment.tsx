@@ -6,7 +6,7 @@ import { useMapNavigation } from '../../model/use-map-navigation';
 import { MAP_THEMES } from '../../model/map-theme';
 import { THREE_CONFIG } from '../../model/three-config';
 
-const { FOG_NEAR, FOG_FAR } = THREE_CONFIG.RENDERING;
+const { FOG_DENSITY } = THREE_CONFIG.RENDERING;
 
 export function MapEnvironment() {
   const { themeKey } = useMapNavigation();
@@ -72,14 +72,16 @@ export function MapEnvironment() {
         mieCoefficient={targetTheme.sky.mieCoefficient}
       />
       {/* 2. 따뜻한 안개: 약간 어둡거나 푸른 감이 도는 회색 톤 */}
-      <fog
+      {/* 현재 args={[targetTheme.fog, ...]}를 args={[fogColor.current, FOG_DENSITY]}로 바꾸면 보간 효과가 안개에도 적용됩니다! */}
+      <fogExp2 attach="fog" args={[fogColor.current, FOG_DENSITY]} />
+      {/* <fog
         attach="fog"
         args={[
           fogColor.current.getStyle(),
           FOG_NEAR, // 600
           FOG_FAR, // 1200
         ]}
-      />
+      /> */}
 
       {/* 3. 조명 시스템: 화사하고 입체적인 조명 구성 */}
       <ambientLight ref={ambientRef} />

@@ -6,7 +6,7 @@ import { OrbitControls } from '@react-three/drei';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 // 2. 프로젝트 공통 타입 및 상수 (Shared / Features)
-import { projection } from '@/shared/lib/geo/projection';
+import { VOXEL_CONFIG } from '../../model/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
 import type { MeterPos } from '@/shared/types/map';
 
@@ -60,12 +60,12 @@ export function MapCameraController({ worldGroupRef }: Props) {
     if (!origin) {
       /**
        * 🚀 [초기화 스냅 적용]
-       * 최초 원점 설정 시에도 projection.snapToGrid를 사용하여
+       * 최초 원점 설정 시에도 VOXEL_CONFIG.snapToVoxel를 사용하여
        * 월드의 시작점을 4m 격자 눈금에 정확히 맞춥니다.
        */
-      setOrigin(devicePos); // 내부에서 snapToGrid가 적용됨 (스토어 로직)
+      setOrigin(devicePos); // 내부에서 snapToVoxel가 적용됨 (스토어 로직)
 
-      const snappedInitial = projection.snapToGrid(devicePos);
+      const snappedInitial = VOXEL_CONFIG.snapToVoxel(devicePos);
       setOriginOffset(snappedInitial);
 
       setCenter(devicePos); // 센터는 부드러운 시작을 위해 소수점 유지
@@ -199,8 +199,8 @@ export function MapCameraController({ worldGroupRef }: Props) {
     if (camera.position.length() > RESET_THRESHOLD) {
       const rawOffset = controlsRef.current.target.clone();
 
-      // 🚀 [리팩토링] 직접 계산 대신 공통 유틸리티 snapToGrid 사용
-      const snappedStep = projection.snapToGrid(rawOffset);
+      // 🚀 [리팩토링] 직접 계산 대신 공통 유틸리티 snapToVoxel 사용
+      const snappedStep = VOXEL_CONFIG.snapToVoxel(rawOffset);
 
       // 누적 오프셋 갱신 (이미 내부에서 한 번 더 스냅하므로 안전)
       const newTotalOffset = {
