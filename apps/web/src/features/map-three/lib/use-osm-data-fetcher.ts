@@ -33,7 +33,7 @@ export function useOsmDataFetcher() {
 
   // 3. OSM 데이터 패칭
   const { data, isLoading, error } = useMapFeatures(
-    ['GEOMETRY_MAJOR', 'POI_MAJOR'],
+    ['GEOMETRY_ROADS_MAJOR', 'POI_ALL'],
     fetchLocation,
   );
 

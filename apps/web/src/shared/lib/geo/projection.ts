@@ -1,6 +1,6 @@
 // 이 파일은 지리적 좌표(WGS84)와 3D 월드 좌표(Web Mercator) 간의 변환을 담당하는 물리 엔진의 핵심입니다.
 
-import type { Location } from '@/shared/types/map';
+import type { Location, MeterPos } from '@/shared/types/map';
 
 /**
  * 메르카토르 도법(Web Mercator EPSG:3857) 수학적 한계치
@@ -27,29 +27,12 @@ const EARTH_RADIUS = 6378137;
 export const projection = {
   EARTH_RADIUS,
 
-  /**
-   * 격자 한 칸의 물리적 크기 (단위: 미터)
-   * 1:1 시스템이므로 4m 격자는 엔진 내 4 Unit 크기를 가집니다.
-   */
-  GRID_SIZE: 4,
-
-  // 🚀 격자 칸 정중앙 정렬을 위한 핵심 상수
-  get HALF_GRID() {
-    return this.GRID_SIZE / 2;
-  },
-
-  /**
-   * 🚀 플로팅 오리진 및 격자 정렬을 위한 정밀도 스냅 함수
-   * 입력된 좌표를 GRID_SIZE(4)의 배수로 깔끔하게 내림/반올림합니다.
-   */
-  snapToGrid: (pos: { x: number; y: number; z: number }) => {
-    const { GRID_SIZE } = projection;
-    return {
-      x: Math.floor(pos.x / GRID_SIZE) * GRID_SIZE,
-      y: 0, // 지면 높이는 보통 격자 시스템에서 제외
-      z: Math.floor(pos.z / GRID_SIZE) * GRID_SIZE,
-    };
-  },
+  /** 🌐 절대 미터 좌표를 현재 원점 기준 로컬 좌표로 변환 */
+  toLocal: (abs: MeterPos, offset: MeterPos): [number, number, number] => [
+    abs.x - offset.x,
+    abs.y - offset.y,
+    abs.z - offset.z,
+  ],
 
   /**
    * [Guard] 입력된 좌표가 한계를 넘지 않도록 보정 (alt가 없으면 객체에서 제거)

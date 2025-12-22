@@ -7,9 +7,7 @@ import { useMapNavigation } from '../../model/use-map-navigation';
 import type { MapPoi } from '../../lib/osm-parser';
 import { THREE_CONFIG } from '../../model/three-config';
 import { cn } from '@/shared/lib/utils';
-import { projection } from '@/shared/lib/geo/projection'; // 격자 유틸리티 임포트
-
-const { HALF_GRID } = projection; // 2m 보정용
+import { VOXEL_CONFIG } from '../../model/voxel-config';
 
 const { FADE_START, FADE_END } = THREE_CONFIG.RENDERING;
 
@@ -86,11 +84,11 @@ export const OsmPoiItem = React.memo(({ poi }: { poi: MapPoi }) => {
 
   // 3. [격자 정렬] 4m 스냅 + 2m 중앙 보정
   const localLabelPosition = useMemo(() => {
-    const snappedAbsPos = projection.snapToGrid(poi.center);
+    const snappedAbsPos = VOXEL_CONFIG.snapToVoxel(poi.center);
     return new THREE.Vector3(
-      snappedAbsPos.x + HALF_GRID - originOffset.x,
-      2.5, // 0.5m 더 높여서 시인성 확보
-      snappedAbsPos.z + HALF_GRID - originOffset.z,
+      VOXEL_CONFIG.toCenter(snappedAbsPos.x) - originOffset.x,
+      VOXEL_CONFIG.HALF, // 2m 더 높여서 시인성 확보
+      VOXEL_CONFIG.toCenter(snappedAbsPos.z) - originOffset.z,
     );
   }, [poi.center, originOffset]);
 
