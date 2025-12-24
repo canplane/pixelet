@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import type { Location } from '@/shared/types/map';
 
+/**
+ * [device-location-store]
+ * 기기의 물리적 센서(GPS, 나침반) 데이터와 수신 상태를 관리하는 스토어입니다.
+ */
+
 export type DeviceLocationStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface DeviceLocationState {
@@ -42,6 +47,10 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
   status: 'idle',
   message: null,
 
+  /**
+   * [set-gps-data]
+   * 위경도 데이터 수신 시 유효성 검사 및 필터링을 거쳐 상태를 업데이트합니다.
+   */
   setGpsData: (data) =>
     set((state) => {
       const prevLoc = state.location;
@@ -59,7 +68,7 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
       }
 
       /**
-       * [Deadzone Filtering]
+       * [deadzone-filtering]
        * 목적: GPS 센서 특유의 미세한 떨림(Jitter)이 앱 전체로 전파되는 것을 차단합니다.
        * 기준: 약 1.1m(소수점 5자리) 미만의 변화는 무시합니다.
        * 결과: 실제 유의미한 이동이 없을 경우 Store 상태를 갱신하지 않아 불필요한 리렌더링을 방지합니다.
@@ -75,15 +84,25 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
         accuracy: data.accuracy,
         gpsHeading: data.heading,
         status: 'ready',
-        message: null, // 데이터 수신 성공 시 메시지 초기화
+        message: null,
       };
     }),
 
+  /**
+   * [set-compass-heading]
+   * 마그네토미터 센서에서 얻은 기기 전면의 절대 방위각을 업데이트합니다.
+   */
   setCompassHeading: (heading) => set({ compassHeading: heading }),
 
-  // 상태만 변경할 때 사용 (예: 처음 로딩 시작 시)
+  /**
+   * [set-status]
+   * 위치 권한 요청 및 데이터 수신 생명주기 상태를 변경합니다.
+   */
   setStatus: (status) => set({ status }),
 
-  // 에러 발생 시 상태와 메시지를 동시에 업데이트
+  /**
+   * [set-error]
+   * 하드웨어 접근 실패나 권한 거부 시 에러 메시지를 기록합니다.
+   */
   setError: (message) => set({ status: 'error', message }),
 }));

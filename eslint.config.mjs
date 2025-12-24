@@ -37,6 +37,12 @@ export default [
       ...tseslint.configs.recommended.rules,
       ...prettier.rules,
 
+      /* 🔹 [strict-type-boundary]
+       * 외부 모듈로 노출되는(export) 함수의 인자와 리턴 타입을 강제합니다.
+       * 엔진급 코드의 인터페이스 명확성을 위해 추가되었습니다.
+       */
+      '@typescript-eslint/explicit-module-boundary-types': 'warn',
+
       /* 🔹 soften unused vars */
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [

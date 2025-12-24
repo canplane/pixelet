@@ -4,30 +4,38 @@ import { ScaleBar } from './scale-bar';
 import { VoxelInspector } from './voxel-inspector';
 import { LocationControl } from './location-control';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { PoiDetailPanel } from '../osm/poi-detail-panel';
+import { PoiDetailPanel } from './poi-detail-panel';
 import { MapSearchBar } from './map-location-header';
-
 import { Badge } from '@/shared/ui/theme/glass/badge';
 
+/**
+ * [map-overlays]
+ * 3D 캔버스 위에 렌더링되는 모든 2D UI 컴포넌트들을 통합 관리합니다.
+ * 지도 조작 상태(isInteracting)에 따라 UI의 시각적 피드백(Blur, Scale, Opacity)을 동적으로 제어합니다.
+ */
 export function MapOverlays() {
   const { setCenter, isInteracting } = useMapNavigation();
 
+  /**
+   * [get-interaction-style]
+   * 사용자가 지도를 조작 중일 때 UI가 시야를 방해하지 않도록 감쇠 효과를 적용합니다.
+   * 조작 중에는 pointer-events-none을 통해 클릭 간섭을 차단합니다.
+   */
   const interactionStyle = cn(
     'transition-all duration-500 ease-in-out',
     isInteracting
       ? 'pointer-events-none opacity-40 scale-[0.98] blur-[0.5px]'
-      : 'pointer-events-auto opacity-100 scale-100 blur-0',
+      : 'opacity-100 scale-100 blur-0',
   );
 
   return (
     <>
-      {/* 1. [Top-Center] 검색바 */}
+      {/* 1. 상단 중앙: 위치 검색바 */}
       <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-4rem)] flex justify-center pointer-events-none">
-        {/* 🚀 pointer-events-auto를 통해 검색바 영역만 다시 클릭이 가능하게 만듭니다. */}
         <MapSearchBar className={cn(interactionStyle, 'pointer-events-auto')} />
       </div>
 
-      {/* 2. [Top-Left] Voxel Inspector (시스템 모니터링) */}
+      {/* 2. 상단 좌측: Voxel 데이터 모니터링 패널 */}
       <div
         className={cn(
           'absolute top-8 left-8 z-50 w-64 pointer-events-none',
@@ -39,7 +47,7 @@ export function MapOverlays() {
         </div>
       </div>
 
-      {/* 3. [Top-Right] POI Detail Panel (컨텐츠 상세) */}
+      {/* 3. 상단 우측: 선택된 POI 정보 패널 */}
       <div
         className={cn(
           'absolute top-8 right-8 z-50 w-64 pointer-events-none',
@@ -51,7 +59,7 @@ export function MapOverlays() {
         </div>
       </div>
 
-      {/* 4. [Bottom-Left] 디버그 뱃지 */}
+      {/* 4. 하단 좌측: 원점 이동 디버그 유틸리티 */}
       <div className={cn('absolute bottom-8 left-8 z-50', interactionStyle)}>
         <Badge
           variant="glass"
@@ -62,28 +70,24 @@ export function MapOverlays() {
         </Badge>
       </div>
 
-      {/* 5. [Bottom-Right] 통합 제어 레이어 */}
+      {/* 5. 하단 우측: 지도 제어 도구 (나침반, 스케일바, 위치 컨트롤) */}
       <div
         className={cn(
           'absolute bottom-8 right-8 z-50 flex flex-col items-end gap-5 pointer-events-none',
           interactionStyle,
         )}
       >
-        {/* Compass와 하단 그룹 사이는 Gap 5 유지 */}
         <div className={cn(!isInteracting && 'pointer-events-auto')}>
           <Compass />
         </div>
 
-        {/* 🚀 ScaleBar와 LocationControl 사이만 Gap 6 적용 */}
         <div
           className={cn(
-            'flex items-end gap-6', // 이 부분만 6(24px)으로 확장
+            'flex items-end gap-6',
             !isInteracting && 'pointer-events-auto',
           )}
         >
           <div className="pb-4">
-            {' '}
-            {/* 스케일바 텍스트 높이를 고려한 하단 여백 */}
             <ScaleBar />
           </div>
           <LocationControl />

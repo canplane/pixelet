@@ -1,77 +1,79 @@
-// 1. 외부 라이브러리 (External Libraries)
 import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// 4. 현재 기능 전용 모델 및 설정 (Feature: map-three)
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { THREE_CONFIG } from '../../model/three-config';
+import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
 
-// 5. 현재 기능 내부 컴포넌트 및 오버레이 (Internal UI)
 import { MapCameraController } from '../controls/map-camera-controller';
-
 import { MapOverlays } from '../overlays/map-overlays';
 import { MapEnvironment } from './map-environment';
 import { MapToastController } from '../toasts/map-toast-controller';
 import { MapPortalRoot } from '../portal/map-portal-root';
-import { MAP_THEMES } from '../../model/map-theme';
 import { WorldContent } from './world-content';
+import { MapDebugTools } from '../debug/map-debug-tools';
 
 const { FOV, NEAR } = THREE_CONFIG.CAMERA;
 const { FAR_CLIP } = THREE_CONFIG.RENDERING;
 
-/** 메인 지도 컴포넌트 */
+/**
+ * [map-view]
+ * 3D 캔버스와 2D 오버레이를 통합 관리하는 최상위 뷰 컴포넌트입니다.
+ * 테마 전환 시 CSS 배경색과 3D 공간의 안개(fog) 색상을 동기화하여 시각적 연속성을 보장합니다.
+ */
 export function MapView() {
+  const isDebug = import.meta.env.DEV;
+
   const worldGroupRef = useRef<THREE.Group>(null);
-
   const { themeKey } = useMapNavigation();
-
-  const currentTheme = MAP_THEMES[themeKey];
+  const currentTheme = MAP_LAYOUT_THEMES[themeKey];
 
   return (
-    <div className="fixed inset-0">
+    <div className="fixed inset-0 overflow-hidden bg-black">
       <MapToastController />
 
-      {/* 🚀 자식들에게 "여기는 월드 공간이야"라고 알림 */}
+      {/* 테마 배경 레이어: 안개 색상과 일치시켜 3D와 2D 영역의 경계를 제거합니다. */}
       <div
-        className="absolute inset-0 transition-colors duration-[2000ms] ease-in-out"
+        className="absolute inset-0 transition-colors duration-[1500ms] ease-in-out"
         style={{
-          backgroundColor: currentTheme.background,
+          backgroundColor: currentTheme.fog,
         }}
       >
         <Canvas
-          // 🚀 [보정] dpr을 [1, 2]로 유지하되, 고해상도 디스플레이에서 성능을 위해 조정
-          dpr={window.devicePixelRatio > 2 ? [1, 2] : 1}
-          shadows // 그림자가 필요하다면 활성화
+          dpr={[1, 2]}
+          shadows
           camera={{
             fov: FOV,
             near: NEAR,
             far: FAR_CLIP,
           }}
-          // 🚀 [최적화] 프레임 루프를 조금 더 효율적으로 관리
           gl={{
             antialias: true,
             powerPreference: 'high-performance',
-            alpha: false, // 배경색을 CSS로 처리하므로 false가 성능에 유리
+            alpha: false,
+            stencil: false,
+            depth: true,
           }}
+          frameloop="always"
         >
-          {/* 3D 환경 구성 (조명, 안개, 그리드) */}
-          {/* 환경 요소는 그룹 밖에 두어 카메라와 동기화되게 합니다 */}
+          {/* 1. 3D 환경 구성 (조명 및 하늘) */}
           <MapEnvironment />
 
-          {/* 카메라 컨트롤 */}
+          {/* 2. 카메라 제어 및 Floating Origin 연동 */}
           <MapCameraController worldGroupRef={worldGroupRef} />
 
-          {/* 분리된 월드 그룹 컴포넌트 */}
+          {/* 3. 월드 콘텐츠 (그리드 지형, 인프라, 마커) */}
           <WorldContent ref={worldGroupRef} />
         </Canvas>
       </div>
 
-      {/* 캔버스 바로 뒤에 배치하여 동일한 좌표계(inset-0) 공유 */}
+      {/* HTML 요소 기반의 오버레이 포탈 및 UI 레이어 */}
       <MapPortalRoot />
-
-      {/* Overlay Layer: Canvas 위에 띄움 */}
       <MapOverlays />
+
+      {/* 개발 환경 전용 그리드 데이터 추출 도구 */}
+      {isDebug && <MapDebugTools />}
     </div>
   );
 }
