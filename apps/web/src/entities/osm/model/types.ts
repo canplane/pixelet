@@ -57,6 +57,16 @@ export interface OsmTags {
 }
 
 /**
+ * relation의 구성 요소 (Member)
+ */
+export interface OverpassMember {
+  type: ElementType;
+  ref: number;
+  role: string; // 'outer', 'inner', 'subarea' 등
+  geometry?: LatLng[]; // out geom 옵션 시 멤버별로 채워짐
+}
+
+/**
  * Overpass API 응답의 개별 요소 (Element)
  * 쿼리 시 out body, out center, out geom 등의 옵션 조합에 따라 속성이 동적으로 채워집니다.
  */
@@ -79,6 +89,9 @@ export interface OverpassElement {
 
   /** 장소의 속성을 담고 있는 키-값 쌍 (MapInfra/MapPoi 분류 기준) */
   tags?: OsmTags;
+
+  /** 🚀 [추가] relation 타입일 때 존재하는 멤버 배열 */
+  members?: OverpassMember[];
 }
 
 /**

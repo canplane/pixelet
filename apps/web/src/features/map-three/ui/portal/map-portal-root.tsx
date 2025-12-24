@@ -1,18 +1,23 @@
 import React, { useEffect, useRef } from 'react';
-import { useMapStore } from '../../model/map-store'; // 경로 확인 필요
+import { useMapStore } from '../../model/map-store';
 import { cn } from '@/shared/lib/utils';
 
-export const MapPortalRoot = () => {
+/**
+ * [map-portal-root]
+ * Three.js 캔버스 위에 HTML 기반 오버레이(POI 뱃지 등)를 렌더링하기 위한 전용 포탈 컨테이너입니다.
+ */
+export const MapPortalRoot = React.memo(() => {
   const portalRef = useRef<HTMLDivElement>(null);
   const setPortalElement = useMapStore((state) => state.setPortalElement);
 
+  /**
+   * [sync-portal-ref]
+   * 실제 DOM 노드를 글로벌 스토어에 등록하여 다른 컴포넌트들이 Html(drei) 포탈로 접근할 수 있게 합니다.
+   */
   useEffect(() => {
-    // 컴포넌트가 마운트될 때 실제 DOM 노드를 Store에 저장합니다.
     if (portalRef.current) {
       setPortalElement(portalRef.current);
     }
-
-    // 언마운트 시 정리 (선택 사항)
     return () => setPortalElement(null);
   }, [setPortalElement]);
 
@@ -20,13 +25,15 @@ export const MapPortalRoot = () => {
     <div
       ref={portalRef}
       id="map-portal-root"
-      /* z-[50]: POI 뱃지들이 노는 층
-         pointer-events-none: 아래에 있는 캔버스의 클릭을 방해하지 않음
-      */
+      /**
+       * z-[50]: UI 오버레이와 3D 캔버스 사이의 중간 레이어 층을 형성합니다.
+       * pointer-events-none: 하위의 캔버스 조작을 방해하지 않도록 설정합니다.
+       * overflow-hidden: 렌더링 영역을 벗어나는 자식 요소로 인한 스크롤 발생을 차단합니다.
+       */
       className={cn(
         'theme-cozy',
-        'absolute inset-0 pointer-events-none z-[50] overflow-hidden',
+        'absolute inset-0 pointer-events-none z-[50] overflow-hidden select-none',
       )}
     />
   );
-};
+});

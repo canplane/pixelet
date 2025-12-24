@@ -1,10 +1,34 @@
 export type ThemeKey = 'morning' | 'day' | 'evening' | 'night';
 
-export type MapTheme = {
-  background: string; // Canvas 배경색 (div)
-  fog: string; // 안개 색상
+/**
+ * [voxel-colors]
+ * 지형 타입별 실제 렌더링 색상을 정의합니다.
+ */
+export const VOXEL_COLORS = {
+  WATER: '#AACBD6',
+  ROAD: '#FFFFFF',
+  BUILDING: '#D9D0C9',
+  GREEN_DEEP: '#ADD19E',
+  GREEN_LIGHT: '#C8FACA',
+  BASE_LAND: '#F2EFE9',
+  RESIDENTIAL: '#DADADA',
+  COMMERCIAL: '#F2DADE',
+  INDUSTRIAL: '#ECDBE8',
+  SAND: '#F1E6B9',
+  RAIL: '#999999',
+  PEDESTRIAN: '#DDDDDD',
+  EMPTY: '#E0DDD5',
+} as const;
+
+/**
+ * [map-layout-theme]
+ * 월드 환경 설정 테마입니다. (grid 필드 제거 완료)
+ */
+export type MapLayoutTheme = {
+  background: string;
+  fog: string;
   sky: {
-    rayleigh: number; // 하늘 푸른 정도
+    rayleigh: number;
     mieCoefficient: number;
     sunPosition: [number, number, number];
   };
@@ -19,7 +43,7 @@ export type MapTheme = {
   };
 };
 
-export const MAP_THEMES: Record<ThemeKey, MapTheme> = {
+export const MAP_LAYOUT_THEMES: Record<ThemeKey, MapLayoutTheme> = {
   morning: {
     background: '#f8fafc',
     fog: '#e2e8f0',
@@ -32,7 +56,7 @@ export const MAP_THEMES: Record<ThemeKey, MapTheme> = {
     grid: { cell: '#e2e8f0', section: '#cbd5e1' },
   },
   day: {
-    background: '#e0f2fe', // 🚀 맑은 하늘색 (Light Blue)
+    background: '#e0f2fe',
     fog: '#bae6fd',
     sky: { rayleigh: 1.5, mieCoefficient: 0.002, sunPosition: [50, 100, 50] },
     lighting: {
