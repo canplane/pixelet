@@ -48,6 +48,7 @@ interface ProcessingStep {
  */
 function createProcessingSteps(bbox: string): ProcessingStep[] {
   // ✨ [통합 쿼리] 기본 지형뿐만 아니라 단지, 구역 정보를 한 번에 요청하여 API 호출 횟수를 최적화합니다.
+  // [보강] create_query 내부에서 (._; > ;) 전략을 사용하여 모든 노드 좌표를 강제 포함합니다.
   const queryInfra = create_query(`
     ${GEOMETRY_FILTERS.BASE(bbox)}
     ${BOUNDARY_FILTERS.ADMIN(bbox)}
@@ -102,11 +103,14 @@ function processLayerData(
   },
   targetGrids: TileGrids, // Mutable Update
 ): { newInfras: MapInfra[]; newPois: MapPoi[] } {
-  // (A) 파싱: 'osm-parser'가 ID 중복 제거 및 객체 우선순위(Layer Stacking) 정리
+  /**
+   * (A) 파싱: 'osm-parser' 실행
+   * [보강] 'elements'에는 (._; > ;) 쿼리 결과로 포함된 다량의 순수 Node 좌표 데이터가 섞여 있습니다.
+   * parseOsmData 내부의 nodeCache가 이 elements를 전체 순회하여 Way의 좌표를 100% 복구합니다.
+   */
   const { infras, pois } = parseOsmData(elements, context.project);
 
   // (B) 부분 베이킹 & 채널 병합
-  // 데이터가 있고, 그리드에 영향을 주는 레이어인 경우에만 수행
   if (infras.length > 0 && step.targetChannels.length > 0) {
     const { grids: partialGrids } = bakeTileGrid(infras, context.origin, {
       tileSize: context.tileSize,
@@ -114,9 +118,11 @@ function processLayerData(
     });
 
     // 고속 메모리 복사 (Channel Merging)
-    // 쉐이더의 레이어 합성 우선순위와 일치하도록 채널별 데이터를 병합합니다.
     step.targetChannels.forEach((channel) => {
-      targetGrids[channel].set(partialGrids[channel]);
+      // partialGrids가 생성되지 않은 채널이 있을 수 있으므로 방어 로직 추가
+      if (partialGrids[channel]) {
+        targetGrids[channel].set(partialGrids[channel]);
+      }
     });
   }
 
@@ -128,16 +134,6 @@ function processLayerData(
 /**
  * [tile-processor]
  * 단일 타일의 생애주기(데이터 로드 -> 가공 -> 그리드 생성)를 책임지는 원자적 함수입니다.
- * 모든 결과 데이터는 서버 및 글로벌 기준과 동일한 '절대 미터 좌표계'를 유지합니다.
- * * [주요 정책]
- * 1. 대형 쿼리 동시 실행 대신, 레이어별 순차 실행을 통해 API 안정성을 확보했습니다.
- * 2. 특정 레이어 로드 실패가 전체 타일 로딩 실패로 이어지지 않도록 방어 로직이 적용되었습니다.
- * 3. 점진적 업데이트(onProgress)를 통해 사용자가 로딩 과정을 실시간으로 확인할 수 있습니다.
- * * @param tx - 타일 격자 X 인덱스
- * @param tz - 타일 격자 Z 인덱스
- * @param project - 위경도를 미터로 변환하는 함수
- * @param unproject - 미터를 위경도로 변환하는 함수
- * @param onProgress - 단계별 렌더링을 위한 콜백 함수 (선택 사항)
  */
 export async function fetchAndProcessTile(
   tx: number,
@@ -150,7 +146,7 @@ export async function fetchAndProcessTile(
   const key = `${tx}:${tz}`;
   const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
 
-  // 1. Origin 설정
+  // 1. Origin 설정 (절대 좌표계 기준점)
   const origin: MeterPos = {
     x: tx * TILE_SIZE,
     y: 0,
@@ -159,13 +155,12 @@ export async function fetchAndProcessTile(
 
   /**
    * 2. 타일 경계(BBox) 계산
-   * getTileBBox 유틸리티를 사용하여 Grid Index 기반 위경도 범위를 도출합니다.
    */
   const bbox = getTileBBox(tx, tz, (pos) =>
     unproject({ x: pos.x, y: 0, z: pos.z }),
   );
 
-  // 3. 실행 계획 수립 (3-Pass Strategy: Infra -> Structure -> POI)
+  // 3. 실행 계획 수립
   const steps = createProcessingSteps(bbox);
 
   // 4. 상태 저장소 초기화
@@ -174,7 +169,6 @@ export async function fetchAndProcessTile(
   const accumulatedPois: MapPoi[] = [];
 
   // 5. 순차 실행 루프 (Sequential Execution)
-  // Overpass API의 부하를 분산하고 타임아웃을 방지하기 위해 순차적으로 처리합니다.
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     if (!step.query || step.query.trim() === '') continue;
@@ -182,20 +176,19 @@ export async function fetchAndProcessTile(
     try {
       const response = await requestOverpass(step.query);
 
+      // [보강] response.elements에는 쿼리 필터 결과물(Way/Relation)과
+      // 재귀적으로 추출된 좌표 데이터(Node)가 모두 포함되어 전달되어야 합니다.
       if (response?.elements && response.elements.length > 0) {
-        // [위임] 복잡한 데이터 가공 및 병합 처리는 Worker 함수에게 위임
         const result = processLayerData(
           response.elements,
           step,
           { origin, tileSize: TILE_SIZE, cellSize: CELL_SIZE, project },
-          currentGrids, // 참조 전달 (내부에서 업데이트됨)
+          currentGrids,
         );
 
-        // 결과 누적
         accumulatedInfras.push(...result.newInfras);
         accumulatedPois.push(...result.newPois);
 
-        // [Progressive Rendering] 점진적 렌더링 알림
         if (onProgress) {
           onProgress({
             key,
@@ -212,18 +205,14 @@ export async function fetchAndProcessTile(
         `[TileProcessor] ${step.name} fetch failed in ${key}.`,
         error,
       );
-
-      // 인프라(지면/교통) 로딩 실패 시 타일 생성 불가 -> 에러 전파 (Critical)
       if (step.critical) throw error;
     }
 
-    // [서버 매너] 공용 모드일 때 마지막 단계가 아니라면 랜덤 딜레이 적용
     if (API_MODE === 'public' && i < steps.length - 1) {
       await randomDelay(500, 1500);
     }
   }
 
-  // 6. 가공 완료된 원자적 타일 데이터 반환 (WorldTile 인터페이스 준수)
   return {
     key,
     origin,

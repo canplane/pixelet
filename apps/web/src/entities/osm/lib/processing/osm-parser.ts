@@ -51,13 +51,31 @@ const LAYER_PRIORITY: Record<string, number> = {
 /**
  * [Advanced Parsing Logic]
  * Overpass API 응답을 파싱하여 3D 엔진용 객체로 변환합니다.
+ * * * [BBox & Clipping Policy]
+ * - (._; > ;) 전략으로 인해 현재 타일(BBox) 경계에 걸친 인프라의 경우 타일 외부 좌표가 유입됩니다.
+ * - 본 파서는 데이터 무결성을 위해 외부 점을 강제로 절단(Clipping)하지 않고 온전히 보존합니다.
+ * - 타일 간의 매끄러운 연결(Seamless joining)을 위해 인프라의 기하 구조를 원본 그대로 유지하며,
+ * 실제 가시 영역 제한은 이후 Baking(Rasterization) 또는 렌더링 단계에서 처리합니다.
  */
 export const parseOsmData = (
   elements: OverpassElement[],
   project: (loc: Location) => MeterPos | null,
 ): ParseResult => {
   const result: ParseResult = { infras: [], pois: [] };
-  if (!elements) return result;
+  if (!elements || elements.length === 0) return result;
+
+  /**
+   * [보강: PASS 1] 모든 노드 좌표 사전 구축
+   * Way/Relation이 geometry 없이 nodes ID 리스트만 가질 경우 좌표를 복구하기 위한 인덱스입니다.
+   * [BBox Outside] 타일 외부에 위치한 참조 노드들도 누락 없이 캐싱하여 객체 복원율을 100%로 유지합니다.
+   */
+  const nodeCache = new Map<number, MeterPos>();
+  elements.forEach((el) => {
+    if (el.type === 'node' && el.lat !== undefined && el.lon !== undefined) {
+      const projected = project({ lat: el.lat, lng: el.lon, alt: 0 });
+      if (projected) nodeCache.set(el.id, projected);
+    }
+  });
 
   // 1. 중복 제거 (API 응답 내 동일 ID 객체 방어)
   const elementMap: Map<number | string, OverpassElement> = new Map();
@@ -102,29 +120,41 @@ export const parseOsmData = (
       const outerPoints: MeterPos[] = [];
       const innerHoles: MeterPos[][] = [];
 
-      // Geometry 추출 (Vite/WebWorker 환경 호환)
-      if (item.geometry) {
-        item.geometry.forEach((pt) => {
-          const projected = project({ lng: pt.lon, lat: pt.lat, alt: 0 });
-          if (projected) outerPoints.push(projected);
-        });
-      } else if (item.type === 'relation' && item.members) {
-        item.members.forEach((member) => {
-          if (!member.geometry) return;
-          const memberPoints = member.geometry
+      /**
+       * [보강] 좌표 추출 통합 헬퍼
+       * 1. geometry 배열이 있으면 우선 사용 (서버 계산값)
+       * 2. 없으면 nodes ID 리스트를 nodeCache에서 참조하여 복구
+       */
+      const resolvePoints = (geom?: any[], nodes?: number[]): MeterPos[] => {
+        if (geom && geom.length > 0) {
+          return geom
             .map((pt) => project({ lng: pt.lon, lat: pt.lat, alt: 0 }))
             .filter((v): v is MeterPos => v !== null);
+        }
+        if (nodes && nodes.length > 0) {
+          return nodes
+            .map((id) => nodeCache.get(id))
+            .filter((v): v is MeterPos => v !== undefined) as MeterPos[];
+        }
+        return [];
+      };
 
-          if (member.role === 'outer') outerPoints.push(...memberPoints);
-          else if (member.role === 'inner') innerHoles.push(memberPoints);
+      // Geometry 추출 (노드 복구 로직 포함)
+      if (item.type === 'way') {
+        outerPoints.push(...resolvePoints(item.geometry, item.nodes));
+      } else if (item.type === 'relation' && item.members) {
+        item.members.forEach((member) => {
+          const memberPoints = resolvePoints(member.geometry, member.nodes);
+          if (memberPoints.length < 2) return;
+
+          if (member.role === 'inner') innerHoles.push(memberPoints);
+          else outerPoints.push(...memberPoints);
         });
       }
 
       if (outerPoints.length < 2) return;
 
       // --- [Type Detection & Optimization] ---
-      // 베이커(Baker) 단계에서 조건문 부하를 줄이기 위해 미리 타입을 판별하여 플래그를 심습니다.
-
       const isBuilding = !!(
         tags.building ||
         tags['building:part'] ||
@@ -145,7 +175,6 @@ export const parseOsmData = (
         tags.landuse === 'reservoir' ||
         tags.water === 'river';
 
-      // ✨ [구역 타입 보강] 학교, 주차장, 운동장 등 구체적 구역 판별
       const isInstitutional =
         ['school', 'university', 'hospital', 'college'].includes(
           tags.amenity || '',
@@ -167,12 +196,11 @@ export const parseOsmData = (
 
       if (!isBuilding && !isRoad && !isWater && !isLanduse) return;
 
-      // 베이커용 내부 전용 플래그 주입
+      // 내부 플래그 주입
       if (isInstitutional) tags._isInstitutional = 'true';
       if (isParking) tags._isParking = 'true';
       if (isSports) tags._isSports = 'true';
 
-      // [도로 너비 계산]
       if (isRoad) {
         const lanes = tags.lanes ? parseInt(tags.lanes) : 1;
         const widthTag = tags.width ? parseFloat(tags.width) : 0;
@@ -199,13 +227,10 @@ export const parseOsmData = (
       };
 
       // --- [Y-Offset Stacking & Z-Fighting Defense] ---
-      // 겹침 방지를 위한 미세 고도 조정 (단위: meter)
-      // Base(0.02) < Institutional(0.025) < Parking(0.03) < Sports(0.035) < Road(0.05)
       const layerLevel = tags.layer ? parseFloat(tags.layer) : 0;
 
       const pointsWithOffset = outerPoints.map((pt) => {
         let y = 0;
-
         if (isRoad) {
           y = 0.05 + layerLevel * 0.2;
           if (tags.bridge === 'yes') y += 1.0;
@@ -213,19 +238,16 @@ export const parseOsmData = (
         } else if (isWater) {
           y = -0.15 + layerLevel * 0.1;
         } else if (isLanduse) {
-          y = 0.02; // 기본 지형 (Grass)
-
-          if (isInstitutional) y = 0.025; // 학교/병원
-          if (isParking) y = 0.03; // 주차장 (잔디보다 위)
-          if (isSports) y = 0.035; // 운동장 (최상단 구역)
-
-          // 숲/나무 영역은 일반 지형보다 미세하게 위로 배치하여 가시성 확보
+          y = 0.02;
+          if (isInstitutional) y = 0.025;
+          if (isParking) y = 0.03;
+          if (isSports) y = 0.035;
           if (tags.landuse === 'forest' || tags.natural === 'wood') y = 0.028;
         }
         return { ...pt, y };
       });
 
-      // [건물 높이 계산] 층수 또는 직접 높이 태그 참조
+      // [건물 높이 계산]
       let infraHeight = 0;
       if (isBuilding) {
         const levels = tags['building:levels']
@@ -243,8 +265,7 @@ export const parseOsmData = (
         infraHeight = Math.max(0, baseHeight);
       }
 
-      // [IsClosed 판정 Update]
-      // 영역 데이터(Area)가 선(Line)으로 렌더링되지 않도록 강제 폐곡선 처리
+      // [IsClosed 판정]
       const forceClosed =
         isParking ||
         isSports ||
@@ -258,14 +279,10 @@ export const parseOsmData = (
         (!isRoad && !tags.waterway && outerPoints.length >= 3) ||
         !!tags['area:highway'] ||
         (outerPoints.length > 2 &&
-          outerPoints[0].x === outerPoints[outerPoints.length - 1].x &&
-          outerPoints[0].z === outerPoints[outerPoints.length - 1].z);
-
-      const shapePath: ShapePath = {
-        points: pointsWithOffset,
-        isClosed: isClosed,
-        holes: innerHoles.length > 0 ? innerHoles : undefined,
-      };
+          Math.abs(outerPoints[0].x - outerPoints[outerPoints.length - 1].x) <
+            0.1 &&
+          Math.abs(outerPoints[0].z - outerPoints[outerPoints.length - 1].z) <
+            0.1);
 
       const infraType = isBuilding
         ? 'building'
@@ -280,14 +297,17 @@ export const parseOsmData = (
         type: infraType,
         points: pointsWithOffset,
         center,
-        shapePath,
+        shapePath: {
+          points: pointsWithOffset,
+          isClosed: isClosed,
+          holes: innerHoles.length > 0 ? innerHoles : undefined,
+        },
         height: infraHeight,
         tags,
       });
     }
   });
 
-  // 3. 최종 정렬: 레이어 우선순위에 따라 베이킹 순서 보장
   result.infras.sort(
     (a, b) => (LAYER_PRIORITY[a.type] || 0) - (LAYER_PRIORITY[b.type] || 0),
   );
