@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapStore } from './map-store';
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
+import { projection } from '@/shared/lib/geo/projection';
+
+const { project } = projection;
 
 /**
  * [use-map-navigation]
@@ -46,7 +49,6 @@ export function useMapNavigation() {
       getThemeKey: state.getThemeKey,
     })),
   );
-  const project = useMapStore((state) => state.project);
 
   /**
    * [get-constrained-accuracy]

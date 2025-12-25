@@ -13,10 +13,9 @@ export const OsmLayer = React.memo(() => {
   const center = useMapStore((state) => state.center);
   const worldTiles = useMapStore((state) => state.worldTiles);
   const status = useMapStore((state) => state.status);
-  const unproject = useMapStore((state) => state.unproject);
 
   // 타일 라이프사이클 엔진 실행 (데이터 로드/해제 관리)
-  useTileLifecycleManager(center, unproject);
+  useTileLifecycleManager(center);
 
   const tileList = useMemo(() => Array.from(worldTiles.values()), [worldTiles]);
 
