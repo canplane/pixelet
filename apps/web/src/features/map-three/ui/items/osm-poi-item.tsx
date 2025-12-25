@@ -5,7 +5,7 @@ import { Html } from '@react-three/drei';
 import { useMapStore } from '../../model/map-store';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { useRelativePosition } from '../../model/use-relative-position';
-import type { MapPoi } from '../../../../entities/osm/lib/osm-parser';
+import type { MapPoi } from '../../../../entities/osm/lib/processing/osm-parser';
 import { THREE_CONFIG } from '../../model/three-config';
 import { cn } from '@/shared/lib/utils';
 import { VOXEL_CONFIG } from '../../model/voxel-config';

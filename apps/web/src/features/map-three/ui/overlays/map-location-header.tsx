@@ -2,6 +2,9 @@ import * as React from 'react';
 import { Search } from 'lucide-react';
 import { useMapStore } from '../../model/map-store';
 import { cn } from '@/shared/lib/utils';
+import { projection } from '@/shared/lib/geo/projection';
+
+const { unproject } = projection;
 
 interface MapSearchBarProps {
   className?: string; // 🚀 외부(MapOverlays)에서 interactionStyle을 받기 위함
@@ -9,7 +12,6 @@ interface MapSearchBarProps {
 
 export function MapSearchBar({ className }: MapSearchBarProps) {
   const center = useMapStore((state) => state.center);
-  const unproject = useMapStore((state) => state.unproject);
 
   const locationInfo = React.useMemo(() => {
     if (!center) return { title: '장소 검색', coords: '' };

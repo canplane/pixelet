@@ -86,6 +86,33 @@ export const projection = {
     return latRad * (180 / Math.PI);
   },
 
+  // --- [좌표 변환 유틸리티] ---
+
+  /**
+   * [project]
+   * 위경도(Location)를 절대 미터 좌표(MeterPos)로 투영합니다.
+   */
+  project: (location: Location) => {
+    const { lng, lat, alt = 0 } = projection.clamp(location);
+    return {
+      x: projection.lngToX(lng),
+      y: alt,
+      z: -projection.latToY(lat),
+    };
+  },
+
+  /**
+   * [unproject]
+   * 절대 미터 좌표를 위경도 좌표로 역투영합니다.
+   */
+  unproject: (pos: MeterPos) => {
+    return {
+      lng: projection.xToLng(pos.x),
+      alt: pos.y,
+      lat: projection.yToLat(-pos.z),
+    };
+  },
+
   /**
    * [create-bbox]
    * 중심점과 미터 범위를 기반으로 외부 API(Overpass 등)용 BBox 문자열을 생성합니다.

@@ -1,12 +1,16 @@
 import { create } from 'zustand';
 import { projection } from '@/shared/lib/geo/projection';
 import { VOXEL_CONFIG } from './voxel-config';
-import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
 import type { Location, MeterPos } from '@/shared/types/map';
-import type { MapInfra, MapPoi } from '@/entities/osm/lib/osm-parser';
+import type {
+  MapInfra,
+  MapPoi,
+} from '@/entities/osm/lib/processing/osm-parser';
 import { THREE_CONFIG } from './three-config';
 import type { ThemeKey } from '../../../entities/osm/config/map-theme';
+import type { TileGrids } from '@/entities/osm/lib/baking/tile-baker';
 
+const { project } = projection;
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 
 export type MapDataStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -19,7 +23,7 @@ export type MapDataStatus = 'idle' | 'loading' | 'success' | 'error';
 export interface WorldTile {
   key: string; // "tx:tz" 형식의 고유 키
   origin: MeterPos; // 타일의 시작점 (절대 미터 좌표)
-  grid: Uint8Array; // 🎯 명칭 통일: 타일 지형 격자 데이터 (Voxel Type Map)
+  grids: TileGrids; // 🎯 명칭 통일: 타일 지형 격자 데이터 (Voxel Type Map)
   pois: MapPoi[]; // 타일에 포함된 절대 좌표 기반 POI
   infras: MapInfra[]; // 타일에 포함된 절대 좌표 기반 인프라
   resolution: number; // 격자 해상도
@@ -52,7 +56,11 @@ interface MapState {
 
   /** 활성 범위 내의 타일 데이터 관리 (Grid 중심) */
   worldTiles: Map<string, WorldTile>;
-  setWorldTile: (key: string, tile: WorldTile) => void;
+  /** * [setWorldTile] (Updated)
+   * 완전한 타일 교체뿐만 아니라, 부분 업데이트(Partial)를 지원합니다.
+   * 기존에 타일이 있다면 데이터를 병합하고, 없다면 새로 생성합니다.
+   */
+  setWorldTile: (key: string, tile: Partial<WorldTile>) => void; // 👈 타입 변경
   removeWorldTile: (key: string) => void;
   clearOldTiles: (neededKeys: string[]) => void;
 
@@ -69,10 +77,6 @@ interface MapState {
 
   originOffset: MeterPos;
   setOriginOffset: (offset: MeterPos) => void;
-
-  // --- [좌표 변환 유틸리티] ---
-  project: (location: Location) => MeterPos;
-  unproject: (pos: MeterPos) => Location;
 
   cameraResetSignal: { distance: number; orientation: number };
   triggerDistanceReset: () => void;
@@ -110,10 +114,40 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   worldTiles: new Map(),
 
-  setWorldTile: (key, tile) =>
+  /**
+   * [setWorldTile] 구현체 수정
+   * 부분 업데이트 로직 추가
+   */
+  setWorldTile: (key, partialTile) =>
     set((state) => {
       const newMap = new Map(state.worldTiles);
-      newMap.set(key, tile);
+      const existingTile = newMap.get(key);
+
+      if (existingTile) {
+        // [Merge Strategy]
+        // 기존 타일이 있으면 새로운 속성만 덮어씁니다.
+        // 배열(pois, infras)은 덮어쓰는 것이 안전합니다 (누적된 전체 리스트가 오므로).
+        // Grids(Uint8Array)는 참조가 바뀌므로 렌더링 트리거가 됩니다.
+        newMap.set(key, {
+          ...existingTile,
+          ...partialTile,
+          // (주의) Grids 내부의 Uint8Array는 Worker에서 통째로 교체되어 오므로
+          // 얕은 병합(...grids) 대신 객체 자체를 교체해도 무방합니다.
+        });
+      } else {
+        // 기존 타일이 없는데 Partial이 들어온 경우?
+        // (보통 origin, resolution 등 필수값은 첫 패킷에 포함되어야 함)
+        // 타입 안전성을 위해 필수값이 있는지 체크하거나, as WorldTile로 단언합니다.
+        // 여기서는 Worker가 첫 패킷에 필수 정보를 다 보낸다고 가정합니다.
+        if (partialTile.origin && partialTile.grids && partialTile.resolution) {
+          newMap.set(key, partialTile as WorldTile);
+        } else {
+          console.warn(
+            `[MapStore] Incomplete tile data received for ${key}`,
+            partialTile,
+          );
+        }
+      }
       return { worldTiles: newMap };
     }),
 
@@ -140,7 +174,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   center: null,
   setCenter: (pos) => set({ center: pos }),
   setCenterByLocation: (location) => {
-    const meterPos = get().project(location);
+    const meterPos = project(location);
     set({ center: meterPos });
   },
 
@@ -164,38 +198,13 @@ export const useMapStore = create<MapState>((set, get) => ({
     });
   },
   setOriginByLocation: (location) => {
-    const meterPos = get().project(location);
+    const meterPos = project(location);
     get().setOrigin(meterPos);
   },
 
   originOffset: { x: 0, y: 0, z: 0 },
   setOriginOffset: (offset) => {
     set({ originOffset: VOXEL_CONFIG.snapToVoxel(offset) });
-  },
-
-  /**
-   * [project]
-   * 위경도(Location)를 절대 미터 좌표(MeterPos)로 투영합니다.
-   */
-  project: (location: Location) => {
-    const { lng, lat, alt = 0 } = projection.clamp(location);
-    return {
-      x: projection.lngToX(lng),
-      y: alt,
-      z: -projection.latToY(lat),
-    };
-  },
-
-  /**
-   * [unproject]
-   * 절대 미터 좌표를 위경도 좌표로 역투영합니다.
-   */
-  unproject: (pos: MeterPos) => {
-    return {
-      lng: projection.xToLng(pos.x),
-      alt: pos.y,
-      lat: projection.yToLat(-pos.z),
-    };
   },
 
   cameraResetSignal: { distance: 0, orientation: 0 },

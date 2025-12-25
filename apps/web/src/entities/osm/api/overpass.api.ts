@@ -3,17 +3,22 @@ import { OSM_CONFIG } from '../config/osm-config';
 import type { OverpassResponse } from '../model/types';
 
 /**
- * Overpass API 서버군에 지리 데이터 쿼리를 요청합니다.
- * 로드 밸런싱을 위해 가용 서버 중 하나를 무작위로 선택하며, 장애 발생 시 자동으로 Fallback을 시도합니다.
+ * Overpass API 요청을 수행합니다.
+ * 설정된 모드('local' | 'public')에 따라 최적화된 전략을 사용합니다.
  */
 export async function requestOverpass(
   query: string,
 ): Promise<OverpassResponse> {
+  // [Mode 1] 로컬 서버 모드 (Super Fast & Unlimited)
+  if (OSM_CONFIG.API_MODE === 'local') {
+    return fetchFromUrl(OSM_CONFIG.LOCAL_ENDPOINT, query, 'Local Docker');
+  }
+
+  // [Mode 2] 공용 서버 모드 (Legacy: Load Balancing & Fallback)
   // 1. 서버 목록 무작위 셔플 (특정 서버 부하 집중 방지)
   const shuffledServers = [...OSM_CONFIG.ENDPOINTS].sort(
     () => Math.random() - 0.5,
   );
-
   let lastError: Error | null = null;
 
   // 2. 가용 서버 순차 시도
@@ -78,4 +83,51 @@ export async function requestOverpass(
   }
 
   throw new Error(`[Overpass API] 모든 서버 응답 실패: ${lastError?.message}`);
+}
+
+/**
+ * 실제 fetch를 수행하는 내부 헬퍼 함수
+ */
+async function fetchFromUrl(
+  url: string,
+  query: string,
+  label: string,
+): Promise<OverpassResponse> {
+  const startTime = performance.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    OSM_CONFIG.REQUEST_TIMEOUT,
+  );
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: `data=${encodeURIComponent(query)}`, // 헤더 없이 body만으로도 보통 동작함
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as OverpassResponse;
+    const duration = ((performance.now() - startTime) / 1000).toFixed(3);
+
+    if (!data || !data.elements) {
+      throw new Error('Invalid Response Data');
+    }
+
+    // [LOG] 로컬일 때는 너무 빠르므로 로그가 스팸이 되지 않게 필요시에만 출력하거나 간소화
+    console.debug(
+      `✅ [${label}] Fetched ${data.elements.length} items in ${duration}s`,
+    );
+
+    return data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
 }
