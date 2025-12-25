@@ -4,10 +4,21 @@ import { OSM_CONFIG } from '../config/osm-config';
 // [변경 1] 직접 처리 함수 대신 워커 매니저를 가져옵니다.
 import { tileWorkerManager } from '@/features/map-three/lib/tile-worker-manager';
 
+interface TileRequest {
+  tx: number;
+  tz: number;
+  key: string;
+  distance: number;
+}
+
 /**
  * [use-tile-lifecycle-manager]
  * Web Worker를 통해 백그라운드에서 타일을 로드하고,
  * 점진적 렌더링(Progressive Rendering) 결과를 UI에 반영합니다.
+ *
+ * [Scheduling]
+ * 중심 좌표를 기준으로 가까운 타일(Radius Sort)부터 우선적으로 Worker에 요청하여,
+ * 사용자의 시야 중심부(Ripple Effect)가 가장 먼저 로딩되도록 스케줄링합니다.
  */
 export function useTileLifecycleManager(
   center: { x: number; z: number } | null,
@@ -33,9 +44,9 @@ export function useTileLifecycleManager(
     lastCenterTileKey.current = currentKey;
 
     const activeKeys = new Set<string>();
-    const tasks: Promise<void>[] = [];
+    const pendingRequests: TileRequest[] = [];
 
-    // 2. 가시 범위 순회
+    // 2. 가시 범위 순회 및 후보군 수집
     for (let dx = -DEFAULT_RENDER_RADIUS; dx <= DEFAULT_RENDER_RADIUS; dx++) {
       for (let dz = -DEFAULT_RENDER_RADIUS; dz <= DEFAULT_RENDER_RADIUS; dz++) {
         const targetTx = tx + dx;
@@ -45,48 +56,60 @@ export function useTileLifecycleManager(
 
         const { worldTiles } = useMapStore.getState();
 
-        // 3. 로드 요청 (Worker 사용)
+        // 3. 로드 요청 대기열 추가 (이미 로드된 타일 제외)
         if (!worldTiles.has(key) && !processingTiles.current.has(key)) {
-          processingTiles.current.add(key);
-
-          // [변경 2] tileWorkerManager를 통해 요청합니다.
-          // 더 이상 project/unproject 함수를 인자로 넘기지 않습니다. (Worker가 알아서 함)
-          const task = tileWorkerManager
-            .requestTile(
-              targetTx,
-              targetTz,
-              // [점진적 업데이트] Worker가 중간 결과를 보낼 때마다 실행됨
-              (partialTile) => {
-                setWorldTile(key, partialTile);
-              },
-            )
-            .then((finalTile) => {
-              // [최종 완료]
-              if (finalTile && finalTile.grids) {
-                setWorldTile(key, finalTile);
-              }
-            })
-            .catch((err) => {
-              console.error(`[Lifecycle] Worker error ${key}:`, err);
-            })
-            .finally(() => {
-              processingTiles.current.delete(key);
-            });
-
-          tasks.push(task);
+          // [Priority Scheduling] 중심부와의 거리(가중치) 계산
+          // 유클리드 거리 제곱 (sqrt 연산 최적화)
+          const distance = dx * dx + dz * dz;
+          pendingRequests.push({ tx: targetTx, tz: targetTz, key, distance });
         }
       }
     }
 
-    // 4. 범위 밖 타일 정리
+    // 4. [핵심] 거리순 정렬 (가까운 타일 -> 먼 타일)
+    // Worker는 FIFO(선입선출)로 메시지를 처리하므로, 요청 순서가 곧 로딩 순서가 됩니다.
+    pendingRequests.sort((a, b) => a.distance - b.distance);
+
+    // 5. 정렬된 순서대로 비동기 요청 실행
+    const tasks = pendingRequests.map((req) => {
+      const { tx: targetTx, tz: targetTz, key } = req;
+
+      processingTiles.current.add(key);
+
+      // [변경 2] tileWorkerManager를 통해 요청합니다.
+      return tileWorkerManager
+        .requestTile(
+          targetTx,
+          targetTz,
+          // [점진적 업데이트] Worker가 중간 결과를 보낼 때마다 실행됨
+          (partialTile) => {
+            setWorldTile(key, partialTile);
+          },
+        )
+        .then((finalTile) => {
+          // [최종 완료]
+          if (finalTile && finalTile.grids) {
+            setWorldTile(key, finalTile);
+          }
+        })
+        .catch((err) => {
+          console.error(`[Lifecycle] Worker error ${key}:`, err);
+        })
+        .finally(() => {
+          processingTiles.current.delete(key);
+        });
+    });
+
+    // 6. 범위 밖 타일 정리 (메모리 관리)
     const { worldTiles } = useMapStore.getState();
     worldTiles.forEach((_, key) => {
+      // 현재 보고 있는 범위(activeKeys)에도 없고, 로딩 중도 아니라면 삭제
       if (!activeKeys.has(key) && !processingTiles.current.has(key)) {
         removeWorldTile(key);
       }
     });
 
-    // 5. 상태 관리
+    // 7. 상태 관리
     if (tasks.length > 0) {
       setStatus('loading');
       Promise.all(tasks)
@@ -96,5 +119,5 @@ export function useTileLifecycleManager(
       const { worldTiles: currentTiles } = useMapStore.getState();
       if (currentTiles.size > 0) setStatus('success');
     }
-  }, [center, setWorldTile, removeWorldTile, setStatus]); // project/unproject 의존성 제거 가능
+  }, [center, setWorldTile, removeWorldTile, setStatus]); // project/unproject 의존성 제거됨
 }

@@ -11,10 +11,11 @@ export const GEOMETRY_FILTERS = {
    * 캔버스의 가장 밑바닥(Background)을 결정합니다.
    */
   BASE: (bbox: string) => `
-    nwr["landuse"~"forest|grass|residential|commercial|industrial|cemetery|allotments|quarry|construction"](${bbox});
-    nwr["natural"~"wood|scrub|heath|grassland|bare_rock|sand|shingle"](${bbox});
-    nwr["leisure"~"park|garden|pitch|playground|golf_course|square|nature_reserve"](${bbox});
-    nwr["amenity"~"parking|university|hospital|school"](${bbox}); 
+    nwr["landuse"~"forest|grass|residential|commercial|industrial|cemetery|allotments|quarry|construction|meadow"](${bbox});
+    nwr["natural"~"wood|scrub|heath|grassland|bare_rock|sand|shingle|fell"](${bbox});
+    nwr["leisure"~"park|garden|pitch|playground|golf_course|square|nature_reserve|track|stadium"](${bbox});
+    nwr["amenity"~"parking|university|hospital|school|college"](${bbox});
+    nwr["campus"](${bbox});
   `,
   /** * [Pass 2] water-layer (수계)
    * 지형 위에 물을 덮습니다.

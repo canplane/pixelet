@@ -6,6 +6,8 @@
 
 import { requestOverpass } from '../api/overpass.api';
 import { GEOMETRY_FILTERS } from '../lib/query/osm-geometry-queries';
+// ✨ [New Import] 행정 구역 및 단지 정보 쿼리 추가
+import { BOUNDARY_FILTERS } from '../lib/query/osm-boundary-queries';
 import { create_query } from '../lib/query/overpass-utils';
 import { POI_QUERIES } from '../lib/query/osm-poi-queries';
 import {
@@ -41,10 +43,16 @@ interface ProcessingStep {
  * [Step 1] 실행 계획 수립
  * BBox를 기반으로 3단계(Pass) 쿼리 계획을 생성합니다.
  * 순서: 지형 -> 물 -> 교통 -> 구조물 -> POI
+ * * [고도화] Infrastructure 단계에 행정 구역 및 시설 단지(Boundary) 쿼리를 통합하여
+ * 학교, 아파트 단지, 공원 구역 정보를 한 번에 확보합니다.
  */
 function createProcessingSteps(bbox: string): ProcessingStep[] {
+  // ✨ [통합 쿼리] 기본 지형뿐만 아니라 단지, 구역 정보를 한 번에 요청하여 API 호출 횟수를 최적화합니다.
   const queryInfra = create_query(`
     ${GEOMETRY_FILTERS.BASE(bbox)}
+    ${BOUNDARY_FILTERS.ADMIN(bbox)}
+    ${BOUNDARY_FILTERS.RESIDENTIAL(bbox)}
+    ${BOUNDARY_FILTERS.LEISURE(bbox)}
     ${GEOMETRY_FILTERS.WATER(bbox)}
     ${GEOMETRY_FILTERS.TRANSPORT(bbox)}
   `);
@@ -94,7 +102,7 @@ function processLayerData(
   },
   targetGrids: TileGrids, // Mutable Update
 ): { newInfras: MapInfra[]; newPois: MapPoi[] } {
-  // (A) 파싱: 'osm-parser'가 ID 중복 제거 및 객체 우선순위 정리
+  // (A) 파싱: 'osm-parser'가 ID 중복 제거 및 객체 우선순위(Layer Stacking) 정리
   const { infras, pois } = parseOsmData(elements, context.project);
 
   // (B) 부분 베이킹 & 채널 병합
@@ -106,6 +114,7 @@ function processLayerData(
     });
 
     // 고속 메모리 복사 (Channel Merging)
+    // 쉐이더의 레이어 합성 우선순위와 일치하도록 채널별 데이터를 병합합니다.
     step.targetChannels.forEach((channel) => {
       targetGrids[channel].set(partialGrids[channel]);
     });
@@ -120,9 +129,10 @@ function processLayerData(
  * [tile-processor]
  * 단일 타일의 생애주기(데이터 로드 -> 가공 -> 그리드 생성)를 책임지는 원자적 함수입니다.
  * 모든 결과 데이터는 서버 및 글로벌 기준과 동일한 '절대 미터 좌표계'를 유지합니다.
- * * * [주요 정책]
+ * * [주요 정책]
  * 1. 대형 쿼리 동시 실행 대신, 레이어별 순차 실행을 통해 API 안정성을 확보했습니다.
  * 2. 특정 레이어 로드 실패가 전체 타일 로딩 실패로 이어지지 않도록 방어 로직이 적용되었습니다.
+ * 3. 점진적 업데이트(onProgress)를 통해 사용자가 로딩 과정을 실시간으로 확인할 수 있습니다.
  * * @param tx - 타일 격자 X 인덱스
  * @param tz - 타일 격자 Z 인덱스
  * @param project - 위경도를 미터로 변환하는 함수
@@ -155,7 +165,7 @@ export async function fetchAndProcessTile(
     unproject({ x: pos.x, y: 0, z: pos.z }),
   );
 
-  // 3. 실행 계획 수립 (3-Pass Strategy)
+  // 3. 실행 계획 수립 (3-Pass Strategy: Infra -> Structure -> POI)
   const steps = createProcessingSteps(bbox);
 
   // 4. 상태 저장소 초기화
@@ -185,7 +195,7 @@ export async function fetchAndProcessTile(
         accumulatedInfras.push(...result.newInfras);
         accumulatedPois.push(...result.newPois);
 
-        // 점진적 렌더링 알림
+        // [Progressive Rendering] 점진적 렌더링 알림
         if (onProgress) {
           onProgress({
             key,
@@ -203,7 +213,7 @@ export async function fetchAndProcessTile(
         error,
       );
 
-      // 인프라(지면) 로딩 실패 시 타일 생성 불가 -> 에러 전파 (Critical)
+      // 인프라(지면/교통) 로딩 실패 시 타일 생성 불가 -> 에러 전파 (Critical)
       if (step.critical) throw error;
     }
 

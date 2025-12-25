@@ -1,3 +1,9 @@
+/**
+ * @file tile-debug.ts
+ * 엔진 내부의 그리드 데이터(Uint8Array)를 바이너리 또는 이미지 파일로 추출하여
+ * 데이터의 정합성을 시각적으로 검증하는 도구입니다.
+ */
+
 import { VOXEL_TYPES, type TileGrids } from '../baking/tile-baker';
 import { VOXEL_COLORS } from '../../config/map-theme';
 
@@ -32,7 +38,7 @@ const getColorMap = (): Record<number, [number, number, number]> => ({
   [VOXEL_TYPES.PEDESTRIAN]: hexToRgb(VOXEL_COLORS.PEDESTRIAN),
   [VOXEL_TYPES.RAIL]: hexToRgb(VOXEL_COLORS.RAIL),
 
-  // ✨ [New] 추가된 타입 매핑
+  // ✨ [New] 행정 구역 및 시설 단지 타입 매핑
   [VOXEL_TYPES.INSTITUTIONAL]: hexToRgb(VOXEL_COLORS.INSTITUTIONAL),
   [VOXEL_TYPES.PARKING]: hexToRgb(VOXEL_COLORS.PARKING),
   [VOXEL_TYPES.SPORTS]: hexToRgb(VOXEL_COLORS.SPORTS),
@@ -41,6 +47,7 @@ const getColorMap = (): Record<number, [number, number, number]> => ({
 /**
  * [tile-debug]
  * 생성된 그리드 데이터를 바이너리 파일(.bin)로 저장합니다.
+ * 파일 헤더에는 resolution과 origin 정보가 포함되어 서버/클라이언트 간 데이터 검증에 사용됩니다.
  */
 export function downloadGridAsBinary(
   grid: Uint8Array,
@@ -48,7 +55,7 @@ export function downloadGridAsBinary(
   resolution: number,
   filename?: string,
 ) {
-  const HEADER_SIZE = 12;
+  const HEADER_SIZE = 12; // resolution(4) + originX(4) + originZ(4)
   const combinedBuffer = new Uint8Array(HEADER_SIZE + grid.length);
   const view = new DataView(combinedBuffer.buffer);
 
@@ -67,6 +74,7 @@ export function downloadGridAsBinary(
 /**
  * [tile-debug]
  * 단일 채널 그리드 데이터를 PNG 이미지로 변환하여 시각적으로 검증합니다.
+ * 각 채널(Base, Water 등)의 데이터가 베이커에서 의도한 대로 구워졌는지 확인하는 용도입니다.
  */
 export function downloadGridAsImage(
   grid: Uint8Array,
@@ -109,10 +117,12 @@ export function downloadGridAsImage(
 }
 
 /**
- * ✨ [New] [tile-debug]
+ * [tile-debug]
  * 4개의 레이어(Base, Water, Transport, Structure)를 우선순위에 따라 합성하여
  * 최종 렌더링 결과와 동일한 하나의 PNG 이미지를 생성합니다.
- * * Priority: Structure > Transport > Water > Base
+ * * [Composition Logic]
+ * 쉐이더의 렌더링 파이프라인과 동일한 우선순위를 따릅니다.
+ * Priority: Structure(Building) > Transport(Road/Parking) > Water > Base(Landuse)
  */
 export function downloadMergedGridAsImage(
   grids: TileGrids,
@@ -133,20 +143,21 @@ export function downloadMergedGridAsImage(
   const length = resolution * resolution;
 
   for (let i = 0; i < length; i++) {
-    // 1. 각 레이어의 값 추출
+    // 1. 각 레이어의 개별 복셀 값 추출
     const tBase = grids.base[i];
     const tWater = grids.water[i];
     const tTrans = grids.transport[i];
     const tStruct = grids.structure[i];
 
-    // 2. 우선순위 합성 (Shader Logic과 동일)
+    // 2. 우선순위 합성 (Shader Logic과 1:1 대응)
+    // 하위 레이어에서 상위 레이어로 덮어쓰기 수행
     let finalType = tBase;
 
     if (tWater !== VOXEL_TYPES.EMPTY) finalType = tWater;
     if (tTrans !== VOXEL_TYPES.EMPTY) finalType = tTrans;
     if (tStruct !== VOXEL_TYPES.EMPTY) finalType = tStruct;
 
-    // 3. 색상 매핑
+    // 3. 합성된 결과에 따른 색상 매핑
     const rgb = colorMap[finalType] || colorMap[VOXEL_TYPES.BASE_LAND];
     const idx = i * 4;
     imageData.data[idx] = rgb[0];
@@ -166,6 +177,9 @@ export function downloadMergedGridAsImage(
   });
 }
 
+/**
+ * [Internal Helper] 파일 브라우저 다운로드 트리거
+ */
 function saveFile(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
