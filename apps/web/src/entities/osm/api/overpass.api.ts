@@ -1,10 +1,14 @@
 // 1. 프로젝트 공통 타입 및 설정 (Shared / Feature Config)
 import { OSM_CONFIG } from '../config/osm-config';
 import type { OverpassResponse } from '../model/types';
+import { randomDelay } from '@/shared/lib/aync-utils'; // 기존에 사용하던 유틸리티 활용
 
 /**
  * Overpass API 요청을 수행합니다.
  * 설정된 모드('local' | 'public')에 따라 최적화된 전략을 사용합니다.
+ * * [Strategy]
+ * - 공용 서버 모드에서는 데이터 누락(remark) 발생 시 딜레이 후 재시도합니다.
+ * - HTTP 429(Too Many Requests) 또는 서버 타임아웃 발생 시 다음 가용 서버로 전환합니다.
  */
 export async function requestOverpass(
   query: string,
@@ -15,7 +19,6 @@ export async function requestOverpass(
   }
 
   // [Mode 2] 공용 서버 모드 (Legacy: Load Balancing & Fallback)
-  // 1. 서버 목록 무작위 셔플 (특정 서버 부하 집중 방지)
   const shuffledServers = [...OSM_CONFIG.ENDPOINTS].sort(
     () => Math.random() - 0.5,
   );
@@ -26,63 +29,98 @@ export async function requestOverpass(
     const startTime = performance.now();
     const serverName = new URL(url).hostname;
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12초 타임아웃
+    // 서버당 최대 재시도 횟수 (누락 응답 대응용)
+    const MAX_RETRY_PER_SERVER = 2;
 
-      // [LOG] 요청 시작 그룹
-      console.groupCollapsed(`🌐 [Overpass Request] -> ${serverName}`);
-      console.log('%cQuery:', 'color: #007acc; font-weight: bold;', query);
-      console.groupEnd();
+    for (let attempt = 1; attempt <= MAX_RETRY_PER_SERVER; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 공용은 조금 더 넉넉히 15초
 
-      // 3. API 요청 수행
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
+        // [LOG] 요청 시작
+        console.groupCollapsed(
+          `🌐 [Overpass Request] -> ${serverName} (Attempt: ${attempt})`,
+        );
+        console.log('%cQuery:', 'color: #007acc; font-weight: bold;', query);
+        console.groupEnd();
 
-      clearTimeout(timeoutId);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `data=${encodeURIComponent(query)}`,
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
+        clearTimeout(timeoutId);
+
+        if (response.status === 429) {
+          throw new Error('Rate Limit Exceeded (429)');
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
+
+        const data = (await response.json()) as OverpassResponse;
+        const endTime = performance.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(2);
+
+        /**
+         * 🚨 [핵심: 누락 여부 판단]
+         * Overpass API는 런타임 에러나 데이터 제한 발생 시 'remark' 필드에 사유를 담아 보냅니다.
+         * 이 경우 elements가 일부 포함되어 있더라도 '누락된 응답'으로 간주합니다.
+         */
+        if (data.osm3s?.remark) {
+          const isRuntimeError = data.osm3s.remark.includes('runtime error');
+          console.warn(
+            `⚠️ [Partial Data] ${serverName} remark: ${data.osm3s.remark}`,
+          );
+
+          if (attempt < MAX_RETRY_PER_SERVER) {
+            const delay = 1000 * attempt; // 점진적 딜레이
+            console.log(`[Retry] ${delay}ms 후 동일 서버 재시도...`);
+            await randomDelay(delay, delay + 500);
+            continue; // 다음 attempt 실행
+          }
+          throw new Error(`Partial Response: ${data.osm3s.remark}`);
+        }
+
+        if (!data || !data.elements) {
+          throw new Error('Invalid Response: Missing elements');
+        }
+
+        // [LOG] 성공 결과 출력
+        console.group(
+          `✅ [Overpass Success] ${data.elements.length} elements in ${duration}s`,
+        );
+        console.log('%cServer:', 'color: #888;', url);
+        console.log(
+          '%cFull Response Body:',
+          'color: #4caf50; font-weight: bold;',
+          data,
+        );
+        console.groupEnd();
+
+        return data;
+      } catch (error: any) {
+        const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+        const errorMessage =
+          error.name === 'AbortError' ? 'Timeout (15s)' : error.message;
+
+        console.warn(
+          `⚠️ [Overpass Failed] ${url} (${duration}s): ${errorMessage}`,
+        );
+        lastError = new Error(errorMessage);
+
+        // HTTP 429나 심각한 서버 에러 시 즉시 다음 서버로 전환 (attempt 루프 탈출)
+        break;
       }
-
-      const data = (await response.json()) as OverpassResponse;
-      const endTime = performance.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-
-      if (!data || !data.elements) {
-        throw new Error('Invalid Response: Missing elements');
-      }
-
-      // [LOG] 응답 성공 및 바디 출력
-      console.group(
-        `✅ [Overpass Success] ${data.elements.length} elements in ${duration}s`,
-      );
-      console.log('%cServer:', 'color: #888;', url);
-      console.log(
-        '%cFull Response Body:',
-        'color: #4caf50; font-weight: bold;',
-        data,
-      );
-      console.groupEnd();
-
-      return data;
-    } catch (error: any) {
-      const duration = ((performance.now() - startTime) / 1000).toFixed(2);
-      const errorMessage =
-        error.name === 'AbortError' ? 'Timeout (12s)' : error.message;
-
-      console.warn(
-        `⚠️ [Overpass Retry] ${url} 실패 (${duration}s): ${errorMessage}`,
-      );
-      lastError = new Error(errorMessage);
     }
   }
 
-  throw new Error(`[Overpass API] 모든 서버 응답 실패: ${lastError?.message}`);
+  throw new Error(
+    `[Overpass API] 모든 서버 응답 실패 또는 데이터 누락: ${lastError?.message}`,
+  );
 }
 
 /**
@@ -97,13 +135,14 @@ async function fetchFromUrl(
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(),
-    OSM_CONFIG.REQUEST_TIMEOUT,
+    OSM_CONFIG.REQUEST_TIMEOUT || 30000,
   );
 
   try {
     const response = await fetch(url, {
       method: 'POST',
-      body: `data=${encodeURIComponent(query)}`, // 헤더 없이 body만으로도 보통 동작함
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
     });
 
@@ -116,15 +155,18 @@ async function fetchFromUrl(
     const data = (await response.json()) as OverpassResponse;
     const duration = ((performance.now() - startTime) / 1000).toFixed(3);
 
+    // 로컬에서도 remark 체크는 수행 (서버 설정 이슈 확인용)
+    if (data.osm3s?.remark) {
+      throw new Error(`Local Overpass Remark: ${data.osm3s.remark}`);
+    }
+
     if (!data || !data.elements) {
       throw new Error('Invalid Response Data');
     }
 
-    // [LOG] 로컬일 때는 너무 빠르므로 로그가 스팸이 되지 않게 필요시에만 출력하거나 간소화
     console.debug(
       `✅ [${label}] Fetched ${data.elements.length} items in ${duration}s`,
     );
-
     return data;
   } catch (error) {
     clearTimeout(timeoutId);

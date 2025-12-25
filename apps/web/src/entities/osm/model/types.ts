@@ -103,7 +103,12 @@ export interface OverpassMember {
   type: ElementType;
   ref: number;
   role: string; // 'outer', 'inner', 'subarea' 등
-  geometry?: LatLng[]; // out geom 옵션 시 멤버별로 채워짐
+  /** out geom 옵션 시 멤버별로 채워짐 */
+  geometry?: LatLng[];
+  /** * 🚀 [보강] out body 옵션 시 멤버를 구성하는 노드 ID 배열
+   * nodeCache를 통한 Relation 복구 시 필수적으로 사용됩니다.
+   */
+  nodes?: number[];
 }
 
 /**
@@ -143,6 +148,10 @@ export interface OverpassResponse {
   osm3s?: {
     timestamp_osm_base: string;
     copyright: string;
+    /** * 🚀 [보강] 서버측 런타임 에러나 쿼리 중단 메시지
+     * 공용 API 모드에서 데이터 누락(Partial Response) 여부를 판단하는 핵심 지표입니다.
+     */
+    remark?: string;
   };
   /** 실제 지리 정보 데이터를 담고 있는 배열 */
   elements: OverpassElement[];
