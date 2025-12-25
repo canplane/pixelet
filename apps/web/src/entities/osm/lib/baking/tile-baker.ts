@@ -1,5 +1,6 @@
 /**
  * @file tile-baker.ts
+ * 벡터 데이터를 4개의 독립적인 비트맵 레이어로 래스터화(Rasterization)합니다.
  */
 
 import type { MeterPos } from '@/shared/types/map';
@@ -49,7 +50,6 @@ interface BakeOptions {
 /**
  * [TileGrids]
  * OSM 쿼리의 4단계 패스(Pass 1~4)와 정확히 1:1 대응되는 멀티 채널 그리드입니다.
- * 각 레이어는 물리적 성격에 따라 독립적으로 관리됩니다.
  */
 export interface TileGrids {
   base: Uint8Array; // [Pass 1] 지형 (Landuse, Natural, Institutional)
@@ -60,7 +60,6 @@ export interface TileGrids {
 
 /**
  * [Factory] 빈 그리드 생성기
- * 초기 렌더링 및 병합을 위해 기본값으로 채워진 TileGrids를 생성합니다.
  */
 export function createEmptyGrids(resolution: number): TileGrids {
   const size = resolution * resolution;
@@ -75,7 +74,6 @@ export function createEmptyGrids(resolution: number): TileGrids {
 /**
  * [tile-baker]
  * 벡터 데이터를 4개의 독립적인 비트맵 레이어로 래스터화(Rasterization)합니다.
- * 쿼리 구조와 동일한 계층 구조를 유지하여 3D 생성 시 레이어별 제어가 가능합니다.
  */
 export function bakeTileGrid(
   infras: MapInfra[],
@@ -88,15 +86,8 @@ export function bakeTileGrid(
   const resolution = Math.floor(tileSize / cellSize);
   const size = resolution * resolution;
 
-  // [핵심] 4개 레이어 초기화
-  const grids: TileGrids = {
-    base: new Uint8Array(size).fill(VOXEL_TYPES.BASE_LAND),
-    water: new Uint8Array(size).fill(VOXEL_TYPES.EMPTY),
-    transport: new Uint8Array(size).fill(VOXEL_TYPES.EMPTY),
-    structure: new Uint8Array(size).fill(VOXEL_TYPES.EMPTY),
-  };
+  const grids: TileGrids = createEmptyGrids(resolution);
 
-  // 중간 분류용 배열 (타입 정보를 함께 저장하여 최적화)
   const layers = {
     base: [] as { infra: MapInfra; type: number }[],
     water: [] as MapInfra[],
@@ -113,11 +104,16 @@ export function bakeTileGrid(
       return;
     }
 
-    // 2. Base Layer (Landuse & Natural & Amenity)
+    // 2. Base Layer (Landuse & 구역 정보)
     let baseType: number | null = null;
 
-    // (1) Landuse 우선 확인
-    if (tags.landuse) {
+    // ✨ [우선순위 1] 파서에서 심어준 명시적 내부 플래그 확인
+    if (tags._isInstitutional === 'true') baseType = VOXEL_TYPES.INSTITUTIONAL;
+    else if (tags._isSports === 'true') baseType = VOXEL_TYPES.SPORTS;
+    // 주차장은 Transport 채널에서 처리하기 위해 여기서는 건너뜁니다.
+
+    // [우선순위 2] Landuse 확인
+    if (baseType === null && tags.landuse) {
       if (['residential', 'cemetery', 'allotments'].includes(tags.landuse))
         baseType = VOXEL_TYPES.RESIDENTIAL;
       else if (['commercial', 'retail'].includes(tags.landuse))
@@ -126,22 +122,22 @@ export function bakeTileGrid(
         baseType = VOXEL_TYPES.INDUSTRIAL;
       else if (['forest'].includes(tags.landuse))
         baseType = VOXEL_TYPES.GREEN_DEEP;
-      else if (['grass', 'village_green'].includes(tags.landuse))
+      else if (['grass', 'village_green', 'meadow'].includes(tags.landuse))
         baseType = VOXEL_TYPES.GREEN_LIGHT;
     }
 
-    // (2) Natural 확인
-    if (!baseType && tags.natural) {
+    // [우선순위 3] Natural 확인
+    if (baseType === null && tags.natural) {
       if (['wood', 'scrub', 'heath'].includes(tags.natural))
         baseType = VOXEL_TYPES.GREEN_DEEP;
-      else if (['grassland'].includes(tags.natural))
+      else if (['grassland', 'fell'].includes(tags.natural))
         baseType = VOXEL_TYPES.GREEN_LIGHT;
       else if (['sand', 'shingle', 'bare_rock', 'beach'].includes(tags.natural))
         baseType = VOXEL_TYPES.SAND;
     }
 
-    // (3) Leisure 확인 (공원 및 체육시설)
-    if (!baseType && tags.leisure) {
+    // [우선순위 4] Leisure 확인 (Legacy fallback)
+    if (baseType === null && tags.leisure) {
       if (['park', 'garden', 'nature_reserve'].includes(tags.leisure))
         baseType = VOXEL_TYPES.GREEN_LIGHT;
       else if (
@@ -150,25 +146,17 @@ export function bakeTileGrid(
         baseType = VOXEL_TYPES.SPORTS;
     }
 
-    // (4) Amenity 확인 (학교, 병원 등 대규모 시설)
-    if (!baseType && tags.amenity) {
-      if (
-        ['university', 'hospital', 'school', 'college'].includes(tags.amenity)
-      )
-        baseType = VOXEL_TYPES.INSTITUTIONAL;
-    }
-
     if (baseType !== null) {
       layers.base.push({ infra, type: baseType });
     }
 
-    // 3. Transport Layer (Pedestrian, Road, Rail, Parking)
+    // 3. Transport Layer (Road, Rail, Pedestrian, Parking)
     let transType: number | null = null;
 
-    if (tags.tunnel === 'yes') return; // 터널은 렌더링 제외
+    if (tags.tunnel === 'yes') return;
 
-    // 주차장 (Amenity)
-    if (tags.amenity === 'parking') {
+    // ✨ [우선순위 1] 주차장 플래그 확인
+    if (tags._isParking === 'true' || tags.amenity === 'parking') {
       transType = VOXEL_TYPES.PARKING;
     }
     // 일반 도로 및 철도
@@ -176,23 +164,25 @@ export function bakeTileGrid(
       if (tags.railway) {
         transType = VOXEL_TYPES.RAIL;
       } else if (
-        ['pedestrian', 'footway', 'living_street', 'path', 'steps'].includes(
-          tags.highway || '',
-        )
+        [
+          'pedestrian',
+          'footway',
+          'living_street',
+          'path',
+          'steps',
+          'platform',
+        ].includes(tags.highway || '')
       ) {
         transType = VOXEL_TYPES.PEDESTRIAN;
       } else {
         transType = VOXEL_TYPES.ROAD;
       }
-    }
-    // 면(Area) 형태의 도로/보행로
-    else if (tags['area:highway'] === 'yes') {
+    } else if (tags['area:highway'] === 'yes') {
       transType = VOXEL_TYPES.PEDESTRIAN;
     }
 
     if (transType !== null) {
       layers.transport.push({ infra, type: transType });
-      // Transport로 분류되면 Base나 Structure 처리는 건너뜀 (중복 방지)
       return;
     }
 
@@ -240,7 +230,6 @@ export function bakeTileGrid(
 
   // [Pass 3] Transport Grid
   layers.transport.forEach(({ infra, type }) => {
-    // 주차장이나 폐곡선(Area) 형태는 Polygon으로 채움
     if (infra.shapePath?.isClosed || type === VOXEL_TYPES.PARKING) {
       renderPolygon(
         infra.points,
@@ -332,7 +321,6 @@ function renderLinearFeature(
 
   let thickness = 1;
 
-  // 두께 결정 로직
   if (value === VOXEL_TYPES.ROAD || value === VOXEL_TYPES.RAIL) {
     thickness = tags._calculatedWidth
       ? Math.max(
@@ -345,7 +333,7 @@ function renderLinearFeature(
       ? Math.max(1, Math.round(parseFloat(tags.width) / cellSize))
       : 1;
   } else if (value === VOXEL_TYPES.PARKING) {
-    thickness = 2; // 주차장 선형 표현 시 약간 두껍게
+    thickness = 2;
   }
 
   const drawCircle = (cx: number, cz: number, r: number) => {

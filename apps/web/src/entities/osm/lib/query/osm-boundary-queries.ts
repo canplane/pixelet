@@ -19,8 +19,8 @@ export const BOUNDARY_FILTERS = {
    */
   RESIDENTIAL: (bbox: string) => `
     nwr["landuse"="residential"](${bbox});
-    nwr["amenity"="university"](${bbox});
-    nwr["amenity"="hospital"](${bbox});
+    nwr["amenity"~"university|hospital|school|college"](${bbox});
+    nwr["campus"](${bbox});
   `,
 
   /** 공원 및 녹지 영역 (논리적 구역)

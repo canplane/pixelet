@@ -1,8 +1,10 @@
 /**
  * @file osm-parser.ts
+ * Raw OSM 데이터를 엔진에서 사용 가능한 인프라 및 POI 객체로 변환합니다.
+ * 레이어 간의 고도(Y-Offset)를 조정하여 Z-Fighting을 방지하고 렌더링 우선순위를 결정합니다.
  */
 
-import type { OverpassElement, OverpassMember } from '../../model/types';
+import type { OverpassElement } from '../../model/types';
 import type { Location, MeterPos } from '@/shared/types/map';
 
 export interface ShapePath {
@@ -48,6 +50,7 @@ const LAYER_PRIORITY: Record<string, number> = {
 
 /**
  * [Advanced Parsing Logic]
+ * Overpass API 응답을 파싱하여 3D 엔진용 객체로 변환합니다.
  */
 export const parseOsmData = (
   elements: OverpassElement[],
@@ -56,7 +59,7 @@ export const parseOsmData = (
   const result: ParseResult = { infras: [], pois: [] };
   if (!elements) return result;
 
-  // 1. 중복 제거
+  // 1. 중복 제거 (API 응답 내 동일 ID 객체 방어)
   const elementMap: Map<number | string, OverpassElement> = new Map();
   elements.forEach((el: OverpassElement) => {
     if (el.id && !elementMap.has(el.id)) {
@@ -71,7 +74,7 @@ export const parseOsmData = (
     const rawLat: number | undefined = item.lat || item.center?.lat;
     const rawLon: number | undefined = item.lon || item.center?.lon;
 
-    // [SECTION 1] POI 처리 (Node)
+    // [SECTION 1] POI 처리 (Node 기반 장소 정보)
     if (item.type === 'node') {
       if (tags.name && rawLat && rawLon) {
         const poiPos = project({ lng: rawLon, lat: rawLat, alt: 0 });
@@ -94,11 +97,12 @@ export const parseOsmData = (
       return;
     }
 
-    // [SECTION 2] 인프라 처리 (Way & Relation)
+    // [SECTION 2] 인프라 처리 (Way & Relation 기반 지형/구조물)
     if (item.type === 'way' || item.type === 'relation') {
       const outerPoints: MeterPos[] = [];
       const innerHoles: MeterPos[][] = [];
 
+      // Geometry 추출 (Vite/WebWorker 환경 호환)
       if (item.geometry) {
         item.geometry.forEach((pt) => {
           const projected = project({ lng: pt.lon, lat: pt.lat, alt: 0 });
@@ -118,13 +122,13 @@ export const parseOsmData = (
 
       if (outerPoints.length < 2) return;
 
-      // --- [Type Detection Update] ---
+      // --- [Type Detection & Optimization] ---
+      // 베이커(Baker) 단계에서 조건문 부하를 줄이기 위해 미리 타입을 판별하여 플래그를 심습니다.
+
       const isBuilding = !!(
         tags.building ||
         tags['building:part'] ||
         tags.man_made === 'pier' ||
-        tags.man_made === 'groyne' ||
-        tags.man_made === 'embankment' ||
         tags.bridge === 'yes'
       );
 
@@ -137,27 +141,36 @@ export const parseOsmData = (
 
       const isWater =
         tags.natural === 'water' ||
-        tags.natural === 'cliff' ||
-        tags.natural === 'coastline' ||
         !!tags.waterway ||
         tags.landuse === 'reservoir' ||
-        tags.landuse === 'basin' ||
         tags.water === 'river';
 
-      // ✨ [수정] Institutional, Parking, Sports 태그를 확실하게 포함
+      // ✨ [구역 타입 보강] 학교, 주차장, 운동장 등 구체적 구역 판별
+      const isInstitutional =
+        ['school', 'university', 'hospital', 'college'].includes(
+          tags.amenity || '',
+        ) || !!tags.campus;
+      const isParking =
+        tags.amenity === 'parking' || tags.parking === 'surface';
+      const isSports = ['pitch', 'track', 'playground', 'stadium'].includes(
+        tags.leisure || '',
+      );
+
       const isLanduse = !!(
         tags.landuse ||
         tags.leisure ||
         tags.natural ||
-        tags.amenity === 'parking' ||
-        tags.amenity === 'university' ||
-        tags.amenity === 'hospital' ||
-        tags.amenity === 'school' ||
-        tags.amenity === 'college' || // 추가
-        tags.campus // 추가
+        isInstitutional ||
+        isParking ||
+        isSports
       );
 
       if (!isBuilding && !isRoad && !isWater && !isLanduse) return;
+
+      // 베이커용 내부 전용 플래그 주입
+      if (isInstitutional) tags._isInstitutional = 'true';
+      if (isParking) tags._isParking = 'true';
+      if (isSports) tags._isSports = 'true';
 
       // [도로 너비 계산]
       if (isRoad) {
@@ -167,7 +180,7 @@ export const parseOsmData = (
         tags._calculatedWidth = calculatedWidth.toString();
       }
 
-      // [Center 계산]
+      // [Center 계산] 바운딩 박스 기반 중심점 도출
       let minX = Infinity,
         maxX = -Infinity,
         minZ = Infinity,
@@ -185,8 +198,8 @@ export const parseOsmData = (
         z: (minZ + maxZ) * 0.5,
       };
 
-      // --- [Y-Offset Stacking Update] ---
-      // ✨ 겹침 방지를 위한 미세 고도 조정 (단위: meter)
+      // --- [Y-Offset Stacking & Z-Fighting Defense] ---
+      // 겹침 방지를 위한 미세 고도 조정 (단위: meter)
       // Base(0.02) < Institutional(0.025) < Parking(0.03) < Sports(0.035) < Road(0.05)
       const layerLevel = tags.layer ? parseFloat(tags.layer) : 0;
 
@@ -200,35 +213,19 @@ export const parseOsmData = (
         } else if (isWater) {
           y = -0.15 + layerLevel * 0.1;
         } else if (isLanduse) {
-          // 기본 지형
-          y = 0.02;
+          y = 0.02; // 기본 지형 (Grass)
 
-          // [미세 조정]
-          if (tags.landuse === 'forest' || tags.natural === 'wood') y = 0.03; // 나무는 살짝 위
+          if (isInstitutional) y = 0.025; // 학교/병원
+          if (isParking) y = 0.03; // 주차장 (잔디보다 위)
+          if (isSports) y = 0.035; // 운동장 (최상단 구역)
 
-          // Institutional (학교, 병원 캠퍼스)
-          if (
-            ['school', 'university', 'hospital', 'college'].includes(
-              tags.amenity || '',
-            )
-          ) {
-            y = 0.025;
-          }
-
-          // Parking (아스팔트니까 캠퍼스 잔디보다 위)
-          if (tags.amenity === 'parking') {
-            y = 0.03;
-          }
-
-          // Sports (운동장은 주차장/잔디보다 명확하게 위)
-          if (['pitch', 'track', 'playground'].includes(tags.leisure || '')) {
-            y = 0.035;
-          }
+          // 숲/나무 영역은 일반 지형보다 미세하게 위로 배치하여 가시성 확보
+          if (tags.landuse === 'forest' || tags.natural === 'wood') y = 0.028;
         }
         return { ...pt, y };
       });
 
-      // [건물 높이 계산]
+      // [건물 높이 계산] 층수 또는 직접 높이 태그 참조
       let infraHeight = 0;
       if (isBuilding) {
         const levels = tags['building:levels']
@@ -247,17 +244,17 @@ export const parseOsmData = (
       }
 
       // [IsClosed 판정 Update]
-      // 주차장(parking), 운동장(pitch)은 highway가 없어도 무조건 면(Polygon)으로 닫아야 함
+      // 영역 데이터(Area)가 선(Line)으로 렌더링되지 않도록 강제 폐곡선 처리
       const forceClosed =
-        tags.amenity === 'parking' ||
-        ['pitch', 'track', 'playground', 'park', 'garden'].includes(
-          tags.leisure || '',
-        ) ||
+        isParking ||
+        isSports ||
+        isInstitutional ||
+        ['park', 'garden'].includes(tags.leisure || '') ||
         !!tags.landuse;
 
       const isClosed =
         item.type === 'relation' ||
-        forceClosed || // ✨ 강제 폐곡선 처리
+        forceClosed ||
         (!isRoad && !tags.waterway && outerPoints.length >= 3) ||
         !!tags['area:highway'] ||
         (outerPoints.length > 2 &&
@@ -290,7 +287,7 @@ export const parseOsmData = (
     }
   });
 
-  // 3. 최종 정렬
+  // 3. 최종 정렬: 레이어 우선순위에 따라 베이킹 순서 보장
   result.infras.sort(
     (a, b) => (LAYER_PRIORITY[a.type] || 0) - (LAYER_PRIORITY[b.type] || 0),
   );
