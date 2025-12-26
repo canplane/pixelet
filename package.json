@@ -11,13 +11,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:web": "pnpm -C apps/web dev",
+    "predev": "pnpm recursive run clean",
+    "dev:web": "wait-on tcp:3000 && pnpm -C apps/web dev",
     "dev:api": "pnpm -C apps/api dev",
     "dev": "concurrently -k -n web,api -c blue,green \"pnpm run dev:web\" \"pnpm run dev:api\"",
+    "prebuild": "pnpm run clean",
     "build:web": "pnpm -C apps/web build",
     "build:api": "pnpm -C apps/api build",
     "build": "pnpm recursive run build",
-    "prebuild": "pnpm run clean",
     "clean": "pnpm recursive run clean",
     "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\"",
     "lint:fix": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\" --fix",
@@ -33,7 +34,8 @@
     "globals": "^16.5.0",
     "prettier": "^3.7.4",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0"
+    "typescript-eslint": "^8.50.0",
+    "wait-on": "^9.0.3"
   },
   "packageManager": "pnpm@10.26.1+sha512.664074abc367d2c9324fdc18037097ce0a8f126034160f709928e9e9f95d98714347044e5c3164d65bd5da6c59c6be362b107546292a8eecb7999196e5ce58fa"
 }

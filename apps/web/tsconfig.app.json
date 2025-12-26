@@ -37,7 +37,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"], // Web 프로젝트 내부 소스 참조용 별칭
-      "three/*": ["../../node_modules/@types/three/*"] // Three.js 상세 타입 정의 매핑
+      "three/*": ["./node_modules/@types/three/*"] // Three.js 상세 타입 정의 매핑
     }
   },
   "include": ["src", "@types"],

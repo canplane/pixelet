@@ -22,7 +22,11 @@ export default defineConfig({
 
   server: {
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: 'http://127.0.0.1:3000', // [수정] localhost -> 127.0.0.1
+        changeOrigin: true,
+        secure: false,
+      },
     },
 
     open: true, // 서버 시작 시 자동으로 브라우저 오픈
