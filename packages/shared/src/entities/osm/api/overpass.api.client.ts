@@ -13,9 +13,14 @@ import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils'; // 기존�
 export async function requestOverpass(
   query: string,
 ): Promise<OverpassResponse> {
-  // [Mode 1] 로컬 서버 모드 (Super Fast & Unlimited)
+  // [Mode 1] 로컬 서버 모드 (이제 우리 NestJS API를 호출합니다)
   if (OSM_CONFIG.API_MODE === 'local') {
-    return fetchFromUrl(OSM_CONFIG.LOCAL_ENDPOINT, query, 'Local Docker');
+    // OSM_CONFIG.LOCAL_ENDPOINT가 우리 NestJS 서버 주소(예: http://localhost:3000/api/geo/query)여야 합니다.
+    return fetchFromUrl(
+      OSM_CONFIG.LOCAL_API_ENDPOINT,
+      query,
+      'Pixelet NestJS API',
+    );
   }
 
   // [Mode 2] 공용 서버 모드 (Legacy: Load Balancing & Fallback)
@@ -124,7 +129,7 @@ export async function requestOverpass(
 }
 
 /**
- * 실제 fetch를 수행하는 내부 헬퍼 함수
+ * 실제 fetch를 수행하는 내부 헬퍼 함수 (엔드포인트 교체 대응)
  */
 async function fetchFromUrl(
   url: string,
@@ -139,6 +144,8 @@ async function fetchFromUrl(
   );
 
   try {
+    // 우리 NestJS 서버는 POST /geo/query로 Query 원문을 받거나,
+    // 혹은 기존처럼 폼 데이터 형식을 유지하여 호환성을 높입니다.
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -155,9 +162,9 @@ async function fetchFromUrl(
     const data = (await response.json()) as OverpassResponse;
     const duration = ((performance.now() - startTime) / 1000).toFixed(3);
 
-    // 로컬에서도 remark 체크는 수행 (서버 설정 이슈 확인용)
+    // [중요] 우리 서버가 뱉는 remark 필드도 에러 핸들링 로직에 태웁니다.
     if (data.osm3s?.remark) {
-      throw new Error(`Local Overpass Remark: ${data.osm3s.remark}`);
+      throw new Error(`Server Remark: ${data.osm3s.remark}`);
     }
 
     if (!data || !data.elements) {

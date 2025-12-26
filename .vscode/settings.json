@@ -1,9 +1,13 @@
 {
   /* Import & Module resolution settings */
-  "typescript.preferences.importModuleSpecifier": "shortest",
-  "javascript.preferences.importModuleSpecifier": "shortest",
+  // non-relative는 @pixelet/shared 같은 워크스페이스 패키지 이름을 더 잘 보존합니다.
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "javascript.preferences.importModuleSpecifier": "non-relative",
   "typescript.preferences.importModuleSpecifierEnding": "minimal",
   "typescript.updateImportsOnFileMove.enabled": "always",
+
+  /* 3. 만약 위 설정이 Unknown이라면 이 방식으로 대체 시도 */
+  "typescript.preferences.autoImportSpecifierExcludeRegexes": ["\\.d\\.ts$"],
 
   /* Formatter & Linter settings (Prettier + ESLint) */
   "editor.defaultFormatter": "esbenp.prettier-vscode",
@@ -34,17 +38,12 @@
 
   /* File visibility */
   "files.exclude": {
-    /* 1. Hide JS & Maps: Only within src and only when TS exists */
     "**/src/**/*.js": { "when": "$(basename).ts" },
     "**/src/**/*.js.map": true,
-
-    /* 2. Hide Generated Declarations: Target src to preserve root @types */
-    /* This automatically keeps manual definitions in @types visible while hiding artifacts in src */
     "**/src/**/*.d.ts": { "when": "$(basename).ts" },
     "**/src/**/*.d.ts.map": true,
-
-    /* 3. Global cleanups: Infrastructure & Build artifacts */
     "**/*.tsbuildinfo": true,
-    "**/.turbo": true
+    "**/.turbo": true,
+    "**/dist": true // dist 폴더 자체를 탐색기에서 숨겨서 실수 방지
   }
 }

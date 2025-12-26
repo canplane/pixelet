@@ -20,7 +20,7 @@ import {
   type WorldTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
-import { getTileBBox } from '@pixelet/shared/entities/osm/lib/tile-math';
+import { getTileBbox } from '@pixelet/shared/entities/osm/lib/tile-math';
 import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
 import type { OverpassElement } from '@pixelet/shared/entities/osm/api/overpass-types';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
@@ -28,7 +28,7 @@ import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
 // [중요] 좌표 변환 함수 import
 // 주의: 이 함수들은 DOM(window, document)에 의존하지 않는 순수 수학 함수여야 합니다.
 
-const { project, unproject } = projection;
+const { project } = projection;
 
 // --- Types ---
 type StepName = 'Infrastructure' | 'Structure' | 'POI';
@@ -157,9 +157,7 @@ export async function fetchAndProcessTile(
   /**
    * 2. 타일 경계(BBox) 계산
    */
-  const bbox = getTileBBox(tx, tz, (pos) =>
-    unproject({ x: pos.x, y: 0, z: pos.z }),
-  );
+  const bbox = getTileBbox(tx, tz);
 
   // 3. 실행 계획 수립
   const steps = createProcessingSteps(bbox);

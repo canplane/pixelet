@@ -1,0 +1,21 @@
+# [Pixelet OSM Style File]
+# Node/Way   Tag          Type    Output
+# --------------------------------------
+
+# 건물 (Buildings)
+node,way    building     text    polygon
+node,way    building:levels  text    polygon
+node,way    height       text    polygon
+
+# 도로 (Roads)
+way         highway      text    linear
+way         oneway       text    linear
+way         bridge       text    linear
+
+# 관심 지점 (POI)
+# 마지막 컬럼을 비워두면 osm2pgsql이 자동으로 포인트 테이블로 보냅니다.
+node,way    amenity          text
+node,way    shop             text
+node,way    tourism          text
+node,way    leisure          text
+node,way    name             text

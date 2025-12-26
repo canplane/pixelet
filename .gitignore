@@ -47,6 +47,10 @@ build/Release
 node_modules/
 jspm_packages/
 
+# OSM Data (OpenStreetMap raw files)
+*.pbf
+infra/osm-data/**/*.pbf
+
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 
