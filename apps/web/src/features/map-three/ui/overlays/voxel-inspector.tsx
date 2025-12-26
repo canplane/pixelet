@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Compass, Box, Map as MapIcon, MousePointer2 } from 'lucide-react';
 import * as THREE from 'three';
-import { projection } from '@/shared/lib/geo/projection';
+import { projection } from '@pixelet/shared/shared/lib/map/projection';
 
 import { Badge } from '@/shared/ui/theme/glass/badge';
 import { Separator } from '@/shared/ui/theme/glass/separator';

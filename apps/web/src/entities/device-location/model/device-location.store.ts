@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Location } from '@/shared/types/map';
+import type { Location } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [device-location-store]

@@ -1,6 +1,6 @@
 // 개별 블록 (개발/테스트용)
 
-import { VOXEL_CONFIG } from '../../model/voxel-config';
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { RoundedBox } from '@react-three/drei';
 
 const size = VOXEL_CONFIG.SIZE;

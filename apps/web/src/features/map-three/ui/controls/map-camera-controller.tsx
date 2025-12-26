@@ -4,9 +4,9 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
-import { VOXEL_CONFIG } from '../../model/voxel-config';
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
-import type { MeterPos } from '@/shared/types/map';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import { useMapStore } from '../../model/map-store';
 import { useMapNavigation } from '../../model/use-map-navigation';
 

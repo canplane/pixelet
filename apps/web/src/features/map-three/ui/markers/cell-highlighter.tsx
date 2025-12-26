@@ -4,10 +4,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Line } from '@react-three/drei';
 
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { VOXEL_CONFIG } from '../../model/voxel-config';
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
-import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
-import type { MeterPos } from '@/shared/types/map';
+import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
 const { FOG_DENSITY, FADE_END } = THREE_CONFIG.RENDERING;
 

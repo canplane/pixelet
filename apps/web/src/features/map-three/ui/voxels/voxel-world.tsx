@@ -3,7 +3,6 @@
 // (예시)
 // import * as THREE from 'three';
 // import { useRef, useLayoutEffect } from 'react';
-// import { projection } from '@/shared/lib/geo/projection';
 
 // export const VoxelWorld = ({ data }: { data: VoxelData[] }) => {
 //   const meshRef = useRef<THREE.InstancedMesh>(null);

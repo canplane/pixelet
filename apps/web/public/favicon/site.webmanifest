@@ -1,6 +1,6 @@
 {
-  "name": "Pixelet",
-  "short_name": "Pixelet",
+  "name": "pixelet",
+  "short_name": "pixelet",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",

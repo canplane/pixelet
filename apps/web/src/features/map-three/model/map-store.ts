@@ -1,33 +1,26 @@
 import { create } from 'zustand';
-import { projection } from '@/shared/lib/geo/projection';
-import { VOXEL_CONFIG } from './voxel-config';
-import type { Location, MeterPos } from '@/shared/types/map';
-import type {
-  MapInfra,
-  MapPoi,
-} from '@/entities/osm/lib/processing/osm-parser';
+
+// 1. 수학 및 투영 유틸리티
+import { projection } from '@pixelet/shared/shared/lib/map/projection';
+
+// 2. 기초 타입 (Location, MeterPos 등)
+import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
+
+// 3. OSM 관련 로직 및 도메인 타입
+import type { MapPoi } from '@pixelet/shared/entities/osm/model/osms';
+
+// 4. 전역 설정 및 테마
+import type { ThemeKey } from './world-themes';
+
+// 5. 현재 패키지(web) 내부 설정
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from './three-config';
-import type { ThemeKey } from '../../../entities/osm/config/map-theme';
-import type { TileGrids } from '@/entities/osm/lib/baking/tile-baker';
 
 const { project } = projection;
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 
 export type MapDataStatus = 'idle' | 'loading' | 'success' | 'error';
-
-/**
- * [world-tile]
- * 타일 격자 시스템의 원자적 데이터 단위입니다.
- * 모든 공간 데이터는 서버 및 글로벌 기준인 '절대 미터 좌표계'를 유지합니다.
- */
-export interface WorldTile {
-  key: string; // "tx:tz" 형식의 고유 키
-  origin: MeterPos; // 타일의 시작점 (절대 미터 좌표)
-  grids: TileGrids; // 🎯 명칭 통일: 타일 지형 격자 데이터 (Voxel Type Map)
-  pois: MapPoi[]; // 타일에 포함된 절대 좌표 기반 POI
-  infras: MapInfra[]; // 타일에 포함된 절대 좌표 기반 인프라
-  resolution: number; // 격자 해상도
-}
 
 /**
  * [view-state]
@@ -39,6 +32,7 @@ export interface ViewState {
   polarAngle: number; // 수직 각도 (라디안)
   altitude: number; // 지면으로부터의 수직 높이
 }
+
 /**
  * [map-state]
  * 전체 지도 엔진의 상태 관리 및 좌표 변환 로직을 담당합니다.

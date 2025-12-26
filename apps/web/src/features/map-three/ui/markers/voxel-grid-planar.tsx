@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
-import { VOXEL_CONFIG } from '../../model/voxel-config';
+import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
 
 /**

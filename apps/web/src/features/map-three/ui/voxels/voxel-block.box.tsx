@@ -1,7 +1,7 @@
 // 개별 블록 (개발/테스트용)
 // 라운딩 블록이 아니라 일반 블록
 
-import { VOXEL_CONFIG } from '../../model/voxel-config';
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 
 const size = VOXEL_CONFIG.SIZE;
 interface VoxelBlockProps {

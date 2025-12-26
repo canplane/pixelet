@@ -53,6 +53,22 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# TypeScript build outputs (Project References)
+# 1. Hide JS & Maps: Only within src and only when TS exists
+**/src/**/*.js
+**/src/**/*.js.map
+
+# 2. Hide Generated Declarations: Target src to preserve root @types
+# This ensures auto-generated artifacts in src are ignored while manual types remain.
+**/src/**/*.d.ts
+**/src/**/*.d.ts.map
+
+# 4. Global cleanups: Infrastructure & Build artifacts
+# Consolidating build outputs and workspace caches
+*.tsbuildinfo
+dist/
+.turbo/
+
 # Optional npm cache directory
 .npm
 

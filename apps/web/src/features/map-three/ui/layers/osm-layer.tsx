@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useMapStore } from '../../model/map-store';
 import { OsmTileLayer } from './osm-tile-layer';
 import { OsmPoiItem } from '../items/osm-poi-item';
-import { useTileLifecycleManager } from '@/entities/osm/model/use-tile-lifecycle-manager';
+import { useTileLifecycleManager } from '../../lib/use-tile-lifecycle-manager';
 
 /**
  * [osm-layer]

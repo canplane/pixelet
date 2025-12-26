@@ -1,9 +1,7 @@
-# Pixelet
+# pixelet
 
-_A droplet fades._
-_A pixelet remains._
-
-**Pixel, here.**
+> _A droplet fades._
+> _A pixelet remains._
 
 _Started on December 15, 2025._
 
@@ -15,7 +13,7 @@ Pixel-based map & UX experiments.
 
 ## Overview
 
-Pixelet is a **pnpm-based monorepo** project consisting of:
+pixelet is a **pnpm-based monorepo** project consisting of:
 
 - **Web**: React + Vite frontend (FSD Architecture)
 - **API**: Node.js backend
@@ -237,9 +235,9 @@ pnpm changeset   # Generate a new versioning changeset
 
 ## Philosophy
 
-Pixelet is built on the idea that maps and interfaces do not have to be literal representations of reality.
+pixelet is built on the idea that maps and interfaces do not have to be literal representations of reality.
 
-Instead of focusing on accuracy first, Pixelet explores abstraction, reduction, and reinterpretation — treating pixels as expressive units rather than raw data points.
+Instead of focusing on accuracy first, pixelet explores abstraction, reduction, and reinterpretation — treating pixels as expressive units rather than raw data points.
 
 The goal is not to show _everything_, but to show _just enough_.
 

@@ -1,40 +1,50 @@
 {
+  /* Import & Module resolution settings */
   "typescript.preferences.importModuleSpecifier": "shortest",
   "javascript.preferences.importModuleSpecifier": "shortest",
-
+  "typescript.preferences.importModuleSpecifierEnding": "minimal",
   "typescript.updateImportsOnFileMove.enabled": "always",
 
+  /* Formatter & Linter settings (Prettier + ESLint) */
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnSave": true,
-
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
 
-  "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[typescriptreact]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[json]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[jsonc]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[html]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[css]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[scss]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  /* Language specific formatters */
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[html]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[scss]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+  /* Use workspace typescript version */
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  /* Search exclusion */
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.turbo": true
   },
 
-  "typescript.tsdk": "node_modules/typescript/lib"
+  /* File visibility */
+  "files.exclude": {
+    /* 1. Hide JS & Maps: Only within src and only when TS exists */
+    "**/src/**/*.js": { "when": "$(basename).ts" },
+    "**/src/**/*.js.map": true,
+
+    /* 2. Hide Generated Declarations: Target src to preserve root @types */
+    /* This automatically keeps manual definitions in @types visible while hiding artifacts in src */
+    "**/src/**/*.d.ts": { "when": "$(basename).ts" },
+    "**/src/**/*.d.ts.map": true,
+
+    /* 3. Global cleanups: Infrastructure & Build artifacts */
+    "**/*.tsbuildinfo": true,
+    "**/.turbo": true
+  }
 }

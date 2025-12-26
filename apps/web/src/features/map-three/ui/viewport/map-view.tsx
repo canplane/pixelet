@@ -4,7 +4,7 @@ import * as THREE from 'three';
 
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { THREE_CONFIG } from '../../model/three-config';
-import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
+import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 
 import { MapCameraController } from '../controls/map-camera-controller';
 import { MapOverlays } from '../overlays/map-overlays';
