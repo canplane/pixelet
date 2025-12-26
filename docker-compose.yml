@@ -1,15 +1,30 @@
 services:
-  db:
+  db-main:
     image: postgres:16
-    container_name: pixelet-db
+    container_name: ${PROJECT_NAME}-db-main
+    restart: always
     ports:
-      - '5432:5432'
+      - '${MAIN_DB_PORT}:5432'
     environment:
-      POSTGRES_USER: pixelet
-      POSTGRES_PASSWORD: pixelet
-      POSTGRES_DB: pixelet
+      POSTGRES_USER: ${MAIN_DB_USER}
+      POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
+      POSTGRES_DB: ${MAIN_DB_NAME}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata-main:/var/lib/postgresql/data
+
+  db-geo:
+    image: postgis/postgis:16-3.4
+    container_name: ${PROJECT_NAME}-db-geo
+    restart: always
+    ports:
+      - '${GEO_DB_PORT}:5432'
+    environment:
+      POSTGRES_USER: ${GEO_DB_USER}
+      POSTGRES_PASSWORD: ${GEO_DB_PASSWORD}
+      POSTGRES_DB: ${GEO_DB_NAME}
+    volumes:
+      - pgdata-geo:/var/lib/postgresql/data
 
 volumes:
-  pgdata:
+  pgdata-main:
+  pgdata-geo:

@@ -2,22 +2,37 @@
   "name": "@pixelet/api",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "tsup src/index.ts --watch --format esm --onSuccess \"node dist/index.js\"",
-    "build": "tsup src/index.ts --format esm --clean --minify",
+    "prebuild": "rimraf dist",
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
     "clean": "rm -rf dist",
-    "typecheck": "tsc -b",
-    "start": "node dist/index.js"
+    "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-fastify": "^11.0.0",
+    "@nestjs/typeorm": "^11.0.0",
     "@pixelet/shared": "workspace:*",
-    "fastify": "^5.6.2"
+    "axios": "^1.13.2",
+    "fastify": "^5.6.2",
+    "geojson": "^0.5.0",
+    "lucene-query-parser": "^1.2.0",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.20"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^25.0.2",
-    "tsup": "^8.3.5",
-    "tsx": "^4.21.0",
+    "rimraf": "^6.0.1",
+    "ts-loader": "^9.5.2",
     "typescript": "^5.9.3"
   }
 }

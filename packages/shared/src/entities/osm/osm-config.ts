@@ -24,13 +24,13 @@ export const OSM_CONFIG = {
    * 'local': Docker로 띄운 로컬 서버 사용 (속도 최상, 제한 없음)
    * 'public': 공용 서버 목록 사용 (Legacy, 로드밸런싱 및 Rate Limit 적용)
    */
-  API_MODE: 'public' as 'local' | 'public', // 여기서 모드 변경
+  API_MODE: 'local' as 'local' | 'public', // 여기서 모드 변경
 
   /**
    * --- 로컬 서버 엔드포인트 ---
    * Docker 컨테이너가 실행 중인 주소입니다.
    */
-  LOCAL_ENDPOINT: 'http://localhost:8080/api/interpreter',
+  LOCAL_API_ENDPOINT: '/api/geo/query',
 
   /**
    * --- 엔드포인트 (Load Balancing Pool) ---

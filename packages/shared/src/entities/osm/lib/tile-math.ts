@@ -2,8 +2,11 @@
  * @file tile-math.ts
  */
 
+import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { OSM_CONFIG } from '../osm-config';
 import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
+
+const { unproject } = projection;
 
 /**
  * 절대 좌표(MeterPos)를 받아 타일 인덱스(tx, tz)로 변환합니다.
@@ -22,13 +25,8 @@ export const getTileIndex = (pos: MeterPos) => {
  * 내부적으로 3D 좌표(MeterPos)를 생성하여 unproject 함수에 전달합니다.
  * * @param tx - 타일 X 인덱스
  * @param tz - 타일 Z 인덱스
- * @param unproject - 3D 미터 좌표(MeterPos)를 위경도(Location)로 변환하는 함수
  */
-export const getTileBBox = (
-  tx: number,
-  tz: number,
-  unproject: (pos: MeterPos) => Location,
-): string => {
+export const getTileBbox = (tx: number, tz: number): string => {
   const { TILE_SIZE } = OSM_CONFIG;
 
   const minX = tx * TILE_SIZE;

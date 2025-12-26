@@ -136,8 +136,8 @@ pnpm install
 Each app manages its own environment variables.
 
 ```bash
-# API server
-cp apps/api/.env.example apps/api/.env
+# API server, Infrastructure
+cp .env.example .env
 
 # Web app
 cp apps/web/.env.example apps/web/.env

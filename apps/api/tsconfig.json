@@ -9,19 +9,23 @@
     "target": "ES2022", // 서버 환경 Node.js 최신 버전 타겟
     "lib": ["ES2022"], // 서버 사이드 API 중심 라이브러리
 
+    /* 데코레이터 지원 (NestJS & TypeORM 필수 보강) */
+    "experimentalDecorators": true, // [추가] NestJS 의존성 주입 및 TypeORM 엔티티 데코레이터 활성화
+    "emitDecoratorMetadata": true, // [추가] 런타임 타입 추론을 위한 메타데이터 생성
+
     /* 모듈 해석 전략 */
     /* tsup(esbuild) 기반 번들링 환경과 web 프로젝트와의 대칭을 위해 최신 전략으로 보강 */
     "module": "ESNext", // 최신 ESM(Import/Export) 시스템 사용
     "moduleResolution": "bundler", // 번들러 환경에 최적화된 모듈 해석 (web과 일치)
-    "verbatimModuleSyntax": true, // [중요] 런타임 코드와 타입을 엄격히 분리 (Web 프로젝트와 일치)
+    "verbatimModuleSyntax": false, // [수정] NestJS 데코레이터와 클래스 메타데이터 호환성을 위해 false로 조정 (기존 true에서 변경)
     "moduleDetection": "force", // 모든 파일을 독립된 모듈로 간주하여 전역 오염 방지
 
     /* 출력 설정 */
-    /* 실제 빌드 결과물은 tsup이 담당하므로, tsc는 검사 및 선언 파일 생성에 집중 */
+    /* 실제 빌드 결과물은 nest build(내부 webpack/swc)가 담당 */
     "rootDir": "src", // [정석] 이제 다시 자기 폴더인 src만 뿌리로 가집니다. (TS6059 완전 해결)
     "outDir": "dist",
     "sourceMap": true, // 디버깅을 위한 소스맵 생성
-    "noEmit": true, // tsc는 검사만 수행 (실제 빌드는 tsup이 담당)
+    "noEmit": false, // [수정] Nest CLI 빌드 파이프라인 연동을 위해 false로 변경 (기존 true에서 변경)
 
     /* 엄격한 타입 검사 및 린팅 규칙 */
     "strict": true, // 모든 엄격한 타입 검사 옵션 활성화
