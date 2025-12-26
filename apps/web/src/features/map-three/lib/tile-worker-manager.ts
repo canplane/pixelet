@@ -1,4 +1,4 @@
-import type { WorldTile } from '@/features/map-three/model/map-store';
+import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [WorkerResponse] 워커로부터 수신하는 메시지 타입 정의

@@ -1,41 +1,53 @@
 {
-  "extends": "./tsconfig.json", // 부모 설정을 상속받는 경우
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    /* 프로젝트 참조 및 빌드 최적화 */
-    "composite": true, // 프로젝트 참조 기능을 활성화
-    "incremental": true, // 변경된 부분만 빌드하여 속도 향상
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo", // 증분 빌드 캐시 파일 경로
+    /* 프로젝트 빌드 및 증분 컴파일 최적화 */
+    "composite": true, // 모노레포 프로젝트 참조(Project References) 기능을 활성화
+    "incremental": true, // 변경된 부분만 빌드하여 타입 체크 및 빌드 속도 향상
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo", // 증분 빌드 캐시 정보 저장 경로
 
-    /* 언어 및 런타임 환경 */
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "useDefineForClassFields": true,
-    "jsx": "react-jsx",
+    /* 런타임 환경 및 언어 사양 */
+    "target": "ES2022", // 최신 브라우저와 안정적으로 호환되는 ECMAScript 버전
+    "lib": ["ES2022", "DOM", "DOM.Iterable"], // 클라이언트 환경에서 사용할 브라우저 및 최신 API 포함
+    "useDefineForClassFields": true, // 클래스 필드 초기화 방식을 최신 표준 사양으로 고정
+    "jsx": "react-jsx", // React 17+ 방식의 JSX 트랜스파일링 사용
     "types": [
-      "vite/client",
-      "vite-plugin-svgr/client" // SVGR
-    ], // Vite 관련 타입 정의
+      "vite/client", // Vite 환경 변수 및 에셋(SVG, CSS) 타입 지원
+      "vite-plugin-svgr/client" // SVGR 플러그인을 통한 SVG React 컴포넌트 타입 지원
+    ],
 
-    /* 모듈 해석 전략 (Bundler) */
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "verbatimModuleSyntax": true, // import/export 구문 엄격 적용
-    "moduleDetection": "force",
-    "noEmit": true, // Vite가 빌드하므로 tsc는 파일 생성 안 함
+    /* 모듈 해석 및 번들러 전략 */
+    "module": "ESNext", // 최신 ESM(Import/Export) 시스템 사용
+    "moduleResolution": "bundler", // Vite, esbuild 등 최신 번들러 환경에 최적화된 모듈 해석
+    "verbatimModuleSyntax": true, // [중요] 런타임 코드와 타입을 엄격히 분리 (import type 사용 강제)
+    "moduleDetection": "force", // 모든 파일을 독립된 모듈로 간주하여 전역 오염 방지
 
-    /* 엄격한 타입 검사 및 린팅 */
-    "strict": true,
-    "skipLibCheck": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true,
+    /* 출력 설정 */
+    "rootDir": "src", // [정석] 뿌리를 src로 고정하여 외부 소스 침범 방지 및 빌드 구조 유지
+    "noEmit": true, // tsc는 검사만 수행 (실제 빌드는 Vite가 담당)
 
-    /* 경로 별칭 (Alias) */
+    /* 엄격한 타입 검사 및 린팅 규칙 */
+    "strict": true, // 모든 엄격한 타입 검사 옵션 활성화
+    "skipLibCheck": true, // node_modules 내 외부 라이브러리의 타입 검사 생략
+    "noUnusedLocals": false, // 사용하지 않는 지역 변수에 대한 에러 보고 여부
+    "noUnusedParameters": false, // 사용하지 않는 함수 파라미터에 대한 에러 보고 여부
+    "noFallthroughCasesInSwitch": true, // switch 문에서 break 누락 방지
+
+    /* 경로 별칭 (Path Alias) */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "three/*": ["node_modules/three/*"]
+      "@/*": ["./src/*"], // Web 프로젝트 내부 소스 참조용 별칭
+      "three/*": ["../../node_modules/@types/three/*"] // Three.js 상세 타입 정의 매핑
     }
   },
-  "include": ["src"]
+  "include": ["src", "@types"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "../../packages/shared/src/**/*.server.ts" // ✨ [중요] 서버 전용 코드는 클라이언트 검사에서 제외
+  ],
+  "references": [
+    { "path": "../../packages/shared" } // [핵심] 정석 방식으로 Shared 프로젝트 참조 등록
+  ]
 }

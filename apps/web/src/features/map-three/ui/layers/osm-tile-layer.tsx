@@ -1,11 +1,15 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
-import { VOXEL_TYPES } from '@/entities/osm/lib/baking/tile-baker';
-import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
-import { VOXEL_COLORS } from '@/entities/osm/config/map-theme';
+import {
+  VOXEL_COLORS,
+  VOXEL_TYPES,
+} from '@pixelet/shared/entities/voxel/model/voxels';
+import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import { useRelativePosition } from '../../model/use-relative-position';
-import type { WorldTile } from '../../model/map-store';
+import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
 import { THREE_CONFIG } from '../../model/three-config';
+
+const { TILE_SIZE } = OSM_CONFIG;
 
 interface OsmTileLayerProps {
   tile: WorldTile;
@@ -39,7 +43,6 @@ const createDataTexture = (data: Uint8Array, resolution: number) => {
  */
 export const OsmTileLayer = React.memo(({ tile }: OsmTileLayerProps) => {
   const { grids, origin, resolution, key } = tile;
-  const TILE_SIZE = OSM_CONFIG.TILE_SIZE;
 
   // 1. 절대 좌표 중심점 계산
   const absoluteCenter = useMemo(

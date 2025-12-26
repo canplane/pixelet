@@ -1,11 +1,11 @@
 import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import type { MeterPos } from '@/shared/types/map';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { VOXEL_CONFIG } from '../../model/voxel-config';
+import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
-import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
+import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { useRelativePosition } from '../../model/use-relative-position';
 
 /**

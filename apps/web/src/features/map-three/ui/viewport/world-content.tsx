@@ -4,7 +4,7 @@ import { UserMarker } from '../markers/user-marker';
 import { CellHighlighter } from '../markers/cell-highlighter';
 import { OsmLayer } from '../layers/osm-layer';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
+import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { VoxelBlock } from '../voxels/voxel-block.box';
 import { VoxelGridPlanar } from '../markers/voxel-grid-planar';
 

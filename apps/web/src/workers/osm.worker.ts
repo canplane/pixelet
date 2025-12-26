@@ -1,13 +1,7 @@
 /// <reference lib="webworker" />
 
 // [중요] 기존 로직 함수 import
-import { fetchAndProcessTile } from '@/entities/osm/model/tile-processor';
-
-// [중요] 좌표 변환 함수 import
-// 주의: 이 함수들은 DOM(window, document)에 의존하지 않는 순수 수학 함수여야 합니다.
-import { projection } from '@/shared/lib/geo/projection';
-
-const { project, unproject } = projection;
+import { fetchAndProcessTile } from '@pixelet/shared/features/osm/lib/tile-processor';
 
 // ✨ [Type Definition] 워커가 받는 메시지 타입 정의 (안전성 강화)
 interface WorkerInput {
@@ -24,21 +18,15 @@ worker.onmessage = async (e: MessageEvent<WorkerInput>) => {
 
   try {
     // 타일 처리 실행
-    const result = await fetchAndProcessTile(
-      tx,
-      tz,
-      project,
-      unproject,
-      (partialTile) => {
-        // [점진적 업데이트]
-        // 여기서는 Transferable을 쓰지 않습니다. (부분 데이터는 복사 비용이 작음)
-        worker.postMessage({
-          type: 'progress',
-          id,
-          data: partialTile,
-        });
-      },
-    );
+    const result = await fetchAndProcessTile(tx, tz, (partialTile) => {
+      // [점진적 업데이트]
+      // 여기서는 Transferable을 쓰지 않습니다. (부분 데이터는 복사 비용이 작음)
+      worker.postMessage({
+        type: 'progress',
+        id,
+        data: partialTile,
+      });
+    });
 
     // [성능 최적화] Transferable Object 준비
     // ArrayBuffer의 소유권을 메인 스레드로 '이동'시켜 복사 비용을 0으로 만듭니다.

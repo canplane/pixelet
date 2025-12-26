@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Search } from 'lucide-react';
 import { useMapStore } from '../../model/map-store';
 import { cn } from '@/shared/lib/utils';
-import { projection } from '@/shared/lib/geo/projection';
+import { projection } from '@pixelet/shared/shared/lib/map/projection';
 
 const { unproject } = projection;
 

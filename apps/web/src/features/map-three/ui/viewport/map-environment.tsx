@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import { MAP_LAYOUT_THEMES } from '../../../../entities/osm/config/map-theme';
+import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { THREE_CONFIG } from '../../model/three-config';
 
 const { FOG_DENSITY } = THREE_CONFIG.RENDERING;

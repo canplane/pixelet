@@ -4,8 +4,8 @@ import {
   downloadGridAsBinary,
   downloadGridAsImage,
   downloadMergedGridAsImage, // ✨ Import 추가
-} from '@/entities/osm/lib/debug/tile-debug';
-import type { TileGrids } from '@/entities/osm/lib/baking/tile-baker';
+} from '@pixelet/shared/features/osm/api/tile-exporter.client';
+import type { TileGrids } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [map-debug-tools]

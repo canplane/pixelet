@@ -16,6 +16,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      '@pixelet/shared': path.resolve(__dirname, '../../packages/shared/src'),
     },
   },
 
@@ -28,6 +29,10 @@ export default defineConfig({
   },
 
   define: {
-    __APP_NAME__: JSON.stringify('Pixelet'), // Easter egg 🫧
+    /** A droplet fades. A pixelet remains. 🫧 */
+    __APP_NAME__: JSON.stringify('pixelet'),
+
+    /** Injected as a boolean literal for dead code elimination */
+    __IS_DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
   },
 });

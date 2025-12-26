@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {} // 또는 아예 삭제
+  },
+  "files": [], // 루트 자체에는 소스 코드가 없음을 명시
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "apps/api" },
+    { "path": "apps/web" }
+  ]
+}

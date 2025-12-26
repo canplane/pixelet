@@ -1,10 +1,12 @@
 {
   "name": "@pixelet/api",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -b",
+    "dev": "tsup src/index.ts --watch --format esm --onSuccess \"node dist/index.js\"",
+    "build": "tsup src/index.ts --format esm --clean --minify",
+    "clean": "rm -rf dist",
     "typecheck": "tsc -b",
     "start": "node dist/index.js"
   },
@@ -14,6 +16,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.2",
+    "tsup": "^8.3.5",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

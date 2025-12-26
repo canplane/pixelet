@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useMapStore } from './map-store';
-import type { MeterPos } from '@/shared/types/map';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [use-relative-position]
