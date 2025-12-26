@@ -3,23 +3,19 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "./index.ts",
   "types": "./index.ts",
   "exports": {
-    ".": {
-      "types": "./index.ts",
-      "import": "./index.ts"
-    },
-    "./*": {
-      "types": "./src/*.ts",
-      "import": "./src/*.ts"
-    }
+    "./*": "./src/*.ts"
   },
   "files": [
     "index.ts",
     "src",
     "@types"
   ],
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean && rm -rf dist",
