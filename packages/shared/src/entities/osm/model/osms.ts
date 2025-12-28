@@ -13,7 +13,7 @@ export interface ShapePath {
 
 export interface MapInfra {
   id: string;
-  type: 'building' | 'road' | 'water' | 'landuse';
+  type: string; // 'building' | 'road' | 'water' | 'landuse' | 'forest';
   points: MeterPos[];
   center: MeterPos;
   shapePath?: ShapePath;

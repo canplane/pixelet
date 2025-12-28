@@ -6,7 +6,6 @@
 
 import { requestOverpass } from '@pixelet/shared/entities/osm/api/overpass.api.client';
 import { GEOMETRY_FILTERS } from '@pixelet/shared/entities/osm/api/query/osm-geometry-queries';
-// ✨ [New Import] 행정 구역 및 단지 정보 쿼리 추가
 import { BOUNDARY_FILTERS } from '@pixelet/shared/entities/osm/api/query/osm-boundary-queries';
 import { POI_QUERIES } from '@pixelet/shared/entities/osm/api/query/osm-poi-queries';
 import { create_query } from '@pixelet/shared/entities/osm/api/overpass-utils';
@@ -20,7 +19,8 @@ import {
   getTileLocationBbox,
   type LocationBbox,
 } from '@pixelet/shared/entities/osm/lib/tile-math';
-import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-hander';
+import { normalizeOsmData } from '@pixelet/shared/entities/osm/lib/osm-normalizer'; // 🎯 추가: Raw -> Normalized 변환
+import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-handler';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import type { MapInfra, MapPoi } from '@pixelet/shared/entities/osm/model/osms';
@@ -96,8 +96,15 @@ async function executeStep(step: ProcessingStep, origin: MeterPos) {
   const response = await requestOverpass(step.query);
   if (!response?.elements?.length) return null;
 
-  // Shared 엔진을 사용하여 OSM Raw Elements를 그리드 데이터로 변환
-  return processOsmToGrids(response.elements, origin, {
+  /**
+   * 정규화: 'osm-normalizer' 실행
+   * [보강] Raw elements를 3857 Meter 좌표계로 변환하고,
+   * isClosed 판정, Holes 조립, 물리 수치(Computed) 계산을 한 번에 끝냅니다.
+   */
+  const normalizedElements = normalizeOsmData(response.elements);
+
+  // 정규화된 데이터를 핸들러에 전달 (서버의 GeoService 호출과 동일한 규격이 됨)
+  return processOsmToGrids(normalizedElements, origin, {
     tileSize: TILE_SIZE,
     cellSize: CELL_SIZE,
   });

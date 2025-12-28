@@ -5,7 +5,7 @@ import { VoxelInspector } from './voxel-inspector';
 import { LocationControl } from './location-control';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { PoiDetailPanel } from './poi-detail-panel';
-import { MapSearchBar } from './map-location-header';
+import { MapSearchBar } from './map-search-bar';
 import { Badge } from '@/shared/ui/theme/glass/badge';
 
 /**

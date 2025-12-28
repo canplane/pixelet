@@ -26,7 +26,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   await app.listen(port, host);
-  console.log(`🚀 Pixelet API is running on: http://localhost:${port}/api`);
+  console.log(`🚀 pixelet API is running on: http://localhost:${port}/api`);
 }
 
 bootstrap();

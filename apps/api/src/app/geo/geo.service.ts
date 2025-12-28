@@ -1,15 +1,9 @@
-// src/geo/geo.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OsmBuilding } from './entities/osm-building.entity';
-import { OsmPoi } from './entities/osm-poi.entity';
-import { OsmRoad } from './entities/osm-road.entity';
+import { OsmElement } from '@/app/geo/entities/osm-element.entity';
 
-import type {
-  OverpassElement,
-  OverpassResponse,
-} from '@pixelet/shared/entities/osm/api/overpass-types';
+import type { NormalizedElement } from '@pixelet/shared/entities/osm/api/normalized-types';
 import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import { getTileBbox } from '@pixelet/shared/entities/osm/lib/tile-math';
 import {
@@ -17,199 +11,216 @@ import {
   TileGrids,
   WorldTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
-import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-hander';
+import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-handler';
+import { MeterPos } from '@pixelet/shared/shared/model/coords';
+
+// 🎯 [Refactoring] 공유 정책 모듈 Import
+import {
+  determineOsmCategory,
+  shouldForceClosed,
+  computeOsmMetrics,
+} from '@pixelet/shared/entities/osm/lib/osm-policy';
+
+const { TILE_SIZE, CELL_SIZE } = OSM_CONFIG;
+
+interface OsmRawResult {
+  osm_id: string;
+  tags: string | Record<string, string>;
+  wkt: string;
+  cwkt: string;
+}
+
+type GeoJsonCoord = [number, number];
+
+interface OsmGeometry {
+  type: 'Point' | 'LineString' | 'Polygon' | 'MultiPolygon';
+  coordinates: any;
+}
+
 @Injectable()
 export class GeoService {
   constructor(
-    @InjectRepository(OsmBuilding, 'geoConnection')
-    private readonly buildingRepo: Repository<OsmBuilding>,
-    @InjectRepository(OsmRoad, 'geoConnection')
-    private readonly roadRepo: Repository<OsmRoad>,
-    @InjectRepository(OsmPoi, 'geoConnection')
-    private readonly poiRepo: Repository<OsmPoi>,
+    @InjectRepository(OsmElement, 'geoConnection')
+    private readonly geoRepo: Repository<OsmElement>,
   ) {}
 
-  /**
-   * [개선] 타일 인덱스를 직접 받아, 가공이 완료된 WorldTile을 반환합니다.
-   */
   async getProcessedTile(tx: number, ty: number): Promise<WorldTile> {
-    const { TILE_SIZE, CELL_SIZE } = OSM_CONFIG;
     const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
     const key = `${tx}:${ty}`;
 
-    console.log(`\n🚀 [Tile-Start] ${key}`);
-    console.time(`Total-Process-${key}`);
+    const elements = await this.getNearbyMapDataByTile(tx, ty);
 
-    // 1. DB 데이터 조회 단계
-    console.time(`Step1-DB-Query-${key}`);
-    const overpassData = await this.getNearbyMapDataByTile(tx, ty);
-    console.timeEnd(`Step1-DB-Query-${key}`);
-    console.log(`   - Fetched elements: ${overpassData.elements.length}`);
+    if (elements.length === 0) {
+      console.warn(`[Tile-${key}] No elements found in this area.`);
+    } else {
+      console.log(`[Tile-${key}] Fetched total elements: ${elements.length}`);
+    }
 
-    // 2. 베이킹 엔진 가동 단계
     const origin = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, z: 0 };
-    console.time(`Step2-Baking-Engine-${key}`);
-    const { infras, pois, partialGrids } = processOsmToGrids(
-      overpassData.elements,
-      origin,
-      { tileSize: TILE_SIZE, cellSize: CELL_SIZE },
-    );
-    console.timeEnd(`Step2-Baking-Engine-${key}`);
 
-    // 3. 그리드 병합 및 메모리 복사 단계
-    console.time(`Step3-Grid-Assembly-${key}`);
+    const { infras, pois, partialGrids } = processOsmToGrids(elements, origin, {
+      tileSize: TILE_SIZE,
+      cellSize: CELL_SIZE,
+    });
+
     const finalGrids = createEmptyGrids(resolution);
     (Object.keys(partialGrids) as (keyof TileGrids)[]).forEach((channel) => {
       if (partialGrids[channel]) {
         finalGrids[channel].set(partialGrids[channel]);
       }
     });
-    console.timeEnd(`Step3-Grid-Assembly-${key}`);
 
-    console.timeEnd(`Total-Process-${key}`);
-    console.log(`🏁 [Tile-End] ${key}\n`);
+    const gridsForJson: Record<string, number[]> = {};
+    for (const [gKey, uint8Arr] of Object.entries(finalGrids)) {
+      if (uint8Arr instanceof Uint8Array) {
+        gridsForJson[gKey] = Array.from(uint8Arr);
+      }
+    }
 
-    // 5. 최종 WorldTile 규격으로 반환
     return {
       key,
       origin,
-      grids: finalGrids,
+      grids: gridsForJson as unknown as TileGrids,
       infras,
       pois,
       resolution,
     };
   }
 
-  /**
-   * 위경도를 입력받아 해당 좌표가 속한 타일의 BBox를 계산하고,
-   * 해당 범위 내의 모든 데이터를 가져옵니다.
-   */
   private async getNearbyMapDataByTile(
     tx: number,
     ty: number,
-  ): Promise<OverpassResponse> {
-    // 2. 타일의 미터 범위(Bbox) 추출
+  ): Promise<NormalizedElement[]> {
     const bbox = getTileBbox(tx, ty);
-
-    // 3. PostGIS 쿼리 최적화
-    // ST_MakeEnvelope(minX, minZ, maxX, maxZ, srid)
-    // DB 인덱스가 3857이라면 변환 오버헤드 없이 즉시 검색됩니다.
     const area3857 = `ST_MakeEnvelope(${bbox.minX}, ${bbox.minY}, ${bbox.maxX}, ${bbox.maxY}, 3857)`;
 
-    // ✨ [최적화 2] 데이터 획득 병렬화 및 필요한 컬럼만 추출
-    const [rawBuildings, rawRoads, rawPois] = await Promise.all([
-      this.buildingRepo
-        .createQueryBuilder('b')
-        .select(['b.osm_id', 'b.building_type', 'b.levels', 'b.name'])
-        // GeoJSON 변환은 DB 부하가 크므로, 꼭 필요한 경우에만 4326으로 변환합니다.
-        .addSelect('ST_AsGeoJSON(ST_Transform(b.geom, 4326))', 'geom')
-        .where(`ST_Intersects(b.geom, ${area3857})`)
-        .getRawMany(),
-      this.roadRepo
-        .createQueryBuilder('r')
-        .select(['r.osm_id', 'r.highway_type', 'r.name'])
-        .addSelect('ST_AsGeoJSON(ST_Transform(r.geom, 4326))', 'geom')
-        .where(`ST_Intersects(r.geom, ${area3857})`)
-        .getRawMany(),
-      this.poiRepo
-        .createQueryBuilder('p')
-        .select(['p.osm_id', 'p.poi_type', 'p.name'])
-        .addSelect('ST_AsGeoJSON(ST_Transform(p.geom, 4326))', 'geom')
-        .where(`ST_Intersects(p.geom, ${area3857})`)
-        .getRawMany(),
-    ]);
+    const raws: any[] = await this.geoRepo.query(`
+      SELECT 
+        osm_id, 
+        tags, 
+        ST_AsGeoJSON(ST_SimplifyPreserveTopology(way, 0.1)) as geometry, 
+        ST_AsText(ST_Centroid(way)) as cwkt
+      FROM osm_elements
+      WHERE way && ${area3857} 
+        OR ST_Intersects(way, ${area3857})
+    `);
 
-    // ✨ [최적화 3] 루프 내부 가공 로직 최적화
-    const elements: OverpassElement[] = [];
+    return raws.map((raw) => {
+      const tags =
+        typeof raw.tags === 'string'
+          ? this.parseHstore(raw.tags)
+          : raw.tags || {};
+      const geo = JSON.parse(raw.geometry);
 
-    // Buildings
-    for (const b of rawBuildings) {
-      elements.push(this.mapToElement(b, 'way', 'building'));
-    }
-    // Roads
-    for (const r of rawRoads) {
-      elements.push(this.mapToElement(r, 'way', 'road'));
-    }
-    // POIs
-    for (const p of rawPois) {
-      elements.push(this.mapToElement(p, 'node', 'poi'));
-    }
+      // 🎯 [Refactoring] 분류 로직 위임 (Policy 모듈 사용)
+      const category = determineOsmCategory(tags);
 
-    return {
-      version: 0.6,
-      generator: 'Pixelet PostGIS Engine',
-      osm3s: {
-        timestamp_osm_base: new Date().toISOString(),
-        copyright: 'OpenStreetMap contributors',
-      },
-      elements: elements,
-    };
+      return this.mapToNormalizedElementFromGeoJSON(raw, geo, tags, category);
+    });
   }
 
-  /**
-   * TypeORM 엔티티(Raw)를 OverpassElement 규격으로 래핑합니다.
-   */
-  private mapToElement(
-    raw: any,
-    type: 'node' | 'way',
+  private mapToNormalizedElementFromGeoJSON(
+    raw: OsmRawResult,
+    geo: OsmGeometry,
+    tags: Record<string, string>,
     category: string,
-  ): OverpassElement {
-    const geometry = this.convertGeomToOverpassGeometry(raw.geom);
+  ): NormalizedElement {
+    let points: MeterPos[] = [];
+    let holes: MeterPos[][] = [];
 
-    const elementId = raw.osm_id
-      ? Number(raw.osm_id)
-      : raw.id
-        ? Number(raw.id)
-        : Math.floor(Math.random() * 1000000);
+    // 1. Polygon 처리
+    if (geo.type === 'Polygon') {
+      const coords = geo.coordinates as GeoJsonCoord[][];
+      points = coords[0].map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 }));
+      if (coords.length > 1) {
+        holes = coords
+          .slice(1)
+          .map((ring: GeoJsonCoord[]) =>
+            ring.map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 })),
+          );
+      }
+    }
+    // 2. MultiPolygon 처리
+    else if (geo.type === 'MultiPolygon') {
+      const coords = geo.coordinates as GeoJsonCoord[][][];
+      const sortedPolygons = coords.sort((a, b) => b[0].length - a[0].length);
+      const mainPolygon = sortedPolygons[0];
+      points = mainPolygon[0].map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 }));
+
+      if (mainPolygon.length > 1) {
+        holes = mainPolygon
+          .slice(1)
+          .map((ring: GeoJsonCoord[]) =>
+            ring.map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 })),
+          );
+      }
+
+      for (let i = 1; i < sortedPolygons.length; i++) {
+        const poly = sortedPolygons[i];
+        holes.push(poly[0].map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 })));
+        if (poly.length > 1) {
+          const subHoles = poly
+            .slice(1)
+            .map((ring: GeoJsonCoord[]) =>
+              ring.map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 })),
+            );
+          holes.push(...subHoles);
+        }
+      }
+    }
+    // 3. LineString & Point 처리
+    else if (geo.type === 'LineString') {
+      const coords = geo.coordinates as GeoJsonCoord[];
+      points = coords.map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 }));
+    } else if (geo.type === 'Point') {
+      const [x, y] = geo.coordinates as GeoJsonCoord;
+      points = [{ x, y, z: 0 }];
+    }
+
+    const centerPoints = this.parseWktToMeterPos(raw.cwkt);
+    const center = centerPoints[0] || points[0] || { x: 0, y: 0, z: 0 };
+
+    // 🎯 [Refactoring] 강제 폐곡 판정 위임 + 기하학적 검사 결합
+    const isClosed =
+      shouldForceClosed(tags) ||
+      (!['highway', 'waterway'].includes(tags.highway || tags.waterway || '') &&
+        (geo.type === 'Polygon' ||
+          geo.type === 'MultiPolygon' ||
+          (points.length >= 3 &&
+            Math.abs(points[0].x - points[points.length - 1].x) < 0.1)));
+
+    // 🎯 [Refactoring] 물리 수치 계산 위임 (Policy 모듈 사용)
+    const computed = computeOsmMetrics(tags, category);
 
     return {
-      type,
-      id: elementId,
-      center: type === 'node' ? geometry[0] : undefined,
-      geometry: geometry,
-      tags: {
-        name: raw.name || '',
-        ...(category === 'building' && {
-          building: raw.building_type || 'yes',
-          'building:levels': raw.levels ? raw.levels.toString() : '1',
-        }),
-        ...(category === 'road' && {
-          highway: raw.highway_type || 'road',
-          oneway: raw.oneway === 'yes' ? 'yes' : 'no',
-        }),
-        ...(category === 'poi' && {
-          amenity: raw.poi_type,
-        }),
-      },
+      type: points.length === 1 ? 'node' : 'way',
+      id: Number(raw.osm_id),
+      center,
+      shape: { points, isClosed, holes: holes.length > 0 ? holes : undefined },
+      computed, // 계산된 객체 그대로 주입
+      tags,
+      category,
     };
   }
 
-  private convertGeomToOverpassGeometry(
-    geomStr: string,
-  ): { lat: number; lon: number }[] {
-    if (!geomStr) return [];
+  private parseWktToMeterPos(wkt: string): MeterPos[] {
+    if (!wkt) return [];
+    const coordsMatch = wkt.match(/[\d\.-]+\s+[\d\.-]+/g);
+    return coordsMatch
+      ? coordsMatch.map((pair) => {
+          const [x, y] = pair.split(/\s+/).map(Number);
+          return { x, y, z: 0 };
+        })
+      : [];
+  }
 
-    const geom = JSON.parse(geomStr);
-
-    if (geom.type === 'Point') {
-      const [lon, lat] = geom.coordinates;
-      return [{ lat, lon }];
+  private parseHstore(hstoreStr: string): Record<string, string> {
+    const result: Record<string, string> = {};
+    const pattern = /"(.+?)"=>"(.*?)"/g;
+    let match;
+    while ((match = pattern.exec(hstoreStr)) !== null) {
+      result[match[1]] = match[2];
     }
-
-    if (geom.type === 'LineString') {
-      return geom.coordinates.map(([lon, lat]: [number, number]) => ({
-        lat,
-        lon,
-      }));
-    }
-
-    if (geom.type === 'Polygon') {
-      return geom.coordinates[0].map(([lon, lat]: [number, number]) => ({
-        lat,
-        lon,
-      }));
-    }
-
-    return [];
+    return result;
   }
 }

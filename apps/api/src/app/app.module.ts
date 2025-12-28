@@ -13,6 +13,7 @@ import * as path from 'path';
       // 보통 apps/api/src/app 에서 루트는 4단계 위입니다.
       envFilePath: path.resolve(__dirname, '../../../.env'),
       isGlobal: true,
+      expandVariables: true, // 🎯 이 옵션을 true로 설정하세요!
     }),
 
     // 2. Main DB 연결 (Business Logic)
