@@ -37,10 +37,6 @@
       "@pixelet/shared/*": ["./src/*"] // Shared 패키지 내부에서 동일하게 사용할 유니크 별칭
     }
   },
-  "include": [
-    "src",
-    "@types",
-    "../../apps/web/src/shared/lib/three/three-coords.ts"
-  ],
+  "include": ["src", "@types"],
   "exclude": ["node_modules", "dist"] // 제외 규칙 추가
 }

@@ -1,16 +1,17 @@
-// src/geo/geo.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { OsmBuilding } from './entities/osm-building.entity';
-import { OsmRoad } from './entities/osm-road.entity';
-import { OsmPoi } from './entities/osm-poi.entity';
+import { OsmElement } from './entities/osm-element.entity';
 import { GeoService } from './geo.service';
 import { GeoController } from './geo.controller';
 
 @Module({
   imports: [
-    // Geo DB 연결 이름('geoConnection')을 명시하여 엔티티 등록
-    TypeOrmModule.forFeature([OsmBuilding, OsmRoad, OsmPoi], 'geoConnection'),
+    /**
+     * [TypeOrmModule]
+     * 'geoConnection' 데이터베이스 연결에 사용할 엔티티들을 등록합니다.
+     * 4-Pass 레이어 전략에 맞춰 Base, Transport, Structure 엔티티가 모두 포함되어야 합니다.
+     */
+    TypeOrmModule.forFeature([OsmElement], 'geoConnection'),
   ],
   providers: [GeoService],
   controllers: [GeoController],

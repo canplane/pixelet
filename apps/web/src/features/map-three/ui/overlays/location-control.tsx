@@ -5,8 +5,12 @@ import { useDeviceOrientation } from '@/entities/device-location/model/use-orien
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { CircularButton } from '@/shared/ui/theme/glass/circular-button';
 import { MotionContainer } from '@/shared/ui/layout/motion-container';
+import { useMapFollowMode } from '@/features/map-three/model/use-map-follow-mode';
 
 export function LocationControl() {
+  // 🎯 [Engine Start] 여기서 훅을 호출해야 Follow Mode 로직이 실제로 돌아갑니다.
+  useMapFollowMode();
+
   const deviceStatus = useDeviceLocationStore((state) => state.status);
   const deviceLocation = useDeviceLocationStore((state) => state.location);
 

@@ -10,6 +10,10 @@ import { THREE_CONFIG } from '../../model/three-config';
 import { cn } from '@/shared/lib/utils';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import {
+  toThreePos,
+  toThreePosWithOffset,
+} from '@/shared/lib/three/three-coords';
 
 const { FADE_START, FADE_END } = THREE_CONFIG.RENDERING;
 
@@ -47,9 +51,7 @@ export const OsmPoiItem = React.memo(
     const relativePosArray: MeterPos = useRelativePosition(poi.center);
     const localPosition: THREE.Vector3 = useMemo((): THREE.Vector3 => {
       return new THREE.Vector3(
-        relativePosArray.x,
-        VOXEL_CONFIG.HALF + 0.5,
-        relativePosArray.z,
+        ...toThreePosWithOffset(relativePosArray, VOXEL_CONFIG.HALF + 0.5),
       );
     }, [relativePosArray]);
 
