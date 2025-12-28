@@ -73,16 +73,16 @@ export function VoxelInspector() {
               </header>
               <div className="flex flex-col gap-1.5 text-[11px] font-light text-white/70 tabular-nums">
                 <div className="flex justify-between">
-                  <span className="text-white/20">X</span>{' '}
-                  {viewVec.x.toFixed(1)}
+                  <span className="text-white/20">X (E)</span>{' '}
+                  {center.x.toFixed(1)}
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-white/20">Y</span>{' '}
-                  {viewVec.y.toFixed(1)}
+                  <span className="text-white/20">Y (N)</span>{' '}
+                  {center.y.toFixed(1)}
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-white/20">Z</span>{' '}
-                  {viewVec.z.toFixed(1)}
+                  <span className="text-white/20">Z (A)</span>{' '}
+                  {center.z.toFixed(1)}
                 </div>
               </div>
             </div>

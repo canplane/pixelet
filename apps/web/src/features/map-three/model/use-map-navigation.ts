@@ -65,7 +65,7 @@ export function useMapNavigation() {
    */
   const devicePos = useMemo(
     () => (deviceLocation ? project(deviceLocation) : null),
-    [deviceLocation, project],
+    [deviceLocation],
   );
 
   /**
@@ -76,7 +76,7 @@ export function useMapNavigation() {
     if (!devicePos || !store.originOffset) return null;
     return {
       x: devicePos.x - store.originOffset.x,
-      z: devicePos.z - store.originOffset.z,
+      y: devicePos.y - store.originOffset.y,
     };
   }, [devicePos, store.originOffset]);
 
@@ -84,7 +84,7 @@ export function useMapNavigation() {
     if (!store.hoveredPos || !store.originOffset) return null;
     return {
       x: store.hoveredPos.x - store.originOffset.x,
-      z: store.hoveredPos.z - store.originOffset.z,
+      y: store.hoveredPos.y - store.originOffset.y,
     };
   }, [store.hoveredPos, store.originOffset]);
 
@@ -101,7 +101,7 @@ export function useMapNavigation() {
 
     const dist = Math.sqrt(
       Math.pow(devicePos.x - store.center.x, 2) +
-        Math.pow(devicePos.z - store.center.z, 2),
+        Math.pow(devicePos.y - store.center.y, 2),
     );
 
     if (!isOffCenter && dist > 10) {
@@ -111,9 +111,9 @@ export function useMapNavigation() {
     }
   }, [
     devicePos?.x,
-    devicePos?.z,
+    devicePos?.y,
     store.center?.x,
-    store.center?.z,
+    store.center?.y,
     isOffCenter,
   ]);
 

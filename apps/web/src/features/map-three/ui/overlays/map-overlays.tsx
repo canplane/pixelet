@@ -64,7 +64,13 @@ export function MapOverlays() {
         <Badge
           variant="glass"
           className="pointer-events-auto cursor-pointer px-4 py-1.5 bg-white/5 border-white/10 text-[9px] font-bold tracking-widest text-white/30 hover:text-white/80 transition-all rounded-full"
-          onClick={() => setCenter({ x: 500, y: 0, z: 500 })}
+          /**
+           * 🎯 [debug-coordinate-fix]
+           * 기존: { x: 500, y: 0, z: 500 } (Y를 고도로 사용)
+           * 수정: { x: 500, y: 500, z: 0 } (Y는 북쪽, Z가 고도)
+           * 이제 이 버튼을 누르면 동쪽으로 500m, 북쪽으로 500m 떨어진 지점으로 이동합니다.
+           */
+          onClick={() => setCenter({ x: 500, y: 500, z: 0 })}
         >
           DEBUG: SHIFT ORIGIN
         </Badge>

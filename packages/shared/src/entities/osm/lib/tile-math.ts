@@ -1,48 +1,71 @@
 /**
  * @file tile-math.ts
+ * 타일 인덱스와 절대 좌표(Meter), 지리적 좌표(Location) 간의 변환을 담당합니다.
  */
 
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { OSM_CONFIG } from '../osm-config';
-import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
 const { unproject } = projection;
+const { TILE_SIZE } = OSM_CONFIG;
 
 /**
- * 절대 좌표(MeterPos)를 받아 타일 인덱스(tx, tz)로 변환합니다.
- * 3D 좌표지만 타일은 2D 평면(XZ) 기준이므로 y값은 무시합니다.
- * * @param pos - 3D 절대 미터 좌표 {x, y, z}
+ * 절대 좌표(MeterPos)를 받아 타일 인덱스(tx, ty)로 변환합니다.
  */
 export const getTileIndex = (pos: MeterPos) => {
   return {
-    tx: Math.floor(pos.x / OSM_CONFIG.TILE_SIZE),
-    tz: Math.floor(pos.z / OSM_CONFIG.TILE_SIZE),
+    tx: Math.floor(pos.x / TILE_SIZE),
+    ty: Math.floor(pos.y / TILE_SIZE),
   };
 };
 
+export interface Bbox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export interface LocationBbox {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
+
 /**
- * 특정 타일 인덱스의 BBox(위경도 문자열)를 반환합니다.
- * 내부적으로 3D 좌표(MeterPos)를 생성하여 unproject 함수에 전달합니다.
+ * 특정 타일 인덱스의 미터 단위 BBox를 반환합니다.
  * * @param tx - 타일 X 인덱스
- * @param tz - 타일 Z 인덱스
+ * @param ty - 타일 Y 인덱스
  */
-export const getTileBbox = (tx: number, tz: number): string => {
+export const getTileBbox = (tx: number, ty: number): Bbox => {
   const { TILE_SIZE } = OSM_CONFIG;
 
   const minX = tx * TILE_SIZE;
-  const minZ = tz * TILE_SIZE;
+  const minY = ty * TILE_SIZE;
   const maxX = (tx + 1) * TILE_SIZE;
-  const maxZ = (tz + 1) * TILE_SIZE;
+  const maxY = (ty + 1) * TILE_SIZE;
 
-  // BBox 계산 시 높이(y)는 지면 기준인 0으로 설정하여 MeterPos 인터페이스를 준수합니다.
-  const sw = unproject({ x: minX, y: 0, z: minZ });
-  const ne = unproject({ x: maxX, y: 0, z: maxZ });
+  return { minX, minY, maxX, maxY };
+};
 
-  // Overpass Query 형식: "south,west,north,east" (minLat, minLng, maxLat, maxLng)
-  const minLat = Math.min(sw.lat, ne.lat);
-  const minLng = Math.min(sw.lng, ne.lng);
-  const maxLat = Math.max(sw.lat, ne.lat);
-  const maxLng = Math.max(sw.lng, ne.lng);
+/**
+ * [상위 호환] 특정 타일의 지리적 위경도 범위(LocationBbox)를 반환합니다.
+ * Overpass API 쿼리나 서버사이드 공간 검색에 직접적으로 사용됩니다.
+ */
+export const getTileLocationBbox = (tx: number, ty: number): LocationBbox => {
+  const { minX, minY, maxX, maxY } = getTileBbox(tx, ty);
 
-  return `${minLat},${minLng},${maxLat},${maxLng}`;
+  // 미터 좌표를 위경도로 역투영(Unproject)
+  const sw = unproject({ x: minX, y: minY, z: 0 });
+  const ne = unproject({ x: maxX, y: maxY, z: 0 });
+
+  // Overpass 및 PostGIS 표준 형식 (S, W, N, E) 보장
+  return {
+    minLat: Math.min(sw.lat, ne.lat),
+    minLng: Math.min(sw.lng, ne.lng),
+    maxLat: Math.max(sw.lat, ne.lat),
+    maxLng: Math.max(sw.lng, ne.lng),
+  };
 };

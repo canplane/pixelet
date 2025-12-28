@@ -1,95 +1,83 @@
 import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
+import type {
+  TileWorkerInput,
+  TileWorkerResponse,
+} from '@pixelet/shared/entities/osm/model/worker-types';
+import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
+import { delay } from '@pixelet/shared/shared/lib/aync-utils';
+
+const { API_MODE } = OSM_CONFIG;
 
 /**
- * [WorkerResponse] 워커로부터 수신하는 메시지 타입 정의
- */
-type WorkerResponse =
-  | { type: 'progress'; id: string; data: Partial<WorldTile> }
-  | { type: 'complete'; id: string; data: WorldTile }
-  | { type: 'error'; id: string; error: any };
-
-/**
- * [TaskCallbacks] 특정 타일 요청에 대한 콜백 핸들러 저장소
+ * [TaskCallbacks]
+ * 특정 타일 요청에 대한 상태와 제어권을 관리합니다.
  */
 interface TaskCallbacks {
-  /**
-   * [Deduplication]
-   * 중복 요청 발생 시, 새로 워커를 호출하지 않고 기존 작업을 반환하기 위해
-   * 진행 중인 Promise 객체 자체를 저장합니다.
-   */
+  /** [Deduplication] 중복 요청 시 기존 Promise를 반환하여 리소스 낭비를 방지합니다. */
   promise: Promise<WorldTile>;
   resolve: (data: WorldTile) => void;
   reject: (error: any) => void;
+  /** [Progressive Update] 데이터 가공 단계별(지형 -> 건물 등) 콜백 */
   onProgress?: (data: Partial<WorldTile>) => void;
 }
 
+/**
+ * [TileWorkerManager]
+ * Web Worker를 관리하고 메인 스레드와의 통신을 중재하는 매니저입니다.
+ * 모든 요청은 requestId(tx:ty)를 통해 추적 및 중복 제거(Deduplication)됩니다.
+ */
 class TileWorkerManager {
   private worker: Worker | null = null;
-  /**
-   * 진행 중인 작업 목록 (Key: 'tx:tz')
-   * 중복 요청을 방지하고 완료 시 Promise를 해결하기 위해 관리합니다.
-   */
+  /** 진행 중인 작업 목록 (Key: 'tx:ty') */
   private callbacks = new Map<string, TaskCallbacks>();
 
   constructor() {
     this.initWorker();
   }
 
+  /**
+   * [Internal] 워커 초기화 및 메시지 핸들러 등록
+   */
   private initWorker() {
-    // Vite에서 Worker를 import하는 표준 방식
-    // (경로가 실제 파일 위치와 맞는지 꼭 확인하세요!)
+    // Vite 환경의 Worker 생성 표준 방식
     this.worker = new Worker(
       new URL('../../../workers/osm.worker.ts', import.meta.url),
-      {
-        type: 'module',
-      },
+      { type: 'module' },
     );
 
-    this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-      // [수정] data, error를 미리 꺼내지 않고 response 객체 자체를 참조합니다.
-      const response = e.data;
-      const { type, id } = response;
+    this.worker.onmessage = (e: MessageEvent<TileWorkerResponse>) => {
+      const { type, requestId, data, error } = e.data;
+      const callback = this.callbacks.get(requestId);
 
-      const callback = this.callbacks.get(id);
-
-      // 이미 처리되었거나 취소된 작업이라면 무시
       if (!callback) return;
 
       switch (type) {
         case 'progress':
-          // [Progressive Update] 부분 업데이트 (지형 -> 건물 -> ...)
-          // TS가 'progress' 타입임을 알기 때문에 .data 접근이 가능해집니다.
-          if (response.type === 'progress' && response.data) {
-            // 중복 요청이 들어와도 최초 요청의 onProgress 하나만 실행되므로 효율적입니다.
-            callback.onProgress?.(response.data);
-          }
+          // 점진적 업데이트: 가공 중인 부분 데이터를 UI에 즉시 반영
+          if (data) callback.onProgress?.(data);
           break;
 
         case 'complete':
-          // [Done] 최종 완료
-          if (response.type === 'complete') {
-            callback.resolve(response.data);
-            this.callbacks.delete(id); // 메모리 누수 방지를 위해 즉시 삭제
+          // 최종 완료: 데이터 전달 후 콜백 맵에서 삭제 (메모리 관리)
+          if (data) {
+            callback.resolve(data as WorldTile);
+            this.callbacks.delete(requestId);
           }
           break;
 
         case 'error':
-          // [Fail] 에러 처리
-          if (response.type === 'error') {
-            console.error(
-              `[WorkerManager] Error in tile ${id}:`,
-              response.error,
-            );
-            callback.reject(response.error);
-            this.callbacks.delete(id);
-          }
+          // 에러 발생: 상위 호출자에게 에러 전파 후 정리
+          console.error(`[WorkerManager] Error in tile ${requestId}:`, error);
+          callback.reject(error);
+          this.callbacks.delete(requestId);
           break;
       }
     };
 
-    // [Global Error Handler]
-    // 워커 스크립트 문법 오류 등으로 워커가 죽었을 때,
-    // 대기 중인 모든 Promise를 Reject 처리하여 UI가 영원히 로딩 상태로 남는 것을 방지합니다.
+    /**
+     * [Global Error Handler]
+     * 워커 내부의 예기치 못한 크래시 발생 시 대기 중인 모든 요청을 Reject 처리합니다.
+     */
     this.worker.onerror = (err) => {
       console.error('[WorkerManager] Worker global error:', err);
       this.callbacks.forEach((cb) => cb.reject(err));
@@ -98,28 +86,29 @@ class TileWorkerManager {
   }
 
   /**
-   * [requestTile] 타일 생성 요청 (Promise 반환)
-   * - 중복 요청 시(이미 로딩 중), 새로 요청하지 않고 기존 Promise를 반환합니다.
-   * - 이를 통해 빠른 이동 시 요청이 덮어씌워져(Overwrite) 타일이 누락되는 현상을 방지합니다.
+   * [requestTile]
+   * 타일 생성을 요청합니다. 이미 요청된 타일은 기존 Promise를 반환합니다.
+   * * @param tx - 타일 X 인덱스
+   * @param ty - 타일 Y 인덱스
+   * @param onProgress - 부분 데이터 수신 시 콜백
    */
-  public requestTile(
+  public async requestTile(
     tx: number,
-    tz: number,
+    ty: number,
     onProgress?: (data: Partial<WorldTile>) => void,
   ): Promise<WorldTile> {
-    const id = `${tx}:${tz}`;
+    const requestId = `${tx}:${ty}`;
 
-    // 워커가 혹시 죽었거나 없으면 재실행
-    if (!this.worker) this.initWorker();
-
-    // ✨ [Deduplication] 이미 진행 중인 요청이 있다면 기존 Promise 재사용
-    // 기존에는 여기서 덮어쓰기가 발생하여 이전 요청의 resolve가 소실되는 버그가 있었습니다.
-    if (this.callbacks.has(id)) {
-      // console.log(`[WorkerManager] Deduplicated request for ${id}`);
-      return this.callbacks.get(id)!.promise;
+    // 1. 중복 요청 확인 (Deduplication)
+    if (this.callbacks.has(requestId)) {
+      return this.callbacks.get(requestId)!.promise;
     }
 
-    // Promise의 제어권(resolve, reject)을 추출하여 Map에 저장
+    // [중요] 동시 요청 시 서버 부하 분산을 위해 약 50~100ms의 시차를 줍니다.
+    // 이는 9개 타일 요청 시 마지막 타일까지 약 0.5초의 간격을 만들어 서버 폭주를 막습니다.
+    await delay(Math.random() * 100);
+
+    // 2. Promise 제어권 추출
     let resolveFn: (data: WorldTile) => void;
     let rejectFn: (error: any) => void;
 
@@ -128,20 +117,34 @@ class TileWorkerManager {
       rejectFn = reject;
     });
 
-    // 콜백 맵에 등록 (Promise 객체 포함)
-    this.callbacks.set(id, {
+    // 3. 콜백 등록
+    this.callbacks.set(requestId, {
       promise,
-      resolve: resolveFn!, // Executor는 동기 실행되므로 할당 보장됨
+      resolve: resolveFn!,
       reject: rejectFn!,
       onProgress,
     });
 
-    // 워커에게 작업 지시
-    this.worker?.postMessage({ tx, tz, id });
+    // 4. [주입] 워커에게 보낼 구조화된 데이터 생성
+    // 메인 스레드의 최신 설정을 스냅샷으로 전달하여 워커의 순수성을 유지합니다.
+    const input: TileWorkerInput = {
+      coord: { tx, ty },
+      options: {
+        apiMode: API_MODE,
+      },
+      meta: {
+        requestId,
+      },
+    };
+
+    this.worker?.postMessage(input);
 
     return promise;
   }
 
+  /**
+   * 워커를 강제 종료하고 상태를 초기화합니다.
+   */
   public terminate() {
     this.worker?.terminate();
     this.worker = null;
@@ -149,5 +152,4 @@ class TileWorkerManager {
   }
 }
 
-// 싱글톤 인스턴스로 내보내기
 export const tileWorkerManager = new TileWorkerManager();

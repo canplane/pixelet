@@ -2,12 +2,14 @@ import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [projection]
- * 지리적 좌표(WGS84)와 3D 월드 좌표(Web Mercator) 간의 변환을 담당하는 엔진의 핵심 유틸리티입니다.
+ * 지리적 좌표(WGS84, EPSG:4326)와 표준 투영 좌표(Web Mercator, EPSG:3857) 간의
+ * 순수한 변환을 담당하는 엔진의 핵심 데이터 레이어 유틸리티입니다.
+ * 렌더링을 위한 축 교정은 이 레이어가 아닌 렌더링 레이어에서 처리합니다.
  */
 
 /**
  * 메르카토르 도법(Web Mercator EPSG:3857) 수학적 한계치
- * 위도가 극점에 가까워지면 Y값이 무하게 발산하므로 렌더링 가능한 임계치를 정의합니다.
+ * 위도가 극점에 가까워지면 Y값이 무한하게 발산하므로 투영 가능한 임계치를 정의합니다.
  */
 const LIMITS = {
   LAT_MAX: 85.05112878,
@@ -21,7 +23,7 @@ const LIMITS = {
 /**
  * WGS84 타원체를 구체로 가정했을 때의 지구 반지름 (단위: m)
  */
-const EARTH_RADIUS = 6378137; // WGS84 기준 지구 반지름 (m)
+const EARTH_RADIUS = 6378137; // EPSG:3857 기준 지구 반지름 (m)
 const DEG_TO_RAD = Math.PI / 180;
 
 export const projection = {
@@ -29,13 +31,14 @@ export const projection = {
 
   /**
    * [to-local]
-   * 절대 미터 좌표를 현재 씬의 원점(offset) 기준 상대 좌표로 변환합니다.
+   * 절대 미터 좌표를 특정 기준점(offset) 기반의 상대 미터 좌표로 변환합니다.
+   * 순수 지리적 축(X:동, Y:북, Z:고도)을 유지합니다.
    */
-  toLocal: (abs: MeterPos, offset: MeterPos): [number, number, number] => [
-    abs.x - offset.x,
-    abs.y - offset.y,
-    abs.z - offset.z,
-  ],
+  toLocal: (abs: MeterPos, offset: MeterPos): MeterPos => ({
+    x: abs.x - offset.x,
+    y: abs.y - offset.y,
+    z: abs.z - offset.z,
+  }),
 
   /**
    * [lng-to-x]
@@ -75,9 +78,10 @@ export const projection = {
 
   /**
    * [project]
-   * 위경도(Location)를 절대 미터 좌표(MeterPos)로 투영합니다.
+   * 위경도(Location)를 EPSG:3857 표준 미터 좌표(MeterPos)로 투영합니다.
+   * 결과값은 PostGIS의 ST_Transform(geom, 3857) 결과와 완벽히 일치합니다.
    * @param useCorrection 실제 지표면 거리 왜곡 보정(cosLat) 여부
-   * * 주의: 현재는 데이터 정합성을 위해 표준 Web Mercator(EPSG:3857)를 유지합니다.
+   * * 주의: 데이터 정합성을 위해 표준 Web Mercator(EPSG:3857) 수치를 그대로 반환합니다.
    */
   project: (location: Location, useCorrection = false): MeterPos => {
     const { lng, lat, alt = 0 } = projection.clamp(location);
@@ -85,6 +89,7 @@ export const projection = {
     let y = projection.latToY(lat);
 
     // [Legacy/Option] 위도에 따른 Mercator 거리 왜곡 보정이 필요할 경우 활성화 검토
+    // 렌더링 시점에 전체 스케일을 조정하는 방식을 권장합니다.
     /*
     if (useCorrection) {
       const cosLat = Math.cos(lat * (Math.PI / 180));
@@ -95,29 +100,29 @@ export const projection = {
 
     return {
       x,
-      y: alt,
-      z: -y,
+      y, // 지리적 북쪽 방향 (Standard 3857 Y)
+      z: alt, // 지리적 고도 방향
     };
   },
 
   /**
    * [unproject]
-   * 절대 미터 좌표를 위경도 좌표로 역투영합니다.
+   * EPSG:3857 절대 미터 좌표를 위경도 좌표(Location)로 역투영합니다.
    */
   unproject: (pos: MeterPos, _useCorrection = false): Location => {
     return {
       lng: projection.xToLng(pos.x),
-      alt: pos.y,
-      lat: projection.yToLat(-pos.z),
+      lat: projection.yToLat(pos.y),
+      alt: pos.z,
     };
   },
 
   /**
    * [haversine-distance]
    * 하버사인 공식을 사용하여 두 위경도 좌표 사이의 대권 거리(Great-circle distance)를 계산합니다.
-   * * @param start 시작 지점 위경도 (Location)
+   * @param start 시작 지점 위경도 (Location)
    * @param end 종료 지점 위경도 (Location)
-   * @returns 미터(m) 단위 거리
+   * @returns 실제 지표면 기준 미터(m) 단위 거리
    */
   getDistance: (start: Location, end: Location): number => {
     const dLat = (end.lat - start.lat) * DEG_TO_RAD;
@@ -154,8 +159,9 @@ export const projection = {
    * [create-bbox]
    * 중심점과 미터 범위를 기반으로 외부 API(Overpass 등)용 BBox 문자열을 생성합니다.
    * 반환 형식: "south,west,north,east"
+   * 주의: 입력된 width/height는 3857 좌표계 상의 미터 단위를 기준으로 계산됩니다.
    */
-  createBBox: (
+  createBbox: (
     centerLng: number,
     centerLat: number,
     widthMeter: number,

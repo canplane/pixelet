@@ -5,8 +5,12 @@ import { CellHighlighter } from '../markers/cell-highlighter';
 import { OsmLayer } from '../layers/osm-layer';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
-import { VoxelBlock } from '../voxels/voxel-block.box';
+import { VoxelBlock } from '../voxels/voxel-block';
 import { VoxelGridPlanar } from '../markers/voxel-grid-planar';
+import {
+  toThreePos,
+  toThreePosWithOffset,
+} from '@/shared/lib/three/three-coords';
 
 /**
  * [world-content]
@@ -38,16 +42,22 @@ export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
         {/* 3. [dynamic-objects] 동적 오브젝트 (사용자 마커, 복셀 블록, 설치물) */}
         <UserMarker />
 
-        {/* [voxel-test-block] 특정 그리드 위치에 배치된 테스트용 복셀입니다. */}
-        <VoxelBlock gridPos={[4, 0, 0]} color={targetTheme.grid.section} />
+        {/* 🎯 [voxel-test-block] 테스트용 복셀 배치 교정
+            기존: [4, 0, 0] (X=4, Y=0, Z=0)
+            수정: [4, 4, 0] 등으로 테스트 시, 이제 두 번째 인자가 '북쪽'으로 4칸 이동함을 의미합니다.
+            만약 VoxelBlock 내부가 [x, y, z] 규격(y=Up)이라면, 
+            여기서 넘겨줄 때 [x, z, -y] 형태로 변환해서 그리도록 내부 로직도 점검이 필요합니다.
+        */}
+        <VoxelBlock gridPos={[4, 4, 0]} color={targetTheme.grid.section} />
 
         {/* 4. [extension-slot] 외부에서 주입된 추가 레이어나 오브젝트 */}
         {children}
 
-        {/* [debug-origin-marker] 🎯 
-            디버그용 기준점 마커: Floating Origin 리셋 시 이 마커가 원점(0,0,0)에 위치해야 합니다. 
+        {/* [debug-origin-marker]
+            Floating Origin 리셋 시 이 마커는 항상 Scene의 (0,0,0)에 위치합니다.
+            지면(Y=0)보다 살짝 위(0.05)에 배치되어 기준점 역할을 합니다.
         */}
-        <mesh position={[0, 0.05, 0]}>
+        <mesh position={toThreePosWithOffset({ x: 0, y: 0 }, 0.05)}>
           <sphereGeometry args={[0.2]} />
           <meshBasicMaterial color="red" />
         </mesh>

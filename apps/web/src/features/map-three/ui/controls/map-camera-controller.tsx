@@ -64,7 +64,7 @@ export function MapCameraController({
     const snappedInitial: MeterPos = VOXEL_CONFIG.snapToVoxel(devicePos);
     setOriginOffset(snappedInitial);
     setCenter(devicePos); // 센터는 부드러운 시작을 위해 소수점 유지
-  }, [devicePos, origin, setOrigin, setCenter, setOriginOffset]);
+  }, [devicePos, origin]);
 
   const lastProcessedCenter = useRef<string>('');
 
@@ -98,11 +98,10 @@ export function MapCameraController({
       controlsRef.current.getPolarAngle() || DEFAULT_POLAR_ANGLE;
     const azimuth: number = controlsRef.current.getAzimuthalAngle();
 
-    const destX: number =
-      targetPos.x + distance * Math.sin(polar) * Math.sin(azimuth);
-    const destY: number = targetPos.y + distance * Math.cos(polar);
-    const destZ: number =
-      targetPos.z + distance * Math.sin(polar) * Math.cos(azimuth);
+    // Three.js 좌표계 기준 (Y-Up)
+    const destX = targetPos.x + distance * Math.sin(polar) * Math.sin(azimuth);
+    const destY = targetPos.y + distance * Math.cos(polar); // Three Y (Altitude)
+    const destZ = targetPos.z + distance * Math.sin(polar) * Math.cos(azimuth);
 
     camera.position.set(destX, destY, destZ);
     controlsRef.current.target.set(targetPos.x, targetPos.y, targetPos.z);
@@ -133,19 +132,20 @@ export function MapCameraController({
 
   /**
    * [coordinate-sync-effect]
-   * 📡 [coordinate-transform-sync]
    * 절대 좌표(center)에서 스냅된 오프셋(originOffset)을 빼서
    * Three.js 공간의 '로컬 좌표'를 산출하고 카메라를 동기화합니다.
+   * 💡 중요: Three.js의 Z는 지리적 Y(남북)에 대응되며 부호가 반전됩니다.
    */
   useEffect((): void => {
     if (!center || !origin || !controlsRef.current) return;
     if ((controlsRef.current as any).active) return;
 
-    const localTarget: MeterPos = {
-      x: center.x - originOffset.x,
-      y: center.y - originOffset.y,
-      z: center.z - originOffset.z,
-    };
+    // useEffect 내부 예시
+    const localTargetVec = new THREE.Vector3(
+      center.x - originOffset.x,
+      center.z - originOffset.z, // 고도
+      -(center.y - originOffset.y), // 남북
+    );
 
     const currentDist: number = camera.position.distanceTo(
       controlsRef.current.target,
@@ -154,10 +154,10 @@ export function MapCameraController({
       currentDist > 1 ? currentDist : DEFAULT_DISTANCE;
 
     if (!isInitialized.current) {
-      syncCamera(localTarget, finalDistance);
+      syncCamera(localTargetVec, finalDistance);
       isInitialized.current = true;
     } else {
-      flyTo(localTarget, finalDistance);
+      flyTo(localTargetVec, finalDistance);
     }
   }, [center, origin, originOffset]);
 
@@ -205,10 +205,12 @@ export function MapCameraController({
       camera.position.length() > RESET_THRESHOLD
     ) {
       const rawOffset: THREE.Vector3 = controlsRef.current.target.clone();
+
+      // Three.js 로컬 좌표를 다시 지리적 좌표 규격으로 역변환하여 스냅
       const snappedStep: MeterPos = VOXEL_CONFIG.snapToVoxel({
         x: rawOffset.x,
-        y: rawOffset.y,
-        z: rawOffset.z,
+        y: -rawOffset.z, // Three -Z -> Geo Y
+        z: rawOffset.y, // Three Y -> Geo Z
       });
 
       const newTotalOffset: MeterPos = {
@@ -219,11 +221,13 @@ export function MapCameraController({
       setOriginOffset(newTotalOffset);
 
       // 세계 전체와 카메라를 정확히 '격자 단위'로 반대 방향 이동
-      const moveVec: THREE.Vector3 = new THREE.Vector3(
+      // 월드 그룹 및 카메라 이동 (Three.js 공간 기준이므로 raw x, y, z 사용)
+      const moveVec = new THREE.Vector3(
         snappedStep.x,
-        snappedStep.y,
-        snappedStep.z,
+        snappedStep.z, // Geo Z -> Three Y
+        -snappedStep.y, // Geo Y -> Three -Z
       );
+
       worldGroupRef.current.position.sub(moveVec);
       camera.position.sub(moveVec);
       controlsRef.current.target.sub(moveVec);
@@ -316,13 +320,12 @@ export function MapCameraController({
 
           /**
            * 📍 [absolute-position-reverse]
-           * 로컬의 상대 좌표(t)에 '스냅된 절대 오프셋'을 더해
-           * 정밀도가 살아있는 진짜 지구 주소를 추출합니다.
+           * Three.js 로컬 축을 다시 지리적 표준(X, Y, Z)으로 변환
            */
           const absolutePos: MeterPos = {
             x: t.x + originOffset.x,
-            y: t.y + originOffset.y,
-            z: t.z + originOffset.z,
+            y: -t.z + originOffset.y, // Three -Z -> Geo Y (North)
+            z: t.y + originOffset.z, // Three Y -> Geo Z (Alt)
           };
 
           lastProcessedCenter.current = JSON.stringify(absolutePos);

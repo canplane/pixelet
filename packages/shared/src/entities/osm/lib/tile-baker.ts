@@ -13,6 +13,8 @@ import {
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels';
 
+const { TILE_SIZE, CELL_SIZE } = OSM_CONFIG;
+
 interface BakeOptions {
   tileSize?: number;
   cellSize?: number;
@@ -24,11 +26,10 @@ interface BakeOptions {
  */
 export function bakeTileGrid(
   infras: MapInfra[],
-  tileOrigin: { x: number; z: number },
+  tileOrigin: { x: number; y: number },
   options: BakeOptions = {},
 ): { grids: TileGrids; resolution: number } {
-  const { tileSize = OSM_CONFIG.TILE_SIZE, cellSize = OSM_CONFIG.CELL_SIZE } =
-    options;
+  const { tileSize = TILE_SIZE, cellSize = CELL_SIZE } = options;
 
   const resolution = Math.floor(tileSize / cellSize);
   const size = resolution * resolution;
@@ -218,14 +219,14 @@ function renderPolygon(
   points: MeterPos[],
   value: number,
   grid: Uint8Array,
-  origin: { x: number; z: number },
+  origin: { x: number; y: number },
   res: number,
   cellSize: number,
 ) {
   if (points.length < 3) return;
   const local = points.map((p) => ({
     x: (p.x - origin.x) / cellSize,
-    y: (p.z - origin.z) / cellSize,
+    y: (p.y - origin.y) / cellSize,
   }));
 
   const minY = Math.max(0, Math.floor(Math.min(...local.map((p) => p.y))));
@@ -259,7 +260,7 @@ function renderLinearFeature(
   infra: MapInfra,
   value: number,
   grid: Uint8Array,
-  origin: { x: number; z: number },
+  origin: { x: number; y: number },
   res: number,
   cellSize: number,
 ) {
@@ -283,14 +284,14 @@ function renderLinearFeature(
     thickness = 2;
   }
 
-  const drawCircle = (cx: number, cz: number, r: number) => {
+  const drawCircle = (cx: number, cy: number, r: number) => {
     for (let bx = -r; bx <= r; bx++) {
-      for (let bz = -r; bz <= r; bz++) {
-        if (bx * bx + bz * bz <= r * r) {
+      for (let by = -r; by <= r; by++) {
+        if (bx * bx + by * by <= r * r) {
           const tx = cx + bx,
-            tz = cz + bz;
-          if (tx >= 0 && tx < res && tz >= 0 && tz < res)
-            grid[tz * res + tx] = value;
+            ty = cy + by;
+          if (tx >= 0 && tx < res && ty >= 0 && ty < res)
+            grid[ty * res + tx] = value;
         }
       }
     }
@@ -298,29 +299,29 @@ function renderLinearFeature(
 
   for (let i = 0; i < points.length - 1; i++) {
     const x1 = (points[i].x - origin.x) / cellSize,
-      z1 = (points[i].z - origin.z) / cellSize;
+      y1 = (points[i].y - origin.y) / cellSize;
     const x2 = (points[i + 1].x - origin.x) / cellSize,
-      z2 = (points[i + 1].z - origin.z) / cellSize;
+      y2 = (points[i + 1].y - origin.y) / cellSize;
 
-    drawCircle(Math.floor(x1 + 0.5), Math.floor(z1 + 0.5), thickness);
+    drawCircle(Math.floor(x1 + 0.5), Math.floor(y1 + 0.5), thickness);
     if (i === points.length - 2)
-      drawCircle(Math.floor(x2 + 0.5), Math.floor(z2 + 0.5), thickness);
+      drawCircle(Math.floor(x2 + 0.5), Math.floor(y2 + 0.5), thickness);
 
     const steps = Math.max(
       1,
-      Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(z2 - z1)) * 2),
+      Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 2),
     );
 
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
       const cx = Math.floor(x1 + (x2 - x1) * t + 0.5),
-        cz = Math.floor(z1 + (z2 - z1) * t + 0.5);
+        cy = Math.floor(y1 + (y2 - y1) * t + 0.5);
       for (let bx = -thickness; bx <= thickness; bx++) {
-        for (let bz = -thickness; bz <= thickness; bz++) {
+        for (let by = -thickness; by <= thickness; by++) {
           const tx = cx + bx,
-            tz = cz + bz;
-          if (tx >= 0 && tx < res && tz >= 0 && tz < res)
-            grid[tz * res + tx] = value;
+            ty = cy + by;
+          if (tx >= 0 && tx < res && ty >= 0 && ty < res)
+            grid[ty * res + tx] = value;
         }
       }
     }

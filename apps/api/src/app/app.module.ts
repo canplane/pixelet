@@ -39,7 +39,7 @@ import * as path from 'path';
         database: configService.get<string>('GEO_DB_NAME'),
         autoLoadEntities: true, // GeoModule에서 등록된 엔티티 자동 스캔
         synchronize: false, // OSM 데이터는 쉘 스크립트로 관리하므로 false 권장
-        logging: true,
+        logging: false,
       }),
       inject: [ConfigService],
     }),

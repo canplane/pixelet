@@ -19,7 +19,7 @@ export const OsmLayer = React.memo(() => {
    * [Lifecycle] 타일 엔진 실행
    * 카메라 중심점(center) 변화를 감지하여 타일을 동적으로 로드/해제합니다.
    */
-  useTileLifecycleManager(center);
+  useTileLifecycleManager();
 
   // Map 객체를 배열로 변환하여 렌더링 준비
   const tileList = useMemo(() => Array.from(worldTiles.values()), [worldTiles]);
@@ -52,8 +52,8 @@ export const OsmLayer = React.memo(() => {
       tile.pois.forEach((poi) => {
         // 🎯 절대 좌표(Absolute) 기준 거리 계산
         const dx = poi.center.x - center.x;
-        const dz = poi.center.z - center.z;
-        const distSq = dx * dx + dz * dz;
+        const dy = poi.center.y - center.y;
+        const distSq = dx * dx + dy * dy;
 
         const maxDist = VISIBLE_RANGE[poi.category] || VISIBLE_RANGE.default;
 

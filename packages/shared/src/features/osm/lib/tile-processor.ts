@@ -1,223 +1,122 @@
 /**
  * @file tile-processor.ts
- * 단일 타일의 생애주기(데이터 로드 -> 가공 -> 그리드 생성)를 책임지는 원자적 함수입니다.
- * 모든 결과 데이터는 서버 및 글로벌 기준과 동일한 '절대 미터 좌표계'를 유지합니다.
+ * 타일 데이터 획득 및 생애주기를 관리하는 메인 오케스트레이터입니다.
+ * 구성 환경(API 모드)에 따라 서버에서 완성된 데이터를 가져오거나,
+ * 클라이언트 워커에서 직접 OSM 데이터를 가공(Baking)합니다.
  */
 
-import { requestOverpass } from '@pixelet/shared/entities/osm/api/overpass.api.client';
-import { GEOMETRY_FILTERS } from '@pixelet/shared/entities/osm/api/query/osm-geometry-queries';
-// ✨ [New Import] 행정 구역 및 단지 정보 쿼리 추가
-import { BOUNDARY_FILTERS } from '@pixelet/shared/entities/osm/api/query/osm-boundary-queries';
-import { POI_QUERIES } from '@pixelet/shared/entities/osm/api/query/osm-poi-queries';
-import { create_query } from '@pixelet/shared/entities/osm/api/overpass-utils';
-import { projection } from '@pixelet/shared/shared/lib/map/projection';
-import type { MapInfra, MapPoi } from '@pixelet/shared/entities/osm/model/osms';
-import { parseOsmData } from '@pixelet/shared/entities/osm/lib/osm-parser';
-import { bakeTileGrid } from './tile-baker';
 import {
-  createEmptyGrids,
   type TileGrids,
   type WorldTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
-import { getTileBbox } from '@pixelet/shared/entities/osm/lib/tile-math';
-import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
-import type { OverpassElement } from '@pixelet/shared/entities/osm/api/overpass-types';
-import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import { processPublicTile } from './tile-public-processor';
+import type { TileWorkerInput } from '@pixelet/shared/entities/osm/model/worker-types';
 
-// [중요] 좌표 변환 함수 import
-// 주의: 이 함수들은 DOM(window, document)에 의존하지 않는 순수 수학 함수여야 합니다.
-
-const { project } = projection;
-
-// --- Types ---
-type StepName = 'Infrastructure' | 'Structure' | 'POI';
-
-interface ProcessingStep {
-  name: StepName;
-  query: string;
-  critical: boolean;
-  targetChannels: (keyof TileGrids)[];
-}
-
-// --- Sub-Functions (Logic Extraction) ---
+const { TILE_SIZE, CELL_SIZE, LOCAL_API_ENDPOINT } = OSM_CONFIG;
 
 /**
- * [Step 1] 실행 계획 수립
- * BBox를 기반으로 3단계(Pass) 쿼리 계획을 생성합니다.
- * 순서: 지형 -> 물 -> 교통 -> 구조물 -> POI
- * * [고도화] Infrastructure 단계에 행정 구역 및 시설 단지(Boundary) 쿼리를 통합하여
- * 학교, 아파트 단지, 공원 구역 정보를 한 번에 확보합니다.
+ * [Helper] LOCAL 모드: 서버에서 이미 베이킹이 완료된 타일 데이터를 획득합니다.
+ * JSON 직렬화 과정에서 소실된 TypedArray(바이너리) 타입을 복원하여 성능을 최적화합니다.
  */
-function createProcessingSteps(bbox: string): ProcessingStep[] {
-  // ✨ [통합 쿼리] 기본 지형뿐만 아니라 단지, 구역 정보를 한 번에 요청하여 API 호출 횟수를 최적화합니다.
-  // [보강] create_query 내부에서 (._; > ;) 전략을 사용하여 모든 노드 좌표를 강제 포함합니다.
-  const queryInfra = create_query(`
-    ${GEOMETRY_FILTERS.BASE(bbox)}
-    ${BOUNDARY_FILTERS.ADMIN(bbox)}
-    ${BOUNDARY_FILTERS.RESIDENTIAL(bbox)}
-    ${BOUNDARY_FILTERS.LEISURE(bbox)}
-    ${GEOMETRY_FILTERS.WATER(bbox)}
-    ${GEOMETRY_FILTERS.TRANSPORT(bbox)}
-  `);
+async function fetchBakedTile(
+  coord: TileWorkerInput['coord'],
+  origin: MeterPos,
+  resolution: number,
+): Promise<WorldTile> {
+  const { tx, ty } = coord;
+  const controller = new AbortController();
 
-  const queryStructure = create_query(GEOMETRY_FILTERS.STRUCTURE(bbox));
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 10초 타임아웃 설정
 
-  const poiFilter = POI_QUERIES.GET_RAW_FILTER
-    ? POI_QUERIES.GET_RAW_FILTER(bbox)
-    : '';
-  const queryPoi = create_query(poiFilter);
-
-  return [
-    {
-      name: 'Infrastructure',
-      query: queryInfra,
-      critical: true, // 지형 실패 시 타일 생성 불가
-      targetChannels: ['base', 'water', 'transport'],
-    },
-    {
-      name: 'Structure',
-      query: queryStructure,
-      critical: false,
-      targetChannels: ['structure'],
-    },
-    {
-      name: 'POI',
-      query: queryPoi,
-      critical: false,
-      targetChannels: [], // POI는 복셀 그리드에 영향 없음
-    },
-  ];
-}
-
-/**
- * [Step 2] 데이터 가공 (Worker)
- * 수신된 Raw 데이터를 파싱하고, 필요한 경우 부분 베이킹(Partial Baking)을 수행하여
- * 메인 그리드(targetGrids)에 병합합니다.
- */
-function processLayerData(
-  elements: OverpassElement[],
-  step: ProcessingStep,
-  context: {
-    origin: MeterPos;
-    tileSize: number;
-    cellSize: number;
-    project: (loc: Location) => MeterPos | null;
-  },
-  targetGrids: TileGrids, // Mutable Update
-): { newInfras: MapInfra[]; newPois: MapPoi[] } {
-  /**
-   * (A) 파싱: 'osm-parser' 실행
-   * [보강] 'elements'에는 (._; > ;) 쿼리 결과로 포함된 다량의 순수 Node 좌표 데이터가 섞여 있습니다.
-   * parseOsmData 내부의 nodeCache가 이 elements를 전체 순회하여 Way의 좌표를 100% 복구합니다.
-   */
-  const { infras, pois } = parseOsmData(elements, context.project);
-
-  // (B) 부분 베이킹 & 채널 병합
-  if (infras.length > 0 && step.targetChannels.length > 0) {
-    const { grids: partialGrids } = bakeTileGrid(infras, context.origin, {
-      tileSize: context.tileSize,
-      cellSize: context.cellSize,
+  try {
+    const response = await fetch(LOCAL_API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tx, ty }),
+      signal: controller.signal,
     });
 
-    // 고속 메모리 복사 (Channel Merging)
-    step.targetChannels.forEach((channel) => {
-      // partialGrids가 생성되지 않은 채널이 있을 수 있으므로 방어 로직 추가
-      if (partialGrids[channel]) {
-        targetGrids[channel].set(partialGrids[channel]);
-      }
-    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(
+        `Local Tile Fetch Failed: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const data = (await response.json()) as WorldTile;
+
+    /**
+     * [성능 최적화: 바이너리 복원]
+     * JSON 통신 시 Uint8Array는 일반 number[]로 변환됩니다.
+     * 이를 다시 Uint8Array로 래핑해야 워커 전송 시 Zero-copy(Transferable)가 작동합니다.
+     */
+    const restoredGrids: Partial<TileGrids> = {};
+    if (data && data.grids) {
+      Object.entries(data.grids).forEach(([key, val]) => {
+        // JSON으로 넘어온 값은 number[] 타입이므로 Uint8Array로 복원
+        restoredGrids[key as keyof TileGrids] = new Uint8Array(
+          val as unknown as number[],
+        );
+      });
+    }
+
+    return {
+      ...data,
+      grids: restoredGrids as TileGrids, // 최종 캐스팅
+      key: `${tx}:${ty}`,
+      origin,
+      resolution,
+    };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(
+        `[Timeout] Local server response exceeded limit for ${tx}:${ty}`,
+      );
+    }
+    console.error(`[TileProcessor] Local fetch error:`, error);
+    throw error; // 에러를 상위 워커 핸들러로 전파
   }
-
-  return { newInfras: infras, newPois: pois };
 }
 
-// --- Main Function ---
-
 /**
- * [tile-processor]
- * 단일 타일의 생애주기(데이터 로드 -> 가공 -> 그리드 생성)를 책임지는 원자적 함수입니다.
+ * [Main Entry] fetchAndProcessTile
+ * 워커로부터 구조화된 데이터를 주입받아 타일 생성 전략을 실행합니다.
+ * * @param coord - 타일 인덱스 정보 { tx, ty }
+ * @param options - 실행 옵션 { apiMode, cellSize, ... }
+ * @param onProgress - 점진적 업데이트 콜백
  */
 export async function fetchAndProcessTile(
-  tx: number,
-  tz: number,
+  coord: TileWorkerInput['coord'],
+  options: TileWorkerInput['options'],
   onProgress?: (partialTile: WorldTile) => void,
 ): Promise<WorldTile> {
-  const { TILE_SIZE, CELL_SIZE, API_MODE } = OSM_CONFIG;
-  const key = `${tx}:${tz}`;
+  const { tx, ty } = coord;
+  const { apiMode } = options;
+
   const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
 
-  // 1. Origin 설정 (절대 좌표계 기준점)
+  // 1. 타일별 절대 미터 좌표계 기준점(Origin) 설정
   const origin: MeterPos = {
     x: tx * TILE_SIZE,
-    y: 0,
-    z: tz * TILE_SIZE,
+    y: ty * TILE_SIZE,
+    z: 0,
   };
 
   /**
-   * 2. 타일 경계(BBox) 계산
+   * [Case A] LOCAL 모드
+   * 서버(NestJS)에서 모든 가공이 끝난 WorldTile 객체를 즉시 가져옵니다.
    */
-  const bbox = getTileBbox(tx, tz);
-
-  // 3. 실행 계획 수립
-  const steps = createProcessingSteps(bbox);
-
-  // 4. 상태 저장소 초기화
-  const currentGrids = createEmptyGrids(resolution);
-  const accumulatedInfras: MapInfra[] = [];
-  const accumulatedPois: MapPoi[] = [];
-
-  // 5. 순차 실행 루프 (Sequential Execution)
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i];
-    if (!step.query || step.query.trim() === '') continue;
-
-    try {
-      const response = await requestOverpass(step.query);
-
-      // [보강] response.elements에는 쿼리 필터 결과물(Way/Relation)과
-      // 재귀적으로 추출된 좌표 데이터(Node)가 모두 포함되어 전달되어야 합니다.
-      if (response?.elements && response.elements.length > 0) {
-        const result = processLayerData(
-          response.elements,
-          step,
-          { origin, tileSize: TILE_SIZE, cellSize: CELL_SIZE, project },
-          currentGrids,
-        );
-
-        accumulatedInfras.push(...result.newInfras);
-        accumulatedPois.push(...result.newPois);
-
-        if (onProgress) {
-          onProgress({
-            key,
-            origin,
-            grids: currentGrids,
-            infras: accumulatedInfras,
-            pois: accumulatedPois,
-            resolution,
-          });
-        }
-      }
-    } catch (error) {
-      console.warn(
-        `[TileProcessor] ${step.name} fetch failed in ${key}.`,
-        error,
-      );
-      if (step.critical) throw error;
-    }
-
-    if (API_MODE === 'public' && i < steps.length - 1) {
-      await randomDelay(500, 1500);
-    }
+  if (apiMode === 'local') {
+    return await fetchBakedTile(coord, origin, resolution);
   }
 
-  return {
-    key,
-    origin,
-    grids: currentGrids,
-    infras: accumulatedInfras,
-    pois: accumulatedPois,
-    resolution,
-  };
+  /**
+   * [Case B] PUBLIC 모드
+   * 클라이언트가 직접 Overpass API를 호출하고 단계적으로 그리드를 생성(Baking)합니다.
+   */
+  return await processPublicTile(coord, origin, resolution, onProgress);
 }

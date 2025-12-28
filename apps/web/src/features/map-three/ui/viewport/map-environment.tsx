@@ -22,7 +22,13 @@ export function MapEnvironment() {
   const fogColor = useRef(new THREE.Color(targetTheme.fog));
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const sunRef = useRef<THREE.DirectionalLight>(null);
-  const sunPosVec = useRef(new THREE.Vector3(...targetTheme.sky.sunPosition));
+
+  // 🎯 [Axis-Mapping] 테마의 [x, y, z] 데이터를 [x, z, -y] 형태로 변환하여 추적
+  // 테마 데이터 구조가 { x: East, y: North, z: Altitude }라고 가정합니다.
+  const getMappedPos = (pos: [number, number, number]) =>
+    new THREE.Vector3(pos[0], pos[2], -pos[1]);
+
+  const sunPosVec = useRef(getMappedPos(targetTheme.sky.sunPosition));
 
   /**
    * [update-environment-lerp]
@@ -30,6 +36,7 @@ export function MapEnvironment() {
    */
   useFrame((_, delta) => {
     const lerpFactor = delta * 1.5;
+    const targetSunPos = getMappedPos(targetTheme.sky.sunPosition);
 
     // --- 1. 안개(Fog) 보간 ---
     fogColor.current.lerp(new THREE.Color(targetTheme.fog), lerpFactor);
@@ -39,8 +46,8 @@ export function MapEnvironment() {
       const { uniforms } = skyRef.current.material;
       const targetPos = new THREE.Vector3(...targetTheme.sky.sunPosition);
 
-      // 태양 위치 및 대기 산란 계수 보간
-      sunPosVec.current.lerp(targetPos, lerpFactor);
+      // 🚀 [수정]: targetTheme.sky.sunPosition 대신 targetSunPos를 사용하여 정합성 유지
+      sunPosVec.current.lerp(targetSunPos, lerpFactor);
       uniforms.sunPosition.value.copy(sunPosVec.current);
 
       uniforms.rayleigh.value = THREE.MathUtils.lerp(
@@ -71,6 +78,7 @@ export function MapEnvironment() {
 
     // --- 4. 직사광(Directional Light) 보간 ---
     if (sunRef.current) {
+      // 🎯 이제 uniforms와 동일한 sunPosVec을 사용하므로 광원과 해의 위치가 일치합니다.
       sunRef.current.position.copy(sunPosVec.current);
       sunRef.current.color.lerp(
         new THREE.Color(targetTheme.lighting.directional.color),
@@ -90,7 +98,8 @@ export function MapEnvironment() {
       <Sky
         ref={skyRef}
         distance={450000}
-        sunPosition={targetTheme.sky.sunPosition}
+        // 초기 포지션도 스와핑된 벡터 사용
+        sunPosition={sunPosVec.current as any}
         rayleigh={targetTheme.sky.rayleigh}
         mieCoefficient={targetTheme.sky.mieCoefficient}
       />
@@ -106,6 +115,7 @@ export function MapEnvironment() {
         ref={sunRef}
         castShadow
         shadow-mapSize={[2048, 2048]}
+        // 그림자 범위가 광범위하므로 Floating Origin과 연동되어야 함
         shadow-camera-left={-2500}
         shadow-camera-right={2500}
         shadow-camera-top={2500}

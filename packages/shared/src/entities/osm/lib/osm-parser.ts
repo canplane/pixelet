@@ -5,8 +5,11 @@
  */
 
 import type { OverpassElement } from '@pixelet/shared/entities/osm/api/overpass-types';
-import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import type { MapInfra, MapPoi } from '../model/osms';
+import { projection } from '@pixelet/shared/shared/lib/map/projection';
+
+const { project } = projection;
 
 /**
  * 레이어 렌더링 우선순위 (Baking 순서 결정)
@@ -33,10 +36,7 @@ interface ParseResult {
  * - 타일 간의 매끄러운 연결(Seamless joining)을 위해 인프라의 기하 구조를 원본 그대로 유지하며,
  * 실제 가시 영역 제한은 이후 Baking(Rasterization) 또는 렌더링 단계에서 처리합니다.
  */
-export const parseOsmData = (
-  elements: OverpassElement[],
-  project: (loc: Location) => MeterPos | null,
-): ParseResult => {
+export const parseOsmData = (elements: OverpassElement[]): ParseResult => {
   const result: ParseResult = { infras: [], pois: [] };
   if (!elements || elements.length === 0) return result;
 
@@ -187,40 +187,41 @@ export const parseOsmData = (
       // [Center 계산] 바운딩 박스 기반 중심점 도출
       let minX = Infinity,
         maxX = -Infinity,
-        minZ = Infinity,
-        maxZ = -Infinity;
+        minY = Infinity,
+        maxY = -Infinity;
       outerPoints.forEach((p) => {
         if (p.x < minX) minX = p.x;
         if (p.x > maxX) maxX = p.x;
-        if (p.z < minZ) minZ = p.z;
-        if (p.z > maxZ) maxZ = p.z;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
       });
 
       const center: MeterPos = {
         x: (minX + maxX) * 0.5,
-        y: 0,
-        z: (minZ + maxZ) * 0.5,
+        y: (minY + maxY) * 0.5, // 지리적 북향 중심
+        z: 0, // 고도는 0으로 초기화
       };
 
       // --- [Y-Offset Stacking & Z-Fighting Defense] ---
       const layerLevel = tags.layer ? parseFloat(tags.layer) : 0;
 
       const pointsWithOffset = outerPoints.map((pt) => {
-        let y = 0;
+        let offsetZ = 0;
         if (isRoad) {
-          y = 0.05 + layerLevel * 0.2;
-          if (tags.bridge === 'yes') y += 1.0;
-          if (tags.tunnel === 'yes') y -= 1.0;
+          offsetZ = 0.05 + layerLevel * 0.2;
+          if (tags.bridge === 'yes') offsetZ += 1.0;
+          if (tags.tunnel === 'yes') offsetZ -= 1.0;
         } else if (isWater) {
-          y = -0.15 + layerLevel * 0.1;
+          offsetZ = -0.15 + layerLevel * 0.1;
         } else if (isLanduse) {
-          y = 0.02;
-          if (isInstitutional) y = 0.025;
-          if (isParking) y = 0.03;
-          if (isSports) y = 0.035;
-          if (tags.landuse === 'forest' || tags.natural === 'wood') y = 0.028;
+          offsetZ = 0.02;
+          if (isInstitutional) offsetZ = 0.025;
+          if (isParking) offsetZ = 0.03;
+          if (isSports) offsetZ = 0.035;
+          if (tags.landuse === 'forest' || tags.natural === 'wood')
+            offsetZ = 0.028;
         }
-        return { ...pt, y };
+        return { ...pt, z: offsetZ };
       });
 
       // [건물 높이 계산]
@@ -257,7 +258,7 @@ export const parseOsmData = (
         (outerPoints.length > 2 &&
           Math.abs(outerPoints[0].x - outerPoints[outerPoints.length - 1].x) <
             0.1 &&
-          Math.abs(outerPoints[0].z - outerPoints[outerPoints.length - 1].z) <
+          Math.abs(outerPoints[0].y - outerPoints[outerPoints.length - 1].y) <
             0.1);
 
       const infraType = isBuilding
