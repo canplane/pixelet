@@ -3,6 +3,8 @@ import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import type { OverpassResponse } from './overpass-types';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils'; // 기존에 사용하던 유틸리티 활용
 
+const { PUBLIC_API_ENDPOINTS } = OSM_CONFIG;
+
 /**
  * Overpass API 요청을 수행합니다.
  * 설정된 모드('local' | 'public')에 따라 최적화된 전략을 사용합니다.
@@ -13,18 +15,8 @@ import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils'; // 기존�
 export async function requestOverpass(
   query: string,
 ): Promise<OverpassResponse> {
-  // [Mode 1] 로컬 서버 모드 (이제 우리 NestJS API를 호출합니다)
-  if (OSM_CONFIG.API_MODE === 'local') {
-    // OSM_CONFIG.LOCAL_ENDPOINT가 우리 NestJS 서버 주소(예: http://localhost:3000/api/geo/query)여야 합니다.
-    return fetchFromUrl(
-      OSM_CONFIG.LOCAL_API_ENDPOINT,
-      query,
-      'Pixelet NestJS API',
-    );
-  }
-
   // [Mode 2] 공용 서버 모드 (Legacy: Load Balancing & Fallback)
-  const shuffledServers = [...OSM_CONFIG.ENDPOINTS].sort(
+  const shuffledServers = [...PUBLIC_API_ENDPOINTS].sort(
     () => Math.random() - 0.5,
   );
   let lastError: Error | null = null;
@@ -126,57 +118,4 @@ export async function requestOverpass(
   throw new Error(
     `[Overpass API] 모든 서버 응답 실패 또는 데이터 누락: ${lastError?.message}`,
   );
-}
-
-/**
- * 실제 fetch를 수행하는 내부 헬퍼 함수 (엔드포인트 교체 대응)
- */
-async function fetchFromUrl(
-  url: string,
-  query: string,
-  label: string,
-): Promise<OverpassResponse> {
-  const startTime = performance.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    OSM_CONFIG.REQUEST_TIMEOUT || 30000,
-  );
-
-  try {
-    // 우리 NestJS 서버는 POST /geo/query로 Query 원문을 받거나,
-    // 혹은 기존처럼 폼 데이터 형식을 유지하여 호환성을 높입니다.
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as OverpassResponse;
-    const duration = ((performance.now() - startTime) / 1000).toFixed(3);
-
-    // [중요] 우리 서버가 뱉는 remark 필드도 에러 핸들링 로직에 태웁니다.
-    if (data.osm3s?.remark) {
-      throw new Error(`Server Remark: ${data.osm3s.remark}`);
-    }
-
-    if (!data || !data.elements) {
-      throw new Error('Invalid Response Data');
-    }
-
-    console.debug(
-      `✅ [${label}] Fetched ${data.elements.length} items in ${duration}s`,
-    );
-    return data;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
-  }
 }

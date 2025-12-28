@@ -4,6 +4,7 @@ import { useMapNavigation } from '../../model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
+import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
 
 /**
  * [voxel-grid-planar]
@@ -54,15 +55,17 @@ export const VoxelGridPlanar = () => {
         }
 
         void main() {
-          float dist = length(vWorldPosition.xz);
-          float softness = 0.04; 
+          // 🎯 [Coordinate-Fix]: 지표면 평면은 X와 Z입니다. (Y는 고도)
+          float flatDist = length(vWorldPosition.xz); 
+          float softness = 0.04;
           
+          // 🎯 World X축 격자와 World Z축(지리적 북향) 격자를 각각 생성
           float lineX = getRefinedGrid(vWorldPosition.x, uSize, softness);
-          float lineZ = getRefinedGrid(vWorldPosition.z, uSize, softness);
+          float lineZ = getRefinedGrid(vWorldPosition.z, uSize, softness); 
           float lineAlpha = max(lineX, lineZ);
           
-          // [distance-fade] 카메라 중심에서 멀어질수록 자연스럽게 소멸됩니다.
-          float fade = pow(clamp(1.0 - dist / uFadeEnd, 0.0, 1.0), 3.0);
+          // 🎯 평면 거리(flatDist)를 기준으로 페이드 처리
+          float fade = pow(clamp(1.0 - flatDist / uFadeEnd, 0.0, 1.0), 3.0);
           // [opacity-control] 0.10 농도로 연하고 세련된 느낌을 유지합니다.
           float finalAlpha = lineAlpha * fade * 0.10; 
           
@@ -77,8 +80,13 @@ export const VoxelGridPlanar = () => {
     <mesh
       // [layer-order] 지형(0)보다 나중에 그려지도록 설정합니다.
       renderOrder={1}
-      rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION}
-      position={[0, THREE_CONFIG.LAYOUT.OFFSET.GRID, 0]}
+      // 🎯 THREE_CONFIG에 정의된 [ -Math.PI / 2, 0, 0 ]를 사용하여 바닥에 눕힘
+      rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION as unknown as THREE.Euler}
+      // 🎯 지면(0)보다 아주 미세하게 위(0.01)로 띄워 Z-Fighting 방지
+      position={toThreePosWithOffset(
+        { x: 0, y: 0 },
+        THREE_CONFIG.LAYOUT.OFFSET.GRID,
+      )}
     >
       <planeGeometry args={[FADE_END * 2, FADE_END * 2]} />
       <primitive object={material} attach="material" />

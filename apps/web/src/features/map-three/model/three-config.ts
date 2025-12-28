@@ -21,13 +21,20 @@ export const THREE_CONFIG = {
    * 월드의 물리적인 배치와 레이어 순서를 정의합니다.
    */
   LAYOUT: {
-    // [floor-rotation] 바닥 평면을 구성하기 위한 공통 회전값
+    /**
+     * [floor-rotation]
+     * Three.js의 기본 Plane은 XY 평면(수직)입니다.
+     * 이를 [ -Math.PI / 2, 0, 0 ] 회전시키면:
+     * 1. 지리적 X(동서) -> Three.js World X
+     * 2. 지리적 Y(남북) -> Three.js World -Z (북쪽) 🎯
+     * 3. 지리적 Z(고도) -> Three.js World Y (위) 🎯
+     */
     FLOOR_ROTATION: [-Math.PI / 2, 0, 0] as [number, number, number],
     // [layer-offsets] 레이어 간 간섭(Z-Fighting)을 방지하기 위한 미세 높이값들
     OFFSET: {
       TERRAIN: 0,
       GRID: 0, // polygonOffset으로 처리하므로 0
-      HIGHLIGHTER: 0.001,
+      HIGHLIGHTER: 0.01, // 🚀 [Z-Fighting] 0.001보다는 0.01이 모바일 환경에서 더 안정적입니다.
     },
   },
 
@@ -40,6 +47,12 @@ export const THREE_CONFIG = {
     NEAR: 0.1,
 
     DEFAULT_DISTANCE: 256, // [zoom-start] 시작 시 적절한 줌 레벨
+    /**
+     * [polar-angle]
+     * Three.js에서 0도는 수직 위(+Y)를 봅니다.
+     * 90도는 수평(지평선)을 봅니다.
+     * DEFAULT_TILT가 30도라면, 카메라는 지면을 향해 60도 각도로 내려다봅니다.
+     */
     DEFAULT_POLAR_ANGLE: ((90 - DEFAULT_TILT) * Math.PI) / 180,
 
     // 🚀 [binary-distance-limit] 2의 배수 기반 거리 제한

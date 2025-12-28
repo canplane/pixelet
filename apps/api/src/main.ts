@@ -10,7 +10,11 @@ async function bootstrap() {
   // Fastify 어댑터 생성 (기존 Fastify 설정과 호환)
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true }), // 개발 시 로그 확인 용이
+    new FastifyAdapter({ logger: false }), // 개발 시 로그 확인 용이
+    {
+      // 'error', 'warn'만 남기면 부팅 시 출력되는 파란색 LOG 메시지들이 사라집니다.
+      logger: ['error', 'warn'],
+    },
   );
 
   // ConfigService를 통해 .env 설정 로드

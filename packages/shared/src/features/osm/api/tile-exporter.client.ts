@@ -54,23 +54,23 @@ const getColorMap = (): Record<number, [number, number, number]> => ({
  */
 export function downloadGridAsBinary(
   grid: Uint8Array,
-  origin: { x: number; z: number },
+  origin: { x: number; y: number },
   resolution: number,
   filename?: string,
 ) {
-  const HEADER_SIZE = 12; // resolution(4) + originX(4) + originZ(4)
+  const HEADER_SIZE = 12; // resolution(4) + originX(4) + originY(4)
   const combinedBuffer = new Uint8Array(HEADER_SIZE + grid.length);
   const view = new DataView(combinedBuffer.buffer);
 
   view.setInt32(0, resolution, true);
   view.setInt32(4, Math.floor(origin.x), true);
-  view.setInt32(8, Math.floor(origin.z), true);
+  view.setInt32(8, Math.floor(origin.y), true);
 
   combinedBuffer.set(grid, HEADER_SIZE);
 
   const blob = new Blob([combinedBuffer], { type: 'application/octet-stream' });
   const finalName =
-    filename || `tile_${Math.floor(origin.x)}_${Math.floor(origin.z)}.bin`;
+    filename || `tile_${Math.floor(origin.x)}_${Math.floor(origin.y)}.bin`;
   saveFile(blob, finalName);
 }
 
@@ -82,7 +82,7 @@ export function downloadGridAsBinary(
 export function downloadGridAsImage(
   grid: Uint8Array,
   resolution: number,
-  origin: { x: number; z: number },
+  origin: { x: number; y: number },
   filename?: string,
 ) {
   if (typeof document === 'undefined') return;
@@ -96,23 +96,29 @@ export function downloadGridAsImage(
   const colorMap = getColorMap();
   const imageData = ctx.createImageData(resolution, resolution);
 
-  for (let i = 0; i < grid.length; i++) {
-    const voxelValue = grid[i];
-    // 매핑되지 않은 값은 기본 땅 색상으로 처리 (Safety fallback)
-    const rgb = colorMap[voxelValue] || colorMap[VOXEL_TYPES.BASE_LAND];
+  for (let y = 0; y < resolution; y++) {
+    for (let x = 0; x < resolution; x++) {
+      // 💡 Canvas는 위에서 아래로(0 -> res), 데이터는 아래에서 위로 쌓여있음
+      // 따라서 데이터를 읽을 때 Y축을 뒤집어서 읽어야 실제 지도 방향과 일치함
+      const dataIdx = (resolution - 1 - y) * resolution + x;
+      const voxelValue = grid[dataIdx];
 
-    const idx = i * 4;
-    imageData.data[idx] = rgb[0];
-    imageData.data[idx + 1] = rgb[1];
-    imageData.data[idx + 2] = rgb[2];
-    imageData.data[idx + 3] = 255;
+      // 매핑되지 않은 값은 기본 땅 색상으로 처리 (Safety fallback)
+      const rgb = colorMap[voxelValue] || colorMap[VOXEL_TYPES.BASE_LAND];
+      const canvasIdx = (y * resolution + x) * 4;
+
+      imageData.data[canvasIdx] = rgb[0];
+      imageData.data[canvasIdx + 1] = rgb[1];
+      imageData.data[canvasIdx + 2] = rgb[2];
+      imageData.data[canvasIdx + 3] = 255;
+    }
   }
 
   ctx.putImageData(imageData, 0, 0);
 
   const finalName =
     filename ||
-    `debug_tile_${Math.floor(origin.x)}_${Math.floor(origin.z)}.png`;
+    `debug_tile_${Math.floor(origin.x)}_${Math.floor(origin.y)}.png`;
 
   canvas.toBlob((blob) => {
     if (blob) saveFile(blob, finalName);
@@ -130,7 +136,7 @@ export function downloadGridAsImage(
 export function downloadMergedGridAsImage(
   grids: TileGrids,
   resolution: number,
-  origin: { x: number; z: number },
+  origin: { x: number; y: number },
   filename?: string,
 ) {
   if (typeof document === 'undefined') return;
@@ -145,35 +151,41 @@ export function downloadMergedGridAsImage(
   const imageData = ctx.createImageData(resolution, resolution);
   const length = resolution * resolution;
 
-  for (let i = 0; i < length; i++) {
-    // 1. 각 레이어의 개별 복셀 값 추출
-    const tBase = grids.base[i];
-    const tWater = grids.water[i];
-    const tTrans = grids.transport[i];
-    const tStruct = grids.structure[i];
+  for (let y = 0; y < resolution; y++) {
+    for (let x = 0; x < resolution; x++) {
+      // 합성 함수에서도 동일한 인덱스 반전 적용
+      const i = (resolution - 1 - y) * resolution + x;
 
-    // 2. 우선순위 합성 (Shader Logic과 1:1 대응)
-    // 하위 레이어에서 상위 레이어로 덮어쓰기 수행
-    let finalType = tBase;
+      // 1. 각 레이어의 개별 복셀 값 추출
+      const tBase = grids.base[i];
+      const tWater = grids.water[i];
+      const tTrans = grids.transport[i];
+      const tStruct = grids.structure[i];
 
-    if (tWater !== VOXEL_TYPES.EMPTY) finalType = tWater;
-    if (tTrans !== VOXEL_TYPES.EMPTY) finalType = tTrans;
-    if (tStruct !== VOXEL_TYPES.EMPTY) finalType = tStruct;
+      // 2. 우선순위 합성 (Shader Logic과 1:1 대응)
+      // 하위 레이어에서 상위 레이어로 덮어쓰기 수행
+      let finalType = tBase;
 
-    // 3. 합성된 결과에 따른 색상 매핑
-    const rgb = colorMap[finalType] || colorMap[VOXEL_TYPES.BASE_LAND];
-    const idx = i * 4;
-    imageData.data[idx] = rgb[0];
-    imageData.data[idx + 1] = rgb[1];
-    imageData.data[idx + 2] = rgb[2];
-    imageData.data[idx + 3] = 255;
+      if (tWater !== VOXEL_TYPES.EMPTY) finalType = tWater;
+      if (tTrans !== VOXEL_TYPES.EMPTY) finalType = tTrans;
+      if (tStruct !== VOXEL_TYPES.EMPTY) finalType = tStruct;
+
+      // 3. 합성된 결과에 따른 색상 매핑
+      const rgb = colorMap[finalType] || colorMap[VOXEL_TYPES.BASE_LAND];
+      const canvasIdx = (y * resolution + x) * 4;
+
+      imageData.data[canvasIdx] = rgb[0];
+      imageData.data[canvasIdx + 1] = rgb[1];
+      imageData.data[canvasIdx + 2] = rgb[2];
+      imageData.data[canvasIdx + 3] = 255;
+    }
   }
 
   ctx.putImageData(imageData, 0, 0);
 
   const finalName =
     filename ||
-    `merged_tile_${Math.floor(origin.x)}_${Math.floor(origin.z)}.png`;
+    `merged_tile_${Math.floor(origin.x)}_${Math.floor(origin.y)}.png`;
 
   canvas.toBlob((blob) => {
     if (blob) saveFile(blob, finalName);

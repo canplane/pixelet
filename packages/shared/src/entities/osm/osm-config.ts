@@ -30,14 +30,14 @@ export const OSM_CONFIG = {
    * --- 로컬 서버 엔드포인트 ---
    * Docker 컨테이너가 실행 중인 주소입니다.
    */
-  LOCAL_API_ENDPOINT: '/api/geo/query',
+  LOCAL_API_ENDPOINT: '/api/geo/tile',
 
   /**
    * --- 엔드포인트 (Load Balancing Pool) ---
    * 한국에서의 접속 속도 및 서버 안정성을 고려하여 목록을 10개로 확장했습니다.
    * * interpreter 주소가 /api/ 인지 /cgi/ 인지 주의해야 합니다.
    */
-  ENDPOINTS: [
+  PUBLIC_API_ENDPOINTS: [
     // 1. 아시아/러시아권 (한국에서 비교적 빠름)
     'https://overpass.nchc.org.tw/api/interpreter', // 대만 (1순위 권장)
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter', // 러시아 (Mail.ru)

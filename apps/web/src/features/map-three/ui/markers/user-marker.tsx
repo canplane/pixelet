@@ -1,12 +1,15 @@
 import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../../model/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { useRelativePosition } from '../../model/use-relative-position';
+import {
+  toThreePos,
+  toThreePosWithOffset,
+} from '@/shared/lib/three/three-coords';
 
 /**
  * [create-rounded-rect-geometry]
@@ -59,16 +62,18 @@ export function UserMarker(): ReactElement | null {
   const themeAccent: string = targetTheme.grid.section;
   const gemColor: string = isNight ? '#00f2ff' : '#ff1493';
 
-  // [relative-position-sync]
-  // devicePos가 없을 경우 기본값({x:0, y:0, z:0})을 활용하여 훅 실행 순서를 유지합니다.
-  const localPos: MeterPos = useRelativePosition(
-    useMemo(
-      () => (devicePos ? { ...devicePos, y: 0 } : { x: 0, y: 0, z: 0 }),
-      [devicePos],
-    ),
+  // 🎯 [Coordinate-Fix] 평면 위치 계산을 위해 고도(z)를 0으로 고정
+  const basePos = useMemo(
+    () =>
+      devicePos
+        ? { x: devicePos.x, y: devicePos.y, z: 0 }
+        : { x: 0, y: 0, z: 0 },
+    [devicePos],
   );
 
-  const snappedLocalPos: MeterPos = useRelativePosition(
+  const localPos = useRelativePosition(basePos);
+
+  const snappedLocalPos = useRelativePosition(
     useMemo(
       () =>
         devicePos ? VOXEL_CONFIG.snapToVoxel(devicePos) : { x: 0, y: 0, z: 0 },
@@ -76,10 +81,11 @@ export function UserMarker(): ReactElement | null {
     ),
   );
 
-  const gemOffset = useMemo((): { x: number; z: number } => {
+  // 🎯 [Offset-Fix] 동서(x)와 남북(y) 오프셋을 정확히 분리
+  const gemOffset = useMemo(() => {
     return {
       x: localPos.x - VOXEL_CONFIG.toCenter(snappedLocalPos.x),
-      z: localPos.z - VOXEL_CONFIG.toCenter(snappedLocalPos.z),
+      y: localPos.y - VOXEL_CONFIG.toCenter(snappedLocalPos.y), // 지리적 Y (남북)
     };
   }, [localPos, snappedLocalPos]);
 
@@ -106,17 +112,18 @@ export function UserMarker(): ReactElement | null {
     }
   });
 
-  const gridOffsets = useMemo((): { x: number; z: number }[] => {
+  const gridOffsets = useMemo((): { x: number; y: number }[] => {
     if (!devicePos) return [];
     const activeAccuracy: number = Math.min(accuracy || 10, 50);
-    const offsets: { x: number; z: number }[] = [];
+    const offsets: { x: number; y: number }[] = [];
     const step: number = VOXEL_CONFIG.SIZE;
     const range: number = Math.ceil(activeAccuracy / step);
 
     for (let x = -range; x <= range; x++) {
-      for (let z = -range; z <= range; z++) {
-        if ((x * step) ** 2 + (z * step) ** 2 <= activeAccuracy ** 2) {
-          offsets.push({ x: x * step, z: z * step });
+      for (let y = -range; y <= range; y++) {
+        // 평면 원형 범위 체크 (x:동서, y:남북)
+        if ((x * step) ** 2 + (y * step) ** 2 <= activeAccuracy ** 2) {
+          offsets.push({ x: x * step, y: y * step });
         }
       }
     }
@@ -134,8 +141,15 @@ export function UserMarker(): ReactElement | null {
     }
 
     // 활성 격자 배치
-    gridOffsets.forEach((offset: { x: number; z: number }, i: number): void => {
-      tempObject.position.set(offset.x, 0.125, offset.z);
+    gridOffsets.forEach((offset, i) => {
+      /**
+       * 🎯 [Swizzling-Fix]
+       * InstancedMesh 내부 좌표 배치:
+       * Three X = offset.x (동서)
+       * Three Y = 0.05 (지면 높이)
+       * Three Z = -offset.y (남북 -> 북향 매핑)
+       */
+      tempObject.position.set(offset.x, 0.05, -offset.y);
       tempObject.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.matrix);
     });
@@ -152,7 +166,7 @@ export function UserMarker(): ReactElement | null {
       position={[
         VOXEL_CONFIG.toCenter(snappedLocalPos.x),
         VOXEL_CONFIG.SYSTEM_OFFSET,
-        VOXEL_CONFIG.toCenter(snappedLocalPos.z),
+        -VOXEL_CONFIG.toCenter(snappedLocalPos.y), // y -> -z (북향 매핑)
       ]}
     >
       <instancedMesh
@@ -171,7 +185,8 @@ export function UserMarker(): ReactElement | null {
       {/* [floating-gem] 사용자 위치를 표시하는 보석 오브젝트 */}
       <mesh
         ref={gemRef}
-        position={[gemOffset.x, 2, gemOffset.z]}
+        // 🎯 [Swizzling-Fix] 오프셋 적용 시에도 y(남북)를 Three.js의 -z로 매핑
+        position={toThreePosWithOffset(gemOffset, 2)}
         renderOrder={20}
       >
         <octahedronGeometry args={[0.6, 0]} />
@@ -187,7 +202,7 @@ export function UserMarker(): ReactElement | null {
 
       {/* [location-glow] 전역 디자인 가이드에 따른 야간 발광 효과 */}
       <pointLight
-        position={[gemOffset.x, 2, gemOffset.z]}
+        position={toThreePos(gemOffset)}
         distance={16}
         intensity={isNight ? 10 : 3}
         color={gemColor}

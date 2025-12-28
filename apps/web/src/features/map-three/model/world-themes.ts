@@ -10,7 +10,7 @@ export type MapLayoutTheme = {
   sky: {
     rayleigh: number;
     mieCoefficient: number;
-    sunPosition: [number, number, number];
+    sunPosition: [number, number, number]; // [X, Y, Z]
   };
   lighting: {
     ambient: { color: string; intensity: number };
@@ -27,7 +27,8 @@ export const MAP_LAYOUT_THEMES: Record<ThemeKey, MapLayoutTheme> = {
   morning: {
     background: '#f8fafc',
     fog: '#e2e8f0',
-    sky: { rayleigh: 3, mieCoefficient: 0.005, sunPosition: [100, 20, 100] },
+    // 🌅 아침: 동쪽(X+)에서 떠오름, 약간 북쪽(Y+) 치우침
+    sky: { rayleigh: 3, mieCoefficient: 0.005, sunPosition: [100, 20, 30] },
     lighting: {
       ambient: { color: '#fff5e6', intensity: 1.0 },
       hemisphere: { sky: '#ffffff', ground: '#ffcc99', intensity: 1.0 },
@@ -38,7 +39,8 @@ export const MAP_LAYOUT_THEMES: Record<ThemeKey, MapLayoutTheme> = {
   day: {
     background: '#e0f2fe',
     fog: '#bae6fd',
-    sky: { rayleigh: 1.5, mieCoefficient: 0.002, sunPosition: [50, 100, 50] },
+    // ☀️ 낮: 남중고도 (남쪽 Y- 방향에서 높게 Z+ 위치)
+    sky: { rayleigh: 1.5, mieCoefficient: 0.002, sunPosition: [0, -50, 100] },
     lighting: {
       ambient: { color: '#ffffff', intensity: 0.4 },
       hemisphere: { sky: '#ffffff', ground: '#94a3b8', intensity: 0.4 },
@@ -49,7 +51,8 @@ export const MAP_LAYOUT_THEMES: Record<ThemeKey, MapLayoutTheme> = {
   evening: {
     background: '#451a03',
     fog: '#fb923c',
-    sky: { rayleigh: 6, mieCoefficient: 0.05, sunPosition: [100, 10, -100] },
+    // 🌇 저녁: 서쪽(X-)으로 저묾
+    sky: { rayleigh: 6, mieCoefficient: 0.05, sunPosition: [-100, -20, 20] },
     lighting: {
       ambient: { color: '#ffedd5', intensity: 1.2 },
       hemisphere: { sky: '#fb923c', ground: '#451a03', intensity: 1.5 },
@@ -60,7 +63,8 @@ export const MAP_LAYOUT_THEMES: Record<ThemeKey, MapLayoutTheme> = {
   night: {
     background: '#0f172a',
     fog: '#1e293b',
-    sky: { rayleigh: 10, mieCoefficient: 0.1, sunPosition: [0, -100, 0] },
+    // 🌙 밤: 지평선 아래 (Z-)
+    sky: { rayleigh: 10, mieCoefficient: 0.1, sunPosition: [0, 0, -100] },
     lighting: {
       ambient: { color: '#1e293b', intensity: 0.5 },
       hemisphere: { sky: '#1e293b', ground: '#020617', intensity: 0.8 },

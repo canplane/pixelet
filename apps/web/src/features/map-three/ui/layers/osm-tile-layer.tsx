@@ -8,6 +8,7 @@ import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import { useRelativePosition } from '../../model/use-relative-position';
 import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
 import { THREE_CONFIG } from '../../model/three-config';
+import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
 
 const { TILE_SIZE } = OSM_CONFIG;
 
@@ -44,14 +45,14 @@ const createDataTexture = (data: Uint8Array, resolution: number) => {
 export const OsmTileLayer = React.memo(({ tile }: OsmTileLayerProps) => {
   const { grids, origin, resolution, key } = tile;
 
-  // 1. 절대 좌표 중심점 계산
+  // 1. 절대 좌표 중심점 (지리적 표준: x=동서, y=남북, z=고도)
   const absoluteCenter = useMemo(
     () => ({
       x: origin.x + TILE_SIZE / 2,
-      y: 0,
-      z: origin.z + TILE_SIZE / 2,
+      y: origin.y + TILE_SIZE / 2, // 지리적 Y (북쪽)
+      z: 0,
     }),
-    [origin.x, origin.z, TILE_SIZE],
+    [origin.x, origin.y],
   );
 
   // 2. 렌더링용 상대 좌표 변환 (Floating Origin 대응)
@@ -171,8 +172,15 @@ export const OsmTileLayer = React.memo(({ tile }: OsmTileLayerProps) => {
         }
 
         void main() {
-          // UV Y-Flip Correction (DataTexture와 Plane UV 정렬)
-          vec2 uv = vec2(vUv.x, 1.0 - vUv.y); 
+          /**
+           * 🎯 [UV-Flip Correction]
+           * Three.js Plane을 -90도 눕히면, UV.y는 월드의 -Z(북쪽) 방향을 향합니다.
+           * DataTexture는 아래에서 위로 저장되므로, 
+           * 지리적 북쪽(데이터 상단)이 월드의 북쪽(-Z)에 오려면 
+           * 쉐이더에서 별도의 Y-Flip(1.0-y)이 필요하지 않을 수 있습니다.
+           * 만약 위아래가 바뀌어 보인다면 vUv를 그대로 사용하세요.
+           */
+          vec2 uv = vUv;
 
           // 1. 샘플링 (8비트 데이터를 정수로 복원)
           float tBase = floor(texture2D(uBase, uv).r * 255.0 + 0.5);
@@ -199,12 +207,14 @@ export const OsmTileLayer = React.memo(({ tile }: OsmTileLayerProps) => {
   return (
     <mesh
       name={`tile-${key}`}
-      // 바닥 타일 간의 미세한 겹침을 방지하기 위해 y축을 아주 미세하게 조정
-      position={[
-        relativePosition.x,
-        relativePosition.y - 0.01,
-        relativePosition.z,
-      ]}
+      /**
+       * 🎯 [Axis-Mapping]
+       * relativePosition.x: 동서 (World X)
+       * relativePosition.z: 고도 (World Y) 🎯
+       * -relativePosition.y: 남북 (World -Z) 🎯
+       */
+      position={toThreePosWithOffset(relativePosition, -0.01)} // 지표면(Y)을 아주 살짝 낮춤
+      // y축을 미세하게 내리는 처리는 축 변환 후인 월드 Y(두 번째 인자)에 적용
       rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION as unknown as THREE.Euler}
       receiveShadow
     >

@@ -48,7 +48,12 @@
       "@pixelet/shared/*": ["../../packages/shared/src/*"]
     }
   },
-  "include": ["src", "@types", "../../packages/shared/src/**/*"], // [선택] 명시적으로 포함해주면 더 확실합니다.
+  "include": [
+    "src",
+    "@types",
+    "../../packages/shared/src/**/*",
+    "../web/src/shared/lib/three/three-coords.ts"
+  ], // [선택] 명시적으로 포함해주면 더 확실합니다.
   "exclude": [
     "node_modules",
     "dist",
