@@ -9,7 +9,7 @@ import type { RouteObject } from 'react-router-dom';
 import { ScrollToTop } from './helpers/scroll-to-top';
 import { devRoutes } from '../dev/dev-routes';
 import { AppLayout } from '../ui/app-layout';
-import IndexPage from '@/pages/index-page';
+import MapPage from '@/pages/map-page';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -27,7 +27,7 @@ const routes: RouteObject[] = [
       </>
     ),
     children: [
-      { path: '', element: <IndexPage /> }, // Index page
+      { path: '', element: <MapPage /> }, // Map page
 
       ...(IS_DEV ? devRoutes : []), // Debug mode only accessible routes
 

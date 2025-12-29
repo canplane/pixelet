@@ -6,25 +6,22 @@ import { useMapNavigation } from './use-map-navigation';
  * 사용자의 위치와 방향을 지도에 실시간 동기화하는 엔진 훅입니다.
  */
 export function useMapFollowMode() {
-  const {
-    setCenter,
-    setViewState, // 기존에 이미 잘 만들어두신 액션 활용
-    devicePos,
-    compassHeading,
-    isFollowMode,
-  } = useMapNavigation();
+  const { setCenter, setViewState, devicePos, compassHeading, isFollowMode } =
+    useMapNavigation();
 
+  // 1. [위치 동기화] GPS 좌표가 변경될 때만 실행
   useEffect(() => {
-    // 1. 추적 모드가 꺼져있거나 센서 데이터가 없으면 중단
-    if (!isFollowMode || !devicePos || compassHeading === null) {
-      return;
-    }
+    if (!isFollowMode || !devicePos) return;
 
-    // 2. 위치 동기화: 위경도 -> 3D 좌표 변환
+    // 🚀 단순히 좌표만 업데이트 (회전값 건드리지 않음)
     setCenter(devicePos);
+  }, [isFollowMode, devicePos, setCenter]);
 
-    // 3. 시선 동기화: 나침반 각도를 지도의 bearing으로 업데이트
-    // viewState 전체를 건드리지 않고 bearing만 덮어씌웁니다.
+  // 2. [시선 동기화] 나침반 각도가 변경될 때만 실행
+  useEffect(() => {
+    if (!isFollowMode || compassHeading === null) return;
+
+    // 🚀 단순히 회전각만 업데이트 (좌표 건드리지 않음)
     setViewState({ bearing: compassHeading });
-  }, [isFollowMode, devicePos, compassHeading, setCenter, setViewState]);
+  }, [isFollowMode, compassHeading, setViewState]);
 }
