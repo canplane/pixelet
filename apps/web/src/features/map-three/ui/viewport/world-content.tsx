@@ -2,15 +2,12 @@ import { forwardRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { UserMarker } from '../markers/user-marker';
 import { CellHighlighter } from '../markers/cell-highlighter';
-import { OsmLayer } from '../layers/osm-layer';
+import { WorldLayer } from '../layers/world-layer';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { VoxelBlock } from '../voxels/voxel-block';
-import { VoxelGridPlanar } from '../markers/voxel-grid-planar';
-import {
-  toThreePos,
-  toThreePosWithOffset,
-} from '@/shared/lib/three/three-coords';
+import { WorldGrid } from '../markers/world-grid';
+import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
 
 /**
  * [world-content]
@@ -30,11 +27,11 @@ export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
     return (
       <group ref={ref}>
         {/* 1. [base-layer] 기본 레이어 (OSM 지형 및 바닥 메쉬) */}
-        <OsmLayer />
+        <WorldLayer />
 
         {/* 2. [guide-layer] 가이드 레이어 (그리드 및 셀 하이라이터) */}
         {/* [grid-system] Voxel 단위에 최적화된 커스텀 평면 그리드를 사용합니다. */}
-        <VoxelGridPlanar />
+        <WorldGrid />
 
         {/* [prevent-z-fighting] 🎯 지형(0)보다 아주 살짝 높게 배치하여 깜빡임을 방지하는 하이라이터입니다. */}
         <CellHighlighter />

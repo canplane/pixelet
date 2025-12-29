@@ -16,7 +16,7 @@ interface TileRequest {
 }
 
 /**
- * [use-tile-lifecycle-manager]
+ * [use-tile-scheduler]
  * Web Worker를 통해 백그라운드에서 타일을 로드하고,
  * 점진적 렌더링(Progressive Rendering) 결과를 UI에 반영합니다.
  *
@@ -24,7 +24,7 @@ interface TileRequest {
  * 중심 좌표를 기준으로 가까운 타일(Radius Sort)부터 우선적으로 Worker에 요청하여,
  * 사용자의 시야 중심부(Ripple Effect)가 가장 먼저 로딩되도록 스케줄링합니다.
  */
-export function useTileLifecycleManager() {
+export function useTileScheduler() {
   const { center } = useMapNavigation();
 
   const setStatus = useMapStore((state) => state.setStatus);
@@ -39,7 +39,7 @@ export function useTileLifecycleManager() {
   /**
    * [1] 가시 범위 순회 및 로드 대상 후보군 수집
    */
-  const getPendingRequests = useCallback(
+  const getScheduledQueue = useCallback(
     (tx: number, ty: number): TileRequest[] => {
       const pendingRequests: TileRequest[] = [];
       const { worldTiles } = useMapStore.getState();
@@ -142,14 +142,12 @@ export function useTileLifecycleManager() {
     cleanupTiles(activeKeys);
 
     // 5. 정렬된 순서대로 비동기 요청 실행
-    const pendingRequests = getPendingRequests(tx, ty);
+    const queue = getScheduledQueue(tx, ty);
 
-    if (pendingRequests.length > 0) {
+    if (queue.length > 0) {
       setStatus('loading');
 
-      const tasks = pendingRequests.map((req) =>
-        loadTile(req.tx, req.ty, req.key),
-      );
+      const tasks = queue.map((req) => loadTile(req.tx, req.ty, req.key));
 
       // 7. 상태 관리
       Promise.all(tasks).finally(() => {
@@ -162,5 +160,5 @@ export function useTileLifecycleManager() {
       const { worldTiles: currentTiles } = useMapStore.getState();
       if (currentTiles.size > 0) setStatus('success');
     }
-  }, [center, setStatus, cleanupTiles, getPendingRequests, loadTile]);
+  }, [center, setStatus, cleanupTiles, getScheduledQueue, loadTile]);
 }

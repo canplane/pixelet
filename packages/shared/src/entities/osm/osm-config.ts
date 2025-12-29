@@ -20,11 +20,24 @@ export const OSM_CONFIG = {
   CELL_SIZE: 2,
 
   /**
+   * [zScaleRatio 설명]
+   * 수평 격자(cellSize) 대비 수직 격자의 배율을 결정합니다.
+   * * 예시: cellSize = 2m, zScaleRatio = 4 인 경우
+   * 1. voxelZUnit = 2m * 4 = 8m
+   * 2. 실제 고도가 8m 상승할 때마다 복셀 데이터(Uint8) 상의 1층이 증가합니다.
+   * 3. 결과적으로 복셀 한 칸의 규격은 [2m(W) x 2m(D) x 8m(H)] 인 직육면체가 됩니다.
+   * * * [주요 목적]
+   * - 시각적 강조: 지형의 고도 변화를 수직으로 과장하여 입체감을 높임.
+   * - 데이터 범위: Uint8(0~255) 한계 내에서 더 높은 해발 고도까지 표현 가능.
+   */
+  Z_SCALE_RATIO: 2,
+
+  /**
    * --- API 모드 설정 ---
    * 'local': Docker로 띄운 로컬 서버 사용 (속도 최상, 제한 없음)
    * 'public': 공용 서버 목록 사용 (Legacy, 로드밸런싱 및 Rate Limit 적용)
    */
-  API_MODE: 'local' as 'local' | 'public', // 여기서 모드 변경
+  API_MODE: 'public' as 'local' | 'public', // 여기서 모드 변경
 
   /**
    * --- 로컬 서버 엔드포인트 ---

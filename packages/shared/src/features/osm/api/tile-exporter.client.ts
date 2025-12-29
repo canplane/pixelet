@@ -30,22 +30,22 @@ const hexToRgb = (hex: string): [number, number, number] => {
  * 쉐이더의 팔레트 루크업(Palette Lookup)과 동일한 논리를 가집니다.
  */
 const getColorMap = (): Record<number, [number, number, number]> => ({
-  [VOXEL_TYPES.EMPTY]: hexToRgb(VOXEL_COLORS.EMPTY),
+  [VOXEL_TYPES.UNKNOWN]: hexToRgb(VOXEL_COLORS.UNKNOWN),
+  [VOXEL_TYPES.BASE_LAND]: hexToRgb(VOXEL_COLORS.BASE_LAND),
   [VOXEL_TYPES.WATER]: hexToRgb(VOXEL_COLORS.WATER),
-  [VOXEL_TYPES.ROAD]: hexToRgb(VOXEL_COLORS.ROAD),
-  [VOXEL_TYPES.BUILDING]: hexToRgb(VOXEL_COLORS.BUILDING),
   [VOXEL_TYPES.GREEN_DEEP]: hexToRgb(VOXEL_COLORS.GREEN_DEEP),
   [VOXEL_TYPES.GREEN_LIGHT]: hexToRgb(VOXEL_COLORS.GREEN_LIGHT),
-  [VOXEL_TYPES.BASE_LAND]: hexToRgb(VOXEL_COLORS.BASE_LAND),
+  [VOXEL_TYPES.SAND]: hexToRgb(VOXEL_COLORS.SAND),
   [VOXEL_TYPES.RESIDENTIAL]: hexToRgb(VOXEL_COLORS.RESIDENTIAL),
   [VOXEL_TYPES.COMMERCIAL]: hexToRgb(VOXEL_COLORS.COMMERCIAL),
   [VOXEL_TYPES.INDUSTRIAL]: hexToRgb(VOXEL_COLORS.INDUSTRIAL),
-  [VOXEL_TYPES.SAND]: hexToRgb(VOXEL_COLORS.SAND),
+  [VOXEL_TYPES.INSTITUTIONAL]: hexToRgb(VOXEL_COLORS.INSTITUTIONAL),
+  [VOXEL_TYPES.SPORTS]: hexToRgb(VOXEL_COLORS.SPORTS),
+  [VOXEL_TYPES.ROAD]: hexToRgb(VOXEL_COLORS.ROAD),
   [VOXEL_TYPES.PEDESTRIAN]: hexToRgb(VOXEL_COLORS.PEDESTRIAN),
   [VOXEL_TYPES.RAIL]: hexToRgb(VOXEL_COLORS.RAIL),
-  [VOXEL_TYPES.INSTITUTIONAL]: hexToRgb(VOXEL_COLORS.INSTITUTIONAL),
   [VOXEL_TYPES.PARKING]: hexToRgb(VOXEL_COLORS.PARKING),
-  [VOXEL_TYPES.SPORTS]: hexToRgb(VOXEL_COLORS.SPORTS),
+  [VOXEL_TYPES.BUILDING]: hexToRgb(VOXEL_COLORS.BUILDING),
 });
 
 /**
@@ -195,9 +195,9 @@ export function downloadMergedGridAsImage(
       const tStruct = grids.structure[i] ?? 0;
 
       let finalType = tBase;
-      if (tWater !== VOXEL_TYPES.EMPTY) finalType = tWater;
-      if (tTrans !== VOXEL_TYPES.EMPTY) finalType = tTrans;
-      if (tStruct !== VOXEL_TYPES.EMPTY) finalType = tStruct;
+      if (tWater !== VOXEL_TYPES.UNKNOWN) finalType = tWater;
+      if (tTrans !== VOXEL_TYPES.UNKNOWN) finalType = tTrans;
+      if (tStruct !== VOXEL_TYPES.UNKNOWN) finalType = tStruct;
 
       const rgb = colorMap[finalType] || colorMap[VOXEL_TYPES.BASE_LAND];
       const canvasIdx = (y * resolution + x) * 4;
