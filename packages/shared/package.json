@@ -17,6 +17,9 @@
     "types": "./dist/index.d.ts"
   },
   "scripts": {
+    "predev": "pnpm run clean",
+    "dev": "tsc -b -w",
+    "prebuild": "pnpm run clean",
     "build": "tsc -b",
     "clean": "tsc -b --clean && rm -rf dist",
     "typecheck": "tsc --noEmit"
