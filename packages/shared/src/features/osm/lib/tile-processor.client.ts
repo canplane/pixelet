@@ -7,9 +7,9 @@
  * 3. 클라이언트 측에서 origin을 재계산하여 서버-클라이언트 간의 미세한 좌표 오차를 방지합니다.
  */
 
-import {
-  type TileGrids,
-  type WorldTile,
+import type {
+  GeometryGrids,
+  GeometryTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
@@ -20,6 +20,41 @@ import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
 const { TILE_SIZE, CELL_SIZE, LOCAL_API_ENDPOINT } = OSM_CONFIG;
 
 /**
+ * [Helper] Base64 문자열을 8비트 배열로 복원
+ * 서버에서 Buffer.from(arr).toString('base64')로 보낸 데이터를 디코딩합니다.
+ */
+const restore8 = (b64: any): Uint8Array => {
+  // 만약 서버가 이미 배열로 보냈다면 그대로 사용 (호환성 유지)
+  if (Array.isArray(b64) || b64 instanceof Uint8Array) {
+    return new Uint8Array(b64);
+  }
+  // Base64 문자열 복원
+  const binary = atob(b64 as string);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+/**
+ * [Helper] Base64 문자열을 16비트 배열로 복원
+ * 고도 데이터(height) 복원용
+ */
+const restore16 = (b64: any): Uint16Array => {
+  if (Array.isArray(b64) || b64 instanceof Uint16Array) {
+    return new Uint16Array(b64);
+  }
+  const binary = atob(b64 as string);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  // 바이트 배열을 16비트 뷰로 변환 (Endianness 주의: 보통 Little Endian)
+  return new Uint16Array(bytes.buffer);
+};
+
+/**
  * [Helper] LOCAL 모드: 서버에서 이미 베이킹이 완료된 타일 데이터를 획득합니다.
  * @param coord - 타일 인덱스 {tx, ty}
  * @param origin - 타일의 좌상단 시작점 (Meter)
@@ -27,7 +62,7 @@ const { TILE_SIZE, CELL_SIZE, LOCAL_API_ENDPOINT } = OSM_CONFIG;
 async function requestBakedTile(
   coord: TileWorkerInput['coord'],
   origin: MeterPos,
-): Promise<WorldTile> {
+): Promise<GeometryTile> {
   const { tx, ty } = coord;
   // 타일 당 그리드 해상도 (N x N)
   const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
@@ -54,46 +89,33 @@ async function requestBakedTile(
         throw new Error(`Local Tile Fetch Failed: HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as WorldTile;
+      // 서버로부터 받은 JSON 완제품
+      // 데이터 구조: { grids: { layers: { base: "base64...", ... }, terrain: { height: "base64..." } } }
+      const data = (await response.json()) as any;
 
       /**
-       * [성능 최적화: 바이너리 복원 (Re-hydrating)]
-       * JSON은 TypedArray(Uint8Array)를 지원하지 않아 전송 시 일반 number[]로 변환됩니다.
-       * 이를 다시 Uint8Array로 래핑하여:
-       * 1. WebGL 텍스처 데이터로 즉시 소비 가능하게 함
-       * 2. 워커 -> 메인 스레드 전송 시 Zero-copy(Transferable Objects) 메커니즘 활성화
+       * 🚀 [성능 최적화: 계층형 바이너리 복원]
+       * 서버의 Base64 압축 데이터를 고속으로 TypedArray로 변환합니다.
+       * Array.from() 오버헤드를 완전히 제거했습니다.
        */
-      const restoredGrids: Partial<TileGrids> = {};
-      const expectedSize = resolution * resolution;
-
-      if (data?.grids) {
-        for (const [key, val] of Object.entries(data.grids)) {
-          if (Array.isArray(val)) {
-            // 🚀 서버가 보낸 키(base, water 등)를 그대로 사용하여 Uint8Array 생성
-            const arr = new Uint8Array(expectedSize);
-
-            // 데이터가 있을 때만 채우고, 모자라면 0으로 유지됨 (Safety)
-            // 서버 데이터가 부족하더라도 시스템이 죽지 않게 보호
-            const sourceData = new Uint8Array(val);
-            arr.set(sourceData.slice(0, expectedSize));
-
-            // 🚀 데이터 복사 비용을 줄이기 위해 원본 배열을 TypedArray로 즉시 변환
-            restoredGrids[key as keyof TileGrids] = arr;
-          }
-        }
-      }
-
-      // 🎯 [Safety Check]: 필수 채널인 height가 없으면 0으로라도 채워줌
-      if (!restoredGrids.height) {
-        restoredGrids.height = new Uint8Array(expectedSize).fill(0);
-      }
+      const restoredGrids: GeometryGrids = {
+        layers: {
+          base: restore8(data.grids.layers.base),
+          water: restore8(data.grids.layers.water),
+          transport: restore8(data.grids.layers.transport),
+          structure: restore8(data.grids.layers.structure),
+        },
+        terrain: {
+          // 🏔️ 16비트 고도 데이터 복원
+          height: restore16(data.grids.terrain.height),
+        },
+      };
 
       return {
         ...data,
-        grids: restoredGrids as TileGrids, // 최종적으로 엔진 규격 타입으로 캐스팅
         key: `${tx}:${ty}`,
-        // 🎯 [무결성 보장] 서버가 준 origin 대신 클라이언트 설정 기반 origin을 강제 주입하여 타일 정렬 오차 방지
-        origin,
+        origin, // 🎯 [무결성 보장] 서버가 준 origin 대신 클라이언트 설정 기반 origin을 강제 주입하여 타일 정렬 오차 방지
+        grids: restoredGrids,
         resolution,
       };
     } catch (error: any) {
@@ -119,8 +141,8 @@ async function requestBakedTile(
 export async function fetchAndProcessTile(
   coord: TileWorkerInput['coord'],
   options: TileWorkerInput['options'],
-  onProgress?: (partialTile: WorldTile) => void,
-): Promise<WorldTile> {
+  onProgress?: (partialTile: GeometryTile) => void,
+): Promise<GeometryTile> {
   const { tx, ty } = coord;
   const { apiMode } = options;
 

@@ -28,6 +28,6 @@ export type WorkerMessageType = 'progress' | 'complete' | 'error';
 export interface TileWorkerResponse {
   type: WorkerMessageType;
   requestId: string;
-  data?: any; // WorldTile 또는 partialTile
+  data?: any; // GeometryTile 또는 partialTile
   error?: string;
 }

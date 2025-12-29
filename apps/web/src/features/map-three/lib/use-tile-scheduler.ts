@@ -28,8 +28,8 @@ export function useTileScheduler() {
   const { center } = useMapNavigation();
 
   const setStatus = useMapStore((state) => state.setStatus);
-  const setWorldTile = useMapStore((state) => state.setWorldTile);
-  const removeWorldTile = useMapStore((state) => state.removeWorldTile);
+  const setGeometryTile = useMapStore((state) => state.setGeometryTile);
+  const removeGeometryTile = useMapStore((state) => state.removeGeometryTile);
 
   const lastCenterTileKey = useRef<string>('');
   const processingTiles = useRef<Set<string>>(new Set());
@@ -79,11 +79,11 @@ export function useTileScheduler() {
       worldTiles.forEach((_, key) => {
         // 현재 보고 있는 범위(activeKeys)에도 없고, 로딩 중도 아니라면 삭제
         if (!activeKeys.has(key) && !processingTiles.current.has(key)) {
-          removeWorldTile(key);
+          removeGeometryTile(key);
         }
       });
     },
-    [removeWorldTile],
+    [removeGeometryTile],
   );
 
   /**
@@ -100,13 +100,13 @@ export function useTileScheduler() {
           ty,
           // [점진적 업데이트] Worker가 중간 결과를 보낼 때마다 실행됨
           (partialTile) => {
-            setWorldTile(key, partialTile);
+            setGeometryTile(key, partialTile);
           },
         );
 
         // [최종 완료] 최종 결과물이 유효하면 스토어 업데이트
         if (finalTile && finalTile.grids) {
-          setWorldTile(key, finalTile);
+          setGeometryTile(key, finalTile);
         }
       } catch (err) {
         console.error(`[Lifecycle] Worker error ${key}:`, err);
@@ -114,7 +114,7 @@ export function useTileScheduler() {
         processingTiles.current.delete(key);
       }
     },
-    [setWorldTile],
+    [setGeometryTile],
   );
 
   useEffect(() => {

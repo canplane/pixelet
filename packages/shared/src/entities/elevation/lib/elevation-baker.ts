@@ -18,12 +18,12 @@ interface BakeOptions {
  * 2. Z-Quantization: 보간된 높이(m)를 복셀 수직 유닛(cellSize * zScaleRatio)으로 나누어 '층(Floor)' 인덱스로 변환합니다.
  * * @param points - 수집된 고도 데이터 (33x33 격자 권장)
  * @param options - tileSize(4096), cellSize(2), zScaleRatio(배율) 옵션
- * @returns Uint8Array - 각 셀의 복셀 층수(Index)가 담긴 1D 배열
+ * @returns Uint16Array - 각 셀의 복셀 층수(Index)가 담긴 1D 배열
  */
 export function bakeElevationGrid(
   points: { x: number; y: number; z: number }[],
   options: BakeOptions = {},
-): Uint8Array {
+): Uint16Array {
   const {
     tileSize = TILE_SIZE,
     cellSize = CELL_SIZE,
@@ -32,7 +32,7 @@ export function bakeElevationGrid(
 
   // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
   const resolution = Math.floor(tileSize / cellSize);
-  const grid = new Uint8Array(resolution * resolution);
+  const grid = new Uint16Array(resolution * resolution);
 
   // 복셀 한 칸의 실제 물리적 높이 (m)
   const voxelZUnit = cellSize * zScaleRatio;
@@ -42,12 +42,14 @@ export function bakeElevationGrid(
 
   if (!Number.isInteger(sampleCount)) {
     console.error(
-      '[ElevationBaker] 포인트 데이터가 정사각 격자 형태가 아닙니다.',
+      `[ElevationBaker] 포인트 데이터가 정사각 격자 형태가 아닙니다. Length: ${points.length}`,
     );
+    // 빈 그리드 반환하여 렌더링 충돌 방지
     return grid;
   }
 
   // 2D 배열 접근을 위한 헬퍼 (포인트 클라우드 인덱싱)
+  // 💡 points는 row-major 순서로 정렬되어 있다고 가정합니다. (서버/클라이언트 모두 이 순서로 생성)
   const getSampleZ = (row: number, col: number) =>
     points[row * sampleCount + col].z;
 
@@ -71,7 +73,7 @@ export function bakeElevationGrid(
       const x0 = Math.floor(sx);
       const x1 = Math.min(x0 + 1, sampleCount - 1);
 
-      // 참조점 간 가중치 계산
+      // 참조점 간 가중치 계산 (0.0 ~ 1.0)
       const dy = sy - y0;
       const dx = sx - x0;
 
@@ -96,10 +98,10 @@ export function bakeElevationGrid(
 
       /**
        * [Step 4: Storage]
-       * 메모리 최적화를 위해 Uint8(0~255)로 클램핑하여 저장합니다.
+       * Uint16(0~65535) 범위로 확장하여 저장합니다.
        * 값 '1'은 1층(voxelZUnit 미터)을 의미합니다.
        */
-      grid[gy * resolution + gx] = Math.min(zIndex, 255);
+      grid[gy * resolution + gx] = Math.max(0, Math.min(zIndex, 65535));
     }
   }
 

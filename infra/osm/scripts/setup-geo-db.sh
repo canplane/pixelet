@@ -23,13 +23,10 @@ PGUSER="${GEO_DB_USER:-admin}"
 PGDATABASE="${GEO_DB_NAME:-geo}"
 PGPORT="${GEO_DB_PORT:-5433}"
 DB_HOST="${GEO_DB_HOST:-localhost}"
-COUNTRY_CODE="${COUNTRY_CODE:-KR}"
 
-OSM_DATA_DIR="$OSM_ROOT/data"
-HOST_STYLE_PATH="$OSM_ROOT/default.style"
-CONTAINER_DATA_DIR="/data"
-STYLE_IN_CONTAINER="/data/default.style"
-PBF_RELATIVE_PATH="${COUNTRY_CODE}/latest.osm.pbf"
+COUNTRY_CODE="${COUNTRY_CODE:-KR}"
+COUNTRY_DIR="countries/${COUNTRY_CODE}"
+PBF_RELATIVE_PATH="${COUNTRY_DIR}/raw/latest.osm.pbf"
 
 echo "💧 Starting pixelet geo-data integration..."
 
@@ -46,7 +43,7 @@ osm2pgsql -U "$PGUSER" -d "$PGDATABASE" -H "$DB_HOST" -P "$PGPORT" \
   --multi-geometry \
   --number-processes 4 \
   --style "$OSM_ROOT/default.style" \
-  "$OSM_DATA_DIR/$PBF_RELATIVE_PATH"
+  "$OSM_ROOT/$PBF_RELATIVE_PATH"
 
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
 "UPDATE osm_data_catalog SET status = 'PROCESSING' WHERE status = 'READY' AND country_code = '$COUNTRY_CODE';"
