@@ -24,7 +24,7 @@ export type MapQueriesParams = {
  * * @param filterContent - nwr[...] 형태의 순수 필터 문자열
  * @param timeout - 쿼리 타임아웃 (초 단위, 기본값 90)
  */
-export const create_query = (filterContent: string, timeout = 90) => {
+export const createQuery = (filterContent: string, timeout = 90) => {
   const sanitized = filterContent.replace(/\s+/g, ' ').trim();
 
   // 데이터 무결성 최우선: 원천 노드를 모두 가져와서 파서(nodeCache)가 직접 조립하도록 유도
@@ -35,7 +35,7 @@ export const create_query = (filterContent: string, timeout = 90) => {
 /**
  * [debug-only] 특정 영역의 모든 원천 데이터를 추출합니다.
  */
-export const get_raw_all_query = ({ bbox }: MapQueriesParams): string => `
+export const getRawAllQuery = ({ bbox }: MapQueriesParams): string => `
       [out:json][timeout:180][maxsize:200000000];
       (node(${bbox}); way(${bbox}); relation(${bbox}););
       (._; > ;);

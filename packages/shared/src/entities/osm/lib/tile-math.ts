@@ -27,13 +27,6 @@ export interface Bbox {
   maxY: number;
 }
 
-export interface LocationBbox {
-  minLat: number;
-  minLng: number;
-  maxLat: number;
-  maxLng: number;
-}
-
 /**
  * 특정 타일 인덱스의 미터 단위 BBox를 반환합니다.
  * * @param tx - 타일 X 인덱스
@@ -50,18 +43,27 @@ export const getTileBbox = (tx: number, ty: number): Bbox => {
   return { minX, minY, maxX, maxY };
 };
 
-/**
- * [상위 호환] 특정 타일의 지리적 위경도 범위(LocationBbox)를 반환합니다.
- * Overpass API 쿼리나 서버사이드 공간 검색에 직접적으로 사용됩니다.
- */
-export const getTileLocationBbox = (tx: number, ty: number): LocationBbox => {
-  const { minX, minY, maxX, maxY } = getTileBbox(tx, ty);
+export interface LocationBbox {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
 
-  // 미터 좌표를 위경도로 역투영(Unproject)
+/**
+ * [unproject-bbox]
+ * 미터 단위의 BBox(X, Y)를 지리적 위경도 범위(LocationBbox)로 역투영합니다.
+ * @param bbox - { minX, minY, maxX, maxY } 미터 단위 범위
+ */
+export const unprojectBbox = (bbox: Bbox): LocationBbox => {
+  const { minX, minY, maxX, maxY } = bbox;
+
+  // 1. 대각선 두 지점(SW, NE)을 위경도로 역투영
+  // 지침 준수: XY 평면이 지표면이므로 z: 0을 입력
   const sw = unproject({ x: minX, y: minY, z: 0 });
   const ne = unproject({ x: maxX, y: maxY, z: 0 });
 
-  // Overpass 및 PostGIS 표준 형식 (S, W, N, E) 보장
+  // 2. 투영법에 따른 위경도 역전 현상 방지를 위해 Min/Max 재정렬
   return {
     minLat: Math.min(sw.lat, ne.lat),
     minLng: Math.min(sw.lng, ne.lng),

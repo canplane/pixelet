@@ -16,18 +16,29 @@ export interface TileGrids {
   water: Uint8Array; // [Pass 2] 수계 (Water)
   transport: Uint8Array; // [Pass 3] 교통 (Road, Rail, Pedestrian, Parking)
   structure: Uint8Array; // [Pass 4] 구조물 (Building, Man-made)
+
+  /**
+   * [height]
+   * 각 셀의 복셀 층수 인덱스 (Uint8)
+   * 실제 높이(m) = value * (OSM_CONFIG.CELL_SIZE * OSM_CONFIG.Z_SCALE_RATIO)
+   */
+  height: Uint8Array;
 }
 
 /**
  * [Factory] 빈 그리드 생성기
+ * 모든 채널을 동일한 해상도로 생성하며, 고도(height) 채널은 0층으로 초기화합니다.
  */
 export function createEmptyGrids(resolution: number): TileGrids {
   const size = resolution * resolution;
   return {
     base: new Uint8Array(size).fill(VOXEL_TYPES.BASE_LAND),
-    water: new Uint8Array(size).fill(VOXEL_TYPES.EMPTY),
-    transport: new Uint8Array(size).fill(VOXEL_TYPES.EMPTY),
-    structure: new Uint8Array(size).fill(VOXEL_TYPES.EMPTY),
+    water: new Uint8Array(size).fill(VOXEL_TYPES.UNKNOWN),
+    transport: new Uint8Array(size).fill(VOXEL_TYPES.UNKNOWN),
+    structure: new Uint8Array(size).fill(VOXEL_TYPES.UNKNOWN),
+
+    // 🎯 고도 채널 추가: 기본값 0 (해수면 또는 기준 고도)
+    height: new Uint8Array(size).fill(0),
   };
 }
 

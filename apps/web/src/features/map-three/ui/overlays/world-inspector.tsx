@@ -10,7 +10,12 @@ import { Separator } from '@/shared/ui/theme/glass/separator';
 
 const { unproject } = projection;
 
-export function VoxelInspector() {
+/**
+ * [WorldInspector]
+ * 엔진의 실시간 좌표계(WGS84, MeterPos)와 카메라 상태를 모니터링합니다.
+ * XY 평면 지표면 지침과 Z축 고도 지침이 제대로 투영되고 있는지 확인하는 기준점이 됩니다.
+ */
+export function WorldInspector() {
   const { center, viewState, hoveredPos } = useMapNavigation();
 
   const currentViewLocation = useMemo(
@@ -123,7 +128,7 @@ export function VoxelInspector() {
             */}
             <div className="bg-white/[0.03] p-3.5 rounded-[20px] border border-white/5 transition-all hover:bg-white/[0.06]">
               <header className="text-[8px] font-semibold text-white/30 tracking-[0.2em] flex items-center gap-1.5 uppercase mb-2">
-                <MousePointer2 size={10} /> Target Voxel
+                <MousePointer2 size={10} /> Target Coordinates
               </header>
               {hoveredPos ? (
                 <div className="flex justify-between text-[11px] font-light text-white/80 tracking-tight tabular-nums">

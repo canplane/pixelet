@@ -31,6 +31,7 @@ export function bakeTileGrid(
 ): { grids: TileGrids; resolution: number } {
   const { tileSize = TILE_SIZE, cellSize = CELL_SIZE } = options;
 
+  // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
   const resolution = Math.floor(tileSize / cellSize);
   const grids: TileGrids = createEmptyGrids(resolution);
 

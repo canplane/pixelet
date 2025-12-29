@@ -1,7 +1,7 @@
 import { cn } from '@/shared/lib/utils';
 import { Compass } from './compass';
 import { ScaleBar } from './scale-bar';
-import { VoxelInspector } from './voxel-inspector';
+import { WorldInspector } from './world-inspector';
 import { LocationControl } from './location-control';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import { PoiDetailPanel } from './poi-detail-panel';
@@ -43,7 +43,7 @@ export function MapOverlays() {
         )}
       >
         <div className="pointer-events-auto">
-          <VoxelInspector />
+          <WorldInspector />
         </div>
       </div>
 

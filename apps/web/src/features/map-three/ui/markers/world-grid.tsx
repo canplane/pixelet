@@ -7,11 +7,11 @@ import { THREE_CONFIG } from '../../model/three-config';
 import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
 
 /**
- * [voxel-grid-planar]
+ * [WorldGrid]
  * 지형 레이어 위에 안착되는 절차적 쉐이더 그리드입니다.
  * 물리적인 높이는 바닥(0)에 고정하되, 렌더링 우선순위를 조절하여 지형 위에 덧씌웁니다.
  */
-export const VoxelGridPlanar = () => {
+export const WorldGrid = () => {
   const { SIZE } = VOXEL_CONFIG;
   const { FADE_END } = THREE_CONFIG.RENDERING;
   const { themeKey } = useMapNavigation();
@@ -31,7 +31,7 @@ export const VoxelGridPlanar = () => {
       polygonOffsetUnits: -4,
       uniforms: {
         uColor: { value: new THREE.Color(targetTheme.grid.cell) },
-        uSize: { value: SIZE },
+        uCellSize: { value: SIZE },
         uFadeEnd: { value: FADE_END },
       },
       vertexShader: `
@@ -45,7 +45,7 @@ export const VoxelGridPlanar = () => {
       fragmentShader: `
         varying vec3 vWorldPosition;
         uniform vec3 uColor;
-        uniform float uSize;
+        uniform float uCellSize;
         uniform float uFadeEnd;
 
         float getRefinedGrid(float position, float size, float softness) {
@@ -60,8 +60,8 @@ export const VoxelGridPlanar = () => {
           float softness = 0.04;
           
           // 🎯 World X축 격자와 World Z축(지리적 북향) 격자를 각각 생성
-          float lineX = getRefinedGrid(vWorldPosition.x, uSize, softness);
-          float lineZ = getRefinedGrid(vWorldPosition.z, uSize, softness); 
+          float lineX = getRefinedGrid(vWorldPosition.x, uCellSize, softness);
+          float lineZ = getRefinedGrid(vWorldPosition.z, uCellSize, softness); 
           float lineAlpha = max(lineX, lineZ);
           
           // 🎯 평면 거리(flatDist)를 기준으로 페이드 처리
