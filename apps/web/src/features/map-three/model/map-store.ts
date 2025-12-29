@@ -5,7 +5,7 @@ import { projection } from '@pixelet/shared/shared/lib/map/projection';
 
 // 2. 기초 타입 (Location, MeterPos 등)
 import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
-import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
+import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 
 // 3. OSM 관련 로직 및 도메인 타입
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osms';
@@ -49,13 +49,13 @@ interface MapState {
   setLoadingStep: (loadingStep: MapState['loadingStep']) => void;
 
   /** 활성 범위 내의 타일 데이터 관리 (Grid 중심) */
-  worldTiles: Map<string, WorldTile>;
-  /** * [setWorldTile] (Updated)
+  worldTiles: Map<string, GeometryTile>;
+  /** * [setGeometryTile] (Updated)
    * 완전한 타일 교체뿐만 아니라, 부분 업데이트(Partial)를 지원합니다.
    * 기존에 타일이 있다면 데이터를 병합하고, 없다면 새로 생성합니다.
    */
-  setWorldTile: (key: string, tile: Partial<WorldTile>) => void; // 👈 타입 변경
-  removeWorldTile: (key: string) => void;
+  setGeometryTile: (key: string, tile: Partial<GeometryTile>) => void; // 👈 타입 변경
+  removeGeometryTile: (key: string) => void;
   clearOldTiles: (neededKeys: string[]) => void;
 
   center: MeterPos | null;
@@ -109,10 +109,10 @@ export const useMapStore = create<MapState>((set, get) => ({
   worldTiles: new Map(),
 
   /**
-   * [setWorldTile] 구현체 수정
+   * [setGeometryTile] 구현체 수정
    * 부분 업데이트 로직 추가
    */
-  setWorldTile: (key, partialTile) =>
+  setGeometryTile: (key, partialTile) =>
     set((state) => {
       const newMap = new Map(state.worldTiles);
       const existingTile = newMap.get(key);
@@ -131,10 +131,10 @@ export const useMapStore = create<MapState>((set, get) => ({
       } else {
         // 기존 타일이 없는데 Partial이 들어온 경우?
         // (보통 origin, resolution 등 필수값은 첫 패킷에 포함되어야 함)
-        // 타입 안전성을 위해 필수값이 있는지 체크하거나, as WorldTile로 단언합니다.
+        // 타입 안전성을 위해 필수값이 있는지 체크하거나, as GeometryTile로 단언합니다.
         // 여기서는 Worker가 첫 패킷에 필수 정보를 다 보낸다고 가정합니다.
         if (partialTile.origin && partialTile.grids && partialTile.resolution) {
-          newMap.set(key, partialTile as WorldTile);
+          newMap.set(key, partialTile as GeometryTile);
         } else {
           console.warn(
             `[MapStore] Incomplete tile data received for ${key}`,
@@ -145,7 +145,7 @@ export const useMapStore = create<MapState>((set, get) => ({
       return { worldTiles: newMap };
     }),
 
-  removeWorldTile: (key) =>
+  removeGeometryTile: (key) =>
     set((state) => {
       const newMap = new Map(state.worldTiles);
       newMap.delete(key);

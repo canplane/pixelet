@@ -32,12 +32,16 @@ export const OSM_CONFIG = {
    */
   Z_SCALE_RATIO: 2,
 
+  // 🎯 [Optimization] 클라이언트와 동일한 128m 간격 샘플링 (33x33)
+  // 타일 당 쿼리 수를 4백만 개에서 약 1,000개로 줄여 DB 부하를 제거합니다.
+  Z_SAMPLING_STEP: 128,
+
   /**
    * --- API 모드 설정 ---
    * 'local': Docker로 띄운 로컬 서버 사용 (속도 최상, 제한 없음)
    * 'public': 공용 서버 목록 사용 (Legacy, 로드밸런싱 및 Rate Limit 적용)
    */
-  API_MODE: 'public' as 'local' | 'public', // 여기서 모드 변경
+  API_MODE: 'local' as 'local' | 'public', // 여기서 모드 변경
 
   /**
    * --- 로컬 서버 엔드포인트 ---

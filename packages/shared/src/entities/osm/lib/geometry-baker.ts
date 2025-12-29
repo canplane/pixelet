@@ -1,5 +1,5 @@
 /**
- * @file tile-baker.ts
+ * @file geometry-baker.ts
  * 정규화된 벡터 데이터를 4개의 독립적인 비트맵 레이어로 래스터화(Rasterization)합니다.
  * 🎯 모든 입력 데이터(NormalizedElement)는 로컬 미터 좌표계로 전처리가 완료된 상태여야 합니다.
  */
@@ -8,8 +8,8 @@ import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import type { NormalizedElement } from '@pixelet/shared/entities/osm/api/normalized-types';
 import {
-  createEmptyGrids,
-  type TileGrids,
+  createEmptyLayers,
+  type VoxelLayers,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels';
 
@@ -21,19 +21,19 @@ interface BakeOptions {
 }
 
 /**
- * [tile-baker]
+ * [bakeGeometryGrid]
  * 정규화된 요소를 받아 4개의 독립적인 비트맵 레이어로 래스터화합니다.
  */
-export function bakeTileGrid(
+export function bakeGeometryGrid(
   elements: NormalizedElement[],
   tileOrigin: { x: number; y: number },
   options: BakeOptions = {},
-): { grids: TileGrids; resolution: number } {
+): { layers: VoxelLayers; resolution: number } {
   const { tileSize = TILE_SIZE, cellSize = CELL_SIZE } = options;
 
   // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
   const resolution = Math.floor(tileSize / cellSize);
-  const grids: TileGrids = createEmptyGrids(resolution);
+  const layers: VoxelLayers = createEmptyLayers(resolution);
 
   // 1. 레이어 분류 및 베이킹 (NormalizedElement의 전처리된 데이터를 직접 소비)
   elements.forEach((item) => {
@@ -53,7 +53,7 @@ export function bakeTileGrid(
         renderPolygon(
           shape.points,
           VOXEL_TYPES.WATER,
-          grids.water,
+          layers.water,
           tileOrigin,
           resolution,
           cellSize,
@@ -63,7 +63,7 @@ export function bakeTileGrid(
       renderLinearFeature(
         shape.points,
         VOXEL_TYPES.WATER,
-        grids.water,
+        layers.water,
         tileOrigin,
         resolution,
         cellSize,
@@ -85,7 +85,7 @@ export function bakeTileGrid(
       renderPolygon(
         shape.points,
         VOXEL_TYPES.PARKING,
-        grids.transport,
+        layers.transport,
         tileOrigin,
         resolution,
         cellSize,
@@ -107,7 +107,7 @@ export function bakeTileGrid(
         renderPolygon(
           shape.points,
           transType,
-          grids.transport,
+          layers.transport,
           tileOrigin,
           resolution,
           cellSize,
@@ -117,7 +117,7 @@ export function bakeTileGrid(
         renderLinearFeature(
           shape.points,
           transType,
-          grids.transport,
+          layers.transport,
           tileOrigin,
           resolution,
           cellSize,
@@ -137,7 +137,7 @@ export function bakeTileGrid(
       renderPolygon(
         shape.points,
         VOXEL_TYPES.BUILDING,
-        grids.structure,
+        layers.structure,
         tileOrigin,
         resolution,
         cellSize,
@@ -154,7 +154,7 @@ export function bakeTileGrid(
       renderPolygon(
         shape.points,
         baseType,
-        grids.base,
+        layers.base,
         tileOrigin,
         resolution,
         cellSize,
@@ -163,7 +163,7 @@ export function bakeTileGrid(
     }
   });
 
-  return { grids, resolution };
+  return { layers, resolution };
 }
 
 /** * [최적화] Scan-line Fill 알고리즘
@@ -180,11 +180,15 @@ function renderPolygon(
 ) {
   if (points.length < 3) return;
 
-  // 로컬 좌표 변환 헬퍼
+  // 타일의 북쪽 끝 Y 좌표 (World Coordinate)
+  const tileTopY = origin.y + res * cellSize;
+
+  // 로컬 좌표 변환 헬퍼 (Standard Raster: Top-Down)
   const toLocal = (pts: MeterPos[]) =>
     pts.map((p) => ({
       x: (p.x - origin.x) / cellSize,
-      y: (p.y - origin.y) / cellSize,
+      // 🎯 [Correction] MaxY(북쪽)에서 p.y를 뺍니다. (Top-Down)
+      y: (tileTopY - p.y) / cellSize,
     }));
 
   const outer = toLocal(points);
@@ -247,6 +251,8 @@ function renderLinearFeature(
 ) {
   if (!points || points.length < 2) return;
 
+  const tileTopY = origin.y + res * cellSize;
+
   // 두께 계산 (meter 단위 폭을 픽셀 반경으로 변환)
   const thickness = Math.max(1, Math.round((meterWidth / cellSize) * 0.5));
 
@@ -265,10 +271,12 @@ function renderLinearFeature(
   };
 
   for (let i = 0; i < points.length - 1; i++) {
-    const x1 = (points[i].x - origin.x) / cellSize,
-      y1 = (points[i].y - origin.y) / cellSize;
-    const x2 = (points[i + 1].x - origin.x) / cellSize,
-      y2 = (points[i + 1].y - origin.y) / cellSize;
+    const x1 = (points[i].x - origin.x) / cellSize;
+    // 🎯 [Correction] Top-Down 방식 적용
+    const y1 = (tileTopY - points[i].y) / cellSize;
+
+    const x2 = (points[i + 1].x - origin.x) / cellSize;
+    const y2 = (tileTopY - points[i + 1].y) / cellSize;
 
     // 시작/끝점 Round Cap
     drawCircle(Math.floor(x1 + 0.5), Math.floor(y1 + 0.5), thickness);

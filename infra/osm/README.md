@@ -12,21 +12,33 @@
 ## 2. Data Management Rules
 
 - **Standard**: ISO 3166-1 alpha-2 국가 코드를 사용함.
-- **Storage**: `infra/osm-data/[COUNTRY_CODE]/` 경로에 원본 `.pbf` 파일을 보관함.
+- **Storage**: `infra/osm/countries/[COUNTRY_CODE]/raw` 경로에 원본 `.pbf` 파일을 보관함.
 - **Audit**: `osm_data_catalog` 테이블을 통해 데이터 상태 및 주입 이력을 관리함.
 
 ## 3. How to Run (Quick Start)
 
 이 섹션은 표준 자동화 스크립트를 사용하여 전체 파이프라인을 실행하는 방법을 다룹니다.
 
-### Prerequisites
+### Prerequisites (macOS)
+
+데이터 인프라 구축을 위해 맥 로컬 환경에 아래 도구들이 설치되어 있어야 합니다.
+
+```bash
+# 통합 설치 명령어
+brew install osm2pgsql gdal postgis jq envsubst
+```
+
+- **osm2pgsql**: OSM PBF 데이터 적재 엔진
+- **gdal**: 지형 데이터(GeoTIFF) 변환 및 처리 (Warping, VRT)
+- **postgis**: DB 주입용 클라이언트 도구 (`raster2pgsql`) 포함
+- **jq / envsubst**: 스크립트 내 JSON 파싱 및 환경 변수 치환용 유틸리티
 
 주입 프로세스 시작 전, 아래의 준비 사항을 확인하십시오.
 
-- **Raw Data**: `infra/osm/data/[COUNTRY_CODE]/` 경로에 대상 지역의 `.pbf` 파일이 배치되어 있어야 합니다. (파일명은 `latest.osm.pbf`로 통일 권장)
+- **Raw Data**: `infra/osm/countries/[COUNTRY_CODE]/raw` 경로에 대상 지역의 `.pbf` 파일이 배치되어 있어야 합니다. (파일명은 `latest.osm.pbf`로 통일 권장)
   ```bash
   # 예: 대한민국 데이터 준비
-  mkdir -p infra/osm/data/KR && cd infra/osm/data/KR
+  mkdir -p infra/osm/countries/KR/raw && cd infra/osm/countries/KR/raw
   curl -L -O https://download.geofabrik.de/asia/south-korea-latest.osm.pbf
   mv south-korea-latest.osm.pbf latest.osm.pbf
   ```
@@ -87,7 +99,7 @@ osm2pgsql -U pixelet_geo_admin -d pixelet_geo -H localhost -P 5433 \
   --multi-geometry \
   --number-processes 4 \
   --style infra/osm/default.style \
-  infra/osm/data/KR/latest.osm.pbf
+  infra/osm/countries/KR/raw/latest.osm.pbf
 ```
 
 ### Step 3: Audit Initialization

@@ -9,11 +9,12 @@ import { GEOMETRY_FILTERS } from '@pixelet/shared/entities/osm/api/query/osm-geo
 import { BOUNDARY_FILTERS } from '@pixelet/shared/entities/osm/api/query/osm-boundary-queries';
 import { POI_QUERIES } from '@pixelet/shared/entities/osm/api/query/osm-poi-queries';
 import { createQuery } from '@pixelet/shared/entities/osm/api/overpass-utils';
-import {
-  createEmptyGrids,
-  type TileGrids,
-  type WorldTile,
+import type {
+  GeometryGrids,
+  VoxelLayers,
+  GeometryTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
+import { createEmptyGrids } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
 import {
   getTileBbox,
@@ -37,7 +38,7 @@ interface ProcessingStep {
   name: StepName;
   query: string;
   critical: boolean; // 실패 시 전체 타일 생성을 중단할지 여부
-  targetChannels: (keyof TileGrids)[];
+  targetChannels: (keyof VoxelLayers)[];
 }
 
 /**
@@ -107,31 +108,28 @@ async function executeStep(step: ProcessingStep, origin: MeterPos) {
   const normalizedElements = normalizeOsmData(response.elements);
 
   // 정규화된 데이터를 핸들러에 전달 (서버의 GeoService 호출과 동일한 규격이 됨)
-  return processOsmToGrids(normalizedElements, origin, {
-    tileSize: TILE_SIZE,
-    cellSize: CELL_SIZE,
-  });
+  return processOsmToGrids(normalizedElements, origin);
 }
 
 /**
  * [Helper 2] 가공된 데이터를 현재 타일 상태에 병합합니다.
  */
 function mergeStepResult(
-  target: { grids: TileGrids; infras: MapInfra[]; pois: MapPoi[] },
+  target: { grids: GeometryGrids; infras: MapInfra[]; pois: MapPoi[] },
   source: {
-    partialGrids: Partial<TileGrids>;
+    partialLayers: Partial<VoxelLayers>;
     infras: MapInfra[];
     pois: MapPoi[];
   },
-  targetChannels: (keyof TileGrids)[],
+  targetChannels: (keyof VoxelLayers)[],
 ) {
   target.infras.push(...source.infras);
   target.pois.push(...source.pois);
 
   targetChannels.forEach((channel) => {
-    const channelData = source.partialGrids[channel];
+    const channelData = source.partialLayers[channel];
     if (channelData) {
-      target.grids[channel].set(channelData);
+      target.grids.layers[channel].set(channelData);
     }
   });
 }
@@ -143,8 +141,8 @@ function mergeStepResult(
 export async function processPublicTile(
   coord: TileWorkerInput['coord'],
   origin: MeterPos,
-  onProgress?: (partialTile: WorldTile) => void,
-): Promise<WorldTile> {
+  onProgress?: (partialTile: GeometryTile) => void,
+): Promise<GeometryTile> {
   const { tx, ty } = coord;
   // 타일 당 그리드 해상도 (N x N)
   const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
@@ -175,7 +173,7 @@ export async function processPublicTile(
      * 이 과정에서 Bilinear Interpolation을 적용하면 지형이 부드러워집니다.
      */
     const heightGrid = bakeElevationGrid(elevationPoints);
-    currentGrids.height = heightGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
+    currentGrids.terrain.height = heightGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
 
     // 고도 데이터가 준비되면 첫 번째 점진적 업데이트 발송
     onProgress?.({

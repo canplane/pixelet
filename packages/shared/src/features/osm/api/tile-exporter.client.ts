@@ -2,25 +2,26 @@
  * @file tile-debug.ts
  * 엔진 내부의 그리드 데이터(Uint8Array)를 시각적 이미지(PNG) 또는 바이너리(.bin)로 추출합니다.
  * 베이킹 엔진(Baker)에서 생성된 복셀 데이터가 실제 지형과 일치하는지 검증하는 용도입니다.
- * * [핵심 설계: Y축 반전(Flip)]
- * Canvas API는 좌측 상단(0,0)에서 시작하지만, 엔진의 데이터는 남쪽에서 북쪽으로 쌓입니다.
- * 따라서 추출 시 Y축을 반전시켜야 실제 지도와 동일한 방향의 이미지를 얻을 수 있습니다.
+ * * [설계 변경: Standard Raster Order]
+ * 데이터가 이제 표준 이미지 좌표계(Top-Down, 북->남)를 따르므로,
+ * Canvas API와 방향이 일치합니다. 별도의 Y축 반전(Flip) 없이 순차적으로 그립니다.
  */
 
 import {
   VOXEL_COLORS,
   VOXEL_TYPES,
 } from '@pixelet/shared/entities/voxel/model/voxels';
-import type { TileGrids } from '@pixelet/shared/entities/osm/model/tiles';
+import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [hex-to-rgb]
- * HEX 색상을 ImageData(RGBA)에서 소비 가능한 RGB 배열로 변환합니다.
+ * HEX(#RRGGBB 또는 RRGGBB)를 [r, g, b]로 변환
  */
 const hexToRgb = (hex: string): [number, number, number] => {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
+  const cleanHex = hex.startsWith('#') ? hex.slice(1) : hex;
+  const r = parseInt(cleanHex.slice(0, 2), 16);
+  const g = parseInt(cleanHex.slice(2, 4), 16);
+  const b = parseInt(cleanHex.slice(4, 6), 16);
   return [r, g, b];
 };
 
@@ -109,12 +110,11 @@ export function downloadGridAsImage(
   for (let y = 0; y < resolution; y++) {
     for (let x = 0; x < resolution; x++) {
       /**
-       * 🎯 [Y-axis Flip Logic]
-       * 데이터 인덱스: 아래 -> 위 (남 -> 북)
-       * Canvas 좌표: 위 -> 아래 (북 -> 남)
-       * 상하 반전 처리를 통해 실제 지도 뷰와 일치시킵니다.
+       * 🎯 [Standard Order]
+       * 데이터가 Top-Down(북->남)으로 정렬되어 있으므로, Canvas 좌표계와 일치합니다.
+       * 별도의 Y-Flip 로직 없이 인덱스를 그대로 매핑합니다.
        */
-      const dataIdx = (resolution - 1 - y) * resolution + x;
+      const dataIdx = y * resolution + x; // (resolution - 1 - y) 제거됨
       const voxelValue = grid[dataIdx];
 
       const rgb = colorMap[voxelValue] || colorMap[VOXEL_TYPES.BASE_LAND];
@@ -141,36 +141,34 @@ export function downloadGridAsImage(
  * [downloadMergedGridAsImage]
  * 4개의 레이어(Base, Water, Transport, Structure)를 합성하여 최종 타일 이미지를 생성합니다.
  * * [Layer Composition Priority]
- * 쉐이더의 연산 우선순위와 동일하게 동작합니다:
+ * 쉐이더(Fragment Shader)의 합성 로직을 그대로 모방하여 이미지를 생성합니다.
  * 1. Structure (최상단: 건물)
  * 2. Transport (도로/주차장)
  * 3. Water (수계)
  * 4. Base (최하단: 지형/구역)
  */
 export function downloadMergedGridAsImage(
-  grids: TileGrids,
+  layers: VoxelLayers,
   resolution: number,
   origin: { x: number; y: number },
   filename?: string,
 ) {
-  if (typeof document === 'undefined' || !grids) return;
+  if (typeof document === 'undefined' || !layers) return;
 
-  // 🎯 [무결성 체크] 모든 그리드 채널의 크기가 해상도와 일치하는지 전수 검사
   const expectedLength = resolution * resolution;
-  const channels: (keyof TileGrids)[] = [
+  const channels: (keyof VoxelLayers)[] = [
     'base',
     'water',
     'transport',
     'structure',
   ];
 
+  // 1. 사이즈 검증
   for (const channel of channels) {
-    if (!grids[channel] || grids[channel].length !== expectedLength) {
+    if (!layers[channel] || layers[channel].length !== expectedLength) {
       console.error(
-        `[TileDebug] ${channel} channel size mismatch! 
-         Actual: ${grids[channel]?.length ?? 0}, Expected: ${expectedLength} (res: ${resolution})`,
+        `[TileDebug] ${channel} mismatch! Actual: ${layers[channel]?.length}, Expected: ${expectedLength}`,
       );
-      // 🚨 여기서 return 하거나 해상도를 실제 데이터에 맞게 강제 조정해야 함
       return;
     }
   }
@@ -184,28 +182,48 @@ export function downloadMergedGridAsImage(
   const colorMap = getColorMap();
   const imageData = ctx.createImageData(resolution, resolution);
 
+  // 🎯 쉐이더의 Fallback 색상 (보통 Base Land 색상)
+  const FALLBACK_COLOR = colorMap[VOXEL_TYPES.BASE_LAND];
+
   for (let y = 0; y < resolution; y++) {
     for (let x = 0; x < resolution; x++) {
-      const i = (resolution - 1 - y) * resolution + x;
+      /**
+       * 🎯 [Standard Order]
+       * 데이터와 캔버스 모두 Top-Down(북->남) 좌표계를 따르므로 Flip 없이 매핑합니다.
+       */
+      const dataIdx = y * resolution + x; // (resolution - 1 - y) 제거됨
 
-      // 🎯 [Safety Fallback] 만에 하나 undefined일 경우 EMPTY(0)로 처리
-      const tBase = grids.base[i] ?? 0;
-      const tWater = grids.water[i] ?? 0;
-      const tTrans = grids.transport[i] ?? 0;
-      const tStruct = grids.structure[i] ?? 0;
+      const tBase = layers.base[dataIdx] ?? 0;
+      const tWater = layers.water[dataIdx] ?? 0;
+      const tTrans = layers.transport[dataIdx] ?? 0;
+      const tStruct = layers.structure[dataIdx] ?? 0;
 
-      let finalType = tBase;
-      if (tWater !== VOXEL_TYPES.UNKNOWN) finalType = tWater;
-      if (tTrans !== VOXEL_TYPES.UNKNOWN) finalType = tTrans;
-      if (tStruct !== VOXEL_TYPES.UNKNOWN) finalType = tStruct;
+      /**
+       * 🎯 [Shader Logic Mirroring]
+       * 쉐이더 코드:
+       * vec3 finalColor = getTypeColor(tBase);
+       * if (tWater > TYPE_UNKNOWN) finalColor = getTypeColor(tWater);
+       * ...
+       * getTypeColor 내부: 매칭 안되면 return uColorBaseLand;
+       */
 
-      const rgb = colorMap[finalType] || colorMap[VOXEL_TYPES.BASE_LAND];
+      // 1. Base Layer 처리 (0이면 BaseLand로 Fallback)
+      let finalType =
+        tBase === VOXEL_TYPES.UNKNOWN ? VOXEL_TYPES.BASE_LAND : tBase;
+
+      // 2. Layer Overwrite (0보다 클 때만 덮어씀)
+      if (tWater > VOXEL_TYPES.UNKNOWN) finalType = tWater;
+      if (tTrans > VOXEL_TYPES.UNKNOWN) finalType = tTrans;
+      if (tStruct > VOXEL_TYPES.UNKNOWN) finalType = tStruct;
+
+      // 3. 색상 매핑
+      const rgb = colorMap[finalType] || FALLBACK_COLOR;
+
       const canvasIdx = (y * resolution + x) * 4;
-
       imageData.data[canvasIdx] = rgb[0];
       imageData.data[canvasIdx + 1] = rgb[1];
       imageData.data[canvasIdx + 2] = rgb[2];
-      imageData.data[canvasIdx + 3] = 255;
+      imageData.data[canvasIdx + 3] = 255; // Alpha
     }
   }
 

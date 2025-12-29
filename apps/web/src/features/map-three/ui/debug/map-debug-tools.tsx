@@ -5,7 +5,7 @@ import {
   downloadGridAsImage,
   downloadMergedGridAsImage, // ✨ Import 추가
 } from '@pixelet/shared/features/osm/api/tile-exporter.client';
-import type { TileGrids } from '@pixelet/shared/entities/osm/model/tiles';
+import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [map-debug-tools]
@@ -16,14 +16,19 @@ export function MapDebugTools() {
 
   if (worldTiles.size === 0) return null;
 
+  /**
+   * 1. 바이너리 다운로드 핸들러
+   */
   const handleDownloadAllBinary = () => {
     worldTiles.forEach((tile) => {
+      const { layers, terrain } = tile.grids;
+
+      // [XY Layers] 8-bit 채널들
       // 4개 채널을 순회하며 각각 다운로드
-      (Object.keys(tile.grids) as Array<keyof TileGrids>).forEach((channel) => {
-        const gridData = tile.grids[channel];
+      (Object.keys(layers) as Array<keyof VoxelLayers>).forEach((channel) => {
         // 파일명: tile_10:5_base.bin
         downloadGridAsBinary(
-          gridData,
+          layers[channel],
           tile.origin,
           tile.resolution,
           `tile_${tile.key}_${channel}.bin`,
@@ -32,14 +37,19 @@ export function MapDebugTools() {
     });
   };
 
+  /**
+   * 2. 레이어별 이미지 프리뷰 핸들러
+   */
   const handleDownloadAllImages = () => {
     worldTiles.forEach((tile) => {
+      const { layers, terrain } = tile.grids;
+
+      // [XY Layers] 8-bit 채널들
       // 4개 채널을 순회하며 각각 이미지화
-      (Object.keys(tile.grids) as Array<keyof TileGrids>).forEach((channel) => {
-        const gridData = tile.grids[channel];
+      (Object.keys(layers) as Array<keyof VoxelLayers>).forEach((channel) => {
         // 파일명: tile_10:5_transport.png
         downloadGridAsImage(
-          gridData,
+          layers[channel],
           tile.resolution,
           tile.origin,
           `tile_${tile.key}_${channel}.png`,
@@ -51,8 +61,10 @@ export function MapDebugTools() {
   // ✨ [New] 병합된 이미지 다운로드 핸들러
   const handleDownloadMergedImages = () => {
     worldTiles.forEach((tile) => {
+      const { layers, terrain } = tile.grids;
+
       downloadMergedGridAsImage(
-        tile.grids, // 4개 채널 전체 구조체 전달
+        layers, // 4개 채널 전체 구조체 전달
         tile.resolution,
         tile.origin,
         `tile_${tile.key}_merged.png`,

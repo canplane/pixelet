@@ -1,4 +1,4 @@
-import type { WorldTile } from '@pixelet/shared/entities/osm/model/tiles';
+import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 import type {
   TileWorkerInput,
   TileWorkerResponse,
@@ -14,11 +14,11 @@ const { API_MODE } = OSM_CONFIG;
  */
 interface TaskCallbacks {
   /** [Deduplication] 중복 요청 시 기존 Promise를 반환하여 리소스 낭비를 방지합니다. */
-  promise: Promise<WorldTile>;
-  resolve: (data: WorldTile) => void;
+  promise: Promise<GeometryTile>;
+  resolve: (data: GeometryTile) => void;
   reject: (error: any) => void;
   /** [Progressive Update] 데이터 가공 단계별(지형 -> 건물 등) 콜백 */
-  onProgress?: (data: Partial<WorldTile>) => void;
+  onProgress?: (data: Partial<GeometryTile>) => void;
 }
 
 /**
@@ -60,7 +60,7 @@ class TileWorkerManager {
         case 'complete':
           // 최종 완료: 데이터 전달 후 콜백 맵에서 삭제 (메모리 관리)
           if (data) {
-            callback.resolve(data as WorldTile);
+            callback.resolve(data as GeometryTile);
             this.callbacks.delete(requestId);
           }
           break;
@@ -95,8 +95,8 @@ class TileWorkerManager {
   public async requestTile(
     tx: number,
     ty: number,
-    onProgress?: (data: Partial<WorldTile>) => void,
-  ): Promise<WorldTile> {
+    onProgress?: (data: Partial<GeometryTile>) => void,
+  ): Promise<GeometryTile> {
     const requestId = `${tx}:${ty}`;
 
     // 1. 중복 요청 확인 (Deduplication)
@@ -109,10 +109,10 @@ class TileWorkerManager {
     await delay(Math.random() * 100);
 
     // 2. Promise 제어권 추출
-    let resolveFn: (data: WorldTile) => void;
+    let resolveFn: (data: GeometryTile) => void;
     let rejectFn: (error: any) => void;
 
-    const promise = new Promise<WorldTile>((resolve, reject) => {
+    const promise = new Promise<GeometryTile>((resolve, reject) => {
       resolveFn = resolve;
       rejectFn = reject;
     });

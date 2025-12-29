@@ -4,11 +4,11 @@
  */
 
 import { parseOsmData } from './osm-parser';
-import { bakeTileGrid } from './tile-baker';
+import { bakeGeometryGrid } from './geometry-baker';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 import type { NormalizedElement } from '../api/normalized-types';
 import type { MapInfra, MapPoi } from '../model/osms';
-import type { TileGrids } from '../model/tiles';
+import type { VoxelLayers } from '../model/tiles';
 
 /**
  * [process-osm-to-grids]
@@ -18,11 +18,11 @@ import type { TileGrids } from '../model/tiles';
 export function processOsmToGrids(
   elements: NormalizedElement[], // 🎯 오직 정규화된 데이터만 수용
   origin: MeterPos,
-  config: { tileSize: number; cellSize: number },
+  options?: { tileSize: number; cellSize: number },
 ): {
   infras: MapInfra[];
   pois: MapPoi[];
-  partialGrids: Partial<TileGrids>;
+  partialLayers: Partial<VoxelLayers>;
 } {
   /**
    * 1. 파싱: 'osm-parser' 실행
@@ -36,11 +36,11 @@ export function processOsmToGrids(
    * 인프라 객체(infras) 대신, 더 원원 정보가 풍부한 normalizedElements를 베이커에 직접 전달하여
    * 래스터화(Rasterization) 정밀도를 높입니다.
    */
-  let partialGrids: Partial<TileGrids> = {};
+  let partialLayers: Partial<VoxelLayers> = {};
   if (elements.length > 0) {
-    const result = bakeTileGrid(elements, origin, config);
-    partialGrids = result.grids;
+    const result = bakeGeometryGrid(elements, origin, options);
+    partialLayers = result.layers;
   }
 
-  return { infras, pois, partialGrids };
+  return { infras, pois, partialLayers };
 }

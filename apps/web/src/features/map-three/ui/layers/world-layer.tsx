@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import { useMapStore } from '../../model/map-store';
-import { GeometryTile } from './geometry-tile';
+import { GeometryTileView } from './geometry-tile-view';
 import { PoiItem } from '../items/poi-item';
 import { useTileScheduler } from '../../lib/use-tile-scheduler';
 
@@ -113,7 +113,7 @@ export const WorldLayer = React.memo(() => {
           각 타일 내부에서 상대 좌표 변환이 수행됩니다. */}
       <group name="tiles-group">
         {tileList.map((tile) => (
-          <GeometryTile key={tile.key} tile={tile} />
+          <GeometryTileView key={tile.key} tile={tile} />
         ))}
       </group>
 
