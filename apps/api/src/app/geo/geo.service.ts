@@ -3,15 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OsmElement } from '@/app/geo/entities/osm-element.entity';
 
-import type { NormalizedElement } from '@pixelet/shared/entities/osm/api/normalized-types';
-import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
+import type { OsmFeature } from '@pixelet/shared/entities/osm/model/osm-features';
+import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { Bbox, getTileBbox } from '@pixelet/shared/entities/osm/lib/tile-math';
 import {
   createEmptyGrids,
   GeometryGrids,
   VoxelLayers,
   GeometryTile,
-} from '@pixelet/shared/entities/osm/model/tiles';
+} from '@pixelet/shared/entities/osm/model/osm-tile';
 import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-handler';
 import { MeterPos } from '@pixelet/shared/shared/model/coords';
 
@@ -23,7 +23,7 @@ import {
 } from '@pixelet/shared/entities/osm/lib/osm-policy';
 import { bakeElevationGrid } from '@pixelet/shared/entities/elevation/lib/elevation-baker';
 
-const { TILE_SIZE, CELL_SIZE, Z_SAMPLING_STEP } = OSM_CONFIG;
+const { TILE_SIZE, CELL_SIZE, Z_SAMPLING_STEP } = OSM_CONSTANTS;
 
 interface OsmRawResult {
   osm_id: string;
@@ -223,7 +223,7 @@ export class GeoService {
   private async getNearbyMapDataByTile(
     tx: number,
     ty: number,
-  ): Promise<NormalizedElement[]> {
+  ): Promise<OsmFeature[]> {
     const bbox = getTileBbox(tx, ty);
     const area3857 = `ST_MakeEnvelope(${bbox.minX}, ${bbox.minY}, ${bbox.maxX}, ${bbox.maxY}, 3857)`;
 
@@ -249,23 +249,23 @@ export class GeoService {
       // [Policy Check] 태그 기반 카테고리 결정 (building, road, water 등)
       const category = determineOsmCategory(tags);
 
-      return this.mapToNormalizedElementFromGeoJSON(raw, geo, tags, category);
+      return this.mapToOsmFeatureFromGeoJSON(raw, geo, tags, category);
     });
   }
 
   /**
-   * [mapToNormalizedElementFromGeoJSON]
-   * Raw GeoJSON 데이터를 엔진 내부 표준인 NormalizedElement로 변환합니다.
+   * [mapToOsmFeatureFromGeoJSON]
+   * Raw GeoJSON 데이터를 엔진 내부 표준인 OsmFeature로 변환합니다.
    * - 폴리곤/라인/포인트 형상 통일
    * - 폐곡 여부(isClosed) 자동 판별
    * - 물리적 메트릭(높이, 층수 등) 계산
    */
-  private mapToNormalizedElementFromGeoJSON(
+  private mapToOsmFeatureFromGeoJSON(
     raw: OsmRawResult,
     geo: OsmGeometry,
     tags: Record<string, string>,
     category: string,
-  ): NormalizedElement {
+  ): OsmFeature {
     let points: MeterPos[] = [];
     let holes: MeterPos[][] = [];
 

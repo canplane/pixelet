@@ -1,6 +1,6 @@
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
-import { useMapStore } from '@/features/map-three/model/map-store';
-import { useMapNavigation } from '@/features/map-three/model/use-map-navigation';
+import { useMapStore } from '@/entities/osm/model/map-store';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 
 /**
@@ -49,14 +49,14 @@ const getCategoryStyles = (tags: any, isNight: boolean) => {
 export const PoiList = () => {
   const { status } = useDeviceLocationStore();
   const { themeKey } = useMapNavigation();
-  const worldTiles = useMapStore((state) => state.worldTiles);
+  const tiles = useMapStore((state) => state.tiles);
   const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
   const isNight = themeKey === 'night';
 
   /**
    * 전역 스토어에서 통합된 POI 리스트 추출
    */
-  const allPois = Array.from(worldTiles.values()).flatMap((tile) => tile.pois);
+  const allPois = Array.from(tiles.values()).flatMap((tile) => tile.pois);
 
   /**
    * 🎯 데이터 추출 보강
@@ -73,7 +73,7 @@ export const PoiList = () => {
     }))
     .filter((item) => item.displayName !== '이름 없는 장소');
 
-  const isLoading = status === 'ready' && worldTiles.size === 0;
+  const isLoading = status === 'ready' && tiles.size === 0;
 
   if (status !== 'ready' || isLoading) {
     return (

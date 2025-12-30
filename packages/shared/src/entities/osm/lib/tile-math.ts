@@ -4,11 +4,11 @@
  */
 
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
-import { OSM_CONFIG } from '../osm-config';
+import { OSM_CONSTANTS } from '../model/osm-constants';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
 const { unproject } = projection;
-const { TILE_SIZE } = OSM_CONFIG;
+const { TILE_SIZE } = OSM_CONSTANTS;
 
 /**
  * 절대 좌표(MeterPos)를 받아 타일 인덱스(tx, ty)로 변환합니다.
@@ -33,7 +33,7 @@ export interface Bbox {
  * @param ty - 타일 Y 인덱스
  */
 export const getTileBbox = (tx: number, ty: number): Bbox => {
-  const { TILE_SIZE } = OSM_CONFIG;
+  const { TILE_SIZE } = OSM_CONSTANTS;
 
   const minX = tx * TILE_SIZE;
   const minY = ty * TILE_SIZE;

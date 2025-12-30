@@ -1,11 +1,10 @@
 /**
  * @file osm-parser.ts
- * 정규화된 NormalizedElement를 엔진에서 사용 가능한 인프라 및 POI 객체로 최종 변환합니다.
+ * 정규화된 OsmFeature를 엔진에서 사용 가능한 인프라 및 POI 객체로 최종 변환합니다.
  * 레이어 간의 고도(Y-Offset)를 적용하여 Z-Fighting을 방지합니다.
  */
 
-import type { NormalizedElement } from '../api/normalized-types';
-import type { MapInfra, MapPoi } from '../model/osms';
+import type { OsmFeature, MapInfra, MapPoi } from '../model/osm-feature';
 
 /**
  * 레이어 렌더링 우선순위 (Baking 순서 결정)
@@ -20,7 +19,7 @@ const LAYER_PRIORITY: Record<string, number> = {
 } as const;
 
 export const parseOsmData = (
-  elements: NormalizedElement[],
+  elements: OsmFeature[],
 ): { infras: MapInfra[]; pois: MapPoi[] } => {
   const result = { infras: [] as MapInfra[], pois: [] as MapPoi[] };
 

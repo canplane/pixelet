@@ -1,29 +1,28 @@
-import { useMapStore } from '../../model/map-store';
+import { useMapStore } from '@/entities/osm/model/map-store';
 import { cn } from '@/shared/lib/utils';
 import {
   downloadGridAsBinary,
   downloadGridAsImage,
-  downloadMergedGridAsImage, // ✨ Import 추가
-} from '@pixelet/shared/features/osm/api/tile-exporter.client';
-import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/tiles';
+  downloadMergedGridAsImage,
+} from '@/entities/osm/lib/exporters/tile-exporter';
+import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/osm-tile';
 
 /**
  * [map-debug-tools]
  * 활성화된 모든 월드 타일의 '멀티 채널' 그리드 데이터를 추출합니다.
  */
 export function MapDebugTools() {
-  const worldTiles = useMapStore((state) => state.worldTiles);
+  const tiles = useMapStore((state) => state.tiles);
 
-  if (worldTiles.size === 0) return null;
+  if (tiles.size === 0) return null;
 
   /**
    * 1. 바이너리 다운로드 핸들러
    */
   const handleDownloadAllBinary = () => {
-    worldTiles.forEach((tile) => {
+    tiles.forEach((tile) => {
       const { layers, terrain } = tile.grids;
 
-      // [XY Layers] 8-bit 채널들
       // 4개 채널을 순회하며 각각 다운로드
       (Object.keys(layers) as Array<keyof VoxelLayers>).forEach((channel) => {
         // 파일명: tile_10:5_base.bin
@@ -41,10 +40,9 @@ export function MapDebugTools() {
    * 2. 레이어별 이미지 프리뷰 핸들러
    */
   const handleDownloadAllImages = () => {
-    worldTiles.forEach((tile) => {
+    tiles.forEach((tile) => {
       const { layers, terrain } = tile.grids;
 
-      // [XY Layers] 8-bit 채널들
       // 4개 채널을 순회하며 각각 이미지화
       (Object.keys(layers) as Array<keyof VoxelLayers>).forEach((channel) => {
         // 파일명: tile_10:5_transport.png
@@ -60,7 +58,7 @@ export function MapDebugTools() {
 
   // ✨ [New] 병합된 이미지 다운로드 핸들러
   const handleDownloadMergedImages = () => {
-    worldTiles.forEach((tile) => {
+    tiles.forEach((tile) => {
       const { layers, terrain } = tile.grids;
 
       downloadMergedGridAsImage(
@@ -75,7 +73,7 @@ export function MapDebugTools() {
   return (
     <div className="absolute bottom-20 left-6 flex flex-col gap-2 z-[100] pointer-events-auto select-none">
       <p className="text-[10px] text-white/50 font-mono mb-1 tracking-tighter">
-        DEBUG: MULTI-CHANNEL ({worldTiles.size} Tiles)
+        DEBUG: MULTI-CHANNEL ({tiles.size} Tiles)
       </p>
 
       <button
@@ -110,10 +108,10 @@ export function MapDebugTools() {
       </button>
 
       <div className="text-[9px] text-white/40 mt-1 px-1 font-mono leading-relaxed">
-        Tiles Loaded: {worldTiles.size}
+        Tiles Loaded: {tiles.size}
         <br />
         <span className="opacity-60">
-          Keys: {Array.from(worldTiles.keys()).join(', ')}
+          Keys: {Array.from(tiles.keys()).join(', ')}
         </span>
       </div>
     </div>
