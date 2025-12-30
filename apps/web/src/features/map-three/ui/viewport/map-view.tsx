@@ -10,7 +10,7 @@ import { MapCameraController } from '../controls/map-camera-controller';
 import { MapOverlays } from '../overlays/map-overlays';
 import { MapEnvironment } from './map-environment';
 import { MapToastController } from '../toasts/map-toast-controller';
-import { MapPortalRoot } from '../portal/map-portal-root';
+import { MapHtmlOverlay } from '../portal/map-html-overlay';
 import { WorldContent } from './world-content';
 import { MapDebugTools } from '../debug/map-debug-tools';
 
@@ -72,8 +72,10 @@ export function MapView() {
         </Canvas>
       </div>
 
-      {/* HTML 요소 기반의 오버레이 포탈 및 UI 레이어 */}
-      <MapPortalRoot />
+      {/* HTML 요소 기반의 오버레이 포탈 */}
+      <MapHtmlOverlay />
+
+      {/* 일반 절대 위치 UI 레이어 */}
       <MapOverlays />
 
       {/* 개발 환경 전용 그리드 데이터 추출 도구 */}

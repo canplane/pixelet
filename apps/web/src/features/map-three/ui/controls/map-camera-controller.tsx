@@ -11,7 +11,7 @@ import { useMapStore } from '@/entities/osm/model/map-store';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-// 🎯 [utility-import] 양방향 변환 유틸리티 모두 가져오기
+// 🎯 [utility-import] 좌표 변환 유틸리티 적용
 import { fromThreePos, toThreePos } from '@/shared/lib/three/three-coords';
 import { useCoordinateConverter } from '../../../../entities/osm/lib/use-coordinate-system';
 
@@ -32,6 +32,7 @@ interface MapCameraControllerProps {
  * 1. [physics]: OrbitControls를 통한 카메라 물리 제어
  * 2. [floating-origin]: 타일 기반 양자화(quantization) 리셋을 통해 부동소수점 정밀도 유지
  * 3. [sync]: 로컬(Three.js) 좌표와 절대(Geographic) 좌표 간의 실시간 동기화
+ * 4. [bridge-frame]: Origin 변경 시 발생하는 1프레임 깜빡임(Flicker)을 수동 조작으로 보정
  */
 export function MapCameraController({
   worldGroupRef,
@@ -70,6 +71,19 @@ export function MapCameraController({
     setOrigin(snappedInitial);
     setCenter(devicePos);
   }, [devicePos, origin]);
+
+  /**
+   * 🎯 [Bridge-Frame-Reset]
+   * useFrame에서 수동으로 밀어버린 worldGroup의 위치를,
+   * 리액트가 리렌더링(새로운 origin 반영)을 완료한 시점에 다시 0으로 초기화합니다.
+   * 이로써 [수동 이동 -> 리액트 업데이트 -> 초기화] 사이클이 완성되어 깜빡임이 사라집니다.
+   */
+  useEffect(() => {
+    if (worldGroupRef.current) {
+      worldGroupRef.current.position.set(0, 0, 0);
+      worldGroupRef.current.updateMatrixWorld(true);
+    }
+  }, [origin]); // origin 변경 감지
 
   const lastProcessedCenter = useRef<string>('');
   const lastUpdate = useRef<{ distance: number; bearing: number }>({
@@ -126,20 +140,26 @@ export function MapCameraController({
 
   /**
    * [coordinate-synchronization]
-   * 절대 좌표(global-center)가 변경될 때마다 Three.js 로컬 좌표계를 동기화합니다.
-   * 🎯 [refactored] 수동 계산을 제거하고 표준 변환 훅과 유틸리티를 사용합니다.
-   * Flow: Absolute(Center) -> Local(Geo) -> Swizzled(Three)
+   * 절대 좌표(global-center)가 변경될 때만 실행됩니다.
+   * * 🚫 [Fix-SnapBack]: 의존성에서 'origin'을 제거했습니다.
+   * Floating Origin이 바뀌는 것은 내부적인 좌표 이동일 뿐, 카메라가 'Center'로 되돌아가야 함을 의미하지 않습니다.
+   * 이미 useFrame에서 수동으로 시각적 위치를 보정했으므로, 여기서 또 움직이면 안 됩니다.
    */
   useEffect((): void => {
     if (!center || !controlsRef.current) return;
+
+    // 사용자가 상호작용 중일 때는 강제 이동 금지
     if ((controlsRef.current as any).active) return;
 
-    // 1. 절대 좌표 -> 로컬 지리 좌표 (Floating Origin 적용)
+    // 🎯 [Loop-Prevention] 방금 onEnd에서 내가 설정한 center라면, 카메라를 또 움직일 필요가 없음
+    // (이게 없으면 드래그 끝난 직후 아주 미세하게 카메라가 튀는 현상이 발생할 수 있음)
+    if (lastProcessedCenter.current === JSON.stringify(center)) return;
+
     const localGeoPos = globalToLocal(center);
 
-    // 2. 지리 좌표 -> Three.js 좌표 (Swizzling 적용)
-    const [tx, ty, tz] = toThreePos(localGeoPos);
-    const localTargetVec = new THREE.Vector3(tx, ty, tz);
+    // 🚀 [toThreePos] 유틸리티 사용하여 변환 (Vector3Tuple 분해)
+    const threePos = toThreePos(localGeoPos);
+    const localTargetVec = new THREE.Vector3(...threePos);
 
     const currentDist: number = camera.position.distanceTo(
       controlsRef.current.target,
@@ -153,7 +173,7 @@ export function MapCameraController({
     } else {
       flyTo(localTargetVec, finalDistance);
     }
-  }, [center, origin]); // globalToLocal은 origin에 의존하므로 dep 유지
+  }, [center, globalToLocal]); // 🎯 origin 제거, globalToLocal 추가
 
   // [signal-handlers]
   useEffect((): void => {
@@ -179,9 +199,17 @@ export function MapCameraController({
     if (!controlsRef.current || !worldGroupRef.current) return;
 
     // --- 1. Floating Origin Logic ---
-    const currentTargetLocal = controlsRef.current.target;
-    const absX = currentTargetLocal.x + origin.x;
-    const absY = -currentTargetLocal.z + origin.y;
+    const t = controlsRef.current.target;
+
+    /**
+     * 🎯 [Standardized-Unswizzling]
+     * 기존의 하드코딩된 좌표 복원 로직(-z -> y)을 표준 유틸리티(fromThreePos)로 대체합니다.
+     * Three.js 좌표(Local) -> 지리 좌표(Local Geo)
+     */
+    const localGeo = fromThreePos([t.x, t.y, t.z]);
+
+    const absX = localGeo.x + origin.x;
+    const absY = localGeo.y + origin.y;
 
     const currentTx = Math.floor(absX / TILE_SIZE);
     const currentTy = Math.floor(absY / TILE_SIZE);
@@ -205,16 +233,28 @@ export function MapCameraController({
         y: newOriginY,
         z: origin.z,
       };
-      setOrigin(newOrigin);
+      setOrigin(newOrigin); // React Update Trigger
 
-      const moveVec = new THREE.Vector3(moveX, 0, -moveY);
-      worldGroupRef.current.position.sub(moveVec);
+      // Floating Origin Shift Vector
+      // 🚀 [toThreePos] 이동 벡터도 표준 변환을 사용하여 생성 (Geo [dx, dy] -> Three [dx, 0, -dy])
+      const moveVecTuple = toThreePos({ x: moveX, y: moveY });
+      const moveVec = new THREE.Vector3(...moveVecTuple);
+
+      /**
+       * 🎯 [Sync-Correction]
+       * 1. 카메라와 컨트롤 타겟을 이동 (Local 좌표계 유지)
+       * 2. WorldGroup도 동일하게 이동 (sub)하여,
+       * 타일들이 아직 '오래된 좌표'를 가지고 있는 1프레임 동안 위치를 보정함.
+       * * (원리: Origin이 +100 이동 -> 카메라 -100 이동 -> 타일도 -100 이동해야 시각적 고정)
+       */
       camera.position.sub(moveVec);
       controlsRef.current.target.sub(moveVec);
+      worldGroupRef.current.position.sub(moveVec);
 
-      worldGroupRef.current.updateMatrixWorld(true);
       camera.updateMatrixWorld(true);
       controlsRef.current.update();
+      // worldGroupRef 업데이트는 필수는 아니지만 안전을 위해 수행
+      worldGroupRef.current.updateMatrixWorld(true);
 
       console.log(
         `[FloatingOrigin] Shifted to Tile(${currentTx}, ${currentTy})`,
@@ -292,11 +332,17 @@ export function MapCameraController({
         if (controlsRef.current) {
           const t: THREE.Vector3 = controlsRef.current.target;
 
-          /**
-           * [absolute-position-reverse]
-           * 1. fromThreePos: Axis Un-swizzling (Three Y -> Geo Z, Three -Z -> Geo Y)
-           * 2. localToGlobal: Floating Origin Offset 복원
-           */
+          // [Safety Check]
+          if (
+            !Number.isFinite(t.x) ||
+            !Number.isFinite(t.y) ||
+            !Number.isFinite(t.z)
+          ) {
+            console.warn('[Camera] Invalid target detected, skipping update');
+            return;
+          }
+
+          // 🚀 [fromThreePos] 표준 유틸리티 사용 (Vector3Tuple 타입 단언)
           const localMeterPos = fromThreePos([t.x, t.y, t.z]);
           const absolutePos = localToGlobal(localMeterPos);
 

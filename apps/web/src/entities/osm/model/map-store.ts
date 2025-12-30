@@ -20,6 +20,14 @@ import { THREE_CONFIG } from '../config/three-config';
 const { project } = projection;
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 
+/**
+ * [status-lifecycle]
+ * 지도의 전반적인 데이터 로딩 상태입니다.
+ * - idle: 초기 대기
+ * - loading: 데이터 페칭 중
+ * - success: 렌더링 준비 완료
+ * - error: 로딩 실패
+ */
 export type MapDataStatus = 'idle' | 'loading' | 'success' | 'error';
 
 /**
@@ -28,9 +36,9 @@ export type MapDataStatus = 'idle' | 'loading' | 'success' | 'error';
  */
 export interface ViewState {
   distance: number; // 줌 레벨 (카메라-타겟 거리)
-  bearing: number; // 수평 회전 각도 (0~360)
-  polarAngle: number; // 수직 각도 (라디안)
-  altitude: number; // 지면으로부터의 수직 높이
+  bearing: number; // 수평 회전 각도 (0~360, 북쪽 기준)
+  polarAngle: number; // 수직 각도 (0:수직, PI/2:수평)
+  altitude: number; // 지면으로부터의 카메라 수직 높이
 }
 
 /**
@@ -44,54 +52,82 @@ export interface ViewState {
  * 3. Local Position: 렌더링 시에는 (Absolute - origin) 연산을 통해 0 근처의 로컬 좌표로 변환됩니다.
  */
 interface MapState {
+  // --- [Lifecycle & Status] ---
   status: MapDataStatus;
   setStatus: (status: MapDataStatus) => void;
+  /** [progressive-loading] 단계별 로딩 상태 (도로 -> POI -> 완료) */
   loadingStep: 'roads' | 'poi' | 'complete' | null;
   setLoadingStep: (loadingStep: MapState['loadingStep']) => void;
 
-  /** 활성 범위 내의 타일 데이터 관리 */
+  // --- [Tile Data Management] ---
+  /** 현재 메모리에 로드된 타일 데이터 저장소 (Key: "tx:ty") */
   tiles: Map<string, GeometryTile>;
   /**
    * [set-geometry-tile] (Partial Update Supported)
-   * 타일 데이터의 점진적 로딩을 지원합니다. (예: 도로 먼저 -> POI 나중에)
+   * 타일 데이터를 새로 추가하거나, 이미 존재하는 타일에 데이터를 병합(Merge)합니다.
+   * 예: Worker로부터 지형 데이터 수신 후, 나중에 POI 데이터 수신 시 병합
    */
   setGeometryTile: (key: string, tile: Partial<GeometryTile>) => void;
+  /** 특정 타일을 메모리에서 즉시 해제합니다. */
   removeGeometryTile: (key: string) => void;
+  /** 가시 범위 밖의 불필요한 타일들을 일괄 정리(GC)합니다. */
   clearOldTiles: (neededKeys: string[]) => void;
 
-  // [center-position] 카메라가 보고 있는 절대 위치
+  // --- [Navigation & Coordinate] ---
+  /** [center-position] 카메라가 현재 바라보고 있는 절대적 중심 좌표 (Target) */
   center: MeterPos | null;
   setCenter: (pos: MeterPos) => void;
+  /** 위경도(Location)를 받아 투영 후 Center를 설정하는 편의 함수 */
   setCenterByLocation: (location: Location) => void;
 
+  /** 카메라의 줌, 회전, 고도 등 시각적 파라미터 */
   viewState: ViewState;
   setViewState: (view: Partial<ViewState>) => void;
 
-  // [floating-origin] 시스템의 동적 기준점
+  /**
+   * [floating-origin]
+   * 렌더링 정밀도 유지를 위해 동적으로 변하는 World 원점 (0,0,0)의 실제 절대 좌표.
+   * 카메라 이동에 따라 타일 크기 단위로 스냅되어 이동합니다.
+   */
   origin: MeterPos;
   setOrigin: (origin: MeterPos) => void;
 
+  // --- [Control Signals] ---
+  /** 카메라 리셋 요청을 트리거하기 위한 시그널 (Timestamp 기반) */
   cameraResetSignal: { distance: number; orientation: number };
   triggerDistanceReset: () => void;
   triggerOrientationReset: () => void;
 
+  // --- [Interaction] ---
+  /** 마우스가 호버 중인 3D 월드 상의 좌표 (Raycasting 결과) */
   hoveredPos: MeterPos | null;
   setHoveredPos: (pos: MeterPos | null) => void;
 
+  /** 사용자가 클릭하여 선택한 POI 객체 */
   selectedPoi: MapPoi | null;
   setSelectedPoi: (poi: MapPoi | null) => void;
 
-  portalElement: HTMLDivElement | null;
-  setPortalElement: (el: HTMLDivElement | null) => void;
+  /**
+   * [html-portal-target]
+   * Three.js 캔버스 위에 HTML 오버레이를 렌더링하기 위한 DOM 노드 참조.
+   * <Html portal={...}> 컴포넌트가 마운트될 위치입니다.
+   */
+  htmlPortalElement: HTMLDivElement | null;
+  setHtmlPortalElement: (el: HTMLDivElement | null) => void;
 
+  /** 내비게이션 추적 모드 활성화 여부 (사용자 위치 자동 따라가기) */
   isFollowMode: boolean;
   setIsFollowMode: (isFollowMode: boolean) => void;
 
+  /** 사용자가 지도를 조작(드래그, 줌 등) 중인지 여부 */
   isInteracting: boolean;
   setIsInteracting: (isInteracting: boolean) => void;
 
+  // --- [Environment & Theme] ---
+  /** 현재 가상 월드의 시간 (0~23) */
   currentHour: number;
   setCurrentHour: (hour: number) => void;
+  /** 현재 시간에 따른 테마 키(morning, day, evening, night) 계산 함수 */
   getThemeKey: () => ThemeKey;
 }
 
@@ -117,13 +153,13 @@ export const useMapStore = create<MapState>((set, get) => ({
       const existingTile = newMap.get(key);
 
       if (existingTile) {
-        // [merge-strategy] 기존 타일 병합
+        // [merge-strategy] 기존 타일 병합 (Shallow Merge)
         newMap.set(key, {
           ...existingTile,
           ...partialTile,
         });
       } else {
-        // [new-tile-validation] 필수 데이터 확인 후 생성
+        // [new-tile-validation] 신규 생성 시 필수 데이터 무결성 검사
         if (partialTile.origin && partialTile.grids && partialTile.resolution) {
           newMap.set(key, partialTile as GeometryTile);
         } else {
@@ -145,7 +181,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   /**
    * [clear-old-tiles]
-   * 현재 가시 범위 밖에 있는 타일들을 메모리에서 해제합니다.
+   * 현재 가시 범위(neededKeys)에 포함되지 않는 타일들을 제거하여 메모리를 확보합니다.
    */
   clearOldTiles: (neededKeys) =>
     set((state) => {
@@ -183,7 +219,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   /**
    * [set-origin]
-   * 오리진 설정 시 항상 격자(voxel) 단위로 스냅하여 렌더링 정밀도를 보장합니다.
+   * 오리진 설정 시 항상 격자(voxel) 단위로 스냅하여 렌더링 정밀도와 좌표 일관성을 보장합니다.
    */
   setOrigin: (newOrigin) => {
     set({ origin: VOXEL_CONFIG.snapToVoxel(newOrigin) });
@@ -208,8 +244,8 @@ export const useMapStore = create<MapState>((set, get) => ({
   selectedPoi: null,
   setSelectedPoi: (poi) => set({ selectedPoi: poi }),
 
-  portalElement: null,
-  setPortalElement: (el) => set({ portalElement: el }),
+  htmlPortalElement: null,
+  setHtmlPortalElement: (el) => set({ htmlPortalElement: el }),
 
   isFollowMode: false,
   setIsFollowMode: (isFollowMode) => set({ isFollowMode }),

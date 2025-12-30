@@ -1,4 +1,10 @@
-import React, { useMemo, useRef, useState, type ReactElement } from 'react';
+import React, {
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  type ReactElement,
+} from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
@@ -66,7 +72,7 @@ function getTerrainAltitude(absX: number, absY: number): number {
  */
 export const PoiItem = React.memo(
   ({ poi }: PoiItemProps): ReactElement | null => {
-    const portalElement = useMapStore((state) => state.portalElement);
+    const htmlPortalElement = useMapStore((state) => state.htmlPortalElement);
     const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
 
     const { themeKey } = useMapNavigation();
@@ -88,10 +94,30 @@ export const PoiItem = React.memo(
 
     const shouldShowName: boolean = !isMinimal || isHovered;
 
+    // 🎯 [Terrain-Snap-Correction]
+    // 1. 이 POI가 속한 타일의 Key를 계산합니다.
+    const tileKey = useMemo(() => {
+      const tx = Math.floor(poi.center.x / TILE_SIZE);
+      const ty = Math.floor(poi.center.y / TILE_SIZE);
+      return `${tx}:${ty}`;
+    }, [poi.center.x, poi.center.y]);
+
     /**
-     * [Terrain-Snap]
+     * 2. [State-Subscription] 해당 타일의 로딩 여부만 정밀하게 구독합니다.
+     * useCallback을 사용하여 Selector 함수의 참조를 유지해야 불필요한 리렌더링을 막습니다.
+     * tiles Map 전체가 바뀌어도, 내 키(tileKey)의 존재 여부(boolean)가 안 바뀌면 리렌더링 되지 않습니다.
+     */
+    const isTileLoadedSelector = useCallback(
+      (state: any) => state.tiles.has(tileKey),
+      [tileKey],
+    );
+    const isTileLoaded = useMapStore(isTileLoadedSelector);
+
+    /**
+     * [Terrain-Snap] & [Lazy-Correction]
      * POI의 절대 좌표는 불변이므로, 해당 위치의 지형 높이를 초기 1회 계산합니다.
-     * (지형이 실시간으로 변하지 않는다고 가정)
+     * 🎯 [Fix] isTileLoaded가 false -> true로 변하는 순간(타일 로드 완료 시) 재계산하여,
+     * 초기 로딩 시 POI가 바닥(0m)에 붙어있는 문제를 해결합니다.
      */
     const terrainHeight = useMemo(() => {
       // 🎯 POI 중심점에 VOXEL_CONFIG.HALF(복셀 중심 보정)를 더해 정확한 샘플링
@@ -99,7 +125,7 @@ export const PoiItem = React.memo(
         poi.center.x + VOXEL_CONFIG.HALF,
         poi.center.y + VOXEL_CONFIG.HALF,
       );
-    }, [poi.center.x, poi.center.y]);
+    }, [poi.center.x, poi.center.y, isTileLoaded]);
 
     /**
      * [get-category-style]
@@ -240,7 +266,9 @@ export const PoiItem = React.memo(
     return (
       <group ref={groupRef}>
         <Html
-          portal={portalElement ? { current: portalElement } : undefined}
+          portal={
+            htmlPortalElement ? { current: htmlPortalElement } : undefined
+          }
           // 🎯 Group이 이미 위치를 잡았으므로 Html은 (0,0,0)에 배치
           position={[0, 0, 0]}
           center
