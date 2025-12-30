@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useMapStore } from '../../model/map-store';
+import { useMapStore } from '@/entities/osm/model/map-store';
 import { cn } from '@/shared/lib/utils';
 
 /**

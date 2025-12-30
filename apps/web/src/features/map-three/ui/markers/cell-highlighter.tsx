@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Line } from '@react-three/drei';
 
-import { useMapNavigation } from '../../model/use-map-navigation';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
-import { THREE_CONFIG } from '../../model/three-config';
+import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
@@ -17,14 +17,8 @@ const { FOG_DENSITY, FADE_END } = THREE_CONFIG.RENDERING;
  */
 export function CellHighlighter(): ReactElement | null {
   const { raycaster, pointer, camera } = useThree();
-  const {
-    center,
-    setCenter,
-    originOffset,
-    hoveredPos,
-    setHoveredPos,
-    themeKey,
-  } = useMapNavigation();
+  const { setCenter, origin, hoveredPos, setHoveredPos, themeKey } =
+    useMapNavigation();
 
   const targetTheme = MAP_LAYOUT_THEMES[themeKey];
   const themeColor: string = targetTheme.grid.section;
@@ -76,8 +70,8 @@ export function CellHighlighter(): ReactElement | null {
          * - Three.js -Z -> 지리적 Y (북쪽)
          */
         const absolutePoint: MeterPos = {
-          x: intersect.x + originOffset.x,
-          y: -intersect.z + originOffset.y, // 🎯 축 스와핑 핵심
+          x: intersect.x + origin.x,
+          y: -intersect.z + origin.y, // 🎯 축 스와핑 핵심
           z: 0,
         };
 
@@ -85,8 +79,8 @@ export function CellHighlighter(): ReactElement | null {
         const snapped = VOXEL_CONFIG.snapToVoxel(absolutePoint);
 
         // 3. 다시 씬의 로컬 좌표로 변환
-        const localX = snapped.x - originOffset.x;
-        const localY = snapped.y - originOffset.y;
+        const localX = snapped.x - origin.x;
+        const localY = snapped.y - origin.y;
 
         // 🎯 [Center-Correction]
         // 하이라이터 메시는 '중심' 기준이므로, 스냅된 좌표의 '가운데'로 보정합니다.
@@ -148,10 +142,10 @@ export function CellHighlighter(): ReactElement | null {
         <mesh
           onClick={(e) => {
             e.stopPropagation();
-            // 🎯 setCenter 시에도 절대 좌표(originOffset 포함)로 전달
+            // 🎯 setCenter 시에도 절대 좌표(origin 포함)로 전달
             setCenter({
-              x: hoveredPos.x + originOffset.x,
-              y: hoveredPos.y + originOffset.y,
+              x: hoveredPos.x + origin.x,
+              y: hoveredPos.y + origin.y,
               z: 0,
             });
           }}

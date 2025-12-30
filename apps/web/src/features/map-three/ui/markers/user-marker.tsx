@@ -1,15 +1,19 @@
 import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { useMapNavigation } from '../../model/use-map-navigation';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
-import { THREE_CONFIG } from '../../model/three-config';
+import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
-import { useRelativePosition } from '../../model/use-relative-position';
+import { useRelativePosition } from '../../../../entities/osm/lib/use-coordinate-system';
 import {
   toThreePos,
   toThreePosWithOffset,
 } from '@/shared/lib/three/three-coords';
+import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { useMapStore } from '@/entities/osm/model/map-store';
+
+const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
 
 /**
  * [create-rounded-rect-geometry]
@@ -50,8 +54,12 @@ const MAX_INSTANCES: number = 1500;
  */
 export function UserMarker(): ReactElement | null {
   const { devicePos, accuracy, themeKey } = useMapNavigation();
+  const tiles = useMapStore((state) => state.tiles); // 🎯 전역 타일 데이터
+
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const gemRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null); // 🎯 고도 적용을 위해 그룹 참조 추가
+
   const tempObject: THREE.Object3D = useMemo(() => new THREE.Object3D(), []);
 
   // [hook-order-safety]
@@ -89,7 +97,45 @@ export function UserMarker(): ReactElement | null {
     };
   }, [localPos, snappedLocalPos]);
 
+  /**
+   * 🏔️ [Ground Clamping Logic]
+   * 현재 기기 위치(devicePos)가 속한 타일을 찾아 해당 좌표의 고도값을 반환합니다.
+   */
+  const getElevation = (x: number, y: number): number => {
+    // 1. 현재 좌표가 속한 타일 키 계산 (tx, ty)
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    const tileKey = `${tx}:${ty}`;
+
+    const tile = tiles.get(tileKey);
+    if (!tile || !tile.grids.terrain.height) return 0;
+
+    // 2. 타일 내 로컬 좌표로 변환 (0 ~ TILE_SIZE)
+    const localX = x - tx * TILE_SIZE;
+    const localY = y - ty * TILE_SIZE;
+
+    // 3. 그리드 인덱스 계산 (Resolution: 2048)
+    const res = Math.floor(TILE_SIZE / CELL_SIZE);
+    const gridX = Math.floor(localX / CELL_SIZE);
+    const gridY = Math.floor((TILE_SIZE - localY) / CELL_SIZE); // Top-Down 보정
+
+    const index = gridY * res + gridX;
+    const hRaw = tile.grids.terrain.height[index] || 0;
+
+    // 4. 물리적 고도 계산 (Uint16 * Z_Unit)
+    return hRaw * (CELL_SIZE * Z_SCALE_RATIO);
+  };
+
   useFrame((state: { camera: THREE.Camera; clock: THREE.Clock }): void => {
+    if (!devicePos || !groupRef.current) return;
+
+    // 🎯 [Height-Sync] 매 프레임 현재 위치의 고도를 계산하여 그룹의 Y(Three.js Z) 축에 적용
+    const elevation = getElevation(devicePos.x, devicePos.y);
+
+    // Three.js 좌표계: 지면 고도는 Y축 (우리 레이아웃 기준으론 Z가 고도일 수 있으나
+    // 현재 그룹의 position 배열 구조에 맞춰 조정)
+    groupRef.current.position.y = elevation + VOXEL_CONFIG.SYSTEM_OFFSET;
+
     if (!gemRef.current || !meshRef.current || !devicePos) return;
 
     const markerWorldPos: THREE.Vector3 = new THREE.Vector3();
@@ -163,16 +209,18 @@ export function UserMarker(): ReactElement | null {
 
   return (
     <group
+      ref={groupRef} // 🎯 고도 제어를 위해 ref 연결
       position={[
         VOXEL_CONFIG.toCenter(snappedLocalPos.x),
         VOXEL_CONFIG.SYSTEM_OFFSET,
         -VOXEL_CONFIG.toCenter(snappedLocalPos.y), // y -> -z (북향 매핑)
       ]}
     >
+      {/* 🎯 InstancedMesh (정확도 범위) */}
       <instancedMesh
         ref={meshRef}
         args={[ROUNDED_GEOMETRY, undefined, MAX_INSTANCES]}
-        renderOrder={5}
+        renderOrder={5} //
       >
         <meshBasicMaterial
           color={isNight ? themeAccent : '#FFD700'}
@@ -182,20 +230,15 @@ export function UserMarker(): ReactElement | null {
         />
       </instancedMesh>
 
-      {/* [floating-gem] 사용자 위치를 표시하는 보석 오브젝트 */}
-      <mesh
-        ref={gemRef}
-        // 🎯 [Swizzling-Fix] 오프셋 적용 시에도 y(남북)를 Three.js의 -z로 매핑
-        position={toThreePosWithOffset(gemOffset, 2)}
-        renderOrder={20}
-      >
+      {/* 🎯 Gem & Light: 사용자 위치를 표시하는 보석 오브젝트 */}
+      <mesh ref={gemRef} position={toThreePosWithOffset(gemOffset, 0)}>
         <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial
           color={gemColor}
           emissive={gemColor}
           emissiveIntensity={isNight ? 2 : 0.5}
-          roughness={0.2}
-          metalness={0.8}
+          roughness={0.2} //
+          metalness={0.8} ///
           flatShading
         />
       </mesh>

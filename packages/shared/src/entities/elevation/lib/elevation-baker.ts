@@ -1,8 +1,8 @@
 // @pixelet/web/src/entities/elevation/lib/elevation-baker.ts
 
-import { OSM_CONFIG } from '@pixelet/shared/entities/osm/osm-config';
+import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONFIG;
+const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
 
 interface BakeOptions {
   tileSize?: number; // 타일 한 변의 물리적 크기 (m)

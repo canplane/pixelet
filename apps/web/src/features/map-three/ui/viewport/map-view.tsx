@@ -2,8 +2,8 @@ import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 
-import { useMapNavigation } from '../../model/use-map-navigation';
-import { THREE_CONFIG } from '../../model/three-config';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 
 import { MapCameraController } from '../controls/map-camera-controller';
@@ -25,7 +25,11 @@ const { FAR_CLIP } = THREE_CONFIG.RENDERING;
 export function MapView() {
   const isDebug = import.meta.env.DEV;
 
+  // 🎯 [World Group Ref]
+  // 이 그룹 안에 타일, POI, 그리고 Html 포탈 앵커가 모두 포함됩니다.
+  // Floating Origin Shift 발생 시 이 그룹 전체가 이동하므로 이격이 발생하지 않습니다.
   const worldGroupRef = useRef<THREE.Group>(null);
+
   const { themeKey } = useMapNavigation();
   const currentTheme = MAP_LAYOUT_THEMES[themeKey];
 

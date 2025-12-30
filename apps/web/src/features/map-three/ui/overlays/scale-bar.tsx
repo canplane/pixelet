@@ -1,5 +1,5 @@
-import { THREE_CONFIG } from '@/features/map-three/model/three-config';
-import { useMapNavigation } from '../../model/use-map-navigation';
+import { THREE_CONFIG } from '@/entities/osm/config/three-config';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 import { MotionContainer } from '@/shared/ui/layout/motion-container';
 

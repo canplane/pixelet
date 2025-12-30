@@ -6,9 +6,9 @@
 import { parseOsmData } from './osm-parser';
 import { bakeGeometryGrid } from './geometry-baker';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
-import type { NormalizedElement } from '../api/normalized-types';
+import type { OsmFeature } from '../model/osm-feature';
 import type { MapInfra, MapPoi } from '../model/osms';
-import type { VoxelLayers } from '../model/tiles';
+import type { VoxelLayers } from '../model/osm-tile';
 
 /**
  * [process-osm-to-grids]
@@ -16,7 +16,7 @@ import type { VoxelLayers } from '../model/tiles';
  * 전처리기(Normalizer)를 거쳐 정규화된 데이터를 각 엔진 컴포넌트에 배분합니다.
  */
 export function processOsmToGrids(
-  elements: NormalizedElement[], // 🎯 오직 정규화된 데이터만 수용
+  elements: OsmFeature[], // 🎯 오직 정규화된 데이터만 수용
   origin: MeterPos,
   options?: { tileSize: number; cellSize: number },
 ): {

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CheckCircle2, MapPinOff } from 'lucide-react';
-import { useMapStore } from '../../model/map-store';
+import { useMapStore } from '@/entities/osm/model/map-store';
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
 import { DynamicIslandLayout } from '@/shared/ui/toasts/dynamic-island-layout';
 

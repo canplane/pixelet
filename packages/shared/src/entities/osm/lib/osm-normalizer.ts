@@ -3,8 +3,8 @@
  * Raw OSM(4326) 데이터를 엔진 표준(3857 Meter)으로 정규화합니다.
  */
 
-import type { OverpassElement } from '../api/overpass-types';
-import type { NormalizedElement } from '../api/normalized-types';
+import type { OsmSourceElement } from '../model/osm-source';
+import type { OsmFeature } from '../model/osm-feature';
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
@@ -18,8 +18,8 @@ import {
 const { project } = projection;
 
 export const normalizeOsmData = (
-  elements: OverpassElement[],
-): NormalizedElement[] => {
+  elements: OsmSourceElement[],
+): OsmFeature[] => {
   if (!elements || elements.length === 0) return [];
 
   const nodeCache = new Map<number, MeterPos>();
@@ -31,7 +31,7 @@ export const normalizeOsmData = (
   });
 
   return elements
-    .map((item, idx): NormalizedElement | null => {
+    .map((item, idx): OsmFeature | null => {
       const tags = item.tags || {};
 
       // 1. 위치 정보 정규화
@@ -101,5 +101,5 @@ export const normalizeOsmData = (
         category,
       };
     })
-    .filter((v): v is NormalizedElement => v !== null);
+    .filter((v): v is OsmFeature => v !== null);
 };
