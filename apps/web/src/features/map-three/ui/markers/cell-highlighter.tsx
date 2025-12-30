@@ -9,6 +9,9 @@ import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import type { MeterPos } from '@pixelet/shared/shared/model/coords';
 
+// 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
+import { fromThreePos, toThreePos } from '@/shared/lib/three/three-coords';
+
 const { FOG_DENSITY, FADE_END } = THREE_CONFIG.RENDERING;
 
 /**
@@ -64,14 +67,15 @@ export function CellHighlighter(): ReactElement | null {
       // 🚀 [수정] FADE_END가 너무 짧으면 하이라이터가 일찍 사라집니다. 여유를 둡니다.
       if (distToCamera <= FADE_END * 2.0) {
         /**
-         * 🎯 [Coordinate-Fix]
-         * 1. 씬의 로컬 X, Z를 지리적 절대 좌표로 복원
-         * - Three.js X -> 지리적 X
-         * - Three.js -Z -> 지리적 Y (북쪽)
+         * 🎯 [Coordinate-Fix] 표준 유틸리티(fromThreePos) 사용
+         * 1. 씬의 로컬 좌표(Three)를 지리적 로컬 좌표(Meter)로 복원
+         * - Three.js 좌표계 -> Geo 좌표계 자동 변환
          */
+        const localGeo = fromThreePos([intersect.x, intersect.y, intersect.z]);
+
         const absolutePoint: MeterPos = {
-          x: intersect.x + origin.x,
-          y: -intersect.z + origin.y, // 🎯 축 스와핑 핵심
+          x: localGeo.x + origin.x,
+          y: localGeo.y + origin.y, // 🎯 fromThreePos가 이미 북쪽을 +y로 변환해줌
           z: 0,
         };
 
@@ -96,8 +100,10 @@ export function CellHighlighter(): ReactElement | null {
         }
 
         if (localGroupRef.current) {
-          // 🎯 Three.js 위치 배치: (X, 0, -Y)
-          localGroupRef.current.position.set(centeredX, 0, -centeredY);
+          // 🎯 Three.js 위치 배치: 표준 유틸리티(toThreePos) 사용
+          // Geo {x, y} -> Three [x, 0, -y] 자동 변환
+          const groupPos = toThreePos({ x: centeredX, y: centeredY, z: 0 });
+          localGroupRef.current.position.set(...groupPos);
 
           const visibility = Math.exp(-Math.pow(distToCamera * FOG_DENSITY, 2));
           localGroupRef.current.visible = visibility > 0.01;

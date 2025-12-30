@@ -1,15 +1,19 @@
 import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
+import type { Vector3Tuple } from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { useRelativePosition } from '../../../../entities/osm/lib/use-coordinate-system';
+
+// 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
 import {
   toThreePos,
   toThreePosWithOffset,
 } from '@/shared/lib/three/three-coords';
+
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { useMapStore } from '@/entities/osm/model/map-store';
 
@@ -179,9 +183,13 @@ export function UserMarker(): ReactElement | null {
   useEffect((): void => {
     if (!meshRef.current) return;
 
-    // 초기화: 모든 인스턴스를 보이지 않는 곳으로 이동
+    // 🎯 [Standardization] 숨김 좌표도 표준 유틸리티를 사용하여 정의
+    // (Geographic) Alt: -1000m -> (Three) Y: -1000
+    const hiddenPos = toThreePos({ x: 0, y: 0, z: -1000 });
+
+    // 초기화: 모든 인스턴스를 보이지 않는 곳(지하)으로 이동
     for (let i = 0; i < MAX_INSTANCES; i++) {
-      tempObject.position.set(0, -1000, 0);
+      tempObject.position.set(...hiddenPos);
       tempObject.updateMatrix();
       meshRef.current.setMatrixAt(i, tempObject.matrix);
     }
@@ -189,13 +197,17 @@ export function UserMarker(): ReactElement | null {
     // 활성 격자 배치
     gridOffsets.forEach((offset, i) => {
       /**
-       * 🎯 [Swizzling-Fix]
-       * InstancedMesh 내부 좌표 배치:
-       * Three X = offset.x (동서)
-       * Three Y = 0.05 (지면 높이)
-       * Three Z = -offset.y (남북 -> 북향 매핑)
+       * 🎯 [Swizzling-Fix] 표준 유틸리티(toThreePos) 사용
+       * InstancedMesh 좌표: { x: 동서, y: 남북 } -> { x: x, y: 0.05, z: -y }
+       * toThreePos({ x, y, z: 0.05 }) 호출 시 [x, 0.05, -y]가 반환됨
        */
-      tempObject.position.set(offset.x, 0.05, -offset.y);
+      const pos: Vector3Tuple = toThreePos({
+        x: offset.x,
+        y: offset.y,
+        z: 0.05,
+      });
+
+      tempObject.position.set(...pos);
       tempObject.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.matrix);
     });
@@ -207,14 +219,27 @@ export function UserMarker(): ReactElement | null {
   // [type-guard-render] 모든 Hook 실행 후 렌더링 여부 결정
   if (!devicePos) return null;
 
+  // 🎯 [Coordinate-Normalization]
+  // 그룹의 위치(Position)도 표준 유틸리티로 변환하여 일관성 확보
+  const groupPos = toThreePos({
+    x: VOXEL_CONFIG.toCenter(snappedLocalPos.x),
+    y: VOXEL_CONFIG.toCenter(snappedLocalPos.y),
+    z: VOXEL_CONFIG.SYSTEM_OFFSET,
+  });
+
+  // 🎯 [Gem-Position] 보석 위치도 표준 유틸리티 사용 (zOffset 0)
+  const gemPos = toThreePosWithOffset(
+    { x: gemOffset.x, y: gemOffset.y }, // z 생략 시 0 처리됨
+    0,
+  );
+
+  // 🎯 [PointLight-Position] 보석과 동일한 위치
+  const lightPos = toThreePos({ x: gemOffset.x, y: gemOffset.y });
+
   return (
     <group
       ref={groupRef} // 🎯 고도 제어를 위해 ref 연결
-      position={[
-        VOXEL_CONFIG.toCenter(snappedLocalPos.x),
-        VOXEL_CONFIG.SYSTEM_OFFSET,
-        -VOXEL_CONFIG.toCenter(snappedLocalPos.y), // y -> -z (북향 매핑)
-      ]}
+      position={groupPos}
     >
       {/* 🎯 InstancedMesh (정확도 범위) */}
       <instancedMesh
@@ -231,7 +256,7 @@ export function UserMarker(): ReactElement | null {
       </instancedMesh>
 
       {/* 🎯 Gem & Light: 사용자 위치를 표시하는 보석 오브젝트 */}
-      <mesh ref={gemRef} position={toThreePosWithOffset(gemOffset, 0)}>
+      <mesh ref={gemRef} position={gemPos}>
         <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial
           color={gemColor}
@@ -245,7 +270,7 @@ export function UserMarker(): ReactElement | null {
 
       {/* [location-glow] 전역 디자인 가이드에 따른 야간 발광 효과 */}
       <pointLight
-        position={toThreePos(gemOffset)}
+        position={lightPos}
         distance={16}
         intensity={isNight ? 10 : 3}
         color={gemColor}

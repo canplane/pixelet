@@ -1,10 +1,14 @@
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import * as THREE from 'three';
+import type { Vector3Tuple } from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
+
+// 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
+import { toThreePos } from '@/shared/lib/three/three-coords';
 
 // 🎯 [config-integration] 렌더링 설정 가져오기
 const { FOG_DENSITY, FAR_CLIP } = THREE_CONFIG.RENDERING;
@@ -28,32 +32,57 @@ export function MapEnvironment() {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const sunRef = useRef<THREE.DirectionalLight>(null);
 
-  // 🎯 [Axis-Mapping] 테마의 [x, y, z] 데이터를 [x, z, -y] 형태로 변환하여 추적
-  // 테마 데이터 구조가 { x: East, y: North, z: Altitude }라고 가정합니다.
-  const getMappedPos = (pos: [number, number, number]) =>
-    new THREE.Vector3(pos[0], pos[2], -pos[1]);
+  /**
+   * 🎯 [Coordinate-System-Mapping]
+   * Theme Data: Vector3Tuple([East, North, Up]) -> Three.js: Vector3Tuple([x, z, -y])
+   * Vector3Tuple을 해체하여 Vector3 인스턴스를 생성합니다.
+   */
+  const getMappedPos = (pos: Vector3Tuple): THREE.Vector3 => {
+    const [x, y, z] = pos;
+    // 🚀 [toThreePos] 유틸리티는 Vector3Tuple을 반환합니다.
+    const threePos = toThreePos({ x, y, z });
+    return new THREE.Vector3(...threePos);
+  };
 
-  const sunPosVec = useRef(getMappedPos(targetTheme.sky.sunPosition));
+  /**
+   * 🎯 [Optimization: Memoization]
+   * 매 프레임(60fps)마다 새로운 Vector3 인스턴스를 생성하는 것을 방지합니다.
+   * 타겟 위치(targetSunPos)는 테마가 바뀔 때만 재계산되면 충분합니다.
+   */
+  const targetSunPos = useMemo(
+    () => getMappedPos(targetTheme.sky.sunPosition),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [targetTheme], // getMappedPos는 내부 함수지만 로직이 고정적이므로 theme 변경만 감지하면 됨
+  );
+
+  // 현재 보간 중인 태양 위치 상태 (Mutable)
+  // 초기값은 타겟 위치를 복제(clone)하여 시작 (참조 오염 방지)
+  const sunPosVec = useRef(targetSunPos.clone());
 
   /**
    * [update-environment-lerp]
    * 매 프레임마다 현재 상태를 타겟 테마의 값으로 보간하여 부드러운 시간 변화를 표현합니다.
    */
   useFrame((_, delta) => {
+    // 🎯 [Safety-Guard] 초기화 중에는 실행 스킵
+    if (!scene || !skyRef.current) return;
+
     const lerpFactor = delta * 1.5;
-    const targetSunPos = getMappedPos(targetTheme.sky.sunPosition);
 
     // --- 1. 안개(Fog) 보간 ---
-    // 🎯 [Fix] Ref값만 바꾸는 게 아니라 실제 Scene의 Fog 객체를 업데이트해야 함
-    if (scene.fog instanceof THREE.FogExp2) {
-      scene.fog.color.lerp(new THREE.Color(targetTheme.fog), lerpFactor);
+    // FogExp2 타입인지 확인 후 색상 변경
+    if (scene.fog && 'color' in scene.fog) {
+      (scene.fog as THREE.FogExp2).color.lerp(
+        new THREE.Color(targetTheme.fog),
+        lerpFactor,
+      );
     }
 
-    // --- 2. 하늘(Sky) 쉐이더 유니폼 보간 ---
-    if (skyRef.current) {
+    // --- 2. 하늘(Sky) 보간 ---
+    if (skyRef.current?.material?.uniforms) {
       const { uniforms } = skyRef.current.material;
 
-      // 🚀 [수정]: targetTheme.sky.sunPosition 대신 targetSunPos를 사용하여 정합성 유지
+      // 🎯 [Optimization] 미리 계산된 targetSunPos를 사용하여 메모리 할당 최소화
       sunPosVec.current.lerp(targetSunPos, lerpFactor);
       uniforms.sunPosition.value.copy(sunPosVec.current);
 
@@ -112,7 +141,7 @@ export function MapEnvironment() {
       />
 
       {/* 대기 안개 효과 */}
-      {/* 🎯 Fog는 초기값으로 세팅하고, 이후 useFrame에서 scene.fog를 직접 제어 */}
+      {/* 🎯 Fog는 Scene에 자동 attach되므로 여기서 선언하면 scene.fog가 됩니다 */}
       <fogExp2 attach="fog" args={[targetTheme.fog, FOG_DENSITY]} />
 
       {/* 기본 환경 조명 */}
@@ -132,6 +161,8 @@ export function MapEnvironment() {
         shadow-camera-far={FAR_CLIP * 1.2}
         // 🎯 [Shadow-Bias] 거대한 씬에서의 그림자 깨짐(Artifact) 방지
         shadow-bias={-0.0001}
+        // 🎯 [Shadow-Artifact-Fix] 곡면이나 경사면에서 그림자가 깨지는 것을 방지
+        shadow-normalBias={0.05}
       />
 
       {/* 반사광 표현을 위한 반구 조명 */}

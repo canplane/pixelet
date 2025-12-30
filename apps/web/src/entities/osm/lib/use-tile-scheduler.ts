@@ -78,6 +78,8 @@ export function useTileScheduler() {
       tiles.forEach((_, key) => {
         // 현재 보고 있는 범위(activeKeys)에도 없고, 로딩 중도 아니라면 삭제
         if (!activeKeys.has(key) && !processingTiles.current.has(key)) {
+          // 🎯 [Log-Unload] 메모리 해제 로그
+          console.log(`[TileScheduler] 🗑️ Unloaded Tile: ${key}`);
           removeGeometryTile(key);
         }
       });
@@ -106,6 +108,8 @@ export function useTileScheduler() {
         // [최종 완료] 최종 결과물이 유효하면 스토어 업데이트
         if (finalTile && finalTile.grids) {
           setGeometryTile(key, finalTile);
+          // 🎯 [Log-Load] 로딩 완료 로그 (최종 완료 시점에만 출력)
+          console.log(`[TileScheduler] ✅ Loaded Tile: ${key}`);
         }
       } catch (err) {
         console.error(`[Lifecycle] Worker error ${key}:`, err);
