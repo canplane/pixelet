@@ -1,8 +1,0 @@
-# Elevation Raw Data (GeoTIFF, VRT)
-**/raw/*.tif
-**/warped/
-**/temp/
-*.vrt
-*.zip
-*.log
-temp_tile.png
