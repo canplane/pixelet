@@ -1,6 +1,6 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { GeoService } from './geo.service';
-import { GeometryTile } from '@pixelet/shared/entities/osm/model/osm-tile';
+import { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [TileRequestDto]

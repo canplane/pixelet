@@ -1,5 +1,23 @@
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
-import type { OsmSourceType, OsmSourceTags } from './osm-source';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { OsmElementType, OsmTags } from './osm-source';
+
+/**
+ * [Intermediate DTO] Transformer -> Normalizer 전달용 규격
+ * Transformer들이 출력하고 Normalizer가 입력받는 표준 중간 데이터 규격입니다.
+ * 좌표계는 EPSG:3857(Meter)을 전제로 합니다.
+ * Feature와 생명주기를 같이 하는 "내부 데이터"이므로 여기에 있는 것이 적합합니다.
+ */
+export interface OsmInput {
+  id: number;
+  type: OsmElementType;
+  tags: OsmTags;
+  geometry: {
+    points: Coord[];
+    holes?: Coord[][];
+  };
+  center?: Coord;
+  isPolygonSource?: boolean;
+}
 
 /**
  * [osm-feature]
@@ -9,7 +27,7 @@ import type { OsmSourceType, OsmSourceTags } from './osm-source';
  */
 export interface OsmFeature {
   /** 객체 타입 (node, way, relation) */
-  type: OsmSourceType;
+  type: OsmElementType;
 
   /** OSM 고유 ID (Relation의 경우 음수 혹은 대형 ID가 올 수 있음) */
   id: number;
@@ -17,7 +35,7 @@ export interface OsmFeature {
   /** * 요소의 지리적 중심점 (EPSG:3857 Meter)
    * 라벨 배치, POI 마커 생성, 카메라 포커싱의 기준점이 됩니다.
    */
-  center: MeterPos;
+  center: Coord;
 
   /** * 해석이 완료된 형상 정보
    * 정규화 단계에서 isClosed 판정과 Holes(inner 멤버) 조립이 끝난 상태입니다.
@@ -25,13 +43,13 @@ export interface OsmFeature {
    */
   shape: {
     /** 3857 미터 단위로 투영된 좌표 리스트 */
-    points: MeterPos[];
+    points: Coord[];
     /** * 폐곡면 여부. tags.landuse나 시작-끝점 일치 여부를 기반으로
      * 면(Fill)으로 채울지 선(Stroke)으로 그릴지 결정합니다.
      */
     isClosed: boolean;
     /** Relation의 'inner' 멤버들이 미터 좌표로 조립된 구멍(Hole) 데이터 */
-    holes?: MeterPos[][];
+    holes?: Coord[][];
   };
 
   /** * 수치화된 물리 데이터 (Computed Properties)
@@ -52,7 +70,7 @@ export interface OsmFeature {
   /** * 원본 태그
    * 정규화 이후에도 메타데이터 참조, 조건부 스타일링, 상세 정보 팝업 출력을 위해 유지합니다.
    */
-  tags: OsmSourceTags;
+  tags: OsmTags;
 
   /**
    * 서비스 계층(GeoService) 또는 정규화기(Normalizer)에서 확정한 렌더링 카테고리입니다.
@@ -67,16 +85,16 @@ export interface OsmFeature {
  */
 
 export interface ShapePath {
-  points: MeterPos[];
+  points: Coord[];
   isClosed: boolean;
-  holes?: MeterPos[][];
+  holes?: Coord[][];
 }
 
 export interface MapInfra {
   id: string;
   type: string; // 'building' | 'road' | 'water' | 'landuse' | 'forest';
-  points: MeterPos[];
-  center: MeterPos;
+  points: Coord[];
+  center: Coord;
   shapePath?: ShapePath;
   height: number;
   tags: Record<string, string | undefined>;
@@ -87,6 +105,6 @@ export interface MapPoi {
   type: 'poi';
   category: string;
   name: string;
-  center: MeterPos;
+  center: Coord;
   tags: Record<string, string | undefined>;
 }

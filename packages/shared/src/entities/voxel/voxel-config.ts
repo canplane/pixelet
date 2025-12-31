@@ -1,4 +1,4 @@
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [voxel-config]
@@ -39,7 +39,7 @@ export const VOXEL_CONFIG = {
    * Floating Origin 리셋 시 이 단위를 기준으로 이동해야 배경 격자가 튀지 않습니다.
    * 💡 이제 입력된 pos.y는 북향(North) 좌표입니다.
    */
-  snapToVoxel(pos: MeterPos): MeterPos {
+  snapToVoxel(pos: Coord): Coord {
     const S = 4.0;
     return {
       x: Math.floor(pos.x / S) * S,
@@ -53,7 +53,7 @@ export const VOXEL_CONFIG = {
    * 🚀 정수 인덱스(그리드 번호)를 월드 미터 좌표(큐브의 정중앙)로 변환합니다.
    * 💡 결과: { x, y, z } (y는 북향 미터, z는 고도 미터)
    */
-  gridToWorld: (gx: number, gy: number, gz: number): MeterPos => {
+  gridToWorld: (gx: number, gy: number, gz: number): Coord => {
     const S = 4.0;
     const H = 2.0;
     return {

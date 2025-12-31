@@ -32,8 +32,6 @@ export function useMapNavigation() {
       /** 카메라가 바라보는 절대 중심 좌표 */
       center: state.center,
       setCenter: state.setCenter,
-      /** 위경도를 받아 투영 후 중심으로 설정 */
-      setCenterByLocation: state.setCenterByLocation,
 
       // [Camera View]
       /** 줌, 회전, 고도 등 시각적 상태 */

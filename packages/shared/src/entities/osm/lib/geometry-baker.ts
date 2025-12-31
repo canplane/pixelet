@@ -4,10 +4,10 @@
  * 🎯 모든 입력 데이터(OsmFeature)는 로컬 미터 좌표계로 전처리가 완료된 상태여야 합니다.
  */
 
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import type { OsmFeature } from '../model/osm-feature';
-import { createEmptyLayers, type VoxelLayers } from '../model/osm-tile';
+import { createEmptyLayers, type VoxelLayers } from '../model/tiles';
 import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels';
 
 const { TILE_SIZE, CELL_SIZE } = OSM_CONSTANTS;
@@ -251,13 +251,13 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
  * 🚀 보강: shape.holes(Inner members) 대응 로직 추가 (Even-Odd rule 자동 적용)
  */
 function renderPolygon(
-  points: MeterPos[],
+  points: Coord[],
   value: number,
   grid: Uint8Array,
   origin: { x: number; y: number },
   res: number,
   cellSize: number,
-  holes?: MeterPos[][],
+  holes?: Coord[][],
 ) {
   if (points.length < 3) return;
 
@@ -265,7 +265,7 @@ function renderPolygon(
   const tileTopY = origin.y + res * cellSize;
 
   // 로컬 좌표 변환 헬퍼 (Standard Raster: Top-Down)
-  const toLocal = (pts: MeterPos[]) =>
+  const toLocal = (pts: Coord[]) =>
     pts.map((p) => ({
       x: (p.x - origin.x) / cellSize,
       // 🎯 [Correction] MaxY(북쪽)에서 p.y를 뺍니다. (Top-Down)
@@ -323,7 +323,7 @@ function findIntersections(
  * 🚀 보강: 전처리된 computed.width를 직접 사용하여 런타임 parseFloat 제거
  */
 function renderLinearFeature(
-  points: MeterPos[],
+  points: Coord[],
   value: number,
   grid: Uint8Array,
   origin: { x: number; y: number },

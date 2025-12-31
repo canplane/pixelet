@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OsmElement } from '@/app/geo/entities/osm-element.entity';
 
-import type { OsmFeature } from '@pixelet/shared/entities/osm/model/osm-features';
+import type { OsmFeature } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { Bbox, getTileBbox } from '@pixelet/shared/entities/osm/lib/tile-math';
 import {
@@ -11,34 +11,17 @@ import {
   GeometryGrids,
   VoxelLayers,
   GeometryTile,
-} from '@pixelet/shared/entities/osm/model/osm-tile';
-import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-handler';
-import { MeterPos } from '@pixelet/shared/shared/model/coords';
-
-// [Shared Policy] 도메인 로직(분류, 폐곡성 판단, 메트릭 계산)의 중앙화된 모듈
-import {
-  determineOsmCategory,
-  shouldForceClosed,
-  computeOsmMetrics,
-} from '@pixelet/shared/entities/osm/lib/osm-policy';
+} from '@pixelet/shared/entities/osm/model/tiles';
+import { parseOsmData } from '@pixelet/shared/entities/osm/lib/osm-parser';
+import { bakeGeometryGrid } from '@pixelet/shared/entities/osm/lib/geometry-baker';
+import { Coord } from '@pixelet/shared/shared/model/coords';
 import { bakeElevationGrid } from '@pixelet/shared/entities/elevation/lib/elevation-baker';
+import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/osm-feature-normalizer';
+import { OsmInput } from '@pixelet/shared/entities/osm/model/osm-feature';
 
 const { TILE_SIZE, CELL_SIZE, Z_SAMPLING_STEP } = OSM_CONSTANTS;
 
-interface OsmRawResult {
-  osm_id: string;
-  tags: string | Record<string, string>;
-  wkt: string;
-  cwkt: string;
-}
-
 type GeoJsonCoord = [number, number];
-
-interface OsmGeometry {
-  type: 'Point' | 'LineString' | 'Polygon' | 'MultiPolygon';
-  coordinates: any;
-}
-
 @Injectable()
 export class GeoService {
   constructor(
@@ -78,9 +61,23 @@ export class GeoService {
     const heightGrid = bakeElevationGrid(elevationPoints);
 
     // 4. [Geometry Baking] 8-bit Surface Layers & Entity Extraction
-    // OSM 벡터 데이터를 래스터화하여 지표면 속성(Layers)을 굽고, 독립 객체(Entity)를 분리합니다.
-    // ※ processOsmToGrids 내부에서 POI/Infra의 좌표를 origin 기준 로컬 좌표로 변환해야 함
-    const { infras, pois, partialLayers } = processOsmToGrids(elements, origin);
+    /**
+     * 1. 파싱: 'osm-parser' 실행
+     * 정규화된 데이터를 바탕으로 3D 엔진용 인프라(Way/Rel) 및 POI(Node) 객체를 생성합니다.
+     * 이미 정규화가 끝났으므로 연산 오버헤드 없이 분류와 정렬만 수행합니다.
+     */
+    const { infras, pois } = parseOsmData(elements);
+
+    /**
+     * 2. 그리드 베이킹 (정규화된 데이터 직결)
+     * 인프라 객체(infras) 대신, 더 원원 정보가 풍부한 normalizedElements를 베이커에 직접 전달하여
+     * 래스터화(Rasterization) 정밀도를 높입니다.
+     */
+    let partialLayers: Partial<VoxelLayers> = {};
+    if (elements.length > 0) {
+      const result = bakeGeometryGrid(elements, origin);
+      partialLayers = result.layers;
+    }
 
     // 5. [Assembly] GeometryGrids 조립
     // 빈 그리드 컨테이너에 베이킹된 데이터를 채워넣습니다.
@@ -136,7 +133,7 @@ export class GeoService {
   private async getElevationGrid(
     bbox: Bbox,
     step: number = Z_SAMPLING_STEP,
-  ): Promise<MeterPos[]> {
+  ): Promise<Coord[]> {
     // 1. Calculate Grid Dimensions (Inner Tile)
     const innerWidth = Math.floor((bbox.maxX - bbox.minX) / step) + 1;
     const innerHeight = Math.floor((bbox.maxY - bbox.minY) / step) + 1;
@@ -187,7 +184,7 @@ export class GeoService {
     if (!result || result.length === 0 || !result[0].z_values) return [];
 
     const zValues: number[][] = result[0].z_values;
-    const points: MeterPos[] = [];
+    const points: Coord[] = [];
 
     // 4. Data Extraction Loop (Top-Down / North -> South)
     // PostGIS 래스터 데이터는 일반적으로 북쪽(Top)이 Row 0입니다.
@@ -219,6 +216,7 @@ export class GeoService {
    * [getNearbyMapDataByTile]
    * 해당 타일 영역(BBox)에 포함되거나 걸쳐있는 모든 OSM 요소를 조회합니다.
    * GeoJSON 형태로 변환 후 정규화(Normalization) 과정을 거칩니다.
+   * Pipeline: DB Fetch -> Transform (Adapter) -> Normalize (Policy)
    */
   private async getNearbyMapDataByTile(
     tx: number,
@@ -227,7 +225,7 @@ export class GeoService {
     const bbox = getTileBbox(tx, ty);
     const area3857 = `ST_MakeEnvelope(${bbox.minX}, ${bbox.minY}, ${bbox.maxX}, ${bbox.maxY}, 3857)`;
 
-    // PostGIS: 공간 인덱스(R-Tree)를 활용하여 빠른 조회 (&& 연산자)
+    // SQL 쿼리 로직 유지 (ST_SimplifyPreserveTopology 등)
     const raws: any[] = await this.geoRepo.query(`
       SELECT 
         osm_id, 
@@ -239,69 +237,64 @@ export class GeoService {
         OR ST_Intersects(way, ${area3857})
     `);
 
-    return raws.map((raw) => {
-      const tags =
-        typeof raw.tags === 'string'
-          ? this.parseHstore(raw.tags)
-          : raw.tags || {};
-      const geo = JSON.parse(raw.geometry);
-
-      // [Policy Check] 태그 기반 카테고리 결정 (building, road, water 등)
-      const category = determineOsmCategory(tags);
-
-      return this.mapToOsmFeatureFromGeoJSON(raw, geo, tags, category);
-    });
+    // [Pipeline]
+    // 1. Transform: DB Row -> Input Spec
+    // 2. Normalize: Input Spec -> OsmFeature
+    return raws
+      .map((raw) => this.transformGeoJsonToInput(raw))
+      .map((input) => normalizeOsmFeature(input));
   }
 
   /**
-   * [mapToOsmFeatureFromGeoJSON]
-   * Raw GeoJSON 데이터를 엔진 내부 표준인 OsmFeature로 변환합니다.
-   * - 폴리곤/라인/포인트 형상 통일
-   * - 폐곡 여부(isClosed) 자동 판별
-   * - 물리적 메트릭(높이, 층수 등) 계산
+   * [transformGeoJsonToInput]
+   * GeoJSON -> OsmNormalizationInput 변환 어댑터
    */
-  private mapToOsmFeatureFromGeoJSON(
-    raw: OsmRawResult,
-    geo: OsmGeometry,
-    tags: Record<string, string>,
-    category: string,
-  ): OsmFeature {
-    let points: MeterPos[] = [];
-    let holes: MeterPos[][] = [];
+  private transformGeoJsonToInput(raw: any): OsmInput {
+    // [Legacy Support] Hstore String Parsing
+    const tags =
+      typeof raw.tags === 'string'
+        ? this.parseHstore(raw.tags)
+        : raw.tags || {};
 
-    // 1. Geometry Type Handling (Polygon, MultiPolygon, LineString, Point)
-    // 모든 좌표를 평평한 MeterPos(z=0) 배열로 변환합니다.
+    const geo = JSON.parse(raw.geometry);
+
+    let points: Coord[] = [];
+    let holes: Coord[][] = [];
+    let isPolygonSource = false;
+
+    // [Parsing] GeoJSON Types Check
     if (geo.type === 'Polygon') {
+      isPolygonSource = true;
       const coords = geo.coordinates as GeoJsonCoord[][];
-      points = coords[0].map(([x, y]: GeoJsonCoord) => ({ x, y, z: 0 }));
-      // 첫 번째 링은 외곽선, 나머지는 구멍(Holes)
+      points = coords[0].map(([x, y]) => ({ x, y, z: 0 }));
       if (coords.length > 1) {
         holes = coords
           .slice(1)
           .map((ring) => ring.map(([x, y]) => ({ x, y, z: 0 })));
       }
     } else if (geo.type === 'MultiPolygon') {
+      isPolygonSource = true;
       const coords = geo.coordinates as GeoJsonCoord[][][];
-      // 가장 큰 폴리곤을 메인 형상으로 간주하여 정렬
+      // [Sorting] 가장 큰 폴리곤을 메인으로 (기존 로직 유지)
       const sortedPolygons = coords.sort((a, b) => b[0].length - a[0].length);
       const mainPolygon = sortedPolygons[0];
+
       points = mainPolygon[0].map(([x, y]) => ({ x, y, z: 0 }));
 
-      // 메인 폴리곤 내부의 홀 처리
+      // 홀 처리 로직 유지
       if (mainPolygon.length > 1) {
         holes = mainPolygon
           .slice(1)
           .map((ring) => ring.map(([x, y]) => ({ x, y, z: 0 })));
       }
-      // 나머지 폴리곤들도 홀로 처리 (단순화)
       for (let i = 1; i < sortedPolygons.length; i++) {
         const poly = sortedPolygons[i];
+        // 나머지 폴리곤도 일단 구멍 리스트에 추가 (단순화 처리)
         holes.push(poly[0].map(([x, y]) => ({ x, y, z: 0 })));
         if (poly.length > 1) {
-          const subHoles = poly
-            .slice(1)
-            .map((ring) => ring.map(([x, y]) => ({ x, y, z: 0 })));
-          holes.push(...subHoles);
+          holes.push(
+            ...poly.slice(1).map((r) => r.map(([x, y]) => ({ x, y, z: 0 }))),
+          );
         }
       }
     } else if (geo.type === 'LineString') {
@@ -312,36 +305,22 @@ export class GeoService {
       points = [{ x, y, z: 0 }];
     }
 
-    const centerPoints = this.parseWktToMeterPos(raw.cwkt);
-    const center = centerPoints[0] || points[0] || { x: 0, y: 0, z: 0 };
-
-    // 2. Closed Loop Detection
-    // 태그(shouldForceClosed) 또는 기하학적 특성(시작점==끝점)을 통해 폐곡 여부를 판단합니다.
-    const isClosed =
-      shouldForceClosed(tags) ||
-      (!['highway', 'waterway'].includes(tags.highway || tags.waterway || '') &&
-        (geo.type === 'Polygon' ||
-          geo.type === 'MultiPolygon' ||
-          (points.length >= 3 &&
-            Math.abs(points[0].x - points[points.length - 1].x) < 0.1)));
-
-    // 3. Metric Computation (Shared Policy)
-    // 태그 정보를 바탕으로 높이, 층수, 색상 등을 계산합니다.
-    const computed = computeOsmMetrics(tags, category);
+    // [Parsing] Center WKT
+    const centerPoints = this.parseWktToCoord(raw.cwkt);
+    const center = centerPoints[0];
 
     return {
-      type: points.length === 1 ? 'node' : 'way',
       id: Number(raw.osm_id),
-      center,
-      shape: { points, isClosed, holes: holes.length > 0 ? holes : undefined },
-      computed,
+      type: points.length === 1 ? 'node' : 'way',
       tags,
-      category,
+      geometry: { points, holes },
+      center,
+      isPolygonSource,
     };
   }
 
-  // ... (Helper Methods: parseWktToMeterPos, parseHstore 유지) ...
-  private parseWktToMeterPos(wkt: string): MeterPos[] {
+  // ... (Helper Methods: parseWktToCoord, parseHstore 유지) ...
+  private parseWktToCoord(wkt: string): Coord[] {
     if (!wkt) return [];
     const coordsMatch = wkt.match(/[\d\.-]+\s+[\d\.-]+/g);
     return coordsMatch

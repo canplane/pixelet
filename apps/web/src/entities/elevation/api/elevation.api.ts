@@ -1,4 +1,4 @@
-import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord4326, Coord } from '@pixelet/shared/shared/model/coords';
 import type { Bbox } from '@pixelet/shared/entities/osm/lib/tile-math';
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
@@ -23,7 +23,7 @@ const { unproject } = projection;
  * [Internal] 실제 API 서버에 대량의 좌표를 전달하여 고도를 응답받습니다.
  */
 async function requestElevationBatch(
-  points: Location[],
+  points: Coord4326[],
 ): Promise<ElevationElement[]> {
   const locations = points.map((p) => ({
     latitude: p.lat,
@@ -54,7 +54,7 @@ async function requestElevationBatch(
 export async function requestElevation(
   bbox: Bbox,
   step: number = Z_SAMPLING_STEP,
-): Promise<MeterPos[]> {
+): Promise<Coord[]> {
   const rawKey = `elevation:${bbox.minX},${bbox.minY}:${step}`;
 
   return withSharedPromise('elevation', rawKey, async () => {
@@ -73,7 +73,7 @@ export async function requestElevation(
 
     // 2. [Top-Down Order] 좌표 생성 (북 -> 남)
     // PostGIS 및 서버 로직과 동일하게 Row 0이 북쪽(MaxY)이 되도록 순회합니다.
-    const pointsToFetch: { pos: MeterPos; location: Location }[] = [];
+    const pointsToFetch: { pos: Coord; location: Coord4326 }[] = [];
 
     for (let row = 0; row < paddedHeight; row++) {
       // Y축: 위(Max)에서 아래(Min)로 감소
@@ -114,7 +114,7 @@ export async function requestElevation(
     // 5. Filtering & Result Assembly
     // 패딩된 데이터를 모두 가져온 후, 실제 타일 영역(Inner)만 필터링하여 반환합니다.
     // (서버 코드의 `if (worldX >= bbox.minX ...)` 로직과 100% 일치)
-    const finalPoints: MeterPos[] = [];
+    const finalPoints: Coord[] = [];
 
     for (const p of pointsToFetch) {
       const key = `${p.location.lat.toFixed(6)},${p.location.lng.toFixed(6)}`;

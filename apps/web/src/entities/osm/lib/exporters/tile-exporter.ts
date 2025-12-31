@@ -11,7 +11,7 @@ import {
   VOXEL_COLORS,
   VOXEL_TYPES,
 } from '@pixelet/shared/entities/voxel/model/voxels';
-import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/osm-tile';
+import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [hex-to-rgb]

@@ -12,7 +12,7 @@ const { unproject } = projection;
 
 /**
  * [WorldInspector]
- * 엔진의 실시간 좌표계(WGS84, MeterPos)와 카메라 상태를 모니터링합니다.
+ * 엔진의 실시간 좌표계(WGS84, Coord)와 카메라 상태를 모니터링합니다.
  * XY 평면 지표면 지침과 Z축 고도 지침이 제대로 투영되고 있는지 확인하는 기준점이 됩니다.
  */
 export function WorldInspector() {

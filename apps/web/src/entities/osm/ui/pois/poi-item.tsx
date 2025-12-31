@@ -30,7 +30,7 @@ interface PoiItemProps {
 }
 
 /**
- * [Helper] 특정 절대 좌표(MeterPos)의 지형 높이를 계산합니다.
+ * [Helper] 특정 절대 좌표(Coord)의 지형 높이를 계산합니다.
  * 셰이더 변위(Vertex Displacement)와 동일한 로직으로 CPU 상에서 높이를 샘플링합니다.
  */
 function getTerrainAltitude(absX: number, absY: number): number {

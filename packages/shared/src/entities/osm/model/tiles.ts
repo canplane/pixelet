@@ -3,8 +3,8 @@
  * 타일 격자 데이터(Grids)와 최종 타일 객체(GeometryTile) 규격을 정의합니다.
  */
 
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
-import type { MapInfra, MapPoi } from './osms';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { MapInfra, MapPoi } from './osm-feature';
 
 /**
  * [VoxelLayers]
@@ -57,7 +57,7 @@ export interface GeometryGrids {
  */
 export interface GeometryTile {
   key: string; // "tx:tz" 형식의 고유 키
-  origin: MeterPos; // 타일의 시작점 (절대 미터 좌표)
+  origin: Coord; // 타일의 시작점 (절대 미터 좌표)
   grids: GeometryGrids; // 🎯 명칭 통일: 타일 지형 격자 데이터 (Voxel Type Map)
   pois: MapPoi[]; // 타일에 포함된 절대 좌표 기반 POI
   infras: MapInfra[]; // 타일에 포함된 절대 좌표 기반 인프라

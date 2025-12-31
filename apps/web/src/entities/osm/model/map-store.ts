@@ -3,9 +3,9 @@ import { create } from 'zustand';
 // 1. 수학 및 투영 유틸리티
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 
-// 2. 기초 타입 (Location, MeterPos 등)
-import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/osm-tile';
+// 2. 기초 타입 (Coord 등)
+import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 
 // 3. OSM 관련 로직 및 도메인 타입
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
@@ -75,10 +75,8 @@ interface MapState {
 
   // --- [Navigation & Coordinate] ---
   /** [center-position] 카메라가 현재 바라보고 있는 절대적 중심 좌표 (Target) */
-  center: MeterPos | null;
-  setCenter: (pos: MeterPos) => void;
-  /** 위경도(Location)를 받아 투영 후 Center를 설정하는 편의 함수 */
-  setCenterByLocation: (location: Location) => void;
+  center: Coord | null;
+  setCenter: (pos: Coord) => void;
 
   /** 카메라의 줌, 회전, 고도 등 시각적 파라미터 */
   viewState: ViewState;
@@ -89,8 +87,8 @@ interface MapState {
    * 렌더링 정밀도 유지를 위해 동적으로 변하는 World 원점 (0,0,0)의 실제 절대 좌표.
    * 카메라 이동에 따라 타일 크기 단위로 스냅되어 이동합니다.
    */
-  origin: MeterPos;
-  setOrigin: (origin: MeterPos) => void;
+  origin: Coord;
+  setOrigin: (origin: Coord) => void;
 
   // --- [Control Signals] ---
   /** 카메라 리셋 요청을 트리거하기 위한 시그널 (Timestamp 기반) */
@@ -100,8 +98,8 @@ interface MapState {
 
   // --- [Interaction] ---
   /** 마우스가 호버 중인 3D 월드 상의 좌표 (Raycasting 결과) */
-  hoveredPos: MeterPos | null;
-  setHoveredPos: (pos: MeterPos | null) => void;
+  hoveredPos: Coord | null;
+  setHoveredPos: (pos: Coord | null) => void;
 
   /** 사용자가 클릭하여 선택한 POI 객체 */
   selectedPoi: MapPoi | null;
@@ -198,10 +196,6 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   center: null,
   setCenter: (pos) => set({ center: pos }),
-  setCenterByLocation: (location) => {
-    const meterPos = project(location);
-    set({ center: meterPos });
-  },
 
   viewState: {
     distance: 200,

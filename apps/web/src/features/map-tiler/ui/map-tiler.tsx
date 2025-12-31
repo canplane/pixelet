@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 
 // 2. 프로젝트 공통 자산 및 타입 (Shared)
-import type { Location } from '@pixelet/shared/shared/model/coords';
+import type { Coord4326 } from '@pixelet/shared/shared/model/coords';
 
 // 3. 엔티티 및 상태 관리 (Entities)
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
@@ -11,7 +11,7 @@ import { useDeviceLocationStore } from '@/entities/device-location/model/device-
 // 4. 기능 전용 설정 (Feature Config)
 import { mapStyle } from '../config/map-style';
 
-const DEFAULT_LOCATION: Location = { lng: 126.978, lat: 37.5665 }; // Seoul
+const DEFAULT_LOCATION: Coord4326 = { lng: 126.978, lat: 37.5665 }; // Seoul
 
 /**
  * MapLibre 기반의 2D 지도 테스트 컴포넌트입니다.

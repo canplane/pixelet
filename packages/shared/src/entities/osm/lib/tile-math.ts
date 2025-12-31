@@ -5,15 +5,15 @@
 
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { OSM_CONSTANTS } from '../model/osm-constants';
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 
 const { unproject } = projection;
 const { TILE_SIZE } = OSM_CONSTANTS;
 
 /**
- * 절대 좌표(MeterPos)를 받아 타일 인덱스(tx, ty)로 변환합니다.
+ * 절대 좌표(Coord)를 받아 타일 인덱스(tx, ty)로 변환합니다.
  */
-export const getTileIndex = (pos: MeterPos) => {
+export const getTileIndex = (pos: Coord) => {
   return {
     tx: Math.floor(pos.x / TILE_SIZE),
     ty: Math.floor(pos.y / TILE_SIZE),
@@ -43,7 +43,7 @@ export const getTileBbox = (tx: number, ty: number): Bbox => {
   return { minX, minY, maxX, maxY };
 };
 
-export interface LocationBbox {
+export interface Bbox4326 {
   minLat: number;
   minLng: number;
   maxLat: number;
@@ -52,10 +52,10 @@ export interface LocationBbox {
 
 /**
  * [unproject-bbox]
- * 미터 단위의 BBox(X, Y)를 지리적 위경도 범위(LocationBbox)로 역투영합니다.
+ * 미터 단위의 BBox(X, Y)를 지리적 위경도 범위(Bbox4326)로 역투영합니다.
  * @param bbox - { minX, minY, maxX, maxY } 미터 단위 범위
  */
-export const unprojectBbox = (bbox: Bbox): LocationBbox => {
+export const unprojectBbox = (bbox: Bbox): Bbox4326 => {
   const { minX, minY, maxX, maxY } = bbox;
 
   // 1. 대각선 두 지점(SW, NE)을 위경도로 역투영

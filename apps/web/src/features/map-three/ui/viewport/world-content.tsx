@@ -7,7 +7,7 @@ import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { VoxelBlock } from '../voxels/voxel-block';
 import { WorldGrid } from '../markers/world-grid';
-import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
+import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 
 /**
  * [world-content]
@@ -54,7 +54,7 @@ export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
             Floating Origin 리셋 시 이 마커는 항상 Scene의 (0,0,0)에 위치합니다.
             지면(Y=0)보다 살짝 위(0.05)에 배치되어 기준점 역할을 합니다.
         */}
-        <mesh position={toThreePosWithOffset({ x: 0, y: 0 }, 0.05)}>
+        <mesh position={toThreeCoordWithOffset({ x: 0, y: 0 }, 0.05)}>
           <sphereGeometry args={[0.2]} />
           <meshBasicMaterial color="red" />
         </mesh>
