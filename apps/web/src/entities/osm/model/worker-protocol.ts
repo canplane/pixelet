@@ -3,17 +3,15 @@
  * 메인 스레드와 타일 워커 간의 통신 규격을 정의합니다.
  */
 
-export type ApiMode = 'local' | 'public';
+import type { ServiceMode } from '@/entities/osm/config/osm-config';
+import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils.d';
 
 export interface TileWorkerInput {
   // 1. 공간 좌표 정보 (어디를 그릴 것인가)
-  coord: {
-    tx: number;
-    ty: number;
-  };
+  coord: TileCoord;
   // 2. 실행 및 환경 옵션 (어떻게 그릴 것인가)
   options: {
-    apiMode: ApiMode;
+    serviceMode: ServiceMode;
   };
   // 3. 추적 및 관리를 위한 메타 정보
   meta: {

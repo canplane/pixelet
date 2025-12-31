@@ -4,21 +4,33 @@
  */
 
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
-import { OSM_CONSTANTS } from '../model/osm-constants';
+import { OSM_CONSTANTS } from '../../model/osm-constants';
 import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type {
+  GridLayers,
+  TileGrids,
+} from '@pixelet/shared/entities/osm/model/tiles';
 
 const { unproject } = projection;
-const { TILE_SIZE } = OSM_CONSTANTS;
+
+const { TILE_SIZE, TILE_RESOLUTION } = OSM_CONSTANTS;
+
+export interface TileCoord {
+  tx: number;
+  ty: number;
+}
 
 /**
  * 절대 좌표(Coord)를 받아 타일 인덱스(tx, ty)로 변환합니다.
  */
-export const getTileIndex = (pos: Coord) => {
+export const getTileCoord = (pos: Coord): TileCoord => {
   return {
     tx: Math.floor(pos.x / TILE_SIZE),
     ty: Math.floor(pos.y / TILE_SIZE),
   };
 };
+
+export const getTileKey = ({ tx, ty }: TileCoord) => `${tx}:${ty}`;
 
 export interface Bbox {
   minX: number;
@@ -29,11 +41,10 @@ export interface Bbox {
 
 /**
  * 특정 타일 인덱스의 미터 단위 BBox를 반환합니다.
- * * @param tx - 타일 X 인덱스
- * @param ty - 타일 Y 인덱스
+ * * @param coord - 타일 좌표
  */
-export const getTileBbox = (tx: number, ty: number): Bbox => {
-  const { TILE_SIZE } = OSM_CONSTANTS;
+export const getTileBbox = (coord: TileCoord): Bbox => {
+  const { tx, ty } = coord;
 
   const minX = tx * TILE_SIZE;
   const minY = ty * TILE_SIZE;
@@ -71,3 +82,35 @@ export const unprojectBbox = (bbox: Bbox): Bbox4326 => {
     maxLng: Math.max(sw.lng, ne.lng),
   };
 };
+
+/**
+ * [GridLayers 초기화 팩토리]
+ */
+export function createEmptyLayers(
+  resolution: number = TILE_RESOLUTION,
+): GridLayers {
+  const size = resolution * resolution;
+  return {
+    base: new Uint8Array(size),
+    water: new Uint8Array(size),
+    transport: new Uint8Array(size),
+    structure: new Uint8Array(size),
+  };
+}
+
+/**
+ * [Factory] 빈 그리드 생성기
+ * 모든 채널을 동일한 해상도로 생성하며, 고도(height) 채널은 0층으로 초기화합니다.
+ */
+export function createEmptyGrids(
+  resolution: number = TILE_RESOLUTION,
+): TileGrids {
+  const size = resolution * resolution;
+  return {
+    layers: createEmptyLayers(resolution),
+    terrain: {
+      // 🎯 고도 채널 추가: 기본값 0 (해수면 또는 기준 고도)
+      height: new Uint16Array(size).fill(0),
+    },
+  };
+}

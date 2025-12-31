@@ -1,7 +1,6 @@
 /**
- * @file tile-public-processor.ts
- * Public Overpass API를 통해 OSM 데이터를 단계별로 Fetch하고,
- * 이를 복셀 그리드로 가공(Baking)하여 최종 타일 데이터를 생성합니다.
+ * @file tile-serverless-builder.ts
+ * 서버 없이 클라이언트 런타임에서 타일 데이터를 직접 생성합니다.
  */
 
 import { requestOverpass } from '../../api/overpass.api';
@@ -10,33 +9,29 @@ import { BOUNDARY_FILTERS } from '../../api/query/osm-boundary-queries';
 import { POI_QUERIES } from '../../api/query/osm-poi-queries';
 import { createQuery } from '../../api/overpass-utils';
 import type {
-  GeometryGrids,
-  VoxelLayers,
+  TileGrids,
+  GridLayers,
   GeometryTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
-import { createEmptyGrids } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import {
   getTileBbox,
   unprojectBbox,
-} from '@pixelet/shared/entities/osm/lib/tile-math';
-import type { Bbox } from '@pixelet/shared/entities/osm/lib/tile-math';
-
-import { transformOsm4326 } from '@pixelet/shared/entities/osm/lib/osm-4326-transformer';
-import { parseOsmData } from '@pixelet/shared/entities/osm/lib/osm-parser';
-import { bakeGeometryGrid } from '@pixelet/shared/entities/osm/lib/geometry-baker';
-import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
+  createEmptyGrids,
+  getTileKey,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import type {
-  MapInfra,
-  MapPoi,
-} from '@pixelet/shared/entities/osm/model/osm-feature';
-import type { TileWorkerInput } from '@/entities/osm/model/worker-protocol';
-import { requestElevation } from '@/entities/elevation/api/elevation.api';
-import { bakeElevationGrid } from '@pixelet/shared/entities/elevation/lib/elevation-baker';
-import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/osm-feature-normalizer';
+  Bbox,
+  TileCoord,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
-const { TILE_SIZE, CELL_SIZE } = OSM_CONSTANTS;
+import { transformOsm4326 } from '@pixelet/shared/entities/osm/lib/process/osm-4326-transformer';
+import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/osm-feature-normalizer';
+import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
+import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
+import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
+import { bakeElevationGrid } from '@pixelet/shared/entities/terrain/lib/elevation-baker';
+import { requestElevation } from '@/entities/terrain/api/elevation.api';
 
 type StepName = 'Infrastructure' | 'Structure' | 'POI';
 
@@ -44,7 +39,7 @@ interface ProcessingStep {
   name: StepName;
   query: string;
   critical: boolean; // 실패 시 전체 타일 생성을 중단할지 여부
-  targetChannels: (keyof VoxelLayers)[];
+  targetChannels: (keyof GridLayers)[];
 }
 
 /**
@@ -102,7 +97,7 @@ function createProcessingSteps(bbox: Bbox): ProcessingStep[] {
 /**
  * [Helper 1] 개별 단계를 실행하여 가공된 데이터를 반환합니다.
  */
-async function executeStep(step: ProcessingStep, origin: Coord) {
+async function executeStep(coord: TileCoord, step: ProcessingStep) {
   const response = await requestOverpass(step.query);
   if (!response?.elements?.length) return null;
 
@@ -115,41 +110,21 @@ async function executeStep(step: ProcessingStep, origin: Coord) {
     normalizeOsmFeature(input),
   );
 
-  /**
-   * 1. 파싱: 'osm-parser' 실행
-   * 정규화된 데이터를 바탕으로 3D 엔진용 인프라(Way/Rel) 및 POI(Node) 객체를 생성합니다.
-   * 이미 정규화가 끝났으므로 연산 오버헤드 없이 분류와 정렬만 수행합니다.
-   */
-  const { infras, pois } = parseOsmData(elements);
-
-  /**
-   * 2. 그리드 베이킹 (정규화된 데이터 직결)
-   * 인프라 객체(infras) 대신, 더 원원 정보가 풍부한 normalizedElements를 베이커에 직접 전달하여
-   * 래스터화(Rasterization) 정밀도를 높입니다.
-   */
-  let partialLayers: Partial<VoxelLayers> = {};
-  if (elements.length > 0) {
-    const result = bakeGeometryGrid(elements, origin);
-    partialLayers = result.layers;
-  }
-
   // 정규화된 데이터를 핸들러에 전달 (서버의 GeoService 호출과 동일한 규격이 됨)
-  return { infras, pois, partialLayers };
+  return assembleTile(coord, elements);
 }
 
 /**
  * [Helper 2] 가공된 데이터를 현재 타일 상태에 병합합니다.
  */
 function mergeStepResult(
-  target: { grids: GeometryGrids; infras: MapInfra[]; pois: MapPoi[] },
+  target: { grids: TileGrids; pois: MapPoi[] },
   source: {
-    partialLayers: Partial<VoxelLayers>;
-    infras: MapInfra[];
+    partialLayers: Partial<GridLayers>;
     pois: MapPoi[];
   },
-  targetChannels: (keyof VoxelLayers)[],
+  targetChannels: (keyof GridLayers)[],
 ) {
-  target.infras.push(...source.infras);
   target.pois.push(...source.pois);
 
   targetChannels.forEach((channel) => {
@@ -164,20 +139,15 @@ function mergeStepResult(
  * [Main Orchestrator] Public API 모드용 타일 프로세서
  * Overpass API 호출 -> 데이터 가공 -> 점진적 업데이트 -> 최종 타일 반환의 워크플로우를 관리합니다.
  */
-export async function processPublicTile(
-  coord: TileWorkerInput['coord'],
-  origin: Coord,
+export async function buildExternalTile(
+  coord: TileCoord,
   onProgress?: (partialTile: GeometryTile) => void,
 ): Promise<GeometryTile> {
-  const { tx, ty } = coord;
-  // 타일 당 그리드 해상도 (N x N)
-  const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
-
-  const key = `${tx}:${ty}`;
-  const bbox = getTileBbox(tx, ty);
+  const key = getTileKey(coord);
+  const bbox = getTileBbox(coord);
 
   const steps = createProcessingSteps(bbox);
-  const currentGrids = createEmptyGrids(resolution);
+  const currentGrids = createEmptyGrids();
 
   // 🎯 [Elevation Integration]: 고도 데이터 수집 시작
   // OSM 쿼리들과 병렬로 실행하여 네트워크 대기 시간을 최소화합니다.
@@ -185,7 +155,6 @@ export async function processPublicTile(
 
   const accumulatedData = {
     grids: currentGrids,
-    infras: [] as MapInfra[],
     pois: [] as MapPoi[],
   };
 
@@ -203,12 +172,9 @@ export async function processPublicTile(
 
     // 고도 데이터가 준비되면 첫 번째 점진적 업데이트 발송
     onProgress?.({
-      key,
-      origin,
+      coord,
       grids: currentGrids,
-      infras: accumulatedData.infras,
       pois: accumulatedData.pois,
-      resolution,
     });
   } catch (error) {
     console.warn(`[TileProcessor] Elevation step failed in ${key}.`, error);
@@ -220,19 +186,16 @@ export async function processPublicTile(
     if (!step.query?.trim()) continue;
 
     try {
-      const stepResult = await executeStep(step, origin);
+      const stepResult = await executeStep(coord, step);
 
       if (stepResult) {
         mergeStepResult(accumulatedData, stepResult, step.targetChannels);
 
         // [점진적 업데이트] 개별 단계 완료 시 마다 UI에 알림
         onProgress?.({
-          key,
-          origin,
+          coord,
           grids: currentGrids,
-          infras: accumulatedData.infras,
           pois: accumulatedData.pois,
-          resolution,
         });
       }
     } catch (error) {
@@ -250,11 +213,8 @@ export async function processPublicTile(
   }
 
   return {
-    key,
-    origin,
+    coord,
     grids: currentGrids,
-    infras: accumulatedData.infras,
     pois: accumulatedData.pois,
-    resolution,
   };
 }

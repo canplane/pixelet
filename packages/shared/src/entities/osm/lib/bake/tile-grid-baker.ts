@@ -1,25 +1,37 @@
 /**
- * @file geometry-baker.ts
+ * @file tile-grid-baker.ts
  * 정규화된 벡터 데이터를 4개의 독립적인 비트맵 레이어로 래스터화(Rasterization)합니다.
- * 🎯 모든 입력 데이터(OsmFeature)는 로컬 미터 좌표계로 전처리가 완료된 상태여야 합니다.
+ *
+ * [Architectural Note]
+ * 이 모듈은 '타일 한 장'을 굽는 가장 하위 레벨의 렌더러입니다.
+ * 외부(Fetcher/Assembler)에서 어떤 좌표계(Floating Origin 등)를 쓰든 상관없이,
+ * 이 모듈은 오직 '입력된 절대 좌표(Meter)'와 '타일 인덱스(Index)'만으로
+ * 자신의 로컬 픽셀 좌표를 계산하여 그림을 그립니다.
  */
 
 import type { Coord } from '@pixelet/shared/shared/model/coords';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
-import type { OsmFeature } from '../model/osm-feature';
-import { createEmptyLayers, type VoxelLayers } from '../model/tiles';
+import type { OsmExtra, OsmFeature } from '../../model/osm-feature';
+import type { OsmTags } from '@pixelet/shared/entities/osm/model/osm-source';
 import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels';
 
-const { TILE_SIZE, CELL_SIZE } = OSM_CONSTANTS;
+// 🎯 [Correction] createEmptyLayers는 모델 정의 파일에서 가져옵니다.
+import type { GridLayers } from '../../model/tiles';
 
-interface BakeOptions {
-  tileSize?: number;
-  cellSize?: number;
-}
+// 🚀 [Refactor] 타일 절대 좌표 계산을 위해 유틸리티 활용
+import {
+  createEmptyLayers,
+  getTileBbox,
+  type TileCoord,
+} from '../utils/tile-utils';
+
+// [Optimization] 모듈 스코프 상수 캐싱 (함수 인자 전달 비용 제거)
+// 렌더링 루프에서 빈번하게 사용되므로 상위 스코프에 선언하여 클로저로 접근합니다.
+const { CELL_SIZE: cellSize, TILE_RESOLUTION: res } = OSM_CONSTANTS;
 
 /**
  * [Voxel-Mapping] 카테고리별 기본 복셀 타입 정의
- * OsmFeature.category가 이 키에 해당하면 즉시 매핑합니다.
+ * 복잡한 태그 검사 없이 category만으로 매핑 가능한 경우를 정의합니다.
  */
 const CATEGORY_TO_VOXEL: Record<string, number> = {
   water: VOXEL_TYPES.WATER,
@@ -27,39 +39,42 @@ const CATEGORY_TO_VOXEL: Record<string, number> = {
   forest: VOXEL_TYPES.GREEN_DEEP,
   park: VOXEL_TYPES.GREEN_LIGHT,
   sand: VOXEL_TYPES.SAND,
-  // Road, Parking 등은 태그에 따라 세분화가 필요하여 별도 로직으로 처리
 };
 
 /**
- * [bakeGeometryGrid]
+ * [bakeTileGrid]
  * 정규화된 요소를 받아 4개의 독립적인 비트맵 레이어로 래스터화합니다.
+ *
+ * @param coord - 굽고자 하는 타일의 인덱스 { tx, ty }
+ * @param elements - 로컬 미터 좌표계로 전처리된 OSM Feature 목록
  */
-export function bakeGeometryGrid(
+export function bakeTileGrid(
+  coord: TileCoord,
   elements: OsmFeature[],
-  tileOrigin: { x: number; y: number },
-  options: BakeOptions = {},
-): { layers: VoxelLayers; resolution: number } {
-  const { tileSize = TILE_SIZE, cellSize = CELL_SIZE } = options;
+): GridLayers {
+  const layers: GridLayers = createEmptyLayers();
 
-  // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
-  const resolution = Math.floor(tileSize / cellSize);
-  const layers: VoxelLayers = createEmptyLayers(resolution);
+  // 1. [Coordinate Anchor Calculation]
+  // 타일의 '절대 시작 위치(World Origin)'를 계산합니다.
+  // 이 값은 Feature의 절대 좌표(World Coordinate)를 타일 내부의 상대 좌표(0~Resolution)로
+  // 변환(Projection)할 때 기준점(Anchor)이 됩니다.
+  const bbox = getTileBbox(coord);
+  const tileOrigin = { x: bbox.minX, y: bbox.minY };
 
-  // 1. 레이어 분류 및 베이킹 (OsmFeature의 전처리된 데이터를 직접 소비)
+  // 2. [Feature Iteration]
   elements.forEach((feature) => {
     const { tags, shape, computed } = feature;
 
-    // 터널 및 고가 도로는 지면 그리드에 굽지 않음 (필요 시 로직 확장 가능)
+    // [Filter] 터널 및 고가 도로는 지면 그리드 렌더링에서 제외
     if (tags.tunnel === 'yes') return;
 
-    // 2. [Type Resolution] 복셀 타입 및 타겟 레이어 결정
-    // 기존의 분산된 태그 검사 로직을 resolveVoxelContext로 일원화
+    // 3. [Type Resolution] 어떤 레이어에 무슨 색(Voxel)으로 칠할지 결정
     const { voxelType, targetLayer } = resolveVoxelContext(feature, layers);
 
     if (!voxelType || !targetLayer) return;
 
-    // 3. [Rasterization] 형상(Shape)에 따른 그리기 수행
-    // 🎯 보강: Base Layer(지형)는 닫히지 않았어도(isClosed=false) 최대한 면으로 채웁니다.
+    // 4. [Rasterization] 형상에 따른 그리기 수행
+    // [Policy] Base Layer(지형)는 선형 데이터라도 면(Polygon)으로 강제 변환하여 빈틈을 메꿉니다.
     const forcePolygon = targetLayer === layers.base;
 
     if (shape.isClosed || forcePolygon) {
@@ -68,62 +83,52 @@ export function bakeGeometryGrid(
         voxelType,
         targetLayer,
         tileOrigin,
-        resolution,
-        cellSize,
         shape.holes,
       );
     } else {
-      // 선형 데이터(도로, 강줄기 등)
       renderLinearFeature(
         shape.points,
         voxelType,
         targetLayer,
         tileOrigin,
-        resolution,
-        cellSize,
         computed.width,
       );
     }
   });
 
-  return { layers, resolution };
+  return layers;
 }
 
 /**
  * [Helper] Feature의 속성을 분석하여 그릴 복셀 타입과 타겟 레이어를 반환합니다.
- * 기존의 중복된 태그 검사 로직을 이곳으로 일원화했습니다.
+ * 기존의 분산된 태그 검사 로직을 이곳으로 일원화하여 가독성을 높였습니다.
  */
 function resolveVoxelContext(
   feature: OsmFeature,
-  layers: VoxelLayers,
+  layers: GridLayers,
 ): { voxelType: number | null; targetLayer: Uint8Array | null } {
-  const { category, tags } = feature;
+  const { category, tags, extra } = feature;
 
-  // --- [Category 1: Water Layer] ---
+  // --- [Layer 1: Water] ---
   if (category === 'water' || tags.waterway || tags.natural === 'water') {
     return { voxelType: VOXEL_TYPES.WATER, targetLayer: layers.water };
   }
 
-  // --- [Category 2: Transport Layer] ---
+  // --- [Layer 2: Transport] ---
   if (
     category === 'road' ||
     tags.highway ||
     tags.railway ||
     category === 'parking'
   ) {
-    // 주차장 처리
-    if (
-      category === 'parking' ||
-      tags._isParking === 'true' ||
-      tags.amenity === 'parking'
-    ) {
+    // 🚀 [Logic] Extra Flag를 우선 확인하여 태그 파싱 비용 절감
+    if (extra.isParking) {
       return { voxelType: VOXEL_TYPES.PARKING, targetLayer: layers.transport };
     }
-    // 철도
     if (tags.railway) {
       return { voxelType: VOXEL_TYPES.RAIL, targetLayer: layers.transport };
     }
-    // 보행자 전용
+    // 보행자 도로 확인
     if (
       ['pedestrian', 'footway', 'living_street', 'path'].includes(
         tags.highway || '',
@@ -134,21 +139,22 @@ function resolveVoxelContext(
         targetLayer: layers.transport,
       };
     }
-    // 일반 도로
+    // 일반 도로 (Default)
     return { voxelType: VOXEL_TYPES.ROAD, targetLayer: layers.transport };
   }
 
-  // --- [Category 3: Structure Layer] ---
+  // --- [Layer 3: Structure] ---
   if (category === 'building' || tags.building) {
     return { voxelType: VOXEL_TYPES.BUILDING, targetLayer: layers.structure };
   }
 
-  // --- [Category 4: Base Layer] (Landuse & Natural) ---
-  // 🎯 Category 매핑을 우선 시도하고, 없으면 상세 태그 분석(detectBaseVoxelType 로직 흡수)
+  // --- [Layer 4: Base Land] ---
+  // 1차: Category 매핑 시도
   let baseType: number | null = CATEGORY_TO_VOXEL[category];
 
+  // 2차: 매핑 실패 시 상세 태그 분석 (Legacy Logic)
   if (!baseType) {
-    baseType = resolveBaseVoxelTypeByTags(tags);
+    baseType = resolveBaseVoxelType(tags, extra);
   }
 
   if (baseType) {
@@ -160,15 +166,15 @@ function resolveVoxelContext(
 
 /**
  * [Legacy Logic Preserved]
- * 카테고리로 분류되지 않은 세부 Base Layer 타입을 태그 기반으로 결정합니다.
- * (기존 detectBaseVoxelType 함수의 로직과 주석을 그대로 계승)
+ * 카테고리로 분류되지 않은 세부 Base Layer 타입을 결정합니다.
+ * 🚀 Refactor: 태그 목록 누락 없이 완벽하게 이전 로직을 보존했습니다.
  */
-function resolveBaseVoxelTypeByTags(tags: any): number | null {
-  // 1. 특수 시설 (최우선순위)
-  if (tags._isInstitutional === 'true') return VOXEL_TYPES.INSTITUTIONAL;
-  if (tags._isSports === 'true') return VOXEL_TYPES.SPORTS;
+function resolveBaseVoxelType(tags: OsmTags, extra: OsmExtra): number | null {
+  // 1. [Institutional/Sports] (Extra Flag Prioritized)
+  if (extra.isInstitutional) return VOXEL_TYPES.INSTITUTIONAL;
+  if (extra.isSports) return VOXEL_TYPES.SPORTS;
 
-  // 🎯 2. [산/숲] 🌲 짙은 녹지 (GREEN_DEEP)
+  // 2. [Forest/Deep Green] 산, 숲
   if (
     (tags.natural &&
       [
@@ -186,7 +192,7 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
     return VOXEL_TYPES.GREEN_DEEP;
   }
 
-  // 🎯 3. [초지/공원] 🌿 연한 녹지 (GREEN_LIGHT)
+  // 3. [Grass/Light Green] 초지, 공원
   if (
     (tags.natural && ['grassland', 'fell', 'moor'].includes(tags.natural)) ||
     (tags.landuse &&
@@ -199,7 +205,7 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
     return VOXEL_TYPES.GREEN_LIGHT;
   }
 
-  // 🎯 4. [거친 땅/바위] 🏜️ 모래 및 암석 (SAND)
+  // 4. [Sand/Rock] 거친 땅
   if (
     (tags.natural &&
       ['sand', 'shingle', 'bare_rock', 'beach', 'scree'].includes(
@@ -210,7 +216,7 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
     return VOXEL_TYPES.SAND;
   }
 
-  // 🎯 5. [인간 활동 구역] (RESIDENTIAL, COMMERCIAL, INDUSTRIAL)
+  // 5. [Human Activity] 주거/상업/공업
   if (tags.landuse) {
     if (['residential', 'cemetery'].includes(tags.landuse))
       return VOXEL_TYPES.RESIDENTIAL;
@@ -220,7 +226,7 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
       return VOXEL_TYPES.INDUSTRIAL;
   }
 
-  // 🎯 6. [스포츠/운동장]
+  // 6. [Sports Fallback] (Extra Flag에서 걸러지지 않은 경우를 위한 안전망)
   if (
     tags.leisure &&
     ['pitch', 'playground', 'golf_course', 'track', 'stadium'].includes(
@@ -230,9 +236,7 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
     return VOXEL_TYPES.SPORTS;
   }
 
-  // 🎯 7. [마지막 수단]
-  // 만약 위에서 아무것도 걸러지지 않았는데, landuse나 natural 키가 존재한다면
-  // 최소한 BASE_LAND로라도 그려야 합니다.
+  // 7. [General Fallback] 기본 땅
   if (
     tags.landuse ||
     tags.natural ||
@@ -247,28 +251,24 @@ function resolveBaseVoxelTypeByTags(tags: any): number | null {
 }
 
 /**
- * [최적화] Scan-line Fill 알고리즘
- * 🚀 보강: shape.holes(Inner members) 대응 로직 추가 (Even-Odd rule 자동 적용)
+ * [Rasterization: Polygon] (Scan-line Fill Algorithm)
+ * 좌표계를 변환(World -> Local)하고 다각형을 픽셀 그리드에 채웁니다.
  */
 function renderPolygon(
   points: Coord[],
   value: number,
   grid: Uint8Array,
   origin: { x: number; y: number },
-  res: number,
-  cellSize: number,
   holes?: Coord[][],
 ) {
   if (points.length < 3) return;
 
-  // 타일의 북쪽 끝 Y 좌표 (World Coordinate)
+  // 상수 res, cellSize는 상위 스코프(Module Scope)에서 참조 (Closure)
   const tileTopY = origin.y + res * cellSize;
 
-  // 로컬 좌표 변환 헬퍼 (Standard Raster: Top-Down)
   const toLocal = (pts: Coord[]) =>
     pts.map((p) => ({
       x: (p.x - origin.x) / cellSize,
-      // 🎯 [Correction] MaxY(북쪽)에서 p.y를 뺍니다. (Top-Down)
       y: (tileTopY - p.y) / cellSize,
     }));
 
@@ -280,13 +280,10 @@ function renderPolygon(
 
   for (let y = minY; y <= maxY; y++) {
     const intersections: number[] = [];
-
-    // Outer boundary intersections
     findIntersections(outer, y, intersections);
-    // 🚀 Inner holes intersections (짝수/홀수 규칙에 따라 구멍이 뚫림)
     innerList.forEach((hole) => findIntersections(hole, y, intersections));
-
     intersections.sort((a, b) => a - b);
+
     for (let i = 0; i < intersections.length; i += 2) {
       if (i + 1 >= intersections.length) break;
       const startX = Math.max(0, Math.ceil(intersections[i]));
@@ -298,7 +295,9 @@ function renderPolygon(
   }
 }
 
-/** 교차점 계산 보조 함수 */
+/**
+ * [Math Helper] 다각형 선분과 Scan-line(y)의 교차점(x)을 찾습니다.
+ */
 function findIntersections(
   nodes: { x: number; y: number }[],
   y: number,
@@ -319,23 +318,20 @@ function findIntersections(
 }
 
 /**
- * [최적화] 선형 보간 + Round Cap
- * 🚀 보강: 전처리된 computed.width를 직접 사용하여 런타임 parseFloat 제거
+ * [Rasterization: Linear] (Line Interpolation + Round Cap)
+ * 좌표계를 변환하고 선형 데이터를 두께감 있게 그립니다.
  */
 function renderLinearFeature(
   points: Coord[],
   value: number,
   grid: Uint8Array,
   origin: { x: number; y: number },
-  res: number,
-  cellSize: number,
   meterWidth: number,
 ) {
   if (!points || points.length < 2) return;
 
+  // 상수 res, cellSize는 상위 스코프(Module Scope)에서 참조
   const tileTopY = origin.y + res * cellSize;
-
-  // 두께 계산 (meter 단위 폭을 픽셀 반경으로 변환)
   const thickness = Math.max(1, Math.round((meterWidth / cellSize) * 0.5));
 
   const drawCircle = (cx: number, cy: number, r: number) => {
@@ -354,19 +350,15 @@ function renderLinearFeature(
 
   for (let i = 0; i < points.length - 1; i++) {
     const x1 = (points[i].x - origin.x) / cellSize;
-    // 🎯 [Correction] Top-Down 방식 적용
     const y1 = (tileTopY - points[i].y) / cellSize;
-
     const x2 = (points[i + 1].x - origin.x) / cellSize;
     const y2 = (tileTopY - points[i + 1].y) / cellSize;
 
-    // 시작/끝점 Round Cap
     drawCircle(Math.floor(x1 + 0.5), Math.floor(y1 + 0.5), thickness);
     if (i === points.length - 2) {
       drawCircle(Math.floor(x2 + 0.5), Math.floor(y2 + 0.5), thickness);
     }
 
-    // 선분 보간 스텝 계산
     const steps = Math.max(
       1,
       Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 2),
@@ -377,7 +369,6 @@ function renderLinearFeature(
       const cx = Math.floor(x1 + (x2 - x1) * t + 0.5);
       const cy = Math.floor(y1 + (y2 - y1) * t + 0.5);
 
-      // 두께만큼 채우기
       for (let bx = -thickness; bx <= thickness; bx++) {
         for (let by = -thickness; by <= thickness; by++) {
           const tx = cx + bx,

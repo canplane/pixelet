@@ -4,8 +4,9 @@ import {
   downloadGridAsBinary,
   downloadGridAsImage,
   downloadMergedGridAsImage,
-} from '@/entities/osm/lib/exporters/tile-exporter';
-import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/tiles';
+} from '@/entities/osm/lib/export/tile-exporter';
+import type { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
+import { getTileKey } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 /**
  * [map-debug-tools]
@@ -21,16 +22,16 @@ export function MapDebugTools() {
    */
   const handleDownloadAllBinary = () => {
     tiles.forEach((tile) => {
-      const { layers, terrain } = tile.grids;
+      const { coord, grids } = tile;
+      const { layers, terrain } = grids;
 
       // 4개 채널을 순회하며 각각 다운로드
-      (Object.keys(layers) as Array<keyof VoxelLayers>).forEach((channel) => {
+      (Object.keys(layers) as Array<keyof GridLayers>).forEach((channel) => {
         // 파일명: tile_10:5_base.bin
         downloadGridAsBinary(
+          coord,
           layers[channel],
-          tile.origin,
-          tile.resolution,
-          `tile_${tile.key}_${channel}.bin`,
+          `tile_${getTileKey(coord)}_${channel}.bin`,
         );
       });
     });
@@ -41,16 +42,16 @@ export function MapDebugTools() {
    */
   const handleDownloadAllImages = () => {
     tiles.forEach((tile) => {
-      const { layers, terrain } = tile.grids;
+      const { coord, grids } = tile;
+      const { layers, terrain } = grids;
 
       // 4개 채널을 순회하며 각각 이미지화
-      (Object.keys(layers) as Array<keyof VoxelLayers>).forEach((channel) => {
+      (Object.keys(layers) as Array<keyof GridLayers>).forEach((channel) => {
         // 파일명: tile_10:5_transport.png
         downloadGridAsImage(
+          coord,
           layers[channel],
-          tile.resolution,
-          tile.origin,
-          `tile_${tile.key}_${channel}.png`,
+          `tile_${getTileKey(coord)}_${channel}.png`,
         );
       });
     });
@@ -59,13 +60,13 @@ export function MapDebugTools() {
   // ✨ [New] 병합된 이미지 다운로드 핸들러
   const handleDownloadMergedImages = () => {
     tiles.forEach((tile) => {
-      const { layers, terrain } = tile.grids;
+      const { coord, grids } = tile;
+      const { layers, terrain } = grids;
 
       downloadMergedGridAsImage(
+        coord,
         layers, // 4개 채널 전체 구조체 전달
-        tile.resolution,
-        tile.origin,
-        `tile_${tile.key}_merged.png`,
+        `tile_${getTileKey(coord)}.png`,
       );
     });
   };

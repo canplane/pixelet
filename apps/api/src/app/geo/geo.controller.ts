@@ -1,6 +1,6 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { GeoService } from './geo.service';
-import { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
+import { GeometryTileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
 
 /**
  * [TileRequestDto]
@@ -21,9 +21,9 @@ export class GeoController {
    * 페이지 이동 없이 Web Worker의 fetch에 의해 호출됩니다.
    */
   @Post('tile')
-  async getTile(@Body() body: TileRequestDto): Promise<GeometryTile> {
+  async getTile(@Body() body: TileRequestDto): Promise<GeometryTileDto> {
     const { tx, ty } = body;
     // GeoService에서 베이킹까지 완료된 GeometryTile을 반환합니다.
-    return await this.geoService.getProcessedTile(tx, ty);
+    return await this.geoService.getProcessedTile({ tx, ty });
   }
 }

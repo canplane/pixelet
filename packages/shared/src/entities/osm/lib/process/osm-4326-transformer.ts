@@ -2,7 +2,7 @@
  * @file osm-4326-transformer.ts
  * @description Raw OSM API(4326) 데이터를 엔진 표준인 3857 Input 규격으로 변환합니다.
  */
-import type { Osm4326Input } from '../model/osm-source';
+import type { Osm4326Input } from '../../model/osm-source';
 import type { OsmInput } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import type { Coord } from '@pixelet/shared/shared/model/coords';

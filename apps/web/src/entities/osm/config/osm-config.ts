@@ -2,27 +2,34 @@
  * [osm-config]
  * OSM 데이터 통신 및 API 인프라 설정을 관리하는 클라이언트 전역 설정입니다.
  */
+
+/**
+ * [ServiceMode]
+ * 시스템 전체의 데이터 처리 및 통신 전략을 결정합니다.
+ */
+export type ServiceMode = 'internal' | 'external';
+
 export const OSM_CONFIG = {
   /**
    * [api-mode-config]
    * 환경 변수(VITE_OSM_API_MODE)를 통해 제어합니다.
    * 값이 없으면 기본값으로 'local'을 사용합니다.
    */
-  API_MODE:
-    (import.meta.env.VITE_OSM_API_MODE as 'local' | 'public') || 'local',
+  SERVICE_MODE:
+    (import.meta.env.VITE_SERVICE_MODE as ServiceMode) || 'external',
 
   /**
    * [local-endpoint]
-   * 환경 변수(VITE_OSM_LOCAL_ENDPOINT)를 통해 제어합니다.
+   * 환경 변수(VITE_INTERNAL_OSM_API_ENDPOINT)를 통해 제어합니다.
    */
-  LOCAL_API_ENDPOINT:
-    import.meta.env.VITE_OSM_LOCAL_ENDPOINT || '/api/geo/tile',
+  INTERNAL_OSM_ENDPOINT:
+    import.meta.env.VITE_INTERNAL_OSM_API_ENDPOINT || '/api/geo/tile',
 
   /**
    * [load-balancing-pool]
    * 한국에서의 접속 속도 및 서버 안정성을 고려하여 선별된 공용 서버 목록입니다.
    */
-  PUBLIC_API_ENDPOINTS: [
+  EXTERNAL_OSM_ENDPOINTS: [
     // 1. 아시아/러시아권 (Latency 우수)
     'https://overpass.nchc.org.tw/api/interpreter', // 대만 (Primary)
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter', // 러시아

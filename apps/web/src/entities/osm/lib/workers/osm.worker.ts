@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { fetchAndProcessTile } from '@/entities/osm/lib/processors/tile-processor';
+import { fetchTile } from '@/entities/osm/lib/fetch/tile-fetcher';
 import type { TileWorkerInput } from '@/entities/osm/model/worker-protocol';
 
 // ✨ [수정 1] self를 Worker 스코프로 타입 단언
@@ -12,7 +12,7 @@ worker.onmessage = async (e: MessageEvent<TileWorkerInput>) => {
 
   try {
     // 타일 처리 실행
-    const result = await fetchAndProcessTile(coord, options, (partialTile) => {
+    const result = await fetchTile(coord, options, (partialTile) => {
       // [점진적 업데이트]
       // 여기서는 Transferable을 쓰지 않습니다. (부분 데이터는 복사 비용이 작음)
       worker.postMessage({

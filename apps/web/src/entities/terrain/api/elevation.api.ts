@@ -1,5 +1,5 @@
 import type { Coord4326, Coord } from '@pixelet/shared/shared/model/coords';
-import type { Bbox } from '@pixelet/shared/entities/osm/lib/tile-math';
+import type { Bbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
