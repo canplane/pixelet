@@ -2,11 +2,12 @@
  * @file osm-feature-normalizer.ts
  * @description 엔진 표준 OsmFeature 객체 생성을 위한 순수 도메인 로직 (정책 적용)
  */
-import type { OsmFeature } from '../model/osm-feature';
+import type { OsmFeature } from '../../model/osm-feature';
 import {
   determineOsmCategory,
   shouldForceClosed,
   computeOsmMetrics,
+  computeOsmExtra,
 } from './osm-policy';
 import type { OsmInput } from '@pixelet/shared/entities/osm/model/osm-feature';
 
@@ -43,7 +44,10 @@ export const normalizeOsmFeature = (input: OsmInput): OsmFeature => {
   // 4. [Metric Computation] 물리적 수치 계산 (높이, 층수 등)
   const computed = computeOsmMetrics(tags, category);
 
-  // 5. [Center Correction] 중심점 보정
+  // 🚀 5. [Extra Flags] 별도 객체로 분리하여 계산
+  const extra = computeOsmExtra(tags, category);
+
+  // 6. [Center Correction] 중심점 보정
   const finalCenter = center || points[0] || { x: 0, y: 0, z: 0 };
 
   return {
@@ -58,5 +62,6 @@ export const normalizeOsmFeature = (input: OsmInput): OsmFeature => {
     computed,
     tags,
     category,
+    extra,
   };
 };

@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { OsmElement } from './entities/osm-element.entity';
-import { GeoService } from './geo.service';
 import { GeoController } from './geo.controller';
+import { GeoService } from './geo.service';
+import { GeoRepository } from './geo.repository';
+import { OsmAdapter } from './osm-adapter';
+import { OsmElement } from './entities/osm-element.entity';
 
 @Module({
   imports: [
@@ -13,7 +15,7 @@ import { GeoController } from './geo.controller';
      */
     TypeOrmModule.forFeature([OsmElement], 'geoConnection'),
   ],
-  providers: [GeoService],
+  providers: [GeoService, GeoRepository, OsmAdapter],
   controllers: [GeoController],
   exports: [GeoService],
 })

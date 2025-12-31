@@ -15,6 +15,12 @@ import { THREE_CONFIG } from '../../config/three-config';
 import { cn } from '@/shared/lib/utils';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import {
+  getTileBbox,
+  getTileCoord,
+  getTileKey,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import type { Coord } from '@pixelet/shared/shared/model/coords.d';
 
 const { FADE_START, FADE_END, FAR_CLIP } = THREE_CONFIG.RENDERING;
 const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO, TILE_RESOLUTION } = OSM_CONSTANTS;
@@ -33,24 +39,25 @@ interface PoiItemProps {
  * [Helper] 특정 절대 좌표(Coord)의 지형 높이를 계산합니다.
  * 셰이더 변위(Vertex Displacement)와 동일한 로직으로 CPU 상에서 높이를 샘플링합니다.
  */
-function getTerrainAltitude(absX: number, absY: number): number {
+function getTerrainAltitude(pos: Coord): number {
   const tiles = useMapStore.getState().tiles; // 구독 없이 일회성 조회 (성능 최적화)
 
   // 1. 타일 키 계산 (ex: "12:5")
-  const tx = Math.floor(absX / TILE_SIZE);
-  const ty = Math.floor(absY / TILE_SIZE);
-  const key = `${tx}:${ty}`;
+  const coord = getTileCoord(pos);
+  const key = getTileKey(coord);
+  const bbox = getTileBbox(coord);
+
   const tile = tiles.get(key);
 
   if (!tile) return 0; // 타일이 아직 로드되지 않았으면 해수면(0) 반환
 
   // 2. 타일 내 로컬 그리드 인덱스 계산
-  const localX = absX - tile.origin.x;
-  const localY = absY - tile.origin.y; // Bottom-Up (OSM Standard)
+  const localX = pos.x - bbox.minX;
+  const localY = pos.y - bbox.minY; // Bottom-Up (OSM Standard)
 
   // 그리드 좌표 (0 ~ 2047)
   const gx = Math.floor(localX / CELL_SIZE);
-  // 🎯 [Correction] VoxelTerrain 데이터는 Top-Down 이미지 순서로 저장됨을 가정
+  // 🎯 [Correction] GridTerrain 데이터는 Top-Down 이미지 순서로 저장됨을 가정
   const gy = Math.floor((TILE_SIZE - localY) / CELL_SIZE);
 
   // 범위 체크
@@ -96,11 +103,10 @@ export const PoiItem = React.memo(
 
     // 🎯 [Terrain-Snap-Correction]
     // 1. 이 POI가 속한 타일의 Key를 계산합니다.
-    const tileKey = useMemo(() => {
-      const tx = Math.floor(poi.center.x / TILE_SIZE);
-      const ty = Math.floor(poi.center.y / TILE_SIZE);
-      return `${tx}:${ty}`;
-    }, [poi.center.x, poi.center.y]);
+    const tileKey = useMemo(
+      () => getTileKey(getTileCoord(poi.center)),
+      [poi.center],
+    );
 
     /**
      * 2. [State-Subscription] 해당 타일의 로딩 여부만 정밀하게 구독합니다.
@@ -121,10 +127,11 @@ export const PoiItem = React.memo(
      */
     const terrainHeight = useMemo(() => {
       // 🎯 POI 중심점에 VOXEL_CONFIG.HALF(복셀 중심 보정)를 더해 정확한 샘플링
-      return getTerrainAltitude(
-        poi.center.x + VOXEL_CONFIG.HALF,
-        poi.center.y + VOXEL_CONFIG.HALF,
-      );
+      return getTerrainAltitude({
+        x: poi.center.x + VOXEL_CONFIG.HALF,
+        y: poi.center.y + VOXEL_CONFIG.HALF,
+        z: 0,
+      });
     }, [poi.center.x, poi.center.y, isTileLoaded]);
 
     /**

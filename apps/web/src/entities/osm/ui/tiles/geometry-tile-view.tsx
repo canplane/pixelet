@@ -9,8 +9,17 @@ import { useRelativePosition } from '../../lib/use-coordinate-system';
 import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 import { THREE_CONFIG } from '../../config/three-config';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
+import {
+  getTileBbox,
+  getTileKey,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
-const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
+const {
+  TILE_SIZE,
+  CELL_SIZE,
+  TILE_RESOLUTION: resolution,
+  Z_SCALE_RATIO,
+} = OSM_CONSTANTS;
 
 const COLOR_UNIFORMS = {
   uColorUnknown: { value: new THREE.Color(VOXEL_COLORS.UNKNOWN) },
@@ -31,7 +40,7 @@ const COLOR_UNIFORMS = {
   uColorBuilding: { value: new THREE.Color(VOXEL_COLORS.BUILDING) },
 };
 
-const createDataTexture = (data: Uint8Array, resolution: number) => {
+const createDataTexture = (data: Uint8Array) => {
   const tex = new THREE.DataTexture(
     data,
     resolution,
@@ -48,7 +57,7 @@ const createDataTexture = (data: Uint8Array, resolution: number) => {
   return tex;
 };
 
-const createHeightTexture = (data: Uint16Array, resolution: number) => {
+const createHeightTexture = (data: Uint16Array) => {
   const tex = new THREE.DataTexture(
     data,
     resolution,
@@ -69,40 +78,40 @@ interface GeometryTileViewProps {
 
 export const GeometryTileView = React.memo(
   ({ tile }: GeometryTileViewProps) => {
-    const { grids, origin, resolution, key } = tile;
+    const { coord, grids } = tile;
     const { layers, terrain } = grids;
 
-    const absoluteCenter = useMemo(
-      () => ({
-        x: origin.x + TILE_SIZE / 2,
-        y: origin.y + TILE_SIZE / 2,
+    const absoluteCenter = useMemo(() => {
+      const { minX, minY } = getTileBbox(coord);
+      return {
+        x: minX + TILE_SIZE / 2,
+        y: minY + TILE_SIZE / 2,
         z: 0,
-      }),
-      [origin.x, origin.y],
-    );
+      };
+    }, [coord]);
 
     // React Cycle에 묶여 있음 (origin 변경 시 재계산됨)
     const relativePosition = useRelativePosition(absoluteCenter);
 
     const texBase = useMemo(
-      () => createDataTexture(layers.base, resolution),
-      [layers.base, resolution],
+      () => createDataTexture(layers.base),
+      [layers.base],
     );
     const texWater = useMemo(
-      () => createDataTexture(layers.water, resolution),
-      [layers.water, resolution],
+      () => createDataTexture(layers.water),
+      [layers.water],
     );
     const texTransport = useMemo(
-      () => createDataTexture(layers.transport, resolution),
-      [layers.transport, resolution],
+      () => createDataTexture(layers.transport),
+      [layers.transport],
     );
     const texStructure = useMemo(
-      () => createDataTexture(layers.structure, resolution),
-      [layers.structure, resolution],
+      () => createDataTexture(layers.structure),
+      [layers.structure],
     );
     const texHeight = useMemo(
-      () => createHeightTexture(terrain.height, resolution),
-      [terrain.height, resolution],
+      () => createHeightTexture(terrain.height),
+      [terrain.height],
     );
 
     // [Cleanup]
@@ -230,7 +239,7 @@ export const GeometryTileView = React.memo(
 
     return (
       <mesh
-        name={`tile-${key}`}
+        name={`tile-${getTileKey(coord)}`}
         position={toThreeCoordWithOffset(relativePosition, -0.01)}
         rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION as unknown as THREE.Euler}
         receiveShadow

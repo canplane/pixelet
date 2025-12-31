@@ -1,6 +1,7 @@
 import { Entity, PrimaryColumn, Column, Index } from 'typeorm';
 import { Geometry } from 'geojson';
 
+// DB 엔티티 (영속성 계층)
 @Entity('osm_elements')
 export class OsmElement {
   @PrimaryColumn({ type: 'bigint' })

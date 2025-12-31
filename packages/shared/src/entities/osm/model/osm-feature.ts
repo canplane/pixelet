@@ -20,6 +20,20 @@ export interface OsmInput {
 }
 
 /**
+ * 🚀 [New] 엔진 내부 최적화 플래그 집합
+ * 태그 문자열 파싱 비용을 줄이기 위해 Normalizer 단계에서 미리 계산된 불리언 값들입니다.
+ */
+export interface OsmExtra {
+  /** 주차장 구역 판별 (amenity=parking, etc.) */
+  isParking: boolean;
+  /** 학교, 병원, 관공서 등 대형 시설 구역 판별 */
+  isInstitutional: boolean;
+  /** 스포츠, 운동장 구역 판별 */
+  isSports: boolean;
+  // 필요 시 isCampus, isForest 등으로 확장 가능
+}
+
+/**
  * [osm-feature]
  * 엔진에서 렌더링 가능한 상태로 정제된 지형지물(EPSG:3857, Web Mercator)입니다.
  * 4326 좌표계가 3857 미터 좌표계로 투영(Projection)되었으며,
@@ -52,7 +66,7 @@ export interface OsmFeature {
     holes?: Coord[][];
   };
 
-  /** * 수치화된 물리 데이터 (Computed Properties)
+  /** * [Computed] 엔진이 원본 태그를 바탕으로 계산해낸 물리적 수치
    * tags에서 매번 파싱하지 않도록 전처리기가 계산한 결과값입니다.
    * 렌더링 성능 최적화를 위해 모든 단위는 SI 표준(Meter)을 따릅니다.
    */
@@ -67,7 +81,7 @@ export interface OsmFeature {
     layer: number;
   };
 
-  /** * 원본 태그
+  /** * [Raw] 원본 소스 태그
    * 정규화 이후에도 메타데이터 참조, 조건부 스타일링, 상세 정보 팝업 출력을 위해 유지합니다.
    */
   tags: OsmTags;
@@ -78,6 +92,9 @@ export interface OsmFeature {
    * 파서와 엔진은 이 값을 통해 데이터의 용도를 즉시 식별합니다.
    */
   category: string;
+
+  /** [Extra] 엔진이 태그 분석을 통해 추가로 판단한 최적화 플래그 */
+  extra: OsmExtra;
 }
 
 /**
@@ -88,16 +105,6 @@ export interface ShapePath {
   points: Coord[];
   isClosed: boolean;
   holes?: Coord[][];
-}
-
-export interface MapInfra {
-  id: string;
-  type: string; // 'building' | 'road' | 'water' | 'landuse' | 'forest';
-  points: Coord[];
-  center: Coord;
-  shapePath?: ShapePath;
-  height: number;
-  tags: Record<string, string | undefined>;
 }
 
 export interface MapPoi {

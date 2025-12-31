@@ -16,8 +16,11 @@ import type { ThemeKey } from '../../../features/map-three/model/world-themes';
 // 5. 현재 패키지(web) 내부 설정
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../config/three-config';
+import {
+  getTileKey,
+  type TileCoord,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
-const { project } = projection;
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 
 /**
@@ -67,7 +70,7 @@ interface MapState {
    * 타일 데이터를 새로 추가하거나, 이미 존재하는 타일에 데이터를 병합(Merge)합니다.
    * 예: Worker로부터 지형 데이터 수신 후, 나중에 POI 데이터 수신 시 병합
    */
-  setGeometryTile: (key: string, tile: Partial<GeometryTile>) => void;
+  setGeometryTile: (coord: TileCoord, tile: Partial<GeometryTile>) => void;
   /** 특정 타일을 메모리에서 즉시 해제합니다. */
   removeGeometryTile: (key: string) => void;
   /** 가시 범위 밖의 불필요한 타일들을 일괄 정리(GC)합니다. */
@@ -145,8 +148,9 @@ export const useMapStore = create<MapState>((set, get) => ({
    * [set-geometry-tile]
    * 타일 데이터를 저장하거나 부분 업데이트를 수행합니다.
    */
-  setGeometryTile: (key, partialTile) =>
+  setGeometryTile: (coord, partialTile) =>
     set((state) => {
+      const key = getTileKey(coord);
       const newMap = new Map(state.tiles);
       const existingTile = newMap.get(key);
 
@@ -158,7 +162,8 @@ export const useMapStore = create<MapState>((set, get) => ({
         });
       } else {
         // [new-tile-validation] 신규 생성 시 필수 데이터 무결성 검사
-        if (partialTile.origin && partialTile.grids && partialTile.resolution) {
+        // grids가 반드시 존재해야 유효한 타일로 간주합니다.
+        if (partialTile.grids) {
           newMap.set(key, partialTile as GeometryTile);
         } else {
           console.warn(

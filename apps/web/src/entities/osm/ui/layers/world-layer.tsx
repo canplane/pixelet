@@ -3,6 +3,7 @@ import { useMapStore } from '@/entities/osm/model/map-store';
 import { GeometryTileView } from '../tiles/geometry-tile-view';
 import { PoiManager } from '../pois/poi-manager'; // 🎯 매니저 도입
 import { useTileScheduler } from '@/entities/osm/lib/use-tile-scheduler';
+import { getTileKey } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 /**
  * [WorldLayer]
@@ -47,13 +48,13 @@ export const WorldLayer = React.memo(() => {
       {/* 1. 지형 지면 (타일) */}
       <group name="tiles-group">
         {tileList.map((tile) => (
-          <GeometryTileView key={tile.key} tile={tile} />
+          <GeometryTileView key={getTileKey(tile.coord)} tile={tile} />
         ))}
       </group>
 
       {/* 2. POI 매니저 (Hybrid LOD 시스템)
           🎯 10,000개 이상의 POI를 통째로 넘깁니다. */}
-      {/* <PoiManager pois={allActivePois} /> */}
+      <PoiManager pois={allActivePois} />
     </group>
   );
 });

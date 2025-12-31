@@ -7,8 +7,12 @@ import type {
 } from '@/entities/osm/model/worker-protocol';
 import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
 import { delay } from '@pixelet/shared/shared/lib/aync-utils';
+import {
+  getTileKey,
+  type TileCoord,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
-const { API_MODE } = OSM_CONFIG;
+const { SERVICE_MODE } = OSM_CONFIG;
 
 /**
  * [TaskCallbacks]
@@ -96,11 +100,10 @@ class TileWorkerManager {
    * @param onProgress - 부분 데이터 수신 시 콜백
    */
   public async requestTile(
-    tx: number,
-    ty: number,
+    coord: TileCoord,
     onProgress?: (data: Partial<GeometryTile>) => void,
   ): Promise<GeometryTile> {
-    const requestId = `${tx}:${ty}`;
+    const requestId = getTileKey(coord);
 
     // 1. 중복 요청 확인 (Deduplication)
     if (this.callbacks.has(requestId)) {
@@ -131,9 +134,9 @@ class TileWorkerManager {
     // 4. [주입] 워커에게 보낼 구조화된 데이터 생성
     // 메인 스레드의 최신 설정을 스냅샷으로 전달하여 워커의 순수성을 유지합니다.
     const input: TileWorkerInput = {
-      coord: { tx, ty },
+      coord,
       options: {
-        apiMode: API_MODE,
+        serviceMode: SERVICE_MODE,
       },
       meta: {
         requestId,

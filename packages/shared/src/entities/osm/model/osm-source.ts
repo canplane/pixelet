@@ -1,5 +1,5 @@
 /**
- * [osm-4326-model.ts]
+ * [osm-source.ts]
  * OSM 원본 데이터(EPSG:4326, WGS84)의 규격 정의입니다.
  * * - 좌표계 종속적인 타입: Osm4326 접두어 사용 (Element, Member, Coordinate)
  * - 공용(Shared) 타입: 접두어 없음 (Tags, Type) -> OsmFeature 등에서도 재사용 가능
@@ -88,16 +88,6 @@ export interface OsmTags {
   historic?: string;
   /** 철도 및 대중교통 거점 (station 등) */
   railway?: string;
-
-  // --- [Internal Only] 엔진 내부 로직용 확장 태그 (Prefix: _) ---
-  /** 도로 너비 계산값 (meter) */
-  _calculatedWidth?: string;
-  /** 주차장 구역 판별 플래그 (Baker 최적화용) */
-  _isParking?: string;
-  /** 학교/캠퍼스 구역 판별 플래그 (Baker 최적화용) */
-  _isInstitutional?: string;
-  /** 운동장/체육 구역 판별 플래그 (Baker 최적화용) */
-  _isSports?: string;
 
   /** 가변적인 모든 태그 허용 */
   [key: string]: string | undefined;
