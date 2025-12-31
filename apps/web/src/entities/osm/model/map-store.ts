@@ -11,7 +11,7 @@ import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 
 // 4. 전역 설정 및 테마
-import type { ThemeKey } from '../../../features/map-three/model/world-themes';
+import type { ThemeKey } from '@/features/map-three/model/world-themes';
 
 // 5. 현재 패키지(web) 내부 설정
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
@@ -54,7 +54,7 @@ export interface ViewState {
  * - 카메라가 멀리 이동할 때마다 타일 단위로 갱신(Shift)되어 부동소수점 정밀도를 유지합니다.
  * 3. Local Position: 렌더링 시에는 (Absolute - origin) 연산을 통해 0 근처의 로컬 좌표로 변환됩니다.
  */
-interface MapState {
+export interface MapState {
   // --- [Lifecycle & Status] ---
   status: MapDataStatus;
   setStatus: (status: MapDataStatus) => void;

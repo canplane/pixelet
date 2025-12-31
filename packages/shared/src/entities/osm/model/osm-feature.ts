@@ -24,12 +24,22 @@ export interface OsmInput {
  * 태그 문자열 파싱 비용을 줄이기 위해 Normalizer 단계에서 미리 계산된 불리언 값들입니다.
  */
 export interface OsmExtra {
+  /** * 🚀 [New] 렌더링 우선순위 (Rank)
+   * 0~255 범위. 숫자가 높을수록 중요한 지형지물/POI임을 의미합니다.
+   * 클라이언트 엔진은 이 값을 보고 겹치는 POI 중 무엇을 먼저 숨길지 결정합니다.
+   */
+  rank: number;
+
+  /** 🌊 [New] 해안선 데이터셋에서 추출된 "진짜 바다" 여부 */
+  isOcean: boolean;
+
   /** 주차장 구역 판별 (amenity=parking, etc.) */
   isParking: boolean;
   /** 학교, 병원, 관공서 등 대형 시설 구역 판별 */
   isInstitutional: boolean;
   /** 스포츠, 운동장 구역 판별 */
   isSports: boolean;
+
   // 필요 시 isCampus, isForest 등으로 확장 가능
 }
 
@@ -114,4 +124,7 @@ export interface MapPoi {
   name: string;
   center: Coord;
   tags: Record<string, string | undefined>;
+
+  /** 엔진이 확정한 중요도 수준 */
+  rank: number;
 }

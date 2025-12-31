@@ -3,9 +3,22 @@
  * 타일 격자 데이터(Grids)와 최종 타일 객체(GeometryTile) 규격을 정의합니다.
  */
 
-import type { Coord } from '@pixelet/shared/shared/model/coords';
-import type { MapPoi } from './osm-feature';
 import type { TileCoord } from '../lib/utils/tile-utils';
+import type { MapPoi } from './osm-feature';
+
+/**
+ * 🎯 [SSOT] GridLayers의 모든 키를 순서대로 정의합니다.
+ * 이 배열의 순서가 바이너리 패킹(Packer)과 초기화(Factory)의 기준이 됩니다.
+ */
+export const GRID_LAYER_KEYS: (keyof GridLayers)[] = [
+  'sea',
+  'base',
+  'water',
+  'transport',
+  'structure',
+];
+
+export const GRID_TERRAIN_KEYS: (keyof GridTerrain)[] = ['elevation'];
 
 /**
  * [GridLayers]
@@ -13,10 +26,16 @@ import type { TileCoord } from '../lib/utils/tile-utils';
  * OSM 데이터를 래스터화한 결과물입니다.
  */
 export interface GridLayers {
-  base: Uint8Array; // [Pass 1] 지형 (Landuse, Natural, Institutional)
-  water: Uint8Array; // [Pass 2] 수계 (Water)
-  transport: Uint8Array; // [Pass 3] 교통 (Road, Rail, Pedestrian, Parking)
-  structure: Uint8Array; // [Pass 4] 구조물 (Building, Man-made)
+  /** [Pass 0] 바다 (Sea/Ocean) - 모든 지형의 바탕이 되는 백그라운드 */
+  sea: Uint8Array;
+  /** [Pass 1] 지형 (Landuse, Natural, Institutional) - 육지 위를 덮는 면들 */
+  base: Uint8Array;
+  /** [Pass 2] 수계 (Water) - 강, 호수 등 내륙 수계 */
+  water: Uint8Array;
+  /** [Pass 3] 교통 (Road, Rail, Pedestrian, Parking) */
+  transport: Uint8Array;
+  /** [Pass 4] 구조물 (Building, Man-made) */
+  structure: Uint8Array;
 }
 
 /**
@@ -26,11 +45,11 @@ export interface GridLayers {
  */
 export interface GridTerrain {
   /**
-   * [height]
+   * [elevation]
    * 각 셀의 복셀 층수 인덱스 (Uint8)
    * 실제 높이(m) = value * (OSM_CONSTANTS.CELL_SIZE * OSM_CONSTANTS.Z_SCALE_RATIO)
    */
-  height: Uint16Array;
+  elevation: Uint16Array;
 }
 
 /**

@@ -17,7 +17,7 @@ export type OsmElementType = 'node' | 'way' | 'relation';
  * [4326 Specific] 위경도 좌표 객체 (OSM 표준 규격: lat, lon)
  * 3857의 Coord(x, y)와 구분하기 위해 4326을 명시합니다.
  */
-interface Osm4326Coordinate {
+export interface Osm4326Coordinate {
   lat: number;
   lon: number;
 }

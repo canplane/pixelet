@@ -2,7 +2,7 @@
  * @file tile-processor.ts
  * 타일 데이터 획득 및 생애주기를 관리하는 메인 오케스트레이터입니다.
  * * [설계 의도]
- * 1. 환경(apiMode)에 따라 서버(Local) 완제품 소비 또는 클라이언트(Public) 직접 가공 전략을 선택합니다.
+ * 1. 환경(serviceMode)에 따라 서버(Local) 완제품 소비 또는 클라이언트(Public) 직접 가공 전략을 선택합니다.
  * 2. 서버 통신 시 JSON 직렬화로 파괴된 바이너리 데이터(Uint8Array)를 복원하여 GPU 전송 효율을 극대화합니다.
  * 3. 클라이언트 측에서 origin을 재계산하여 서버-클라이언트 간의 미세한 좌표 오차를 방지합니다.
  */
@@ -11,16 +11,16 @@ import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 import type { GeometryTileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
 import { buildExternalTile } from './tile-external-builder';
 import type { TileWorkerInput } from '../../model/worker-protocol';
 import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
 import { unpackTileGrids } from '@pixelet/shared/entities/osm/compression/tile-grid-packer';
 import { unpackVector } from '@pixelet/shared/entities/osm/compression/vector-packer';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
-import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils.d';
+import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { SERVICE_MODES } from '@/config/app-config';
 
-const { TILE_SIZE, CELL_SIZE } = OSM_CONSTANTS;
+const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
 const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
 
 /**
@@ -29,8 +29,6 @@ const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
  */
 async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
   const { tx, ty } = coord;
-  // 타일 당 그리드 해상도 (N x N)
-  const resolution = Math.floor(TILE_SIZE / CELL_SIZE);
 
   const rawKey = `baked:${tx}:${ty}:${resolution}`;
 
@@ -58,11 +56,13 @@ async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
 
       // 🚀 병렬로 모든 압축 해제 및 객체 복원
       const [grids, pois] = await Promise.all([
-        unpackTileGrids(dto.grids),
+        unpackTileGrids(dto.grids, resolution),
         unpackVector<MapPoi>(dto.pois),
       ]);
 
-      return { ...dto, grids, pois };
+      // [Memory Optimization] 필요한 필드만 정제하여 반환
+      const { coord } = dto;
+      return { coord, grids, pois };
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -80,7 +80,7 @@ async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
  * [Main Entry] fetchTile
  * 워커로부터 타일 생성 요청을 받아 적절한 가공 전략을 실행하는 엔트리 포인트입니다.
  * * @param coord - 타일 좌표 정보
- * @param options - 렌더링 옵션 (apiMode 등)
+ * @param options - 렌더링 옵션 (serviceMode 등)
  * @param onProgress - (Public 모드 전용) 단계별 가공 데이터 알림 콜백
  */
 export async function fetchTile(
@@ -88,17 +88,13 @@ export async function fetchTile(
   options: TileWorkerInput['options'],
   onProgress?: (partialTile: GeometryTile) => void,
 ): Promise<GeometryTile> {
-  const { tx, ty } = coord;
   const { serviceMode } = options;
-
-  // 🎯 Floating Origin 및 렌더링 기준점이 되는 타일 절대 좌표 계산
-  const origin: Coord = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, z: 0 };
 
   /**
    * [Case A] internal 모드
    * 우리 서버에 이미 구워진 완제품(Baked Tile)을 요청합니다.
    */
-  if (serviceMode === 'internal') {
+  if (serviceMode === SERVICE_MODES.INTERNAL) {
     return await requestServerTile(coord);
   }
 

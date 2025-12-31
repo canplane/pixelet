@@ -1,14 +1,13 @@
 // @pixelet/web/src/entities/elevation/lib/elevation-baker.ts
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 
-const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
-
-interface BakeOptions {
-  tileSize?: number; // 타일 한 변의 물리적 크기 (m)
-  cellSize?: number; // 복셀 한 칸의 수평 크기 (m)
-  zScaleRatio?: number; // 수평(cellSize) 대비 수직 배율
-}
+const {
+  CELL_SIZE: cellSize,
+  Z_SCALE_RATIO: zScaleRatio,
+  TILE_RESOLUTION: resolution,
+} = OSM_CONSTANTS;
 
 /**
  * [bakeElevationGrid]
@@ -20,18 +19,7 @@ interface BakeOptions {
  * @param options - tileSize(4096), cellSize(2), zScaleRatio(배율) 옵션
  * @returns Uint16Array - 각 셀의 복셀 층수(Index)가 담긴 1D 배열
  */
-export function bakeElevationGrid(
-  points: { x: number; y: number; z: number }[],
-  options: BakeOptions = {},
-): Uint16Array {
-  const {
-    tileSize = TILE_SIZE,
-    cellSize = CELL_SIZE,
-    zScaleRatio = Z_SCALE_RATIO,
-  } = options;
-
-  // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
-  const resolution = Math.floor(tileSize / cellSize);
+export function bakeElevationGrid(points: Coord[]): Uint16Array {
   const grid = new Uint16Array(resolution * resolution);
 
   // 복셀 한 칸의 실제 물리적 높이 (m)

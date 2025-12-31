@@ -143,35 +143,4 @@ export const projection = {
       }),
     };
   },
-
-  /**
-   * [create-bbox]
-   * 중심점과 미터 범위를 기반으로 외부 API(Overpass 등)용 BBox 문자열을 생성합니다.
-   * 반환 형식: "south,west,north,east"
-   * 주의: 입력된 width/height는 3857 좌표계 상의 미터 단위를 기준으로 계산됩니다.
-   */
-  createBbox: (
-    centerLng: number,
-    centerLat: number,
-    widthMeter: number,
-    heightMeter: number = widthMeter,
-  ): string => {
-    const centerX = projection.lngToX(centerLng);
-    const centerY = projection.latToY(centerLat);
-
-    const halfW = widthMeter / 2;
-    const halfH = heightMeter / 2;
-
-    const minX = centerX - halfW;
-    const maxX = centerX + halfW;
-    const minY = centerY - halfH;
-    const maxY = centerY + halfH;
-
-    const south = projection.yToLat(minY);
-    const west = projection.xToLng(minX);
-    const north = projection.yToLat(maxY);
-    const east = projection.xToLng(maxX);
-
-    return `${south},${west},${north},${east}`;
-  },
 } as const;

@@ -13,7 +13,7 @@ import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants'
 
 // 🎯 [utility-import] 좌표 변환 유틸리티 적용
 import { fromThreeCoord, toThreeCoord } from '@/shared/lib/three/three-coords';
-import { useCoordinateConverter } from '@/entities/osm/lib/use-coordinate-system';
+import { useCoordinateConverter } from '@/entities/osm/lib/use-coordinate-converter';
 
 const { TILE_SIZE, TILE_BUFFER } = OSM_CONSTANTS;
 
@@ -257,7 +257,7 @@ export function MapCameraController({
       worldGroupRef.current.updateMatrixWorld(true);
 
       console.log(
-        `[FloatingOrigin] Shifted to Tile(${currentTx}, ${currentTy})`,
+        `[FloatingOrigin] Shifted to Tile (${currentTx}:${currentTy})`,
       );
     }
 
