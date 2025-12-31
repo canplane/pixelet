@@ -6,9 +6,9 @@ import {
 } from '@pixelet/shared/entities/voxel/model/voxels';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { useRelativePosition } from '../../lib/use-coordinate-system';
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/osm-tile';
+import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 import { THREE_CONFIG } from '../../config/three-config';
-import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
+import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 
 const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
 
@@ -231,7 +231,7 @@ export const GeometryTileView = React.memo(
     return (
       <mesh
         name={`tile-${key}`}
-        position={toThreePosWithOffset(relativePosition, -0.01)}
+        position={toThreeCoordWithOffset(relativePosition, -0.01)}
         rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION as unknown as THREE.Euler}
         receiveShadow
       >

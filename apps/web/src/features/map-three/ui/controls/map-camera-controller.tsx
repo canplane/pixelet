@@ -6,14 +6,14 @@ import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 import { useMapStore } from '@/entities/osm/model/map-store';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
 // 🎯 [utility-import] 좌표 변환 유틸리티 적용
-import { fromThreePos, toThreePos } from '@/shared/lib/three/three-coords';
-import { useCoordinateConverter } from '../../../../entities/osm/lib/use-coordinate-system';
+import { fromThreeCoord, toThreeCoord } from '@/shared/lib/three/three-coords';
+import { useCoordinateConverter } from '@/entities/osm/lib/use-coordinate-system';
 
 const { TILE_SIZE, TILE_BUFFER } = OSM_CONSTANTS;
 
@@ -67,7 +67,7 @@ export function MapCameraController({
   useEffect((): void => {
     if (!devicePos || origin.x !== 0) return;
 
-    const snappedInitial: MeterPos = VOXEL_CONFIG.snapToVoxel(devicePos);
+    const snappedInitial: Coord = VOXEL_CONFIG.snapToVoxel(devicePos);
     setOrigin(snappedInitial);
     setCenter(devicePos);
   }, [devicePos, origin]);
@@ -103,7 +103,7 @@ export function MapCameraController({
   });
 
   // [camera-sync-logic]
-  const syncCamera = (targetPos: MeterPos, distance: number): void => {
+  const syncCamera = (targetPos: Coord, distance: number): void => {
     if (!controlsRef.current) return;
     const polar: number =
       controlsRef.current.getPolarAngle() || DEFAULT_POLAR_ANGLE;
@@ -120,7 +120,7 @@ export function MapCameraController({
   };
 
   // [fly-interpolation]
-  const flyTo = (targetPos: MeterPos, distance: number): void => {
+  const flyTo = (targetPos: Coord, distance: number): void => {
     if (!controlsRef.current) return;
 
     const polar: number =
@@ -157,9 +157,9 @@ export function MapCameraController({
 
     const localGeoPos = globalToLocal(center);
 
-    // 🚀 [toThreePos] 유틸리티 사용하여 변환 (Vector3Tuple 분해)
-    const threePos = toThreePos(localGeoPos);
-    const localTargetVec = new THREE.Vector3(...threePos);
+    // 🚀 [toThreeCoord] 유틸리티 사용하여 변환 (Vector3Tuple 분해)
+    const threeCoord = toThreeCoord(localGeoPos);
+    const localTargetVec = new THREE.Vector3(...threeCoord);
 
     const currentDist: number = camera.position.distanceTo(
       controlsRef.current.target,
@@ -203,10 +203,10 @@ export function MapCameraController({
 
     /**
      * 🎯 [Standardized-Unswizzling]
-     * 기존의 하드코딩된 좌표 복원 로직(-z -> y)을 표준 유틸리티(fromThreePos)로 대체합니다.
+     * 기존의 하드코딩된 좌표 복원 로직(-z -> y)을 표준 유틸리티(fromThreeCoord)로 대체합니다.
      * Three.js 좌표(Local) -> 지리 좌표(Local Geo)
      */
-    const localGeo = fromThreePos([t.x, t.y, t.z]);
+    const localGeo = fromThreeCoord([t.x, t.y, t.z]);
 
     const absX = localGeo.x + origin.x;
     const absY = localGeo.y + origin.y;
@@ -228,7 +228,7 @@ export function MapCameraController({
       const moveX = newOriginX - origin.x;
       const moveY = newOriginY - origin.y;
 
-      const newOrigin: MeterPos = {
+      const newOrigin: Coord = {
         x: newOriginX,
         y: newOriginY,
         z: origin.z,
@@ -236,8 +236,8 @@ export function MapCameraController({
       setOrigin(newOrigin); // React Update Trigger
 
       // Floating Origin Shift Vector
-      // 🚀 [toThreePos] 이동 벡터도 표준 변환을 사용하여 생성 (Geo [dx, dy] -> Three [dx, 0, -dy])
-      const moveVecTuple = toThreePos({ x: moveX, y: moveY });
+      // 🚀 [toThreeCoord] 이동 벡터도 표준 변환을 사용하여 생성 (Geo [dx, dy] -> Three [dx, 0, -dy])
+      const moveVecTuple = toThreeCoord({ x: moveX, y: moveY });
       const moveVec = new THREE.Vector3(...moveVecTuple);
 
       /**
@@ -342,9 +342,9 @@ export function MapCameraController({
             return;
           }
 
-          // 🚀 [fromThreePos] 표준 유틸리티 사용 (Vector3Tuple 타입 단언)
-          const localMeterPos = fromThreePos([t.x, t.y, t.z]);
-          const absolutePos = localToGlobal(localMeterPos);
+          // 🚀 [fromThreeCoord] 표준 유틸리티 사용 (Vector3Tuple 타입 단언)
+          const localCoord = fromThreeCoord([t.x, t.y, t.z]);
+          const absolutePos = localToGlobal(localCoord);
 
           lastProcessedCenter.current = JSON.stringify(absolutePos);
           setCenter(absolutePos);

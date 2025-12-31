@@ -1,6 +1,6 @@
 // 1. 프로젝트 공통 타입 및 설정 (Shared / Feature Config)
+import type { Osm4326Response } from '@pixelet/shared/entities/osm/model/osm-source';
 import { OSM_CONFIG } from '../config/osm-config';
-import type { OverpassResponse } from './overpass-types';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils'; // 기존에 사용하던 유틸리티 활용
 import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
 
@@ -13,9 +13,7 @@ const { PUBLIC_API_ENDPOINTS } = OSM_CONFIG;
  * - 공용 서버 모드에서는 데이터 누락(remark) 발생 시 딜레이 후 재시도합니다.
  * - HTTP 429(Too Many Requests) 또는 서버 타임아웃 발생 시 다음 가용 서버로 전환합니다.
  */
-export async function requestOverpass(
-  query: string,
-): Promise<OverpassResponse> {
+export async function requestOverpass(query: string): Promise<Osm4326Response> {
   return withSharedPromise('overpass', query, async () => {
     // [Mode 2] 공용 서버 모드 (Legacy: Load Balancing & Fallback)
     const shuffledServers = [...PUBLIC_API_ENDPOINTS].sort(
@@ -60,7 +58,7 @@ export async function requestOverpass(
             throw new Error(`HTTP Error: ${response.status}`);
           }
 
-          const data = (await response.json()) as OverpassResponse;
+          const data = (await response.json()) as Osm4326Response;
           const endTime = performance.now();
           const duration = ((endTime - startTime) / 1000).toFixed(2);
 

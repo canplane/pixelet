@@ -1,7 +1,7 @@
 // 개별 블록 (개발/테스트용)
 // 라운딩 블록이 아니라 일반 블록
 
-import { toThreePos } from '@/shared/lib/three/three-coords';
+import { toThreeCoord } from '@/shared/lib/three/three-coords';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 
 const size = VOXEL_CONFIG.SIZE;
@@ -35,7 +35,7 @@ export const VoxelBlock = ({ gridPos, color = 'red' }: VoxelBlockProps) => {
        * - World Y = geoPos.z (고도) 🎯
        * - World Z = -geoPos.y (북향 반영) 🎯
        */
-      position={toThreePos(geoPos)}
+      position={toThreeCoord(geoPos)}
     >
       <boxGeometry args={[size, size, size]} />
       <meshStandardMaterial color={color} />

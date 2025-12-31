@@ -10,8 +10,8 @@ import { useRelativePosition } from '../../../../entities/osm/lib/use-coordinate
 
 // 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
 import {
-  toThreePos,
-  toThreePosWithOffset,
+  toThreeCoord,
+  toThreeCoordWithOffset,
 } from '@/shared/lib/three/three-coords';
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
@@ -185,7 +185,7 @@ export function UserMarker(): ReactElement | null {
 
     // 🎯 [Standardization] 숨김 좌표도 표준 유틸리티를 사용하여 정의
     // (Geographic) Alt: -1000m -> (Three) Y: -1000
-    const hiddenPos = toThreePos({ x: 0, y: 0, z: -1000 });
+    const hiddenPos = toThreeCoord({ x: 0, y: 0, z: -1000 });
 
     // 초기화: 모든 인스턴스를 보이지 않는 곳(지하)으로 이동
     for (let i = 0; i < MAX_INSTANCES; i++) {
@@ -197,11 +197,11 @@ export function UserMarker(): ReactElement | null {
     // 활성 격자 배치
     gridOffsets.forEach((offset, i) => {
       /**
-       * 🎯 [Swizzling-Fix] 표준 유틸리티(toThreePos) 사용
+       * 🎯 [Swizzling-Fix] 표준 유틸리티(toThreeCoord) 사용
        * InstancedMesh 좌표: { x: 동서, y: 남북 } -> { x: x, y: 0.05, z: -y }
-       * toThreePos({ x, y, z: 0.05 }) 호출 시 [x, 0.05, -y]가 반환됨
+       * toThreeCoord({ x, y, z: 0.05 }) 호출 시 [x, 0.05, -y]가 반환됨
        */
-      const pos: Vector3Tuple = toThreePos({
+      const pos: Vector3Tuple = toThreeCoord({
         x: offset.x,
         y: offset.y,
         z: 0.05,
@@ -221,20 +221,20 @@ export function UserMarker(): ReactElement | null {
 
   // 🎯 [Coordinate-Normalization]
   // 그룹의 위치(Position)도 표준 유틸리티로 변환하여 일관성 확보
-  const groupPos = toThreePos({
+  const groupPos = toThreeCoord({
     x: VOXEL_CONFIG.toCenter(snappedLocalPos.x),
     y: VOXEL_CONFIG.toCenter(snappedLocalPos.y),
     z: VOXEL_CONFIG.SYSTEM_OFFSET,
   });
 
   // 🎯 [Gem-Position] 보석 위치도 표준 유틸리티 사용 (zOffset 0)
-  const gemPos = toThreePosWithOffset(
+  const gemPos = toThreeCoordWithOffset(
     { x: gemOffset.x, y: gemOffset.y }, // z 생략 시 0 처리됨
     0,
   );
 
   // 🎯 [PointLight-Position] 보석과 동일한 위치
-  const lightPos = toThreePos({ x: gemOffset.x, y: gemOffset.y });
+  const lightPos = toThreeCoord({ x: gemOffset.x, y: gemOffset.y });
 
   return (
     <group

@@ -13,18 +13,20 @@ import type {
   GeometryGrids,
   VoxelLayers,
   GeometryTile,
-} from '@pixelet/shared/entities/osm/model/osm-tile';
-import { createEmptyGrids } from '@pixelet/shared/entities/osm/model/osm-tile';
+} from '@pixelet/shared/entities/osm/model/tiles';
+import { createEmptyGrids } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import {
   getTileBbox,
   unprojectBbox,
 } from '@pixelet/shared/entities/osm/lib/tile-math';
 import type { Bbox } from '@pixelet/shared/entities/osm/lib/tile-math';
-import { normalizeOsmData } from '@pixelet/shared/entities/osm/lib/osm-normalizer'; // 🎯 추가: Raw -> Normalized 변환
-import { processOsmToGrids } from '@pixelet/shared/entities/osm/lib/tile-data-handler';
+
+import { transformOsm4326 } from '@pixelet/shared/entities/osm/lib/osm-4326-transformer';
+import { parseOsmData } from '@pixelet/shared/entities/osm/lib/osm-parser';
+import { bakeGeometryGrid } from '@pixelet/shared/entities/osm/lib/geometry-baker';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 import type {
   MapInfra,
   MapPoi,
@@ -32,6 +34,7 @@ import type {
 import type { TileWorkerInput } from '@/entities/osm/model/worker-protocol';
 import { requestElevation } from '@/entities/elevation/api/elevation.api';
 import { bakeElevationGrid } from '@pixelet/shared/entities/elevation/lib/elevation-baker';
+import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/osm-feature-normalizer';
 
 const { TILE_SIZE, CELL_SIZE } = OSM_CONSTANTS;
 
@@ -99,7 +102,7 @@ function createProcessingSteps(bbox: Bbox): ProcessingStep[] {
 /**
  * [Helper 1] 개별 단계를 실행하여 가공된 데이터를 반환합니다.
  */
-async function executeStep(step: ProcessingStep, origin: MeterPos) {
+async function executeStep(step: ProcessingStep, origin: Coord) {
   const response = await requestOverpass(step.query);
   if (!response?.elements?.length) return null;
 
@@ -108,10 +111,30 @@ async function executeStep(step: ProcessingStep, origin: MeterPos) {
    * [보강] Raw elements를 3857 Meter 좌표계로 변환하고,
    * isClosed 판정, Holes 조립, 물리 수치(Computed) 계산을 한 번에 끝냅니다.
    */
-  const normalizedElements = normalizeOsmData(response.elements);
+  const elements = transformOsm4326(response.elements).map((input) =>
+    normalizeOsmFeature(input),
+  );
+
+  /**
+   * 1. 파싱: 'osm-parser' 실행
+   * 정규화된 데이터를 바탕으로 3D 엔진용 인프라(Way/Rel) 및 POI(Node) 객체를 생성합니다.
+   * 이미 정규화가 끝났으므로 연산 오버헤드 없이 분류와 정렬만 수행합니다.
+   */
+  const { infras, pois } = parseOsmData(elements);
+
+  /**
+   * 2. 그리드 베이킹 (정규화된 데이터 직결)
+   * 인프라 객체(infras) 대신, 더 원원 정보가 풍부한 normalizedElements를 베이커에 직접 전달하여
+   * 래스터화(Rasterization) 정밀도를 높입니다.
+   */
+  let partialLayers: Partial<VoxelLayers> = {};
+  if (elements.length > 0) {
+    const result = bakeGeometryGrid(elements, origin);
+    partialLayers = result.layers;
+  }
 
   // 정규화된 데이터를 핸들러에 전달 (서버의 GeoService 호출과 동일한 규격이 됨)
-  return processOsmToGrids(normalizedElements, origin);
+  return { infras, pois, partialLayers };
 }
 
 /**
@@ -143,7 +166,7 @@ function mergeStepResult(
  */
 export async function processPublicTile(
   coord: TileWorkerInput['coord'],
-  origin: MeterPos,
+  origin: Coord,
   onProgress?: (partialTile: GeometryTile) => void,
 ): Promise<GeometryTile> {
   const { tx, ty } = coord;

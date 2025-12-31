@@ -1,6 +1,6 @@
 import OsmWorker from './osm.worker?worker'; // 🎯 Vite 전용 워커 임포트
 
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/osm-tile';
+import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 import type {
   TileWorkerInput,
   TileWorkerResponse,

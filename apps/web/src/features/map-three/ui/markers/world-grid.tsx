@@ -4,7 +4,7 @@ import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
-import { toThreePosWithOffset } from '@/shared/lib/three/three-coords';
+import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 
 /**
  * [WorldGrid]
@@ -83,7 +83,7 @@ export const WorldGrid = () => {
       // 🎯 THREE_CONFIG에 정의된 [ -Math.PI / 2, 0, 0 ]를 사용하여 바닥에 눕힘
       rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION as unknown as THREE.Euler}
       // 🎯 지면(0)보다 아주 미세하게 위(0.01)로 띄워 Z-Fighting 방지
-      position={toThreePosWithOffset(
+      position={toThreeCoordWithOffset(
         { x: 0, y: 0 },
         THREE_CONFIG.LAYOUT.OFFSET.GRID,
       )}

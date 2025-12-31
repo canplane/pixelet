@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Location } from '@pixelet/shared/shared/model/coords';
+import type { Coord4326 } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [device-location-store]
@@ -11,7 +11,7 @@ export type DeviceLocationStatus = 'idle' | 'loading' | 'ready' | 'error';
 interface DeviceLocationState {
   // --- 1. [State: Geolocation] 위경도 및 고도 데이터 ---
   /** 기기의 현재 위경도 및 고도 */
-  location: Location | null;
+  location: Coord4326 | null;
   /** GPS 정확도 (단위: 미터) */
   accuracy: number | null;
   /** 이동 방향 (GPS 이동 궤적 기반, 0~360도) */
@@ -32,7 +32,7 @@ interface DeviceLocationState {
   // --- 4. [Actions: Geolocation] ---
   /** GPS 데이터 수신 시 필터링 후 업데이트 */
   setGpsData: (data: {
-    location: Location;
+    location: Coord4326;
     accuracy: number;
     heading: number | null;
   }) => void;

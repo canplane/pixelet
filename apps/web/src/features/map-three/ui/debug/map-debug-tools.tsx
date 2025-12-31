@@ -5,7 +5,7 @@ import {
   downloadGridAsImage,
   downloadMergedGridAsImage,
 } from '@/entities/osm/lib/exporters/tile-exporter';
-import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/osm-tile';
+import type { VoxelLayers } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [map-debug-tools]

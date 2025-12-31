@@ -1,7 +1,8 @@
 /**
- * [osm-source]
- * OSM 원본 데이터(EPSG:4326, WGS84)의 규격입니다.
- * Overpass API나 PBF 파서로부터 유입되는 '입력 단계'의 데이터 형태를 정의합니다.
+ * [osm-4326-model.ts]
+ * OSM 원본 데이터(EPSG:4326, WGS84)의 규격 정의입니다.
+ * * - 좌표계 종속적인 타입: Osm4326 접두어 사용 (Element, Member, Coordinate)
+ * - 공용(Shared) 타입: 접두어 없음 (Tags, Type) -> OsmFeature 등에서도 재사용 가능
  */
 
 /**
@@ -10,21 +11,23 @@
  * - way: 노드들이 순서대로 연결된 선(Line) 또는 폐곡면(Polygon) 데이터
  * - relation: 노드, 웨이, 다른 릴레이션을 묶어 하나의 논리적 그룹을 형성 (예: 복잡한 경계선)
  */
-export type OsmSourceType = 'node' | 'way' | 'relation';
+export type OsmElementType = 'node' | 'way' | 'relation';
 
 /**
- * 위경도 좌표 객체 (OSM 표준 규격: lat, lon)
+ * [4326 Specific] 위경도 좌표 객체 (OSM 표준 규격: lat, lon)
+ * 3857의 Coord(x, y)와 구분하기 위해 4326을 명시합니다.
  */
-export interface LatLng {
+interface Osm4326Coordinate {
   lat: number;
   lon: number;
 }
 
 /**
- * OSM 태그들을 성격별로 구체화하여 정의합니다.
+ * [Shared] OSM 태그 정의
+ * 태그의 내용은 좌표계와 무관하므로 4326/3857 모든 단계에서 공유합니다.
  * parseOsmData에서 이 태그들을 기준으로 MapInfra와 MapPoi를 분류합니다.
  */
-export interface OsmSourceTags {
+export interface OsmTags {
   /** 공통: 장소나 시설의 고유 이름 */
   name?: string;
 
@@ -101,14 +104,15 @@ export interface OsmSourceTags {
 }
 
 /**
- * relation의 구성 요소 (Member)
+ * [4326 Specific] relation의 구성 요소 (Member)
+ * geometry 속성이 4326 좌표계를 포함하므로 4326 타입으로 정의합니다.
  */
-export interface OsmSourceMember {
-  type: OsmSourceType;
+interface Osm4326Member {
+  type: OsmElementType;
   ref: number;
   role: string; // 'outer', 'inner', 'subarea' 등
-  /** out geom 옵션 시 멤버별로 채워짐 */
-  geometry?: LatLng[];
+  /** out geom 옵션 시 멤버별로 채워짐 (4326 좌표) */
+  geometry?: Osm4326Coordinate[];
   /** * 🚀 [보강] out body 옵션 시 멤버를 구성하는 노드 ID 배열
    * nodeCache를 통한 Relation 복구 시 필수적으로 사용됩니다.
    */
@@ -116,37 +120,38 @@ export interface OsmSourceMember {
 }
 
 /**
- * Overpass API 응답의 개별 요소 (Element)
+ * [4326 Specific] Overpass API 응답의 개별 요소 (Element)
+ * lat, lon, geometry 등 좌표계 종속적인 필드를 포함합니다.
  * 쿼리 시 out body, out center, out geom 등의 옵션 조합에 따라 속성이 동적으로 채워집니다.
  */
-export interface OsmSourceElement {
-  type: OsmSourceType;
+export interface Osm4326Input {
+  type: OsmElementType;
   id: number;
 
-  /** node 타입일 때 존재하는 개별 위경도 */
+  /** node 타입일 때 존재하는 개별 위경도 (4326) */
   lat?: number;
   lon?: number;
 
   /** way나 relation의 중심 좌표 (out center 옵션 시 생성) - MapPoi 렌더링 시 기준점 */
-  center?: LatLng;
+  center?: Osm4326Coordinate;
 
   /** way의 전체 경로 좌표 배열 (out geom 옵션 시 생성) - MapInfra 3D Mesh 생성 시 사용 */
-  geometry?: LatLng[];
+  geometry?: Osm4326Coordinate[];
 
   /** way를 구성하는 노드들의 ID 배열 */
   nodes?: number[];
 
   /** 장소의 속성을 담고 있는 키-값 쌍 (MapInfra/MapPoi 분류 기준) */
-  tags?: OsmSourceTags;
+  tags?: OsmTags;
 
   /** 🚀 [추가] relation 타입일 때 존재하는 멤버 배열 */
-  members?: OsmSourceMember[];
+  members?: Osm4326Member[];
 }
 
 /**
- * Overpass API 전체 응답 구조
+ * [4326 Specific] Overpass API 전체 응답 구조
  */
-export interface OverpassResponse {
+export interface Osm4326Response {
   version?: number;
   generator?: string;
   osm3s?: {
@@ -158,5 +163,5 @@ export interface OverpassResponse {
     remark?: string;
   };
   /** 실제 지리 정보 데이터를 담고 있는 배열 */
-  elements: OsmSourceElement[];
+  elements: Osm4326Input[];
 }

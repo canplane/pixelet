@@ -10,10 +10,10 @@
 import type {
   GeometryGrids,
   GeometryTile,
-} from '@pixelet/shared/entities/osm/model/osm-tile';
+} from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 import { processPublicTile } from './tile-public-processor';
 import type { TileWorkerInput } from '../../model/worker-protocol';
 import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
@@ -63,7 +63,7 @@ const restore16 = (b64: any): Uint16Array => {
  */
 async function requestBakedTile(
   coord: TileWorkerInput['coord'],
-  origin: MeterPos,
+  origin: Coord,
 ): Promise<GeometryTile> {
   const { tx, ty } = coord;
   // 타일 당 그리드 해상도 (N x N)
@@ -149,7 +149,7 @@ export async function fetchAndProcessTile(
   const { apiMode } = options;
 
   // 🎯 Floating Origin 및 렌더링 기준점이 되는 타일 절대 좌표 계산
-  const origin: MeterPos = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, z: 0 };
+  const origin: Coord = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, z: 0 };
 
   /**
    * [Case A] LOCAL 모드

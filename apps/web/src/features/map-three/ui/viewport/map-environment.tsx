@@ -8,7 +8,7 @@ import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 
 // 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
-import { toThreePos } from '@/shared/lib/three/three-coords';
+import { toThreeCoord } from '@/shared/lib/three/three-coords';
 
 // 🎯 [config-integration] 렌더링 설정 가져오기
 const { FOG_DENSITY, FAR_CLIP } = THREE_CONFIG.RENDERING;
@@ -39,9 +39,9 @@ export function MapEnvironment() {
    */
   const getMappedPos = (pos: Vector3Tuple): THREE.Vector3 => {
     const [x, y, z] = pos;
-    // 🚀 [toThreePos] 유틸리티는 Vector3Tuple을 반환합니다.
-    const threePos = toThreePos({ x, y, z });
-    return new THREE.Vector3(...threePos);
+    // 🚀 [toThreeCoord] 유틸리티는 Vector3Tuple을 반환합니다.
+    const threeCoord = toThreeCoord({ x, y, z });
+    return new THREE.Vector3(...threeCoord);
   };
 
   /**

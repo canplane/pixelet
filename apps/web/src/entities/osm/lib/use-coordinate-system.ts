@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useMapStore } from '../model/map-store';
-import type { MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [use-relative-position] (Value Hook)
@@ -8,7 +8,7 @@ import type { MeterPos } from '@pixelet/shared/shared/model/coords';
  * * Formula: Local = Absolute - Origin
  * * Usage: 렌더링 루프(Render Loop)나 컴포넌트 프로퍼티 계산 시 사용
  */
-export function useRelativePosition(absolutePos: MeterPos): MeterPos {
+export function useRelativePosition(absolutePos: Coord): Coord {
   const origin = useMapStore((state) => state.origin);
 
   return useMemo(
@@ -34,7 +34,7 @@ export function useCoordinateConverter() {
    * Three.js 씬의 로컬 좌표를 실제 지리적 절대 좌표로 복원합니다.
    */
   const localToGlobal = useCallback(
-    (localPos: MeterPos): MeterPos => {
+    (localPos: Coord): Coord => {
       return {
         x: localPos.x + origin.x,
         y: localPos.y + origin.y,
@@ -49,7 +49,7 @@ export function useCoordinateConverter() {
    * 절대 좌표를 현재 오리진 기준의 로컬 좌표로 변환합니다.
    */
   const globalToLocal = useCallback(
-    (globalPos: MeterPos): MeterPos => {
+    (globalPos: Coord): Coord => {
       return {
         x: globalPos.x - origin.x,
         y: globalPos.y - origin.y,

@@ -1,4 +1,4 @@
-import type { Location, MeterPos } from '@pixelet/shared/shared/model/coords';
+import type { Coord4326, Coord } from '@pixelet/shared/shared/model/coords';
 
 /**
  * [projection]
@@ -34,7 +34,7 @@ export const projection = {
    * 절대 미터 좌표를 특정 기준점(offset) 기반의 상대 미터 좌표로 변환합니다.
    * 순수 지리적 축(X:동, Y:북, Z:고도)을 유지합니다.
    */
-  toLocal: (abs: MeterPos, offset: MeterPos): MeterPos => ({
+  toLocal: (abs: Coord, offset: Coord): Coord => ({
     x: abs.x - offset.x,
     y: abs.y - offset.y,
     z: abs.z - offset.z,
@@ -78,25 +78,14 @@ export const projection = {
 
   /**
    * [project]
-   * 위경도(Location)를 EPSG:3857 표준 미터 좌표(MeterPos)로 투영합니다.
+   * 위경도(Coord4326)를 EPSG:3857 표준 미터 좌표(Coord)로 투영합니다.
    * 결과값은 PostGIS의 ST_Transform(geom, 3857) 결과와 완벽히 일치합니다.
-   * @param useCorrection 실제 지표면 거리 왜곡 보정(cosLat) 여부
    * * 주의: 데이터 정합성을 위해 표준 Web Mercator(EPSG:3857) 수치를 그대로 반환합니다.
    */
-  project: (location: Location, useCorrection = false): MeterPos => {
+  project: (location: Coord4326): Coord => {
     const { lng, lat, alt = 0 } = projection.clamp(location);
     let x = projection.lngToX(lng);
     let y = projection.latToY(lat);
-
-    // [Legacy/Option] 위도에 따른 Mercator 거리 왜곡 보정이 필요할 경우 활성화 검토
-    // 렌더링 시점에 전체 스케일을 조정하는 방식을 권장합니다.
-    /*
-    if (useCorrection) {
-      const cosLat = Math.cos(lat * (Math.PI / 180));
-      x *= cosLat;
-      y *= cosLat;
-    }
-    */
 
     return {
       x,
@@ -107,9 +96,9 @@ export const projection = {
 
   /**
    * [unproject]
-   * EPSG:3857 절대 미터 좌표를 위경도 좌표(Location)로 역투영합니다.
+   * EPSG:3857 절대 미터 좌표를 위경도 좌표(Coord4326)로 역투영합니다.
    */
-  unproject: (pos: MeterPos, _useCorrection = false): Location => {
+  unproject: (pos: Coord): Coord4326 => {
     return {
       lng: projection.xToLng(pos.x),
       lat: projection.yToLat(pos.y),
@@ -120,11 +109,11 @@ export const projection = {
   /**
    * [haversine-distance]
    * 하버사인 공식을 사용하여 두 위경도 좌표 사이의 대권 거리(Great-circle distance)를 계산합니다.
-   * @param start 시작 지점 위경도 (Location)
-   * @param end 종료 지점 위경도 (Location)
+   * @param start 시작 지점 위경도 (Coord4326)
+   * @param end 종료 지점 위경도 (Coord4326)
    * @returns 실제 지표면 기준 미터(m) 단위 거리
    */
-  getDistance: (start: Location, end: Location): number => {
+  getDistance: (start: Coord4326, end: Coord4326): number => {
     const dLat = (end.lat - start.lat) * DEG_TO_RAD;
     const dLon = (end.lng - start.lng) * DEG_TO_RAD;
 
@@ -143,7 +132,7 @@ export const projection = {
    * [clamp]
    * 입력된 위경도 및 고도 좌표가 투영 가능한 수학적 범위를 넘지 않도록 보정합니다.
    */
-  clamp: (location: Location): Location => {
+  clamp: (location: Coord4326): Coord4326 => {
     const { lng, alt, lat } = location;
 
     return {
