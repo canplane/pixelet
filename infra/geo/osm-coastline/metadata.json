@@ -1,0 +1,20 @@
+[
+  {
+    "region_code": "Global",
+    "data_date": "2025-12-30",
+    "provider": {
+      "name": "OSM Data (OpenStreetMap)",
+      "url": "https://osmdata.openstreetmap.de/data/land-polygons.html"
+    },
+    "coordinate_system": "EPSG:3857",
+    "description": "OSM Land Polygons (Split version) - Large polygons are split; optimized for larger zoom levels and coastline rendering",
+    "files": [
+      "region/global/raw/land-polygons-split-3857/land_polygons.shp",
+      "region/global/raw/land-polygons-split-3857/land_polygons.shx",
+      "region/global/raw/land-polygons-split-3857/land_polygons.dbf",
+      "region/global/raw/land-polygons-split-3857/land_polygons.prj",
+      "region/global/raw/land-polygons-split-3857/land_polygons.cpg",
+      "region/global/raw/land-polygons-split-3857/README.txt"
+    ]
+  }
+]
