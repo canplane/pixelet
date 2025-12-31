@@ -7,9 +7,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OsmElement } from '@/app/geo/entities/osm-element.entity';
-import { Bbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { Bbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 const { Z_SAMPLING_STEP } = OSM_CONSTANTS;
 
@@ -128,6 +128,24 @@ export class GeoRepository {
       FROM osm_elements
       WHERE way && ${area3857} 
         OR ST_Intersects(way, ${area3857})
+    `);
+  }
+
+  /**
+   * [fetchCoastlines]
+   * 전용 해안선 테이블(osm_coastline_polygons)에서 데이터를 조회합니다.
+   * fetchRawMapData와 동일하게 GeoJSON 규격을 사용하여 데이터 파이프라인의 통일성을 유지합니다.
+   */
+  async fetchCoastlines(bbox: Bbox): Promise<any[]> {
+    const area3857 = `ST_MakeEnvelope(${bbox.minX}, ${bbox.minY}, ${bbox.maxX}, ${bbox.maxY}, 3857)`;
+
+    return await this.repo.query(`
+      SELECT 
+        fid as id,
+        ST_AsGeoJSON(geom) as geometry 
+      FROM osm_coastline_polygons
+      WHERE geom && ${area3857}
+        AND ST_IsValid(geom)
     `);
   }
 }

@@ -27,6 +27,7 @@ export const OSM_CONSTANTS = {
    */
   CELL_SIZE,
 
+  // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
   TILE_RESOLUTION,
 
   /**

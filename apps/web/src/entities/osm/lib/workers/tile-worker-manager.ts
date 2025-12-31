@@ -5,14 +5,12 @@ import type {
   TileWorkerInput,
   TileWorkerResponse,
 } from '@/entities/osm/model/worker-protocol';
-import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
+import { SERVICE_MODE } from '@/config/app-config';
 import { delay } from '@pixelet/shared/shared/lib/aync-utils';
 import {
   getTileKey,
   type TileCoord,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-
-const { SERVICE_MODE } = OSM_CONFIG;
 
 /**
  * [TaskCallbacks]

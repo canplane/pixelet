@@ -6,7 +6,7 @@ import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
-import { useRelativePosition } from '../../../../entities/osm/lib/use-coordinate-system';
+import { useRelativePosition } from '@/entities/osm/lib/use-coordinate-converter';
 
 // 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
 import {
@@ -112,7 +112,7 @@ export function UserMarker(): ReactElement | null {
     const tileKey = `${tx}:${ty}`;
 
     const tile = tiles.get(tileKey);
-    if (!tile || !tile.grids.terrain.height) return 0;
+    if (!tile || !tile.grids.terrain.elevation) return 0;
 
     // 2. 타일 내 로컬 좌표로 변환 (0 ~ TILE_SIZE)
     const localX = x - tx * TILE_SIZE;
@@ -124,7 +124,7 @@ export function UserMarker(): ReactElement | null {
     const gridY = Math.floor((TILE_SIZE - localY) / CELL_SIZE); // Top-Down 보정
 
     const index = gridY * res + gridX;
-    const hRaw = tile.grids.terrain.height[index] || 0;
+    const hRaw = tile.grids.terrain.elevation[index] || 0;
 
     // 4. 물리적 고도 계산 (Uint16 * Z_Unit)
     return hRaw * (CELL_SIZE * Z_SCALE_RATIO);

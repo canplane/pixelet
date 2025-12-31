@@ -13,7 +13,6 @@ import type {
   GridLayers,
   GeometryTile,
 } from '@pixelet/shared/entities/osm/model/tiles';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import {
   getTileBbox,
   unprojectBbox,
@@ -111,7 +110,9 @@ async function executeStep(coord: TileCoord, step: ProcessingStep) {
   );
 
   // 정규화된 데이터를 핸들러에 전달 (서버의 GeoService 호출과 동일한 규격이 됨)
-  return assembleTile(coord, elements);
+  return assembleTile(coord, elements, {
+    limited: true,
+  });
 }
 
 /**
@@ -167,8 +168,8 @@ export async function buildExternalTile(
      * 수집된 포인트를 타일 해상도(resolution)에 맞게 확장하여 height 채널에 굽습니다.
      * 이 과정에서 Bilinear Interpolation을 적용하면 지형이 부드러워집니다.
      */
-    const heightGrid = bakeElevationGrid(elevationPoints);
-    currentGrids.terrain.height = heightGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
+    const elevationGrid = bakeElevationGrid(elevationPoints);
+    currentGrids.terrain.elevation = elevationGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
 
     // 고도 데이터가 준비되면 첫 번째 점진적 업데이트 발송
     onProgress?.({

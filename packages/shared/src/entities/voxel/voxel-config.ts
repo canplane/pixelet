@@ -1,4 +1,8 @@
-import type { Coord } from '@pixelet/shared/shared/model/coords';
+import {
+  CoordOps,
+  type Coord,
+  type Coord2D,
+} from '@pixelet/shared/shared/model/coords';
 
 /**
  * [voxel-config]
@@ -6,30 +10,36 @@ import type { Coord } from '@pixelet/shared/shared/model/coords';
  * 모든 수치는 2의 배수(Binary-friendly)를 기반으로 최적화되어 있습니다.
  */
 
-type CoordXY = { x: number; y: number };
-type CoordXYZ = { x: number; y: number; z: number };
+const SIZE = 4.0;
+const HALF = 2.0;
+const QUARTER = 1.0;
+const STEP = 0.5; // (미래를 위해 남겨두되, 현재는 4.0 위주로 사용)
+const SYSTEM_OFFSET = 0.25;
 
 /**
  * [to-center]
- * 🎯 입력 타입에 따라 4m 그리드 내의 중앙 좌표를 반환합니다.
- * 큐브 메쉬가 그리드 칸 안에 정중앙에 배치되도록 오프셋(2.0m)을 보정합니다.
+ * 🎯 CoordOps.add를 활용하여 4m 그리드 내의 중앙 좌표로 보정합니다.
+ * (x, y, z) 각 성분에 HALF(2.0m)를 더하는 연산을 캡슐화합니다.
  */
-function toCenter(pos: number): number;
-function toCenter(pos: CoordXY): CoordXY;
-function toCenter(pos: CoordXYZ): CoordXYZ;
-function toCenter(input: any): any {
-  const H = 2.0; // VOXEL_CONFIG.HALF
-  if (typeof input === 'number') return input + H;
-  if ('z' in input) return { x: input.x + H, y: input.y + H, z: input.z + H };
-  return { x: input.x + H, y: input.y + H };
-}
+export const toCenter = <T extends number | Coord2D | Coord>(input: T): T => {
+  const H = VOXEL_CONFIG.HALF;
+
+  // 1. 단순 숫자인 경우
+  if (typeof input === 'number') {
+    return (input + H) as T;
+  }
+
+  // 2. 좌표 객체인 경우 (Coord2D | Coord)
+  // CoordOps.add가 제네릭 T를 반환하므로 타입 캐스팅 없이 안전하게 환원됩니다.
+  return CoordOps.add(input as Coord2D | Coord, H) as T;
+};
 
 export const VOXEL_CONFIG = {
-  SIZE: 4.0,
-  HALF: 2.0,
-  QUARTER: 1.0,
-  STEP: 0.5, // (미래를 위해 남겨두되, 현재는 4.0 위주로 사용)
-  SYSTEM_OFFSET: 0.25,
+  SIZE,
+  HALF,
+  QUARTER,
+  STEP,
+  SYSTEM_OFFSET,
 
   toCenter,
 

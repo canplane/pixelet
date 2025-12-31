@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useMapNavigation } from '../../../entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 
 /**
  * Follow Mode(추적 모드) 활성화 시

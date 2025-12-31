@@ -70,13 +70,16 @@ export function useTileScheduler() {
   );
 
   /**
-   * [2] Garbage Collection
+   * [2] 범위 밖 타일 정리 (메모리 관리 / Garbage Collection)
    */
   const cleanupTiles = useCallback(
     (activeKeys: Set<string>) => {
       const { tiles } = useMapStore.getState();
       tiles.forEach((_, key) => {
+        // 현재 보고 있는 범위(activeKeys)에도 없고, 로딩 중도 아니라면 삭제
         if (!activeKeys.has(key) && !processingTiles.current.has(key)) {
+          // 🎯 [Log-Unload] 메모리 해제 로그
+          console.log(`[TileScheduler] 🗑️ Unloaded Tile (${key})`);
           removeGeometryTile(key);
         }
       });
@@ -85,7 +88,7 @@ export function useTileScheduler() {
   );
 
   /**
-   * [3] Async Loader
+   * [3] 개별 타일 비동기 로딩 및 점진적 업데이트 실행 (Async Loader)
    * 🎯 Key 인자를 제거하고 Coord만 받습니다.
    */
   const loadTile = useCallback(
@@ -96,15 +99,17 @@ export function useTileScheduler() {
       try {
         const finalTile = await tileWorkerManager.requestTile(
           coord,
-          // Progressive Update
+          // [점진적 업데이트] Worker가 중간 결과를 보낼 때마다 실행됨
           (partialTile) => {
             setGeometryTile(coord, partialTile);
           },
         );
 
-        // Final Update
+        // [최종 완료] 최종 결과물이 유효하면 스토어 업데이트
         if (finalTile && finalTile.grids) {
           setGeometryTile(coord, finalTile);
+          // 🎯 [Log-Load] 로딩 완료 로그 (최종 완료 시점에만 출력)
+          console.log(`[TileScheduler] ✅ Loaded Tile (${key})`);
         }
       } catch (err) {
         console.error(`[TileScheduler] ❌ Worker Error (${key}):`, err);

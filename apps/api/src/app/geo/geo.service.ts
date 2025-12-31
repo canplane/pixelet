@@ -10,7 +10,6 @@ import { gzipSync } from 'zlib';
 import { GeoRepository } from './geo.repository';
 import { OsmAdapter } from './osm-adapter';
 
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import {
   createEmptyGrids,
   getTileBbox,
@@ -32,57 +31,65 @@ export class GeoService {
   ) {}
 
   /**
-   * [getProcessedTile]
-   * 클라이언트가 요청한 타일 좌표(tx, ty)에 대해 렌더링 가능한 압축 데이터(DTO)를 생성합니다.
-   *
-   * @param tx 타일 X 인덱스
-   * @param ty 타일 Y 인덱스
-   * @returns GeometryTileDto (Packed Binary Grids + Compressed Vector Data)
+   * [createGeometryTile]
+   * 타일 좌표에 대해 바다(Sea), 육지(Land), 지형(Terrain)을 포함한 압축 데이터를 생성합니다.
    */
-  async getProcessedTile(coord: TileCoord): Promise<GeometryTileDto> {
-    const { tx, ty } = coord;
-
-    // ----------------------------------------------------------------------
-    // 1. [Context Setup] 타일 공간 정의
-    // ----------------------------------------------------------------------
+  async createGeometryTile(coord: TileCoord): Promise<GeometryTileDto> {
     const bbox = getTileBbox(coord);
 
     // ----------------------------------------------------------------------
     // 2. [Fetch] 병렬 데이터 조회 (I/O Bound)
     // ----------------------------------------------------------------------
-    // - elevationPoints: DEM(Digital Elevation Model) 포인트
-    // - rawElements: DB에서 갓 나온 순수 엔티티 (OsmElement[])
-    const [elevationPoints, rawElements] = await Promise.all([
+    const [elevationPoints, rawElements, rawCoastlines] = await Promise.all([
       this.geoRepo.fetchElevationPoints(bbox),
       this.geoRepo.fetchRawMapData(bbox),
+      this.geoRepo.fetchCoastlines(bbox),
     ]);
 
     // ----------------------------------------------------------------------
-    // 3. [Terrain Baking] 지형 생성 (16-bit)
+    // 3. [Terrain Baking] 16-bit 고도 맵 생성
     // ----------------------------------------------------------------------
-    // 희소 샘플링된 고도 점들을 보간(Interpolation)하여 전체 해상도의 HeightMap 생성
-    const heightGrid = bakeElevationGrid(elevationPoints);
+    const elevationGrid = bakeElevationGrid(elevationPoints);
 
     // ----------------------------------------------------------------------
     // 4. [Transformation] 데이터 정규화 파이프라인
     // ----------------------------------------------------------------------
     // [Flow]: OsmElement(DB) -> OsmInput(Adapter) -> OsmFeature(Domain)
-    const elements = rawElements
-      .map((raw) => this.osmAdapter.toOsmInput(raw)) // DB 종속성 제거 및 규격화
+
+    // 일반 OSM 요소 (건물, 도로 등)
+    // 🚀 .flatMap 사용: toOsmInput이 배열을 반환하므로 평탄화 필요
+    const osmFeatures = rawElements
+      .flatMap((raw) => this.osmAdapter.toOsmInput(raw)) // DB 종속성 제거 및 규격화
       .map((input) => normalizeOsmFeature(input)); // 도메인 로직 적용 (좌표계, 타입 분류)
+
+    // 🌊 바다 데이터 (Polygon 기반)
+    // 이미 DB에서 EPSG:3857 Polygons로 정제되어 있으므로 변환이 매우 가볍습니다.
+    // 🚀 .flatMap 사용: MultiPolygon이 쪼개진 배열을 평탄화
+    const oceanFeatures = rawCoastlines
+      .flatMap((coast) => this.osmAdapter.coastlineToOsmInput(coast)) // 전용 어댑터 메서드
+      .map((input) => {
+        const feature = normalizeOsmFeature(input);
+        feature.extra.isOcean = true; // 쉐이더 판별용 플래그 주입
+        return feature;
+      });
+
+    // 🎯 합류: 모든 지형지물을 통합하여 어셈블러로 전송 (이제 모든 폴리곤이 1:1로 펼쳐진 상태입니다)
+    const allFeatures = [...oceanFeatures, ...osmFeatures];
 
     // ----------------------------------------------------------------------
     // 5. [Geometry Processing] 벡터 및 래스터 생성
     // ----------------------------------------------------------------------
-    const { pois, partialLayers } = assembleTile(coord, elements);
+    const { pois, partialLayers } = assembleTile(coord, allFeatures);
 
     // ----------------------------------------------------------------------
     // 6. [Assembly & Compression] 최종 조립 및 패킹
     // ----------------------------------------------------------------------
     const finalGrids = createEmptyGrids();
 
-    // Terrain(16-bit) + Layers(8-bit) 병합
-    finalGrids.terrain.height = heightGrid;
+    finalGrids.terrain.elevation = elevationGrid;
+
+    // sea 채널을 포함한 모든 partialLayers 병합
+    // Terrain(16-bit) + Layers(8-bit)
     (Object.keys(partialLayers) as (keyof GridLayers)[]).forEach((channel) => {
       if (finalGrids.layers[channel] && partialLayers[channel]) {
         finalGrids.layers[channel].set(partialLayers[channel]);

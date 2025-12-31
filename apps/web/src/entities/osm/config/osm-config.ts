@@ -3,21 +3,7 @@
  * OSM 데이터 통신 및 API 인프라 설정을 관리하는 클라이언트 전역 설정입니다.
  */
 
-/**
- * [ServiceMode]
- * 시스템 전체의 데이터 처리 및 통신 전략을 결정합니다.
- */
-export type ServiceMode = 'internal' | 'external';
-
 export const OSM_CONFIG = {
-  /**
-   * [api-mode-config]
-   * 환경 변수(VITE_OSM_API_MODE)를 통해 제어합니다.
-   * 값이 없으면 기본값으로 'local'을 사용합니다.
-   */
-  SERVICE_MODE:
-    (import.meta.env.VITE_SERVICE_MODE as ServiceMode) || 'external',
-
   /**
    * [local-endpoint]
    * 환경 변수(VITE_INTERNAL_OSM_API_ENDPOINT)를 통해 제어합니다.

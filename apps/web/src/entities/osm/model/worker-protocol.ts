@@ -3,8 +3,8 @@
  * 메인 스레드와 타일 워커 간의 통신 규격을 정의합니다.
  */
 
-import type { ServiceMode } from '@/entities/osm/config/osm-config';
-import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils.d';
+import type { ServiceMode } from '@/config/app-config';
+import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 export interface TileWorkerInput {
   // 1. 공간 좌표 정보 (어디를 그릴 것인가)

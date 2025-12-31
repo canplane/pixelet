@@ -1,24 +1,26 @@
 /**
  * @file osm-policy.ts
- * [Single Source of Truth]
+ * 🧠 [Single Source of Truth]
  * OSM 원시 데이터(Tags)를 우리 시스템의 규격(Category, Metrics, Flags)으로 해석하는 단일 정책 파일입니다.
  *
  * * [설계 의도]
- * 1. SSOT: 매핑 테이블(Data)과 해석 로직(Policy)을 한곳에 통합하여 도메인 지식의 분산을 막습니다.
- * 2. Performance: 타일 베이킹 루프(수만 번 반복) 성능을 위해 조회용 상수는 Set/Map(O(1))을 사용합니다.
- * 3. Fallback: 태그가 누락된 경우에도 적절한 기본값을 할당하여 시각적 오류를 방지합니다.
+ * 1. 🎯 SSOT: 매핑 테이블(Data)과 해석 로직(Policy)을 한곳에 통합하여 도메인 지식의 분산을 막습니다.
+ * 2. ⚡ Performance: 타일 베이킹 루프(수만 번 반복) 성능을 위해 조회용 상수는 Set/Map(O(1))을 사용합니다.
+ * 3. 🛡️ Fallback: 태그가 누락된 경우에도 적절한 기본값을 할당하여 시각적 오류를 방지합니다.
  */
 
 import type { OsmTags } from '@pixelet/shared/entities/osm/model/osm-source';
 import type { OsmExtra } from '@pixelet/shared/entities/osm/model/osm-feature';
+import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels'; // 복셀 타입 import
+import type { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
 
 // =============================================================================
-// SECTION 1. [Domain Knowledge] 해석 기준 데이터 (Internal Lookups)
+// SECTION 1. [Domain Knowledge] 📚 해석 기준 데이터 (Internal Lookups)
 // * 외부 노출 없이 정책 로직 내부에서만 참조되는 '해석용 상수'들입니다.
 // =============================================================================
 
 /**
- * [Road Thickness Map]
+ * 🛣️ [Road Thickness Map]
  * 도로 종류(highway)별 기본 차선 수입니다.
  * lanes 태그가 없는 경우, 이 값을 참조하여 도로의 시각적 위계를 표현합니다.
  */
@@ -37,7 +39,7 @@ const DEFAULT_LANES_BY_HIGHWAY: Record<string, number> = {
 };
 
 /**
- * [Institutional Check]
+ * 🏫 [Institutional Check]
  * 대형 공공기관이나 교육/의료 시설로 분류할 amenity 태그 목록입니다.
  * (Baker 단계에서 특수 텍스처 매핑에 활용됨)
  */
@@ -52,7 +54,7 @@ const INSTITUTIONAL_TYPES = new Set([
 ]);
 
 /**
- * [Sports Check]
+ * 🏟️ [Sports Check]
  * 스포츠 시설로 분류할 leisure/sport 관련 태그 목록입니다.
  */
 const SPORTS_TYPES = new Set([
@@ -65,7 +67,7 @@ const SPORTS_TYPES = new Set([
 ]);
 
 /**
- * [Force Close Rules]
+ * 🔒 [Force Close Rules]
  * 선형(LineString) 데이터로 오더라도 면(Polygon)으로 닫아서 처리해야 할 시설들입니다.
  */
 const FORCE_CLOSE_AMENITIES = new Set([
@@ -77,23 +79,34 @@ const FORCE_CLOSE_AMENITIES = new Set([
 const FORCE_CLOSE_LEISURE = new Set(['pitch', 'stadium', 'park', 'garden']);
 
 // =============================================================================
-// SECTION 2. [Policy Logic] 데이터 해석 로직 (Exports)
+// SECTION 2. [Policy Logic] ⚙️ 데이터 해석 로직 (Exports)
 // * 위 상수들을 활용하여 실제 값을 계산하거나 판단하는 순수 함수들입니다.
 // =============================================================================
 
 /**
- * [Category Determination]
+ * 📂 [Category Determination]
  * 태그의 우선순위(Priority)에 따라 지형지물의 타입을 결정합니다.
  *
  * * [Priority Order]
- * 1. Structure (건물, 구조물) - 가장 중요
- * 2. Water (수계) - 지형의 기초
- * 3. POI (장소) - 랜드마크
- * 4. Road (교통) - 네트워크
- * 5. Nature (자연) - 배경
+ * 0. 🌊 Sea (바다) - 최하단 배경 (Static Layer)
+ * 1. 🏢 Structure (건물, 구조물) - 가장 중요
+ * 2. 💧 Water (수계) - 지형의 기초
+ * 3. 📍 POI (장소) - 랜드마크
+ * 4. 🛣️ Road (교통) - 네트워크
+ * 5. 🌲 Nature (자연) - 배경
  */
 export const determineOsmCategory = (tags: OsmTags): string => {
-  // 1. STRUCTURE
+  // 0. 🌊 OCEAN (최우선 순위 배경)
+  if (
+    tags.natural === 'coastline' ||
+    tags.natural === 'ocean' ||
+    tags.natural === 'sea' ||
+    tags.source === 'osm-coastline' // 🎯 추가
+  ) {
+    return 'sea';
+  }
+
+  // 1. 🏢 STRUCTURE
   if (
     tags.building ||
     tags['building:part'] ||
@@ -105,17 +118,18 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     return 'building';
   }
 
-  // 2. WATER
+  // 2. 💧 WATER (내륙 수계)
   if (
     tags.waterway ||
     tags.water ||
-    ['water', 'cliff', 'coastline'].includes(tags.natural || '') ||
-    tags.landuse === 'reservoir'
+    tags.natural === 'water' ||
+    tags.landuse === 'reservoir' ||
+    tags.landuse === 'basin'
   ) {
     return 'water';
   }
 
-  // 3. POI
+  // 3. 📍 POI
   if (
     tags.amenity ||
     tags.shop ||
@@ -126,7 +140,7 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     return 'poi';
   }
 
-  // 4. TRANSPORT
+  // 4. 🛣️ TRANSPORT
   if (
     tags.highway ||
     tags.railway ||
@@ -137,23 +151,31 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     return 'road';
   }
 
-  // 5. NATURAL / FOREST
+  // 5. 🌲 NATURAL / FOREST (지형 배경)
   if (
     tags.landuse === 'forest' ||
     tags.leisure === 'nature_reserve' ||
-    ['wood', 'peak', 'mountain', 'scrub', 'fell', 'bare_rock'].includes(
-      tags.natural || '',
-    )
+    [
+      'wood',
+      'peak',
+      'mountain',
+      'scrub',
+      'fell',
+      'bare_rock',
+      'cliff',
+      'sand',
+      'beach', // ⛰️ 절벽과 모래사장은 자연 지형으로 분류
+    ].includes(tags.natural || '')
   ) {
-    return 'forest';
+    return 'forest'; // 혹은 'nature'로 명칭 확장 가능
   }
 
-  // 6. GENERIC (Default)
+  // 6. 🗺️ GENERIC (Default)
   return 'landuse';
 };
 
 /**
- * [Metric Calculation]
+ * 📐 [Metric Calculation]
  * 태그와 매핑 테이블을 조합하여 물리적 수치(높이, 폭, 레이어)를 계산합니다.
  *
  * * [Logic: Width]
@@ -165,7 +187,7 @@ export const computeOsmMetrics = (
   tags: OsmTags,
   category: string,
 ): { height: number; width: number; layer: number } => {
-  // --- 1. Height Calculation ---
+  // --- 1. 📏 Height Calculation ---
   let height = 0;
   if (category === 'building') {
     if (tags.height) {
@@ -177,9 +199,16 @@ export const computeOsmMetrics = (
       const roofHeight = parseFloat(tags['roof:height'] || '0');
       height = (levels - minLevel) * 3.5 + roofHeight;
     }
+  } else if (category === 'sea') {
+    // 바다는 해수면 기준이므로 높이는 0이지만,
+    // 나중에 심도(Depth) 데이터를 쓸 경우 여기서 처리합니다.
+    height = 0;
   }
 
-  // --- 2. Width Calculation ---
+  // --- 2. ↕️ Width Calculation ---
+  // 1. width 태그 존재 시 최우선 사용
+  // 2. lanes 태그 존재 시 lanes * 3.5m 적용
+  // 3. 둘 다 없으면 highway 타입에 따른 기본 차선 수(DEFAULT_LANES_BY_HIGHWAY) * 3.5m 적용
   let width = 0;
   if (category === 'road') {
     if (tags.width) {
@@ -196,47 +225,273 @@ export const computeOsmMetrics = (
       }
       width = lanes * 3.5;
     }
+  } else if (category === 'water' && tags.waterway) {
+    // [수로 기본 폭 보정] 강(River)이나 운하의 경우 width 태그가 없으면
+    // 최소한의 가시성을 위해 기본 폭(예: 3m)을 부여합니다.
+    width = tags.width ? parseFloat(tags.width) : 3;
   }
 
-  // --- 3. Layer Calculation ---
-  const layer = parseInt(tags.layer || '0', 10);
+  // --- 3. 🪜 Layer Calculation ---
+  // 바다는 항상 최하단이므로 layer가 없으면 -5 정도로 기본값을 낮출 수도 있습니다.
+  const baseLayer = category === 'sea' ? -5 : 0;
+  const layer = parseInt(tags.layer || baseLayer.toString(), 10);
 
   // NaN 방지 및 음수 높이 방어
   return {
     height: Math.max(0, isNaN(height) ? 0 : height),
-    width: isNaN(width) ? 0 : width,
-    layer: isNaN(layer) ? 0 : layer,
+    width: Math.max(0, isNaN(width) ? 0 : width),
+    layer: isNaN(layer) ? baseLayer : layer,
   };
 };
 
 /**
- * [Flag Extraction]
- * 렌더링 단계(Baker)에서 복잡한 문자열 비교 없이 상태를 확인하기 위해
- * 불리언 플래그를 미리 추출합니다.
- */
-export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
-  return {
-    isParking:
-      category === 'parking' ||
-      tags.amenity === 'parking' ||
-      tags.parking === 'surface',
-
-    // Set.has()를 사용하여 O(1) 성능으로 체크
-    isInstitutional: INSTITUTIONAL_TYPES.has(tags.amenity || ''),
-
-    isSports: SPORTS_TYPES.has(tags.leisure || '') || !!tags.sport,
-  };
-};
-
-/**
- * [Geometry Helper]
+ * 🔗 [Geometry Helper]
  * 기하학적으로 열려 있어도(LineString), 속성상 면(Polygon)으로 닫아서
  * 렌더링해야 하는지 여부를 판별합니다.
  */
 export const shouldForceClosed = (tags: OsmTags): boolean => {
   return (
     !!tags.landuse ||
+    tags.natural === 'ocean' || // 🌊 해안선 데이터 강제 폐곡
+    tags.natural === 'sea' ||
     FORCE_CLOSE_AMENITIES.has(tags.amenity || '') ||
     FORCE_CLOSE_LEISURE.has(tags.leisure || '')
   );
 };
+
+/**
+ * 🚩 [Flag Extraction]
+ * 렌더링 단계(Baker)에서 복잡한 문자열 비교 없이 상태를 확인하기 위해
+ * 불리언 플래그와 중요도를 미리 추출합니다.
+ */
+export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
+  const isInstitutional = INSTITUTIONAL_TYPES.has(tags.amenity || ''); // Set.has()를 사용하여 O(1) 성능으로 체크
+  const isOcean =
+    tags.source === 'osm-coastline' ||
+    tags.natural === 'ocean' ||
+    tags.natural === 'sea' ||
+    category === 'sea';
+
+  return {
+    /** 🚀 [Policy] 정책 기반 중요도 산출 */
+    rank: calculateOsmRank(category, tags, { isInstitutional, isOcean }),
+
+    /** 🌊 [Flag] 진짜 바다 여부 */
+    isOcean, // Baker가 이 값을 보고 Inverse Rendering(파내기)을 수행합니다.
+
+    /** 🅿️ [Flag] 주차장 여부 */
+    isParking:
+      category === 'parking' ||
+      tags.amenity === 'parking' ||
+      tags.parking === 'surface',
+
+    /** 🏛️ [Flag] 공공/교육 시설 여부 */
+    isInstitutional,
+
+    /** ⚽ [Flag] 스포츠 시설 여부 */
+    isSports: SPORTS_TYPES.has(tags.leisure || '') || !!tags.sport,
+  };
+};
+
+/**
+ * 📊 [calculateOsmRank]
+ * 엔진 내 렌더링 및 POI 노출 우선순위를 결정합니다. (0~255)
+ * 정책적으로 중요한 지형지물에 가중치를 부여합니다.
+ */
+function calculateOsmRank(
+  category: string,
+  tags: OsmTags,
+  flags: { isInstitutional: boolean; isOcean: boolean },
+): number {
+  let score = 10; // Base score
+
+  // 1. 🗂️ 카테고리별 가중치
+  if (category === 'poi') score += 50;
+  if (category === 'building' && tags.name) score += 20;
+  if (category === 'water') score += 15;
+
+  // 2. ⚡ 플래그 기반 가중치
+  if (flags.isOcean) score += 100; // 바다는 최하단 배경이므로 높은 우선순위로 관리
+  if (flags.isInstitutional) score += 40;
+
+  // 3. 🚩 랜드마크 가중치
+  if (tags.tourism === 'attraction' || tags.heritage) score += 60;
+  if (tags.amenity === 'hospital' || tags.amenity === 'university') score += 30;
+
+  // 4. 📝 정보 가시성 보정 (이름이 있으면 사용자에게 노출될 가치가 높음)
+  if (tags.name) score += 20;
+
+  return Math.min(score, 255); // 8-bit uint8 규격 준수
+}
+
+// =============================================================================
+// SECTION 3. [Voxel Policy] 🎨 복셀 시각화 정책 (Baker 연동)
+// * OSM 데이터를 어떤 복셀 타입(Color)과 레이어(Layer)로 그릴지 결정합니다.
+// =============================================================================
+
+/**
+ * 🎨 [Voxel Configuration]
+ * 결정된 복셀 타입과 타겟 레이어 정보
+ */
+export interface VoxelConfig {
+  voxelType: number;
+  layerKey: keyof GridLayers;
+}
+
+/**
+ * [Main Policy] Feature의 속성을 분석하여 그릴 복셀 타입과 타겟 레이어를 반환합니다.
+ * @returns 설정값이 없으면 null 반환 (렌더링 스킵)
+ */
+export const determineVoxelConfig = (
+  category: string,
+  tags: OsmTags,
+  extra: OsmExtra,
+): VoxelConfig | null => {
+  // 1. 🌊 Sea Layer (최우선 Pass)
+  if (extra.isOcean || category === 'sea') {
+    return { voxelType: VOXEL_TYPES.WATER, layerKey: 'sea' };
+  }
+
+  // 2. 💧 Water Layer
+  if (category === 'water' || tags.waterway || tags.natural === 'water') {
+    return { voxelType: VOXEL_TYPES.WATER, layerKey: 'water' };
+  }
+
+  // 3. 🛣️ Transport Layer
+  if (
+    category === 'road' ||
+    tags.highway ||
+    tags.railway ||
+    category === 'parking'
+  ) {
+    // (1) 주차장 (Extra Flag 우선 확인)
+    if (extra.isParking) {
+      return { voxelType: VOXEL_TYPES.PARKING, layerKey: 'transport' };
+    }
+    // (2) 철도
+    if (tags.railway) {
+      return { voxelType: VOXEL_TYPES.RAIL, layerKey: 'transport' };
+    }
+    // (3) 보행자 도로
+    if (
+      ['pedestrian', 'footway', 'living_street', 'path'].includes(
+        tags.highway || '',
+      )
+    ) {
+      return { voxelType: VOXEL_TYPES.PEDESTRIAN, layerKey: 'transport' };
+    }
+    // (4) 일반 도로
+    return { voxelType: VOXEL_TYPES.ROAD, layerKey: 'transport' };
+  }
+
+  // 4. 🏢 Structure Layer
+  if (category === 'building' || tags.building) {
+    return { voxelType: VOXEL_TYPES.BUILDING, layerKey: 'structure' };
+  }
+
+  // 5. 🏔️ Base Land Layer (복합 로직)
+  // 카테고리 매핑 -> 상세 태그 매핑 순으로 결정
+  const baseType = resolveBaseVoxelType(category, tags, extra);
+  if (baseType) {
+    return { voxelType: baseType, layerKey: 'base' };
+  }
+
+  return null; // 렌더링 대상 아님
+};
+
+/**
+ * [Internal Helper] Base Layer의 상세 복셀 타입 결정
+ * (기존 Baker에 있던 resolveBaseVoxelType 로직 이관)
+ */
+function resolveBaseVoxelType(
+  category: string,
+  tags: OsmTags,
+  extra: OsmExtra,
+): number | null {
+  // (0) 단순 카테고리 매핑 (빠른 반환)
+  const CATEGORY_MAP: Record<string, number> = {
+    forest: VOXEL_TYPES.GREEN_DEEP,
+    park: VOXEL_TYPES.GREEN_LIGHT,
+    sand: VOXEL_TYPES.SAND,
+  };
+  if (CATEGORY_MAP[category]) return CATEGORY_MAP[category];
+
+  // (1) [Institutional/Sports] Flag 활용
+  if (extra.isInstitutional) return VOXEL_TYPES.INSTITUTIONAL;
+  if (extra.isSports) return VOXEL_TYPES.SPORTS;
+
+  // (2) [Forest/Deep Green]
+  if (
+    (tags.natural &&
+      [
+        'wood',
+        'scrub',
+        'heath',
+        'peak',
+        'ridge',
+        'cliff',
+        'mountain',
+        'volcano',
+      ].includes(tags.natural)) ||
+    tags.landuse === 'forest'
+  ) {
+    return VOXEL_TYPES.GREEN_DEEP;
+  }
+
+  // (3) [Grass/Light Green]
+  if (
+    (tags.natural && ['grassland', 'fell', 'moor'].includes(tags.natural)) ||
+    (tags.landuse &&
+      ['grass', 'village_green', 'meadow', 'allotments'].includes(
+        tags.landuse,
+      )) ||
+    (tags.leisure &&
+      ['park', 'garden', 'nature_reserve'].includes(tags.leisure))
+  ) {
+    return VOXEL_TYPES.GREEN_LIGHT;
+  }
+
+  // (4) [Sand/Rock]
+  if (
+    (tags.natural &&
+      ['sand', 'shingle', 'bare_rock', 'beach', 'scree'].includes(
+        tags.natural,
+      )) ||
+    tags.landuse === 'quarry'
+  ) {
+    return VOXEL_TYPES.SAND;
+  }
+
+  // (5) [Human Activity]
+  if (tags.landuse) {
+    if (['residential', 'cemetery'].includes(tags.landuse))
+      return VOXEL_TYPES.RESIDENTIAL;
+    if (['commercial', 'retail'].includes(tags.landuse))
+      return VOXEL_TYPES.COMMERCIAL;
+    if (['industrial', 'construction'].includes(tags.landuse))
+      return VOXEL_TYPES.INDUSTRIAL;
+  }
+
+  // (6) [Sports Fallback]
+  if (
+    tags.leisure &&
+    ['pitch', 'playground', 'golf_course', 'track', 'stadium'].includes(
+      tags.leisure,
+    )
+  ) {
+    return VOXEL_TYPES.SPORTS;
+  }
+
+  // (7) [General Fallback]
+  if (
+    tags.landuse ||
+    tags.natural ||
+    tags.leisure ||
+    tags.highway ||
+    tags.building
+  ) {
+    return VOXEL_TYPES.BASE_LAND;
+  }
+
+  return null;
+}
