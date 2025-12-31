@@ -1,0 +1,13 @@
+[
+  {
+    "region_code": "KR",
+    "data_date": "2025-12-26",
+    "provider": {
+      "name": "Geofabrik",
+      "url": "https://download.geofabrik.de/asia/south-korea-latest.osm.pbf"
+    },
+    "coordinate_system": "EPSG:4326",
+    "description": "South Korea OSM PBF Raw Source",
+    "files": ["region/KR/raw/latest.osm.pbf"]
+  }
+]

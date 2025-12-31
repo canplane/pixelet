@@ -1,7 +1,0 @@
-{
-  "country_code": "KR",
-  "downloaded_at": "2025-12-26",
-  "source": "https://download.geofabrik.de/asia/south-korea-latest.osm.pbf",
-  "description": "South Korea OSM PBF from Geofabrik",
-  "files": ["raw/latest.osm"]
-}
