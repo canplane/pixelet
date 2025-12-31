@@ -257,7 +257,7 @@ export function MapCameraController({
       worldGroupRef.current.updateMatrixWorld(true);
 
       console.log(
-        `[FloatingOrigin] Shifted to Tile (${currentTx}:${currentTy})`,
+        `[Floating Origin] Shifted to Tile (${currentTx}:${currentTy})`,
       );
     }
 

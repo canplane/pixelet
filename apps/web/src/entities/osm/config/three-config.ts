@@ -5,8 +5,8 @@
  */
 
 // 🎯 [Control-Knob] 이 값만 바꾸면 모든 렌더링 거리가 자동 조정됩니다.
-// 기존 1024 -> 3500 (3.5km)로 대폭 상향
-const VIEW_DISTANCE = 6000;
+// 기존 1024
+const VIEW_DISTANCE = 8192;
 
 const DEFAULT_TILT: number = 30; // 30도 Tilt
 
