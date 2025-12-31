@@ -1,16 +1,16 @@
 services:
-  db-main:
+  db-core:
     image: postgres:16
-    container_name: ${MAIN_DB_CONTAINER}
+    container_name: ${CORE_DB_CONTAINER}
     restart: always
     ports:
-      - '${MAIN_DB_PORT}:5432'
+      - '${CORE_DB_PORT}:5432'
     environment:
-      POSTGRES_USER: ${MAIN_DB_USER}
-      POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
-      POSTGRES_DB: ${MAIN_DB_NAME}
+      POSTGRES_USER: ${CORE_DB_USER}
+      POSTGRES_PASSWORD: ${CORE_DB_PASSWORD}
+      POSTGRES_DB: ${CORE_DB_NAME}
     volumes:
-      - pgdata-main:/var/lib/postgresql/data
+      - pgdata-core:/var/lib/postgresql/data
     networks:
       - ${DOCKER_NETWORK}
 
@@ -26,15 +26,13 @@ services:
       POSTGRES_DB: ${GEO_DB_NAME}
     volumes:
       - pgdata-geo:/var/lib/postgresql/data
-      - ./osm/init:/docker-entrypoint-initdb.d
     networks:
       - ${DOCKER_NETWORK}
 
-# 🎯 네트워크 정의 추가 (스크립트가 네트워크를 참조하므로 명시 필요)
 networks:
   pixelet-network:
     name: ${DOCKER_NETWORK}
 
 volumes:
-  pgdata-main:
+  pgdata-core:
   pgdata-geo:

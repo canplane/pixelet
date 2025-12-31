@@ -1,0 +1,18 @@
+[
+  {
+    "region_code": "KR",
+    "data_date": "2025-12-29",
+    "provider": {
+      "name": "OpenTopography",
+      "url": "https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3"
+    },
+    "coordinate_system": "EPSG:4326",
+    "description": "Copernicus GLO-30 Raw GeoTIFF for South Korea",
+    "files": [
+      "region/KR/raw/GLO30_KOR_W125E130_S34N39_4326.tif",
+      "region/KR/raw/GLO30_KOR_W126E127_S33N34_4326.tif",
+      "region/KR/raw/GLO30_KOR_W124E125_S37N39_4326.tif",
+      "region/KR/raw/GLO30_KOR_W130E132_S37N38_4326.tif"
+    ]
+  }
+]

@@ -160,7 +160,7 @@ export class GeoService {
       ),
       clipped_chunks AS (
         SELECT ST_Clip(r.rast, i.geom) as rast
-        FROM srtm_elevation_3857 r, interest_area i
+        FROM esa_elevation_raster r, interest_area i
         WHERE ST_Intersects(r.rast, i.geom)
       ),
       unioned_rast AS (
