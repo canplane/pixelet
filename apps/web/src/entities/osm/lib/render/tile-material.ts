@@ -68,7 +68,9 @@ const vertexShader = `
     uint hIndex = texture(uHeight, uv).r; 
     
     // 실제 미터 단위 높이로 변환
-    float height = float(hIndex) * uVoxelZUnit;
+    // 1. 최소 높이 0.01을 더해 바닥면과의 Z-Fighting 방지
+    // 2. height 계산 시 정밀도 보장
+    float height = (float(hIndex) * uVoxelZUnit) + 0.01;
     
     vec3 pos = position;
     // World Y(North) 방향으로 고도 Displacement 적용
