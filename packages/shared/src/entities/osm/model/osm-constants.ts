@@ -48,6 +48,16 @@ export const OSM_CONSTANTS = {
   Z_SAMPLING_STEP: 128,
 
   /**
+   * [TERRAIN_SEGMENTS]
+   * 지형 메쉬를 구성하는 분할 수입니다. (4096 / 128 = 32)
+   * 🎯 [Engineering Fix] Math.round를 사용하여 부동소수점 오차(ex: 31.99)에 의한
+   * 세그먼트 유실을 방지하고, 데이터 샘플 밀도와 메쉬 정점 수(Segments + 1)를 1:1로 강제합니다.
+   */
+  get TERRAIN_SEGMENTS() {
+    return Math.round(this.TILE_SIZE / this.Z_SAMPLING_STEP);
+  },
+
+  /**
    * [floating-origin-policy]
    * Floating Origin 리셋을 위한 타일 버퍼 크기입니다.
    *

@@ -7,12 +7,24 @@ const {
   TILE_RESOLUTION: res,
 } = OSM_CONSTANTS;
 
+const PAD = 1;
+
 /**
- * [bakeElevationGrid]
- * 성긴 고도 샘플(Vertex-based, 33x33)을 타일의 고해상도 복셀 그리드(2048x2048)로 변환합니다.
- * * [수학적 프로세스]
- * 1. Bilinear Interpolation: 128m 간격의 샘플 사이를 2m 간격의 부드러운 평면으로 보간합니다.
- * 2. Z-Quantization: 보간된 높이(m)를 복셀 수직 유닛(cellSize * zScaleRatio)으로 나누어 '층(Floor)' 인덱스로 변환합니다.
+ * [bakeTileTerrain]
+ * 패딩이 포함된 성긴 고도 샘플(35x35)을 타일 규격의 고해상도 복셀 그리드(2048x2048)로 변환합니다.
+ * * * [Engineering Logic]
+ * 1. Padding-Aware Bilinear Interpolation:
+ * - 입력 데이터(points)는 보간 오차 방지를 위해 타일 경계 밖 128m 데이터(PAD=1)를 포함합니다.
+ * - 타일의 실제 경계(0m, 4096m)를 샘플 인덱스의 [1]과 [innerSampleCount]에 정밀하게 매핑하여
+ * 인접 타일 간의 지형 찢어짐(Seam)을 근본적으로 방지합니다.
+ * * 2. Sampling Sync:
+ * - 타일 해상도(res)를 샘플 구간 밀도와 동기화하여 데이터 포인트와 메쉬 정점을 1:1로 일치시킵니다.
+ * * 3. Z-Quantization (Voxel Snap):
+ * - 보간된 해발 고도(m)를 복셀 수직 단위(cellSize * zScaleRatio)로 나누어
+ * 쉐이더에서 즉시 사용 가능한 수직 층(Floor) 인덱스로 변환합니다.
+ *
+ * @param points - South-to-North 순서로 정렬된 35x35 고도 샘플 (Padding 포함)
+ * @returns 2048x2048 해상도의 Uint16 고도 인덱스 그리드 (Padding 제외)
  */
 export function bakeTileTerrain(points: Coord[]): Uint16Array {
   const elevationGrid = new Uint16Array(res * res);
@@ -20,14 +32,20 @@ export function bakeTileTerrain(points: Coord[]): Uint16Array {
   // 복셀 한 칸의 실제 물리적 높이 (m)
   const voxelZUnit = cellSize * zScaleRatio;
 
-  // 입력 데이터가 유효한 정사각 격자인지 검증 (예: 1089개 포인트 -> 33x33)
-  const sampleCount = Math.sqrt(points.length);
+  // 1. 패딩 규격 (128m 간격의 샘플 중 앞뒤 1개씩이 패딩)
+  const length = points.length; // 35 x 35
+  const sampleCountRaw = Math.sqrt(length); // 35
 
-  if (!Number.isInteger(sampleCount)) {
-    console.error(`[ElevationBaker] Invalid points length: ${points.length}`);
-    // 빈 그리드 반환하여 렌더링 충돌 방지
-    return elevationGrid;
+  // 🎯 [Engineering Fix] 정수가 아니라는 것은 격자 구조가 깨졌다는 뜻입니다.
+  if (!Number.isInteger(sampleCountRaw)) {
+    console.error(
+      `[ElevationBaker] Invalid points length: ${length}. Must be a perfect square.`,
+    );
+    return elevationGrid; // 빈 그리드 반환하여 렌더링 충돌 방지
   }
+
+  const sampleCount = Math.round(sampleCountRaw); // 35 = 33 + 2
+  const innerSampleCount = sampleCount - PAD * 2; // 33 (실제 타일 너비: 4096 / 128 + 1)
 
   // 2D 배열 접근을 위한 헬퍼 (포인트 클라우드 인덱싱)
   // 💡 points는 row-major 순서로 정렬되어 있다고 가정합니다. (서버/클라이언트 모두 이 순서로 생성)
@@ -42,11 +60,12 @@ export function bakeTileTerrain(points: Coord[]): Uint16Array {
     for (let gx = 0; gx < res; gx++) {
       /**
        * [Step 1: Sampling Coordinate Mapping]
-       * 출력 그리드 좌표(0~2047)를 샘플 그리드 좌표계(0.0~32.0)로 정밀하게 매핑합니다.
-       * (res - 1)과 (sampleCount - 1)을 사용하여 타일의 양 끝점을 샘플 포인트와 일치시킵니다.
+       * 타일 해상도(0~2047)를 샘플 인덱스(1~33) 사이로 매핑합니다.
+       * 이렇게 해야 패딩(0번, 34번)을 '참조'하여 보간하되,
+       * 타일의 끝점은 정확히 1번과 33번 샘플에 안착합니다.
        */
-      const sy = (gy / (res - 1)) * (sampleCount - 1);
-      const sx = (gx / (res - 1)) * (sampleCount - 1);
+      const sy = PAD + (gy / (res - 1)) * (innerSampleCount - 1);
+      const sx = PAD + (gx / (res - 1)) * (innerSampleCount - 1);
 
       // 주변 4개 참조점(Vertex) 확정
       const y0 = Math.floor(sy);

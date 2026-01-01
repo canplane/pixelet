@@ -13,6 +13,8 @@ import type { Bbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 const { Z_SAMPLING_STEP } = OSM_CONSTANTS;
 
+const PAD = 1;
+
 @Injectable()
 export class GeoRepository {
   constructor(
@@ -24,10 +26,12 @@ export class GeoRepository {
    * [fetchElevationPoints]
    * PostGIS 래스터 쿼리를 통해 고도 데이터를 샘플링하여 Coord 배열로 반환합니다.
    *
-   * @strategy Union + Padding + Standard Order
-   * 1. Padding: 타일 경계(Seam)의 보간 오차를 없애기 위해 상하좌우 1칸씩 더 넓게 조회합니다.
-   * 2. Union: 여러 SRTM 파일에 걸쳐 있는 타일의 경우, 조각난 래스터를 병합합니다.
-   * 3. Order: 이미지 표준인 Top-Down(북->남) 순서를 유지하여 Three.js 텍스처 좌표계와 정합성을 맞춥니다.
+   * @strategy Union + Padding + South-to-North Order
+   * 1. Padding: 타일 경계(Seam)의 보간 오차를 방지하기 위해 상하좌우 1칸(step)씩 더 넓게 조회합니다.
+   * 2. Union: 여러 SRTM/ESA 파일에 걸쳐 있는 타일의 경우, 조각난 래스터를 병합(ST_Union)합니다.
+   * 3. 🎯 South-to-North Order (Critical):
+   * PostGIS의 Top-Down 배열을 역순으로 순회하여 월드 좌표계(South-to-North)와 일치시킵니다.
+   * 이로써 별도의 Y-Flip 없이 Three.js의 UV 좌표계(0,0 = South-West)와 직접 정합됩니다.
    */
   async fetchElevationPoints(
     bbox: Bbox,
@@ -39,15 +43,14 @@ export class GeoRepository {
     const innerHeight = Math.floor((bbox.maxY - bbox.minY) / step) + 1;
 
     // 2. Apply Padding (상하좌우 1칸)
-    const pad = 1;
-    const paddedWidth = innerWidth + pad * 2;
-    const paddedHeight = innerHeight + pad * 2;
+    const paddedWidth = innerWidth + PAD * 2; // 35 = 33 + 2
+    const paddedHeight = innerHeight + PAD * 2; // 35 = 33 + 2
 
     // 3. 🎯 [Critical Fix] Extent Calculation
     // SQL의 ST_Resample이 이미지를 찌그러뜨리지 않도록,
     // 픽셀 개수(paddedWidth)에 맞춰 물리적 거리(step)를 곱해 Extent를 재정의합니다.
-    const paddedMinX = bbox.minX - step * pad;
-    const paddedMaxY = bbox.maxY + step * pad;
+    const paddedMinX = bbox.minX - step * PAD;
+    const paddedMaxY = bbox.maxY + step * PAD;
 
     // ❌ 기존: const paddedMaxX = bbox.maxX + step * pad; (오차 발생 원인)
     // ✅ 수정: 시작점 + (개수 * 간격)으로 정확한 끝점을 계산

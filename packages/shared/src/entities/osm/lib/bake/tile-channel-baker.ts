@@ -3,8 +3,12 @@
  * 정규화된 벡터 데이터를 4개의 독립적인 비트맵 채널(Channel)로 래스터화(Rasterization)합니다.
  *
  * [Architectural Note]
- * 이 모듈은 '타일 한 장'을 굽는 가장 하위 레벨의 렌더러입니다.
- * 입력된 절대 좌표(Meter)와 타일 인덱스(Index)만으로 로컬 픽셀 좌표를 계산하여 그림을 그립니다.
+ * 1. 로컬 렌더링: 입력된 절대 좌표(Meter)를 타일 로컬 픽셀 좌표로 변환하여 래스터화합니다.
+ * 2. 🎯 South-to-North Order (Critical):
+ * 이 베이커는 이미지를 생성할 때 Y축의 아래쪽(0)을 남쪽(South), 위쪽(res-1)을 북쪽(North)으로
+ * 매핑하여 굽습니다. 이는 프로젝트 전반의 월드 좌표계 정합성을 위함입니다.
+ * 3. No-Flip Policy:
+ * 생성된 바이너리는 별도의 Y-Flip 없이 클라이언트 쉐이더의 UV 좌표계와 1:1로 대응됩니다.
  */
 
 import type { Coord } from '@pixelet/shared/shared/model/coords';

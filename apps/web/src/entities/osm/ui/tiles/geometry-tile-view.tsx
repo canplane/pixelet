@@ -19,7 +19,8 @@ import {
 } from '../../lib/render/texture-factory';
 import { createTileMaterial } from '../../lib/render/tile-material';
 
-const { TILE_SIZE } = OSM_CONSTANTS;
+const { TILE_SIZE, TERRAIN_SEGMENTS } = OSM_CONSTANTS;
+
 interface TileViewProps {
   tile: Tile;
 }
@@ -80,7 +81,10 @@ export const GeometryTileView = React.memo(({ tile }: TileViewProps) => {
       rotation={THREE_CONFIG.LAYOUT.FLOOR_ROTATION as unknown as THREE.Euler}
       receiveShadow
     >
-      <planeGeometry args={[TILE_SIZE, TILE_SIZE, 32, 32]} />
+      {/* 🎯 데이터 샘플링 포인트(segments + 1 = 33)와 1:1 동기화 */}
+      <planeGeometry
+        args={[TILE_SIZE, TILE_SIZE, TERRAIN_SEGMENTS, TERRAIN_SEGMENTS]}
+      />
       <primitive object={material} attach="material" />
     </mesh>
   );
