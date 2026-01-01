@@ -1,12 +1,12 @@
 import { useMapStore } from '@/entities/osm/model/map-store';
 import { cn } from '@/shared/lib/utils';
+import { triggerDownload } from '@/shared/lib/io/browser-io';
+import { generateGridBinary } from '@pixelet/shared/entities/osm/lib/io/grid-data';
 import {
-  downloadGridAsBinary,
-  downloadGridAsImage,
-  downloadMergedGridAsImage,
+  exportGridImage,
+  exportMergedGridImage,
 } from '@/entities/osm/lib/export/tile-exporter';
 import type { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
-import { getTileKey } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 /**
  * [map-debug-tools]
@@ -21,54 +21,60 @@ export function MapDebugTools() {
    * 1. 바이너리 다운로드 핸들러
    */
   const handleDownloadAllBinary = () => {
-    tiles.forEach((tile) => {
-      const { coord, grids } = tile;
-      const { layers, terrain } = grids;
+    for (const [key, tile] of tiles) {
+      const { grids } = tile;
+      const { layers } = grids;
 
-      // 4개 채널을 순회하며 각각 다운로드
-      (Object.keys(layers) as Array<keyof GridLayers>).forEach((channel) => {
+      // 채널들을 순회하며 각각 다운로드
+      for (const channel of Object.keys(layers) as Array<keyof GridLayers>) {
+        // 1. 바이너리 데이터 생성 (헤더 포함)
+        const binaryData = generateGridBinary(layers[channel]);
+
+        // 2. 다운로드 실행
         // 파일명: tile_10:5_base.bin
-        downloadGridAsBinary(
-          coord,
-          layers[channel],
-          `tile_${getTileKey(coord)}_${channel}.bin`,
-        );
-      });
-    });
+        triggerDownload(binaryData, `tile_${key}_${channel}.bin`);
+      }
+    }
   };
 
   /**
    * 2. 레이어별 이미지 프리뷰 핸들러
    */
   const handleDownloadAllImages = () => {
-    tiles.forEach((tile) => {
-      const { coord, grids } = tile;
-      const { layers, terrain } = grids;
+    // Promise.all을 사용하여 모든 타일의 처리를 병렬로 진행할 수 있습니다.
+    for (const [key, tile] of tiles) {
+      const { grids } = tile;
+      const { layers } = grids;
 
-      // 4개 채널을 순회하며 각각 이미지화
-      (Object.keys(layers) as Array<keyof GridLayers>).forEach((channel) => {
-        // 파일명: tile_10:5_transport.png
-        downloadGridAsImage(
-          coord,
-          layers[channel],
-          `tile_${getTileKey(coord)}_${channel}.png`,
-        );
-      });
-    });
+      // 채널들을 순회하며 각각 다운로드
+      for (const channel of Object.keys(layers) as Array<keyof GridLayers>) {
+        // 1. 이미지 Blob 생성
+        exportGridImage(layers[channel], channel).then((blob) => {
+          // 2. 다운로드 실행
+          if (blob) {
+            triggerDownload(blob, `tile_${key}_${channel}.png`);
+          }
+        });
+      }
+    }
   };
 
-  // ✨ [New] 병합된 이미지 다운로드 핸들러
+  /**
+   * 3. 병합된 이미지 다운로드 핸들러
+   */
   const handleDownloadMergedImages = () => {
-    tiles.forEach((tile) => {
-      const { coord, grids } = tile;
-      const { layers, terrain } = grids;
+    for (const [key, tile] of tiles) {
+      const { grids } = tile;
+      const { layers } = grids;
 
-      downloadMergedGridAsImage(
-        coord,
-        layers, // 4개 채널 전체 구조체 전달
-        `tile_${getTileKey(coord)}.png`,
-      );
-    });
+      // 1. 합성 이미지 Blob 생성 (전체 채널 구조체 전달)
+      exportMergedGridImage(layers).then((blob) => {
+        // 2. 다운로드 실행
+        if (blob) {
+          triggerDownload(blob, `tile_${key}.png`);
+        }
+      });
+    }
   };
 
   return (
