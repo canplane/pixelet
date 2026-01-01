@@ -7,9 +7,13 @@
  * OSM 태그 그룹 분리 (Reusable Filter Sets)
  */
 export const GEOMETRY_FILTERS = {
-  /** * [Pass 1] base-layer (지형 및 토지 용도)
-   * 캔버스의 가장 밑바닥(Background)을 결정합니다.
-   */
+  /** * [Pass 1] 수계 (Water) */
+  WATER: (bbox: string) => `
+    nwr["natural"~"water|cliff|coastline"](${bbox});
+    nwr["waterway"~"river|riverbank|canal|stream|drain|dock"](${bbox});
+    nwr["water"~"river|oxbow|lake|reservoir|basin|pond"](${bbox});
+  `,
+  /** * [Pass 2] 지형 (Base Land, Natural, Landuse) */
   BASE: (bbox: string) => `
     nwr["landuse"~"forest|grass|residential|commercial|industrial|cemetery|allotments|quarry|construction|meadow"](${bbox});
     nwr["natural"~"wood|scrub|heath|grassland|bare_rock|sand|shingle|fell"](${bbox});
@@ -17,17 +21,7 @@ export const GEOMETRY_FILTERS = {
     nwr["amenity"~"parking|university|hospital|school|college"](${bbox});
     nwr["campus"](${bbox});
   `,
-  /** * [Pass 2] water-layer (수계)
-   * 지형 위에 물을 덮습니다.
-   */
-  WATER: (bbox: string) => `
-    nwr["natural"~"water|cliff|coastline"](${bbox});
-    nwr["waterway"~"river|riverbank|canal|stream|drain|dock"](${bbox});
-    nwr["water"~"river|oxbow|lake|reservoir|basin|pond"](${bbox});
-  `,
-  /** * [Pass 3] transport-layer (도로 및 철도)
-   * 이동 가능한 경로를 생성합니다.
-   */
+  /** * [Pass 3] 교통 (Transport) */
   TRANSPORT: (bbox: string) => `
     nwr["highway"~"motorway|trunk|primary|secondary|tertiary|residential|service|unclassified|pedestrian|living_street|footway|cycleway|path"](${bbox});
     nwr["highway"~".*_link"](${bbox});
@@ -35,9 +29,7 @@ export const GEOMETRY_FILTERS = {
     nwr["railway"~"rail|subway|light_rail|tram"](${bbox});
     nwr["junction"](${bbox});
   `,
-  /** * [Pass 4 structure-layer (건물 및 인프라)
-   * 가장 높은 우선순위로 캔버스 최상단을 덮습니다.
-   */
+  /** * [Pass 4] 구조물 (Structure) */
   STRUCTURE: (bbox: string) => `
     nwr["building"](${bbox});
     nwr["building:part"](${bbox});

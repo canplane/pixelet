@@ -1,6 +1,6 @@
 /**
- * @file tile-grid-baker.ts
- * 정규화된 벡터 데이터를 4개의 독립적인 비트맵 레이어로 래스터화(Rasterization)합니다.
+ * @file tile-channel-baker.ts
+ * 정규화된 벡터 데이터를 4개의 독립적인 비트맵 채널(Channel)로 래스터화(Rasterization)합니다.
  *
  * [Architectural Note]
  * 이 모듈은 '타일 한 장'을 굽는 가장 하위 레벨의 렌더러입니다.
@@ -11,12 +11,12 @@ import type { Coord } from '@pixelet/shared/shared/model/coords';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import type { OsmFeature } from '../../model/osm-feature';
 import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels';
-import type { GridLayers } from '../../model/tiles';
+import type { TileChannels } from '../../model/tiles';
 
 import {
   type TileCoord,
   getTileAbsAnchor,
-  createEmptyLayers,
+  createEmptyChannels,
 } from '../utils/tile-utils';
 
 import { determineVoxelConfig } from '@pixelet/shared/entities/osm/policy/osm-policy';
@@ -32,16 +32,16 @@ interface TileRenderContext {
 }
 
 /**
- * [bakeTileGrid]
- * 정규화된 요소를 받아 독립적인 비트맵 레이어로 래스터화합니다.
+ * [bakeTileChannels]
+ * 정규화된 요소를 받아 독립적인 비트맵 채널로 래스터화합니다.
  */
-export function bakeTileGrid(
+export function bakeTileChannels(
   coord: TileCoord,
   elements: OsmFeature[],
   config?: TileBuildConfig,
-): GridLayers {
-  // 1. [Layer Initialization]
-  const layers: GridLayers = createEmptyLayers();
+): TileChannels {
+  // 1. [Channel Initialization]
+  const channels: TileChannels = createEmptyChannels();
 
   // 2. [Context Setup]
   const anchor = getTileAbsAnchor(coord);
@@ -64,32 +64,33 @@ export function bakeTileGrid(
     .sort((a, b) => a.extra.rank - b.extra.rank);
 
   // ===========================================================================
-  // 🌊 Pass 0: [Inverse Sea Rendering]
-  // 해안선 데이터셋은 '육지 형상'을 가지므로, 전체를 바다로 채운 뒤 육지를 파냅니다.
+  // 🌊 Pass 0: [Inverse Sea Rendering] on Water Channel
+  // 해안선 데이터셋은 '육지 형상'을 가지므로, Water 채널 전체를 바다로 채운 뒤 육지를 파냅니다.
   // ===========================================================================
 
-  // 🌊  [Safety Check] External 모드에서는 바다 채우기를 건너뜁니다.
-  if (!config?.limited) {
-    layers.sea.fill(VOXEL_TYPES.WATER.WATER);
+  // 🌊 [Safety Check] External 모드에서는 바다 채우기를 건너뜁니다.
+  const shouldFillSea = !config?.limited;
+
+  if (shouldFillSea) {
+    // (1) 배경 초기화: Water 채널 전체를 바다로 채움 (통합된 WATER 채널 사용)
+    channels.water.fill(VOXEL_TYPES.WATER.SEA);
+
+    // (2) 육지 조각하기: 육지 형상(Polygon)을 0(Empty)으로 만듦
+    // 결과적으로 Water 채널에는 '바다' 영역만 값이 남게 됨
+    seaFeatures.forEach((feature) => {
+      renderPolygon(
+        feature.shape.points,
+        VOXEL_TYPES.COMMON.AIR, // 🎯 0 = Empty (Land Placeholder)
+        channels.water,
+        ctx,
+        feature.shape.holes,
+      );
+    });
   }
 
-  // (1) 배경 초기화: 타일 전체를 바다로 채움
-  layers.sea.fill(VOXEL_TYPES.WATER.WATER);
-
-  // (2) 육지 조각하기: 육지 형상(Polygon)을 0(Empty)으로 만듦
-  seaFeatures.forEach((feature) => {
-    renderPolygon(
-      feature.shape.points,
-      0, // 🎯 0 = Empty (Land Placeholder)
-      layers.sea,
-      ctx,
-      feature.shape.holes,
-    );
-  });
-
   // ===========================================================================
-  // 🏞️ Pass 1~4: 육지 데이터 렌더링 (Masking)
-  // '진짜 바다' 영역(layers.sea가 WATER인 곳)에는 육지를 그리지 않도록 마스킹합니다.
+  // 🏞️ Pass 1~4: 육지 데이터 렌더링 (Masking Strategy)
+  // '진짜 바다' 영역(channels.water가 채워진 곳)에는 육지(Base)를 그리지 않도록 마스킹합니다.
   // ===========================================================================
   otherFeatures.forEach((feature) => {
     const { shape, computed, category, tags, extra } = feature;
@@ -104,34 +105,50 @@ export function bakeTileGrid(
       return;
     }
 
-    const config = determineVoxelConfig(category, tags, extra);
-    if (!config) return;
+    const voxelConfig = determineVoxelConfig(category, tags, extra);
+    if (!voxelConfig) return;
 
-    const { voxelType, layerKey } = config;
-    const targetLayer = layers[layerKey];
-    const forcePolygon = layerKey === 'base';
+    const { voxelType, channelKey } = voxelConfig;
+
+    // 🎯 [Channel Selection]
+    // 내륙 수계(River/Lake)도 이제 'water' 채널에 그려집니다.
+    // 기존 바다 데이터 위에 덧쓰거나, 빈 공간(육지)에 그려집니다.
+    const targetChannel = channels[channelKey];
+
+    // 🛡️ [Masking Logic]
+    // 1. Base(지형)는 바다(SEA)가 있는 곳을 피해야 합니다.
+    // 2. 내륙 수계(INLAND_WATER)도 이미 바다(SEA)인 곳에는 덧그릴 필요가 없습니다.
+    // 🎯 따라서 마스크의 적용 대상을 'base'와 'water'(내륙) 둘 다로 확장하되,
+    //    마스크 값은 오직 Pass 0에서 채워진 'SEA'여야 합니다.
+
+    const isBaseOrInlandWater = channelKey === 'base' || channelKey === 'water';
+    const maskChannel =
+      isBaseOrInlandWater && shouldFillSea ? channels.water : undefined;
+
+    const forcePolygon = channelKey === 'base';
 
     if (shape.isClosed || forcePolygon) {
       renderPolygon(
         shape.points,
         voxelType,
-        targetLayer,
+        targetChannel,
         ctx,
         shape.holes,
-        layers.sea, // 🛡️ 바다 레이어를 마스크로 사용
+        maskChannel, // 🛡️ 바다 영역(Water Channel)을 마스크로 사용
       );
     } else {
       renderLinearFeature(
         shape.points,
         voxelType,
-        targetLayer,
+        targetChannel,
         ctx,
         computed.width,
+        maskChannel,
       );
     }
   });
 
-  return layers;
+  return channels;
 }
 
 /**
@@ -144,7 +161,7 @@ function renderPolygon(
   grid: Uint8Array,
   ctx: TileRenderContext,
   holes?: Coord[][],
-  maskGrid?: Uint8Array, // 🛡️ Mask Layer
+  maskGrid?: Uint8Array, // 🛡️ Mask Layer (Usually Water Channel)
 ) {
   if (points.length < 3) return;
 
@@ -183,7 +200,7 @@ function renderPolygon(
         const idx = y * ctx.res + x;
 
         // 🎯 [Mask Check] 마스크(바다)가 채워져 있다면(0이 아니라면) 그리지 않음
-        // 즉, 바다 영역에는 육지 데이터를 덮어쓰지 않음
+        // 즉, 바다 영역에는 육지 데이터(Base)를 덮어쓰지 않음
         if (maskGrid && maskGrid[idx] !== 0) continue;
 
         grid[idx] = value;
@@ -223,6 +240,7 @@ function renderLinearFeature(
   grid: Uint8Array,
   ctx: TileRenderContext,
   meterWidth: number,
+  maskGrid?: Uint8Array, // 🛡️ 추가
 ) {
   if (!points || points.length < 2) return;
 
@@ -235,7 +253,10 @@ function renderLinearFeature(
           const tx = cx + bx,
             ty = cy + by;
           if (tx >= 0 && tx < ctx.res && ty >= 0 && ty < ctx.res) {
-            grid[ty * ctx.res + tx] = value;
+            const idx = ty * ctx.res + tx;
+            // 🛡️ Mask Check
+            if (maskGrid && maskGrid[idx] !== 0) continue;
+            grid[idx] = value;
           }
         }
       }
@@ -268,7 +289,10 @@ function renderLinearFeature(
           const tx = cx + bx,
             ty = cy + by;
           if (tx >= 0 && tx < ctx.res && ty >= 0 && ty < ctx.res) {
-            grid[ty * ctx.res + tx] = value;
+            const idx = ty * ctx.res + tx; // 🎯 인덱스 계산
+            // 🛡️ Mask Check
+            if (maskGrid && maskGrid[idx] !== 0) continue;
+            grid[idx] = value;
           }
         }
       }

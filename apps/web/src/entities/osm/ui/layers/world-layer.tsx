@@ -4,6 +4,7 @@ import { GeometryTileView } from '../tiles/geometry-tile-view';
 import { PoiManager } from '../pois/poi-manager'; // 🎯 매니저 도입
 import { useTileScheduler } from '@/entities/osm/lib/use-tile-scheduler';
 import { getTileKey } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { useTileStore } from '@/entities/osm/model/tile-store';
 
 /**
  * [WorldLayer]
@@ -11,7 +12,7 @@ import { getTileKey } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
  * 더 이상 여기서 거리 계산이나 필터링을 수행하지 않습니다. (LOD는 PoiManager의 역할)
  */
 export const WorldLayer = React.memo(() => {
-  const tiles = useMapStore((state) => state.tiles);
+  const tiles = useTileStore((state) => state.tiles);
   const status = useMapStore((state) => state.status);
 
   // 타일 스케줄러 (데이터 페칭)

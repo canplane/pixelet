@@ -6,29 +6,28 @@ import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 // 🎯 [Refactor] tile-utils 최신 스펙 반영 (TileCoord, x, y)
 import {
   getTileCoord,
+  getTileKey,
   type TileCoord,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { useTileStore } from '@/entities/osm/model/tile-store';
 
 const { DEFAULT_RENDER_RADIUS, CLEANUP_RADIUS } = OSM_CONSTANTS;
 
 interface TileRequest {
+  key: string;
   coord: TileCoord;
-  // key: string; -> 🗑️ 삭제됨 (중복 데이터)
   distance: number;
 }
-
-/**
- * [Helper] 좌표를 스토어/캐시용 키 문자열로 변환 (Derived State)
- * 필요할 때마다 즉시 생성해서 씁니다.
- */
-const getTileKey = (coord: TileCoord) => `${coord.tx}:${coord.ty}`;
 
 export function useTileScheduler() {
   const { center } = useMapNavigation();
 
   const setStatus = useMapStore((state) => state.setStatus);
-  const setGeometryTile = useMapStore((state) => state.setGeometryTile);
-  const removeGeometryTile = useMapStore((state) => state.removeGeometryTile);
+
+  // TileStore에서 필요한 상태와 액션들을 미리 구독
+  const tiles = useTileStore((state) => state.tiles);
+  const setTile = useTileStore((state) => state.setTile);
+  const clearOldTiles = useTileStore((state) => state.clearOldTiles);
 
   const lastCenterTileKey = useRef<string>('');
   const processingTiles = useRef<Set<string>>(new Set());
@@ -40,7 +39,6 @@ export function useTileScheduler() {
   const getScheduledQueue = useCallback(
     (centerCoord: TileCoord): TileRequest[] => {
       const pendingRequests: TileRequest[] = [];
-      const { tiles } = useMapStore.getState();
       const { tx, ty } = centerCoord;
 
       for (let dx = -DEFAULT_RENDER_RADIUS; dx <= DEFAULT_RENDER_RADIUS; dx++) {
@@ -50,65 +48,49 @@ export function useTileScheduler() {
           dy++
         ) {
           const targetCoord = { tx: tx + dx, ty: ty + dy };
-          const key = getTileKey(targetCoord); // 🎯 존재 여부 확인용으로만 생성
+          const key = getTileKey(targetCoord);
 
-          // 이미 로드되었거나 로딩 중이면 스킵
           if (!tiles.has(key) && !processingTiles.current.has(key)) {
             const distance = dx * dx + dy * dy;
-            // 🎯 Queue에는 순수 좌표 데이터만 넣습니다.
-            pendingRequests.push({
-              coord: targetCoord,
-              distance,
-            });
+            pendingRequests.push({ key, coord: targetCoord, distance });
           }
         }
       }
-
       return pendingRequests.sort((a, b) => a.distance - b.distance);
     },
-    [],
+    [tiles], // 🎯 의존성에 tiles 추가
   );
 
   /**
    * [2] 범위 밖 타일 정리 (메모리 관리 / Garbage Collection)
    */
   const cleanupTiles = useCallback(
-    (activeKeys: Set<string>) => {
-      const { tiles } = useMapStore.getState();
-      tiles.forEach((_, key) => {
-        // 현재 보고 있는 범위(activeKeys)에도 없고, 로딩 중도 아니라면 삭제
-        if (!activeKeys.has(key) && !processingTiles.current.has(key)) {
-          // 🎯 [Log-Unload] 메모리 해제 로그
-          console.log(`[Tile Scheduler] 🗑️ Unloaded Tile (${key})`);
-          removeGeometryTile(key);
-        }
-      });
+    (neededKeys: string[]) => {
+      // 🎯 위에서 뽑아둔 액션을 그대로 사용
+      clearOldTiles(neededKeys);
     },
-    [removeGeometryTile],
+    [clearOldTiles],
   );
 
   /**
    * [3] 개별 타일 비동기 로딩 및 점진적 업데이트 실행 (Async Loader)
-   * 🎯 Key 인자를 제거하고 Coord만 받습니다.
    */
   const loadTile = useCallback(
-    async (coord: TileCoord) => {
-      const key = getTileKey(coord); // 🎯 내부 식별용으로 즉시 생성
+    async (request: TileRequest) => {
+      const { key, coord } = request;
       processingTiles.current.add(key);
 
       try {
         const finalTile = await tileWorkerManager.requestTile(
+          key,
           coord,
           // [점진적 업데이트] Worker가 중간 결과를 보낼 때마다 실행됨
-          (partialTile) => {
-            setGeometryTile(coord, partialTile);
-          },
+          (partialTile) => setTile(key, partialTile),
         );
 
         // [최종 완료] 최종 결과물이 유효하면 스토어 업데이트
         if (finalTile && finalTile.grids) {
-          setGeometryTile(coord, finalTile);
-          // 🎯 [Log-Load] 로딩 완료 로그 (최종 완료 시점에만 출력)
+          setTile(key, finalTile);
           console.log(`[Tile Scheduler] ✅ Loaded Tile (${key})`);
         }
       } catch (err) {
@@ -117,7 +99,7 @@ export function useTileScheduler() {
         processingTiles.current.delete(key);
       }
     },
-    [setGeometryTile],
+    [setTile],
   );
 
   // [Main Loop]
@@ -141,14 +123,13 @@ export function useTileScheduler() {
       }
     }
 
-    cleanupTiles(activeKeys);
+    cleanupTiles([...activeKeys]);
 
     const queue = getScheduledQueue(centerCoord);
 
     if (queue.length > 0) {
       setStatus('loading');
-      // 🎯 인자가 coord 하나로 줄어들어 깔끔해짐
-      const tasks = queue.map((req) => loadTile(req.coord));
+      const tasks = queue.map((req) => loadTile(req));
 
       Promise.all(tasks).finally(() => {
         if (batchId === activeBatchId.current) {
@@ -156,7 +137,7 @@ export function useTileScheduler() {
         }
       });
     } else {
-      const { tiles: currentTiles } = useMapStore.getState();
+      const { tiles: currentTiles } = useTileStore.getState();
       if (currentTiles.size > 0) setStatus('success');
     }
   }, [center, setStatus, cleanupTiles, getScheduledQueue, loadTile]);

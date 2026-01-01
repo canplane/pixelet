@@ -7,6 +7,7 @@ import type { ServiceMode } from '@/config/app-config';
 import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 export interface TileWorkerInput {
+  key: string;
   // 1. 공간 좌표 정보 (어디를 그릴 것인가)
   coord: TileCoord;
   // 2. 실행 및 환경 옵션 (어떻게 그릴 것인가)
@@ -26,6 +27,6 @@ export type WorkerMessageType = 'progress' | 'complete' | 'error';
 export interface TileWorkerResponse {
   type: WorkerMessageType;
   requestId: string;
-  data?: any; // GeometryTile 또는 partialTile
+  data?: any; // Tile 또는 partialTile
   error?: string;
 }

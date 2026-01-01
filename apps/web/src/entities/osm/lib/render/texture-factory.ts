@@ -10,10 +10,10 @@ import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants'
 const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
 
 /**
- * [createLayerTexture]
- * 8-bit 레이어 데이터(Sea, Base, Water...)를 텍스처로 변환합니다.
+ * [createChannelTexture]
+ * 8-bit 채널 데이터(Water, Base...)를 텍스처로 변환합니다.
  */
-export const createLayerTexture = (data: Uint8Array): THREE.DataTexture => {
+export const createChannelTexture = (data: Uint8Array): THREE.DataTexture => {
   const tex = new THREE.DataTexture(
     data,
     resolution,

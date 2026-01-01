@@ -1,5 +1,6 @@
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
 import { useMapStore } from '@/entities/osm/model/map-store';
+import { useTileStore } from '@/entities/osm/model/tile-store';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 
@@ -49,7 +50,7 @@ const getCategoryStyles = (tags: any, isNight: boolean) => {
 export const PoiList = () => {
   const { status } = useDeviceLocationStore();
   const { themeKey } = useMapNavigation();
-  const tiles = useMapStore((state) => state.tiles);
+  const tiles = useTileStore((state) => state.tiles);
   const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
   const isNight = themeKey === 'night';
 

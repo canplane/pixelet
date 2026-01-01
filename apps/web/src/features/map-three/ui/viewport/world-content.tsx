@@ -45,7 +45,10 @@ export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
             만약 VoxelBlock 내부가 [x, y, z] 규격(y=Up)이라면, 
             여기서 넘겨줄 때 [x, z, -y] 형태로 변환해서 그리도록 내부 로직도 점검이 필요합니다.
         */}
-        <VoxelBlock gridPos={[4, 4, 0]} color={targetTheme.grid.section} />
+        <VoxelBlock
+          cellIdx={{ cx: 4, cy: 4, cz: 0 }}
+          color={targetTheme.grid.section}
+        />
 
         {/* 4. [extension-slot] 외부에서 주입된 추가 레이어나 오브젝트 */}
         {children}

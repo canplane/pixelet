@@ -7,7 +7,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { GeoService } from './geo.service';
-import { GeometryTileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
+import { TileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
 
 /**
  * [TileRequestDto]
@@ -31,7 +31,7 @@ export class GeoController {
   @Post('tile')
   @HttpCode(HttpStatus.OK) // POST 기본값인 201 대신 200 반환 (데이터 조회 성격)
   @Post('tile')
-  async getTile(@Body() body: TileRequestDto): Promise<GeometryTileDto> {
+  async getTile(@Body() body: TileRequestDto): Promise<TileDto> {
     const { tx, ty } = body;
 
     // 🛡️ [Guard] 타일 인덱스 유효성 검사
@@ -42,8 +42,8 @@ export class GeoController {
     }
 
     try {
-      // GeoService에서 베이킹까지 완료된 GeometryTile을 반환합니다.
-      return await this.geoService.createGeometryTile({ tx, ty });
+      // GeoService에서 베이킹까지 완료된 Tile을 반환합니다.
+      return await this.geoService.createTile({ tx, ty });
     } catch (error) {
       // 서버 에러 로깅 (엔지니어링 필수 요소)
       console.error(

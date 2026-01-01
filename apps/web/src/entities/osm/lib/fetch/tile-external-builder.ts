@@ -10,8 +10,8 @@ import { POI_QUERIES } from '../../api/query/osm-poi-queries';
 import { createQuery } from '../../api/overpass-utils';
 import type {
   TileGrids,
-  GridLayers,
-  GeometryTile,
+  TileChannels,
+  Tile,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import {
   getTileBbox,
@@ -29,7 +29,7 @@ import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/os
 import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
-import { bakeElevationGrid } from '@pixelet/shared/entities/terrain/lib/elevation-baker';
+import { bakeTileTerrain } from '@pixelet/shared/entities/terrain/lib/tile-terrain-baker';
 import { requestElevation } from '@/entities/terrain/api/elevation.api';
 
 type StepName = 'Infrastructure' | 'Structure' | 'POI';
@@ -38,7 +38,7 @@ interface ProcessingStep {
   name: StepName;
   query: string;
   critical: boolean; // 실패 시 전체 타일 생성을 중단할지 여부
-  targetChannels: (keyof GridLayers)[];
+  targetChannels: (keyof TileChannels)[];
 }
 
 /**
@@ -121,17 +121,17 @@ async function executeStep(coord: TileCoord, step: ProcessingStep) {
 function mergeStepResult(
   target: { grids: TileGrids; pois: MapPoi[] },
   source: {
-    partialLayers: Partial<GridLayers>;
+    partialChannels: Partial<TileChannels>;
     pois: MapPoi[];
   },
-  targetChannels: (keyof GridLayers)[],
+  targetChannels: (keyof TileChannels)[],
 ) {
   target.pois.push(...source.pois);
 
   targetChannels.forEach((channel) => {
-    const channelData = source.partialLayers[channel];
+    const channelData = source.partialChannels[channel];
     if (channelData) {
-      target.grids.layers[channel].set(channelData);
+      target.grids.channels[channel].set(channelData);
     }
   });
 }
@@ -142,8 +142,8 @@ function mergeStepResult(
  */
 export async function buildExternalTile(
   coord: TileCoord,
-  onProgress?: (partialTile: GeometryTile) => void,
-): Promise<GeometryTile> {
+  onProgress?: (partialTile: Tile) => void,
+): Promise<Tile> {
   const key = getTileKey(coord);
   const bbox = getTileBbox(coord);
 
@@ -168,11 +168,12 @@ export async function buildExternalTile(
      * 수집된 포인트를 타일 해상도(resolution)에 맞게 확장하여 height 채널에 굽습니다.
      * 이 과정에서 Bilinear Interpolation을 적용하면 지형이 부드러워집니다.
      */
-    const elevationGrid = bakeElevationGrid(elevationPoints);
+    const elevationGrid = bakeTileTerrain(elevationPoints);
     currentGrids.terrain.elevation = elevationGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
 
     // 고도 데이터가 준비되면 첫 번째 점진적 업데이트 발송
     onProgress?.({
+      key,
       coord,
       grids: currentGrids,
       pois: accumulatedData.pois,
@@ -194,6 +195,7 @@ export async function buildExternalTile(
 
         // [점진적 업데이트] 개별 단계 완료 시 마다 UI에 알림
         onProgress?.({
+          key,
           coord,
           grids: currentGrids,
           pois: accumulatedData.pois,
@@ -214,6 +216,7 @@ export async function buildExternalTile(
   }
 
   return {
+    key,
     coord,
     grids: currentGrids,
     pois: accumulatedData.pois,

@@ -15,7 +15,7 @@ import {
 } from '@/shared/lib/three/three-coords';
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
-import { useMapStore } from '@/entities/osm/model/map-store';
+import { useTileStore } from '@/entities/osm/model/tile-store';
 
 const { TILE_SIZE, CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
 
@@ -58,7 +58,7 @@ const MAX_INSTANCES: number = 1500;
  */
 export function UserMarker(): ReactElement | null {
   const { devicePos, accuracy, themeKey } = useMapNavigation();
-  const tiles = useMapStore((state) => state.tiles); // 🎯 전역 타일 데이터
+  const tiles = useTileStore((state) => state.tiles); // 🎯 전역 타일 데이터
 
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const gemRef = useRef<THREE.Mesh>(null);
