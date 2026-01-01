@@ -1,12 +1,12 @@
 /**
- * @file grid-data.ts
+ * @file grid-binary.ts
  * OSM 그리드 데이터의 규격 정의 및 바이너리 인코딩 로직을 담당합니다.
  * 이 파일은 순수 함수로 구성되어 서버와 클라이언트에서 공통으로 참조 가능합니다.
  */
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
+const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
 
 /**
  * [generateGridBinary]
@@ -15,17 +15,28 @@ const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
  * * [Header Specification] (Total 12 Bytes, Little Endian)
  * - 0~3 byte: Resolution (int32)
  * - 4~7 byte: Origin X (int32) -> 0
- * - 8~11 byte: Origin Y (int32) -> 0
+ * - 8~11 byte: Origin Y (int32) -> 0 (South Anchor)
+ *
+ * * 💡 [Data Order Note]
+ * 부착되는 grid 데이터는 South-to-North(Bottom-Up) 순서로 정렬되어 있습니다.
+ *
+ * @param grid - South-to-North 순서의 원본 데이터
+ * @param originX - 타일 내 로컬 시작 X (기본값 0)
+ * @param originY - 타일 내 로컬 시작 Y (기본값 0, South Anchor)
  */
-export function generateGridBinary(grid: Uint8Array): Uint8Array {
+export function generateGridBinary(
+  grid: Uint8Array,
+  originX: number = 0,
+  originY: number = 0,
+): Uint8Array {
   const HEADER_SIZE = 12;
   const combinedBuffer = new Uint8Array(HEADER_SIZE + grid.length);
   const view = new DataView(combinedBuffer.buffer);
 
   // 🎯 Header Spec (Little Endian): Resolution, OriginX(0), OriginY(0)
-  view.setInt32(0, resolution, true);
-  view.setInt32(4, 0, true);
-  view.setInt32(8, 0, true);
+  view.setInt32(0, res, true);
+  view.setInt32(4, originX, true);
+  view.setInt32(8, originY, true);
 
   combinedBuffer.set(grid, HEADER_SIZE);
   return combinedBuffer;

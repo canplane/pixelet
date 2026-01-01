@@ -1,12 +1,10 @@
-// @pixelet/web/src/entities/elevation/lib/elevation-baker.ts
-
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import type { Coord } from '@pixelet/shared/shared/model/coords';
 
 const {
   CELL_SIZE: cellSize,
   Z_SCALE_RATIO: zScaleRatio,
-  TILE_RESOLUTION: resolution,
+  TILE_RESOLUTION: res,
 } = OSM_CONSTANTS;
 
 /**
@@ -15,12 +13,9 @@ const {
  * * [수학적 프로세스]
  * 1. Bilinear Interpolation: 128m 간격의 샘플 사이를 2m 간격의 부드러운 평면으로 보간합니다.
  * 2. Z-Quantization: 보간된 높이(m)를 복셀 수직 유닛(cellSize * zScaleRatio)으로 나누어 '층(Floor)' 인덱스로 변환합니다.
- * * @param points - 수집된 고도 데이터 (33x33 격자 권장)
- * @param options - tileSize(4096), cellSize(2), zScaleRatio(배율) 옵션
- * @returns Uint16Array - 각 셀의 복셀 층수(Index)가 담긴 1D 배열
  */
 export function bakeTileTerrain(points: Coord[]): Uint16Array {
-  const elevationGrid = new Uint16Array(resolution * resolution);
+  const elevationGrid = new Uint16Array(res * res);
 
   // 복셀 한 칸의 실제 물리적 높이 (m)
   const voxelZUnit = cellSize * zScaleRatio;
@@ -29,9 +24,7 @@ export function bakeTileTerrain(points: Coord[]): Uint16Array {
   const sampleCount = Math.sqrt(points.length);
 
   if (!Number.isInteger(sampleCount)) {
-    console.error(
-      `[ElevationBaker] 포인트 데이터가 정사각 격자 형태가 아닙니다. Length: ${points.length}`,
-    );
+    console.error(`[ElevationBaker] Invalid points length: ${points.length}`);
     // 빈 그리드 반환하여 렌더링 충돌 방지
     return elevationGrid;
   }
@@ -43,17 +36,17 @@ export function bakeTileTerrain(points: Coord[]): Uint16Array {
 
   /**
    * [Main Grid Loop]
-   * 타일 해상도(resolution)를 순회하며 각 픽셀의 복셀 층수를 결정합니다.
+   * 타일 해상도(res)를 순회하며 각 픽셀의 복셀 층수를 결정합니다.
    */
-  for (let gy = 0; gy < resolution; gy++) {
-    for (let gx = 0; gx < resolution; gx++) {
+  for (let gy = 0; gy < res; gy++) {
+    for (let gx = 0; gx < res; gx++) {
       /**
        * [Step 1: Sampling Coordinate Mapping]
        * 출력 그리드 좌표(0~2047)를 샘플 그리드 좌표계(0.0~32.0)로 정밀하게 매핑합니다.
-       * (resolution - 1)과 (sampleCount - 1)을 사용하여 타일의 양 끝점을 샘플 포인트와 일치시킵니다.
+       * (res - 1)과 (sampleCount - 1)을 사용하여 타일의 양 끝점을 샘플 포인트와 일치시킵니다.
        */
-      const sy = (gy / (resolution - 1)) * (sampleCount - 1);
-      const sx = (gx / (resolution - 1)) * (sampleCount - 1);
+      const sy = (gy / (res - 1)) * (sampleCount - 1);
+      const sx = (gx / (res - 1)) * (sampleCount - 1);
 
       // 주변 4개 참조점(Vertex) 확정
       const y0 = Math.floor(sy);
@@ -89,10 +82,7 @@ export function bakeTileTerrain(points: Coord[]): Uint16Array {
        * Uint16(0~65535) 범위로 확장하여 저장합니다.
        * 값 '1'은 1층(voxelZUnit 미터)을 의미합니다.
        */
-      elevationGrid[gy * resolution + gx] = Math.max(
-        0,
-        Math.min(zIndex, 65535),
-      );
+      elevationGrid[gy * res + gx] = Math.max(0, Math.min(zIndex, 65535));
     }
   }
 
