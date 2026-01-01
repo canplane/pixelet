@@ -179,24 +179,30 @@ export function downloadMergedGridAsImage(
   // 2. 픽셀 단위 합성
   for (let i = 0; i < expectedLength; i++) {
     /**
-     * [Painter's Algorithm Simulation]
-     * 1. 초기값: BASE_LAND
-     * 2. GRID_LAYER_KEYS 순서(Sea->Base->Water->...)대로 순회하며, 값이 존재하면(> UNKNOWN) 덮어씌움
+     * [Painter's Algorithm 정교화]
+     * 0(AIR)으로 시작하여 GRID_LAYER_KEYS 순서대로 유효한 값을 덮어씌웁니다.
      */
-    let finalType: number = VOXEL_TYPES.BASE_LAND;
+    let finalType: number = VOXEL_TYPES.AIR;
 
-    // 🚀 Dynamic Layer Blending
     for (const key of GRID_LAYER_KEYS) {
       const val = layers[key][i];
-      // VOXEL_TYPES.UNKNOWN(1)보다 크면 유효한 데이터로 간주하여 오버레이
+      // UNKNOWN(1)보다 큰 유효한 데이터가 있을 때만 해당 레이어 값으로 갱신
       if (val > VOXEL_TYPES.UNKNOWN) {
         finalType = val;
       }
     }
 
-    const rgb = colorMap[finalType] || FALLBACK_RGB;
-    const canvasIdx = i * 4;
+    /**
+     * 3. 최종 색상 결정
+     * 모든 레이어를 검사했는데도 데이터가 없다면(AIR/UNKNOWN),
+     * 시각적 결손 방지를 위해 BASE_LAND 색상을 적용합니다.
+     */
+    const rgb =
+      finalType > VOXEL_TYPES.UNKNOWN
+        ? colorMap[finalType] || FALLBACK_RGB
+        : FALLBACK_RGB;
 
+    const canvasIdx = i * 4;
     imageData.data[canvasIdx] = rgb[0];
     imageData.data[canvasIdx + 1] = rgb[1];
     imageData.data[canvasIdx + 2] = rgb[2];

@@ -14,6 +14,11 @@ import type { OsmExtra } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels'; // 복셀 타입 import
 import type { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
 
+// 🔥 [Helper] 태그 존재 여부 및 포함 여부를 안전하게 체크
+const checkTag = (tagValue: string | undefined, targets: string[]) => {
+  return tagValue ? targets.includes(tagValue) : false;
+};
+
 // =============================================================================
 // SECTION 1. [Domain Knowledge] 📚 해석 기준 데이터 (Internal Lookups)
 // * 외부 노출 없이 정책 로직 내부에서만 참조되는 '해석용 상수'들입니다.
@@ -39,9 +44,22 @@ const DEFAULT_LANES_BY_HIGHWAY: Record<string, number> = {
 };
 
 /**
+ * ✈️ [Aeroway Width Map]
+ * 공항 시설물의 기본 폭(m)입니다.
+ * width 태그가 없을 때 이 값을 사용하여 웅장함을 표현합니다.
+ */
+const DEFAULT_AEROWAY_WIDTHS: Record<string, number> = {
+  runway: 45, // 국제공항급 활주로 (보통 45~60m)
+  taxiway: 23, // 대형 항공기 유도로 (보통 20~25m)
+  taxilane: 15, // 계류장 내 이동로
+  apron: 0, // 면(Area)이므로 선폭 불필요 (보통 Polygon으로 옴)
+};
+
+/**
  * 🏫 [Institutional Check]
  * 대형 공공기관이나 교육/의료 시설로 분류할 amenity 태그 목록입니다.
  * (Baker 단계에서 특수 텍스처 매핑에 활용됨)
+ * * 🔥 [UPDATE] 'train_station', 'transportation' 추가 -> 역사가 일반 건물과 다르게 보이도록 함
  */
 const INSTITUTIONAL_TYPES = new Set([
   'school',
@@ -51,6 +69,8 @@ const INSTITUTIONAL_TYPES = new Set([
   'public_building',
   'civic_centre',
   'government',
+  'train_station', // 🚅 기차역/전철역
+  'transportation', // 🚌 터미널 등
 ]);
 
 /**
@@ -83,6 +103,59 @@ const FORCE_CLOSE_LEISURE = new Set(['pitch', 'stadium', 'park', 'garden']);
 // * 위 상수들을 활용하여 실제 값을 계산하거나 판단하는 순수 함수들입니다.
 // =============================================================================
 
+// =============================================================================
+// [Helper] 도로 위계별 복셀 타입 매핑
+// =============================================================================
+function determineRoadVoxel(highwayTag: string): number {
+  switch (highwayTag) {
+    // 🔴 Level 1: 고속도로 및 간선도로
+    case 'motorway':
+    case 'motorway_link':
+    case 'trunk':
+    case 'trunk_link':
+      return VOXEL_TYPES.ROAD_MOTORWAY;
+
+    // 🟠 Level 2: 주요 도로 (대로)
+    case 'primary':
+    case 'primary_link':
+      return VOXEL_TYPES.ROAD_PRIMARY;
+
+    // 🟡 Level 3: 보조 도로 (중로)
+    case 'secondary':
+    case 'secondary_link':
+    case 'tertiary': // 3차 도로까지는 노란색 계열로 묶거나
+    case 'tertiary_link': // 디자인에 따라 Default(White)로 보낼 수도 있음
+      return VOXEL_TYPES.ROAD_SECONDARY;
+
+    // ⚪ Level 4: 일반/주거지 도로 (기본값)
+    case 'residential':
+    case 'living_street':
+    case 'unclassified':
+    case 'service':
+    default:
+      return VOXEL_TYPES.ROAD_DEFAULT;
+  }
+}
+
+// [Helper] 철도 종류별 복셀 타입 매핑
+function determineRailwayVoxel(tags: OsmTags): number {
+  const type = tags.railway;
+
+  // 1. 지하철 및 경전철 (Subway, Light Rail)
+  if (type === 'subway' || type === 'light_rail') {
+    return VOXEL_TYPES.RAIL_SUBWAY;
+  }
+
+  // 2. 일반 철도 (Rail)
+  if (type === 'rail') {
+    // service 태그가 있으면 기지창이나 지선이므로 위계를 낮출 수도 있습니다.
+    return VOXEL_TYPES.RAIL_MAIN;
+  }
+
+  // 3. 기타 (Tram, Monorail 등) - 기본값으로 대응
+  return VOXEL_TYPES.RAIL_MAIN;
+}
+
 /**
  * 📂 [Category Determination]
  * 태그의 우선순위(Priority)에 따라 지형지물의 타입을 결정합니다.
@@ -111,9 +184,9 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     tags.building ||
     tags['building:part'] ||
     tags.man_made === 'pier' ||
-    tags.man_made ||
-    tags.bridge === 'yes' ||
-    tags.tunnel === 'yes'
+    // 🔥 [FIX] man_made가 'tunnel'이거나 'bridge'인 경우, 건물 카테고리에서 제외!
+    // 이렇게 해야 다리가 Road로, 터널이 Road/Landuse로 자연스럽게 흘러갑니다.
+    (tags.man_made && tags.man_made !== 'tunnel' && tags.man_made !== 'bridge')
   ) {
     return 'building';
   }
@@ -140,14 +213,16 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     return 'poi';
   }
 
+  // 3.5 ✈️ AEROWAY (공항 분류 세분화)
+  if (tags.aeroway) {
+    if (['apron', 'aerodrome', 'helipad'].includes(tags.aeroway)) {
+      return 'landuse'; // 면(Area)으로 그려질 배경 요소
+    }
+    return 'road'; // 선(Line)으로 그려질 교통망 (Runway, Taxiway)
+  }
+
   // 4. 🛣️ TRANSPORT
-  if (
-    tags.highway ||
-    tags.railway ||
-    tags.aeroway ||
-    tags['area:highway'] ||
-    tags.junction
-  ) {
+  if (tags.highway || tags.railway || tags['area:highway'] || tags.junction) {
     return 'road';
   }
 
@@ -213,7 +288,11 @@ export const computeOsmMetrics = (
   if (category === 'road') {
     if (tags.width) {
       width = parseFloat(tags.width);
+    } else if (tags.aeroway) {
+      // ✈️ 공항 전용 너비 정책 적용
+      width = DEFAULT_AEROWAY_WIDTHS[tags.aeroway] || 30;
     } else {
+      // 기존 도로 너비 정책
       // Fallback Strategy: Lanes Tag -> Mapping Table -> Default(1)
       let lanes = 1;
       if (tags.lanes) {
@@ -265,7 +344,14 @@ export const shouldForceClosed = (tags: OsmTags): boolean => {
  * 불리언 플래그와 중요도를 미리 추출합니다.
  */
 export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
-  const isInstitutional = INSTITUTIONAL_TYPES.has(tags.amenity || ''); // Set.has()를 사용하여 O(1) 성능으로 체크
+  // 🔥 [FIX] 역(Station) 판별 로직 강화
+  // amenity 태그뿐만 아니라, railway나 building 태그도 확인하여 공공시설로 분류
+  const isInstitutional =
+    INSTITUTIONAL_TYPES.has(tags.amenity || '') || // Set.has()를 사용하여 O(1) 성능으로 체크
+    tags.railway === 'station' ||
+    tags.building === 'train_station' ||
+    tags.building === 'transportation';
+
   const isOcean =
     tags.source === 'osm-coastline' ||
     tags.natural === 'ocean' ||
@@ -295,8 +381,12 @@ export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
 
 /**
  * 📊 [calculateOsmRank]
- * 엔진 내 렌더링 및 POI 노출 우선순위를 결정합니다. (0~255)
- * 정책적으로 중요한 지형지물에 가중치를 부여합니다.
+ * 엔진 내 렌더링 및 POI 노출 우선순위를 결정합니다.
+ *
+ * [Engineering Note]
+ * 1. Layer Priority: 물리적 높이(Layer)는 무조건 최우선입니다. (가중치 100)
+ * 2. Hierarchy Priority: 같은 층에서는 '도로 위계가 높은(넓은)' 도로가
+ * '낮은(좁은)' 도로를 덮어써야(Draw Last) 도로망의 시각적 연속성이 보장됩니다.
  */
 function calculateOsmRank(
   category: string,
@@ -310,18 +400,46 @@ function calculateOsmRank(
   if (category === 'building' && tags.name) score += 20;
   if (category === 'water') score += 15;
 
-  // 2. ⚡ 플래그 기반 가중치
-  if (flags.isOcean) score += 100; // 바다는 최하단 배경이므로 높은 우선순위로 관리
+  // 2. 🛣️ 도로 위계별 가중치 (🔥 다시 중요도 순으로 복귀)
+  if (category === 'road') {
+    const h = tags.highway || '';
+
+    // [Draw Order: Hierarchy]
+    // 덜 중요한 도로(Residential)를 먼저 그리고(깔고),
+    // 중요한 도로(Motorway)를 나중에 그려서(덮고) 간선 도로의 연속성을 유지합니다.
+    if (['motorway', 'trunk', 'motorway_link', 'trunk_link'].includes(h)) {
+      score += 80; // 📈 가장 나중에 그려짐 (최상단)
+    } else if (
+      ['primary', 'primary_link', 'secondary', 'secondary_link'].includes(h)
+    ) {
+      score += 50; // 중간
+    } else if (['tertiary', 'tertiary_link'].includes(h)) {
+      score += 30;
+    } else {
+      score += 10; // 📉 가장 먼저 그려짐 (바닥: 주거지 도로 등)
+    }
+
+    // [Layer Priority]
+    // 물리적 높이는 스타일을 압도해야 합니다. (Layer 1 = +100점)
+    // 예: Layer 1인 골목길(110점) > Layer 0인 고속도로(90점) -> 다리가 고속도로 위로 지나감 OK
+    const layer = parseInt(tags.layer || '0', 10);
+    score += layer * 100;
+  }
+
+  // 3. ⚡ 플래그 기반 가중치
+  if (flags.isOcean) score += 100;
   if (flags.isInstitutional) score += 40;
 
-  // 3. 🚩 랜드마크 가중치
+  // 4. 🚩 랜드마크 가중치
   if (tags.tourism === 'attraction' || tags.heritage) score += 60;
   if (tags.amenity === 'hospital' || tags.amenity === 'university') score += 30;
 
-  // 4. 📝 정보 가시성 보정 (이름이 있으면 사용자에게 노출될 가치가 높음)
+  // 5. 📝 정보 가시성 보정
   if (tags.name) score += 20;
 
-  return Math.min(score, 255); // 8-bit uint8 규격 준수
+  // 🔥 [FIX] 8-bit Clamp 제거 유지
+  // 층위 표현을 위해 255 초과 허용
+  return score;
 }
 
 // =============================================================================
@@ -364,13 +482,22 @@ export const determineVoxelConfig = (
     tags.railway ||
     category === 'parking'
   ) {
+    // ✈️ (0) 공항 활주로/유도로 (최우선)
+    if (tags.aeroway === 'runway') {
+      return { voxelType: VOXEL_TYPES.RUNWAY, layerKey: 'transport' };
+    }
+    if (tags.aeroway === 'taxiway' || tags.aeroway === 'taxilane') {
+      return { voxelType: VOXEL_TYPES.TAXIWAY, layerKey: 'transport' };
+    }
+
     // (1) 주차장 (Extra Flag 우선 확인)
     if (extra.isParking) {
       return { voxelType: VOXEL_TYPES.PARKING, layerKey: 'transport' };
     }
     // (2) 철도
     if (tags.railway) {
-      return { voxelType: VOXEL_TYPES.RAIL, layerKey: 'transport' };
+      const railwayType = determineRailwayVoxel(tags);
+      return { voxelType: railwayType, layerKey: 'transport' };
     }
     // (3) 보행자 도로
     if (
@@ -380,12 +507,63 @@ export const determineVoxelConfig = (
     ) {
       return { voxelType: VOXEL_TYPES.PEDESTRIAN, layerKey: 'transport' };
     }
-    // (4) 일반 도로
-    return { voxelType: VOXEL_TYPES.ROAD, layerKey: 'transport' };
+
+    // 🎯 (4) 일반 도로: 위계(Hierarchy)에 따른 색상 분기
+    const roadType = determineRoadVoxel(tags.highway || '');
+    return { voxelType: roadType, layerKey: 'transport' };
   }
 
   // 4. 🏢 Structure Layer
   if (category === 'building' || tags.building) {
+    // (1) 🚉 교통 시설 (Station)
+    // building 태그 자체가 'train_station'인 경우도 체크해야 함
+    if (
+      tags.railway === 'station' ||
+      tags.public_transport === 'station' ||
+      tags.amenity === 'bus_station' ||
+      ['train_station', 'transportation', 'station'].includes(
+        tags.building || '',
+      )
+    ) {
+      return { voxelType: VOXEL_TYPES.BUILDING_STATION, layerKey: 'structure' };
+    }
+
+    // (2) 🏥 의료 시설 (Medical)
+    // amenity뿐만 아니라 building 태그가 hospital인 경우도 체크
+    if (
+      ['hospital', 'clinic'].includes(tags.amenity || '') ||
+      ['hospital', 'clinic'].includes(tags.building || '')
+    ) {
+      return { voxelType: VOXEL_TYPES.BUILDING_MEDICAL, layerKey: 'structure' };
+    }
+
+    // (3) 🏫 교육 시설 (Education)
+    // 기존에는 tags.amenity만 봤지만, 실제 건물은 building=university, building=school 등으로 태깅됩니다.
+    // building 태그의 값을 확인하도록 수정했습니다.
+    const eduValues = [
+      'school',
+      'university',
+      'college',
+      'kindergarten',
+      'classroom',
+      'dormitory',
+    ];
+    if (
+      eduValues.includes(tags.amenity || '') ||
+      eduValues.includes(tags.building || '')
+    ) {
+      return {
+        voxelType: VOXEL_TYPES.BUILDING_EDUCATION,
+        layerKey: 'structure',
+      };
+    }
+
+    // (4) 🏛️ 기타 공공 시설 (Government, Public)
+    if (extra.isInstitutional) {
+      return { voxelType: VOXEL_TYPES.BUILDING_PUBLIC, layerKey: 'structure' };
+    }
+
+    // (5) 일반 건물
     return { voxelType: VOXEL_TYPES.BUILDING, layerKey: 'structure' };
   }
 
@@ -416,9 +594,32 @@ function resolveBaseVoxelType(
   };
   if (CATEGORY_MAP[category]) return CATEGORY_MAP[category];
 
-  // (1) [Institutional/Sports] Flag 활용
-  if (extra.isInstitutional) return VOXEL_TYPES.INSTITUTIONAL;
-  if (extra.isSports) return VOXEL_TYPES.SPORTS;
+  // (1) [Institutional/Sports] Landuse 분화
+  // 건물이 아니라 '면(Area)' 데이터가 들어왔을 때의 처리입니다.
+  const eduValues = ['university', 'school', 'college', 'kindergarten'];
+
+  // 🏫 학교 부지
+  if (
+    checkTag(tags.amenity, eduValues) ||
+    checkTag(tags.landuse, ['education'])
+  ) {
+    return VOXEL_TYPES.LANDUSE_EDUCATION;
+  }
+
+  // 🏥 병원 부지
+  if (
+    checkTag(tags.amenity, ['hospital', 'clinic']) ||
+    checkTag(tags.landuse, ['medical'])
+  ) {
+    return VOXEL_TYPES.LANDUSE_MEDICAL;
+  }
+
+  // 🏛️ 일반 관공서/공공 부지
+  if (extra.isInstitutional) {
+    return VOXEL_TYPES.LANDUSE_PUBLIC;
+  }
+
+  if (extra.isSports) return VOXEL_TYPES.LANDUSE_SPORTS;
 
   // (2) [Forest/Deep Green]
   if (
@@ -465,11 +666,11 @@ function resolveBaseVoxelType(
   // (5) [Human Activity]
   if (tags.landuse) {
     if (['residential', 'cemetery'].includes(tags.landuse))
-      return VOXEL_TYPES.RESIDENTIAL;
+      return VOXEL_TYPES.LANDUSE_RESIDENTIAL;
     if (['commercial', 'retail'].includes(tags.landuse))
-      return VOXEL_TYPES.COMMERCIAL;
+      return VOXEL_TYPES.LANDUSE_COMMERCIAL;
     if (['industrial', 'construction'].includes(tags.landuse))
-      return VOXEL_TYPES.INDUSTRIAL;
+      return VOXEL_TYPES.LANDUSE_INDUSTRIAL;
   }
 
   // (6) [Sports Fallback]
@@ -479,8 +680,13 @@ function resolveBaseVoxelType(
       tags.leisure,
     )
   ) {
-    return VOXEL_TYPES.SPORTS;
+    return VOXEL_TYPES.LANDUSE_SPORTS;
   }
+
+  // (6.5) ✈️ [Airport Area]
+  if (tags.aeroway === 'apron') return VOXEL_TYPES.APRON;
+  if (tags.aeroway === 'helipad') return VOXEL_TYPES.HELIPAD;
+  if (tags.aeroway === 'aerodrome') return VOXEL_TYPES.BASE_LAND; // 공항 부지 전체
 
   // (7) [General Fallback]
   if (
