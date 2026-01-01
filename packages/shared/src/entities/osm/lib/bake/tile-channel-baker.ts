@@ -26,7 +26,7 @@ import type { TileBuildConfig } from '@pixelet/shared/entities/osm/lib/bake/tile
 const { CELL_SIZE: cellSize, TILE_RESOLUTION: res } = OSM_CONSTANTS;
 interface TileRenderContext {
   originX: number;
-  topY: number;
+  originY: number;
   cellSize: number;
   res: number;
 }
@@ -47,7 +47,7 @@ export function bakeTileChannels(
   const anchor = getTileAbsAnchor(coord);
   const ctx: TileRenderContext = {
     originX: anchor.x,
-    topY: anchor.y + res * cellSize,
+    originY: anchor.y,
     cellSize,
     res,
   };
@@ -168,7 +168,7 @@ function renderPolygon(
   const toLocal = (pts: Coord[]) =>
     pts.map((p) => ({
       x: (p.x - ctx.originX) / ctx.cellSize,
-      y: (ctx.topY - p.y) / ctx.cellSize,
+      y: (p.y - ctx.originY) / ctx.cellSize,
     }));
 
   const outer = toLocal(points);
@@ -265,9 +265,9 @@ function renderLinearFeature(
 
   for (let i = 0; i < points.length - 1; i++) {
     const x1 = (points[i].x - ctx.originX) / ctx.cellSize;
-    const y1 = (ctx.topY - points[i].y) / ctx.cellSize;
+    const y1 = (points[i].y - ctx.originY) / ctx.cellSize;
     const x2 = (points[i + 1].x - ctx.originX) / ctx.cellSize;
-    const y2 = (ctx.topY - points[i + 1].y) / ctx.cellSize;
+    const y2 = (points[i + 1].y - ctx.originY) / ctx.cellSize;
 
     drawCircle(Math.floor(x1 + 0.5), Math.floor(y1 + 0.5), thickness);
     if (i === points.length - 2) {

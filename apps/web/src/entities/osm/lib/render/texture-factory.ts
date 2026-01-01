@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
+const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
 
 /**
  * [createChannelTexture]
@@ -16,8 +16,8 @@ const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
 export const createChannelTexture = (data: Uint8Array): THREE.DataTexture => {
   const tex = new THREE.DataTexture(
     data,
-    resolution,
-    resolution,
+    res,
+    res,
     THREE.RedFormat,
     THREE.UnsignedByteType,
   );
@@ -41,8 +41,8 @@ export const createChannelTexture = (data: Uint8Array): THREE.DataTexture => {
 export const createTerrainTexture = (data: Uint16Array): THREE.DataTexture => {
   const tex = new THREE.DataTexture(
     data,
-    resolution,
-    resolution,
+    res,
+    res,
     THREE.RedIntegerFormat,
     THREE.UnsignedShortType,
   );

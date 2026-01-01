@@ -1,7 +1,7 @@
 import { useTileStore } from '@/entities/osm/model/tile-store';
 import { cn } from '@/shared/lib/utils';
 import { triggerDownload } from '@/shared/lib/io/browser-io';
-import { generateGridBinary } from '@pixelet/shared/entities/osm/lib/io/grid-data';
+import { generateGridBinary } from '@pixelet/shared/entities/osm/lib/io/grid-binary';
 import {
   exportGridImage,
   exportMergedGridImage,

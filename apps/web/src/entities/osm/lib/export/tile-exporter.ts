@@ -1,6 +1,6 @@
 /**
  * @file tile-exporter.ts
- * 엔진 내부의 채널 데이터(Uint8Array)를 시각적 이미지(PNG) 또는 바이너리(.bin)로 추출합니다.
+ * 엔진 내부의 채널 데이터(Uint8Array)를 시각적 이미지(PNG)로 추출합니다.
  * 베이킹 엔진(Baker)에서 생성된 복셀 데이터가 실제 지형과 일치하는지 검증하는 용도입니다.
  *
  * [Refactor Note]
@@ -20,7 +20,7 @@ import {
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
+const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
 
 /**
  * [hex-to-rgb]
@@ -80,6 +80,17 @@ const getColorMap = (): Record<
 };
 
 /**
+ * [getGridIdx]
+ * 캔버스 좌표(x, y)에 대응하는 월드 데이터(South-to-North)의 인덱스를 반환합니다.
+ */
+const getGridIdx = (gx: number, gy: number, res: number): number => {
+  // 캔버스의 y는 위(0)에서 아래(res-1)로 가지만,
+  // 월드 데이터의 gy는 아래(0)에서 위(res-1)로 가므로 여기서 변환
+  const worldGy = res - 1 - gy;
+  return worldGy * res + gx;
+};
+
+/**
  * [Internal Helper] 캔버스 생성 및 픽셀 주입 공통 로직
  */
 async function drawToBlob(
@@ -88,28 +99,42 @@ async function drawToBlob(
   if (typeof document === 'undefined') return null;
 
   const canvas = document.createElement('canvas');
-  canvas.width = resolution;
-  canvas.height = resolution;
+  canvas.width = res;
+  canvas.height = res;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
   const colorMap = getColorMap();
-  const imageData = ctx.createImageData(resolution, resolution);
+  const imageData = ctx.createImageData(res, res);
+  const data = imageData.data;
 
-  for (let i = 0; i < resolution * resolution; i++) {
-    const rgb = pixelSource(i, colorMap);
-    const canvasIdx = i * 4;
-    imageData.data[canvasIdx] = rgb[0];
-    imageData.data[canvasIdx + 1] = rgb[1];
-    imageData.data[canvasIdx + 2] = rgb[2];
-    imageData.data[canvasIdx + 3] = 255;
+  /**
+   * 🎯 [Optimization: Sequential Write]
+   * 캔버스 좌표(cx, cy)를 기준으로 루프를 돌며 ImageData를 순차적으로 채웁니다.
+   * 이렇게 하면 data[i]에 순서대로 접근하므로 메모리 대역폭을 최대로 활용합니다.
+   */
+  let canvasIdx = 0;
+  for (let cy = 0; cy < res; cy++) {
+    // Top to Bottom
+    for (let cx = 0; cx < res; cx++) {
+      // Left to Right
+
+      // 1. 현재 캔버스 위치(cy, cx)에 해당하는 데이터 인덱스 계산
+      const gridIdx = getGridIdx(cx, cy, res);
+
+      // 2. 데이터 추출
+      const rgb = pixelSource(gridIdx, colorMap);
+
+      // 3. 순차적 쓰기 (Zero-Jump)
+      data[canvasIdx++] = rgb[0];
+      data[canvasIdx++] = rgb[1];
+      data[canvasIdx++] = rgb[2];
+      data[canvasIdx++] = 255;
+    }
   }
 
   ctx.putImageData(imageData, 0, 0);
-
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), 'image/png');
-  });
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
 /**

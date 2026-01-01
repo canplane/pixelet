@@ -20,7 +20,7 @@ import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import { SERVICE_MODES } from '@/config/app-config';
 
-const { TILE_RESOLUTION: resolution } = OSM_CONSTANTS;
+const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
 const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
 
 /**
@@ -30,7 +30,7 @@ const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
 async function requestServerTile(coord: TileCoord): Promise<Tile> {
   const { tx, ty } = coord;
 
-  const rawKey = `baked:${tx}:${ty}:${resolution}`;
+  const rawKey = `baked:${tx}:${ty}:${res}`;
 
   return withSharedPromise('local-tile', rawKey, async () => {
     const controller = new AbortController();
@@ -56,7 +56,7 @@ async function requestServerTile(coord: TileCoord): Promise<Tile> {
 
       // 🚀 병렬로 모든 압축 해제 및 객체 복원
       const [grids, pois] = await Promise.all([
-        unpackTileGrids(dto.grids, resolution),
+        unpackTileGrids(dto.grids, res),
         unpackVector<MapPoi>(dto.pois),
       ]);
 

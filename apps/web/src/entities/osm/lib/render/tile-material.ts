@@ -62,16 +62,16 @@ const vertexShader = `
 
   void main() {
     vUv = uv;
-    // 텍스처 좌표계 보정 (Y-Flip for Three.js PlaneGeometry)
-    vec2 readUv = vec2(uv.x, 1.0 - uv.y);
     
     // R16UI 텍스처에서 높이 인덱스 추출 (0~65535)
-    uint hIndex = texture(uHeight, readUv).r; 
+    // 🎯 [Engineering Fix] Y-Flip 제거: uv를 그대로 사용하여 고도 샘플링
+    uint hIndex = texture(uHeight, uv).r; 
     
     // 실제 미터 단위 높이로 변환
     float height = float(hIndex) * uVoxelZUnit;
     
     vec3 pos = position;
+    // World Y(North) 방향으로 고도 Displacement 적용
     pos.z += height;
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -96,7 +96,7 @@ const generateFragmentShader = () => {
   // R8 포맷(0~255)을 float로 정확히 복원
   const channelSamplingLogic = TILE_CHANNEL_KEYS.map(
     (key) =>
-      `float ${toVar(key)} = floor(texture(${toUniform(key)}, readUv).r * 255.0 + 0.5);`,
+      `float ${toVar(key)} = floor(texture(${toUniform(key)}, vUv).r * 255.0 + 0.5);`,
   ).join('\n    ');
 
   // ---------------------------------------------------------
@@ -192,8 +192,6 @@ const generateFragmentShader = () => {
   ${colorMappingFunctions}
 
   void main() {
-    vec2 readUv = vec2(vUv.x, 1.0 - vUv.y);
-
     // [Auto-Generated Sampling]
     ${channelSamplingLogic}
 

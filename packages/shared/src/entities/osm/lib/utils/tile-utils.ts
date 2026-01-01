@@ -27,7 +27,7 @@ const { unproject } = projection;
 const {
   TILE_SIZE: tileSize,
   CELL_SIZE: cellSize,
-  TILE_RESOLUTION: resolution,
+  TILE_RESOLUTION: res,
 } = OSM_CONSTANTS;
 
 /**
@@ -168,7 +168,7 @@ export const unprojectBbox = (bbox: Bbox): Bbox4326 => {
  * 메모리 효율을 위해 Uint8Array를 사용합니다.
  */
 export function createEmptyChannels(): TileChannels {
-  const size = resolution * resolution;
+  const size = res * res;
 
   const entries = TILE_CHANNEL_KEYS.map((key) => [key, new Uint8Array(size)]);
 
@@ -184,7 +184,7 @@ export function createEmptyGrids(): TileGrids {
     channels: createEmptyChannels(),
     terrain: {
       // 고도(Elevation) 데이터는 m 단위 정밀도 표현을 위해 16-bit 사용 (기본값 0: 해수면)
-      elevation: new Uint16Array(resolution * resolution).fill(0),
+      elevation: new Uint16Array(res * res).fill(0),
     },
   };
 }

@@ -89,24 +89,27 @@ export class GeoRepository {
     const result = await this.repo.query(query);
     if (!result || result.length === 0 || !result[0].z_values) return [];
 
-    const zValues: number[][] = result[0].z_values;
+    const zValues: number[][] = result[0].z_values; // PostGIS Standard: [Row 0 = North]
     const points: Coord[] = [];
 
-    // 4. Data Extraction
-    // 🎯 좌표계가 정확해졌으므로 부동소수점 오차 필터링(if check) 대신
-    // 인덱스 기반으로 정확하게 필요한 영역만 잘라냅니다.
-    for (let row = pad; row < paddedHeight - pad; row++) {
-      const worldY = paddedMaxY - row * step; // Top-Left corner convention
+    /**
+     * 3. 🎯 [Natural Fix] 인덱스 매핑만 교정
+     * PostGIS 래스터의 바닥(마지막 row)이 월드 좌표계의 남쪽(MinY)입니다.
+     * 따라서 바닥 row부터 위로 올라가며 수집하면 자연스럽게 남->북 순서가 됩니다.
+     */
+    for (let row = paddedHeight - 1; row >= 0; row--) {
+      // row가 줄어들수록(위로 올라갈수록) worldY는 증가함
+      const worldY = paddedMaxY - row * step;
 
-      for (let col = pad; col < paddedWidth - pad; col++) {
+      for (let col = 0; col < paddedWidth; col++) {
+        // col이 증가할수록(오른쪽으로 갈수록) worldX는 증가함
         const worldX = paddedMinX + col * step;
-
-        // PostGIS 배열 접근 안전장치
-        const z = zValues[row]?.[col] ?? 0;
+        const z = zValues[row]?.[col] ?? 0; // PostGIS 배열 접근 안전장치
 
         points.push({ x: worldX, y: worldY, z });
       }
     }
+
     return points;
   }
 
