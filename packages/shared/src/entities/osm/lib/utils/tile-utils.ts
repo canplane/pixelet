@@ -16,14 +16,19 @@ import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { OSM_CONSTANTS } from '../../model/osm-constants';
 import { CoordOps, type Coord2D } from '@pixelet/shared/shared/model/coords';
 import {
-  GRID_LAYER_KEYS,
-  type GridLayers,
+  TILE_CHANNEL_KEYS,
+  type TileChannels,
   type TileGrids,
+  type Tile,
 } from '@pixelet/shared/entities/osm/model/tiles';
 
 const { unproject } = projection;
 
-const { TILE_SIZE, TILE_RESOLUTION } = OSM_CONSTANTS;
+const {
+  TILE_SIZE: tileSize,
+  CELL_SIZE: cellSize,
+  TILE_RESOLUTION: resolution,
+} = OSM_CONSTANTS;
 
 /**
  * [TileCoord]
@@ -41,8 +46,8 @@ export interface TileCoord {
  */
 export const getTileCoord = (pos: Coord2D): TileCoord => {
   return {
-    tx: Math.floor(pos.x / TILE_SIZE),
-    ty: Math.floor(pos.y / TILE_SIZE),
+    tx: Math.floor(pos.x / tileSize),
+    ty: Math.floor(pos.y / tileSize),
   };
 };
 
@@ -68,10 +73,10 @@ export interface Bbox {
 export const getTileBbox = (coord: TileCoord): Bbox => {
   const { tx, ty } = coord;
 
-  const minX = tx * TILE_SIZE;
-  const minY = ty * TILE_SIZE;
-  const maxX = (tx + 1) * TILE_SIZE;
-  const maxY = (ty + 1) * TILE_SIZE;
+  const minX = tx * tileSize;
+  const minY = ty * tileSize;
+  const maxX = (tx + 1) * tileSize;
+  const maxY = (ty + 1) * tileSize;
 
   return { minX, minY, maxX, maxY };
 };
@@ -90,40 +95,40 @@ export const getTileAbsAnchor = (coord: TileCoord): Coord2D => {
 };
 
 /**
- * [World -> Local Meter]
- * 절대 미터 좌표(AbsPos)를 특정 타일의 Anchor 기준 상대 좌표(Local Meter)로 변환합니다.
+ * [getTileOffset]
+ * 절대 미터 좌표(AbsPos)를 특정 타일의 Anchor 기준 상대 좌표(tileOffset)로 변환합니다.
  *
  * * Formula: Local = Absolute - Anchor
  * * Usage: 타일 베이킹 시 좌표 정규화 등에 사용
  */
-export const getTileLocalPos = (absPos: Coord2D, coord: TileCoord): Coord2D => {
+export const absPosToTileOffset = (absPos: Coord2D): Coord2D => {
+  const coord = getTileCoord(absPos);
   const anchor = getTileAbsAnchor(coord);
   return CoordOps.sub(absPos, anchor);
 };
 
 /**
- * [World -> Grid Index]
- * 절대 미터 좌표를 타일 내부의 그리드 인덱스(0 ~ Resolution)로 변환합니다.
- * 데이터 샘플링이나 충돌 처리에 사용됩니다.
- *
- * ⚠️ [Y-Axis Flip Warning]
- * - World Space: Y가 위로 갈수록 증가 (North)
- * - Grid/Image Space: Y가 아래로 갈수록 증가 (South/Top-Down)
- * - 따라서 변환 과정에서 `TILE_SIZE - localY` 연산이 수행됩니다.
+ * [tileOffsetToCellIdx]
+ * cy=0은 타일의 남쪽(MinY), cy=99는 타일의 북쪽(MaxY)이 됩니다.
  */
-export const getTileLocalGridIdx = (
-  absPos: Coord2D,
-  coord: TileCoord,
-  resolution: number = TILE_RESOLUTION,
-): { gx: number; gy: number } => {
-  const localPos = getTileLocalPos(absPos, coord);
-  const cellSize = TILE_SIZE / resolution;
-
+export const tileOffsetToCellIdx = (localPos: Coord2D) => {
   return {
-    // 서쪽에서 동쪽으로 (+X)
-    gx: Math.floor(localPos.x / cellSize),
-    // 북쪽(TILE_SIZE)에서 남쪽으로 하강 (Y-Flip)
-    gy: Math.floor((TILE_SIZE - localPos.y) / cellSize),
+    cx: Math.floor(localPos.x / cellSize),
+    cy: Math.floor(localPos.y / cellSize),
+  };
+};
+
+/**
+ * [tileCellIdxToOffset]
+ * 💡 셀의 '정중앙' 좌표를 반환하도록 설계되었습니다 (+0.5).
+ */
+export const cellIdxToTileOffset = (cellIdx: {
+  cx: number;
+  cy: number;
+}): Coord2D => {
+  return {
+    x: cellIdx.cx * cellSize,
+    y: cellIdx.cy * cellSize,
   };
 };
 
@@ -158,29 +163,25 @@ export const unprojectBbox = (bbox: Bbox): Bbox4326 => {
 };
 
 /**
- * [Layers Factory]
- * 🚀 스키마(GRID_LAYER_KEYS)에 정의된 모든 레이어(8-bit)를 자동으로 생성합니다.
+ * [Channels Factory]
+ * 🚀 스키마(TILE_CHANNEL_KEYS)에 정의된 모든 채널(8-bit)을 자동으로 생성합니다.
  * 메모리 효율을 위해 Uint8Array를 사용합니다.
  */
-export function createEmptyLayers(
-  resolution: number = TILE_RESOLUTION,
-): GridLayers {
+export function createEmptyChannels(): TileChannels {
   const size = resolution * resolution;
 
-  const entries = GRID_LAYER_KEYS.map((key) => [key, new Uint8Array(size)]);
+  const entries = TILE_CHANNEL_KEYS.map((key) => [key, new Uint8Array(size)]);
 
-  return Object.fromEntries(entries) as unknown as GridLayers;
+  return Object.fromEntries(entries) as unknown as TileChannels;
 }
 
 /**
  * [Tile Grids Factory] 빈 그리드 생성기
  * 모든 채널을 동일한 해상도로 생성하며, 지형 데이터(elevation)는 정밀도를 위해 16-bit을 사용합니다.
  */
-export function createEmptyGrids(
-  resolution: number = TILE_RESOLUTION,
-): TileGrids {
+export function createEmptyGrids(): TileGrids {
   return {
-    layers: createEmptyLayers(resolution),
+    channels: createEmptyChannels(),
     terrain: {
       // 고도(Elevation) 데이터는 m 단위 정밀도 표현을 위해 16-bit 사용 (기본값 0: 해수면)
       elevation: new Uint16Array(resolution * resolution).fill(0),
@@ -189,17 +190,24 @@ export function createEmptyGrids(
 }
 
 /**
+ * [Tile Factory] 빈 타일 생성기
+ */
+export function createEmptyTile(coord: TileCoord): Tile {
+  return {
+    key: getTileKey(coord),
+    coord,
+    grids: createEmptyGrids(),
+    pois: [],
+  };
+}
+
+/**
  * [Pixel -> World] Debug Utility
  * 타일 내 로컬 픽셀 좌표(Grid Index)를 다시 절대 미터 좌표로 복원합니다.
  * 쉐이더 디버깅이나 마우스 피킹(Picking) 역산 시 유용합니다.
  */
-export const pixelToWorld = (
-  coord: TileCoord,
-  localPos: Coord2D,
-  resolution: number = TILE_RESOLUTION,
-): Coord2D => {
+export const pixelToWorld = (coord: TileCoord, localPos: Coord2D): Coord2D => {
   const bbox = getTileBbox(coord);
-  const cellSize = TILE_SIZE / resolution;
   return {
     // 서쪽(minX)에서 동쪽으로 이동
     x: bbox.minX + localPos.x * cellSize,
@@ -211,16 +219,13 @@ export const pixelToWorld = (
 /**
  * [World -> Pixel] Debug Utility
  * 절대 미터 좌표가 타일 내의 정확히 어느 픽셀(소수점 포함)에 위치하는지 계산합니다.
- * `getTileLocalGridIdx`와 유사하지만, 정수형 인덱스(Floor)가 아닌 실수형 좌표를 반환합니다.
+ * `getTileCellIdx`와 유사하지만, 정수형 인덱스(Floor)가 아닌 실수형 좌표를 반환합니다.
  */
 export const worldToPixel = (
   coord: TileCoord,
   worldPos: Coord2D,
-  resolution: number = TILE_RESOLUTION,
 ): { localX: number; localY: number } => {
   const bbox = getTileBbox(coord);
-  const cellSize = TILE_SIZE / resolution;
-
   return {
     // 서쪽 경계(minX)로부터의 오프셋을 cellSize로 나눔
     localX: (worldPos.x - bbox.minX) / cellSize,

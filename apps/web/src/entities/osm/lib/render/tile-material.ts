@@ -1,12 +1,12 @@
 /**
  * @file tile-material.ts
  * 타일 렌더링을 위한 커스텀 ShaderMaterial을 정의합니다.
- * 백엔드 베이커가 생성한 레이어들과 Voxel 정의를 SSOT(Single Source of Truth) 기반으로
+ * 백엔드 베이커가 생성한 채널들과 Voxel 정의를 SSOT(Single Source of Truth) 기반으로
  * 동적으로 쉐이더를 생성하고 합성하여 최종 색상을 결정합니다.
  *
  * * [Refactor Note]
- * - Major(Layer) / Minor(Type) 2단계 위계 구조를 지원하도록 쉐이더 생성 로직을 고도화했습니다.
- * - 각 레이어별로 독립된 컬러 매핑 함수(get[Layer]Color)를 생성합니다.
+ * - Major(Channel) / Minor(Type) 2단계 위계 구조를 지원하도록 쉐이더 생성 로직을 고도화했습니다.
+ * - 각 채널별로 독립된 컬러 매핑 함수(get[Channel]Color)를 생성합니다.
  */
 
 import * as THREE from 'three';
@@ -16,8 +16,8 @@ import {
 } from '@pixelet/shared/entities/voxel/model/voxels';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import {
-  GRID_LAYER_KEYS,
-  type GridLayers,
+  TILE_CHANNEL_KEYS,
+  type TileChannels,
 } from '@pixelet/shared/entities/osm/model/tiles';
 
 const { CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
@@ -26,29 +26,29 @@ const { CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
 // 1. Helpers for Dynamic GLSL
 // ----------------------------------------------------------------------
 
-/** sea -> uSea */
+/** base -> uBase */
 const toUniform = (key: string) =>
   `u${key.charAt(0).toUpperCase() + key.slice(1)}`;
 
-/** sea -> tSea */
+/** base -> tBase */
 const toVar = (key: string) => `t${key.charAt(0).toUpperCase() + key.slice(1)}`;
 
-/** sea -> Sea (PascalCase) */
-const toLayerName = (key: string) =>
+/** base -> Base (PascalCase) */
+const toChannelName = (key: string) =>
   key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
 
 /**
  * [Color Uniform Name Generator]
- * Layer + Type Key 조합으로 유니크한 유니폼 이름을 생성합니다.
+ * Channel + Type Key 조합으로 유니크한 유니폼 이름을 생성합니다.
  * 예: uColorBaseGreenDeep
  */
-const toColorUniformName = (layerKey: string, typeKey: string) => {
-  const layerPart = toLayerName(layerKey);
+const toColorUniformName = (channelKey: string, typeKey: string) => {
+  const channelPart = toChannelName(channelKey);
   const typePart = typeKey
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
-  return `uColor${layerPart}${typePart}`;
+  return `uColor${channelPart}${typePart}`;
 };
 
 // ----------------------------------------------------------------------
@@ -84,17 +84,17 @@ const vertexShader = `
 
 const generateFragmentShader = () => {
   // ---------------------------------------------------------
-  // [Section A] Layer Related (Pass 0~4)
+  // [Section A] Channel Related (Pass 0~4)
   // ---------------------------------------------------------
 
-  // 1. Layer Uniforms Auto-Generation
-  const layerUniformsDecl = GRID_LAYER_KEYS.map(
+  // 1. Channel Uniforms Auto-Generation
+  const channelUniformsDecl = TILE_CHANNEL_KEYS.map(
     (key) => `uniform sampler2D ${toUniform(key)};`,
   ).join('\n  ');
 
-  // 2. Layer Sampling Logic
+  // 2. Channel Sampling Logic
   // R8 포맷(0~255)을 float로 정확히 복원
-  const layerSamplingLogic = GRID_LAYER_KEYS.map(
+  const channelSamplingLogic = TILE_CHANNEL_KEYS.map(
     (key) =>
       `float ${toVar(key)} = floor(texture(${toUniform(key)}, readUv).r * 255.0 + 0.5);`,
   ).join('\n    ');
@@ -106,39 +106,40 @@ const generateFragmentShader = () => {
   let colorUniformsDecl = '';
   let colorMappingFunctions = '';
 
-  // 각 레이어(Major)별로 독립된 컬러 매핑 함수를 생성합니다.
+  // 각 채널(Major)별로 독립된 컬러 매핑 함수를 생성합니다.
   (Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]).forEach(
     (majorKey) => {
-      // COMMON은 스킵 (실제 렌더링되는 레이어가 아님)
+      // COMMON은 스킵 (실제 렌더링되는 채널이 아님)
       if (majorKey === 'COMMON') return;
 
-      const layerKey = majorKey.toLowerCase();
-      const layerTypes = VOXEL_TYPES[majorKey] as Record<string, number>;
+      const channelKey = majorKey.toLowerCase();
+      const channelTypes = VOXEL_TYPES[majorKey] as Record<string, number>;
 
       // 1. Color Uniforms Declaration
-      const uniforms = Object.keys(layerTypes)
+      const uniforms = Object.keys(channelTypes)
         .filter((key) => key !== 'AIR' && key !== 'UNKNOWN') // AIR/UNKNOWN은 유니폼 불필요
         .map(
-          (typeKey) => `uniform vec3 ${toColorUniformName(layerKey, typeKey)};`,
+          (typeKey) =>
+            `uniform vec3 ${toColorUniformName(channelKey, typeKey)};`,
         )
         .join('\n  ');
 
       colorUniformsDecl += uniforms + '\n  ';
 
-      // 2. Layer-Specific Color Mapping Function
+      // 2. Channel-Specific Color Mapping Function
       // vec3 getBaseColor(float type) { ... }
-      const cases = Object.keys(layerTypes)
+      const cases = Object.keys(channelTypes)
         .filter((key) => key !== 'AIR' && key !== 'UNKNOWN')
         .map((typeKey) => {
-          const typeVal = layerTypes[typeKey]; // 정수값 (예: 10)
-          const uName = toColorUniformName(layerKey, typeKey);
+          const typeVal = channelTypes[typeKey]; // 정수값 (예: 10)
+          const uName = toColorUniformName(channelKey, typeKey);
           // float 비교 시 오차 방지를 위해 Epsilon을 쓰거나 정수로 비교
           return `if (abs(type - ${typeVal}.0) < 0.1) return ${uName};`;
         })
         .join('\n    ');
 
       colorMappingFunctions += `
-  vec3 get${toLayerName(layerKey)}Color(float type) {
+  vec3 get${toChannelName(channelKey)}Color(float type) {
     ${cases}
     return vec3(0.0); // Fallback (Black or Transparent logic)
   }
@@ -147,25 +148,25 @@ const generateFragmentShader = () => {
   );
 
   // ---------------------------------------------------------
-  // [Section C] Layer Blending Logic (Painter's Algorithm)
+  // [Section C] Channel Blending Logic (Painter's Algorithm)
   // ---------------------------------------------------------
 
   // UNKNOWN(1) 값
   const unknownVal = `${VOXEL_TYPES.COMMON.UNKNOWN}.0`;
   const baseLandUniform = toColorUniformName('base', 'BASE_LAND'); // Fallback용
 
-  const layerBlendingLogic = GRID_LAYER_KEYS.map((key) => {
+  const channelBlendingLogic = TILE_CHANNEL_KEYS.map((key) => {
     const varName = toVar(key);
-    const funcName = `get${toLayerName(key)}Color`;
+    const funcName = `get${toChannelName(key)}Color`;
 
     return `
-    // Check [${key}] Layer
+    // Check [${key}] Channel
     // UNKNOWN(${unknownVal})보다 커야 유효한 데이터
     if (${varName} > ${unknownVal} + 0.1) {
-      vec3 layerColor = ${funcName}(${varName});
+      vec3 channelColor = ${funcName}(${varName});
       // 0.0(Black)이 아니면 유효한 색상으로 간주하여 덮어쓰기
       // (혹은 알파 블렌딩 로직을 추가할 수도 있음)
-      finalColor = layerColor;
+      finalColor = channelColor;
     }
     `;
   }).join('');
@@ -178,8 +179,8 @@ const generateFragmentShader = () => {
   precision highp float;
   precision highp usampler2D;
 
-  // [Auto-Generated Layer Uniforms]
-  ${layerUniformsDecl}
+  // [Auto-Generated Channel Uniforms]
+  ${channelUniformsDecl}
 
   // [Auto-Generated Color Uniforms]
   ${colorUniformsDecl}
@@ -194,16 +195,16 @@ const generateFragmentShader = () => {
     vec2 readUv = vec2(vUv.x, 1.0 - vUv.y);
 
     // [Auto-Generated Sampling]
-    ${layerSamplingLogic}
+    ${channelSamplingLogic}
 
     // [Blending Strategy]
     // 0. 캔버스 초기화: 기본 지면 색상 (Base Land) Fallback
-    // 만약 모든 레이어가 비어있을 경우를 대비해 Base Land 색상으로 초기화합니다.
+    // 만약 모든 채널이 비어있을 경우를 대비해 Base Land 색상으로 초기화합니다.
     vec3 finalColor = ${baseLandUniform};
 
-    // [Auto-Generated Layering]
-    // GRID_LAYER_KEYS 순서대로 덮어씌웁니다. (Z-Index: Pass 0 -> Pass N)
-    ${layerBlendingLogic}
+    // [Auto-Generated Channeling]
+    // TILE_CHANNEL_KEYS 순서대로 덮어씌웁니다. (Z-Index: Pass 0 -> Pass N)
+    ${channelBlendingLogic}
 
     outColor = vec4(finalColor, 1.0);
   }
@@ -215,17 +216,17 @@ const generateFragmentShader = () => {
 // ----------------------------------------------------------------------
 
 interface TileMaterialProps {
-  layerTextures: Record<keyof GridLayers, THREE.Texture>;
+  channelTextures: Record<keyof TileChannels, THREE.Texture>;
   terrainTexture: THREE.Texture;
 }
 
 /**
  * [createTileMaterial]
- * 5개의 레이어 텍스처와 1개의 고도 텍스처를 받아 ShaderMaterial을 생성합니다.
- * 🚀 SSOT(GRID_LAYER_KEYS + VOXEL_TYPES)에 따라 쉐이더 코드를 완전 동적으로 생성합니다.
+ * 4개의 채널 텍스처와 1개의 고도 텍스처를 받아 ShaderMaterial을 생성합니다.
+ * 🚀 SSOT(TILE_CHANNEL_KEYS + VOXEL_TYPES)에 따라 쉐이더 코드를 완전 동적으로 생성합니다.
  */
 export const createTileMaterial = (props: TileMaterialProps) => {
-  const { layerTextures, terrainTexture } = props;
+  const { channelTextures, terrainTexture } = props;
 
   // 1. Voxel Color Uniforms 자동 생성
   const generatedColorUniforms: Record<string, any> = {};
@@ -234,7 +235,7 @@ export const createTileMaterial = (props: TileMaterialProps) => {
     (majorKey) => {
       if (majorKey === 'COMMON') return;
 
-      const layerKey = majorKey.toLowerCase();
+      const channelKey = majorKey.toLowerCase();
       const types = VOXEL_TYPES[majorKey] as Record<string, number>;
       const colors = VOXEL_COLORS[
         majorKey as keyof typeof VOXEL_COLORS
@@ -248,7 +249,7 @@ export const createTileMaterial = (props: TileMaterialProps) => {
         const hexColor = colors[typeId];
 
         if (hexColor && hexColor !== 'transparent') {
-          const uName = toColorUniformName(layerKey, typeKey);
+          const uName = toColorUniformName(channelKey, typeKey);
           generatedColorUniforms[uName] = {
             value: new THREE.Color(hexColor),
           };
@@ -264,10 +265,10 @@ export const createTileMaterial = (props: TileMaterialProps) => {
     ...generatedColorUniforms,
   };
 
-  // 3. 레이어 텍스처 Uniform 자동 주입 (Sea, Base, Water...)
-  GRID_LAYER_KEYS.forEach((key) => {
-    if (layerTextures[key]) {
-      uniforms[toUniform(key)] = { value: layerTextures[key] };
+  // 3. 채널 텍스처 Uniform 자동 주입 (Water, Base...)
+  TILE_CHANNEL_KEYS.forEach((key) => {
+    if (channelTextures[key]) {
+      uniforms[toUniform(key)] = { value: channelTextures[key] };
     }
   });
 

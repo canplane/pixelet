@@ -3,7 +3,7 @@
  * 정규화된 OsmFeature를 타일 그리드와 POI 엔티티로 조립합니다.
  */
 
-import { bakeTileGrid } from './tile-grid-baker';
+import { bakeTileChannels } from './tile-channel-baker';
 import type { OsmFeature, MapPoi } from '../../model/osm-feature';
 import type { TileCoord } from '../utils/tile-utils';
 
@@ -24,7 +24,7 @@ export interface TileBuildConfig {
 
 /**
  * [assembleTile]
- * 피처 목록을 받아 그리드 레이어와 POI 리스트를 한꺼번에 생성합니다.
+ * 피처 목록을 받아 타일 채널과 POI 리스트를 한꺼번에 생성합니다.
  * 🌊 oceanFeatures가 포함된 elements를 받아 래스터화 과정을 조율합니다.
  */
 export function assembleTile(
@@ -37,10 +37,10 @@ export function assembleTile(
 
   // 2. 그리드 베이킹
   // 데이터가 없더라도 GridPacker가 기대하는 5개 채널 구조를 유지하기 위해
-  // 기본적으로 EmptyLayers를 기반으로 시작하는 것이 안전합니다.
-  const partialLayers = bakeTileGrid(coord, elements, options);
+  // 기본적으로 EmptyChannels를 기반으로 시작하는 것이 안전합니다.
+  const partialChannels = bakeTileChannels(coord, elements, options);
 
-  return { pois, partialLayers };
+  return { pois, partialChannels };
 }
 
 /**

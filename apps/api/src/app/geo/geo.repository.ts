@@ -33,21 +33,28 @@ export class GeoRepository {
     bbox: Bbox,
     step: number = Z_SAMPLING_STEP,
   ): Promise<Coord[]> {
-    // 1. Calculate Grid Dimensions (Inner Tile)
+    // 1. Calculate Grid Dimensions
+    // 예: 폭 100m, step 10m -> 11개 포인트 필요
     const innerWidth = Math.floor((bbox.maxX - bbox.minX) / step) + 1;
     const innerHeight = Math.floor((bbox.maxY - bbox.minY) / step) + 1;
 
-    // 2. Apply Padding (1 cell margin)
+    // 2. Apply Padding (상하좌우 1칸)
     const pad = 1;
     const paddedWidth = innerWidth + pad * 2;
     const paddedHeight = innerHeight + pad * 2;
 
+    // 3. 🎯 [Critical Fix] Extent Calculation
+    // SQL의 ST_Resample이 이미지를 찌그러뜨리지 않도록,
+    // 픽셀 개수(paddedWidth)에 맞춰 물리적 거리(step)를 곱해 Extent를 재정의합니다.
     const paddedMinX = bbox.minX - step * pad;
-    const paddedMaxX = bbox.maxX + step * pad;
-    const paddedMinY = bbox.minY - step * pad;
     const paddedMaxY = bbox.maxY + step * pad;
 
-    // 3. PostGIS Query Execution
+    // ❌ 기존: const paddedMaxX = bbox.maxX + step * pad; (오차 발생 원인)
+    // ✅ 수정: 시작점 + (개수 * 간격)으로 정확한 끝점을 계산
+    const paddedMaxX = paddedMinX + paddedWidth * step;
+    // Y축은 PostGIS 래스터 특성상(Top-Down) MinY도 맞춰줘야 안전합니다.
+    const paddedMinY = paddedMaxY - paddedHeight * step;
+
     const query = `
       WITH interest_area AS (
         SELECT ST_MakeEnvelope(
@@ -85,27 +92,19 @@ export class GeoRepository {
     const zValues: number[][] = result[0].z_values;
     const points: Coord[] = [];
 
-    // 4. Data Extraction Loop (Top-Down / North -> South)
-    // PostGIS 래스터 데이터는 일반적으로 북쪽(Top)이 Row 0입니다.
-    // 이 순서를 그대로 유지하며, 패딩을 제외한 유효 타일 영역만 추출합니다.
+    // 4. Data Extraction
+    // 🎯 좌표계가 정확해졌으므로 부동소수점 오차 필터링(if check) 대신
+    // 인덱스 기반으로 정확하게 필요한 영역만 잘라냅니다.
     for (let row = pad; row < paddedHeight - pad; row++) {
-      // worldY 계산: 북쪽(MaxY)에서 시작하여 아래로 감소
-      const worldY = paddedMaxY - row * step;
+      const worldY = paddedMaxY - row * step; // Top-Left corner convention
 
       for (let col = pad; col < paddedWidth - pad; col++) {
-        // worldX 계산: 서쪽(MinX)에서 시작하여 우측으로 증가
         const worldX = paddedMinX + col * step;
+
+        // PostGIS 배열 접근 안전장치
         const z = zValues[row]?.[col] ?? 0;
 
-        // [Validation] 부동소수점 오차를 고려한 BBox 포함 여부 검사
-        if (
-          worldX >= bbox.minX - 0.1 &&
-          worldX <= bbox.maxX + 0.1 &&
-          worldY >= bbox.minY - 0.1 &&
-          worldY <= bbox.maxY + 0.1
-        ) {
-          points.push({ x: worldX, y: worldY, z });
-        }
+        points.push({ x: worldX, y: worldY, z });
       }
     }
     return points;

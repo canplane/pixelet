@@ -1,4 +1,4 @@
-import { useMapStore } from '@/entities/osm/model/map-store';
+import { useTileStore } from '@/entities/osm/model/tile-store';
 import { cn } from '@/shared/lib/utils';
 import { triggerDownload } from '@/shared/lib/io/browser-io';
 import { generateGridBinary } from '@pixelet/shared/entities/osm/lib/io/grid-data';
@@ -6,14 +6,14 @@ import {
   exportGridImage,
   exportMergedGridImage,
 } from '@/entities/osm/lib/export/tile-exporter';
-import type { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
+import type { TileChannels } from '@pixelet/shared/entities/osm/model/tiles';
 
 /**
  * [map-debug-tools]
  * 활성화된 모든 월드 타일의 '멀티 채널' 그리드 데이터를 추출합니다.
  */
 export function MapDebugTools() {
-  const tiles = useMapStore((state) => state.tiles);
+  const tiles = useTileStore((state) => state.tiles);
 
   if (tiles.size === 0) return null;
 
@@ -22,13 +22,14 @@ export function MapDebugTools() {
    */
   const handleDownloadAllBinary = () => {
     for (const [key, tile] of tiles) {
-      const { grids } = tile;
-      const { layers } = grids;
+      const { channels } = tile.grids;
 
       // 채널들을 순회하며 각각 다운로드
-      for (const channel of Object.keys(layers) as Array<keyof GridLayers>) {
+      for (const channel of Object.keys(channels) as Array<
+        keyof TileChannels
+      >) {
         // 1. 바이너리 데이터 생성 (헤더 포함)
-        const binaryData = generateGridBinary(layers[channel]);
+        const binaryData = generateGridBinary(channels[channel]);
 
         // 2. 다운로드 실행
         // 파일명: tile_10:5_base.bin
@@ -38,21 +39,22 @@ export function MapDebugTools() {
   };
 
   /**
-   * 2. 레이어별 이미지 프리뷰 핸들러
+   * 2. 채널별 이미지 프리뷰 핸들러
    */
   const handleDownloadAllImages = () => {
     // Promise.all을 사용하여 모든 타일의 처리를 병렬로 진행할 수 있습니다.
     for (const [key, tile] of tiles) {
-      const { grids } = tile;
-      const { layers } = grids;
+      const { channels } = tile.grids;
 
       // 채널들을 순회하며 각각 다운로드
-      for (const channel of Object.keys(layers) as Array<keyof GridLayers>) {
+      for (const channelKey of Object.keys(channels) as Array<
+        keyof TileChannels
+      >) {
         // 1. 이미지 Blob 생성
-        exportGridImage(layers[channel], channel).then((blob) => {
+        exportGridImage(channels[channelKey], channelKey).then((blob) => {
           // 2. 다운로드 실행
           if (blob) {
-            triggerDownload(blob, `tile_${key}_${channel}.png`);
+            triggerDownload(blob, `tile_${key}_${channelKey}.png`);
           }
         });
       }
@@ -64,11 +66,10 @@ export function MapDebugTools() {
    */
   const handleDownloadMergedImages = () => {
     for (const [key, tile] of tiles) {
-      const { grids } = tile;
-      const { layers } = grids;
+      const { channels } = tile.grids;
 
       // 1. 합성 이미지 Blob 생성 (전체 채널 구조체 전달)
-      exportMergedGridImage(layers).then((blob) => {
+      exportMergedGridImage(channels).then((blob) => {
         // 2. 다운로드 실행
         if (blob) {
           triggerDownload(blob, `tile_${key}.png`);
@@ -100,7 +101,7 @@ export function MapDebugTools() {
           'bg-slate-800/80 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 active:scale-95',
         )}
       >
-        Preview Layers .PNG (x4)
+        Preview Channels .PNG (x4)
       </button>
 
       {/* ✨ [New Button] Merged Preview */}

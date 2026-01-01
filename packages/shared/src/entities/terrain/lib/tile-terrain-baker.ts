@@ -19,8 +19,8 @@ const {
  * @param options - tileSize(4096), cellSize(2), zScaleRatio(배율) 옵션
  * @returns Uint16Array - 각 셀의 복셀 층수(Index)가 담긴 1D 배열
  */
-export function bakeElevationGrid(points: Coord[]): Uint16Array {
-  const grid = new Uint16Array(resolution * resolution);
+export function bakeTileTerrain(points: Coord[]): Uint16Array {
+  const elevationGrid = new Uint16Array(resolution * resolution);
 
   // 복셀 한 칸의 실제 물리적 높이 (m)
   const voxelZUnit = cellSize * zScaleRatio;
@@ -33,7 +33,7 @@ export function bakeElevationGrid(points: Coord[]): Uint16Array {
       `[ElevationBaker] 포인트 데이터가 정사각 격자 형태가 아닙니다. Length: ${points.length}`,
     );
     // 빈 그리드 반환하여 렌더링 충돌 방지
-    return grid;
+    return elevationGrid;
   }
 
   // 2D 배열 접근을 위한 헬퍼 (포인트 클라우드 인덱싱)
@@ -89,9 +89,12 @@ export function bakeElevationGrid(points: Coord[]): Uint16Array {
        * Uint16(0~65535) 범위로 확장하여 저장합니다.
        * 값 '1'은 1층(voxelZUnit 미터)을 의미합니다.
        */
-      grid[gy * resolution + gx] = Math.max(0, Math.min(zIndex, 65535));
+      elevationGrid[gy * resolution + gx] = Math.max(
+        0,
+        Math.min(zIndex, 65535),
+      );
     }
   }
 
-  return grid;
+  return elevationGrid;
 }

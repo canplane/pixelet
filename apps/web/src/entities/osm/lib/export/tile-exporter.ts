@@ -1,12 +1,12 @@
 /**
  * @file tile-exporter.ts
- * 엔진 내부의 그리드 데이터(Uint8Array)를 시각적 이미지(PNG) 또는 바이너리(.bin)로 추출합니다.
+ * 엔진 내부의 채널 데이터(Uint8Array)를 시각적 이미지(PNG) 또는 바이너리(.bin)로 추출합니다.
  * 베이킹 엔진(Baker)에서 생성된 복셀 데이터가 실제 지형과 일치하는지 검증하는 용도입니다.
  *
  * [Refactor Note]
  * 1. VOXEL_TYPES/COLORS를 순회하여 색상 맵을 자동 생성합니다.
- * 2. GRID_LAYER_KEYS를 순회하여 Sea 레이어를 포함한 모든 레이어를 동적으로 합성합니다.
- * 3. [Update] Major(Layer)/Minor(Type) 위계 구조에 맞춰 레이어별 독립 색상 매핑을 지원합니다.
+ * 2. GRID_CHANNEL_KEYS를 순회하여 모든 채널을 동적으로 합성(Channeling)합니다.
+ * 3. [Update] Major(Channel)/Minor(Type) 위계 구조에 맞춰 채널별 독립 색상 매핑을 지원합니다.
  * 4. [Separation] 데이터 생성과 파일 저장(IO) 로직을 분리하여 범용성을 높였습니다.
  */
 
@@ -15,8 +15,8 @@ import {
   VOXEL_TYPES,
 } from '@pixelet/shared/entities/voxel/model/voxels';
 import {
-  GRID_LAYER_KEYS,
-  type GridLayers,
+  TILE_CHANNEL_KEYS,
+  type TileChannels,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
@@ -41,8 +41,8 @@ const hexToRgb = (hex: string): [number, number, number] => {
  * [getColorMap]
  * 🚀 [Automation] 복셀 타입별 정의된 색상을 매핑 테이블로 구축합니다.
  * voxels.ts에 정의된 모든 타입을 순회하므로 유지보수가 필요 없습니다.
- * 🎯 [Update] 레이어별 독립된 ID 네임스페이스를 지원하기 위해 2차원 맵을 반환합니다.
- * 결과 구조: { sea: { 2: [r,g,b] }, base: { 2: [r,g,b] }, ... }
+ * 🎯 [Update] 채널별 독립된 ID 네임스페이스를 지원하기 위해 2차원 맵을 반환합니다.
+ * 결과 구조: { water: { 2: [r,g,b] }, base: { 2: [r,g,b] }, ... }
  */
 const getColorMap = (): Record<
   string,
@@ -50,14 +50,14 @@ const getColorMap = (): Record<
 > => {
   const map: Record<string, Record<number, [number, number, number]>> = {};
 
-  // Major 카테고리(SEA, BASE, TRANSPORT 등)를 순회합니다.
+  // Major 카테고리(BASE, WATER, TRANSPORT 등)를 순회합니다.
   (Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]).forEach(
     (majorKey) => {
-      // COMMON은 스킵하고, 실제 레이어 키(sea, base 등)로 변환
+      // COMMON은 스킵하고, 실제 채널 키(water, base 등)로 변환
       if (majorKey === 'COMMON') return;
 
-      const layerKey = majorKey.toLowerCase();
-      map[layerKey] = {};
+      const channelKey = majorKey.toLowerCase();
+      map[channelKey] = {};
 
       const types = VOXEL_TYPES[majorKey] as Record<string, number>;
       const colors = VOXEL_COLORS[
@@ -70,7 +70,7 @@ const getColorMap = (): Record<
 
         // AIR(0)나 색상이 없는 경우 스킵
         if (hexColor && hexColor !== 'transparent') {
-          map[layerKey][typeId] = hexToRgb(hexColor);
+          map[channelKey][typeId] = hexToRgb(hexColor);
         }
       });
     },
@@ -114,16 +114,16 @@ async function drawToBlob(
 
 /**
  * [exportGridImage]
- * 단일 채널(예: Sea, Water) 그리드를 시각화하여 Blob으로 반환합니다.
- * 🎯 [Update] 레이어별 ID 스코핑을 위해 layerKey를 참조하도록 수정되었습니다.
+ * 단일 채널(예: Water, Transport) 그리드를 시각화하여 Blob으로 반환합니다.
+ * 🎯 [Update] 채널별 ID 스코핑을 위해 channelKey를 참조하도록 수정되었습니다.
  */
 export async function exportGridImage(
   grid: Uint8Array,
-  layerKey: keyof GridLayers,
+  channelKey: keyof TileChannels,
 ): Promise<Blob | null> {
   return drawToBlob((i, colorMap) => {
     const voxelValue = grid[i];
-    const layerColors = colorMap[layerKey] || {};
+    const channelColors = colorMap[channelKey] || {};
     const FALLBACK_RGB = colorMap.base[VOXEL_TYPES.BASE.BASE_LAND] || [
       242, 239, 233,
     ];
@@ -131,42 +131,42 @@ export async function exportGridImage(
     // 값이 없으면 검은색, 있으면 매핑된 색상, 매핑 없으면 기본 땅 색상 fallback
     // COMMON.UNKNOWN(1) 보다 커야 유효한 값으로 간주
     return voxelValue > VOXEL_TYPES.COMMON.UNKNOWN
-      ? layerColors[voxelValue] || FALLBACK_RGB
+      ? channelColors[voxelValue] || FALLBACK_RGB
       : [0, 0, 0];
   });
 }
 
 /**
  * [exportMergedGridImage]
- * 🚀 [Layer Automation] GRID_LAYER_KEYS에 정의된 모든 레이어를 합성하여 Blob으로 반환합니다.
+ * 🚀 [Channel Automation] TILE_CHANNEL_KEYS에 정의된 모든 채널을 합성하여 Blob으로 반환합니다.
  * 쉐이더의 Painter's Algorithm을 그대로 JS로 구현하여 최종 결과물을 시뮬레이션합니다.
  */
 export async function exportMergedGridImage(
-  layers: GridLayers,
+  channels: TileChannels,
 ): Promise<Blob | null> {
   return drawToBlob((i, colorMap) => {
     /**
      * [Painter's Algorithm 정교화]
-     * 0(AIR)으로 시작하여 GRID_LAYER_KEYS 순서대로 유효한 값을 덮어씌웁니다.
+     * 0(AIR)으로 시작하여 TILE_CHANNEL_KEYS 순서대로 유효한 값을 덮어씌웁니다.
      */
     let finalRgb: [number, number, number] | null = null;
     const FALLBACK_RGB = colorMap.base[VOXEL_TYPES.BASE.BASE_LAND] || [
       242, 239, 233,
     ];
 
-    for (const key of GRID_LAYER_KEYS) {
-      const val = layers[key][i];
-      // UNKNOWN(1)보다 큰 유효한 데이터가 있을 때만 해당 레이어 값으로 갱신
+    for (const key of TILE_CHANNEL_KEYS) {
+      const val = channels[key][i];
+      // UNKNOWN(1)보다 큰 유효한 데이터가 있을 때만 해당 채널 값으로 갱신
       if (val > VOXEL_TYPES.COMMON.UNKNOWN) {
-        // 🎯 핵심: 값(val)뿐만 아니라 레이어(key) 정보도 함께 사용하여 2차원 맵에서 색상을 찾습니다.
-        const layerColor = colorMap[key]?.[val];
-        if (layerColor) finalRgb = layerColor;
+        // 🎯 핵심: 값(val)뿐만 아니라 채널(key) 정보도 함께 사용하여 2차원 맵에서 색상을 찾습니다.
+        const channelColor = colorMap[key]?.[val];
+        if (channelColor) finalRgb = channelColor;
       }
     }
 
     /**
      * 최종 색상 결정
-     * 모든 레이어를 검사했는데도 데이터가 없다면(AIR/UNKNOWN),
+     * 모든 채널을 검사했는데도 데이터가 없다면(AIR/UNKNOWN),
      * 시각적 결손 방지를 위해 BASE_LAND 색상을 적용합니다.
      */
     return finalRgb || FALLBACK_RGB;

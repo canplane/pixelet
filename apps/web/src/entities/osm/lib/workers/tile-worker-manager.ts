@@ -1,6 +1,6 @@
 import OsmWorker from './osm.worker?worker'; // 🎯 Vite 전용 워커 임포트
 
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
+import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
 import type {
   TileWorkerInput,
   TileWorkerResponse,
@@ -18,11 +18,11 @@ import {
  */
 interface TaskCallbacks {
   /** [Deduplication] 중복 요청 시 기존 Promise를 반환하여 리소스 낭비를 방지합니다. */
-  promise: Promise<GeometryTile>;
-  resolve: (data: GeometryTile) => void;
+  promise: Promise<Tile>;
+  resolve: (data: Tile) => void;
   reject: (error: any) => void;
   /** [Progressive Update] 데이터 가공 단계별(지형 -> 건물 등) 콜백 */
-  onProgress?: (data: Partial<GeometryTile>) => void;
+  onProgress?: (data: Partial<Tile>) => void;
 }
 
 /**
@@ -65,7 +65,7 @@ class TileWorkerManager {
         case 'complete':
           // 최종 완료: 데이터 전달 후 콜백 맵에서 삭제 (메모리 관리)
           if (data) {
-            callback.resolve(data as GeometryTile);
+            callback.resolve(data as Tile);
             this.callbacks.delete(requestId);
           }
           break;
@@ -98,14 +98,13 @@ class TileWorkerManager {
    * @param onProgress - 부분 데이터 수신 시 콜백
    */
   public async requestTile(
-    coord: TileCoord,
-    onProgress?: (data: Partial<GeometryTile>) => void,
-  ): Promise<GeometryTile> {
-    const requestId = getTileKey(coord);
-
-    // 1. 중복 요청 확인 (Deduplication)
-    if (this.callbacks.has(requestId)) {
-      return this.callbacks.get(requestId)!.promise;
+    key: string, // 1. Map 조회용 (Dedup)
+    coord: TileCoord, // 2. Worker 전달용 (Payload)
+    onProgress?: (data: Partial<Tile>) => void,
+  ): Promise<Tile> {
+    // 1. 중복 요청 확인 (key 사용 -> 연산 비용 0)
+    if (this.callbacks.has(key)) {
+      return this.callbacks.get(key)!.promise;
     }
 
     // [중요] 동시 요청 시 서버 부하 분산을 위해 약 50~100ms의 시차를 줍니다.
@@ -113,32 +112,28 @@ class TileWorkerManager {
     await delay(Math.random() * 100);
 
     // 2. Promise 제어권 추출
-    let resolveFn: (data: GeometryTile) => void;
+    let resolveFn: (data: Tile) => void;
     let rejectFn: (error: any) => void;
 
-    const promise = new Promise<GeometryTile>((resolve, reject) => {
+    const promise = new Promise<Tile>((resolve, reject) => {
       resolveFn = resolve;
       rejectFn = reject;
     });
 
-    // 3. 콜백 등록
-    this.callbacks.set(requestId, {
+    // 2. 콜백 등록 (key 사용)
+    this.callbacks.set(key, {
       promise,
       resolve: resolveFn!,
       reject: rejectFn!,
       onProgress,
     });
 
-    // 4. [주입] 워커에게 보낼 구조화된 데이터 생성
-    // 메인 스레드의 최신 설정을 스냅샷으로 전달하여 워커의 순수성을 유지합니다.
+    // 3. 워커 메시지 전송 (coord 사용 -> 파싱 비용 0)
     const input: TileWorkerInput = {
+      key,
       coord,
-      options: {
-        serviceMode: SERVICE_MODE,
-      },
-      meta: {
-        requestId,
-      },
+      options: { serviceMode: SERVICE_MODE },
+      meta: { requestId: key },
     };
 
     this.worker?.postMessage(input);

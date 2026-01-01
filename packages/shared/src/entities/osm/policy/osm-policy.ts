@@ -11,8 +11,8 @@
 
 import type { OsmTags } from '@pixelet/shared/entities/osm/model/osm-source';
 import type { OsmExtra } from '@pixelet/shared/entities/osm/model/osm-feature';
-import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels'; // 복셀 타입 import
-import type { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
+import { VOXEL_TYPES } from '@pixelet/shared/entities/voxel/model/voxels';
+import type { TileChannels } from '@pixelet/shared/entities/osm/model/tiles';
 
 // 🔥 [Helper] 태그 존재 여부 및 포함 여부를 안전하게 체크
 const checkTag = (tagValue: string | undefined, targets: string[]) => {
@@ -160,16 +160,14 @@ function determineRailwayVoxel(tags: OsmTags): number {
  * 📂 [Category Determination]
  * 태그의 우선순위(Priority)에 따라 지형지물의 타입을 결정합니다.
  *
- * * [Priority Order]
- * 0. 🌊 Sea (바다) - 최하단 배경 (Static Layer)
- * 1. 🏢 Structure (건물, 구조물) - 가장 중요
- * 2. 💧 Water (수계) - 지형의 기초
- * 3. 📍 POI (장소) - 랜드마크
- * 4. 🛣️ Road (교통) - 네트워크
- * 5. 🌲 Nature (자연) - 배경
+ * * [Priority Order] (Auto-Generated Channeling Order)
+ * 1. 💧 Water (수계) - 배경 및 기초
+ * 2. 🏔️ Base (지형) - 땅, 자연, 구역
+ * 3. 🛣️ Transport (교통) - 도로망
+ * 4. 🏢 Structure (구조물) - 건물
  */
 export const determineOsmCategory = (tags: OsmTags): string => {
-  // 0. 🌊 OCEAN (최우선 순위 배경)
+  // 0. 🌊 OCEAN (최우선 순위 배경 -> Water Channel)
   if (
     tags.natural === 'coastline' ||
     tags.natural === 'ocean' ||
@@ -179,7 +177,7 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     return 'sea';
   }
 
-  // 1. 🏢 STRUCTURE
+  // 1. 🏢 STRUCTURE (Detection Priority: High)
   if (
     tags.building ||
     tags['building:part'] ||
@@ -216,9 +214,9 @@ export const determineOsmCategory = (tags: OsmTags): string => {
   // 3.5 ✈️ AEROWAY (공항 분류 세분화)
   if (tags.aeroway) {
     if (['apron', 'aerodrome', 'helipad'].includes(tags.aeroway)) {
-      return 'landuse'; // 면(Area)으로 그려질 배경 요소
+      return 'landuse'; // 면(Area)으로 그려질 배경 요소 -> Base Channel
     }
-    return 'road'; // 선(Line)으로 그려질 교통망 (Runway, Taxiway)
+    return 'road'; // 선(Line)으로 그려질 교통망 (Runway, Taxiway) -> Transport Channel
   }
 
   // 4. 🛣️ TRANSPORT
@@ -226,7 +224,7 @@ export const determineOsmCategory = (tags: OsmTags): string => {
     return 'road';
   }
 
-  // 5. 🌲 NATURAL / FOREST (지형 배경)
+  // 5. 🌲 NATURAL / FOREST (Base Channel)
   if (
     tags.landuse === 'forest' ||
     tags.leisure === 'nature_reserve' ||
@@ -256,7 +254,6 @@ export const determineOsmCategory = (tags: OsmTags): string => {
  * * [Logic: Width]
  * 1. width 태그 존재 시 최우선 사용
  * 2. lanes 태그 존재 시 lanes * 3.5m 적용
- * 3. 둘 다 없으면 highway 타입에 따른 기본 차선 수(DEFAULT_LANES_BY_HIGHWAY) * 3.5m 적용
  */
 export const computeOsmMetrics = (
   tags: OsmTags,
@@ -311,11 +308,9 @@ export const computeOsmMetrics = (
   }
 
   // --- 3. 🪜 Layer Calculation ---
-  // 바다는 항상 최하단이므로 layer가 없으면 -5 정도로 기본값을 낮출 수도 있습니다.
   const baseLayer = category === 'sea' ? -5 : 0;
   const layer = parseInt(tags.layer || baseLayer.toString(), 10);
 
-  // NaN 방지 및 음수 높이 방어
   return {
     height: Math.max(0, isNaN(height) ? 0 : height),
     width: Math.max(0, isNaN(width) ? 0 : width),
@@ -325,8 +320,6 @@ export const computeOsmMetrics = (
 
 /**
  * 🔗 [Geometry Helper]
- * 기하학적으로 열려 있어도(LineString), 속성상 면(Polygon)으로 닫아서
- * 렌더링해야 하는지 여부를 판별합니다.
  */
 export const shouldForceClosed = (tags: OsmTags): boolean => {
   return (
@@ -393,14 +386,15 @@ function calculateOsmRank(
   tags: OsmTags,
   flags: { isInstitutional: boolean; isOcean: boolean },
 ): number {
-  let score = 10; // Base score
+  let score = 10; // Base score (Base Land가 보통 10점을 가짐)
 
   // 1. 🗂️ 카테고리별 가중치
+  if (category === 'water') score = 5; // 5점 -> Base(10점)보다 먼저 그려짐
+
   if (category === 'poi') score += 50;
   if (category === 'building' && tags.name) score += 20;
-  if (category === 'water') score += 15;
 
-  // 2. 🛣️ 도로 위계별 가중치 (🔥 다시 중요도 순으로 복귀)
+  // 2. 🛣️ 도로 위계별 가중치
   if (category === 'road') {
     const h = tags.highway || '';
 
@@ -437,59 +431,76 @@ function calculateOsmRank(
   // 5. 📝 정보 가시성 보정
   if (tags.name) score += 20;
 
-  // 🔥 [FIX] 8-bit Clamp 제거 유지
   // 층위 표현을 위해 255 초과 허용
   return score;
 }
 
 // =============================================================================
 // SECTION 3. [Voxel Policy] 🎨 복셀 시각화 정책 (Baker 연동)
-// * OSM 데이터를 어떤 복셀 타입(Color)과 레이어(Layer)로 그릴지 결정합니다.
+// * OSM 데이터를 어떤 복셀 타입(Color)과 채널(Channel)로 그릴지 결정합니다.
 // =============================================================================
 
 /**
  * 🎨 [Voxel Configuration]
- * 결정된 복셀 타입과 타겟 레이어 정보
+ * 결정된 복셀 타입과 타겟 채널 정보
  */
 export interface VoxelConfig {
   voxelType: number;
-  layerKey: keyof GridLayers;
+  channelKey: keyof TileChannels;
 }
 
 /**
- * [Main Policy] Feature의 속성을 분석하여 그릴 복셀 타입과 타겟 레이어를 반환합니다.
+ * [Main Policy] Feature의 속성을 분석하여 그릴 복셀 타입과 타겟 채널을 반환합니다.
  * @returns 설정값이 없으면 null 반환 (렌더링 스킵)
+ *
+ * [Channeling Strategy]
+ * Detection(파싱) 순서는 구체적(Road/Building) -> 포괄적(Base) 순으로 진행하지만,
+ * 렌더링(Layering) 순서는 Water -> Base -> Transport -> Structure 입니다.
+ * 아래 주석 번호(1~4)는 렌더링 패스(Channel Index)를 의미합니다.
  */
 export const determineVoxelConfig = (
   category: string,
   tags: OsmTags,
   extra: OsmExtra,
 ): VoxelConfig | null => {
-  // 1. 🌊 Sea Layer (최우선 Pass)
+  // 1. 💧 Water Channel (Pass 1 - Bottom)
+
+  // (1) 바다 (Sea) 판별
   if (extra.isOcean || category === 'sea') {
-    return { voxelType: VOXEL_TYPES.WATER.WATER, layerKey: 'sea' };
+    return { voxelType: VOXEL_TYPES.WATER.SEA, channelKey: 'water' };
   }
 
-  // 2. 💧 Water Layer
-  if (category === 'water' || tags.waterway || tags.natural === 'water') {
-    return { voxelType: VOXEL_TYPES.SEA.WATER, layerKey: 'water' };
+  // (2) 내륙 수계 (Inland Water) 판별
+  // 바다가 아니면서 water 속성을 가진 것들
+  if (
+    category === 'water' ||
+    tags.waterway ||
+    tags.natural === 'water' ||
+    tags.landuse === 'reservoir' ||
+    tags.landuse === 'basin'
+  ) {
+    return { voxelType: VOXEL_TYPES.WATER.INLAND_WATER, channelKey: 'water' };
   }
 
-  // 3. 🛣️ Transport Layer
+  // 3. 🛣️ Transport Channel (Pass 3)
+  // [Note] Detection Priority 문제로 Base보다 먼저 체크하지만, 렌더링 순서는 Base 위입니다.
   if (
     category === 'road' ||
     tags.highway ||
     tags.railway ||
     category === 'parking'
   ) {
-    // ✈️ (0) 공항 활주로/유도로 (최우선)
+    // ✈️ (0) 공항 활주로/유도로
     if (tags.aeroway === 'runway') {
-      return { voxelType: VOXEL_TYPES.TRANSPORT.RUNWAY, layerKey: 'transport' };
+      return {
+        voxelType: VOXEL_TYPES.TRANSPORT.RUNWAY,
+        channelKey: 'transport',
+      };
     }
     if (tags.aeroway === 'taxiway' || tags.aeroway === 'taxilane') {
       return {
         voxelType: VOXEL_TYPES.TRANSPORT.TAXIWAY,
-        layerKey: 'transport',
+        channelKey: 'transport',
       };
     }
 
@@ -497,13 +508,13 @@ export const determineVoxelConfig = (
     if (extra.isParking) {
       return {
         voxelType: VOXEL_TYPES.TRANSPORT.PARKING,
-        layerKey: 'transport',
+        channelKey: 'transport',
       };
     }
     // (2) 철도
     if (tags.railway) {
       const railwayType = determineRailwayVoxel(tags);
-      return { voxelType: railwayType, layerKey: 'transport' };
+      return { voxelType: railwayType, channelKey: 'transport' };
     }
     // (3) 보행자 도로
     if (
@@ -513,16 +524,16 @@ export const determineVoxelConfig = (
     ) {
       return {
         voxelType: VOXEL_TYPES.TRANSPORT.PEDESTRIAN,
-        layerKey: 'transport',
+        channelKey: 'transport',
       };
     }
 
     // 🎯 (4) 일반 도로: 위계(Hierarchy)에 따른 색상 분기
     const roadType = determineRoadVoxel(tags.highway || '');
-    return { voxelType: roadType, layerKey: 'transport' };
+    return { voxelType: roadType, channelKey: 'transport' };
   }
 
-  // 4. 🏢 Structure Layer
+  // 4. 🏢 Structure Channel (Pass 4 - Top)
   if (category === 'building' || tags.building) {
     // (1) 🚉 교통 시설 (Station)
     // building 태그 자체가 'train_station'인 경우도 체크해야 함
@@ -536,7 +547,7 @@ export const determineVoxelConfig = (
     ) {
       return {
         voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_STATION,
-        layerKey: 'structure',
+        channelKey: 'structure',
       };
     }
 
@@ -548,7 +559,7 @@ export const determineVoxelConfig = (
     ) {
       return {
         voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_MEDICAL,
-        layerKey: 'structure',
+        channelKey: 'structure',
       };
     }
 
@@ -569,7 +580,7 @@ export const determineVoxelConfig = (
     ) {
       return {
         voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_EDUCATION,
-        layerKey: 'structure',
+        channelKey: 'structure',
       };
     }
 
@@ -577,27 +588,30 @@ export const determineVoxelConfig = (
     if (extra.isInstitutional) {
       return {
         voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_PUBLIC,
-        layerKey: 'structure',
+        channelKey: 'structure',
       };
     }
 
     // (5) 일반 건물
-    return { voxelType: VOXEL_TYPES.STRUCTURE.BUILDING, layerKey: 'structure' };
+    return {
+      voxelType: VOXEL_TYPES.STRUCTURE.BUILDING,
+      channelKey: 'structure',
+    };
   }
 
-  // 5. 🏔️ Base Land Layer (복합 로직)
-  // 카테고리 매핑 -> 상세 태그 매핑 순으로 결정
+  // 2. 🏔️ Base Land Channel (Pass 2)
+  // [Note] 'Specific First, General Last' 파싱 규칙에 따라 마지막에 체크하지만,
+  // 논리적으로는 Water 바로 위, Transport 아래에 위치합니다.
   const baseType = resolveBaseVoxelType(category, tags, extra);
   if (baseType) {
-    return { voxelType: baseType, layerKey: 'base' };
+    return { voxelType: baseType, channelKey: 'base' };
   }
 
   return null; // 렌더링 대상 아님
 };
 
 /**
- * [Internal Helper] Base Layer의 상세 복셀 타입 결정
- * (기존 Baker에 있던 resolveBaseVoxelType 로직 이관)
+ * [Internal Helper] Base Channel의 상세 복셀 타입 결정
  */
 function resolveBaseVoxelType(
   category: string,

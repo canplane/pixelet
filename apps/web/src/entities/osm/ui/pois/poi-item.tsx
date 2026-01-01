@@ -8,7 +8,8 @@ import React, {
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
-import { useMapStore, type MapState } from '../../model/map-store';
+import { useMapStore } from '../../model/map-store';
+import { useTileStore, type TileState } from '@/entities/osm/model/tile-store';
 import { useMapNavigation } from '../../model/use-map-navigation';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { THREE_CONFIG } from '../../config/three-config';
@@ -81,15 +82,15 @@ export const PoiItem = React.memo(
     );
     // useCallback으로 Selector 참조를 유지하여 불필요한 구독 갱신 방지
     const isTileLoadedSelector = useCallback(
-      (state: MapState) => state.tiles.has(tileKey),
+      (state: TileState) => state.tiles.has(tileKey),
       [tileKey],
     );
-    const isTileLoaded = useMapStore(isTileLoadedSelector);
+    const isTileLoaded = useTileStore(isTileLoadedSelector);
 
     // 1-2. [Height Calculation] 지형 높이 샘플링 (O(1))
     // 타일이 로드되면 높이를 재계산하여 바닥에 붙는 현상 방지
     const terrainHeight = useMemo(() => {
-      const tiles = useMapStore.getState().tiles;
+      const tiles = useTileStore.getState().tiles;
       return getTerrainAltitude(VOXEL_CONFIG.toCenter(poi.center), tiles);
     }, [poi.center.x, poi.center.y, isTileLoaded]);
 

@@ -1,11 +1,7 @@
 import { create } from 'zustand';
 
-// 1. 수학 및 투영 유틸리티
-import { projection } from '@pixelet/shared/shared/lib/map/projection';
-
 // 2. 기초 타입 (Coord 등)
 import type { Coord } from '@pixelet/shared/shared/model/coords';
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
 
 // 3. OSM 관련 로직 및 도메인 타입
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
@@ -16,10 +12,6 @@ import type { ThemeKey } from '@/features/map-three/model/world-themes';
 // 5. 현재 패키지(web) 내부 설정
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '../config/three-config';
-import {
-  getTileKey,
-  type TileCoord,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 
@@ -61,20 +53,6 @@ export interface MapState {
   /** [progressive-loading] 단계별 로딩 상태 (도로 -> POI -> 완료) */
   loadingStep: 'roads' | 'poi' | 'complete' | null;
   setLoadingStep: (loadingStep: MapState['loadingStep']) => void;
-
-  // --- [Tile Data Management] ---
-  /** 현재 메모리에 로드된 타일 데이터 저장소 (Key: "tx:ty") */
-  tiles: Map<string, GeometryTile>;
-  /**
-   * [set-geometry-tile] (Partial Update Supported)
-   * 타일 데이터를 새로 추가하거나, 이미 존재하는 타일에 데이터를 병합(Merge)합니다.
-   * 예: Worker로부터 지형 데이터 수신 후, 나중에 POI 데이터 수신 시 병합
-   */
-  setGeometryTile: (coord: TileCoord, tile: Partial<GeometryTile>) => void;
-  /** 특정 타일을 메모리에서 즉시 해제합니다. */
-  removeGeometryTile: (key: string) => void;
-  /** 가시 범위 밖의 불필요한 타일들을 일괄 정리(GC)합니다. */
-  clearOldTiles: (neededKeys: string[]) => void;
 
   // --- [Navigation & Coordinate] ---
   /** [center-position] 카메라가 현재 바라보고 있는 절대적 중심 좌표 (Target) */
@@ -141,63 +119,6 @@ export const useMapStore = create<MapState>((set, get) => ({
   setStatus: (status) => set({ status }),
   loadingStep: null,
   setLoadingStep: (loadingStep) => set({ loadingStep }),
-
-  tiles: new Map(),
-
-  /**
-   * [set-geometry-tile]
-   * 타일 데이터를 저장하거나 부분 업데이트를 수행합니다.
-   */
-  setGeometryTile: (coord, partialTile) =>
-    set((state) => {
-      const key = getTileKey(coord);
-      const newMap = new Map(state.tiles);
-      const existingTile = newMap.get(key);
-
-      if (existingTile) {
-        // [merge-strategy] 기존 타일 병합 (Shallow Merge)
-        newMap.set(key, {
-          ...existingTile,
-          ...partialTile,
-        });
-      } else {
-        // [new-tile-validation] 신규 생성 시 필수 데이터 무결성 검사
-        // grids가 반드시 존재해야 유효한 타일로 간주합니다.
-        if (partialTile.grids) {
-          newMap.set(key, partialTile as GeometryTile);
-        } else {
-          console.warn(
-            `[MapStore] Incomplete tile data received for ${key}`,
-            partialTile,
-          );
-        }
-      }
-      return { tiles: newMap };
-    }),
-
-  removeGeometryTile: (key) =>
-    set((state) => {
-      const newMap = new Map(state.tiles);
-      newMap.delete(key);
-      return { tiles: newMap };
-    }),
-
-  /**
-   * [clear-old-tiles]
-   * 현재 가시 범위(neededKeys)에 포함되지 않는 타일들을 제거하여 메모리를 확보합니다.
-   */
-  clearOldTiles: (neededKeys) =>
-    set((state) => {
-      const newMap = new Map(state.tiles);
-      let changed = false;
-      newMap.forEach((_, key) => {
-        if (!neededKeys.includes(key)) {
-          newMap.delete(key);
-          changed = true;
-        }
-      });
-      return changed ? { tiles: newMap } : state;
-    }),
 
   center: null,
   setCenter: (pos) => set({ center: pos }),

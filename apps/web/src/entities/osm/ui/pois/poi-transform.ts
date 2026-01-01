@@ -1,10 +1,11 @@
 import { type Coord2D } from '@pixelet/shared/shared/model/coords';
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
+import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import {
   getTileCoord,
   getTileKey,
-  getTileLocalGridIdx,
+  absPosToTileOffset,
+  tileOffsetToCellIdx,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 const { CELL_SIZE, Z_SCALE_RATIO, TILE_RESOLUTION } = OSM_CONSTANTS;
@@ -19,7 +20,7 @@ const { CELL_SIZE, Z_SCALE_RATIO, TILE_RESOLUTION } = OSM_CONSTANTS;
  */
 export function getTerrainAltitude(
   absPos: Coord2D,
-  tiles: Map<string, GeometryTile>,
+  tiles: Map<string, Tile>,
 ): number {
   // 1. 타일 찾기
   const coord = getTileCoord(absPos);
@@ -28,14 +29,14 @@ export function getTerrainAltitude(
 
   if (!tile) return 0; // 데이터 없으면 해수면(0m) 처리
 
-  // 3. 그리드 인덱스 변환 (새로 만든 tile-utils 활용)
-  const { gx, gy } = getTileLocalGridIdx(absPos, coord);
+  // 3. 셀 인덱스 변환
+  const { cx, cy } = tileOffsetToCellIdx(absPosToTileOffset(absPos));
 
   // 4. 범위 방어 코드 (Boundary Check)
-  if (gx < 0 || gx >= TILE_RESOLUTION || gy < 0 || gy >= TILE_RESOLUTION)
+  if (cx < 0 || cx >= TILE_RESOLUTION || cy < 0 || cy >= TILE_RESOLUTION)
     return 0;
 
   // 5. 높이 샘플링 및 스케일 적용
-  const index = gy * TILE_RESOLUTION + gx;
+  const index = cy * TILE_RESOLUTION + cx;
   return (tile.grids.terrain.elevation[index] || 0) * CELL_SIZE * Z_SCALE_RATIO;
 }

@@ -77,15 +77,15 @@ echo '✅ DB is ready!'
 각 스크립트는 내부적으로 루트(`.env`)의 환경 변수를 로드하여 인증 및 접속 정보를 처리합니다.
 
 ```bash
-# [Layer 1] OSM Features (도로, 건물 등) 구축
+# [Channel 1] OSM Features (도로, 건물 등) 구축
 chmod +x infra/geo/osm-features/scripts/setup-osm-features.sh
 ./infra/geo/osm-features/scripts/setup-osm-features.sh
 
-# [Layer 2] ESA Elevation (고도 정보) 구축
+# [Channel 2] ESA Elevation (고도 정보) 구축
 chmod +x infra/geo/esa-elevation/scripts/setup-esa-elevation.sh
 ./infra/geo/esa-elevation/scripts/setup-esa-elevation.sh
 
-# [Layer 3] OSM Coastline (해안선/해수면) 구축
+# [Channel 3] OSM Coastline (해안선/해수면) 구축
 chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 ./infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 ```

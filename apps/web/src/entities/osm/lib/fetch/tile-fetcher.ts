@@ -7,8 +7,8 @@
  * 3. 클라이언트 측에서 origin을 재계산하여 서버-클라이언트 간의 미세한 좌표 오차를 방지합니다.
  */
 
-import type { GeometryTile } from '@pixelet/shared/entities/osm/model/tiles';
-import type { GeometryTileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
+import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
+import type { TileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
 import { buildExternalTile } from './tile-external-builder';
@@ -27,7 +27,7 @@ const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
  * [Helper] LOCAL 모드: 서버에서 이미 베이킹이 완료된 타일 데이터를 획득합니다.
  * @param coord - 타일 인덱스 {tx, ty}
  */
-async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
+async function requestServerTile(coord: TileCoord): Promise<Tile> {
   const { tx, ty } = coord;
 
   const rawKey = `baked:${tx}:${ty}:${resolution}`;
@@ -52,7 +52,7 @@ async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
         throw new Error(`Local Tile Fetch Failed: HTTP ${response.status}`);
       }
 
-      const dto: GeometryTileDto = await response.json(); // 🎯 DTO 수신
+      const dto: TileDto = await response.json(); // 🎯 DTO 수신
 
       // 🚀 병렬로 모든 압축 해제 및 객체 복원
       const [grids, pois] = await Promise.all([
@@ -61,8 +61,8 @@ async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
       ]);
 
       // [Memory Optimization] 필요한 필드만 정제하여 반환
-      const { coord } = dto;
-      return { coord, grids, pois };
+      const { key, coord } = dto;
+      return { key, coord, grids, pois };
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -86,8 +86,8 @@ async function requestServerTile(coord: TileCoord): Promise<GeometryTile> {
 export async function fetchTile(
   coord: TileCoord,
   options: TileWorkerInput['options'],
-  onProgress?: (partialTile: GeometryTile) => void,
-): Promise<GeometryTile> {
+  onProgress?: (partialTile: Tile) => void,
+): Promise<Tile> {
   const { serviceMode } = options;
 
   /**

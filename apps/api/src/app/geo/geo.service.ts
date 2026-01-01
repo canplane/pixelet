@@ -13,13 +13,14 @@ import { OsmAdapter } from './osm-adapter';
 import {
   createEmptyGrids,
   getTileBbox,
+  getTileKey,
   TileCoord,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import { GridLayers } from '@pixelet/shared/entities/osm/model/tiles';
-import { GeometryTileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
+import { TileChannels } from '@pixelet/shared/entities/osm/model/tiles';
+import { TileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
 import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/osm-feature-normalizer';
 import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
-import { bakeElevationGrid } from '@pixelet/shared/entities/terrain/lib/elevation-baker';
+import { bakeTileTerrain } from '@pixelet/shared/entities/terrain/lib/tile-terrain-baker';
 import { packTileGrids } from '@pixelet/shared/entities/osm/compression/tile-grid-packer';
 import { packVector } from '@pixelet/shared/entities/osm/compression/vector-packer';
 
@@ -31,10 +32,11 @@ export class GeoService {
   ) {}
 
   /**
-   * [createGeometryTile]
+   * [createTile]
    * 타일 좌표에 대해 바다(Sea), 육지(Land), 지형(Terrain)을 포함한 압축 데이터를 생성합니다.
    */
-  async createGeometryTile(coord: TileCoord): Promise<GeometryTileDto> {
+  async createTile(coord: TileCoord): Promise<TileDto> {
+    const key = getTileKey(coord);
     const bbox = getTileBbox(coord);
 
     // ----------------------------------------------------------------------
@@ -49,7 +51,7 @@ export class GeoService {
     // ----------------------------------------------------------------------
     // 3. [Terrain Baking] 16-bit 고도 맵 생성
     // ----------------------------------------------------------------------
-    const elevationGrid = bakeElevationGrid(elevationPoints);
+    const elevationGrid = bakeTileTerrain(elevationPoints);
 
     // ----------------------------------------------------------------------
     // 4. [Transformation] 데이터 정규화 파이프라인
@@ -79,7 +81,7 @@ export class GeoService {
     // ----------------------------------------------------------------------
     // 5. [Geometry Processing] 벡터 및 래스터 생성
     // ----------------------------------------------------------------------
-    const { pois, partialLayers } = assembleTile(coord, allFeatures);
+    const { pois, partialChannels } = assembleTile(coord, allFeatures);
 
     // ----------------------------------------------------------------------
     // 6. [Assembly & Compression] 최종 조립 및 패킹
@@ -88,15 +90,18 @@ export class GeoService {
 
     finalGrids.terrain.elevation = elevationGrid;
 
-    // sea 채널을 포함한 모든 partialLayers 병합
-    // Terrain(16-bit) + Layers(8-bit)
-    (Object.keys(partialLayers) as (keyof GridLayers)[]).forEach((channel) => {
-      if (finalGrids.layers[channel] && partialLayers[channel]) {
-        finalGrids.layers[channel].set(partialLayers[channel]);
-      }
-    });
+    // sea 채널을 포함한 모든 partialChannels 병합
+    // Terrain(16-bit) + Channels(8-bit)
+    (Object.keys(partialChannels) as (keyof TileChannels)[]).forEach(
+      (channelKey) => {
+        if (finalGrids.channels[channelKey] && partialChannels[channelKey]) {
+          finalGrids.channels[channelKey].set(partialChannels[channelKey]);
+        }
+      },
+    );
 
     return {
+      key,
       coord,
       // 🚀 Grids: 단일 바이너리 스트림으로 통합 패킹 (SoA + Gzip)
       grids: packTileGrids(finalGrids, gzipSync),

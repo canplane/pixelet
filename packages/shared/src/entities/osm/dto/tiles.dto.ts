@@ -6,10 +6,11 @@
 import type { TileCoord } from '../lib/utils/tile-utils';
 
 /**
- * [GeometryTileDto]
+ * [TileDto]
  * 바이너리 격자 데이터가 Gzip + Base64로 인코딩된 전송 객체입니다.
  */
-export interface GeometryTileDto {
+export interface TileDto {
+  key: string;
   coord: TileCoord;
   grids: string; // 압축
   pois: string; // 압축

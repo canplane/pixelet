@@ -57,19 +57,4 @@ export const VOXEL_CONFIG = {
       z: Math.floor(pos.z / S) * S, // 고도 스냅
     };
   },
-
-  /**
-   * [grid-to-world]
-   * 🚀 정수 인덱스(그리드 번호)를 월드 미터 좌표(큐브의 정중앙)로 변환합니다.
-   * 💡 결과: { x, y, z } (y는 북향 미터, z는 고도 미터)
-   */
-  gridToWorld: (gx: number, gy: number, gz: number): Coord => {
-    const S = 4.0;
-    const H = 2.0;
-    return {
-      x: gx * S + H,
-      y: gy * S + H, // 남북 방향 중심점
-      z: gz * S + H, // 고도 방향 중심점
-    };
-  },
 } as const;

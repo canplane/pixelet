@@ -5,13 +5,13 @@
  */
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
-// 🎯 [Refactor] tiles.ts에서 SSOT(GRID_LAYER_KEYS, GRID_TERRAIN_KEYS)를 가져옵니다.
+// 🎯 [Refactor] tiles.ts에서 SSOT(TILE_CHANNEL_KEYS, TILE_TERRAIN_KEYS)를 가져옵니다.
 import {
-  GRID_LAYER_KEYS,
-  GRID_TERRAIN_KEYS,
+  TILE_CHANNEL_KEYS,
+  TILE_TERRAIN_KEYS,
   type TileGrids,
-  type GridLayers,
-  type GridTerrain,
+  type TileChannels,
+  type TileTerrain,
 } from '../model/tiles';
 import { decompressBase64 } from './compression-utils';
 
@@ -25,31 +25,31 @@ export const packTileGrids = (
   grids: TileGrids,
   gzipSync: (buf: Uint8Array, opt?: any) => any,
 ): string => {
-  const { layers, terrain } = grids;
+  const { channels, terrain } = grids;
 
-  // [Safety] sea 레이어 등이 누락되었을 경우를 대비해 layers.base 기준으로 해상도 산출
-  const resolutionSq = layers.base.length;
+  // [Safety] water 채널 등이 누락되었을 경우를 대비해 channels.base 기준으로 해상도 산출
+  const resolutionSq = channels.base.length;
 
   // 1. Calculate Total Size (Dynamic based on SSOT)
-  // 8-bit Layers Total Size
-  const layersByteSize = resolutionSq * GRID_LAYER_KEYS.length;
+  // 8-bit Channels Total Size
+  const channelsByteSize = resolutionSq * TILE_CHANNEL_KEYS.length;
   // 16-bit Terrain Total Size (2 bytes per cell)
-  const terrainByteSize = resolutionSq * 2 * GRID_TERRAIN_KEYS.length;
+  const terrainByteSize = resolutionSq * 2 * TILE_TERRAIN_KEYS.length;
 
-  const totalSize = layersByteSize + terrainByteSize;
+  const totalSize = channelsByteSize + terrainByteSize;
   const combined = new Uint8Array(totalSize);
 
   let offset = 0;
 
-  // 2. Pack 8-bit Layers (Sea -> Base -> Water -> Transport -> Structure)
-  for (const key of GRID_LAYER_KEYS) {
-    const data = layers[key];
+  // 2. Pack 8-bit Channels (Base -> Water -> Transport -> Structure)
+  for (const key of TILE_CHANNEL_KEYS) {
+    const data = channels[key];
     combined.set(data, offset);
     offset += resolutionSq;
   }
 
   // 3. Pack 16-bit Terrain (Height)
-  for (const key of GRID_TERRAIN_KEYS) {
+  for (const key of TILE_TERRAIN_KEYS) {
     const data = terrain[key]; // Uint16Array
     // Uint16Array -> Uint8Array View 변환 후 복사 (Endianness: System default, usually LE)
     combined.set(new Uint8Array(data.buffer), offset);
@@ -73,17 +73,17 @@ export const unpackTileGrids = async (
   const resolutionSq = resolution * resolution;
   let offset = 0;
 
-  // 1. Unpack Layers
-  const layers = {} as GridLayers;
-  for (const key of GRID_LAYER_KEYS) {
+  // 1. Unpack Channels
+  const channels = {} as TileChannels;
+  for (const key of TILE_CHANNEL_KEYS) {
     // Zero-copy slicing
-    layers[key] = decompressed.subarray(offset, offset + resolutionSq);
+    channels[key] = decompressed.subarray(offset, offset + resolutionSq);
     offset += resolutionSq;
   }
 
   // 2. Unpack Terrain
-  const terrain = {} as GridTerrain;
-  for (const key of GRID_TERRAIN_KEYS) {
+  const terrain = {} as TileTerrain;
+  for (const key of TILE_TERRAIN_KEYS) {
     // ⚠️ [Alignment Safety] 16-bit 배열 생성 시 버퍼 오프셋 정렬 확인
     const subBuffer = decompressed.slice(
       offset,
@@ -94,7 +94,7 @@ export const unpackTileGrids = async (
   }
 
   return {
-    layers,
+    channels,
     terrain,
   };
 };

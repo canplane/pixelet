@@ -2,8 +2,8 @@
  * @file voxels.ts
  * 복셀의 종류와 상수 값을 정의합니다.
  * * [Refactor Note]
- * - Major(Layer) / Minor(Type) 2단계 위계 적용
- * - 각 레이어는 독립적인 ID 네임스페이스(Uint8, 0~255)를 가집니다.
+ * - Major(Channel) / Minor(Type) 2단계 위계 적용
+ * - 각 채널은 독립적인 ID 네임스페이스(Uint8, 0~255)를 가집니다.
  */
 
 // =============================================================================
@@ -12,22 +12,23 @@
 
 export const VOXEL_TYPES = {
   /** * 🌐 [COMMON]
-   * 모든 레이어에서 공통으로 사용하는 상태 값입니다.
+   * 모든 채널에서 공통으로 사용하는 상태 값입니다.
    */
   COMMON: {
     AIR: 0, // 💨 공중 (완전한 비어있음, 초기화 값)
     UNKNOWN: 1, // 🌫️ 알 수 없는 상태 (데이터 부재 지역의 Fallback)
   },
 
-  /** * 🌊 [Layer: SEA]
-   * 모든 지형의 바탕이 되는 백그라운드 (Pass 0)
+  /** * 💧 [Channel: WATER]
+   * 수계 채널 (바다 + 내륙 수계 통합) (Pass 1)
    */
-  SEA: {
-    WATER: 2, // 💧 바다 (해수면)
+  WATER: {
+    SEA: 2, // 🌊 바다 (Ocean, Coastline) - 배경이 되는 거대한 물
+    INLAND_WATER: 3, // 🏞️ 내륙 수계 (River, Lake, Basin) - 지형 위의 물
   },
 
-  /** * ⛰️ [Layer: BASE]
-   * 지형/바닥 레이어 (Natural + Landuse) (Pass 1)
+  /** * ⛰️ [Channel: BASE]
+   * 지형/바닥 채널 (Natural + Landuse) (Pass 2)
    */
   BASE: {
     BASE_LAND: 2, // 🏜️ 일반 대지 (명시적으로 정의된 땅)
@@ -51,19 +52,12 @@ export const VOXEL_TYPES = {
     HELIPAD: 31, // 🚁 헬기장
   },
 
-  /** * 💧 [Layer: WATER]
-   * 내륙 수계 (Pass 2)
-   */
-  WATER: {
-    WATER: 2, // 💧 물 (강, 호수 등)
-  },
-
-  /** * 🛣️ [Layer: TRANSPORT]
+  /** * 🛣️ [Channel: TRANSPORT]
    * 교통 및 인프라 (Pass 3)
    */
   TRANSPORT: {
     // --- [ROADS] 도로 ---
-    ROAD_DEFAULT: 2, // ⚪ 일반/주거지 도로 (소로) - 기존 ROAD 역할
+    ROAD_DEFAULT: 2, // ⚪ 일반/주거지 도로 (소로)
     ROAD_MOTORWAY: 3, // 🔴 고속도로/간선도로 (가장 중요)
     ROAD_PRIMARY: 4, // 🟠 주요 도로 (대로)
     ROAD_SECONDARY: 5, // 🟡 보조 도로 (중로)
@@ -79,7 +73,7 @@ export const VOXEL_TYPES = {
     TAXIWAY: 21, // 🚕 유도로 (활주로 연결)
   },
 
-  /** * 🏢 [Layer: STRUCTURE]
+  /** * 🏢 [Channel: STRUCTURE]
    * 구조물 및 입체 개체 (Pass 4)
    */
   STRUCTURE: {
@@ -98,16 +92,17 @@ export const VOXEL_TYPES = {
 
 /**
  * [voxel-colors]
- * 각 레이어(Major)의 ID(Minor)에 대응하는 렌더링 색상입니다.
- * Exporter나 Renderer는 `VOXEL_COLORS[LayerKey][LocalID]` 형태로 접근합니다.
+ * 각 채널(Major)의 ID(Minor)에 대응하는 렌더링 색상입니다.
+ * Exporter나 Renderer는 `VOXEL_COLORS[ChannelKey][LocalID]` 형태로 접근합니다.
  */
 export const VOXEL_COLORS = {
   COMMON: {
     [VOXEL_TYPES.COMMON.AIR]: 'transparent', // 🎯 AIR는 투명
     [VOXEL_TYPES.COMMON.UNKNOWN]: '#E0DDD5', // 🌑 빈 공간: 배경과 어우러지는 샌드 그레이
   },
-  SEA: {
-    [VOXEL_TYPES.SEA.WATER]: '#AACBD6', // 💧 물: 차분하고 맑은 파스텔 블루
+  WATER: {
+    [VOXEL_TYPES.WATER.SEA]: '#AACBD6', // 🌊 바다: 기존의 차분한 파스텔 블루 (깊이감)
+    [VOXEL_TYPES.WATER.INLAND_WATER]: '#C4E3ED', // 🏞️ 내륙 수계: 바다보다 조금 더 밝고 경쾌한 블루 (청량감)
   },
   BASE: {
     [VOXEL_TYPES.BASE.BASE_LAND]: '#F2EFE9', // 🏜️ 땅: 자연스러운 미색 (크림 톤)
@@ -129,9 +124,6 @@ export const VOXEL_COLORS = {
     // Aeroway Areas
     [VOXEL_TYPES.BASE.APRON]: '#E0E0E0', // 🅿️ 계류장: 밝은 콘크리트 색상
     [VOXEL_TYPES.BASE.HELIPAD]: '#555555', // 🚁 헬기장: 유도로와 동일
-  },
-  WATER: {
-    [VOXEL_TYPES.WATER.WATER]: '#AACBD6',
   },
   TRANSPORT: {
     // Roads

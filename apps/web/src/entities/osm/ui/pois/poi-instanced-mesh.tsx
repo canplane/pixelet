@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useMapStore } from '../../model/map-store';
+import { useTileStore } from '../../model/tile-store';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { CoordOps, to3D } from '@pixelet/shared/shared/model/coords';
@@ -94,7 +95,7 @@ const PoiShaderMaterial = new THREE.ShaderMaterial({
 export const PoiInstancedMesh = React.memo(
   ({ pois }: PoiInstancedMeshProps) => {
     const meshRef = useRef<THREE.InstancedMesh>(null);
-    const tiles = useMapStore((state) => state.tiles);
+    const tiles = useTileStore((state) => state.tiles);
 
     // 🎯 [Anchor Origin Snapshot]
     const anchorOriginRef = useRef(useMapStore.getState().origin);
