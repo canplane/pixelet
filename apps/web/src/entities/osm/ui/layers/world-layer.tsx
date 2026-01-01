@@ -54,7 +54,7 @@ export const WorldLayer = React.memo(() => {
 
       {/* 2. POI 매니저 (Hybrid LOD 시스템)
           🎯 10,000개 이상의 POI를 통째로 넘깁니다. */}
-      <PoiManager pois={allActivePois} />
+      {/* <PoiManager pois={allActivePois} /> */}
     </group>
   );
 });

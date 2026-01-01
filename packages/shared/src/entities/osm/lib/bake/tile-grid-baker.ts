@@ -19,7 +19,7 @@ import {
   createEmptyLayers,
 } from '../utils/tile-utils';
 
-import { determineVoxelConfig } from '@pixelet/shared/entities/osm/lib/process/osm-policy';
+import { determineVoxelConfig } from '@pixelet/shared/entities/osm/policy/osm-policy';
 import type { TileBuildConfig } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
 
 // [Optimization] 모듈 스코프 상수 캐싱
@@ -58,7 +58,10 @@ export function bakeTileGrid(
     f.extra.isOcean || f.category === 'sea' || f.tags.natural === 'ocean';
 
   const seaFeatures = elements.filter((f) => isSea(f));
-  const otherFeatures = elements.filter((f) => !isSea(f));
+  // 렌더링 순서 보정을 위한 정렬: Rank가 낮은(덜 중요한) 것부터 먼저 그리고, 높은(중요한) 것을 나중에 그려서 덮어쓰게 함
+  const otherFeatures = elements
+    .filter((f) => !isSea(f))
+    .sort((a, b) => a.extra.rank - b.extra.rank);
 
   // ===========================================================================
   // 🌊 Pass 0: [Inverse Sea Rendering]
@@ -91,7 +94,15 @@ export function bakeTileGrid(
   otherFeatures.forEach((feature) => {
     const { shape, computed, category, tags, extra } = feature;
 
-    if (tags.tunnel === 'yes') return;
+    // 🔥 [FIX] 터널 숨김 조건 강화
+    // highway 터널뿐만 아니라 man_made 터널 구조물도 확실히 스킵
+    if (
+      tags.tunnel === 'yes' ||
+      tags.man_made === 'tunnel' ||
+      tags.waterway === 'tunnel'
+    ) {
+      return;
+    }
 
     const config = determineVoxelConfig(category, tags, extra);
     if (!config) return;

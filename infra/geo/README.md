@@ -104,13 +104,13 @@ chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 #### Step 2: Raw Processing (osm2pgsql)
 
 - `metadata.json`을 순회하며 대상 PBF 데이터를 처리합니다.
-- 여러 리전의 데이터는 `IS_FIRST_RUN` 플래그에 따라 `create` 또는 `append` 모드로 하나의 임시 테이블 세트(`planet_osm_*`)에 통합됩니다.
-- `--hstore-all`, `--multi-geometry` 옵션을 사용하여 원본 데이터의 속성과 형상을 유실 없이 보관합니다.
+- **`--hstore-all`** 옵션을 핵심으로 사용하여, 별도 컬럼 매핑 없이 **모든 속성 데이터를 `tags` 컬럼에 보존(Lossless)**합니다. 이는 스키마 변경 없이 어떤 태그든 수용할 수 있는 유연성을 제공합니다.
+- `--multi-geometry` 옵션을 사용하여 원본 데이터의 형상을 유실 없이 보관합니다.
 
-#### Step 3: Sequential Merge (Migration)
+#### Step 3: Sequential Merge & Optimization
 
-- 쉘 스크립트의 특수문자 해석 오류를 방지하기 위해 **`temp_migration.sql` 임시 파일**을 생성하여 실행합니다.
-- **Vector SSOT (`osm_elements`)**: 통합된 임시 테이블 데이터를 `type` 컬럼으로 구분하여 이관하며, `DISTINCT ON (osm_id)`로 중복을 제거합니다.
+- **Migration**: 쉘 스크립트 에러 방지를 위해 임시 SQL 파일을 생성합니다. 임시 테이블(`planet_osm_point` 등)의 데이터를 SSOT 테이블(`osm_elements`)로 이관합니다. 이때 `hstore`로 통합된 태그와 형상 정보가 단일 테이블로 모입니다.
+- **Physical Clustering**: 데이터 이관이 완료된 직후, 공간 인덱스(`GiST`)를 기준으로 **`CLUSTER` 명령을 수행**하여 디스크 상의 데이터 배치를 물리적으로 최적화합니다. (범위 검색 성능 극대화)
 - **Generalized Roads (`osm_roads`)**: 줌 아웃 시 렌더링 성능을 위해 단순화된 형상 데이터를 별도 보관합니다.
 
 #### Step 4: Finalization & Catalog Update
@@ -213,9 +213,11 @@ chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
   cat osm_coastline_backup.sql | docker exec -i $GEO_DB_CONTAINER psql -U $PGUSER -d $PGDATABASE
   ```
 
-- **Storage Optimization**: Raster 데이터 주입 후 또는 대규모 Vector 이관 후에는 아래 명령으로 DB 공간을 정리하고 인덱스를 최적화하십시오.
+- **Storage Optimization**: 대규모 데이터 주입(Clean Start) 직후에는 데드 튜플(Dead Tuples) 정리가 필수적입니다. 데이터 적재가 끝난 후 아래 명령을 통해 통계 정보를 갱신하고 스토리지 회수를 수행하십시오.
   ```sql
-  VACUUM FULL ANALYZE;
+  VACUUM ANALYZE;      -- 통계 갱신 및 일반 정리 (운영 중 권장)
+  -- or
+  VACUUM FULL ANALYZE; -- 물리적 디스크 공간 회수 (다운타임 허용 시 권장)
   ```
 
 ## 6. Security & Sensitive Information

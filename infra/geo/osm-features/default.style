@@ -25,7 +25,12 @@ node,way   man_made     text         linear    # 부두, 교량, 둑 등
 
 # 4. Transport & Infrastructure (도로망 무결성)
 node,way   highway      text         linear    # 모든 등급의 도로
-node,way   railway      text         linear    # 철도 및 역사
+node,way   railway      text         linear    # 일반 철도, 지하철, 트램 등 모든 궤도
+node,way   subway       text         linear    # 지하철 명시적 수집 (일부 태그 대응)
+node,way   station      text         linear    # 역사 정보
+node,way   route        text         linear    # 🎯 중요: 노선 정보 (지하철은 route=subway로 정의됨)
+node,way   service      text         linear    # 기지창, 연결선 (철도 디테일)
+node,way   public_transport text     linear    # 🎯 최신 표준: 플랫폼, 정류장, 역 구역 (v2 schema 대응)
 node,way   junction     text         linear    # 교차로 형태
 node,way   lanes        text         linear    # 도로 폭 계산 (width)
 node,way   bridge       text         linear    # 교량 오프셋 연산용

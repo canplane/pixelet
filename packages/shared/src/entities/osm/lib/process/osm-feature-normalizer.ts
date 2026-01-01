@@ -2,14 +2,13 @@
  * @file osm-feature-normalizer.ts
  * @description 엔진 표준 OsmFeature 객체 생성을 위한 순수 도메인 로직 (정책 적용)
  */
-import type { OsmTags } from '@pixelet/shared/entities/osm/model/osm-source';
 import type { OsmFeature } from '../../model/osm-feature';
 import {
   determineOsmCategory,
   shouldForceClosed,
   computeOsmMetrics,
   computeOsmExtra,
-} from './osm-policy';
+} from '../../policy/osm-policy';
 import type { OsmInput } from '@pixelet/shared/entities/osm/model/osm-feature';
 
 /**
