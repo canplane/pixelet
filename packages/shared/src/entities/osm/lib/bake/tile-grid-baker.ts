@@ -70,11 +70,11 @@ export function bakeTileGrid(
 
   // 🌊  [Safety Check] External 모드에서는 바다 채우기를 건너뜁니다.
   if (!config?.limited) {
-    layers.sea.fill(VOXEL_TYPES.WATER);
+    layers.sea.fill(VOXEL_TYPES.WATER.WATER);
   }
 
   // (1) 배경 초기화: 타일 전체를 바다로 채움
-  layers.sea.fill(VOXEL_TYPES.WATER);
+  layers.sea.fill(VOXEL_TYPES.WATER.WATER);
 
   // (2) 육지 조각하기: 육지 형상(Polygon)을 0(Empty)으로 만듦
   seaFeatures.forEach((feature) => {

@@ -3,6 +3,10 @@
  * 타일 렌더링을 위한 커스텀 ShaderMaterial을 정의합니다.
  * 백엔드 베이커가 생성한 레이어들과 Voxel 정의를 SSOT(Single Source of Truth) 기반으로
  * 동적으로 쉐이더를 생성하고 합성하여 최종 색상을 결정합니다.
+ *
+ * * [Refactor Note]
+ * - Major(Layer) / Minor(Type) 2단계 위계 구조를 지원하도록 쉐이더 생성 로직을 고도화했습니다.
+ * - 각 레이어별로 독립된 컬러 매핑 함수(get[Layer]Color)를 생성합니다.
  */
 
 import * as THREE from 'three';
@@ -29,17 +33,23 @@ const toUniform = (key: string) =>
 /** sea -> tSea */
 const toVar = (key: string) => `t${key.charAt(0).toUpperCase() + key.slice(1)}`;
 
-/** GREEN_DEEP -> GreenDeep (For uniform names) */
-const toPascalCase = (str: string) =>
-  str
+/** sea -> Sea (PascalCase) */
+const toLayerName = (key: string) =>
+  key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+
+/**
+ * [Color Uniform Name Generator]
+ * Layer + Type Key 조합으로 유니크한 유니폼 이름을 생성합니다.
+ * 예: uColorBaseGreenDeep
+ */
+const toColorUniformName = (layerKey: string, typeKey: string) => {
+  const layerPart = toLayerName(layerKey);
+  const typePart = typeKey
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
-
-// 🎯 Voxel SSOT 추출 (AIR 제외: 렌더링되지 않음)
-const VOXEL_KEYS = (
-  Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]
-).filter((key) => key !== 'AIR');
+  return `uColor${layerPart}${typePart}`;
+};
 
 // ----------------------------------------------------------------------
 // 2. Static Parts & Dynamic Uniforms Preparation
@@ -78,52 +88,90 @@ const generateFragmentShader = () => {
   // ---------------------------------------------------------
 
   // 1. Layer Uniforms Auto-Generation
-  // Output: uniform sampler2D uSea; uniform sampler2D uBase; ...
   const layerUniformsDecl = GRID_LAYER_KEYS.map(
     (key) => `uniform sampler2D ${toUniform(key)};`,
   ).join('\n  ');
 
-  // 2. Layer Sampling Logic Auto-Generation
-  // Output: float tSea = floor(texture(uSea, readUv).r * 255.0 + 0.5);
+  // 2. Layer Sampling Logic
+  // R8 포맷(0~255)을 float로 정확히 복원
   const layerSamplingLogic = GRID_LAYER_KEYS.map(
     (key) =>
       `float ${toVar(key)} = floor(texture(${toUniform(key)}, readUv).r * 255.0 + 0.5);`,
   ).join('\n    ');
 
-  // 3. Layer Blending Logic Auto-Generation (Painter's Algorithm)
-  // GRID_LAYER_KEYS 순서(Sea -> Base -> ... -> Structure)가 곧 Z-Index 역할을 합니다.
-  const layerBlendingLogic = GRID_LAYER_KEYS.map(
-    (key) => `
+  // ---------------------------------------------------------
+  // [Section B] Voxel Color & Mapping Logic (Major -> Minor)
+  // ---------------------------------------------------------
+
+  let colorUniformsDecl = '';
+  let colorMappingFunctions = '';
+
+  // 각 레이어(Major)별로 독립된 컬러 매핑 함수를 생성합니다.
+  (Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]).forEach(
+    (majorKey) => {
+      // COMMON은 스킵 (실제 렌더링되는 레이어가 아님)
+      if (majorKey === 'COMMON') return;
+
+      const layerKey = majorKey.toLowerCase();
+      const layerTypes = VOXEL_TYPES[majorKey] as Record<string, number>;
+
+      // 1. Color Uniforms Declaration
+      const uniforms = Object.keys(layerTypes)
+        .filter((key) => key !== 'AIR' && key !== 'UNKNOWN') // AIR/UNKNOWN은 유니폼 불필요
+        .map(
+          (typeKey) => `uniform vec3 ${toColorUniformName(layerKey, typeKey)};`,
+        )
+        .join('\n  ');
+
+      colorUniformsDecl += uniforms + '\n  ';
+
+      // 2. Layer-Specific Color Mapping Function
+      // vec3 getBaseColor(float type) { ... }
+      const cases = Object.keys(layerTypes)
+        .filter((key) => key !== 'AIR' && key !== 'UNKNOWN')
+        .map((typeKey) => {
+          const typeVal = layerTypes[typeKey]; // 정수값 (예: 10)
+          const uName = toColorUniformName(layerKey, typeKey);
+          // float 비교 시 오차 방지를 위해 Epsilon을 쓰거나 정수로 비교
+          return `if (abs(type - ${typeVal}.0) < 0.1) return ${uName};`;
+        })
+        .join('\n    ');
+
+      colorMappingFunctions += `
+  vec3 get${toLayerName(layerKey)}Color(float type) {
+    ${cases}
+    return vec3(0.0); // Fallback (Black or Transparent logic)
+  }
+  `;
+    },
+  );
+
+  // ---------------------------------------------------------
+  // [Section C] Layer Blending Logic (Painter's Algorithm)
+  // ---------------------------------------------------------
+
+  // UNKNOWN(1) 값
+  const unknownVal = `${VOXEL_TYPES.COMMON.UNKNOWN}.0`;
+  const baseLandUniform = toColorUniformName('base', 'BASE_LAND'); // Fallback용
+
+  const layerBlendingLogic = GRID_LAYER_KEYS.map((key) => {
+    const varName = toVar(key);
+    const funcName = `get${toLayerName(key)}Color`;
+
+    return `
     // Check [${key}] Layer
-    if (${toVar(key)} > 0.1) {
-      finalColor = getTypeColor(${toVar(key)});
-    }`,
-  ).join('');
+    // UNKNOWN(${unknownVal})보다 커야 유효한 데이터
+    if (${varName} > ${unknownVal} + 0.1) {
+      vec3 layerColor = ${funcName}(${varName});
+      // 0.0(Black)이 아니면 유효한 색상으로 간주하여 덮어쓰기
+      // (혹은 알파 블렌딩 로직을 추가할 수도 있음)
+      finalColor = layerColor;
+    }
+    `;
+  }).join('');
 
   // ---------------------------------------------------------
-  // [Section B] Voxel Color Related (From voxels.ts)
-  // ---------------------------------------------------------
-
-  // 1. Color Uniforms Declaration
-  // Output: uniform vec3 uColorGreenDeep; ...
-  const colorUniformsDecl = VOXEL_KEYS.map(
-    (key) => `uniform vec3 uColor${toPascalCase(key)};`,
-  ).join('\n  ');
-
-  // 2. Voxel Type Macros
-  // Output: #define TYPE_GREEN_DEEP 10.0
-  const voxelMacrosDecl = VOXEL_KEYS.map(
-    (key) => `#define TYPE_${key} ${VOXEL_TYPES[key]}.0`,
-  ).join('\n  ');
-
-  // 3. getTypeColor Logic Auto-Generation
-  // Output: if (type == TYPE_GREEN_DEEP) return uColorGreenDeep;
-  const colorMappingLogic = VOXEL_KEYS.map(
-    (key) => `if (type == TYPE_${key}) return uColor${toPascalCase(key)};`,
-  ).join('\n    ');
-
-  // ---------------------------------------------------------
-  // [Section C] Assembly
+  // [Section D] Assembly
   // ---------------------------------------------------------
 
   return `
@@ -139,16 +187,8 @@ const generateFragmentShader = () => {
   in vec2 vUv;
   out vec4 outColor;
 
-  // [Auto-Generated Voxel Macros]
-  ${voxelMacrosDecl}
-
-  vec3 getTypeColor(float type) {
-    // [Auto-Generated Color Mapping]
-    ${colorMappingLogic}
-    
-    // Default Fallback
-    return uColorBaseLand;
-  }
+  // [Auto-Generated Color Mapping Functions]
+  ${colorMappingFunctions}
 
   void main() {
     vec2 readUv = vec2(vUv.x, 1.0 - vUv.y);
@@ -157,8 +197,9 @@ const generateFragmentShader = () => {
     ${layerSamplingLogic}
 
     // [Blending Strategy]
-    // 0. 캔버스 초기화: 기본 지면 색상 (Base Land)
-    vec3 finalColor = uColorBaseLand;
+    // 0. 캔버스 초기화: 기본 지면 색상 (Base Land) Fallback
+    // 만약 모든 레이어가 비어있을 경우를 대비해 Base Land 색상으로 초기화합니다.
+    vec3 finalColor = ${baseLandUniform};
 
     // [Auto-Generated Layering]
     // GRID_LAYER_KEYS 순서대로 덮어씌웁니다. (Z-Index: Pass 0 -> Pass N)
@@ -188,16 +229,33 @@ export const createTileMaterial = (props: TileMaterialProps) => {
 
   // 1. Voxel Color Uniforms 자동 생성
   const generatedColorUniforms: Record<string, any> = {};
-  VOXEL_KEYS.forEach((key) => {
-    // VOXEL_COLORS에 정의된 색상 문자열을 THREE.Color로 변환하여 주입
-    // (Partial 타입 방어를 위해 key 체크)
-    const colorHex = VOXEL_COLORS[key as keyof typeof VOXEL_COLORS];
-    if (colorHex) {
-      generatedColorUniforms[`uColor${toPascalCase(key)}`] = {
-        value: new THREE.Color(colorHex),
-      };
-    }
-  });
+
+  (Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]).forEach(
+    (majorKey) => {
+      if (majorKey === 'COMMON') return;
+
+      const layerKey = majorKey.toLowerCase();
+      const types = VOXEL_TYPES[majorKey] as Record<string, number>;
+      const colors = VOXEL_COLORS[
+        majorKey as keyof typeof VOXEL_COLORS
+      ] as Record<number, string>;
+
+      Object.keys(types).forEach((typeKey) => {
+        // AIR, UNKNOWN 제외하고 색상이 있는 경우만 유니폼 생성
+        if (typeKey === 'AIR' || typeKey === 'UNKNOWN') return;
+
+        const typeId = types[typeKey];
+        const hexColor = colors[typeId];
+
+        if (hexColor && hexColor !== 'transparent') {
+          const uName = toColorUniformName(layerKey, typeKey);
+          generatedColorUniforms[uName] = {
+            value: new THREE.Color(hexColor),
+          };
+        }
+      });
+    },
+  );
 
   // 2. 전체 Uniform 조립 (Terrain + Z-Unit + Colors)
   const uniforms: Record<string, any> = {

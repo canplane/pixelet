@@ -113,19 +113,19 @@ function determineRoadVoxel(highwayTag: string): number {
     case 'motorway_link':
     case 'trunk':
     case 'trunk_link':
-      return VOXEL_TYPES.ROAD_MOTORWAY;
+      return VOXEL_TYPES.TRANSPORT.ROAD_MOTORWAY;
 
     // 🟠 Level 2: 주요 도로 (대로)
     case 'primary':
     case 'primary_link':
-      return VOXEL_TYPES.ROAD_PRIMARY;
+      return VOXEL_TYPES.TRANSPORT.ROAD_PRIMARY;
 
     // 🟡 Level 3: 보조 도로 (중로)
     case 'secondary':
     case 'secondary_link':
     case 'tertiary': // 3차 도로까지는 노란색 계열로 묶거나
     case 'tertiary_link': // 디자인에 따라 Default(White)로 보낼 수도 있음
-      return VOXEL_TYPES.ROAD_SECONDARY;
+      return VOXEL_TYPES.TRANSPORT.ROAD_SECONDARY;
 
     // ⚪ Level 4: 일반/주거지 도로 (기본값)
     case 'residential':
@@ -133,7 +133,7 @@ function determineRoadVoxel(highwayTag: string): number {
     case 'unclassified':
     case 'service':
     default:
-      return VOXEL_TYPES.ROAD_DEFAULT;
+      return VOXEL_TYPES.TRANSPORT.ROAD_DEFAULT;
   }
 }
 
@@ -143,17 +143,17 @@ function determineRailwayVoxel(tags: OsmTags): number {
 
   // 1. 지하철 및 경전철 (Subway, Light Rail)
   if (type === 'subway' || type === 'light_rail') {
-    return VOXEL_TYPES.RAIL_SUBWAY;
+    return VOXEL_TYPES.TRANSPORT.RAIL_SUBWAY;
   }
 
   // 2. 일반 철도 (Rail)
   if (type === 'rail') {
     // service 태그가 있으면 기지창이나 지선이므로 위계를 낮출 수도 있습니다.
-    return VOXEL_TYPES.RAIL_MAIN;
+    return VOXEL_TYPES.TRANSPORT.RAIL_MAIN;
   }
 
   // 3. 기타 (Tram, Monorail 등) - 기본값으로 대응
-  return VOXEL_TYPES.RAIL_MAIN;
+  return VOXEL_TYPES.TRANSPORT.RAIL_MAIN;
 }
 
 /**
@@ -467,12 +467,12 @@ export const determineVoxelConfig = (
 ): VoxelConfig | null => {
   // 1. 🌊 Sea Layer (최우선 Pass)
   if (extra.isOcean || category === 'sea') {
-    return { voxelType: VOXEL_TYPES.WATER, layerKey: 'sea' };
+    return { voxelType: VOXEL_TYPES.WATER.WATER, layerKey: 'sea' };
   }
 
   // 2. 💧 Water Layer
   if (category === 'water' || tags.waterway || tags.natural === 'water') {
-    return { voxelType: VOXEL_TYPES.WATER, layerKey: 'water' };
+    return { voxelType: VOXEL_TYPES.SEA.WATER, layerKey: 'water' };
   }
 
   // 3. 🛣️ Transport Layer
@@ -484,15 +484,21 @@ export const determineVoxelConfig = (
   ) {
     // ✈️ (0) 공항 활주로/유도로 (최우선)
     if (tags.aeroway === 'runway') {
-      return { voxelType: VOXEL_TYPES.RUNWAY, layerKey: 'transport' };
+      return { voxelType: VOXEL_TYPES.TRANSPORT.RUNWAY, layerKey: 'transport' };
     }
     if (tags.aeroway === 'taxiway' || tags.aeroway === 'taxilane') {
-      return { voxelType: VOXEL_TYPES.TAXIWAY, layerKey: 'transport' };
+      return {
+        voxelType: VOXEL_TYPES.TRANSPORT.TAXIWAY,
+        layerKey: 'transport',
+      };
     }
 
     // (1) 주차장 (Extra Flag 우선 확인)
     if (extra.isParking) {
-      return { voxelType: VOXEL_TYPES.PARKING, layerKey: 'transport' };
+      return {
+        voxelType: VOXEL_TYPES.TRANSPORT.PARKING,
+        layerKey: 'transport',
+      };
     }
     // (2) 철도
     if (tags.railway) {
@@ -505,7 +511,10 @@ export const determineVoxelConfig = (
         tags.highway || '',
       )
     ) {
-      return { voxelType: VOXEL_TYPES.PEDESTRIAN, layerKey: 'transport' };
+      return {
+        voxelType: VOXEL_TYPES.TRANSPORT.PEDESTRIAN,
+        layerKey: 'transport',
+      };
     }
 
     // 🎯 (4) 일반 도로: 위계(Hierarchy)에 따른 색상 분기
@@ -525,7 +534,10 @@ export const determineVoxelConfig = (
         tags.building || '',
       )
     ) {
-      return { voxelType: VOXEL_TYPES.BUILDING_STATION, layerKey: 'structure' };
+      return {
+        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_STATION,
+        layerKey: 'structure',
+      };
     }
 
     // (2) 🏥 의료 시설 (Medical)
@@ -534,7 +546,10 @@ export const determineVoxelConfig = (
       ['hospital', 'clinic'].includes(tags.amenity || '') ||
       ['hospital', 'clinic'].includes(tags.building || '')
     ) {
-      return { voxelType: VOXEL_TYPES.BUILDING_MEDICAL, layerKey: 'structure' };
+      return {
+        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_MEDICAL,
+        layerKey: 'structure',
+      };
     }
 
     // (3) 🏫 교육 시설 (Education)
@@ -553,18 +568,21 @@ export const determineVoxelConfig = (
       eduValues.includes(tags.building || '')
     ) {
       return {
-        voxelType: VOXEL_TYPES.BUILDING_EDUCATION,
+        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_EDUCATION,
         layerKey: 'structure',
       };
     }
 
     // (4) 🏛️ 기타 공공 시설 (Government, Public)
     if (extra.isInstitutional) {
-      return { voxelType: VOXEL_TYPES.BUILDING_PUBLIC, layerKey: 'structure' };
+      return {
+        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_PUBLIC,
+        layerKey: 'structure',
+      };
     }
 
     // (5) 일반 건물
-    return { voxelType: VOXEL_TYPES.BUILDING, layerKey: 'structure' };
+    return { voxelType: VOXEL_TYPES.STRUCTURE.BUILDING, layerKey: 'structure' };
   }
 
   // 5. 🏔️ Base Land Layer (복합 로직)
@@ -588,9 +606,9 @@ function resolveBaseVoxelType(
 ): number | null {
   // (0) 단순 카테고리 매핑 (빠른 반환)
   const CATEGORY_MAP: Record<string, number> = {
-    forest: VOXEL_TYPES.GREEN_DEEP,
-    park: VOXEL_TYPES.GREEN_LIGHT,
-    sand: VOXEL_TYPES.SAND,
+    forest: VOXEL_TYPES.BASE.GREEN_DEEP,
+    park: VOXEL_TYPES.BASE.GREEN_LIGHT,
+    sand: VOXEL_TYPES.BASE.SAND,
   };
   if (CATEGORY_MAP[category]) return CATEGORY_MAP[category];
 
@@ -603,7 +621,7 @@ function resolveBaseVoxelType(
     checkTag(tags.amenity, eduValues) ||
     checkTag(tags.landuse, ['education'])
   ) {
-    return VOXEL_TYPES.LANDUSE_EDUCATION;
+    return VOXEL_TYPES.BASE.EDUCATION;
   }
 
   // 🏥 병원 부지
@@ -611,15 +629,15 @@ function resolveBaseVoxelType(
     checkTag(tags.amenity, ['hospital', 'clinic']) ||
     checkTag(tags.landuse, ['medical'])
   ) {
-    return VOXEL_TYPES.LANDUSE_MEDICAL;
+    return VOXEL_TYPES.BASE.MEDICAL;
   }
 
   // 🏛️ 일반 관공서/공공 부지
   if (extra.isInstitutional) {
-    return VOXEL_TYPES.LANDUSE_PUBLIC;
+    return VOXEL_TYPES.BASE.PUBLIC;
   }
 
-  if (extra.isSports) return VOXEL_TYPES.LANDUSE_SPORTS;
+  if (extra.isSports) return VOXEL_TYPES.BASE.SPORTS;
 
   // (2) [Forest/Deep Green]
   if (
@@ -636,7 +654,7 @@ function resolveBaseVoxelType(
       ].includes(tags.natural)) ||
     tags.landuse === 'forest'
   ) {
-    return VOXEL_TYPES.GREEN_DEEP;
+    return VOXEL_TYPES.BASE.GREEN_DEEP;
   }
 
   // (3) [Grass/Light Green]
@@ -649,7 +667,7 @@ function resolveBaseVoxelType(
     (tags.leisure &&
       ['park', 'garden', 'nature_reserve'].includes(tags.leisure))
   ) {
-    return VOXEL_TYPES.GREEN_LIGHT;
+    return VOXEL_TYPES.BASE.GREEN_LIGHT;
   }
 
   // (4) [Sand/Rock]
@@ -660,17 +678,17 @@ function resolveBaseVoxelType(
       )) ||
     tags.landuse === 'quarry'
   ) {
-    return VOXEL_TYPES.SAND;
+    return VOXEL_TYPES.BASE.SAND;
   }
 
   // (5) [Human Activity]
   if (tags.landuse) {
     if (['residential', 'cemetery'].includes(tags.landuse))
-      return VOXEL_TYPES.LANDUSE_RESIDENTIAL;
+      return VOXEL_TYPES.BASE.RESIDENTIAL;
     if (['commercial', 'retail'].includes(tags.landuse))
-      return VOXEL_TYPES.LANDUSE_COMMERCIAL;
+      return VOXEL_TYPES.BASE.COMMERCIAL;
     if (['industrial', 'construction'].includes(tags.landuse))
-      return VOXEL_TYPES.LANDUSE_INDUSTRIAL;
+      return VOXEL_TYPES.BASE.INDUSTRIAL;
   }
 
   // (6) [Sports Fallback]
@@ -680,13 +698,13 @@ function resolveBaseVoxelType(
       tags.leisure,
     )
   ) {
-    return VOXEL_TYPES.LANDUSE_SPORTS;
+    return VOXEL_TYPES.BASE.SPORTS;
   }
 
   // (6.5) ✈️ [Airport Area]
-  if (tags.aeroway === 'apron') return VOXEL_TYPES.APRON;
-  if (tags.aeroway === 'helipad') return VOXEL_TYPES.HELIPAD;
-  if (tags.aeroway === 'aerodrome') return VOXEL_TYPES.BASE_LAND; // 공항 부지 전체
+  if (tags.aeroway === 'apron') return VOXEL_TYPES.BASE.APRON;
+  if (tags.aeroway === 'helipad') return VOXEL_TYPES.BASE.HELIPAD;
+  if (tags.aeroway === 'aerodrome') return VOXEL_TYPES.BASE.BASE_LAND; // 공항 부지 전체
 
   // (7) [General Fallback]
   if (
@@ -696,7 +714,7 @@ function resolveBaseVoxelType(
     tags.highway ||
     tags.building
   ) {
-    return VOXEL_TYPES.BASE_LAND;
+    return VOXEL_TYPES.BASE.BASE_LAND;
   }
 
   return null;
