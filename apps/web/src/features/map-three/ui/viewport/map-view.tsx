@@ -1,12 +1,14 @@
 import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
+// 🎯 [Add] 후처리 효과 가져오기
+import { EffectComposer, SMAA } from '@react-three/postprocessing';
 
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 
-import { MapCameraController } from '../controls/map-camera-controller';
+import { MapCameraController } from '../camera-controller/map-camera-controller';
 import { MapOverlays } from '../overlays/map-overlays';
 import { MapEnvironment } from './map-environment';
 import { MapToastController } from '../toasts/map-toast-controller';
@@ -45,30 +47,38 @@ export function MapView() {
         }}
       >
         <Canvas
-          dpr={[1, 2]}
+          dpr={1} // 성능과 선명도를 위해 1로 고정 추천 (또는 [1, 1.5])
+          gl={{
+            antialias: false,
+            powerPreference: 'high-performance',
+            alpha: false,
+            stencil: false,
+            depth: true,
+          }}
           shadows
           camera={{
             fov: FOV,
             near: NEAR,
             far: FAR_CLIP,
           }}
-          gl={{
-            antialias: true,
-            powerPreference: 'high-performance',
-            alpha: false,
-            stencil: false,
-            depth: true,
-          }}
           frameloop="always"
         >
-          {/* 1. 3D 환경 구성 (조명 및 하늘) */}
+          {/* 카메라 제어 및 Floating Origin 연동 */}
+          <MapCameraController />
+
+          {/* 3D 환경 구성 (조명 및 하늘) */}
           <MapEnvironment />
 
-          {/* 2. 카메라 제어 및 Floating Origin 연동 */}
-          <MapCameraController worldGroupRef={worldGroupRef} />
-
-          {/* 3. 월드 콘텐츠 (그리드 지형, 인프라, 마커) */}
+          {/* 🏗️ 물리적으로 이동하는 세상 (지형, 건물, 그리드) */}
+          {/* 여기에 ref를 연결하여 카메라 컨트롤러가 위치를 밀어버립니다 */}
           <WorldContent ref={worldGroupRef} />
+
+          {/* 🎯 [Visual Quality] 복셀 노이즈 제거를 위한 안티앨리어싱 */}
+          {/* multisampling은 0으로 꺼야 후처리가 제대로 먹히는 경우가 많으나, 
+              R3F v8에서는 auto로 둬도 됩니다. SMAA가 덮어씁니다. */}
+          <EffectComposer multisampling={0}>
+            <SMAA />
+          </EffectComposer>
         </Canvas>
       </div>
 

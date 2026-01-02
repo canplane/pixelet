@@ -1,200 +1,152 @@
-import React, { useMemo, useRef, type ReactElement } from 'react';
+import { useMemo, useRef, useEffect, useState, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Line } from '@react-three/drei';
 
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
+import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
+import { fromThreeCoord } from '@/shared/lib/three/three-coords';
+import { FloatingGroup } from '@/entities/osm/ui/floating-group';
 import type { Coord } from '@pixelet/shared/shared/model/coords';
 
-// 🎯 [utility-import] 좌표 변환 표준 유틸리티 적용
-import { fromThreeCoord, toThreeCoord } from '@/shared/lib/three/three-coords';
+// 🎯 [Type Definition] 하이라이터가 표시할 정보
+interface HoveredInfo {
+  coord: Coord; // 절대 좌표
+}
 
-const { FOG_DENSITY, FADE_END } = THREE_CONFIG.RENDERING;
-
-/**
- * [cell-highlighter]
- * 마우스 레이캐스팅을 통해 현재 호버 중인 격자(Voxel)를 시각화합니다.
- */
 export function CellHighlighter(): ReactElement | null {
-  const { raycaster, pointer, camera } = useThree();
-  const { setCenter, origin, hoveredPos, setHoveredPos, themeKey } =
-    useMapNavigation();
+  const { gl, raycaster, controls } = useThree();
+  const { updateCenter, floatingOrigin, themeKey } = useMapNavigation();
+  const { getTerrainAltitude } = useTerrainAltitude();
 
   const targetTheme = MAP_LAYOUT_THEMES[themeKey];
-  const themeColor: string = targetTheme.grid.section;
+  const themeColor = targetTheme.grid.section;
 
-  // 🎯 평면은 월드 Y=0(바닥)에 고정
-  const groundPlane = useMemo(
+  // 1. 계산용 임시 객체들 (메모리 할당 최소화)
+  const intersectionPoint = useMemo(() => new THREE.Vector3(), []);
+  const plane = useMemo(
     () => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
     [],
   );
-  const intersectionPoint = useMemo(() => new THREE.Vector3(), []);
 
-  const localGroupRef = useRef<THREE.Group>(null);
-  const aniGroupRef = useRef<THREE.Group>(null);
+  // 2. 상태 관리 (격자가 바뀔 때만 렌더링 발생)
+  const [hoveredInfo, setHoveredInfo] = useState<HoveredInfo | null>(null);
 
-  // 1. 라운딩 프레임 경로 계산
-  const roundedPoints = useMemo(() => {
-    const size = VOXEL_CONFIG.SIZE * 0.95;
-    const radius = size * 0.15;
-    const pts = [];
-    for (let i = 0; i <= 32; i++) {
-      const angle = (i / 32) * Math.PI * 2;
-      const px =
-        (Math.cos(angle) > 0 ? 1 : -1) * (size / 2 - radius) +
-        Math.cos(angle) * radius;
-      const py =
-        (Math.sin(angle) > 0 ? 1 : -1) * (size / 2 - radius) +
-        Math.sin(angle) * radius;
-      pts.push(new THREE.Vector3(px, py, 0));
-    }
-    return pts;
-  }, []);
+  // 3. 클릭 이벤트를 위한 Ref (리렌더링 없이 최신 좌표 추적)
+  const latestHoveredRef = useRef<HoveredInfo | null>(null);
 
-  useFrame((state: { camera: THREE.Camera; clock: THREE.Clock }): void => {
-    raycaster.setFromCamera(pointer, camera);
-    const intersect = raycaster.ray.intersectPlane(
-      groundPlane,
-      intersectionPoint,
-    );
+  // 포인터 트래킹
+  const pointerDownTime = useRef(0);
+  const pointerDownPos = useRef(new THREE.Vector2());
 
-    if (intersect) {
-      const distToCamera: number = camera.position.distanceTo(intersect);
+  // 🚀 [Logic] Raycasting Loop
+  useFrame(() => {
+    if (!controls) return;
 
-      // 🚀 [수정] FADE_END가 너무 짧으면 하이라이터가 일찍 사라집니다. 여유를 둡니다.
-      if (distToCamera <= FADE_END * 2.0) {
-        /**
-         * 🎯 [Coordinate-Fix] 표준 유틸리티(fromThreeCoord) 사용
-         * 1. 씬의 로컬 좌표(Three)를 지리적 로컬 좌표(Meter)로 복원
-         * - Three.js 좌표계 -> Geo 좌표계 자동 변환
-         */
-        const localGeo = fromThreeCoord([
-          intersect.x,
-          intersect.y,
-          intersect.z,
-        ]);
+    // (1) 가상의 바닥 평면을 현재 카메라 타겟 높이에 맞춤
+    const currentTargetY = (controls as any).target.y;
+    plane.constant = -currentTargetY;
 
-        const absolutePoint: Coord = {
-          x: localGeo.x + origin.x,
-          y: localGeo.y + origin.y, // 🎯 fromThreeCoord가 이미 북쪽을 +y로 변환해줌
-          z: 0,
-        };
+    // (2) Raycasting
+    const hit = raycaster.ray.intersectPlane(plane, intersectionPoint);
 
-        // 2. 스냅 (4m 단위 격자에 맞춤)
-        const snapped = VOXEL_CONFIG.snapToVoxel(absolutePoint);
+    if (hit) {
+      // (3) Local(Three.js) -> Global(Absolute) 변환
+      const globalPos = fromThreeCoord([hit.x, hit.y, hit.z]);
 
-        // 3. 다시 씬의 로컬 좌표로 변환
-        const localX = snapped.x - origin.x;
-        const localY = snapped.y - origin.y;
+      // Floating Origin 보정 (현재 렌더링 기준 -> 실제 절대 좌표)
+      const absoluteX = globalPos.x + floatingOrigin.x;
+      const absoluteY = globalPos.y + floatingOrigin.y;
 
-        // 🎯 [Center-Correction]
-        // 하이라이터 메시는 '중심' 기준이므로, 스냅된 좌표의 '가운데'로 보정합니다.
-        const centeredX = VOXEL_CONFIG.toCenter(localX);
-        const centeredY = VOXEL_CONFIG.toCenter(localY);
+      // (4) 격자 스냅 (Voxel Grid)
+      const snapped = VOXEL_CONFIG.snapToVoxel({
+        x: absoluteX,
+        y: absoluteY,
+        z: 0,
+      });
+      const gx = VOXEL_CONFIG.toCenter(snapped.x);
+      const gy = VOXEL_CONFIG.toCenter(snapped.y);
 
-        if (
-          !hoveredPos ||
-          hoveredPos.x !== centeredX ||
-          hoveredPos.y !== centeredY
-        ) {
-          setHoveredPos({ x: centeredX, y: centeredY, z: 0 });
-        }
+      // (5) 지형 높이 조회
+      const terrainH = getTerrainAltitude({ x: gx, y: gy }) ?? 0;
+      const targetHeight = terrainH + 0.15; // Z-fighting 방지 오프셋
 
-        if (localGroupRef.current) {
-          // 🎯 Three.js 위치 배치: 표준 유틸리티(toThreeCoord) 사용
-          // Geo {x, y} -> Three [x, 0, -y] 자동 변환
-          const groupPos = toThreeCoord({ x: centeredX, y: centeredY, z: 0 });
-          localGroupRef.current.position.set(...groupPos);
+      // (6) 상태 업데이트 (좌표가 변경되었을 때만!)
+      const current = latestHoveredRef.current;
+      if (!current || current.coord.x !== gx || current.coord.y !== gy) {
+        const newInfo = { coord: { x: gx, y: gy, z: targetHeight } };
 
-          const visibility = Math.exp(-Math.pow(distToCamera * FOG_DENSITY, 2));
-          localGroupRef.current.visible = visibility > 0.01;
-        }
-      } else {
-        if (hoveredPos) setHoveredPos(null);
+        latestHoveredRef.current = newInfo; // 클릭용 Ref 업데이트
+        setHoveredInfo(newInfo); // 렌더링용 State 업데이트
       }
     } else {
-      if (hoveredPos) setHoveredPos(null);
-    }
-
-    // 3. 숨쉬기 애니메이션
-    if (aniGroupRef.current) {
-      const t = state.clock.getElapsedTime();
-      aniGroupRef.current.position.y = 0.05 + Math.sin(t * 2.5) * 0.02;
+      // Ray가 빗나가면 숨김
+      if (latestHoveredRef.current !== null) {
+        latestHoveredRef.current = null;
+        setHoveredInfo(null);
+      }
     }
   });
 
-  if (!hoveredPos) return null;
+  // 🚀 [Interaction] 클릭 핸들러 (DOM Event)
+  useEffect(() => {
+    const canvas = gl.domElement;
+
+    const handleDown = (e: PointerEvent) => {
+      pointerDownTime.current = Date.now();
+      pointerDownPos.current.set(e.clientX, e.clientY);
+    };
+
+    const handleUp = (e: PointerEvent) => {
+      const duration = Date.now() - pointerDownTime.current;
+      const moveDist = pointerDownPos.current.distanceTo(
+        new THREE.Vector2(e.clientX, e.clientY),
+      );
+
+      // 짧은 클릭(Tap)이고, 하이라이트 된 곳이 있다면 이동
+      if (duration < 250 && moveDist < 10 && latestHoveredRef.current) {
+        const { coord } = latestHoveredRef.current;
+
+        // MapCameraController 감지용 미세 오차 주입
+        const target = {
+          x: coord.x,
+          y: coord.y,
+          z: coord.z + Math.random() * 0.0001,
+        };
+
+        console.log('🚀 Move to:', target);
+        updateCenter(target);
+      }
+    };
+
+    canvas.addEventListener('pointerdown', handleDown);
+    canvas.addEventListener('pointerup', handleUp);
+    return () => {
+      canvas.removeEventListener('pointerdown', handleDown);
+      canvas.removeEventListener('pointerup', handleUp);
+    };
+  }, [gl, updateCenter]);
+
+  // 데이터가 없으면 렌더링 안 함
+  if (!hoveredInfo) return null;
 
   return (
-    <group ref={localGroupRef}>
-      <group
-        ref={aniGroupRef}
-        rotation={[-Math.PI / 2, 0, 0]} // 바닥에 눕힘
-        // 🚀 [Position-Reset] 부모 그룹이 이미 중심 좌표를 잡았으므로 내부는 0,0,0
-        position={[0, 0, 0]}
-      >
-        <mesh renderOrder={99}>
-          <planeGeometry
-            args={[VOXEL_CONFIG.SIZE * 0.95, VOXEL_CONFIG.SIZE * 0.95]}
-          />
+    // 🎯 [Pattern] 절대 좌표만 넘기면 FloatingGroup이 알아서 위치를 잡습니다.
+    <FloatingGroup coord={hoveredInfo.coord}>
+      <group rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh renderOrder={9999999}>
+          <planeGeometry args={[VOXEL_CONFIG.SIZE, VOXEL_CONFIG.SIZE]} />
           <meshBasicMaterial
             color={themeColor}
             transparent
-            opacity={0.15}
+            opacity={0.6}
+            depthTest={false}
             depthWrite={false}
+            blending={THREE.AdditiveBlending}
           />
         </mesh>
-
-        {/* 클릭 영역 (투명) */}
-        <mesh
-          onClick={(e) => {
-            e.stopPropagation();
-            // 🎯 setCenter 시에도 절대 좌표(origin 포함)로 전달
-            setCenter({
-              x: hoveredPos.x + origin.x,
-              y: hoveredPos.y + origin.y,
-              z: 0,
-            });
-          }}
-          onPointerOver={() => (document.body.style.cursor = 'pointer')}
-          onPointerOut={() => (document.body.style.cursor = 'auto')}
-        >
-          <planeGeometry args={[VOXEL_CONFIG.SIZE, VOXEL_CONFIG.SIZE]} />
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-        </mesh>
-
-        <Line
-          points={roundedPoints}
-          color={themeColor}
-          lineWidth={3}
-          transparent
-          opacity={0.8}
-          renderOrder={100}
-        />
-
-        {/* 네 모서리 도트 */}
-        {[
-          [-1, -1],
-          [-1, 1],
-          [1, -1],
-          [1, 1],
-        ].map(([mx, my], i) => (
-          <mesh
-            key={i}
-            position={[
-              mx * (VOXEL_CONFIG.SIZE * 0.42),
-              my * (VOXEL_CONFIG.SIZE * 0.42),
-              0.01,
-            ]}
-          >
-            <circleGeometry args={[0.06, 16]} />
-            <meshBasicMaterial color={themeColor} />
-          </mesh>
-        ))}
       </group>
-    </group>
+    </FloatingGroup>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * @file osm-boundary-queries.ts
+ * @file overpass-boundary-queries.ts
  * 행정 구역 및 논리적 경계(Boundary) 수집을 위한 Overpass QL 쿼리 셋입니다.
  */
 

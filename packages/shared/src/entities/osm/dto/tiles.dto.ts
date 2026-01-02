@@ -12,6 +12,6 @@ import type { TileCoord } from '../lib/utils/tile-utils';
 export interface TileDto {
   key: string;
   coord: TileCoord;
-  grids: string; // 압축
+  terrain: string; // 압축
   pois: string; // 압축
 }

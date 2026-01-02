@@ -7,34 +7,31 @@ import { CoordOps, type Coord } from '@pixelet/shared/shared/model/coords';
  * Floating Origin 시스템의 핵심인 변환 함수들을 제공합니다.
  */
 export function useCoordinateConverter() {
-  const origin = useMapStore((state) => state.origin);
+  const floatingOrigin = useMapStore((state) => state.floatingOrigin);
 
   /** 🎯 Local (Scene) -> Global (World) */
   const localToGlobal = useCallback(
-    (localPos: Coord): Coord => CoordOps.add(localPos, origin),
-    [origin],
+    (localPos: Coord): Coord => CoordOps.add(localPos, floatingOrigin),
+    [floatingOrigin],
   );
 
   /** 🎯 Global (World) -> Local (Scene) */
   const globalToLocal = useCallback(
-    (globalPos: Coord): Coord => CoordOps.sub(globalPos, origin),
-    [origin],
+    (globalPos: Coord): Coord => CoordOps.sub(globalPos, floatingOrigin),
+    [floatingOrigin],
   );
 
-  return { origin, localToGlobal, globalToLocal };
+  return { floatingOrigin, localToGlobal, globalToLocal };
 }
 
 /**
  * [use-relative-position] (Derived Hook)
  * 절대 좌표를 현재 씬의 로컬 좌표로 변환하여 메모이제이션합니다. (Global -> Local)
  */
-export function useRelativePosition(absolutePos: Coord): Coord {
+export function useRelativePosition(globalPos: Coord): Coord {
   const { globalToLocal } = useCoordinateConverter();
 
-  return useMemo(
-    () => globalToLocal(absolutePos),
-    [globalToLocal, absolutePos],
-  );
+  return useMemo(() => globalToLocal(globalPos), [globalToLocal, globalPos]);
 }
 
 /**

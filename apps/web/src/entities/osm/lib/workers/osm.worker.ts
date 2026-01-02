@@ -3,7 +3,7 @@
 import { fetchTile } from '@/entities/osm/lib/fetch/tile-fetcher';
 import type { TileWorkerInput } from '@/entities/osm/model/worker-protocol';
 
-// ✨ [수정 1] self를 Worker 스코프로 타입 단언
+// self를 Worker 스코프로 타입 단언
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 
 worker.onmessage = async (e: MessageEvent<TileWorkerInput>) => {
@@ -22,26 +22,38 @@ worker.onmessage = async (e: MessageEvent<TileWorkerInput>) => {
       });
     });
 
-    // 🎯 [Optimization]: 중복 버퍼 제거 로직 추가
+    // 🎯 [Transferable Optimization]
     const bufferSet = new Set<ArrayBuffer>();
 
     /**
-     * [성능 최적화: Zero-Copy]
-     * ArrayBuffer의 소유권을 메인 스레드로 '이동'시켜 복사 비용을 없앱니다.
-     * 🎯 [개선] 하드코딩 대신 Object.values를 통해 모든 그리드 채널의 버퍼를 자동 추출합니다.
+     * [Helper] Transfer 가능한 순수 ArrayBuffer만 선별합니다.
+     * SharedArrayBuffer는 공유 메모리이므로 전송 리스트에 넣으면 에러가 발생합니다.
      */
-    Object.values(result.grids).forEach((grid) => {
-      if (grid instanceof Uint8Array && grid.buffer instanceof ArrayBuffer) {
-        bufferSet.add(grid.buffer);
+    const collectTransferable = (view: Uint8Array | Uint16Array) => {
+      // 뷰가 바라보는 실제 메모리 덩어리
+      const buf = view.buffer;
+      // SharedArrayBuffer 제외하고, 순수 ArrayBuffer만 수집
+      if (buf instanceof ArrayBuffer) {
+        bufferSet.add(buf);
       }
-    });
+    };
 
+    // 1. Channels (8-bit) 수집
+    if (result.terrain.channels) {
+      Object.values(result.terrain.channels).forEach(collectTransferable);
+    }
+
+    // 2. Elevation (16-bit) 수집
+    if (result.terrain.elevation) {
+      collectTransferable(result.terrain.elevation);
+    }
+
+    // Set을 다시 배열로 변환하여 전송
     const transferables = Array.from(bufferSet);
 
     /**
      * [Zero-Copy Transfer]
-     * 버퍼의 소유권을 메인 스레드로 완전히 넘깁니다.
-     * 이제 워커에서는 이 버퍼를 참조할 수 없게 되지만, 전송 속도는 최상입니다.
+     * transferables 리스트에 담긴 버퍼만 소유권이 이전됩니다.
      */
     worker.postMessage(
       { type: 'complete', requestId, data: result },

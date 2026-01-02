@@ -20,7 +20,7 @@ import {
 } from '@pixelet/shared/entities/osm/model/tiles';
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
+const { TILE_RES: res } = OSM_CONSTANTS;
 
 /**
  * [hex-to-rgb]

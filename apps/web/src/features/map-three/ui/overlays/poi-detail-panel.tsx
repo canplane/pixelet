@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Navigation } from 'lucide-react';
 import { useMapStore } from '@/entities/osm/model/map-store';
+import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 import { Badge } from '@/shared/ui/theme/glass/badge';
 
@@ -10,7 +11,7 @@ import { Badge } from '@/shared/ui/theme/glass/badge';
  * Framer Motion을 활용한 진입/퇴장 애니메이션과 절대 좌표(Spatial Data) 모듈을 포함합니다.
  */
 export const PoiDetailPanel = () => {
-  const setCenter = useMapStore((state) => state.setCenter);
+  const { updateCenter } = useMapNavigation();
   const selectedPoi = useMapStore((state) => state.selectedPoi);
   const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
 
@@ -87,7 +88,7 @@ export const PoiDetailPanel = () => {
                 'bg-white text-black hover:bg-neutral-100 shadow-lg text-[11px] font-bold',
               )}
               onClick={() =>
-                setCenter({
+                updateCenter({
                   x: selectedPoi.center.x,
                   y: selectedPoi.center.y,
                   z: selectedPoi.center.z,

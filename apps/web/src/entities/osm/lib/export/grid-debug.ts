@@ -6,7 +6,7 @@
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_RESOLUTION } = OSM_CONSTANTS;
+const { TILE_RES } = OSM_CONSTANTS;
 
 /**
  * [printGrid]
@@ -14,7 +14,7 @@ const { TILE_RESOLUTION } = OSM_CONSTANTS;
  */
 export function printGrid(
   grid: Uint8Array | Uint16Array,
-  res: number = TILE_RESOLUTION,
+  res: number = TILE_RES,
 ) {
   // 🎯 [Engineering Note]
   // 내부 데이터 순서는 남->북(0->res)이지만,

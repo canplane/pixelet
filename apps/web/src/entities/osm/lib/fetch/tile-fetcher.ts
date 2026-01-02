@@ -4,7 +4,6 @@
  * * [설계 의도]
  * 1. 환경(serviceMode)에 따라 서버(Local) 완제품 소비 또는 클라이언트(Public) 직접 가공 전략을 선택합니다.
  * 2. 서버 통신 시 JSON 직렬화로 파괴된 바이너리 데이터(Uint8Array)를 복원하여 GPU 전송 효율을 극대화합니다.
- * 3. 클라이언트 측에서 origin을 재계산하여 서버-클라이언트 간의 미세한 좌표 오차를 방지합니다.
  */
 
 import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
@@ -14,13 +13,13 @@ import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
 import { buildExternalTile } from './tile-external-builder';
 import type { TileWorkerInput } from '../../model/worker-protocol';
 import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
-import { unpackTileGrids } from '@pixelet/shared/entities/osm/compression/tile-grid-packer';
+import { unpackTileTerrain } from '@pixelet/shared/entities/osm/compression/tile-terrain-packer';
 import { unpackVector } from '@pixelet/shared/entities/osm/compression/vector-packer';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import { SERVICE_MODES } from '@/config/app-config';
 
-const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
+const { TILE_RES: res } = OSM_CONSTANTS;
 const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
 
 /**
@@ -55,14 +54,14 @@ async function requestServerTile(coord: TileCoord): Promise<Tile> {
       const dto: TileDto = await response.json(); // 🎯 DTO 수신
 
       // 🚀 병렬로 모든 압축 해제 및 객체 복원
-      const [grids, pois] = await Promise.all([
-        unpackTileGrids(dto.grids, res),
+      const [terrain, pois] = await Promise.all([
+        unpackTileTerrain(dto.terrain, res),
         unpackVector<MapPoi>(dto.pois),
       ]);
 
       // [Memory Optimization] 필요한 필드만 정제하여 반환
       const { key, coord } = dto;
-      return { key, coord, grids, pois };
+      return { key, coord, terrain, pois };
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {

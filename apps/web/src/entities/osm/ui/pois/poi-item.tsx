@@ -19,7 +19,7 @@ import {
   getTileCoord,
   getTileKey,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import { getTerrainAltitude } from './poi-transform';
+import { useTerrainAltitude } from '../../lib/use-terrain-altitude';
 import { to3D } from '@pixelet/shared/shared/model/coords';
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
 
@@ -45,6 +45,8 @@ interface PoiItemProps {
  */
 export const PoiItem = React.memo(
   ({ poi }: PoiItemProps): ReactElement | null => {
+    const { getTerrainAltitude } = useTerrainAltitude();
+
     // --- [Global Store Selectors] ---
     const htmlPortalElement = useMapStore((state) => state.htmlPortalElement);
     const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
@@ -82,7 +84,7 @@ export const PoiItem = React.memo(
     );
     // useCallback으로 Selector 참조를 유지하여 불필요한 구독 갱신 방지
     const isTileLoadedSelector = useCallback(
-      (state: TileState) => state.tiles.has(tileKey),
+      (state: TileState) => state.tilesMap.has(tileKey),
       [tileKey],
     );
     const isTileLoaded = useTileStore(isTileLoadedSelector);
@@ -90,9 +92,8 @@ export const PoiItem = React.memo(
     // 1-2. [Height Calculation] 지형 높이 샘플링 (O(1))
     // 타일이 로드되면 높이를 재계산하여 바닥에 붙는 현상 방지
     const terrainHeight = useMemo(() => {
-      const tiles = useTileStore.getState().tiles;
-      return getTerrainAltitude(VOXEL_CONFIG.toCenter(poi.center), tiles);
-    }, [poi.center.x, poi.center.y, isTileLoaded]);
+      return getTerrainAltitude(VOXEL_CONFIG.toCenter(poi.center));
+    }, [poi.center.x, poi.center.y, isTileLoaded, getTerrainAltitude]);
 
     // 1-3. 🚀 [Refactor: Coordinate Hook]
     // 절대 좌표(Map) -> 상대 좌표(Scene) 변환을 훅으로 위임 (Origin 변경 시 자동 반응)

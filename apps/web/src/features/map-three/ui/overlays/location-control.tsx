@@ -21,7 +21,7 @@ export function LocationControl() {
 
   const {
     canShowLocationControl,
-    setCenter,
+    updateCenter,
     viewState,
     devicePos, // 🛰️ 현재 기기 위치
     isFollowMode,
@@ -41,7 +41,7 @@ export function LocationControl() {
     if (canShowLocationControl) {
       // 🛡️ [Refinement] Non-null assertion(!) 대신 조건문으로 안전하게 처리
       if (devicePos) {
-        setCenter(devicePos);
+        updateCenter(devicePos);
       }
       setIsFollowMode(false);
       return;

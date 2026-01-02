@@ -1,69 +1,74 @@
 /**
- * [osm-constants]
- * OSM 데이터의 기하학적 구조와 격자 시스템을 정의하는 순수 상수 파일입니다.
- * 이 수치들은 클라이언트와 워커, 서버 간의 데이터 호환성을 보장하는 핵심 규격입니다.
+ * @file osm-constants.ts
+ * OSM 데이터의 지오메트리 규격, 격자 시스템 및 메모리 정책을 정의하는 핵심 상수입니다.
+ * 이 파일의 수치는 DB 쿼리(Server), 데이터 가공(Worker), 렌더링(Client) 전체의 동기화를 보장합니다.
  */
 
-const TILE_SIZE = 4096;
-const CELL_SIZE = 2;
+const TILE_SIZE = 1024; // 타일 한 변의 물리적 길이 (meters)
+const CELL_SIZE = 1; // 최소 데이터 단위(Voxel/Pixel)의 물리적 크기 (meters)
 
-/** 계산된 타일당 해상도 (픽셀 수) */
-const TILE_RESOLUTION = Math.floor(TILE_SIZE / CELL_SIZE);
+/** * [TILE_RES] 타일 해상도
+ * 한 타일의 가로/세로에 포함되는 셀(Cell)의 개수입니다.
+ * 비트맵 버퍼 크기 및 인덱싱의 기준이 됩니다.
+ */
+const TILE_RES = Math.floor(TILE_SIZE / CELL_SIZE);
 
 export const OSM_CONSTANTS = {
   /**
-   * [fixed-grid-strategy]
-   * 1. TILE_SIZE (4096m): 지구 좌표를 4km 단위 격자로 나누어 관리합니다.
-   * 2. DEFAULT_RENDER_RADIUS (1): 플레이어가 속한 타일을 중심으로 주변 1칸(3x3, 총 9타일)의 데이터를 유지합니다.
+   * [Fixed Grid Strategy]
+   * 지구 좌표계를 1024m(약 1km) 단위의 정방형 격자로 분할하여 관리합니다.
    */
   TILE_SIZE,
-  DEFAULT_RENDER_RADIUS: 1,
-  CLEANUP_RADIUS: 2, // 로딩보다 1단위 더 넓게 설정
 
   /**
-   * [baking-resolution]
-   * CELL_SIZE: 비트맵 생성 시 1픽셀이 담당할 실제 거리(m)입니다.
-   * 중앙 참조를 통해 타일 베이커와 프로세서의 해상도를 동기화합니다.
+   * [Baking Resolution]
+   * 데이터 처리 및 텍스처 베이킹 시 1픽셀이 담당하는 실제 거리입니다.
+   * 값이 작을수록 정밀도가 높아지나 메모리 사용량이 지수적으로 증가합니다.
    */
   CELL_SIZE,
 
-  // 타일 가로/세로당 복셀 셀 개수 (예: 4096 / 2 = 2048)
-  TILE_RESOLUTION,
+  /**
+   * [Z_UNIT_SCALE] 수직 해상도 및 왜곡 배율
+   * 데이터 1유닛(Voxel Layer)이 물리적으로 담당하는 수직 거리(m)를 결정합니다.
+   * * 1. 해상도 제어: 이 값이 높을수록 수직 데이터를 더 미세하게 양자화(Quantization)합니다.
+   * 2. 의도적 왜곡: 렌더링 시 1유닛은 CELL_SIZE 높이로 투영되므로, 수직 강조 효과를 조절합니다.
+   * * @formula 1 Unit Data = CELL_SIZE / Z_UNIT_SCALE (m)
+   */
+  Z_UNIT_SCALE: 1,
+
+  /** 타일당 복셀 해상도 (예: 1024 / 1 = 1024px) */
+  TILE_RES,
 
   /**
-   * [z-scale-ratio]
-   * 수평 격자(cell-size) 대비 수직 격자의 배율을 결정합니다.
-   *
-   * * Formula: voxelZUnit = CELL_SIZE * Z_SCALE_RATIO
-   * * Example: CELL_SIZE(2m) * RATIO(2) = 4m (수직 1층당 높이)
-   *
-   * [purpose]
-   * - 시각적 강조: 지형의 고도 변화를 수직으로 과장하여 입체감을 높임.
-   * - 데이터 범위: Uint8(0~255) 한계 내에서 더 높은 해발 고도까지 표현 가능.
+   * [LOAD_RADIUS] 데이터 로드 반경
+   * 플레이어 중심 타일로부터 데이터를 미리 가져오는(Fetch) 반경입니다.
+   * 값 2: 5x5 영역(총 25개 타일)을 워커에 요청하여 메모리에 상주시키며,
+   * 실제 화면에 그리는 RENDER_RADIUS보다 최소 1단계 이상 커야 Pop-in 현상을 방지합니다.
    */
-  Z_SCALE_RATIO: 2,
-
-  // 🎯 [optimization] 클라이언트와 동일한 128m 간격 샘플링 (33x33)
-  // 타일 당 쿼리 수를 4백만 개에서 약 1,000개로 줄여 DB 부하를 제거합니다.
-  Z_SAMPLING_STEP: 128,
+  LOAD_RADIUS: 2,
 
   /**
-   * [TERRAIN_SEGMENTS]
-   * 지형 메쉬를 구성하는 분할 수입니다. (4096 / 128 = 32)
-   * 🎯 [Engineering Fix] Math.round를 사용하여 부동소수점 오차(ex: 31.99)에 의한
-   * 세그먼트 유실을 방지하고, 데이터 샘플 밀도와 메쉬 정점 수(Segments + 1)를 1:1로 강제합니다.
+   * [CLEANUP_RADIUS] 메모리 해제 반경
+   * LOAD_RADIUS보다 크게 설정하여 경계 지역에서 빈번한 로드/언로드를 방지(Hysteresis)합니다.
+   * 이 범위를 벗어난 타일은 메모리(TileStore) 및 GPU 리소스에서 즉시 제거됩니다.
    */
-  get TERRAIN_SEGMENTS() {
-    return Math.round(this.TILE_SIZE / this.Z_SAMPLING_STEP);
-  },
+  CLEANUP_RADIUS: 4,
 
   /**
-   * [floating-origin-policy]
-   * Floating Origin 리셋을 위한 타일 버퍼 크기입니다.
-   *
-   * 🎯 [hysteresis-buffer]
-   * 현재 타일에서 '2칸(8km)' 이상 벗어나면 리셋을 트리거합니다.
-   * 1칸 차이는 경계에서 빈번하게 발생할 수 있으므로, 2칸을 두어 불필요한 연산을 방지합니다.
+   * [ELEVATION_SAMPLE_STEP] 지형 고도 샘플링 간격
+   * PostGIS 래스터 쿼리 및 외부 Elevation API 호출 시 지표면 데이터를 추출하는 간격(m)입니다.
+   * * 🎯 [Strict Alignment]
+   * 이 값은 반드시 TILE_SIZE의 약수여야 타일 간 경계(Seam)에서 높이 오차가 발생하지 않습니다.
+   * 예: 64m 간격 시 1024m 타일 한 변당 17개의 포인트(Padding 제외)가 생성됩니다.
    */
-  TILE_BUFFER: 2,
+  ELEVATION_SAMPLE_STEP: 64,
+
+  /**
+   * [REBASE_FLOATING_ORIGIN_THRES] 월드 앵커 재설정 임계값 (단위: Tile)
+   * Floating Origin 시스템에서 좌표 정밀도를 유지하기 위해 월드 기준점(Anchor)을 다시 찍는 기준입니다.
+   * * 🎯 [Logic]
+   * 현재 Anchor 타일로부터 이 거리 이상 멀어지면, 현재 타일을 새로운 Anchor로 설정(Rebase)합니다.
+   * 이를 통해 카메라와 객체 간의 거리 차이를 줄여 GPU 연산의 수치적 안정성을 확보합니다.
+   */
+  REBASE_FLOATING_ORIGIN_THRES: 8,
 } as const;

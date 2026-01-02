@@ -14,7 +14,8 @@ import { Badge } from '@/shared/ui/theme/glass/badge';
  * 지도 조작 상태(isInteracting)에 따라 UI의 시각적 피드백(Blur, Scale, Opacity)을 동적으로 제어합니다.
  */
 export function MapOverlays() {
-  const { setCenter, isInteracting } = useMapNavigation();
+  const { cameraControlMode, updateCenter } = useMapNavigation();
+  const isInteracting = cameraControlMode !== 'none';
 
   /**
    * [get-interaction-style]
@@ -70,7 +71,7 @@ export function MapOverlays() {
            * 수정: { x: 500, y: 500, z: 0 } (Y는 북쪽, Z가 고도)
            * 이제 이 버튼을 누르면 동쪽으로 500m, 북쪽으로 500m 떨어진 지점으로 이동합니다.
            */
-          onClick={() => setCenter({ x: 500, y: 500, z: 0 })}
+          onClick={() => updateCenter({ x: 500, y: 500, z: 0 })}
         >
           DEBUG: SHIFT ORIGIN
         </Badge>

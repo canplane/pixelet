@@ -19,20 +19,17 @@ import type { TileChannels } from '../../model/tiles';
 
 import {
   type TileCoord,
-  getTileAbsAnchor,
+  getTileOrigin,
   createEmptyChannels,
 } from '../utils/tile-utils';
 
 import { determineVoxelConfig } from '@pixelet/shared/entities/osm/policy/osm-policy';
 import type { TileBuildConfig } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
 
-// [Optimization] 모듈 스코프 상수 캐싱
-const { CELL_SIZE: cellSize, TILE_RESOLUTION: res } = OSM_CONSTANTS;
+const { CELL_SIZE, TILE_RES } = OSM_CONSTANTS;
 interface TileRenderContext {
-  originX: number;
-  originY: number;
-  cellSize: number;
-  res: number;
+  tileOriginX: number;
+  tileOriginY: number;
 }
 
 /**
@@ -48,12 +45,10 @@ export function bakeTileChannels(
   const channels: TileChannels = createEmptyChannels();
 
   // 2. [Context Setup]
-  const anchor = getTileAbsAnchor(coord);
+  const tileOrigin = getTileOrigin(coord);
   const ctx: TileRenderContext = {
-    originX: anchor.x,
-    originY: anchor.y,
-    cellSize,
-    res,
+    tileOriginX: tileOrigin.x,
+    tileOriginY: tileOrigin.y,
   };
 
   // 3. [Feature Split]
@@ -171,8 +166,8 @@ function renderPolygon(
 
   const toLocal = (pts: Coord[]) =>
     pts.map((p) => ({
-      x: (p.x - ctx.originX) / ctx.cellSize,
-      y: (p.y - ctx.originY) / ctx.cellSize,
+      x: (p.x - ctx.tileOriginX) / CELL_SIZE,
+      y: (p.y - ctx.tileOriginY) / CELL_SIZE,
     }));
 
   const outer = toLocal(points);
@@ -180,7 +175,7 @@ function renderPolygon(
 
   const minY = Math.max(0, Math.floor(Math.min(...outer.map((p) => p.y))));
   const maxY = Math.min(
-    ctx.res - 1,
+    TILE_RES - 1,
     Math.ceil(Math.max(...outer.map((p) => p.y))),
   );
 
@@ -198,10 +193,10 @@ function renderPolygon(
     for (let i = 0; i < intersections.length; i += 2) {
       if (i + 1 >= intersections.length) break;
       const startX = Math.max(0, Math.ceil(intersections[i]));
-      const endX = Math.min(ctx.res - 1, Math.floor(intersections[i + 1]));
+      const endX = Math.min(TILE_RES - 1, Math.floor(intersections[i + 1]));
 
       for (let x = startX; x <= endX; x++) {
-        const idx = y * ctx.res + x;
+        const idx = y * TILE_RES + x;
 
         // 🎯 [Mask Check] 마스크(바다)가 채워져 있다면(0이 아니라면) 그리지 않음
         // 즉, 바다 영역에는 육지 데이터(Base)를 덮어쓰지 않음
@@ -248,7 +243,7 @@ function renderLinearFeature(
 ) {
   if (!points || points.length < 2) return;
 
-  const thickness = Math.max(1, Math.round((meterWidth / ctx.cellSize) * 0.5));
+  const thickness = Math.max(1, Math.round((meterWidth / CELL_SIZE) * 0.5));
 
   const drawCircle = (cx: number, cy: number, r: number) => {
     for (let bx = -r; bx <= r; bx++) {
@@ -256,8 +251,8 @@ function renderLinearFeature(
         if (bx * bx + by * by <= r * r) {
           const tx = cx + bx,
             ty = cy + by;
-          if (tx >= 0 && tx < ctx.res && ty >= 0 && ty < ctx.res) {
-            const idx = ty * ctx.res + tx;
+          if (tx >= 0 && tx < TILE_RES && ty >= 0 && ty < TILE_RES) {
+            const idx = ty * TILE_RES + tx;
             // 🛡️ Mask Check
             if (maskGrid && maskGrid[idx] !== 0) continue;
             grid[idx] = value;
@@ -268,10 +263,10 @@ function renderLinearFeature(
   };
 
   for (let i = 0; i < points.length - 1; i++) {
-    const x1 = (points[i].x - ctx.originX) / ctx.cellSize;
-    const y1 = (points[i].y - ctx.originY) / ctx.cellSize;
-    const x2 = (points[i + 1].x - ctx.originX) / ctx.cellSize;
-    const y2 = (points[i + 1].y - ctx.originY) / ctx.cellSize;
+    const x1 = (points[i].x - ctx.tileOriginX) / CELL_SIZE;
+    const y1 = (points[i].y - ctx.tileOriginY) / CELL_SIZE;
+    const x2 = (points[i + 1].x - ctx.tileOriginX) / CELL_SIZE;
+    const y2 = (points[i + 1].y - ctx.tileOriginY) / CELL_SIZE;
 
     drawCircle(Math.floor(x1 + 0.5), Math.floor(y1 + 0.5), thickness);
     if (i === points.length - 2) {
@@ -292,8 +287,8 @@ function renderLinearFeature(
         for (let by = -thickness; by <= thickness; by++) {
           const tx = cx + bx,
             ty = cy + by;
-          if (tx >= 0 && tx < ctx.res && ty >= 0 && ty < ctx.res) {
-            const idx = ty * ctx.res + tx; // 🎯 인덱스 계산
+          if (tx >= 0 && tx < TILE_RES && ty >= 0 && ty < TILE_RES) {
+            const idx = ty * TILE_RES + tx; // 🎯 인덱스 계산
             // 🛡️ Mask Check
             if (maskGrid && maskGrid[idx] !== 0) continue;
             grid[idx] = value;

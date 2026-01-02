@@ -16,7 +16,6 @@ interface PoiManagerProps {
 }
 
 export const PoiManager = React.memo(({ pois }: PoiManagerProps) => {
-  // Store의 origin을 직접 구독하지 않고 useFrame 내부에서 조회하여 리렌더링 방지
   const [nearbyPois, setNearbyPois] = useState<MapPoi[]>([]);
 
   const lastSortTime = useRef<number>(0);
@@ -33,7 +32,7 @@ export const PoiManager = React.memo(({ pois }: PoiManagerProps) => {
     lastSortTime.current = now;
 
     const cameraPos = state.camera.position;
-    const currentOrigin = useMapStore.getState().origin; // 🎯 최신 오리진 조회
+    const floatingOrigin = useMapStore.getState().floatingOrigin; // 🎯 최신 오리진 조회
 
     // 2. 거리 기반 정렬 (Nearest Neighbor Search)
     // 10,000개 정렬은 최신 JS 엔진에서 약 2~4ms 소요 (허용 가능)
@@ -41,8 +40,8 @@ export const PoiManager = React.memo(({ pois }: PoiManagerProps) => {
     const sortedIndices = pois
       .map((poi, index) => {
         // 로컬 좌표로 변환하여 거리 계산
-        const lx = poi.center.x - currentOrigin.x;
-        const lz = -(poi.center.y - currentOrigin.y); // Y -> -Z
+        const lx = poi.center.x - floatingOrigin.x;
+        const lz = -(poi.center.y - floatingOrigin.y); // Y -> -Z
         // 3D 거리(높이 포함)보다는 평면 거리만으로도 충분
         const distSq = (lx - cameraPos.x) ** 2 + (lz - cameraPos.z) ** 2;
         return { index, distSq };

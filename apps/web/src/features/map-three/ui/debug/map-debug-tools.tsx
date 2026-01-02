@@ -13,16 +13,16 @@ import type { TileChannels } from '@pixelet/shared/entities/osm/model/tiles';
  * 활성화된 모든 월드 타일의 '멀티 채널' 그리드 데이터를 추출합니다.
  */
 export function MapDebugTools() {
-  const tiles = useTileStore((state) => state.tiles);
+  const tilesMap = useTileStore((state) => state.tilesMap);
 
-  if (tiles.size === 0) return null;
+  if (tilesMap.size === 0) return null;
 
   /**
    * 1. 바이너리 다운로드 핸들러
    */
   const handleDownloadAllBinary = () => {
-    for (const [key, tile] of tiles) {
-      const { channels } = tile.grids;
+    for (const [key, tile] of tilesMap) {
+      const { channels } = tile.terrain;
 
       // 채널들을 순회하며 각각 다운로드
       for (const channel of Object.keys(channels) as Array<
@@ -43,8 +43,8 @@ export function MapDebugTools() {
    */
   const handleDownloadAllImages = () => {
     // Promise.all을 사용하여 모든 타일의 처리를 병렬로 진행할 수 있습니다.
-    for (const [key, tile] of tiles) {
-      const { channels } = tile.grids;
+    for (const [key, tile] of tilesMap) {
+      const { channels } = tile.terrain;
 
       // 채널들을 순회하며 각각 다운로드
       for (const channelKey of Object.keys(channels) as Array<
@@ -65,8 +65,8 @@ export function MapDebugTools() {
    * 3. 병합된 이미지 다운로드 핸들러
    */
   const handleDownloadMergedImages = () => {
-    for (const [key, tile] of tiles) {
-      const { channels } = tile.grids;
+    for (const [key, tile] of tilesMap) {
+      const { channels } = tile.terrain;
 
       // 1. 합성 이미지 Blob 생성 (전체 채널 구조체 전달)
       exportMergedGridImage(channels).then((blob) => {
@@ -81,7 +81,7 @@ export function MapDebugTools() {
   return (
     <div className="absolute bottom-20 left-6 flex flex-col gap-2 z-[100] pointer-events-auto select-none">
       <p className="text-[10px] text-white/50 font-mono mb-1 tracking-tighter">
-        DEBUG: MULTI-CHANNEL ({tiles.size} Tiles)
+        DEBUG: MULTI-CHANNEL ({tilesMap.size} Tiles)
       </p>
 
       <button
@@ -116,10 +116,10 @@ export function MapDebugTools() {
       </button>
 
       <div className="text-[9px] text-white/40 mt-1 px-1 font-mono leading-relaxed">
-        Tiles Loaded: {tiles.size}
+        Tiles Loaded: {tilesMap.size}
         <br />
         <span className="opacity-60">
-          Keys: {Array.from(tiles.keys()).join(', ')}
+          Keys: {Array.from(tilesMap.keys()).join(', ')}
         </span>
       </div>
     </div>
