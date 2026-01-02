@@ -14,10 +14,10 @@ import { useMapNavigation } from '../../model/use-map-navigation';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { THREE_CONFIG } from '../../config/three-config';
 import { cn } from '@/shared/lib/utils';
-import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import {
   getTileCoord,
   getTileKey,
+  toCenter,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import { useTerrainAltitude } from '../../lib/use-terrain-altitude';
 import { to3D } from '@pixelet/shared/shared/model/coords';
@@ -92,7 +92,7 @@ export const PoiItem = React.memo(
     // 1-2. [Height Calculation] 지형 높이 샘플링 (O(1))
     // 타일이 로드되면 높이를 재계산하여 바닥에 붙는 현상 방지
     const terrainHeight = useMemo(() => {
-      return getTerrainAltitude(VOXEL_CONFIG.toCenter(poi.center));
+      return getTerrainAltitude(toCenter(poi.center));
     }, [poi.center.x, poi.center.y, isTileLoaded, getTerrainAltitude]);
 
     // 1-3. 🚀 [Refactor: Coordinate Hook]
@@ -115,7 +115,7 @@ export const PoiItem = React.memo(
       // 2-1. [Position Sync] Pipeline Integration
       // Hook에서 계산된 '상대 좌표(relativePos)'를 기반으로 최종 씬 좌표를 계산합니다.
       // (1) Center Align (복셀 정렬) -> (2) 3D Projection (높이 적용) -> (3) Axis Swap
-      const alignedPos = VOXEL_CONFIG.toCenter(relativePos);
+      const alignedPos = toCenter(relativePos);
       const [tPosX, tPosY, tPosZ] = toThreeCoord(
         to3D(alignedPos, terrainHeight + 0.5), // UI 오프셋 0.5m 추가
       );

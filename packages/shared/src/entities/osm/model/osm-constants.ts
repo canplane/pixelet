@@ -5,7 +5,7 @@
  */
 
 const TILE_SIZE = 1024; // 타일 한 변의 물리적 길이 (meters)
-const CELL_SIZE = 1; // 최소 데이터 단위(Voxel/Pixel)의 물리적 크기 (meters)
+const CELL_SIZE = 2; // 최소 데이터 단위(Voxel/Pixel)의 물리적 크기 (meters)
 
 /** * [TILE_RES] 타일 해상도
  * 한 타일의 가로/세로에 포함되는 셀(Cell)의 개수입니다.

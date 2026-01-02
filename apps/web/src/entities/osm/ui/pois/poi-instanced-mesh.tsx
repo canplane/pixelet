@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapStore } from '../../model/map-store';
 import { useTileStore } from '../../model/tile-store';
-import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
+import { toCenter } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import { CoordOps, to3D } from '@pixelet/shared/shared/model/coords';
 import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
@@ -133,12 +133,12 @@ export const PoiInstancedMesh = React.memo(
 
       pois.forEach((poi, i) => {
         // 2. 높이 계산 (Terrain Snap)
-        const gh = getTerrainAltitude(VOXEL_CONFIG.toCenter(poi.center));
+        const gh = getTerrainAltitude(toCenter(poi.center));
 
         // 3. [RTE Core] Anchor 기준 상대 좌표 계산 (Double Precision)
         // 여기서 (절대좌표 - Anchor)를 미리 계산해둠으로써
         // 이후 Anchor가 얼마나 멀어지든 이 값은 작은 상태로 유지됩니다.
-        const absPos = VOXEL_CONFIG.toCenter(poi.center);
+        const absPos = toCenter(poi.center);
         let localPos = CoordOps.sub(absPos, anchor);
 
         // 4. Three.js 좌표계 변환

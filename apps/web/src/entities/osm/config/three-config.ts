@@ -84,6 +84,13 @@ export const THREE_CONFIG = {
   },
 } as const;
 
+/**
+ * [camera-control-mode]
+ * 카메라를 제어하는 주체를 정의합니다.
+ * - NONE: 유휴 상태 (Idle)
+ * - USER: 사용자가 OrbitControls로 조작 중 (Drag/Rotate)
+ * - SYSTEM: 시스템에 의해 자동 이동 중 (FlyTo/Animation)
+ */
 export const CAMERA_CONTROL_MODE = {
   NONE: 'none',
   USER: 'user',

@@ -1,18 +1,21 @@
+/** @deprecated Unused */
+
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
-import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
+import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+
+const { CELL_SIZE } = OSM_CONSTANTS;
 
 /**
- * [WorldGrid]
+ * [GridPlanar]
  * 지형 레이어 위에 안착되는 절차적 쉐이더 그리드입니다.
  * 물리적인 높이는 바닥(0)에 고정하되, 렌더링 우선순위를 조절하여 지형 위에 덧씌웁니다.
  */
-export const WorldGrid = () => {
-  const { SIZE } = VOXEL_CONFIG;
+export const GridPlanar = () => {
   const { FADE_END } = THREE_CONFIG.RENDERING;
   const { themeKey } = useMapNavigation();
   const targetTheme = MAP_LAYOUT_THEMES[themeKey];
@@ -31,7 +34,7 @@ export const WorldGrid = () => {
       polygonOffsetUnits: -4,
       uniforms: {
         uColor: { value: new THREE.Color(targetTheme.grid.cell) },
-        uCellSize: { value: SIZE },
+        uCellSize: { value: CELL_SIZE },
         uFadeEnd: { value: FADE_END },
       },
       vertexShader: `
@@ -74,7 +77,7 @@ export const WorldGrid = () => {
         }
       `,
     });
-  }, [targetTheme, SIZE, FADE_END]);
+  }, [targetTheme, CELL_SIZE, FADE_END]);
 
   return (
     <mesh

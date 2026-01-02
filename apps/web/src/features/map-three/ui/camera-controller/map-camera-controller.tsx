@@ -8,7 +8,7 @@ import { useCameraKernel } from '@/features/map-three/ui/camera-controller/lib/u
 const { MIN_DISTANCE, MAX_DISTANCE } = THREE_CONFIG.CAMERA;
 
 export function MapCameraController() {
-  const { setCameraControlMode } = useMapNavigation();
+  const { cameraControlMode, setCameraControlMode } = useMapNavigation();
 
   const { controlsRef, onInteractionStart, onInteractionEnd } =
     useCameraKernel();
@@ -35,13 +35,17 @@ export function MapCameraController() {
       screenSpacePanning={false}
       maxPolarAngle={Math.PI / 2.1}
       minPolarAngle={0}
+      // 시작: 무조건 USER 모드로 잠금
       onStart={(e) => {
         setCameraControlMode('user'); // 🔒 Lock: 외부(Zustand) 명령 차단
         onInteractionStart();
       }}
+      // 끝: 현재가 USER 모드일 때만 해제 (SYSTEM 모드라면 건드리지 않음)
       onEnd={(e) => {
         onInteractionEnd();
-        setCameraControlMode('none'); // 🔓 Unlock: 다시 외부 명령(FlyTo 등) 수용 가능 상태로 전환
+        if (cameraControlMode === 'user') {
+          setCameraControlMode('none'); // 🔓 Unlock: 다시 외부 명령(FlyTo 등) 수용 가능 상태로 전환
+        }
       }}
     />
   );
