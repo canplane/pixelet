@@ -10,7 +10,6 @@ import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
 import type { ThemeKey } from '@/features/map-three/model/world-themes';
 
 // 5. 현재 패키지(web) 내부 설정
-import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
 import { THREE_CONFIG, type CameraControlMode } from '../config/three-config';
 import {
   getTileCenter,
@@ -70,7 +69,6 @@ export interface MapState {
   // --- [Navigation & Coordinate] ---
   /** [center-position] 카메라가 현재 바라보고 있는 절대적 중심 좌표 (Target) */
   center: Coord | null;
-  updateCenter: (center: Coord) => void;
 
   /**
    * [floating-origin]
@@ -79,12 +77,14 @@ export interface MapState {
    */
   floatingOrigin: Coord;
 
+  updateCenter: (center: Coord) => void;
+
   /** 카메라의 줌, 회전, 고도 등 시각적 파라미터 */
   viewState: ViewState;
   setViewState: (view: Partial<ViewState>) => void;
 
   /** 카메라의 비행(Interpolation) 진행 여부 */
-  isFlying: boolean; // 🎯 단순 플래그만 저장 (가볍다!)
+  isFlying: boolean;
   setIsFlying: (isFlying: boolean) => void;
 
   // --- [Control Signals] ---
@@ -137,6 +137,10 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({ cameraControlMode }),
 
   center: null,
+
+  // [origin-initial-state] (0,0,0)으로 시작
+  floatingOrigin: { x: 0, y: 0, z: 0 },
+
   updateCenter: (center: Coord) => {
     const { floatingOrigin } = get();
 
@@ -153,13 +157,15 @@ export const useMapStore = create<MapState>((set, get) => ({
     set({
       center: toFixedCoord(center),
       ...(needsRebase && {
-        floatingOrigin: { ...getTileCenter(dstTileCoord), z: 0 }, // TODO: z: center.z 대응
+        floatingOrigin: { ...getTileCenter(dstTileCoord), z: 0 },
       }),
+
+      // 🎯 [Architectural Fix]
+      // 좌표 이동은 '시스템 명령'이므로 모드를 SYSTEM으로 강제 전환합니다.
+      // 이로써 OrbitControls의 USER 모드 점유(Race Condition)를 원천 차단합니다.
+      cameraControlMode: 'system',
     });
   },
-
-  // [origin-initial-state] (0,0,0)으로 시작
-  floatingOrigin: { x: 0, y: 0, z: 0 },
 
   viewState: {
     distance: 200,
@@ -172,7 +178,9 @@ export const useMapStore = create<MapState>((set, get) => ({
       viewState: { ...state.viewState, ...view },
     })),
 
-  isFlying: false, // 🎯 단순 플래그만 저장 (가볍다!)
+  isFlying: false,
+  // 비행이 끝나면 모드를 IDLE(none)로 복귀시킬 수도 있으나,
+  // 여기서는 단순히 플래그만 제어합니다. (모드 복귀는 CameraKernel이나 OrbitControls가 담당)
   setIsFlying: (isFlying) => set({ isFlying }),
 
   cameraResetSignal: { distance: 0, orientation: 0 },

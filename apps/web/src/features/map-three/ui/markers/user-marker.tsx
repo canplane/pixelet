@@ -1,11 +1,14 @@
 import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
-import type { Vector3Tuple } from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
-import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
+import { CoordOps } from '@pixelet/shared/shared/model/coords';
+import {
+  snapToCell,
+  toCenter,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
-import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { FloatingGroup } from '@/entities/osm/ui/floating-group';
 import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
 import {
@@ -13,174 +16,261 @@ import {
   toThreeCoordWithOffset,
 } from '@/shared/lib/three/three-coords';
 
-function createRoundedRectGeometry(
-  size: number,
-  radius: number,
-): THREE.ShapeGeometry {
-  const shape: THREE.Shape = new THREE.Shape();
-  const h: number = size / 2;
-
-  shape.moveTo(-h, -h + radius);
-  shape.lineTo(-h, h - radius);
-  shape.quadraticCurveTo(-h, h, -h + radius, h);
-  shape.lineTo(h - radius, h);
-  shape.quadraticCurveTo(h, h, h, h - radius);
-  shape.lineTo(h, -h + radius);
-  shape.quadraticCurveTo(h, -h, h - radius, -h);
-  shape.lineTo(-h + radius, -h);
-  shape.quadraticCurveTo(-h, -h, -h, -h + radius);
-
-  const geometry: THREE.ShapeGeometry = new THREE.ShapeGeometry(shape);
-  geometry.rotateX(THREE_CONFIG.LAYOUT.FLOOR_ROTATION[0]);
-  return geometry;
-}
-
-const ROUNDED_GEOMETRY: THREE.ShapeGeometry = createRoundedRectGeometry(
-  VOXEL_CONFIG.SIZE * 0.98,
-  0.8,
-);
+const { CELL_SIZE } = OSM_CONSTANTS;
 const MAX_INSTANCES = 1500;
 
+// ⚙️ [Config]
+const CONFIG = {
+  SCALE: 1.001,
+  TERRAIN_OFFSET: -CELL_SIZE,
+  RADIUS_M: 16,
+};
+
+// 🎨 [Style]
+const STYLE = {
+  COLOR: '#4fd1c5',
+  FILL_OPACITY: 0.4,
+  BORDER_WIDTH: 0.085,
+};
+
 export function UserMarker(): ReactElement | null {
-  const { devicePos, accuracy, themeKey } = useMapNavigation();
+  const { devicePos, themeKey } = useMapNavigation();
   const { getTerrainAltitude } = useTerrainAltitude();
 
+  // Refs
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const gemRef = useRef<THREE.Mesh>(null);
   const tempObject = useMemo(() => new THREE.Object3D(), []);
 
-  const targetTheme = MAP_LAYOUT_THEMES[themeKey];
+  // Theme
   const isNight = themeKey === 'night';
-  const themeAccent = targetTheme.grid.section;
   const gemColor = isNight ? '#00f2ff' : '#ff1493';
 
-  // 🎯 [Safety] 지면 높이 조회 (이제 floatingOrigin 뺄셈은 Wrapper가 함)
-  const surfaceH = useMemo(() => {
-    return devicePos ? getTerrainAltitude(devicePos) : 0;
-  }, [devicePos, getTerrainAltitude]);
-
-  /**
-   * 🎯 [Refactoring] 복잡한 useRelativePosition 제거
-   * 이제 FloatingGroup의 'coord' prop에 스냅된 절대 좌표만 넘기면 됩니다.
-   * FloatingGroup 내부에서 (coord - floatingOrigin) 계산을 수행합니다.
-   */
+  // 1️⃣ [Center]
   const snappedCenter = useMemo(() => {
     if (!devicePos) return { x: 0, y: 0 };
-    // 그리드 스냅 (절대 좌표계)
-    const snapped = VOXEL_CONFIG.snapToVoxel(devicePos);
-    return {
-      x: VOXEL_CONFIG.toCenter(snapped.x),
-      y: VOXEL_CONFIG.toCenter(snapped.y),
-    };
+    return toCenter(snapToCell(devicePos));
   }, [devicePos]);
 
-  // 보석(Gem)의 미세 오프셋 계산 (부드러운 이동)
+  // 2️⃣ [Height]
+  const centerSurfaceH = useMemo(() => {
+    return devicePos ? getTerrainAltitude(devicePos) : 0;
+  }, [devicePos, snappedCenter, getTerrainAltitude]);
+
+  // 3️⃣ [Offset]
   const gemOffset = useMemo(() => {
     if (!devicePos) return { x: 0, y: 0 };
-    return {
-      x: devicePos.x - snappedCenter.x,
-      y: devicePos.y - snappedCenter.y,
-    };
+    return CoordOps.sub(devicePos, snappedCenter);
   }, [devicePos, snappedCenter]);
 
-  // 🎯 [Optimization] useFrame 단순화 (위치 보정 로직 제거 -> 애니메이션만 남음)
-  useFrame((state) => {
-    if (!devicePos) return;
-
-    // 1. [Terrain-Sticking] (FloatingGroup이 처리하므로 Y축 수동 갱신 불필요)
-    // 단, 실시간 지형 로딩으로 surfaceH가 바뀔 수 있다면 여기서 갱신 필요할 수 있음.
-    // 현재는 useMemo(surfaceH)가 devicePos 변경 시 갱신됨.
-
-    // 2. [Visibility & Animation]
-    if (gemRef.current && meshRef.current) {
-      const markerWorldPos = new THREE.Vector3();
-      gemRef.current.getWorldPosition(markerWorldPos);
-      const distance = state.camera.position.distanceTo(markerWorldPos);
-
-      const isVisible = distance < THREE_CONFIG.RENDERING.FOG_FAR;
-
-      gemRef.current.visible = isVisible;
-      meshRef.current.visible = isVisible;
-
-      if (isVisible) {
-        const t = state.clock.getElapsedTime();
-        gemRef.current.rotation.y = t * 1.2;
-        // 로컬 좌표계에서의 상하 운동
-        gemRef.current.position.y = 2 + Math.sin(t * 1.5) * 0.25;
-      }
-    }
-  });
-
-  const gridOffsets = useMemo((): { x: number; y: number }[] => {
+  // 4️⃣ [Grid Logic] 둥근 모양 & 외곽선 끊김 완벽 해결
+  const gridData = useMemo(() => {
     if (!devicePos) return [];
-    const activeAccuracy: number = Math.min(accuracy || 10, 50);
-    const offsets: { x: number; y: number }[] = [];
-    const step: number = VOXEL_CONFIG.SIZE;
-    const range: number = Math.ceil(activeAccuracy / step);
+
+    const radius = CONFIG.RADIUS_M;
+
+    // 🎯 [Rounder Shape] 반경 축소 유지 (둥글게)
+    const effectiveRadius = radius - 0.8;
+    const radiusSq = effectiveRadius * effectiveRadius;
+
+    // 🛠️ [Border Fix]
+    // 별도의 borderCheckRadiusSq를 만들지 않고 radiusSq를 그대로 씁니다.
+    // 원칙: "내 옆 칸이 렌더링에서 탈락했다면, 무조건 테두리를 그린다."
+
+    const step = CELL_SIZE;
+    const range = Math.ceil(radius / step);
+
+    const result: {
+      x: number;
+      y: number;
+      borders: [number, number, number, number];
+    }[] = [];
 
     for (let x = -range; x <= range; x++) {
       for (let y = -range; y <= range; y++) {
-        if ((x * step) ** 2 + (y * step) ** 2 <= activeAccuracy ** 2) {
-          offsets.push({ x: x * step, y: y * step });
+        const dx = x * step;
+        const dy = y * step;
+        const currentDistSq = dx * dx + dy * dy;
+
+        // 렌더링 되는 셀에 대해서만 계산
+        if (currentDistSq <= radiusSq) {
+          // 각 방향의 이웃이 반경(radiusSq)을 벗어났는지 체크
+          // 벗어났다면(true) -> 테두리 그림(1.0)
+
+          const dTop = dx * dx + (dy + step) * (dy + step);
+          const bTop = dTop > radiusSq ? 1.0 : 0.0;
+
+          const dBottom = dx * dx + (dy - step) * (dy - step);
+          const bBottom = dBottom > radiusSq ? 1.0 : 0.0;
+
+          const dRight = (dx + step) * (dx + step) + dy * dy;
+          const bRight = dRight > radiusSq ? 1.0 : 0.0;
+
+          const dLeft = (dx - step) * (dx - step) + dy * dy;
+          const bLeft = dLeft > radiusSq ? 1.0 : 0.0;
+
+          result.push({
+            x: dx,
+            y: dy,
+            borders: [bTop, bBottom, bRight, bLeft],
+          });
         }
       }
     }
-    return offsets.slice(0, MAX_INSTANCES);
-  }, [accuracy, devicePos]);
+    return result.slice(0, MAX_INSTANCES);
+  }, [devicePos]);
 
-  useEffect((): void => {
-    if (!meshRef.current) return;
+  // 5️⃣ [Shader] Material (변동 없음)
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        extensions: { derivatives: true } as any,
+        uniforms: {
+          uColor: { value: new THREE.Color(STYLE.COLOR) },
+          uFillOpacity: { value: STYLE.FILL_OPACITY },
+          uBorderWidth: { value: STYLE.BORDER_WIDTH },
+        },
+        vertexShader: `
+      attribute vec4 aBorders;
+      varying vec2 vUv;
+      varying vec4 vBorders;
 
-    const hiddenPos = toThreeCoord({ x: 0, y: 0, z: -1000 });
+      void main() {
+        vUv = uv;
+        vBorders = aBorders;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+    `,
+        fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uFillOpacity;
+      uniform float uBorderWidth;
+      
+      varying vec2 vUv;
+      varying vec4 vBorders;
 
-    for (let i = 0; i < MAX_INSTANCES; i++) {
-      tempObject.position.set(...hiddenPos);
-      tempObject.updateMatrix();
-      meshRef.current.setMatrixAt(i, tempObject.matrix);
-    }
+      float aastep(float threshold, float value) {
+        float afwidth = fwidth(value) * 0.5;
+        return smoothstep(threshold - afwidth, threshold + afwidth, value);
+      }
 
-    gridOffsets.forEach((offset, i) => {
-      const pos: Vector3Tuple = toThreeCoord({
-        x: offset.x,
-        y: offset.y,
-        z: 0.05,
-      });
+      void main() {
+        vec4 baseColor = vec4(uColor, uFillOpacity);
+        vec4 borderColor = vec4(uColor, 1.0);
+
+        float borderTop    = aastep(1.0 - uBorderWidth, vUv.y) * vBorders.x;
+        float borderBottom = (1.0 - aastep(uBorderWidth, vUv.y)) * vBorders.y;
+        float borderRight  = aastep(1.0 - uBorderWidth, vUv.x) * vBorders.z;
+        float borderLeft   = (1.0 - aastep(uBorderWidth, vUv.x)) * vBorders.w;
+
+        float borderStrength = max(max(borderTop, borderBottom), max(borderLeft, borderRight));
+
+        gl_FragColor = mix(baseColor, borderColor, borderStrength);
+      }
+    `,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1.0,
+        polygonOffsetUnits: -4.0,
+      }),
+    [],
+  );
+
+  // 6️⃣ [Update] (변동 없음)
+  useEffect(() => {
+    if (!meshRef.current || !devicePos) return;
+
+    const count = gridData.length;
+    meshRef.current.count = count;
+
+    const aBorders = meshRef.current.geometry.attributes
+      .aBorders as THREE.InstancedBufferAttribute;
+    const borderArray = aBorders.array as Float32Array;
+
+    gridData.forEach((data, i) => {
+      const absX = snappedCenter.x + data.x;
+      const absY = snappedCenter.y + data.y;
+      const cellH = getTerrainAltitude({ x: absX, y: absY }) ?? 0;
+
+      const instanceAbsZ = cellH + CONFIG.TERRAIN_OFFSET + CELL_SIZE / 2;
+      const centerAbsZ = centerSurfaceH + CONFIG.TERRAIN_OFFSET;
+      const localZ = instanceAbsZ - centerAbsZ;
+
+      const pos = toThreeCoordWithOffset({ x: data.x, y: data.y }, localZ);
 
       tempObject.position.set(...pos);
+      tempObject.scale.set(
+        CELL_SIZE * CONFIG.SCALE,
+        CELL_SIZE * CONFIG.SCALE,
+        CELL_SIZE * CONFIG.SCALE,
+      );
       tempObject.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.matrix);
+
+      borderArray[i * 4 + 0] = data.borders[0];
+      borderArray[i * 4 + 1] = data.borders[1];
+      borderArray[i * 4 + 2] = data.borders[2];
+      borderArray[i * 4 + 3] = data.borders[3];
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-    meshRef.current.count = gridOffsets.length;
-  }, [gridOffsets, tempObject]);
+    aBorders.needsUpdate = true;
+  }, [gridData, snappedCenter, centerSurfaceH, getTerrainAltitude, tempObject]);
+
+  // 7️⃣ [Animation] Gem Floating (변동 없음)
+  useFrame((state) => {
+    if (!devicePos || !gemRef.current) return;
+
+    const markerWorldPos = new THREE.Vector3();
+    gemRef.current.getWorldPosition(markerWorldPos);
+    const distance = state.camera.position.distanceTo(markerWorldPos);
+    const isVisible = distance < THREE_CONFIG.RENDERING.FOG_FAR;
+
+    gemRef.current.visible = isVisible;
+    if (meshRef.current) meshRef.current.visible = isVisible;
+
+    if (isVisible) {
+      const t = state.clock.getElapsedTime();
+      gemRef.current.rotation.y = t * 1.2;
+
+      // Gem 높이: 복셀보다 확실히 위(1.5)
+      const baseHeight = CELL_SIZE * 1.5;
+      gemRef.current.position.y = baseHeight + Math.sin(t * 2) * 0.2;
+    }
+  });
 
   if (!devicePos) return null;
 
-  // 🎯 [Height Correction]
-  // FloatingGroup에 넘겨줄 높이 값 (지형 높이 + 시스템 오프셋)
-  // FloatingGroup 내부에서 (absoluteHeight - floatingOrigin.z) 처리를 수행합니다.
-  const absoluteHeight = surfaceH + VOXEL_CONFIG.SYSTEM_OFFSET;
+  const groupBaseHeight = centerSurfaceH + CONFIG.TERRAIN_OFFSET;
 
-  // Gem의 위치는 그룹 내부의 로컬 좌표이므로 toThreeCoordWithOffset 그대로 사용
   const gemPos = toThreeCoordWithOffset({ x: gemOffset.x, y: gemOffset.y }, 0);
   const lightPos = toThreeCoord({ x: gemOffset.x, y: gemOffset.y });
 
   return (
-    // 🎯 [Wrapper Pattern] 위치 잡는 책임을 FloatingGroup에 위임
-    <FloatingGroup coord={{ ...snappedCenter, z: absoluteHeight }}>
+    <FloatingGroup coord={{ ...snappedCenter, z: groupBaseHeight }}>
       <instancedMesh
         ref={meshRef}
-        args={[ROUNDED_GEOMETRY, undefined, MAX_INSTANCES]}
+        args={[
+          useMemo(() => {
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            geo.setAttribute(
+              'aBorders',
+              new THREE.InstancedBufferAttribute(
+                new Float32Array(MAX_INSTANCES * 4),
+                4,
+              ),
+            );
+            return geo;
+          }, []),
+          material,
+          MAX_INSTANCES,
+        ]}
         renderOrder={5}
-      >
-        <meshBasicMaterial
-          color={isNight ? themeAccent : '#FFD700'}
-          transparent
-          opacity={0.5}
-          depthWrite={false}
-        />
-      </instancedMesh>
+      />
+
       <mesh ref={gemRef} position={gemPos}>
         <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial
@@ -192,6 +282,7 @@ export function UserMarker(): ReactElement | null {
           flatShading
         />
       </mesh>
+
       <pointLight
         position={lightPos}
         distance={16}

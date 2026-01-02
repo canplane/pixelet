@@ -42,7 +42,7 @@ export const to3D = (coord: Coord2D, z: number = 0): Coord => ({
  */
 export const CoordOps = {
   /** * [add] 벡터 합
-   * 사용 예: CoordOps.add(poi.center, VOXEL_CONFIG.HALF)
+   * 사용 예: CoordOps.add(poi.center, VOXEL_SIZE.HALF)
    */
   add: <T extends Coord2D | Coord>(base: T, offset: number | Partial<T>): T => {
     // 1. 숫자가 들어오면 x, y (z) 모두에 더함

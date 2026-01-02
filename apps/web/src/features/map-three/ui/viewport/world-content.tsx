@@ -11,9 +11,7 @@ import { CellHighlighter } from '../markers/cell-highlighter';
 import { VoxelBlock } from '../voxels/voxel-block';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 import { TerrainStickyGroup } from '@/features/map-three/ui/terrain-sticky-group';
-import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
-
-const { snapToVoxel } = VOXEL_CONFIG;
+import { snapToCell } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 
 /**
  * [WorldContent]
@@ -36,6 +34,8 @@ export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
     const { center, floatingOrigin, themeKey } = useMapNavigation();
     const targetTheme = MAP_LAYOUT_THEMES[themeKey];
 
+    const testCoord = center ? snapToCell(center) : { x: 0, y: 0, z: 0 };
+
     return (
       <group ref={ref} name="world-content">
         {/* 1. [Environment] 지형 및 지리 정보 레이어 */}
@@ -45,38 +45,38 @@ export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
         </group>
 
         {/* 2. [Content] 배치된 복셀 및 오브젝트 */}
-        <group name="content-layer">
-          {/* 테스트용 복셀 (북쪽 4칸 이동 배치 예시) */}
-          {/* <TerrainStickyGroup coord={snapToVoxel(center!)}>
-            <VoxelBlock
-              cellIdx={{ cx: 4, cy: 4, cz: 0 }}
-              color={targetTheme.grid.section}
-            />
-          </TerrainStickyGroup>
-          {children} */}
-        </group>
+        <group name="content-layer">{children}</group>
 
         {/* 3. [Interaction] 사용자 인터랙션 및 가이드 레이어 */}
         <group name="interaction-layer">
           {/* Z-Fighting 방지를 위해 지형보다 미세하게 높게(offset) 렌더링 */}
           <CellHighlighter />
           <UserMarker />
-
-          {/* <WorldGrid /> : 추후 가이드 필요 시 활성화 */}
         </group>
 
-        {/* 4. [Debug] 원점 확인용 마커 (항상 0,0,0) */}
-        {/* {import.meta.env.DEV && (
-          <TerrainStickyGroup coord={snapToVoxel(center!)}>
-            <mesh
-              name="debug-origin"
-              position={toThreeCoordWithOffset({ x: 0, y: 0 }, 0.05)}
-            >
-              <sphereGeometry args={[0.2]} />
-              <meshBasicMaterial color="red" wireframe />
-            </mesh>
-          </TerrainStickyGroup>
-        )} */}
+        {/* 4. [Debug] 테스트 레이어 */}
+        {import.meta.env.DEV && (
+          <group name="test-layer">
+            {/* 원점 마커 (Floating Origin) */}
+            <TerrainStickyGroup coord={floatingOrigin}>
+              <mesh
+                name="debug-origin"
+                position={toThreeCoordWithOffset({ x: 0, y: 0 }, 0.05)}
+              >
+                <sphereGeometry args={[0.2]} />
+                <meshBasicMaterial color="red" wireframe />
+              </mesh>
+            </TerrainStickyGroup>
+
+            {/* 복셀 */}
+            <TerrainStickyGroup coord={testCoord}>
+              <VoxelBlock
+                cellCoord={{ cx: 4, cy: 4, cz: 0 }}
+                color={targetTheme.grid.section}
+              />
+            </TerrainStickyGroup>
+          </group>
+        )}
       </group>
     );
   },

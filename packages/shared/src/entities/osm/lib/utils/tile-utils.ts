@@ -293,3 +293,34 @@ export const toFixedCoord = (coord: Coord): Coord => ({
   y: clampPrecision(coord.y),
   z: clampPrecision(coord.z ?? 0),
 });
+
+/**
+ * [snapToCell]
+ * 물리 좌표를 셀 단위로 스냅합니다.
+ * Floating Origin 리셋 시 이 단위를 기준으로 이동해야 배경 격자가 튀지 않습니다.
+ * 💡 이제 입력된 pos.y는 북향(North) 좌표입니다.
+ */
+export const snapToCell = (pos: Coord, size: number = CELL_SIZE): Coord => {
+  return {
+    x: Math.floor(pos.x / size) * size,
+    y: Math.floor(pos.y / size) * size, // 북향 스냅
+    z: Math.floor(pos.z / size) * size, // 고도 스냅
+  };
+};
+
+/** 셀 중앙 좌표로 보정합니다. */
+export const toCenter = <T extends number | Coord2D | Coord>(
+  input: T,
+  size: number = CELL_SIZE,
+): T => {
+  const half = size / 2;
+
+  // 1. 단순 숫자인 경우
+  if (typeof input === 'number') {
+    return (input + half) as T;
+  }
+
+  // 2. 좌표 객체인 경우 (Coord2D | Coord)
+  // CoordOps.add가 제네릭 T를 반환하므로 타입 캐스팅 없이 안전하게 환원됩니다.
+  return CoordOps.add(input as Coord2D | Coord, half) as T;
+};

@@ -34,6 +34,11 @@ export function useMapNavigation() {
       // [Coordinates & Navigation]
       /** 카메라가 바라보는 절대 중심 좌표 */
       center: state.center,
+
+      // [Floating Origin System]
+      /** 렌더링 정밀도 유지를 위한 동적 원점 */
+      floatingOrigin: state.floatingOrigin,
+
       updateCenter: state.updateCenter,
 
       // [Camera View]
@@ -44,10 +49,6 @@ export function useMapNavigation() {
       /** 카메라의 비행(Interpolation) 진행 여부 */
       isFlying: state.isFlying,
       setIsFlying: state.setIsFlying,
-
-      // [Floating Origin System]
-      /** 렌더링 정밀도 유지를 위한 동적 원점 */
-      floatingOrigin: state.floatingOrigin,
 
       // [Signals]
       /** 줌 레벨 초기화 트리거 */
