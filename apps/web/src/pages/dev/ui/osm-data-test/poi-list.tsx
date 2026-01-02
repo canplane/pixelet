@@ -50,14 +50,14 @@ const getCategoryStyles = (tags: any, isNight: boolean) => {
 export const PoiList = () => {
   const { status } = useDeviceLocationStore();
   const { themeKey } = useMapNavigation();
-  const tiles = useTileStore((state) => state.tiles);
+  const tilesMap = useTileStore((state) => state.tilesMap);
   const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
   const isNight = themeKey === 'night';
 
   /**
    * 전역 스토어에서 통합된 POI 리스트 추출
    */
-  const allPois = Array.from(tiles.values()).flatMap((tile) => tile.pois);
+  const allPois = Array.from(tilesMap.values()).flatMap((tile) => tile.pois);
 
   /**
    * 🎯 데이터 추출 보강
@@ -74,7 +74,7 @@ export const PoiList = () => {
     }))
     .filter((item) => item.displayName !== '이름 없는 장소');
 
-  const isLoading = status === 'ready' && tiles.size === 0;
+  const isLoading = status === 'ready' && tilesMap.size === 0;
 
   if (status !== 'ready' || isLoading) {
     return (

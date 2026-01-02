@@ -4,19 +4,19 @@
  */
 
 import { requestOverpass } from '../../api/overpass.api';
-import { GEOMETRY_FILTERS } from '../../api/query/osm-geometry-queries';
-import { BOUNDARY_FILTERS } from '../../api/query/osm-boundary-queries';
-import { POI_QUERIES } from '../../api/query/osm-poi-queries';
+import { GEOMETRY_FILTERS } from '../../api/overpass-query/overpass-geometry-queries';
+import { BOUNDARY_FILTERS } from '../../api/overpass-query/overpass-boundary-queries';
+import { POI_QUERIES } from '../../api/overpass-query/overpass-poi-queries';
 import { createQuery } from '../../api/overpass-utils';
 import type {
-  TileGrids,
+  TileTerrain,
   TileChannels,
   Tile,
 } from '@pixelet/shared/entities/osm/model/tiles';
 import {
   getTileBbox,
   unprojectBbox,
-  createEmptyGrids,
+  createEmptyTerrain,
   getTileKey,
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import type {
@@ -29,8 +29,8 @@ import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/os
 import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
 import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
 import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
-import { bakeTileTerrain } from '@pixelet/shared/entities/terrain/lib/tile-terrain-baker';
-import { requestElevation } from '@/entities/terrain/api/elevation.api';
+import { bakeTileElevation } from '@pixelet/shared/entities/osm/lib/bake/tile-elevation-baker';
+import { requestElevation } from '@/entities/osm/api/elevation.api';
 
 type StepName = 'Infrastructure' | 'Structure' | 'POI';
 
@@ -119,7 +119,7 @@ async function executeStep(coord: TileCoord, step: ProcessingStep) {
  * [Helper 2] 가공된 데이터를 현재 타일 상태에 병합합니다.
  */
 function mergeStepResult(
-  target: { grids: TileGrids; pois: MapPoi[] },
+  target: { terrain: TileTerrain; pois: MapPoi[] },
   source: {
     partialChannels: Partial<TileChannels>;
     pois: MapPoi[];
@@ -131,7 +131,7 @@ function mergeStepResult(
   targetChannels.forEach((channel) => {
     const channelData = source.partialChannels[channel];
     if (channelData) {
-      target.grids.channels[channel].set(channelData);
+      target.terrain.channels[channel].set(channelData);
     }
   });
 }
@@ -148,14 +148,14 @@ export async function buildExternalTile(
   const bbox = getTileBbox(coord);
 
   const steps = createProcessingSteps(bbox);
-  const currentGrids = createEmptyGrids();
+  const currentTerrain = createEmptyTerrain();
 
   // 🎯 [Elevation Integration]: 고도 데이터 수집 시작
   // OSM 쿼리들과 병렬로 실행하여 네트워크 대기 시간을 최소화합니다.
   const elevationTask = requestElevation(bbox);
 
   const accumulatedData = {
-    grids: currentGrids,
+    terrain: currentTerrain,
     pois: [] as MapPoi[],
   };
 
@@ -168,14 +168,14 @@ export async function buildExternalTile(
      * 수집된 포인트를 타일 해상도(resolution)에 맞게 확장하여 height 채널에 굽습니다.
      * 이 과정에서 Bilinear Interpolation을 적용하면 지형이 부드러워집니다.
      */
-    const elevationGrid = bakeTileTerrain(elevationPoints);
-    currentGrids.terrain.elevation = elevationGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
+    const elevationGrid = bakeTileElevation(elevationPoints);
+    currentTerrain.elevation = elevationGrid; // 🎯 지침: 고도는 전용 채널 혹은 Z축 데이터로 통합
 
     // 고도 데이터가 준비되면 첫 번째 점진적 업데이트 발송
     onProgress?.({
       key,
       coord,
-      grids: currentGrids,
+      terrain: currentTerrain,
       pois: accumulatedData.pois,
     });
   } catch (error) {
@@ -197,7 +197,7 @@ export async function buildExternalTile(
         onProgress?.({
           key,
           coord,
-          grids: currentGrids,
+          terrain: currentTerrain,
           pois: accumulatedData.pois,
         });
       }
@@ -218,7 +218,7 @@ export async function buildExternalTile(
   return {
     key,
     coord,
-    grids: currentGrids,
+    terrain: currentTerrain,
     pois: accumulatedData.pois,
   };
 }

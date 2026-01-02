@@ -1,5 +1,5 @@
 /**
- * @file osm-poi-queries.ts
+ * @file overpass-poi-queries.ts
  * 지도 상의 주요 POI(관심 지점) 수집을 위한 Overpass QL 쿼리 셋입니다.
  */
 

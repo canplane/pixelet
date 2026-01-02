@@ -11,7 +11,7 @@ import { GeoRepository } from './geo.repository';
 import { OsmAdapter } from './osm-adapter';
 
 import {
-  createEmptyGrids,
+  createEmptyTerrain,
   getTileBbox,
   getTileKey,
   TileCoord,
@@ -20,8 +20,8 @@ import { TileChannels } from '@pixelet/shared/entities/osm/model/tiles';
 import { TileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
 import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/osm-feature-normalizer';
 import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
-import { bakeTileTerrain } from '@pixelet/shared/entities/terrain/lib/tile-terrain-baker';
-import { packTileGrids } from '@pixelet/shared/entities/osm/compression/tile-grid-packer';
+import { bakeTileElevation } from '@pixelet/shared/entities/osm/lib/bake/tile-elevation-baker';
+import { packTileTerrain } from '@pixelet/shared/entities/osm/compression/tile-terrain-packer';
 import { packVector } from '@pixelet/shared/entities/osm/compression/vector-packer';
 
 @Injectable()
@@ -51,7 +51,7 @@ export class GeoService {
     // ----------------------------------------------------------------------
     // 3. [Terrain Baking] 16-bit 고도 맵 생성
     // ----------------------------------------------------------------------
-    const elevationGrid = bakeTileTerrain(elevationPoints);
+    const elevationGrid = bakeTileElevation(elevationPoints);
 
     // ----------------------------------------------------------------------
     // 4. [Transformation] 데이터 정규화 파이프라인
@@ -86,16 +86,16 @@ export class GeoService {
     // ----------------------------------------------------------------------
     // 6. [Assembly & Compression] 최종 조립 및 패킹
     // ----------------------------------------------------------------------
-    const finalGrids = createEmptyGrids();
+    const finalTerrain = createEmptyTerrain();
 
-    finalGrids.terrain.elevation = elevationGrid;
+    finalTerrain.elevation = elevationGrid;
 
     // sea 채널을 포함한 모든 partialChannels 병합
     // Terrain(16-bit) + Channels(8-bit)
     (Object.keys(partialChannels) as (keyof TileChannels)[]).forEach(
       (channelKey) => {
-        if (finalGrids.channels[channelKey] && partialChannels[channelKey]) {
-          finalGrids.channels[channelKey].set(partialChannels[channelKey]);
+        if (finalTerrain.channels[channelKey] && partialChannels[channelKey]) {
+          finalTerrain.channels[channelKey].set(partialChannels[channelKey]);
         }
       },
     );
@@ -104,7 +104,7 @@ export class GeoService {
       key,
       coord,
       // 🚀 Grids: 단일 바이너리 스트림으로 통합 패킹 (SoA + Gzip)
-      grids: packTileGrids(finalGrids, gzipSync),
+      terrain: packTileTerrain(finalTerrain, gzipSync),
       // 📦 Vectors: JSON Stringify + Gzip (General Purpose)
       pois: packVector(pois, gzipSync),
     };

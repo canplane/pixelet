@@ -6,7 +6,7 @@
 
 import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
-const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
+const { TILE_RES: res } = OSM_CONSTANTS;
 
 /**
  * [generateGridBinary]
@@ -21,13 +21,13 @@ const { TILE_RESOLUTION: res } = OSM_CONSTANTS;
  * 부착되는 grid 데이터는 South-to-North(Bottom-Up) 순서로 정렬되어 있습니다.
  *
  * @param grid - South-to-North 순서의 원본 데이터
- * @param originX - 타일 내 로컬 시작 X (기본값 0)
- * @param originY - 타일 내 로컬 시작 Y (기본값 0, South Anchor)
+ * @param tileOriginX - 타일 내 로컬 시작 X (기본값 0)
+ * @param tileOriginY - 타일 내 로컬 시작 Y (기본값 0, South Anchor)
  */
 export function generateGridBinary(
   grid: Uint8Array,
-  originX: number = 0,
-  originY: number = 0,
+  tileOriginX: number = 0,
+  tileOriginY: number = 0,
 ): Uint8Array {
   const HEADER_SIZE = 12;
   const combinedBuffer = new Uint8Array(HEADER_SIZE + grid.length);
@@ -35,8 +35,8 @@ export function generateGridBinary(
 
   // 🎯 Header Spec (Little Endian): Resolution, OriginX(0), OriginY(0)
   view.setInt32(0, res, true);
-  view.setInt32(4, originX, true);
-  view.setInt32(8, originY, true);
+  view.setInt32(4, tileOriginX, true);
+  view.setInt32(8, tileOriginY, true);
 
   combinedBuffer.set(grid, HEADER_SIZE);
   return combinedBuffer;

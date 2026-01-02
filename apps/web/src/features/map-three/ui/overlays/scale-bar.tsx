@@ -3,7 +3,7 @@ import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 import { MotionContainer } from '@/shared/ui/layout/motion-container';
 
-const { DEFAULT_DISTANCE } = THREE_CONFIG.CAMERA;
+const { DEFAULT_DIST } = THREE_CONFIG.CAMERA;
 
 const SCALE_BAR_WIDTH = 80;
 
@@ -18,7 +18,7 @@ export function ScaleBar() {
   const totalMeters = SCALE_BAR_WIDTH * metersPerPixel;
 
   // 🚀 현재 줌이 기본값인지 체크 (오차범위 1m)
-  const isDefaultZoom = Math.abs(distance - DEFAULT_DISTANCE) < 1;
+  const isDefaultZoom = Math.abs(distance - DEFAULT_DIST) < 1;
 
   const label =
     totalMeters >= 1000

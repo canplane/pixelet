@@ -1,14 +1,13 @@
 /**
  * @file tiles.ts
- * 타일 격자 데이터(Grids)와 최종 타일 객체(Tile) 규격을 정의합니다.
+ * 타일의 물리적 형상(Terrain)과 부가 정보(POIs) 규격을 정의합니다.
  */
 
 import type { TileCoord } from '../lib/utils/tile-utils';
 import type { MapPoi } from './osm-feature';
 
 /**
- * 🎯 [SSOT] TileChannels의 모든 키를 순서대로 정의합니다.
- * 이 배열의 순서가 바이너리 패킹(Packer)과 초기화(Factory)의 기준이 됩니다.
+ * 🎯 [SSOT] 채널 키 정의 (바이너리 패킹 및 텍스처 팩토리용)
  */
 export const TILE_CHANNEL_KEYS: (keyof TileChannels)[] = [
   'water', // 1. 배경 및 수계 (가장 아래)
@@ -16,8 +15,6 @@ export const TILE_CHANNEL_KEYS: (keyof TileChannels)[] = [
   'transport', // 3. 도로망
   'structure', // 4. 건물 (가장 위)
 ];
-
-export const TILE_TERRAIN_KEYS: (keyof TileTerrain)[] = ['elevation'];
 
 /**
  * [TileChannels]
@@ -37,34 +34,19 @@ export interface TileChannels {
 
 /**
  * [TileTerrain]
- * 수직적 형상을 나타내는 16-bit 데이터 집합입니다.
- * DEM(고도) 데이터를 가공한 결과물입니다.
+ * 타일의 기하학적 형상과 속성을 정의하는 핵심 격자 데이터입니다.
+ * 평면 속성(Channels)과 수직 정보(Elevation)를 통합 관리합니다.
  */
 export interface TileTerrain {
-  /**
-   * [elevation]
-   * 각 셀의 복셀 층수 인덱스 (Uint8)
-   * 실제 높이(m) = value * (OSM_CONSTANTS.CELL_SIZE * OSM_CONSTANTS.Z_SCALE_RATIO)
-   */
-  elevation: Uint16Array;
-}
-
-/**
- * [TileGrids]
- * OSM 쿼리의 4단계 패스(Pass 1~4)와 정확히 1:1 대응되는 멀티 채널 그리드입니다.
- */
-export interface TileGrids {
-  /**
-   * [Channels] 수평적 분류 데이터 (8-bit)
-   * 각 셀이 무엇(물, 도로, 건물 등)인지를 정의합니다.
+  /** * [Splatmaps/Channels] 지형의 '피부'
+   * - 8-bit 속성 데이터. 렌더링 시 어떤 텍스처를 섞을지 결정.
    */
   channels: TileChannels;
 
-  /**
-   * [Terrain] 수직적 형상 데이터 (16-bit)
-   * 지형의 실제 높이(고도) 정보를 정밀하게 담습니다.
+  /** * [Elevation/Heightmap] 지형의 '뼈대'
+   * - 16-bit 고도 데이터. 메쉬의 수직 위치를 결정.
    */
-  terrain: TileTerrain;
+  elevation: Uint16Array;
 }
 
 /**
@@ -75,6 +57,10 @@ export interface TileGrids {
 export interface Tile {
   key: string; // "tx:tz" 형식의 고유 키
   coord: TileCoord;
-  grids: TileGrids; // 🎯 명칭 통일: 타일 지형 격자 데이터 (Voxel Type Map)
-  pois: MapPoi[]; // 타일에 포함된 절대 좌표 기반 POI
+
+  /** 🏔️ [Terrain] 타일의 형상 그 자체 (Grids 통합) */
+  terrain: TileTerrain;
+
+  /** 📍 [POIs] 타일 영역 내의 절대 좌표 기반 포인트 데이터 */
+  pois: MapPoi[];
 }

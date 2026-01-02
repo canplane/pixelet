@@ -11,7 +11,7 @@ import {
 } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
 import { useTileStore } from '@/entities/osm/model/tile-store';
 
-const { DEFAULT_RENDER_RADIUS, CLEANUP_RADIUS } = OSM_CONSTANTS;
+const { LOAD_RADIUS, CLEANUP_RADIUS } = OSM_CONSTANTS;
 
 interface TileRequest {
   key: string;
@@ -25,7 +25,7 @@ export function useTileScheduler() {
   const setStatus = useMapStore((state) => state.setStatus);
 
   // TileStore에서 필요한 상태와 액션들을 미리 구독
-  const tiles = useTileStore((state) => state.tiles);
+  const tilesMap = useTileStore((state) => state.tilesMap);
   const setTile = useTileStore((state) => state.setTile);
   const clearOldTiles = useTileStore((state) => state.clearOldTiles);
 
@@ -41,16 +41,12 @@ export function useTileScheduler() {
       const pendingRequests: TileRequest[] = [];
       const { tx, ty } = centerCoord;
 
-      for (let dx = -DEFAULT_RENDER_RADIUS; dx <= DEFAULT_RENDER_RADIUS; dx++) {
-        for (
-          let dy = -DEFAULT_RENDER_RADIUS;
-          dy <= DEFAULT_RENDER_RADIUS;
-          dy++
-        ) {
+      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
           const targetCoord = { tx: tx + dx, ty: ty + dy };
           const key = getTileKey(targetCoord);
 
-          if (!tiles.has(key) && !processingTiles.current.has(key)) {
+          if (!tilesMap.has(key) && !processingTiles.current.has(key)) {
             const distance = dx * dx + dy * dy;
             pendingRequests.push({ key, coord: targetCoord, distance });
           }
@@ -58,7 +54,7 @@ export function useTileScheduler() {
       }
       return pendingRequests.sort((a, b) => a.distance - b.distance);
     },
-    [tiles], // 🎯 의존성에 tiles 추가
+    [tilesMap], // 🎯 의존성에 tilesMap 추가
   );
 
   /**
@@ -89,7 +85,7 @@ export function useTileScheduler() {
         );
 
         // [최종 완료] 최종 결과물이 유효하면 스토어 업데이트
-        if (finalTile && finalTile.grids) {
+        if (finalTile && finalTile.terrain) {
           setTile(key, finalTile);
           console.log(`[Tile Scheduler] ✅ Loaded Tile (${key})`);
         }
@@ -137,8 +133,8 @@ export function useTileScheduler() {
         }
       });
     } else {
-      const { tiles: currentTiles } = useTileStore.getState();
-      if (currentTiles.size > 0) setStatus('success');
+      const { tilesMap: currentTilesMap } = useTileStore.getState();
+      if (currentTilesMap.size > 0) setStatus('success');
     }
   }, [center, setStatus, cleanupTiles, getScheduledQueue, loadTile]);
 }

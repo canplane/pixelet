@@ -1,12 +1,6 @@
 /**
  * @file tile-material.ts
  * 타일 렌더링을 위한 커스텀 ShaderMaterial을 정의합니다.
- * 백엔드 베이커가 생성한 채널들과 Voxel 정의를 SSOT(Single Source of Truth) 기반으로
- * 동적으로 쉐이더를 생성하고 합성하여 최종 색상을 결정합니다.
- *
- * * [Refactor Note]
- * - Major(Channel) / Minor(Type) 2단계 위계 구조를 지원하도록 쉐이더 생성 로직을 고도화했습니다.
- * - 각 채널별로 독립된 컬러 매핑 함수(get[Channel]Color)를 생성합니다.
  */
 
 import * as THREE from 'three';
@@ -20,28 +14,20 @@ import {
   type TileChannels,
 } from '@pixelet/shared/entities/osm/model/tiles';
 
-const { CELL_SIZE, Z_SCALE_RATIO } = OSM_CONSTANTS;
+const { CELL_SIZE } = OSM_CONSTANTS;
 
 // ----------------------------------------------------------------------
 // 1. Helpers for Dynamic GLSL
 // ----------------------------------------------------------------------
 
-/** base -> uBase */
 const toUniform = (key: string) =>
   `u${key.charAt(0).toUpperCase() + key.slice(1)}`;
 
-/** base -> tBase */
 const toVar = (key: string) => `t${key.charAt(0).toUpperCase() + key.slice(1)}`;
 
-/** base -> Base (PascalCase) */
 const toChannelName = (key: string) =>
   key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
 
-/**
- * [Color Uniform Name Generator]
- * Channel + Type Key 조합으로 유니크한 유니폼 이름을 생성합니다.
- * 예: uColorBaseGreenDeep
- */
 const toColorUniformName = (channelKey: string, typeKey: string) => {
   const channelPart = toChannelName(channelKey);
   const typePart = typeKey
@@ -56,185 +42,275 @@ const toColorUniformName = (channelKey: string, typeKey: string) => {
 // ----------------------------------------------------------------------
 
 const vertexShader = `
+  precision highp float;
+  precision highp usampler2D;
+
+  // 1. Fog 파라미터 선언 (vFogDepth 등)
+  #include <fog_pars_vertex>
+
   out vec2 vUv;
+  out vec2 vBoxUv; // 🚀 Box UV 확실하게 출력
+  out float vIsSideFace;
+  
   uniform usampler2D uHeight; 
   uniform float uVoxelZUnit;
+  uniform vec2 uResolution; 
+  uniform float uVoxelSize;
+  uniform float uLodScale;
 
   void main() {
-    vUv = uv;
+    vec2 lodRes = uResolution / uLodScale;
+    int iLodResX = int(lodRes.x);
+    int iLodResY = int(lodRes.y);
     
-    // R16UI 텍스처에서 높이 인덱스 추출 (0~65535)
-    // 🎯 [Engineering Fix] Y-Flip 제거: uv를 그대로 사용하여 고도 샘플링
-    uint hIndex = texture(uHeight, uv).r; 
+    int ixLod = gl_InstanceID % iLodResX;
+    int iyLod = gl_InstanceID / iLodResX;
     
-    // 실제 미터 단위 높이로 변환
-    // 1. 최소 높이 0.01을 더해 바닥면과의 Z-Fighting 방지
-    // 2. height 계산 시 정밀도 보장
-    float height = (float(hIndex) * uVoxelZUnit) + 0.01;
-    
-    vec3 pos = position;
-    // World Y(North) 방향으로 고도 Displacement 적용
-    pos.z += height;
+    int ix = ixLod * int(uLodScale);
+    int iy = iyLod * int(uLodScale);
 
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    // 🎯 [Safety] 픽셀 중앙 샘플링
+    vec2 pixelPos = vec2(float(ix), float(iy));
+    vUv = (pixelPos + 0.5) / uResolution;
+
+    // 🚀 [Verify] BoxGeometry의 UV를 그대로 캡처
+    vBoxUv = uv;
+
+    uint h = texelFetch(uHeight, ivec2(ix, iy), 0).r;
+    float zSurface = float(h) * uVoxelZUnit; 
+    
+    float visualVoxelSize = uVoxelSize * uLodScale;
+    float zCenter = zSurface - (visualVoxelSize * 0.5);
+    
+    vec2 offset = lodRes * 0.5;
+    vec3 instancePos = vec3(
+        (float(ixLod) - offset.x + 0.5) * visualVoxelSize,
+        (float(iyLod) - offset.y + 0.5) * visualVoxelSize,
+        zCenter
+    );
+    
+    vec3 localPos = position;
+
+    // --- Gap Filling & Skirt Logic ---
+    int iResX = int(uResolution.x);
+    int iResY = int(uResolution.y);
+    int lodStep = int(uLodScale);
+
+    // 🎯 [Skirt Fix] 현재 복셀이 타일 가장자리인지 확인
+    bool isEdgeX = (ixLod == 0 || ixLod == iLodResX - 1);
+    bool isEdgeY = (iyLod == 0 || iyLod == iLodResY - 1);
+    
+    float targetBottom;
+
+    if (isEdgeX || isEdgeY) {
+        // 🚀 가장자리는 이웃 높이를 모르므로 바닥을 지하 깊이 내림 (Skirt)
+        targetBottom = zSurface - 200.0;
+    } else {
+        // 내부는 기존대로 인접 4방향 중 가장 낮은 높이까지 내림
+        uint hN = texelFetch(uHeight, ivec2(ix, clamp(iy + lodStep, 0, iResY - 1)), 0).r;
+        uint hS = texelFetch(uHeight, ivec2(ix, clamp(iy - lodStep, 0, iResY - 1)), 0).r;
+        uint hE = texelFetch(uHeight, ivec2(clamp(ix + lodStep, 0, iResX - 1), iy), 0).r;
+        uint hW = texelFetch(uHeight, ivec2(clamp(ix - lodStep, 0, iResX - 1), iy), 0).r;
+        
+        float minNeighborSurface = float(min(min(hN, hS), min(hE, hW))) * uVoxelZUnit;
+        targetBottom = minNeighborSurface - visualVoxelSize;
+    }
+
+    float myBottom = zSurface - visualVoxelSize;
+
+    // 복셀 바닥 연장 (내 바닥보다 목표 바닥이 낮으면 연장)
+    if (localPos.z < 0.0 && targetBottom < myBottom) {
+       float extraDrop = (myBottom - targetBottom) / visualVoxelSize;
+       localPos.z -= extraDrop;
+    }
+    
+    vIsSideFace = (position.z < 0.45) ? 1.0 : 0.0;
+
+    // 1.002배 미세 확대 (틈새 메우기)
+    vec3 finalSize = localPos * visualVoxelSize * 1.002;
+    vec3 transformed = finalSize + instancePos;
+
+    // 🚀 [Fix 1] mvPosition 명시적 계산
+    // Fog 청크는 'mvPosition'이라는 변수명을 필요로 합니다.
+    vec4 worldPosition = modelMatrix * vec4(transformed, 1.0);
+    vec4 mvPosition = viewMatrix * worldPosition;
+    
+    gl_Position = projectionMatrix * mvPosition;
+
+    // Fog 깊이 계산 (mvPosition 필요)
+    #include <fog_vertex>
   }
 `;
 
-// ----------------------------------------------------------------------
-// 3. Dynamic Fragment Shader Generator
-// ----------------------------------------------------------------------
-
 const generateFragmentShader = () => {
-  // ---------------------------------------------------------
-  // [Section A] Channel Related (Pass 0~4)
-  // ---------------------------------------------------------
+  const channelUniformsDecl = [
+    ...TILE_CHANNEL_KEYS.map((key) => `uniform sampler2D ${toUniform(key)};`),
+    `uniform sampler2D uEditMask;`,
+  ].join('\n  ');
 
-  // 1. Channel Uniforms Auto-Generation
-  const channelUniformsDecl = TILE_CHANNEL_KEYS.map(
-    (key) => `uniform sampler2D ${toUniform(key)};`,
-  ).join('\n  ');
-
-  // 2. Channel Sampling Logic
-  // R8 포맷(0~255)을 float로 정확히 복원
   const channelSamplingLogic = TILE_CHANNEL_KEYS.map(
     (key) =>
       `float ${toVar(key)} = floor(texture(${toUniform(key)}, vUv).r * 255.0 + 0.5);`,
   ).join('\n    ');
 
-  // ---------------------------------------------------------
-  // [Section B] Voxel Color & Mapping Logic (Major -> Minor)
-  // ---------------------------------------------------------
-
   let colorUniformsDecl = '';
   let colorMappingFunctions = '';
 
-  // 각 채널(Major)별로 독립된 컬러 매핑 함수를 생성합니다.
   (Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]).forEach(
     (majorKey) => {
-      // COMMON은 스킵 (실제 렌더링되는 채널이 아님)
       if (majorKey === 'COMMON') return;
 
       const channelKey = majorKey.toLowerCase();
       const channelTypes = VOXEL_TYPES[majorKey] as Record<string, number>;
 
-      // 1. Color Uniforms Declaration
       const uniforms = Object.keys(channelTypes)
-        .filter((key) => key !== 'AIR' && key !== 'UNKNOWN') // AIR/UNKNOWN은 유니폼 불필요
+        .filter((key) => key !== 'AIR' && key !== 'UNKNOWN')
         .map(
           (typeKey) =>
             `uniform vec3 ${toColorUniformName(channelKey, typeKey)};`,
         )
         .join('\n  ');
-
       colorUniformsDecl += uniforms + '\n  ';
 
-      // 2. Channel-Specific Color Mapping Function
-      // vec3 getBaseColor(float type) { ... }
       const cases = Object.keys(channelTypes)
         .filter((key) => key !== 'AIR' && key !== 'UNKNOWN')
         .map((typeKey) => {
-          const typeVal = channelTypes[typeKey]; // 정수값 (예: 10)
+          const typeVal = channelTypes[typeKey];
           const uName = toColorUniformName(channelKey, typeKey);
-          // float 비교 시 오차 방지를 위해 Epsilon을 쓰거나 정수로 비교
           return `if (abs(type - ${typeVal}.0) < 0.1) return ${uName};`;
         })
         .join('\n    ');
 
       colorMappingFunctions += `
-  vec3 get${toChannelName(channelKey)}Color(float type) {
-    ${cases}
-    return vec3(0.0); // Fallback (Black or Transparent logic)
-  }
-  `;
+      vec3 get${toChannelName(channelKey)}Color(float type) {
+        ${cases}
+        return vec3(0.0);
+      }
+      `;
     },
   );
 
-  // ---------------------------------------------------------
-  // [Section C] Channel Blending Logic (Painter's Algorithm)
-  // ---------------------------------------------------------
-
-  // UNKNOWN(1) 값
   const unknownVal = `${VOXEL_TYPES.COMMON.UNKNOWN}.0`;
-  const baseLandUniform = toColorUniformName('base', 'BASE_LAND'); // Fallback용
+  const baseLandUniform = toColorUniformName('base', 'BASE_LAND');
 
   const channelBlendingLogic = TILE_CHANNEL_KEYS.map((key) => {
     const varName = toVar(key);
     const funcName = `get${toChannelName(key)}Color`;
-
     return `
-    // Check [${key}] Channel
-    // UNKNOWN(${unknownVal})보다 커야 유효한 데이터
     if (${varName} > ${unknownVal} + 0.1) {
       vec3 channelColor = ${funcName}(${varName});
-      // 0.0(Black)이 아니면 유효한 색상으로 간주하여 덮어쓰기
-      // (혹은 알파 블렌딩 로직을 추가할 수도 있음)
       finalColor = channelColor;
     }
     `;
   }).join('');
 
-  // ---------------------------------------------------------
-  // [Section D] Assembly
-  // ---------------------------------------------------------
-
   return `
   precision highp float;
   precision highp usampler2D;
 
-  // [Auto-Generated Channel Uniforms]
-  ${channelUniformsDecl}
+  // Fog Uniforms (fogColor, fogDensity 등)
+  #include <fog_pars_fragment>
 
-  // [Auto-Generated Color Uniforms]
+  ${channelUniformsDecl}
   ${colorUniformsDecl}
+  
+  uniform vec3 uBorderColor;
+  uniform float uBorderWidth;
+  uniform float uBorderOpacity;
 
   in vec2 vUv;
+  in vec2 vBoxUv; 
+  in float vIsSideFace;
+  
   out vec4 outColor;
 
-  // [Auto-Generated Color Mapping Functions]
   ${colorMappingFunctions}
 
+  // 🎯 [Grid Function] 앤티앨리어싱 그리드 (Anti-aliased Grid)
+  // fwidth를 사용하여 픽셀 단위로 부드러운 선을 그립니다.
+  float gridFactor(vec2 uv, float width) {
+    // uv의 변화량(미분값)을 구해 픽셀 경계를 찾음
+    vec2 grid = abs(fract(uv - 0.5) - 0.5) / fwidth(uv);
+    float line = min(grid.x, grid.y);
+    return 1.0 - min(line / width, 1.0);
+  }
+
   void main() {
-    // [Auto-Generated Sampling]
+    float editMask = texture(uEditMask, vUv).r;
+    if (editMask > 0.5) {
+      discard;
+    }
+
     ${channelSamplingLogic}
 
-    // [Blending Strategy]
-    // 0. 캔버스 초기화: 기본 지면 색상 (Base Land) Fallback
-    // 만약 모든 채널이 비어있을 경우를 대비해 Base Land 색상으로 초기화합니다.
     vec3 finalColor = ${baseLandUniform};
-
-    // [Auto-Generated Channeling]
-    // TILE_CHANNEL_KEYS 순서대로 덮어씌웁니다. (Z-Index: Pass 0 -> Pass N)
     ${channelBlendingLogic}
 
+    if (vIsSideFace > 0.5) {
+      finalColor *= 0.8; 
+    }
+
+    // 🚀 [Improved Grid Logic]
+    // step 방식 대신 fwidth 방식을 사용하거나, step을 확실하게 적용합니다.
+    // 여기서는 사용자 의도(물리적 두께)를 존중하여 step 방식을 강화합니다.
+    
+    vec2 thick = vec2(uBorderWidth);
+    // 가장자리(0.0, 1.0) 근처인지 판별
+    vec2 grid = step(thick, vBoxUv) * step(vBoxUv, vec2(1.0) - thick);
+    float isBorder = 1.0 - (grid.x * grid.y); 
+
+    if (isBorder > 0.5) {
+        finalColor = mix(finalColor, uBorderColor, uBorderOpacity);
+    }
+
     outColor = vec4(finalColor, 1.0);
+
+    // 🚀 [Fix 2] Fog 수동 적용 (GLSL3 호환)
+    // <fog_fragment>는 gl_FragColor를 쓰므로 사용하지 않고 직접 계산합니다.
+    #ifdef USE_FOG
+      float fogFactor = 0.0;
+      #ifdef FOG_EXP2
+        fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+      #else
+        fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+      #endif
+      
+      outColor.rgb = mix( outColor.rgb, fogColor, fogFactor );
+    #endif
   }
   `;
 };
 
-// ----------------------------------------------------------------------
-// 4. Factory Function
-// ----------------------------------------------------------------------
-
 interface TileMaterialProps {
   channelTextures: Record<keyof TileChannels, THREE.Texture>;
   terrainTexture: THREE.Texture;
+  uResolution: THREE.Vector2;
+  uVoxelSize: number;
+  uLodScale: number;
+  uEditMask?: THREE.Texture;
+  gridConfig?: {
+    uBorderColor: THREE.Color;
+    uBorderWidth: number;
+    uBorderOpacity: number;
+  };
 }
 
-/**
- * [createTileMaterial]
- * 4개의 채널 텍스처와 1개의 고도 텍스처를 받아 ShaderMaterial을 생성합니다.
- * 🚀 SSOT(TILE_CHANNEL_KEYS + VOXEL_TYPES)에 따라 쉐이더 코드를 완전 동적으로 생성합니다.
- */
 export const createTileMaterial = (props: TileMaterialProps) => {
-  const { channelTextures, terrainTexture } = props;
+  const {
+    channelTextures,
+    terrainTexture,
+    uResolution,
+    uVoxelSize,
+    uLodScale,
+    uEditMask,
+    gridConfig,
+  } = props;
 
-  // 1. Voxel Color Uniforms 자동 생성
   const generatedColorUniforms: Record<string, any> = {};
 
   (Object.keys(VOXEL_TYPES) as (keyof typeof VOXEL_TYPES)[]).forEach(
     (majorKey) => {
       if (majorKey === 'COMMON') return;
-
       const channelKey = majorKey.toLowerCase();
       const types = VOXEL_TYPES[majorKey] as Record<string, number>;
       const colors = VOXEL_COLORS[
@@ -242,12 +318,9 @@ export const createTileMaterial = (props: TileMaterialProps) => {
       ] as Record<number, string>;
 
       Object.keys(types).forEach((typeKey) => {
-        // AIR, UNKNOWN 제외하고 색상이 있는 경우만 유니폼 생성
         if (typeKey === 'AIR' || typeKey === 'UNKNOWN') return;
-
         const typeId = types[typeKey];
         const hexColor = colors[typeId];
-
         if (hexColor && hexColor !== 'transparent') {
           const uName = toColorUniformName(channelKey, typeKey);
           generatedColorUniforms[uName] = {
@@ -258,14 +331,32 @@ export const createTileMaterial = (props: TileMaterialProps) => {
     },
   );
 
-  // 2. 전체 Uniform 조립 (Terrain + Z-Unit + Colors)
+  // 🚀 [Restore] 기본값 설정 및 Active Config 결정
+  const defaultGrid = {
+    uBorderColor: new THREE.Color('#000000'),
+    uBorderWidth: 0.0,
+    uBorderOpacity: 0.0,
+  };
+  const activeGrid = gridConfig || defaultGrid;
+
   const uniforms: Record<string, any> = {
+    ...THREE.UniformsLib.fog,
     uHeight: { value: terrainTexture },
-    uVoxelZUnit: { value: CELL_SIZE * Z_SCALE_RATIO },
+    uVoxelZUnit: { value: CELL_SIZE },
+    uResolution: { value: uResolution },
+    uVoxelSize: { value: uVoxelSize },
+    uLodScale: { value: uLodScale },
+    uEditMask: {
+      value: uEditMask || new THREE.DataTexture(new Uint8Array([0]), 1, 1),
+    },
+    // 🚀 [Restore] GPU로 데이터를 보내는 핵심 연결 고리
+    uBorderColor: { value: activeGrid.uBorderColor },
+    uBorderWidth: { value: activeGrid.uBorderWidth },
+    uBorderOpacity: { value: activeGrid.uBorderOpacity },
+
     ...generatedColorUniforms,
   };
 
-  // 3. 채널 텍스처 Uniform 자동 주입 (Water, Base...)
   TILE_CHANNEL_KEYS.forEach((key) => {
     if (channelTextures[key]) {
       uniforms[toUniform(key)] = { value: channelTextures[key] };
@@ -275,12 +366,13 @@ export const createTileMaterial = (props: TileMaterialProps) => {
   return new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3,
     uniforms,
+    // generateFragmentShader(), vertexShader 변수는 파일 상단에 정의된 것을 사용
     vertexShader,
-    // 🚀 함수 실행 결과(Generated String)를 쉐이더 소스로 주입
     fragmentShader: generateFragmentShader(),
     transparent: false,
     depthWrite: true,
     depthTest: true,
     side: THREE.DoubleSide,
+    fog: true,
   });
 };

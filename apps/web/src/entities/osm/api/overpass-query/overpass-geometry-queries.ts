@@ -1,5 +1,5 @@
 /**
- * @file osm-geometry-queries.ts
+ * @file overpass-geometry-queries.ts
  * 복셀 지형 및 물리적 구조물 생성을 위한 Overpass QL 쿼리 셋입니다.
  */
 

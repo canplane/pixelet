@@ -14,21 +14,21 @@
 
 import { projection } from '@pixelet/shared/shared/lib/map/projection';
 import { OSM_CONSTANTS } from '../../model/osm-constants';
-import { CoordOps, type Coord2D } from '@pixelet/shared/shared/model/coords';
+import {
+  CoordOps,
+  type Coord,
+  type Coord2D,
+} from '@pixelet/shared/shared/model/coords';
 import {
   TILE_CHANNEL_KEYS,
-  type TileChannels,
-  type TileGrids,
   type Tile,
+  type TileTerrain,
+  type TileChannels,
 } from '@pixelet/shared/entities/osm/model/tiles';
 
 const { unproject } = projection;
 
-const {
-  TILE_SIZE: tileSize,
-  CELL_SIZE: cellSize,
-  TILE_RESOLUTION: res,
-} = OSM_CONSTANTS;
+const { TILE_SIZE, CELL_SIZE, TILE_RES } = OSM_CONSTANTS;
 
 /**
  * [TileCoord]
@@ -39,16 +39,38 @@ export interface TileCoord {
   ty: number;
 }
 
+export interface CellCoord {
+  cx: number;
+  cy: number;
+}
+
 /**
  * [World -> Tile Index]
  * 절대 좌표(Meter)가 포함된 타일의 인덱스(tx, ty)를 계산합니다.
  * @example (1050m, 1050m) -> TileSize가 1000m라면 -> (1, 1)
  */
-export const getTileCoord = (pos: Coord2D): TileCoord => {
+export const getTileCoord = (globalPos: Coord2D): TileCoord => {
   return {
-    tx: Math.floor(pos.x / tileSize),
-    ty: Math.floor(pos.y / tileSize),
+    tx: Math.floor(globalPos.x / TILE_SIZE),
+    ty: Math.floor(globalPos.y / TILE_SIZE),
   };
+};
+
+export const getTileCenter = (tileCoord: TileCoord): Coord2D => {
+  const { x: ax, y: ay } = getTileOrigin(tileCoord);
+  return {
+    x: ax + TILE_SIZE / 2,
+    y: ay + TILE_SIZE / 2,
+  };
+};
+
+export const getTileDistance = (
+  dstTileCoord: TileCoord,
+  srcTileCoord: TileCoord,
+): number => {
+  const dTx = dstTileCoord.tx - srcTileCoord.tx;
+  const dTy = dstTileCoord.ty - srcTileCoord.ty;
+  return dTx ** 2 + dTy ** 2;
 };
 
 /**
@@ -73,62 +95,46 @@ export interface Bbox {
 export const getTileBbox = (coord: TileCoord): Bbox => {
   const { tx, ty } = coord;
 
-  const minX = tx * tileSize;
-  const minY = ty * tileSize;
-  const maxX = (tx + 1) * tileSize;
-  const maxY = (ty + 1) * tileSize;
+  const minX = tx * TILE_SIZE;
+  const minY = ty * TILE_SIZE;
+  const maxX = (tx + 1) * TILE_SIZE;
+  const maxY = (ty + 1) * TILE_SIZE;
 
   return { minX, minY, maxX, maxY };
 };
 
 /**
- * [Tile Absolute Anchor]
+ * [getTileOrigin]
  * 타일 내 로컬 좌표 연산을 위한 절대 기준점(South-West / Min-Min)을 반환합니다.
  *
  * [Architectural Note]
  * 💡 'Anchor'는 Floating Origin 시스템이나 RTE(Relative To Eye) 렌더링에서
  * 거대한 절대 좌표를 작은 상대 좌표로 변환(Reduction)할 때 사용되는 핵심 기준점입니다.
  */
-export const getTileAbsAnchor = (coord: TileCoord): Coord2D => {
-  const bbox = getTileBbox(coord);
+export const getTileOrigin = (tileCoord: TileCoord): Coord2D => {
+  const bbox = getTileBbox(tileCoord);
   return { x: bbox.minX, y: bbox.minY };
 };
 
 /**
- * [getTileOffset]
- * 절대 미터 좌표(AbsPos)를 특정 타일의 Anchor 기준 상대 좌표(tileOffset)로 변환합니다.
- *
- * * Formula: Local = Absolute - Anchor
- * * Usage: 타일 베이킹 시 좌표 정규화 등에 사용
- */
-export const absPosToTileOffset = (absPos: Coord2D): Coord2D => {
-  const coord = getTileCoord(absPos);
-  const anchor = getTileAbsAnchor(coord);
-  return CoordOps.sub(absPos, anchor);
-};
-
-/**
- * [tileOffsetToCellIdx]
+ * [tileOffsetToCell]
  * cy=0은 타일의 남쪽(MinY), cy=99는 타일의 북쪽(MaxY)이 됩니다.
  */
-export const tileOffsetToCellIdx = (localPos: Coord2D) => {
+export const tileOffsetToCell = (tileOffset: Coord2D): CellCoord => {
   return {
-    cx: Math.floor(localPos.x / cellSize),
-    cy: Math.floor(localPos.y / cellSize),
+    cx: Math.floor(tileOffset.x / CELL_SIZE),
+    cy: Math.floor(tileOffset.y / CELL_SIZE),
   };
 };
 
 /**
- * [tileCellIdxToOffset]
+ * [cellToTileOffset]
  * 💡 셀의 '정중앙' 좌표를 반환하도록 설계되었습니다 (+0.5).
  */
-export const cellIdxToTileOffset = (cellIdx: {
-  cx: number;
-  cy: number;
-}): Coord2D => {
+export const cellToTileOffset = (cellCoord: CellCoord): Coord2D => {
   return {
-    x: cellIdx.cx * cellSize,
-    y: cellIdx.cy * cellSize,
+    x: cellCoord.cx * CELL_SIZE,
+    y: cellCoord.cy * CELL_SIZE,
   };
 };
 
@@ -163,12 +169,12 @@ export const unprojectBbox = (bbox: Bbox): Bbox4326 => {
 };
 
 /**
- * [Channels Factory]
+ * [Tile Channels Factory]
  * 🚀 스키마(TILE_CHANNEL_KEYS)에 정의된 모든 채널(8-bit)을 자동으로 생성합니다.
  * 메모리 효율을 위해 Uint8Array를 사용합니다.
  */
 export function createEmptyChannels(): TileChannels {
-  const size = res * res;
+  const size = TILE_RES * TILE_RES;
 
   const entries = TILE_CHANNEL_KEYS.map((key) => [key, new Uint8Array(size)]);
 
@@ -176,60 +182,114 @@ export function createEmptyChannels(): TileChannels {
 }
 
 /**
- * [Tile Grids Factory] 빈 그리드 생성기
+ * [Tile Terrain Factory]
  * 모든 채널을 동일한 해상도로 생성하며, 지형 데이터(elevation)는 정밀도를 위해 16-bit을 사용합니다.
  */
-export function createEmptyGrids(): TileGrids {
+export function createEmptyTerrain(): TileTerrain {
+  const size = TILE_RES * TILE_RES;
+
   return {
     channels: createEmptyChannels(),
-    terrain: {
-      // 고도(Elevation) 데이터는 m 단위 정밀도 표현을 위해 16-bit 사용 (기본값 0: 해수면)
-      elevation: new Uint16Array(res * res).fill(0),
-    },
+    // 고도(Elevation) 데이터는 m 단위 정밀도 표현을 위해 16-bit 사용 (기본값 0: 해수면)
+    elevation: new Uint16Array(size).fill(0),
   };
 }
 
 /**
- * [Tile Factory] 빈 타일 생성기
+ * [Tile Factory]
  */
 export function createEmptyTile(coord: TileCoord): Tile {
   return {
     key: getTileKey(coord),
     coord,
-    grids: createEmptyGrids(),
+    terrain: createEmptyTerrain(),
     pois: [],
   };
 }
 
+export const worldToTile = (globalPos: Coord2D) => {
+  const tileCoord = getTileCoord(globalPos);
+  const tileOrigin = getTileOrigin(tileCoord);
+  const tileOffset = CoordOps.sub(globalPos, tileOrigin);
+  const cellCoord = {
+    // 서쪽 경계(minX)로부터의 거리
+    cx: tileOffset.x / CELL_SIZE,
+    // 남쪽 경계(minY)로부터의 거리 (No Flip)
+    cy: tileOffset.y / CELL_SIZE,
+  };
+  return { tileCoord, cellCoord, tileOrigin, tileOffset };
+};
+
 /**
- * [Pixel -> World] Debug Utility
- * 타일 내 로컬 픽셀 좌표(Grid Index)를 다시 절대 미터 좌표로 복원합니다.
- * 쉐이더 디버깅이나 마우스 피킹(Picking) 역산 시 유용합니다.
+ * [World -> Tile Offset]
+ * 절대 미터 좌표(AbsPos)를 특정 타일의 Anchor 기준 상대 좌표(tileOffset)로 변환합니다.
+ *
+ * * Formula: Local = Absolute - Anchor
+ * * Usage: 타일 베이킹 시 좌표 정규화 등에 사용
  */
-export const pixelToWorld = (coord: TileCoord, localPos: Coord2D): Coord2D => {
-  const bbox = getTileBbox(coord);
+export const worldToTileOffset = (globalPos: Coord2D): Coord2D => {
+  const tileCoord = getTileCoord(globalPos);
+  const tileOrigin = getTileOrigin(tileCoord);
+  return CoordOps.sub(globalPos, tileOrigin);
+};
+
+/**
+ * [World -> Cell]
+ * 절대 미터 좌표가 타일 내의 정확히 어느 셀(실수형)에 위치하는지 계산합니다.
+ * 💡 데이터 배열과 동일한 Bottom-Up 방향을 유지합니다.
+ */
+export const worldToCell = (globalPos: Coord2D): CellCoord => {
+  const tileOffset = worldToTileOffset(globalPos);
   return {
-    // 서쪽(minX)에서 동쪽으로 이동
-    x: bbox.minX + localPos.x * cellSize,
-    // [Top-Down 보정 복원] 북쪽(maxY)에서 남쪽으로 하강했던 것을 다시 미터 좌표계로 복구
-    y: bbox.maxY - localPos.y * cellSize,
+    // 서쪽 경계(minX)로부터의 거리
+    cx: tileOffset.x / CELL_SIZE,
+    // 남쪽 경계(minY)로부터의 거리 (No Flip)
+    cy: tileOffset.y / CELL_SIZE,
   };
 };
 
 /**
- * [World -> Pixel] Debug Utility
- * 절대 미터 좌표가 타일 내의 정확히 어느 픽셀(소수점 포함)에 위치하는지 계산합니다.
- * `getTileCellIdx`와 유사하지만, 정수형 인덱스(Floor)가 아닌 실수형 좌표를 반환합니다.
+ * [Cell -> World]
+ * 타일 내 셀 좌표를 다시 절대 미터 좌표로 복원합니다.
  */
-export const worldToPixel = (
-  coord: TileCoord,
-  worldPos: Coord2D,
-): { localX: number; localY: number } => {
-  const bbox = getTileBbox(coord);
+export const cellToWorld = (
+  tileCoord: TileCoord,
+  cellCoord: CellCoord,
+): Coord2D => {
+  const bbox = getTileBbox(tileCoord);
   return {
-    // 서쪽 경계(minX)로부터의 오프셋을 cellSize로 나눔
-    localX: (worldPos.x - bbox.minX) / cellSize,
-    // 북쪽 경계(maxY)로부터 하강하는 오프셋을 cellSize로 나눔 (Top-Down)
-    localY: (bbox.maxY - worldPos.y) / cellSize,
+    x: bbox.minX + cellCoord.cx * CELL_SIZE,
+    y: bbox.minY + cellCoord.cy * CELL_SIZE,
   };
 };
+
+/**
+ * [Get Elevation at World Pos]
+ * 특정 월드 좌표의 고도값을 elevation 배열에서 즉시 추출합니다.
+ */
+export const getTerrainAltitudeCoord = (
+  tile: Tile,
+  cellCoord: CellCoord,
+): number => {
+  const { cx, cy } = cellCoord;
+
+  // // 경계값 보호
+  // if (cx < 0 || cx >= TILE_RES || cy < 0 || cy >= TILE_RES) {
+  //   return 0;
+  // }
+
+  // 인덱스 범위 가드 (0 ~ TILE_RES - 1)
+  const ix = Math.max(0, Math.min(TILE_RES - 1, Math.floor(cx)));
+  const iy = Math.max(0, Math.min(TILE_RES - 1, Math.floor(cy)));
+
+  // 🎯 데이터 배열 인덱싱: y * width + x
+  return tile.terrain.elevation[iy * TILE_RES + ix];
+};
+
+export const clampPrecision = (val: number) => Math.round(val * 1e6) / 1e6;
+
+export const toFixedCoord = (coord: Coord): Coord => ({
+  x: clampPrecision(coord.x),
+  y: clampPrecision(coord.y),
+  z: clampPrecision(coord.z ?? 0),
+});

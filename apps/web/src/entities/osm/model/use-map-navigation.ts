@@ -28,20 +28,26 @@ export function useMapNavigation() {
   // --- [2. Map State Subscription] ---
   const store = useMapStore(
     useShallow((state) => ({
+      cameraControlMode: state.cameraControlMode,
+      setCameraControlMode: state.setCameraControlMode,
+
       // [Coordinates & Navigation]
       /** 카메라가 바라보는 절대 중심 좌표 */
       center: state.center,
-      setCenter: state.setCenter,
+      updateCenter: state.updateCenter,
 
       // [Camera View]
       /** 줌, 회전, 고도 등 시각적 상태 */
       viewState: state.viewState,
       setViewState: state.setViewState,
 
+      /** 카메라의 비행(Interpolation) 진행 여부 */
+      isFlying: state.isFlying,
+      setIsFlying: state.setIsFlying,
+
       // [Floating Origin System]
       /** 렌더링 정밀도 유지를 위한 동적 원점 */
-      origin: state.origin,
-      setOrigin: state.setOrigin,
+      floatingOrigin: state.floatingOrigin,
 
       // [Signals]
       /** 줌 레벨 초기화 트리거 */
@@ -58,10 +64,6 @@ export function useMapNavigation() {
       /** 내 위치 따라가기 모드 활성화 여부 */
       isFollowMode: state.isFollowMode,
       setIsFollowMode: state.setIsFollowMode,
-
-      /** 사용자 인터랙션(드래그 등) 중 여부 */
-      isInteracting: state.isInteracting,
-      setIsInteracting: state.setIsInteracting,
 
       // [Environment]
       /** 현재 가상 시간 및 테마 */
@@ -85,18 +87,12 @@ export function useMapNavigation() {
   /**
    * [get-absolute-positions]
    * 위경도(EPSG:4326) 기반의 기기 위치를 평면 투영된 절대 미터 좌표계(Local Cartesian)로 변환합니다.
-   * * ⚠️ [Important]
-   * 이 값은 '절대 좌표(Absolute)'입니다. 렌더링 시에는 반드시
-   * `useRelativePosition(devicePos)`를 통해 `origin`을 뺀 로컬 좌표로 변환해야 합니다.
+   * 이 값은 '절대 좌표(Absolute)'입니다.
    */
   const devicePos = useMemo(
     () => (deviceLocation ? project(deviceLocation) : null),
     [deviceLocation],
   );
-
-  // 🗑️ [Deprecated] localDevicePos, localHoveredPos 제거됨
-  // 사유: 소비처(UserMarker 등)에서 useRelativePosition 훅을 사용하여
-  // 렌더링 시점에 직접 변환하는 것이 Floating Origin 아키텍처(Z축 일관성, Swizzling 분리)에 부합함.
 
   /** 현재 보고 있는 화면 중심이 내 위치에서 벗어났는지 여부 */
   const [isOffCenter, setIsOffCenter] = useState(false);

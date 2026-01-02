@@ -11,9 +11,19 @@ import type { ThemeKey } from '@/features/map-three/model/world-themes';
 
 // 5. 현재 패키지(web) 내부 설정
 import { VOXEL_CONFIG } from '@pixelet/shared/entities/voxel/voxel-config';
-import { THREE_CONFIG } from '../config/three-config';
+import { THREE_CONFIG, type CameraControlMode } from '../config/three-config';
+import {
+  getTileCenter,
+  getTileCoord,
+  getTileDistance,
+  toFixedCoord,
+} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
 
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
+
+const REBASE_FLOATING_ORIGIN_THRES_2 =
+  OSM_CONSTANTS.REBASE_FLOATING_ORIGIN_THRES ** 2;
 
 /**
  * [status-lifecycle]
@@ -42,9 +52,9 @@ export interface ViewState {
  *
  * 🌐 [floating-origin-coordinate-system]
  * 1. center (Absolute): 카메라가 보고 있는 실제 지구상의 절대 좌표 (미터)
- * 2. origin (Reference): Three.js Scene의 원점(0,0,0)에 대응되는 실제 지구상의 절대 좌표.
+ * 2. floatingOrigin (Reference): Three.js Scene의 원점(0,0,0)에 대응되는 실제 지구상의 절대 좌표.
  * - 카메라가 멀리 이동할 때마다 타일 단위로 갱신(Shift)되어 부동소수점 정밀도를 유지합니다.
- * 3. Local Position: 렌더링 시에는 (Absolute - origin) 연산을 통해 0 근처의 로컬 좌표로 변환됩니다.
+ * 3. Local Position: 렌더링 시에는 (Absolute - floatingOrigin) 연산을 통해 0 근처의 로컬 좌표로 변환됩니다.
  */
 export interface MapState {
   // --- [Lifecycle & Status] ---
@@ -54,22 +64,28 @@ export interface MapState {
   loadingStep: 'roads' | 'poi' | 'complete' | null;
   setLoadingStep: (loadingStep: MapState['loadingStep']) => void;
 
+  cameraControlMode: CameraControlMode;
+  setCameraControlMode: (cameraControlMode: CameraControlMode) => void;
+
   // --- [Navigation & Coordinate] ---
   /** [center-position] 카메라가 현재 바라보고 있는 절대적 중심 좌표 (Target) */
   center: Coord | null;
-  setCenter: (pos: Coord) => void;
-
-  /** 카메라의 줌, 회전, 고도 등 시각적 파라미터 */
-  viewState: ViewState;
-  setViewState: (view: Partial<ViewState>) => void;
+  updateCenter: (center: Coord) => void;
 
   /**
    * [floating-origin]
    * 렌더링 정밀도 유지를 위해 동적으로 변하는 World 원점 (0,0,0)의 실제 절대 좌표.
    * 카메라 이동에 따라 타일 크기 단위로 스냅되어 이동합니다.
    */
-  origin: Coord;
-  setOrigin: (origin: Coord) => void;
+  floatingOrigin: Coord;
+
+  /** 카메라의 줌, 회전, 고도 등 시각적 파라미터 */
+  viewState: ViewState;
+  setViewState: (view: Partial<ViewState>) => void;
+
+  /** 카메라의 비행(Interpolation) 진행 여부 */
+  isFlying: boolean; // 🎯 단순 플래그만 저장 (가볍다!)
+  setIsFlying: (isFlying: boolean) => void;
 
   // --- [Control Signals] ---
   /** 카메라 리셋 요청을 트리거하기 위한 시그널 (Timestamp 기반) */
@@ -98,10 +114,6 @@ export interface MapState {
   isFollowMode: boolean;
   setIsFollowMode: (isFollowMode: boolean) => void;
 
-  /** 사용자가 지도를 조작(드래그, 줌 등) 중인지 여부 */
-  isInteracting: boolean;
-  setIsInteracting: (isInteracting: boolean) => void;
-
   // --- [Environment & Theme] ---
   /** 현재 가상 월드의 시간 (0~23) */
   currentHour: number;
@@ -120,8 +132,34 @@ export const useMapStore = create<MapState>((set, get) => ({
   loadingStep: null,
   setLoadingStep: (loadingStep) => set({ loadingStep }),
 
+  cameraControlMode: 'none',
+  setCameraControlMode: (cameraControlMode: CameraControlMode) =>
+    set({ cameraControlMode }),
+
   center: null,
-  setCenter: (pos) => set({ center: pos }),
+  updateCenter: (center: Coord) => {
+    const { floatingOrigin } = get();
+
+    const dstTileCoord = getTileCoord(center);
+
+    // Rebase 여부 판단
+    const srcTileCoord = floatingOrigin ? getTileCoord(floatingOrigin) : null;
+    const needsRebase =
+      !srcTileCoord ||
+      getTileDistance(dstTileCoord, srcTileCoord) >=
+        REBASE_FLOATING_ORIGIN_THRES_2;
+
+    // 🎯 단 한 번의 set으로 모든 변화를 원자적으로 반영
+    set({
+      center: toFixedCoord(center),
+      ...(needsRebase && {
+        floatingOrigin: { ...getTileCenter(dstTileCoord), z: 0 }, // TODO: z: center.z 대응
+      }),
+    });
+  },
+
+  // [origin-initial-state] (0,0,0)으로 시작
+  floatingOrigin: { x: 0, y: 0, z: 0 },
 
   viewState: {
     distance: 200,
@@ -134,16 +172,8 @@ export const useMapStore = create<MapState>((set, get) => ({
       viewState: { ...state.viewState, ...view },
     })),
 
-  // [origin-initial-state] (0,0,0)으로 시작
-  origin: { x: 0, y: 0, z: 0 },
-
-  /**
-   * [set-origin]
-   * 오리진 설정 시 항상 격자(voxel) 단위로 스냅하여 렌더링 정밀도와 좌표 일관성을 보장합니다.
-   */
-  setOrigin: (newOrigin) => {
-    set({ origin: VOXEL_CONFIG.snapToVoxel(newOrigin) });
-  },
+  isFlying: false, // 🎯 단순 플래그만 저장 (가볍다!)
+  setIsFlying: (isFlying) => set({ isFlying }),
 
   cameraResetSignal: { distance: 0, orientation: 0 },
   triggerDistanceReset: () =>
@@ -169,9 +199,6 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   isFollowMode: false,
   setIsFollowMode: (isFollowMode) => set({ isFollowMode }),
-
-  isInteracting: false,
-  setIsInteracting: (isInteracting) => set({ isInteracting }),
 
   currentHour: new Date().getHours(),
   setCurrentHour: (hour: number) => set({ currentHour: hour }),
