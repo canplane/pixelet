@@ -1,42 +1,13 @@
 {
+  "files": [],
   "compilerOptions": {
-    /* 프로젝트 빌드 및 증분 컴파일 최적화 */
-    "composite": true, // [정석] 타 프로젝트(web, api)가 참조할 수 있도록 설정
-    "incremental": true, // 변경된 부분만 빌드하여 타입 체크 및 빌드 속도 향상
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.shared.tsbuildinfo", // 증분 빌드 캐시 정보 저장 경로
-
-    /* 런타임 환경 및 언어 사양 */
-    "target": "ES2022", // Node.js(Server) 및 Browser(Web) 공통 지원을 위한 타겟
-    "lib": ["ES2022", "DOM", "DOM.Iterable"], // 서버/클라이언트 공통 API(fetch, URL 등) 타입 포함
-    "useDefineForClassFields": true, // 클래스 필드 초기화 방식을 최신 표준 사양으로 고정
-    "module": "ESNext", // 최신 ESM(Import/Export) 시스템 사용
-    "moduleResolution": "bundler", // 최신 번들러 및 Node.js 환경에 최적화된 모듈 해석
-    "moduleDetection": "force", // 모든 파일을 독립된 모듈로 간주하여 전역 오염 방지
-
-    /* 모듈 상호 호환성 및 엄격 구문 */
-    "verbatimModuleSyntax": true, // [중요] 런타임 코드와 타입을 엄격히 분리 (Web 프로젝트와 일치)
-    "esModuleInterop": true, // 서버 환경에서 CommonJS 모듈을 ESM처럼 사용하도록 허용
-    "forceConsistentCasingInFileNames": true, // OS별 파일명 대소문자 차이로 인한 참조 에러 방지
-
-    /* 타입 정의 파일 생성 및 IDE 지원 (Project References 필수) */
-    "declaration": true, // [중요] 타 프로젝트 참조용 .d.ts 타입 선언 파일 생성
-    "declarationMap": true, // IDE에서 타입 클릭 시 원본 소스(.ts)로 이동 가능하게 지원
-    "rootDir": "src", // [중요] shared 소스의 뿌리를 src로 고정
-    "noEmit": false, // [중요] composite 모드에서는 선언 파일 출력을 위해 false여야 함
-
-    /* 엄격한 타입 검사 및 유지보수 규칙 */
-    "strict": true, // 모든 엄격한 타입 검사 옵션 활성화
-    "skipLibCheck": true, // node_modules 내 외부 라이브러리의 타입 검사 생략
-    "noUnusedLocals": false, // 사용하지 않는 지역 변수에 대한 에러 보고 여부
-    "noUnusedParameters": false, // 사용하지 않는 함수 파라미터에 대한 에러 보고 여부
-    "noFallthroughCasesInSwitch": true, // switch 문에서 break 누락 방지
-
+    "composite": true, // 타 프로젝트(web, api)가 참조할 수 있도록 설정
     /* 경로 별칭 (Path Alias) */
     "baseUrl": ".",
     "paths": {
+      "@/*": ["./src/*"],
       "@pixelet/shared/*": ["./src/*"] // Shared 패키지 내부에서 동일하게 사용할 유니크 별칭
     }
   },
-  "include": ["src", "@types"],
-  "exclude": ["node_modules", "dist"] // 제외 규칙 추가
+  "references": [{ "path": "./tsconfig.lib.json" }]
 }

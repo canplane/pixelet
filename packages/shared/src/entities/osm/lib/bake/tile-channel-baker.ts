@@ -63,24 +63,24 @@ export function bakeTileChannels(
     .sort((a, b) => a.extra.rank - b.extra.rank);
 
   // ===========================================================================
-  // 🌊 Pass 0: [Inverse Sea Rendering] on Water Channel
-  // 해안선 데이터셋은 '육지 형상'을 가지므로, Water 채널 전체를 바다로 채운 뒤 육지를 파냅니다.
+  // 🌊 Pass 0: [Inverse Sea Rendering] on BASE Channel
+  // [Refactor] 바다는 이제 base 채널의 배경(MSB/Mask)으로 먼저 구워집니다.
   // ===========================================================================
 
   // 🌊 [Safety Check] External 모드에서는 바다 채우기를 건너뜁니다.
   const shouldFillSea = !config?.limited;
 
   if (shouldFillSea) {
-    // (1) 배경 초기화: Water 채널 전체를 바다로 채움 (통합된 WATER 채널 사용)
-    channels.water.fill(VOXEL_TYPES.WATER.SEA);
+    // (1) 배경 초기화: BASE 채널 전체를 바다(SEA: 2)로 채움
+    channels.base.fill(VOXEL_TYPES.BASE.SEA);
 
-    // (2) 육지 조각하기: 육지 형상(Polygon)을 0(Empty)으로 만듦
-    // 결과적으로 Water 채널에는 '바다' 영역만 값이 남게 됨
+    // (2) 육지 조각하기: 육지 형상(Polygon) 영역을 UNKNOWN(1)으로 초기화하여 마킹
+    // 이후 resolveBaseVoxelType에 의해 실제 지면 값으로 덮어씌워집니다.
     seaFeatures.forEach((feature) => {
       renderPolygon(
         feature.shape.points,
-        VOXEL_TYPES.COMMON.AIR, // 🎯 0 = Empty (Land Placeholder)
-        channels.water,
+        VOXEL_TYPES.COMMON.UNKNOWN, // Land Placeholder
+        channels.base,
         ctx,
         feature.shape.holes,
       );
@@ -88,14 +88,13 @@ export function bakeTileChannels(
   }
 
   // ===========================================================================
-  // 🏞️ Pass 1~4: 육지 데이터 렌더링 (Masking Strategy)
-  // '진짜 바다' 영역(channels.water가 채워진 곳)에는 육지(Base)를 그리지 않도록 마스킹합니다.
+  // 🏞️ Pass 1~4: 데이터 렌더링 (Sequential Layering)
+  // [Order] BASE -> WATER -> STRUCTURE -> TRANSPORT
   // ===========================================================================
   otherFeatures.forEach((feature) => {
     const { shape, computed, category, tags, extra } = feature;
 
-    // 🔥 [FIX] 터널 숨김 조건 강화
-    // highway 터널뿐만 아니라 man_made 터널 구조물도 확실히 스킵
+    // 터널 숨김 조건
     if (
       tags.tunnel === 'yes' ||
       tags.man_made === 'tunnel' ||
@@ -115,14 +114,10 @@ export function bakeTileChannels(
     const targetChannel = channels[channelKey];
 
     // 🛡️ [Masking Logic]
-    // 1. Base(지형)는 바다(SEA)가 있는 곳을 피해야 합니다.
-    // 2. 내륙 수계(INLAND_WATER)도 이미 바다(SEA)인 곳에는 덧그릴 필요가 없습니다.
-    // 🎯 따라서 마스크의 적용 대상을 'base'와 'water'(내륙) 둘 다로 확장하되,
-    //    마스크 값은 오직 Pass 0에서 채워진 'SEA'여야 합니다.
-
-    const isBaseOrInlandWater = channelKey === 'base' || channelKey === 'water';
-    const maskChannel =
-      isBaseOrInlandWater && shouldFillSea ? channels.water : undefined;
+    // 지형(Base) 및 수계(Water)는 '진짜 바다' 영역(base 채널이 SEA인 곳)을 피해야 합니다.
+    const isBaseOrWater = channelKey === 'base' || channelKey === 'water';
+    const maskGrid = isBaseOrWater && shouldFillSea ? channels.base : undefined;
+    const maskValue = VOXEL_TYPES.BASE.SEA; // 마스크 기준값
 
     const forcePolygon = channelKey === 'base';
 
@@ -133,7 +128,8 @@ export function bakeTileChannels(
         targetChannel,
         ctx,
         shape.holes,
-        maskChannel, // 🛡️ 바다 영역(Water Channel)을 마스크로 사용
+        maskGrid,
+        maskValue,
       );
     } else {
       renderLinearFeature(
@@ -142,7 +138,8 @@ export function bakeTileChannels(
         targetChannel,
         ctx,
         computed.width,
-        maskChannel,
+        maskGrid,
+        maskValue,
       );
     }
   });
@@ -161,6 +158,7 @@ function renderPolygon(
   ctx: TileRenderContext,
   holes?: Coord[][],
   maskGrid?: Uint8Array, // 🛡️ Mask Layer (Usually Water Channel)
+  maskValue?: number,
 ) {
   if (points.length < 3) return;
 
@@ -186,9 +184,7 @@ function renderPolygon(
     intersections.sort((a, b) => a - b);
 
     // 🛡️ [Safety] 타일 경계 밖 시작 보정 (홀수 교차점 방어)
-    if (intersections.length % 2 !== 0) {
-      intersections.unshift(0);
-    }
+    if (intersections.length % 2 !== 0) intersections.unshift(0);
 
     for (let i = 0; i < intersections.length; i += 2) {
       if (i + 1 >= intersections.length) break;
@@ -197,11 +193,9 @@ function renderPolygon(
 
       for (let x = startX; x <= endX; x++) {
         const idx = y * TILE_RES + x;
-
-        // 🎯 [Mask Check] 마스크(바다)가 채워져 있다면(0이 아니라면) 그리지 않음
-        // 즉, 바다 영역에는 육지 데이터(Base)를 덮어쓰지 않음
-        if (maskGrid && maskGrid[idx] !== 0) continue;
-
+        // 🎯 [Mask Check] 마스크 채널의 값이 SEA(2)라면 그리기를 건너뜀
+        if (maskGrid && maskValue !== undefined && maskGrid[idx] === maskValue)
+          continue;
         grid[idx] = value;
       }
     }
@@ -239,7 +233,8 @@ function renderLinearFeature(
   grid: Uint8Array,
   ctx: TileRenderContext,
   meterWidth: number,
-  maskGrid?: Uint8Array, // 🛡️ 추가
+  maskGrid?: Uint8Array,
+  maskValue?: number,
 ) {
   if (!points || points.length < 2) return;
 
@@ -254,7 +249,12 @@ function renderLinearFeature(
           if (tx >= 0 && tx < TILE_RES && ty >= 0 && ty < TILE_RES) {
             const idx = ty * TILE_RES + tx;
             // 🛡️ Mask Check
-            if (maskGrid && maskGrid[idx] !== 0) continue;
+            if (
+              maskGrid &&
+              maskValue !== undefined &&
+              maskGrid[idx] === maskValue
+            )
+              continue;
             grid[idx] = value;
           }
         }
@@ -269,15 +269,13 @@ function renderLinearFeature(
     const y2 = (points[i + 1].y - ctx.tileOriginY) / CELL_SIZE;
 
     drawCircle(Math.floor(x1 + 0.5), Math.floor(y1 + 0.5), thickness);
-    if (i === points.length - 2) {
+    if (i === points.length - 2)
       drawCircle(Math.floor(x2 + 0.5), Math.floor(y2 + 0.5), thickness);
-    }
 
     const steps = Math.max(
       1,
       Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 2),
     );
-
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
       const cx = Math.floor(x1 + (x2 - x1) * t + 0.5);
@@ -288,9 +286,14 @@ function renderLinearFeature(
           const tx = cx + bx,
             ty = cy + by;
           if (tx >= 0 && tx < TILE_RES && ty >= 0 && ty < TILE_RES) {
-            const idx = ty * TILE_RES + tx; // 🎯 인덱스 계산
+            const idx = ty * TILE_RES + tx;
             // 🛡️ Mask Check
-            if (maskGrid && maskGrid[idx] !== 0) continue;
+            if (
+              maskGrid &&
+              maskValue !== undefined &&
+              maskGrid[idx] === maskValue
+            )
+              continue;
             grid[idx] = value;
           }
         }

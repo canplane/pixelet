@@ -1,62 +1,12 @@
 {
+  "files": [],
   "compilerOptions": {
-    /* 프로젝트 참조 및 빌드 최적화 */
-    "composite": false, // 👇 [수정 1] 제약을 풀기 위해 false로 변경 (또는 삭제)
-    "incremental": true, // 변경된 부분만 빌드하여 속도 향상
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo", // 증분 빌드 캐시 파일 경로
-
-    /* 언어 및 런타임 환경 */
-    "target": "ES2022", // 서버 환경 Node.js 최신 버전 타겟
-    "lib": ["ES2022"], // 서버 사이드 API 중심 라이브러리
-
-    /* 데코레이터 지원 (NestJS & TypeORM 필수 보강) */
-    "experimentalDecorators": true, // [추가] NestJS 의존성 주입 및 TypeORM 엔티티 데코레이터 활성화
-    "emitDecoratorMetadata": true, // [추가] 런타임 타입 추론을 위한 메타데이터 생성
-
-    /* 모듈 해석 전략 */
-    /* tsup(esbuild) 기반 번들링 환경과 web 프로젝트와의 대칭을 위해 최신 전략으로 보강 */
-    "module": "ESNext", // 최신 ESM(Import/Export) 시스템 사용
-    "moduleResolution": "bundler", // 번들러 환경에 최적화된 모듈 해석 (web과 일치)
-    "verbatimModuleSyntax": false, // [수정] NestJS 데코레이터와 클래스 메타데이터 호환성을 위해 false로 조정 (기존 true에서 변경)
-    "moduleDetection": "force", // 모든 파일을 독립된 모듈로 간주하여 전역 오염 방지
-
-    /* 출력 설정 */
-    /* 실제 빌드 결과물은 nest build(내부 webpack/swc)가 담당 */
-    "rootDir": "../..", // 👇 [수정 2] 핵심! 루트를 모노레포 최상위로 확장
-    "outDir": "dist",
-    "sourceMap": true, // 디버깅을 위한 소스맵 생성
-    "noEmit": false, // [수정] Nest CLI 빌드 파이프라인 연동을 위해 false로 변경 (기존 true에서 변경)
-
-    /* 엄격한 타입 검사 및 린팅 규칙 */
-    "strict": true, // 모든 엄격한 타입 검사 옵션 활성화
-    "skipLibCheck": true, // node_modules 내 외부 라이브러리의 타입 검사 생략
-    "forceConsistentCasingInFileNames": true, // 파일명 대소문자 일관성 강제
-    "noUnusedLocals": false, // [Web과 통일] 사용하지 않는 지역 변수에 대한 에러 보고 여부
-    "noUnusedParameters": false, // [Web과 통일] 사용하지 않는 함수 파라미터에 대한 에러 보고 여부
-    "noFallthroughCasesInSwitch": true, // [Web과 통일] switch 문에서 break 누락 방지
-
-    /* 상호 운용성 및 기타 */
-    "esModuleInterop": true, // CommonJS 모듈을 ESM처럼 사용 허용
-    "allowSyntheticDefaultImports": true, // 디폴트 익스포트가 없는 모듈도 임포트 허용
-    "resolveJsonModule": true, // JSON 파일 임포트 허용
-
     /* 경로 별칭 (Path Alias) */
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"], // API 프로젝트 내부 소스 참조용 별칭
-      // 👇 이 경로 설정이 있어야 Webpack이 실제 소스 위치를 찾습니다.
-      "@pixelet/shared/*": ["../../packages/shared/src/*"]
+      "@pixelet/shared/*": ["../../packages/shared/src/*"] // 👇 이 경로 설정이 있어야 Webpack이 실제 소스 위치를 찾습니다.
     }
   },
-  "include": ["src", "@types", "../../packages/shared/src/**/*"], // [선택] 명시적으로 포함해주면 더 확실합니다.
-  "exclude": [
-    "node_modules",
-    "dist",
-    "../../packages/shared/src/**/*.client.ts" // ✨ [중요] 클라이언트 전용 코드는 서버 검사에서 제외
-  ]
-
-  // 개발 모드에서는 references를 꺼야 합니다.
-  // "references": [
-  //   { "path": "../../packages/shared" }
-  // ]
+  "references": [{ "path": "./tsconfig.app.json" }]
 }

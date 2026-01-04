@@ -7,29 +7,25 @@ import type { TileCoord } from '../lib/utils/tile-utils';
 import type { MapPoi } from './osm-feature';
 
 /**
- * 🎯 [SSOT] 채널 키 정의 (바이너리 패킹 및 텍스처 팩토리용)
+ * 🎯 [SSOT] 채널 키 정의 (바이너리 패킹 및 렌더링 순서)
+ * 컨벤션에 따른 레이어 스택: Sea(Base에 통합) -> Base -> Water -> Structure -> Transport
  */
 export const TILE_CHANNEL_KEYS: (keyof TileChannels)[] = [
-  'water', // 1. 배경 및 수계 (가장 아래)
-  'base', // 2. 지형
-  'transport', // 3. 도로망
-  'structure', // 4. 건물 (가장 위)
+  'base', // 1. 지형 (MSB 또는 특정 ID를 통해 Sea 마스크 포함)
+  'water', // 2. 내륙 수계 (River, Lake 등)
+  'structure', // 3. 구조물
+  'transport', // 4. 교통망 (최상단 가독성 확보)
 ];
 
-/**
- * [TileChannels]
- * 수평적 분류를 나타내는 8-bit 데이터 채널 집합입니다.
- * 텍스처 채널(Texture Channels)과 1:1로 대응됩니다.
- */
 export interface TileChannels {
-  /** [Ch 1] 수계 (Water) - 바다 및 내륙 수계 통합 */
-  water: Uint8Array;
-  /** [Ch 2] 지형 (Base Land, Natural, Landuse) */
+  /** [Ch 1] 지형 (Base Land) - 바다 영역 마킹 포함 */
   base: Uint8Array;
-  /** [Ch 3] 교통 (Transport) */
-  transport: Uint8Array;
-  /** [Ch 4] 구조물 (Structure) */
+  /** [Ch 2] 내륙 수계 (Inland Water) - 지표면 위의 물 */
+  water: Uint8Array;
+  /** [Ch 3] 구조물 (Structure) */
   structure: Uint8Array;
+  /** [Ch 4] 교통 (Transport) */
+  transport: Uint8Array;
 }
 
 /**

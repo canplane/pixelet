@@ -11,20 +11,18 @@
     "packages/*"
   ],
   "scripts": {
-    "predev": "pnpm recursive run clean",
-    "dev:web": "wait-on tcp:3000 && pnpm -C apps/web dev",
-    "dev:api": "pnpm -C apps/api dev",
-    "dev": "concurrently -k -n web,api -c blue,green \"pnpm run dev:web\" \"pnpm run dev:api\"",
-    "prebuild": "pnpm run clean",
-    "build:web": "pnpm -C apps/web build",
-    "build:api": "pnpm -C apps/api build",
-    "build": "pnpm recursive run build",
     "clean": "pnpm recursive run clean",
-    "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\"",
-    "lint:fix": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\" --fix",
     "format": "prettier \"**/*.{ts,tsx,js,jsx,json,md,css,yaml,yml}\" --write",
     "format:check": "prettier \"**/*.{ts,tsx,js,jsx,json,md,css,yaml,yml}\" --check",
-    "typecheck": "tsc -b"
+    "lint": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\"",
+    "lint:fix": "eslint \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\" --fix",
+    "typecheck": "tsc -b",
+    "dev": "concurrently -k -n web,api -c blue,green \"pnpm run dev:web\" \"pnpm run dev:api\"",
+    "dev:web": "wait-on tcp:3000 && pnpm -C apps/web dev",
+    "dev:api": "pnpm -C apps/api dev",
+    "build": "pnpm recursive run build",
+    "build:web": "pnpm -C apps/web build",
+    "build:api": "pnpm -C apps/api build"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",

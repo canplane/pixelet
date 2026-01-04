@@ -6,28 +6,24 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
-  /* ---------------------------------------------
-   * Base JS rules
-   * --------------------------------------------- */
+  {
+    ignores: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/temp/**'],
+  },
+
   js.configs.recommended,
 
   /* ---------------------------------------------
-   * TypeScript (apps/*)
-   * - project: false for performance
-   * - unused vars are warnings (not errors)
+   * 1. Base TypeScript Rules (All Packages)
    * --------------------------------------------- */
   {
-    files: ['apps/**/*.{ts,tsx}'],
+    // shared와 모든 app을 포함
+    files: ['packages/shared/**/*.{ts,tsx}', 'apps/**/*.{ts,tsx}'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: false, // 🔥 performance-first
+        project: false,
         ecmaVersion: 'latest',
         sourceType: 'module',
-      },
-      globals: {
-        ...globals.browser,
-        ...globals.node,
       },
     },
     plugins: {
@@ -37,13 +33,7 @@ export default [
       ...tseslint.configs.recommended.rules,
       ...prettier.rules,
 
-      /* 🔹 [strict-type-boundary]
-       * 외부 모듈로 노출되는(export) 함수의 인자와 리턴 타입을 강제합니다.
-       * 엔진급 코드의 인터페이스 명확성을 위해 추가되었습니다.
-       */
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
-
-      /* 🔹 soften unused vars */
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
@@ -53,22 +43,39 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-
-      /* 🔹 enforce shared package boundary */
       'no-restricted-imports': [
         'error',
-        {
-          patterns: ['@pixelet/shared/src/*'],
-        },
+        { patterns: ['@pixelet/shared/src/*'] },
       ],
     },
   },
 
   /* ---------------------------------------------
-   * React (apps/web only)
+   * 2. Shared Engine Specific (Pure Logic)
+   * 브라우저/노드 어디서든 돌아가야 하므로 환경을 제한합니다.
+   * --------------------------------------------- */
+  {
+    files: ['packages/shared/**/*.ts'],
+    languageOptions: {
+      globals: {
+        // 엔진 코드는 환경 의존성을 최소화해야 하므로 기본 전역 변수만 허용
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      // 엔진급 코드에서는 any 사용을 더 엄격히 제한하는 것을 권장
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+
+  /* ---------------------------------------------
+   * 3. Web Specific (React/Browser)
    * --------------------------------------------- */
   {
     files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
@@ -83,24 +90,15 @@ export default [
   },
 
   /* ---------------------------------------------
-   * API (apps/api only)
+   * 4. API Specific (Node/Server)
    * --------------------------------------------- */
   {
     files: ['apps/api/**/*.ts'],
     languageOptions: {
-      globals: {
-        ...globals.node,
-      },
+      globals: { ...globals.node },
     },
     rules: {
-      'no-console': 'off', // server logs are fine
+      'no-console': 'off',
     },
-  },
-
-  /* ---------------------------------------------
-   * Ignore
-   * --------------------------------------------- */
-  {
-    ignores: ['**/node_modules/**', '**/dist/**'],
   },
 ];

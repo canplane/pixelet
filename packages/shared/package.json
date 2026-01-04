@@ -17,14 +17,18 @@
     "types": "./dist/index.d.ts"
   },
   "scripts": {
+    "clean": "tsc -b --clean && rimraf dist *.tsbuildinfo node_modules/.cache",
+    "typecheck": "tsc --noEmit",
     "predev": "pnpm run clean",
     "dev": "tsc -b -w",
     "prebuild": "pnpm run clean",
-    "build": "tsc -b",
-    "clean": "tsc -b --clean && rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc -b"
   },
   "devDependencies": {
+    "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-core": "^4.22.0"
   }
 }

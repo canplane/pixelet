@@ -19,19 +19,12 @@ export const VOXEL_TYPES = {
     UNKNOWN: 1, // 🌫️ 알 수 없는 상태 (데이터 부재 지역의 Fallback)
   },
 
-  /** * 💧 [Channel: WATER]
-   * 수계 채널 (바다 + 내륙 수계 통합) (Pass 1)
-   */
-  WATER: {
-    SEA: 2, // 🌊 바다 (Ocean, Coastline) - 배경이 되는 거대한 물
-    INLAND_WATER: 3, // 🏞️ 내륙 수계 (River, Lake, Basin) - 지형 위의 물
-  },
-
   /** * ⛰️ [Channel: BASE]
-   * 지형/바닥 채널 (Natural + Landuse) (Pass 2)
+   * 배경(Sea)과 지형을 통합 관리합니다.
    */
   BASE: {
-    BASE_LAND: 2, // 🏜️ 일반 대지 (명시적으로 정의된 땅)
+    SEA: 2, // 🌊 [Sea Mask] Base 채널에서 바다를 2번으로 정의 (배경)
+    BASE_LAND: 3, // 🏜️ 일반 대지 (바다 위에 얹어지는 땅)
 
     // --- [NATURAL] 자연 지형 ---
     GREEN_DEEP: 10, // 🌲 숲/산
@@ -52,8 +45,29 @@ export const VOXEL_TYPES = {
     HELIPAD: 31, // 🚁 헬기장
   },
 
+  /** * 💧 [Channel: WATER]
+   * 내륙 수계 분화 (지형 위에 흐르는 물)
+   */
+  WATER: {
+    RIVER: 2, // 🌊 흐르는 물 (River, Stream, Canal)
+    LAKE: 3, // 🏞️ 고인 물 (Lake, Pond, Reservoir)
+    WETLAND: 4, // 🌾 습지 (Mud, Wetland) - 하프 투명 또는 특수 텍스처용
+  },
+
+  /** * 🏢 [Channel: STRUCTURE]
+   * 구조물 및 입체 개체 (Pass 4)
+   */
+  STRUCTURE: {
+    // --- [BUILDINGS] 건물 ---
+    BUILDING: 2, // 🏢 일반 건물 (주거/상업 복합)
+    BUILDING_STATION: 3, // 🚉 역사/터미널 (교통 허브)
+    BUILDING_EDUCATION: 4, // 🏫 학교/대학 (교육 시설)
+    BUILDING_MEDICAL: 5, // 🏥 병원 (의료 시설)
+    BUILDING_PUBLIC: 6, // 🏛️ 관공서 건물
+  },
+
   /** * 🛣️ [Channel: TRANSPORT]
-   * 교통 및 인프라 (Pass 3)
+   * 교통 및 인프라
    */
   TRANSPORT: {
     // --- [ROADS] 도로 ---
@@ -72,18 +86,6 @@ export const VOXEL_TYPES = {
     RUNWAY: 20, // 🛫 활주로 (가장 어둡고 넓음)
     TAXIWAY: 21, // 🚕 유도로 (활주로 연결)
   },
-
-  /** * 🏢 [Channel: STRUCTURE]
-   * 구조물 및 입체 개체 (Pass 4)
-   */
-  STRUCTURE: {
-    // --- [BUILDINGS] 건물 ---
-    BUILDING: 2, // 🏢 일반 건물 (주거/상업 복합)
-    BUILDING_STATION: 3, // 🚉 역사/터미널 (교통 허브)
-    BUILDING_EDUCATION: 4, // 🏫 학교/대학 (교육 시설)
-    BUILDING_MEDICAL: 5, // 🏥 병원 (의료 시설)
-    BUILDING_PUBLIC: 6, // 🏛️ 관공서 건물
-  },
 } as const;
 
 // =============================================================================
@@ -100,11 +102,8 @@ export const VOXEL_COLORS = {
     [VOXEL_TYPES.COMMON.AIR]: 'transparent', // 🎯 AIR는 투명
     [VOXEL_TYPES.COMMON.UNKNOWN]: '#E0DDD5', // 🌑 빈 공간: 배경과 어우러지는 샌드 그레이
   },
-  WATER: {
-    [VOXEL_TYPES.WATER.SEA]: '#AACBD6', // 🌊 바다: 기존의 차분한 파스텔 블루 (깊이감)
-    [VOXEL_TYPES.WATER.INLAND_WATER]: '#C4E3ED', // 🏞️ 내륙 수계: 바다보다 조금 더 밝고 경쾌한 블루 (청량감)
-  },
   BASE: {
+    [VOXEL_TYPES.BASE.SEA]: '#AACBD6', // 🌊 바다: 기존의 차분한 파스텔 블루 (깊이감)
     [VOXEL_TYPES.BASE.BASE_LAND]: '#F2EFE9', // 🏜️ 땅: 자연스러운 미색 (크림 톤)
 
     // Natural
@@ -125,6 +124,19 @@ export const VOXEL_COLORS = {
     [VOXEL_TYPES.BASE.APRON]: '#E0E0E0', // 🅿️ 계류장: 밝은 콘크리트 색상
     [VOXEL_TYPES.BASE.HELIPAD]: '#555555', // 🚁 헬기장: 유도로와 동일
   },
+  WATER: {
+    [VOXEL_TYPES.WATER.RIVER]: '#B9DEEA', // 강: 흐름이 느껴지는 밝은 블루
+    [VOXEL_TYPES.WATER.LAKE]: '#A8D3E2', // 호수: 조금 더 깊이감이 느껴지는 블루
+    [VOXEL_TYPES.WATER.WETLAND]: '#D1E3E2', // 습지: 녹색기가 섞인 탁한 블루
+  },
+  STRUCTURE: {
+    // Buildings
+    [VOXEL_TYPES.STRUCTURE.BUILDING]: '#D9D0C9', // 🏢 일반: 웜 그레이
+    [VOXEL_TYPES.STRUCTURE.BUILDING_STATION]: '#546E7A', // 🚉 역사: 블루 그레이 (Cool & Heavy)
+    [VOXEL_TYPES.STRUCTURE.BUILDING_MEDICAL]: '#FFFFFF', // 🏥 병원: 순백색 (Bright)
+    [VOXEL_TYPES.STRUCTURE.BUILDING_EDUCATION]: '#F5DEB3', // 🏫 학교: 샌드/살구 (Warm & Soft)
+    [VOXEL_TYPES.STRUCTURE.BUILDING_PUBLIC]: '#DFE4EA', // 🏛️ 관공서: 스톤 그레이 (Cool & Solid)
+  },
   TRANSPORT: {
     // Roads
     [VOXEL_TYPES.TRANSPORT.ROAD_DEFAULT]: '#FFFFFF', // ⚪ 일반 도로: 깔끔한 순백색
@@ -141,13 +153,5 @@ export const VOXEL_COLORS = {
     // Aeroway Lines
     [VOXEL_TYPES.TRANSPORT.RUNWAY]: '#333333', // 🛫 활주로: 아주 짙은 다크 그레이
     [VOXEL_TYPES.TRANSPORT.TAXIWAY]: '#555555', // 🚕 유도로: 활주로보다 살짝 밝은 그레이
-  },
-  STRUCTURE: {
-    // Buildings
-    [VOXEL_TYPES.STRUCTURE.BUILDING]: '#D9D0C9', // 🏢 일반: 웜 그레이
-    [VOXEL_TYPES.STRUCTURE.BUILDING_STATION]: '#546E7A', // 🚉 역사: 블루 그레이 (Cool & Heavy)
-    [VOXEL_TYPES.STRUCTURE.BUILDING_MEDICAL]: '#FFFFFF', // 🏥 병원: 순백색 (Bright)
-    [VOXEL_TYPES.STRUCTURE.BUILDING_EDUCATION]: '#F5DEB3', // 🏫 학교: 샌드/살구 (Warm & Soft)
-    [VOXEL_TYPES.STRUCTURE.BUILDING_PUBLIC]: '#DFE4EA', // 🏛️ 관공서: 스톤 그레이 (Cool & Solid)
   },
 } as const;
