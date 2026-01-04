@@ -4,8 +4,8 @@ import * as THREE from 'three';
 // 🎯 [Add] 후처리 효과 가져오기
 import { EffectComposer, SMAA } from '@react-three/postprocessing';
 
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
+import { THREE_CONFIG } from '@/entities/geo/config/three-config';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 
 import { MapCameraController } from '../camera-controller/map-camera-controller';

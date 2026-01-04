@@ -1,17 +1,17 @@
 import { forwardRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 
-import { TerrainLayer } from '@/entities/osm/ui/layers/terrain-layer';
-import { PoiLayer } from '@/entities/osm/ui/layers/poi-layer';
+import { TerrainLayer } from '@/entities/geo/ui/layers/terrain-layer';
+import { PoiLayer } from '@/entities/geo/ui/layers/poi-layer';
 import { UserMarker } from '../markers/user-marker';
 import { CellHighlighter } from '../markers/cell-highlighter';
 import { VoxelBlock } from '../voxels/voxel-block';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 import { TerrainStickyGroup } from '@/features/map-three/ui/terrain-sticky-group';
-import { snapToCell } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import { snapToCell } from '@pixelet/core/entities/geo/lib/utils/tile-utils';
 
 /**
  * [WorldContent]

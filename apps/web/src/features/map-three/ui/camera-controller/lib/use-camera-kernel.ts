@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import type { Vector3Tuple } from 'three';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
-import { useCoordinateConverter } from '@/entities/osm/lib/use-coordinate-converter';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
+import { useCoordinateConverter } from '@/entities/geo/lib/use-coordinate-converter';
 import { fromThreeCoord } from '@/shared/lib/three/three-coords';
 
 import { useCameraInitialization } from './use-camera-initialization';

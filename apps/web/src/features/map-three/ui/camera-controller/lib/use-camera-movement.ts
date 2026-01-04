@@ -2,11 +2,11 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
+import { THREE_CONFIG } from '@/entities/geo/config/three-config';
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
-import { useCoordinateConverter } from '@/entities/osm/lib/use-coordinate-converter';
-import { useMapStore } from '@/entities/osm/model/map-store';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useCoordinateConverter } from '@/entities/geo/lib/use-coordinate-converter';
+import { useMapStore } from '@/entities/geo/model/map-store';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 
 const { DEFAULT_DIST, MIN_DISTANCE, DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 

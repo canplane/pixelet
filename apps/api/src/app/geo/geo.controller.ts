@@ -7,7 +7,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { GeoService } from './geo.service';
-import { TileDto } from '@pixelet/core/entities/osm/dto/tiles.dto';
+import { TileDto } from '@pixelet/core/entities/geo/dto/tiles.dto';
 
 /**
  * [TileRequestDto]

@@ -1,7 +1,7 @@
 import { useRef, useLayoutEffect, type RefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import type { CameraFlyTarget } from './use-camera-movement';
 
 interface UseCameraFrameProps {

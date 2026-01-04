@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import type { Coord2D } from '@pixelet/core/shared/model/coords';
-import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
-import { FloatingGroup } from '@/entities/osm/ui/floating-group';
+import { useTerrainAltitude } from '@/entities/geo/lib/use-terrain-altitude';
+import { FloatingGroup } from '@/entities/geo/ui/floating-group';
 
 interface TerrainStickyGroupProps {
   /** 객체의 절대 좌표 (Global Coordinate) */

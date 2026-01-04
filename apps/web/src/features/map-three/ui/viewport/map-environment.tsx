@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import type { Vector3Tuple } from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
+import { THREE_CONFIG } from '@/entities/geo/config/three-config';
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
 
 // 🎯 [Config] 선형 안개 설정 가져오기

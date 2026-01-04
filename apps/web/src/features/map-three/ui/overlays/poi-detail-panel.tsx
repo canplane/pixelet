@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Navigation } from 'lucide-react';
-import { useMapStore } from '@/entities/osm/model/map-store';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapStore } from '@/entities/geo/model/map-store';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 import { Badge } from '@/shared/ui/theme/glass/badge';
 

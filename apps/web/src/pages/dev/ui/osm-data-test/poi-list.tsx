@@ -1,7 +1,7 @@
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
-import { useMapStore } from '@/entities/osm/model/map-store';
-import { useTileStore } from '@/entities/osm/model/tile-store';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapStore } from '@/entities/geo/model/map-store';
+import { useTileStore } from '@/entities/geo/model/tile-store';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 
 /**

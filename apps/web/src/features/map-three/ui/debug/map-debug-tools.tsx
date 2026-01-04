@@ -1,12 +1,12 @@
-import { useTileStore } from '@/entities/osm/model/tile-store';
+import { useTileStore } from '@/entities/geo/model/tile-store';
 import { cn } from '@/shared/lib/utils';
 import { triggerDownload } from '@/shared/lib/io/browser-io';
-import { generateGridBinary } from '@pixelet/core/entities/osm/lib/io/grid-binary';
+import { generateGridBinary } from '@pixelet/core/entities/geo/lib/io/grid-binary';
 import {
   exportGridImage,
   exportMergedGridImage,
-} from '@/entities/osm/lib/export/tile-exporter';
-import type { TileChannels } from '@pixelet/core/entities/osm/model/tiles';
+} from '@/entities/geo/lib/export/tile-exporter';
+import type { TileChannels } from '@pixelet/core/entities/geo/model/tiles';
 
 /**
  * [map-debug-tools]

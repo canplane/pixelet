@@ -1,22 +1,22 @@
 import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { CoordOps } from '@pixelet/core/shared/model/coords';
 import {
   snapToCell,
   toCenter,
-} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
-import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
-import { FloatingGroup } from '@/entities/osm/ui/floating-group';
-import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
+} from '@pixelet/core/entities/geo/lib/utils/tile-utils';
+import { GEO_CONSTANTS } from '@pixelet/core/entities/geo/model/geo-constants';
+import { THREE_CONFIG } from '@/entities/geo/config/three-config';
+import { FloatingGroup } from '@/entities/geo/ui/floating-group';
+import { useTerrainAltitude } from '@/entities/geo/lib/use-terrain-altitude';
 import {
   toThreeCoord,
   toThreeCoordWithOffset,
 } from '@/shared/lib/three/three-coords';
 
-const { CELL_SIZE } = OSM_CONSTANTS;
+const { CELL_SIZE } = GEO_CONSTANTS;
 const MAX_INSTANCES = 1500;
 
 // ⚙️ [Config]
