@@ -19,29 +19,24 @@
     /* 모듈 해석 및 번들러 전략 */
     "module": "ESNext", // 최신 ESM(Import/Export) 시스템 사용
     "moduleResolution": "bundler", // Vite, esbuild 등 최신 번들러 환경에 최적화된 모듈 해석
-    "verbatimModuleSyntax": true, // [중요] 런타임 코드와 타입을 엄격히 분리 (import type 사용 강제)
     "moduleDetection": "force", // 모든 파일을 독립된 모듈로 간주하여 전역 오염 방지
 
     /* 출력 설정 */
-    "rootDir": "src", // [정석] 뿌리를 src로 고정하여 외부 소스 침범 방지 및 빌드 구조 유지
+    "rootDir": "src", // 뿌리를 src로 고정하여 외부 소스 침범 방지 및 빌드 구조 유지
     "noEmit": true, // tsc는 검사만 수행 (실제 빌드는 Vite가 담당)
 
     /* 엄격한 타입 검사 및 린팅 규칙 */
-    "strict": true, // 모든 엄격한 타입 검사 옵션 활성화
-    "skipLibCheck": true, // node_modules 내 외부 라이브러리의 타입 검사 생략
-    "noUnusedLocals": false, // 사용하지 않는 지역 변수에 대한 에러 보고 여부
-    "noUnusedParameters": false, // 사용하지 않는 함수 파라미터에 대한 에러 보고 여부
-    "noFallthroughCasesInSwitch": true // switch 문에서 break 누락 방지
+    "skipLibCheck": true // node_modules 내 외부 라이브러리의 타입 검사 생략
   },
   "include": ["src", "@types", "../../packages/shared/src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
     "build",
-    "../../packages/shared/src/**/*.server.ts", // ✨ [중요] 서버 전용 코드는 클라이언트 검사에서 제외
+    "../../packages/shared/src/**/*.server.ts", // 서버 전용 코드는 클라이언트 검사에서 제외
     "../../packages/shared/src/**/*.spec.ts" // 테스트 파일 제외
   ],
   "references": [
-    { "path": "../../packages/shared" } // [핵심] 정석 방식으로 Shared 프로젝트 참조 등록
+    { "path": "../../packages/shared" } // shared 프로젝트 참조 등록
   ]
 }

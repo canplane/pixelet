@@ -1,12 +1,13 @@
 {
   "files": [],
   "compilerOptions": {
-    "composite": true, // 타 프로젝트(web, api)가 참조할 수 있도록 설정
-    /* 경로 별칭 (Path Alias) */
+    /* 프로젝트 빌드 */
+    "composite": true, // 타 프로젝트가 참조할 수 있도록 설정
+
+    /* 경로 별칭 */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@pixelet/shared/*": ["./src/*"] // Shared 패키지 내부에서 동일하게 사용할 유니크 별칭
+      "@/*": ["./src/*"]
     }
   },
   "references": [{ "path": "./tsconfig.lib.json" }]

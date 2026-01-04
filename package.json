@@ -24,6 +24,11 @@
     "build:web": "pnpm -C apps/web build",
     "build:api": "pnpm -C apps/api build"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@tensorflow/tfjs-node"
+    ]
+  },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "concurrently": "^9.0.0",
