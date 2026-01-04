@@ -31,21 +31,15 @@
     "skipLibCheck": true, // node_modules 내 외부 라이브러리의 타입 검사 생략
     "noUnusedLocals": false, // 사용하지 않는 지역 변수에 대한 에러 보고 여부
     "noUnusedParameters": false, // 사용하지 않는 함수 파라미터에 대한 에러 보고 여부
-    "noFallthroughCasesInSwitch": true, // switch 문에서 break 누락 방지
-
-    /* 경로 별칭 (Path Alias) */
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"], // Web 프로젝트 내부 소스 참조용 별칭
-      "three/*": ["./node_modules/@types/three/*"] // Three.js 상세 타입 정의 매핑
-    }
+    "noFallthroughCasesInSwitch": true // switch 문에서 break 누락 방지
   },
-  "include": ["src", "@types"],
+  "include": ["src", "@types", "../../packages/shared/src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
     "build",
-    "../../packages/shared/src/**/*.server.ts" // ✨ [중요] 서버 전용 코드는 클라이언트 검사에서 제외
+    "../../packages/shared/src/**/*.server.ts", // ✨ [중요] 서버 전용 코드는 클라이언트 검사에서 제외
+    "../../packages/shared/src/**/*.spec.ts" // 테스트 파일 제외
   ],
   "references": [
     { "path": "../../packages/shared" } // [핵심] 정석 방식으로 Shared 프로젝트 참조 등록
