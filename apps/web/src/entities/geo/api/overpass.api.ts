@@ -4,7 +4,7 @@ import { OSM_CONFIG } from '../config/osm-config';
 import { randomDelay } from '@pixelet/core/shared/lib/aync-utils'; // 기존에 사용하던 유틸리티 활용
 import { withSharedPromise } from '@pixelet/core/shared/lib/cache-utils';
 
-const { EXTERNAL_OSM_ENDPOINTS } = OSM_CONFIG;
+const { EXTERNAL_GEO_OSM_ENDPOINTS } = OSM_CONFIG;
 
 /**
  * Overpass API 요청을 수행합니다.
@@ -16,7 +16,7 @@ const { EXTERNAL_OSM_ENDPOINTS } = OSM_CONFIG;
 export async function requestOverpass(query: string): Promise<Osm4326Response> {
   return withSharedPromise('overpass', query, async () => {
     // external 모드 (Load Balancing & Fallback)
-    const shuffledServers = [...EXTERNAL_OSM_ENDPOINTS].sort(
+    const shuffledServers = [...EXTERNAL_GEO_OSM_ENDPOINTS].sort(
       () => Math.random() - 0.5,
     );
     let lastError: Error | null = null;

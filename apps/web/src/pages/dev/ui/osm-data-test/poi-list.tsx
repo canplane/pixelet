@@ -1,3 +1,5 @@
+/** @deprecated Unused */
+
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
 import { useMapStore } from '@/entities/geo/model/map-store';
 import { useTileStore } from '@/entities/geo/model/tile-store';
