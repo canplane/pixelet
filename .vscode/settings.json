@@ -31,23 +31,23 @@
   "[scss]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
 
   /* Use workspace typescript version */
-  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.tsdk": "node_modules/typescript/lib"
 
-  /* Search exclusion */
-  "search.exclude": {
-    "**/node_modules": true,
-    "**/dist": true,
-    "**/.turbo": true
-  },
+  // /* Search exclusion */
+  // "search.exclude": {
+  //   "**/node_modules": true,
+  //   "**/dist": true,
+  //   "**/.turbo": true
+  // },
 
-  /* File visibility */
-  "files.exclude": {
-    "**/src/**/*.js": { "when": "$(basename).ts" },
-    "**/src/**/*.js.map": true,
-    "**/src/**/*.d.ts": { "when": "$(basename).ts" },
-    "**/src/**/*.d.ts.map": true,
-    "**/*.tsbuildinfo": true,
-    "**/.turbo": true,
-    "**/dist": true // dist 폴더 자체를 탐색기에서 숨겨서 실수 방지
-  }
+  // /* File visibility */
+  // "files.exclude": {
+  //   "**/src/**/*.js": { "when": "$(basename).ts" },
+  //   "**/src/**/*.js.map": true,
+  //   "**/src/**/*.d.ts": { "when": "$(basename).ts" },
+  //   "**/src/**/*.d.ts.map": true,
+  //   "**/*.tsbuildinfo": true,
+  //   "**/.turbo": true,
+  //   "**/dist": true // dist 폴더 자체를 탐색기에서 숨겨서 실수 방지
+  // }
 }

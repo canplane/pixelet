@@ -1,4 +1,5 @@
-// import { bootstrapEngines } from './app/bootstrap';
+import '@pixelet/shared/shared/lib/i18n/i18n.server'; // i18n initialization
+import { bootstrapEngines } from '@/app/bootstrap';
 
 import { NestFactory } from '@nestjs/core';
 import {
@@ -9,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
-  // await bootstrapEngines();
+  await bootstrapEngines(); // 인프라 먼저 확보 (TFJS-Node 초기화 등)
 
   // Fastify 어댑터 생성 (기존 Fastify 설정과 호환)
   const app = await NestFactory.create<NestFastifyApplication>(

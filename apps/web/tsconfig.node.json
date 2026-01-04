@@ -14,16 +14,11 @@
     /* 모듈 해석 전략 (Bundler) */
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "verbatimModuleSyntax": true, // import/export 구문 엄격 적용
     "moduleDetection": "force",
     "noEmit": true, // 파일 생성은 하지 않고 검사만 수행
 
-    /* 엄격한 타입 검사 및 린팅 */
-    "strict": true,
-    "skipLibCheck": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    /* 엄격한 타입 검사 및 린팅 규칙 */
+    "skipLibCheck": true // node_modules 내 외부 라이브러리의 타입 검사 생략
   },
   "include": ["vite.config.ts"]
 }

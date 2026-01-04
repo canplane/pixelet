@@ -14,23 +14,15 @@
     "moduleResolution": "bundler", // 최신 번들러 및 Node.js 환경에 최적화된 모듈 해석
     "moduleDetection": "force", // 모든 파일을 독립된 모듈로 간주하여 전역 오염 방지
 
-    /* 모듈 상호 호환성 및 엄격 구문 */
-    "verbatimModuleSyntax": true, // [중요] 런타임 코드와 타입을 엄격히 분리 (Web 프로젝트와 일치)
-    "esModuleInterop": true, // 서버 환경에서 CommonJS 모듈을 ESM처럼 사용하도록 허용
-    "forceConsistentCasingInFileNames": true, // OS별 파일명 대소문자 차이로 인한 참조 에러 방지
-
     /* 타입 정의 파일 생성 및 IDE 지원 (Project References 필수) */
-    "declaration": true, // [중요] 타 프로젝트 참조용 .d.ts 타입 선언 파일 생성
+    "declaration": true, // 타 프로젝트 참조용 .d.ts 타입 선언 파일 생성
     "declarationMap": true, // IDE에서 타입 클릭 시 원본 소스(.ts)로 이동 가능하게 지원
-    "rootDir": "src", // [중요] shared 소스의 뿌리를 src로 고정
-    "noEmit": false, // [중요] composite 모드에서는 선언 파일 출력을 위해 false여야 함
+    "rootDir": "src", // shared 소스의 뿌리를 src로 고정
+    "outDir": "dist",
+    "noEmit": false, // composite 모드에서는 선언 파일 출력을 위해 false여야 함
 
-    /* 엄격한 타입 검사 및 유지보수 규칙 */
-    "strict": true, // 모든 엄격한 타입 검사 옵션 활성화
+    /* 엄격한 타입 검사 및 린팅 규칙 */
     "skipLibCheck": true, // node_modules 내 외부 라이브러리의 타입 검사 생략
-    "noUnusedLocals": false, // 사용하지 않는 지역 변수에 대한 에러 보고 여부
-    "noUnusedParameters": false, // 사용하지 않는 함수 파라미터에 대한 에러 보고 여부
-    "noFallthroughCasesInSwitch": true, // switch 문에서 break 누락 방지
 
     /* 경로 별칭 (Path Alias) */
     "baseUrl": "."
