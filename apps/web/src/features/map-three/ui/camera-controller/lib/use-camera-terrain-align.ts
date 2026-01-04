@@ -1,8 +1,8 @@
 import { useLayoutEffect, type RefObject } from 'react';
 import { useThree } from '@react-three/fiber';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useTerrainAltitude } from '@/entities/geo/lib/use-terrain-altitude';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import type { CameraFlyTarget } from './use-camera-movement';
 
 interface UseCameraTerrainAlignProps {

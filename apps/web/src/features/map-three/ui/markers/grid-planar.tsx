@@ -2,13 +2,13 @@
 
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
+import { THREE_CONFIG } from '@/entities/geo/config/three-config';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
-import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
+import { GEO_CONSTANTS } from '@pixelet/core/entities/geo/model/geo-constants';
 
-const { CELL_SIZE } = OSM_CONSTANTS;
+const { CELL_SIZE } = GEO_CONSTANTS;
 
 /**
  * [GridPlanar]

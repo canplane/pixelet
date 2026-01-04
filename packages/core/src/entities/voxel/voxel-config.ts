@@ -1,6 +1,6 @@
-import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
+import { GEO_CONSTANTS } from '@pixelet/core/entities/geo/model/geo-constants';
 
-const { CELL_SIZE } = OSM_CONSTANTS;
+const { CELL_SIZE } = GEO_CONSTANTS;
 
 /**
  * [voxel-config]

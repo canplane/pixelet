@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { useMapStore } from '@/entities/osm/model/map-store';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapStore } from '@/entities/geo/model/map-store';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { cn } from '@/shared/lib/utils';
 
 /**

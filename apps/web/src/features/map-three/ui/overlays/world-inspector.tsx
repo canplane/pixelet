@@ -1,4 +1,4 @@
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation'; // 🚀 커스텀 훅 임포트
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation'; // 🚀 커스텀 훅 임포트
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Compass, Box, Map as MapIcon, MousePointer2 } from 'lucide-react';

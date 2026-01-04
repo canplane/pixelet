@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from '@react-three/drei';
 
-import { THREE_CONFIG } from '@/entities/osm/config/three-config';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { THREE_CONFIG } from '@/entities/geo/config/three-config';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { useCameraKernel } from '@/features/map-three/ui/camera-controller/lib/use-camera-kernel';
 
 const { MIN_DISTANCE, MAX_DISTANCE } = THREE_CONFIG.CAMERA;

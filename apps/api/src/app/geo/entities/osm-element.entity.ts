@@ -1,6 +1,6 @@
 import { Entity, PrimaryColumn, Column, Index } from 'typeorm';
 import { Geometry } from 'geojson';
-import { OsmTags } from '@pixelet/core/entities/osm/model/osm-source';
+import { OsmTags } from '@pixelet/core/entities/geo/model/osm-source';
 
 // DB 엔티티 (영속성 계층)
 @Entity('osm_elements')

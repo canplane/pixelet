@@ -3,7 +3,7 @@ import { Compass } from './compass';
 import { ScaleBar } from './scale-bar';
 import { WorldInspector } from './world-inspector';
 import { LocationControl } from './location-control';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { PoiDetailPanel } from './poi-detail-panel';
 import { MapSearchBar } from './map-search-bar';
 import { Badge } from '@/shared/ui/theme/glass/badge';

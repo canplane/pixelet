@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Search } from 'lucide-react';
-import { useMapStore } from '@/entities/osm/model/map-store';
+import { useMapStore } from '@/entities/geo/model/map-store';
 import { cn } from '@/shared/lib/utils';
 import { projection } from '@pixelet/core/shared/lib/map/projection';
 

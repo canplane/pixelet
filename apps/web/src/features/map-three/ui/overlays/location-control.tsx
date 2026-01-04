@@ -1,7 +1,7 @@
 import { Locate, Navigation, Compass, Loader2 } from 'lucide-react';
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
 import { cn } from '@/shared/lib/utils';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { CircularButton } from '@/shared/ui/theme/glass/circular-button';
 import { MotionContainer } from '@/shared/ui/layout/motion-container';
 import { useMapFollowMode } from '@/features/map-three/model/use-map-follow-mode';

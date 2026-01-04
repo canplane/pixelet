@@ -1,18 +1,18 @@
 import { useMemo, useRef, useState, useEffect, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
-import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
-import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
-import { FloatingGroup } from '@/entities/osm/ui/floating-group';
+import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
+import { useTerrainAltitude } from '@/entities/geo/lib/use-terrain-altitude';
+import { FloatingGroup } from '@/entities/geo/ui/floating-group';
 import { CoordOps, type Coord } from '@pixelet/core/shared/model/coords';
 import { fromThreeCoord, toThreeCoord } from '@/shared/lib/three/three-coords';
-import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
+import { GEO_CONSTANTS } from '@pixelet/core/entities/geo/model/geo-constants';
 import {
   snapToCell,
   toCenter,
-} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/geo/lib/utils/tile-utils';
 
-const { CELL_SIZE } = OSM_CONSTANTS;
+const { CELL_SIZE } = GEO_CONSTANTS;
 
 // ⚙️ [Config] Raymarching 설정
 const CONFIG = {
