@@ -1,4 +1,4 @@
-import '@pixelet/shared/shared/lib/i18n/i18n.server'; // i18n initialization
+import '@pixelet/core/shared/lib/i18n/i18n.server'; // i18n initialization
 import { bootstrapEngines } from '@/app/bootstrap';
 
 import { NestFactory } from '@nestjs/core';

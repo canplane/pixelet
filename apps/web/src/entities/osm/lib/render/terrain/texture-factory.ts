@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 
 const { TILE_RES } = OSM_CONSTANTS;
 

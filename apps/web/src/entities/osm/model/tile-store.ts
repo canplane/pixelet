@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
 // 2. 기초 타입 (Coord 등)
-import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
-import { createEmptyTile } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import type { Tile } from '@pixelet/core/entities/osm/model/tiles';
+import { createEmptyTile } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 export interface TileState {
   // --- [Tile Data Management] ---

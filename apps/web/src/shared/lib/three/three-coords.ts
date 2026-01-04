@@ -4,7 +4,7 @@
  */
 
 import type { Vector3Tuple } from 'three';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/core/shared/model/coords';
 
 /**
  * [OptionalZ]

@@ -7,9 +7,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OsmElement } from '@/app/geo/entities/osm-element.entity';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
-import type { Bbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
+import type { Coord } from '@pixelet/core/shared/model/coords';
+import type { Bbox } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 const { ELEVATION_SAMPLE_STEP } = OSM_CONSTANTS;
 

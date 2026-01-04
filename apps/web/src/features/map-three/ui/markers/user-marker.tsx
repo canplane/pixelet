@@ -2,12 +2,12 @@ import { useMemo, useEffect, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
-import { CoordOps } from '@pixelet/shared/shared/model/coords';
+import { CoordOps } from '@pixelet/core/shared/model/coords';
 import {
   snapToCell,
   toCenter,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { FloatingGroup } from '@/entities/osm/ui/floating-group';
 import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';

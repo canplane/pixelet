@@ -16,7 +16,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      '@pixelet/shared': path.resolve(__dirname, '../../packages/shared/src'),
+      '@pixelet/core': path.resolve(__dirname, '../../packages/core/src'),
     },
   },
 

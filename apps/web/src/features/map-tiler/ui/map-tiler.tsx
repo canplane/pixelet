@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 
 // 2. 프로젝트 공통 자산 및 타입 (Shared)
-import type { Coord4326 } from '@pixelet/shared/shared/model/coords';
+import type { Coord4326 } from '@pixelet/core/shared/model/coords';
 
 // 3. 엔티티 및 상태 관리 (Entities)
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';

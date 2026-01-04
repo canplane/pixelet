@@ -4,9 +4,9 @@ import { useFrame } from '@react-three/fiber';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapStore } from '../../model/map-store';
 import { useTileStore } from '../../model/tile-store';
-import { toCenter } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
-import { CoordOps, to3D } from '@pixelet/shared/shared/model/coords';
+import { toCenter } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import type { MapPoi } from '@pixelet/core/entities/osm/model/osm-feature';
+import { CoordOps, to3D } from '@pixelet/core/shared/model/coords';
 import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
 
 // 🎯 [Instance-Config]

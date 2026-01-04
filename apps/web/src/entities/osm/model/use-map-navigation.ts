@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useMapStore } from './map-store';
 import { useDeviceLocationStore } from '@/entities/device-location/model/device-location.store';
-import { projection } from '@pixelet/shared/shared/lib/map/projection';
+import { projection } from '@pixelet/core/shared/lib/map/projection';
 
 const { project } = projection;
 

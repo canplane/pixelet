@@ -1,4 +1,4 @@
-import '@pixelet/shared/shared/lib/i18n/i18n.client'; // i18n initialization
+import '@pixelet/core/shared/lib/i18n/i18n.client'; // i18n initialization
 import { enableMapSet } from 'immer';
 import { bootstrapEngines } from '@/app/bootstrap'; // 엔진 부트스트랩 임포트
 

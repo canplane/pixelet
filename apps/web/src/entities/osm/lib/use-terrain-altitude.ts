@@ -1,14 +1,14 @@
 // src/entities/osm/lib/use-height-lookup.ts
 
 import { useCallback } from 'react';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import { useTileStore } from '@/entities/osm/model/tile-store';
 import {
   getTerrainAltitudeCoord as _getTerrainAltitudeCoord,
   getTileKey,
   worldToTile,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import type { Coord2D } from '@pixelet/shared/shared/model/coords';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import type { Coord2D } from '@pixelet/core/shared/model/coords';
 
 const { CELL_SIZE } = OSM_CONSTANTS;
 

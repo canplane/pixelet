@@ -18,13 +18,13 @@ find . -name "*.tsbuildinfo" -type f -delete
 # # ---------------------------------------------------------
 # # 2. Source-Level Artifact Clean (Shared Package Focus)
 # # Removes generated .js and .d.ts files sitting next to .ts sources
-# # especially in the shared package which uses composite mode.
+# # especially in the core package which uses composite mode.
 # # ---------------------------------------------------------
 # echo "🧹 Cleaning stray build artifacts from source directories..."
 # # src 폴더 내부에 생성된 .js, .d.ts, .js.map, .d.ts.map 파일만 타겟팅
-# find ./packages/shared/src -name "*.js" -type f -delete
-# find ./packages/shared/src -name "*.d.ts" -type f -delete
-# find ./packages/shared/src -name "*.map" -type f -delete
+# find ./packages/core/src -name "*.js" -type f -delete
+# find ./packages/core/src -name "*.d.ts" -type f -delete
+# find ./packages/core/src -name "*.map" -type f -delete
 
 # ---------------------------------------------------------
 # 3. Environment Reconstruction

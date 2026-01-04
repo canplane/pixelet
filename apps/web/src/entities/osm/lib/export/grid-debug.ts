@@ -4,7 +4,7 @@
  * South-to-North 그리드 데이터를 인간이 읽기 편하도록(North is Top) 콘솔에 출력합니다.
  */
 
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 
 const { TILE_RES } = OSM_CONSTANTS;
 

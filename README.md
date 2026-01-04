@@ -66,7 +66,7 @@ The goal is to provide a fast, flexible development environment with clear bound
 │   │       └── shared/     # Reusable UI (button, input), Libs (i18n, utils)
 │   └── api/                # Backend (Fastify)
 ├── packages/
-│   └── shared/             # Shared logic across monorepo
+│   └── core/             # Shared logic across monorepo
 ├── docker-compose.yml      # PostgreSQL setup
 └── pnpm-workspace.yaml
 ```
@@ -212,7 +212,7 @@ pnpm changeset   # Generate a new versioning changeset
 
 - **Server state** is handled by **TanStack Query**
 - **Client/UI state** is handled by **Zustand** or local React state
-- Avoid deep imports from `@pixelet/shared/src/*`
+- Avoid deep imports from `@pixelet/core/src/*`
 - Shared package APIs must be accessed via declared exports only
 
 ---

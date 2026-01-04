@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useMapStore } from '@/entities/osm/model/map-store';
 import { TerrainTileMesh } from '../tiles/terrain-tile-mesh';
 import { useTileScheduler } from '@/entities/osm/lib/use-tile-scheduler';
-import { getTileKey } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { getTileKey } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 import { useTileStore } from '@/entities/osm/model/tile-store';
 
 export const TerrainLayer = React.memo(() => {

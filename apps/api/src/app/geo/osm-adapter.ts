@@ -5,9 +5,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { OsmInput } from '@pixelet/shared/entities/osm/model/osm-feature';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
-import type { OsmTags } from '@pixelet/shared/entities/osm/model/osm-source';
+import type { OsmInput } from '@pixelet/core/entities/osm/model/osm-feature';
+import type { Coord } from '@pixelet/core/shared/model/coords';
+import type { OsmTags } from '@pixelet/core/entities/osm/model/osm-source';
 
 type GeoJsonCoord = [number, number];
 

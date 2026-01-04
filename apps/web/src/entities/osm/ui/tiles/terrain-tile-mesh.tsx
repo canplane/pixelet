@@ -1,16 +1,16 @@
 import React, { useState, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree, useFrame } from '@react-three/fiber';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import { useRelativePosition } from '../../lib/use-coordinate-converter';
 import type {
   Tile,
   TileChannels,
-} from '@pixelet/shared/entities/osm/model/tiles';
-import { TILE_CHANNEL_KEYS } from '@pixelet/shared/entities/osm/model/tiles';
+} from '@pixelet/core/entities/osm/model/tiles';
+import { TILE_CHANNEL_KEYS } from '@pixelet/core/entities/osm/model/tiles';
 import { THREE_CONFIG } from '../../config/three-config';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
-import { getTileBbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { getTileBbox } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 import {
   createChannelTexture,
   createElevationTexture,

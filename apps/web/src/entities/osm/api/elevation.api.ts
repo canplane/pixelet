@@ -1,8 +1,8 @@
-import type { Coord4326, Coord } from '@pixelet/shared/shared/model/coords';
-import type { Bbox } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import { projection } from '@pixelet/shared/shared/lib/map/projection';
-import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import type { Coord4326, Coord } from '@pixelet/core/shared/model/coords';
+import type { Bbox } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import { projection } from '@pixelet/core/shared/lib/map/projection';
+import { withSharedPromise } from '@pixelet/core/shared/lib/cache-utils';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 
 const { ELEVATION_SAMPLE_STEP } = OSM_CONSTANTS;
 const PAD = 1;

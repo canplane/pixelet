@@ -30,16 +30,16 @@
     /* 엄격한 타입 검사 및 린팅 규칙 */
     "skipLibCheck": true // node_modules 내 외부 라이브러리의 타입 검사 생략
   },
-  "include": ["src/**/*", "@types", "../../packages/shared/src/**/*"],
+  "include": ["src/**/*", "@types", "../../packages/core/src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
-    "../../packages/shared/src/**/*.client.ts", // 클라이언트 전용 코드는 서버 검사에서 제외
-    "../../packages/shared/src/**/*.spec.ts" // 테스트 파일 제외
+    "../../packages/core/src/**/*.client.ts", // 클라이언트 전용 코드는 서버 검사에서 제외
+    "../../packages/core/src/**/*.spec.ts" // 테스트 파일 제외
   ]
 
   // 개발 모드에서는 references를 꺼야 합니다.
   // "references": [
-  //   { "path": "../../packages/shared" }
+  //   { "path": "../../packages/core" }
   // ]
 }

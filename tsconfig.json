@@ -19,12 +19,12 @@
     /* 경로 별칭 */
     "baseUrl": ".",
     "paths": {
-      "@pixelet/shared/*": ["packages/shared/src/*"] // 이 경로 설정이 있어야 Webpack이 실제 소스 위치를 찾습니다.
+      "@pixelet/core/*": ["packages/core/src/*"] // 이 경로 설정이 있어야 Webpack이 실제 소스 위치를 찾습니다.
     }
   },
   "files": [], // 루트 자체에는 소스 코드가 없음을 명시
   "references": [
-    { "path": "packages/shared" },
+    { "path": "packages/core" },
     { "path": "apps/api" },
     { "path": "apps/web" }
   ]

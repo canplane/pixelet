@@ -11,7 +11,7 @@ import { CellHighlighter } from '../markers/cell-highlighter';
 import { VoxelBlock } from '../voxels/voxel-block';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 import { TerrainStickyGroup } from '@/features/map-three/ui/terrain-sticky-group';
-import { snapToCell } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { snapToCell } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 /**
  * [WorldContent]

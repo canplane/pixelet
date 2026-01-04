@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMapStore } from '../../model/map-store';
 import { PoiItem } from './poi-item';
 import { PoiInstancedMesh } from './poi-instanced-mesh';
-import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
+import type { MapPoi } from '@pixelet/core/entities/osm/model/osm-feature';
 
 // 🎯 [Constraint] HTML로 렌더링할 최대 개수 (성능 마지노선)
 const MAX_HTML_POIS = 20;

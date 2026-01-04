@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import type { Coord2D } from '@pixelet/shared/shared/model/coords';
+import type { Coord2D } from '@pixelet/core/shared/model/coords';
 import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
 import { FloatingGroup } from '@/entities/osm/ui/floating-group';
 

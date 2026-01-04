@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 
 // 2. 기초 타입 (Coord 등)
-import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/core/shared/model/coords';
 
 // 3. OSM 관련 로직 및 도메인 타입
-import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
+import type { MapPoi } from '@pixelet/core/entities/osm/model/osm-feature';
 
 // 4. 전역 설정 및 테마
 import type { ThemeKey } from '@/features/map-three/model/world-themes';
@@ -16,8 +16,8 @@ import {
   getTileCoord,
   getTileDistance,
   toFixedCoord,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 
 const { DEFAULT_POLAR_ANGLE } = THREE_CONFIG.CAMERA;
 

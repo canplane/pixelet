@@ -4,13 +4,13 @@ import { useThree } from '@react-three/fiber';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { useTerrainAltitude } from '@/entities/osm/lib/use-terrain-altitude';
 import { FloatingGroup } from '@/entities/osm/ui/floating-group';
-import { CoordOps, type Coord } from '@pixelet/shared/shared/model/coords';
+import { CoordOps, type Coord } from '@pixelet/core/shared/model/coords';
 import { fromThreeCoord, toThreeCoord } from '@/shared/lib/three/three-coords';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import {
   snapToCell,
   toCenter,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 const { CELL_SIZE } = OSM_CONSTANTS;
 

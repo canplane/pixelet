@@ -15,14 +15,14 @@ import {
   getTileBbox,
   getTileKey,
   TileCoord,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
-import { TileChannels } from '@pixelet/shared/entities/osm/model/tiles';
-import { TileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
-import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/osm-feature-normalizer';
-import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
-import { bakeTileElevation } from '@pixelet/shared/entities/osm/lib/bake/tile-elevation-baker';
-import { packTileTerrain } from '@pixelet/shared/entities/osm/compression/tile-terrain-packer';
-import { packVector } from '@pixelet/shared/entities/osm/compression/vector-packer';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
+import { TileChannels } from '@pixelet/core/entities/osm/model/tiles';
+import { TileDto } from '@pixelet/core/entities/osm/dto/tiles.dto';
+import { normalizeOsmFeature } from '@pixelet/core/entities/osm/lib/process/osm-feature-normalizer';
+import { assembleTile } from '@pixelet/core/entities/osm/lib/bake/tile-assembler';
+import { bakeTileElevation } from '@pixelet/core/entities/osm/lib/bake/tile-elevation-baker';
+import { packTileTerrain } from '@pixelet/core/entities/osm/compression/tile-terrain-packer';
+import { packVector } from '@pixelet/core/entities/osm/compression/vector-packer';
 
 @Injectable()
 export class GeoService {

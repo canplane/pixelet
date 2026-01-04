@@ -16,8 +16,8 @@ export default [
    * 1. Base TypeScript Rules (All Packages)
    * --------------------------------------------- */
   {
-    // shared와 모든 app을 포함
-    files: ['packages/shared/**/*.{ts,tsx}', 'apps/**/*.{ts,tsx}'],
+    // core와 모든 app을 포함
+    files: ['packages/core/**/*.{ts,tsx}', 'apps/**/*.{ts,tsx}'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -43,10 +43,7 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      'no-restricted-imports': [
-        'error',
-        { patterns: ['@pixelet/shared/src/*'] },
-      ],
+      'no-restricted-imports': ['error', { patterns: ['@pixelet/core/src/*'] }],
     },
   },
 
@@ -55,7 +52,7 @@ export default [
    * 브라우저/노드 어디서든 돌아가야 하므로 환경을 제한합니다.
    * --------------------------------------------- */
   {
-    files: ['packages/shared/**/*.ts'],
+    files: ['packages/core/**/*.ts'],
     languageOptions: {
       globals: {
         // 엔진 코드는 환경 의존성을 최소화해야 하므로 기본 전역 변수만 허용

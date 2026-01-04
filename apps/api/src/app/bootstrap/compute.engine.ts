@@ -1,9 +1,9 @@
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-node';
 
-import { EngineModule } from '@pixelet/shared/shared/bootstrap/engine/types';
+import { EngineModule } from '@pixelet/core/shared/bootstrap/engine/types';
 
-import { runComputeDiagnostics } from '@pixelet/shared/shared/bootstrap/specs/compute.test';
+import { runComputeDiagnostics } from '@pixelet/core/shared/bootstrap/specs/compute.test';
 
 export const ComputeEngine: EngineModule = {
   name: 'ComputeEngine (TFJS)',
