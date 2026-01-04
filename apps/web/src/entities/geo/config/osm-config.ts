@@ -6,16 +6,16 @@
 export const OSM_CONFIG = {
   /**
    * [local-endpoint]
-   * 환경 변수(VITE_INTERNAL_OSM_API_ENDPOINT)를 통해 제어합니다.
+   * 환경 변수(VITE_INTERNAL_GEO_ENDPOINT)를 통해 제어합니다.
    */
-  INTERNAL_OSM_ENDPOINT:
-    import.meta.env.VITE_INTERNAL_OSM_API_ENDPOINT || '/api/geo/tile',
+  INTERNAL_GEO_ENDPOINT:
+    import.meta.env.VITE_INTERNAL_GEO_ENDPOINT || '/api/geo/tile',
 
   /**
    * [load-balancing-pool]
    * 한국에서의 접속 속도 및 서버 안정성을 고려하여 선별된 공용 서버 목록입니다.
    */
-  EXTERNAL_OSM_ENDPOINTS: [
+  EXTERNAL_GEO_OSM_ENDPOINTS: [
     // 1. 아시아/러시아권 (Latency 우수)
     'https://overpass.nchc.org.tw/api/interpreter', // 대만 (Primary)
     'https://maps.mail.ru/geo/tools/overpass/api/interpreter', // 러시아

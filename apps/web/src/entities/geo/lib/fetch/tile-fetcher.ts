@@ -20,7 +20,7 @@ import type { TileCoord } from '@pixelet/core/entities/geo/lib/utils/tile-utils'
 import { SERVICE_MODES } from '@/config/app-config';
 
 const { TILE_RES: res } = GEO_CONSTANTS;
-const { INTERNAL_OSM_ENDPOINT } = OSM_CONFIG;
+const { INTERNAL_GEO_ENDPOINT } = OSM_CONFIG;
 
 /**
  * [Helper] LOCAL 모드: 서버에서 이미 베이킹이 완료된 타일 데이터를 획득합니다.
@@ -38,7 +38,7 @@ async function requestServerTile(coord: TileCoord): Promise<Tile> {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const response = await fetch(INTERNAL_OSM_ENDPOINT, {
+      const response = await fetch(INTERNAL_GEO_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tx, ty }),

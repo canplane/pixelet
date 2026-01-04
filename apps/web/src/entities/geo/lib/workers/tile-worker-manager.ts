@@ -1,4 +1,4 @@
-import OsmWorker from './osm.worker?worker'; // 🎯 Vite 전용 워커 임포트
+import OsmWorker from './geo.worker?worker'; // 🎯 Vite 전용 워커 임포트
 
 import type { Tile } from '@pixelet/core/entities/geo/model/tiles';
 import type {
@@ -45,7 +45,7 @@ class TileWorkerManager {
   private initWorker() {
     // // Vite 환경의 Worker 생성 표준 방식
     // this.worker = new Worker(
-    //   new URL('../../../../workers/osm.worker.ts', import.meta.url),
+    //   new URL('../../../../workers/geo.worker.ts', import.meta.url),
     //   { type: 'module' },
     // );
     this.worker = new OsmWorker();

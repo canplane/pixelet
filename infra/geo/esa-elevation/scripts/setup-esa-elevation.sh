@@ -19,19 +19,19 @@ else
 fi
 
 # 변수 가드
-if [ -z "$GEO_DB_CONTAINER" ]; then
-    echo "❌ Error: GEO_DB_CONTAINER is not set. Check your .env file."
+if [ -z "$DB_GEO_CONTAINER" ]; then
+    echo "❌ Error: DB_GEO_CONTAINER is not set. Check your .env file."
     exit 1
 fi
 
-export PGPASSWORD="${GEO_DB_PASSWORD}"
+export PGPASSWORD="${DB_GEO_PASSWORD}"
 
 # [설정] DB 연결 정보
-DB_CONTAINER="${GEO_DB_CONTAINER}"
-PGUSER="${GEO_DB_USER:-admin}"
-PGDATABASE="${GEO_DB_NAME:-geo}"
-PGPORT="${GEO_DB_PORT:-5433}"
-DB_HOST="${GEO_DB_HOST:-localhost}"
+DB_CONTAINER="${DB_GEO_CONTAINER}"
+PGUSER="${DB_GEO_USER:-admin}"
+PGDATABASE="${DB_GEO_NAME:-geo}"
+PGPORT="${DB_GEO_PORT:-5433}"
+DB_HOST="${DB_GEO_HOST:-localhost}"
 
 # 메타데이터 파일 위치
 METADATA_FILE="$ELEV_ROOT/metadata.json"

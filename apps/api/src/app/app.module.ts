@@ -21,7 +21,7 @@ import * as path from 'path';
       name: 'default', // 기본 연결은 'default' 또는 이름을 생략합니다.
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        url: configService.get<string>('DATABASE_URL'),
+        url: configService.get<string>('DB_MAIN_URL'),
         autoLoadEntities: true,
         synchronize: configService.get<string>('NODE_ENV') === 'development', // 개발 환경에서만 true
       }),
@@ -33,11 +33,11 @@ import * as path from 'path';
       name: 'geoConnection', // GIS 전용 연결 식별자
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        host: configService.get<string>('GEO_DB_HOST'),
-        port: configService.get<number>('GEO_DB_PORT'),
-        username: configService.get<string>('GEO_DB_USER'),
-        password: configService.get<string>('GEO_DB_PASSWORD'),
-        database: configService.get<string>('GEO_DB_NAME'),
+        host: configService.get<string>('DB_GEO_HOST'),
+        port: configService.get<number>('DB_GEO_PORT'),
+        username: configService.get<string>('DB_GEO_USER'),
+        password: configService.get<string>('DB_GEO_PASSWORD'),
+        database: configService.get<string>('DB_GEO_NAME'),
         autoLoadEntities: true, // GeoModule에서 등록된 엔티티 자동 스캔
         synchronize: false, // OSM 데이터는 쉘 스크립트로 관리하므로 false 권장
         logging: false,

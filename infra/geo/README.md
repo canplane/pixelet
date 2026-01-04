@@ -64,8 +64,8 @@ docker compose -f infra/docker-compose.yml --env-file .env up -d db-geo
 export $(grep -v '^#' .env | xargs)
 
 # 3. DB 접속 가능 여부 확인 (Health Check)
-echo "Waiting for PostGIS [$GEO_DB_CONTAINER] to be ready..."
-until docker exec "$GEO_DB_CONTAINER" pg_isready -U postgres; do
+echo "Waiting for PostGIS [$DB_GEO_CONTAINER] to be ready..."
+until docker exec "$DB_GEO_CONTAINER" pg_isready -U postgres; do
   echo 'DB is unavailable - sleeping...'
   sleep 2
 done
@@ -202,15 +202,15 @@ chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 
   ```bash
   # 1. 특정 레이어 백업 (예: Coastline)
-  docker exec -t $GEO_DB_CONTAINER pg_dump -U $PGUSER -d $PGDATABASE \
+  docker exec -t $DB_GEO_CONTAINER pg_dump -U $PGUSER -d $PGDATABASE \
     -t osm_coastline_polygons -t osm_coastline_catalog > osm_coastline_backup.sql
 
   # 2. 고도 데이터(Raster) 백업 (압축 권장)
-  docker exec -t $GEO_DB_CONTAINER pg_dump -U $PGUSER -d $PGDATABASE \
+  docker exec -t $DB_GEO_CONTAINER pg_dump -U $PGUSER -d $PGDATABASE \
     -t public.esa_elevation_raster -t public.esa_elevation_catalog | gzip > esa_elevation_backup.sql.gz
 
   # 3. 데이터 복구 (Restore)
-  cat osm_coastline_backup.sql | docker exec -i $GEO_DB_CONTAINER psql -U $PGUSER -d $PGDATABASE
+  cat osm_coastline_backup.sql | docker exec -i $DB_GEO_CONTAINER psql -U $PGUSER -d $PGDATABASE
   ```
 
 - **Storage Optimization**: 대규모 데이터 주입(Clean Start) 직후에는 데드 튜플(Dead Tuples) 정리가 필수적입니다. 데이터 적재가 끝난 후 아래 명령을 통해 통계 정보를 갱신하고 스토리지 회수를 수행하십시오.
@@ -223,4 +223,4 @@ chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 ## 6. Security & Sensitive Information
 
 - **Credentials**: DB 비밀번호 등 민감 정보는 `.env` 파일을 통해서만 주입하며, 문서나 코드에 하드코딩하지 않습니다.
-- **Environment Variables**: 실행 전 `GEO_DB_USER`, `GEO_DB_PASSWORD` 등이 환경 변수로 로드되어 있어야 합니다.
+- **Environment Variables**: 실행 전 `DB_GEO_USER`, `DB_GEO_PASSWORD` 등이 환경 변수로 로드되어 있어야 합니다.
