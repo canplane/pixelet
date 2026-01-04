@@ -12,24 +12,24 @@ import type {
   TileTerrain,
   TileChannels,
   Tile,
-} from '@pixelet/shared/entities/osm/model/tiles';
+} from '@pixelet/core/entities/osm/model/tiles';
 import {
   getTileBbox,
   unprojectBbox,
   createEmptyTerrain,
   getTileKey,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 import type {
   Bbox,
   TileCoord,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
-import { transformOsm4326 } from '@pixelet/shared/entities/osm/lib/process/osm-4326-transformer';
-import { normalizeOsmFeature } from '@pixelet/shared/entities/osm/lib/process/osm-feature-normalizer';
-import { assembleTile } from '@pixelet/shared/entities/osm/lib/bake/tile-assembler';
-import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils';
-import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
-import { bakeTileElevation } from '@pixelet/shared/entities/osm/lib/bake/tile-elevation-baker';
+import { transformOsm4326 } from '@pixelet/core/entities/osm/lib/process/osm-4326-transformer';
+import { normalizeOsmFeature } from '@pixelet/core/entities/osm/lib/process/osm-feature-normalizer';
+import { assembleTile } from '@pixelet/core/entities/osm/lib/bake/tile-assembler';
+import { randomDelay } from '@pixelet/core/shared/lib/aync-utils';
+import type { MapPoi } from '@pixelet/core/entities/osm/model/osm-feature';
+import { bakeTileElevation } from '@pixelet/core/entities/osm/lib/bake/tile-elevation-baker';
 import { requestElevation } from '@/entities/osm/api/elevation.api';
 
 type StepName = 'Infrastructure' | 'Structure' | 'POI';

@@ -2,13 +2,13 @@ import { useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/core/shared/model/coords';
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import {
   getTileCoord,
   getTileKey,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 interface UseCameraFloatingOriginProps {
   controlsRef: React.RefObject<OrbitControlsImpl | null>;

@@ -2,8 +2,8 @@
 // 라운딩 블록이 아니라 일반 블록
 
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
-import { VOXEL_SIZE } from '@pixelet/shared/entities/voxel/voxel-config';
-import { CoordOps, type Coord } from '@pixelet/shared/shared/model/coords';
+import { VOXEL_SIZE } from '@pixelet/core/entities/voxel/voxel-config';
+import { CoordOps, type Coord } from '@pixelet/core/shared/model/coords';
 
 const { BASE, HALF } = VOXEL_SIZE;
 

@@ -7,12 +7,12 @@ import * as THREE from 'three';
 import {
   VOXEL_COLORS,
   VOXEL_TYPES,
-} from '@pixelet/shared/entities/voxel/model/voxels';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+} from '@pixelet/core/entities/voxel/model/voxels';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import {
   TILE_CHANNEL_KEYS,
   type TileChannels,
-} from '@pixelet/shared/entities/osm/model/tiles';
+} from '@pixelet/core/entities/osm/model/tiles';
 
 const { CELL_SIZE } = OSM_CONSTANTS;
 

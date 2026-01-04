@@ -2,7 +2,7 @@ import { useRef, useLayoutEffect, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useMapStore } from '../model/map-store'; // 같은 Entity 내 Import
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
-import type { Coord } from '@pixelet/shared/shared/model/coords';
+import type { Coord } from '@pixelet/core/shared/model/coords';
 
 interface FloatingGroupProps {
   /** 객체의 절대 좌표 (Global Coordinate) */

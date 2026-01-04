@@ -4,7 +4,7 @@
  */
 
 import type { ServiceMode } from '@/config/app-config';
-import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import type { TileCoord } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 export interface TileWorkerInput {
   key: string;

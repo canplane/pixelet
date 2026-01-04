@@ -6,17 +6,17 @@
  * 2. 서버 통신 시 JSON 직렬화로 파괴된 바이너리 데이터(Uint8Array)를 복원하여 GPU 전송 효율을 극대화합니다.
  */
 
-import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
-import type { TileDto } from '@pixelet/shared/entities/osm/dto/tiles.dto';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import type { Tile } from '@pixelet/core/entities/osm/model/tiles';
+import type { TileDto } from '@pixelet/core/entities/osm/dto/tiles.dto';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import { OSM_CONFIG } from '@/entities/osm/config/osm-config';
 import { buildExternalTile } from './tile-external-builder';
 import type { TileWorkerInput } from '../../model/worker-protocol';
-import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
-import { unpackTileTerrain } from '@pixelet/shared/entities/osm/compression/tile-terrain-packer';
-import { unpackVector } from '@pixelet/shared/entities/osm/compression/vector-packer';
-import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
-import type { TileCoord } from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+import { withSharedPromise } from '@pixelet/core/shared/lib/cache-utils';
+import { unpackTileTerrain } from '@pixelet/core/entities/osm/compression/tile-terrain-packer';
+import { unpackVector } from '@pixelet/core/entities/osm/compression/vector-packer';
+import type { MapPoi } from '@pixelet/core/entities/osm/model/osm-feature';
+import type { TileCoord } from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 import { SERVICE_MODES } from '@/config/app-config';
 
 const { TILE_RES: res } = OSM_CONSTANTS;

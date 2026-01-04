@@ -6,7 +6,7 @@ import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 import { THREE_CONFIG } from '@/entities/osm/config/three-config';
 import { toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 
 const { CELL_SIZE } = OSM_CONSTANTS;
 

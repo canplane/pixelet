@@ -1,8 +1,8 @@
 // 1. 프로젝트 공통 타입 및 설정 (Shared / Feature Config)
-import type { Osm4326Response } from '@pixelet/shared/entities/osm/model/osm-source';
+import type { Osm4326Response } from '@pixelet/core/entities/osm/model/osm-source';
 import { OSM_CONFIG } from '../config/osm-config';
-import { randomDelay } from '@pixelet/shared/shared/lib/aync-utils'; // 기존에 사용하던 유틸리티 활용
-import { withSharedPromise } from '@pixelet/shared/shared/lib/cache-utils';
+import { randomDelay } from '@pixelet/core/shared/lib/aync-utils'; // 기존에 사용하던 유틸리티 활용
+import { withSharedPromise } from '@pixelet/core/shared/lib/cache-utils';
 
 const { EXTERNAL_OSM_ENDPOINTS } = OSM_CONFIG;
 

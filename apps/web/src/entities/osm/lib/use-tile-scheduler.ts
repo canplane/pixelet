@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useMapStore } from '@/entities/osm/model/map-store';
-import { OSM_CONSTANTS } from '@pixelet/shared/entities/osm/model/osm-constants';
+import { OSM_CONSTANTS } from '@pixelet/core/entities/osm/model/osm-constants';
 import { tileWorkerManager } from '@/entities/osm/lib/workers/tile-worker-manager';
 import { useMapNavigation } from '@/entities/osm/model/use-map-navigation';
 // 🎯 [Refactor] tile-utils 최신 스펙 반영 (TileCoord, x, y)
@@ -8,7 +8,7 @@ import {
   getTileCoord,
   getTileKey,
   type TileCoord,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 import { useTileStore } from '@/entities/osm/model/tile-store';
 
 const { LOAD_RADIUS, CLEANUP_RADIUS } = OSM_CONSTANTS;

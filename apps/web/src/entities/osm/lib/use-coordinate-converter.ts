@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useMapStore } from '../model/map-store';
-import { CoordOps, type Coord } from '@pixelet/shared/shared/model/coords';
+import { CoordOps, type Coord } from '@pixelet/core/shared/model/coords';
 
 /**
  * [use-coordinate-converter] (Base Hook)

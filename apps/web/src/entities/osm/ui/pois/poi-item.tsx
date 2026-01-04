@@ -11,16 +11,16 @@ import { Html } from '@react-three/drei';
 import { useMapStore } from '../../model/map-store';
 import { useTileStore, type TileState } from '@/entities/osm/model/tile-store';
 import { useMapNavigation } from '../../model/use-map-navigation';
-import type { MapPoi } from '@pixelet/shared/entities/osm/model/osm-feature';
+import type { MapPoi } from '@pixelet/core/entities/osm/model/osm-feature';
 import { THREE_CONFIG } from '../../config/three-config';
 import { cn } from '@/shared/lib/utils';
 import {
   getTileCoord,
   getTileKey,
   toCenter,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 import { useTerrainAltitude } from '../../lib/use-terrain-altitude';
-import { to3D } from '@pixelet/shared/shared/model/coords';
+import { to3D } from '@pixelet/core/shared/model/coords';
 import { toThreeCoord } from '@/shared/lib/three/three-coords';
 
 // 🚀 [Refactor] 좌표계 훅 & 스타일 설정 분리

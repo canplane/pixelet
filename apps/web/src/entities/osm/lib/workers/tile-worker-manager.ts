@@ -1,16 +1,16 @@
 import OsmWorker from './osm.worker?worker'; // 🎯 Vite 전용 워커 임포트
 
-import type { Tile } from '@pixelet/shared/entities/osm/model/tiles';
+import type { Tile } from '@pixelet/core/entities/osm/model/tiles';
 import type {
   TileWorkerInput,
   TileWorkerResponse,
 } from '@/entities/osm/model/worker-protocol';
 import { SERVICE_MODE } from '@/config/app-config';
-import { delay } from '@pixelet/shared/shared/lib/aync-utils';
+import { delay } from '@pixelet/core/shared/lib/aync-utils';
 import {
   getTileKey,
   type TileCoord,
-} from '@pixelet/shared/entities/osm/lib/utils/tile-utils';
+} from '@pixelet/core/entities/osm/lib/utils/tile-utils';
 
 /**
  * [TaskCallbacks]
