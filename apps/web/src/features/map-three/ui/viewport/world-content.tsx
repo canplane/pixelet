@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { MAP_LAYOUT_THEMES } from '../../model/world-themes';
 
-import { TerrainLayer } from '@/entities/geo/ui/layers/terrain-layer';
+import { BaseLayer } from '@/entities/geo/ui/layers/base-layer';
 import { PoiLayer } from '@/entities/geo/ui/layers/poi-layer';
 import { UserMarker } from '../markers/user-marker';
 import { CellHighlighter } from '../markers/cell-highlighter';
@@ -29,57 +29,49 @@ interface WorldContentProps {
   children?: ReactNode;
 }
 
-export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(
-  ({ children }, ref) => {
-    const { center, floatingOrigin, themeKey } = useMapNavigation();
-    const targetTheme = MAP_LAYOUT_THEMES[themeKey];
+export const WorldContent = forwardRef<THREE.Group, WorldContentProps>(({ children }, ref) => {
+  const { center, floatingOrigin, themeKey } = useMapNavigation();
+  const targetTheme = MAP_LAYOUT_THEMES[themeKey];
 
-    const testCoord = center ? snapToCell(center) : { x: 0, y: 0, z: 0 };
+  const testCoord = center ? snapToCell(center) : { x: 0, y: 0, z: 0 };
 
-    return (
-      <group ref={ref} name="world-content">
-        {/* 1. [Environment] 지형 및 지리 정보 레이어 */}
-        <group name="env-layer">
-          <TerrainLayer />
-          <PoiLayer />
-        </group>
-
-        {/* 2. [Content] 배치된 복셀 및 오브젝트 */}
-        <group name="content-layer">{children}</group>
-
-        {/* 3. [Interaction] 사용자 인터랙션 및 가이드 레이어 */}
-        <group name="interaction-layer">
-          {/* Z-Fighting 방지를 위해 지형보다 미세하게 높게(offset) 렌더링 */}
-          <CellHighlighter />
-          <UserMarker />
-        </group>
-
-        {/* 4. [Debug] 테스트 레이어 */}
-        {import.meta.env.DEV && (
-          <group name="test-layer">
-            {/* 원점 마커 (Floating Origin) */}
-            <TerrainStickyGroup coord={floatingOrigin}>
-              <mesh
-                name="debug-origin"
-                position={toThreeCoordWithOffset({ x: 0, y: 0 }, 0.05)}
-              >
-                <sphereGeometry args={[0.2]} />
-                <meshBasicMaterial color="red" wireframe />
-              </mesh>
-            </TerrainStickyGroup>
-
-            {/* 복셀 */}
-            <TerrainStickyGroup coord={testCoord}>
-              <VoxelBlock
-                cellCoord={{ cx: 4, cy: 4, cz: 0 }}
-                color={targetTheme.grid.section}
-              />
-            </TerrainStickyGroup>
-          </group>
-        )}
+  return (
+    <group ref={ref} name="world-content">
+      {/* 1. [Environment] 지형 및 지리 정보 레이어 */}
+      <group name="env-layer">
+        <BaseLayer />
+        <PoiLayer />
       </group>
-    );
-  },
-);
+
+      {/* 2. [Content] 배치된 복셀 및 오브젝트 */}
+      <group name="content-layer">{children}</group>
+
+      {/* 3. [Interaction] 사용자 인터랙션 및 가이드 레이어 */}
+      <group name="interaction-layer">
+        {/* Z-Fighting 방지를 위해 지형보다 미세하게 높게(offset) 렌더링 */}
+        <CellHighlighter />
+        <UserMarker />
+      </group>
+
+      {/* 4. [Debug] 테스트 레이어 */}
+      {import.meta.env.DEV && (
+        <group name="test-layer">
+          {/* 원점 마커 (Floating Origin) */}
+          <TerrainStickyGroup coord={floatingOrigin}>
+            <mesh name="debug-origin" position={toThreeCoordWithOffset({ x: 0, y: 0 }, 0.05)}>
+              <sphereGeometry args={[0.2]} />
+              <meshBasicMaterial color="red" wireframe />
+            </mesh>
+          </TerrainStickyGroup>
+
+          {/* 복셀 */}
+          <TerrainStickyGroup coord={testCoord}>
+            <VoxelBlock cellCoord={{ cx: 4, cy: 4, cz: 0 }} color={targetTheme.grid.section} />
+          </TerrainStickyGroup>
+        </group>
+      )}
+    </group>
+  );
+});
 
 WorldContent.displayName = 'WorldContent';

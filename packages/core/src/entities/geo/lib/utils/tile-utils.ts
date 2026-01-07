@@ -1,5 +1,5 @@
 /**
- * @file tile-math.ts
+ * @file tile-utils.ts
  * 📐 [Tile Coordinate System Core]
  * 타일 인덱싱, 절대 미터 좌표(EPSG:3857), 지리적 좌표(EPSG:4326), 그리고 로컬 그리드 좌표 간의
  * 수학적 변환 공식들을 담당하는 순수 함수 집합입니다.
@@ -14,17 +14,8 @@
 
 import { projection } from '@pixelet/core/shared/lib/map/projection';
 import { GEO_CONSTANTS } from '../../model/geo-constants';
-import {
-  CoordOps,
-  type Coord,
-  type Coord2D,
-} from '@pixelet/core/shared/model/coords';
-import {
-  TILE_CHANNEL_KEYS,
-  type Tile,
-  type TileTerrain,
-  type TileChannels,
-} from '@pixelet/core/entities/geo/model/tiles';
+import { CoordOps, type Coord, type Coord2D } from '@pixelet/core/shared/model/coords';
+import { type Tile, TileSurfaceKey } from '@pixelet/core/entities/geo/model/tiles';
 
 const { unproject } = projection;
 
@@ -64,10 +55,7 @@ export const getTileCenter = (tileCoord: TileCoord): Coord2D => {
   };
 };
 
-export const getTileDistance = (
-  dstTileCoord: TileCoord,
-  srcTileCoord: TileCoord,
-): number => {
+export const getTileDistance = (dstTileCoord: TileCoord, srcTileCoord: TileCoord): number => {
   const dTx = dstTileCoord.tx - srcTileCoord.tx;
   const dTy = dstTileCoord.ty - srcTileCoord.ty;
   return dTx ** 2 + dTy ** 2;
@@ -168,45 +156,6 @@ export const unprojectBbox = (bbox: Bbox): Bbox4326 => {
   };
 };
 
-/**
- * [Tile Channels Factory]
- * 🚀 스키마(TILE_CHANNEL_KEYS)에 정의된 모든 채널(8-bit)을 자동으로 생성합니다.
- * 메모리 효율을 위해 Uint8Array를 사용합니다.
- */
-export function createEmptyChannels(): TileChannels {
-  const size = TILE_RES * TILE_RES;
-
-  const entries = TILE_CHANNEL_KEYS.map((key) => [key, new Uint8Array(size)]);
-
-  return Object.fromEntries(entries) as unknown as TileChannels;
-}
-
-/**
- * [Tile Terrain Factory]
- * 모든 채널을 동일한 해상도로 생성하며, 지형 데이터(elevation)는 정밀도를 위해 16-bit을 사용합니다.
- */
-export function createEmptyTerrain(): TileTerrain {
-  const size = TILE_RES * TILE_RES;
-
-  return {
-    channels: createEmptyChannels(),
-    // 고도(Elevation) 데이터는 m 단위 정밀도 표현을 위해 16-bit 사용 (기본값 0: 해수면)
-    elevation: new Uint16Array(size).fill(0),
-  };
-}
-
-/**
- * [Tile Factory]
- */
-export function createEmptyTile(coord: TileCoord): Tile {
-  return {
-    key: getTileKey(coord),
-    coord,
-    terrain: createEmptyTerrain(),
-    pois: [],
-  };
-}
-
 export const worldToTile = (globalPos: Coord2D) => {
   const tileCoord = getTileCoord(globalPos);
   const tileOrigin = getTileOrigin(tileCoord);
@@ -252,47 +201,13 @@ export const worldToCell = (globalPos: Coord2D): CellCoord => {
  * [Cell -> World]
  * 타일 내 셀 좌표를 다시 절대 미터 좌표로 복원합니다.
  */
-export const cellToWorld = (
-  tileCoord: TileCoord,
-  cellCoord: CellCoord,
-): Coord2D => {
+export const cellToWorld = (tileCoord: TileCoord, cellCoord: CellCoord): Coord2D => {
   const bbox = getTileBbox(tileCoord);
   return {
     x: bbox.minX + cellCoord.cx * CELL_SIZE,
     y: bbox.minY + cellCoord.cy * CELL_SIZE,
   };
 };
-
-/**
- * [Get Elevation at World Pos]
- * 특정 월드 좌표의 고도값을 elevation 배열에서 즉시 추출합니다.
- */
-export const getTerrainAltitudeCoord = (
-  tile: Tile,
-  cellCoord: CellCoord,
-): number => {
-  const { cx, cy } = cellCoord;
-
-  // // 경계값 보호
-  // if (cx < 0 || cx >= TILE_RES || cy < 0 || cy >= TILE_RES) {
-  //   return 0;
-  // }
-
-  // 인덱스 범위 가드 (0 ~ TILE_RES - 1)
-  const ix = Math.max(0, Math.min(TILE_RES - 1, Math.floor(cx)));
-  const iy = Math.max(0, Math.min(TILE_RES - 1, Math.floor(cy)));
-
-  // 🎯 데이터 배열 인덱싱: y * width + x
-  return tile.terrain.elevation[iy * TILE_RES + ix];
-};
-
-export const clampPrecision = (val: number) => Math.round(val * 1e6) / 1e6;
-
-export const toFixedCoord = (coord: Coord): Coord => ({
-  x: clampPrecision(coord.x),
-  y: clampPrecision(coord.y),
-  z: clampPrecision(coord.z ?? 0),
-});
 
 /**
  * [snapToCell]
@@ -309,10 +224,7 @@ export const snapToCell = (pos: Coord, size: number = CELL_SIZE): Coord => {
 };
 
 /** 셀 중앙 좌표로 보정합니다. */
-export const toCenter = <T extends number | Coord2D | Coord>(
-  input: T,
-  size: number = CELL_SIZE,
-): T => {
+export const toCenter = <T extends number | Coord2D | Coord>(input: T, size: number = CELL_SIZE): T => {
   const half = size / 2;
 
   // 1. 단순 숫자인 경우
@@ -323,4 +235,66 @@ export const toCenter = <T extends number | Coord2D | Coord>(
   // 2. 좌표 객체인 경우 (Coord2D | Coord)
   // CoordOps.add가 제네릭 T를 반환하므로 타입 캐스팅 없이 안전하게 환원됩니다.
   return CoordOps.add(input as Coord2D | Coord, half) as T;
+};
+
+/**
+ * 🛡️ [Boundary Check]
+ * 타일 해상도 범위를 정수 단위로 체크하여 인덱스 참조 에러를 방지합니다.
+ */
+export const isOutOfBounds = (cx: number, cy: number): boolean => {
+  // 🎯 부동 소수점 오차 방지를 위해 floor를 고려하거나,
+  // 정수 인덱스로 변환된 후 체크하는 것이 가장 확실합니다.
+  return cx < 0 || cx >= TILE_RES || cy < 0 || cy >= TILE_RES;
+};
+
+/**
+ * [Math Utility] 값의 범위를 제한합니다.
+ */
+export const clamp = (val: number, min: number, max: number): number => (val < min ? min : val > max ? max : val);
+
+/**
+ * [Tile Utility] 셀 인덱스 전용 클램프 (0 ~ TILE_RES - 1)
+ */
+export const clampCell = (val: number): number => Math.max(0, Math.min(TILE_RES - 1, Math.floor(val)));
+
+/**
+ * [clampCellCoord]
+ * 범위를 벗어난 셀 좌표를 타일 내부로 강제 고정합니다.
+ */
+export const clampCellCoord = (cellCoord: CellCoord): CellCoord => ({
+  cx: clampCell(cellCoord.cx),
+  cy: clampCell(cellCoord.cy),
+});
+
+/** 🎯 수치 해석적 안정성을 위한 정밀도 클램핑 (6자리) */
+export const clampPrecision = (val: number) => Math.round(val * 1e6) / 1e6;
+
+/** Coord 객체 전체의 정밀도를 일괄 조정합니다. */
+export const toFixedCoord = (coord: Coord): Coord => ({
+  x: clampPrecision(coord.x),
+  y: clampPrecision(coord.y),
+  z: clampPrecision(coord.z ?? 0),
+});
+
+/**
+ * [Get Surface Value at World Pos]
+ * 고도뿐만 아니라 특정 채널(land, water 등)의 속성값도 조회할 수 있도록 확장 (선택 사항)
+ */
+export const getSurfaceValueCoord = (tile: Tile, key: TileSurfaceKey, cellCoord: CellCoord): number => {
+  const { cx, cy } = cellCoord;
+  const surface = tile.base.surface[key];
+  if (!surface) return 0;
+
+  const ix = Math.max(0, Math.min(TILE_RES - 1, Math.floor(cx)));
+  const iy = Math.max(0, Math.min(TILE_RES - 1, Math.floor(cy)));
+
+  const mx = ix >> 6;
+  const my = iy >> 6;
+  const macroIdx = my * (TILE_RES >> 6) + mx;
+
+  if (surface.macro[macroIdx] === 0) return 0;
+  const details = surface.details[macroIdx];
+  if (!details) return surface.macro[macroIdx];
+
+  return details[(iy & 63) * 64 + (ix & 63)];
 };

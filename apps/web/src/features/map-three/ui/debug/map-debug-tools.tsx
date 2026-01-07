@@ -1,78 +1,84 @@
 import { useTileStore } from '@/entities/geo/model/tile-store';
 import { cn } from '@/shared/lib/utils';
 import { triggerDownload } from '@/shared/lib/io/browser-io';
-import { generateGridBinary } from '@pixelet/core/entities/geo/lib/io/grid-binary';
-import {
-  exportGridImage,
-  exportMergedGridImage,
-} from '@/entities/geo/lib/export/tile-exporter';
-import type { TileChannels } from '@pixelet/core/entities/geo/model/tiles';
+import { generateTileBinary } from '@pixelet/core/entities/geo/lib/io/tile-binary';
+import { exportTileImage } from '@/entities/geo/lib/export/tile-exporter';
+import { TILE_SURFACE_KEYS } from '@pixelet/core/entities/geo/model/tiles';
 
 /**
  * [map-debug-tools]
- * 활성화된 모든 월드 타일의 '멀티 채널' 그리드 데이터를 추출합니다.
+ * 활성화된 모든 월드 타일의 '멀티 채널' 타일 데이터를 추출합니다.
  */
 export function MapDebugTools() {
-  const tilesMap = useTileStore((state) => state.tilesMap);
+  const tileMap = useTileStore((state) => state.tileMap);
 
-  if (tilesMap.size === 0) return null;
+  if (tileMap.size === 0) return null;
 
   /**
    * 1. 바이너리 다운로드 핸들러
    */
   const handleDownloadAllBinary = () => {
-    for (const [key, tile] of tilesMap) {
-      const { channels } = tile.terrain;
+    for (const [key, tile] of tileMap) {
+      const { ele, surface } = tile.base;
 
-      // 채널들을 순회하며 각각 다운로드
-      for (const channel of Object.keys(channels) as Array<
-        keyof TileChannels
-      >) {
-        // 1. 바이너리 데이터 생성 (헤더 포함)
-        const binaryData = generateGridBinary(channels[channel]);
+      // (1) Elevation 채널 (Int16)
+      const eleBin = generateTileBinary(ele);
+      triggerDownload(eleBin, `tile_${key}_elevation.bin`);
 
-        // 2. 다운로드 실행
-        // 파일명: tile_10:5_base.bin
-        triggerDownload(binaryData, `tile_${key}_${channel}.bin`);
-      }
+      // (2) Surface 채널들 (Uint8) - 병렬 실행
+      TILE_SURFACE_KEYS.forEach((channelKey) => {
+        const channelBin = generateTileBinary(surface[channelKey]);
+        triggerDownload(channelBin, `tile_${key}_${channelKey}.bin`);
+      });
     }
   };
 
   /**
-   * 2. 채널별 이미지 프리뷰 핸들러
+   * 2. 채널별 이미지 프리뷰 핸들러 (Individual Channels)
    */
   const handleDownloadAllImages = () => {
-    // Promise.all을 사용하여 모든 타일의 처리를 병렬로 진행할 수 있습니다.
-    for (const [key, tile] of tilesMap) {
-      const { channels } = tile.terrain;
+    for (const [key, tile] of tileMap) {
+      const { surface } = tile.base;
 
-      // 채널들을 순회하며 각각 다운로드
-      for (const channelKey of Object.keys(channels) as Array<
-        keyof TileChannels
-      >) {
-        // 1. 이미지 Blob 생성
-        exportGridImage(channels[channelKey], channelKey).then((blob) => {
-          // 2. 다운로드 실행
+      // 채널들을 순회하며 개별 이미지 생성
+      TILE_SURFACE_KEYS.forEach((channelKey) => {
+        // 🎯 [Refactor] exportTileImage의 'single' 모드 활용
+        exportTileImage(surface, { mode: 'single', targetChannel: channelKey }).then((blob) => {
           if (blob) {
             triggerDownload(blob, `tile_${key}_${channelKey}.png`);
           }
         });
-      }
+      });
     }
   };
 
   /**
-   * 3. 병합된 이미지 다운로드 핸들러
+   * 3. 병합된 이미지 다운로드 핸들러 (Merged Terrain)
    */
   const handleDownloadMergedImages = () => {
-    for (const [key, tile] of tilesMap) {
-      const { channels } = tile.terrain;
+    for (const [key, tile] of tileMap) {
+      const { surface } = tile.base;
 
-      // 1. 합성 이미지 Blob 생성 (전체 채널 구조체 전달)
-      exportMergedGridImage(channels).then((blob) => {
-        // 2. 다운로드 실행
+      // 🎯 [Refactor] exportTileImage의 'base' 모드 활용 (Painter's Algorithm 합성)
+      exportTileImage(surface, { mode: 'base' }).then((blob) => {
         if (blob) {
-          triggerDownload(blob, `tile_${key}.png`);
+          triggerDownload(blob, `tile_${key}_merged.png`);
+        }
+      });
+    }
+  };
+
+  /**
+   * 4. 고도 맵 이미지 다운로드 (Elevation Grayscale)
+   */
+  const handleDownloadElevationImages = () => {
+    for (const [key, tile] of tileMap) {
+      const { surface, ele } = tile.base;
+
+      // 🎯 elevation 쿼드트리를 직접 전달하여 모드 실행
+      exportTileImage(surface, { mode: 'elevation' }, undefined, ele).then((blob) => {
+        if (blob) {
+          triggerDownload(blob, `tile_${key}_elevation.png`);
         }
       });
     }
@@ -80,9 +86,7 @@ export function MapDebugTools() {
 
   return (
     <div className="absolute bottom-20 left-6 flex flex-col gap-2 z-[100] pointer-events-auto select-none">
-      <p className="text-[10px] text-white/50 font-mono mb-1 tracking-tighter">
-        DEBUG: MULTI-CHANNEL ({tilesMap.size} Tiles)
-      </p>
+      <p className="text-[10px] text-white/50 font-mono mb-1 tracking-tighter">DEBUG: SPARSE-CHANNEL ({tileMap.size} Tiles)</p>
 
       <button
         onClick={handleDownloadAllBinary}
@@ -91,7 +95,7 @@ export function MapDebugTools() {
           'bg-slate-800/80 text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 active:scale-95',
         )}
       >
-        Download All .BIN (x4)
+        Download All .BIN (x5)
       </button>
 
       <button
@@ -116,11 +120,9 @@ export function MapDebugTools() {
       </button>
 
       <div className="text-[9px] text-white/40 mt-1 px-1 font-mono leading-relaxed">
-        Tiles Loaded: {tilesMap.size}
+        Tiles Loaded: {tileMap.size}
         <br />
-        <span className="opacity-60">
-          Keys: {Array.from(tilesMap.keys()).join(', ')}
-        </span>
+        <span className="opacity-60">Keys: {Array.from(tileMap.keys()).join(', ')}</span>
       </div>
     </div>
   );

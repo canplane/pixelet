@@ -88,7 +88,7 @@ export function MapView() {
       {/* 일반 절대 위치 UI 레이어 */}
       <MapOverlays />
 
-      {/* 개발 환경 전용 그리드 데이터 추출 도구 */}
+      {/* 개발 환경 전용 타일 데이터 추출 도구 */}
       {isDebug && <MapDebugTools />}
     </div>
   );

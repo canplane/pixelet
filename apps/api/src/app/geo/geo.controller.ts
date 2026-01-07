@@ -1,13 +1,6 @@
-import {
-  Controller,
-  Post,
-  Body,
-  BadRequestException,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException, HttpCode, HttpStatus } from '@nestjs/common';
 import { GeoService } from './geo.service';
-import { TileDto } from '@pixelet/core/entities/geo/dto/tiles.dto';
+import { TileDto } from '@pixelet/core/entities/geo/model/tiles';
 
 /**
  * [TileRequestDto]
@@ -36,9 +29,7 @@ export class GeoController {
 
     // 🛡️ [Guard] 타일 인덱스 유효성 검사
     if (isNaN(tx) || isNaN(ty)) {
-      throw new BadRequestException(
-        'Invalid tile coordinates (tx, ty must be numbers)',
-      );
+      throw new BadRequestException('Invalid tile coordinates (tx, ty must be numbers)');
     }
 
     try {
@@ -46,10 +37,7 @@ export class GeoController {
       return await this.geoService.createTile({ tx, ty });
     } catch (error) {
       // 서버 에러 로깅 (엔지니어링 필수 요소)
-      console.error(
-        `[GeoController] Failed to bake tile ${tx}:${ty} ->`,
-        error,
-      );
+      console.error(`[GeoController] Failed to bake tile ${tx}:${ty} ->`, error);
       throw error; // NestJS 기본 인터셉터가 500 에러로 변환
     }
   }

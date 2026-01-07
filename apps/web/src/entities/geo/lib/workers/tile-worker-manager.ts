@@ -1,16 +1,11 @@
-import OsmWorker from './geo.worker?worker'; // 🎯 Vite 전용 워커 임포트
+import GeoWorker from './geo.worker?worker'; // 🎯 Vite 전용 워커 임포트
 
 import type { Tile } from '@pixelet/core/entities/geo/model/tiles';
-import type {
-  TileWorkerInput,
-  TileWorkerResponse,
-} from '@/entities/geo/model/worker-protocol';
+import type { TileWorkerInput, TileWorkerResponse } from '@/entities/geo/model/worker-protocol';
 import { SERVICE_MODE } from '@/config/app-config';
 import { delay } from '@pixelet/core/shared/lib/aync-utils';
-import {
-  getTileKey,
-  type TileCoord,
-} from '@pixelet/core/entities/geo/lib/utils/tile-utils';
+import { type TileCoord } from '@pixelet/core/entities/geo/lib/utils/tile-utils';
+import { SparseQuadtreeCodec } from '@pixelet/core/shared/lib/structs/sparse-quadtree-codec';
 
 /**
  * [TaskCallbacks]
@@ -48,7 +43,7 @@ class TileWorkerManager {
     //   new URL('../../../../workers/geo.worker.ts', import.meta.url),
     //   { type: 'module' },
     // );
-    this.worker = new OsmWorker();
+    this.worker = new GeoWorker();
 
     this.worker.onmessage = (e: MessageEvent<TileWorkerResponse>) => {
       const { type, requestId, data, error } = e.data;
@@ -63,9 +58,31 @@ class TileWorkerManager {
           break;
 
         case 'complete':
-          // 최종 완료: 데이터 전달 후 콜백 맵에서 삭제 (메모리 관리)
           if (data) {
-            callback.resolve(data as Tile);
+            // 1. [Elevation] 고도 데이터 복원 (Int16Array)
+            const recoveredEle = data.base.ele ? SparseQuadtreeCodec.decode(data.base.ele, Int16Array) : null;
+
+            // 2. [Surface] 지형 채널 복원 (Uint8Array)
+            // 🎯 옥트리와의 대칭성을 유지하며, 각 채널을 개별적으로 Rehydration 합니다.
+            const recoveredSurface: any = {};
+            if (data.base.surface) {
+              Object.keys(data.base.surface).forEach((key) => {
+                const buffer = data.base.surface[key];
+                if (buffer) {
+                  recoveredSurface[key] = SparseQuadtreeCodec.decode(buffer, Uint8Array);
+                }
+              });
+            }
+
+            // 🚀 최종 인스턴스 조립 및 반환
+            callback.resolve({
+              ...data,
+              base: {
+                ...data.base,
+                ele: recoveredEle,
+                surface: recoveredSurface,
+              },
+            });
             this.callbacks.delete(requestId);
           }
           break;
