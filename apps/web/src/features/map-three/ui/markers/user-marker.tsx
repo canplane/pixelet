@@ -3,18 +3,12 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 import { CoordOps } from '@pixelet/core/shared/model/coords';
-import {
-  snapToCell,
-  toCenter,
-} from '@pixelet/core/entities/geo/lib/utils/tile-utils';
+import { snapToCell, toCenter } from '@pixelet/core/entities/geo/lib/utils/tile-utils';
 import { GEO_CONSTANTS } from '@pixelet/core/entities/geo/model/geo-constants';
 import { THREE_CONFIG } from '@/entities/geo/config/three-config';
 import { FloatingGroup } from '@/entities/geo/ui/floating-group';
 import { useTerrainAltitude } from '@/entities/geo/lib/use-terrain-altitude';
-import {
-  toThreeCoord,
-  toThreeCoordWithOffset,
-} from '@/shared/lib/three/three-coords';
+import { toThreeCoord, toThreeCoordWithOffset } from '@/shared/lib/three/three-coords';
 
 const { CELL_SIZE } = GEO_CONSTANTS;
 const MAX_INSTANCES = 1500;
@@ -186,8 +180,7 @@ export function UserMarker(): ReactElement | null {
     const count = gridData.length;
     meshRef.current.count = count;
 
-    const aBorders = meshRef.current.geometry.attributes
-      .aBorders as THREE.InstancedBufferAttribute;
+    const aBorders = meshRef.current.geometry.attributes.aBorders as THREE.InstancedBufferAttribute;
     const borderArray = aBorders.array as Float32Array;
 
     gridData.forEach((data, i) => {
@@ -202,11 +195,7 @@ export function UserMarker(): ReactElement | null {
       const pos = toThreeCoordWithOffset({ x: data.x, y: data.y }, localZ);
 
       tempObject.position.set(...pos);
-      tempObject.scale.set(
-        CELL_SIZE * CONFIG.SCALE,
-        CELL_SIZE * CONFIG.SCALE,
-        CELL_SIZE * CONFIG.SCALE,
-      );
+      tempObject.scale.set(CELL_SIZE * CONFIG.SCALE, CELL_SIZE * CONFIG.SCALE, CELL_SIZE * CONFIG.SCALE);
       tempObject.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.matrix);
 
@@ -256,13 +245,7 @@ export function UserMarker(): ReactElement | null {
         args={[
           useMemo(() => {
             const geo = new THREE.BoxGeometry(1, 1, 1);
-            geo.setAttribute(
-              'aBorders',
-              new THREE.InstancedBufferAttribute(
-                new Float32Array(MAX_INSTANCES * 4),
-                4,
-              ),
-            );
+            geo.setAttribute('aBorders', new THREE.InstancedBufferAttribute(new Float32Array(MAX_INSTANCES * 4), 4));
             return geo;
           }, []),
           material,
@@ -273,22 +256,10 @@ export function UserMarker(): ReactElement | null {
 
       <mesh ref={gemRef} position={gemPos}>
         <octahedronGeometry args={[0.6, 0]} />
-        <meshStandardMaterial
-          color={gemColor}
-          emissive={gemColor}
-          emissiveIntensity={isNight ? 2 : 0.5}
-          roughness={0.2}
-          metalness={0.8}
-          flatShading
-        />
+        <meshStandardMaterial color={gemColor} emissive={gemColor} emissiveIntensity={isNight ? 2 : 0.5} roughness={0.2} metalness={0.8} flatShading />
       </mesh>
 
-      <pointLight
-        position={lightPos}
-        distance={16}
-        intensity={isNight ? 10 : 3}
-        color={gemColor}
-      />
+      <pointLight position={lightPos} distance={16} intensity={isNight ? 10 : 3} color={gemColor} />
     </FloatingGroup>
   );
 }

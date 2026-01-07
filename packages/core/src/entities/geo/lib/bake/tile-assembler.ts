@@ -3,7 +3,7 @@
  * 정규화된 OsmFeature를 타일 그리드와 POI 엔티티로 조립합니다.
  */
 
-import { bakeTileChannels } from './tile-channel-baker';
+import { bakeTileSurface } from './tile-surface-baker';
 import type { OsmFeature, MapPoi } from '../../model/osm-feature';
 import type { TileCoord } from '../utils/tile-utils';
 
@@ -27,20 +27,14 @@ export interface TileBuildConfig {
  * 피처 목록을 받아 타일 채널과 POI 리스트를 한꺼번에 생성합니다.
  * 🌊 oceanFeatures가 포함된 elements를 받아 래스터화 과정을 조율합니다.
  */
-export function assembleTile(
-  coord: TileCoord,
-  elements: OsmFeature[],
-  options?: TileBuildConfig,
-) {
-  // 1. POI 추출 (바다 제외 로직 포함됨)
+export function assembleTile(coord: TileCoord, elements: OsmFeature[], options?: TileBuildConfig) {
+  // POI 추출
   const pois = extractPois(elements);
 
-  // 2. 그리드 베이킹
-  // 데이터가 없더라도 GridPacker가 기대하는 5개 채널 구조를 유지하기 위해
-  // 기본적으로 EmptyChannels를 기반으로 시작하는 것이 안전합니다.
-  const partialChannels = bakeTileChannels(coord, elements, options);
+  // 그리드 베이킹
+  const surface = bakeTileSurface(coord, elements, options);
 
-  return { pois, partialChannels };
+  return { pois, surface };
 }
 
 /**
@@ -63,13 +57,7 @@ export const extractPois = (features: OsmFeature[]): MapPoi[] => {
 
     // [Named Node] 단순히 모든 노드를 가져오지 않고,
     // 최소한의 장소 정보(amenity, shop, tourism 등)가 있는 노드만 선별
-    const isNamedNode =
-      type === 'node' &&
-      (!!tags.amenity ||
-        !!tags.shop ||
-        !!tags.tourism ||
-        !!tags.place ||
-        !!tags.historic);
+    const isNamedNode = type === 'node' && (!!tags.amenity || !!tags.shop || !!tags.tourism || !!tags.place || !!tags.historic);
 
     // [Policy Check]
     if (isExplicitPoi || isMajorFacility || isNamedNode) {
@@ -77,8 +65,7 @@ export const extractPois = (features: OsmFeature[]): MapPoi[] => {
         id: `poi-${id}`,
         type: 'poi',
         // 우선순위: amenity > shop > tourism > category
-        category:
-          tags.amenity || tags.shop || tags.tourism || category || 'place',
+        category: tags.amenity || tags.shop || tags.tourism || category || 'place',
         name,
         center,
         rank: extra.rank, // Normalizer에서 이미 주입됨

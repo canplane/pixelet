@@ -7,7 +7,7 @@
     /* 경로 별칭 */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@pixelet/core/*": ["./src/*"]
     }
   },
   "references": [{ "path": "./tsconfig.lib.json" }]

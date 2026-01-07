@@ -11,8 +11,8 @@
 
 import type { OsmTags } from '@pixelet/core/entities/geo/model/osm-source';
 import type { OsmExtra } from '@pixelet/core/entities/geo/model/osm-feature';
-import { VOXEL_TYPES } from '@pixelet/core/entities/voxel/model/voxels';
-import type { TileChannels } from '@pixelet/core/entities/geo/model/tiles';
+import { BASE_TYPES } from '@pixelet/core/entities/cell/model/base';
+import { TileSurfaceKey } from '@pixelet/core/entities/geo/model/tiles';
 
 // =============================================================================
 // SECTION 1. [Domain Knowledge] 📚 해석 기준 데이터
@@ -68,39 +68,20 @@ const INSTITUTIONAL_TYPES = new Set([
   'transportation', // 🚌 터미널 등
 ]);
 
-const EDU_TYPES = new Set([
-  'school',
-  'university',
-  'college',
-  'kindergarten',
-  'classroom',
-  'dormitory',
-]);
+const EDU_TYPES = new Set(['school', 'university', 'college', 'kindergarten', 'classroom', 'dormitory']);
 const MEDICAL_TYPES = new Set(['hospital', 'clinic']);
 
 /**
  * 🏟️ [Sports Check]
  * 스포츠 시설로 분류할 leisure/sport 관련 태그 목록입니다.
  */
-const SPORTS_TYPES = new Set([
-  'pitch',
-  'stadium',
-  'track',
-  'golf_course',
-  'sports_centre',
-  'playground',
-]);
+const SPORTS_TYPES = new Set(['pitch', 'stadium', 'track', 'golf_course', 'sports_centre', 'playground']);
 
 /**
  * 🔒 [Force Close Rules]
  * 선형(LineString) 데이터로 오더라도 면(Polygon)으로 닫아서 처리해야 할 시설들입니다.
  */
-const FORCE_CLOSE_AMENITIES = new Set([
-  'parking',
-  'school',
-  'university',
-  'hospital',
-]);
+const FORCE_CLOSE_AMENITIES = new Set(['parking', 'school', 'university', 'hospital']);
 const FORCE_CLOSE_LEISURE = new Set(['pitch', 'stadium', 'park', 'garden']);
 
 // =============================================================================
@@ -109,28 +90,28 @@ const FORCE_CLOSE_LEISURE = new Set(['pitch', 'stadium', 'park', 'garden']);
 // =============================================================================
 
 // =============================================================================
-// [Helper] 도로 위계별 복셀 타입 매핑
+// [Helper] 도로 위계별 셀 타입 매핑
 // =============================================================================
-function determineRoadVoxel(highwayTag: string): number {
+function determineRoad(highwayTag: string): number {
   switch (highwayTag) {
     // 🔴 Level 1: 고속도로 및 간선도로
     case 'motorway':
     case 'motorway_link':
     case 'trunk':
     case 'trunk_link':
-      return VOXEL_TYPES.TRANSPORT.ROAD_MOTORWAY;
+      return BASE_TYPES.TRANSPORT.ROAD_MOTORWAY;
 
     // 🟠 Level 2: 주요 도로 (대로)
     case 'primary':
     case 'primary_link':
-      return VOXEL_TYPES.TRANSPORT.ROAD_PRIMARY;
+      return BASE_TYPES.TRANSPORT.ROAD_PRIMARY;
 
     // 🟡 Level 3: 보조 도로 (중로)
     case 'secondary':
     case 'secondary_link':
     case 'tertiary': // 3차 도로까지는 노란색 계열로 묶거나
     case 'tertiary_link': // 디자인에 따라 Default(White)로 보낼 수도 있음
-      return VOXEL_TYPES.TRANSPORT.ROAD_SECONDARY;
+      return BASE_TYPES.TRANSPORT.ROAD_SECONDARY;
 
     // ⚪ Level 4: 일반/주거지 도로 (기본값)
     case 'residential':
@@ -138,27 +119,27 @@ function determineRoadVoxel(highwayTag: string): number {
     case 'unclassified':
     case 'service':
     default:
-      return VOXEL_TYPES.TRANSPORT.ROAD_DEFAULT;
+      return BASE_TYPES.TRANSPORT.ROAD_DEFAULT;
   }
 }
 
-// [Helper] 철도 종류별 복셀 타입 매핑
-function determineRailwayVoxel(tags: OsmTags): number {
+// [Helper] 철도 종류별 셀 타입 매핑
+function determineRailway(tags: OsmTags): number {
   const type = tags.railway;
 
   // 1. 지하철 및 경전철 (Subway, Light Rail)
   if (type === 'subway' || type === 'light_rail') {
-    return VOXEL_TYPES.TRANSPORT.RAIL_SUBWAY;
+    return BASE_TYPES.TRANSPORT.RAIL_SUBWAY;
   }
 
   // 2. 일반 철도 (Rail)
   if (type === 'rail') {
     // service 태그가 있으면 기지창이나 지선이므로 위계를 낮출 수도 있습니다.
-    return VOXEL_TYPES.TRANSPORT.RAIL_MAIN;
+    return BASE_TYPES.TRANSPORT.RAIL_MAIN;
   }
 
   // 3. 기타 (Tram, Monorail 등) - 기본값으로 대응
-  return VOXEL_TYPES.TRANSPORT.RAIL_MAIN;
+  return BASE_TYPES.TRANSPORT.RAIL_MAIN;
 }
 
 /**
@@ -195,24 +176,12 @@ export const determineOsmCategory = (tags: OsmTags): string => {
   }
 
   // 💧 WATER (내륙 수계)
-  if (
-    tags.waterway ||
-    tags.water ||
-    tags.natural === 'water' ||
-    tags.wetland ||
-    ['reservoir', 'basin'].includes(tags.landuse || '')
-  ) {
+  if (tags.waterway || tags.water || tags.natural === 'water' || tags.wetland || ['reservoir', 'basin'].includes(tags.landuse || '')) {
     return 'water';
   }
 
   // 📍 POI
-  if (
-    tags.amenity ||
-    tags.shop ||
-    tags.tourism ||
-    tags.historic ||
-    ['station', 'subway_entrance'].includes(tags.railway || '')
-  ) {
+  if (tags.amenity || tags.shop || tags.tourism || tags.historic || ['station', 'subway_entrance'].includes(tags.railway || '')) {
     return 'poi';
   }
 
@@ -233,17 +202,7 @@ export const determineOsmCategory = (tags: OsmTags): string => {
   if (
     tags.landuse === 'forest' ||
     tags.leisure === 'nature_reserve' ||
-    [
-      'wood',
-      'peak',
-      'mountain',
-      'scrub',
-      'fell',
-      'bare_rock',
-      'cliff',
-      'sand',
-      'beach',
-    ].includes(tags.natural || '')
+    ['wood', 'peak', 'mountain', 'scrub', 'fell', 'bare_rock', 'cliff', 'sand', 'beach'].includes(tags.natural || '')
   ) {
     return 'forest'; // 혹은 'nature'로 명칭 확장 가능
   }
@@ -260,10 +219,7 @@ export const determineOsmCategory = (tags: OsmTags): string => {
  * 1. width 태그 존재 시 최우선 사용
  * 2. lanes 태그 존재 시 lanes * 3.5m 적용
  */
-export const computeOsmMetrics = (
-  tags: OsmTags,
-  category: string,
-): { height: number; width: number; layer: number } => {
+export const computeOsmMetrics = (tags: OsmTags, category: string): { height: number; width: number; layer: number } => {
   // --- 1. 📏 Height Calculation ---
   let height = 0;
   if (category === 'building') {
@@ -299,8 +255,7 @@ export const computeOsmMetrics = (
       if (tags.lanes) {
         lanes = parseInt(tags.lanes, 10);
       } else {
-        const typeKey =
-          tags.highway || (tags.railway ? 'rail' : 'unclassified');
+        const typeKey = tags.highway || (tags.railway ? 'rail' : 'unclassified');
         lanes = DEFAULT_LANES_BY_HIGHWAY[typeKey] || 1;
       }
       width = lanes * 3.5;
@@ -344,15 +299,9 @@ export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
   // 🔥 [FIX] 역(Station) 판별 로직 강화
   // amenity 태그뿐만 아니라, railway나 building 태그도 확인하여 공공시설로 분류
   const isInstitutional =
-    INSTITUTIONAL_TYPES.has(tags.amenity || '') ||
-    tags.railway === 'station' ||
-    ['train_station', 'transportation'].includes(tags.building || '');
+    INSTITUTIONAL_TYPES.has(tags.amenity || '') || tags.railway === 'station' || ['train_station', 'transportation'].includes(tags.building || '');
 
-  const isOcean =
-    tags.source === 'osm-coastline' ||
-    tags.natural === 'ocean' ||
-    tags.natural === 'sea' ||
-    category === 'sea';
+  const isOcean = tags.source === 'osm-coastline' || tags.natural === 'ocean' || tags.natural === 'sea' || category === 'sea';
 
   return {
     /** 🚀 [Policy] 정책 기반 중요도 산출 */
@@ -362,10 +311,7 @@ export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
     isOcean, // Baker가 이 값을 보고 Inverse Rendering(파내기)을 수행합니다.
 
     /** 🅿️ [Flag] 주차장 여부 */
-    isParking:
-      category === 'parking' ||
-      tags.amenity === 'parking' ||
-      tags.parking === 'surface',
+    isParking: category === 'parking' || tags.amenity === 'parking' || tags.parking === 'surface',
 
     /** 🏛️ [Flag] 공공/교육 시설 여부 */
     isInstitutional,
@@ -384,11 +330,7 @@ export const computeOsmExtra = (tags: OsmTags, category: string): OsmExtra => {
  * 2. Hierarchy Priority: 같은 층에서는 '도로 위계가 높은(넓은)' 도로가
  * '낮은(좁은)' 도로를 덮어써야(Draw Last) 도로망의 시각적 연속성이 보장됩니다.
  */
-function calculateOsmRank(
-  category: string,
-  tags: OsmTags,
-  flags: { isInstitutional: boolean; isOcean: boolean },
-): number {
+function calculateOsmRank(category: string, tags: OsmTags, flags: { isInstitutional: boolean; isOcean: boolean }): number {
   let score = 10; // Base score (Base Land가 보통 10점을 가짐)
 
   // 1. 🗂️ 카테고리별 가중치
@@ -406,9 +348,7 @@ function calculateOsmRank(
     // 중요한 도로(Motorway)를 나중에 그려서(덮고) 간선 도로의 연속성을 유지합니다.
     if (['motorway', 'trunk', 'motorway_link', 'trunk_link'].includes(h)) {
       score += 80; // 📈 가장 나중에 그려짐 (최상단)
-    } else if (
-      ['primary', 'primary_link', 'secondary', 'secondary_link'].includes(h)
-    ) {
+    } else if (['primary', 'primary_link', 'secondary', 'secondary_link'].includes(h)) {
       score += 50; // 중간
     } else if (['tertiary', 'tertiary_link'].includes(h)) {
       score += 30;
@@ -439,65 +379,52 @@ function calculateOsmRank(
 }
 
 // =============================================================================
-// SECTION 3. [Voxel Policy] 🎨 복셀 시각화 정책 (Baker 연동)
-// * OSM 데이터를 어떤 복셀 타입(Color)과 채널(Channel)로 그릴지 결정합니다.
+// SECTION 3. [Cell Policy] 🎨 셀 시각화 정책 (Baker 연동)
+// * OSM 데이터를 어떤 셀 타입(Color)과 채널(Channel)로 그릴지 결정합니다.
 // =============================================================================
 
 /**
- * 🎨 [Voxel Configuration]
- * 결정된 복셀 타입과 타겟 채널 정보
+ * 🎨 [Cell Configuration]
+ * 결정된 셀 타입과 타겟 채널 정보
  */
-export interface VoxelConfig {
-  voxelType: number;
-  channelKey: keyof TileChannels;
+export interface CellConfig {
+  cellType: number;
+  channelKey: TileSurfaceKey;
 }
 
 /**
- * [Main Policy] Feature의 속성을 분석하여 그릴 복셀 타입과 타겟 채널을 반환합니다.
+ * [Main Policy] Feature의 속성을 분석하여 그릴 셀 타입과 타겟 채널을 반환합니다.
  * @returns 설정값이 없으면 null 반환 (렌더링 스킵)
  *
  * [Channeling Strategy]
- * Detection(파싱) 순서는 구체적(Road/Building) -> 포괄적(Base) 순으로 진행하지만,
- * 렌더링(Layering) 순서는 Water -> Base -> Transport -> Structure 입니다.
+ * Detection(파싱) 순서는 구체적(Road/Building) -> 포괄적(Land) 순으로 진행하지만,
+ * 렌더링(Layering) 순서는 Land -> Water -> Structure -> Transport 순입니다.
  * 아래 주석 번호(1~4)는 렌더링 패스(Channel Index)를 의미합니다.
  */
-export const determineVoxelConfig = (
-  category: string,
-  tags: OsmTags,
-  extra: OsmExtra,
-): VoxelConfig | null => {
-  // 1. 🏔️ Pass 1: BASE Channel (Sea & Foundations)
+export const determineCellConfig = (category: string, tags: OsmTags, extra: OsmExtra): CellConfig | null => {
+  // 1. 🏔️ Pass 1: LAND Channel (Sea & Foundations)
   if (extra.isOcean || category === 'sea') {
-    return { voxelType: VOXEL_TYPES.BASE.SEA, channelKey: 'base' };
+    return { cellType: BASE_TYPES.LAND.SEA, channelKey: 'land' };
   }
 
   // 2. 💧 Pass 2: WATER Channel (Inland Water)
-  if (
-    category === 'water' ||
-    tags.waterway ||
-    tags.natural === 'water' ||
-    tags.wetland ||
-    ['reservoir', 'basin'].includes(tags.landuse || '')
-  ) {
+  if (category === 'water' || tags.waterway || tags.natural === 'water' || tags.wetland || ['reservoir', 'basin'].includes(tags.landuse || '')) {
     if (tags.natural === 'wetland' || tags.wetland || tags.water === 'mud') {
-      return { voxelType: VOXEL_TYPES.WATER.WETLAND, channelKey: 'water' }; // [cite: 25]
+      return { cellType: BASE_TYPES.WATER.WETLAND, channelKey: 'water' }; // [cite: 25]
     }
 
-    const isFlowing =
-      !!tags.waterway ||
-      ['river', 'canal', 'stream', 'drain'].includes(tags.water || ''); // [cite: 18] default.style의 stream, canal, drain 등 흐르는 물 판별
+    const isFlowing = !!tags.waterway || ['river', 'canal', 'stream', 'drain'].includes(tags.water || ''); // [cite: 18] default.style의 stream, canal, drain 등 흐르는 물 판별
 
-    const waterType = isFlowing
-      ? VOXEL_TYPES.WATER.RIVER
-      : VOXEL_TYPES.WATER.LAKE;
-
-    return { voxelType: waterType, channelKey: 'water' };
+    const waterValue = isFlowing ? BASE_TYPES.WATER.RIVER : BASE_TYPES.WATER.LAKE;
+    return { cellType: waterValue, channelKey: 'water' };
   }
 
   // 3. 🏢 Pass 3: STRUCTURE Channel
   if (category === 'building' || tags.building) {
     const amenity = tags.amenity || '';
     const building = tags.building || '';
+
+    let cellType: number = BASE_TYPES.STRUCTURE.BUILDING;
 
     // 🚉 교통 시설
     if (
@@ -506,123 +433,65 @@ export const determineVoxelConfig = (
       amenity === 'bus_station' ||
       ['train_station', 'transportation', 'station'].includes(building)
     ) {
-      return {
-        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_STATION,
-        channelKey: 'structure',
-      };
+      cellType = BASE_TYPES.STRUCTURE.BUILDING_STATION;
     }
-
     // 🏥 의료 시설
-    if (MEDICAL_TYPES.has(amenity) || MEDICAL_TYPES.has(building)) {
-      return {
-        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_MEDICAL,
-        channelKey: 'structure',
-      };
+    else if (MEDICAL_TYPES.has(amenity) || MEDICAL_TYPES.has(building)) {
+      cellType = BASE_TYPES.STRUCTURE.BUILDING_MEDICAL;
     }
-
     // 🏫 교육 시설
-    if (EDU_TYPES.has(amenity) || EDU_TYPES.has(building)) {
-      return {
-        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_EDUCATION,
-        channelKey: 'structure',
-      };
+    else if (EDU_TYPES.has(amenity) || EDU_TYPES.has(building)) {
+      cellType = BASE_TYPES.STRUCTURE.BUILDING_EDUCATION;
     }
-
     // 🏛️ 기타 공공 시설
-    if (extra.isInstitutional) {
-      return {
-        voxelType: VOXEL_TYPES.STRUCTURE.BUILDING_PUBLIC,
-        channelKey: 'structure',
-      };
+    else if (extra.isInstitutional) {
+      cellType = BASE_TYPES.STRUCTURE.BUILDING_PUBLIC;
     }
 
-    // 일반 건물
-    return {
-      voxelType: VOXEL_TYPES.STRUCTURE.BUILDING,
-      channelKey: 'structure',
-    };
+    return { cellType, channelKey: 'structure' };
   }
 
   // 4. 🛣️ Pass 4: TRANSPORT Channel
-  if (
-    category === 'road' ||
-    tags.highway ||
-    tags.railway ||
-    category === 'parking'
-  ) {
+  if (category === 'road' || tags.highway || tags.railway || category === 'parking') {
+    let cellType: number = BASE_TYPES.TRANSPORT.ROAD_DEFAULT;
+
     // ✈️ 공항 선형
-    if (tags.aeroway === 'runway') {
-      return {
-        voxelType: VOXEL_TYPES.TRANSPORT.RUNWAY,
-        channelKey: 'transport',
-      };
-    }
-    if (tags.aeroway === 'taxiway' || tags.aeroway === 'taxilane') {
-      return {
-        voxelType: VOXEL_TYPES.TRANSPORT.TAXIWAY,
-        channelKey: 'transport',
-      };
-    }
-
-    // 주차장 (Extra Flag 우선 확인)
-    if (extra.isParking) {
-      return {
-        voxelType: VOXEL_TYPES.TRANSPORT.PARKING,
-        channelKey: 'transport',
-      };
-    }
+    if (tags.aeroway === 'runway') cellType = BASE_TYPES.TRANSPORT.RUNWAY;
+    else if (tags.aeroway === 'taxiway' || tags.aeroway === 'taxilane') cellType = BASE_TYPES.TRANSPORT.TAXIWAY;
+    // 주차장
+    else if (extra.isParking) cellType = BASE_TYPES.TRANSPORT.PARKING;
     // 철도
-    if (tags.railway) {
-      return {
-        voxelType: determineRailwayVoxel(tags),
-        channelKey: 'transport',
-      };
-    }
+    else if (tags.railway) cellType = determineRailway(tags);
     // 보행자 도로
-    if (
-      ['pedestrian', 'footway', 'living_street', 'path'].includes(
-        tags.highway || '',
-      )
-    ) {
-      return {
-        voxelType: VOXEL_TYPES.TRANSPORT.PEDESTRIAN,
-        channelKey: 'transport',
-      };
-    }
-
+    else if (['pedestrian', 'footway', 'living_street', 'path'].includes(tags.highway || '')) cellType = BASE_TYPES.TRANSPORT.PEDESTRIAN;
     // 도로
-    return {
-      voxelType: determineRoadVoxel(tags.highway || ''),
-      channelKey: 'transport',
-    };
+    else cellType = determineRoad(tags.highway || '');
+
+    return { cellType, channelKey: 'transport' };
   }
 
-  // 5. 🏔️ Pass 1 (Cont.): BASE Channel Fallback
-  // 건물이 아니고, 도로가 아닌 남은 면(Area) 데이터들은 지형(Base)으로 처리합니다.
-  const baseType = resolveBaseVoxelType(category, tags, extra);
-  if (baseType) {
-    return { voxelType: baseType, channelKey: 'base' };
+  // 5. 🏔️ Pass 1 (Cont.): LAND Channel Fallback
+  // 건물이 아니고, 도로가 아닌 남은 면(Area) 데이터들은 지형(Land)으로 처리합니다.
+  const landType = resolveLand(category, tags, extra);
+  if (landType) {
+    return { cellType: landType, channelKey: 'land' };
   }
 
   return null; // 렌더링 대상 아님
 };
 
 /**
- * [Internal Helper] Base Channel의 상세 복셀 타입 결정
+ * [Internal Helper] Land Channel의 상세 셀 타입 결정
  */
-function resolveBaseVoxelType(
-  category: string,
-  tags: OsmTags,
-  extra: OsmExtra,
-): number | null {
-  // resolveBaseVoxelType 내부는 기존 분화된 ID(EDUCATION, MEDICAL 등)를 유지하며,
-  // voxels.ts의 BASE 섹션 상수와 1:1 대응하도록 둡니다.
+function resolveLand(category: string, tags: OsmTags, extra: OsmExtra): number | null {
+  // resolveLand 내부는 기존 분화된 ID를 유지하며,
+  // 시스템의 LAND 섹션 상수와 1:1 대응하도록 둡니다.
 
   // (0) 단순 카테고리 매핑 (빠른 반환)
   const CATEGORY_MAP: Record<string, number> = {
-    forest: VOXEL_TYPES.BASE.GREEN_DEEP,
-    park: VOXEL_TYPES.BASE.GREEN_LIGHT,
-    sand: VOXEL_TYPES.BASE.SAND,
+    forest: BASE_TYPES.LAND.GREEN_DEEP,
+    park: BASE_TYPES.LAND.GREEN_LIGHT,
+    sand: BASE_TYPES.LAND.SAND,
   };
   if (CATEGORY_MAP[category]) return CATEGORY_MAP[category];
 
@@ -630,97 +499,51 @@ function resolveBaseVoxelType(
   const landuse = tags.landuse || '';
 
   // 🏫 학교 부지
-  if (EDU_TYPES.has(amenity) || landuse === 'education') {
-    return VOXEL_TYPES.BASE.EDUCATION;
-  }
-
+  if (EDU_TYPES.has(amenity) || landuse === 'education') return BASE_TYPES.LAND.EDUCATION;
   // 🏥 병원 부지
-  if (MEDICAL_TYPES.has(amenity) || landuse === 'medical') {
-    return VOXEL_TYPES.BASE.MEDICAL;
-  }
-
+  if (MEDICAL_TYPES.has(amenity) || landuse === 'medical') return BASE_TYPES.LAND.MEDICAL;
   // 🏛️ 공공/교육 시설 부지
-  if (extra.isInstitutional) return VOXEL_TYPES.BASE.PUBLIC;
-
+  if (extra.isInstitutional) return BASE_TYPES.LAND.PUBLIC;
   // ⚽ 스포츠 시설 부지
-  if (extra.isSports) return VOXEL_TYPES.BASE.SPORTS;
+  if (extra.isSports) return BASE_TYPES.LAND.SPORTS;
 
   // (2) [Forest/Deep Green]
-  if (
-    (tags.natural &&
-      [
-        'wood',
-        'scrub',
-        'heath',
-        'peak',
-        'ridge',
-        'cliff',
-        'mountain',
-        'volcano',
-      ].includes(tags.natural)) ||
-    tags.landuse === 'forest'
-  ) {
-    return VOXEL_TYPES.BASE.GREEN_DEEP;
+  if ((tags.natural && ['wood', 'scrub', 'heath', 'peak', 'ridge', 'cliff', 'mountain', 'volcano'].includes(tags.natural)) || tags.landuse === 'forest') {
+    return BASE_TYPES.LAND.GREEN_DEEP;
   }
-
   // (3) [Grass/Light Green]
   if (
     (tags.natural && ['grassland', 'fell', 'moor'].includes(tags.natural)) ||
-    (tags.landuse &&
-      ['grass', 'village_green', 'meadow', 'allotments'].includes(
-        tags.landuse,
-      )) ||
-    (tags.leisure &&
-      ['park', 'garden', 'nature_reserve'].includes(tags.leisure))
+    (tags.landuse && ['grass', 'village_green', 'meadow', 'allotments'].includes(tags.landuse)) ||
+    (tags.leisure && ['park', 'garden', 'nature_reserve'].includes(tags.leisure))
   ) {
-    return VOXEL_TYPES.BASE.GREEN_LIGHT;
+    return BASE_TYPES.LAND.GREEN_LIGHT;
   }
 
   // (4) [Sand/Rock]
-  if (
-    (tags.natural &&
-      ['sand', 'shingle', 'bare_rock', 'beach', 'scree'].includes(
-        tags.natural,
-      )) ||
-    tags.landuse === 'quarry'
-  ) {
-    return VOXEL_TYPES.BASE.SAND;
+  if ((tags.natural && ['sand', 'shingle', 'bare_rock', 'beach', 'scree'].includes(tags.natural)) || tags.landuse === 'quarry') {
+    return BASE_TYPES.LAND.SAND;
   }
 
   // (5) [Human Activity]
   if (landuse) {
-    if (['residential', 'cemetery'].includes(landuse))
-      return VOXEL_TYPES.BASE.RESIDENTIAL;
-    if (['commercial', 'retail'].includes(landuse))
-      return VOXEL_TYPES.BASE.COMMERCIAL;
-    if (['industrial', 'construction'].includes(landuse))
-      return VOXEL_TYPES.BASE.INDUSTRIAL;
+    if (['residential', 'cemetery'].includes(landuse)) return BASE_TYPES.LAND.RESIDENTIAL;
+    if (['commercial', 'retail'].includes(landuse)) return BASE_TYPES.LAND.COMMERCIAL;
+    if (['industrial', 'construction'].includes(landuse)) return BASE_TYPES.LAND.INDUSTRIAL;
   }
 
   // (6) [Sports Fallback]
-  if (
-    tags.leisure &&
-    ['pitch', 'playground', 'golf_course', 'track', 'stadium'].includes(
-      tags.leisure,
-    )
-  ) {
-    return VOXEL_TYPES.BASE.SPORTS;
+  if (tags.leisure && ['pitch', 'playground', 'golf_course', 'track', 'stadium'].includes(tags.leisure)) {
+    return BASE_TYPES.LAND.SPORTS;
   }
-
   // (6.5) ✈️ [Airport Area]
-  if (tags.aeroway === 'apron') return VOXEL_TYPES.BASE.APRON;
-  if (tags.aeroway === 'helipad') return VOXEL_TYPES.BASE.HELIPAD;
-  if (tags.aeroway === 'aerodrome') return VOXEL_TYPES.BASE.BASE_LAND; // 공항 부지 전체
+  if (tags.aeroway === 'apron') return BASE_TYPES.LAND.APRON;
+  if (tags.aeroway === 'helipad') return BASE_TYPES.LAND.HELIPAD;
+  if (tags.aeroway === 'aerodrome') return BASE_TYPES.LAND.BARE; // 공항 부지 전체
 
   // (7) [General Fallback]
-  if (
-    tags.landuse ||
-    tags.natural ||
-    tags.leisure ||
-    tags.highway ||
-    tags.building
-  ) {
-    return VOXEL_TYPES.BASE.BASE_LAND;
+  if (tags.landuse || tags.natural || tags.leisure || tags.highway || tags.building) {
+    return BASE_TYPES.LAND.BARE;
   }
 
   return null;

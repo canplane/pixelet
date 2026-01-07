@@ -3,11 +3,11 @@ import { useTileStore } from '@/entities/geo/model/tile-store';
 import { PoiManager } from '../pois/poi-manager';
 
 export const PoiLayer = React.memo(() => {
-  const tilesMap = useTileStore((state) => state.tilesMap);
+  const tileMap = useTileStore((state) => state.tileMap);
 
   // 1. 타일 스토어에서 POI 데이터 수집
   // (useTileScheduler는 WorldLayer나 상위에서 한 번만 호출되면 됩니다)
-  const tiles = useMemo(() => Array.from(tilesMap.values()), [tilesMap]);
+  const tiles = useMemo(() => Array.from(tileMap.values()), [tileMap]);
 
   // 2. [Aggregate-POIs] 통합 로직 이관
   const allActivePois = useMemo(() => {

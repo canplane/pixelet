@@ -4,14 +4,12 @@ import { GEO_CONSTANTS } from '@pixelet/core/entities/geo/model/geo-constants';
 import { tileWorkerManager } from '@/entities/geo/lib/workers/tile-worker-manager';
 import { useMapNavigation } from '@/entities/geo/model/use-map-navigation';
 // 🎯 [Refactor] tile-utils 최신 스펙 반영 (TileCoord, x, y)
-import {
-  getTileCoord,
-  getTileKey,
-  type TileCoord,
-} from '@pixelet/core/entities/geo/lib/utils/tile-utils';
+import { getTileCoord, getTileKey, type TileCoord } from '@pixelet/core/entities/geo/lib/utils/tile-utils';
 import { useTileStore } from '@/entities/geo/model/tile-store';
 
-const { LOAD_RADIUS, CLEANUP_RADIUS } = GEO_CONSTANTS;
+const { LOAD_RADIUS } = GEO_CONSTANTS;
+// 🎯 [Rule] Math.round(LOAD_RADIUS * 1.5) 공식을 통한 CLEANUP_RADIUS 확정
+const CLEANUP_RADIUS = Math.round(LOAD_RADIUS * 1.5);
 
 interface TileRequest {
   key: string;
@@ -25,9 +23,11 @@ export function useTileScheduler() {
   const setStatus = useMapStore((state) => state.setStatus);
 
   // TileStore에서 필요한 상태와 액션들을 미리 구독
-  const tilesMap = useTileStore((state) => state.tilesMap);
+  const getTile = useTileStore((state) => state.getTile);
+  const getTileMap = useTileStore((state) => state.tileMap); // Map 객체 직접 참조
   const setTile = useTileStore((state) => state.setTile);
-  const clearOldTiles = useTileStore((state) => state.clearOldTiles);
+  const clearTile = useTileStore((state) => state.clearTile);
+  const unloadBuildLayer = useTileStore((state) => state.unloadBuildLayer);
 
   const lastCenterTileKey = useRef<string>('');
   const processingTiles = useRef<Set<string>>(new Set());
@@ -46,26 +46,43 @@ export function useTileScheduler() {
           const targetCoord = { tx: tx + dx, ty: ty + dy };
           const key = getTileKey(targetCoord);
 
-          if (!tilesMap.has(key) && !processingTiles.current.has(key)) {
-            const distance = dx * dx + dy * dy;
+          if (!getTile(key) && !processingTiles.current.has(key)) {
+            // Chebyshev distance로 변경하여 정사각 그리드 일치
+            const distance = Math.max(Math.abs(dx), Math.abs(dy));
             pendingRequests.push({ key, coord: targetCoord, distance });
           }
         }
       }
       return pendingRequests.sort((a, b) => a.distance - b.distance);
     },
-    [tilesMap], // 🎯 의존성에 tilesMap 추가
+    [getTile],
   );
 
   /**
-   * [2] 범위 밖 타일 정리 (메모리 관리 / Garbage Collection)
+   * [2] 범위 밖 타일 정리 (Soft/Hard Unload Strategy)
+   * 🎯 [Optimization] [...tileMap] 순회를 통해 역산(getCoordFromKey) 없이 즉시 처리
    */
   const cleanupTiles = useCallback(
-    (neededKeys: string[]) => {
-      // 🎯 위에서 뽑아둔 액션을 그대로 사용
-      clearOldTiles(neededKeys);
+    (centerCoord: TileCoord) => {
+      const tileMap = getTileMap; // zustand state에서 직접 가져온 Map
+
+      // 🎯 [Reverse Parse Zero] Map Iterator를 사용하여 key와 tile.coord를 동시에 확보
+      for (const [key, tile] of tileMap) {
+        const { tx, ty } = tile.coord;
+        const dx = Math.abs(tx - centerCoord.tx);
+        const dy = Math.abs(ty - centerCoord.ty);
+        const dist = Math.max(dx, dy);
+
+        if (dist > CLEANUP_RADIUS) {
+          // 🚀 [Hard Delete] 1.5배 범위 밖: 완전 제거
+          clearTile(key);
+        } else if (dist > LOAD_RADIUS) {
+          // 🚀 [Soft Unload] h * h * (h/2) 전략: 3D 청크 데이터만 선택적 제거
+          unloadBuildLayer(key);
+        }
+      }
     },
-    [clearOldTiles],
+    [getTileMap, clearTile, unloadBuildLayer],
   );
 
   /**
@@ -85,9 +102,8 @@ export function useTileScheduler() {
         );
 
         // [최종 완료] 최종 결과물이 유효하면 스토어 업데이트
-        if (finalTile && finalTile.terrain) {
+        if (finalTile) {
           setTile(key, finalTile);
-          console.log(`[Tile Scheduler] ✅ Loaded Tile (${key})`);
         }
       } catch (err) {
         console.error(`[Tile Scheduler] ❌ Worker Error (${key}):`, err);
@@ -110,31 +126,37 @@ export function useTileScheduler() {
 
     const batchId = ++activeBatchId.current;
 
-    // Cleanup Scope (Set<string>은 여전히 Key 기반으로 관리하는 것이 효율적)
-    const activeKeys = new Set<string>();
-    const { tx, ty } = centerCoord;
-    for (let dx = -CLEANUP_RADIUS; dx <= CLEANUP_RADIUS; dx++) {
-      for (let dy = -CLEANUP_RADIUS; dy <= CLEANUP_RADIUS; dy++) {
-        activeKeys.add(getTileKey({ tx: tx + dx, ty: ty + dy }));
-      }
-    }
-
-    cleanupTiles([...activeKeys]);
+    // 🎯 [Optimization] 로드된 타일 전수조사 방식으로 Cleanup 실행
+    cleanupTiles(centerCoord);
 
     const queue = getScheduledQueue(centerCoord);
 
     if (queue.length > 0) {
       setStatus('loading');
-      const tasks = queue.map((req) => loadTile(req));
 
-      Promise.all(tasks).finally(() => {
+      const groups: Record<number, TileRequest[]> = {};
+      queue.forEach((req) => {
+        if (!groups[req.distance]) groups[req.distance] = [];
+        groups[req.distance].push(req);
+      });
+
+      const sortedDistances = Object.keys(groups)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+      // 🚀 동심원 로딩 시퀀스 실행
+      (async () => {
+        for (const dist of sortedDistances) {
+          if (batchId !== activeBatchId.current) return;
+
+          // 같은 거리에 있는 타일들은 병렬로 처리
+          await Promise.all(groups[dist].map((req) => loadTile(req)));
+        }
+
         if (batchId === activeBatchId.current) {
           setStatus('success');
         }
-      });
-    } else {
-      const { tilesMap: currentTilesMap } = useTileStore.getState();
-      if (currentTilesMap.size > 0) setStatus('success');
+      })();
     }
   }, [center, setStatus, cleanupTiles, getScheduledQueue, loadTile]);
 }

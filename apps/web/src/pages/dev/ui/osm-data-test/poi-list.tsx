@@ -17,9 +17,7 @@ const getCategoryStyles = (tags: any, isNight: boolean) => {
   if (amenity === 'cafe')
     return {
       icon: '☕',
-      color: isNight
-        ? 'text-orange-300 bg-orange-900/40'
-        : 'text-orange-700 bg-orange-100',
+      color: isNight ? 'text-orange-300 bg-orange-900/40' : 'text-orange-700 bg-orange-100',
     };
   if (amenity === 'restaurant')
     return {
@@ -29,37 +27,31 @@ const getCategoryStyles = (tags: any, isNight: boolean) => {
   if (shop)
     return {
       icon: '🛍️',
-      color: isNight
-        ? 'text-blue-300 bg-blue-900/40'
-        : 'text-blue-700 bg-blue-100',
+      color: isNight ? 'text-blue-300 bg-blue-900/40' : 'text-blue-700 bg-blue-100',
     };
   if (railway === 'station')
     return {
       icon: '🚉',
-      color: isNight
-        ? 'text-yellow-200 bg-yellow-900/40'
-        : 'text-yellow-700 bg-yellow-100',
+      color: isNight ? 'text-yellow-200 bg-yellow-900/40' : 'text-yellow-700 bg-yellow-100',
     };
 
   return {
     icon: '📍',
-    color: isNight
-      ? 'text-slate-300 bg-slate-800'
-      : 'text-gray-600 bg-gray-100',
+    color: isNight ? 'text-slate-300 bg-slate-800' : 'text-gray-600 bg-gray-100',
   };
 };
 
 export const PoiList = () => {
   const { status } = useDeviceLocationStore();
   const { themeKey } = useMapNavigation();
-  const tilesMap = useTileStore((state) => state.tilesMap);
+  const tileMap = useTileStore((state) => state.tileMap);
   const setSelectedPoi = useMapStore((state) => state.setSelectedPoi);
   const isNight = themeKey === 'night';
 
   /**
    * 전역 스토어에서 통합된 POI 리스트 추출
    */
-  const allPois = Array.from(tilesMap.values()).flatMap((tile) => tile.pois);
+  const allPois = Array.from(tileMap.values()).flatMap((tile) => tile.pois);
 
   /**
    * 🎯 데이터 추출 보강
@@ -76,21 +68,17 @@ export const PoiList = () => {
     }))
     .filter((item) => item.displayName !== '이름 없는 장소');
 
-  const isLoading = status === 'ready' && tilesMap.size === 0;
+  const isLoading = status === 'ready' && tileMap.size === 0;
 
   if (status !== 'ready' || isLoading) {
     return (
       <div
         className={cn(
           'p-4 text-xs rounded-xl border backdrop-blur-md animate-pulse',
-          isNight
-            ? 'bg-slate-900/80 border-white/10 text-slate-400'
-            : 'bg-white/80 border-gray-200 text-gray-500',
+          isNight ? 'bg-slate-900/80 border-white/10 text-slate-400' : 'bg-white/80 border-gray-200 text-gray-500',
         )}
       >
-        {status !== 'ready'
-          ? '📍 위치 권한 확인 중...'
-          : '🔍 주변 장소 검색 중...'}
+        {status !== 'ready' ? '📍 위치 권한 확인 중...' : '🔍 주변 장소 검색 중...'}
       </div>
     );
   }
@@ -99,37 +87,19 @@ export const PoiList = () => {
     <div
       className={cn(
         'flex flex-col w-80 rounded-xl shadow-2xl border transition-all duration-500 overflow-hidden backdrop-blur-lg',
-        isNight
-          ? 'bg-slate-900/85 border-white/10 text-slate-100'
-          : 'bg-white/90 border-slate-200 text-slate-900',
+        isNight ? 'bg-slate-900/85 border-white/10 text-slate-100' : 'bg-white/90 border-slate-200 text-slate-900',
       )}
     >
       {/* Header */}
-      <div
-        className={cn(
-          'px-4 py-3 border-b flex justify-between items-center',
-          isNight
-            ? 'border-white/5 bg-white/5'
-            : 'border-gray-100 bg-gray-50/50',
-        )}
-      >
+      <div className={cn('px-4 py-3 border-b flex justify-between items-center', isNight ? 'border-white/5 bg-white/5' : 'border-gray-100 bg-gray-50/50')}>
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
           </span>
-          <h2 className="text-xs font-bold tracking-tight">
-            주요 관심 지점 (POI)
-          </h2>
+          <h2 className="text-xs font-bold tracking-tight">주요 관심 지점 (POI)</h2>
         </div>
-        <span
-          className={cn(
-            'text-[9px] font-mono px-1.5 py-0.5 rounded-full',
-            isNight
-              ? 'bg-blue-500/20 text-blue-300'
-              : 'bg-blue-100 text-blue-700',
-          )}
-        >
+        <span className={cn('text-[9px] font-mono px-1.5 py-0.5 rounded-full', isNight ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700')}>
           {elements.length}
         </span>
       </div>
@@ -142,12 +112,7 @@ export const PoiList = () => {
             <p className="text-[11px]">주변에 탐색된 장소가 없습니다.</p>
           </div>
         ) : (
-          <ul
-            className={cn(
-              'divide-y',
-              isNight ? 'divide-white/5' : 'divide-gray-50',
-            )}
-          >
+          <ul className={cn('divide-y', isNight ? 'divide-white/5' : 'divide-gray-50')}>
             {elements.map((item) => {
               const { icon, color } = getCategoryStyles(item.tags, isNight);
 
@@ -161,10 +126,7 @@ export const PoiList = () => {
                       category: item.category,
                     })
                   }
-                  className={cn(
-                    'p-3 transition-all cursor-pointer group active:scale-[0.98]',
-                    isNight ? 'hover:bg-white/5' : 'hover:bg-blue-50/50',
-                  )}
+                  className={cn('p-3 transition-all cursor-pointer group active:scale-[0.98]', isNight ? 'hover:bg-white/5' : 'hover:bg-blue-50/50')}
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -178,23 +140,15 @@ export const PoiList = () => {
 
                     <div className="flex-1 min-w-0">
                       <p
-                        className={cn(
-                          'text-[13px] font-bold truncate transition-colors',
-                          isNight
-                            ? 'group-hover:text-blue-300'
-                            : 'group-hover:text-blue-600',
-                        )}
+                        className={cn('text-[13px] font-bold truncate transition-colors', isNight ? 'group-hover:text-blue-300' : 'group-hover:text-blue-600')}
                       >
                         {item.displayName}
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[9px] uppercase font-bold opacity-40">
-                          {item.category}
-                        </span>
+                        <span className="text-[9px] uppercase font-bold opacity-40">{item.category}</span>
                         <span className="w-0.5 h-0.5 rounded-full bg-current opacity-20" />
                         <span className="text-[9px] font-mono opacity-40">
-                          {item.displayLat.toFixed(4)},{' '}
-                          {item.displayLng.toFixed(4)}
+                          {item.displayLat.toFixed(4)}, {item.displayLng.toFixed(4)}
                         </span>
                       </div>
                     </div>

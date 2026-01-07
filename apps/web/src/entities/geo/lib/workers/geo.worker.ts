@@ -3,6 +3,10 @@
 import { fetchTile } from '@/entities/geo/lib/fetch/tile-fetcher';
 import type { TileWorkerInput } from '@/entities/geo/model/worker-protocol';
 
+// 🎯 [Standard Integration]: 직렬화를 위해 코덱을 가져옵니다.
+import { SparseQuadtreeCodec } from '@pixelet/core/shared/lib/structs/sparse-quadtree-codec';
+import { TILE_SURFACE_KEYS } from '@pixelet/core/entities/geo/model/tiles';
+
 // self를 Worker 스코프로 타입 단언
 const worker = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -22,48 +26,59 @@ worker.onmessage = async (e: MessageEvent<TileWorkerInput>) => {
       });
     });
 
-    // 🎯 [Transferable Optimization]
+    /**
+     * 🎯 [The Standard: Data Serialization]
+     * SparseQuadtree 인스턴스는 내부에 '생성자 함수'를 포함하고 있어 postMessage로 직접 보낼 수 없습니다.
+     * 따라서 코덱을 이용해 ArrayBuffer로 인코딩하여 데이터만 전송합니다.
+     */
+    const { surface, ele } = result.base;
     const bufferSet = new Set<ArrayBuffer>();
 
-    /**
-     * [Helper] Transfer 가능한 순수 ArrayBuffer만 선별합니다.
-     * SharedArrayBuffer는 공유 메모리이므로 전송 리스트에 넣으면 에러가 발생합니다.
-     */
-    const collectTransferable = (view: Uint8Array | Uint16Array) => {
-      // 뷰가 바라보는 실제 메모리 덩어리
-      const buf = view.buffer;
-      // SharedArrayBuffer 제외하고, 순수 ArrayBuffer만 수집
-      if (buf instanceof ArrayBuffer) {
-        bufferSet.add(buf);
-      }
-    };
-
-    // 1. Channels (8-bit) 수집
-    if (result.terrain.channels) {
-      Object.values(result.terrain.channels).forEach(collectTransferable);
+    // 1. Elevation (고도) 직렬화
+    let encodedEle = null;
+    if (ele) {
+      encodedEle = SparseQuadtreeCodec.encode(ele);
+      bufferSet.add(encodedEle);
     }
 
-    // 2. Elevation (16-bit) 수집
-    if (result.terrain.elevation) {
-      collectTransferable(result.terrain.elevation);
+    // 2. Surface (지형 채널) 직렬화
+    const encodedSurface: any = {};
+    if (surface) {
+      TILE_SURFACE_KEYS.forEach((key) => {
+        const tree = surface[key];
+        if (tree) {
+          const buf = SparseQuadtreeCodec.encode(tree);
+          encodedSurface[key] = buf;
+          bufferSet.add(buf);
+        }
+      });
     }
 
-    // Set을 다시 배열로 변환하여 전송
+    // 🚀 [Zero-Copy] 이전 가능한 객체(Transferable) 목록 생성
     const transferables = Array.from(bufferSet);
 
-    /**
-     * [Zero-Copy Transfer]
-     * transferables 리스트에 담긴 버퍼만 소유권이 이전됩니다.
-     */
+    // 메인 스레드로 최종 결과 전송
     worker.postMessage(
-      { type: 'complete', requestId, data: result },
+      {
+        type: 'complete',
+        requestId,
+        data: {
+          ...result,
+          base: {
+            ...result.base,
+            ele: encodedEle,
+            surface: encodedSurface,
+          },
+        },
+      },
       transferables,
     );
   } catch (error) {
+    console.error(`[WorkerManager] Error in tile ${requestId}:`, error);
     worker.postMessage({
       type: 'error',
       requestId,
-      error: error instanceof Error ? error.message : 'Unknown Worker Error',
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 };

@@ -2,10 +2,7 @@ import '@pixelet/core/shared/lib/i18n/i18n.server'; // i18n initialization
 import { bootstrapEngines } from '@/app/bootstrap';
 
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app/app.module';
 
