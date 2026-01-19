@@ -1,21 +1,26 @@
-import { useAppContext } from '@/app/providers/app-context';
-import { useSyncDeviceLocation } from '@/entities/device-location/model/use-sync-device-location';
+// @pxl/web/pages/map-page.tsx
 
-import { MapView } from '@/features/map-three/ui/viewport/map-view';
-import { MapTiler } from '@/features/map-tiler/ui/map-tiler';
+import { useAppContext } from "@/app/providers/app-context.ts";
+
+import { useGeolocation } from "../modules/device/pose/use-geolocation.ts";
+import { useDeviceOrientation } from "../modules/device/pose/use-device-orientation.ts";
+
+import { MapScene } from "../modules/map/scene.tsx";
+import { MapTiler } from "@/modules/map-tiler/map-tiler.tsx";
 
 /** Map page */
 function MapPage() {
   const { store } = useAppContext();
 
-  // 🛰️ 여기서 호출하면 GPS와 나침반 데이터가 스토어에 쌓이기 시작합니다.
-  useSyncDeviceLocation();
+  // start tracking device pose
+  useGeolocation();
+  useDeviceOrientation();
 
   return (
     <div className="relative flex-1 w-full flex flex-col items-center">
       {/* <main className="flex-1 container h-full" /> */}
 
-      <MapView />
+      <MapScene />
       {/* <MapTiler /> */}
     </div>
   );

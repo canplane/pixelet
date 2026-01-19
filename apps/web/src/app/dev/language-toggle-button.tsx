@@ -1,4 +1,6 @@
-import { useTranslation } from 'react-i18next';
+// @pxl/web/app/dev/language-toggle-button.tsx
+
+import { useTranslation } from "react-i18next";
 
 /** Button to toggle language */
 export function LanguageToggleButton() {
@@ -10,16 +12,16 @@ export function LanguageToggleButton() {
       <button
         type="button"
         className="w-8 h-8"
-        onClick={(e) => changeLanguage('ko')}
+        onClick={(e) => changeLanguage("ko")}
       >
-        {'한'}
+        {"한"}
       </button>
       <button
         type="button"
         className="w-8 h-8"
-        onClick={(e) => changeLanguage('en')}
+        onClick={(e) => changeLanguage("en")}
       >
-        {'A'}
+        {"A"}
       </button>
     </div>
   );

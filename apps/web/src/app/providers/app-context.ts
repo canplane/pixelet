@@ -1,7 +1,9 @@
-import { createContext, useContext } from 'react';
+// @pxl/web/app/providers/app-context.ts
 
-// import AppStore from '../model/app.store';
-import type { UiController } from '../types/ui.types';
+import { createContext, useContext } from "react";
+
+// import AppStore from "../model/app.store";
+import type { UIController } from "../types/ui.types.ts";
 
 /**
  * Values provided by the AppContext
@@ -21,7 +23,7 @@ type AppContextValue = {
    * Provides access to global UI actions
    * such as opening modals or triggering overlays.
    */
-  ui: UiController;
+  ui: UIController;
 };
 
 /**
@@ -45,7 +47,7 @@ export function useAppContext(): AppContextValue {
   const context = useContext(AppContext);
 
   if (!context) {
-    throw new Error('useAppContext must be used within AppProvider');
+    throw new Error("useAppContext must be used within AppProvider");
   }
 
   return context;

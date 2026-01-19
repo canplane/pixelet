@@ -1,0 +1,40 @@
+{
+  "name": "@pxl/api",
+  "version": "0.0.0",
+  "exports": "./src/index.ts",
+
+  "tasks": {
+    "dev": "deno task dev:init && (deno task dev:watch & deno task serve:dev)",
+    "dev:prefix": "sh -c \"deno task dev 2>&1 | sed 's/^/[api] /'\"",
+    "dev:prefix-color": "sh -c \"deno task dev 2>&1 | sed $'s/^/\\033[32m[api]\\033[0m /'\"",
+
+    "dev:init": "deno task build:main:dev && deno task build:worker:dev",
+    "dev:watch": "deno task watch:main:dev & deno task watch:worker:dev",
+    "serve:dev": "deno run -A --watch=dist/main/server.js,dist/worker/entry.js --env=../../.env dist/main/server.js",
+
+    "watch:main:dev": "deno run -A --node-modules-dir=auto npm:vite build --watch --mode development",
+    "watch:worker:dev": "deno run -A --node-modules-dir=auto npm:vite build --watch --mode development --config vite.worker.config.ts",
+
+    "build": "deno task build:main && deno task build:worker",
+    "build:main": "deno run -A --node-modules-dir=auto npm:vite build",
+    "build:worker": "deno run -A --node-modules-dir=auto npm:vite build --config vite.worker.config.ts",
+
+    "build:main:dev": "deno run -A --node-modules-dir=auto npm:vite build --mode development",
+    "build:worker:dev": "deno run -A --node-modules-dir=auto npm:vite build --mode development --config vite.worker.config.ts",
+
+    "check": "deno check src/index.ts src/xpute/worker/entry.ts"
+  },
+
+  "compilerOptions": { "types": ["./@types/index.d.ts"] },
+
+  "imports": {
+    "@/": "./src/",
+
+    // server framework
+    "@hono/hono": "jsr:@hono/hono@^4.12.2",
+    "socket.io": "npm:socket.io@^4",
+
+    // database
+    "@db/postgres": "jsr:@db/postgres@^0.19.5"
+  }
+}

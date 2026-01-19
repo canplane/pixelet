@@ -1,3 +1,5 @@
+// @pxl/web/app/types/ui.types.ts
+
 /** Base props shared by modal components */
 export type BaseModalProps = {
   open: boolean; // Whether the modal is open
@@ -23,4 +25,4 @@ export type ModalController = {
  * This type aggregates all UI-related controllers
  * to provide a single access point for imperative UI actions.
  */
-export type UiController = {} & ModalController;
+export type UIController = {} & ModalController;

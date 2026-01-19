@@ -1,22 +1,17 @@
-import {
-  createBrowserRouter,
-  Navigate,
-  Outlet,
-  RouterProvider,
-} from 'react-router-dom';
-import type { RouteObject } from 'react-router-dom';
+// @pxl/web/app/router/app-router.tsx
 
-import { ScrollToTop } from './helpers/scroll-to-top';
-import { devRoutes } from '../dev/dev-routes';
-import { AppLayout } from '../ui/app-layout';
-import MapPage from '@/pages/map-page';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
+import type { RouteObject } from "react-router-dom";
 
-const IS_DEV = import.meta.env.DEV;
+import { ScrollToTop } from "./helpers/scroll-to-top.tsx";
+import { devRoutes } from "../dev/dev-routes.tsx";
+import { AppLayout } from "../ui/app-layout.tsx";
+import MapPage from "@/pages/map-page.tsx";
 
 /** Main Router Configuration */
 const routes: RouteObject[] = [
   {
-    path: '/',
+    path: "/",
     element: (
       <>
         <ScrollToTop />
@@ -27,11 +22,11 @@ const routes: RouteObject[] = [
       </>
     ),
     children: [
-      { path: '', element: <MapPage /> }, // Map page
+      { path: "", element: <MapPage /> }, // Map page
 
-      ...(IS_DEV ? devRoutes : []), // Debug mode only accessible routes
+      ...(__IS_DEV__ ? devRoutes : []), // Debug mode only accessible routes
 
-      { path: '*', element: <Navigate to="/" replace /> },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
 ];

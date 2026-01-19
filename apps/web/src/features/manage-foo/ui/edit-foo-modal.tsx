@@ -1,8 +1,10 @@
-import { useEffect, useCallback } from 'react';
+// @pxl/web/features/manage-foo/ui/edit-foo-modal.tsx
 
-import type { BaseModalProps } from '@/app/types/ui.types';
+import { useCallback, useEffect } from "react";
 
-import { useAppContext } from '@/app/providers/app-context';
+import type { BaseModalProps } from "@/app/types/ui.types.ts";
+
+import { useAppContext } from "@/app/providers/app-context.ts";
 
 /**
  * Temporary dialog placeholder.
@@ -12,12 +14,12 @@ function Dialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  return <></>;
+  return null;
 }
 
 /** UpdateFooProps */
 type UpdateFooProps = {
-  type: 'foo:update';
+  type: "foo:update";
   params: { id: number };
 };
 
@@ -42,7 +44,7 @@ export function EditFooModal(props: BaseModalProps & EditFooProps) {
    * Initializes modal state when the modal opens
    */
   const initializeModal = useCallback((): void => {
-    if (type === 'foo:update') {
+    if (type === "foo:update") {
       // Initialize state using params.id and store
     }
   }, [type, params, store]);
@@ -53,9 +55,12 @@ export function EditFooModal(props: BaseModalProps & EditFooProps) {
    * Closing the dialog triggers cleanup / initialization logic.
    */
   const handleOpenChange = (newOpen: boolean): void => {
-    props.onOpenChange(false);
-    // Initialize
-    if (!newOpen) initializeModal();
+    props.onOpenChange(newOpen);
+
+    // NOTE: close hook point (commit/cleanup) - fill later as needed.
+    if (!newOpen) {
+      // commit/cleanup here
+    }
   };
 
   /**

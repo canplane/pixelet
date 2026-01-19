@@ -1,8 +1,8 @@
-import { AppRouter } from './router/app-router';
+// @pxl/web/app/app.tsx
 
-import { DevPanel } from './dev/dev-panel';
+import { AppRouter } from "./router/app-router.tsx";
 
-const IS_DEV = import.meta.env.DEV;
+import { DevPanel } from "./dev/dev-panel.tsx";
 
 /** Entry point of the application */
 export function App() {
@@ -11,7 +11,7 @@ export function App() {
       <AppRouter />
 
       {/* Debugging UI */}
-      {IS_DEV && <DevPanel />}
+      {__IS_DEV__ && <DevPanel />}
     </>
   );
 }

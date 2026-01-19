@@ -13,9 +13,6 @@ lerna-debug.log*
 # pnpm
 .pnpm-debug.log*
 
-# npm (legacy)
-package-lock.json
-
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -161,5 +158,14 @@ dist
 !.yarn/versions
 
 # Vite logs files
+.vite/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# AI coding tools
+.claude/        # Claude Code
+.cursor/        # Cursor
+.windsurf/      # Windsurf
+.codex/         # OpenAI Codex CLI
+.continue/      # Continue.dev
+.aider*         # Aider

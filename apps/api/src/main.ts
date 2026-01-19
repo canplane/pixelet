@@ -1,29 +1,120 @@
-import '@pixelet/core/shared/lib/i18n/i18n.server'; // i18n initialization
-import { bootstrapEngines } from '@/app/bootstrap';
+// @pxl/api/main.ts
 
-import { NestFactory } from '@nestjs/core';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { ConfigService } from '@nestjs/config';
-import { AppModule } from './app/app.module';
+// import "@pxl/common/lib/i18n/i18n.server.ts"; // i18n initialization
 
-async function bootstrap() {
-  await bootstrapEngines(); // 인프라 먼저 확보 (TFJS-Node 초기화 등)
+import { Hono } from "@hono/hono";
+import { bodyLimit } from "@hono/hono/body-limit";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { Readable } from "node:stream";
+import { Server as SocketIoServer } from "socket.io";
 
-  // Fastify 어댑터 생성 (기존 Fastify 설정과 호환)
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter({ logger: false }), // 개발 시 로그 확인 용이
-    { logger: ['error', 'warn'] }, // 'error', 'warn'만 남기면 부팅 시 출력되는 파란색 LOG 메시지들이 사라집니다.
-  );
+import { type AppResources, make_app_resrcs } from "@/app/resources.ts";
+import { mount_app } from "@/app/mount.ts";
+import { type AppConfig, make_cfg } from "@/app/config.ts";
 
-  const configService = app.get(ConfigService); // ConfigService를 통해 .env 설정 로드
-  const port = configService.get<number>('API_PORT') || 3000;
-  const host = configService.get<string>('API_HOST') || '0.0.0.0';
+export type ServerContext = {
+  server: ReturnType<typeof createServer>; // Node HTTP server (owns the listening port and request lifecycle)
+  router: Hono; // HTTP router/app (routes requests; mounted behind server via fetch adapter)
 
-  app.setGlobalPrefix('api'); // 전역 프리픽스 설정 (예: /api/v1)
-  await app.listen(port, host);
+  io: SocketIoServer; // Socket.IO server (real-time transport bound to the same server)
+};
 
-  console.log(`🚀 pixelet API is running on: http://${host}:${port}/api`);
+function make_router(cfg: AppConfig): Hono {
+  const router = new Hono();
+  router.use("/api/*", bodyLimit({ maxSize: cfg.max_body_sz }));
+  return router;
 }
 
-bootstrap();
+function make_node_http_handler(cfg: AppConfig, router: Hono) {
+  // node http handler: IncomingMessage -> Request -> Hono.fetch -> ServerResponse
+  return async function handleNodeRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      const url = new URL(req.url ?? "/", `http://${cfg.host}:${cfg.port}`);
+      const method = req.method ?? "GET";
+
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (v == null) continue;
+        if (Array.isArray(v)) headers.set(k, v.join(", "));
+        else headers.set(k, v);
+      }
+
+      // node -> web stream (best-effort, 1-liner)
+      const body: any = method === "GET" || method === "HEAD" ? null : ((Readable as any).toWeb?.(req) ?? req);
+
+      const resp = await router.fetch(new Request(url, { method, headers, body }));
+
+      res.statusCode = resp.status;
+      resp.headers.forEach((v, k) => res.setHeader(k, v));
+
+      if (!resp.body) {
+        res.end();
+        return;
+      }
+
+      // web -> node stream (best-effort, 1-liner + fallback)
+      const node_stream: any = (Readable as any).fromWeb?.(resp.body);
+      if (node_stream) return void node_stream.pipe(res);
+      res.end(new Uint8Array(await resp.arrayBuffer()));
+    } catch {
+      // last resort
+      try {
+        res.statusCode = 500;
+        res.end();
+      } catch {}
+    }
+  };
+}
+
+function makeListen(cfg: AppConfig, server: ReturnType<typeof createServer>) {
+  return function listen(): void {
+    server.listen(cfg.port, cfg.host, () => {
+      console.log(`app: listening on ${cfg.host}:${cfg.port} (ws: ${cfg.socket_path})`);
+    });
+  };
+}
+
+export async function main(mount_plugs: (ctx: ServerContext) => void): Promise<void> {
+  // ---- cfg ----
+  const cfg = make_cfg();
+
+  // ---- hono ----
+  const router: Hono = make_router(cfg);
+
+  // ---- node http ----
+  const handle_node_request = make_node_http_handler(cfg, router);
+  const server = createServer((req, res) => void handle_node_request(req, res));
+
+  // ---- socket.io ----
+  const io = new SocketIoServer(server, {
+    path: cfg.socket_path,
+    transports: ["websocket"],
+  });
+
+  // ---- wiring ----
+  const ctx: ServerContext = { server, router, io };
+  mount_plugs(ctx);
+
+  let resrc: AppResources | null = null;
+
+  try {
+    // ---- app resources ----
+    resrc = await make_app_resrcs();
+    mount_app(ctx, resrc);
+
+    // ---- online ----
+    const listen = makeListen(cfg, server);
+    listen();
+  } catch (err) {
+    try {
+      await resrc?.dispose();
+    } catch {}
+    try {
+      io.close();
+    } catch {}
+    try {
+      server.close();
+    } catch {}
+    throw err;
+  }
+}

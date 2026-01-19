@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+// @pxl/web/app/hooks/use-app-init.ts
+
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Constants for initialization timing (in milliseconds)
@@ -7,18 +9,14 @@ const TIME_IDLE: number = 100; // Buffer for initial handshake
 const TIME_LOADING: number = 500; // Display loading screen after this delay
 const TIME_TIMEOUT: number = 5000; // Trigger timeout after this duration
 
-export const LOAD_STATE = {
-  IDLE: 'idle', // Initial state
-  LOADING: 'loading', // Show loading UI (after threshold)
-  SUCCESS: 'success', // Initialization complete
-  ERROR: 'error', // Initialization failed
-  TIMEOUT: 'timeout', // Operation exceeded threshold
-} as const;
+export const enum LoadState {
+  IDLE = "idle", // Initial state
+  LOADING = "loading", // Show loading UI (after threshold)
+  SUCCESS = "success", // Initialization complete
+  ERROR = "error", // Initialization failed
+  TIMEOUT = "timeout", // Operation exceeded threshold
+}
 
-/** Load State */
-export type LoadState = (typeof LOAD_STATE)[keyof typeof LOAD_STATE];
-
-/** AppInitResult */
 type AppInitResult = {
   loadState: LoadState;
   store: unknown;
@@ -28,7 +26,7 @@ type AppInitResult = {
  * Hook to manage the global application initialization process.
  */
 export function useAppInit(): AppInitResult {
-  const [loadState, setLoadState] = useState<LoadState>('success');
+  const [loadState, setLoadState] = useState<LoadState>(LoadState.SUCCESS);
 
   // // Use a ref to access the latest state within timeouts without re-triggering them
   // const loadStateRef = useRef(loadState);
