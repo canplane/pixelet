@@ -136,7 +136,7 @@ chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 - **Path Mapping**: Docker 컨테이너용 경로(`/data`) 치환 리스트를 통해 `gdalbuildvrt`를 실행, 가상 래스터 인덱스를 생성합니다.
 - **Path Symmetry**: 생성된 VRT 내부의 가상 경로를 다시 **로컬 호스트 경로**로 환원(sed)하여 로컬 도구가 실제 파일을 짚을 수 있게 합니다.
 - **Stream Ingestion**: 로컬의 `raster2pgsql`과 Docker의 `psql`을 파이프로 연결하여 주입합니다.
-  - `-t 256x256`: 3D Voxel Grid 연산 최적화를 위한 타일 규격 준수
+  - `-t 256x256`: 3D Voxel Grid 연산 최적화를 위한 페이지 규격 준수
 
 #### Step 4: Finalization & Catalog Update
 

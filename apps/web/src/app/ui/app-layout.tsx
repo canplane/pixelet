@@ -1,20 +1,22 @@
-import type { ReactNode } from 'react';
+// @pxl/web/app/ui/app-layout.tsx
 
-import { AppContext } from '../providers/app-context';
+import type { ReactNode } from "react";
 
-import { useAppInit } from '../hooks/use-app-init';
-import { useUiController } from '../hooks/use-ui-controller';
-import { ModalManager } from '../providers/modal-manager';
-import { Toaster } from '@/shared/ui/theme/glass/sonner';
+import { AppContext } from "../providers/app-context.ts";
+
+import { useAppInit } from "../hooks/use-app-init.ts";
+import { useUIController } from "../hooks/use-ui-controller.ts";
+import { ModalManager } from "../providers/modal-manager.tsx";
+import { Toaster } from "@/shared/ui/theme/glass/sonner.tsx";
 
 /** Loading page */
 function LoadingPage() {
-  return <></>;
+  return null;
 }
 
 /** Error page */
 function ErrorPage() {
-  return <></>;
+  return null;
 }
 
 /** AppLayoutProps */
@@ -28,21 +30,21 @@ export function AppLayout(props: AppLayoutProps) {
 
   const { loadState, store } = useAppInit(); // init
 
-  const { uiController, mergeUiController } = useUiController(store);
+  const { uiController, mergeUIController } = useUIController(store);
 
   return (
     <AppContext.Provider value={{ store, ui: uiController }}>
       <Toaster />
 
       <div className="min-h-screen flex flex-col items-center">
-        {loadState === 'success' && children}
+        {loadState === "success" && children}
 
-        {loadState == 'loading' && <LoadingPage />}
-        {(loadState === 'timeout' || loadState === 'error') && <ErrorPage />}
+        {loadState == "loading" && <LoadingPage />}
+        {(loadState === "timeout" || loadState === "error") && <ErrorPage />}
       </div>
 
       {/* Global modal host */}
-      <ModalManager mergeUiController={mergeUiController} />
+      <ModalManager mergeUIController={mergeUIController} />
     </AppContext.Provider>
   );
 }

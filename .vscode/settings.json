@@ -3,51 +3,34 @@
   "editor.insertSpaces": true,
   "editor.detectIndentation": false,
 
-  /* Import & Module resolution settings */
-  // non-relative는 @pixelet/core 같은 워크스페이스 패키지 이름을 더 잘 보존합니다.
-  "typescript.preferences.importModuleSpecifier": "non-relative",
-  "javascript.preferences.importModuleSpecifier": "non-relative",
-  "typescript.preferences.importModuleSpecifierEnding": "minimal",
-  "typescript.updateImportsOnFileMove.enabled": "always",
-
-  /* 3. 만약 위 설정이 Unknown이라면 이 방식으로 대체 시도 */
-  "typescript.preferences.autoImportSpecifierExcludeRegexes": ["\\.d\\.ts$"],
-
-  /* Formatter & Linter settings (Prettier + ESLint) */
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
+  "deno.enable": true,
+  "deno.lint": true,
+  "deno.unstable": true,
+  "deno.suggest.imports.hosts": {
+    "https://deno.land": false,
+    "https://jsr.io": true
   },
 
-  /* Language specific formatters */
-  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[html]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
-  "[scss]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "editor.defaultFormatter": "denoland.vscode-deno",
+  "editor.formatOnSave": true,
 
-  /* Use workspace typescript version */
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "[javascript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
+  "[typescript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
+  "[typescriptreact]": { "editor.defaultFormatter": "denoland.vscode-deno" },
+  "[json]": { "editor.defaultFormatter": "denoland.vscode-deno" },
+  "[jsonc]": { "editor.defaultFormatter": "denoland.vscode-deno" },
 
-  // /* Search exclusion */
-  // "search.exclude": {
-  //   "**/node_modules": true,
-  //   "**/dist": true,
-  //   "**/.turbo": true
-  // },
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "javascript.preferences.importModuleSpecifier": "non-relative",
+  "typescript.updateImportsOnFileMove.enabled": "always",
 
-  // /* File visibility */
-  // "files.exclude": {
-  //   "**/src/**/*.js": { "when": "$(basename).ts" },
-  //   "**/src/**/*.js.map": true,
-  //   "**/src/**/*.d.ts": { "when": "$(basename).ts" },
-  //   "**/src/**/*.d.ts.map": true,
-  //   "**/*.tsbuildinfo": true,
-  //   "**/.turbo": true,
-  //   "**/dist": true // dist 폴더 자체를 탐색기에서 숨겨서 실수 방지
-  // }
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "never"
+  },
+
+  "files.associations": {
+    "*.json": "jsonc",
+    "deno.json": "jsonc",
+    "tsconfig.json": "jsonc"
+  }
 }

@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+// @pxl/web/app/providers/modal-manager.ts
 
-import type { UiController, ModalController } from '../types/ui.types';
+import { useEffect, useState } from "react";
 
-import { EditFooModal } from '@/features/manage-foo/ui/edit-foo-modal';
-import type { EditFooProps } from '@/features/manage-foo/ui/edit-foo-modal';
+import type { ModalController, UIController } from "../types/ui.types.ts";
+
+import { EditFooModal } from "@/features/manage-foo/ui/edit-foo-modal.tsx";
+import type { EditFooProps } from "@/features/manage-foo/ui/edit-foo-modal.tsx";
 
 /**
  * Represents the currently active modal state.
@@ -11,9 +13,9 @@ import type { EditFooProps } from '@/features/manage-foo/ui/edit-foo-modal';
  */
 export type ModalState = EditFooProps | null;
 
-/** ModalsProps */
-type ModalsProps = {
-  mergeUiController: (o: Partial<UiController>) => void; // Merges modal-related UI actions into the global UI controller
+/** ModalManagerProps */
+type ModalManagerProps = {
+  mergeUIController: (o: Partial<UIController>) => void; // Merges modal-related UI actions into the global UI controller
 };
 
 /**
@@ -24,8 +26,8 @@ type ModalsProps = {
  * - Registering imperative modal actions to the UI controller
  * - Rendering active modals at the application root level
  */
-export function ModalManager(props: ModalsProps) {
-  const { mergeUiController } = props;
+export function ModalManager(props: ModalManagerProps) {
+  const { mergeUIController } = props;
 
   const [modalState, setModalState] = useState<ModalState>(null);
 
@@ -36,26 +38,25 @@ export function ModalManager(props: ModalsProps) {
    * (e.g. opening a modal from anywhere in the app)
    */
   const [modalsController] = useState<ModalController>({
-    openUpdateFooModal: (id) =>
-      setModalState({ type: 'foo:update', params: { id } }),
+    openUpdateFooModal: (id) => setModalState({ type: "foo:update", params: { id } }),
   });
 
   /**
    * Register modal actions to the global UI controller
    */
   useEffect(() => {
-    mergeUiController(modalsController);
-  }, [modalsController]);
+    mergeUIController(modalsController);
+  }, [modalsController, mergeUIController]);
 
   // No active modal
   if (!modalState) {
-    return <></>;
+    return null;
   }
   const { type } = modalState;
 
   return (
     <>
-      {type === 'foo:update' && (
+      {type === "foo:update" && (
         <EditFooModal
           open={!!modalState}
           onOpenChange={(open) => !open && setModalState(null)}
