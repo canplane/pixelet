@@ -53,7 +53,7 @@ import { ABS, EQ, GT, LT, MAX, MIN } from "./core.ts";
  */
 export type IVec = u64;
 
-// --- Bit Layout Configuration (Asymmetric Lane-based) ---
+// ---- Bit Layout Configuration (Asymmetric Lane-based) ----
 
 /**
  * SHAMT: Bit-shift alignment for X-Y-Z sequential packing.

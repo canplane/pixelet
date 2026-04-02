@@ -12,18 +12,17 @@ import { Node } from "@xpute/spec/rpc/node.ts";
 import { bake_terrain } from "@pxl/bake/terrain/bake.ts";
 
 // ============ Client ============
-// 페이지 폴트 발생 시 서버에서 데이터를 긁어와 로컬 pt에 매핑
+// Receives page demands, fetches terrain from the server, and relays results back to the local shell.
 
-const client = (env: DeviceEnvironment): void => {
+const load_client = (env: DeviceEnvironment): void => {
   const { signal, post } = env;
 
   post.on<IVec[]>(Command.TILE, (args, _body) => {
-    const demands: IVec[] = args; // 요청받은 좌표 배열
+    const demands: IVec[] = args;
 
-    // 🚀 병렬로 서버에 요청하되, 각각 완료되는 대로 클라이언트에 쏴줌 (Streaming)
+    // Request each page independently and relay results as they arrive.
     demands.forEach(async (page_idx) => {
       try {
-        // 서버에 개별 페이지 요청
         const terrain_encoded: Bytes | null = await signal.req.to(Node.SERVER).send(Vector.TILE, [page_idx]).wait();
         void post.req.unack().send(Command.TILE, [page_idx], terrain_encoded); // relay
       } catch (err) {
@@ -35,9 +34,9 @@ const client = (env: DeviceEnvironment): void => {
 };
 
 // ============ Server ============
-// DB/Cloud에서 레이어별 데이터를 읽어 병합 후 전송
+// Fetches source terrain payloads and returns baked terrain pages.
 
-const server = (env: DeviceEnvironment): void => {
+const load_server = (env: DeviceEnvironment): void => {
   const { signal, post } = env;
 
   signal.on<[IVec]>(Vector.TILE, async (_sel, args, _body) => {
@@ -50,13 +49,13 @@ const server = (env: DeviceEnvironment): void => {
   });
 };
 
-/** Module Entry */
+/** Module entry point. */
 export function load(env: DeviceEnvironment) {
   switch (__ROLE__) {
     case "server":
-      return server(env);
+      return load_server(env);
     case "client":
-      return client(env);
+      return load_client(env);
     default:
       throw new Error(`what do you do?: ${__ROLE__}`);
   }

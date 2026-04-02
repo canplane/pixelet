@@ -38,7 +38,7 @@ OSM_CACHE_SIZE=2000
 OSM_STYLE_NAME=default.style
 METADATA_FILE="$OSM_ROOT/metadata.json"
 
-echo "💧 Starting osm-features integration (SSOT Strategy: Hstore Only)"
+echo "💧 Starting osm-features integration (hstore-only ingestion)"
 
 # ---------------------------------------------------------
 # Step 1: Metadata Parsing & Preparation
@@ -138,14 +138,14 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
 done
 
 # ---------------------------------------------------------
-# Step 4: Migration (Hstore Only Strategy)
+# Step 4: Migration (hstore Only Strategy)
 # ---------------------------------------------------------
 if [ "$IS_FIRST_RUN" = true ]; then
     echo "⚠️  No files were processed. Exiting."
     exit 0
 fi
 
-echo "🚀 Migrating data to Single Source of Truth (osm_elements)..."
+echo "🚀 Migrating data into primary store (osm_elements)..."
 
 MIGRATION_SQL="$OSM_ROOT/temp_migration.sql"
 cat <<EOF > "$MIGRATION_SQL"
@@ -206,4 +206,4 @@ docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -f /tmp/migrat
 
 # 임시 파일 삭제
 rm -f "$MIGRATION_SQL"
-echo "✨ OSM features integration completed! (SSOT: osm_elements, General: osm_roads)"
+echo "✨ OSM features integration completed! (primary: osm_elements, generalized: osm_roads)"

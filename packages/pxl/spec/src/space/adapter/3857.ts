@@ -28,7 +28,7 @@ import { type f64, type u32 } from "@xpute/spec/lib/kit/word.ts";
 import { type FVec, type IVec, projection, type PVF3 } from "../pvf3/mod.ts";
 import { IVEC_X_W } from "../pvf3/core.ts";
 import { FROM_L3_IDX, L3_LIMIT, L3_RANGE } from "../indexer.ts";
-import type { V3 } from "../v3.ts";
+import { fill3, type V3 } from "../v3.ts";
 
 import * as epsg4326 from "./4326.ts";
 
@@ -45,7 +45,7 @@ export type G3857 = [
 const WORLD_WIDTH_3857: f64 = 40075016.68557849;
 const HALF_W_3857: f64 = WORLD_WIDTH_3857 / 2;
 
-const V3_REG: V3 = [0, 0, 0];
+const V3_REG: V3 = fill3(0);
 
 /**
  * Canonical spatial units per physical meter in the EPSG:3857 adapter plane.
@@ -55,12 +55,14 @@ const V3_REG: V3 = [0, 0, 0];
  * - In the current mapping: 1u = 1 L1 cell.
  * - `m` means an EPSG:3857 planar meter, not a geodesic ground meter.
  *
- * 🌍 [Cyclic World Topology Mapping]
- * 24비트 정수 공간(2^24 = 16,777,216 u)이 지구 적도 둘레(WORLD_WIDTH_3857)와
- * 1:1로 정확하게 일치하도록 스케일을 동적으로 락온(Lock-on)합니다.
- * * - 1 [u] = 약 2.388 [m]
- * - 24-bit MAX (8,388,607) 지점을 넘어서면 하드웨어 레벨에서 음수(-8,388,608)로 오버플로우됩니다.
- * - 이 오버플로우는 실제 지구의 날짜변경선(Antimeridian)을 건너는 것과 물리적으로 완벽히 동일합니다.
+ * Cyclic world-topology mapping:
+ * - the 24-bit X lattice domain (2^24 = 16,777,216 u) is scaled to match the
+ *   full EPSG:3857 equatorial world width exactly
+ * - 1 [u] ≈ 2.388 [m]
+ * - crossing the positive 24-bit X limit naturally overflows into the negative
+ *   range at the packed-integer level
+ * - this overflow corresponds to crossing the antimeridian in the wrapped
+ *   Mercator world model
  *
  * Note:
  * - Because EPSG:3857 is distorted, these meters match real-world meters only
@@ -68,8 +70,8 @@ const V3_REG: V3 = [0, 0, 0];
  */
 const U_TOTAL_X: u32 = 1 << IVEC_X_W; // 16,777,216
 
-export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] = 약 0.418 [u]
-const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] = 약 2.388 [m]
+export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] ≈ 0.418 [u]
+const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 2.388 [m]
 
 /**
  * Public Mercator vertical scale contract.

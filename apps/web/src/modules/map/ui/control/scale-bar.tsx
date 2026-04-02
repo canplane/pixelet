@@ -1,12 +1,12 @@
 // @pxl/web/modules/map/ui/control/scale-bar.tsx
 
-import { render_cfg } from "@/modules/world/render/config.ts";
 import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { camera_cfg } from "@/modules/world/render/config.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
 
-const { DEFAULT_DIST, FOV } = render_cfg.camera;
+const { DEFAULT_DIST, FOV } = camera_cfg;
 
 const SCALE_BAR_WIDTH = 80;
 

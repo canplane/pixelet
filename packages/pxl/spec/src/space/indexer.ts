@@ -1,5 +1,5 @@
 // @pxl/spec/space/indexer.ts
-// Multi-level spatial indexing and hierarchy (L1~L5)
+// Multi-level spatial indexing and hierarchy helpers.
 
 /**
  * Multi-level spatial topology and packed hierarchy helpers.

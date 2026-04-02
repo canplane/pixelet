@@ -8,26 +8,25 @@ import { BOOL, type f64, type i32, type u32 } from "@xpute/spec/lib/kit/word.ts"
 
 import { projection, type PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/spec/space/indexer.ts";
-import { to3 } from "@pxl/spec/space/adapter/three.ts";
 import { add3, center3, fill3, floor3, type V3 } from "@pxl/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
-import { render_cfg } from "@/modules/world/render/config.ts";
-
 import { useTileStore } from "../terrain/tile-store.ts";
+import { render_cfg } from "@/modules/world/render/config.ts";
 import { get_ele } from "../terrain/use-elevation.ts";
+
 import { AnchorNode } from "@/modules/world/spatial/anchor/node.tsx";
 import { get_theme_key, WorldThemeKey } from "@/modules/world/render/themes.ts";
 
-const { FOG_FAR } = render_cfg.rendering;
+const { FOG_FAR } = render_cfg;
 
 type ZoneSample = {
   off: V3;
   borders: [f64, f64, f64, f64]; // top, bottom, right, left
 };
 
-// half-diagonal inset so box cells fit the circular zone more cleanly
-const ZONE_RADIUS_CELL: f64 = 16 - 0.707;
+// Radius in cell units, with a half-diagonal shave so box cells fit the circular zone more cleanly.
+const ZONE_RADIUS_CELL: f64 = 16 / U_PER_CELL - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
 const ZONE_SAMPLES: ZoneSample[] = (() => {
@@ -65,6 +64,8 @@ const ZONE_SAMPLES: ZoneSample[] = (() => {
 const ZONE_SAMPLE_BOX = new THREE.BoxGeometry(1, 1, 1);
 ZONE_SAMPLE_BOX.setAttribute("a_borders", new THREE.InstancedBufferAttribute(new Float32Array(ZONE_SAMPLES.length * 4), 4));
 
+const BEACON_Z_BIAS: f64 = 1;
+
 const zone_style = {
   COLOR: "#4fd1c5",
   FILL_OPACITY: .4,
@@ -85,9 +86,9 @@ export function UserMarker(props: UserMarkerProps) {
 
   const tile = useTileStore((state) => state.get_tile(L3_IDX(device_coord.i)));
   const center_pos: V3 = useMemo(() => {
-    const pos: V3 = projection.unproject([0, 0, 0], device_coord.i, device_coord.f);
+    const pos: V3 = projection.unproject(fill3(0), device_coord.i, device_coord.f);
     pos[2] = get_ele(device_coord.i, device_coord.f) ?? 0;
-    return floor3(pos, fill3(U_PER_CELL));
+    return floor3(pos, U_PER_CELL);
   }, [device_coord, tile]);
 
   const center_coord = useMemo(() => {
@@ -169,7 +170,7 @@ void main() {
       const coord: PVF3 = projection.project({ i: 0n, f: 0n }, ...pos);
       const delta_ele: f64 = (get_ele(coord.i, coord.f) ?? 0) - center_pos[2];
 
-      temp_obj.position.set(...to3(center3([off[0], off[1], off[2] + delta_ele], fill3(U_PER_CELL))));
+      temp_obj.position.set(...center3([off[0], off[1], off[2] + delta_ele], U_PER_CELL));
       temp_obj.scale.set(U_PER_CELL, U_PER_CELL, U_PER_CELL);
       temp_obj.updateMatrix();
       mesh.setMatrixAt(i, temp_obj.matrix);
@@ -199,8 +200,8 @@ void main() {
     if (!visible) return;
 
     const t: f64 = state.clock.getElapsedTime();
-    beacon_ref.current.rotation.y = t * 1.2;
-    beacon_ref.current.position.y = U_PER_CELL * 1.5 + Math.sin(t * 2) * (0.2 * U_PER_CELL);
+    beacon_ref.current.rotation.z = t * 1.2;
+    beacon_ref.current.position.z = BEACON_Z_BIAS + Math.sin(t * 2) * (0.2);
   });
 
   return (
@@ -214,9 +215,9 @@ void main() {
 
       <mesh
         ref={beacon_ref}
-        position={to3(center3([0, 0, 0], fill3(U_PER_CELL)))}
+        position={center3([0, 0, BEACON_Z_BIAS], 1)}
       >
-        <octahedronGeometry args={[0.6 * U_PER_CELL, 0]} />
+        <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial
           color={beacon_color}
           emissive={beacon_color}

@@ -216,7 +216,7 @@ export class NetGateway {
   }
 
   /**
-   * Dial bootstrap SSOT pipeline (seed boot + runtime dynamic connect)
+   * Dial bootstrap pipeline used by both seed boot and runtime dynamic connect.
    *
    * Internal path only. Precondition: boot() completed.
    *
@@ -306,7 +306,7 @@ export class NetGateway {
     for (const peer of peers) {
       const xport: Transport = this.xports[peer.kind];
 
-      // --- hdr/body split crypto ---
+      // ---- hdr/body split crypto ----
       // NOTE: peer must expose peer.sign_pub, peer.dh_pub
       const enc_hdr: Bytes = await crypto.aead_encrypt_hdr(my_dh_priv, peer.dh_pub, rid, plain_hdr);
 

@@ -17,8 +17,9 @@ import { U_PER_M, Z_SCALE } from "@pxl/spec/space/adapter/3857.ts";
  * - CELL_SHAMT defines the cell<->u relation.
  * - when CELL_SHAMT = 0, 1u = 1cell.
  */
-export const CELL_SHAMT: i32 = 0; // 1 [u] = 1 [cell]
+export const CELL_SHAMT: i32 = -1;
 export const U_PER_CELL: f64 = 2 ** CELL_SHAMT;
+// Valid when CELL_SHAMT <= 0.
 const CELL_PER_U: u32 = 1 << -CELL_SHAMT;
 
 export const XY_CELL_PER_M: f64 = CELL_PER_U * U_PER_M;
@@ -64,7 +65,7 @@ export const CHUNK_CELL_SPAN: u32 = 1 << (L2_SHAMT - CELL_SHAMT);
  */
 
 /** Number of elevation samples across one page (32x32 inner grid). */
-export const PAGE_ELE_SPAN: u32 = 1 << 5;
+export const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 1 - 5);
 
 /**
  * Two-cell padding (ELE_PAD=2) enables C1 continuous Bicubic interpolation

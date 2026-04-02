@@ -7,9 +7,10 @@ import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 import type { PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/bake/terrain/model/osm_feature.ts";
 
-import { CameraControlMode, render_cfg } from "@/modules/world/render/config.ts";
+import { camera_cfg, CameraControlMode } from "@/modules/world/render/config.ts";
+import type { ViewState } from "@/modules/world/render/camera.ts";
 
-const { DEFAULT_POLAR_ANGLE } = render_cfg.camera;
+const { DEFAULT_POLAR_ANGLE, DEFAULT_DIST } = camera_cfg;
 
 /** Data loading lifecycle. */
 export const enum MapDataStatus {
@@ -18,14 +19,6 @@ export const enum MapDataStatus {
   SUCCESS = "success",
   ERROR = "error",
 }
-
-/** Camera view intent. */
-export type ViewState = {
-  dist: f64; // 줌 레벨 (카메라-타겟 거리)
-  bearing: f64; // 수평 회전 각도 (0~360, 북쪽 기준)
-  polar_angle: f64; // 수직 각도 (0:수직, PI/2:수평)
-  height: f64; // 지면으로부터의 카메라 수직 높이
-};
 
 /**
  * Canonical geo app state.
@@ -55,7 +48,7 @@ export type MapState = {
   map_center: PVF3 | null;
   set_map_center: (center: PVF3) => void;
 
-  /** Camera view intent. */
+  /** User/system-facing camera view intent. */
   view_state: ViewState;
   set_view_state: (view: Partial<ViewState>) => void;
 
@@ -90,7 +83,7 @@ export type MapState = {
 };
 
 /** Canonical geo global state. */
-export const useMapStore = create<MapState>((set, get) => ({
+export const useMapStore = create<MapState>((set, _get) => ({
   status: MapDataStatus.IDLE,
   set_status: (status) => set({ status }),
 
@@ -102,7 +95,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   set_map_center: (map_center: PVF3) => set({ map_center, camera_control_mode: CameraControlMode.SYSTEM }),
 
   view_state: {
-    dist: 200,
+    dist: DEFAULT_DIST,
     bearing: 0,
     polar_angle: DEFAULT_POLAR_ANGLE,
     height: 100,

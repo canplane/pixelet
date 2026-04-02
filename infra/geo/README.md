@@ -20,7 +20,7 @@
 | **Source**      | OpenStreetMap (PBF)                                           | Copernicus GLO-30 (GeoTIFF)   | OSM Coastline (Water Polygons)      |
 | **Directory**   | `./osm-features/`                                             | `./esa-elevation/`            | `./osm-coastline/`                  |
 | **Raw Data**    | `../../region/[CODE]/*.osm.pbf`                               | `../../region/[CODE]/*.tif`   | `../../region/[CODE]/*.shp`         |
-| **Main Table**  | 1. `osm_elements` **(SSOT)**<br>2. `osm_roads` **(Reserved)** | `esa_elevation_raster`        | `osm_coastline_polygons` **(SSOT)** |
+| **Main Table**  | 1. `osm_elements` **(Primary)**<br>2. `osm_roads` **(Reserved)** | `esa_elevation_raster`        | `osm_coastline_polygons` **(Primary)** |
 | **Catalog**     | `osm_features_catalog`                                        | `esa_elevation_catalog`       | `osm_coastline_catalog`             |
 | **Schema File** | `01_osm_features_schema.sql`                                  | `01_esa_elevation_schema.sql` | `01_osm_coastline_schema.sql`       |
 | **SRID**        | EPSG:3857 (Web Mercator)                                      | EPSG:3857 (Web Mercator)      | EPSG:3857 (Web Mercator)            |
@@ -109,7 +109,7 @@ chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 
 #### Step 3: Sequential Merge & Optimization
 
-- **Migration**: 쉘 스크립트 에러 방지를 위해 임시 SQL 파일을 생성합니다. 임시 테이블(`planet_osm_point` 등)의 데이터를 SSOT 테이블(`osm_elements`)로 이관합니다. 이때 `hstore`로 통합된 태그와 형상 정보가 단일 테이블로 모입니다.
+- **Migration**: 쉘 스크립트 에러 방지를 위해 임시 SQL 파일을 생성합니다. 임시 테이블(`planet_osm_point` 등)의 데이터를 메인 테이블(`osm_elements`)로 이관합니다. 이때 `hstore`로 통합된 태그와 형상 정보가 단일 테이블로 모입니다.
 - **Physical Clustering**: 데이터 이관이 완료된 직후, 공간 인덱스(`GiST`)를 기준으로 **`CLUSTER` 명령을 수행**하여 디스크 상의 데이터 배치를 물리적으로 최적화합니다. (범위 검색 성능 극대화)
 - **Generalized Roads (`osm_roads`)**: 줌 아웃 시 렌더링 성능을 위해 단순화된 형상 데이터를 별도 보관합니다.
 

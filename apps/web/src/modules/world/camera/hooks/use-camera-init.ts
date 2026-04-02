@@ -3,11 +3,12 @@
 import { useEffect, useLayoutEffect } from "react";
 import { useThree } from "@react-three/fiber";
 
-import { render_cfg } from "@/modules/world/render/config.ts";
 import { useMapStore } from "@/modules/map/navigation/map-store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
+import { render_cfg } from "../../render/config.ts";
+import { CAMERA_UP } from "../../render/camera.ts";
 
-const { FAR_CLIP } = render_cfg.rendering;
+const { FAR_CLIP } = render_cfg;
 
 export function useCameraInit() {
   const map_center = useMapStore((state) => state.map_center);
@@ -17,15 +18,16 @@ export function useCameraInit() {
 
   const { camera } = useThree();
 
-  // 1. [Camera-Config] 카메라 투영 행렬 설정
+  /** Applies one-time camera runtime defaults for the Z-up scene. */
   useEffect((): void => {
+    camera.up.set(...CAMERA_UP);
     camera.far = FAR_CLIP;
     camera.updateProjectionMatrix();
   }, [camera]);
 
-  // 2. [Initial-Trigger] 세상의 첫 위치 결정
+  /** Initializes the canonical map center from the device coordinate. */
   useLayoutEffect(() => {
-    if (map_center === null && device_coord) {
+    if (map_center === null && device_coord !== null) {
       set_map_center(device_coord);
     }
   }, [map_center, device_coord]);

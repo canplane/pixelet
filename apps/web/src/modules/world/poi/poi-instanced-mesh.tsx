@@ -1,6 +1,6 @@
 // // @pxl/web/modules/world/poi/poi-instanced-mesh.ts
 
-// import React, { useLayoutEffect, useMemo, useRef } from "react";
+// import React, { memo, useLayoutEffect, useMemo, useRef } from "react";
 // import * as THREE from "three";
 // import { useFrame } from "@react-three/fiber";
 // import { useShallow } from "zustand/react/shallow";
@@ -8,7 +8,7 @@
 // import { useTileStore } from "../../model/tile-store.ts";
 // import { toCenter } from "@pxl/bake/terrain/etc/tile-utils.ts";
 // import type { POI } from "@pxl/bake/terrain/model/osm_feature.ts";
-// import { CoordOps, to3D } from "@pxl/spec/space/adapter/three.ts";
+// import { CoordOps, to3D } from "@/modules/world/render/config.ts";
 // import { useGroundHeight } from "@/domain/geo/lib/use-ground-height.ts";
 
 // // 🎯 [Instance-Config]
@@ -101,7 +101,7 @@
 //   side: THREE.DoubleSide,
 // });
 
-// export const POIInstancedMesh = React.memo(({ pois }: POIInstancedMeshProps) => {
+// export const POIInstancedMesh = memo(({ pois }: POIInstancedMeshProps) => {
 //   const { get_ele } = useGroundHeight();
 
 //   const meshRef = useRef<THREE.InstancedMesh>(null);

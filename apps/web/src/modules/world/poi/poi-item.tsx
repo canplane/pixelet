@@ -1,6 +1,6 @@
 // // @pxl/web/modules/world/poi/poi-item.ts
 
-// import React, { type ReactElement, useCallback, useMemo, useRef, useState } from "react";
+// import { memo, type ReactElement, useCallback, useMemo, useRef, useState } from "react";
 // import * as THREE from "three";
 // import { useFrame } from "@react-three/fiber";
 // import { Html } from "@react-three/drei";
@@ -12,14 +12,14 @@
 // import { cn } from "@/shared/lib/utils/cn.ts";
 // import { getTileCoord, getTileKey, toCenter } from "@pxl/bake/terrain/etc/tile-utils.ts";
 // import { useGroundHeight } from "../../lib/use-ground-height.ts";
-// import { to3D, toThreeCoord } from "@pxl/spec/space/adapter/three.ts";
+// import { to3D, toThreeCoord } from "@/modules/world/render/config.ts";
 
 // // 🚀 [Refactor] 좌표계 훅 & 스타일 설정 분리
 // import { useRelativePosition } from "../../lib/use-coordinate-converter.ts";
 // import { resolvePoiStyle } from "./poi-theme-config.ts";
 
 // // 🎯 [Optimization] 렌더링 성능을 위한 상수 캐싱
-// const { FADE_START, FADE_END, FAR_CLIP } = render_cfg.rendering;
+// const { FADE_START, FADE_END, FAR_CLIP } = render_cfg;
 // // HTML 요소는 WebGL보다 무거우므로, Far Clip보다 조금 더 일찍 숨겨서 DOM 부하를 줄입니다.
 // const CULL_DIST = FAR_CLIP * 0.7;
 
@@ -33,25 +33,25 @@
 // type POIItemProps = {
 //   poi: POI;
 // };
-// export const POIItem = React.memo(({ poi }: POIItemProps) => {
+// export const POIItem = memo(({ poi }: POIItemProps) => {
 //   const { get_ele } = useGroundHeight();
 
-//   // --- [Global Store Selectors] ---
+//   // ---- [Global Store Selectors] ----
 //   const html_portal_el = useMapStore((state) => state.html_portal_el);
 //   const set_selected_poi = useMapStore((state) => state.set_selected_poi);
 
-//   // --- [Theme Context] ---
+//   // ---- [Theme Context] ----
 //   const { themeKey } = useMapNavigation();
 //   const isNight: boolean = themeKey === "night";
 
-//   // --- [Refs & Local State] ---
+//   // ---- [Refs & Local State] ----
 //   const groupRef = useRef<THREE.Group>(null);
 //   const containerRef = useRef<HTMLDivElement>(null);
 
 //   const [isHovered, setIsHovered] = useState<boolean>(false);
 //   const [isOccluded, setIsOccluded] = useState<boolean>(false);
 
-//   // --- [Animation Refs] (Re-render 방지용 Mutable Variables) ---
+//   // ---- [Animation Refs] (Re-render 방지용 Mutable Variables) ----
 //   const springValue = useRef<number>(0);
 //   const velocity = useRef<number>(0);
 //   const lastIsMinimal = useRef<boolean>(false);
@@ -157,7 +157,7 @@
 //     <group ref={groupRef}>
 //       <Html
 //         portal={html_portal_el ? { current: html_portal_el } : undefined}
-//         position={[0, 0, 0]} // Group이 이미 위치를 잡았으므로 로컬 0,0,0
+//         position={fill3(0)} // Group이 이미 위치를 잡았으므로 로컬 0,0,0
 //         center
 //         occlude
 //         onOcclude={setIsOccluded}

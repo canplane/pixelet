@@ -14,18 +14,18 @@ import { decode_terrain, type Terrain, type Tile } from "@pxl/bake/terrain/forma
 import { useTileStore } from "./tile-store.ts";
 import { useMapStore } from "@/modules/map/navigation/map-store.ts";
 
-/** Runtime tuning constants for geo streaming / rendering policy. */
+/** Runtime tuning constants for terrain page streaming. */
 
-// page preload radius around current center page
-const LOAD_RADIUS: u32 = 2;
-// cache eviction radius with hysteresis
-const CLEANUP_RADIUS: u32 = Math.round(LOAD_RADIUS * 1.5);
+// Preload radius around the current center page.
+const LOAD_RADIUS: u32 = 1;
+// Cache eviction radius with hysteresis.
+const CLEANUP_RADIUS: u32 = Math.round(LOAD_RADIUS * 2);
 
 const CHEBYSHEV_DIST = (v: IVec): u32 => Number(ivec.max_comp(ivec.abs(v)));
 
-const deferred_demands = new Set<IVec>();
+const pending_page_demands = new Set<IVec>();
 
-function register() {
+function register_tile_stream() {
   const { post } = get_xpute();
   const { set_tile } = useTileStore.getState();
 
@@ -43,17 +43,16 @@ function register() {
     } catch (err) {
       console.error(`[${Command.TILE}/${ivec.repr(page_idx)}] shell: failed to stream tile:`, err);
     } finally {
-      deferred_demands.delete(page_idx);
+      pending_page_demands.delete(page_idx);
     }
   });
   return unsub;
 }
 
 /**
- * Scheduling Queue Generator
- * 현재 위치 기준 로딩이 필요한 페이지들을 거리순으로 정렬하여 반환합니다.
+ * Builds a page demand queue ordered by Chebyshev distance from the center page.
  */
-function schedule(center_id: IVec): IVec[] {
+function schedule_page_demands(center_page_idx: IVec): IVec[] {
   const { get_tile } = useTileStore.getState();
 
   const groups: IVec[][] = Array.from({ length: LOAD_RADIUS + 1 }, () => []); // 거리별 그룹핑
@@ -62,13 +61,13 @@ function schedule(center_id: IVec): IVec[] {
   for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
     for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
       const page_idx_delta = ivec.gather(BigInt(dx), BigInt(dy), BigInt(0));
-      const page_idx = ivec.add(center_id, page_idx_delta);
+      const page_idx = ivec.add(center_page_idx, page_idx_delta);
 
-      // 이미 로드되었거나, 현재 로딩 중(Processing)인 페이지는 스킵
-      if (get_tile(page_idx) || deferred_demands.has(page_idx)) continue;
-      deferred_demands.add(page_idx);
+      // Skip pages that are already loaded or already queued.
+      if (get_tile(page_idx) || pending_page_demands.has(page_idx)) continue;
+      pending_page_demands.add(page_idx);
 
-      // Chebyshev distance (정사각 그리드 로딩)
+      // Chebyshev distance over the square page neighborhood.
       const dist: i32 = CHEBYSHEV_DIST(page_idx_delta);
       groups[dist].push(page_idx), cnt++;
     }
@@ -86,18 +85,15 @@ function schedule(center_id: IVec): IVec[] {
   return flatten;
 }
 
-/**
- * Cleanup Strategy
- * 범위 밖 페이지를 정리합니다.
- */
-function cleanup(center_id: IVec): void {
+/** Evicts cached pages that fall outside the cleanup radius. */
+function cleanup_far_tiles(center_page_idx: IVec): void {
   const { tile_map, clear_tile } = useTileStore.getState();
 
-  // Store의 Map을 직접 순회하며 거리 계산
+  // Scan the current cache and evict pages beyond the hysteresis radius.
   for (const [page_idx] of tile_map) {
-    const dist: u32 = CHEBYSHEV_DIST(ivec.sub(page_idx, center_id));
+    const dist: u32 = CHEBYSHEV_DIST(ivec.sub(page_idx, center_page_idx));
     if (dist > CLEANUP_RADIUS) {
-      clear_tile(page_idx); // 1.5배 범위 밖: 완전 제거
+      clear_tile(page_idx);
     }
   }
 }
@@ -106,25 +102,25 @@ export function useTileFetcher() {
   const { post } = get_xpute();
   const map_center = useMapStore((state) => state.map_center);
 
-  const center_id: IVec | null = useMemo(() => {
+  const center_page_idx: IVec | null = useMemo(() => {
     if (map_center === null) return null;
     return L3_IDX(map_center.i);
   }, [map_center]);
 
   useEffect(() => {
-    const unsub = register();
+    const unsub = register_tile_stream();
     return unsub;
   }, []);
 
-  // Main Loop
+  // Main demand/update loop.
   useEffect(() => {
-    if (center_id === null) return;
+    if (center_page_idx === null) return;
 
-    cleanup(center_id);
+    cleanup_far_tiles(center_page_idx);
 
-    const demands: IVec[] = schedule(center_id); // create request queue
+    const demands: IVec[] = schedule_page_demands(center_page_idx);
     if (demands.length > 0) {
-      void post.req.unack().send(Command.TILE, demands, null); // batch request
+      void post.req.unack().send(Command.TILE, demands, null);
     }
-  }, [center_id]);
+  }, [center_page_idx]);
 }

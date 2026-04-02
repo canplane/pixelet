@@ -1,8 +1,9 @@
 // @pxl/bake/terrain/model/osm_adapter.ts
 
 /**
- * OSM ingress adapter (WKB-only).
- * - SSOT ingress: page/terrain/source wire (WKB + hstore text)
+ * OSM ingress adapter for WKB-based terrain source rows.
+ * Handles the canonical page terrain source payload shape
+ * (WKB geometry + hstore text tags).
  */
 
 import type { u32 } from "@xpute/spec/lib/kit/word.ts";
@@ -20,7 +21,7 @@ type WKBGeometry = {
 };
 
 // -----------------------------------------------------------------------------
-// WKB ingress (SSOT for page/terrain/source wire)
+// WKB ingress for page terrain source rows
 // -----------------------------------------------------------------------------
 
 export function from_feat_row(row: FeatRow): OSMRawFeature[] {
@@ -66,8 +67,9 @@ export function from_coast_row(row: CoastRow): OSMRawFeature[] {
 }
 
 // -----------------------------------------------------------------------------
-// exported: hstore raw -> dict
+// hstore raw string -> tag dictionary
 // -----------------------------------------------------------------------------
+
 function parse_hstore(hstore_str: string): OSMTags {
   const result: Record<string, string> = {};
   const pattern = /"(.+?)"=>"(.*?)"/g;
@@ -75,14 +77,15 @@ function parse_hstore(hstore_str: string): OSMTags {
   while ((match = pattern.exec(hstore_str)) !== null) {
     result[match[1]] = match[2];
   }
-  // hstore는 string KV만 보장하므로, 정책/정규화에서 필요한 키만 OSMTags로 "해석"한다.
+  // hstore guarantees only string key/value pairs.
+  // Later policy/normalization stages interpret the subset relevant to OSMTags.
   return result as unknown as OSMTags;
 }
 
 // -----------------------------------------------------------------------------
-// WKB decode (minimal, internal)
-// - supports: Point, LineString, Polygon, MultiPolygon
-// - accepts EWKB flags (Z/SRID) and ignores SRID/Z (3857 assumed by pipeline)
+// Minimal internal WKB decode.
+// Supports: Point, LineString, Polygon, MultiPolygon.
+// Accepts EWKB flags (Z/SRID) and ignores SRID/Z because the pipeline assumes 3857.
 // -----------------------------------------------------------------------------
 
 function wkb_to_point_or_null(wkb: U8Array): G3857 | null {

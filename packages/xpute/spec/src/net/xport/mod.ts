@@ -24,7 +24,7 @@ export type Handle = string;
 export type Dial = string; // e.g. "https://...", "wss://...", "turn:...", "rtc:..."
 
 /**
- * ========= Network naming canon (NO "locator") =========
+ * ============ Network naming canon (NO "locator") ============
  *
  * PID:
  * - Overlay identity (stable per node).
@@ -46,7 +46,7 @@ export type Dial = string; // e.g. "https://...", "wss://...", "turn:...", "rtc:
  * Forbidden:
  * - "locator" is banned (ambiguous: Dial vs Handle vs PID). Use Dial or Handle explicitly.
  *
- *  ========= Trust & authentication contract =========
+ *  ============ Trust & authentication contract ============
  *
  *  - PID is NOT trusted until crypto verifies it:
  *    A transport-reported inbound link (src_handle) is only a transport hint until:
@@ -57,7 +57,7 @@ export type Dial = string; // e.g. "https://...", "wss://...", "turn:...", "rtc:
  *    transports MAY accept/route NET_HELLO with plaintext enc_hdr under allowlist,
  *    but MUST treat all other vectors as authenticated traffic (drop if unknown handle/peer).
  *
- *  ========= CENTRAL: bootstrap -> post-HELLO (Handle <-> PID bind) =========
+ *  ============ CENTRAL: bootstrap -> post-HELLO (Handle <-> PID bind) ============
  *
  *  Goal:
  *  - Start with Dial seeds (bootstrap) and end with verified PID-bound routing (Handle <-> PID).
@@ -221,7 +221,7 @@ export type Transports = {
 };
 
 // /**
-//  * ========= Wire/Store note (WebRTC) =========
+//  * ============ Wire/Store note (WebRTC) ============
 //  *
 //  * A WebRTC transport MAY be wire-only:
 //  * - If the data-channel is reliable/ordered and payload sizes are acceptable,
@@ -233,7 +233,7 @@ export type Transports = {
 //  * Keeping Wire and Store as separate primitives preserves both options.
 //  */
 
-// // ========= WebRTC multipath (proposal) =========
+// // ============ WebRTC multipath (proposal) ============
 // // Transport 구현체 내부에서 pid당 여러 handle을 허용할 때 권장 구조.
 // // (인터페이스 변경 없이 구현체 내부에서만 사용)
 // export type HandleMultipathMaps = {

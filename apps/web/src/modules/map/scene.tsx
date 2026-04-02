@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { EffectComposer, SMAA } from "@react-three/postprocessing";
 
-import { render_cfg } from "@/modules/world/render/config.ts";
+import { camera_cfg, render_cfg } from "@/modules/world/render/config.ts";
 import { get_theme_key, themes, type WorldTheme } from "@/modules/world/render/themes.ts";
 import { CameraController } from "@/modules/world/camera/camera-controller.tsx";
 
@@ -17,8 +17,8 @@ import { WorldExportTools } from "@/modules/world/terrain/ui/export-tools.tsx";
 
 import { MapToastController } from "./ui/toast/toast-controller.tsx";
 
-const { FOV, NEAR } = render_cfg.camera;
-const { FAR_CLIP } = render_cfg.rendering;
+const { FOV, NEAR } = camera_cfg;
+const { FAR_CLIP } = render_cfg;
 
 export function MapScene() {
   const world_ref = useRef<THREE.Group>(null);
@@ -30,7 +30,7 @@ export function MapScene() {
     <div className="fixed inset-0 overflow-hidden bg-black">
       <MapToastController />
 
-      {/* 테마 배경 레이어: 안개 색상과 일치시켜 3D와 2D 영역의 경계를 제거합니다. */}
+      {/* Theme background layer matched to fog color to hide the 2D/3D seam. */}
       <div
         className="absolute inset-0 transition-colors duration-1500 ease-in-out"
         style={{
@@ -38,7 +38,7 @@ export function MapScene() {
         }}
       >
         <Canvas
-          dpr={1} // 성능과 선명도를 위해 1로 고정 추천 (또는 [1, 1.5])
+          dpr={1}
           gl={{
             antialias: false,
             powerPreference: "high-performance",
@@ -54,34 +54,29 @@ export function MapScene() {
           }}
           frameloop="always"
         >
-          {/* 카메라 제어 및 Floating Origin 연동 */}
+          {/* Camera controls */}
           <CameraController />
 
-          {/* 3D 환경 구성 (조명 및 하늘) */}
+          {/* Lighting and sky environment */}
           <MapEnvironment />
 
-          {/* 🏗️ 물리적으로 이동하는 세상 (지형, 건물, 그리드) */}
-          {/* 여기에 ref를 연결하여 카메라 컨트롤러가 위치를 밀어버립니다 */}
+          {/* World layers in the floating-origin local frame */}
           <World ref={world_ref} />
 
-          {/* 🎯 [Visual Quality] 복셀 노이즈 제거를 위한 안티앨리어싱 */}
-          {
-            /* multisampling은 0으로 꺼야 후처리가 제대로 먹히는 경우가 많으나,
-              R3F v8에서는 auto로 둬도 됩니다. SMAA가 덮어씁니다. */
-          }
+          {/* Post AA for voxel edge cleanup */}
           <EffectComposer multisampling={0}>
             <SMAA />
           </EffectComposer>
         </Canvas>
       </div>
 
-      {/* HTML 요소 기반의 오버레이 포탈 */}
+      {/* HTML overlay portal */}
       <MapHTMLPortal />
 
-      {/* 일반 절대 위치 UI 레이어 */}
+      {/* Absolute-position UI layer */}
       <MapOverlays />
 
-      {/* 개발 환경 전용 페이지 데이터 추출 도구 */}
+      {/* Development-only terrain export tools */}
       {__IS_DEV__ && <WorldExportTools />}
     </div>
   );

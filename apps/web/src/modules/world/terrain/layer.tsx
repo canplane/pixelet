@@ -1,6 +1,6 @@
 // @pxl/web/modules/world/terrain/layer.tsx
 
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 
 import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
 import { FROM_L3_IDX } from "@pxl/spec/space/indexer.ts";
@@ -19,7 +19,7 @@ type TerrainPageProps = {
   page_idx: IVec;
   page: Terrain;
 };
-const TerrainPage = React.memo((props: TerrainPageProps) => {
+const TerrainPage = memo((props: TerrainPageProps) => {
   const { page_idx, page } = props;
   const { ground, ele } = page;
 
@@ -42,7 +42,7 @@ const TerrainPage = React.memo((props: TerrainPageProps) => {
 });
 TerrainPage.displayName = "TerrainPage";
 
-export const TerrainLayer = React.memo(() => {
+export const TerrainLayer = memo(() => {
   const tile_map = useTileStore((state) => state.tile_map);
   const status = useMapStore((state) => state.status);
 

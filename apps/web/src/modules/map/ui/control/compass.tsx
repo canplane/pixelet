@@ -1,12 +1,13 @@
 // @pxl/web/modules/map/ui/control/compass.tsx
 
-import { cn } from "@/shared/lib/utils/cn.ts";
-import { useMapStore } from "../../navigation/map-store.ts";
-import { render_cfg } from "@/modules/world/render/config.ts";
-import { CircularButton } from "@/shared/ui/theme/glass/circular-button.tsx";
-import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
+import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { camera_cfg } from "@/modules/world/render/config.ts";
 
-const { DEFAULT_POLAR_ANGLE } = render_cfg.camera;
+import { cn } from "@/shared/lib/utils/cn.ts";
+import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
+import { CircularButton } from "@/shared/ui/theme/glass/circular-button.tsx";
+
+const { DEFAULT_POLAR_ANGLE } = camera_cfg;
 
 export function MapCompass() {
   const view_state = useMapStore((state) => state.view_state);

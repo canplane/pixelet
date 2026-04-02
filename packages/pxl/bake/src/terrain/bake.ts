@@ -26,7 +26,7 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
   const root: BranchCursor = new TreeReader(pkt).read_branch();
 
   /**
-   * Elevation: 34*34*i16 LE bytes
+   * Elevation: 36*36*i16 LE bytes
    * OSM Feature/Coastline -> OSMInput[] -> normalize -> bake context
    */
 

@@ -3,7 +3,7 @@
 // import "@pxl/common/lib/i18n/i18n.client.ts"; // i18n initialization
 
 import { enableMapSet } from "immer";
-// import { bootstrapEngines } from "@/app/bootstrap/index.ts"; // 엔진 부트스트랩 임포트
+import { bootstrap_app } from "@/bootstrap/app.ts"; // 엔진 부트스트랩 임포트
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -18,8 +18,8 @@ let root: ReturnType<typeof createRoot> | null = null;
 // 비동기 엔진 초기화 후 렌더링 시작
 export function main(): void {
   try {
-    // // 1. 인프라 부트스트랩 (WebGPU 준비 및 Diagnostics 실행)
-    // await bootstrapEngines();
+    // 1. 인프라 부트스트랩 (WebGPU 준비 및 Diagnostics 실행)
+    bootstrap_app();
 
     // 2. UI 렌더링
     if (!root) {
