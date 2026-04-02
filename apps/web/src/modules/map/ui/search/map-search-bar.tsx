@@ -1,6 +1,6 @@
 // // @pxl/web/modules/map/ui/search/map-search-bar.tsx
 
-// import * as React from "react";
+// import { useMemo } from "react";
 // import { Search } from "lucide-react";
 // import { useMapStore } from "@/modules/map/navigation/map-store.ts";
 // import { cn } from "@/shared/lib/utils/cn.ts";
@@ -14,7 +14,7 @@
 // export function MapSearchBar({ className }: MapSearchBarProps) {
 //   const center = useMapStore((state) => state.center);
 
-//   const locationInfo = React.useMemo(() => {
+//   const locationInfo = useMemo(() => {
 //     if (!center) return { title: "장소 검색", coords: "" };
 //     const loc = unproject(center);
 //     return {

@@ -6,12 +6,10 @@ import { useFrame, useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 
-import { to3 } from "@pxl/spec/space/adapter/three.ts";
-
 import { render_cfg } from "@/modules/world/render/config.ts";
 import { get_theme_key, themes, type WorldTheme, WorldThemeKey } from "@/modules/world/render/themes.ts";
 
-const { FOG_NEAR, FOG_FAR } = render_cfg.rendering;
+const { FOG_NEAR, FOG_FAR } = render_cfg;
 
 const sky_vert = /* glsl */ `
 varying vec3 v_world_pos;
@@ -78,7 +76,7 @@ export function MapEnvironment() {
   const sun_glow_color = useMemo(() => new THREE.Color(theme.lighting.directional.color), [theme.lighting.directional.color]);
   const moon_color = useMemo(() => new THREE.Color("#9fb4d6"), []);
 
-  const sun_position = useMemo(() => new THREE.Vector3(...to3([...theme.sky.sun_position])), [theme.sky.sun_position]);
+  const sun_position = useMemo(() => new THREE.Vector3(...theme.sky.sun_position), [theme.sky.sun_position]);
   const current_sun_position = useRef(sun_position.clone());
   const moon_position = useMemo(() => new THREE.Vector3(120, 180, 80), []);
   const sky_material_ref = useRef<THREE.ShaderMaterial>(null);
@@ -88,20 +86,19 @@ export function MapEnvironment() {
 
     const lerp_factor: f64 = delta * 1.5;
 
-    // --- 1. 안개(Fog) 보간 (Linear Fog) ---
+    // ---- 1. Fog interpolation ----
     if (scene.background instanceof THREE.Color) {
       scene.background.lerp(bg_color, lerp_factor);
     } else {
       scene.background = bg_color.clone();
     }
 
-    // Scene에 attach된 fog가 THREE.Fog(선형)인지 확인
     if (scene.fog && "isFog" in scene.fog) {
       const fog = scene.fog as THREE.Fog;
       fog.color.lerp(fog_color, lerp_factor);
     }
 
-    // --- 2. 하늘(Gradient Sky) 보간 ---
+    // ---- 2. Sky interpolation ----
     current_sun_position.current.lerp(sun_position, lerp_factor);
     if (sky_material_ref.current) {
       const { uniforms } = sky_material_ref.current;
@@ -112,7 +109,7 @@ export function MapEnvironment() {
       uniforms.u_sun_glow.value.lerp(sun_glow_color, lerp_factor);
     }
 
-    // --- 3. 조명 보간 ---
+    // ---- 3. Light interpolation ----
     if (ambient_ref.current) {
       ambient_ref.current.color.lerp(ambient_color, lerp_factor);
       ambient_ref.current.intensity = THREE.MathUtils.lerp(ambient_ref.current.intensity, theme.lighting.ambient.intensity, lerp_factor);
@@ -163,13 +160,7 @@ export function MapEnvironment() {
         />
       </mesh>
 
-      {
-        /* 🎯 [Minecraft Style Fog]
-        fogExp2 대신 일반 fog를 사용합니다.
-        attach="fog"를 하면 Three.js Scene에 자동으로 등록되며,
-        ShaderMaterial에서 USE_FOG가 정의되어 있으면 자동으로 uniforms(fogNear, fogFar)가 주입됩니다.
-      */
-      }
+      {/* Linear scene fog. */}
       <fog attach="fog" args={[theme.fog, FOG_NEAR, FOG_FAR]} />
 
       <ambientLight

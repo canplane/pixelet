@@ -1,6 +1,6 @@
 // @pxl/web/shared/ui/pagination/show-more.tsx
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 /**
  * Props for ShowMoreLayout
@@ -19,13 +19,13 @@ type ShowMoreProps<T> = {
   };
 
   /** Render function receiving currently visible items */
-  children: (visibleItems: T[]) => React.ReactNode;
+  children: (visibleItems: T[]) => ReactNode;
 
   /**
    * Render prop that receives an onClick handler
    * and returns a fully bound trigger node (e.g. button)
    */
-  trigger: (onClick: () => void) => React.ReactNode;
+  trigger: (onClick: () => void) => ReactNode;
 };
 
 /**

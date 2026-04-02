@@ -1,8 +1,9 @@
 // @pxl/bake/terrain/format.ts
 
 /**
- * Terrain formats (tree packet helpers)
- * wire order SSOT lives in ./format.ts
+ * Terrain format helpers for baked page payloads.
+ *
+ * The wire field order is defined here.
  *
  * Layer model:
  * - L3 page = transport / storage unit

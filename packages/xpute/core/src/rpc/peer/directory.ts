@@ -111,7 +111,7 @@ export class PeerDirectory {
     this.role_index = new RoleIndex(balance_seed);
   }
 
-  // --- internal membership ops (gateway 밖으로 꺼내고 싶으면 wrapper 만들지 말고 dir 자체를 써) ---
+  // ---- internal membership ops ----
 
   register(peer: Peer): NodeSelector {
     this.peers.set(peer.pid, peer);

@@ -85,7 +85,7 @@ export type SparseTreeMemory<T extends TypedArray> = {
 export type SparseTreeLayout = {
   readonly dim: 2 | 3; // dimension (2 or 3)
 
-  // SSOT: signed log2 scale.
+  // Signed log2 scale used by the layout contract.
   // - min can be negative (e.g. -2 => 1m if 0 means "1 lattice unit")
   // - core never shifts by signed values; it normalizes to u = level - min (u>=0).
   readonly min: i32; // leaf level (signed)

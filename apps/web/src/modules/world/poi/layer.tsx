@@ -1,10 +1,10 @@
 // // @pxl/web/modules/world/poi/layer.tsx
 
-// import React, { useMemo } from "react";
+// import React, { memo, useMemo } from "react";
 // import { useTileStore } from "@/domain/geo/model/tile-store.ts";
 // import { PoiManager } from "../pois/poi-manager.tsx";
 
-// export const POILayer = React.memo(() => {
+// export const POILayer = memo(() => {
 //   const tileMap = useTileStore((state) => state.tileMap);
 
 //   // 1. 페이지 스토어에서 POI 데이터 수집

@@ -53,7 +53,7 @@ resampled AS (
   FROM mosaic m, ref_rast r
 ),
 final_rast AS (
-  -- Final clip to the exact SSOT output extent
+  -- Final clip to the exact output extent
   SELECT ST_Clip(s.rast, ST_Envelope(r.rast)) AS rast
   FROM resampled s, ref_rast r
 ),

@@ -1,6 +1,6 @@
 // @pxl/web/shared/ui/pagination/infinite-scroll.tsx
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 /** Default intersection threshold for infinite scroll */
 export const INTERSECTION_OBSERVER_THRESHOLD: number = 1.0; // A range of 0.1 to 0.5 also works well.
@@ -25,7 +25,7 @@ type InfiniteScrollProps<T> = {
   };
 
   /** Render function receiving currently visible items */
-  children: (visibleItems: T[]) => React.ReactNode;
+  children: (visibleItems: T[]) => ReactNode;
 };
 
 /**

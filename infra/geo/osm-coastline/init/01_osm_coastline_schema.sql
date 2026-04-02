@@ -1,11 +1,11 @@
--- [1] 확장팩 확인 (Extensions)
--- osm-features와 동일하게 PostGIS 의존성 확인
+-- [1] Extensions
+-- Keeps PostGIS dependency explicit, matching the osm-features pipeline.
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- [2] 메인 데이터 테이블 (Main Data Table: Coastline SSOT)
+-- [2] Main data table (primary coastline store)
 -- Source: land-polygons-split-3857 (Shapefile)
--- fid: Shapefile의 고유 ID를 매핑하거나 자동 생성
--- geom: 3857 좌표계의 MultiPolygon
+-- fid  : source feature identifier or generated surrogate key
+-- geom : coastline multipolygon geometry in EPSG:3857
 CREATE TABLE IF NOT EXISTS osm_coastline_polygons (
     fid SERIAL PRIMARY KEY,
     geom GEOMETRY(MultiPolygon, 3857),
@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS osm_coastline_polygons (
 
 CREATE INDEX IF NOT EXISTS idx_osm_coastline_geom ON osm_coastline_polygons USING GIST (geom);
 
--- [3] 카탈로그 테이블 (Catalog: Metadata & History)
--- osm_features_catalog와 대칭되는 구조
+-- [3] Catalog table (metadata and ingestion history)
+-- Mirrors the osm_features_catalog structure.
 CREATE TABLE IF NOT EXISTS osm_coastline_catalog (
     id SERIAL PRIMARY KEY,
     region_code VARCHAR(20) NOT NULL,
@@ -25,9 +25,9 @@ CREATE TABLE IF NOT EXISTS osm_coastline_catalog (
     status VARCHAR(20) DEFAULT 'READY',
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     total_count BIGINT DEFAULT 0,
-    -- ON CONFLICT 처리를 위한 유니크 제약조건
+    -- Unique key for ON CONFLICT handling
     CONSTRAINT uq_coastline_catalog_file_name UNIQUE (file_name)
 );
 
--- 카탈로그 인덱스
+-- Catalog index
 CREATE INDEX IF NOT EXISTS idx_coastline_catalog_region_status ON osm_coastline_catalog (region_code, status);

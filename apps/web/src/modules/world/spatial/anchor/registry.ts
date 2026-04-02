@@ -14,7 +14,6 @@ import * as THREE from "three";
 import type { u32 } from "@xpute/spec/lib/kit/word.ts";
 
 import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
-import { to3 } from "@pxl/spec/space/adapter/three.ts";
 import { FROM_L4_IDX, L4_BASE } from "@pxl/spec/space/indexer.ts";
 
 type Entry = {
@@ -73,11 +72,11 @@ export class AnchorRegistry {
     const anchor: IVec = L4_BASE(FROM_L4_IDX(anchor_idx));
     const local: IVec = ivec.sub(anchor, new_map_origin);
 
-    group.position.set(...to3([
+    group.position.set(
       ivec.to_real(ivec.X(local)),
       ivec.to_real(ivec.Y(local)),
       ivec.to_real(ivec.Z(local)),
-    ]));
+    );
     group.updateMatrix();
   }
 }

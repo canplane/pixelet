@@ -40,7 +40,7 @@ export function page_to_chunks(page_ground: Ground, page_ele: I16Array): [IVec, 
 
   for (let cy: u32 = 0; cy < PAGE_CHUNK_SPAN; cy++) {
     for (let cx: u32 = 0; cx < PAGE_CHUNK_SPAN; cx++) {
-      const tx0: u32 = cx * CHUNK_CELL_SPAN; // 0, 256, 512, 768 in texel space
+      const tx0: u32 = cx * CHUNK_CELL_SPAN; // texel space
       const ty0: u32 = cy * CHUNK_CELL_SPAN;
 
       const ground: Ground = {
@@ -51,7 +51,7 @@ export function page_to_chunks(page_ground: Ground, page_ele: I16Array): [IVec, 
       };
       const ele: I16Array = dense_ele(page_ele, tx0, ty0);
 
-      const page_off_x: u32 = tx0 >> -CELL_SHAMT; // 0, 64, 128, 192 in u-space
+      const page_off_x: u32 = tx0 >> -CELL_SHAMT; // in u-space
       const page_off_y: u32 = ty0 >> -CELL_SHAMT;
       const page_off: IVec = ivec.gather(BigInt(page_off_x), BigInt(page_off_y), BigInt(0n));
       entries.push([page_off, { ground, ele }]);

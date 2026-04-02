@@ -75,7 +75,7 @@ export function DevicePoseControl() {
     }
   };
 
-  const getViewState = () => {
+  const get_icon_style = () => {
     if (is_loading) {
       return { Icon: Loader2, className: "animate-spin opacity-40" };
     }
@@ -101,7 +101,7 @@ export function DevicePoseControl() {
     };
   };
 
-  const { Icon, className, style } = getViewState();
+  const { Icon, className, style } = get_icon_style();
 
   return (
     <MotionContainer variant="slideUp" delay={0.5}>

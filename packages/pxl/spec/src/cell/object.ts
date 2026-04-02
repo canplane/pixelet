@@ -10,7 +10,7 @@
 // export const object_types = {
 //   ...common_types, // 0 is RESERVED for AIR/ERASER in the parent scope
 
-//   // --- [BASIC MATERIALS] ---
+//   // ---- [BASIC MATERIALS] ----
 
 //   /** ⬜ 기본 블록 (White) */
 //   SOLID: 1,
@@ -23,7 +23,7 @@
 //   /** 🏢 콘크리트 */
 //   CONCRETE: 5,
 
-//   // --- [SPECIAL] ---
+//   // ---- [SPECIAL] ----
 
 //   /** 💡 조명 */
 //   LIGHT: 10,
@@ -36,7 +36,7 @@
 // export const object_colors = {
 //   ...common_colors,
 
-//   // --- [BASIC MATERIALS] ---
+//   // ---- [BASIC MATERIALS] ----
 
 //   [object_types.SOLID]: "#FFFFFF",
 //   [object_types.BRICK]: "#C62828",
@@ -44,7 +44,7 @@
 //   [object_types.GLASS]: "#90CAF9", // Alpha should be handled in shader/renderer
 //   [object_types.CONCRETE]: "#9E9E9E",
 
-//   // --- [SPECIAL] ---
+//   // ---- [SPECIAL] ----
 
 //   [object_types.LIGHT]: "#FFF176",
 // } as const;

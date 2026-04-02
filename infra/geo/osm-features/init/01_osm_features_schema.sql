@@ -1,9 +1,9 @@
--- [1] 확장팩 설치 (Extensions)
+-- [1] Extensions
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS hstore;
 
--- [2] 메인 데이터 테이블 (Main Data Table: Vector SSOT)
--- 가장 정밀한 원본 형상(High-fidelity)을 보존하는 메인 저장소
+-- [2] Main data table (primary vector store)
+-- Preserves the highest-fidelity source geometries.
 CREATE TABLE IF NOT EXISTS osm_elements (
     osm_id BIGINT,
     type VARCHAR(10), -- 'point', 'line', 'polygon'
@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS osm_elements (
 CREATE INDEX IF NOT EXISTS idx_osm_elements_way ON osm_elements USING GIST (way);
 CREATE INDEX IF NOT EXISTS idx_osm_elements_tags ON osm_elements USING GIN (tags);
 
--- [3] 도로 일반화 테이블 (Low-zoom Optimization Subset)
--- 목적: 줌 아웃 시 렌더링 성능 확보를 위한 단순화된 도로 형상 데이터 (Source: planet_osm_roads)
+-- [3] Generalized road table (low-zoom optimization subset)
+-- Stores simplified road geometries for zoomed-out rendering.
 CREATE TABLE IF NOT EXISTS osm_roads (
     osm_id BIGINT PRIMARY KEY,
     tags HSTORE,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS osm_roads (
 
 CREATE INDEX IF NOT EXISTS idx_osm_roads_way ON osm_roads USING GIST (way);
 
--- [4] 카탈로그 테이블 (Catalog: Metadata & History)
+-- [4] Catalog table (metadata and ingestion history)
 CREATE TABLE IF NOT EXISTS osm_features_catalog (
     id SERIAL PRIMARY KEY,
     region_code VARCHAR(20) NOT NULL,
@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS osm_features_catalog (
     status VARCHAR(20) DEFAULT 'READY',
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     total_count BIGINT DEFAULT 0,
-    -- ON CONFLICT 처리를 위한 유니크 제약조건 추가
+    -- Unique key for ON CONFLICT handling
     CONSTRAINT uq_osm_catalog_file_name UNIQUE (file_name)
 );
 
--- 카탈로그 인덱스
+-- Catalog index
 CREATE INDEX IF NOT EXISTS idx_features_catalog_region_status ON osm_features_catalog (region_code, status);

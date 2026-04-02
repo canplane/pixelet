@@ -1,6 +1,6 @@
 // @pxl/web/modules/map/portal/html-portal.tsx
 
-import React, { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 
 import { useMapStore } from "@/modules/map/navigation/map-store.ts";
 import { get_theme_key } from "@/modules/world/render/themes.ts";
@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib/utils/cn.ts";
  * Three.js 캔버스 위에 겹쳐지는(Overlay) HTML 전용 레이어입니다.
  * <Html portal={...}> 컴포넌트들이 실제 마운트되는 DOM 위치(Root) 역할을 합니다.
  */
-export const MapHTMLPortal = React.memo(() => {
+export const MapHTMLPortal = memo(() => {
   const set_html_portal_el = useMapStore.getState().set_html_portal_el;
 
   const theme_key = get_theme_key();

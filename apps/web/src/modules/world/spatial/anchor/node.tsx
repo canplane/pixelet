@@ -13,7 +13,6 @@ import { createPortal } from "@react-three/fiber";
 
 import { type FVec, type IVec, ivec, type PVF3, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
 import { L4_BASE, L4_IDX } from "@pxl/spec/space/indexer.ts";
-import { to3 } from "@pxl/spec/space/adapter/three.ts";
 
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
 import { useAnchorRegistry } from "./context.tsx";
@@ -57,11 +56,11 @@ export function AnchorNode(props: AnchorNodeProps) {
   const local: PVF3 = { i: ivec.sub(i, anchor), f };
   return createPortal(
     <group
-      position={to3([
+      position={[
         pvf3.to_real(pvf3.X(local)),
         pvf3.to_real(pvf3.Y(local)),
         pvf3.to_real(pvf3.Z(local)),
-      ])}
+      ]}
     >
       {children}
     </group>,

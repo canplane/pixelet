@@ -48,7 +48,7 @@
 //     return new Uint8Array(0);
 //   },
 
-//   // --- Internal Logic ---
+//   // ---- Internal Logic ----
 
 //   _bakeTerrain(desc: IoDescriptor): Uint8Array {
 //     // Manifest에 정의된 'id'로 접근

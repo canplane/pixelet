@@ -13,13 +13,10 @@ import { type DeviceLocation, useDeviceLocationStore } from "@/modules/device/po
 import { useMapStore } from "./map-store.ts";
 
 export function useMapNavigation() {
-  // ---- Device Sensor Data ----
-
-  /** GPS 원본 위경도 데이터 */
+  /** Device sensor data. */
   const device_location: DeviceLocation | null = useDeviceLocationStore((state) => state.location);
 
-  // ---- Map State Subscription ----
-
+  /** Map state subscription. */
   const store = useMapStore(
     useShallow((state) => ({
       map_center: state.map_center,
