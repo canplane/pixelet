@@ -1,12 +1,12 @@
-// @pxl/web/modules/world/camera/hooks/use-camera-init.ts
+// @pxl/web/modules/camera/hooks/use-camera-init.ts
 
 import { useEffect, useLayoutEffect } from "react";
 import { useThree } from "@react-three/fiber";
 
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
-import { render_cfg } from "../../render/config.ts";
-import { CAMERA_UP } from "../../render/camera.ts";
+import { render_cfg } from "@/modules/world/render/config.ts";
+import { CAMERA_UP } from "../lib/pose.ts";
 
 const { FAR_CLIP } = render_cfg;
 

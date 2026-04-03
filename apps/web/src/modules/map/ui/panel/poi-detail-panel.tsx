@@ -2,7 +2,7 @@
 
 // import { AnimatePresence, motion } from "framer-motion";
 // import { Navigation, X } from "lucide-react";
-// import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+// import { useMapStore } from "@/modules/map/store.ts";
 // import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
 // import { cn } from "@/shared/lib/utils/cn.ts";
 // import { Badge } from "@/shared/ui/theme/glass/badge.tsx";

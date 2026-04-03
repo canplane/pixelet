@@ -4,7 +4,7 @@
 // import * as THREE from "three";
 // import { useFrame } from "@react-three/fiber";
 // import { Html } from "@react-three/drei";
-// import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+// import { useMapStore } from "@/modules/map/store.ts";
 // import { type TileState, useTileStore } from "@/domain/geo/model/tile-store.ts";
 // import { useMapNavigation } from "../../model/use-map-navigation.ts";
 // import type { POI } from "@pxl/bake/terrain/model/osm_feature.ts";

@@ -12,11 +12,11 @@ import { add3, center3, fill3, floor3, type V3 } from "@pxl/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
 import { useTileStore } from "../terrain/tile-store.ts";
-import { render_cfg } from "@/modules/world/render/config.ts";
+import { render_cfg } from "../render/config.ts";
 import { get_ele } from "../terrain/use-elevation.ts";
 
-import { AnchorNode } from "@/modules/world/spatial/anchor/node.tsx";
-import { get_theme_key, WorldThemeKey } from "@/modules/world/render/themes.ts";
+import { AnchorNode } from "../spatial/anchor/node.tsx";
+import { get_theme_key, WorldThemeKey } from "../render/themes.ts";
 
 const { FOG_FAR } = render_cfg;
 

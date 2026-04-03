@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/render/yup.ts
+// @pxl/spec/space/adapter/yup.ts
 
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 

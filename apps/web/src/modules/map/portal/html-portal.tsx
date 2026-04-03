@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef } from "react";
 
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 import { get_theme_key } from "@/modules/world/render/themes.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";

@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/camera/hooks/use-camera-ground-align.ts
+// @pxl/web/modules/camera/hooks/use-camera-ground-align.ts
 
 import { type RefObject, useLayoutEffect } from "react";
 import { useThree } from "@react-three/fiber";
@@ -8,10 +8,10 @@ import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 
 import { ivec } from "@pxl/spec/space/pvf3/mod.ts";
 
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
-import { get_ele } from "../../terrain/use-elevation.ts";
-import type { CameraFlyTarget } from "../../render/camera.ts";
+import { get_ele } from "@/modules/world/terrain/use-elevation.ts";
+import type { CameraFlyTarget } from "../lib/pose.ts";
 
 /**
  * Aligns the camera target height to terrain whenever the canonical center changes.
@@ -22,13 +22,12 @@ import type { CameraFlyTarget } from "../../render/camera.ts";
 type UseCameraGroundAlignProps = {
   controls_ref: RefObject<OrbitControlsImpl | null>;
   fly_target: RefObject<CameraFlyTarget>;
+  is_flying_ref: RefObject<boolean>;
 };
 export function useCameraGroundAlign(props: UseCameraGroundAlignProps) {
-  const { controls_ref, fly_target } = props;
+  const { controls_ref, fly_target, is_flying_ref } = props;
 
   const map_center = useMapStore((state) => state.map_center);
-  const is_flying = useMapStore((state) => state.is_flying);
-
   const map_origin = useMapNavigation().map_origin;
 
   const { camera } = useThree();
@@ -49,7 +48,7 @@ export function useCameraGroundAlign(props: UseCameraGroundAlignProps) {
 
     if (Math.abs(delta_z) < 0.01) return;
 
-    if (is_flying) {
+    if (is_flying_ref.current) {
       /** Preserve the current path and only retarget the landing height. */
       fly_target.current.dst_look_at.z = target_z;
       fly_target.current.dst_pos.z += delta_z;
@@ -60,5 +59,5 @@ export function useCameraGroundAlign(props: UseCameraGroundAlignProps) {
 
       controls.update();
     }
-  }, [map_center, map_origin, camera, fly_target, is_flying, controls_ref]);
+  }, [map_center, map_origin, camera, fly_target, is_flying_ref, controls_ref]);
 }

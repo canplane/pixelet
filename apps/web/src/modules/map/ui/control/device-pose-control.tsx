@@ -10,8 +10,9 @@ import {
   useDeviceOrientationStore,
 } from "@/modules/device/pose/store.ts";
 import { useDeviceOrientation } from "@/modules/device/pose/use-device-orientation.ts";
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
+import { useCameraStore } from "@/modules/camera/store.ts";
 import { useFollowMode } from "@/modules/map/navigation/use-follow-mode.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
@@ -30,11 +31,12 @@ export function DevicePoseControl() {
   const orientation: DeviceOrientation | null = useDeviceOrientationStore((state) => state.orientation);
   const { request_orientation } = useDeviceOrientation();
 
-  const view_state = useMapStore((state) => state.view_state);
   const set_map_center = useMapStore.getState().set_map_center;
-  const is_follow_mode = useMapStore((state) => state.is_follow_mode);
-  const set_is_follow_mode = useMapStore.getState().set_is_follow_mode;
-  const trigger_orientation_reset = useMapStore.getState().trigger_orientation_reset;
+
+  const view_state = useCameraStore((state) => state.view_state);
+  const is_follow_mode = useCameraStore((state) => state.is_follow_mode);
+  const set_is_follow_mode = useCameraStore.getState().set_is_follow_mode;
+  const trigger_orientation_reset = useCameraStore.getState().trigger_orientation_reset;
 
   const { device_coord, is_off_center } = useMapNavigation();
 

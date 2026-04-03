@@ -23,16 +23,17 @@ import { fill3, floor3, type V3 } from "@pxl/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
 
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
+import { CameraRayInput } from "@/modules/camera/ray/ray-input.tsx";
 import { get_ele } from "./terrain/use-elevation.ts";
 
-import { AnchorSpace } from "@/modules/world/spatial/anchor/space.tsx";
+import { AnchorSpace } from "./spatial/anchor/space.tsx";
 import { AnchorNode } from "./spatial/anchor/node.tsx";
-import { GroundedNode } from "@/modules/world/spatial/anchor/grounded-node.tsx";
+import { GroundedNode } from "./spatial/anchor/grounded-node.tsx";
 
-import { TerrainLayer } from "@/modules/world/terrain/layer.tsx";
-// import { POILayer } from "@/modules/world/poi/layer.tsx";
+import { TerrainLayer } from "./terrain/layer.tsx";
+// import { POILayer } from "./poi/layer.tsx";
 import { UserMarker } from "./markers/user-marker.tsx";
 import { CellHighlighter } from "./markers/cell-highlighter.tsx";
 import { Block } from "./primitives/block.tsx";
@@ -113,7 +114,8 @@ export const World = forwardRef<THREE.Group, WorldProps>((props, ref) => {
 
         {/* 3. Interaction layer */}
         <group name="interaction-layer">
-          <CellHighlighter map_center={map_center} map_origin={map_origin} />
+          <CameraRayInput map_center={map_center} map_origin={map_origin} />
+          <CellHighlighter />
           <UserMarker device_coord={device_coord} />
         </group>
 

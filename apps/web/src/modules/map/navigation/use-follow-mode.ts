@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 
 import { useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
-import { useMapStore } from "./map-store.ts";
+import { useCameraStore } from "@/modules/camera/store.ts";
+
+import { useMapStore } from "../store.ts";
 import { useMapNavigation } from "./use-map-navigation.ts";
 
 /**
@@ -11,9 +13,10 @@ import { useMapNavigation } from "./use-map-navigation.ts";
  * 사용자의 위치와 방향을 지도에 실시간 동기화하는 엔진 훅입니다.
  */
 export function useFollowMode() {
-  const is_follow_mode = useMapStore((state) => state.is_follow_mode);
   const set_map_center = useMapStore.getState().set_map_center;
-  const set_view_state = useMapStore.getState().set_view_state;
+
+  const set_view_state = useCameraStore.getState().set_view_state;
+  const is_follow_mode = useCameraStore((state) => state.is_follow_mode);
 
   const heading = useDeviceOrientationStore((state) => state.orientation?.heading ?? null);
 

@@ -4,7 +4,7 @@
 // import * as THREE from "three";
 // import { useFrame } from "@react-three/fiber";
 // import { useShallow } from "zustand/react/shallow";
-// import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+// import { useMapStore } from "@/modules/map/store.ts";
 // import { useTileStore } from "../../model/tile-store.ts";
 // import { toCenter } from "@pxl/bake/terrain/etc/tile-utils.ts";
 // import type { POI } from "@pxl/bake/terrain/model/osm_feature.ts";
