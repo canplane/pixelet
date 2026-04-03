@@ -2,7 +2,7 @@
 
 // import React, { useRef, useState } from "react";
 // import { useFrame } from "@react-three/fiber";
-// import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+// import { useMapStore } from "@/modules/map/store.ts";
 // import { POIItem } from "./poi-item.tsx";
 // import { POIInstancedMesh } from "./poi-instanced-mesh.tsx";
 // import type { POI } from "@pxl/bake/terrain/model/osm_feature.ts";

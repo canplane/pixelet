@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/render/camera.ts
+// @pxl/web/modules/camera/lib/pose.ts
 
 import * as THREE from "three";
 

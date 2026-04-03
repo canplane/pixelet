@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/camera/hooks/use-camera-flight.ts
+// @pxl/web/modules/camera/hooks/use-camera-flight.ts
 
 import { type RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
@@ -9,25 +9,28 @@ import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 
 import { ivec, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
 
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
-import { camera_cfg, CameraControlMode } from "../../render/config.ts";
-import { type CameraFlyTarget, derive_camera_pose } from "../../render/camera.ts";
+import { CameraStatus, useCameraStore } from "../store.ts";
+import { type CameraFlyTarget, derive_camera_pose } from "../lib/pose.ts";
+import { camera_cfg } from "../config.ts";
 
 const { DEFAULT_DIST, MIN_DIST, DEFAULT_POLAR_ANGLE, TRAVEL_DIST_THRES } = camera_cfg;
 
 type UseCameraFlightProps = {
   controls_ref: RefObject<OrbitControlsImpl | null>;
+  is_flying_ref: RefObject<boolean>;
+  set_is_flying: (is_flying: boolean) => void;
 };
 export function useCameraFlight(props: UseCameraFlightProps) {
-  const { controls_ref } = props;
+  const { controls_ref, set_is_flying } = props;
 
   const map_center = useMapStore((state) => state.map_center);
-  const view_state = useMapStore((state) => state.view_state);
-  const set_view_state = useMapStore.getState().set_view_state;
-  const camera_control_mode = useMapStore((state) => state.camera_control_mode);
-  const set_is_flying = useMapStore.getState().set_is_flying;
-  const reset_signal = useMapStore((state) => state.camera_reset_signal);
+
+  const view_state = useCameraStore((state) => state.view_state);
+  const set_view_state = useCameraStore.getState().set_view_state;
+  const reset_signal = useCameraStore((state) => state.camera_reset_signal);
+  const set_camera_status = useCameraStore.getState().set_camera_status;
 
   const map_origin = useMapNavigation().map_origin;
 
@@ -57,6 +60,7 @@ export function useCameraFlight(props: UseCameraFlightProps) {
     } else {
       fly_target.current.dst_pos.copy(dst_pos);
       fly_target.current.dst_look_at.copy(dst_look_at);
+      set_camera_status(CameraStatus.FLYING);
       set_is_flying(true);
     }
   };
@@ -64,12 +68,7 @@ export function useCameraFlight(props: UseCameraFlightProps) {
   /** Re-plans camera motion whenever the canonical center changes. */
   useEffect((): void => {
     const controls: OrbitControlsImpl | null = controls_ref.current;
-    if (!map_center || !controls) {
-      if (camera_control_mode === CameraControlMode.USER) set_is_flying(false);
-      return;
-    }
-
-    if (camera_control_mode === CameraControlMode.USER) return;
+    if (!map_center || !controls) return;
 
     const bound_key = [pvf3.repr(map_center), ivec.repr(map_origin)].join("|");
     if (arrived_key.current === bound_key) return;
@@ -87,7 +86,7 @@ export function useCameraFlight(props: UseCameraFlightProps) {
     plan_flight(dst_pos, dst_look_at, { snap: is_first_plan || travel_dist > TRAVEL_DIST_THRES });
 
     arrived_key.current = bound_key;
-  }, [map_center, map_origin, camera_control_mode]);
+  }, [map_center, map_origin]);
 
   /** Resets camera distance to the configured default. */
   useEffect(() => {

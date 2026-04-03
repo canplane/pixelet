@@ -5,9 +5,10 @@ import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { EffectComposer, SMAA } from "@react-three/postprocessing";
 
-import { camera_cfg, render_cfg } from "@/modules/world/render/config.ts";
+import { CameraController } from "@/modules/camera/controller.tsx";
+import { camera_cfg } from "@/modules/camera/config.ts";
+import { render_cfg } from "@/modules/world/render/config.ts";
 import { get_theme_key, themes, type WorldTheme } from "@/modules/world/render/themes.ts";
-import { CameraController } from "@/modules/world/camera/camera-controller.tsx";
 
 import { MapEnvironment } from "./environment.tsx";
 import { World } from "@/modules/world/world.tsx";

@@ -10,7 +10,7 @@ import { L4_BASE } from "@pxl/spec/space/indexer.ts";
 import * as epsg4326 from "@pxl/spec/space/adapter/4326.ts";
 
 import { type DeviceLocation, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
-import { useMapStore } from "./map-store.ts";
+import { useMapStore } from "../store.ts";
 
 export function useMapNavigation() {
   /** Device sensor data. */

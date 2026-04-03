@@ -1,7 +1,7 @@
 // @pxl/web/modules/map/ui/control/scale-bar.tsx
 
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
-import { camera_cfg } from "@/modules/world/render/config.ts";
+import { useCameraStore } from "@/modules/camera/store.ts";
+import { camera_cfg } from "@/modules/camera/config.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
@@ -11,8 +11,8 @@ const { DEFAULT_DIST, FOV } = camera_cfg;
 const SCALE_BAR_WIDTH = 80;
 
 export function MapScaleBar() {
-  const view_state = useMapStore((state) => state.view_state);
-  const trigger_dist_reset = useMapStore.getState().trigger_dist_reset;
+  const view_state = useCameraStore((state) => state.view_state);
+  const trigger_dist_reset = useCameraStore.getState().trigger_dist_reset;
 
   const { dist } = view_state;
 

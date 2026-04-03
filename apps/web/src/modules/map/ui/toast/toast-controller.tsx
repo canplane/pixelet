@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, MapPinOff } from "lucide-react";
 
 import { DevicePoseStatus, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
-import { MapDataStatus, useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 
 import { DynamicIslandLayout } from "@/shared/ui/toast/dynamic-island-layout.tsx";
 
@@ -14,7 +14,7 @@ export function MapToastController() {
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
   const location_error_msg: string | null = useDeviceLocationStore((state) => state.error_msg);
 
-  const map_status: MapDataStatus = useMapStore((state) => state.status);
+  const map_status: MapStatus = useMapStore((state) => state.map_status);
 
   function get_toast_cfg() {
     // 공통적으로 쓰이는 로딩 아이콘
@@ -42,14 +42,14 @@ export function MapToastController() {
       </motion.div>
     );
 
-    const isError = location_status === DevicePoseStatus.ERROR || map_status === MapDataStatus.ERROR;
+    const isError = location_status === DevicePoseStatus.ERROR || map_status === MapStatus.ERROR;
     if (isError) {
       return {
         id: "location-error", // 에러는 별도 ID 유지 (교체되지 않도록)
         mode: "error" as const,
         title: location_error_msg || "GPS Signal Weak",
-        description: "Signal",
-        subDescription: "실외로 이동하거나 잠시만 기다려주세요.",
+        // description: "Signal",
+        // subDescription: "실외로 이동하거나 잠시만 기다려주세요.",
         statusColor: "bg-red-600",
         icon: <MapPinOff className="w-4 h-4 text-red-500" />,
         duration: 5000,
@@ -65,8 +65,8 @@ export function MapToastController() {
         mode: "status" as const,
         status: "loading" as const,
         title: "당신의 위치를 찾는 중입니다",
-        description: "MAP",
-        subDescription: "정확한 위치를 확인하고 있어요.",
+        // description: "MAP",
+        // subDescription: "정확한 위치를 확인하고 있어요.",
         statusColor: "bg-[#34C759]/30",
         icon: LoadingIcon,
         duration: Infinity,
@@ -74,7 +74,7 @@ export function MapToastController() {
     }
 
     // 위치는 찾았으나 지도가 로딩 중
-    if (location_status === DevicePoseStatus.READY && map_status === MapDataStatus.LOADING) {
+    if (location_status === DevicePoseStatus.READY && map_status === MapStatus.LOADING) {
       // 🚀 감성 매핑 로직
       const content = {
         roads: {
@@ -106,13 +106,13 @@ export function MapToastController() {
       // };
     }
 
-    if (location_status === DevicePoseStatus.READY && map_status === MapDataStatus.SUCCESS) {
+    if (location_status === DevicePoseStatus.READY && map_status === MapStatus.SUCCESS) {
       return {
         id: "map-status-island",
         mode: "status" as const,
         status: "success" as const,
         title: "공간 동기화 완료",
-        description: "MAP",
+        // description: "MAP",
         statusColor: "bg-[#34C759]",
         icon: SuccessIcon,
         duration: 2000,
@@ -136,8 +136,8 @@ export function MapToastController() {
       () => (
         <DynamicIslandLayout
           title={config.title}
-          description={config.description}
-          subDescription={config.subDescription}
+          // description={config.description}
+          // subDescription={config.subDescription}
           statusColor={config.statusColor}
           icon={
             <div className="relative flex items-center justify-center w-4 h-4">

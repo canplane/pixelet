@@ -21,7 +21,7 @@ import { TO_XY } from "@pxl/spec/space/xy.ts";
 
 import type { Tile } from "@pxl/bake/terrain/format.ts";
 
-export type TileState = {
+export type TileStore = {
   tile_map: Map<IVec, Tile>;
 
   get_tile: (page_idx: IVec) => Tile | undefined;
@@ -29,7 +29,7 @@ export type TileState = {
   clear_tile: (page_idx: IVec) => void;
 };
 
-export const useTileStore = create<TileState>()(
+export const useTileStore = create<TileStore>()(
   immer((set, get) => ({
     tile_map: new Map<IVec, Tile>(),
 

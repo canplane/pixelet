@@ -12,12 +12,12 @@ import { L3_IDX } from "@pxl/spec/space/indexer.ts";
 import { Command } from "@xpute/spec/control/cmd.ts";
 import { decode_terrain, type Terrain, type Tile } from "@pxl/bake/terrain/format.ts";
 import { useTileStore } from "./tile-store.ts";
-import { useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { useMapStore } from "@/modules/map/store.ts";
 
 /** Runtime tuning constants for terrain page streaming. */
 
 // Preload radius around the current center page.
-const LOAD_RADIUS: u32 = 1;
+const LOAD_RADIUS: u32 = 2;
 // Cache eviction radius with hysteresis.
 const CLEANUP_RADIUS: u32 = Math.round(LOAD_RADIUS * 2);
 

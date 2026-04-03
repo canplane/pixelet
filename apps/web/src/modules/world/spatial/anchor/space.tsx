@@ -28,7 +28,7 @@ export function AnchorSpace(props: AnchorSpaceProps) {
   /** Shift all live anchors when the floating origin changes. */
   useEffect(() => {
     registry.shift_map_origin(map_origin);
-  }, [origin, registry]);
+  }, [map_origin, registry]);
 
   return (
     <AnchorRegistryContext.Provider value={registry}>

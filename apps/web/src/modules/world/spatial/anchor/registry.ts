@@ -14,7 +14,7 @@ import * as THREE from "three";
 import type { u32 } from "@xpute/spec/lib/kit/word.ts";
 
 import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
-import { FROM_L4_IDX, L4_BASE } from "@pxl/spec/space/indexer.ts";
+import { FROM_L4_IDX } from "@pxl/spec/space/indexer.ts";
 
 type Entry = {
   group: THREE.Group;
@@ -28,15 +28,15 @@ export class AnchorRegistry {
   /** Keyed by L4 anchor index. */
   readonly entries = new Map<IVec, Entry>();
 
-  /** Acquire the anchor group for the given L4 base. */
-  link(anchor_idx: IVec, origin: IVec): THREE.Group {
+  /** Acquire the anchor group for the given L4 anchor index. */
+  link(anchor_idx: IVec, map_origin: IVec): THREE.Group {
     let entry: Entry | undefined = this.entries.get(anchor_idx);
 
     if (!entry) {
       const group = new THREE.Group();
       group.name = ivec.repr(anchor_idx);
 
-      this._update_group_pos(group, anchor_idx, origin);
+      this._update_group_pos(group, anchor_idx, map_origin);
 
       this.root_group.add(group);
       entry = { group, nlink: 0 };
@@ -48,15 +48,15 @@ export class AnchorRegistry {
   }
 
   /** Release one reference to the given L4 anchor group. */
-  unlink(anchor_base: IVec): void {
-    const entry: Entry | undefined = this.entries.get(anchor_base);
+  unlink(anchor_idx: IVec): void {
+    const entry: Entry | undefined = this.entries.get(anchor_idx);
     if (!entry) return;
 
     entry.nlink -= 1;
 
     if (entry.nlink === 0) {
       this.root_group.remove(entry.group);
-      this.entries.delete(anchor_base);
+      this.entries.delete(anchor_idx);
     }
   }
 
@@ -68,9 +68,9 @@ export class AnchorRegistry {
   }
 
   /** Update one anchor group's position relative to the current origin. */
-  private _update_group_pos(group: THREE.Group, anchor_idx: IVec, new_map_origin: IVec): void {
-    const anchor: IVec = L4_BASE(FROM_L4_IDX(anchor_idx));
-    const local: IVec = ivec.sub(anchor, new_map_origin);
+  private _update_group_pos(group: THREE.Group, anchor_idx: IVec, map_origin: IVec): void {
+    const anchor_base: IVec = FROM_L4_IDX(anchor_idx);
+    const local: IVec = ivec.sub(anchor_base, map_origin);
 
     group.position.set(
       ivec.to_real(ivec.X(local)),

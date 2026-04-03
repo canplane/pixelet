@@ -1,6 +1,6 @@
 // @pxl/web/modules/world/terrain/layer.tsx
 
-import React, { memo, useMemo } from "react";
+import { memo, useMemo } from "react";
 
 import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
 import { FROM_L3_IDX } from "@pxl/spec/space/indexer.ts";
@@ -8,7 +8,7 @@ import { FROM_L3_IDX } from "@pxl/spec/space/indexer.ts";
 import type { Terrain } from "@pxl/bake/terrain/format.ts";
 import { page_to_chunks } from "@pxl/render/terrain/chunk.ts";
 
-import { MapDataStatus, useMapStore } from "@/modules/map/navigation/map-store.ts";
+import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 import { useTileStore } from "./tile-store.ts";
 import { useTileFetcher } from "./use-tile-fetcher.ts";
 import { AnchorNode } from "@/modules/world/spatial/anchor/node.tsx";
@@ -43,13 +43,13 @@ const TerrainPage = memo((props: TerrainPageProps) => {
 TerrainPage.displayName = "TerrainPage";
 
 export const TerrainLayer = memo(() => {
+  const map_status = useMapStore((state) => state.map_status);
   const tile_map = useTileStore((state) => state.tile_map);
-  const status = useMapStore((state) => state.status);
 
   useTileFetcher();
 
   const tiles = useMemo(() => Array.from(tile_map.entries()), [tile_map]);
-  if (tiles.length === 0 && status === MapDataStatus.LOADING) return null;
+  if (tiles.length === 0 && map_status === MapStatus.LOADING) return null;
 
   return (
     <group name="terrain-layer">
