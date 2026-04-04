@@ -62,8 +62,6 @@ import * as fvec from "./fvec.ts";
  */
 export type PVF3 = { i: IVec; f: FVec };
 
-export const create = (i: IVec = 0n, f: FVec = 0n) => ({ i, f });
-
 /**
  * Shared scratch register for PVF3 temporary reductions.
  *
@@ -73,7 +71,7 @@ export const create = (i: IVec = 0n, f: FVec = 0n) => ({ i, f });
  * - do not use across await, callbacks, or reentrant boundaries
  * - contents are volatile and may be overwritten by any helper using this register
  */
-const PVF3_REG: PVF3 = create();
+const PVF3_REG: PVF3 = { i: 0n, f: 0n };
 
 const _FRAC_W: u64 = BigInt(FRAC_W);
 

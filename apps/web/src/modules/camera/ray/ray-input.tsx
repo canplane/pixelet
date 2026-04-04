@@ -29,38 +29,47 @@ type CameraRayInputProps = {
 export function CameraRayInput(props: CameraRayInputProps) {
   const { map_center, map_origin } = props;
 
+  const hovered_coord = useCameraStore((state) => state.hovered_coord);
+  const camera_status = useCameraStore((state) => state.camera_status);
   const set_hovered_coord = useCameraStore.getState().set_hovered_coord;
   const clear_hovered_coord = useCameraStore.getState().clear_hovered_coord;
 
   const { raycaster, pointer, camera } = useThree();
 
+  function clear_hovered_once() {
+    if (useCameraStore.getState().hovered_coord !== null) {
+      clear_hovered_coord();
+    }
+  }
+
   function handle_pointer_move(e: ThreeEvent<MouseEvent>) {
     e.stopPropagation();
 
-    if (useCameraStore.getState().camera_status !== CameraStatus.IDLE) {
-      clear_hovered_coord();
+    if (camera_status !== CameraStatus.IDLE) {
+      clear_hovered_once();
       return;
     }
 
     raycaster.setFromCamera(pointer, camera);
     const hit: PVF3 | null = ray_hit_terrain(raycaster.ray, map_origin, get_ele, with_ele);
     if (!hit || !map_center) {
-      clear_hovered_coord();
+      clear_hovered_once();
       return;
     }
 
     if (!in_interact_radius(hit, map_center)) {
-      clear_hovered_coord();
+      clear_hovered_once();
       return;
     }
 
+    if (hovered_coord?.i === hit.i && hovered_coord.f === hit.f) return;
     set_hovered_coord(hit);
   }
 
   return (
     <mesh
       onPointerMove={handle_pointer_move}
-      onPointerOut={clear_hovered_coord}
+      onPointerOut={clear_hovered_once}
     >
       <planeGeometry args={[1e5, 1e5]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
