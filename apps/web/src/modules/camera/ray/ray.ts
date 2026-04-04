@@ -5,8 +5,12 @@ import * as THREE from "three";
 import type { f64, u32 } from "@xpute/spec/lib/kit/word.ts";
 
 import { type FVec, type IVec, ivec, projection, type PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
-import { floor3, type V3 } from "@pxl/spec/space/v3.ts";
+import { floor3, set3, type V3 } from "@pxl/spec/space/v3.ts";
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
+
+const $hit = new THREE.Vector3();
+const $v: V3 = [0, 0, 0];
+const $p: PVF3 = { i: 0n, f: 0n };
 
 const STEP: f64 = 2 * U_PER_CELL;
 const MAX_STEPS: u32 = 200;
@@ -22,15 +26,15 @@ export function ray_terrain_delta_at_t(
   map_origin: IVec,
   sample_ele: SampleEleFn,
 ): f64 {
-  const hit: THREE.Vector3 = ray.at(t, new THREE.Vector3());
+  ray.at(t, $hit);
 
-  const p: PVF3 = projection.project({ i: 0n, f: 0n }, hit.x, hit.y, hit.z);
-  p.i = ivec.add(p.i, map_origin);
+  projection.project($p, $hit.x, $hit.y, $hit.z);
+  $p.i = ivec.add($p.i, map_origin);
 
-  const ele: f64 = sample_ele(p.i, p.f) ?? 0;
+  const ele: f64 = sample_ele($p.i, $p.f) ?? 0;
   const origin_z: f64 = ivec.to_real(ivec.Z(map_origin));
   const visual_z: f64 = ele - origin_z;
-  return hit.z - visual_z;
+  return $hit.z - visual_z;
 }
 
 export function ray_hit_terrain(
@@ -58,11 +62,11 @@ export function ray_hit_terrain(
     ray_terrain_delta_at_t(ray, mid, map_origin, sample_ele) < HIT_EPS ? (max = mid) : (min = mid);
   }
 
-  const hit_three: THREE.Vector3 = ray.at(max, new THREE.Vector3());
-  const hit: V3 = [hit_three.x, hit_three.y, 0];
-  const snapped: V3 = floor3(hit, U_PER_CELL);
+  ray.at(max, $hit);
+  set3($hit.x, $hit.y, 0, $v);
+  floor3($v, U_PER_CELL, $v);
 
-  const p: PVF3 = projection.project({ i: 0n, f: 0n }, ...snapped);
+  const p: PVF3 = projection.project({ i: 0n, f: 0n }, $v[0], $v[1], $v[2]);
   p.i = ivec.add(p.i, map_origin);
 
   return ground_point(p, p.i, p.f);

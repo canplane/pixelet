@@ -3,6 +3,7 @@
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
+import { round_to_step } from "@xpute/spec/lib/kit/math.ts";
 
 import type { PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
 
@@ -58,9 +59,16 @@ export const useCameraStore = create<CameraStore>((set) => ({
     height: 100,
   },
   set_view_state: (partial) =>
-    set((state) => ({
-      view_state: { ...state.view_state, ...partial },
-    })),
+    set((state) => {
+      const next = { ...state.view_state, ...partial };
+
+      next.dist = round_to_step(next.dist, .1);
+      next.height = round_to_step(next.height, .1);
+      next.bearing = round_to_step(next.bearing, .1);
+      next.polar_angle = round_to_step(next.polar_angle, .01);
+
+      return { view_state: next };
+    }),
 
   camera_reset_signal: { dist: 0, orientation: 0 },
   trigger_dist_reset: () =>
@@ -69,10 +77,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
     })),
   trigger_orientation_reset: () =>
     set((state) => ({
-      camera_reset_signal: {
-        ...state.camera_reset_signal,
-        orientation: Date.now(),
-      },
+      camera_reset_signal: { ...state.camera_reset_signal, orientation: Date.now() },
     })),
 
   is_follow_mode: false,

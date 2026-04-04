@@ -6,10 +6,9 @@ import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 
-import { ivec } from "@pxl/spec/space/pvf3/mod.ts";
+import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
-import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
 import { get_ele } from "@/modules/world/terrain/use-elevation.ts";
 import type { CameraFlyTarget } from "../lib/pose.ts";
 
@@ -23,12 +22,12 @@ type UseCameraGroundAlignProps = {
   controls_ref: RefObject<OrbitControlsImpl | null>;
   fly_target: RefObject<CameraFlyTarget>;
   is_flying_ref: RefObject<boolean>;
+  map_origin: IVec;
 };
 export function useCameraGroundAlign(props: UseCameraGroundAlignProps) {
-  const { controls_ref, fly_target, is_flying_ref } = props;
+  const { controls_ref, fly_target, is_flying_ref, map_origin } = props;
 
   const map_center = useMapStore((state) => state.map_center);
-  const map_origin = useMapNavigation().map_origin;
 
   const { camera } = useThree();
 
@@ -59,5 +58,5 @@ export function useCameraGroundAlign(props: UseCameraGroundAlignProps) {
 
       controls.update();
     }
-  }, [map_center, map_origin, camera, fly_target, is_flying_ref, controls_ref]);
+  }, [map_center, map_origin, camera, fly_target]);
 }

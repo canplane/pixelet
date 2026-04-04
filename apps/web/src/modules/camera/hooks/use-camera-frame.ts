@@ -38,7 +38,6 @@ export function useCameraFrame(props: UseCameraFrameProps) {
     bearing: 0,
     polar_angle: 0,
   });
-  const last_update_time = useRef(0);
 
   function sample_camera_change(controls: OrbitControlsImpl): CameraViewSample {
     return calc_camera_view_sample(
@@ -61,18 +60,17 @@ export function useCameraFrame(props: UseCameraFrameProps) {
 
   function handle_change() {
     const controls: OrbitControlsImpl | null = controls_ref.current;
-    if (!controls) return;
+    if (!controls) return null;
+
+    if (is_flying_ref.current) return null;
 
     const cur: CameraViewSample = sample_camera_change(controls);
 
-    const now: f64 = performance.now();
-    if (now - last_update_time.current < 16) return;
-
-    if (!is_camera_changed(cur, last_update.current, DEFAULT_CAMERA_CHANGE_THRESHOLD)) return;
+    if (!is_camera_changed(cur, last_update.current, DEFAULT_CAMERA_CHANGE_THRESHOLD)) return cur;
 
     last_update.current = cur;
-    last_update_time.current = now;
     set_view_state(cur);
+    return cur;
   }
 
   useFrame((_, delta) => {
@@ -92,6 +90,8 @@ export function useCameraFrame(props: UseCameraFrameProps) {
       camera.position.copy(dst_pos);
       controls.target.copy(dst_look_at);
       controls.update();
+      const cur: CameraViewSample = sample_camera_change(controls);
+      set_view_state(cur);
       set_is_flying(false);
       set_camera_status(CameraStatus.IDLE);
     }
