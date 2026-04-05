@@ -16,11 +16,11 @@ export type LODStep = (typeof LOD_STEP_BY_LEVEL)[LODLevel];
 const LOD_MARGIN: f64 = 1.4;
 
 const LOD_DIST_BY_LEVEL = {
-  LOD0: CHUNK_U * 6,
-  LOD1: CHUNK_U * 12,
-  LOD2: CHUNK_U * 24,
-  LOD3: CHUNK_U * 48,
-  LOD4: CHUNK_U * 96,
+  LOD0: CHUNK_U * 3,
+  LOD1: CHUNK_U * 6,
+  LOD2: CHUNK_U * 12,
+  LOD3: CHUNK_U * 24,
+  LOD4: CHUNK_U * 48,
   LOD5: Infinity,
 } as const;
 

@@ -5,8 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 
-import { type IVec, type PVF3, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
-import { L4_BASE } from "@pxl/spec/space/indexer.ts";
+import { type PVF3, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
 import * as epsg4326 from "@pxl/spec/space/adapter/4326.ts";
 
 import { type DeviceLocation, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
@@ -22,12 +21,6 @@ export function useMapNavigation() {
       map_center: state.map_center,
     })),
   );
-
-  /** L4-aligned render anchor derived from canonical center. */
-  const map_origin: IVec = useMemo(() => {
-    if (!store.map_center) return 0n;
-    return L4_BASE(store.map_center.i);
-  }, [store.map_center]);
 
   /** Device location projected into canonical PVF3 world space. */
   const device_coord: PVF3 | null = useMemo(() => {
@@ -56,7 +49,6 @@ export function useMapNavigation() {
   }, [store.map_center, device_coord, is_off_center]);
 
   return {
-    map_origin,
     /** Device coordinate in canonical world space. */
     device_coord,
 

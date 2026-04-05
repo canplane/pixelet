@@ -13,27 +13,30 @@
  * Each layer is responsible for its own local coordinate correction.
  */
 
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useRef } from "react";
 import * as THREE from "three";
 
 import { type FVec, type IVec, projection, type PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
 import { L1_IDX_IN_L4, L3_BASE, L3_CENTER } from "@pxl/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/spec/space/xy.ts";
-import { fill3, floor3, type V3 } from "@pxl/spec/space/v3.ts";
+import { fill3, floor3n, type V3 } from "@pxl/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
-import { CameraRayInput } from "@/modules/camera/ray/ray-input.tsx";
 import { get_ele } from "./terrain/use-elevation.ts";
 
 import { AnchorSpace } from "./spatial/anchor/space.tsx";
 import { AnchorNode } from "./spatial/anchor/node.tsx";
 import { GroundedNode } from "./spatial/anchor/grounded-node.tsx";
 
+import { useFrameRotation } from "./frame/use-frame-rotation.ts";
+import { useFrameTranslation } from "./frame/use-frame-translation.ts";
+import { useFrameRefs } from "./frame/context.tsx";
+import { get_local_world_origin } from "./frame/coord.ts";
+
 import { TerrainLayer } from "./terrain/layer.tsx";
-// import { POILayer } from "./poi/layer.tsx";
 import { UserMarker } from "./markers/user-marker.tsx";
 import { CellHighlighter } from "./markers/cell-highlighter.tsx";
 import { Block } from "./primitives/block.tsx";
@@ -49,7 +52,7 @@ function DebugDot(props: DebugDotProps) {
 
   const v: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(i), f);
   v[2] = get_ele(i, f) ?? 0;
-  const center: V3 = floor3(v, U_PER_CELL);
+  const center: V3 = floor3n(v, U_PER_CELL);
 
   return (
     <mesh name="debug-dot" position={center}>
@@ -89,39 +92,62 @@ function DebugLayer(props: DebugLayerProps) {
   );
 }
 
-type WorldProps = {
-  children?: ReactNode;
-};
-export const World = forwardRef<THREE.Group, WorldProps>((props, ref) => {
-  const { children } = props;
+export const World = forwardRef<THREE.Group>((_props, ref) => {
+  const { world_frame_ref, local_world_frame_ref } = useFrameRefs();
 
   const map_center = useMapStore((state) => state.map_center);
-  const { map_origin, device_coord } = useMapNavigation();
+  const { device_coord } = useMapNavigation();
+
+  const view_frame_ref = useRef<THREE.Group>(null);
+  const map_origin: IVec = get_local_world_origin(map_center);
+
+  useFrameRotation({ frame_ref: world_frame_ref });
+  useFrameTranslation({
+    frame_ref: local_world_frame_ref,
+    map_center,
+    map_origin,
+  });
+
   if (map_center === null) return null;
   if (device_coord === null) return null;
 
   return (
-    <group ref={ref} name="world">
-      {/* 1. Environment layer */}
-      <AnchorSpace map_origin={map_origin}>
-        <group name="env-layer">
-          <TerrainLayer />
-          {/* <POILayer /> */}
+    <group name="world" ref={ref}>
+      <group name="view-frame" ref={view_frame_ref}>
+        {__IS_DEV__ && (
+          <mesh name="view-frame-origin" position={[5, 0, 0]}>
+            <sphereGeometry args={[1]} />
+            <meshBasicMaterial color="green" wireframe />
+          </mesh>
+        )}
+
+        <group name="world-frame" ref={world_frame_ref}>
+          {__IS_DEV__ && (
+            <mesh name="world-frame-origin" position={[0, 5, 0]}>
+              <sphereGeometry args={[1]} />
+              <meshBasicMaterial color="yellow" wireframe />
+            </mesh>
+          )}
+
+          <group name="local-world-frame" ref={local_world_frame_ref}>
+            {__IS_DEV__ && (
+              <mesh name="local-world-frame-origin" position={[2048, 2048, 0]}>
+                <sphereGeometry args={[100]} />
+                <meshBasicMaterial color="black" wireframe />
+              </mesh>
+            )}
+
+            <AnchorSpace map_origin={map_origin}>
+              <TerrainLayer />
+
+              <CellHighlighter />
+              <UserMarker device_coord={device_coord} />
+
+              {__IS_DEV__ && <DebugLayer map_center={map_center} map_origin={map_origin} />}
+            </AnchorSpace>
+          </group>
         </group>
-
-        {/* 2. Content layer */}
-        <group name="content-layer">{children}</group>
-
-        {/* 3. Interaction layer */}
-        <group name="interaction-layer">
-          <CameraRayInput map_center={map_center} map_origin={map_origin} />
-          <CellHighlighter />
-          <UserMarker device_coord={device_coord} />
-        </group>
-
-        {/* 4. Debug layer */}
-        {__IS_DEV__ && <DebugLayer map_center={map_center} map_origin={map_origin} />}
-      </AnchorSpace>
+      </group>
     </group>
   );
 });

@@ -22,7 +22,6 @@ import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
 
 export function DevicePoseControl() {
-  // 🎯 [Engine Start] 팔로우 모드 로직(카메라 이동 등)을 담당하는 엔진을 가동합니다.
   useFollowMode();
 
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
@@ -36,14 +35,14 @@ export function DevicePoseControl() {
   const view_state = useCameraStore((state) => state.view_state);
   const is_follow_mode = useCameraStore((state) => state.is_follow_mode);
   const set_is_follow_mode = useCameraStore.getState().set_is_follow_mode;
-  const trigger_orientation_reset = useCameraStore.getState().trigger_orientation_reset;
+  const reset_orientation = useCameraStore.getState().reset_orientation;
 
   const { device_coord, is_off_center } = useMapNavigation();
 
   // Show "move to my location" only when off-center and not following.
   const can_show_location_control: boolean = is_off_center && !is_follow_mode;
 
-  const { bearing } = view_state;
+  const { azimuth } = view_state;
 
   const is_enabled: boolean = location_status === DevicePoseStatus.READY && !!location;
   const is_loading: boolean = location_status === DevicePoseStatus.LOADING;
@@ -73,7 +72,7 @@ export function DevicePoseControl() {
     } else {
       // 팔로우 모드 해제 시 북쪽 정렬
       set_is_follow_mode(false);
-      trigger_orientation_reset();
+      reset_orientation();
     }
   };
 
@@ -87,12 +86,12 @@ export function DevicePoseControl() {
     }
 
     if (is_follow_mode) {
-      const rotation: f64 = orientation?.heading ?? 0;
-      const final_rotation: f64 = rotation - bearing;
+      const heading_deg: f64 = orientation?.heading ?? 0;
+      const final_rotation_deg: f64 = heading_deg - (azimuth * 180) / Math.PI;
 
       return {
         Icon: Compass,
-        style: { transform: `rotate(${final_rotation}deg)` },
+        style: { transform: `rotate(${final_rotation_deg}deg)` },
         className: "text-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] scale-110",
       };
     }

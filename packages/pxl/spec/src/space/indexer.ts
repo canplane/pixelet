@@ -75,8 +75,8 @@ const { add, fill } = ivec;
 /**
  * SHAMT is the cumulative packed bit distance from the canonical base unit (`u` = L1).
  */
-export const L2_SHAMT: u32 = 6 as const;
-export const L3_SHAMT: u32 = 8 as const;
+export const L2_SHAMT: u32 = 5 as const;
+export const L3_SHAMT: u32 = 7 as const;
 export const L4_SHAMT: u32 = 12 as const;
 // export const L5_SHAMT: u32 = 16 as const;
 

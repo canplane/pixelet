@@ -8,7 +8,7 @@ import { BOOL, type f64, type i32, type u32 } from "@xpute/spec/lib/kit/word.ts"
 
 import { projection, type PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/spec/space/indexer.ts";
-import { add3, center3, fill3, floor3, type V3 } from "@pxl/spec/space/v3.ts";
+import { add3, center3n, fill3, floor3n, set3, type V3 } from "@pxl/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
 import { useTileStore } from "../terrain/tile-store.ts";
@@ -26,7 +26,7 @@ type ZoneSample = {
 };
 
 // Radius in cell units, with a half-diagonal shave so box cells fit the circular zone more cleanly.
-const ZONE_RADIUS_CELL: f64 = 16 / U_PER_CELL - 0.707;
+const ZONE_RADIUS_CELL: f64 = 16 / U_PER_CELL - .707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
 const ZONE_SAMPLES: ZoneSample[] = (() => {
@@ -82,13 +82,15 @@ type UserMarkerProps = {
 export function UserMarker(props: UserMarkerProps) {
   const { device_coord } = props;
 
+  const $v = useRef<V3>([0, 0, 0]);
+
   const theme_key = get_theme_key();
 
   const tile = useTileStore((state) => state.get_tile(L3_IDX(device_coord.i)));
   const center_pos: V3 = useMemo(() => {
     const pos: V3 = projection.unproject(fill3(0), device_coord.i, device_coord.f);
     pos[2] = get_ele(device_coord.i, device_coord.f) ?? 0;
-    return floor3(pos, U_PER_CELL);
+    return floor3n(pos, U_PER_CELL);
   }, [device_coord, tile]);
 
   const center_coord = useMemo(() => {
@@ -161,16 +163,21 @@ void main() {
     const mesh = zone_ref.current;
     if (!mesh) return;
 
+    const v: V3 = $v.current;
+
     mesh.count = ZONE_SAMPLES.length;
     const a_borders = mesh.geometry.attributes.a_borders as THREE.InstancedBufferAttribute;
 
     for (let i: u32 = 0; i < ZONE_SAMPLES.length; i++) {
       const { off, borders } = ZONE_SAMPLES[i];
-      const pos: V3 = add3(center_pos, off);
-      const coord: PVF3 = projection.project({ i: 0n, f: 0n }, ...pos);
+
+      add3(center_pos, off, v);
+      const coord: PVF3 = projection.project({ i: 0n, f: 0n }, ...v);
       const delta_ele: f64 = (get_ele(coord.i, coord.f) ?? 0) - center_pos[2];
 
-      temp_obj.position.set(...center3([off[0], off[1], off[2] + delta_ele], U_PER_CELL));
+      set3(off[0], off[1], off[2] + delta_ele, v);
+      center3n(v, U_PER_CELL, v);
+      temp_obj.position.set(v[0], v[1], v[2]);
       temp_obj.scale.set(U_PER_CELL, U_PER_CELL, U_PER_CELL);
       temp_obj.updateMatrix();
       mesh.setMatrixAt(i, temp_obj.matrix);
@@ -215,7 +222,7 @@ void main() {
 
       <mesh
         ref={beacon_ref}
-        position={center3([0, 0, BEACON_Z_BIAS], 1)}
+        position={center3n([0, 0, BEACON_Z_BIAS], 1)}
       >
         <octahedronGeometry args={[0.6, 0]} />
         <meshStandardMaterial

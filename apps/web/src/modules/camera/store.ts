@@ -3,20 +3,37 @@
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/spec/lib/kit/word.ts";
-import { round_to_step } from "@xpute/spec/lib/kit/math.ts";
+import { clamp, round_to_step, wrap } from "@xpute/spec/lib/kit/math.ts";
 
 import type { PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
 
-import type { ViewState } from "@/modules/camera/lib/pose.ts";
 import { camera_cfg } from "./config.ts";
 
-const { DEFAULT_POLAR_ANGLE, DEFAULT_DIST } = camera_cfg;
+const { DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
+
+const norm_dist = (dist: f64): f64 => clamp(round_to_step(dist, .1), MIN_DIST, MAX_DIST);
+const norm_azimuth = (azimuth: f64): f64 => wrap(round_to_step(azimuth, 0.1 * (Math.PI / 180)), -Math.PI, Math.PI);
+const norm_polar = (polar: f64): f64 => clamp(round_to_step(polar, .01), MIN_POLAR, MAX_POLAR);
 
 export const enum CameraStatus {
   IDLE = "idle",
   DRAG = "drag",
-  FLYING = "flying",
 }
+
+/**
+ * Camera view intent.
+ *
+ * This is not the raw physical camera transform.
+ * It stores the user/system-facing view parameters used to derive a pose.
+ */
+export type ViewState = {
+  /** Camera-to-target distance. */
+  dist: f64;
+  /** Orbit azimuth in radians, normalized to [-PI, PI]. */
+  azimuth: f64;
+  /** Orbit polar angle in radians. */
+  polar: f64;
+};
 
 export type CameraStore = {
   camera_status: CameraStatus;
@@ -24,7 +41,6 @@ export type CameraStore = {
 
   hovered_coord: PVF3 | null;
   set_hovered_coord: (coord: PVF3 | null) => void;
-  clear_hovered_coord: () => void;
 
   /** User/system-facing camera view intent. */
   view_state: ViewState;
@@ -33,9 +49,9 @@ export type CameraStore = {
   // ---- Control Signals ----
 
   /** Reset signals for camera controllers. */
-  camera_reset_signal: { dist: f64; orientation: f64 };
-  trigger_dist_reset: () => void;
-  trigger_orientation_reset: () => void;
+  reset_dist: () => void;
+  reset_orientation: () => void;
+  reset_view: () => void;
 
   // ---- Interaction ----
 
@@ -46,40 +62,56 @@ export type CameraStore = {
 
 export const useCameraStore = create<CameraStore>((set) => ({
   camera_status: CameraStatus.IDLE,
-  set_camera_status: (camera_status) => set({ camera_status }),
+  set_camera_status: (camera_status) => set((state) => state.camera_status === camera_status ? state : { camera_status }),
 
   hovered_coord: null,
-  set_hovered_coord: (hovered_coord) => set({ hovered_coord }),
-  clear_hovered_coord: () => set({ hovered_coord: null }),
+  set_hovered_coord: (hovered_coord) =>
+    set((state) => {
+      const same: boolean = state.hovered_coord?.i === hovered_coord?.i && state.hovered_coord?.f === hovered_coord?.f;
+      return same ? state : { hovered_coord };
+    }),
 
   view_state: {
     dist: DEFAULT_DIST,
-    bearing: 0,
-    polar_angle: DEFAULT_POLAR_ANGLE,
-    height: 100,
+    azimuth: DEFAULT_AZIMUTH,
+    polar: DEFAULT_POLAR,
   },
   set_view_state: (partial) =>
     set((state) => {
       const next = { ...state.view_state, ...partial };
 
-      next.dist = round_to_step(next.dist, .1);
-      next.height = round_to_step(next.height, .1);
-      next.bearing = round_to_step(next.bearing, .1);
-      next.polar_angle = round_to_step(next.polar_angle, .01);
+      next.dist = norm_dist(next.dist);
+      next.azimuth = norm_azimuth(next.azimuth);
+      next.polar = norm_polar(next.polar);
 
-      return { view_state: next };
+      const same: boolean = state.view_state.dist === next.dist &&
+        state.view_state.azimuth === next.azimuth &&
+        state.view_state.polar === next.polar;
+
+      return same ? state : { view_state: next };
     }),
 
-  camera_reset_signal: { dist: 0, orientation: 0 },
-  trigger_dist_reset: () =>
-    set((state) => ({
-      camera_reset_signal: { ...state.camera_reset_signal, dist: Date.now() },
-    })),
-  trigger_orientation_reset: () =>
-    set((state) => ({
-      camera_reset_signal: { ...state.camera_reset_signal, orientation: Date.now() },
-    })),
+  reset_dist: () =>
+    set((state) => {
+      const dist: f64 = norm_dist(DEFAULT_DIST);
+      return state.view_state.dist === dist ? state : { view_state: { ...state.view_state, dist } };
+    }),
+  reset_orientation: () =>
+    set((state) => {
+      const azimuth: f64 = norm_azimuth(DEFAULT_AZIMUTH);
+      const polar: f64 = norm_polar(DEFAULT_POLAR);
+      const same: boolean = state.view_state.azimuth === azimuth && state.view_state.polar === polar;
+      return same ? state : { view_state: { ...state.view_state, azimuth, polar } };
+    }),
+  reset_view: () =>
+    set({
+      view_state: {
+        dist: norm_dist(DEFAULT_DIST),
+        azimuth: norm_azimuth(DEFAULT_AZIMUTH),
+        polar: norm_polar(DEFAULT_POLAR),
+      },
+    }),
 
   is_follow_mode: false,
-  set_is_follow_mode: (is_follow_mode) => set({ is_follow_mode }),
+  set_is_follow_mode: (is_follow_mode) => set((state) => state.is_follow_mode === is_follow_mode ? state : { is_follow_mode }),
 }));

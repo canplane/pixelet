@@ -21,8 +21,4 @@ export function make_comp<T, K extends numeric = number>(
   };
 }
 
-export const CLAMP = <T extends numeric>(x: T, min: T, max: T) => {
-  if (x < min) return min;
-  if (x > max) return max;
-  return x;
-};
+// export const clamp = <T extends numeric>(x: T, min: T, max: T) => x < min ? min : x > max ? max : x;

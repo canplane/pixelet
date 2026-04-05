@@ -52,7 +52,7 @@
  */
 
 import { seed64 } from "@xpute/spec/lib/kit/rng.ts";
-import { CLAMP } from "@xpute/spec/lib/kit/comp.ts";
+import { clamp } from "@xpute/spec/lib/kit/math.ts";
 
 import { FANOUT, IS_ROLE_SEL, type NodeSelector, role_indices } from "@xpute/spec/rpc/node.ts";
 import type { PID } from "@xpute/spec/net/crypto.ts";
@@ -168,7 +168,7 @@ export class PeerDirectory {
 
     // normalize options
     const seed = opts.seed ?? seed64();
-    const mix = CLAMP(opts.mix ?? 1, 0, 1);
+    const mix = clamp(opts.mix ?? 1, 0, 1);
 
     return resolve_roles(this.role_index, roles, n, seed, mix, fanout, this.score_of);
   }

@@ -12,7 +12,7 @@ import { sample_ele } from "@pxl/render/terrain/elevation.ts";
 
 /** Returns ground height in lattice/render units. */
 export function get_ele(i: IVec, f: FVec): f64 | null {
-  const { get_tile } = useTileStore.getState();
+  const get_tile = useTileStore.getState().get_tile;
 
   const page_idx: IVec = L3_IDX(i);
   const tile: Tile | undefined = get_tile(page_idx);

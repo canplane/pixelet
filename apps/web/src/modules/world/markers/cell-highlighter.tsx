@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 
 import type { PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
-import { center3 } from "@pxl/spec/space/v3.ts";
+import { center3n } from "@pxl/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
 
@@ -19,6 +19,8 @@ const highlight_style = {
 };
 
 const HIGHLIGHT_BOX = new THREE.BoxGeometry(1, 1, 1);
+
+const POS = center3n([0, 0, -U_PER_CELL], U_PER_CELL);
 
 export function CellHighlighter() {
   const hovered: PVF3 | null = useCameraStore((state) => state.hovered_coord);
@@ -70,7 +72,7 @@ void main() {
   if (!hovered) return null;
   return (
     <AnchorNode i={hovered.i} f={hovered.f}>
-      <group position={center3([0, 0, -U_PER_CELL], U_PER_CELL)}>
+      <group position={POS}>
         <mesh
           geometry={HIGHLIGHT_BOX}
           material={mat}

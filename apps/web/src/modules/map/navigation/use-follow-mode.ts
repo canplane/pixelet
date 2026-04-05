@@ -31,6 +31,6 @@ export function useFollowMode() {
   // 2. [시선 동기화] 나침반 각도가 변경될 때만 실행
   useEffect(() => {
     if (!is_follow_mode || heading === null) return;
-    set_view_state({ bearing: heading });
+    set_view_state({ azimuth: heading * (Math.PI / 180) });
   }, [is_follow_mode, heading]);
 }
