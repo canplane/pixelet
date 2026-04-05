@@ -29,8 +29,8 @@ export const camera_cfg = {
   },
 
   input: {
-    ROT_GAIN_AZIMUTH: -0.24 * (Math.PI / 180),
-    ROT_GAIN_POLAR: 0.012,
+    ROT_GAIN_AZIMUTH: -0.28 * (Math.PI / 180),
+    ROT_GAIN_POLAR: 0.01,
     DOLLY_GAIN: 0.0022,
   },
 
