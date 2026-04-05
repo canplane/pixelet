@@ -10,6 +10,7 @@
 
 import type { f64, i16, i32, u32 } from "@xpute/spec/lib/kit/word.ts";
 import type { I16Array } from "@xpute/spec/lib/kit/array.ts";
+import { clamp, lerp } from "@xpute/spec/lib/kit/math.ts";
 
 import { CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN } from "@pxl/bake/terrain/constants.ts";
 
@@ -30,9 +31,6 @@ const CHUNK_CELL_SPAN2: u32 = CHUNK_CELL_SPAN * CHUNK_CELL_SPAN;
  * - Elevation stored in I16Array is in [cell] units to preserve 0.25u precision.
  */
 
-const LERP = (a: f64, b: f64, t: f64): f64 => a + (b - a) * t;
-const CLAMP = (v: f64, lo: f64, hi: f64): f64 => v < lo ? lo : v > hi ? hi : v;
-
 /**
  * Bilinear elevation sample from the padded 34x34 elevation tile raster.
  *
@@ -51,10 +49,10 @@ function _sample_ele_bilinear(page_ele: I16Array, tx: u32, ty: u32): i16 {
   const sx: f64 = (tx + 0.5) / ELE_CELL_STEP + ELE_PAD - 0.5;
   const sy: f64 = (ty + 0.5) / ELE_CELL_STEP + ELE_PAD - 0.5;
 
-  const sx0: u32 = CLAMP(Math.floor(sx), 0, ELE_PADDED_SPAN - 1);
-  const sy0: u32 = CLAMP(Math.floor(sy), 0, ELE_PADDED_SPAN - 1);
-  const sx1: u32 = CLAMP(sx0 + 1, 0, ELE_PADDED_SPAN - 1);
-  const sy1: u32 = CLAMP(sy0 + 1, 0, ELE_PADDED_SPAN - 1);
+  const sx0: u32 = clamp(Math.floor(sx), 0, ELE_PADDED_SPAN - 1);
+  const sy0: u32 = clamp(Math.floor(sy), 0, ELE_PADDED_SPAN - 1);
+  const sx1: u32 = clamp(sx0 + 1, 0, ELE_PADDED_SPAN - 1);
+  const sy1: u32 = clamp(sy0 + 1, 0, ELE_PADDED_SPAN - 1);
 
   const sdx: f64 = sx - sx0;
   const sdy: f64 = sy - sy0;
@@ -65,9 +63,9 @@ function _sample_ele_bilinear(page_ele: I16Array, tx: u32, ty: u32): i16 {
   const c: i16 = page_ele[sy1 * ELE_PADDED_SPAN + sx0];
   const d: i16 = page_ele[sy1 * ELE_PADDED_SPAN + sx1];
 
-  const ab: f64 = LERP(a, b, sdx);
-  const cd: f64 = LERP(c, d, sdx);
-  const out: f64 = LERP(ab, cd, sdy);
+  const ab: f64 = lerp(a, b, sdx);
+  const cd: f64 = lerp(c, d, sdx);
+  const out: f64 = lerp(ab, cd, sdy);
 
   return Math.round(out);
 }
@@ -129,10 +127,10 @@ function sample_ele_bicubic(page_ele: I16Array, tx: u32, ty: u32): i16 {
   const wy = [wy0, wy1, wy2, wy3];
 
   for (let j = 0; j < 4; j++) {
-    const py = CLAMP(sy0 - 1 + j, 0, span - 1);
+    const py = clamp(sy0 - 1 + j, 0, span - 1);
     let row_out: f64 = 0;
     for (let i = 0; i < 4; i++) {
-      const px = CLAMP(sx0 - 1 + i, 0, span - 1);
+      const px = clamp(sx0 - 1 + i, 0, span - 1);
       row_out += page_ele[py * span + px] * wx[i];
     }
     out += row_out * wy[j];

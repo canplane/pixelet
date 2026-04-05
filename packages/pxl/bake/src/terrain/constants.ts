@@ -17,7 +17,7 @@ import { U_PER_M, Z_SCALE } from "@pxl/spec/space/adapter/3857.ts";
  * - CELL_SHAMT defines the cell<->u relation.
  * - when CELL_SHAMT = -1, 1u = 2cell.
  */
-export const CELL_SHAMT: i32 = -1;
+export const CELL_SHAMT: i32 = -2;
 export const U_PER_CELL: f64 = 2 ** CELL_SHAMT;
 // Valid when CELL_SHAMT <= 0.
 const CELL_PER_U: u32 = 1 << -CELL_SHAMT;
@@ -84,7 +84,7 @@ export const CHUNK_CELL_SPAN: u32 = 1 << (L2_SHAMT - CELL_SHAMT);
  * Boundary continuity is recovered separately by padded reconstruction
  * (ELE_PAD + bicubic interpolation), not by increasing the inner sample count.
  */
-export const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 1 - 5);
+export const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 2 - 5);
 
 /**
  * Two-cell padding (ELE_PAD=2) enables C1 continuous Bicubic interpolation

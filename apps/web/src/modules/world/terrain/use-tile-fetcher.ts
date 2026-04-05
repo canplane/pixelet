@@ -27,7 +27,7 @@ const pending_page_demands = new Set<IVec>();
 
 function register_tile_stream() {
   const { post } = get_xpute();
-  const { set_tile } = useTileStore.getState();
+  const set_tile = useTileStore.getState().set_tile;
 
   const unsub = post.on<[IVec]>(Command.TILE, (args, body) => {
     const [page_idx] = args;
@@ -53,7 +53,7 @@ function register_tile_stream() {
  * Builds a page demand queue ordered by Chebyshev distance from the center page.
  */
 function schedule_page_demands(center_page_idx: IVec): IVec[] {
-  const { get_tile } = useTileStore.getState();
+  const get_tile = useTileStore.getState().get_tile;
 
   const groups: IVec[][] = Array.from({ length: LOAD_RADIUS + 1 }, () => []); // 거리별 그룹핑
 

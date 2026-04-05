@@ -11,20 +11,32 @@ export const VIEW_DIST: f64 = 2048;
 export const DEFAULT_TILT_DEG: f64 = 30;
 
 export const camera_cfg = {
-  FOV: 50,
-  NEAR: 0.1,
+  projection: {
+    FOV: 50,
+    NEAR: 0.1,
+  },
 
-  DEFAULT_DIST: 128,
+  view: {
+    DEFAULT_DIST: 128,
+    DEFAULT_AZIMUTH: 0,
+    /** 0 = straight down from above, PI / 2 = horizontal. */
+    DEFAULT_POLAR: ((90 - DEFAULT_TILT_DEG) * Math.PI) / 180,
 
-  /**
-   * Polar angle in OrbitControls semantics.
-   * 0 = straight down from above, PI / 2 = horizontal.
-   */
-  DEFAULT_POLAR_ANGLE: ((90 - DEFAULT_TILT_DEG) * Math.PI) / 180,
+    MIN_DIST: 4,
+    MAX_DIST: VIEW_DIST * 0.75,
+    MIN_POLAR: 0.001,
+    MAX_POLAR: Math.PI / 2.05,
+  },
 
-  MIN_DIST: 4,
-  MAX_DIST: VIEW_DIST * 0.75,
+  input: {
+    ROT_GAIN_AZIMUTH: -0.24 * (Math.PI / 180),
+    ROT_GAIN_POLAR: 0.012,
+    DOLLY_GAIN: 0.0022,
+  },
 
-  /** Snap instead of interpolating when the target moves farther than this. */
-  TRAVEL_DIST_THRES: 250,
+  smooth: {
+    ROT_DAMP: 10,
+    POS_DAMP: 10,
+    CAM_DAMP: 10,
+  },
 } as const;

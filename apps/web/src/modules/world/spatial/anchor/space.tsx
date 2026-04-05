@@ -23,7 +23,11 @@ export function AnchorSpace(props: AnchorSpaceProps) {
   const { map_origin, children } = props;
 
   /** Registry lifetime is owned by AnchorSpace. */
-  const registry = useMemo(() => new AnchorRegistry(), []);
+  const registry = useMemo(() => {
+    const next = new AnchorRegistry();
+    next.cur_map_origin = map_origin;
+    return next;
+  }, []);
 
   /** Shift all live anchors when the floating origin changes. */
   useEffect(() => {
@@ -32,7 +36,7 @@ export function AnchorSpace(props: AnchorSpaceProps) {
 
   return (
     <AnchorRegistryContext.Provider value={registry}>
-      <primitive object={registry.root_group} />
+      <primitive object={registry.root} />
       {children}
     </AnchorRegistryContext.Provider>
   );

@@ -68,7 +68,7 @@ const V3_REG: V3 = fill3(0);
  * - Because EPSG:3857 is distorted, these meters match real-world meters only
  * at the equator; higher latitudes require Mercator scale correction.
  */
-const U_TOTAL_X: u32 = 1 << IVEC_X_W; // 16,777,216
+const U_TOTAL_X: u32 = 1 << (IVEC_X_W - 1); // 16,777,216
 
 export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] ≈ 0.418 [u]
 const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 2.388 [m]

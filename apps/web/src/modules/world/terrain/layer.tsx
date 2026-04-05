@@ -10,7 +10,6 @@ import { page_to_chunks } from "@pxl/render/terrain/chunk.ts";
 
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 import { useTileStore } from "./tile-store.ts";
-import { useTileFetcher } from "./use-tile-fetcher.ts";
 import { AnchorNode } from "@/modules/world/spatial/anchor/node.tsx";
 
 import { TerrainChunk } from "./chunk.tsx";
@@ -45,8 +44,6 @@ TerrainPage.displayName = "TerrainPage";
 export const TerrainLayer = memo(() => {
   const map_status = useMapStore((state) => state.map_status);
   const tile_map = useTileStore((state) => state.tile_map);
-
-  useTileFetcher();
 
   const tiles = useMemo(() => Array.from(tile_map.entries()), [tile_map]);
   if (tiles.length === 0 && map_status === MapStatus.LOADING) return null;

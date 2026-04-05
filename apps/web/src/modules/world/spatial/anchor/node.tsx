@@ -14,7 +14,6 @@ import { createPortal } from "@react-three/fiber";
 import { type FVec, type IVec, ivec, type PVF3, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
 import { L4_BASE, L4_IDX } from "@pxl/spec/space/indexer.ts";
 
-import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
 import { useAnchorRegistry } from "./context.tsx";
 import { AnchorRegistry } from "./registry.ts";
 
@@ -27,8 +26,6 @@ type AnchorNodeProps = {
 };
 export function AnchorNode(props: AnchorNodeProps) {
   const { i, f = 0n, children } = props;
-
-  const map_origin = useMapNavigation().map_origin;
 
   const registry: AnchorRegistry = useAnchorRegistry();
 
@@ -43,7 +40,7 @@ export function AnchorNode(props: AnchorNodeProps) {
    * Floating-origin rebasing is handled at the anchor-group level.
    */
   useLayoutEffect(() => {
-    const group: THREE.Group = registry.link(anchor_idx, map_origin);
+    const group: THREE.Group = registry.link(anchor_idx);
     set_target(group);
 
     return () => void registry.unlink(anchor_idx);

@@ -22,6 +22,25 @@ export const gen = {
   FUNC_COLOR: (ch_key: GroundChannelKey): string => `get_color_ch_${ch_key}`,
 };
 
+// // 1. 변수의 '설계도'를 정의 (여기가 유일한 진실의 원천)
+// export const SHADER_VARS = {
+//   U_COLOR: {
+//     name: (ch: string, type: string) => `u_color_ch_${ch}_${type}`,
+//     type: "vec3",
+//     toGLSL: (hex: string) => hexToVec3(hex), // 값 변환 로직까지 한 세트
+//   },
+//   FUNC_COLOR: {
+//     name: (ch: string) => `get_color_ch_${ch}`,
+//   }
+// } as const;
+
+// // 2. 사용은 아주 직관적으로 (Namespace 느낌)
+// const u_name = SHADER_VARS.U_COLOR.name("ground", "grass");
+// const u_val  = SHADER_VARS.U_COLOR.toGLSL("#ff0000");
+
+// // 3. (꿀팁) 코드젠 할 때 '선언문'도 자동화 가능
+// const decl = `uniform ${SHADER_VARS.U_COLOR.type} ${u_name};`;
+
 export type TerrainColorMeta = {
   ch_key: GroundChannelKey;
   type_key: string;

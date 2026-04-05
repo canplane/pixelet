@@ -6,13 +6,14 @@ import { camera_cfg } from "@/modules/camera/config.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
 
-const { DEFAULT_DIST, FOV } = camera_cfg;
+const { FOV } = camera_cfg.projection;
+const { DEFAULT_DIST } = camera_cfg.view;
 
 const SCALE_BAR_WIDTH = 80;
 
 export function MapScaleBar() {
   const view_state = useCameraStore((state) => state.view_state);
-  const trigger_dist_reset = useCameraStore.getState().trigger_dist_reset;
+  const reset_dist = useCameraStore.getState().reset_dist;
 
   const { dist } = view_state;
 
@@ -30,7 +31,7 @@ export function MapScaleBar() {
   return (
     <MotionContainer show={!is_default_zoom} variant="drop" delay={0.2}>
       <div
-        onClick={trigger_dist_reset}
+        onClick={reset_dist}
         className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 py-2"
         title="줌 리셋"
       >
