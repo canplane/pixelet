@@ -129,7 +129,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
             )}
 
             <AnchorSpace map_origin={map_origin}>
-              {/* <TerrainLayer /> */}
+              <TerrainLayer />
 
               <CellHighlighter />
               <UserMarker device_coord={device_coord} />

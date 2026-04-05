@@ -92,13 +92,28 @@ export function CameraInput() {
     const dy: f64 = e.clientY - last_y.current;
     if (dx !== 0 || dy !== 0) did_drag.current = true;
 
+    const prev_x = last_x.current;
+    const prev_y = last_y.current;
+
     last_x.current = e.clientX;
     last_y.current = e.clientY;
 
     if (drag_mode.current === DragMode.ROTATE) {
       const view_state = useCameraStore.getState().view_state;
+
+      const cx: f64 = size.width * 0.5;
+      const cy: f64 = size.height * 0.5;
+
+      const mx: f64 = (prev_x + e.clientX) * 0.5 - cx;
+      const my: f64 = cy - (prev_y + e.clientY) * 0.5;
+
+      const r: f64 = Math.max(1, Math.hypot(mx, my));
+
+      // screen-center-relative tangential drag controls azimuth
+      const tangent: f64 = (mx * dy + my * dx) / r;
+
       set_view_state({
-        azimuth: view_state.azimuth + dx * ROT_GAIN_AZIMUTH,
+        azimuth: view_state.azimuth + tangent * ROT_GAIN_AZIMUTH,
         polar: view_state.polar + dy * ROT_GAIN_POLAR,
       });
       return;
