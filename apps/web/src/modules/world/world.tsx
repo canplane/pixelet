@@ -31,14 +31,12 @@ import { AnchorSpace } from "./spatial/anchor/space.tsx";
 import { AnchorNode } from "./spatial/anchor/node.tsx";
 import { GroundedNode } from "./spatial/anchor/grounded-node.tsx";
 
-import { useFrameRotation } from "./frame/use-frame-rotation.ts";
-import { useFrameTranslation } from "./frame/use-frame-translation.ts";
 import { useFrameRefs } from "./frame/context.tsx";
 import { get_local_world_origin } from "./frame/coord.ts";
 
 import { TerrainLayer } from "./terrain/layer.tsx";
-import { UserMarker } from "./markers/user-marker.tsx";
-import { CellHighlighter } from "./markers/cell-highlighter.tsx";
+import { UserMarker } from "./markers/user-marker/bridge.tsx";
+import { CellHighlighter } from "./markers/cell-highlighter/bridge.tsx";
 import { Block } from "./primitives/block.tsx";
 
 type DebugDotProps = {
@@ -101,13 +99,6 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
   const view_frame_ref = useRef<THREE.Group>(null);
   const map_origin: IVec = get_local_world_origin(map_center);
 
-  useFrameRotation({ frame_ref: world_frame_ref });
-  useFrameTranslation({
-    frame_ref: local_world_frame_ref,
-    map_center,
-    map_origin,
-  });
-
   if (map_center === null) return null;
   if (device_coord === null) return null;
 
@@ -138,7 +129,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
             )}
 
             <AnchorSpace map_origin={map_origin}>
-              <TerrainLayer />
+              {/* <TerrainLayer /> */}
 
               <CellHighlighter />
               <UserMarker device_coord={device_coord} />
