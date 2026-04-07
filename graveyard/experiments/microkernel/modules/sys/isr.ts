@@ -1,4 +1,4 @@
-// // @pxl/engine/modules/sys/isr.ts
+// // @pxl/engine/src/modules/sys/isr.ts
 
 // import { ISR } from "@xpute/spec/control/isr.ts";
 // import { SysAuth } from "./ext/auth.ts";

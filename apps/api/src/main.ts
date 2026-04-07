@@ -27,7 +27,7 @@ function make_router(cfg: AppConfig): Hono {
 
 function make_node_http_handler(cfg: AppConfig, router: Hono) {
   // node http handler: IncomingMessage -> Request -> Hono.fetch -> ServerResponse
-  return async function handleNodeRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return async function handle_node_request(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const url = new URL(req.url ?? "/", `http://${cfg.host}:${cfg.port}`);
       const method = req.method ?? "GET";
@@ -66,7 +66,7 @@ function make_node_http_handler(cfg: AppConfig, router: Hono) {
   };
 }
 
-function makeListen(cfg: AppConfig, server: ReturnType<typeof createServer>) {
+function make_listen(cfg: AppConfig, server: ReturnType<typeof createServer>) {
   return function listen(): void {
     server.listen(cfg.port, cfg.host, () => {
       console.log(`app: listening on ${cfg.host}:${cfg.port} (ws: ${cfg.socket_path})`);
@@ -103,7 +103,7 @@ export async function main(mount_plugs: (ctx: ServerContext) => void): Promise<v
     mount_app(ctx, resrc);
 
     // ---- online ----
-    const listen = makeListen(cfg, server);
+    const listen = make_listen(cfg, server);
     listen();
   } catch (err) {
     try {

@@ -23,7 +23,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // built worker entry artifact path (resolved relative to this built host module).
-const SCRIPT_PATH = path.join(__dirname, "../../worker/entry.js");
+const SCRIPT_PATH = path.join(__dirname, "../worker.js");
 
 export default class NodeDriver implements WorkerDriver {
   async spawn(worker_id: WorkerID): Promise<WorkerLink> {

@@ -12,6 +12,7 @@
  */
 
 export {};
+
 declare global {
   const __ENV__: "deno" | "node" | "browser";
   const __APP_ENV__: string;

@@ -18,14 +18,14 @@ export default class Xpute {
 
   /** Start the Xpute host runtime. */
   async start() {
-    const { worker, guest, devices, net } = this.manifest;
+    const { worker, wasm, guest, devices, net } = this.manifest;
 
     this.worker_driver = new (await worker()).default();
 
     console.debug(`xpute: host starting...`);
 
     // mount workers
-    await Promise.all(devices.map(([worker_id, device_specs]) => this.mount_worker(worker_id, device_specs)));
+    await Promise.all(devices.map(([worker_id, device_specs]) => this.mount_worker(worker_id, device_specs, wasm)));
 
     // mount guest
     await this.mount_guest(guest, net);
@@ -36,12 +36,12 @@ export default class Xpute {
   }
 
   /** Mount workers: 1-254 */
-  private async mount_worker(worker_id: WorkerID, device_specs: DeviceTopology) {
+  private async mount_worker(worker_id: WorkerID, device_specs: DeviceTopology, wasm: XputeManifest["wasm"]) {
     let downlink: WorkerLink;
     if (worker_id === WorkerID.MAIN) {
       const { downlink: _downlink, arg } = create_virtual_link(worker_id);
       downlink = _downlink;
-      await init_worker(arg, device_specs);
+      await init_worker(arg, device_specs, wasm);
     } else {
       downlink = await this.worker_driver.spawn(worker_id);
     }

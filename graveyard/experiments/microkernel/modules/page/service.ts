@@ -1,4 +1,4 @@
-// // @pxl/engine/modules/page/service.ts
+// // @pxl/engine/src/modules/page/service.ts
 
 // import { IoDescriptor } from "@xpute/spec/io/descriptor.ts";
 // import { PAGE_OP } from "./opcode.ts";

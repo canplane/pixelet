@@ -1,0 +1,11 @@
+# packages/pxl/bake/rust/Cargo.toml
+
+[package]
+name = "pxl-bake"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pxl-spec = { path = "../../spec/rust" }
+xpute-core = { path = "../../../xpute/core/rust" }
+xpute-spec = { path = "../../../xpute/spec/rust" }

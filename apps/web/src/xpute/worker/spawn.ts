@@ -21,7 +21,7 @@ export default class BrowserDriver implements WorkerDriver {
   async spawn(worker_id: WorkerID): Promise<WorkerLink> {
     const init: WorkerInit = { kind: FrameKind.WORKER_INIT, worker_id };
     // NOTE: keep this URL inline so Vite can statically detect the worker entry.
-    const worker = new Worker(new URL("./entry.ts", import.meta.url), { type: "module" });
+    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
 
     return await new Promise((resolve, reject) => {
       const handlers: ((frame: Frame) => void)[] = [];

@@ -1,1 +1,1 @@
-// @pxl/engine/../@types/index.d.ts
+// @pxl/engine/@types/index.d.ts

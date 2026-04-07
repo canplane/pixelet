@@ -1,4 +1,4 @@
-// // @pxl/engine/modules/sys/ext/auth.ts
+// // @pxl/engine/src/modules/sys/ext/auth.ts
 
 // import type { IAuthModule } from "../service.ts";
 

@@ -5,7 +5,7 @@
     "apps/api",
     "apps/web",
     "packages/pxl/engine",
-    "packages/pxl/engine_spare",
+    "packages/pxl/engine-spare",
     "packages/pxl/bake",
     "packages/pxl/render",
     "packages/pxl/common",
@@ -18,15 +18,8 @@
 
   "tasks": {
     "dev": "sh -c \"(deno task dev:api) & (deno task dev:web) & wait\"",
-    "dev:prefix": "sh -c \"(deno task dev:api:prefix) & (deno task dev:web:prefix) & wait\"",
-    "dev:prefix-color": "sh -c \"(deno task dev:api:prefix-color) & (deno task dev:web:prefix-color) & wait\"",
-
     "dev:api": "deno task --cwd apps/api dev",
-    "dev:api:prefix": "deno task --cwd apps/api dev:prefix",
-    "dev:api:prefix-color": "deno task --cwd apps/api dev:prefix-color",
     "dev:web": "deno task --cwd apps/web dev",
-    "dev:web:prefix": "deno task --cwd apps/web dev:prefix",
-    "dev:web:prefix-color": "deno task --cwd apps/web dev:prefix-color",
 
     "build:api": "deno task --cwd apps/api build",
     "build:web": "deno task --cwd apps/web build",
@@ -40,7 +33,7 @@
   },
 
   "compilerOptions": {
-    "lib": ["deno.window", "deno.ns", "esnext"],
+    "lib": ["deno.window", "deno.ns", "deno.unstable", "esnext"],
     "strict": true,
     "verbatimModuleSyntax": true,
     "noImplicitOverride": true,
@@ -49,17 +42,24 @@
     // "noUncheckedIndexedAccess": true,
     // "exactOptionalPropertyTypes": true,
 
-    "types": ["./packages/xpute/spec/@types/index.d.ts"]
+    "types": [
+      "npm:@webgpu/types",
+
+      "./packages/xpute/spec/@types/index.d.ts"
+    ]
   },
+  "unstable": ["webgpu"],
 
   "imports": {
     // monorepo packages
-    "@pxl/engine/": "./packages/pxl/engine/src/",
-    "@pxl/engine_spare/": "./packages/pxl/engine_spare/src/",
+    "@pxl/engine/": "./packages/pxl/engine/",
+    "@pxl/engine-spare/": "./packages/pxl/engine-spare/",
     "@pxl/bake/": "./packages/pxl/bake/src/",
     "@pxl/render/": "./packages/pxl/render/src/",
     "@pxl/common/": "./packages/pxl/common/src/",
     "@pxl/spec/": "./packages/pxl/spec/src/",
+
+    "@webgpu/types": "npm:@webgpu/types@^0.1.69",
 
     "@xpute/core/": "./packages/xpute/core/src/",
     "@xpute/spec/": "./packages/xpute/spec/src/",
@@ -91,11 +91,10 @@
 
     // internationalization
     "i18next": "npm:i18next@^25.7.3"
-    // "@tensorflow/tfjs-core": "npm:@tensorflow/tfjs-core@^4.22.0",
   },
 
   "fmt": {
-    "lineWidth": 160,
+    "lineWidth": 200,
     "proseWrap": "preserve",
 
     "exclude": ["node_modules/", "dist/"]

@@ -33,7 +33,7 @@ export function neg3(v: Readonly<V3>, out: V3 = [0, 0, 0]): V3 {
   out[2] = -v[2];
   return out;
 }
-export function abs(v: Readonly<V3>, out: V3 = [0, 0, 0]): V3 {
+export function abs3(v: Readonly<V3>, out: V3 = [0, 0, 0]): V3 {
   out[0] = Math.abs(v[0]);
   out[1] = Math.abs(v[1]);
   out[2] = Math.abs(v[2]);
@@ -98,6 +98,23 @@ export function mod3n(v: Readonly<V3>, k: f64, out: V3 = [0, 0, 0]): V3 {
   out[0] = v[0] % k;
   out[1] = v[1] % k;
   out[2] = v[2] % k;
+  return out;
+}
+
+export function dot3(v: Readonly<V3>, w: Readonly<V3>): f64 {
+  return v[0] * w[0] + v[1] * w[1] + v[2] * w[2];
+}
+export function cross3(v: Readonly<V3>, w: Readonly<V3>, out: V3 = [0, 0, 0]): V3 {
+  out[0] = v[1] * w[2] - v[2] * w[1];
+  out[1] = v[2] * w[0] - v[0] * w[2];
+  out[2] = v[0] * w[1] - v[1] * w[0];
+  return out;
+}
+export function norm3(v: Readonly<V3>, out: V3 = [0, 0, 0]): V3 {
+  const len = Math.hypot(v[0], v[1], v[2]) || 1;
+  out[0] = v[0] / len;
+  out[1] = v[1] / len;
+  out[2] = v[2] / len;
   return out;
 }
 
