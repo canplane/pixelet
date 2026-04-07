@@ -1,8 +1,6 @@
 {
   "name": "@pxl/engine",
   "version": "0.0.0",
-
-  "exports": { ".": "./src/index.ts", "./*": "./src/*" },
-
+  "exports": "./src/index.ts",
   "compilerOptions": { "types": ["./@types/index.d.ts"] }
 }

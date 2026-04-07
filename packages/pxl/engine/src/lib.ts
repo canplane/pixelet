@@ -1,4 +1,4 @@
-// @pxl/engine/lib.ts
+// @pxl/engine/src/lib.ts
 
 import { Errno } from "@xpute/spec/sys/errno.ts";
 import { XputeError } from "@xpute/spec/sys/error.ts";
@@ -8,9 +8,9 @@ import { type Command, type DataFrame, FrameKind, type Vector } from "@xpute/spe
 import { VectorPort } from "@xpute/spec/control/signal.ts";
 import { CommandPort } from "@xpute/spec/control/post.ts";
 
-import * as page_module from "@pxl/engine/modules/page/mod.ts";
+import * as page_module from "@pxl/engine/src/modules/page/mod.ts";
 
-export default class Engine implements Device {
+export class EngineLegacy implements Device {
   private env: DeviceEnvironment;
 
   constructor(tx: DeviceUplink) {

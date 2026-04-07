@@ -15,6 +15,24 @@ export default defineConfig(({ mode }) => {
   const appEnv = env.APP_ENV || mode;
   const isDev = appEnv === "development";
 
+  const buildTarget = env.VITE_BUILD_TARGET || "main";
+
+  let ssr: string;
+  let entryFileNames: string;
+
+  switch (buildTarget) {
+    case "worker":
+      ssr = "./src/xpute/worker/worker.ts";
+      entryFileNames = "worker.js";
+      break;
+
+    case "main":
+    default:
+      ssr = "./src/index.ts";
+      entryFileNames = "index.js";
+      break;
+  }
+
   return {
     plugins: [deno()],
 
@@ -27,14 +45,14 @@ export default defineConfig(({ mode }) => {
       minify: "esbuild",
       sourcemap: mode !== "production",
 
-      outDir: "dist/main",
-      emptyOutDir: true,
+      outDir: "dist",
+      emptyOutDir: false,
 
-      ssr: "./src/index.ts",
+      ssr,
 
       rollupOptions: {
         output: {
-          entryFileNames: "server.js",
+          entryFileNames,
           format: "es",
         },
       },

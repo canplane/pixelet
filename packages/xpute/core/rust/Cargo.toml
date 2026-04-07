@@ -1,0 +1,9 @@
+# packages/xpute/core/rust/Cargo.toml
+
+[package]
+name = "xpute-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+xpute-spec = { path = "../../spec/rust" }

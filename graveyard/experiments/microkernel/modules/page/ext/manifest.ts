@@ -1,4 +1,4 @@
-// // @pxl/engine/modules/page/ext/manifest.ts
+// // @pxl/engine/src/modules/page/ext/manifest.ts
 
 // import type { ResourceManifest } from "@xpute/spec/io/manifest.ts";
 // import { PAGE_OP } from "../opcode.ts";

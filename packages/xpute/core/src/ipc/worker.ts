@@ -50,20 +50,20 @@ import { XputeError } from "@xpute/spec/sys/error.ts";
 
 import type { Device } from "@xpute/spec/ipc/link.ts";
 import { type Command, type DataFrame, EMPTY_ARGS, type Frame, FrameFlag, FrameKind, type Vector, type WorkerArg } from "@xpute/spec/ipc/frame.ts";
-import { DevicePort, type DeviceTopology } from "@xpute/spec/ipc/topology.ts";
+import { DevicePort, type DeviceTopology, type XputeManifest } from "@xpute/spec/ipc/topology.ts";
 
 import { load_device } from "./worker/device_loader.ts";
 import { TxController } from "./tx.ts";
 
 /** Device linker */
-export async function init_worker(arg: WorkerArg, device_specs: DeviceTopology): Promise<void> {
+export async function init_worker(arg: WorkerArg, device_specs: DeviceTopology, wasm_loader: XputeManifest["wasm"]): Promise<void> {
   const { worker_id, uplink } = arg;
 
   // devices
   const tx = new TxController(worker_id, uplink);
   const device_entries: [DevicePort, Device][] = await Promise.all(
     device_specs.map(async ([port, device_spec]) => {
-      const device = await load_device(device_spec, tx);
+      const device = await load_device(port, device_spec, tx, wasm_loader);
       return [port, device];
     }),
   );

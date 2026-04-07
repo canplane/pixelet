@@ -20,7 +20,9 @@ export const enum WorkerID {
 
 export const enum DevicePort {
   ENGINE = 1,
-  ENGINE_SPARE = 2,
+
+  ENGINE_TS = 2,
+  ENGINE_SPARE = 3,
 }
 
 // export type WorkerID = u8;
@@ -28,16 +30,51 @@ export const enum DevicePort {
 
 // ---- System Manifest ----
 
-/** * [Loader]
- * 모듈을 비동기적으로 가져오는 함수 타입.
- * WASM 또는 JS 바이너리를 동적으로 런타임에 주입하기 위해 사용.
- */
-export type Loader<T> = () => Promise<T>;
+export type ModuleLoader<T> = () => Promise<{ default: T }>;
+export type NamespaceLoader = () => Promise<Record<string, any>>;
 
-export type WASMArtifact = WebAssembly.Module | WebAssembly.Instance | Uint8Array; // (wasm bytes)
+export const enum DeviceType {
+  JS = "JS",
+  BINDGEN = "BINDGEN",
+}
 
 // Loadable entry point (Module specifier / WASM URL)
-export type DeviceSpec = { type: "JS"; load: Loader<any> } | { type: "WASM"; load: Loader<WASMArtifact> };
+export type DeviceSpec =
+  | JsDeviceSpec
+  | BindgenDeviceSpec;
+
+export type JsDeviceSpec = {
+  type: DeviceType.JS;
+  name: string;
+
+  load: NamespaceLoader;
+};
+
+export type BindgenModule = {
+  default: (input?: {
+    module_or_path?: string | URL | Response | WebAssembly.Module | BufferSource;
+    memory?: WebAssembly.Memory;
+  }) => Promise<any>;
+  [key: string]: any;
+};
+
+export type BindgenRuntime = {
+  load(js_url: string | URL): Promise<BindgenModule>;
+  init(mod: BindgenModule, wasm_url: string | URL, memory?: WebAssembly.Memory): Promise<any>;
+  create_memory?(opts?: { initial?: number; maximum?: number }): WebAssembly.Memory;
+};
+
+export type BindgenDeviceSpec = {
+  type: DeviceType.BINDGEN;
+  name: string;
+
+  js_url: string | URL;
+  wasm_url: string | URL;
+  memory?: {
+    initial?: number;
+    maximum?: number;
+  };
+};
 
 // NOTE: Worker.GUEST is virtual; do not list it in runtime topology.
 export type DeviceTopology = readonly [DevicePort, DeviceSpec][];
@@ -45,8 +82,12 @@ export type Topology = readonly [WorkerID, DeviceTopology][];
 
 // NOTE: Prefer `satisfies XputeManifest` for concrete manifests (avoid `as const` noise).
 export type XputeManifest = {
-  worker: Loader<any>;
-  guest: Loader<any>;
+  worker: ModuleLoader<any>;
+  wasm: {
+    [DeviceType.BINDGEN]: ModuleLoader<BindgenRuntime>;
+  };
+
+  guest: ModuleLoader<any>;
   devices: Topology;
 
   net: {

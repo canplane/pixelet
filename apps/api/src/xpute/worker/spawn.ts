@@ -15,7 +15,7 @@ import { type Frame, FrameKind, type WorkerInit, type WorkerLink } from "@xpute/
 import type { WorkerDriver } from "@xpute/core/ipc/worker/contract.ts";
 
 // built worker entry artifact path (resolved relative to this built host module).
-const SCRIPT_PATH = new URL("../../worker/entry.js", import.meta.url);
+const SCRIPT_PATH = new URL("../worker.js", import.meta.url);
 
 export default class DenoDriver implements WorkerDriver {
   async spawn(worker_id: WorkerID): Promise<WorkerLink> {

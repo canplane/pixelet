@@ -22,13 +22,7 @@ export const lerp = (a: f64, b: f64, t: f64): f64 => a + (b - a) * t;
 export const inv_lerp = (x: f64, min: f64, max: f64): f64 => (x - min) / (max - min);
 
 /** Remaps a value from one range into another. */
-export const remap = (
-  x: f64,
-  in_min: f64,
-  in_max: f64,
-  out_min: f64,
-  out_max: f64,
-): f64 => lerp(out_min, out_max, inv_lerp(x, in_min, in_max));
+export const remap = (x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64): f64 => lerp(out_min, out_max, inv_lerp(x, in_min, in_max));
 
 export const clamp = (x: f64, min: f64, max: f64): f64 => x < min ? min : x > max ? max : x;
 export const wrap = (x: f64, min: f64, max: f64): f64 => {

@@ -1,4 +1,4 @@
-// @pxl/engine/modules/page/mod.ts
+// @pxl/engine/src/modules/page/mod.ts
 
 import type { Bytes } from "@xpute/spec/lib/kit/array.ts";
 
