@@ -56,10 +56,11 @@ const V3_REG: V3 = fill3(0);
  * - `m` means an EPSG:3857 planar meter, not a geodesic ground meter.
  *
  * Cyclic world-topology mapping:
- * - the 24-bit X lattice domain (2^24 = 16,777,216 u) is scaled to match the
- *   full EPSG:3857 equatorial world width exactly
- * - 1 [u] ≈ 2.388 [m]
- * - crossing the positive 24-bit X limit naturally overflows into the negative
+ * - the effective X domain is 23 bits (2^23 = 8,388,608 u); the MSB of the
+ *   24-bit lane is reserved as a guard bit for pseudo-SIMD lane arithmetic
+ * - this 23-bit domain is scaled to match the full EPSG:3857 equatorial world width exactly
+ * - 1 [u] ≈ 4.777 [m]
+ * - crossing the positive 23-bit X limit naturally overflows into the negative
  *   range at the packed-integer level
  * - this overflow corresponds to crossing the antimeridian in the wrapped
  *   Mercator world model
@@ -68,10 +69,10 @@ const V3_REG: V3 = fill3(0);
  * - Because EPSG:3857 is distorted, these meters match real-world meters only
  * at the equator; higher latitudes require Mercator scale correction.
  */
-const U_TOTAL_X: u32 = 1 << (IVEC_X_W - 1); // 16,777,216
+const U_TOTAL_X: u32 = 1 << (IVEC_X_W - 1); // 2^23 = 8,388,608 (MSB is guard bit)
 
-export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] ≈ 0.418 [u]
-const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 2.388 [m]
+export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] ≈ 0.209 [u]
+const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 4.777 [m]
 
 /**
  * Public Mercator vertical scale contract.
