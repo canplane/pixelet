@@ -1,6 +1,11 @@
 // @pxl/engine/src/modules/page/mod.rs
 
 #[cfg(feature = "client")]
+use std::cell::RefCell;
+#[cfg(feature = "client")]
+use std::rc::Rc;
+
+#[cfg(feature = "client")]
 use wasm_bindgen_futures::spawn_local;
 
 #[cfg(feature = "client")]
@@ -23,13 +28,14 @@ pub type IVec = u64;
 // Receives page demands, fetches terrain from the server, and relays results back to the local shell.
 
 #[cfg(feature = "client")]
-fn load_client(env: &DeviceEnvironment) {
+pub fn load_client(env: &DeviceEnvironment, render: Rc<RefCell<pxl_render::RenderApp>>) {
     let signal = env.signal.clone();
     let post = env.post.clone();
 
     let _ = post.clone().on(cmd::TILE.into(), move |args, _body| {
         let signal = signal.clone();
         let post = post.clone();
+        let render = render.clone();
 
         async move {
             // Decode IVec[] from TLV args
@@ -42,6 +48,7 @@ fn load_client(env: &DeviceEnvironment) {
             for page_idx in demands {
                 let signal = signal.clone();
                 let post = post.clone();
+                let render = render.clone();
 
                 spawn_local(async move {
                     match signal
@@ -52,6 +59,10 @@ fn load_client(env: &DeviceEnvironment) {
                         .await
                     {
                         Ok(terrain_encoded) => {
+                            // Submit terrain chunk to the render pipeline.
+                            render
+                                .borrow_mut()
+                                .submit_terrain(page_idx, terrain_encoded.clone().unwrap_or_default());
                             post.req
                                 .unack()
                                 .send(cmd::TILE.into(), [TlvValue::U64(page_idx)], terrain_encoded);
@@ -80,9 +91,6 @@ fn load_client(env: &DeviceEnvironment) {
     });
 }
 
-/// Module entry point.
-#[allow(unused_variables)]
-pub fn load(env: &DeviceEnvironment) {
-    #[cfg(feature = "client")]
-    load_client(env);
-}
+/// Module entry point (non-client builds).
+#[allow(unused_variables, dead_code)]
+pub fn load(env: &DeviceEnvironment) {}

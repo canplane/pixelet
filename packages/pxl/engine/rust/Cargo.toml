@@ -10,9 +10,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-client = []
-server = []
-render = ["dep:pxl-render"]
+client = ["dep:pxl-render"]
+server = ["dep:pxl-bake"]
 
 [dependencies]
 pxl-bake = { path = "../../bake/rust", optional = true }
@@ -30,7 +29,7 @@ futures = { version = "0.3", default-features = false }
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["console"]
+features = ["console", "OffscreenCanvas"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
