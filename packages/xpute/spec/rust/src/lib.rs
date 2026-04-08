@@ -1,14 +1,13 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+// @xpute/spec/lib.rs
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod control;
+pub mod io;
+pub mod ipc;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Note: `mod lib` in lib.rs would be ambiguous (compiler may resolve to lib.rs itself).
+// Use explicit #[path] to point to the lib/ subdirectory.
+#[path = "lib/mod.rs"]
+pub mod lib;
+
+pub mod rpc;
+pub mod sys;
