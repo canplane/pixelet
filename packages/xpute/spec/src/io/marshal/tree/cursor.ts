@@ -21,7 +21,7 @@ import { Errno } from "@xpute/spec/sys/errno.ts";
 import { MarshalError } from "@xpute/spec/sys/error.ts";
 
 import type { AlignUnit, NodeType, NodeValue } from "./spec.ts";
-import { DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, LE, MAGIC, NONE, ScalarType, SequenceType, SpecialType, TYPE_IS_LEAF, WORD_SZ } from "./spec.ts";
+import { ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, LE, MAGIC, NONE, ScalarType, SequenceType, SpecialType, TYPE_IS_LEAF, WORD_SZ } from "./spec.ts";
 
 type ShallowNodeValue = NodeValue | BranchCursor;
 
@@ -32,6 +32,8 @@ type ShallowNodeValue = NodeValue | BranchCursor;
 const WORD_REG: [u32, u32] = [NONE, NONE];
 
 const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
+  const align_sz: AlignUnit = ALIGN_SZ(type);
+  if (base % align_sz) throw new MarshalError(Errno.EBADMSG, `misaligned node base ${base} for type 0x${type.toString(16)}`);
   if (type === SpecialType.BRANCH) return new BranchCursorImpl(pkt, base);
   if (TYPE_IS_LEAF(type)) return new NodeCursorImpl(pkt, base, type);
   throw new MarshalError(Errno.EBADMSG, `unsupported special node type: 0x${type.toString(16)}`);
@@ -404,9 +406,9 @@ export abstract class BranchCursor extends NodeCursor {
    *
    * Contract:
    * - get()      -> array of direct children
-   * - get(idx)   -> direct child at idx
+   * - get(idx)   -> direct child at idx, shallow-materialized at that child boundary
    * - leaf child -> materialized leaf value
-   * - branch child -> BranchCursor
+   * - branch child -> direct-child array (not recursive)
    * - null child -> null
    */
   override get<T extends ShallowNodeValue[] = ShallowNodeValue[]>(): T;
