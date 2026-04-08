@@ -7,7 +7,7 @@
  */
 
 import { FrameKind, type WorkerArg, type WorkerInit, type WorkerLink } from "@xpute/spec/ipc/frame.ts";
-import { type DeviceTopology, WorkerID } from "@xpute/spec/ipc/topology.ts";
+import { DevicePort, type DeviceTopology, WorkerID } from "@xpute/spec/ipc/topology.ts";
 import { init_worker } from "@xpute/core/ipc/worker.ts";
 
 import manifest from "@/xpute.manifest.ts";
@@ -78,6 +78,18 @@ async function main() {
   const arg: WorkerArg = await resolve_arg();
   const device_specs: DeviceTopology = resolve_device_specs(arg.worker_id);
 
-  await init_worker(arg, device_specs, manifest.wasm);
+  const devices = await init_worker(arg, device_specs, manifest.wasm);
+
+  // Wait for OffscreenCanvas from the main thread, then init the Rust render surface.
+  // Workers do not have requestAnimationFrame; drive tick() via setInterval until a
+  // proper RAF-proxy message protocol is introduced.
+  const engine = devices.get(DevicePort.ENGINE) as any;
+  if (engine?.init_render) {
+    self.addEventListener("message", async (e: MessageEvent) => {
+      if (e.data?.type !== "INIT_RENDER") return;
+      await engine.init_render(e.data.canvas);
+      setInterval(() => engine.tick(), 16);
+    }, { once: true });
+  }
 }
 main().catch((err) => console.error(`worker entry: fatal:`, err));

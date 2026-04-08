@@ -56,7 +56,7 @@ import { load_device } from "./worker/device_loader.ts";
 import { TxController } from "./tx.ts";
 
 /** Device linker */
-export async function init_worker(arg: WorkerArg, device_specs: DeviceTopology, wasm_loader: XputeManifest["wasm"]): Promise<void> {
+export async function init_worker(arg: WorkerArg, device_specs: DeviceTopology, wasm_loader: XputeManifest["wasm"]): Promise<Map<DevicePort, Device>> {
   const { worker_id, uplink } = arg;
 
   // devices
@@ -144,4 +144,6 @@ export async function init_worker(arg: WorkerArg, device_specs: DeviceTopology, 
     }
     console.warn(`init_worker: unknown frame: ${JSON.stringify(frame)}`);
   });
+
+  return devices;
 }

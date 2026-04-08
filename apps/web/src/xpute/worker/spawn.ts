@@ -16,12 +16,29 @@
 import { WorkerID } from "@xpute/spec/ipc/topology.ts";
 import { type Frame, FrameKind, type WorkerInit, type WorkerLink } from "@xpute/spec/ipc/frame.ts";
 import type { WorkerDriver } from "@xpute/core/ipc/worker/contract.ts";
+import { set_render_bridge } from "@/xpute/render_bridge.ts";
 
 export default class BrowserDriver implements WorkerDriver {
+  private _workers = new Map<WorkerID, Worker>();
+
+  constructor() {
+    set_render_bridge(this);
+  }
+
+  send_canvas(canvas: OffscreenCanvas): void {
+    const worker = this._workers.get(WorkerID.CORE);
+    if (!worker) {
+      console.warn("render_bridge: CORE worker not ready");
+      return;
+    }
+    worker.postMessage({ type: "INIT_RENDER", canvas }, [canvas]);
+  }
+
   async spawn(worker_id: WorkerID): Promise<WorkerLink> {
     const init: WorkerInit = { kind: FrameKind.WORKER_INIT, worker_id };
     // NOTE: keep this URL inline so Vite can statically detect the worker entry.
     const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+    this._workers.set(worker_id, worker);
 
     return await new Promise((resolve, reject) => {
       const handlers: ((frame: Frame) => void)[] = [];

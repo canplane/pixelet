@@ -92,6 +92,8 @@ impl DeviceUplink for RustJsUplink {
 pub struct Engine {
     signal: VectorPort,
     post: CommandPort,
+    #[cfg(feature = "client")]
+    render: std::rc::Rc<std::cell::RefCell<pxl_render::RenderApp>>,
 }
 
 #[wasm_bindgen]
@@ -105,12 +107,45 @@ impl Engine {
         log!("Engine::new");
 
         let uplink: DeviceUplinkRef = Rc::new(RustJsUplink(tx.unchecked_into::<JsUplink>()));
+        #[cfg(feature = "client")]
+        let render = std::rc::Rc::new(std::cell::RefCell::new(pxl_render::RenderApp::new()));
         let mut engine = Engine {
             signal: VectorPort::new(uplink.clone()),
             post: CommandPort::new(uplink),
+            #[cfg(feature = "client")]
+            render,
         };
         engine.load_modules();
         engine
+    }
+
+    /// Initialise the offscreen WebGPU surface. Must be awaited before tick().
+    /// canvas must be a transferred OffscreenCanvas from the JS side.
+    /// No-op (resolves immediately) when the `client` feature is disabled.
+    #[wasm_bindgen]
+    pub fn init_render(&self, canvas: JsValue) -> Promise {
+        #[cfg(feature = "client")]
+        {
+            let render = self.render.clone();
+            future_to_promise(async move {
+                let canvas: web_sys::OffscreenCanvas = canvas.unchecked_into();
+                render
+                    .borrow_mut()
+                    .init(canvas)
+                    .await
+                    .map(|_| JsValue::undefined())
+                    .map_err(|e| JsValue::from_str(&e))
+            })
+        }
+        #[cfg(not(feature = "client"))]
+        Promise::resolve(&JsValue::undefined())
+    }
+
+    /// Advance the render app one frame. No-op when the `client` feature is disabled.
+    #[wasm_bindgen]
+    pub fn tick(&self) {
+        #[cfg(feature = "client")]
+        self.render.borrow_mut().tick();
     }
 
     fn load_modules(&mut self) {
@@ -120,6 +155,9 @@ impl Engine {
             signal: self.signal.clone(),
             post: self.post.clone(),
         };
+        #[cfg(feature = "client")]
+        modules::page::load_client(&env, self.render.clone());
+        #[cfg(not(feature = "client"))]
         modules::page::load(&env);
 
         #[cfg(test)]
