@@ -1,0 +1,90 @@
+// @pixelet/server/modules/world/terrain/service.ts
+
+import type { Hono } from "@hono/hono";
+
+import type { AppResources } from "@/app/resources.ts";
+
+import type { f64, i16, u32 } from "@pixelet/shared/kit/word.ts";
+import type { Bytes, I16Array } from "@pixelet/shared/kit/array.ts";
+import { to_tuple } from "@pixelet/shared/kit/lower.ts";
+import { encoder, TreeView } from "@pixelet/shared/xtp/tree/mod.ts";
+
+import type { BBox3857 } from "@pixelet/shared/spec/space/adapter/3857.ts";
+import * as epsg3857 from "@pixelet/shared/spec/space/adapter/3857.ts";
+import { type IVec, ivec } from "@pixelet/shared/spec/space/pvf3/mod.ts";
+
+import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pixelet/shared/bake/format.ts";
+import { ELE_PADDED_SPAN } from "@pixelet/shared/bake/constants.ts";
+import { TerrainRepository } from "./repository.ts";
+
+const ELE_PADDED_SPAN2: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN;
+
+function make_services(repo: TerrainRepository) {
+  const fetch_terrain_source = async (page_idx: IVec): Promise<Bytes> => {
+    const page_bbox: BBox3857 = epsg3857.get_page_bbox(page_idx);
+    const page_z_scale: f64 = epsg3857.Z_SCALE(page_bbox[0][1]);
+
+    // DB fetch
+    let _ele: i16[] | null;
+    let feat_rows: FeatRow[];
+    let coast_rows: CoastRow[];
+    try {
+      [_ele, feat_rows, coast_rows] = await Promise.all([
+        repo.fetch_ele(page_bbox, page_z_scale),
+        repo.fetch_feat_rows(page_bbox),
+        repo.fetch_coast_rows(page_bbox),
+      ]);
+    } catch (err) {
+      console.error(`[terrain/source/${ivec.repr(page_idx)}] shell: db error:`, err);
+      throw err;
+    }
+
+    let ele: I16Array;
+    if (_ele && _ele.length === ELE_PADDED_SPAN2) {
+      ele = new Int16Array(_ele);
+    } else {
+      console.warn(`[terrain/source/${ivec.repr(page_idx)}] shell: invalid ele shape`, _ele?.length ?? null);
+      ele = new Int16Array(ELE_PADDED_SPAN2); // fallback
+    }
+
+    console.debug(
+      `[terrain/source/${ivec.repr(page_idx)}] shell: ele=${ele.length}, feat_rows=${feat_rows.length}, coast_rows=${coast_rows.length}`,
+    );
+
+    const feats_view = new TreeView().branch((__) => {
+      for (const row of feat_rows) {
+        __.put(to_tuple(row, FEAT_ROW_KEYS));
+      }
+    });
+    const coasts_view = new TreeView().branch((__) => {
+      for (const row of coast_rows) {
+        __.put(to_tuple(row, COAST_ROW_KEYS));
+      }
+    });
+
+    return encoder.encode(new TreeView().branch((__) =>
+      __.i16_array(ele)
+        .subtree(feats_view)
+        .subtree(coasts_view)
+    ));
+  };
+
+  return { fetch_terrain_source };
+}
+
+export function register(router: Hono, resrc: AppResources): void {
+  const repo = new TerrainRepository(resrc.geo_pool);
+  const service = make_services(repo);
+
+  router.get("/api/world/terrain/tile/:page_idx", async (c) => {
+    let page_idx: IVec;
+    try {
+      page_idx = BigInt(c.req.param("page_idx"));
+    } catch {
+      return c.text("bad page_idx", 400);
+    }
+
+    const bytes: Bytes = await service.fetch_terrain_source(page_idx);
+    return c.body(bytes, 200, { "content-type": "application/octet-stream" });
+  });
+}

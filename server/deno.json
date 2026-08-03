@@ -1,0 +1,21 @@
+{
+  "name": "@pixelet/server",
+  "version": "0.0.0",
+  "exports": "./src/index.ts",
+
+  "tasks": {
+    "dev": "deno run -A --watch --env=../.env src/index.ts",
+    "check": "deno check src/index.ts"
+  },
+
+  "imports": {
+    "@/": "./src/",
+
+    // server framework
+    "@hono/hono": "jsr:@hono/hono@^4.12.2",
+    "socket.io": "npm:socket.io@^4",
+
+    // database
+    "@db/postgres": "jsr:@db/postgres@^0.19.5"
+  }
+}
