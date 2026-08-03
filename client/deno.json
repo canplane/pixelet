@@ -1,0 +1,80 @@
+{
+  "name": "@pixelet/client",
+  "version": "0.0.0",
+  "exports": "./src/index.ts",
+
+  "tasks": {
+    "dev": "deno run -A --node-modules-dir=auto npm:vite",
+
+    "build": "deno run -A --node-modules-dir=auto npm:vite build",
+    "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
+
+    "check": "deno check src/index.ts"
+  },
+
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable", "deno.ns"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+
+    "types": [
+      "./@types/index.d.ts",
+
+      "npm:vite/client",
+      "npm:@types/react@^19",
+      "npm:@types/react-dom@^19"
+    ]
+  },
+
+  "imports": {
+    "@/": "./src/",
+
+    // build tools
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^4.3.4",
+    "@tailwindcss/vite": "npm:@tailwindcss/vite@^4.0.0",
+    "vite-plugin-svgr": "npm:vite-plugin-svgr@^4.3.0",
+
+    // react core
+    "react": "npm:react@^19.2.0",
+    "react-dom": "npm:react-dom@^19.2.0",
+    "react-router-dom": "npm:react-router-dom@^7.10.1",
+
+    // state management
+    "zustand": "npm:zustand@^5.0.9",
+
+    // 3D & maps
+    "three": "npm:three@^0.183.2",
+    "three-stdlib": "npm:three-stdlib@^2.36.1",
+    "@react-three/drei": "npm:@react-three/drei@^10.7.7",
+    "@react-three/fiber": "npm:@react-three/fiber@^9.5.0",
+    "@react-three/postprocessing": "npm:@react-three/postprocessing@^3.0.4",
+    "postprocessing": "npm:postprocessing@^6.38.3",
+
+    "maplibre-gl": "npm:maplibre-gl@^5.14.0",
+
+    // styling
+    "tailwindcss": "npm:tailwindcss@^4.1.18",
+    "tw-animate-css": "npm:tw-animate-css@^1.3.0",
+    "tailwind-merge": "npm:tailwind-merge@^3.4.0",
+    "clsx": "npm:clsx@^2.1.1",
+    "class-variance-authority": "npm:class-variance-authority@^0.7.1",
+
+    // UI components & animations
+    "sonner": "npm:sonner@^2.0.7",
+    "framer-motion": "npm:framer-motion@^12.23.26",
+    "lucide-react": "npm:lucide-react@^0.561.0",
+    "lottie-react": "npm:lottie-react@^2.4.1",
+    "next-themes": "npm:next-themes@^0.4.6",
+    "@radix-ui/react-slot": "npm:@radix-ui/react-slot@^1.2.4",
+    "@radix-ui/react-separator": "npm:@radix-ui/react-separator@^1.1.8",
+    "@radix-ui/react-dialog": "npm:@radix-ui/react-dialog@^1.1.15",
+    "@radix-ui/react-scroll-area": "npm:@radix-ui/react-scroll-area@^1.2.10",
+    "@radix-ui/react-tooltip": "npm:@radix-ui/react-tooltip@^1.2.8",
+
+    // internationalization
+    "react-i18next": "npm:react-i18next@^16.0.0",
+    "i18next-browser-languagedetector": "npm:i18next-browser-languagedetector@^8.0.2",
+    "i18next-http-backend": "npm:i18next-http-backend@^3.0.0"
+    // "@tensorflow/tfjs-backend-webgpu": "npm:@tensorflow/tfjs-backend-webgpu@^4.22.0",
+  }
+}

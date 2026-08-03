@@ -2,6 +2,10 @@
   "description": "A droplet fades. A pixelet remains.",
 
   "workspace": [
+    "shared",
+    "server",
+    "client",
+
     "apps/api",
     "apps/web",
     "packages/pxl/engine",
@@ -28,6 +32,12 @@
     "check:api": "deno task --cwd apps/api check",
     "check:web": "deno task --cwd apps/web check",
 
+    "check:shared": "deno check shared/src/**/*.ts",
+    "dev:server-new": "deno task --cwd server dev",
+    "check:server-new": "deno task --cwd server check",
+    "dev:client-new": "deno task --cwd client dev",
+    "check:client-new": "deno task --cwd client check",
+
     "lint": "deno lint",
     "fmt": "deno fmt"
   },
@@ -51,6 +61,10 @@
   "unstable": ["webgpu"],
 
   "imports": {
+    // MVP restart (client/server/shared) — see feat/mvp-restart
+    "@pixelet/shared/": "./shared/src/",
+    "@pixelet/server/": "./server/src/",
+
     // monorepo packages
     "@pxl/engine/": "./packages/pxl/engine/",
     "@pxl/engine-spare/": "./packages/pxl/engine-spare/",
