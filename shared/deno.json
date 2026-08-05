@@ -1,6 +1,0 @@
-{
-  "name": "@pixelet/shared",
-  "version": "0.0.0",
-
-  "exports": { "./*": "./src/*" }
-}

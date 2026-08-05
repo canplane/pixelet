@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { type PVF3, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
+import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { with_ele } from "@/modules/world/terrain/use-elevation.ts";
 import { type SubscribeWake, wait_until } from "@/shared/lib/store/wait-until.ts";

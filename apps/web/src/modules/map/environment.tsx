@@ -4,7 +4,7 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 
-import type { f64 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { render_cfg } from "@/modules/world/render/config.ts";
 import { get_theme_key, themes, type WorldTheme, WorldThemeKey } from "@/modules/world/render/themes.ts";

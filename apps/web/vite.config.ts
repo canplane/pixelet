@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const apiBaseDefault = "http://127.0.0.1:3000";
 
 // anti-HMR
-const corePathIncludes = ["/packages/"];
+const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
@@ -66,11 +66,6 @@ export default defineConfig(({ mode }) => {
       alias: { "@": path.resolve(__dirname, "src") },
     },
 
-    worker: {
-      format: "es",
-      plugins: () => [deno()],
-    },
-
     build: {
       target: "esnext",
       minify: "esbuild",
@@ -80,7 +75,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       proxy: {
-        "/x": {
+        "/api": {
           target: apiBase,
           changeOrigin: true,
         },

@@ -1,8 +1,8 @@
 // @pxl/web/modules/world/frame/coord.tsx
 
-import { type IVec, ivec, projection, type PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
-import { L4_BASE } from "@pxl/spec/space/indexer.ts";
-import type { V3 } from "@pxl/spec/space/v3.ts";
+import { type IVec, ivec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { L4_BASE } from "@pxl/shared/spec/space/indexer.ts";
+import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 export function get_local_world_origin(map_center: PVF3 | null): IVec {
   if (!map_center) return 0n;

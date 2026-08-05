@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 
-import type { u32 } from "@xpute/spec/lib/kit/word.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
 
 import { DevicePoseStatus, useDeviceLocationStore } from "./store.ts";
 

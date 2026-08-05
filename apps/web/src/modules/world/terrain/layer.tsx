@@ -2,11 +2,11 @@
 
 import { memo, useMemo } from "react";
 
-import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
-import { FROM_L3_IDX } from "@pxl/spec/space/indexer.ts";
+import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
-import type { Terrain } from "@pxl/bake/terrain/format.ts";
-import { page_to_chunks } from "@pxl/render/terrain/chunk.ts";
+import type { Terrain } from "@pxl/shared/bake/format.ts";
+import { page_to_chunks } from "@/render/terrain/chunk.ts";
 
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 import { useTileStore } from "./tile-store.ts";

@@ -1,8 +1,0 @@
-# packages/pxl/spec/rust/Cargo.toml
-
-[package]
-name = "pxl-spec"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]

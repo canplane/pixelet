@@ -50,12 +50,11 @@ export function MapToastController() {
         title: location_error_msg || "GPS Signal Weak",
         // description: "Signal",
         // subDescription: "실외로 이동하거나 잠시만 기다려주세요.",
-        statusColor: "bg-red-600",
+        statusColor: "bg-red-500",
         icon: <MapPinOff className="w-4 h-4 text-red-500" />,
         duration: 5000,
-        // 원래 디자인의 붉은색 유리 느낌을 backgroundColor와 아이콘 색상으로 계승
-        backgroundColor: "bg-[#1A0505]/90 backdrop-blur-2xl",
-        className: "border-red-900/30 shadow-[0_10px_40px_rgba(220,38,38,0.2)]",
+        backgroundColor: "bg-red-50/85",
+        className: "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]",
       };
     }
 

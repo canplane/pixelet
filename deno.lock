@@ -3,7 +3,6 @@
   "specifiers": {
     "jsr:@db/postgres@~0.19.5": "0.19.5",
     "jsr:@hono/hono@^4.12.2": "4.12.2",
-    "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/bytes@^1.0.5": "1.0.6",
     "jsr:@std/crypto@^1.0.4": "1.0.5",
     "jsr:@std/encoding@^1.0.9": "1.0.10",
@@ -11,9 +10,6 @@
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/path@^1.0.8": "1.1.4",
     "npm:@deno/vite-plugin@^1.0.6": "1.0.6_vite@7.3.1__picomatch@4.0.3",
-    "npm:@noble/curves@^2.0.1": "2.0.1",
-    "npm:@noble/ed25519@3": "3.0.0",
-    "npm:@noble/hashes@^1.8.0": "1.8.0",
     "npm:@radix-ui/react-dialog@^1.1.15": "1.1.15_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@radix-ui/react-scroll-area@^1.2.10": "1.2.10_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@radix-ui/react-separator@^1.1.8": "1.1.8_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
@@ -26,14 +22,9 @@
     "npm:@types/react-dom@19": "19.2.3_@types+react@19.2.14",
     "npm:@types/react@19": "19.2.14",
     "npm:@vitejs/plugin-react@^4.3.4": "4.7.0_vite@7.3.1__picomatch@4.0.3_@babel+core@7.29.0",
-    "npm:@webgpu/types@*": "0.1.69",
-    "npm:@webgpu/types@~0.1.69": "0.1.69",
     "npm:class-variance-authority@~0.7.1": "0.7.1",
     "npm:clsx@^2.1.1": "2.1.1",
-    "npm:date-fns@^4.1.0": "4.1.0",
-    "npm:flatbuffers@^25.9.23": "25.9.23",
     "npm:framer-motion@^12.23.26": "12.34.3_react@19.2.4_react-dom@19.2.4__react@19.2.4",
-    "npm:gl-matrix@^3.4.4": "3.4.4",
     "npm:i18next-browser-languagedetector@^8.0.2": "8.2.1",
     "npm:i18next-http-backend@3": "3.0.2",
     "npm:i18next@^25.7.3": "25.8.13",
@@ -47,7 +38,6 @@
     "npm:react-i18next@16": "16.5.4_i18next@25.8.13_react@19.2.4",
     "npm:react-router-dom@^7.10.1": "7.13.1_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:react@^19.2.0": "19.2.4",
-    "npm:socket.io-client@4": "4.8.3",
     "npm:socket.io@4": "4.8.3",
     "npm:sonner@^2.0.7": "2.0.7_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:tailwind-merge@^3.4.0": "3.5.0",
@@ -55,7 +45,6 @@
     "npm:three-stdlib@^2.36.1": "2.36.1_three@0.183.2",
     "npm:three@~0.183.2": "0.183.2",
     "npm:tw-animate-css@^1.3.0": "1.4.0",
-    "npm:uuid@13": "13.0.0",
     "npm:vite-plugin-svgr@^4.3.0": "4.5.0_vite@7.3.1__picomatch@4.0.3_@svgr+core@8.1.0__@babel+core@7.29.0",
     "npm:vite@*": "7.3.1_picomatch@4.0.3",
     "npm:vite@^7.2.4": "7.3.1_picomatch@4.0.3",
@@ -74,12 +63,6 @@
     },
     "@hono/hono@4.12.2": {
       "integrity": "a3344827d814799503bb3bba77285344aaa2798643d1cc56345f9e3537ece886"
-    },
-    "@std/assert@1.0.19": {
-      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
-      "dependencies": [
-        "jsr:@std/internal"
-      ]
     },
     "@std/bytes@1.0.6": {
       "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
@@ -508,21 +491,6 @@
         "promise-worker-transferable",
         "three"
       ]
-    },
-    "@noble/curves@2.0.1": {
-      "integrity": "sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==",
-      "dependencies": [
-        "@noble/hashes@2.0.1"
-      ]
-    },
-    "@noble/ed25519@3.0.0": {
-      "integrity": "sha512-QyteqMNm0GLqfa5SoYbSC3+Pvykwpn95Zgth4MFVSMKBB75ELl9tX1LAVsN4c3HXOrakHsF2gL4zWDAYCcsnzg=="
-    },
-    "@noble/hashes@1.8.0": {
-      "integrity": "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="
-    },
-    "@noble/hashes@2.0.1": {
-      "integrity": "sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw=="
     },
     "@radix-ui/number@1.1.1": {
       "integrity": "sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g=="
@@ -1549,9 +1517,6 @@
     "csstype@3.2.3": {
       "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="
     },
-    "date-fns@4.1.0": {
-      "integrity": "sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg=="
-    },
     "debug@4.4.3": {
       "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
       "dependencies": [
@@ -1585,16 +1550,6 @@
     },
     "electron-to-chromium@1.5.302": {
       "integrity": "sha512-sM6HAN2LyK82IyPBpznDRqlTQAtuSaO+ShzFiWTvoMJLHyZ+Y39r8VMfHzwbU8MVBzQ4Wdn85+wlZl2TLGIlwg=="
-    },
-    "engine.io-client@6.6.4": {
-      "integrity": "sha512-+kjUJnZGwzewFDw951CDWcwj35vMNf2fcj7xQWOctq1F2i1jkDdVvdFG9kM/BEChymCH36KgjnW0NsL58JYRxw==",
-      "dependencies": [
-        "@socket.io/component-emitter",
-        "debug",
-        "engine.io-parser",
-        "ws",
-        "xmlhttprequest-ssl"
-      ]
     },
     "engine.io-parser@5.2.3": {
       "integrity": "sha512-HqD3yTBfnBxIrbnM1DoD6Pcq8NECnh8d4As1Qgh0z5Gg3jRRIqijury0CL3ghu/edArpUYiYqQiDUQBIs4np3Q=="
@@ -1682,9 +1637,6 @@
     },
     "fflate@0.8.2": {
       "integrity": "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A=="
-    },
-    "flatbuffers@25.9.23": {
-      "integrity": "sha512-MI1qs7Lo4Syw0EOzUl0xjs2lsoeqFku44KpngfIduHBYvzm8h2+7K8YMQh1JtVVVrUvhLpNwqVi4DERegUJhPQ=="
     },
     "framer-motion@12.34.3_react@19.2.4_react-dom@19.2.4__react@19.2.4": {
       "integrity": "sha512-v81ecyZKYO/DfpTwHivqkxSUBzvceOpoI+wLfgCgoUIKxlFKEXdg0oR9imxwXumT4SFy8vRk9xzJ5l3/Du/55Q==",
@@ -2290,15 +2242,6 @@
         "ws"
       ]
     },
-    "socket.io-client@4.8.3": {
-      "integrity": "sha512-uP0bpjWrjQmUt5DTHq9RuoCBdFJF10cdX9X+a368j/Ft0wmaVgxlrjvK3kjvgCODOMMOz9lcaRzxmso0bTWZ/g==",
-      "dependencies": [
-        "@socket.io/component-emitter",
-        "debug",
-        "engine.io-client",
-        "socket.io-parser"
-      ]
-    },
     "socket.io-parser@4.2.5": {
       "integrity": "sha512-bPMmpy/5WWKHea5Y/jYAP6k74A+hvmRCQaJuJB6I/ML5JZq/KfNieUVo/3Mh7SAqn7TyFdIo6wqYHInG1MU1bQ==",
       "dependencies": [
@@ -2471,10 +2414,6 @@
     "utility-types@3.11.0": {
       "integrity": "sha512-6Z7Ma2aVEWisaL6TvBCy7P8rm2LQoPv6dJ7ecIaIixHcwfbJ0x7mWdbcwlIM5IGQxPZSFYeqRCqlOOeKoJYMkw=="
     },
-    "uuid@13.0.0": {
-      "integrity": "sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==",
-      "bin": true
-    },
     "vary@1.1.2": {
       "integrity": "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="
     },
@@ -2531,9 +2470,6 @@
     "ws@8.18.3": {
       "integrity": "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="
     },
-    "xmlhttprequest-ssl@2.1.2": {
-      "integrity": "sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ=="
-    },
     "yallist@3.1.1": {
       "integrity": "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="
     },
@@ -2569,20 +2505,9 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@^1.0.19",
       "npm:@deno/vite-plugin@^1.0.6",
-      "npm:@noble/curves@^2.0.1",
-      "npm:@noble/ed25519@3",
-      "npm:@noble/hashes@^1.8.0",
-      "npm:@webgpu/types@*",
-      "npm:@webgpu/types@~0.1.69",
-      "npm:date-fns@^4.1.0",
-      "npm:flatbuffers@^25.9.23",
-      "npm:gl-matrix@^3.4.4",
       "npm:i18next@^25.7.3",
       "npm:immer@^11.1.3",
-      "npm:socket.io-client@4",
-      "npm:uuid@13",
       "npm:vite@^7.2.4"
     ],
     "members": {
@@ -2594,39 +2519,6 @@
         ]
       },
       "apps/web": {
-        "dependencies": [
-          "npm:@radix-ui/react-dialog@^1.1.15",
-          "npm:@radix-ui/react-scroll-area@^1.2.10",
-          "npm:@radix-ui/react-separator@^1.1.8",
-          "npm:@radix-ui/react-slot@^1.2.4",
-          "npm:@radix-ui/react-tooltip@^1.2.8",
-          "npm:@tailwindcss/vite@4",
-          "npm:@types/react-dom@19",
-          "npm:@types/react@19",
-          "npm:@vitejs/plugin-react@^4.3.4",
-          "npm:class-variance-authority@~0.7.1",
-          "npm:clsx@^2.1.1",
-          "npm:framer-motion@^12.23.26",
-          "npm:i18next-browser-languagedetector@^8.0.2",
-          "npm:i18next-http-backend@3",
-          "npm:lottie-react@^2.4.1",
-          "npm:lucide-react@0.561",
-          "npm:maplibre-gl@^5.14.0",
-          "npm:next-themes@~0.4.6",
-          "npm:react-dom@^19.2.0",
-          "npm:react-i18next@16",
-          "npm:react-router-dom@^7.10.1",
-          "npm:react@^19.2.0",
-          "npm:sonner@^2.0.7",
-          "npm:tailwind-merge@^3.4.0",
-          "npm:tailwindcss@^4.1.18",
-          "npm:tw-animate-css@^1.3.0",
-          "npm:vite-plugin-svgr@^4.3.0",
-          "npm:vite@*",
-          "npm:zustand@^5.0.9"
-        ]
-      },
-      "client": {
         "dependencies": [
           "npm:@radix-ui/react-dialog@^1.1.15",
           "npm:@radix-ui/react-scroll-area@^1.2.10",
@@ -2663,13 +2555,6 @@
           "npm:vite-plugin-svgr@^4.3.0",
           "npm:vite@*",
           "npm:zustand@^5.0.9"
-        ]
-      },
-      "server": {
-        "dependencies": [
-          "jsr:@db/postgres@~0.19.5",
-          "jsr:@hono/hono@^4.12.2",
-          "npm:socket.io@4"
         ]
       }
     }

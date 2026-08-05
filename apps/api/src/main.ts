@@ -1,6 +1,6 @@
 // @pxl/api/main.ts
 
-// import "@pxl/common/lib/i18n/i18n.server.ts"; // i18n initialization
+// TODO: i18n initialization (not wired up yet)
 
 import { Hono } from "@hono/hono";
 import { bodyLimit } from "@hono/hono/body-limit";
@@ -74,7 +74,7 @@ function make_listen(cfg: AppConfig, server: ReturnType<typeof createServer>) {
   };
 }
 
-export async function main(mount_plugs: (ctx: ServerContext) => void): Promise<void> {
+export async function main(): Promise<void> {
   // ---- cfg ----
   const cfg = make_cfg();
 
@@ -93,7 +93,6 @@ export async function main(mount_plugs: (ctx: ServerContext) => void): Promise<v
 
   // ---- wiring ----
   const ctx: ServerContext = { server, router, io };
-  mount_plugs(ctx);
 
   let resrc: AppResources | null = null;
 

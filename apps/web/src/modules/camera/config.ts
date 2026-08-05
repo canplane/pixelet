@@ -1,6 +1,6 @@
 // @pxl/web/modules/camera/config.ts
 
-import type { f64 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
 /** Camera projection and interaction limits. */
 
@@ -29,8 +29,16 @@ export const camera_cfg = {
   },
 
   input: {
-    ROT_GAIN_AZIMUTH: -0.28 * (Math.PI / 180),
-    ROT_GAIN_POLAR: 0.01,
+    // ROT_GAIN_POLAR is tuned per-pixel at a viewport height of ROT_GAIN_REF_HEIGHT.
+    // input.tsx normalizes by the *current* viewport height (size.height), so a given
+    // drag distance relative to the screen tilts by the same amount on any screen
+    // size — a fixed px/degree rate would make tilt feel much weaker on a small
+    // (e.g. mobile) viewport, where the achievable drag range in raw pixels is smaller.
+    // (Azimuth has no fixed gain — it tracks the cursor's angle around screen center
+    // 1:1, arcball-style; see do_rotate() in input.tsx.)
+    ROT_GAIN_POLAR: 0.012,
+    ROT_GAIN_REF_HEIGHT: 1080,
+
     DOLLY_GAIN: 0.0022,
   },
 

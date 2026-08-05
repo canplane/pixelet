@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 
-import type { G4326 } from "@pxl/spec/space/adapter/4326.ts";
+import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 
 import { type DeviceLocation, DevicePoseStatus, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
 import { mapStyle } from "./config/style.ts";

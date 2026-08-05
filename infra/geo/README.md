@@ -15,15 +15,15 @@
 데이터는 성격에 따라 세 가지 파이프라인으로 분리되어 관리됩니다. 모든 파이프라인은 동일한 설계 철학(Symmetry)을 공유합니다.
 (경로는 본 문서가 위치한 `infra/geo/` 기준 상대 경로입니다.)
 
-| Feature         | **OSM Features (Vector)**                                     | **ESA Elevation (Raster)**    | **OSM Coastline (Vector)**          |
-| :-------------- | :------------------------------------------------------------ | :---------------------------- | :---------------------------------- |
-| **Source**      | OpenStreetMap (PBF)                                           | Copernicus GLO-30 (GeoTIFF)   | OSM Coastline (Water Polygons)      |
-| **Directory**   | `./osm-features/`                                             | `./esa-elevation/`            | `./osm-coastline/`                  |
-| **Raw Data**    | `../../region/[CODE]/*.osm.pbf`                               | `../../region/[CODE]/*.tif`   | `../../region/[CODE]/*.shp`         |
+| Feature         | **OSM Features (Vector)**                                        | **ESA Elevation (Raster)**    | **OSM Coastline (Vector)**             |
+| :-------------- | :--------------------------------------------------------------- | :---------------------------- | :------------------------------------- |
+| **Source**      | OpenStreetMap (PBF)                                              | Copernicus GLO-30 (GeoTIFF)   | OSM Coastline (Water Polygons)         |
+| **Directory**   | `./osm-features/`                                                | `./esa-elevation/`            | `./osm-coastline/`                     |
+| **Raw Data**    | `../../region/[CODE]/*.osm.pbf`                                  | `../../region/[CODE]/*.tif`   | `../../region/[CODE]/*.shp`            |
 | **Main Table**  | 1. `osm_elements` **(Primary)**<br>2. `osm_roads` **(Reserved)** | `esa_elevation_raster`        | `osm_coastline_polygons` **(Primary)** |
-| **Catalog**     | `osm_features_catalog`                                        | `esa_elevation_catalog`       | `osm_coastline_catalog`             |
-| **Schema File** | `01_osm_features_schema.sql`                                  | `01_esa_elevation_schema.sql` | `01_osm_coastline_schema.sql`       |
-| **SRID**        | EPSG:3857 (Web Mercator)                                      | EPSG:3857 (Web Mercator)      | EPSG:3857 (Web Mercator)            |
+| **Catalog**     | `osm_features_catalog`                                           | `esa_elevation_catalog`       | `osm_coastline_catalog`                |
+| **Schema File** | `01_osm_features_schema.sql`                                     | `01_esa_elevation_schema.sql` | `01_osm_coastline_schema.sql`          |
+| **SRID**        | EPSG:3857 (Web Mercator)                                         | EPSG:3857 (Web Mercator)      | EPSG:3857 (Web Mercator)               |
 
 ## 3. How to Run (Quick Start)
 

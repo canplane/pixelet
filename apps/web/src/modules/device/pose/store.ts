@@ -3,9 +3,9 @@
 
 import { create } from "zustand";
 
-import type { f64 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
-import type { G4326 } from "@pxl/spec/space/adapter/4326.ts";
+import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 
 export const enum DevicePoseStatus {
   IDLE = "idle",

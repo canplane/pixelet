@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import type { f64 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
-import { type PVF3, pvf3 } from "@pxl/spec/space/pvf3/mod.ts";
-import * as epsg4326 from "@pxl/spec/space/adapter/4326.ts";
+import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 
 import { type DeviceLocation, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
 import { useMapStore } from "../store.ts";

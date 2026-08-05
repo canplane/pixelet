@@ -2,11 +2,11 @@
 
 import { Pool } from "@db/postgres";
 
-import type { f64, i16 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64, i16 } from "@xpute/core/kit/word.ts";
 
-import type { CoastRow, FeatRow } from "@pxl/bake/terrain/format.ts";
-import { ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M } from "@pxl/bake/terrain/constants.ts";
-import type { BBox3857 } from "@pxl/spec/space/adapter/3857.ts";
+import type { CoastRow, FeatRow } from "@pxl/shared/bake/format.ts";
+import { ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
+import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 
 const ESA_ELE_SQL = `WITH cfg AS (
   SELECT

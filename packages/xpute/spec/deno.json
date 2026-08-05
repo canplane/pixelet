@@ -1,8 +1,0 @@
-{
-  "name": "@xpute/spec",
-  "version": "0.0.0",
-
-  "exports": { ".": "./src/index.ts", "./*": "./src/*" },
-
-  "compilerOptions": { "types": ["./@types/index.d.ts"] }
-}

@@ -16,12 +16,12 @@
 import { forwardRef, useRef } from "react";
 import * as THREE from "three";
 
-import { type FVec, type IVec, projection, type PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
-import { L1_IDX_IN_L4, L3_BASE, L3_CENTER } from "@pxl/spec/space/indexer.ts";
-import { TO_XY } from "@pxl/spec/space/xy.ts";
-import { fill3, floor3n, type V3 } from "@pxl/spec/space/v3.ts";
+import { type FVec, type IVec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { L1_IDX_IN_L4, L3_BASE, L3_CENTER } from "@pxl/shared/spec/space/indexer.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
+import { fill3, floor3n, type V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { U_PER_CELL } from "@pxl/bake/terrain/constants.ts";
+import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
@@ -31,12 +31,14 @@ import { AnchorSpace } from "./spatial/anchor/space.tsx";
 import { AnchorNode } from "./spatial/anchor/node.tsx";
 import { GroundedNode } from "./spatial/anchor/grounded-node.tsx";
 
+import { useFrameRotation } from "./frame/use-frame-rotation.ts";
+import { useFrameTranslation } from "./frame/use-frame-translation.ts";
 import { useFrameRefs } from "./frame/context.tsx";
 import { get_local_world_origin } from "./frame/coord.ts";
 
 import { TerrainLayer } from "./terrain/layer.tsx";
-import { UserMarker } from "./markers/user-marker/bridge.tsx";
-import { CellHighlighter } from "./markers/cell-highlighter/bridge.tsx";
+import { UserMarker } from "./markers/user-marker.tsx";
+import { CellHighlighter } from "./markers/cell-highlighter.tsx";
 import { Block } from "./primitives/block.tsx";
 
 type DebugDotProps = {
@@ -98,6 +100,13 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
   const view_frame_ref = useRef<THREE.Group>(null);
   const map_origin: IVec = get_local_world_origin(map_center);
+
+  useFrameRotation({ frame_ref: world_frame_ref });
+  useFrameTranslation({
+    frame_ref: local_world_frame_ref,
+    map_center,
+    map_origin,
+  });
 
   if (map_center === null) return null;
   if (device_coord === null) return null;

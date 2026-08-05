@@ -2,15 +2,12 @@
 
 import { useEffect, useMemo } from "react";
 
-import type { i32, u32 } from "@xpute/spec/lib/kit/word.ts";
-import type { U8Array } from "@xpute/spec/lib/kit/array.ts";
-import { get_xpute } from "@/xpute/context.ts";
+import type { i32, u32 } from "@xpute/core/kit/word.ts";
 
-import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
-import { L3_IDX } from "@pxl/spec/space/indexer.ts";
+import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
-import { Command } from "@xpute/spec/control/cmd.ts";
-import { decode_terrain, type Terrain, type Tile } from "@pxl/bake/terrain/format.ts";
+import { decode_terrain, type Terrain, type Tile } from "@pxl/shared/bake/format.ts";
 import { useTileStore } from "./tile-store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 
@@ -25,28 +22,25 @@ const CHEBYSHEV_DIST = (v: IVec): u32 => Number(ivec.max_comp(ivec.abs(v)));
 
 const pending_page_demands = new Set<IVec>();
 
-function register_tile_stream() {
-  const { post } = get_xpute();
+/** Fetches a single terrain page over plain HTTP and stores the decoded result. */
+async function fetch_tile(page_idx: IVec): Promise<void> {
   const set_tile = useTileStore.getState().set_tile;
 
-  const unsub = post.on<[IVec]>(Command.TILE, (args, body) => {
-    const [page_idx] = args;
+  try {
+    const res = await fetch(`/api/world/terrain/tile/${page_idx.toString()}`);
+    if (!res.ok) throw new Error(`[tile/${ivec.repr(page_idx)}] shell: http ${res.status}`);
 
-    try {
-      if (!body) throw new Error(`[${Command.TILE}/${ivec.repr(page_idx)}] shell: tile is empty`);
-      const _tile: U8Array = body;
+    const _tile = new Uint8Array(await res.arrayBuffer());
 
-      const terrain: Terrain = decode_terrain(_tile);
-      const tile: Tile = { terrain };
-      console.debug(`[${Command.TILE}/${ivec.repr(page_idx)}] shell:`, tile);
-      set_tile(page_idx, tile);
-    } catch (err) {
-      console.error(`[${Command.TILE}/${ivec.repr(page_idx)}] shell: failed to stream tile:`, err);
-    } finally {
-      pending_page_demands.delete(page_idx);
-    }
-  });
-  return unsub;
+    const terrain: Terrain = decode_terrain(_tile);
+    const tile: Tile = { terrain };
+    console.debug(`[tile/${ivec.repr(page_idx)}] shell:`, tile);
+    set_tile(page_idx, tile);
+  } catch (err) {
+    console.error(`[tile/${ivec.repr(page_idx)}] shell: failed to fetch tile:`, err);
+  } finally {
+    pending_page_demands.delete(page_idx);
+  }
 }
 
 /**
@@ -99,18 +93,12 @@ function cleanup_far_tiles(center_page_idx: IVec): void {
 }
 
 export function useTileFetcher() {
-  const { post } = get_xpute();
   const map_center = useMapStore((state) => state.map_center);
 
   const center_page_idx: IVec | null = useMemo(() => {
     if (map_center === null) return null;
     return L3_IDX(map_center.i);
   }, [map_center]);
-
-  useEffect(() => {
-    const unsub = register_tile_stream();
-    return unsub;
-  }, []);
 
   // Main demand/update loop.
   useEffect(() => {
@@ -119,8 +107,8 @@ export function useTileFetcher() {
     cleanup_far_tiles(center_page_idx);
 
     const demands: IVec[] = schedule_page_demands(center_page_idx);
-    if (demands.length > 0) {
-      void post.req.unack().send(Command.TILE, demands, null);
+    for (const page_idx of demands) {
+      void fetch_tile(page_idx);
     }
   }, [center_page_idx]);
 }

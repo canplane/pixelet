@@ -1,29 +1,12 @@
 {
-  "name": "@pxl/api",
+  "name": "@pixelet/server",
   "version": "0.0.0",
   "exports": "./src/index.ts",
 
   "tasks": {
-    "dev": "deno task dev:init && (deno task dev:watch & deno task serve:dev)",
-
-    "dev:init": "deno task build:main:dev && deno task build:worker:dev",
-    "dev:watch": "deno task watch:main:dev & deno task watch:worker:dev",
-    "serve:dev": "deno run -A --watch=dist --env=../../.env dist/index.js",
-
-    "watch:main:dev": "VITE_BUILD_TARGET=main deno run -A --node-modules-dir=auto npm:vite build --watch --mode development",
-    "watch:worker:dev": "VITE_BUILD_TARGET=worker deno run -A --node-modules-dir=auto npm:vite build --watch --mode development",
-
-    "build": "deno task build:main && deno task build:worker",
-    "build:main": "VITE_BUILD_TARGET=main deno run -A --node-modules-dir=auto npm:vite build",
-    "build:worker": "VITE_BUILD_TARGET=worker deno run -A --node-modules-dir=auto npm:vite build",
-
-    "build:main:dev": "VITE_BUILD_TARGET=main deno run -A --node-modules-dir=auto npm:vite build --mode development",
-    "build:worker:dev": "VITE_BUILD_TARGET=worker deno run -A --node-modules-dir=auto npm:vite build --mode development",
-
-    "check": "deno check src/index.ts src/xpute/worker/worker.ts"
+    "dev": "deno run -A --watch --env=../.env src/index.ts",
+    "check": "deno check src/index.ts"
   },
-
-  "compilerOptions": { "types": ["./@types/index.d.ts"] },
 
   "imports": {
     "@/": "./src/",
