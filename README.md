@@ -6,79 +6,17 @@ _Started on December 15, 2025._
 
 ---
 
-**pxl** (pixelet) is a personal spatial engine project, with **xpute** (Transpute) emerging from the same codebase as a shared distributed runtime.
+**pxl** (pixelet) is a location-based social/building game — Pokémon Go-style presence, Minecraft-style building, Cyworld-style social space — built around a voxel-style 3D representation of real-world (OSM) geographic data.
 
----
+The engine is split into a pixelet-specific domain layer (**`@pxl/shared`**: coordinate system, cell/terrain model, bake wire format) and a project-agnostic utility layer (**`@xpute/core`**: generic collections, codecs, and the binary tree protocol those formats are built on) — see [Repository Structure](#repository-structure).
 
-## xpute (Transpute)
-
-A runtime that treats browser workers and server runtimes as first-class peers under the same IPC model. Browser and server are symmetric by design.
-
-### IPC
-
-Two frame planes share the same link:
-
-| Plane  | Frame Kind | Addressed by     |
-| ------ | ---------- | ---------------- |
-| Signal | `SIGNAL`   | Vector (u16)     |
-| Post   | `POST`     | Command (string) |
-
-Both planes support `ACKREQ` (request/response) and `UNACK` (fire-and-forget) semantics. The `RES` flag is owned by the router — devices and dispatchers never set it directly.
-
-### Workers
-
-Workers are numbered. Two IDs are reserved:
-
-| ID    | Role                    |
-| ----- | ----------------------- |
-| `1`   | Main thread             |
-| `255` | Guest (network gateway) |
-
-Workers register their vector/command capabilities during boot via a `LINK_INIT_SYN` / `LINK_INIT_ACK` handshake. The `Switch` maintains the routing table and forwards frames accordingly.
-
-### Dispatch
-
-| Component      | Role                                                   |
-| -------------- | ------------------------------------------------------ |
-| `Switch`       | Frame router. Maintains vector/command → worker table. |
-| `VectorPort`   | Handles vector-addressed dispatch.                     |
-| `CommandPort`  | Handles command-addressed dispatch.                    |
-| worker runtime | Owns ACKREQ/UNACK semantics at the runtime boundary.   |
-
-### Network
-
-`NetGateway` manages the network boundary:
-
-- HELLO handshake with HMAC cookie (anti-amplification)
-- Per-packet AEAD encryption (X25519 key exchange)
-- Ed25519 packet signatures
-- Replay protection with per-peer RID cache
-
-Two transports are supported:
-
-| Transport          | Kind                               |
-| ------------------ | ---------------------------------- |
-| `CentralTransport` | WebSocket + HTTP (server-mediated) |
-| `MeshTransport`    | WebRTC (peer-to-peer)              |
-
-### XTP — Xpute Tree Packet
-
-Binary wire format for IPC/RPC body payloads.
-
-- **Tree-shaped**: scalar leaves, typed-array sequences, branch nodes with positional children
-- **C-layout-compatible**: 8-byte word alignment, little-endian, relative offsets throughout
-- **Relocatable**: all internal references are relative; packets can be moved or spliced freely
-- **Zero-copy reads**: typed array sequences are returned as views into the packet buffer
-- **GRAFT**: a pre-encoded subtree packet splices inline with identical on-wire layout to an inline-encoded node
-- **Type-preserving nulls**: optional nodes preserve type metadata even when physically absent
-
-TLV is used separately for IPC frame argument encoding (flat, self-delimiting, stream-oriented).
+> An earlier iteration of this codebase explored a decentralized P2P/WebRTC runtime (`xpute` as a peer-symmetric IPC substrate: workers, `Switch` frame routing, `NetGateway` transports). That direction is parked in favor of a plain client-server MVP. The old code isn't deleted — it's preserved on `archive/pre-mvp-restart-20260409`.
 
 ---
 
 ## pxl (pixelet)
 
-A spatial map engine built on xpute, designed around voxel-style 3D representation of geographic data.
+A spatial map engine designed around voxel-style 3D representation of geographic data.
 
 ### Coordinate System — PVF3
 
@@ -137,7 +75,22 @@ Polygon rasterization uses even-odd fill with hole support. Linear features use 
 
 ### Rendering
 
-Pages are decoded into render-ready terrain data for the terrain layer. LOD is distance-based with reference distances at L1 (512), L2 (1024), L4 (2048), L8 (4096), L16 (8192), and L32 (∞).
+Pages are decoded into render-ready terrain data for the terrain layer, rendered with Three.js / React Three Fiber. LOD is distance-based with reference distances at L1 (512), L2 (1024), L4 (2048), L8 (4096), L16 (8192), and L32 (∞).
+
+### XTP — Xpute Tree Packet
+
+The binary wire format the bake pipeline's pages (and the map-tile API response) are encoded as.
+
+- **Tree-shaped**: scalar leaves, typed-array sequences, branch nodes with positional children
+- **C-layout-compatible**: 8-byte word alignment, little-endian, relative offsets throughout
+- **Relocatable**: all internal references are relative; packets can be moved or spliced freely
+- **Zero-copy reads**: typed array sequences are returned as views into the packet buffer
+- **GRAFT**: a pre-encoded subtree packet splices inline with identical on-wire layout to an inline-encoded node
+- **Type-preserving nulls**: optional nodes preserve type metadata even when physically absent
+
+TLV is used separately for flat, self-delimiting, stream-oriented argument encoding.
+
+Lives in `@xpute/core` (not `@pxl/shared`) — it's a generic relocatable-binary-tree codec with no pixelet domain knowledge baked in.
 
 ---
 
@@ -146,20 +99,17 @@ Pages are decoded into render-ready terrain data for the terrain layer. LOD is d
 ```
 .
 ├── apps/
-│   ├── web/                        # Web app (Deno + Vite)
-│   └── api/                        # API server (Deno + Hono + Vite)
+│   ├── web/                        # Web client (Deno + Vite + React 19 + R3F)
+│   └── api/                        # API server (Deno + Hono), OSM bake pipeline
 │
 └── packages/
     ├── xpute/
-    │   ├── core/                   # Switch, worker runtime, NetGateway, transports
-    │   └── spec/                   # IPC frames, XTP, TLV, RPC, crypto, error types
+    │   └── core/                   # Generic kit/collections/io/errors + XTP binary protocol
+    │                                # (no pixelet domain knowledge — portable to other projects)
     │
     └── pxl/
-        ├── engine/                 # Core spatial engine runtime
-        ├── bake/                   # OSM processing and page baking pipeline
-        ├── render/                 # LOD system, chunk render data types
-        ├── spec/                   # Cell types, PVF3, spatial indexer, adapters
-        └── common/                 # Shared utilities
+        └── shared/                 # PVF3 coordinate system, cell/terrain model, bake wire format
+                                     # (pixelet-specific — must stay identical between web and api)
 ```
 
 ---
@@ -167,25 +117,24 @@ Pages are decoded into render-ready terrain data for the terrain layer. LOD is d
 ## Tech Stack
 
 The monorepo, package management, and task execution are unified under Deno.
-Both the web and api apps use Vite as the bundling/build entry.
+The web app uses Vite as its bundling/build entry; the api runs directly under Deno.
 
-| Layer               | Technology                                   |
-| ------------------- | -------------------------------------------- |
-| Runtime / Workspace | Deno + TypeScript (strict)                   |
-| Bundler             | Vite                                         |
-| Web UI              | React 19                                     |
-| API                 | Hono                                         |
-| 3D Rendering        | Three.js + React Three Fiber                 |
-| Cryptography        | @noble/curves, @noble/ed25519, @noble/hashes |
-| Networking          | WebSocket (central), WebRTC (mesh)           |
-| Geodata             | OpenStreetMap (OSM)                          |
-| Spatial math        | gl-matrix, PVF3 fixed-point                  |
+| Layer               | Technology                      |
+| ------------------- | ------------------------------- |
+| Runtime / Workspace | Deno + TypeScript (strict)      |
+| Bundler (web)       | Vite                            |
+| Web UI              | React 19                        |
+| API                 | Hono                            |
+| 3D Rendering        | Three.js + React Three Fiber    |
+| Database            | PostgreSQL (main + geo/PostGIS) |
+| Geodata             | OpenStreetMap (OSM)             |
+| Spatial math        | PVF3 fixed-point (BigInt)       |
 
 ---
 
 ## Getting Started
 
-> Requires [Deno](https://deno.land/) 2.x.
+> Requires [Deno](https://deno.land/) 2.x and Docker (for the local Postgres databases).
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -193,6 +142,8 @@ cd pixelet
 
 cp .env.example .env
 cp apps/web/.env.example apps/web/.env
+
+docker compose --env-file .env -f infra/docker-compose.yml up -d
 
 deno task dev
 ```

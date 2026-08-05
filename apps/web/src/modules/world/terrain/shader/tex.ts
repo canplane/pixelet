@@ -2,8 +2,8 @@
 
 import * as THREE from "three";
 
-import type { u32 } from "@xpute/spec/lib/kit/word.ts";
-import type { I16Array, U8Array } from "@xpute/spec/lib/kit/array.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
+import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
 
 let max_anisotropy: number | null = null;
 

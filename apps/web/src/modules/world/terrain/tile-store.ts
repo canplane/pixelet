@@ -16,10 +16,10 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import type { IVec } from "@pxl/spec/space/pvf3/mod.ts";
-import { TO_XY } from "@pxl/spec/space/xy.ts";
+import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import type { Tile } from "@pxl/bake/terrain/format.ts";
+import type { Tile } from "@pxl/shared/bake/format.ts";
 
 export type TileStore = {
   tile_map: Map<IVec, Tile>;

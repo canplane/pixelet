@@ -2,13 +2,7 @@
 
 import { Compass, Loader2, Locate, Navigation } from "lucide-react";
 
-import {
-  type DeviceLocation,
-  type DeviceOrientation,
-  DevicePoseStatus,
-  useDeviceLocationStore,
-  useDeviceOrientationStore,
-} from "@/modules/device/pose/store.ts";
+import { type DeviceLocation, type DeviceOrientation, DevicePoseStatus, useDeviceLocationStore, useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
 import { useDeviceOrientation } from "@/modules/device/pose/use-device-orientation.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
@@ -16,10 +10,9 @@ import { useCameraStore } from "@/modules/camera/store.ts";
 import { useFollowMode } from "@/modules/map/navigation/use-follow-mode.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { CircularButton } from "@/shared/ui/theme/glass/circular-button.tsx";
-import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
+import { CircularButton } from "@/shared/ui/theme/cozy/circular-button.tsx";
 
-import type { f64 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
 export function DevicePoseControl() {
   useFollowMode();
@@ -82,7 +75,7 @@ export function DevicePoseControl() {
     }
 
     if (can_show_location_control) {
-      return { Icon: Locate, className: "text-white/40 scale-90" };
+      return { Icon: Locate, className: "text-[#5B4636]/40 scale-90" };
     }
 
     if (is_follow_mode) {
@@ -92,33 +85,32 @@ export function DevicePoseControl() {
       return {
         Icon: Compass,
         style: { transform: `rotate(${final_rotation_deg}deg)` },
-        className: "text-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] scale-110",
+        className: "text-sky-500 scale-110",
       };
     }
 
     return {
       Icon: Navigation,
-      className: "text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] group-hover:rotate-[45deg]",
+      className: "text-[#5B4636] group-hover:rotate-[45deg]",
     };
   };
 
   const { Icon, className, style } = get_icon_style();
 
   return (
-    <MotionContainer variant="slideUp" delay={0.5}>
-      <CircularButton
-        onClick={handle_action}
-        isActive={is_follow_mode}
-        disabled={!is_enabled || is_loading}
-      >
-        <Icon
-          className={cn(
-            "w-6 h-6 transition-all duration-500 ease-out",
-            className,
-          )}
-          style={style}
-        />
-      </CircularButton>
-    </MotionContainer>
+    <CircularButton
+      className="w-11 h-11"
+      onClick={handle_action}
+      isActive={is_follow_mode}
+      disabled={!is_enabled || is_loading}
+    >
+      <Icon
+        className={cn(
+          "w-5 h-5 transition-all duration-500 ease-out",
+          className,
+        )}
+        style={style}
+      />
+    </CircularButton>
   );
 }

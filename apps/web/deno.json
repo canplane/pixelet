@@ -1,5 +1,5 @@
 {
-  "name": "@pxl/web",
+  "name": "@pixelet/client",
   "version": "0.0.0",
   "exports": "./src/index.ts",
 
@@ -9,11 +9,11 @@
     "build": "deno run -A --node-modules-dir=auto npm:vite build",
     "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
 
-    "check": "deno check src/index.ts src/xpute/worker/worker.ts"
+    "check": "deno check src/index.ts"
   },
 
   "compilerOptions": {
-    "lib": ["esnext", "dom", "dom.iterable", "deno.ns", "deno.unstable"],
+    "lib": ["esnext", "dom", "dom.iterable", "deno.ns"],
     "jsx": "react-jsx",
     "jsxImportSource": "react",
 
@@ -43,12 +43,12 @@
     "zustand": "npm:zustand@^5.0.9",
 
     // 3D & maps
-    // "three": "npm:three@^0.183.2",
-    // "three-stdlib": "npm:three-stdlib@^2.36.1",
-    // "@react-three/drei": "npm:@react-three/drei@^10.7.7",
-    // "@react-three/fiber": "npm:@react-three/fiber@^9.5.0",
-    // "@react-three/postprocessing": "npm:@react-three/postprocessing@^3.0.4",
-    // "postprocessing": "npm:postprocessing@^6.38.3",
+    "three": "npm:three@^0.183.2",
+    "three-stdlib": "npm:three-stdlib@^2.36.1",
+    "@react-three/drei": "npm:@react-three/drei@^10.7.7",
+    "@react-three/fiber": "npm:@react-three/fiber@^9.5.0",
+    "@react-three/postprocessing": "npm:@react-three/postprocessing@^3.0.4",
+    "postprocessing": "npm:postprocessing@^6.38.3",
 
     "maplibre-gl": "npm:maplibre-gl@^5.14.0",
 
@@ -75,5 +75,6 @@
     "react-i18next": "npm:react-i18next@^16.0.0",
     "i18next-browser-languagedetector": "npm:i18next-browser-languagedetector@^8.0.2",
     "i18next-http-backend": "npm:i18next-http-backend@^3.0.0"
+    // "@tensorflow/tfjs-backend-webgpu": "npm:@tensorflow/tfjs-backend-webgpu@^4.22.0",
   }
 }

@@ -1,6 +1,6 @@
 // @pxl/api/app/config.ts
 
-import type { i32 } from "@xpute/spec/lib/kit/word.ts";
+import type { i32 } from "@xpute/core/kit/word.ts";
 
 import * as env from "@/lib/env/mod.ts";
 

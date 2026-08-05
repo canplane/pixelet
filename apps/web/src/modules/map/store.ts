@@ -2,8 +2,8 @@
 
 import { create } from "zustand";
 
-import type { PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
-import type { POI } from "@pxl/bake/terrain/model/osm_feature.ts";
+import type { PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 
 /** Data loading lifecycle. */
 export const enum MapStatus {

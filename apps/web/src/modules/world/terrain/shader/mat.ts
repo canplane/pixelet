@@ -2,11 +2,11 @@
 
 import * as THREE from "three";
 
-import type { f64, u32 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
-import { GROUND_CH_KEYS, type GroundChannelKey } from "@pxl/bake/terrain/format.ts";
-import { create_frag, vert } from "@pxl/render/terrain/shader.ts";
-import * as meta from "@pxl/render/terrain/shader_meta.ts";
+import { GROUND_CH_KEYS, type GroundChannelKey } from "@pxl/shared/bake/format.ts";
+import { create_frag, vert } from "@/render/terrain/shader.ts";
+import * as meta from "@/render/terrain/shader_meta.ts";
 
 const frag = create_frag();
 

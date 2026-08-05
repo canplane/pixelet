@@ -2,10 +2,10 @@
 
 import { create } from "zustand";
 
-import type { f64 } from "@xpute/spec/lib/kit/word.ts";
-import { clamp, round_to_step, wrap } from "@xpute/spec/lib/kit/math.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
+import { clamp, round_to_step, wrap } from "@xpute/core/kit/math.ts";
 
-import type { PVF3 } from "@pxl/spec/space/pvf3/mod.ts";
+import type { PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { camera_cfg } from "./config.ts";
 
@@ -58,6 +58,11 @@ export type CameraStore = {
   /** Follow mode flag. */
   is_follow_mode: boolean;
   set_is_follow_mode: (is_follow_mode: boolean) => void;
+
+  /** When enabled, panning re-samples terrain elevation under the map center every drag step. */
+  follow_terrain: boolean;
+  set_follow_terrain: (follow_terrain: boolean) => void;
+  toggle_follow_terrain: () => void;
 };
 
 export const useCameraStore = create<CameraStore>((set) => ({
@@ -114,4 +119,8 @@ export const useCameraStore = create<CameraStore>((set) => ({
 
   is_follow_mode: false,
   set_is_follow_mode: (is_follow_mode) => set((state) => state.is_follow_mode === is_follow_mode ? state : { is_follow_mode }),
+
+  follow_terrain: true,
+  set_follow_terrain: (follow_terrain) => set((state) => state.follow_terrain === follow_terrain ? state : { follow_terrain }),
+  toggle_follow_terrain: () => set((state) => ({ follow_terrain: !state.follow_terrain })),
 }));

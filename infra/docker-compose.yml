@@ -4,7 +4,7 @@ services:
     container_name: ${DB_MAIN_CONTAINER}
     restart: always
     ports:
-      - '${DB_MAIN_PORT}:5432'
+      - "${DB_MAIN_PORT}:5432"
     environment:
       POSTGRES_USER: ${DB_MAIN_USER}
       POSTGRES_PASSWORD: ${DB_MAIN_PASSWORD}
@@ -19,7 +19,7 @@ services:
     container_name: ${DB_GEO_CONTAINER}
     restart: always
     ports:
-      - '${DB_GEO_PORT}:5432'
+      - "${DB_GEO_PORT}:5432"
     environment:
       POSTGRES_USER: ${DB_GEO_USER}
       POSTGRES_PASSWORD: ${DB_GEO_PASSWORD}

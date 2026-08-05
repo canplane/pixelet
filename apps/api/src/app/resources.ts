@@ -1,8 +1,8 @@
-// @pxl/app/resources.ts
+// @pxl/api/app/resources.ts
 
 import { Pool } from "@db/postgres";
 
-import type { i32 } from "@xpute/spec/lib/kit/word.ts";
+import type { i32 } from "@xpute/core/kit/word.ts";
 
 import * as env from "@/lib/env/mod.ts";
 

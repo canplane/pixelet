@@ -1,6 +1,5 @@
 // @pxl/web/index.ts
 
-import Xpute from "@xpute/core/lib.ts";
-import manifest from "@/xpute.manifest.ts";
+import { main } from "@/main.tsx";
 
-new Xpute(manifest).start();
+main();

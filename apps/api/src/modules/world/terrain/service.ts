@@ -1,20 +1,21 @@
 // @pxl/api/modules/world/terrain/service.ts
 
-import { get_xpute } from "@/xpute/context.ts";
+import type { Hono } from "@hono/hono";
+
 import type { AppResources } from "@/app/resources.ts";
 
-import type { f64, i16, u32 } from "@xpute/spec/lib/kit/word.ts";
-import type { Bytes, I16Array } from "@xpute/spec/lib/kit/array.ts";
-import { to_tuple } from "@xpute/spec/lib/kit/lower.ts";
-import { encoder, TreeView } from "@xpute/spec/io/marshal/tree/mod.ts";
+import type { f64, i16, u32 } from "@xpute/core/kit/word.ts";
+import type { Bytes, I16Array } from "@xpute/core/kit/array.ts";
+import { to_tuple } from "@xpute/core/kit/lower.ts";
+import { encoder, TreeView } from "@xpute/core/xtp/tree/mod.ts";
 
-import type { BBox3857 } from "@pxl/spec/space/adapter/3857.ts";
-import * as epsg3857 from "@pxl/spec/space/adapter/3857.ts";
-import { type IVec, ivec } from "@pxl/spec/space/pvf3/mod.ts";
+import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
+import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
+import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { Command } from "@xpute/spec/control/cmd.ts";
-import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pxl/bake/terrain/format.ts";
-import { ELE_PADDED_SPAN } from "@pxl/bake/terrain/constants.ts";
+import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pxl/shared/bake/format.ts";
+import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
+import { bake_terrain } from "@pxl/api/bake/terrain/bake.ts";
 import { TerrainRepository } from "./repository.ts";
 
 const ELE_PADDED_SPAN2: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN;
@@ -35,7 +36,7 @@ function make_services(repo: TerrainRepository) {
         repo.fetch_coast_rows(page_bbox),
       ]);
     } catch (err) {
-      console.error(`[${Command.TERRAIN_SOURCE}/${ivec.repr(page_idx)}] shell: db error:`, err);
+      console.error(`[terrain/source/${ivec.repr(page_idx)}] shell: db error:`, err);
       throw err;
     }
 
@@ -43,12 +44,12 @@ function make_services(repo: TerrainRepository) {
     if (_ele && _ele.length === ELE_PADDED_SPAN2) {
       ele = new Int16Array(_ele);
     } else {
-      console.warn(`[${Command.TERRAIN_SOURCE}/${ivec.repr(page_idx)}] shell: invalid ele shape`, _ele?.length ?? null);
+      console.warn(`[terrain/source/${ivec.repr(page_idx)}] shell: invalid ele shape`, _ele?.length ?? null);
       ele = new Int16Array(ELE_PADDED_SPAN2); // fallback
     }
 
     console.debug(
-      `[${Command.TERRAIN_SOURCE}/${ivec.repr(page_idx)}] shell: ele=${ele.length}, feat_rows=${feat_rows.length}, coast_rows=${coast_rows.length}`,
+      `[terrain/source/${ivec.repr(page_idx)}] shell: ele=${ele.length}, feat_rows=${feat_rows.length}, coast_rows=${coast_rows.length}`,
     );
 
     const feats_view = new TreeView().branch((__) => {
@@ -69,20 +70,29 @@ function make_services(repo: TerrainRepository) {
     ));
   };
 
-  return { fetch_terrain_source };
+  // Raw OSM/elevation source, baked into client-ready ground channels.
+  // This step used to run inside the (now-dropped) WASM worker.
+  const fetch_tile = async (page_idx: IVec): Promise<Bytes> => {
+    const raw: Bytes = await fetch_terrain_source(page_idx);
+    return bake_terrain(page_idx, raw);
+  };
+
+  return { fetch_terrain_source, fetch_tile };
 }
 
-export function register(resrc: AppResources) {
-  const { post } = get_xpute();
-
+export function register(router: Hono, resrc: AppResources): void {
   const repo = new TerrainRepository(resrc.geo_pool);
   const service = make_services(repo);
 
-  const unsub = post.on<[IVec]>(Command.TERRAIN_SOURCE, (args, _body) => {
-    const [page_idx] = args;
+  router.get("/api/world/terrain/tile/:page_idx", async (c) => {
+    let page_idx: IVec;
+    try {
+      page_idx = BigInt(c.req.param("page_idx"));
+    } catch {
+      return c.text("bad page_idx", 400);
+    }
 
-    return service.fetch_terrain_source(page_idx);
+    const bytes: Bytes = await service.fetch_tile(page_idx);
+    return c.body(bytes, 200, { "content-type": "application/octet-stream" });
   });
-
-  resrc.disposers.push(unsub);
 }

@@ -9,7 +9,7 @@ import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
 const { FOV } = camera_cfg.projection;
 const { DEFAULT_DIST } = camera_cfg.view;
 
-const SCALE_BAR_WIDTH = 80;
+const SCALE_BAR_WIDTH = 64;
 
 export function MapScaleBar() {
   const view_state = useCameraStore((state) => state.view_state);
@@ -39,7 +39,7 @@ export function MapScaleBar() {
         <span
           className={cn(
             "text-[8px] font-medium mb-2 tracking-widest uppercase transition-colors",
-            is_default_zoom ? "text-blue-400/80" : "text-white/40 group-hover:text-white/80",
+            is_default_zoom ? "text-sky-500/90" : "text-[#5B4636]/40 group-hover:text-[#5B4636]/80",
           )}
         >
           {label}
@@ -53,19 +53,16 @@ export function MapScaleBar() {
           {/* 베이스 수평선 */}
           <div
             className={cn(
-              "h-[0.5px] w-full relative transition-colors",
-              is_default_zoom ? "bg-blue-400/30" : "bg-white/20",
+              "h-[1px] w-full relative transition-colors",
+              is_default_zoom ? "bg-sky-400/50" : "bg-[#5B4636]/20",
             )}
-          >
-            {/* 기본 줌일 때 은은한 블루 글로우 효과 */}
-            {is_default_zoom && <div className="absolute inset-0 bg-linear-to-r from-transparent via-blue-400/40 to-transparent blur-[0.5px]" />}
-          </div>
+          />
 
           {/* 왼쪽 눈금 */}
           <div
             className={cn(
-              "absolute left-0 h-2 w-[0.5px] transition-colors",
-              is_default_zoom ? "bg-blue-400/60" : "bg-white/40 group-hover:bg-white/80",
+              "absolute left-0 h-2 w-[1px] transition-colors",
+              is_default_zoom ? "bg-sky-500/70" : "bg-[#5B4636]/40 group-hover:bg-[#5B4636]/80",
             )}
           />
 
@@ -73,15 +70,15 @@ export function MapScaleBar() {
           <div
             className={cn(
               "absolute left-1/2 -translate-x-1/2 w-[2px] h-[2px] rounded-full transition-colors",
-              is_default_zoom ? "bg-blue-400/40" : "bg-white/20 group-hover:bg-white/50",
+              is_default_zoom ? "bg-sky-400/50" : "bg-[#5B4636]/20 group-hover:bg-[#5B4636]/50",
             )}
           />
 
           {/* 오른쪽 눈금 */}
           <div
             className={cn(
-              "absolute right-0 h-2 w-[0.5px] transition-colors",
-              is_default_zoom ? "bg-blue-400/60" : "bg-white/40 group-hover:bg-white/80",
+              "absolute right-0 h-2 w-[1px] transition-colors",
+              is_default_zoom ? "bg-sky-500/70" : "bg-[#5B4636]/40 group-hover:bg-[#5B4636]/80",
             )}
           />
         </div>

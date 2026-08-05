@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 
-import type { f64, u32 } from "@xpute/spec/lib/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
 import { useDeviceOrientationStore } from "./store.ts";
 

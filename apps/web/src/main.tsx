@@ -1,9 +1,9 @@
 // @pxl/web/main.tsx
 
-// import "@pxl/common/lib/i18n/i18n.client.ts"; // i18n initialization
+// TODO: i18n initialization (not wired up yet)
 
 import { enableMapSet } from "immer";
-import { bootstrap_app } from "@/bootstrap/app.ts";
+import { bootstrap_app } from "@/bootstrap/app.ts"; // 엔진 부트스트랩 임포트
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,13 +15,16 @@ enableMapSet(); // Immer의 Map/Set 지원 플러그인 활성화
 
 let root: ReturnType<typeof createRoot> | null = null;
 
-export async function main(): Promise<void> {
+// 비동기 엔진 초기화 후 렌더링 시작
+export function main(): void {
   try {
-    await bootstrap_app();
+    // 1. 인프라 부트스트랩 (WebGPU 준비 및 Diagnostics 실행)
+    bootstrap_app();
 
+    // 2. UI 렌더링
     if (!root) {
       const container = document.getElementById("root");
-      if (!container) throw new Error("web: missing root container: #root");
+      if (!container) throw new Error(`web: missing root container: #root`);
       root = createRoot(container);
     }
 
@@ -31,7 +34,8 @@ export async function main(): Promise<void> {
       </StrictMode>,
     );
   } catch (err) {
-    console.error("web: failed to bootstrap app:", err);
+    console.error("web: 🔥 failed to bootstrap engines:", err);
+    // 필요 시 엔진 로드 실패 화면(Fallback) 처리
   }
 }
 // main();

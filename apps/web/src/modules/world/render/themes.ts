@@ -1,8 +1,8 @@
 // @pxl/web/modules/world/render/themes.ts
 
-import type { u32 } from "@xpute/spec/lib/kit/word.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
 
-import type { V3 } from "@pxl/spec/space/v3.ts";
+import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 export const enum WorldThemeKey {
   MORNING = "morning",

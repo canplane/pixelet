@@ -59,7 +59,7 @@ export function ModalManager(props: ModalManagerProps) {
       {type === "foo:update" && (
         <EditFooModal
           open={!!modalState}
-          onOpenChange={(open) => !open && setModalState(null)}
+          onOpenChange={(open: boolean) => !open && setModalState(null)}
           {...modalState}
         />
       )}
