@@ -9,7 +9,13 @@
     "build": "deno run -A --node-modules-dir=auto npm:vite build",
     "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
 
-    "check": "deno check src/index.ts"
+    "check": "deno check src/index.ts",
+    // Pure-logic modules only (camera orbit math, LOD selection, ...) — none
+    // of this touches the DOM/WebGL, so plain `deno test` works with no
+    // browser/jsdom harness. A component that needs a mounted <Canvas> isn't
+    // a target for this task; that's what the live browser verification
+    // pass this project's been using is for instead.
+    "test": "deno test -A src"
   },
 
   "compilerOptions": {

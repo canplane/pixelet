@@ -10,7 +10,7 @@ import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { floor3n, set3, type V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import { get_ele_at_local, with_ele } from "@/modules/world/terrain/use-elevation.ts";
+import { get_ele_at_local, with_ele } from "@/modules/world/terrain/use_elevation.ts";
 import { get_local_world_origin } from "../world/frame/coord.ts";
 
 const $hit = new THREE.Vector3();

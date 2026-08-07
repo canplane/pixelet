@@ -45,7 +45,7 @@ import type { ElementOf, TypedArray, TypedArrayCtor, U32Array, U64Array, U8Array
 import { copy_ab_view } from "@xpute/core/kit/array.ts";
 
 import type { PVec, PVecTraits } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ } from "@xpute/core/xtp/tree/spec.ts";
+import { ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ } from "@xpute/core/io/marshal/tree/spec.ts";
 
 /**
  * Scratchpad for 64-bit word operations to avoid allocation.

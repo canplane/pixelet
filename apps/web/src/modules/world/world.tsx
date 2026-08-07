@@ -13,7 +13,7 @@
  * Each layer is responsible for its own local coordinate correction.
  */
 
-import { forwardRef, useRef } from "react";
+import { forwardRef, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { type FVec, type IVec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -24,21 +24,23 @@ import { fill3, floor3n, type V3 } from "@pxl/shared/spec/space/v3.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
-import { useMapNavigation } from "@/modules/map/navigation/use-map-navigation.ts";
-import { get_ele } from "./terrain/use-elevation.ts";
+import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
+import { get_ele } from "./terrain/use_elevation.ts";
+import { useDebugStore } from "@/app/dev/debug_store.ts";
 
 import { AnchorSpace } from "./spatial/anchor/space.tsx";
 import { AnchorNode } from "./spatial/anchor/node.tsx";
-import { GroundedNode } from "./spatial/anchor/grounded-node.tsx";
+import { GroundedNode } from "./spatial/anchor/grounded_node.tsx";
+import { AnchorRegistry } from "./spatial/anchor/registry.ts";
 
-import { useFrameRotation } from "./frame/use-frame-rotation.ts";
-import { useFrameTranslation } from "./frame/use-frame-translation.ts";
+import { useFrameRotation } from "./frame/use_frame_rotation.ts";
+import { useFrameTranslation } from "./frame/use_frame_translation.ts";
 import { useFrameRefs } from "./frame/context.tsx";
 import { get_local_world_origin } from "./frame/coord.ts";
 
 import { TerrainLayer } from "./terrain/layer.tsx";
-import { UserMarker } from "./markers/user-marker.tsx";
-import { CellHighlighter } from "./markers/cell-highlighter.tsx";
+import { UserMarker } from "./markers/user_marker.tsx";
+import { CellHighlighter } from "./markers/cell_highlighter.tsx";
 import { Block } from "./primitives/block.tsx";
 
 type DebugDotProps = {
@@ -97,24 +99,40 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
   const map_center = useMapStore((state) => state.map_center);
   const { device_coord } = useMapNavigation();
+  const show_debug_objects = useDebugStore((state) => state.show_debug_objects);
 
   const view_frame_ref = useRef<THREE.Group>(null);
   const map_origin: IVec = get_local_world_origin(map_center);
+
+  // owned here (not by AnchorSpace) so useFrameTranslation can rebase it in
+  // the same callback that snaps local-world-frame's position — see the doc
+  // comment on useFrameTranslation's registry param.
+  const registry = useMemo(() => {
+    const next = new AnchorRegistry();
+    next.cur_map_origin = map_origin;
+    return next;
+  }, []);
 
   useFrameRotation({ frame_ref: world_frame_ref });
   useFrameTranslation({
     frame_ref: local_world_frame_ref,
     map_center,
     map_origin,
+    registry,
   });
 
+  // device_coord is deliberately NOT gated here the way map_center is —
+  // map_center can be seeded from a fallback (see use_map_bootstrap.ts) even
+  // when there's no real device fix at all, and the terrain/world itself
+  // should still render in that case. Only the pieces that specifically
+  // depict *the device's own position* (UserMarker below) need to stay
+  // absent when device_coord is null.
   if (map_center === null) return null;
-  if (device_coord === null) return null;
 
   return (
     <group name="world" ref={ref}>
       <group name="view-frame" ref={view_frame_ref}>
-        {__IS_DEV__ && (
+        {__IS_DEV__ && show_debug_objects && (
           <mesh name="view-frame-origin" position={[5, 0, 0]}>
             <sphereGeometry args={[1]} />
             <meshBasicMaterial color="green" wireframe />
@@ -122,7 +140,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
         )}
 
         <group name="world-frame" ref={world_frame_ref}>
-          {__IS_DEV__ && (
+          {__IS_DEV__ && show_debug_objects && (
             <mesh name="world-frame-origin" position={[0, 5, 0]}>
               <sphereGeometry args={[1]} />
               <meshBasicMaterial color="yellow" wireframe />
@@ -130,20 +148,20 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
           )}
 
           <group name="local-world-frame" ref={local_world_frame_ref}>
-            {__IS_DEV__ && (
+            {__IS_DEV__ && show_debug_objects && (
               <mesh name="local-world-frame-origin" position={[2048, 2048, 0]}>
                 <sphereGeometry args={[100]} />
                 <meshBasicMaterial color="black" wireframe />
               </mesh>
             )}
 
-            <AnchorSpace map_origin={map_origin}>
+            <AnchorSpace registry={registry}>
               <TerrainLayer />
 
               <CellHighlighter />
-              <UserMarker device_coord={device_coord} />
+              {device_coord !== null && <UserMarker device_coord={device_coord} />}
 
-              {__IS_DEV__ && <DebugLayer map_center={map_center} map_origin={map_origin} />}
+              {__IS_DEV__ && show_debug_objects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
             </AnchorSpace>
           </group>
         </group>

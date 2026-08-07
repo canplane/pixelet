@@ -1,48 +1,64 @@
 // @pxl/web/modules/map/ui/control/compass.tsx
 
 import { useCameraStore } from "@/modules/camera/store.ts";
-import { camera_cfg } from "@/modules/camera/config.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
-import { CircularButton } from "@/shared/ui/theme/cozy/circular-button.tsx";
+import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
+import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
 
-import { reground_map_center } from "@/modules/world/terrain/use-terrain-follow-sync.ts";
-
-const { DEFAULT_POLAR } = camera_cfg.view;
+import { reground_map_center } from "@/modules/world/terrain/use_terrain_follow_sync.ts";
 
 export function MapCompass() {
   const view_state = useCameraStore((state) => state.view_state);
-  const reset_orientation = useCameraStore.getState().reset_orientation;
-  const { dist, azimuth, polar } = view_state;
+  const reset_azimuth = useCameraStore.getState().reset_azimuth;
+  const { dist, azimuth } = view_state;
 
-  const tilt_thres = Math.max(0.26, 2.5 / (dist + 7.5) + 0.1);
   const azimuth_thres = (Math.max(3.0, 25 / (dist + 2.5))) * (Math.PI / 180);
 
   const is_rotated: boolean = Math.abs(azimuth) > azimuth_thres;
-  const is_tilted = Math.abs(polar - DEFAULT_POLAR) > tilt_thres;
 
-  const is_default_orientation: boolean = !is_rotated && !is_tilted;
+  // visibility is azimuth-only now — this button's own action
+  // (reset_azimuth) only ever touches azimuth, not tilt (see handle_reset's
+  // comment), so showing/hiding it for tilt changes too was inconsistent:
+  // it could appear while already pointing exactly north (tilt merely
+  // off-default), where clicking it would visibly do nothing, or disappear
+  // while still rotated because tilt happened to be back at default.
+  const is_default_orientation: boolean = !is_rotated;
 
-  // reset_orientation only touches azimuth/polar — it doesn't re-sample elevation, so
-  // if map_center had drifted (or was never grounded) the view can visibly "float" once
+  // reset_azimuth only touches azimuth — it doesn't re-sample elevation, so if
+  // map_center had drifted (or was never grounded) the view can visibly "float" once
   // the angle change makes that mismatch obvious. Re-ground alongside the angle reset,
   // same as every other camera-settling interaction (see reground_map_center's callers).
   const handle_reset = () => {
-    reset_orientation();
+    reset_azimuth();
     reground_map_center();
   };
 
   return (
-    <MotionContainer show={!is_default_orientation} variant="compass" delay={0.4}>
-      <CircularButton className="w-11 h-11" onClick={handle_reset} isActive={is_default_orientation}>
-        {/* 🧭 N 표시: 방향과 틸트가 모두 완벽히 리셋되었을 때만 빨간색 활성화 */}
+    // layout={false}: this now sits in a flex column alongside
+    // DevicePoseControl (top_overlays.tsx puts GPS above compass in one
+    // shared column) instead of its own standalone wrapper — without this,
+    // framer-motion's default layout={true} tries to auto-animate this
+    // button's bounding box whenever the *column's* size changes (e.g. its
+    // own mount/unmount reflowing the shared flex container), which could
+    // leave it stuck mid-transition instead of cleanly disappearing.
+    <MotionContainer show={!is_default_orientation} variant="compass" delay={0.4} layout={false}>
+      {
+        /* isActive dropped: MotionContainer only mounts this while
+          !is_default_orientation, so is_default_orientation is always false
+          for every render that actually reaches the screen — passing it as
+          isActive was dead code, CircularButton's amber ring could never
+          actually show. This is a one-shot reset button, not a toggle with
+          a real "currently active" state to indicate. */
+      }
+      <CircularButton className="w-11 h-11" dark onClick={handle_reset}>
+        {/* 🧭 N 표시: 방위(azimuth)가 정확히 북쪽일 때만 빨간색 활성화 */}
         <span
           className={cn(
             "absolute top-0.5 text-[8px] font-medium tracking-tighter select-none z-20 transition-colors duration-300",
             is_default_orientation // 🚀 추출한 변수를 사용하여 조건문 단순화
               ? "text-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
-              : "text-[#5B4636]/40",
+              : "text-white/40",
           )}
         >
           N
@@ -54,7 +70,7 @@ export function MapCompass() {
           style={{ transform: `rotate(${(-azimuth * 180) / Math.PI}deg)` }}
         >
           <div className="flex-1 bg-red-500/80 rounded-t-full shadow-[0_0_12px_rgba(239,68,68,0.4)]" />
-          <div className="flex-1 bg-[#5B4636]/20 rounded-b-full" />
+          <div className="flex-1 bg-white/25 rounded-b-full" />
         </div>
       </CircularButton>
     </MotionContainer>

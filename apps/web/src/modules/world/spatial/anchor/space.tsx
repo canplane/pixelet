@@ -2,45 +2,31 @@
 
 /**
  * Anchor scene-space coordinator.
- * - owns the registry lifetime
- * - shifts live anchors on origin changes
  * - mounts the registry root into the scene
+ * - provides the registry (owned by the caller, see World) to descendants
+ *
+ * Rebasing anchors on origin change used to happen in a useFrame here, as
+ * its own independent subscription from use_frame_translation.ts's frame
+ * snap — two separate per-frame callbacks reacting to the same map_origin
+ * change with no ordering contract between them, which could leave anchors
+ * and the local-world-frame disagreeing about the origin for a tick (seen
+ * as a stray offset/doubled instance). The registry is now owned by World
+ * and rebased from inside useFrameTranslation's own callback instead, so
+ * it's one atomic step rather than two independently-scheduled ones.
  */
 
-import { type ReactNode, useMemo } from "react";
-import { useFrame } from "@react-three/fiber";
+import type { ReactNode } from "react";
 
-import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-
-import { AnchorRegistry } from "./registry.ts";
+import type { AnchorRegistry } from "./registry.ts";
 import { AnchorRegistryContext } from "./context.tsx";
 
 type AnchorSpaceProps = {
-  map_origin: IVec;
+  registry: AnchorRegistry;
 
   children: ReactNode;
 };
 export function AnchorSpace(props: AnchorSpaceProps) {
-  const { map_origin, children } = props;
-
-  /** Registry lifetime is owned by AnchorSpace. */
-  const registry = useMemo(() => {
-    const next = new AnchorRegistry();
-    next.cur_map_origin = map_origin;
-    return next;
-  }, []);
-
-  /**
-   * Shift all live anchors when the floating origin changes.
-   * Runs on the R3F render tick (not a React effect) so it stays synchronized with
-   * use-frame-translation.ts's frame snap — an effect-based shift can lag a tick behind,
-   * leaving newly-linked anchors baked in with a stale origin until the next rebase.
-   */
-  useFrame(() => {
-    if (registry.cur_map_origin !== map_origin) {
-      registry.shift_map_origin(map_origin);
-    }
-  });
+  const { registry, children } = props;
 
   return (
     <AnchorRegistryContext.Provider value={registry}>

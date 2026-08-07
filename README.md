@@ -6,11 +6,11 @@ _Started on December 15, 2025._
 
 ---
 
-**pxl** (pixelet) is a location-based social/building game — Pokémon Go-style presence, Minecraft-style building, Cyworld-style social space — built around a voxel-style 3D representation of real-world (OSM) geographic data.
+**pxl** (pixelet) is a location-based social/building game — real-time presence, voxel-style building, and a persistent social space — built around a voxel-style 3D representation of real-world (OSM) geographic data.
 
 The engine is split into a pixelet-specific domain layer (**`@pxl/shared`**: coordinate system, cell/terrain model, bake wire format) and a project-agnostic utility layer (**`@xpute/core`**: generic collections, codecs, and the binary tree protocol those formats are built on) — see [Repository Structure](#repository-structure).
 
-> An earlier iteration of this codebase explored a decentralized P2P/WebRTC runtime (`xpute` as a peer-symmetric IPC substrate: workers, `Switch` frame routing, `NetGateway` transports). That direction is parked in favor of a plain client-server MVP. The old code isn't deleted — it's preserved on `archive/pre-mvp-restart-20260409`.
+> An earlier iteration of this codebase explored a decentralized P2P/WebRTC runtime (`xpute` as a peer-symmetric IPC substrate: workers, `Switch` frame routing, `NetGateway` transports), then a Rust/WebGPU rewrite of the spatial/bake stack. Both directions are parked in favor of a plain client-server MVP. The old code isn't deleted — it's preserved on `checkpoint/20260107-float`, `checkpoint/20260405-xpute`, and `checkpoint/20260409-wasm-aborted`.
 
 ---
 
@@ -75,7 +75,7 @@ Polygon rasterization uses even-odd fill with hole support. Linear features use 
 
 ### Rendering
 
-Pages are decoded into render-ready terrain data for the terrain layer, rendered with Three.js / React Three Fiber. LOD is distance-based with reference distances at L1 (512), L2 (1024), L4 (2048), L8 (4096), L16 (8192), and L32 (∞).
+Pages are decoded into render-ready terrain data for the terrain layer, rendered with Three.js / React Three Fiber. LOD is distance-based, stepping cell density by 1/2/4/8/16/32 at reference distances of 96, 192, 384, 768, 1536, and ∞ world units.
 
 ### XTP — Xpute Tree Packet
 

@@ -50,7 +50,7 @@ export type CameraStore = {
 
   /** Reset signals for camera controllers. */
   reset_dist: () => void;
-  reset_orientation: () => void;
+  reset_azimuth: () => void;
   reset_view: () => void;
 
   // ---- Interaction ----
@@ -101,12 +101,15 @@ export const useCameraStore = create<CameraStore>((set) => ({
       const dist: f64 = norm_dist(DEFAULT_DIST);
       return state.view_state.dist === dist ? state : { view_state: { ...state.view_state, dist } };
     }),
-  reset_orientation: () =>
+  // azimuth-only: "align north" is what both the dedicated compass button
+  // and the follow-mode-off action actually mean — resetting
+  // polar (tilt) alongside it used to also flatten/steepen whatever view
+  // angle the user had deliberately set, on a click whose entire purpose was
+  // "point me north," not "also forget my tilt."
+  reset_azimuth: () =>
     set((state) => {
       const azimuth: f64 = norm_azimuth(DEFAULT_AZIMUTH);
-      const polar: f64 = norm_polar(DEFAULT_POLAR);
-      const same: boolean = state.view_state.azimuth === azimuth && state.view_state.polar === polar;
-      return same ? state : { view_state: { ...state.view_state, azimuth, polar } };
+      return state.view_state.azimuth === azimuth ? state : { view_state: { ...state.view_state, azimuth } };
     }),
   reset_view: () =>
     set({

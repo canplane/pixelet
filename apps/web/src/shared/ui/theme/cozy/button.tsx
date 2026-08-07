@@ -15,10 +15,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Warm cream card, softly frosted — the cozy default surface.
+        // warm cream card, softly frosted — the cozy default surface.
         default: "bg-[#FFFDF7]/80 backdrop-blur-md text-[#5B4636] shadow-[0_4px_14px_rgba(200,160,100,0.22)] border-2 border-white/90 hover:bg-[#FFF8EC]/85",
 
-        // Golden "active/selected" fill — distinct from the green success toast.
+        // golden "active/selected" fill — distinct from the green success toast.
         accent: "bg-amber-400 text-white shadow-[0_4px_14px_rgba(217,119,6,0.35)] hover:bg-amber-500",
 
         outline: "border-2 border-[#F0E4CC] bg-transparent text-[#5B4636] hover:bg-[#FFF8EC]",

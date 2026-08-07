@@ -28,7 +28,7 @@
  */
 
 import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
-import { BranchCursor, encoder, TreeReader, TreeView } from "@xpute/core/xtp/tree/mod.ts";
+import { BranchCursor, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 
 // import * as json_codec from "@xpute/core/io/json_codec.ts";
 

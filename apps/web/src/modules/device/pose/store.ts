@@ -1,5 +1,5 @@
 // @pxl/web/modules/device/pose/store.ts
-// 기기의 물리적 센서(GPS, 나침반) 데이터와 수신 상태를 관리하는 전역 스토어
+// global store for the device's physical sensors (GPS, compass) — data and reception state.
 
 import { create } from "zustand";
 
@@ -15,22 +15,22 @@ export const enum DevicePoseStatus {
 }
 
 export type DeviceLocation = {
-  /** 기기의 현재 위경도 및 고도 */
+  /** Current latitude/longitude/altitude. */
   coords: G4326;
-  /** GPS 정확도 (단위: 미터) */
+  /** GPS accuracy, in meters. */
   accuracy: f64;
-  /** 이동 방향 (GPS 이동 궤적 기반, 0~360도) */
+  /** Heading of travel from GPS course, 0-360 degrees. */
   course: f64 | null;
 
   timestamp: f64;
 };
 
 export type DeviceOrientation = {
-  /** 0~360: 나침반 방향 (Z축 회전) */
+  /** 0-360: compass heading (Z rotation). */
   heading: f64 | null;
-  /** -180~180: 앞뒤 기울기 (X축 회전) */
+  /** -180-180: front/back tilt (X rotation). */
   beta: f64 | null;
-  /** -90~90: 좌우 기울기 (Y축 회전) */
+  /** -90-90: left/right tilt (Y rotation). */
   gamma: f64 | null;
 
   timestamp: f64;
@@ -41,52 +41,64 @@ function is_delta_over(a: f64 | null, b: f64 | null, eps: f64): boolean {
   return Math.abs(a - b) > eps;
 }
 
-type DeviceLocationState = {
-  // ---- Geolocation: 위경도 및 고도 데이터 ----
+/** Shortest distance between two values on a circle of the given period (e.g. 360 for compass degrees) — unlike a plain subtraction, this stays small across the wrap (359 vs 1 is a 2-unit gap, not 358). */
+function circular_delta(a: f64, b: f64, period: f64): f64 {
+  const raw: f64 = Math.abs(a - b) % period;
+  return raw > period / 2 ? period - raw : raw;
+}
 
-  /** 위치 추적 활성화 여부 */
+/** Same dead-zone check as is_delta_over, but for a circular (wrapping) value like compass heading. Plain is_delta_over would see 359° vs 1° as a 358° jump and let every bit of sensor noise through right around due north. */
+function is_heading_delta_over(a: f64 | null, b: f64 | null, eps: f64): boolean {
+  if (a === null || b === null) return a !== b;
+  return circular_delta(a, b, 360) > eps;
+}
+
+type DeviceLocationState = {
+  // ---- Geolocation: lat/lng/altitude data ----
+
+  /** Whether location tracking is active. */
   is_tracking_location: boolean;
-  /** GPS 데이터 수신 시 필터링 후 업데이트 */
+  /** Updates on GPS data reception, after filtering. */
   set_is_tracking_location: (enabled: boolean) => void;
 
   location: DeviceLocation | null;
   set_location: (coords: G4326, accuracy: f64, course: f64 | null) => void;
 
-  // ---- Lifecycle State: 공통 상태 및 메시지 ----
-  /** 전체적인 위치 서비스 수신 상태 */
+  // ---- Lifecycle state: shared status/message ----
+  /** Overall location-service reception status. */
   status: DevicePoseStatus;
-  /** 시스템 메시지 (에러 내용 등) */
+  /** System message (error detail, etc). */
   error_msg: string | null;
 
-  // ---- Common Actions ----
-  /** 서비스 상태 변경 (idle, loading, ready) */
+  // ---- Common actions ----
+  /** Service status transition (idle, loading, ready). */
   set_status: (status: DevicePoseStatus) => void;
-  /** 예외 상황 발생 시 에러 기록 */
+  /** Records an error on failure. */
   set_error: (error_msg: string) => void;
 };
 
 type DeviceOrientationState = {
-  // ---- Orientation: 나침반 및 권한 상태 ----
+  // ---- Orientation: compass and permission state ----
 
-  /** 나침반 리스너 등록 및 작동 여부 */
+  /** Whether the compass listener is registered and running. */
   is_tracking_orientation: boolean;
   /** Orientation tracking state change */
   set_is_tracking_orientation: (enabled: boolean) => void;
 
   orientation: DeviceOrientation | null;
-  /** 나침반 센서 데이터 업데이트 (데드존 필터링 적용) */
+  /** Updates compass sensor data (dead-zone filtered). */
   set_orientation: (heading: f64 | null, beta: f64 | null, gamma: f64 | null) => void;
 
-  // ---- Lifecycle State: 공통 상태 및 메시지 ----
-  /** 전체적인 위치 서비스 수신 상태 */
+  // ---- Lifecycle state: shared status/message ----
+  /** Overall location-service reception status. */
   status: DevicePoseStatus;
-  /** 시스템 메시지 (에러 내용 등) */
+  /** System message (error detail, etc). */
   error_msg: string | null;
 
-  // ---- Common Actions ----
-  /** 서비스 상태 변경 (idle, loading, ready) */
+  // ---- Common actions ----
+  /** Service status transition (idle, loading, ready). */
   set_status: (status: DevicePoseStatus) => void;
-  /** 예외 상황 발생 시 에러 기록 */
+  /** Records an error on failure. */
   set_error: (error_msg: string) => void;
 };
 
@@ -97,13 +109,13 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
   status: DevicePoseStatus.IDLE,
   error_msg: null,
 
-  /** 하드웨어에서 전달된 원시 GPS 데이터를 검증하고, 유의미한 변화일 때만 상태를 갱신합니다. */
+  /** Validates raw GPS data from hardware, and only updates state on a significant change. */
   set_location: (coords, accuracy, course) =>
     set((state) => {
       const timestamp: f64 = performance.now();
       const prev: DeviceLocation | null = state.location;
 
-      // 1. First-Fix Pass
+      // 1. First-fix pass
       if (!prev) {
         return {
           location: { coords, accuracy, course, timestamp },
@@ -113,11 +125,11 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
         };
       }
 
-      // 2. Accuracy Guard (Accept if < 100m OR if accuracy is improving)
+      // 2. Accuracy guard (accept if < 100m, or if accuracy is improving)
       const is_improving = accuracy < prev.accuracy;
       if (accuracy > 100 && !is_improving) return state;
 
-      // 3. Deadzone-Filtering (Approx. 1.1m for Lat/Lng, 0.5m for Alt)
+      // 3. Dead-zone filtering (~1.1m for lat/lng, 0.5m for altitude)
       const lng_diff: f64 = Math.abs(prev.coords[0] - coords[0]);
       const lat_diff: f64 = Math.abs(prev.coords[1] - coords[1]);
       const alt_diff: f64 = Math.abs((prev.coords[2] ?? 0) - (coords[2] ?? 0));
@@ -128,11 +140,9 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
         return state;
       }
 
-      /**
-       * 4. Update Strategy:
-       * Even if the position hasn't moved significantly, we update the metadata (accuracy/course/timestamp)
-       * to ensure the UI has the freshest signal information.
-       */
+      // 4. Update strategy: even without significant movement, refresh
+      // metadata (accuracy/course/timestamp) so the UI has the freshest
+      // signal info.
       return {
         location: {
           coords: is_significant_change ? coords : prev.coords,
@@ -148,29 +158,23 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
 
   set_is_tracking_location: (enabled) =>
     set((state) => {
-      // 🛡️ 값이 이미 같다면 리렌더링을 발생시키지 않음
+      // no-op if unchanged, to avoid a re-render
       if (state.is_tracking_location === enabled) return state;
 
-      // 추적 중단 시 location 데이터를 null로 초기화하여 stale data 방지
+      // reset location to null on stop, to avoid stale data
       return {
         is_tracking_location: enabled,
         location: enabled ? state.location : null,
       };
     }),
 
-  /**
-   * 서비스 라이프사이클 상태를 안전하게 변경합니다.
-   */
   set_status: (status) =>
     set((state) => {
-      // 🛡️ 상태가 동일하면 state 참조를 그대로 반환 (리액트 최적화)
+      // same reference back if unchanged (React optimization)
       if (state.status === status) return state;
       return { status };
     }),
 
-  /**
-   * 하드웨어 접근 실패나 권한 문제 발생 시 에러 상태로 전환합니다.
-   */
   set_error: (error_msg) =>
     set((state) => {
       if (state.status === DevicePoseStatus.ERROR && state.error_msg === error_msg) return state;
@@ -194,15 +198,16 @@ export const useDeviceOrientationStore = create<DeviceOrientationState>((set) =>
         return {
           orientation: { heading, beta, gamma, timestamp },
 
-          status: DevicePoseStatus.READY, // orientation만 들어와도 서비스 사용 가능 상태로 간주
+          status: DevicePoseStatus.READY, // orientation data alone is enough to count as usable
           error_msg: null,
         };
       }
 
-      // 데드존 필터링 (가장 중요한 heading 기준으로 1.5도 변화 체크)
-      const is_heading_changed: boolean = is_delta_over(heading, prev.heading, 1.5);
+      // dead-zone filter, keyed on heading (the most important field): 1.5°
+      // change, using the circular-aware delta since heading wraps
+      const is_heading_changed: boolean = is_heading_delta_over(heading, prev.heading, 1.5);
 
-      // 기울기(Beta, Gamma) 변화 체크 (복셀 엔진에서 화면 흔들림 방지용, 약 2도)
+      // tilt (beta/gamma) change check, ~2° — avoids visible jitter in the voxel renderer
       const is_tilt_changed: boolean = is_delta_over(beta, prev.beta, 2.0) || is_delta_over(gamma, prev.gamma, 2.0);
 
       if (!is_heading_changed && !is_tilt_changed) return state;
@@ -214,29 +219,23 @@ export const useDeviceOrientationStore = create<DeviceOrientationState>((set) =>
 
   set_is_tracking_orientation: (enabled) =>
     set((state) => {
-      // 🛡️ 값이 이미 같다면 리렌더링을 발생시키지 않음
+      // no-op if unchanged, to avoid a re-render
       if (state.is_tracking_orientation === enabled) return state;
 
-      // 추적 중단 시 orientation 데이터를 null로 초기화
+      // reset orientation to null on stop
       return {
         is_tracking_orientation: enabled,
         orientation: enabled ? state.orientation : null,
       };
     }),
 
-  /**
-   * 서비스 라이프사이클 상태를 안전하게 변경합니다.
-   */
   set_status: (status) =>
     set((state) => {
-      // 🛡️ 상태가 동일하면 state 참조를 그대로 반환 (리액트 최적화)
+      // same reference back if unchanged (React optimization)
       if (state.status === status) return state;
       return { status };
     }),
 
-  /**
-   * 하드웨어 접근 실패나 권한 문제 발생 시 에러 상태로 전환합니다.
-   */
   set_error: (error_msg) =>
     set((state) => {
       if (state.status === DevicePoseStatus.ERROR && state.error_msg === error_msg) return state;

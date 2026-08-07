@@ -67,6 +67,7 @@
 
 import { BIT64, FIELD_MASK64, type u32, type u64 } from "@xpute/core/kit/word.ts";
 import { type IVec, ivec } from "../space/pvf3/mod.ts";
+import { IVEC_WORD_MASK } from "../space/pvf3/core.ts";
 
 const { add, fill } = ivec;
 
@@ -172,3 +173,16 @@ export const FROM_L2_IDX = (idx: IVec): IVec => idx << _L2_SHAMT;
 export const FROM_L3_IDX = (idx: IVec): IVec => idx << _L3_SHAMT;
 export const FROM_L4_IDX = (idx: IVec): IVec => idx << _L4_SHAMT;
 // export const FROM_L5_IDX = (idx: IVec): IVec => idx << _L5_SHAMT;
+
+/**
+ * Upper bound of a valid L3_IDX: the packed IVec word is a full 64-bit
+ * unsigned range (IVEC_WORD_MASK), and L3_IDX only ever shifts that range
+ * right by L3_SHAMT — it never adds bits — so no legitimate L3_IDX can
+ * exceed `IVEC_WORD_MASK >> L3_SHAMT`. Exists mainly for boundary callers
+ * (e.g. the terrain tile HTTP route) that receive an L3_IDX from outside
+ * this process and need to reject an out-of-domain value before it's fed
+ * into FROM_L3_IDX/get_page_bbox-style math, which has no range checks of
+ * its own (raw packed shifts on an out-of-domain BigInt don't throw, they
+ * just silently produce a garbage bbox).
+ */
+export const MAX_L3_IDX: u64 = IVEC_WORD_MASK >> _L3_SHAMT;

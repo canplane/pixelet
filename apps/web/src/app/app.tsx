@@ -1,8 +1,8 @@
 // @pxl/web/app/app.tsx
 
-import { AppRouter } from "./router/app-router.tsx";
+import { AppRouter } from "./router/app_router.tsx";
 
-import { DevPanel } from "./dev/dev-panel.tsx";
+import { DevPanel } from "./dev/dev_panel.tsx";
 
 /** Entry point of the application */
 export function App() {

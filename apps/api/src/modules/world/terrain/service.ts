@@ -7,7 +7,7 @@ import type { AppResources } from "@/app/resources.ts";
 import type { f64, i16, u32 } from "@xpute/core/kit/word.ts";
 import type { Bytes, I16Array } from "@xpute/core/kit/array.ts";
 import { to_tuple } from "@xpute/core/kit/lower.ts";
-import { encoder, TreeView } from "@xpute/core/xtp/tree/mod.ts";
+import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 
 import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
@@ -15,8 +15,22 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pxl/shared/bake/format.ts";
 import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
+import { MAX_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { bake_terrain } from "@pxl/api/bake/terrain/bake.ts";
 import { TerrainRepository } from "./repository.ts";
+
+/**
+ * Digits only, capped well above MAX_L3_IDX's own ~18-digit width (2^57 ≈
+ * 1.44e17) but far short of a string long enough to make BigInt()'s own
+ * O(n^2)-ish decimal parse expensive — checked *before* BigInt() ever
+ * touches attacker-controlled input, so an oversized digit string is
+ * rejected as cheaply as a malformed one instead of paying to parse it
+ * first. BigInt()'s constructor also accepts "-", "+", "0x…"/"0b…"/"0o…",
+ * and surrounding whitespace, any of which could still parse to a value
+ * outside page_idx's real domain below — this regex is stricter than
+ * "parses as BigInt", not just a length guard.
+ */
+const PAGE_IDX_PATTERN = /^\d{1,20}$/;
 
 const ELE_PADDED_SPAN2: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN;
 
@@ -85,10 +99,20 @@ export function register(router: Hono, resrc: AppResources): void {
   const service = make_services(repo);
 
   router.get("/api/world/terrain/tile/:page_idx", async (c) => {
-    let page_idx: IVec;
-    try {
-      page_idx = BigInt(c.req.param("page_idx"));
-    } catch {
+    const raw_page_idx: string = c.req.param("page_idx");
+
+    // page_idx is an L3_IDX (see indexer.ts): an *unsigned* logical key in
+    // [0, MAX_L3_IDX]. A negative or out-of-range value isn't just
+    // "invalid" the way a NaN would be — FROM_L3_IDX/get_page_bbox happily
+    // shift and unproject it into some nonsense-but-well-formed bbox with
+    // no exception anywhere along the way, which would've reached the DB
+    // as a garbage query instead of failing fast here.
+    if (!PAGE_IDX_PATTERN.test(raw_page_idx)) {
+      return c.text("bad page_idx", 400);
+    }
+
+    const page_idx: IVec = BigInt(raw_page_idx);
+    if (page_idx > MAX_L3_IDX) {
       return c.text("bad page_idx", 400);
     }
 

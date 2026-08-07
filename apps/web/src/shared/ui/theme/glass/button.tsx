@@ -5,15 +5,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/shared/lib/utils/cn.ts";
 
 const buttonVariants = cva(
-  // [Apple Style]: 얇은 자간(tight), 정교한 폰트 두께(medium), 부드러운 곡률
+  // tight letter-spacing, medium weight, soft corner radius
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl text-sm font-medium transition-all duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4 outline-none focus-visible:ring-1 focus-visible:ring-white/30 tracking-tight",
   {
     variants: {
       variant: {
-        // [Liquid Solid]: 불투명하지만 매끄러운 화이트/블랙
+        // opaque but smooth white/black
         default: "bg-white text-black shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:bg-white/90",
 
-        // [Liquid Glass]: 이 버튼의 핵심. 맑고 투명하며 엣지가 살아있음
+        // glass: the core of this theme — clear, translucent, with a visible edge
         glass: "bg-white/10 backdrop-blur-md border border-white/20 border-t-white/40 \
            shadow-[0_8px_32px_rgba(0,0,0,0.05),inset_0_0_0_1px_rgba(255,255,255,0.05)] \
            text-white hover:bg-white/15 hover:border-white/30",

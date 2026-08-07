@@ -15,8 +15,8 @@ function Separator({
       decorative={decorative}
       orientation={orientation}
       className={cn(
-        // bg-border 대신 foreground/10 또는 white/10을 사용하여
-        // 유리에 살짝 흠집을 낸 듯한 투명한 선 느낌을 줍니다.
+        // foreground/10 or white/10 instead of bg-border, for a faint,
+        // translucent line like a hairline scratch in glass.
         "bg-foreground/10 shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
         className,
       )}
