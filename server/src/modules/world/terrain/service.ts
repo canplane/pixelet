@@ -15,6 +15,7 @@ import { type IVec, ivec } from "@pixelet/shared/spec/space/pvf3/mod.ts";
 
 import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pixelet/shared/bake/format.ts";
 import { ELE_PADDED_SPAN } from "@pixelet/shared/bake/constants.ts";
+import { bake_terrain } from "@pixelet/server/bake/terrain/bake.ts";
 import { TerrainRepository } from "./repository.ts";
 
 const ELE_PADDED_SPAN2: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN;
@@ -69,7 +70,14 @@ function make_services(repo: TerrainRepository) {
     ));
   };
 
-  return { fetch_terrain_source };
+  // Raw OSM/elevation source, baked into client-ready ground channels.
+  // This step used to run inside the (now-dropped) WASM worker.
+  const fetch_tile = async (page_idx: IVec): Promise<Bytes> => {
+    const raw: Bytes = await fetch_terrain_source(page_idx);
+    return bake_terrain(page_idx, raw);
+  };
+
+  return { fetch_terrain_source, fetch_tile };
 }
 
 export function register(router: Hono, resrc: AppResources): void {
@@ -84,7 +92,7 @@ export function register(router: Hono, resrc: AppResources): void {
       return c.text("bad page_idx", 400);
     }
 
-    const bytes: Bytes = await service.fetch_terrain_source(page_idx);
+    const bytes: Bytes = await service.fetch_tile(page_idx);
     return c.body(bytes, 200, { "content-type": "application/octet-stream" });
   });
 }

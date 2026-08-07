@@ -7,7 +7,8 @@
  * - mounts the registry root into the scene
  */
 
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
 
 import type { IVec } from "@pixelet/shared/spec/space/pvf3/mod.ts";
 
@@ -29,10 +30,17 @@ export function AnchorSpace(props: AnchorSpaceProps) {
     return next;
   }, []);
 
-  /** Shift all live anchors when the floating origin changes. */
-  useEffect(() => {
-    registry.shift_map_origin(map_origin);
-  }, [map_origin, registry]);
+  /**
+   * Shift all live anchors when the floating origin changes.
+   * Runs on the R3F render tick (not a React effect) so it stays synchronized with
+   * use-frame-translation.ts's frame snap — an effect-based shift can lag a tick behind,
+   * leaving newly-linked anchors baked in with a stale origin until the next rebase.
+   */
+  useFrame(() => {
+    if (registry.cur_map_origin !== map_origin) {
+      registry.shift_map_origin(map_origin);
+    }
+  });
 
   return (
     <AnchorRegistryContext.Provider value={registry}>

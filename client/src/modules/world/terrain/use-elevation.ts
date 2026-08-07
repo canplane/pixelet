@@ -4,11 +4,13 @@ import { useTileStore } from "./tile-store.ts";
 
 import type { f64, u32 } from "@pixelet/shared/kit/word.ts";
 
-import { type FVec, type IVec, type PVF3, pvf3 } from "@pixelet/shared/spec/space/pvf3/mod.ts";
-import { L1_IDX_IN_L3, L3_IDX } from "@pixelet/shared/spec/space/indexer.ts";
+import { type FVec, ivec, type IVec, type PVF3, pvf3 } from "@pixelet/shared/spec/space/pvf3/mod.ts";
+import { L1_IDX_IN_L3, L3_IDX, L3_RANGE } from "@pixelet/shared/spec/space/indexer.ts";
 import { U_PER_CELL } from "@pixelet/shared/bake/constants.ts";
 import type { Tile } from "@pixelet/shared/bake/format.ts";
 import { sample_ele } from "@/render/terrain/elevation.ts";
+
+const L3_RANGE_REAL: f64 = Number(L3_RANGE);
 
 /** Returns ground height in lattice/render units. */
 export function get_ele(i: IVec, f: FVec): f64 | null {
@@ -21,6 +23,36 @@ export function get_ele(i: IVec, f: FVec): f64 | null {
   const page_off: PVF3 = { i: L1_IDX_IN_L3(i), f };
   const tx: u32 = Math.floor(pvf3.to_real(pvf3.X(page_off)) / U_PER_CELL);
   const ty: u32 = Math.floor(pvf3.to_real(pvf3.Y(page_off)) / U_PER_CELL);
+  return sample_ele(tile.terrain.ele, tx, ty) * U_PER_CELL;
+}
+
+/**
+ * Fast path for hot per-step loops (e.g. raycasting): looks up elevation from
+ * local float coordinates already relative to map_origin (same real "u" units
+ * as pvf3.to_real), instead of round-tripping through the full BigInt PVF3
+ * fixed-point representation on every call. Only the page-key lookup itself
+ * still touches BigInt, and only for one (typically -1/0/1) candidate page.
+ *
+ * `origin_page_idx_xy` must be TO_XY(L3_IDX(map_origin)), precomputed once by
+ * the caller outside the loop. map_origin is L4-aligned, which is coarser
+ * than (and therefore also aligned to) L3, so page indices compose
+ * additively: L3_IDX(local + origin) === L3_IDX(local) + L3_IDX(origin).
+ */
+export function get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64): f64 | null {
+  const get_tile = useTileStore.getState().get_tile;
+
+  const local_page_x: f64 = Math.floor(local_x / L3_RANGE_REAL);
+  const local_page_y: f64 = Math.floor(local_y / L3_RANGE_REAL);
+
+  const page_idx: IVec = ivec.add(origin_page_idx_xy, ivec.gather(BigInt(local_page_x), BigInt(local_page_y), 0n));
+  const tile: Tile | undefined = get_tile(page_idx);
+  if (!tile) return null;
+
+  const page_local_x: f64 = local_x - local_page_x * L3_RANGE_REAL;
+  const page_local_y: f64 = local_y - local_page_y * L3_RANGE_REAL;
+
+  const tx: u32 = Math.floor(page_local_x / U_PER_CELL);
+  const ty: u32 = Math.floor(page_local_y / U_PER_CELL);
   return sample_ele(tile.terrain.ele, tx, ty) * U_PER_CELL;
 }
 

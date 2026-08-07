@@ -6,6 +6,7 @@
   "deno.enable": true,
   "deno.lint": true,
   "deno.unstable": ["webgpu"],
+  "deno.config": "./deno.json",
   "deno.suggest.imports.hosts": {
     "https://deno.land": false,
     "https://jsr.io": true

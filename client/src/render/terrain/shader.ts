@@ -80,14 +80,24 @@ export const vert = /* glsl */ `
 
     // ---- 5. 스커트(Skirt) 하단 경계 계산 ----
 
+    // Interior neighbor heights are raw (non-quantized) samples, so near a steep
+    // discontinuity (coastline, cliff) a neighbor can read far lower than this
+    // cell's own height — without a bound, extra_drop below stretches the cell
+    // into an arbitrarily long slab. Cap it to a few cell-heights: enough to hide
+    // ordinary LOD-quantization gaps between neighbors, not real terrain drops
+    // (those should just show as a natural vertical face, not a giant skirt).
+    const float MAX_INTERIOR_SKIRT_CELLS = 4.0;
+
+    float cell_bottom_z = surface_z - visual_scale;
+
     float target_bottom;
     if (is_edge_x || is_edge_y) {
       target_bottom = surface_z - 200.0;
     } else {
-      target_bottom = min(min(h_n, h_s), min(h_e, h_w)) - visual_scale;
+      float neighbor_min = min(min(h_n, h_s), min(h_e, h_w)) - visual_scale;
+      target_bottom = max(neighbor_min, cell_bottom_z - MAX_INTERIOR_SKIRT_CELLS * visual_scale);
     }
 
-    float cell_bottom_z = surface_z - visual_scale;
     v_is_skirt = 0.0;
 
     if (local_pos.z < 0.0 && target_bottom < cell_bottom_z) {
