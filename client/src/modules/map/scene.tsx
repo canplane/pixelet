@@ -16,6 +16,7 @@ import { MapEnvironment } from "./environment.tsx";
 import { World } from "@/modules/world/world.tsx";
 import { useMapBootstrap } from "./navigation/use-map-bootstrap.ts";
 import { useTileFetcher } from "@/modules/world/terrain/use-tile-fetcher.ts";
+import { useTerrainFollowSync } from "@/modules/world/terrain/use-terrain-follow-sync.ts";
 import { MapOverlays } from "./ui/overlay/map-overlays.tsx";
 import { MapHTMLPortal } from "./portal/html-portal.tsx";
 
@@ -32,6 +33,7 @@ function CameraRig() {
 export function MapScene() {
   useMapBootstrap();
   useTileFetcher();
+  useTerrainFollowSync();
 
   const world_ref = useRef<THREE.Group>(null);
 

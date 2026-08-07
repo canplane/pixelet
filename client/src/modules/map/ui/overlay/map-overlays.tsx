@@ -4,6 +4,8 @@ import { cn } from "@/shared/lib/utils/cn.ts";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
 import { DevicePoseControl } from "@/modules/map/ui/control/device-pose-control.tsx";
+import { TerrainFollowToggle } from "@/modules/map/ui/control/terrain-follow-toggle.tsx";
+import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
 import { CameraStatus, useCameraStore } from "@/modules/camera/store.ts";
 
 /**
@@ -47,27 +49,35 @@ export function MapOverlays() {
         }
       </div>
 
-      {/* 3. 상단 우측: 선택된 POI 정보 패널 */}
+      {/* 3. 상단 우측: 선택된 POI 정보 패널 + 지형-따라가기(디버그용, 별도 배치) */}
       <div
         className={cn(
-          "absolute top-8 right-8 z-50 w-64 pointer-events-none",
+          "absolute top-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none",
           interaction_style,
         )}
       >
-        {
-          /* <div className="pointer-events-auto">
-          <PoiDetailPanel />
-        </div> */
-        }
+        <MotionContainer variant="slideUp" delay={0.5}>
+          <div className={cn(!is_camera_busy && "pointer-events-auto")}>
+            <TerrainFollowToggle />
+          </div>
+        </MotionContainer>
+
+        <div className="w-64 pointer-events-none">
+          {
+            /* <div className="pointer-events-auto">
+            <PoiDetailPanel />
+          </div> */
+          }
+        </div>
       </div>
 
       {/* 4. 하단 좌측: 원점 이동 디버그 유틸리티 */}
       <div className={cn("absolute bottom-8 left-8 z-50", interaction_style)} />
 
-      {/* 5. 하단 우측: 지도 제어 도구 (나침반, 스케일바, 위치 컨트롤) */}
+      {/* 5. 하단 우측: 지도 제어 도구 (나침반 / 스케일바 - GPS) */}
       <div
         className={cn(
-          "absolute bottom-8 right-8 z-50 flex flex-col items-end gap-5 pointer-events-none",
+          "absolute bottom-4 right-4 z-50 flex flex-col items-end gap-3 pointer-events-none",
           interaction_style,
         )}
       >
@@ -75,15 +85,8 @@ export function MapOverlays() {
           <MapCompass />
         </div>
 
-        <div
-          className={cn(
-            "flex items-end gap-6",
-            !is_camera_busy && "pointer-events-auto",
-          )}
-        >
-          <div className="pb-4">
-            <MapScaleBar />
-          </div>
+        <div className={cn("flex items-center gap-3", !is_camera_busy && "pointer-events-auto")}>
+          <MapScaleBar />
           <DevicePoseControl />
         </div>
       </div>

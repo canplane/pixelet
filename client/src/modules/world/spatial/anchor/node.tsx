@@ -7,7 +7,7 @@
  * - applies anchor-local PVF3 offset
  */
 
-import { type ReactNode, useLayoutEffect, useState } from "react";
+import { type ReactNode, useLayoutEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { createPortal } from "@react-three/fiber";
 
@@ -46,19 +46,17 @@ export function AnchorNode(props: AnchorNodeProps) {
     return () => void registry.unlink(anchor_idx);
   }, [anchor_idx]);
 
+  /** Anchor-local offset within the resolved L4 anchor. */
+  const local_pos = useMemo((): [number, number, number] => {
+    const anchor: IVec = L4_BASE(i);
+    const local: PVF3 = { i: ivec.sub(i, anchor), f };
+    return [pvf3.to_real(pvf3.X(local)), pvf3.to_real(pvf3.Y(local)), pvf3.to_real(pvf3.Z(local))];
+  }, [i, f]);
+
   if (!target) return null;
 
-  /** Anchor-local offset within the resolved L4 anchor. */
-  const anchor: IVec = L4_BASE(i);
-  const local: PVF3 = { i: ivec.sub(i, anchor), f };
   return createPortal(
-    <group
-      position={[
-        pvf3.to_real(pvf3.X(local)),
-        pvf3.to_real(pvf3.Y(local)),
-        pvf3.to_real(pvf3.Z(local)),
-      ]}
-    >
+    <group position={local_pos}>
       {children}
     </group>,
     target,

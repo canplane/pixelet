@@ -23,7 +23,7 @@ export function DynamicIslandLayout({
   subDescription,
   statusColor,
   className,
-  backgroundColor = "bg-[#0A0A0A]",
+  backgroundColor = "bg-[#FFFDF7]/85",
 }: DynamicIslandLayoutProps) {
   const isExpanded = !!(title || subDescription);
   const hasSub = !!subDescription;
@@ -65,8 +65,8 @@ export function DynamicIslandLayout({
         style={{ borderRadius: "999px" }} // 원형 유지
         transition={springConfig}
         className={cn(
-          "relative inline-flex items-center justify-start shadow-2xl overflow-hidden pointer-events-auto shrink-0",
-          "min-w-[44px] origin-bottom",
+          "relative inline-flex items-center justify-start overflow-hidden pointer-events-auto shrink-0",
+          "min-w-[44px] origin-bottom border-2 border-white/90 backdrop-blur-md shadow-[0_6px_20px_rgba(200,160,100,0.25)]",
           backgroundColor,
           className,
         )}
@@ -81,7 +81,7 @@ export function DynamicIslandLayout({
         >
           <div
             className={cn(
-              "w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white transition-transform duration-500",
+              "w-7 h-7 rounded-full bg-[#FFF3DE] flex items-center justify-center text-[#5B4636] transition-transform duration-500",
               wasExpanded && hasSub ? "scale-125" : "scale-100",
             )}
           >
@@ -101,17 +101,17 @@ export function DynamicIslandLayout({
             >
               <div className="flex flex-col justify-center py-1">
                 <div className="flex items-baseline gap-2 leading-none">
-                  <span className="text-[13px] font-semibold text-white tracking-tight">
+                  <span className="text-[13px] font-semibold text-[#5B4636] tracking-tight">
                     {title}
                   </span>
                   {description && (
-                    <span className="text-[9px] font-black text-white/20 uppercase tracking-widest">
+                    <span className="text-[9px] font-black text-[#5B4636]/40 uppercase tracking-widest">
                       {description}
                     </span>
                   )}
                 </div>
                 {subDescription && (
-                  <div className="text-[10px] font-medium text-white/40 mt-0.5 italic tracking-tight">
+                  <div className="text-[10px] font-medium text-[#5B4636]/50 mt-0.5 italic tracking-tight">
                     {subDescription}
                   </div>
                 )}

@@ -5,15 +5,16 @@ import * as THREE from "three";
 import type { f64, u32 } from "@pixelet/shared/kit/word.ts";
 
 import { type IVec, ivec, projection, type PVF3, pvf3 } from "@pixelet/shared/spec/space/pvf3/mod.ts";
+import { L3_IDX } from "@pixelet/shared/spec/space/indexer.ts";
+import { TO_XY } from "@pixelet/shared/spec/space/xy.ts";
 import { floor3n, set3, type V3 } from "@pixelet/shared/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pixelet/shared/bake/constants.ts";
-import { get_ele, with_ele } from "@/modules/world/terrain/use-elevation.ts";
+import { get_ele_at_local, with_ele } from "@/modules/world/terrain/use-elevation.ts";
 import { get_local_world_origin } from "../world/frame/coord.ts";
 
 const $hit = new THREE.Vector3();
 const $v: V3 = [0, 0, 0];
-const $p: PVF3 = { i: 0n, f: 0n };
 const $origin = new THREE.Vector3();
 const $dir = new THREE.Vector3();
 const $m = new THREE.Matrix4();
@@ -49,25 +50,33 @@ export function in_interact_radius(a: PVF3, b: PVF3): boolean {
   return dx * dx + dy * dy <= INTERACT_RADIUS2_U;
 }
 
-function ray_terrain_delta_at_t(ray: THREE.Ray, t: f64, map_origin: IVec): f64 | null {
+/**
+ * Per-step marching cost used to dominate hover raycasting (up to ~200+6 steps,
+ * run on every hover check): each step round-tripped through the full BigInt
+ * PVF3 fixed-point representation just to look up one elevation sample. Since
+ * map_origin is fixed for the whole call, precompute its page index and Z
+ * once (origin_page_idx_xy / origin_z_real below) and do the per-step lookup
+ * in plain floats via get_ele_at_local — see its doc comment for why that's
+ * safe (map_origin is L4-aligned, hence also L3-aligned, so page indices
+ * compose additively).
+ */
+function ray_terrain_delta_at_t(ray: THREE.Ray, t: f64, origin_page_idx_xy: IVec, origin_z_real: f64): f64 | null {
   ray.at(t, $hit);
 
-  projection.project($p, $hit.x, $hit.y, $hit.z);
-  $p.i = ivec.add($p.i, map_origin);
-
-  const ele: f64 | null = get_ele($p.i, $p.f);
+  const ele: f64 | null = get_ele_at_local(origin_page_idx_xy, $hit.x, $hit.y);
   if (ele === null) return null;
-  const origin_z: f64 = ivec.to_real(ivec.Z(map_origin));
-  const visual_z: f64 = ele - origin_z;
-  return $hit.z - visual_z;
+  return $hit.z - (ele - origin_z_real);
 }
 
 function ray_hit_terrain(ray: THREE.Ray, map_origin: IVec): PVF3 | null {
+  const origin_page_idx_xy: IVec = TO_XY(L3_IDX(map_origin));
+  const origin_z_real: f64 = ivec.to_real(ivec.Z(map_origin));
+
   let t = 0;
   let hit_t = -1;
 
   for (let i = 0; i < MAX_STEPS; i++, t += STEP) {
-    const delta: f64 | null = ray_terrain_delta_at_t(ray, t, map_origin);
+    const delta: f64 | null = ray_terrain_delta_at_t(ray, t, origin_page_idx_xy, origin_z_real);
     if (delta === null) continue;
     if (delta < HIT_EPS) {
       hit_t = t;
@@ -81,7 +90,7 @@ function ray_hit_terrain(ray: THREE.Ray, map_origin: IVec): PVF3 | null {
   let max = hit_t;
   for (let i = 0; i < BIN_ITER; i++) {
     const mid: f64 = (min + max) * 0.5;
-    const delta: f64 | null = ray_terrain_delta_at_t(ray, mid, map_origin);
+    const delta: f64 | null = ray_terrain_delta_at_t(ray, mid, origin_page_idx_xy, origin_z_real);
     if (delta === null) {
       min = mid;
       continue;
