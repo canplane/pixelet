@@ -11,19 +11,27 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
-import { with_ele } from "@/modules/world/terrain/use-elevation.ts";
+import { ground_or_raw } from "@/modules/world/terrain/use_elevation.ts";
 import { ray_pick_terrain } from "./ray.ts";
 import { CameraStatus, useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
 
 const { FOV } = camera_cfg.projection;
-const { ROT_GAIN_POLAR, ROT_GAIN_REF_HEIGHT, DOLLY_GAIN } = camera_cfg.input;
+const { ROT_GAIN_POLAR, ROT_GAIN_REF_HEIGHT, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, AXIS_LOCK_THRESHOLD_PX } = camera_cfg.input;
 
 const enum DragMode {
   NONE = "none",
   PAN = "pan",
   ROTATE = "rotate",
   PINCH = "pinch",
+}
+
+/** Which single axis a rotate-drag (do_rotate) has committed to — see
+ * AXIS_LOCK_THRESHOLD_PX's doc comment in config.ts for why this exists. */
+const enum RotateAxisLock {
+  NONE = "none",
+  TILT = "tilt",
+  ROTATE = "rotate",
 }
 
 type PointerPos = { x: f64; y: f64 };
@@ -48,6 +56,18 @@ export function CameraInput() {
   // ---- rotate-drag (mouse right-drag / trackpad two-finger-click-drag) ----
   const rotate_start_angle = useRef<f64>(0);
   const rotate_start_azimuth = useRef<f64>(0);
+  // whether rotate_start_angle/rotate_start_azimuth currently anchor a valid
+  // reference sample (see MIN_ROTATE_RADIUS_PX doc comment in config.ts).
+  const rotate_anchored = useRef(false);
+  // pointer-down position for this rotate-drag — the reference point
+  // AXIS_LOCK_THRESHOLD_PX measures total displacement against, separate
+  // from last_x/last_y (which track the *previous move event*, not the
+  // gesture's start) and from MIN_ROTATE_RADIUS_PX's screen-center-relative
+  // radius (a different measurement for a different purpose — see
+  // do_rotate()).
+  const rotate_drag_start_x = useRef<f64>(0);
+  const rotate_drag_start_y = useRef<f64>(0);
+  const rotate_axis_lock = useRef<RotateAxisLock>(RotateAxisLock.NONE);
 
   // ---- multi-touch (pinch/twist/tilt) ----
   const active_pointers = useRef<Map<number, PointerPos>>(new Map());
@@ -57,6 +77,9 @@ export function CameraInput() {
   const pinch_start_view_dist = useRef<f64>(0);
   const pinch_start_azimuth = useRef<f64>(0);
   const pinch_start_polar = useRef<f64>(0);
+  // whether pinch_start_angle/pinch_start_azimuth currently anchor a valid
+  // twist reference sample (see MIN_TWIST_DIST_PX doc comment in config.ts).
+  const twist_anchored = useRef(false);
 
   const set_map_center = useMapStore.getState().set_map_center;
 
@@ -100,56 +123,85 @@ export function CameraInput() {
     const center: V3 = projection.unproject($center.current, map_center.i, map_center.f);
     const next_center: PVF3 = projection.project({ i: 0n, f: 0n }, center[0] + wx, center[1] + wy, center[2]);
 
-    if (useCameraStore.getState().follow_terrain) {
-      // with_ele() adds sampled elevation onto out's existing Z, so the probe's Z must start at 0
-      // (matches ray.ts's ray_hit_terrain convention) — otherwise height compounds every drag step.
-      const ground_probe: PVF3 = projection.project({ i: 0n, f: 0n }, center[0] + wx, center[1] + wy, 0);
-      const grounded: PVF3 | null = with_ele(ground_probe, ground_probe.i, ground_probe.f);
-      set_map_center(grounded ?? next_center);
-    } else {
-      set_map_center(next_center);
-    }
+    // ground_or_raw shares the exact same "zero Z, then sample real terrain
+    // height" step every map_center-setting interaction that respects
+    // follow_terrain goes through (see its own doc comment) — the GPS
+    // recenter button in device_pose_control.tsx uses it too, instead of
+    // each call site hand-rolling its own probe.
+    set_map_center(useCameraStore.getState().follow_terrain ? ground_or_raw(next_center) : next_center);
   }
 
-  /** Azimuth for a rotate-drag: matches the cursor's angle-around-screen-center delta
-   * since drag-start (arcball-style), instead of a fixed px/degree rate. The camera
-   * always looks straight at map_center, so screen center is the one fixed pivot to
-   * measure against. World rotates opposite the cursor's angle delta because
-   * increasing azimuth spins world points CCW (viewed from above) while screen space
-   * is Y-flipped, so a world point's *screen* angle moves by -azimuth_delta (verified
-   * live: a synthetic two-finger sweep of +30° screen angle mapped to azimuth -30°,
-   * matching this sign).
+  /** Azimuth tracks the cursor's angle around screen center since drag-start
+   * (arcball-style), not a fixed px/degree rate — screen center is the fixed
+   * pivot since the camera always looks at map_center. World rotates
+   * opposite the cursor's angle delta (CCW world rotation reads as CW on
+   * screen's flipped Y; verified live: +30° screen sweep -> azimuth -30°).
+   * Exact for the cumulative rotational displacement since drag-start
+   * (path-independent), but not pixel-perfect on a large net drag — a
+   * single-axis arcball can only trace a fixed 1D arc on screen, which
+   * won't generally pass through a far-away destination (an inherent limit,
+   * not a formula bug).
    *
-   * This matches the cursor's rotational *rate* exactly (correct for the total
-   * displacement accumulated since drag-start, not just per-frame deltas — the formula
-   * is path-independent), so it's accurate while that cumulative displacement is small.
-   * It is not literal pixel-perfect tracking for a large net drag: with azimuth as the
-   * only degree of freedom, a grabbed point only ever moves along a fixed 1D arc on
-   * screen, which generally does not pass through an arbitrary far-away destination
-   * (checked numerically against the real perspective+tilt projection — moderate drags
-   * land within a few px, large swings can be tens of px off). This is an inherent
-   * limit of any single-axis arcball drag, not something a better formula fixes.
+   * Polar (tilt) keeps the old fixed-rate drag — there's no natural anchor
+   * point for tilt the way there is for a horizontal spin.
    *
-   * Polar (tilt) keeps the old fixed-rate drag — there's no natural "grabbed point"
-   * to anchor for tilt the way there is for a horizontal spin. */
+   * The anchor is captured lazily, once the cursor first clears
+   * MIN_ROTATE_RADIUS_PX from center — atan2 is degenerate right at the
+   * pivot, so a drag starting in that dead zone re-anchors on the next
+   * reliable sample instead of spinning.
+   *
+   * Axis lock (AXIS_LOCK_THRESHOLD_PX, see config.ts): azimuth and polar
+   * used to update simultaneously every move event, but an off-center
+   * "straight down" drag still sweeps some angle-around-center too — most
+   * visible once polar saturated (MIN/MAX_POLAR, ground-collision clamp)
+   * and the same drag suddenly read as a big, unrelated azimuth spin. Now
+   * it commits to whichever axis dominates once past the threshold and
+   * locks it for the rest of the gesture. */
   function do_rotate(client_x: f64, client_y: f64, dy: f64) {
-    const rect = rect_ref.current;
-    const view_state = useCameraStore.getState().view_state;
-    const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
+    if (rotate_axis_lock.current === RotateAxisLock.NONE) {
+      const total_dx: f64 = client_x - rotate_drag_start_x.current;
+      const total_dy: f64 = client_y - rotate_drag_start_y.current;
+      if (Math.hypot(total_dx, total_dy) < AXIS_LOCK_THRESHOLD_PX) return;
+      rotate_axis_lock.current = Math.abs(total_dy) > Math.abs(total_dx) ? RotateAxisLock.TILT : RotateAxisLock.ROTATE;
+    }
 
+    const view_state = useCameraStore.getState().view_state;
+
+    if (rotate_axis_lock.current === RotateAxisLock.TILT) {
+      const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
+      set_view_state({ polar: view_state.polar + dy * ROT_GAIN_POLAR * norm });
+      return;
+    }
+
+    const rect = rect_ref.current;
     let next_azimuth: f64 = view_state.azimuth;
     if (rect) {
       const cx: f64 = rect.left + rect.width / 2;
       const cy: f64 = rect.top + rect.height / 2;
-      const cur_angle: f64 = Math.atan2(client_y - cy, client_x - cx);
-      const angle_delta: f64 = cur_angle - rotate_start_angle.current;
-      next_azimuth = rotate_start_azimuth.current - angle_delta;
+      const dx: f64 = client_x - cx;
+      const dyc: f64 = client_y - cy;
+      const radius: f64 = Math.hypot(dx, dyc);
+
+      // atan2's angle is numerically unstable close to the pivot — see
+      // MIN_ROTATE_RADIUS_PX. Freeze azimuth and drop the anchor below that
+      // radius; re-anchor from the next reliable sample once the cursor
+      // moves back out, instead of tracking the unstable angle.
+      if (radius >= MIN_ROTATE_RADIUS_PX) {
+        const cur_angle: f64 = Math.atan2(dyc, dx);
+        if (!rotate_anchored.current) {
+          rotate_start_angle.current = cur_angle;
+          rotate_start_azimuth.current = view_state.azimuth;
+          rotate_anchored.current = true;
+        } else {
+          const angle_delta: f64 = cur_angle - rotate_start_angle.current;
+          next_azimuth = rotate_start_azimuth.current - angle_delta;
+        }
+      } else {
+        rotate_anchored.current = false;
+      }
     }
 
-    set_view_state({
-      azimuth: next_azimuth,
-      polar: view_state.polar + dy * ROT_GAIN_POLAR * norm,
-    });
+    set_view_state({ azimuth: next_azimuth });
   }
 
   function pointer_pair(): [PointerPos, PointerPos] | null {
@@ -166,8 +218,11 @@ export function CameraInput() {
     const [p0, p1] = pair;
 
     pinch_start_dist.current = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    pinch_start_angle.current = Math.atan2(p1.y - p0.y, p1.x - p0.x);
     pinch_start_midpoint_y.current = (p0.y + p1.y) / 2;
+    // twist angle is re-anchored lazily by update_pinch() once the fingers
+    // are far enough apart for that angle to be numerically reliable —
+    // don't capture it here, it may be degenerate right at touch-down.
+    twist_anchored.current = false;
 
     const view_state = useCameraStore.getState().view_state;
     pinch_start_view_dist.current = view_state.dist;
@@ -187,19 +242,36 @@ export function CameraInput() {
     const [p0, p1] = pair;
 
     const dist: f64 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const angle: f64 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
     const midpoint_y: f64 = (p0.y + p1.y) / 2;
 
-    // Fingers spreading apart (dist grows) zooms in (smaller camera distance).
+    // fingers spreading apart (dist grows) zooms in (smaller camera distance).
     const scale: f64 = pinch_start_dist.current / dist;
     const next_dist: f64 = pinch_start_view_dist.current * scale;
-
-    const angle_delta: f64 = angle - pinch_start_angle.current;
-    const next_azimuth: f64 = pinch_start_azimuth.current - angle_delta;
 
     const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
     const midpoint_dy: f64 = midpoint_y - pinch_start_midpoint_y.current;
     const next_polar: f64 = pinch_start_polar.current + midpoint_dy * ROT_GAIN_POLAR * norm;
+
+    // twist angle (inter-finger vector direction) is numerically unstable
+    // when the fingers are close together — see MIN_TWIST_DIST_PX. Freeze
+    // azimuth and drop the anchor below that distance; re-anchor from the
+    // next reliable sample once the fingers spread back out, instead of
+    // tracking the unstable angle.
+    let next_azimuth: f64 = pinch_start_azimuth.current;
+    if (dist >= MIN_TWIST_DIST_PX) {
+      const angle: f64 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+      if (!twist_anchored.current) {
+        pinch_start_angle.current = angle;
+        pinch_start_azimuth.current = useCameraStore.getState().view_state.azimuth;
+        twist_anchored.current = true;
+        next_azimuth = pinch_start_azimuth.current;
+      } else {
+        const angle_delta: f64 = angle - pinch_start_angle.current;
+        next_azimuth = pinch_start_azimuth.current - angle_delta;
+      }
+    } else {
+      twist_anchored.current = false;
+    }
 
     set_view_state({ dist: next_dist, azimuth: next_azimuth, polar: next_polar });
   }
@@ -236,13 +308,13 @@ export function CameraInput() {
     last_y.current = e.clientY;
 
     if (drag_mode.current === DragMode.ROTATE) {
-      const rect = rect_ref.current;
-      if (rect) {
-        const cx: f64 = rect.left + rect.width / 2;
-        const cy: f64 = rect.top + rect.height / 2;
-        rotate_start_angle.current = Math.atan2(e.clientY - cy, e.clientX - cx);
-      }
-      rotate_start_azimuth.current = useCameraStore.getState().view_state.azimuth;
+      // anchor is captured lazily by do_rotate() on the first reliable
+      // sample instead of here — the down position itself may be within
+      // MIN_ROTATE_RADIUS_PX of the pivot, where atan2's angle is degenerate.
+      rotate_anchored.current = false;
+      rotate_axis_lock.current = RotateAxisLock.NONE;
+      rotate_drag_start_x.current = e.clientX;
+      rotate_drag_start_y.current = e.clientY;
     }
 
     update_pointer(e.clientX, e.clientY);
@@ -257,7 +329,7 @@ export function CameraInput() {
 
     requestAnimationFrame(() => {
       hover_raf_pending.current = false;
-      // Pointer may have started dragging (or left) since this was scheduled.
+      // pointer may have started dragging (or left) since this was scheduled.
       if (drag_mode.current !== DragMode.NONE) return;
       update_hover();
     });
@@ -290,7 +362,7 @@ export function CameraInput() {
     update_pointer(e.clientX, e.clientY);
 
     if (drag_mode.current === DragMode.NONE) {
-      // Raycasting against terrain is expensive (up to ~200 marching steps); a raw
+      // raycasting against terrain is expensive (up to ~200 marching steps); a raw
       // pointermove can fire far more often than the render loop, so cap it to once
       // per animation frame instead of once per event.
       request_hover_update();
@@ -353,14 +425,14 @@ export function CameraInput() {
           if (hovered) set_map_center(hovered);
         }
       } else if (active_pointers.current.size === 1) {
-        // Dropped from 2 fingers to 1 — resume single-finger pan seamlessly.
+        // dropped from 2 fingers to 1 — resume single-finger pan seamlessly.
         const [remaining] = [...active_pointers.current.values()];
         drag_mode.current = DragMode.PAN;
         last_x.current = remaining.x;
         last_y.current = remaining.y;
         did_drag.current = true; // already mid-gesture, don't treat the eventual lift as a tap
       } else {
-        // Dropped from 3+ fingers to exactly 2 — recalibrate the pinch baseline.
+        // dropped from 3+ fingers to exactly 2 — recalibrate the pinch baseline.
         begin_pinch();
       }
       return;
@@ -395,7 +467,7 @@ export function CameraInput() {
   useEffect(() => {
     const el = gl.domElement;
 
-    // Prevent the browser's native touch scroll/pinch-zoom from fighting with our
+    // prevent the browser's native touch scroll/pinch-zoom from fighting with our
     // own pan/pinch handling.
     el.style.touchAction = "none";
 

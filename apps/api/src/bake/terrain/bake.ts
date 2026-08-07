@@ -4,7 +4,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 
 import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
 import { from_tuple } from "@xpute/core/kit/lower.ts";
-import { BranchCursor, TreeReader } from "@xpute/core/xtp/tree/mod.ts";
+import { BranchCursor, TreeReader } from "@xpute/core/io/marshal/tree/mod.ts";
 
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";

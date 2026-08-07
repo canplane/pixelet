@@ -38,8 +38,8 @@ export function seed64(): u64 {
     return (BigInt(hi) << 32n) | BigInt(lo);
   }
 
-  // 2) Node fallback (require 없이도 최대한)
-  //    (randomUUID 있으면 거기서 엔트로피 뽑기)
+  // 2) Node fallback, staying require-free as much as possible
+  //    (pull entropy from randomUUID if it's available)
   if (c?.randomUUID) {
     const s = c.randomUUID().replace(/-/g, "");
     return BigInt("0x" + s.slice(0, 16));

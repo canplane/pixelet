@@ -12,4 +12,3 @@ export const WITH_Y = (y: i64, i: IVec = 0n): IVec => ivec.gather(ivec.X(i), Big
 export const WITH_Z = (z: i64, i: IVec = 0n): IVec => ivec.gather(ivec.X(i), ivec.Y(i), BigInt(z));
 
 export const CELL_CENTER_U = (u_per_cell: f64): f64 => u_per_cell * 0.5;
-// 또는 const CELL_CENTER = U_PER_CELL * 0.5;

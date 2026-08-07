@@ -3,7 +3,7 @@
 /** Base props shared by modal components */
 export type BaseModalProps = {
   open: boolean; // Whether the modal is open
-  onOpenChange: (open: boolean) => void; // Callback invoked when the open state changes
+  on_open_change: (open: boolean) => void; // Callback invoked when the open state changes
 };
 
 /**
@@ -16,7 +16,7 @@ export type BaseModalProps = {
 
 /** Modal-related UI actions */
 export type ModalController = {
-  openUpdateFooModal: (id: number) => void; // DUMMY: Open the "Update Foo" modal for a specific entity
+  open_update_foo_modal: (id: number) => void; // DUMMY: Open the "Update Foo" modal for a specific entity
 };
 
 /**

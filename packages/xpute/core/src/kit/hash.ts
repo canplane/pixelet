@@ -53,8 +53,8 @@ export function fnv1a_64_hex(bytes: Bytes): string {
 }
 
 // ============ SHA-256 ============
-// 문자열 데이터를 SHA-256 알고리즘을 사용하여 고정 길이 해시로 변환합니다.
-// 주로 대규모 쿼리 문자열의 캐시 키 최적화에 사용됩니다.
+// Converts string data to a fixed-length hash via SHA-256.
+// Mainly used to derive cache keys for large query strings.
 
 export async function sha256(bytes: Bytes): Promise<Bytes> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));

@@ -45,7 +45,7 @@ const CHUNK_CELL_SPAN2: u32 = CHUNK_CELL_SPAN * CHUNK_CELL_SPAN;
  *   sy = ty / step + pad - 0.5
  */
 function _sample_ele_bilinear(page_ele: I16Array, tx: u32, ty: u32): i16 {
-  // Convert texel-space coordinates into padded source-grid coordinates.
+  // convert texel-space coordinates into padded source-grid coordinates.
   const sx: f64 = (tx + 0.5) / ELE_CELL_STEP + ELE_PAD - 0.5;
   const sy: f64 = (ty + 0.5) / ELE_CELL_STEP + ELE_PAD - 0.5;
 
@@ -57,7 +57,7 @@ function _sample_ele_bilinear(page_ele: I16Array, tx: u32, ty: u32): i16 {
   const sdx: f64 = sx - sx0;
   const sdy: f64 = sy - sy0;
 
-  // Bilinear interpolation
+  // bilinear interpolation
   const a: i16 = page_ele[sy0 * ELE_PADDED_SPAN + sx0];
   const b: i16 = page_ele[sy0 * ELE_PADDED_SPAN + sx1];
   const c: i16 = page_ele[sy1 * ELE_PADDED_SPAN + sx0];
@@ -88,7 +88,7 @@ function sample_ele_bicubic(page_ele: I16Array, tx: u32, ty: u32): i16 {
   const fdx: f64 = sx - sx0;
   const fdy: f64 = sy - sy0;
 
-  // Precompute cubic interpolation weights.
+  // precompute cubic interpolation weights.
   const x2 = fdx * fdx;
   const x3 = x2 * fdx;
   const wx0 = -0.5 * x3 + x2 - 0.5 * fdx;
@@ -105,9 +105,9 @@ function sample_ele_bicubic(page_ele: I16Array, tx: u32, ty: u32): i16 {
 
   const span = ELE_PADDED_SPAN;
 
-  // Fast interior path with no clamp overhead.
+  // fast interior path with no clamp overhead.
   if (sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3) {
-    // Unrolled 4x4 neighborhood sampling.
+    // unrolled 4x4 neighborhood sampling.
     const idx0 = (sy0 - 1) * span + sx0;
     const idx1 = sy0 * span + sx0;
     const idx2 = (sy0 + 1) * span + sx0;
@@ -121,7 +121,7 @@ function sample_ele_bicubic(page_ele: I16Array, tx: u32, ty: u32): i16 {
     return Math.round(row0 * wy0 + row1 * wy1 + row2 * wy2 + row3 * wy3);
   }
 
-  // Slow boundary path with clamped coordinates.
+  // slow boundary path with clamped coordinates.
   let out: f64 = 0;
   const wx = [wx0, wx1, wx2, wx3];
   const wy = [wy0, wy1, wy2, wy3];

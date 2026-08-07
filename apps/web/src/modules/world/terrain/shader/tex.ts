@@ -5,23 +5,7 @@ import * as THREE from "three";
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
 
-let max_anisotropy: number | null = null;
-
-function get_safe_anisotropy(renderer?: THREE.WebGLRenderer): number {
-  if (max_anisotropy !== null) return max_anisotropy;
-
-  if (renderer) {
-    max_anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
-    return max_anisotropy;
-  }
-  return 1;
-}
-
-export function create_splatmap(
-  ch: U8Array,
-  row_stride: u32,
-  renderer?: THREE.WebGLRenderer,
-): THREE.DataTexture {
+export function create_splatmap(ch: U8Array, row_stride: u32): THREE.DataTexture {
   const tex = new THREE.DataTexture(ch, row_stride, row_stride, THREE.RedFormat, THREE.UnsignedByteType);
   tex.internalFormat = "R8";
 
@@ -29,11 +13,6 @@ export function create_splatmap(
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
   tex.anisotropy = 1;
-
-  // tex.magFilter = THREE.NearestFilter;
-  // tex.minFilter = THREE.NearestMipmapLinearFilter;
-  // tex.generateMipmaps = true;
-  // tex.anisotropy = get_safe_anisotropy(renderer);
 
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;

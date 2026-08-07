@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@db/postgres@~0.19.5": "0.19.5",
     "jsr:@hono/hono@^4.12.2": "4.12.2",
+    "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/bytes@^1.0.5": "1.0.6",
     "jsr:@std/crypto@^1.0.4": "1.0.5",
     "jsr:@std/encoding@^1.0.9": "1.0.10",
@@ -17,6 +18,7 @@
     "npm:@radix-ui/react-tooltip@^1.2.8": "1.2.8_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@react-three/drei@^10.7.7": "10.7.7_@react-three+fiber@9.5.0__react@19.2.4__react-dom@19.2.4___react@19.2.4__three@0.183.2__@types+react@19.2.14__immer@11.1.4_react@19.2.4_react-dom@19.2.4__react@19.2.4_three@0.183.2_@types+react@19.2.14_@types+three@0.183.1_immer@11.1.4",
     "npm:@react-three/fiber@^9.5.0": "9.5.0_react@19.2.4_react-dom@19.2.4__react@19.2.4_three@0.183.2_@types+react@19.2.14_immer@11.1.4",
+    "npm:@react-three/postprocessing@3.0.4": "3.0.4_@react-three+fiber@9.5.0__react@19.2.4__react-dom@19.2.4___react@19.2.4__three@0.183.2__@types+react@19.2.14__immer@11.1.4_react@19.2.4_three@0.183.2_@types+react@19.2.14_@types+three@0.183.1_immer@11.1.4_react-dom@19.2.4__react@19.2.4",
     "npm:@react-three/postprocessing@^3.0.4": "3.0.4_@react-three+fiber@9.5.0__react@19.2.4__react-dom@19.2.4___react@19.2.4__three@0.183.2__@types+react@19.2.14__immer@11.1.4_react@19.2.4_three@0.183.2_@types+react@19.2.14_@types+three@0.183.1_immer@11.1.4_react-dom@19.2.4__react@19.2.4",
     "npm:@tailwindcss/vite@4": "4.2.1_vite@7.3.1__picomatch@4.0.3",
     "npm:@types/react-dom@19": "19.2.3_@types+react@19.2.14",
@@ -63,6 +65,12 @@
     },
     "@hono/hono@4.12.2": {
       "integrity": "a3344827d814799503bb3bba77285344aaa2798643d1cc56345f9e3537ece886"
+    },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
     },
     "@std/bytes@1.0.6": {
       "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
@@ -2505,6 +2513,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@std/assert@1",
       "npm:@deno/vite-plugin@^1.0.6",
       "npm:i18next@^25.7.3",
       "npm:immer@^11.1.3",

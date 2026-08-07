@@ -260,11 +260,11 @@ export const terrain_colors = {
 
     // ---- roads ----
 
-    [terrain_types.transport.ROAD_DEFAULT]: "#F8F1E2", // warm ivory road
+    [terrain_types.transport.ROAD_DEFAULT]: "#C9C3B4", // warm asphalt gray — was #F8F1E2, nearly identical to land.BARE (#F7F1E6) and land.RESIDENTIAL (#E1D7CC), so ordinary streets were disappearing into the surrounding land
     [terrain_types.transport.ROAD_MOTORWAY]: "#E7A1A3", // muted coral
     [terrain_types.transport.ROAD_PRIMARY]: "#F2C78A", // soft amber
     [terrain_types.transport.ROAD_SECONDARY]: "#F7E4AE", // pale butter
-    [terrain_types.transport.PEDESTRIAN]: "#E8DED0", // warm pedestrian path
+    [terrain_types.transport.PEDESTRIAN]: "#D6CDB8", // same fix as ROAD_DEFAULT — was #E8DED0, just as close to land.BARE; narrow alleys/footways classify into this type
     [terrain_types.transport.PARKING]: "#CEC2B2", // muted parking gray
 
     // ---- rails ----

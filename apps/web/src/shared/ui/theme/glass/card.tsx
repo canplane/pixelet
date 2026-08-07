@@ -7,7 +7,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        // [Apple Style]: 매우 얇은 테두리, 미세한 투명도, 넓은 곡률
+        // very thin border, subtle transparency, wide corner radius
         "bg-white/5 backdrop-blur-xl border border-white/10 border-t-white/20",
         "rounded-[2rem] shadow-[0_24px_80px_rgba(0,0,0,0.1)]",
         "text-white ring-1 ring-black/5",
@@ -22,7 +22,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-header"
-      // gap을 줄여서 좀 더 콤팩트하고 고상하게 조정
+      // smaller gap for a more compact, refined feel
       className={cn(
         "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
         className,
@@ -36,7 +36,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      // 동숲 느낌을 위해 자간을 줄이고 폰트를 조금 더 굵게(font-black) 설정
+      // tighter letter-spacing and a bolder weight (font-black) for a friendly, rounded feel
       className={cn(
         "leading-none font-black tracking-tighter text-lg",
         className,

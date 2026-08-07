@@ -9,7 +9,7 @@ import type { Terrain } from "@pxl/shared/bake/format.ts";
 import { page_to_chunks } from "@/render/terrain/chunk.ts";
 
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
-import { useTileStore } from "./tile-store.ts";
+import { useTileStore } from "./tile_store.ts";
 import { AnchorNode } from "@/modules/world/spatial/anchor/node.tsx";
 
 import { TerrainChunk } from "./chunk.tsx";

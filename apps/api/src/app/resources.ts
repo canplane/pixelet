@@ -19,7 +19,7 @@ type PostgresConfig = {
   geo_url: string;
 
   pool_size: i32;
-  lazy: 0 | 1; // postgres Pool ctor 3rd arg (너가 쓰던 true)
+  lazy: 0 | 1; // postgres Pool constructor's 3rd arg
 };
 
 async function probe_pool(name: string, pool: Pool, sql: string): Promise<void> {
@@ -48,8 +48,8 @@ export async function make_app_resrcs(): Promise<AppResources> {
   await probe_pool("geo", geo_pool, "select postgis_full_version()");
 
   const disposers: (() => void | Promise<void>)[] = [];
-  // close API는 postgres 라이브러리 버전에 따라 다를 수 있음.
-  // 네가 쓰는 postgres(Pool)가 end()를 제공하면 그걸 호출.
+  // the close API can vary by postgres library version — call end() if
+  // this Pool implementation provides it.
   async function dispose(): Promise<void> {
     for (let i = disposers.length - 1; i >= 0; i--) {
       try {
@@ -58,7 +58,7 @@ export async function make_app_resrcs(): Promise<AppResources> {
     }
     // best-effort
     try {
-      // deno-postgres / postgres 라이브러리들에서 보통 end() 또는 close()
+      // deno-postgres / postgres libraries usually expose end() or close()
       await main_pool.end?.();
     } catch {}
     try {

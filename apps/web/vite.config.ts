@@ -1,6 +1,6 @@
 // @pxl/web/../vite.config.ts
 
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, type HmrContext, loadEnv } from "vite";
 import deno from "@deno/vite-plugin";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,15 +29,19 @@ function fullReloadOnCoreChange() {
   return {
     name: "full-reload-core",
     enforce: "pre" as const,
-    handleHotUpdate(ctx: any) {
-      const file: string = ctx.file ?? "";
-      if (!file) return [];
+    handleHotUpdate(ctx: HmrContext) {
+      const file = ctx.file;
 
       if (isCoreFile(file)) {
         ctx.server.ws.send({ type: "full-reload" });
         return [];
       }
-      return [];
+      // Returning [] here (even though it's "empty") tells Vite "no
+      // modules to update" for EVERY non-core file too, since Vite treats
+      // any array return — including [] — as truthy and overwrites
+      // ctx.modules with it. That silently disabled HMR for the entire
+      // app. Returning nothing lets Vite fall through to its default
+      // HMR behavior for anything that isn't a core-package file.
     },
   };
 }
@@ -52,6 +56,12 @@ export default defineConfig(({ mode }) => {
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
   return {
+    // root `deno task dev` runs dev:api and dev:web concurrently in one
+    // terminal (`sh -c "(deno task dev:api) & (deno task dev:web) & wait"`).
+    // Vite's default clearScreen wipes the whole terminal — including the
+    // API server's output — on every restart/error.
+    clearScreen: false,
+
     plugins: [
       deno(),
       react(),
