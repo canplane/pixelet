@@ -54,7 +54,29 @@ export function MapScene() {
         }}
       >
         <Canvas
-          dpr={1}
+          // dpr={[1, 2]}: real spatial supersampling, not just edge AA.
+          // MSAA (tried below, previously multisampling={4}) only resolves
+          // per-sample *coverage/depth* — the fragment shader itself still
+          // runs once per output pixel, so it never re-evaluates shading at
+          // sub-pixel positions. That's fine for a triangle's silhouette
+          // edge, but this terrain is thousands of independently
+          // flat-shaded boxes that minify well below one pixel at any real
+          // distance (see the EffectComposer comment below) — the visible
+          // artifact there is shading-value flicker between neighboring
+          // facets sharing a pixel, which MSAA structurally cannot fix.
+          // Rendering the whole canvas (WebGL draw + the full post stack)
+          // at up to 2x linear resolution and letting the browser's own
+          // canvas-to-CSS downscale do a real per-pixel color average fixes
+          // both classes of aliasing at once. Was pinned to a flat 1
+          // specifically to bound close-zoom cost; revisiting now that
+          // CELL_SHAMT going -2 -> -1 cut instanced-terrain vertex/fragment
+          // load ~4x, freeing up roughly the budget this costs (dpr 2
+          // means ~4x the pixels, so ~4x the fragment-shading work of the
+          // whole pipeline, post stack included) — if this turns out too
+          // expensive on real devices, that's the number to re-check
+          // against, and the [1,2] cap keeps it from ever exceeding 2x even
+          // on a 3x/4x-DPR phone.
+          dpr={[1, 2]}
           gl={{
             antialias: false,
             powerPreference: "high-performance",
@@ -62,13 +84,36 @@ export function MapScene() {
             stencil: false,
             depth: true,
           }}
-          shadows
+          // "percentage" (THREE.PCFShadowMap) instead of bare `shadows`
+          // (which defaults to PCFSoft) — the installed three.js version
+          // deprecated PCFSoftShadowMap and silently substitutes
+          // PCFShadowMap on every single render call, spamming devtools
+          // with the same warning every frame. Requesting PCFShadowMap
+          // directly is a no-op behavior-wise (matches what three.js was
+          // already falling back to) but skips the deprecated codepath
+          // entirely.
+          shadows="percentage"
           camera={{
             fov: FOV,
             near: NEAR,
             far: FAR_CLIP,
           }}
-          frameloop="always"
+          // "always" rendered every frame unconditionally, even fully at
+          // rest. "demand" only renders when something calls invalidate() —
+          // every useFrame that changes something over time now has to ask
+          // for its own next frame explicitly: use_camera.ts (camera
+          // damping), use_frame_translation.ts/use_frame_rotation.ts
+          // (floating-origin frame damping), environment.tsx (real-time
+          // sun/moon + theme color lerps, via a plain interval since
+          // there's no prop/store change to hang a wake-up effect off of),
+          // and location_puck.tsx's beacon spin/bob (which never converges
+          // by design, so it just keeps re-invalidating for as long as it's
+          // visible — see its own comment for why that puts a floor under
+          // how idle this can ever get). chunk.tsx's LOD/shadow-eligibility
+          // recheck needed no changes: it's purely a function of camera-to-
+          // chunk distance, so it can only ever have something new to do on
+          // a frame the camera damping above already caused to render.
+          frameloop="demand"
         >
           <FrameProvider>
             <CameraRig />
@@ -119,19 +164,22 @@ export function MapScene() {
           }
           {
             /*
-            multisampling was 0 (SMAA-only) — fine for clean geometric edges,
-            but this terrain is thousands of small flat-shaded boxes, and at
-            any real distance many of them minify into one pixel. That's not
-            an edge SMAA detects; it's the same class of problem as the grid/
-            grain shader fades above, just from geometry+shading instead of a
-            procedural pattern, and only real supersampling fixes it. Real
-            MSAA rather than a higher value here, since dpr is pinned to 1
-            (see the Canvas props) specifically to keep the close-zoom cost
-            (still-open lag investigation) from getting worse — worth
-            revisiting together if this turns out too expensive.
+            multisampling left at its default (0, off): the Canvas's dpr
+            prop above now does real supersampling (the whole canvas,
+            including this entire post stack, renders at up to 2x linear
+            resolution and gets box-downsampled by the browser), which
+            covers what MSAA was here for and then some — MSAA only
+            resolves per-sample coverage/depth for triangle edges, never
+            re-running the fragment shader per sample, so it could not touch
+            the shading-domain flicker this terrain's thousands of small
+            flat-shaded boxes produce once they minify below a pixel.
+            Stacking MSAA on top of the dpr supersampling would add further
+            coverage-sample cost without fixing an aliasing class dpr
+            doesn't already cover, so it's dropped rather than kept
+            alongside it.
           */
           }
-          <EffectComposer multisampling={4}>
+          <EffectComposer>
             <N8AO
               quality={post_cfg.AO.QUALITY}
               halfRes={post_cfg.AO.HALF_RES}

@@ -52,7 +52,7 @@ export function decode<T>(buffer: ArrayBuffer | ArrayBufferView): T | undefined 
 
     return result as T;
   } catch (err) {
-    console.error("json codec: decode failed:", err);
+    console.error("[json_codec] decode failed:", err);
     return undefined;
   }
 }

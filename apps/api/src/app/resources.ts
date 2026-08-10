@@ -26,7 +26,7 @@ async function probe_pool(name: string, pool: Pool, sql: string): Promise<void> 
   const client = await pool.connect();
   try {
     await client.queryArray(sql);
-    console.debug(`db: ${name}: ok`);
+    console.debug(`[db] ${name}: ok`);
   } finally {
     client.release();
   }

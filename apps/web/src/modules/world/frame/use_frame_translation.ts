@@ -1,8 +1,8 @@
 // @pxl/web/modules/world/frame/use_frame_translation.ts
 
-import { type RefObject, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { useFrame } from "@react-three/fiber";
+import { invalidate, useFrame } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
@@ -12,6 +12,9 @@ import { camera_cfg } from "@/modules/camera/config.ts";
 import type { AnchorRegistry } from "@/modules/world/spatial/anchor/registry.ts";
 
 const { POS_DAMP } = camera_cfg.smooth;
+
+// see use_camera.ts's DIST_EPS/POLAR_EPS comment — same frameloop="demand" reasoning.
+const POS_EPS: f64 = 0.0005;
 
 type UseFrameTranslationProps = {
   frame_ref: RefObject<THREE.Group | null>;
@@ -35,7 +38,15 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
   const prev_map_origin = useRef<IVec>(map_origin);
   const did_init = useRef(false);
 
-  useFrame((_, delta) => {
+  // wakes the loop back up when the damping target moves (GPS update,
+  // follow-mode re-center, floating-origin rebase, ...) while the canvas is
+  // idle — see use_camera.ts's matching effect for why the useFrame below
+  // can't notice this on its own under frameloop="demand".
+  useEffect(() => {
+    invalidate();
+  }, [map_center, map_origin]);
+
+  useFrame((state, delta) => {
     const frame = frame_ref.current;
     if (!frame || map_center === null) return;
 
@@ -64,5 +75,13 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
     frame.position.y += (ty - frame.position.y) * alpha;
     frame.position.z += (tz - frame.position.z) * alpha;
     frame.updateMatrix();
+
+    if (
+      Math.abs(tx - frame.position.x) > POS_EPS ||
+      Math.abs(ty - frame.position.y) > POS_EPS ||
+      Math.abs(tz - frame.position.z) > POS_EPS
+    ) {
+      state.invalidate();
+    }
   });
 }

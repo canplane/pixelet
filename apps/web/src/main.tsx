@@ -34,7 +34,7 @@ export function main(): void {
       </StrictMode>,
     );
   } catch (err) {
-    console.error("web: failed to bootstrap engines:", err);
+    console.error("[web] failed to bootstrap engines:", err);
     // TODO: show a fallback screen on engine load failure, if needed
   }
 }

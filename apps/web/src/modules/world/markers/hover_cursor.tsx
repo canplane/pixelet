@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/markers/cell_highlighter.tsx
+// @pxl/web/modules/world/markers/hover_cursor.tsx
 
 import { useMemo } from "react";
 import * as THREE from "three";
@@ -22,7 +22,7 @@ const HIGHLIGHT_BOX = new THREE.BoxGeometry(1, 1, 1);
 
 const POS = center3n([0, 0, -U_PER_CELL], U_PER_CELL);
 
-export function CellHighlighter() {
+export function HoverCursor() {
   const hovered: PVF3 | null = useCameraStore((state) => state.hovered_coord);
 
   const mat: THREE.ShaderMaterial = useMemo(

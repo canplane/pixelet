@@ -32,8 +32,8 @@ import { make_rng, type RNG } from "@xpute/core/kit/rng.ts";
 export type Key = string | number | bigint;
 
 type Tree<T> = {
-  val: T; // 데이터 (BST Key)
-  prio: u32; // 우선순위 (Heap Key)
+  val: T; // data (BST key)
+  prio: u32; // priority (heap key)
 
   sz: u32; // subtree size (for unbiased sampling)
   left: Tree<T> | null;

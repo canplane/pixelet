@@ -4,6 +4,10 @@
 import { common_colors, common_types } from "./common.ts";
 import { CELL_MASKS } from "./utils.ts";
 
+import brick_colors_json from "./palette/brick.json" with { type: "json" };
+import soft_theme_colors_json from "./palette/soft.json" with { type: "json" };
+import carto_colors_json from "./palette/carto.json" with { type: "json" };
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -124,157 +128,75 @@ export const terrain_types = {
 } as const;
 
 // ============================================================================
-// Color Definitions - OSM-like Backup
+// Color Definitions — loaded from JSON (see ./palette/)
 // ============================================================================
+//
+// Used to be inline `as const` object literals here, keyed by
+// `[terrain_types.X.Y]` computed properties — moved out to plain JSON so
+// color values (and the human-readable `note` next to each one) can be
+// edited without touching TypeScript. JSON object keys can't reference
+// another module's values the way `[terrain_types.land.BARE]` could, so
+// each JSON file keys by the type's own NAME string ("BARE", "SEA", ...)
+// instead of its numeric id directly — build_colors_from_json below does
+// that name -> type_id resolution once, here, against terrain_types, and
+// throws immediately on a typo'd name rather than silently dropping a color.
 
-export const terrain_colors_osm = {
-  // ---- land ----
+type ColorJsonEntry = { hex: string; note?: string };
+/** Root-level, sits alongside the channel maps — provenance for the palette
+ * as a whole (where the colors came from), as opposed to `note` which
+ * documents one specific entry. Optional: older/simpler files can omit it. */
+type ColorJsonMeta = { description?: string; source?: string };
+// index signature has to cover both branches (a plain string-keyed lookup
+// can't tell _meta and the channel maps apart by type alone) — narrowed back
+// to Record<string, ColorJsonEntry> below, after _meta is skipped.
+type ColorJsonFile = { _meta?: ColorJsonMeta; [ch_key: string]: ColorJsonMeta | Record<string, ColorJsonEntry> | undefined };
 
-  land: {
-    ...common_colors,
+function build_colors_from_json(json: ColorJsonFile): Record<string, Record<number, string | null>> {
+  const out: Record<string, Record<number, string | null>> = {};
 
-    [terrain_types.land.BARE]: "#F2EFE9",
-    [terrain_types.land.SEA]: "#AACBD6",
+  Object.keys(json).forEach((ch_key) => {
+    if (ch_key === "_meta") return;
 
-    [terrain_types.land.GREEN_DEEP]: "#ADD19E",
-    [terrain_types.land.GREEN_LIGHT]: "#C8FACA",
-    [terrain_types.land.SAND]: "#F1E6B9",
+    const types_for_ch = (terrain_types as Record<string, Record<string, number>>)[ch_key];
+    if (!types_for_ch) {
+      throw new Error(`terrain color JSON references unknown channel "${ch_key}" — check terrain_types`);
+    }
 
-    [terrain_types.land.RESIDENTIAL]: "#DADADA",
-    [terrain_types.land.COMMERCIAL]: "#F2DADE",
-    [terrain_types.land.INDUSTRIAL]: "#ECDBE8",
-    [terrain_types.land.SPORTS]: "#BCEAC3",
-    [terrain_types.land.EDUCATION]: "#FAF7E6",
-    [terrain_types.land.MEDICAL]: "#F0F9F5",
-    [terrain_types.land.PUBLIC]: "#F0F2F5",
+    const ch_out: Record<number, string | null> = { ...common_colors };
+    const ch_entries = json[ch_key] as Record<string, ColorJsonEntry>;
+    Object.entries(ch_entries).forEach(([type_name, entry]) => {
+      const type_id = types_for_ch[type_name];
+      if (type_id === undefined) {
+        throw new Error(`terrain color JSON references unknown type "${ch_key}.${type_name}" — check terrain_types`);
+      }
+      ch_out[type_id] = entry.hex;
+    });
 
-    [terrain_types.land.APRON]: "#E0E0E0",
-    [terrain_types.land.HELIPAD]: "#555555",
-  },
+    out[ch_key] = ch_out;
+  });
 
-  // ---- water ----
+  return out;
+}
 
-  water: {
-    ...common_colors,
+/** BrickLink-sourced palette — superseded by the OSM-style palette below as
+ * the active default, kept as a named backup/reference rather than
+ * deleted. */
+export const terrain_colors_brick: Record<string, Record<number, string | null>> = build_colors_from_json(
+  brick_colors_json,
+);
 
-    [terrain_types.water.RIVER]: "#B9DEEA",
-    [terrain_types.water.LAKE]: "#A8D3E2",
-    [terrain_types.water.WETLAND]: "#D1E3E2",
-  },
+/** The original pastel "Soft World Theme" — also superseded, kept as a
+ * named backup/reference (same reasoning as terrain_colors_brick above). */
+export const terrain_colors_soft: Record<string, Record<number, string | null>> = build_colors_from_json(
+  soft_theme_colors_json,
+);
 
-  // ---- structure ----
-
-  structure: {
-    ...common_colors,
-
-    [terrain_types.structure.BUILDING]: "#D9D0C9",
-    [terrain_types.structure.BUILDING_STATION]: "#546E7A",
-    [terrain_types.structure.BUILDING_MEDICAL]: "#FFFFFF",
-    [terrain_types.structure.BUILDING_EDUCATION]: "#F5DEB3",
-    [terrain_types.structure.BUILDING_PUBLIC]: "#DFE4EA",
-  },
-
-  // ---- transport ----
-
-  transport: {
-    ...common_colors,
-
-    [terrain_types.transport.ROAD_DEFAULT]: "#FFFFFF",
-    [terrain_types.transport.ROAD_MOTORWAY]: "#E5989B",
-    [terrain_types.transport.ROAD_PRIMARY]: "#FAD492",
-    [terrain_types.transport.ROAD_SECONDARY]: "#FEFAE0",
-    [terrain_types.transport.PEDESTRIAN]: "#DDDDDD",
-    [terrain_types.transport.PARKING]: "#C2C2C2",
-
-    [terrain_types.transport.RAIL_MAIN]: "#999999",
-    [terrain_types.transport.RAIL_SUBWAY]: "#2A9D8F",
-
-    [terrain_types.transport.RUNWAY]: "#333333",
-    [terrain_types.transport.TAXIWAY]: "#555555",
-  },
-} as const;
-
-// ============================================================================
-// Color Definitions - Soft World Theme
-// ============================================================================
-
-export const terrain_colors = {
-  // ---- land ----
-
-  land: {
-    ...common_colors,
-
-    // ---- basic ----
-
-    [terrain_types.land.BARE]: "#F7F1E6", // warm cream ground
-    [terrain_types.land.SEA]: "#94D3D8", // soft toy-like sea
-
-    // ---- natural ----
-
-    [terrain_types.land.GREEN_DEEP]: "#9FC58E", // muted forest green
-    [terrain_types.land.GREEN_LIGHT]: "#D3EABD", // soft park green
-    [terrain_types.land.SAND]: "#F3DEAE", // warm sand
-
-    // ---- landuse ----
-
-    [terrain_types.land.RESIDENTIAL]: "#E1D7CC", // warm light gray
-    [terrain_types.land.COMMERCIAL]: "#F5D7CC", // soft peach
-    [terrain_types.land.INDUSTRIAL]: "#DDD0D9", // dusty mauve
-    [terrain_types.land.SPORTS]: "#BFE0AE", // playful field green
-    [terrain_types.land.EDUCATION]: "#F6E6BE", // warm ivory
-    [terrain_types.land.MEDICAL]: "#E8F6EE", // clean mint
-    [terrain_types.land.PUBLIC]: "#E4E9EE", // cool civic gray
-
-    // ---- aeroway areas ----
-
-    [terrain_types.land.APRON]: "#D9D1C6", // pale concrete
-    [terrain_types.land.HELIPAD]: "#6B625B", // muted dark pad
-  },
-
-  // ---- water ----
-
-  water: {
-    ...common_colors,
-
-    [terrain_types.water.RIVER]: "#BDE8E6", // bright mint river
-    [terrain_types.water.LAKE]: "#A5DDD9", // calm soft lake
-    [terrain_types.water.WETLAND]: "#CCE4D3", // muted wetland green-blue
-  },
-
-  // ---- structure ----
-
-  structure: {
-    ...common_colors,
-
-    [terrain_types.structure.BUILDING]: "#D9CBBB", // warm clay-gray
-    [terrain_types.structure.BUILDING_STATION]: "#73838C", // blue-gray landmark
-    [terrain_types.structure.BUILDING_MEDICAL]: "#FFFDF8", // soft white
-    [terrain_types.structure.BUILDING_EDUCATION]: "#EACB98", // warm sand
-    [terrain_types.structure.BUILDING_PUBLIC]: "#DDE4E8", // civic cool gray
-  },
-
-  // ---- transport ----
-
-  transport: {
-    ...common_colors,
-
-    // ---- roads ----
-
-    [terrain_types.transport.ROAD_DEFAULT]: "#C9C3B4", // warm asphalt gray — was #F8F1E2, nearly identical to land.BARE (#F7F1E6) and land.RESIDENTIAL (#E1D7CC), so ordinary streets were disappearing into the surrounding land
-    [terrain_types.transport.ROAD_MOTORWAY]: "#E7A1A3", // muted coral
-    [terrain_types.transport.ROAD_PRIMARY]: "#F2C78A", // soft amber
-    [terrain_types.transport.ROAD_SECONDARY]: "#F7E4AE", // pale butter
-    [terrain_types.transport.PEDESTRIAN]: "#D6CDB8", // same fix as ROAD_DEFAULT — was #E8DED0, just as close to land.BARE; narrow alleys/footways classify into this type
-    [terrain_types.transport.PARKING]: "#CEC2B2", // muted parking gray
-
-    // ---- rails ----
-
-    [terrain_types.transport.RAIL_MAIN]: "#8B8176", // warm rail gray
-    [terrain_types.transport.RAIL_SUBWAY]: "#64A89F", // softened teal
-
-    // ---- aeroway lines ----
-
-    [terrain_types.transport.RUNWAY]: "#4A443E", // muted charcoal
-    [terrain_types.transport.TAXIWAY]: "#70675E", // softened asphalt
-  },
-} as const;
+/** Active palette — every terrain-color consumer (shader_meta.ts,
+ * minimap_atlas.ts, mod.ts's cell_colors) reads this one. Sourced from
+ * OpenStreetMap Carto (openstreetmap.org's own default renderer,
+ * gravitystorm/openstreetmap-carto) — "OSM" alone would be ambiguous, since
+ * the OSM *data* has no inherent colors; Carto is the specific style whose
+ * color choices this file replicates. */
+export const terrain_colors: Record<string, Record<number, string | null>> = build_colors_from_json(
+  carto_colors_json,
+);

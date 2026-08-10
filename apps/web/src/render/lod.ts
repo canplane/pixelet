@@ -16,11 +16,33 @@ export type LODStep = (typeof LOD_STEP_BY_LEVEL)[LODLevel];
 const LOD_MARGIN: f64 = 1.4;
 
 const LOD_DIST_BY_LEVEL = {
-  LOD0: CHUNK_U * 3,
-  LOD1: CHUNK_U * 6,
-  LOD2: CHUNK_U * 12,
-  LOD3: CHUNK_U * 24,
-  LOD4: CHUNK_U * 48,
+  // Every finite threshold below is 2x an earlier round of chunk-width
+  // multipliers (3/6/24/48/96 -> 6/12/48/96/192) — a second, independent
+  // widening on top of the LOD2-4 one two paragraphs down, this time across
+  // every level including LOD0/1, requested directly because LOD was
+  // switching too readily/abruptly during ordinary movement. Doubling every
+  // threshold doubles how far you have to travel (in any direction) before
+  // a level hands off, i.e. each level now covers roughly 4x the ground
+  // area (radius x2 -> area x4) before the next one takes over — same
+  // ladder of steps, just stretched so a normal pan/zoom crosses far fewer
+  // of them.
+  LOD0: CHUNK_U * 6,
+  LOD1: CHUNK_U * 12,
+  // LOD2-4 thresholds were already pushed to 2x their original chunk-width
+  // multiplier once before (12/24/48 -> 24/48/96) to match CELL_SHAMT going
+  // -2 -> -1 (U_PER_CELL doubled): only LOD0/LOD1 are dither-blended (see
+  // BLEND_ELIGIBLE_THRESHOLDS below), so the LOD2/3/4 handoffs are still
+  // hard pops, and a hard pop's on-screen footprint scales with the
+  // physical cell size the same way everything else here does — doubling
+  // the switch distance kept that footprint (and thus how noticeable the
+  // pop is) roughly where it was before the cell size changed, instead of
+  // popping at the same distance as before but twice as large. Deliberately
+  // NOT widening BLEND_ELIGIBLE_THRESHOLDS to cover these instead — that
+  // was already tried (see its own comment) and reverted for being
+  // noisier, and a larger base cell size only makes that worse, not better.
+  LOD2: CHUNK_U * 48,
+  LOD3: CHUNK_U * 96,
+  LOD4: CHUNK_U * 192,
   LOD5: Infinity,
 } as const;
 
@@ -60,15 +82,46 @@ function clamp01(x: f64): f64 {
 }
 
 // internal sampling uses step values 1/2/4/8/16/32, while external naming uses LOD0..LOD5.
+//
+// Per-threshold hysteresis margin, not one flat factor for every threshold
+// at once (the previous version): LOD_MARGIN's ~29% dead zone is far wider
+// than BLEND_BAND_FRACTION's 5% band, and for a blend-eligible threshold
+// that mismatch is a real bug, not just a wider safety margin — while
+// zooming in, get_lod_guide's band turns off (the chunk exits it) once dist
+// crosses the band's own inner edge (t*(1-BLEND_BAND_FRACTION)), but the
+// flat-factor version didn't actually commit lod_step to the finer tier
+// until dist reached the much farther t/LOD_MARGIN. In the gap between
+// those two points, the chunk had already looked like it switched to fine
+// (the blend band's own per-chunk u_blend_r comparison shows the finer draw
+// for almost any hash value near the band's low edge, since coarse_fraction
+// there is near 0) and then visibly snapped back to full-coarse the instant
+// the band turned off and get_lod_guide fell back to whatever lod_step
+// actually was (still coarse) — a real "un-does itself" pop during smooth,
+// one-directional zooming, not requiring any reversal in the input. Matching
+// the blend-eligible margin to the band's own inner edge (1-BLEND_BAND_FRACTION)
+// makes both systems commit to the finer tier at the exact same dist, so
+// there's no gap left to fall into. Non-blend-eligible thresholds (LOD2+)
+// have no band to stay consistent with, so they keep the original, wider
+// LOD_MARGIN-based cushion — a hard pop there is already the least
+// noticeable case (see BLEND_ELIGIBLE_THRESHOLDS's own comment).
 function calculate_lod_step(dist: f64, current_lod_step: LODStep): LODStep {
-  const get_thres = (ref_dist: f64): f64 => ref_dist * (current_lod_step > 1 ? 1 / LOD_MARGIN : 1.0);
+  for (let i = 0; i < LOD_THRESHOLDS.length; i++) {
+    const raw_t: f64 = LOD_THRESHOLDS[i];
+    const finer_step: LODStep = LOD_STEP_BY_LEVEL[i];
 
-  if (dist < get_thres(LOD_DIST_BY_LEVEL.LOD0)) return 1;
-  if (dist < get_thres(LOD_DIST_BY_LEVEL.LOD1)) return 2;
-  if (dist < get_thres(LOD_DIST_BY_LEVEL.LOD2)) return 4;
-  if (dist < get_thres(LOD_DIST_BY_LEVEL.LOD3)) return 8;
-  if (dist < get_thres(LOD_DIST_BY_LEVEL.LOD4)) return 16;
-  return 32;
+    // hysteresis only ever resists *becoming finer* (shrinking the
+    // threshold once already coarser than this tier) — there's no
+    // symmetric cushion against becoming coarser, same asymmetry the
+    // original had; see this function's own doc comment for why that's
+    // fine on the coarsening side (it never opens a band/hysteresis gap
+    // the way the finer-side mismatch did).
+    const already_coarser = current_lod_step > finer_step;
+    const margin: f64 = i < BLEND_ELIGIBLE_THRESHOLDS ? (1 - BLEND_BAND_FRACTION) : (1 / LOD_MARGIN);
+    const thres: f64 = already_coarser ? raw_t * margin : raw_t;
+
+    if (dist < thres) return finer_step;
+  }
+  return LOD_STEP_BY_LEVEL[LOD_STEP_BY_LEVEL.length - 1];
 }
 
 function get_lod_level(lod_step: LODStep): LODLevel {

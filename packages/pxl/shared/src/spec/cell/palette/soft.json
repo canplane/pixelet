@@ -1,0 +1,48 @@
+{
+  "land": {
+    "BARE": { "hex": "#F7F1E6", "note": "warm cream ground" },
+    "SEA": { "hex": "#94D3D8", "note": "soft toy-like sea" },
+    "GREEN_DEEP": { "hex": "#9FC58E", "note": "muted forest green" },
+    "GREEN_LIGHT": { "hex": "#D3EABD", "note": "soft park green" },
+    "SAND": { "hex": "#F3DEAE", "note": "warm sand" },
+    "RESIDENTIAL": { "hex": "#E1D7CC", "note": "warm light gray" },
+    "COMMERCIAL": { "hex": "#F5D7CC", "note": "soft peach" },
+    "INDUSTRIAL": { "hex": "#DDD0D9", "note": "dusty mauve" },
+    "SPORTS": { "hex": "#BFE0AE", "note": "playful field green" },
+    "EDUCATION": { "hex": "#F6E6BE", "note": "warm ivory" },
+    "MEDICAL": { "hex": "#E8F6EE", "note": "clean mint" },
+    "PUBLIC": { "hex": "#E4E9EE", "note": "cool civic gray" },
+    "APRON": { "hex": "#D9D1C6", "note": "pale concrete" },
+    "HELIPAD": { "hex": "#6B625B", "note": "muted dark pad" }
+  },
+  "water": {
+    "RIVER": { "hex": "#BDE8E6", "note": "bright mint river" },
+    "LAKE": { "hex": "#A5DDD9", "note": "calm soft lake" },
+    "WETLAND": { "hex": "#CCE4D3", "note": "muted wetland green-blue" }
+  },
+  "structure": {
+    "BUILDING": { "hex": "#D9CBBB", "note": "warm clay-gray" },
+    "BUILDING_STATION": { "hex": "#73838C", "note": "blue-gray landmark" },
+    "BUILDING_MEDICAL": { "hex": "#FFFDF8", "note": "soft white" },
+    "BUILDING_EDUCATION": { "hex": "#EACB98", "note": "warm sand" },
+    "BUILDING_PUBLIC": { "hex": "#DDE4E8", "note": "civic cool gray" }
+  },
+  "transport": {
+    "ROAD_DEFAULT": {
+      "hex": "#C9C3B4",
+      "note": "warm asphalt gray — was #F8F1E2, nearly identical to land.BARE (#F7F1E6) and land.RESIDENTIAL (#E1D7CC), so ordinary streets were disappearing into the surrounding land"
+    },
+    "ROAD_MOTORWAY": { "hex": "#E7A1A3", "note": "muted coral" },
+    "ROAD_PRIMARY": { "hex": "#F2C78A", "note": "soft amber" },
+    "ROAD_SECONDARY": { "hex": "#F7E4AE", "note": "pale butter" },
+    "PEDESTRIAN": {
+      "hex": "#D6CDB8",
+      "note": "same fix as ROAD_DEFAULT — was #E8DED0, just as close to land.BARE; narrow alleys/footways classify into this type"
+    },
+    "PARKING": { "hex": "#CEC2B2", "note": "muted parking gray" },
+    "RAIL_MAIN": { "hex": "#8B8176", "note": "warm rail gray" },
+    "RAIL_SUBWAY": { "hex": "#64A89F", "note": "softened teal" },
+    "RUNWAY": { "hex": "#4A443E", "note": "muted charcoal" },
+    "TAXIWAY": { "hex": "#70675E", "note": "softened asphalt" }
+  }
+}

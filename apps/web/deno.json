@@ -66,7 +66,6 @@
     "class-variance-authority": "npm:class-variance-authority@^0.7.1",
 
     // UI components & animations
-    "sonner": "npm:sonner@^2.0.7",
     "framer-motion": "npm:framer-motion@^12.23.26",
     "lucide-react": "npm:lucide-react@^0.561.0",
     "lottie-react": "npm:lottie-react@^2.4.1",

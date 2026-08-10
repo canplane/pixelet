@@ -39,8 +39,8 @@ import { useFrameRefs } from "./frame/context.tsx";
 import { get_local_world_origin } from "./frame/coord.ts";
 
 import { TerrainLayer } from "./terrain/layer.tsx";
-import { UserMarker } from "./markers/user_marker.tsx";
-import { CellHighlighter } from "./markers/cell_highlighter.tsx";
+import { LocationPuck } from "./markers/location_puck.tsx";
+import { HoverCursor } from "./markers/hover_cursor.tsx";
 import { Block } from "./primitives/block.tsx";
 
 type DebugDotProps = {
@@ -107,11 +107,17 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
   // owned here (not by AnchorSpace) so useFrameTranslation can rebase it in
   // the same callback that snaps local-world-frame's position — see the doc
   // comment on useFrameTranslation's registry param.
-  const registry = useMemo(() => {
-    const next = new AnchorRegistry();
-    next.cur_map_origin = map_origin;
-    return next;
-  }, []);
+  const registry = useMemo(() => new AnchorRegistry(), []);
+
+  // map_center starts out null, so the registry above is first created with
+  // cur_map_origin stuck at 0n (its own field default) — the real origin
+  // isn't known until map_center resolves. Once any anchor has linked,
+  // cur_map_origin may only change through shift_map_origin (which also
+  // repositions those existing anchors — see useFrameTranslation's own
+  // callback), but while entries is still empty there's nothing to
+  // reposition, so it's safe to keep this synced directly here, before any
+  // AnchorNode's layout effect can link() using a stale origin.
+  if (registry.entries.size === 0) registry.cur_map_origin = map_origin;
 
   useFrameRotation({ frame_ref: world_frame_ref });
   useFrameTranslation({
@@ -124,9 +130,10 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
   // device_coord is deliberately NOT gated here the way map_center is —
   // map_center can be seeded from a fallback (see use_map_bootstrap.ts) even
   // when there's no real device fix at all, and the terrain/world itself
-  // should still render in that case. Only the pieces that specifically
-  // depict *the device's own position* (UserMarker below) need to stay
-  // absent when device_coord is null.
+  // should still render in that case. LocationPuck itself now holds its own
+  // last-known device_coord across a transient null (a GPS blip shouldn't
+  // unmount/remount it — see its own doc comment), so it no longer needs to
+  // be conditionally mounted here either.
   if (map_center === null) return null;
 
   return (
@@ -158,8 +165,8 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
             <AnchorSpace registry={registry}>
               <TerrainLayer />
 
-              <CellHighlighter />
-              {device_coord !== null && <UserMarker device_coord={device_coord} />}
+              <HoverCursor />
+              <LocationPuck device_coord={device_coord} />
 
               {__IS_DEV__ && show_debug_objects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
             </AnchorSpace>

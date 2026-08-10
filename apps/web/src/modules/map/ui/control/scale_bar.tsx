@@ -65,7 +65,7 @@ export function MapScaleBar() {
   // conversion, making every shown distance ~4.78x (1/U_PER_M) too small.
   // that bug survived an "empirical" check that only compared two
   // Vector3.distanceTo() results against each other (both already in u
-  // units) — caught for real by cross-checking against CellHighlighter's
+  // units) — caught for real by cross-checking against HoverCursor's
   // on-screen pixel width (scale={U_PER_CELL}, a known true size).
   const visible_planar_m = visible_u / epsg3857.U_PER_M;
   const planar_m_per_px = visible_planar_m / screen_height;
@@ -135,14 +135,6 @@ export function MapScaleBar() {
           <div
             className={cn(
               "absolute left-0 h-2 w-[1.5px] transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-neutral-900 group-hover:bg-black",
-            )}
-          />
-
-          {/* center tick */}
-          <div
-            className={cn(
-              "absolute left-1/2 -translate-x-1/2 w-[2.5px] h-[2.5px] rounded-full transition-colors",
               is_default_zoom ? "bg-amber-400" : "bg-neutral-900 group-hover:bg-black",
             )}
           />

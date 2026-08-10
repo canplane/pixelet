@@ -41,7 +41,6 @@
     "npm:react-router-dom@^7.10.1": "7.13.1_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:react@^19.2.0": "19.2.4",
     "npm:socket.io@4": "4.8.3",
-    "npm:sonner@^2.0.7": "2.0.7_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:tailwind-merge@^3.4.0": "3.5.0",
     "npm:tailwindcss@^4.1.18": "4.2.1",
     "npm:three-stdlib@^2.36.1": "2.36.1_three@0.183.2",
@@ -2269,13 +2268,6 @@
         "socket.io-parser"
       ]
     },
-    "sonner@2.0.7_react@19.2.4_react-dom@19.2.4__react@19.2.4": {
-      "integrity": "sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==",
-      "dependencies": [
-        "react",
-        "react-dom"
-      ]
-    },
     "source-map-js@1.2.1": {
       "integrity": "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA=="
     },
@@ -2555,7 +2547,6 @@
           "npm:react-i18next@16",
           "npm:react-router-dom@^7.10.1",
           "npm:react@^19.2.0",
-          "npm:sonner@^2.0.7",
           "npm:tailwind-merge@^3.4.0",
           "npm:tailwindcss@^4.1.18",
           "npm:three-stdlib@^2.36.1",

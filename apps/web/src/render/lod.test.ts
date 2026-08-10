@@ -7,15 +7,16 @@ import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 import { get_instance_cnt, get_lod_guide } from "./lod.ts";
 
 // CHUNK_U (module-internal) = 1 << L2_SHAMT = 32, so the first two
-// LOD_THRESHOLDS this file exercises are CHUNK_U*3 = 96 and CHUNK_U*6 = 192 —
+// LOD_THRESHOLDS this file exercises are CHUNK_U*6 = 192 and CHUNK_U*12 = 384 —
 // re-derived here instead of imported since lod.ts intentionally keeps
 // LOD_DIST_BY_LEVEL/LOD_THRESHOLDS module-private (get_lod_guide is the only
 // sanctioned way to query LOD state). If lod.ts's own constants ever change,
 // these numbers need updating alongside them — that coupling is deliberate,
 // it's what makes this a regression test for the threshold values, not just
 // for get_lod_guide's control flow.
-const THRESHOLD_0 = 96;
-const THRESHOLD_1 = 192;
+const THRESHOLD_0 = 192;
+const THRESHOLD_1 = 384;
+const THRESHOLD_2 = 1536; // CHUNK_U*48, the LOD2<->LOD3 handoff
 const BAND_0 = THRESHOLD_0 * 0.05; // BLEND_BAND_FRACTION
 const BAND_1 = THRESHOLD_1 * 0.05;
 
@@ -86,13 +87,13 @@ Deno.test("get_lod_guide - the second blend band (LOD1<->LOD2) also blends, same
 });
 
 Deno.test("get_lod_guide - thresholds past BLEND_ELIGIBLE_THRESHOLDS never blend, even right at the edge of one", () => {
-  // LOD2<->LOD3 (t=384) is the 3rd threshold — BLEND_ELIGIBLE_THRESHOLDS=2
+  // LOD2<->LOD3 (t=1536) is the 3rd threshold — BLEND_ELIGIBLE_THRESHOLDS=2
   // only covers the first two (LOD0<->1, LOD1<->2), so this one always pops
   // instead of dithering, by design (see lod.ts's doc comment on why: far
   // rings cover the most chunks by count, and are visually the smallest
-  // per-cell anyway). 380 sits just inside the LOD2 tier (step 4), a hair
-  // below the 384 threshold — the closest a "step 4" distance gets to it.
-  const guide = get_lod_guide(380, 1);
+  // per-cell anyway). THRESHOLD_2-6 sits just inside the LOD2 tier (step 4),
+  // a hair below the threshold — the closest a "step 4" distance gets to it.
+  const guide = get_lod_guide(THRESHOLD_2 - 6, 1);
   assertEquals(guide.blend_active, false);
   assertEquals(guide.lod_step, 4);
 });

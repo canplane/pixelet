@@ -57,7 +57,18 @@ const V3_REG: V3 = fill3(0);
  *
  * Cyclic world-topology mapping:
  * - the effective X domain is 23 bits (2^23 = 8,388,608 u); the MSB of the
- *   24-bit lane is reserved as a guard bit for pseudo-SIMD lane arithmetic
+ *   24-bit lane is reserved as a guard bit (see ivec.ts's own "Guard-Bit
+ *   Headroom" doc for what this margin does and — just as importantly —
+ *   doesn't buy: it does NOT make raw packed-word add/sub across lanes
+ *   safe, that was tried and measured wrong). Y ends up with this same
+ *   23-bit-of-24 headroom too (EPSG:3857's square bounds put its
+ *   legitimate range at essentially this same magnitude), it's just not
+ *   derived in this file since Y needs no antimeridian-style wrap of its
+ *   own. X keeps an extra, independent reason to want the bit regardless:
+ *   a delta taken against a not-yet-rewrapped position near the seam can
+ *   transiently swing close to a full world-width before whatever
+ *   re-wraps it runs, and this same headroom is what keeps that transient
+ *   from corrupting the value before it gets corrected.
  * - this 23-bit domain is scaled to match the full EPSG:3857 equatorial world width exactly
  * - 1 [u] ≈ 4.777 [m]
  * - crossing the positive 23-bit X limit naturally overflows into the negative

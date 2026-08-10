@@ -62,6 +62,16 @@ export default defineConfig(({ mode }) => {
     // API server's output — on every restart/error.
     clearScreen: false,
 
+    // maplibre-gl's CJS/UMD packaging is the one dependency in this project
+    // esbuild's cold-start scan misses (verified: every other real
+    // dependency here pre-bundles correctly) — without this, the browser
+    // only trips over it once map_tiler.tsx actually loads, forcing a
+    // mid-session "optimized dependencies changed" full reload that
+    // cancels whatever terrain tile fetches were in flight at that moment.
+    optimizeDeps: {
+      include: ["maplibre-gl"],
+    },
+
     plugins: [
       deno(),
       react(),

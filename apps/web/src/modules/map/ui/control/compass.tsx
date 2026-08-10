@@ -2,7 +2,6 @@
 
 import { useCameraStore } from "@/modules/camera/store.ts";
 
-import { cn } from "@/shared/lib/utils/cn.ts";
 import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
 import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
 
@@ -36,7 +35,7 @@ export function MapCompass() {
 
   return (
     // layout={false}: this now sits in a flex column alongside
-    // DevicePoseControl (top_overlays.tsx puts GPS above compass in one
+    // TrackingButton (top_overlays.tsx puts GPS above compass in one
     // shared column) instead of its own standalone wrapper — without this,
     // framer-motion's default layout={true} tries to auto-animate this
     // button's bounding box whenever the *column's* size changes (e.g. its
@@ -51,20 +50,18 @@ export function MapCompass() {
           actually show. This is a one-shot reset button, not a toggle with
           a real "currently active" state to indicate. */
       }
-      <CircularButton className="w-11 h-11" dark onClick={handle_reset}>
-        {/* 🧭 N 표시: 방위(azimuth)가 정확히 북쪽일 때만 빨간색 활성화 */}
-        <span
-          className={cn(
-            "absolute top-0.5 text-[8px] font-medium tracking-tighter select-none z-20 transition-colors duration-300",
-            is_default_orientation // 🚀 추출한 변수를 사용하여 조건문 단순화
-              ? "text-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
-              : "text-white/40",
-          )}
-        >
+      <CircularButton className="w-11 h-11" dark shadow={false} onClick={handle_reset}>
+        {
+          /* N label — same dead-branch reasoning as the dropped isActive prop
+        above: MotionContainer only mounts this while !is_default_orientation,
+        so is_default_orientation is always false here. The "red when
+        pointing exactly north" branch could never actually render. */
+        }
+        <span className="absolute top-0.5 text-[8px] font-medium tracking-tighter select-none z-20 text-white/40">
           N
         </span>
 
-        {/* 🧭 바늘 회전 */}
+        {/* needle rotation */}
         <div
           className="relative w-[2px] h-6 flex flex-col z-10 transition-transform duration-200 ease-[cubic-bezier(0.1,0,0,1)]"
           style={{ transform: `rotate(${(-azimuth * 180) / Math.PI}deg)` }}

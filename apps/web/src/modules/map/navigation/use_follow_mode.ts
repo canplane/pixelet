@@ -6,7 +6,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { wrap } from "@xpute/core/kit/math.ts";
 import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
+import { DevicePoseStatus, useDeviceLocationStore, useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { ground_or_raw } from "@/modules/world/terrain/use_elevation.ts";
 
@@ -42,6 +42,7 @@ export function useFollowMode() {
   const set_map_center = useMapStore.getState().set_map_center;
 
   const set_view_state = useCameraStore.getState().set_view_state;
+  const set_is_follow_mode = useCameraStore.getState().set_is_follow_mode;
   const is_follow_mode = useCameraStore((state) => state.is_follow_mode);
 
   const heading = useDeviceOrientationStore((state) => state.orientation?.heading ?? null);
@@ -50,6 +51,32 @@ export function useFollowMode() {
 
   const smoothed_azimuth = useRef<f64 | null>(null);
   const smoothed_coord = useRef<PVF3 | null>(null);
+
+  /**
+   * Follow mode needs both sensors to mean anything: it's position (GPS)
+   * fused with heading (compass). TrackingButton only lets the user
+   * *enter* follow mode once both are already READY (see its own
+   * is_enabled/request_orientation gating), but nothing previously
+   * re-checked that after entry — if either sensor dropped out mid-session
+   * (permission revoked, signal lost), the effects below would just stop
+   * updating position/azimuth (their own `=== null` guards) and silently
+   * freeze the camera facing a heading/position that's no longer actually
+   * live, while is_follow_mode stayed true and TrackingButton's button
+   * (disabled without READY location) couldn't even be used to back out —
+   * only a manual pan/pinch (camera/input.tsx) would. Exiting the moment
+   * either sensor stops being READY closes that dead end: same rule the
+   * button already enforces on the way in, just enforced continuously
+   * instead of only at the click that started it.
+   */
+  const location_status = useDeviceLocationStore((state) => state.status);
+  const orientation_status = useDeviceOrientationStore((state) => state.status);
+
+  useEffect(() => {
+    if (!is_follow_mode) return;
+    if (location_status !== DevicePoseStatus.READY || orientation_status !== DevicePoseStatus.READY) {
+      set_is_follow_mode(false);
+    }
+  }, [is_follow_mode, location_status, orientation_status, set_is_follow_mode]);
 
   // 1. [Position sync] runs only when the GPS coordinate changes
   useEffect(() => {

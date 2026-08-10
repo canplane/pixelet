@@ -7,13 +7,21 @@ interface CircularButtonProps extends React.ComponentProps<typeof Button> {
   /** Strip the floating-card chrome (background/border/shadow) for use inside a shared control tray. */
   bare?: boolean;
   /**
-   * Flat, blurred dark chrome (bg-neutral-900/80 + backdrop-blur, white
-   * icon) instead of this theme's default warm-cream card — the map's
-   * floating controls (compass, GPS/DevicePoseControl) are moving toward
-   * this dark language (see palette_bar.tsx) while everything else using
+   * Dark-toned chrome (bg-neutral-900/50 + backdrop-blur, white icon)
+   * instead of this theme's default warm-cream card — palette only, depth
+   * is controlled independently by `shadow`. Used by the map's floating
+   * controls (compass, GPS/TrackingButton) while everything else using
    * this shared button keeps the light cozy default untouched.
    */
   dark?: boolean;
+  /**
+   * Whether this button casts the soft drop shadow (offset/blur:
+   * 0_4px_14px) that's otherwise cozy's default depth cue — independent of
+   * `dark`, since palette and depth are separate decisions. Defaults to
+   * true; the map's floating controls (compass, GPS/TrackingButton) pass
+   * false for a flat look.
+   */
+  shadow?: boolean;
 }
 
 export function CircularButton({
@@ -22,6 +30,7 @@ export function CircularButton({
   isActive,
   bare,
   dark,
+  shadow = true,
   variant,
   size = "icon",
   disabled,
@@ -34,12 +43,14 @@ export function CircularButton({
       disabled={disabled}
       className={cn(
         "relative w-14 h-14 rounded-full cursor-pointer transition-all duration-500 active:scale-95 group",
-        !bare && !dark && "border-2 border-white/90 shadow-[0_4px_14px_rgba(200,160,100,0.22)]",
-        // explicit shadow-none, not just omitting the utility — otherwise
-        // twMerge leaves the default Button variant's cream shadow as the
-        // only shadow-* utility in the merged list, leaking through even
-        // though `dark` never asked for it
-        dark && "backdrop-blur-md border border-white/15 shadow-none text-white/80",
+        !bare && !dark && (shadow ? "border-2 border-white/90 shadow-[0_4px_14px_rgba(200,160,100,0.22)]" : "border-2 border-white/90 shadow-none"),
+        // same offset/blur as the light default's shadow (0_4px_14px), just
+        // a neutral dark color instead of the warm cream tint — palette-only
+        // difference, `shadow` controls whether either palette casts one
+        dark && cn(
+          "backdrop-blur-md border border-white/15 text-white/80",
+          shadow ? "shadow-[0_4px_14px_rgba(0,0,0,0.35)]" : "shadow-none",
+        ),
         // active-state bg and base `dark` bg used to be two separate cn()
         // entries, each its own !bg-* class — twMerge doesn't reliably dedupe
         // Tailwind v4's leading-`!` classes against each other, so both could

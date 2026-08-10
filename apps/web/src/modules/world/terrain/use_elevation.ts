@@ -44,7 +44,12 @@ export function get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y
   const local_page_x: f64 = Math.floor(local_x / L3_RANGE_REAL);
   const local_page_y: f64 = Math.floor(local_y / L3_RANGE_REAL);
 
-  const page_idx: IVec = ivec.add(origin_page_idx_xy, ivec.gather(BigInt(local_page_x), BigInt(local_page_y), 0n));
+  // the overwhelmingly common case per-step (a ray mostly stays within the
+  // origin page) — skip the BigInt gather/add round-trip entirely instead
+  // of doing it just to compute an identity.
+  const page_idx: IVec = local_page_x === 0 && local_page_y === 0
+    ? origin_page_idx_xy
+    : ivec.add(origin_page_idx_xy, ivec.gather(BigInt(local_page_x), BigInt(local_page_y), 0n));
   const tile: Tile | undefined = get_tile(page_idx);
   if (!tile) return null;
 
