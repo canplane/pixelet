@@ -4,18 +4,19 @@ import { VIEW_DIST } from "@/modules/camera/config.ts";
 
 /** Render-distance and fog configuration. */
 export const render_cfg = {
-  FADE_START: VIEW_DIST * 0.75,
-  FADE_END: VIEW_DIST,
-
+  // VIEW_DIST (camera/config.ts) is sized against terrain/config.ts's
+  // RENDER_RADIUS — the actual real-world edge of mounted terrain — so
+  // FAR_CLIP has real margin past where geometry stops existing instead of
+  // an arbitrary multiple. The real fog gradient is FOG_NEAR/FOG_FAR below
+  // (THREE's own linear fog, wired in via environment.tsx's <fog>) — it
+  // already landed inside RENDER_RADIUS's reach even before this, so
+  // ground fades into the fog color before it runs out, rather than the
+  // old, much tighter LOAD_RADIUS-driven mount boundary cutting geometry
+  // off before fog had a chance to hide it. The sky dome is fog-exempt
+  // (environment.tsx's `fog={false}`), so the horizon still reads as a
+  // full vista — only ground geometry fades.
   FAR_CLIP: VIEW_DIST * 1.5,
 
-  // was VIEW_DIST*0.75 / VIEW_DIST (1536/2048u) — far enough that only the
-  // outermost LOD hand-off (LOD4) sat inside the fog gradient; LOD2/LOD3
-  // were in clear air with no dither-blend covering them (only LOD0<->1 and
-  // LOD1<->2 blend, see lod.ts). Pulled in to straddle those two hand-offs
-  // instead, trading view distance for hiding them in haze. The sky dome is
-  // fog-exempt (environment.tsx's `fog={false}`), so the horizon still
-  // reads as a full vista — only ground geometry fades sooner.
   FOG_NEAR: 320,
   FOG_FAR: 900,
 } as const;
@@ -93,13 +94,18 @@ export const post_cfg = {
     // must point along the start/end line's perpendicular (vertical here) or
     // blur samples smear diagonally instead of matching the ramp direction
     DIRECTION: [0, 1] as [number, number],
-    // still read as too blurry at 0.22/0.4. The shader's blur radius is an
-    // ease-in curve (smoothstep), not linear, so it's near-zero right at the
-    // sharp line before accelerating — a bigger TAPER stretches that ease-in
-    // region (wider sharp band), BLUR scales the ceiling. Both dialed down
-    // so a normal framing (street level, not a wide shot) stays sharp.
-    BLUR: 0.14,
-    TAPER: 0.55,
+    // 0.14/0.55 read as too subtle for the miniature-diorama look this is
+    // meant to sell — bumped up for a more pronounced tilt-shift. The
+    // shader's blur radius is an ease-in curve (smoothstep), not linear, so
+    // it's near-zero right at the sharp line before accelerating — TAPER
+    // stretches/shrinks that ease-in region (bigger = wider sharp band),
+    // BLUR scales the ceiling. Shrinking TAPER alongside raising BLUR keeps
+    // the sharp middle band from also growing, so the emphasis reads as
+    // "blurrier edges" rather than "sharp region got bigger too" — still
+    // tuned to keep a normal framing (street level, not a wide shot)
+    // legible, just noticeably softer top/bottom than before.
+    BLUR: 0.22,
+    TAPER: 0.42,
     SAMPLES: 6,
   },
   GRADE: {

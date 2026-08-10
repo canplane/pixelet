@@ -22,12 +22,12 @@ const CHUNK_CELL_SPAN2: u32 = CHUNK_CELL_SPAN * CHUNK_CELL_SPAN;
  * Unit convention:
  * - [u]      : Canonical world unit (Standard coordinate space).
  * - [cell]   : Discrete raster unit. 1u = 2^-CELL_SHAMT cells.
- * - [texel]  : Continuous coordinate within the PAGE_CELL_SPAN grid [0, 1024].
+ * - [texel]  : Continuous coordinate within the PAGE_CELL_SPAN grid [0, PAGE_CELL_SPAN].
  * - [sample] : Low-res elevation grid index [0, 32] (before padding).
  *
  * Scale relation:
  * - 1 [cell] = 1 [texel]
- * - 1 [u]    = 4 [cells] (when CELL_SHAMT is -2)
+ * - 1 [u]    = 2^-CELL_SHAMT [cells] (currently CELL_SHAMT=-1, so 1u = 2 cells)
  * - Elevation stored in I16Array is in [cell] units to preserve 0.25u precision.
  */
 

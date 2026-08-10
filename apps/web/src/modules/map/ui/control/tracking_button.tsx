@@ -1,4 +1,4 @@
-// @pxl/web/modules/map/ui/control/device_pose_control.tsx
+// @pxl/web/modules/map/ui/control/tracking_button.tsx
 
 import { Compass, Loader2, Locate, Navigation } from "lucide-react";
 
@@ -15,7 +15,7 @@ import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
-export function DevicePoseControl() {
+export function TrackingButton() {
   useFollowMode();
 
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
@@ -74,7 +74,7 @@ export function DevicePoseControl() {
         set_is_follow_mode(true);
       } else {
         // TODO: show a toast on permission denial
-        console.error("orientation: could not start the sensor.");
+        console.error("[orientation] could not start the sensor.");
       }
     } else {
       // realign north on exiting follow mode (tilt is untouched)
@@ -118,6 +118,7 @@ export function DevicePoseControl() {
     <CircularButton
       className="w-11 h-11"
       dark
+      shadow={false}
       onClick={handle_action}
       isActive={is_follow_mode}
       disabled={!is_enabled || is_loading}

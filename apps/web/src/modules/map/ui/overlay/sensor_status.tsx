@@ -9,12 +9,12 @@ import { cn } from "@/shared/lib/utils/cn.ts";
  * Bare status icons (no CircularButton chrome — these aren't interactive,
  * just a glance-able "is the sensor actually working" readout) for the two
  * device sensors this app depends on. Deliberately separate from
- * DevicePoseControl, which is a single action button multiplexing several
+ * TrackingButton, which is a single action button multiplexing several
  * different jobs (recenter / toggle follow mode) onto one icon whose shape
  * already changes with state — that's the wrong place to also answer "is
  * geolocation currently receiving fixes," a question that matters even when
  * that button isn't showing anything sensor-related at all (e.g. mid
- * free-look pan, where DevicePoseControl reads as a plain "recenter"
+ * free-look pan, where TrackingButton reads as a plain "recenter"
  * arrow).
  */
 

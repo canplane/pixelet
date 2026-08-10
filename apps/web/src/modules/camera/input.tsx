@@ -126,7 +126,7 @@ export function CameraInput() {
     // ground_or_raw shares the exact same "zero Z, then sample real terrain
     // height" step every map_center-setting interaction that respects
     // follow_terrain goes through (see its own doc comment) — the GPS
-    // recenter button in device_pose_control.tsx uses it too, instead of
+    // recenter button in tracking_button.tsx uses it too, instead of
     // each call site hand-rolling its own probe.
     set_map_center(useCameraStore.getState().follow_terrain ? ground_or_raw(next_center) : next_center);
   }

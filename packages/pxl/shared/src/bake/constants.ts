@@ -17,7 +17,7 @@ import { U_PER_M, Z_SCALE } from "@pxl/shared/spec/space/adapter/3857.ts";
  * - CELL_SHAMT defines the cell<->u relation.
  * - when CELL_SHAMT = -1, 1u = 2cell.
  */
-export const CELL_SHAMT: i32 = -2;
+export const CELL_SHAMT: i32 = -1;
 export const U_PER_CELL: f64 = 2 ** CELL_SHAMT;
 // Valid when CELL_SHAMT <= 0.
 const CELL_PER_U: u32 = 1 << -CELL_SHAMT;

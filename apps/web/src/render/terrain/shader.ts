@@ -4,6 +4,52 @@ import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import * as meta from "./shader_meta.ts";
 import { shadow_cfg } from "@/modules/world/render/config.ts";
 
+/** Splatmap sampler declarations — identical text needed in both create_vert
+ * (low-spec's own resolve pass) and create_frag (texture-pack's, and
+ * low-spec still needs ch_structure/etc. locals for the material-profile
+ * effects further down regardless of mode). */
+const ch_uniforms_decl = GROUND_CH_KEYS.map((ch_key) => `uniform sampler2D ${meta.gen.U_CH(ch_key)};`).join("\n  ");
+
+/** `float ch_X = ...;` locals from the splatmap textures — same text needed
+ * in both shader stages, just sampled at a different UV varying/local by
+ * each (core_uv in the vertex shader where it's still a local; v_uv, the
+ * same value passed through as a varying, in the fragment shader). */
+const build_ch_sampling_logic = (uv_expr: string): string =>
+  GROUND_CH_KEYS
+    .map((ch_key) => `float ${meta.gen.CH(ch_key)} = floor(texture(${meta.gen.U_CH(ch_key)}, ${uv_expr}).r * 255.0 + 0.5);`)
+    .join("\n    ");
+
+/** Shared ground-layer resolver (see shader_meta.ts's own doc comment) —
+ * generated once and included verbatim in both create_vert and create_frag,
+ * since each is its own compiled GLSL program with no cross-shader sharing;
+ * textually identical either way, so the two stages can never disagree
+ * about what a given channel/type combination resolves to. */
+const ground_layer_resolver = meta.build_ground_layer_resolver(meta.get_layer_meta());
+
+/**
+ * Resolves one ground-layer color at an arbitrary channel-sample UV —
+ * `sample_uv` picks which category wins (splatmap channels + resolve_
+ * ground_layer's priority), `box_uv` is the tiling coordinate across the
+ * cell's own face (unrelated to which fine sub-cell is being categorized),
+ * `is_side` picks u_ground_layers_side over u_ground_layers (mat.ts builds
+ * both from the same layer indexing — a type with no distinct side texture
+ * just resolves to the same image in both, see ground_layer_images.ts's
+ * GROUND_LAYER_SIDE_IMAGE_MAP). Fragment-only (u_ground_layers/
+ * resolve_ground_layer aren't declared in create_vert's low-spec path) —
+ * factored out so create_frag's main() can call it at several different
+ * sample_uv taps for the coarse-LOD supersample blend below, instead of
+ * repeating the channel-sample+resolve+fetch sequence at each tap site.
+ */
+const ground_layer_color_sampler = /* glsl */ `
+  vec3 sample_ground_layer_color(vec2 sample_uv, vec2 box_uv, bool is_side) {
+    ${build_ch_sampling_logic("sample_uv")}
+    float ground_layer = resolve_ground_layer(ch_land, ch_water, ch_structure, ch_transport, u_show_structures);
+    return is_side
+      ? texture(u_ground_layers_side, vec3(box_uv, ground_layer)).rgb
+      : texture(u_ground_layers, vec3(box_uv, ground_layer)).rgb;
+  }
+`;
+
 /**
  * Shared position-computation core.
  *
@@ -25,7 +71,7 @@ const position_core = /* glsl */ `
     int ix_lod = gl_InstanceID % i_lod_res;
     int iy_lod = gl_InstanceID / i_lod_res;
 
-    // ---- 0. LOD-boundary blend: which of this pair's two draws claims this cell ----
+    // ---- 0. LOD-boundary blend: which of this pair's two draws claims this chunk ----
     //
     // u_blend_role/u_blend_t are only meaningful while this chunk is inside a
     // transition band (get_lod_guide's blend_active in lod.ts) — outside one,
@@ -33,18 +79,26 @@ const position_core = /* glsl */ `
     // unconditionally true below, i.e. exactly today's behavior with one
     // extra always-true comparison.
     //
-    // the partition key is the *coarser* cell's own (ix,iy) — the finer draw
-    // (role 0) divides its own by 2 to land on the same key its 4 fine cells
-    // share; the coarser draw (role 1) already IS at that granularity. Both
-    // draws hash the identical key, so they agree on which side of u_blend_t
-    // it falls on: exactly one of "this coarse cell" or "its 4 fine cells" is
-    // visible for any given key at any given t, never both, never neither —
-    // a stochastic swap instead of an alpha blend, which is what lets this
-    // dither into a gradient across neighboring chunks (each with their own
-    // t, but the same per-cell hash) instead of a flat see-through overlap.
-    ivec2 blend_key = (u_blend_role < 0.5) ? (ivec2(ix_lod, iy_lod) / 2) : ivec2(ix_lod, iy_lod);
-    float blend_r = fract(sin(dot(vec2(blend_key), vec2(12.9898, 78.233))) * 43758.5453123);
-    bool core_visible = (u_blend_role < 0.5) ? (blend_r >= u_blend_t) : (blend_r < u_blend_t);
+    // u_blend_r is a per-CHUNK constant (computed once in JS from page_idx+
+    // page_off — see chunk.tsx), not a per-cell hash. Used to be the latter
+    // (each cell independently coin-flipped between this draw and its
+    // blend-partner draw, via a hash of the cell's own (ix,iy)) — that
+    // partitioned color smoothly (mip levels are already a soft per-cell
+    // difference) but partitioned HEIGHT into a visible checkerboard: a
+    // coarse-LOD cell's box-filtered height and its fine-LOD neighbor's raw
+    // height can differ by a real amount, and interleaving the two per-cell
+    // reads as relief noise, not a gradient, the way the same trick reads
+    // fine for color. Since both draws of one chunk share this same u_blend_r
+    // value, this chunk-uniform version makes the visibility split atomic
+    // per chunk instead — its whole population of cells hard-pops together,
+    // eliminating the intra-chunk checkerboard entirely. What blending
+    // originally existed for (avoiding a hard seam between two ADJACENT
+    // chunks that land on opposite sides of the same threshold at the same
+    // instant) is preserved: each chunk still has its own distinct u_blend_r,
+    // so different chunks still cross u_blend_t at different points within
+    // the shared band, staggering the population-level transition instead of
+    // every loaded chunk switching in the same frame.
+    bool core_visible = (u_blend_role < 0.5) ? (u_blend_r >= u_blend_t) : (u_blend_r < u_blend_t);
 
     // ---- 1. index and sampling coordinate (tex_coord) ----
 
@@ -86,9 +140,36 @@ const position_core = /* glsl */ `
       int h01 = texelFetch(u_heightmap, ivec2(min(ix + q1, row_max), min(iy + q3, row_max)), 0).r;
       int h10 = texelFetch(u_heightmap, ivec2(min(ix + q3, row_max), min(iy + q1, row_max)), 0).r;
       int h11 = texelFetch(u_heightmap, ivec2(min(ix + q3, row_max), min(iy + q3, row_max)), 0).r;
-      h = (h00 + h01 + h10 + h11) / 4;
+      // round to nearest, not GLSL's truncating int division — see the
+      // Z-quantization line below for why a downward bias here specifically
+      // (as opposed to just some fixed sampling error) reads as visible
+      // popping during panning.
+      h = int(round((float(h00) + float(h01) + float(h10) + float(h11)) * 0.25));
     }
-    h = (h / int(u_lod_step)) * int(u_lod_step); // Z-quantization: apply the data-level LOD step (averaged sample still snaps to the LOD grid)
+    // Z-quantization: snap to a multiple of the LOD step — needed because
+    // visual_scale (below) scales X, Y, *and* Z together by u_lod_step, so a
+    // coarse cell reads as one enlarged voxel only if its height is also a
+    // whole multiple of that same enlarged unit; an unsnapped height would
+    // sit at a fraction of a coarse voxel, breaking the blocky look.
+    //
+    // floor(), deliberately not round(): round() picks whichever of the two
+    // neighboring step-multiples is numerically closer, independent of
+    // step size — for a fixed true height that can pick the *lower*
+    // multiple at one step and the *higher* one at a coarser step (e.g.
+    // true height 1: step 4 rounds to 0, step 2 rounds to 2, step 1 is
+    // exactly 1 — 0 -> 2 -> 1 isn't a monotonic falloff, it's a bounce, and
+    // reads as the cell popping *up* momentarily while zooming through a
+    // coarser tier before dropping back down). floor(h/step)*step is
+    // provably monotonic non-increasing in step for any fixed h (the
+    // largest step-multiple <= h can only shrink or hold as step grows,
+    // never grow) — every coarser tier is <= the next finer one, always,
+    // for every cell, so panning/zooming through the LOD ladder only ever
+    // sees a cell's height count down toward its true value, never bounce.
+    // The 4-tap average above stays round()-based regardless — that step
+    // has no "which grid tier" comparison to stay consistent across, it's
+    // just estimating one block's mean height, where round() is the
+    // unbiased choice.
+    h = int(floor(float(h) / u_lod_step)) * int(u_lod_step);
 
     // 2. physical height calculation and expansion
     float surface_z = float(h) * u_scale; // real-world elevation (top face)
@@ -161,14 +242,34 @@ const position_core = /* glsl */ `
       if (is_edge_x || is_edge_y) core_is_skirt = 1.0;
     }
 
-    float core_is_side_face = (position.z < 0.45) ? 1.0 : 0.0;
+    // CHUNK_BOX's built-in 'normal' attribute is flat per face (BoxGeometry
+    // gives each face its own hard-edged normal, never smoothed across an
+    // edge) — every vertex belonging to one wall face agrees normal.z ≈ 0,
+    // every vertex of the top/bottom faces agrees normal.z ≈ ±1, with no
+    // exceptions. That flatness is exactly why this needs to key off normal
+    // instead of position.z: a wall face's four corners span the *entire*
+    // z range (two at +0.5, two at -0.5, since it's a full-height wall), so
+    // a 'position.z < threshold' test disagreed between a wall's own top-
+    // edge vertices (false) and bottom-edge vertices (true) — and since
+    // this value feeds a smoothly-interpolated varying (v_is_side_face,
+    // read by both the vertex-side texture selection AND every side_diff/
+    // skirt tint below), the disagreement didn't just misclassify a few
+    // vertices, it produced a real 0->1 gradient down every wall's own
+    // height: the bottom half correctly read as "side" while the top half
+    // silently fell back to the top texture/tint, mid-face, on every
+    // single wall — worse up close (the gradient band fills the screen)
+    // than from a distance (it minifies into a blend that merely looks
+    // "kind of side-colored"), which is exactly the "fine far away, a
+    // mirage up close" symptom this was reported as.
+    float core_is_side_face = (abs(normal.z) < 0.5) ? 1.0 : 0.0;
 
     vec3 scaled_local_pos = local_pos * visual_scale * 1.002;
     vec3 transformed = scaled_local_pos + instance_pos;
 `;
 
 // vertex shader
-export const vert = /* glsl */ `
+export function create_vert(): string {
+  return /* glsl */ `
   precision highp float;
   precision highp int;
   precision highp isampler2D;
@@ -192,6 +293,15 @@ export const vert = /* glsl */ `
   // not something that needs a chamfered edge, so bending its normal based
   // on the *stretched* position would just be wrong.
   out vec3 v_local_pos;
+  out vec3 v_ground_color;
+  // pre-division tex_coord (see position_core's step 1) — passed through
+  // rather than reconstructed from v_uv in the fragment shader so the
+  // coarse-LOD supersample taps there (create_frag's u_low_spec-false
+  // branch) stay exact integer-grid offsets instead of round-tripping
+  // through a UV division/multiplication. flat: this is a per-instance
+  // constant (same reasoning as core_uv itself), not something meant to
+  // interpolate.
+  flat out vec2 v_tex_coord;
 
   uniform isampler2D u_heightmap;
   uniform float u_scale;
@@ -202,15 +312,60 @@ export const vert = /* glsl */ `
   // get_lod_guide blend band.
   uniform float u_blend_t;
   uniform float u_blend_role;
+  // per-chunk constant (see position_core's step 0) — same value on both of
+  // this chunk's materials, set once at chunk creation, never touched per-frame.
+  uniform float u_blend_r;
+
+  uniform bool u_low_spec;
+
+  // real per-chunk mip-blended color bake (shader_meta.ts's
+  // decode_ground_rgba + tex.ts's create_ground_color_texture) — low-spec
+  // mode's own color source; unlike u_ground_layers (create_frag's
+  // texture-pack path), this is real per-cell color baked once per chunk,
+  // so hardware mip generation gives real cross-category blending at
+  // coarse LOD instead of resolving to one winning category per sample.
+  uniform sampler2D u_ground_color;
 
   void main() {
     ${position_core}
 
     v_uv = core_uv;
     v_box_uv = uv;
+    v_tex_coord = tex_coord;
     v_is_skirt = core_is_skirt;
     v_is_side_face = core_is_side_face;
     v_local_pos = position;
+
+    // ---- ground color: low-spec path only (create_frag's own u_low_spec
+    // branch handles texture-pack mode instead, from u_ground_layers) —
+    // real mip-sampled fetch, not a nearest corner texel. u_lod_step is
+    // always a power of two in {1,2,4,8,16,32}, so log2() lands exactly on
+    // an integer mip level (0-5) — textureLod, not the derivative-based
+    // texture(), because core_uv is constant across one instance's own
+    // face (position-computed per-instance, not per-vertex), so its
+    // screen-space derivative is ~0 and implicit LOD selection would always
+    // resolve to mip 0 on its own.
+    //
+    // NOT core_uv: that's centered on this block's first *fine* sub-cell
+    // (tex_coord = ix_lod*lod_step, offset toward one corner of the block —
+    // fine for a nearest fetch of one texel, which is all it was ever built
+    // for), not on the block's own center in mip-space. Sampling a mip level
+    // at an off-center UV pulls a large, systematically-biased fraction of
+    // its bilinear weight from the *neighboring* block instead of this one —
+    // at high LOD steps that's most of the sample, which read as a
+    // pervasive blur/haze across every coarse-LOD cell once this shipped.
+    // ground_uv instead centers on (ix_lod, iy_lod) itself — the same
+    // block-index-plus-half-cell centering position_core's own instance
+    // placement already uses (see instance_pos below) — which collapses to
+    // exactly core_uv when lod_step is 1 (ix_lod == ix), so the finest LOD
+    // tier is unaffected.
+    if (u_low_spec) {
+      vec2 ground_uv = (vec2(ix_lod, iy_lod) + 0.5) * u_lod_step / u_row_stride;
+      v_ground_color = textureLod(u_ground_color, ground_uv, log2(u_lod_step)).rgb;
+    } else {
+      // unused by create_frag in this mode — see its own u_low_spec branch.
+      v_ground_color = vec3(0.0);
+    }
 
     // ---- 6. Shadow-map coordinates ----
     //
@@ -242,7 +397,8 @@ export const vert = /* glsl */ `
 
     #include <fog_vertex>
   }
-`;
+  `;
+}
 
 /**
  * Shadow-depth pass.
@@ -271,6 +427,7 @@ export const depth_vert = /* glsl */ `
   uniform float u_lod_step;
   uniform float u_blend_t;
   uniform float u_blend_role;
+  uniform float u_blend_r;
 
   void main() {
     ${position_core}
@@ -297,33 +454,6 @@ export const depth_frag = /* glsl */ `
 
 // fragment shader
 export function create_frag(): string {
-  const ch_uniforms_decl = [
-    ...GROUND_CH_KEYS.map((ch_key) => `uniform sampler2D ${meta.gen.U_CH(ch_key)};`),
-    `uniform sampler2D u_edit_mask;`,
-  ].join("\n  ");
-
-  const ch_sampling_logic = GROUND_CH_KEYS
-    .map((ch_key) => `float ${meta.gen.CH(ch_key)} = floor(texture(${meta.gen.U_CH(ch_key)}, v_uv).r * 255.0 + 0.5);`)
-    .join("\n    ");
-  const color_meta = meta.get_color_meta();
-  const { color_uniforms_decl, color_mapping_funcs } = meta.build_color_mappings(color_meta);
-
-  const base_land_uniform = meta.gen.U_COLOR(GroundChannelKey.LAND, "BARE");
-
-  const ch_blending_logic = GROUND_CH_KEYS
-    .map((ch_key) => {
-      const ch_var_name: string = meta.gen.CH(ch_key);
-      // STRUCTURE reuses the already-gated `is_structure` bool (declared
-      // just above this block in the generated shader, see its own comment)
-      // instead of re-reading the raw channel value — u_show_structures off
-      // means a structure cell just never overrides final_color here, so it
-      // falls back to whatever LAND/WATER/TRANSPORT channel already painted
-      // underneath it, same as if the building had never been baked in.
-      const cond = ch_key === GroundChannelKey.STRUCTURE ? "is_structure" : `${ch_var_name} > 0.5`;
-      return `if (${cond}) final_color = ${meta.gen.FUNC_COLOR(ch_key)}(${ch_var_name});`;
-    })
-    .join("");
-
   return /* glsl */ `
   precision highp float;
   #include <common>
@@ -340,7 +470,7 @@ export function create_frag(): string {
   #include <shadowmask_pars_fragment>
 
   ${ch_uniforms_decl}
-  ${color_uniforms_decl}
+  uniform sampler2D u_edit_mask;
 
   uniform float u_border_opacity;
   uniform vec3 u_light_dir;
@@ -352,8 +482,22 @@ export function create_frag(): string {
   // than needing a separate check at each downstream usage.
   uniform bool u_show_structures;
 
+  // see create_vert's own copy of these three — u_low_spec picks which of
+  // the two shaders actually resolves+samples the ground color this frame
+  // (vertex there, fragment here); u_ground_layers/resolve_ground_layer are
+  // the same shared texture/function either way (see shader_meta.ts).
+  uniform sampler2DArray u_ground_layers;
+  uniform sampler2DArray u_ground_layers_side;
+  uniform bool u_low_spec;
+  // needed only to regenerate the coarse-LOD supersample taps below (see
+  // v_tex_coord's own comment in create_vert) — u_low_spec's low-spec branch
+  // doesn't touch these, only the texture-pack else-branch does.
+  uniform float u_row_stride;
+  uniform float u_lod_step;
+
   in vec2 v_uv;
   in vec2 v_box_uv;
+  flat in vec2 v_tex_coord;
   in float v_is_side_face;
   in float v_is_skirt;
   in float v_view_dist;
@@ -361,10 +505,12 @@ export function create_frag(): string {
   in float v_surface_z;
   in vec2 v_world_xy;
   in vec3 v_local_pos;
+  in vec3 v_ground_color;
 
   out vec4 out_color;
 
-  ${color_mapping_funcs}
+  ${ground_layer_resolver}
+  ${ground_layer_color_sampler}
 
   float getDynamicGrid(vec2 uv, float target_width) {
     vec2 fw = fwidth(uv);
@@ -397,13 +543,58 @@ export function create_frag(): string {
     float edit_mask = texture(u_edit_mask, v_uv).r;
     if (edit_mask > 0.5) discard;
 
-    ${ch_sampling_logic}
+    ${build_ch_sampling_logic("v_uv")}
     bool is_water = ${meta.gen.CH(GroundChannelKey.WATER)} > 0.5;
     bool is_land = ${meta.gen.CH(GroundChannelKey.LAND)} > 0.5;
     bool is_structure = ${meta.gen.CH(GroundChannelKey.STRUCTURE)} > 0.5 && u_show_structures;
     bool is_transport = ${meta.gen.CH(GroundChannelKey.TRANSPORT)} > 0.5;
-    vec3 final_color = ${base_land_uniform};
-    ${ch_blending_logic}
+
+    // low-spec: v_ground_color was already resolved+sampled once per vertex
+    // (create_vert) at a fixed UV — cheap, flat per cell. texture-pack: same
+    // resolve_ground_layer priority (LAND -> WATER -> STRUCTURE(if shown) ->
+    // TRANSPORT), sampled here per-fragment with a real tiling UV (v_box_uv)
+    // so a real (non-flat-fill) layer image actually shows detail across a
+    // cell's face — see shader_meta.ts's build_ground_layer_resolver for why
+    // this priority logic is generated once and shared verbatim with
+    // create_vert instead of living in each place separately.
+    // top vs side texture selection (u_ground_layers vs u_ground_layers_side)
+    // — see sample_ground_layer_color's own comment. Only meaningful in
+    // texture-pack mode; low-spec's v_ground_color never distinguishes faces
+    // (it never did, and this isn't the ask that changed).
+    bool is_side = v_is_side_face > 0.5;
+
+    vec3 final_color;
+    if (u_low_spec) {
+      final_color = v_ground_color;
+    } else if (u_lod_step <= 1.0) {
+      // finest tier: one macro-cell IS one fine cell, so supersampling
+      // within it would just resample the same one splatmap texel four
+      // times over — skip straight to the single-tap read.
+      final_color = sample_ground_layer_color(v_uv, v_box_uv, is_side);
+    } else {
+      // Coarse-LOD supersample blend — the category-resolve analogue of
+      // position_core's own 4-tap sparse box filter for height (same
+      // rotated-grid 1/4/3/4 tap positions, see that comment for why this
+      // pattern and tap count). A macro-cell here spans u_lod_step fine
+      // cells, but v_uv/ch_* only ever sampled ONE corner texel of that
+      // whole block (a real aliasing source — a road one fine-cell wide can
+      // fall entirely outside that one sample point and vanish completely,
+      // then reappear a frame later as the LOD grid shifts, reading as an
+      // abrupt pop rather than a graceful fade). Category ids can't be
+      // hardware-mipmapped (averaging two ids isn't a third valid id, same
+      // reason splatmaps are NearestFilter/no-mips in tex.ts), so this
+      // hand-rolled supersample stands in for it: resolve+sample each tap's
+      // own winning color independently, then average the *colors* — a
+      // thin/rare category's contribution now shrinks smoothly toward zero
+      // as distance grows instead of blinking in and out.
+      float q1 = u_lod_step * 0.25;
+      float q3 = u_lod_step * 0.75;
+      vec3 c00 = sample_ground_layer_color((v_tex_coord + vec2(q1, q1) + 0.5) / u_row_stride, v_box_uv, is_side);
+      vec3 c01 = sample_ground_layer_color((v_tex_coord + vec2(q1, q3) + 0.5) / u_row_stride, v_box_uv, is_side);
+      vec3 c10 = sample_ground_layer_color((v_tex_coord + vec2(q3, q1) + 0.5) / u_row_stride, v_box_uv, is_side);
+      vec3 c11 = sample_ground_layer_color((v_tex_coord + vec2(q3, q3) + 0.5) / u_row_stride, v_box_uv, is_side);
+      final_color = (c00 + c01 + c10 + c11) * 0.25;
+    }
 
     vec3 fdx = dFdx(v_view_pos);
     vec3 fdy = dFdy(v_view_pos);

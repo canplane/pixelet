@@ -21,21 +21,38 @@ import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
 import type { Tile } from "@pxl/shared/bake/format.ts";
 
+type TileInterest = {
+  matches: (page_idx: IVec) => boolean;
+  notify: () => void;
+};
+
+/**
+ * Live registrations, kept outside zustand state — this is dispatch wiring,
+ * not data, so registering/unregistering shouldn't itself trigger a
+ * re-render of every store subscriber.
+ */
+const interests = new Set<TileInterest>();
+
+/**
+ * Registers interest in a subset of pages (whichever `matches` returns true
+ * for), calling `notify` only when a matching page is set/cleared — instead
+ * of every consumer waking on every page load anywhere in the loaded world
+ * and re-deriving relevance itself. Returns an unregister function.
+ */
+export function register_tile_interest(matches: (page_idx: IVec) => boolean, notify: () => void): () => void {
+  const interest: TileInterest = { matches, notify };
+  interests.add(interest);
+  return () => interests.delete(interest);
+}
+
+function notify_interests(page_idx: IVec): void {
+  for (const interest of interests) {
+    if (interest.matches(page_idx)) interest.notify();
+  }
+}
+
 export type TileStore = {
   tile_map: Map<IVec, Tile>;
-
-  /**
-   * Bumped on every set_tile/clear_tile. `tile_map` itself is a plain Map
-   * mutated in place (via immer's draft) rather than replaced, so its
-   * identity never changes — nothing that just does `useTileStore(state =>
-   * state.tile_map)` re-renders when a page streams in. Consumers that need
-   * to react to "some tile finished loading" in general (not one specific
-   * page_idx via get_tile) — e.g. UserMarker's zone ring, which samples
-   * get_ele() across many neighboring pages once up front and has no other
-   * signal telling it a page it originally missed has since arrived —
-   * subscribe to this counter instead.
-   */
-  tile_version: number;
 
   get_tile: (page_idx: IVec) => Tile | undefined;
   set_tile: (page_idx: IVec, tile: Tile) => void;
@@ -45,18 +62,19 @@ export type TileStore = {
 export const useTileStore = create<TileStore>()(
   immer((set, get) => ({
     tile_map: new Map<IVec, Tile>(),
-    tile_version: 0,
 
     get_tile: (page_idx) => get().tile_map.get(TO_XY(page_idx)),
-    set_tile: (page_idx, tile) =>
+    set_tile: (page_idx, tile) => {
       set((state) => {
         state.tile_map.set(TO_XY(page_idx), tile);
-        state.tile_version++;
-      }),
-    clear_tile: (page_idx) =>
+      });
+      notify_interests(page_idx);
+    },
+    clear_tile: (page_idx) => {
       set((state) => {
         state.tile_map.delete(TO_XY(page_idx));
-        state.tile_version++;
-      }),
+      });
+      notify_interests(page_idx);
+    },
   })),
 );

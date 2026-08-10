@@ -9,17 +9,11 @@ import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
 import { decode_terrain, type Terrain, type Tile } from "@pxl/shared/bake/format.ts";
 import { useTileStore } from "./tile_store.ts";
+import { CLEANUP_RADIUS, LOAD_RADIUS } from "./config.ts";
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
 
-/** Runtime tuning constants for terrain page streaming. */
-
-// preload radius around the current center page.
-const LOAD_RADIUS: u32 = 2;
-// cache eviction radius with hysteresis.
-const CLEANUP_RADIUS: u32 = Math.round(LOAD_RADIUS * 2);
-
-const CHEBYSHEV_DIST = (v: IVec): u32 => Number(ivec.max_comp(ivec.abs(v)));
+export const CHEBYSHEV_DIST = (v: IVec): u32 => Number(ivec.max_comp(ivec.abs(v)));
 
 const pending_page_demands = new Set<IVec>();
 
@@ -29,16 +23,23 @@ async function fetch_tile(page_idx: IVec): Promise<void> {
 
   try {
     const res = await fetch(`/api/world/terrain/tile/${page_idx.toString()}`);
-    if (!res.ok) throw new Error(`[tile/${ivec.repr(page_idx)}] shell: http ${res.status}`);
+    if (!res.ok) throw new Error(`[tile/${ivec.repr(page_idx)}] http ${res.status}`);
 
     const _tile = new Uint8Array(await res.arrayBuffer());
 
     const terrain: Terrain = decode_terrain(_tile);
     const tile: Tile = { terrain };
-    console.debug(`[tile/${ivec.repr(page_idx)}] shell:`, tile);
+    // logs only the id, not the decoded tile itself — that's a full terrain
+    // payload (elevation grid + feature/coastline rows), and this fires on
+    // every tile load, including rapid-fire ones during a pan/zoom gesture;
+    // handing the whole object to console.debug on each one is a real,
+    // avoidable cost (both the reference retention and however the
+    // devtools console chooses to format/inspect it), for a debug line
+    // nothing downstream actually reads.
+    console.debug(`[tile/${ivec.repr(page_idx)}] loaded`);
     set_tile(page_idx, tile);
   } catch (err) {
-    console.error(`[tile/${ivec.repr(page_idx)}] shell: failed to fetch tile:`, err);
+    console.error(`[tile/${ivec.repr(page_idx)}] failed to fetch tile:`, err);
   } finally {
     pending_page_demands.delete(page_idx);
   }
@@ -56,7 +57,7 @@ async function fetch_tile(page_idx: IVec): Promise<void> {
 function schedule_page_demands(center_page_idx: IVec, pinned_page_idx: IVec | null): IVec[] {
   const get_tile = useTileStore.getState().get_tile;
 
-  const groups: IVec[][] = Array.from({ length: LOAD_RADIUS + 1 }, () => []); // 거리별 그룹핑
+  const groups: IVec[][] = Array.from({ length: LOAD_RADIUS + 1 }, () => []); // grouped by distance
 
   let cnt: u32 = 0;
   for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {

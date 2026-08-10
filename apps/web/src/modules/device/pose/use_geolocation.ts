@@ -33,7 +33,7 @@ export function useGeolocation() {
     if (geolocation_watch_id !== null) return;
 
     if (!("geolocation" in navigator)) {
-      set_error("이 브라우저는 위치 정보를 지원하지 않습니다.");
+      set_error("이 환경에서는 위치 정보를 지원하지 않습니다.");
       return;
     }
 
@@ -56,11 +56,30 @@ export function useGeolocation() {
         );
       },
       (err) => {
+        // clear the dead watch id too, not just the store flag — otherwise
+        // start_watching()'s "already active" guard blocks every future
+        // retry (including the permission-recovery listener below) forever.
+        // clearWatch() first (not just discarding the id) — this callback
+        // doesn't end the underlying watchPosition subscription, so without
+        // it the "dead" watch keeps calling back (a timeout/unavailable
+        // error can still be followed by a late success) *and* a later
+        // start_watching() registers a second, fully independent watch on
+        // top of it. Two watches racing each other is what turned a single
+        // transient error into location flapping null/non-null on every
+        // callback from either one — see the device_coord-flicker
+        // investigation this comment came out of.
+        if (geolocation_watch_id !== null) {
+          navigator.geolocation.clearWatch(geolocation_watch_id);
+          geolocation_watch_id = null;
+        }
         useDeviceLocationStore.getState().set_is_tracking_location(false);
 
         let error_message: string = "위치 정보를 가져올 수 없습니다.";
         if (err.code === err.PERMISSION_DENIED) {
-          error_message = "위치 권한이 거부되었습니다.";
+          // actionable, not just descriptive — unlike POSITION_UNAVAILABLE/
+          // TIMEOUT below, this is the one case the user can actually fix
+          // themselves (re-grant permission in browser/OS settings).
+          error_message = "위치 권한을 허용해주세요.";
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           error_message = "위치 신호를 잡을 수 없습니다.";
         } else if (err.code === err.TIMEOUT) {
@@ -108,4 +127,36 @@ export function useGeolocation() {
       document.removeEventListener("visibilitychange", handle_visibility_change);
     };
   }, [start_watching, stop_watching, set_status]);
+
+  /**
+   * Recovers from a denied/error state the moment the user grants location
+   * access from outside the app (browser site-settings UI) — without this,
+   * a denial leaves the store stuck in ERROR forever, since nothing else
+   * re-triggers start_watching() until the page reloads.
+   */
+  useEffect(() => {
+    if (!("permissions" in navigator)) return;
+
+    let status: PermissionStatus | undefined;
+    let is_effect_active = true;
+
+    const handle_change = () => {
+      if (status?.state === "granted" && !useDeviceLocationStore.getState().is_tracking_location) {
+        start_watching();
+      }
+    };
+
+    navigator.permissions.query({ name: "geolocation" }).then((result) => {
+      if (!is_effect_active) return;
+      status = result;
+      status.addEventListener("change", handle_change);
+    }).catch(() => {
+      // Permissions API unsupported for "geolocation" in this browser — no recovery path, same as before this effect existed.
+    });
+
+    return () => {
+      is_effect_active = false;
+      status?.removeEventListener("change", handle_change);
+    };
+  }, [start_watching]);
 }

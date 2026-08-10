@@ -89,8 +89,8 @@ const _L4_SHAMT: u64 = BigInt(L4_SHAMT);
 // ---- Absolute Ranges (in Canonical `u` Units) ----
 
 // canonical base unit: 1u = 1 L1 block
-export const L2_RANGE: u64 = BIT64(L2_SHAMT); // 1 << 6  = 64u
-export const L3_RANGE: u64 = BIT64(L3_SHAMT); // 1 << 8  = 256u
+export const L2_RANGE: u64 = BIT64(L2_SHAMT); // 1 << 5  = 32u
+export const L3_RANGE: u64 = BIT64(L3_SHAMT); // 1 << 7  = 128u
 export const L4_RANGE: u64 = BIT64(L4_SHAMT); // 1 << 12 = 4096u
 // export const L5_RANGE: u64 = BIT64(L5_SHAMT); // 1 << 16 = 65536u
 

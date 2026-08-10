@@ -1,17 +1,17 @@
-// @pxl/web/modules/world/markers/user_marker.tsx
+// @pxl/web/modules/world/markers/location_puck.tsx
 
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 
 import { BOOL, type f64, type i32, type u32 } from "@xpute/core/kit/word.ts";
 
-import { projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { ivec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { add3, center3n, fill3, floor3n, set3, type V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import { useTileStore } from "../terrain/tile_store.ts";
+import { register_tile_interest, useTileStore } from "../terrain/tile_store.ts";
 import { render_cfg } from "../render/config.ts";
 import { get_ele } from "../terrain/use_elevation.ts";
 
@@ -81,25 +81,47 @@ const beacon_style = {
   COLOR_DAY: "#ff1493",
   COLOR_NIGHT: "#00f2ff",
 } as const;
-type UserMarkerProps = {
-  device_coord: PVF3;
+type LocationPuckProps = {
+  device_coord: PVF3 | null;
 };
-export function UserMarker(props: UserMarkerProps) {
+export function LocationPuck(props: LocationPuckProps) {
   const { device_coord } = props;
 
   const $v = useRef<V3>([0, 0, 0]);
 
   const theme_key = useThemeKey();
 
-  const tile = useTileStore((state) => state.get_tile(L3_IDX(device_coord.i)));
-  // the zone ring samples get_ele() across its ~63-cell radius, which
-  // regularly reaches past the device's own L3 page into neighbors not yet
-  // loaded on first mount — those samples fall back to a flat guess and
-  // never get revisited, since the effect baking them into the instanced
-  // mesh only re-runs when `tile`/`device_coord` change, not when a
-  // neighboring page finishes streaming. Subscribing to the store-wide load
-  // counter makes the ring self-correct the moment its terrain actually finishes.
-  const tile_version = useTileStore((state) => state.tile_version);
+  // Holds the last known device position across a transient GPS dropout
+  // (device_coord going null — e.g. right after a tab resumes and the
+  // sensor is still reacquiring). Previously this component was fully
+  // unmounted/remounted by its caller on every such blip, tearing down and
+  // rebuilding the zone's InstancedMesh (and its shared singleton geometry)
+  // each time — the repeated remounts, not the position math itself (which
+  // always computed correctly), were the source of a "stacked/cube"
+  // rendering glitch seen right after tab-away-and-back. Same "hold the
+  // last good value" idiom as last_known_center_z below, just one level up.
+  const last_known_device_coord = useRef<PVF3 | null>(null);
+  if (device_coord !== null) last_known_device_coord.current = device_coord;
+  const effective_device_coord: PVF3 | null = last_known_device_coord.current;
+
+  const own_page_idx = effective_device_coord !== null ? L3_IDX(effective_device_coord.i) : 0n;
+  const tile = useTileStore((state) => state.get_tile(own_page_idx));
+
+  const [recompute_tick, set_recompute_tick] = useState(0);
+  // the zone ring samples get_ele() across its own L3 page plus its
+  // immediate neighbors, which can reach past the device's own page into a
+  // neighbor not yet loaded on first mount — those samples fall back to a
+  // flat guess and never get revisited unless something tells the ring a
+  // page it originally missed has since streamed in. Registering interest
+  // in just that 3x3 page neighborhood (rather than every page load
+  // anywhere in the world) means the ring only recomputes when a page it
+  // could actually be sampling from finishes loading.
+  useEffect(() => {
+    return register_tile_interest(
+      (page_idx) => Number(ivec.max_comp(ivec.abs(ivec.sub(page_idx, own_page_idx)))) <= 1,
+      () => set_recompute_tick((t) => t + 1),
+    );
+  }, [own_page_idx]);
   // A placeholder height (sea level, or a "last known good" value) while
   // the device's own page isn't loaded still renders the marker at a
   // guess — floating or sinking wherever real terrain differs. null (not
@@ -107,14 +129,17 @@ export function UserMarker(props: UserMarkerProps) {
   // it with an estimate.
   const last_known_center_z = useRef<f64 | null>(null);
   const center_pos: V3 = useMemo(() => {
-    const pos: V3 = projection.unproject(fill3(0), device_coord.i, device_coord.f);
-    const ele: f64 | null = get_ele(device_coord.i, device_coord.f);
+    if (effective_device_coord === null) return fill3(0);
+    const pos: V3 = projection.unproject(fill3(0), effective_device_coord.i, effective_device_coord.f);
+    const ele: f64 | null = get_ele(effective_device_coord.i, effective_device_coord.f);
     if (ele !== null) last_known_center_z.current = ele;
     pos[2] = last_known_center_z.current ?? 0;
     return floor3n(pos, U_PER_CELL);
-  }, [device_coord, tile]);
+  }, [effective_device_coord, tile]);
 
-  const has_ground: boolean = last_known_center_z.current !== null;
+  // nothing to place the marker at yet at all (no fix has ever landed), or
+  // nothing to ground it to (same last_known_center_z reasoning as before).
+  const has_ground: boolean = effective_device_coord !== null && last_known_center_z.current !== null;
 
   const center_coord = useMemo(() => {
     return projection.project({ i: 0n, f: 0n }, ...center_pos);
@@ -217,7 +242,7 @@ void main() {
 
     mesh.instanceMatrix.needsUpdate = true;
     a_borders.needsUpdate = true;
-  }, [center_pos, temp_obj, tile_version]);
+  }, [center_pos, temp_obj, recompute_tick]);
 
   const $beacon_pos = useRef(new THREE.Vector3());
 
@@ -238,6 +263,13 @@ void main() {
     beacon_ref.current.rotation.z = t * 1.2;
     // bob amplitude, also 1/4 of the original 0.2.
     beacon_ref.current.position.z = BEACON_Z_BIAS + Math.sin(t * 2) * (0.05);
+
+    // this spin/bob never converges by design (it's meant to animate
+    // forever while the marker is on screen) — under frameloop="demand"
+    // (scene.tsx) that means it has to keep asking for a next frame itself,
+    // every frame, for as long as it stays visible. Unlike the damped
+    // camera/frame hooks, there's no settling point here to stop at.
+    state.invalidate();
   });
 
   // nothing to ground the marker to yet — see last_known_center_z above.
@@ -256,7 +288,7 @@ void main() {
       <mesh
         ref={beacon_ref}
         // U_PER_CELL, not 1 — every other position here (center_pos, each
-        // zone tile, cell_highlighter.tsx's POS) snaps to that same cell
+        // zone tile, hover_cursor.tsx's POS) snaps to that same cell
         // grid. Snapping to the 1-unit grid instead put the beacon up to 2
         // cells away from where center_pos/center_coord actually anchor —
         // visible as sitting off-center from the zone ring.

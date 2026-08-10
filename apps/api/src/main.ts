@@ -4,6 +4,7 @@
 
 import { Hono } from "@hono/hono";
 import { bodyLimit } from "@hono/hono/body-limit";
+import { compress } from "@hono/hono/compress";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { Server as SocketIoServer } from "socket.io";
@@ -22,6 +23,12 @@ export type ServerContext = {
 function make_router(cfg: AppConfig): Hono {
   const router = new Hono();
   router.use("/api/*", bodyLimit({ maxSize: cfg.max_body_sz }));
+  // terrain tile responses are dense per-cell ground-channel bytes (~256KB/page,
+  // see format.ts's encode_terrain) built mostly from large uniform runs
+  // (polygon fills) — highly compressible, and gzip here is transparent to
+  // fetch() on the client (Content-Encoding is auto-decoded), no wire-format
+  // or client change needed.
+  router.use("/api/*", compress());
   return router;
 }
 
@@ -69,7 +76,7 @@ function make_node_http_handler(cfg: AppConfig, router: Hono) {
 function make_listen(cfg: AppConfig, server: ReturnType<typeof createServer>) {
   return function listen(): void {
     server.listen(cfg.port, cfg.host, () => {
-      console.log(`app: listening on ${cfg.host}:${cfg.port} (ws: ${cfg.socket_path})`);
+      console.log(`[app] listening on ${cfg.host}:${cfg.port} (ws: ${cfg.socket_path})`);
     });
   };
 }

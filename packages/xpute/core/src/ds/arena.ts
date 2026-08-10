@@ -82,7 +82,7 @@ export class Arena<T extends object> {
    */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
-      console.warn(`arena: truncate ignored: new_len=${new_len} > len=${this._len}`);
+      console.warn(`[arena] truncate ignored: new_len=${new_len} > len=${this._len}`);
       return;
     }
     this._len = new_len;
@@ -196,7 +196,7 @@ export class Vector<T extends AnyTypedArray> {
    */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
-      console.warn(`vector: truncate ignored: new_len=${new_len}) > len=${this._len}`);
+      console.warn(`[vector] truncate ignored: new_len=${new_len} > len=${this._len}`);
       return;
     }
     this._len = new_len;

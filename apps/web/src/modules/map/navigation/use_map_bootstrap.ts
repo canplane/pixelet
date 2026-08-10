@@ -21,9 +21,10 @@ const subscribe_ele_wake: SubscribeWake = (wake) => useTileStore.subscribe(wake)
 // any terrain at all. Never touches the device/pose store — no separate
 // "pretend we have a real fix" flag (like is_fallback); this only seeds
 // map_center itself with this coordinate. device_coord stays null, so
-// UserMarker naturally doesn't render (world.tsx), and the GPS recenter
-// button naturally stays disabled too (device_pose_control.tsx's
-// is_enabled) — both fall out for free from the existing state combination.
+// LocationPuck naturally has nothing to show (it never gets a real fix to
+// remember — see its own has_ground gate), and the GPS recenter button
+// naturally stays disabled too (tracking_button.tsx's is_enabled) —
+// both fall out for free from the existing state combination.
 const FALLBACK_G4326: G4326 = [126.9780, 37.5665];
 const FALLBACK_SEED: PVF3 = epsg4326.project({ i: 0n, f: 0n }, FALLBACK_G4326);
 

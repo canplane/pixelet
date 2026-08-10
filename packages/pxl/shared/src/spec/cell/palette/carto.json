@@ -1,0 +1,45 @@
+{
+  "land": {
+    "BARE": { "hex": "#EEE5DC" },
+    "SEA": { "hex": "#AAD3DF" },
+    "GREEN_DEEP": { "hex": "#ADD19E" },
+    "GREEN_LIGHT": { "hex": "#C8FACC" },
+    "SAND": { "hex": "#F5E9C6" },
+    "RESIDENTIAL": { "hex": "#E0DFDF" },
+    "COMMERCIAL": { "hex": "#F2DAD9" },
+    "INDUSTRIAL": { "hex": "#EBDBE8" },
+    "SPORTS": { "hex": "#88E0BE" },
+    "EDUCATION": { "hex": "#FFFFE5" },
+    "MEDICAL": { "hex": "#FFFFE5" },
+    "PUBLIC": { "hex": "#FFFFE5" },
+    "APRON": { "hex": "#DADAE0" },
+    "HELIPAD": { "hex": "#BBBBCC" }
+  },
+  "water": {
+    "RIVER": { "hex": "#AAD3DF" },
+    "LAKE": { "hex": "#AAD3DF" },
+    "WETLAND": { "hex": "#AAD3DF" }
+  },
+  "structure": {
+    "BUILDING": { "hex": "#D9D0C9" },
+    "BUILDING_STATION": {
+      "hex": "#C4B6AB",
+      "note": "real OSM Carto darkens 'major' buildings (station/terminal/place_of_worship) 10% off the base building fill (buildings.mss) — every other BUILDING_* here is deliberately identical to plain BUILDING because Carto itself doesn't distinguish them, but this one genuinely does"
+    },
+    "BUILDING_MEDICAL": { "hex": "#D9D0C9" },
+    "BUILDING_EDUCATION": { "hex": "#D9D0C9" },
+    "BUILDING_PUBLIC": { "hex": "#D9D0C9" }
+  },
+  "transport": {
+    "ROAD_DEFAULT": { "hex": "#FFFFFF" },
+    "ROAD_MOTORWAY": { "hex": "#E892A2" },
+    "ROAD_PRIMARY": { "hex": "#FCD6A4" },
+    "ROAD_SECONDARY": { "hex": "#F7FABF" },
+    "PEDESTRIAN": { "hex": "#DDDDE8" },
+    "PARKING": { "hex": "#EEEEEE" },
+    "RAIL_MAIN": { "hex": "#707070" },
+    "RAIL_SUBWAY": { "hex": "#999999" },
+    "RUNWAY": { "hex": "#BBBBCC" },
+    "TAXIWAY": { "hex": "#BBBBCC" }
+  }
+}

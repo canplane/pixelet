@@ -4,8 +4,16 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 
 /** Camera projection and interaction limits. */
 
+// Only feeds render_cfg's FAR_CLIP (camera far-clip plane) now — sized
+// against terrain/config.ts's RENDER_RADIUS (currently 8 pages, one page
+// = 128u -> ~1024u real reach from the camera pivot) so that margin stays
+// proportional instead of an arbitrary leftover multiple. The actual
+// "ground pops out of existence" fix was RENDER_RADIUS itself (layer.tsx
+// used to cap mounted terrain at the much tighter LOAD_RADIUS) — this knob
+// was already comfortably past that edge either way, it just used to imply
+// a needlessly large FAR_CLIP margin (was 2048).
 /** Control knob for global view-dependent distances. */
-export const VIEW_DIST: f64 = 2048;
+export const VIEW_DIST: f64 = 1024;
 
 /** Default tilt angle in degrees from the ground plane. */
 export const DEFAULT_TILT_DEG: f64 = 30;
@@ -31,7 +39,7 @@ export const camera_cfg = {
     // picked with no real-world reference and implicitly coupled MAX_DIST to
     // the unrelated terrain fog/LOD knob (VIEW_DIST) it happened to share a symbol with.
     MIN_DIST: 1,
-    MAX_DIST: 256,
+    MAX_DIST: 512,
     MIN_POLAR: 0.001,
     MAX_POLAR: Math.PI / 2.05,
   },

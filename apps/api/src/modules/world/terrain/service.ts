@@ -50,7 +50,7 @@ function make_services(repo: TerrainRepository) {
         repo.fetch_coast_rows(page_bbox),
       ]);
     } catch (err) {
-      console.error(`[terrain/source/${ivec.repr(page_idx)}] shell: db error:`, err);
+      console.error(`[terrain/source/${ivec.repr(page_idx)}] db error:`, err);
       throw err;
     }
 
@@ -58,12 +58,12 @@ function make_services(repo: TerrainRepository) {
     if (_ele && _ele.length === ELE_PADDED_SPAN2) {
       ele = new Int16Array(_ele);
     } else {
-      console.warn(`[terrain/source/${ivec.repr(page_idx)}] shell: invalid ele shape`, _ele?.length ?? null);
+      console.warn(`[terrain/source/${ivec.repr(page_idx)}] invalid ele shape`, _ele?.length ?? null);
       ele = new Int16Array(ELE_PADDED_SPAN2); // fallback
     }
 
     console.debug(
-      `[terrain/source/${ivec.repr(page_idx)}] shell: ele=${ele.length}, feat_rows=${feat_rows.length}, coast_rows=${coast_rows.length}`,
+      `[terrain/source/${ivec.repr(page_idx)}] ele=${ele.length}, feat_rows=${feat_rows.length}, coast_rows=${coast_rows.length}`,
     );
 
     const feats_view = new TreeView().branch((__) => {
@@ -117,6 +117,23 @@ export function register(router: Hono, resrc: AppResources): void {
     }
 
     const bytes: Bytes = await service.fetch_tile(page_idx);
+
+    // hono's own compress() middleware (main.ts) skips this response: it
+    // gates on Content-Type, and application/octet-stream isn't in its
+    // compressible-type allowlist (reasonably so in general — opaque binary
+    // is often already-compressed media). This payload isn't that: it's
+    // dense per-cell ground-channel bytes built from polygon fills, mostly
+    // large uniform runs (see format.ts's encode_terrain) — gzips well.
+    // fetch() on the client decodes Content-Encoding transparently, so this
+    // needs no client-side change.
+    if ((c.req.header("accept-encoding") ?? "").includes("gzip")) {
+      const gzip_body = new Response(bytes).body!.pipeThrough(new CompressionStream("gzip"));
+      return new Response(gzip_body, {
+        status: 200,
+        headers: { "content-type": "application/octet-stream", "content-encoding": "gzip" },
+      });
+    }
+
     return c.body(bytes, 200, { "content-type": "application/octet-stream" });
   });
 }

@@ -7,7 +7,7 @@ import { useIsMobile } from "@/shared/hooks/use_is_mobile.tsx";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { Button } from "@/shared/ui/theme/base/button.tsx";
 import { Input } from "@/shared/ui/theme/base/input.tsx";
-import { Separator } from "@/shared/ui/theme/glass/separator.tsx";
+import { Separator } from "@/shared/ui/theme/base/separator.tsx";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/ui/theme/base/sheet.tsx";
 import { Skeleton } from "@/shared/ui/theme/base/skeleton.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/shared/ui/theme/base/tooltip.tsx";

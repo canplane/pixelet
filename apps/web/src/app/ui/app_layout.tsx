@@ -7,7 +7,7 @@ import { AppContext } from "../providers/app_context.ts";
 import { useAppInit } from "../hooks/use_app_init.ts";
 import { useUIController } from "../hooks/use_ui_controller.ts";
 import { ModalManager } from "../providers/modal_manager.tsx";
-import { Toaster } from "@/shared/ui/theme/glass/sonner.tsx";
+import { Toaster } from "@/shared/ui/toast/toaster.tsx";
 
 /** Loading page */
 function LoadingPage() {

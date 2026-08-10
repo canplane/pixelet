@@ -13,6 +13,7 @@ import { createPortal } from "@react-three/fiber";
 
 import { type FVec, type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L4_BASE, L4_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { useAnchorRegistry } from "./context.tsx";
 import { AnchorRegistry } from "./registry.ts";
@@ -47,7 +48,7 @@ export function AnchorNode(props: AnchorNodeProps) {
   }, [anchor_idx]);
 
   /** Anchor-local offset within the resolved L4 anchor. */
-  const local_pos = useMemo((): [number, number, number] => {
+  const local_pos = useMemo((): V3 => {
     const anchor: IVec = L4_BASE(i);
     const local: PVF3 = { i: ivec.sub(i, anchor), f };
     return [pvf3.to_real(pvf3.X(local)), pvf3.to_real(pvf3.Y(local)), pvf3.to_real(pvf3.Z(local))];

@@ -82,7 +82,7 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
           set_label(parts.length > 0 ? parts.join(" ") : null);
         } catch (err) {
           if ((err as Error)?.name !== "AbortError") {
-            console.error("[reverse-geocode] failed:", err);
+            console.error("[reverse_geocode] failed:", err);
           }
         } finally {
           if (!controller.signal.aborted) set_loading(false);

@@ -33,7 +33,7 @@ export function useUIController(store: unknown) {
 
         // Fallback for unregistered actions
         return (...args: unknown[]) => {
-          console.warn(`[UIController] Action "${String(prop)}" called but not registered.`, { args });
+          console.warn(`[ui_controller] action "${String(prop)}" called but not registered.`, { args });
         };
       },
     });

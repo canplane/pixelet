@@ -8,7 +8,7 @@ import { SensorStatus } from "./sensor_status.tsx";
 import { useReverseGeocode } from "./use_reverse_geocode.ts";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale_bar.tsx";
-import { DevicePoseControl } from "@/modules/map/ui/control/device_pose_control.tsx";
+import { TrackingButton } from "@/modules/map/ui/control/tracking_button.tsx";
 
 /**
  * Everything anchored to the top edge of the map canvas — split out of
@@ -16,7 +16,7 @@ import { DevicePoseControl } from "@/modules/map/ui/control/device_pose_control.
  *
  * Top-right now stacks the address/sensor status bar above the compass /
  * scale_bar / GPS cluster (moved here from bottom-right) — that cluster
- * used to live at the bottom, but the floating palette bar (bottom-center,
+ * used to live at the bottom, but the floating mode bar (bottom-center,
  * bottom_overlays.tsx) is planned to grow into this app's main control
  * surface, and per that direction the bottom edge is meant to stay clear
  * for it rather than sharing space with unrelated controls. The debug
@@ -70,7 +70,7 @@ export function TopOverlays() {
           closest to the screen edge should be, making the icon visibly
           drift left/right every time the address length changed. */
           }
-          <div className="flex items-center gap-2 h-6 bg-black/40 rounded px-2 w-fit">
+          <div className="flex items-center gap-2 h-6 bg-black/40 backdrop-blur-sm rounded px-2 w-fit">
             <CurrentAddress label={address_label} />
             <SensorStatus />
           </div>
@@ -87,7 +87,7 @@ export function TopOverlays() {
           <MapScaleBar />
 
           <div className="flex flex-col items-center gap-3">
-            <DevicePoseControl />
+            <TrackingButton />
             <MapCompass />
           </div>
         </div>

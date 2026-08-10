@@ -1,8 +1,6 @@
 // @pxl/web/modules/world/render/themes.ts
 
-import type { u32 } from "@xpute/core/kit/word.ts";
-
-import type { V3 } from "@pxl/shared/spec/space/v3.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
 export const enum WorldThemeKey {
   MORNING = "morning",
@@ -15,7 +13,6 @@ export type WorldTheme = {
   background: string;
   fog: string;
   sky: {
-    sun_position: V3; // ENU [X, Y, Z]
     colors: {
       top: string;
       middle: string;
@@ -38,7 +35,6 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     background: "#f6efe6",
     fog: "#e9dccb",
     sky: {
-      sun_position: [100, 20, 16],
       colors: {
         top: "#f7d9bc",
         middle: "#f9e7d2",
@@ -57,7 +53,6 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     background: "#dff1ff",
     fog: "#c8def0",
     sky: {
-      sun_position: [0, -50, 82],
       colors: {
         top: "#b9ddff",
         middle: "#dff1ff",
@@ -76,7 +71,6 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     background: "#3c2318",
     fog: "#c9865f",
     sky: {
-      sun_position: [-100, -20, 12],
       colors: {
         top: "#6f4d4d",
         middle: "#c9865f",
@@ -95,7 +89,6 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     background: "#0f172a",
     fog: "#1e293b",
     sky: {
-      sun_position: [0, 0, -100],
       colors: {
         top: "#0b1220",
         middle: "#172338",
@@ -111,10 +104,19 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
   },
 };
 
-/** Theme derived from current virtual hour. */
-export function get_theme_key(hour: u32 = new Date().getHours()): WorldThemeKey {
-  if (hour >= 5 && hour < 11) return WorldThemeKey.MORNING;
-  if (hour >= 11 && hour < 17) return WorldThemeKey.DAY;
-  if (hour >= 17 && hour < 21) return WorldThemeKey.EVENING;
-  return WorldThemeKey.NIGHT;
+/**
+ * Theme derived from the current hour and the real sunrise/sunset for
+ * wherever the map is centered (celestial_position.ts's get_sunrise_sunset)
+ * — replaces a fixed 05:00/21:00 split that didn't track season or
+ * location. MORNING/DAY/EVENING still split the daylight span the same way
+ * the old fixed version did (37.5% / 37.5% / 25%, matching its old
+ * 6h/6h/4h split of a 16h fixed daylight span), just scaled to however long
+ * daylight actually is today instead of always 16 hours.
+ */
+export function get_theme_key(hour: f64, sunrise_hour: f64, sunset_hour: f64): WorldThemeKey {
+  if (hour < sunrise_hour || hour >= sunset_hour) return WorldThemeKey.NIGHT;
+  const daylight_fraction = (hour - sunrise_hour) / (sunset_hour - sunrise_hour);
+  if (daylight_fraction < 0.375) return WorldThemeKey.MORNING;
+  if (daylight_fraction < 0.75) return WorldThemeKey.DAY;
+  return WorldThemeKey.EVENING;
 }

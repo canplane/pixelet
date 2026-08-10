@@ -9,7 +9,7 @@ export const comp_str = (a: string, b: string): number => (a < b ? -1 : a > b ? 
 
 export function make_comp<T, K extends numeric = number>(
   key_fn: (e: T) => K,
-  tie_fn?: (a: T, b: T) => number, // tie_fn 없으면 0 (ties: implementation-defined ordering)
+  tie_fn?: (a: T, b: T) => number, // defaults to 0 if omitted (ties: implementation-defined ordering)
 ): Comp<T> {
   const tie = tie_fn ?? (() => 0);
 
