@@ -1,11 +1,11 @@
 // @pxl/web/app/dev/dev_panel.tsx
 
 import { useState } from "react";
-import { LanguageToggleButton } from "./language_toggle_button.tsx";
+import { LanguageToggleButton as _LanguageToggleButton } from "./language_toggle_button.tsx";
 import { useDebugStore } from "./debug_store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { Toast } from "@/shared/ui/toast/toast.tsx";
-import { toast_custom, toast_dismiss } from "@/shared/ui/toast/toast_store.ts";
+import { toast_custom, toast_dismiss } from "@/shared/ui/toast/store.ts";
 
 const DUMMY_TOAST_IDS = ["dummy-1", "dummy-2", "dummy-3", "dummy-4"];
 
@@ -40,9 +40,6 @@ export function DevPanel() {
   const low_spec = useDebugStore((state) => state.low_spec);
   const toggle_low_spec = useDebugStore.getState().toggle_low_spec;
 
-  const show_shadows = useDebugStore((state) => state.show_shadows);
-  const toggle_show_shadows = useDebugStore.getState().toggle_show_shadows;
-
   // moved here from the main map overlay (see git history on
   // terrain_follow_toggle.tsx / map_overlays.tsx) — follow_terrain's
   // default is already true, so "terrain follows as you pan" reads as
@@ -61,14 +58,15 @@ export function DevPanel() {
   }
 
   return (
-    // top-4 left-4 — swapped with top-right so the map's own address/sensor
-    // status bar (top_overlays.tsx) can move to top-right, stacked above
-    // the compass/scale_bar/GPS cluster that used to sit at bottom-right.
-    // flex-col items-start (not a row): once show_debug_menu started
-    // revealing a growing list of secondary buttons, a row kept pushing
-    // further right and eventually off-screen — a left-aligned column has
-    // room to grow downward instead.
-    <div className="fixed top-4 left-4 z-10 flex flex-col items-start gap-2">
+    // bottom-4 left-4 — out of the way of the map's own top-left chrome.
+    // flex-col-reverse (not flex-col): the "debug" trigger button is
+    // always the first DOM child, and with bottom-4 anchoring the
+    // container's bottom edge, flex-col-reverse is what keeps that trigger
+    // pinned right at the anchor while the secondary buttons stack upward
+    // above it as show_debug_menu reveals them — plain flex-col would put
+    // the trigger at the container's top instead, so it'd visibly jump
+    // position every time the list grows or shrinks.
+    <div className="fixed bottom-4 left-4 z-10 flex flex-col-reverse items-start gap-2">
       {/* multi-language toggle button */}
       {/* <LanguageToggleButton /> */}
 
@@ -128,20 +126,9 @@ export function DevPanel() {
           type="button"
           onClick={toggle_low_spec}
           className={`${BUTTON_CLASS} ${!low_spec ? "bg-amber-400 text-black" : "bg-black/40 text-white/70"}`}
-          title="지형 색상 해상 모드 — 저사양(버텍스, 기본) / 텍스처팩(프래그먼트, 실제 타일링)"
+          title="지형/오브젝트 색상 해상 모드 — 저사양(플랫 컬러, 기본) / 텍스처팩(4-tap 실제 이미지, 성능 비교용)"
         >
           텍스처팩
-        </button>
-      )}
-
-      {show_debug_menu && (
-        <button
-          type="button"
-          onClick={toggle_show_shadows}
-          className={`${BUTTON_CLASS} ${show_shadows ? "bg-amber-400 text-black" : "bg-black/40 text-white/70"}`}
-          title="태양/달 실시간 그림자맵 렌더 여부 — GPU 비용이 큰 편이라 성능 비교용"
-        >
-          그림자
         </button>
       )}
 

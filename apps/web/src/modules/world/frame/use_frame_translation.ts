@@ -9,7 +9,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { fvec, type IVec, ivec, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { camera_cfg } from "@/modules/camera/config.ts";
-import type { AnchorRegistry } from "@/modules/world/spatial/anchor/registry.ts";
+import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
 
 const { POS_DAMP } = camera_cfg.smooth;
 

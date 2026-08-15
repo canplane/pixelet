@@ -9,15 +9,21 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
+import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
-import { ground_or_raw } from "@/modules/world/terrain/use_elevation.ts";
-import { ray_pick_terrain } from "./ray.ts";
+import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
+import { get_local_world_origin } from "@/modules/world/frame/coord.ts";
+import { find_overlapping_object } from "@/modules/world/objects/collision.ts";
+import { object_aabb, object_center } from "@/modules/world/objects/geometry.ts";
+import { MaterialClass } from "@/render/layer/pipeline/volume.ts";
+import { get_placed_object, place, remove } from "@/modules/world/objects/store.ts";
+import { ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3 } from "./ray.ts";
 import { CameraStatus, useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
 
 const { FOV } = camera_cfg.projection;
-const { ROT_GAIN_POLAR, ROT_GAIN_REF_HEIGHT, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, AXIS_LOCK_THRESHOLD_PX } = camera_cfg.input;
+const { ROT_GAIN_POLAR, ROT_GAIN_REF_HEIGHT, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, AXIS_LOCK_THRESHOLD_PX, TAP_DRAG_THRESHOLD_PX } = camera_cfg.input;
 
 const enum DragMode {
   NONE = "none",
@@ -39,6 +45,59 @@ type PointerPos = { x: f64; y: f64 };
 const $ray = new THREE.Ray();
 const $pointer = new THREE.Vector2();
 
+/**
+ * What a non-drag tap on the terrain means — recenter the map (pointer
+ * tool), place a cube (object tool), or remove one (eraser tool). Shared by
+ * both tap-detection sites below (mouse pointerup, touch's
+ * drop-to-zero-fingers branch).
+ */
+function handle_tap(hovered: PVF3): void {
+  const { active_tool, object_color_id, object_size } = useUiStore.getState();
+
+  if (active_tool === "pointer") {
+    // hovering an object recenters on its actual middle — real height
+    // included, deliberately NOT re-grounded to terrain (unlike a
+    // terrain-sourced `hovered`, which is already grounded via with_ele and
+    // stays that way). hovered/hovered_coord stores the corner (see
+    // camera/store.ts and update_hover() below), off by half the object's
+    // own size on every axis, so this still needs object_center rather than
+    // using the corner as-is.
+    //
+    // Known consequence: do_pan's follow_terrain re-grounds Z on every pan
+    // step, so the very next drag after this will snap the camera target
+    // down to the terrain surface at whatever X/Y you've panned to — a
+    // visible jump if the object sat well above ground. Not fixed here;
+    // fixing it properly means follow_terrain preserving a height-above-
+    // terrain offset while panning instead of hugging the raw surface,
+    // which changes panning in general, not just this recenter.
+    const { hovered_object_id } = useCameraStore.getState();
+    const hovered_object = hovered_object_id ? get_placed_object(hovered_object_id) : null;
+    const target = hovered_object ? object_center(hovered_object, get_local_world_origin(useMapStore.getState().map_center)) : hovered;
+
+    useMapStore.getState().set_map_center(target);
+    return;
+  }
+
+  if (active_tool === "eraser") {
+    // targets the object the raycast actually struck (see update_hover()),
+    // not a grid-key lookup — correct for any size, any face.
+    const { hovered_object_id } = useCameraStore.getState();
+    if (hovered_object_id) remove(hovered_object_id);
+    return;
+  }
+
+  // active_tool === "object" — `hovered` is already either a terrain corner
+  // or, when the cursor is over an existing object, the corner flush against
+  // whichever face was struck (adjacent_corner() in update_hover()). Still
+  // guard against that candidate slot itself already being occupied (e.g.
+  // something else placed in the same spot since the last hover update).
+  const map_center = useMapStore.getState().map_center;
+  const map_origin = get_local_world_origin(map_center);
+  if (!find_overlapping_object(hovered, object_size, map_origin)) {
+    place(hovered.i, hovered.f, object_size, object_color_id);
+  }
+}
+
 export function CameraInput() {
   const { gl, size, raycaster, camera } = useThree();
 
@@ -50,6 +109,11 @@ export function CameraInput() {
 
   const last_x = useRef<f64>(0);
   const last_y = useRef<f64>(0);
+  // pointerdown position for the current gesture — total displacement from
+  // here (not the per-event dx/dy last_x/y tracks) is what decides whether
+  // this is a tap or a drag. See TAP_DRAG_THRESHOLD_PX's doc comment.
+  const tap_start_x = useRef<f64>(0);
+  const tap_start_y = useRef<f64>(0);
   const $center = useRef<V3>([0, 0, 0]);
   const hover_raf_pending = useRef(false);
 
@@ -86,6 +150,7 @@ export function CameraInput() {
   const set_view_state = useCameraStore.getState().set_view_state;
   const set_camera_status = useCameraStore.getState().set_camera_status;
   const set_hovered_coord = useCameraStore.getState().set_hovered_coord;
+  const set_hovered_object_id = useCameraStore.getState().set_hovered_object_id;
   const set_is_follow_mode = useCameraStore.getState().set_is_follow_mode;
 
   const { world_frame_ref, local_world_frame_ref } = useFrameRefs();
@@ -288,6 +353,8 @@ export function CameraInput() {
         did_drag.current = false;
         last_x.current = e.clientX;
         last_y.current = e.clientY;
+        tap_start_x.current = e.clientX;
+        tap_start_y.current = e.clientY;
         update_pointer(e.clientX, e.clientY);
         set_hovered_coord(null);
       } else if (active_pointers.current.size === 2) {
@@ -306,6 +373,8 @@ export function CameraInput() {
 
     last_x.current = e.clientX;
     last_y.current = e.clientY;
+    tap_start_x.current = e.clientX;
+    tap_start_y.current = e.clientY;
 
     if (drag_mode.current === DragMode.ROTATE) {
       // anchor is captured lazily by do_rotate() on the first reliable
@@ -351,7 +420,9 @@ export function CameraInput() {
       if (drag_mode.current === DragMode.PAN && active_pointers.current.size === 1) {
         const dx: f64 = e.clientX - last_x.current;
         const dy: f64 = e.clientY - last_y.current;
-        if (dx !== 0 || dy !== 0) did_drag.current = true;
+        if (Math.hypot(e.clientX - tap_start_x.current, e.clientY - tap_start_y.current) > TAP_DRAG_THRESHOLD_PX) {
+          did_drag.current = true;
+        }
         last_x.current = e.clientX;
         last_y.current = e.clientY;
         do_pan(dx, dy);
@@ -371,7 +442,9 @@ export function CameraInput() {
 
     const dx: f64 = e.clientX - last_x.current;
     const dy: f64 = e.clientY - last_y.current;
-    if (dx !== 0 || dy !== 0) did_drag.current = true;
+    if (Math.hypot(e.clientX - tap_start_x.current, e.clientY - tap_start_y.current) > TAP_DRAG_THRESHOLD_PX) {
+      did_drag.current = true;
+    }
 
     last_x.current = e.clientX;
     last_y.current = e.clientY;
@@ -385,9 +458,9 @@ export function CameraInput() {
   }
 
   function clear_hovered_once() {
-    if (useCameraStore.getState().hovered_coord !== null) {
-      set_hovered_coord(null);
-    }
+    const state = useCameraStore.getState();
+    if (state.hovered_coord !== null) set_hovered_coord(null);
+    if (state.hovered_object_id !== null) set_hovered_object_id(null);
   }
 
   function update_hover() {
@@ -400,13 +473,56 @@ export function CameraInput() {
     $pointer.set(pointer_x.current, pointer_y.current);
     raycaster.setFromCamera($pointer, camera);
 
-    const hit: PVF3 | null = ray_pick_terrain($ray, raycaster.ray, world_frame_ref.current, local_world_frame_ref.current, map_center);
-    if (!hit) {
+    const { active_tool, object_size } = useUiStore.getState();
+    const map_origin = get_local_world_origin(map_center);
+
+    // One unified raycast — terrain (top or a wall) and any placed object
+    // (any size) all come back as the same WorldHit shape now, since
+    // they're all just boxes in the same dense voxel field (ray.ts's own
+    // doc comment). No more per-tool "do we need the wall pass" gating —
+    // it's not a separate pass anymore.
+    const pick = ray_pick($ray, raycaster.ray, world_frame_ref.current, local_world_frame_ref.current, map_center);
+    if (!pick) {
       clear_hovered_once();
       return;
     }
+    const { hit } = pick;
 
-    set_hovered_coord(hit);
+    if (active_tool === "object") {
+      // the one tool that wants an ADJACENT empty slot, not the struck
+      // surface itself.
+      set_hovered_object_id(null);
+
+      // When the struck thing is a real, known PlacedObject, hand
+      // world_adjacent_corner its exact stored AABB instead of letting it
+      // fall back to hit's own box_min/box_max — those come back through
+      // the u8-packed sub_cell payload (voxel.ts), accurate to only
+      // ~1/510 of a cell, which is what let stacked sub-cell placements
+      // silently drift (see world_adjacent_corner's own doc comment on
+      // precise_box). Terrain/no-resolved-object hits have no more precise
+      // source, so this is null and world_adjacent_corner uses hit's own
+      // box as before.
+      const struck_object = hit.material_class === MaterialClass.OBJECT
+        ? resolve_hit_object(hit, map_origin)
+        : null;
+      const precise_box = struck_object ? object_aabb(struck_object, map_origin) : undefined;
+
+      set_hovered_coord(world_adjacent_corner(hit, object_size, map_origin, precise_box));
+      return;
+    }
+
+    // pointer (recenter on it) and eraser (remove it) both target the
+    // struck thing itself, not an adjacent slot.
+    const struck_object = resolve_hit_object(hit, map_origin);
+    set_hovered_object_id(struck_object?.id ?? null);
+    if (struck_object) {
+      set_hovered_coord({ i: struck_object.i, f: struck_object.f });
+    } else {
+      // terrain (top or wall) — the struck cell's own owning corner,
+      // grounded to its real top.
+      const grounded = world_hover_pvf3(hit, map_origin);
+      grounded ? set_hovered_coord(grounded) : clear_hovered_once();
+    }
   }
 
   function on_pointer_up(e: PointerEvent) {
@@ -422,7 +538,7 @@ export function CameraInput() {
         if (was_active && !did_drag.current && mode === DragMode.PAN) {
           update_hover();
           const hovered = useCameraStore.getState().hovered_coord;
-          if (hovered) set_map_center(hovered);
+          if (hovered) handle_tap(hovered);
         }
       } else if (active_pointers.current.size === 1) {
         // dropped from 2 fingers to 1 — resume single-finger pan seamlessly.
@@ -447,9 +563,7 @@ export function CameraInput() {
     if (!did_drag.current && mode === DragMode.PAN) {
       update_hover();
       const hovered = useCameraStore.getState().hovered_coord;
-      if (hovered) {
-        set_map_center(hovered);
-      }
+      if (hovered) handle_tap(hovered);
     }
   }
 

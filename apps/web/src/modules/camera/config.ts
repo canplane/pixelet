@@ -5,15 +5,17 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 /** Camera projection and interaction limits. */
 
 // Only feeds render_cfg's FAR_CLIP (camera far-clip plane) now — sized
-// against terrain/config.ts's RENDER_RADIUS (currently 8 pages, one page
-// = 128u -> ~1024u real reach from the camera pivot) so that margin stays
+// against terrain/config.ts's RENDER_RADIUS (currently 2 pages, one page
+// = 1024u -> ~2048u real reach from the camera pivot) so that margin stays
 // proportional instead of an arbitrary leftover multiple. The actual
-// "ground pops out of existence" fix was RENDER_RADIUS itself (layer.tsx
+// "ground pops out of existence" fix was RENDER_RADIUS itself (chunk_stage.tsx
 // used to cap mounted terrain at the much tighter LOAD_RADIUS) — this knob
 // was already comfortably past that edge either way, it just used to imply
-// a needlessly large FAR_CLIP margin (was 2048).
+// a needlessly large FAR_CLIP margin. Re-derived 2026-08-13 alongside
+// RENDER_RADIUS's mobile-driven decouple from CLEANUP_RADIUS (was 1024,
+// tracking RENDER_RADIUS=8 @ 128u/page from before that page size grew).
 /** Control knob for global view-dependent distances. */
-export const VIEW_DIST: f64 = 1024;
+export const VIEW_DIST: f64 = 2048;
 
 /** Default tilt angle in degrees from the ground plane. */
 export const DEFAULT_TILT_DEG: f64 = 30;
@@ -76,6 +78,16 @@ export const camera_cfg = {
     // than MIN_ROTATE_RADIUS_PX on purpose — this only needs enough
     // displacement to tell vertical from horizontal, not a stable angle reading.
     AXIS_LOCK_THRESHOLD_PX: 12,
+
+    // did_drag used to flip true on ANY nonzero pointermove delta between
+    // pointerdown and pointerup — real pointers (trackpad clicks, high-DPI
+    // mice, touch) almost always report a pixel or two of jitter even on a
+    // "stationary" click, so genuine taps (map recenter, object place/erase)
+    // were silently getting swallowed as a zero-distance drag. Gate on total
+    // displacement from pointerdown instead (see tap_start_x/y in
+    // input.tsx) — small enough that an intentional drag still starts
+    // panning immediately, large enough to absorb click jitter.
+    TAP_DRAG_THRESHOLD_PX: 4,
   },
 
   smooth: {

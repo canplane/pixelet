@@ -42,6 +42,10 @@ export type CameraStore = {
   hovered_coord: PVF3 | null;
   set_hovered_coord: (coord: PVF3 | null) => void;
 
+  /** id of the placed object currently under the cursor, if any — see camera/ray.ts's PickResult.hit_object. */
+  hovered_object_id: string | null;
+  set_hovered_object_id: (id: string | null) => void;
+
   /** User/system-facing camera view intent. */
   view_state: ViewState;
   set_view_state: (partial: Partial<ViewState>) => void;
@@ -75,6 +79,9 @@ export const useCameraStore = create<CameraStore>((set) => ({
       const same: boolean = state.hovered_coord?.i === hovered_coord?.i && state.hovered_coord?.f === hovered_coord?.f;
       return same ? state : { hovered_coord };
     }),
+
+  hovered_object_id: null,
+  set_hovered_object_id: (hovered_object_id) => set((state) => state.hovered_object_id === hovered_object_id ? state : { hovered_object_id }),
 
   view_state: {
     dist: DEFAULT_DIST,

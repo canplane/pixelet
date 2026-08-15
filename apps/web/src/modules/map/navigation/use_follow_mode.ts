@@ -8,7 +8,7 @@ import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { DevicePoseStatus, useDeviceLocationStore, useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
-import { ground_or_raw } from "@/modules/world/terrain/use_elevation.ts";
+import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 
 import { useMapStore } from "../store.ts";
 import { useMapNavigation } from "./use_map_navigation.ts";

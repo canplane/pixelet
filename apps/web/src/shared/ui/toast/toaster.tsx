@@ -5,7 +5,7 @@
 
 import { memo, useEffect, useState } from "react";
 import { BOTTOM_OVERLAY_SAFE_PX } from "@/shared/ui/overlay_safe_area.ts";
-import { get_toast_entries, is_toast_removing, subscribe_toast_entries, type ToastRenderFn } from "./toast_store.ts";
+import { get_toast_entries, is_toast_removing, subscribe_toast_entries, type ToastRenderFn } from "./store.ts";
 
 /** Extra lift on top of BOTTOM_OVERLAY_SAFE_PX (which only guarantees
  * clearing the mode bar) — the toast sat right at that floor, which

@@ -3,7 +3,7 @@
 import { memo, useEffect, useRef } from "react";
 
 import { useMapStore } from "@/modules/map/store.ts";
-import { useThemeKey } from "@/modules/world/render/theme_clock.ts";
+import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
 

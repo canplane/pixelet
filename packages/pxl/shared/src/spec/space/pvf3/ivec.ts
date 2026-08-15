@@ -12,40 +12,20 @@
  * [ MSB ........................................................... LSB ]
  * [ Lane X (X_W bits) | Lane Y (Y_W bits) | Lane Z (Z_W bits) ]
  *
- * Example Configuration (64-bit Word), each lane's own MSB is its guard bit
- * (see Guard-Bit Headroom below):
- * [ 63 | 62 ............... 40 | 39 | 38 ............... 16 | 15 | 14 ............... 0 ]
- * [ Gx |    Lane X (23b)       | Gy |    Lane Y (23b)       | Gz |    Lane Z (15b)       ]
+ * Example Configuration (64-bit Word):
+ * [ 63 ................. 40 | 39 ................. 16 | 15 ................. 0 ]
+ * [      Lane X (24b)       |      Lane Y (24b)       |      Lane Z (16b)       ]
  *
  * Mathematical Domain & Topology:
  * - X/Y/Z lanes are interpreted as signed (two's complement).
  * - X is cyclic (wrap-around) in the chosen world model: the signed boundary represents a continuous seam
  *   (i.e., MIN and MAX meet at the seam, e.g., antimeridian behavior) rather than a clamp.
  *
- * Guard-Bit Headroom (why lane widths are one bit wider than the legitimate domain):
- * - A NORMALIZED coordinate never uses a lane's full physical width — each lane's legitimate
- *   magnitude is bounded to (lane_width - 1) bits, one bit narrower than the field it's stored
- *   in (X/Y: |value| < 2^22 inside a 24-bit field; Z: |value| < 2^14 inside a 16-bit field).
- * - For X and Y this headroom isn't a policy choice, it falls out of the coordinate domain
- *   itself: EPSG:3857's own square bounds put both axes' legitimate range at essentially the
- *   same magnitude (see adapter/3857.ts's WORLD_WIDTH_3857-derived U_PER_M) — the field being
- *   one bit wider than that was already true before this was ever named as a convention. For Z
- *   there's no equivalent domain-forced ceiling (altitude has no analog to a Mercator square
- *   bound); its own value happens to sit nowhere near even a much tighter ceiling than this.
- * - X additionally benefits from this same margin for an unrelated reason: because its seam is
- *   a wrap (not a clamp), a delta computed against a not-yet-rewrapped position near the seam
- *   can transiently swing by close to a full world-width before whatever re-wraps it runs, and
- *   this headroom is what keeps that transient from corrupting the value before it's corrected.
- * - What this headroom does NOT buy: a single raw `(v + w) & WORD_MASK` across the whole packed
- *   word, skipping gather()'s per-lane unpack/repack. That was tried and measured wrong — see
- *   this package's README for the full investigation.
- *
  * Operational Integrity & Overflow Policy:
  * - Deterministic Arithmetic: Uses BigInt for bit-exact operations; per-lane modular wrapping
  *   is enforced by masking in gather().
  * - Lane Isolation: Cross-lane carry is structurally impossible, as all arithmetic is performed
- *   on deconstructed lane values and re-packed via gather() — see this package's README for why
- *   this full unpack/repack isn't just belt-and-suspenders here, it's load-bearing.
+ *   on deconstructed lane values and re-packed via gather().
  * - Overflow Policy: Each lane wraps/truncates modulo 2^W; the caller must ensure semantic validity
  *   (e.g., displacements stay within lane-specific bit-depth when required by higher-level policies).
  * - Semantic Validity: 'Absolute + Absolute' addition is semantically invalid at the coordinate level
@@ -163,15 +143,8 @@ export const sh = (v: IVec, shamt: i32): IVec => shamt >= 0 ? shl(v, shamt) : sh
 export const neg = (v: IVec): IVec => gather(-X(v), -Y(v), -Z(v));
 export const abs = (v: IVec): IVec => gather(ABS(X(v)), ABS(Y(v)), ABS(Z(v)));
 
-/**
- * Deliberately NOT a raw `(v + w) & WORD_MASK` on the packed word — see this
- * package's README for why (three failed packed-arithmetic attempts, plus
- * why the one that does work in general isn't worth it for 3 fixed lanes on
- * a BigInt word).
- */
 export const add = (v: IVec, w: IVec): IVec => gather(X(v) + X(w), Y(v) + Y(w), Z(v) + Z(w));
 export const sub = (v: IVec, w: IVec): IVec => gather(X(v) - X(w), Y(v) - Y(w), Z(v) - Z(w));
-
 export const mul = (v: IVec, w: IVec): IVec => gather(X(v) * X(w), Y(v) * Y(w), Z(v) * Z(w));
 export const div = (v: IVec, w: IVec): IVec => gather(X(v) / X(w), Y(v) / Y(w), Z(v) / Z(w));
 export const mod = (v: IVec, w: IVec): IVec => gather(X(v) % X(w), Y(v) % Y(w), Z(v) % Z(w));

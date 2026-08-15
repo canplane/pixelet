@@ -8,7 +8,7 @@ import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { useFollowMode } from "@/modules/map/navigation/use_follow_mode.ts";
-import { ground_or_raw } from "@/modules/world/terrain/use_elevation.ts";
+import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";

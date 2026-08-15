@@ -4,9 +4,9 @@
 import { common_colors, common_types } from "./common.ts";
 import { CELL_MASKS } from "./utils.ts";
 
-import brick_colors_json from "./palette/brick.json" with { type: "json" };
-import soft_theme_colors_json from "./palette/soft.json" with { type: "json" };
-import carto_colors_json from "./palette/carto.json" with { type: "json" };
+import brick_colors_json from "./theme/palette/terrain/brick.json" with { type: "json" };
+import soft_theme_colors_json from "./theme/palette/terrain/soft.json" with { type: "json" };
+import carto_colors_json from "./theme/palette/terrain/carto.json" with { type: "json" };
 
 // ============================================================================
 // Type Definitions

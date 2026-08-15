@@ -1,6 +1,6 @@
 // @pxl/web/modules/world/markers/location_puck.tsx
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 
@@ -11,13 +11,14 @@ import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { add3, center3n, fill3, floor3n, set3, type V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import { register_tile_interest, useTileStore } from "../terrain/tile_store.ts";
-import { render_cfg } from "../render/config.ts";
-import { get_ele } from "../terrain/use_elevation.ts";
+import { register_tile_interest, useTileStore } from "../terrain/store.ts";
+import { render_cfg } from "../environment/config.ts";
+import { get_ele } from "../terrain/elevation.ts";
 
-import { AnchorNode } from "../spatial/anchor/node.tsx";
-import { WorldThemeKey } from "../render/themes.ts";
-import { useThemeKey } from "../render/theme_clock.ts";
+import { AnchorNode } from "../anchor/node.tsx";
+import { WorldThemeKey } from "../environment/themes.ts";
+import { useThemeKey } from "../environment/theme_clock.ts";
+import { marker_colors } from "./style.ts";
 
 const { FOG_FAR } = render_cfg;
 
@@ -27,10 +28,15 @@ type ZoneSample = {
 };
 
 // radius in cell units, with a half-diagonal shave so box cells fit the circular zone more cleanly.
-// 2 == 16 shrunk to 1/4, then halved again — the .707 shave stays as-is,
-// it's a fixed one-cell diagonal correction in CELL units, not a
-// world-space dimension that scales with the marker's size.
-const ZONE_RADIUS_CELL: f64 = 2 / U_PER_CELL - .707;
+// 4 == 2 doubled — when CELL_SHAMT doubled U_PER_CELL (0.5u -> 1u), this
+// world-space numerator stayed as-is (by design — see the .707 note below),
+// which kept the zone's world-space footprint fixed but rendered it with
+// half as many, twice-as-big cells: same size, visibly blockier. Doubling
+// the numerator instead doubles the zone's actual world-space radius, which
+// reads as "bigger, not just blockier" and is what was asked for. The .707
+// shave stays as-is — it's a fixed one-cell diagonal correction in CELL
+// units, not a world-space dimension that scales with the marker's size.
+const ZONE_RADIUS_CELL: f64 = 4 / U_PER_CELL - .707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
 const ZONE_SAMPLES: ZoneSample[] = (() => {
@@ -68,11 +74,13 @@ const ZONE_SAMPLES: ZoneSample[] = (() => {
 const ZONE_SAMPLE_BOX = new THREE.BoxGeometry(1, 1, 1);
 ZONE_SAMPLE_BOX.setAttribute("a_borders", new THREE.InstancedBufferAttribute(new Float32Array(ZONE_SAMPLES.length * 4), 4));
 
-// 1/4 of the original 1 — scaled down together with the rest of the marker.
-const BEACON_Z_BIAS: f64 = 0.25;
+// 1/2 of the original 1 — doubled back up from 0.25 (1/4) along with the
+// zone ring and octahedron radius, so the beacon floats proportionally
+// above the now-larger ring instead of sitting low relative to it.
+const BEACON_Z_BIAS: f64 = 0.5;
 
 const zone_style = {
-  COLOR: "#4fd1c5",
+  COLOR: marker_colors.ACTION,
   FILL_OPACITY: .4,
   BORDER_WIDTH: .085,
 } as const;
@@ -146,6 +154,25 @@ export function LocationPuck(props: LocationPuckProps) {
   }, [center_pos]);
 
   const zone_ref = useRef<THREE.InstancedMesh | null>(null);
+  // AnchorNode is a two-pass portal (target starts null, resolves via its
+  // own useLayoutEffect — see node.tsx): zone_ref's instancedMesh doesn't
+  // actually exist in the scene until that second pass commits. The
+  // matrix-writing effect below is keyed on [center_pos, temp_obj,
+  // recompute_tick] — none of which change between AnchorNode's first and
+  // second pass — so a plain useRef here meant that effect's one real,
+  // useful run (the one where zone_ref.current is finally non-null) never
+  // happened: it ran once early with mesh=null (a no-op, guarded away) and
+  // never got a reason to run again. The instancedMesh then kept
+  // three.js's default identity instanceMatrix for every one of its
+  // ZONE_SAMPLES instances — all of them sitting exactly on top of each
+  // other at local (0,0,0), which reads as one solid stacked cube instead
+  // of a ring. zone_mesh_ready flips true the moment the mesh actually
+  // attaches, giving the effect below a real dependency change to fire on.
+  const [zone_mesh_ready, set_zone_mesh_ready] = useState(false);
+  const set_zone_ref = useCallback((mesh: THREE.InstancedMesh | null) => {
+    zone_ref.current = mesh;
+    set_zone_mesh_ready(mesh !== null);
+  }, []);
   const beacon_ref = useRef<THREE.Mesh>(null);
 
   const is_night: boolean = theme_key === WorldThemeKey.NIGHT;
@@ -242,7 +269,7 @@ void main() {
 
     mesh.instanceMatrix.needsUpdate = true;
     a_borders.needsUpdate = true;
-  }, [center_pos, temp_obj, recompute_tick]);
+  }, [center_pos, temp_obj, recompute_tick, zone_mesh_ready]);
 
   const $beacon_pos = useRef(new THREE.Vector3());
 
@@ -261,8 +288,8 @@ void main() {
 
     const t: f64 = state.clock.getElapsedTime();
     beacon_ref.current.rotation.z = t * 1.2;
-    // bob amplitude, also 1/4 of the original 0.2.
-    beacon_ref.current.position.z = BEACON_Z_BIAS + Math.sin(t * 2) * (0.05);
+    // bob amplitude — doubled back up too, see BEACON_Z_BIAS above.
+    beacon_ref.current.position.z = BEACON_Z_BIAS + Math.sin(t * 2) * (0.1);
 
     // this spin/bob never converges by design (it's meant to animate
     // forever while the marker is on screen) — under frameloop="demand"
@@ -279,7 +306,7 @@ void main() {
   return (
     <AnchorNode i={center_coord.i} f={center_coord.f}>
       <instancedMesh
-        ref={zone_ref}
+        ref={set_zone_ref}
         args={[ZONE_SAMPLE_BOX, mat, ZONE_SAMPLES.length]}
         frustumCulled={false}
         renderOrder={5}
@@ -294,19 +321,22 @@ void main() {
         // visible as sitting off-center from the zone ring.
         position={center3n([0, 0, BEACON_Z_BIAS], U_PER_CELL)}
       >
-        {/* 1/4 of the original 0.6. */}
-        <octahedronGeometry args={[0.15, 0]} />
+        {
+          /* 1/2 of the original 0.6 — bumped back up from 0.15 (1/4) so the
+        beacon doesn't look undersized against the now-bigger zone ring. */
+        }
+        <octahedronGeometry args={[0.3, 0]} />
         <meshStandardMaterial
           color={beacon_color}
           emissive={beacon_color}
-          emissiveIntensity={is_night ? 2 : 0.5}
+          emissiveIntensity={is_night ? 1 : 0.25}
           roughness={0.2}
           metalness={0.8}
           flatShading
         />
         <pointLight
-          distance={ZONE_RADIUS_CELL * U_PER_CELL}
-          intensity={is_night ? 10 : 3}
+          distance={ZONE_RADIUS_CELL * U_PER_CELL * 2.5}
+          intensity={1}
           color={beacon_color}
         />
       </mesh>

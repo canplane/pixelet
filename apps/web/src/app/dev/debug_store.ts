@@ -45,35 +45,22 @@ export type DebugStore = {
   toggle_structures: () => void;
 
   /**
-   * Ground-color resolution mode (see shader.ts's u_low_spec / mat.ts's own
-   * doc comment): true (default) resolves+samples the ground-layer texture
-   * array once per vertex at a fixed UV — near-zero fragment cost, flat
-   * color per cell, matches this material's original design. false resolves
-   * +samples once per fragment instead, with a real tiling UV, so a real
-   * (non-flat-fill) texture-pack image would actually show detail across a
-   * cell's face — the more expensive path, currently only meaningful once
-   * real per-layer images replace the flat-fill placeholders. Debug-only
-   * for now (surfaces via dev_panel.tsx's own toggle once show_debug_menu
-   * is on) since there's no real texture-pack content yet to compare against.
+   * Ground-color resolution mode (see chunk_stage.tsx's own u_low_spec
+   * uniform / inject_instance_rgb): true (default) is the flat per-instance
+   * averaged color — cheapest, and what the app ships showing out of the
+   * box. false opts into real texture-pack sampling (GROUND_LAYERS_TOP/
+   * SIDE, 4-tap supersampled) instead — more expensive (4 extra
+   * sampler2DArray reads/instance) and dev-panel-only for now, toggled via
+   * the "텍스처팩" button once show_debug_menu is on. Predates the unified
+   * ChunkStage pipeline (used to gate the OLD terrain shader's own
+   * vertex-vs-fragment resolution split, a different mechanism this
+   * pipeline has no equivalent of) — kept the same store field/button
+   * rather than adding a second one, since "flat color vs. real texture" is
+   * still the same user-facing choice either way.
    */
   low_spec: boolean;
   set_low_spec: (low_spec: boolean) => void;
   toggle_low_spec: () => void;
-
-  /**
-   * Whether the sun/moon directional lights cast real-time shadow maps
-   * (environment.tsx's castShadow props). Real shadow mapping is one of the
-   * most GPU-expensive features this scene runs (see
-   * project-mobile-capacitor-perf-targets memory) — this exists to A/B the
-   * cost live instead of needing a code edit + reload. Defaults to true
-   * (today's actual behavior); turning it off only ever drops the scene to
-   * zero shadow-casting lights, never more than one at a time regardless
-   * (sun/moon already alternate which one casts via is_night — see
-   * environment.tsx), so this is an already-exercised code path, not a new one.
-   */
-  show_shadows: boolean;
-  set_show_shadows: (show_shadows: boolean) => void;
-  toggle_show_shadows: () => void;
 };
 
 export const useDebugStore = create<DebugStore>((set) => ({
@@ -92,8 +79,4 @@ export const useDebugStore = create<DebugStore>((set) => ({
   low_spec: true,
   set_low_spec: (low_spec) => set({ low_spec }),
   toggle_low_spec: () => set((state) => ({ low_spec: !state.low_spec })),
-
-  show_shadows: true,
-  set_show_shadows: (show_shadows) => set({ show_shadows }),
-  toggle_show_shadows: () => set((state) => ({ show_shadows: !state.show_shadows })),
 }));

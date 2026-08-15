@@ -10,7 +10,7 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
-import { render_cfg } from "@/modules/world/render/config.ts";
+import { render_cfg } from "@/modules/world/environment/config.ts";
 import { damp_alpha, orbit_local_offset } from "./orbit.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;

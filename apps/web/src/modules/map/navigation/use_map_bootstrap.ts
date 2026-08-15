@@ -6,11 +6,11 @@ import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 
-import { with_ele } from "@/modules/world/terrain/use_elevation.ts";
+import { with_ele } from "@/modules/world/terrain/elevation.ts";
 import { type SubscribeWake, wait_until } from "@/shared/lib/store/wait_until.ts";
 import { useMapStore } from "../store.ts";
 import { useMapNavigation } from "./use_map_navigation.ts";
-import { useTileStore } from "@/modules/world/terrain/tile_store.ts";
+import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { DevicePoseStatus, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
 
 const subscribe_ele_wake: SubscribeWake = (wake) => useTileStore.subscribe(wake);

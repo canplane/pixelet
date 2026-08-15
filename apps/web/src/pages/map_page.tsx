@@ -6,7 +6,6 @@ import { useGeolocation } from "../modules/device/pose/use_geolocation.ts";
 import { useDeviceOrientation } from "../modules/device/pose/use_device_orientation.ts";
 
 import { MapScene } from "../modules/map/scene.tsx";
-import { MapTiler } from "@/modules/map_tiler/map_tiler.tsx";
 
 /** Map page */
 function MapPage() {
@@ -21,7 +20,6 @@ function MapPage() {
       {/* <main className="flex-1 container h-full" /> */}
 
       <MapScene />
-      {/* <MapTiler /> */}
     </div>
   );
 }

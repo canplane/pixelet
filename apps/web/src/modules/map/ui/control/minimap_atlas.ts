@@ -18,7 +18,7 @@ import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 import { terrain_colors, terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
-import { useTileStore } from "@/modules/world/terrain/tile_store.ts";
+import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
 
 const { DEFAULT_DIST } = camera_cfg.view;

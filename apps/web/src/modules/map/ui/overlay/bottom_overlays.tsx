@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { useDebugStore } from "@/app/dev/debug_store.ts";
 import { CameraStatus, useCameraStore } from "@/modules/camera/store.ts";
 import { ModeBar } from "./mode_bar.tsx";
 
@@ -21,14 +20,6 @@ import { ModeBar } from "./mode_bar.tsx";
 export function BottomOverlays() {
   const camera_status: CameraStatus = useCameraStore((state) => state.camera_status);
   const is_camera_busy: boolean = camera_status !== CameraStatus.IDLE;
-
-  // Still a concept (see this component's own doc comment) — not wired to
-  // a real chat/drawing system yet, so it only shows up behind the same
-  // debug-menu gate as the rest of the dev-only UI for now. show_debug_menu,
-  // not show_debug_objects — the latter is specifically the 3D-scene gizmo
-  // toggle (frame-origin spheres etc.), a separate concern with its own
-  // button in dev_panel.tsx now that the two used to be conflated.
-  const show_debug_menu = useDebugStore((state) => state.show_debug_menu);
 
   // Both required data-source notices (see this file's attribution block
   // below) collapse behind a tap instead of sitting permanently on-screen —
@@ -124,39 +115,40 @@ export function BottomOverlays() {
       </div>
 
       {
-        /* 5. bottom-center: floating mode bar (concept). z-40 — the toast
-      pill uses its own portal at a much higher z-index, so it floats above
-      this; toaster.tsx keeps its own margin via BOTTOM_OVERLAY_SAFE_PX so
-      the two don't overlap. Keep this bottom value in sync with
-      MODE_BAR_BOTTOM_OFFSET_PX (overlay_safe_area.ts). */
+        /* 5. bottom-center: floating mode bar. z-40 — the toast pill uses
+      its own portal at a much higher z-index, so it floats above this;
+      toaster.tsx keeps its own margin via BOTTOM_OVERLAY_SAFE_PX so the two
+      don't overlap. Keep this bottom value in sync with
+      MODE_BAR_BOTTOM_OFFSET_PX (overlay_safe_area.ts). No longer gated
+      behind the debug menu — its palette pill now drives real object
+      placement/erasure (see mode_bar.tsx's own doc comment), not just the
+      cosmetic concept it started as. */
       }
-      {show_debug_menu && (
-        <div
-          // left-6 right-6 (not left-1/2 -translate-x-1/2 + max-w), so the
-          // reserved 24px inset — the same number as this bar's own
-          // bottom-6 — comes from real layout width, not a clipped/
-          // scrollable overflow area: the box's width IS 100vw - 48px,
-          // full stop, so there's nothing for content to overflow past in
-          // the first place.
-          className={cn("absolute bottom-6 left-6 right-6 z-40 pointer-events-none", interaction_style)}
-        >
-          {
-            // w-full + flex justify-center here (not on the div above) —
-            // ModeBar's own w-full/flex-1 chain (mode_bar.tsx) needs a
-            // real ancestor width to resolve against, not just a centered
-            // flex item with no forced size: without this, widening the
-            // message input's max-w did nothing visible, because
-            // flex-grow was claiming "100% of an undefined width," i.e.
-            // nothing. justify-center keeps ModeBar visually centered in
-            // the reserved box whenever it doesn't need the full width;
-            // when it does, its own min-w-0 chain lets the message pill
-            // shrink to fit instead of pushing past the margins.
-          }
-          <div className={cn("min-w-0 w-full flex justify-center", !is_camera_busy && "pointer-events-auto")}>
-            <ModeBar />
-          </div>
+      <div
+        // left-6 right-6 (not left-1/2 -translate-x-1/2 + max-w), so the
+        // reserved 24px inset — the same number as this bar's own
+        // bottom-6 — comes from real layout width, not a clipped/
+        // scrollable overflow area: the box's width IS 100vw - 48px,
+        // full stop, so there's nothing for content to overflow past in
+        // the first place.
+        className={cn("absolute bottom-6 left-6 right-6 z-40 pointer-events-none", interaction_style)}
+      >
+        {
+          // w-full + flex justify-center here (not on the div above) —
+          // ModeBar's own w-full/flex-1 chain (mode_bar.tsx) needs a
+          // real ancestor width to resolve against, not just a centered
+          // flex item with no forced size: without this, widening the
+          // message input's max-w did nothing visible, because
+          // flex-grow was claiming "100% of an undefined width," i.e.
+          // nothing. justify-center keeps ModeBar visually centered in
+          // the reserved box whenever it doesn't need the full width;
+          // when it does, its own min-w-0 chain lets the message pill
+          // shrink to fit instead of pushing past the margins.
+        }
+        <div className={cn("min-w-0 w-full flex justify-center", !is_camera_busy && "pointer-events-auto")}>
+          <ModeBar />
         </div>
-      )}
+      </div>
     </>
   );
 }

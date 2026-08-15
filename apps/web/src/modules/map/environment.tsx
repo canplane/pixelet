@@ -7,22 +7,20 @@ import { invalidate, useFrame, useThree } from "@react-three/fiber";
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
 
-import { render_cfg, shadow_cfg } from "@/modules/world/render/config.ts";
-import { themes, type WorldTheme, WorldThemeKey } from "@/modules/world/render/themes.ts";
-import { useThemeKey } from "@/modules/world/render/theme_clock.ts";
+import { render_cfg } from "@/modules/world/environment/config.ts";
+import { themes, type WorldTheme, WorldThemeKey } from "@/modules/world/environment/themes.ts";
+import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
-import { SUN_DIR } from "@/modules/world/render/sun_dir.ts";
-import { get_moon_position, get_sun_position } from "@/modules/world/render/celestial_position.ts";
+import { SUN_DIR } from "@/modules/world/environment/sun_dir.ts";
+import { get_moon_position, get_sun_position } from "@/modules/world/environment/celestial_position.ts";
 import { useFrameRotation } from "@/modules/world/frame/use_frame_rotation.ts";
 import { rotate2 } from "@/modules/camera/orbit.ts";
 import { useMapStore } from "@/modules/map/store.ts";
-import { useDebugStore } from "@/app/dev/debug_store.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 
 const { FOG_NEAR, FOG_FAR, FAR_CLIP } = render_cfg;
 const { MAX_DIST } = camera_cfg.view;
-const { FRUSTUM_HALF_EXTENT: SHADOW_HALF_EXTENT } = shadow_cfg;
 
 // Same Seoul coordinate use_map_bootstrap.ts seeds map_center with before a
 // real GPS fix (or that fallback itself) resolves — reused here so the very
@@ -30,20 +28,6 @@ const { FRUSTUM_HALF_EXTENT: SHADOW_HALF_EXTENT } = shadow_cfg;
 // instead of computing sun/moon position for (0,0) (equator/prime meridian).
 const FALLBACK_LAT = 37.5665;
 const FALLBACK_LON = 126.978;
-
-// get_sun_position/get_moon_position track real wall-clock time (a full
-// sweep is 24 real hours — celestial_position.ts), so from frame to frame
-// the light direction barely moves at all; re-rendering a full shadow map
-// (2048deg/1024deg) every single frame regardless was pure waste. Below,
-// shadow.autoUpdate is turned off per-light (JSX shadow-autoUpdate prop) and
-// shadow.needsUpdate is instead set by hand exactly when the light's own
-// direction has actually drifted past this angle since the last shadow
-// render — small enough that the shadow's own visible position doesn't
-// noticeably lag, large enough that at the real ~0.0042deg/s sweep rate this
-// fires roughly once every 10ish seconds during full daylight instead of
-// every frame.
-const SHADOW_UPDATE_ANGLE_RAD = (0.05 * Math.PI) / 180;
-const SHADOW_UPDATE_DOT_THRESHOLD = Math.cos(SHADOW_UPDATE_ANGLE_RAD);
 
 // must stay inside the camera's far clip plane (use_camera.ts sets
 // camera.far = FAR_CLIP) or the sky dome gets frustum-clipped — which is
@@ -276,8 +260,6 @@ const ENV_TRANSITION_SETTLE_EPS = 0.005;
 export function MapEnvironment() {
   const { scene } = useThree();
 
-  const show_shadows = useDebugStore((state) => state.show_shadows);
-
   // Real sun/moon position needs the map's actual latitude/longitude — this
   // read doesn't gate anything, just supplies a location for celestial_position.ts.
   const map_center = useMapStore((state) => state.map_center);
@@ -397,16 +379,6 @@ export function MapEnvironment() {
     [],
   );
 
-  // last light direction that actually triggered a shadow-map render (see
-  // SHADOW_UPDATE_DOT_THRESHOLD above) — zero-vector start is deliberate,
-  // not a magic sentinel: no real (normalized) light direction can dot to
-  // >= the threshold against a zero vector, so the very first frame always
-  // triggers the initial shadow render for free, without a separate
-  // "already initialized" flag.
-  const last_sun_shadow_dir = useRef(new THREE.Vector3());
-  const last_moon_shadow_dir = useRef(new THREE.Vector3());
-  const prev_is_night = useRef(is_night);
-
   // stars/moon-disc visibility — lerped the same way as the light intensities
   // below (theme.lighting.hemisphere.intensity etc.), so night doesn't just
   // cut in but fades in alongside the rest of the theme transition. Also
@@ -508,20 +480,6 @@ export function MapEnvironment() {
 
     // ---- 3. Light interpolation ----
 
-    // day/night flips which of sun/moon actually casts (castShadow={!is_night}
-    // / castShadow={is_night} below) — the newly-active one may not have
-    // rendered a shadow map in a while (its own angular-delta check below
-    // still ran while it was inactive, so last_*_shadow_dir was already
-    // "caught up" and wouldn't otherwise re-trigger right on this transition
-    // frame), which would leave it showing a stale shadow angle from
-    // whenever it last actually cast one until the next natural angular
-    // update. Force both fresh exactly on the transition instead.
-    if (is_night !== prev_is_night.current) {
-      prev_is_night.current = is_night;
-      if (sun_ref.current) sun_ref.current.shadow.needsUpdate = true;
-      if (moon_ref.current) moon_ref.current.shadow.needsUpdate = true;
-    }
-
     if (ambient_ref.current) {
       ambient_ref.current.color.lerp(ambient_color, lerp_factor);
       ambient_ref.current.intensity = THREE.MathUtils.lerp(ambient_ref.current.intensity, theme.lighting.ambient.intensity, lerp_factor);
@@ -531,30 +489,11 @@ export function MapEnvironment() {
       sun_ref.current.position.copy(current_sun_position.current);
       sun_ref.current.color.lerp(sun_color, lerp_factor);
       sun_ref.current.intensity = THREE.MathUtils.lerp(sun_ref.current.intensity, theme.lighting.directional.intensity, lerp_factor);
-
-      // shadow.autoUpdate=false (JSX below) means this is the only thing
-      // that ever asks for a new shadow render — see SHADOW_UPDATE_DOT_THRESHOLD's
-      // own comment. sun_position_scratch is free to reuse here: its own
-      // job (this frame's fresh get_sun_position() target) is already done
-      // by the lerp above, nothing later in this frame reads it again.
-      const sun_dir_now = sun_position_scratch.current.copy(current_sun_position.current).normalize();
-      if (sun_dir_now.dot(last_sun_shadow_dir.current) < SHADOW_UPDATE_DOT_THRESHOLD) {
-        sun_ref.current.shadow.needsUpdate = true;
-        last_sun_shadow_dir.current.copy(sun_dir_now);
-      }
     }
 
     if (moon_ref.current) {
       moon_ref.current.position.copy(current_moon_position.current);
       moon_ref.current.color.lerp(moon_color, lerp_factor);
-
-      // same reasoning as the sun block above, reusing moon_position_scratch
-      // the same way.
-      const moon_shadow_dir_now = moon_position_scratch.current.copy(current_moon_position.current).normalize();
-      if (moon_shadow_dir_now.dot(last_moon_shadow_dir.current) < SHADOW_UPDATE_DOT_THRESHOLD) {
-        moon_ref.current.shadow.needsUpdate = true;
-        last_moon_shadow_dir.current.copy(moon_shadow_dir_now);
-      }
 
       moon_ref.current.intensity = THREE.MathUtils.lerp(
         moon_ref.current.intensity,
@@ -602,37 +541,6 @@ export function MapEnvironment() {
         color={theme.lighting.directional.color}
         intensity={theme.lighting.directional.intensity}
         position={current_sun_position.current}
-        castShadow={!is_night && show_shadows}
-        // manual update instead — see SHADOW_UPDATE_DOT_THRESHOLD's comment
-        // and the sun_ref block in the useFrame above.
-        shadow-autoUpdate={false}
-        shadow-mapSize={[2048, 2048]}
-        /**
-         * A ±768 frustum over a 2048-texel map was ~0.75 world units/texel —
-         * coarser than a terrain cell (0.25u), so adjacent cells aliased to
-         * the same texel and self-shadowed incorrectly (diagonal banding —
-         * shadow-map resolution aliasing, not classic acne; a bias tweak
-         * alone wouldn't fix it). Floating-origin keeps navigable terrain
-         * near the scene origin, so shrinking to ±96 still covers normal-zoom
-         * view while giving ~4 texels/cell — clean edges instead of moiré.
-         * Zoomed out past DEFAULT_DIST, shadows just fade near the frustum
-         * edge instead of covering the view (acceptable for now; a
-         * camera-following frustum would be the real fix).
-         *
-         * The frustum's own hard edge showed up as a flat dark rectangle
-         * (PCF clamping at the boundary instead of falling back to
-         * unshadowed) — the terrain shader fades its own shadow contribution
-         * to zero before SHADOW_HALF_EXTENT to hide that seam, so this
-         * constant has to stay the actual frustum size for the fade to land
-         * inside it.
-         */
-        shadow-camera-left={-SHADOW_HALF_EXTENT}
-        shadow-camera-right={SHADOW_HALF_EXTENT}
-        shadow-camera-top={SHADOW_HALF_EXTENT}
-        shadow-camera-bottom={-SHADOW_HALF_EXTENT}
-        shadow-camera-far={2400}
-        shadow-bias={-0.0015}
-        shadow-normalBias={0.05}
       />
 
       <directionalLight
@@ -640,21 +548,6 @@ export function MapEnvironment() {
         color="#9fb4d6"
         intensity={is_night ? 0.18 : 0.0}
         position={current_moon_position.current}
-        castShadow={is_night && show_shadows}
-        // manual update instead — see SHADOW_UPDATE_DOT_THRESHOLD's comment
-        // and the moon_ref block in the useFrame above.
-        shadow-autoUpdate={false}
-        shadow-mapSize={[1024, 1024]}
-        // same resolution-aliasing fix and edge-fade coupling as the sun
-        // above, scaled to this light's smaller 1024 map (still ~10.7
-        // texels/unit at this span).
-        shadow-camera-left={-SHADOW_HALF_EXTENT}
-        shadow-camera-right={SHADOW_HALF_EXTENT}
-        shadow-camera-top={SHADOW_HALF_EXTENT}
-        shadow-camera-bottom={-SHADOW_HALF_EXTENT}
-        shadow-camera-far={1200}
-        shadow-bias={-0.0018}
-        shadow-normalBias={0.07}
       />
 
       <hemisphereLight

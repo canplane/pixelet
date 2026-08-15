@@ -260,6 +260,14 @@ export function get<K extends PVec, T extends TypedArray>(
 /**
  * Write one value, splitting only when needed.
  *
+ * `target_shift` (default: finest, `layout.min` — same default/parameter
+ * shape as `resolve()`) lets a write claim a whole coarser block in one
+ * call instead of always bottoming out at the finest leaf: reaching
+ * `target_u` unconditionally claims that slot as one uniform leaf at
+ * `val`, discarding whatever finer structure lived beneath it (its child
+ * block, if any, is simply orphaned — never visited again once `heap[slot]`
+ * no longer points at it, and reclaimed the next time the caller compacts).
+ *
  * Traversal invariant:
  * - `base` is always the current child-block base
  * - `slot` is the selected child entry inside that block
@@ -270,6 +278,7 @@ export function set<K extends PVec, T extends TypedArray>(
   layout: SparseTreeLayout,
   key: K,
   val: ElementOf<T>,
+  target_shift: i32 = layout.min,
   root: u32 = 0,
 ): void {
   validate_layout(layout);
@@ -280,7 +289,9 @@ export function set<K extends PVec, T extends TypedArray>(
   const dep: i32 = layout.max - layout.min;
   if (dep <= 0) return;
 
-  for (let u = dep - 1; u >= 0; u--) {
+  const target_u: i32 = target_shift - layout.min;
+
+  for (let u = dep - 1; u >= target_u; u--) {
     const shifted = traits.sh(key, -u);
 
     let child: u32 = Number(traits.X(shifted) & 1n);
@@ -288,6 +299,14 @@ export function set<K extends PVec, T extends TypedArray>(
     if (layout.dim >= 3) child |= Number(traits.Z(shifted) & 1n) << 2;
 
     const slot: u32 = base + child;
+
+    if (u === target_u) {
+      if (!(mem.heap[slot] & NODE_MSB) && mem.data[slot] === val) return;
+      mem.heap[slot] = 0;
+      mem.data[slot] = val;
+      return;
+    }
+
     const node: u32 = mem.heap[slot];
 
     if (node & NODE_MSB) {
@@ -296,11 +315,6 @@ export function set<K extends PVec, T extends TypedArray>(
     }
 
     if (mem.data[slot] === val) return;
-
-    if (u === 0) {
-      mem.data[slot] = val;
-      return;
-    }
 
     const next_base: u32 = alloc_block(mem, layout.dim);
     mem.data.fill(mem.data[slot], next_base, next_base + width);
@@ -441,6 +455,83 @@ export function dense<K extends PVec, T extends TypedArray>(
     }
   }
   return out;
+}
+
+// ============ Traversal (Enumerate) ============
+
+/**
+ * Visit every maximal uniform leaf block in the tree — the inverse of
+ * `dense()`: instead of expanding to one value per finest-level cell, this
+ * calls `visit` once per *block*, however coarse, with that block's own
+ * corner (in min-level lattice units — multiply by `2**layout.min` for a
+ * real-unit offset) and shift level (`2**level` is that block's real-unit
+ * size). Skips branch slots entirely (never visits an internal node, only
+ * leaves), so a caller building a sparse "list of occupied regions" view
+ * (e.g. one render/placement record per uniform block) never has to
+ * re-detect uniformity itself the way `dense()`-then-rescan would.
+ */
+export function walk<T extends TypedArray>(
+  mem: SparseTreeMemory<T>,
+  layout: SparseTreeLayout,
+  visit: (x: i32, y: i32, z: i32, level: i32, val: ElementOf<T>) => void,
+  root: u32 = 0,
+): void {
+  validate_layout(layout);
+  const dep: i32 = layout.max - layout.min;
+  const width: u32 = block_width(layout.dim);
+
+  // The root itself can never be a scalar leaf (invariant #4 — it's always
+  // pre-allocated as one block of `width` children), so a tree made
+  // uniform via fill()/reset() stores that as `width` separate identical
+  // leaf slots, not one leaf. Check for that case explicitly: it's still
+  // the single most "maximal uniform block" this tree can ever report
+  // (bigger than any of its own children), just one compact() itself never
+  // rewrites (compact()'s own contract only ever preserves the root-is-a-
+  // block invariant, see its doc comment) — walk() is read-only, so it can
+  // report the virtual result without needing to touch tree storage.
+  let uniform = true;
+  const first: ElementOf<T> = mem.data[root] as ElementOf<T>;
+  for (let c = 0; c < width && uniform; c++) {
+    if ((mem.heap[root + c] & NODE_MSB) || mem.data[root + c] !== first) uniform = false;
+  }
+  if (uniform) {
+    visit(0, 0, 0, layout.max, first);
+    return;
+  }
+
+  _walk(mem, layout.dim, layout.min, root, dep - 1, 0, 0, 0, visit);
+}
+
+function _walk<T extends TypedArray>(
+  mem: SparseTreeMemory<T>,
+  dim: 2 | 3,
+  min: i32,
+  base: u32,
+  u: i32,
+  x: i32,
+  y: i32,
+  z: i32,
+  visit: (x: i32, y: i32, z: i32, level: i32, val: ElementOf<T>) => void,
+): void {
+  const width: u32 = block_width(dim);
+
+  for (let c = 0; c < width; c++) {
+    const slot: u32 = base + c;
+    const node: u32 = mem.heap[slot];
+
+    const bit_x: i32 = c & 1;
+    const bit_y: i32 = dim >= 2 ? (c >> 1) & 1 : 0;
+    const bit_z: i32 = dim >= 3 ? (c >> 2) & 1 : 0;
+    const cx: i32 = x | (bit_x << u);
+    const cy: i32 = y | (bit_y << u);
+    const cz: i32 = z | (bit_z << u);
+
+    if (node & NODE_MSB) {
+      _walk(mem, dim, min, node & BLOCK_MASK, u - 1, cx, cy, cz, visit);
+    } else {
+      visit(cx, cy, cz, min + u, mem.data[slot] as ElementOf<T>);
+    }
+  }
 }
 
 // ============ Maintenance (Pack) ============

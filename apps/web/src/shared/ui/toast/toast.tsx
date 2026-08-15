@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { animate as animate_value, AnimatePresence, LayoutGroup, motion, useMotionValue } from "framer-motion";
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { get_toast_stack_rotation, reset_toast_stack_rotation, rotate_toast_stack, set_toast_drag_active, subscribe_toast_stack_rotation } from "./toast_store.ts";
+import { get_toast_stack_rotation, reset_toast_stack_rotation, rotate_toast_stack, set_toast_drag_active, subscribe_toast_stack_rotation } from "./store.ts";
 
 /** How far a stacked-behind toast should peek out below the front one. */
 export const TOAST_STACK_PEEK_PX = 6;
@@ -41,11 +41,11 @@ const DRAG_FOLLOW_MAX_PX = 28;
 
 type ToastProps = {
   id: string;
-  /** Position among currently-visible toasts, 0 = most recently created — passed straight through from toast_store.ts's container, not derived from anything DOM-observed. */
+  /** Position among currently-visible toasts, 0 = most recently created — passed straight through from store.ts's container, not derived from anything DOM-observed. */
   index: number;
   /** Total toast count right now, same number for every toast instance in the same render pass. */
   stack_size: number;
-  /** Whether toast_store.ts has marked this toast dismissed — still mounted for its own fade-out, but logically gone. */
+  /** Whether store.ts has marked this toast dismissed — still mounted for its own fade-out, but logically gone. */
   is_removing: boolean;
   children?: ReactNode;
   icon?: ReactNode;
@@ -69,8 +69,8 @@ export function Toast({
 }: ToastProps) {
   const isExpanded = !!message;
 
-  // Plain module-level pub/sub (toast_stack_store.ts), not a React context —
-  // every stacked toast is its own top-level render (toast_store.ts's
+  // Plain module-level pub/sub (store.ts), not a React context —
+  // every stacked toast is its own top-level render (store.ts's
   // container maps over the list independently for each), so a useState
   // here alone couldn't be seen by the other toast instances that also need
   // to react to the same swipe.
@@ -358,7 +358,7 @@ export function Toast({
     end_drag();
     // Applies any background-toast promotion that arrived mid-drag and got
     // deferred — see set_toast_drag_active's own doc comment in
-    // toast_store.ts.
+    // store.ts.
     set_toast_drag_active(false);
   }
 

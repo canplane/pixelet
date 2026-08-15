@@ -23,11 +23,11 @@
  * @module epsg3857
  */
 
-import { type f64, type u32 } from "@xpute/core/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { type FVec, type IVec, projection, type PVF3 } from "../pvf3/mod.ts";
-import { IVEC_X_W } from "../pvf3/core.ts";
-import { FROM_L3_IDX, L3_LIMIT, L3_RANGE } from "../indexer.ts";
+import { FRAC_W, IVEC_X_W } from "../pvf3/core.ts";
+import { FROM_L3_IDX, L3_RANGE } from "../indexer.ts";
 import { fill3, type V3 } from "../v3.ts";
 
 import * as epsg4326 from "./4326.ts";
@@ -56,22 +56,9 @@ const V3_REG: V3 = fill3(0);
  * - `m` means an EPSG:3857 planar meter, not a geodesic ground meter.
  *
  * Cyclic world-topology mapping:
- * - the effective X domain is 23 bits (2^23 = 8,388,608 u); the MSB of the
- *   24-bit lane is reserved as a guard bit (see ivec.ts's own "Guard-Bit
- *   Headroom" doc for what this margin does and — just as importantly —
- *   doesn't buy: it does NOT make raw packed-word add/sub across lanes
- *   safe, that was tried and measured wrong). Y ends up with this same
- *   23-bit-of-24 headroom too (EPSG:3857's square bounds put its
- *   legitimate range at essentially this same magnitude), it's just not
- *   derived in this file since Y needs no antimeridian-style wrap of its
- *   own. X keeps an extra, independent reason to want the bit regardless:
- *   a delta taken against a not-yet-rewrapped position near the seam can
- *   transiently swing close to a full world-width before whatever
- *   re-wraps it runs, and this same headroom is what keeps that transient
- *   from corrupting the value before it gets corrected.
- * - this 23-bit domain is scaled to match the full EPSG:3857 equatorial world width exactly
- * - 1 [u] ≈ 4.777 [m]
- * - crossing the positive 23-bit X limit naturally overflows into the negative
+ * - all 24 bits of the signed X lane represent one full EPSG:3857 world
+ * - 1 [u] ≈ 2.389 [m]
+ * - crossing the positive 24-bit X limit naturally overflows into the negative
  *   range at the packed-integer level
  * - this overflow corresponds to crossing the antimeridian in the wrapped
  *   Mercator world model
@@ -80,10 +67,16 @@ const V3_REG: V3 = fill3(0);
  * - Because EPSG:3857 is distorted, these meters match real-world meters only
  * at the equator; higher latitudes require Mercator scale correction.
  */
-const U_TOTAL_X: u32 = 1 << (IVEC_X_W - 1); // 2^23 = 8,388,608 (MSB is guard bit)
+const U_TOTAL_X: f64 = 2 ** IVEC_X_W; // 2^24 = 16,777,216
 
-export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] ≈ 0.209 [u]
-const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 4.777 [m]
+export const U_PER_M: f64 = U_TOTAL_X / WORLD_WIDTH_3857; // 1 [m] ≈ 0.419 [u]
+export const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 2.389 [m]
+
+// Y is clamped rather than cyclic. Its positive bound must stay half-open:
+// +2^23u is the signed lane's negative endpoint, so the northernmost valid
+// value is the final 1/1024u lattice point immediately below that boundary.
+const Y_MIN_3857: f64 = -HALF_W_3857;
+const Y_MAX_3857: f64 = HALF_W_3857 - M_PER_U / 2 ** FRAC_W;
 
 /**
  * Public Mercator vertical scale contract.
@@ -139,6 +132,9 @@ export const Z_SCALE = (y_m: f64): f64 => {
 export const project = (out: PVF3, x: f64, y: f64, z: f64 = 0): PVF3 => {
   // Canonical Mercator wrap-around
   x = ((((x + HALF_W_3857) % WORLD_WIDTH_3857) + WORLD_WIDTH_3857) % WORLD_WIDTH_3857) - HALF_W_3857;
+  // The signed Y lane represents a half-open Mercator square. Unlike X, Y
+  // clamps at the poles instead of wrapping through the opposite boundary.
+  y = Math.max(Y_MIN_3857, Math.min(Y_MAX_3857, y));
   // Vertical Mercator correction
   z = z * Z_SCALE(y);
 
@@ -177,12 +173,22 @@ export type BBox3857 = [min: G3857, max: G3857];
 
 export function get_page_bbox(page_idx: IVec): BBox3857 {
   const base: IVec = FROM_L3_IDX(page_idx);
-  const limit: IVec = L3_LIMIT(base);
 
   const min: G3857 = [0, 0, 0];
-  const max: G3857 = [0, 0, 0];
   unproject(min, base, 0n);
-  unproject(max, limit, 0n);
+
+  // Do not construct the positive limit as an IVec: the eastern/northern
+  // world's exclusive +2^23u boundary is intentionally not representable
+  // and would wrap to the negative endpoint. BBoxes are external physical
+  // intervals, so their exclusive maximum may be +HALF_W_3857 directly.
+  const page_span_m = Number(L3_RANGE) * M_PER_U;
+  const max_x = min[0] + page_span_m;
+  const max_y = min[1] + page_span_m;
+  const max: G3857 = [
+    max_x > HALF_W_3857 - M_PER_U ? HALF_W_3857 : max_x,
+    max_y > HALF_W_3857 - M_PER_U ? HALF_W_3857 : max_y,
+    0,
+  ];
 
   return [min, max];
 }

@@ -2,57 +2,49 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
-import { L2_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
-
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
-const CHUNK_U: u32 = 1 << L2_SHAMT;
+/** XY sampling stride in L1 blocks inside one 64x64 chunk. */
+export const LOD_STEP_BY_LEVEL = [1, 2, 4, 8, 16, 32, 64] as const;
 
-export const LOD_STEP_BY_LEVEL = [1, 2, 4, 8, 16, 32] as const;
-
-export type LODLevel = 0 | 1 | 2 | 3 | 4 | 5;
+export type LODLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type LODStep = (typeof LOD_STEP_BY_LEVEL)[LODLevel];
+
+/** Moves one adjacent tier so sudden camera/page changes never jump 64 -> 1. */
+export function step_lod_toward(current: LODStep, target: LODStep): LODStep {
+  if (current === target) return target;
+  const current_level = LOD_STEP_BY_LEVEL.indexOf(current);
+  const direction = target < current ? -1 : 1;
+  return LOD_STEP_BY_LEVEL[current_level + direction];
+}
 
 const LOD_MARGIN: f64 = 1.4;
 
+// Explicit world-space distances. Each threshold doubles with the sampling
+// stride, keeping a coarse cell's projected size approximately constant at
+// every handoff. The previous compressed tail (576/736/832/896) made the
+// visible world race through 8/16/32/64 just before FOG_FAR=900, which is why
+// the horizon read as a handful of giant blocks. With this ladder the current
+// fog range reaches step 8 at most; 32/64 stay available for future longer
+// ranges and as renderer fallback states without appearing in today's view.
 const LOD_DIST_BY_LEVEL = {
-  // Every finite threshold below is 2x an earlier round of chunk-width
-  // multipliers (3/6/24/48/96 -> 6/12/48/96/192) — a second, independent
-  // widening on top of the LOD2-4 one two paragraphs down, this time across
-  // every level including LOD0/1, requested directly because LOD was
-  // switching too readily/abruptly during ordinary movement. Doubling every
-  // threshold doubles how far you have to travel (in any direction) before
-  // a level hands off, i.e. each level now covers roughly 4x the ground
-  // area (radius x2 -> area x4) before the next one takes over — same
-  // ladder of steps, just stretched so a normal pan/zoom crosses far fewer
-  // of them.
-  LOD0: CHUNK_U * 6,
-  LOD1: CHUNK_U * 12,
-  // LOD2-4 thresholds were already pushed to 2x their original chunk-width
-  // multiplier once before (12/24/48 -> 24/48/96) to match CELL_SHAMT going
-  // -2 -> -1 (U_PER_CELL doubled): only LOD0/LOD1 are dither-blended (see
-  // BLEND_ELIGIBLE_THRESHOLDS below), so the LOD2/3/4 handoffs are still
-  // hard pops, and a hard pop's on-screen footprint scales with the
-  // physical cell size the same way everything else here does — doubling
-  // the switch distance kept that footprint (and thus how noticeable the
-  // pop is) roughly where it was before the cell size changed, instead of
-  // popping at the same distance as before but twice as large. Deliberately
-  // NOT widening BLEND_ELIGIBLE_THRESHOLDS to cover these instead — that
-  // was already tried (see its own comment) and reverted for being
-  // noisier, and a larger base cell size only makes that worse, not better.
-  LOD2: CHUNK_U * 48,
-  LOD3: CHUNK_U * 96,
-  LOD4: CHUNK_U * 192,
-  LOD5: Infinity,
+  LOD0: 192,
+  LOD1: 384,
+  LOD2: 768,
+  LOD3: 1536,
+  LOD4: 3072,
+  LOD5: 6144,
+  LOD6: Infinity,
 } as const;
 
-/** The 5 finite distances where one LOD level hands off to the next. */
+/** The six finite distances where one LOD level hands off to the next. */
 const LOD_THRESHOLDS: readonly f64[] = [
   LOD_DIST_BY_LEVEL.LOD0,
   LOD_DIST_BY_LEVEL.LOD1,
   LOD_DIST_BY_LEVEL.LOD2,
   LOD_DIST_BY_LEVEL.LOD3,
   LOD_DIST_BY_LEVEL.LOD4,
+  LOD_DIST_BY_LEVEL.LOD5,
 ];
 
 /**
@@ -67,21 +59,31 @@ const LOD_THRESHOLDS: readonly f64[] = [
 const BLEND_BAND_FRACTION: f64 = 0.05;
 
 /**
- * Only the first N thresholds get dither-blended. Coarser LOD rings cover
- * far more chunks by count (ring area grows with distance), so blending
- * them too meant a wide/top-down view had a quarter or more of all loaded
- * chunks dithering at once (confirmed live: 26%, still visibly noisy even
- * with the narrower band above). Those far rings are also where a cell is
- * smallest on screen — the least noticeable case for a hard pop — so this
- * narrows blending to where the jump is both large and visible.
+ * Only thresholds inside the current visible range get dither-blended. The
+ * third handoff moved from 576 to 768 and is now the last visible transition
+ * before FOG_FAR=900, so including it removes both its hard pop and the old
+ * 29% non-blended hysteresis gap. Later thresholds start past the fog range
+ * and remain hard transitions to avoid retaining unused secondary meshes if
+ * the render distance is expanded later.
  */
-const BLEND_ELIGIBLE_THRESHOLDS: u32 = 2;
+const BLEND_ELIGIBLE_THRESHOLDS: u32 = 3;
 
 function clamp01(x: f64): f64 {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
-// internal sampling uses step values 1/2/4/8/16/32, while external naming uses LOD0..LOD5.
+/**
+ * Complementary stochastic visibility used by the two meshes in one LOD
+ * transition. Exactly one side is visible for every r/t pair: no overlap,
+ * no hole. `r` is stable per L2 chunk while `coarse_fraction` moves through
+ * the band, staggering whole-chunk transitions without relief checkerboard.
+ */
+export function get_lod_pair_visibility(r: f64, coarse_fraction: f64): { finer: boolean; coarser: boolean } {
+  const coarser = r < coarse_fraction;
+  return { finer: !coarser, coarser };
+}
+
+// Internal sampling uses 1/2/4/8/16/32/64 L1 blocks inside one chunk.
 //
 // Per-threshold hysteresis margin, not one flat factor for every threshold
 // at once (the previous version): LOD_MARGIN's ~29% dead zone is far wider
@@ -130,7 +132,8 @@ function get_lod_level(lod_step: LODStep): LODLevel {
   if (lod_step === 4) return 2;
   if (lod_step === 8) return 3;
   if (lod_step === 16) return 4;
-  return 5;
+  if (lod_step === 32) return 5;
+  return 6;
 }
 
 export function get_instance_cnt(lod_step: LODStep): u32 {

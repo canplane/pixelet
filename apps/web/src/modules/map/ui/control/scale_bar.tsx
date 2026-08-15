@@ -47,7 +47,7 @@ export function MapScaleBar() {
 
   const { dist } = view_state;
 
-  const screen_height = typeof window !== "undefined" ? window.innerHeight : 800;
+  const screen_height = globalThis.innerHeight ?? 800;
   const fov_rad = (FOV * Math.PI) / 180;
   // deliberately independent of polar (tilt). Dividing by cos(polar) is
   // geometrically correct for the exact ground distance at the crosshair,
@@ -62,7 +62,7 @@ export function MapScaleBar() {
   // `dist` (like every camera/scene distance here) is in canonical "u"
   // units, not meters — a prior version of this comment wrongly assumed
   // scene distance was already in EPSG:3857 planar meters and skipped this
-  // conversion, making every shown distance ~4.78x (1/U_PER_M) too small.
+  // conversion, making every shown distance 1/U_PER_M too small.
   // that bug survived an "empirical" check that only compared two
   // Vector3.distanceTo() results against each other (both already in u
   // units) — caught for real by cross-checking against HoverCursor's
@@ -105,13 +105,22 @@ export function MapScaleBar() {
         // snugged it to the row's own top edge, which read as too tight
         // next to the GPS button's breathing room.
         //
+        // min-w-[44px]: the click/tap target, decoupled from the bar's own
+        // visual width (bar_width_px, set on the inner div below) — at some
+        // zoom levels that visual width shrinks well under 44px (the usual
+        // minimum comfortable touch-target size), which made "reset zoom"
+        // hard to land precisely on mobile. items-center on this flex-col
+        // keeps the bar/label centered within whatever extra invisible
+        // width this adds, so the visible bar itself never changes size or
+        // position, only the hit-area around it grows.
+        //
         // the outline lives here, on the parent, as ONE filter, not a real
         // CSS `outline` per shape — a real per-element outline (tried
         // first) read as four disconnected halos instead of one cohesive
         // outline, and doesn't follow text glyphs anyway (only the
         // rectangular bounding box). filter: drop-shadow wraps the union of
         // every child's actual rendered shape into one outline instead.
-        className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 py-2 [filter:drop-shadow(1px_0_0_rgba(255,255,255,0.9))_drop-shadow(-1px_0_0_rgba(255,255,255,0.9))_drop-shadow(0_1px_0_rgba(255,255,255,0.9))_drop-shadow(0_-1px_0_rgba(255,255,255,0.9))]"
+        className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 py-2 min-w-[44px] filter-[drop-shadow(1px_0_0_rgba(0,0,0,0.9))_drop-shadow(-1px_0_0_rgba(0,0,0,0.9))_drop-shadow(0_1px_0_rgba(0,0,0,0.9))_drop-shadow(0_-1px_0_rgba(0,0,0,0.9))]"
         title="줌 리셋"
       >
         {/* 1. scale bar — width matches exactly the distance the label shows. */}
@@ -126,24 +135,24 @@ export function MapScaleBar() {
           {/* base horizontal line */}
           <div
             className={cn(
-              "h-[1.5px] w-full relative transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-neutral-900",
+              "h-px w-full relative transition-colors",
+              is_default_zoom ? "bg-amber-400" : "bg-white",
             )}
           />
 
           {/* left tick */}
           <div
             className={cn(
-              "absolute left-0 h-2 w-[1.5px] transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-neutral-900 group-hover:bg-black",
+              "absolute left-0 h-2 w-px transition-colors",
+              is_default_zoom ? "bg-amber-400" : "bg-white",
             )}
           />
 
           {/* right tick */}
           <div
             className={cn(
-              "absolute right-0 h-2 w-[1.5px] transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-neutral-900 group-hover:bg-black",
+              "absolute right-0 h-2 w-px transition-colors",
+              is_default_zoom ? "bg-amber-400" : "bg-white",
             )}
           />
         </div>
@@ -158,7 +167,7 @@ export function MapScaleBar() {
             // the `uppercase` that used to be here was force-uppercasing a
             // label string that already composed its unit lowercase correctly.
             "text-[8px] font-bold mt-1 tracking-widest transition-colors",
-            is_default_zoom ? "text-amber-400" : "text-neutral-900 group-hover:text-black",
+            is_default_zoom ? "text-amber-400" : "text-white",
           )}
         >
           {label}

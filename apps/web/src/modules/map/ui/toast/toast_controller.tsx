@@ -8,7 +8,7 @@ import { DevicePoseStatus, useDeviceLocationStore } from "@/modules/device/pose/
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 
 import { Toast } from "@/shared/ui/toast/toast.tsx";
-import { toast_custom, toast_dismiss } from "@/shared/ui/toast/toast_store.ts";
+import { toast_custom, toast_dismiss } from "@/shared/ui/toast/store.ts";
 
 const LoadingIcon = (
   <motion.div

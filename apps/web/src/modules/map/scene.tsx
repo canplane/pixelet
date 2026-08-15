@@ -3,15 +3,15 @@
 import { useRef } from "react";
 import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
-import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, N8AO, SMAA, TiltShift2, Vignette } from "@react-three/postprocessing";
+import { BrightnessContrast, EffectComposer, HueSaturation, Vignette } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 
 import { useCamera } from "@/modules/camera/use_camera.ts";
 import { CameraInput } from "@/modules/camera/input.tsx";
 import { camera_cfg } from "@/modules/camera/config.ts";
-import { post_cfg, render_cfg } from "@/modules/world/render/config.ts";
-import { themes, type WorldTheme } from "@/modules/world/render/themes.ts";
-import { useThemeKey } from "@/modules/world/render/theme_clock.ts";
+import { post_cfg, render_cfg } from "@/modules/world/environment/config.ts";
+import { themes, type WorldTheme } from "@/modules/world/environment/themes.ts";
+import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { FrameProvider } from "@/modules/world/frame/context.tsx";
 
 import { MapEnvironment } from "./environment.tsx";
@@ -21,6 +21,7 @@ import { useTileFetcher } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { useTerrainFollowSync } from "@/modules/world/terrain/use_terrain_follow_sync.ts";
 import { MapOverlays } from "./ui/overlay/map_overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
+import { DevPanel } from "@/app/dev/dev_panel.tsx";
 
 import { MapToastController } from "./ui/toast/toast_controller.tsx";
 
@@ -76,7 +77,14 @@ export function MapScene() {
           // expensive on real devices, that's the number to re-check
           // against, and the [1,2] cap keeps it from ever exceeding 2x even
           // on a 3x/4x-DPR phone.
-          dpr={[1, 2]}
+          // TEMPORARY 2026-08-13: pinned to [1,1] to isolate resolution's
+          // own contribution to the desktop/Retina perf investigation
+          // (dpr=2 on a Retina display means 4x the pixels, hence ~4x the
+          // fragment-shading work, vs dpr=1) — separate from chunk-count/
+          // frustum-culling effects, which don't depend on pixel count at
+          // all. Kept at [1,1] deliberately — do not raise back to [1,2],
+          // that quadruples fragment-shading cost.
+          dpr={[1, 1]}
           gl={{
             antialias: false,
             powerPreference: "high-performance",
@@ -84,19 +92,27 @@ export function MapScene() {
             stencil: false,
             depth: true,
           }}
-          // "percentage" (THREE.PCFShadowMap) instead of bare `shadows`
-          // (which defaults to PCFSoft) — the installed three.js version
-          // deprecated PCFSoftShadowMap and silently substitutes
-          // PCFShadowMap on every single render call, spamming devtools
-          // with the same warning every frame. Requesting PCFShadowMap
-          // directly is a no-op behavior-wise (matches what three.js was
-          // already falling back to) but skips the deprecated codepath
-          // entirely.
-          shadows="percentage"
           camera={{
             fov: FOV,
             near: NEAR,
             far: FAR_CLIP,
+          }}
+          // Confirmed live via profiling: getProgramInfoLog/getShaderInfoLog
+          // (three.js's post-compile GL log validation, run by default on
+          // every new WebGLProgram — renderer.debug.checkShaderErrors
+          // defaults to true) were the dominant main-thread cost while
+          // panning, ~90% of a recorded frame's self time. These calls force
+          // a CPU-GPU sync point to read back the compile/link log — real
+          // cost even though our own shader source is a stable module-level
+          // constant (mat.ts) that three.js's program cache already
+          // reuses across every chunk; the validation step still runs once
+          // per *material instance* (now one per Chunk/LOD/material
+          // bucket, previously one per L2) regardless of whether the
+          // underlying compiled program is shared. Standard production
+          // three.js/r3f advice (WebGLRenderer.debug.checkShaderErrors's own
+          // doc comment) is to disable this once shaders are known-good.
+          onCreated={(state) => {
+            state.gl.debug.checkShaderErrors = false;
           }}
           // "always" rendered every frame unconditionally, even fully at
           // rest. "demand" only renders when something calls invalidate() —
@@ -109,10 +125,10 @@ export function MapScene() {
           // and location_puck.tsx's beacon spin/bob (which never converges
           // by design, so it just keeps re-invalidating for as long as it's
           // visible — see its own comment for why that puts a floor under
-          // how idle this can ever get). chunk.tsx's LOD/shadow-eligibility
-          // recheck needed no changes: it's purely a function of camera-to-
-          // chunk distance, so it can only ever have something new to do on
-          // a frame the camera damping above already caused to render.
+          // how idle this can ever get). chunk_stage.tsx additionally
+          // invalidates while its global reveal/LOD-remesh budgets still
+          // have queued work, then becomes camera-driven again once those
+          // queues drain.
           frameloop="demand"
         >
           <FrameProvider>
@@ -127,89 +143,83 @@ export function MapScene() {
 
           {
             /*
-            "Miniature diorama" post stack. Order matters:
-            1. N8AO — real screen-space contact/crevice AO. Tried here early
-               on and pulled back out with a (wrong) postmortem blaming a
-               material-swap normal pre-pass. Re-read n8ao's actual source
-               before retrying: it has no such pass — DepthDownSample.js
-               reconstructs normals straight from the real depth buffer via
-               screen-space derivatives, the same technique this terrain's
-               own fragment shader already uses for its lighting, so the
-               original garbage (a flat blue square, red scan-line noise)
-               can't have been a displacement/normal mismatch. Retried once
-               the shadow pipeline (lights:true, shared uniforms) and
-               multisampling were both stable and it renders correctly.
-               aoRadius/intensity (post_cfg.AO) needed real tuning once it
-               actually worked, not just non-garbage defaults: at the
-               original radius, every riser of this terrain's LOD-stepped
-               geometry shadowed several neighbors up the same slope,
-               reading as repeated contour-line banding on any terraced
-               area rather than soft contact shadow — confirmed the shader's
-               own AO/height-tint effects weren't the cause by bypassing
-               them and watching the exact same bands survive unchanged.
-               Shrunk to roughly one cell-neighborhood's scale instead.
+            "Miniature diorama" post stack — N8AO/Bloom/TiltShift2/SMAA
+            (2026-08-13) disabled, not deleted: confirmed real cost via live
+            profiling of the terrain pipeline (WebGLRenderer.renderBufferDirect/
+            setProgram time scaling with the post stack), and none of the four
+            are things a Minecraft-default-options level would even offer as a
+            toggle (SSAO/bloom/tilt-shift/post-AA are shader-pack territory,
+            not vanilla settings) — so turned fully off rather than kept behind
+            a runtime option. Commented out (not removed) so the "miniature
+            diorama" look this was built for is easy to bring back later, not
+            lost. Order mattered when these were active:
+            1. N8AO — real screen-space contact/crevice AO. See git history
+               (this comment block, pre-2026-08-13) for the normal-pass/
+               radius-tuning notes from when it was built.
             2. Bloom — glow on the few genuinely bright things (sun disc, night
                lights); the high luminance threshold keeps daytime scenes from
                washing out.
             3. Color grade (contrast/saturation) — the flat/raw output reads
                washed out next to the punchy reference stills; this is cheap
-               and global.
+               and global, stays active below.
             4. TiltShift2 — screen-space blur band, the actual "macro lens"
-               illusion that sells the miniature look. Works because this
+               illusion that sold the miniature look. Worked because this
                camera holds a fixed top-down-ish angle, so screen-Y already
                correlates with depth the way a real tilt-shift lens exploits.
-            5. Vignette — subtle framing, closes out the grade.
-            6. SMAA last — edge cleanup after every other pass has run.
+            5. Vignette — subtle framing; cheap, stays active below.
+            6. SMAA last — edge cleanup after every other pass ran.
           */
           }
           {
             /*
             multisampling left at its default (0, off): the Canvas's dpr
-            prop above now does real supersampling (the whole canvas,
-            including this entire post stack, renders at up to 2x linear
-            resolution and gets box-downsampled by the browser), which
-            covers what MSAA was here for and then some — MSAA only
-            resolves per-sample coverage/depth for triangle edges, never
-            re-running the fragment shader per sample, so it could not touch
-            the shading-domain flicker this terrain's thousands of small
-            flat-shaded boxes produce once they minify below a pixel.
-            Stacking MSAA on top of the dpr supersampling would add further
-            coverage-sample cost without fixing an aliasing class dpr
-            doesn't already cover, so it's dropped rather than kept
-            alongside it.
+            prop above already does real supersampling (the whole canvas
+            renders at up to 2x linear resolution and gets box-downsampled
+            by the browser) — MSAA only resolves per-sample coverage/depth
+            for triangle edges, never re-running the fragment shader per
+            sample, so it could not touch the shading-domain flicker this
+            terrain's thousands of small flat-shaded boxes produce once
+            they minify below a pixel. Independent of SMAA (above) being on
+            or off — this is about the Canvas's own `multisampling` prop.
           */
           }
           <EffectComposer>
-            <N8AO
+            {
+              /* <N8AO
               quality={post_cfg.AO.QUALITY}
               halfRes={post_cfg.AO.HALF_RES}
               aoRadius={post_cfg.AO.RADIUS}
               intensity={post_cfg.AO.INTENSITY}
               distanceFalloff={post_cfg.AO.DISTANCE_FALLOFF}
               color={post_cfg.AO.COLOR}
-            />
-            <Bloom
+            /> */
+            }
+            {
+              /* <Bloom
               intensity={post_cfg.BLOOM.INTENSITY}
               luminanceThreshold={post_cfg.BLOOM.LUMINANCE_THRESHOLD}
               luminanceSmoothing={post_cfg.BLOOM.LUMINANCE_SMOOTHING}
               mipmapBlur={post_cfg.BLOOM.MIPMAP_BLUR}
-            />
+            /> */
+            }
             <BrightnessContrast brightness={post_cfg.GRADE.BRIGHTNESS} contrast={post_cfg.GRADE.CONTRAST} />
             <HueSaturation saturation={post_cfg.GRADE.SATURATION} />
-            <TiltShift2
+            {
+              /* <TiltShift2
               blur={post_cfg.TILT_SHIFT.BLUR}
               taper={post_cfg.TILT_SHIFT.TAPER}
               start={post_cfg.TILT_SHIFT.START}
               end={post_cfg.TILT_SHIFT.END}
               direction={post_cfg.TILT_SHIFT.DIRECTION}
               samples={post_cfg.TILT_SHIFT.SAMPLES}
-            />
+            /> */
+            }
             <Vignette
               blendFunction={BlendFunction.NORMAL}
               darkness={post_cfg.VIGNETTE.DARKNESS}
               offset={post_cfg.VIGNETTE.OFFSET}
             />
-            <SMAA />
+            {/* <SMAA /> */}
           </EffectComposer>
         </Canvas>
       </div>
@@ -219,6 +229,19 @@ export function MapScene() {
 
       {/* Absolute-position UI layer */}
       <MapOverlays />
+
+      {
+        /* Debugging UI — moved here from app.tsx (was a root-level sibling
+        of AppRouter) so its z-10 actually compares against ModeBar's z-40
+        (bottom_overlays.tsx). This div's own `fixed inset-0` establishes
+        its own stacking context per spec (position:fixed always does,
+        independent of z-index), so a z-index living OUTSIDE it — like
+        DevPanel's old root-level placement — never actually competed
+        against anything inside; it just painted above the whole subtree
+        regardless of the number. Living inside now, the two z-indexes
+        finally resolve against each other as their numbers suggest. */
+      }
+      {__IS_DEV__ && <DevPanel />}
     </div>
   );
 }
