@@ -12,12 +12,15 @@ import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 
 import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pxl/shared/bake/format.ts";
 import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
-import { MAX_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 import { bake_terrain } from "@pxl/api/bake/terrain/bake.ts";
 import { TerrainRepository } from "./repository.ts";
+
+const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 
 /**
  * Digits only, capped well above MAX_L3_IDX's own ~18-digit width (2^57 ≈

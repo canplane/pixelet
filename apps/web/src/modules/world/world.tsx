@@ -25,23 +25,31 @@ import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
-import { get_ele } from "./terrain/use_elevation.ts";
+import { get_ele } from "./terrain/elevation.ts";
 import { useDebugStore } from "@/app/dev/debug_store.ts";
 
-import { AnchorSpace } from "./spatial/anchor/space.tsx";
-import { AnchorNode } from "./spatial/anchor/node.tsx";
-import { GroundedNode } from "./spatial/anchor/grounded_node.tsx";
-import { AnchorRegistry } from "./spatial/anchor/registry.ts";
+import { AnchorSpace } from "./anchor/space.tsx";
+import { AnchorNode } from "./anchor/node.tsx";
+import { GroundedNode } from "./anchor/grounded_node.tsx";
+import { AnchorRegistry } from "./anchor/registry.ts";
 
 import { useFrameRotation } from "./frame/use_frame_rotation.ts";
 import { useFrameTranslation } from "./frame/use_frame_translation.ts";
 import { useFrameRefs } from "./frame/context.tsx";
 import { get_local_world_origin } from "./frame/coord.ts";
 
-import { TerrainLayer } from "./terrain/layer.tsx";
 import { LocationPuck } from "./markers/location_puck.tsx";
 import { HoverCursor } from "./markers/hover_cursor.tsx";
-import { Block } from "./primitives/block.tsx";
+import { Cube } from "./cube.tsx";
+
+// Unified terrain/object render pipeline — replaces the old split
+// TerrainLayer+ObjectLayer (archived: see checkpoint/20260813-before-
+// layer-unification for the pre-unification state). CHUNK_STAGE_LAYERS
+// lives in modules/world/stack.ts (not inline here) so camera/ray.ts's own
+// unified raycast can composite the exact same layer stack instead of a
+// second, possibly-drifting registration.
+import { ChunkStage } from "./chunk_stage.tsx";
+import { CHUNK_STAGE_LAYERS } from "./stack.ts";
 
 type DebugDotProps = {
   i: IVec;
@@ -81,14 +89,14 @@ function DebugLayer(props: DebugLayerProps) {
       <DebugDot i={map_origin} color="blue" />
 
       <GroundedNode i={page_base}>
-        <Block base={[0, U_PER_CELL, 0]} span={1} color="green" />
+        <Cube base={[0, U_PER_CELL, 0]} span={1} color="green" />
       </GroundedNode>
       <GroundedNode i={page_center}>
-        <Block base={[U_PER_CELL, 0, 0]} span={1} color="red" />
+        <Cube base={[U_PER_CELL, 0, 0]} span={1} color="red" />
       </GroundedNode>
 
       <AnchorNode i={map_center.i} f={map_center.f}>
-        <Block base={fill3(0)} span={1} color="blue" />
+        <Cube base={fill3(0)} span={1} color="blue" />
       </AnchorNode>
     </group>
   );
@@ -163,7 +171,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
             )}
 
             <AnchorSpace registry={registry}>
-              <TerrainLayer />
+              <ChunkStage stack={CHUNK_STAGE_LAYERS} />
 
               <HoverCursor />
               <LocationPuck device_coord={device_coord} />

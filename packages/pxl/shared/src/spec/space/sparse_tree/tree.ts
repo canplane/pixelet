@@ -58,10 +58,15 @@ export function dense<K extends PVec, T extends TypedArray>(
 
 // ---- I/O ----
 
-/** Write one value at the given PVF3 coordinate. */
-export function write<T extends TypedArray>(tree: SparseTree<T>, coord: PVF3, val: ElementOf<T>): void {
+/**
+ * Write one value at the given PVF3 coordinate. `level` (default: finest,
+ * `tree.layout.min`) claims a whole block at that coarser shift amount in
+ * one call instead of always writing a single finest-leaf cell — see
+ * st_mem.set's own doc comment.
+ */
+export function write<T extends TypedArray>(tree: SparseTree<T>, coord: PVF3, val: ElementOf<T>, level: i32 = tree.layout.min): void {
   const key: IVec = to_key(coord, tree.layout.min);
-  st_mem.set(tree.mem, ivec, tree.layout, key, val);
+  st_mem.set(tree.mem, ivec, tree.layout, key, val, level);
 }
 
 /** Read one value at the given PVF3 coordinate. */
@@ -79,6 +84,19 @@ export function fill<T extends TypedArray>(tree: SparseTree<T>, val: ElementOf<T
 export function compact<T extends TypedArray>(tree: SparseTree<T>): SparseTree<T> {
   tree.mem = st_mem.compact(tree.mem, tree.layout, 0).mem;
   return tree;
+}
+
+/**
+ * Visit every maximal uniform leaf block — see st_mem.walk's own doc
+ * comment. `x`/`y`/`z` are in min-level lattice units (multiply by
+ * `2**tree.layout.min` for a real-unit corner); `level` is that block's
+ * own shift amount (`2**level` is its real-unit size).
+ */
+export function walk<T extends TypedArray>(
+  tree: SparseTree<T>,
+  visit: (x: i32, y: i32, z: i32, level: i32, val: ElementOf<T>) => void,
+): void {
+  st_mem.walk(tree.mem, tree.layout, visit);
 }
 
 /**

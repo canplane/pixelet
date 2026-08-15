@@ -6,7 +6,7 @@
  * The wire field order is defined here.
  *
  * Layer model:
- * - L3 page = transport / storage unit
+ * - L3 page = terrain transport / storage unit
  * - terrain = static terrain layer carried by that page
  * - ground  = categorical 2D terrain channels
  * - ele     = elevation raster payload for that terrain layer

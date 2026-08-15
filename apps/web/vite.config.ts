@@ -62,16 +62,6 @@ export default defineConfig(({ mode }) => {
     // API server's output — on every restart/error.
     clearScreen: false,
 
-    // maplibre-gl's CJS/UMD packaging is the one dependency in this project
-    // esbuild's cold-start scan misses (verified: every other real
-    // dependency here pre-bundles correctly) — without this, the browser
-    // only trips over it once map_tiler.tsx actually loads, forcing a
-    // mid-session "optimized dependencies changed" full reload that
-    // cancels whatever terrain tile fetches were in flight at that moment.
-    optimizeDeps: {
-      include: ["maplibre-gl"],
-    },
-
     plugins: [
       deno(),
       react(),
@@ -94,6 +84,19 @@ export default defineConfig(({ mode }) => {
 
     server: {
       host: true,
+      // Vite's default fs.allow walks up from this config's own directory
+      // looking for an npm/pnpm/yarn workspace root — this repo is a Deno
+      // workspace, which that heuristic doesn't recognize, so it fell back
+      // to just apps/web itself. That silently 403'd any `/@fs/` request
+      // for a file outside apps/web — invisible for plain .ts imports
+      // (those go through the deno plugin's own resolution, not this gate)
+      // but broke real asset imports (import x from "*.png") the moment
+      // any of them started pointing into packages/pxl/shared instead of
+      // staying under apps/web, e.g. objects/wool_images.ts and
+      // terrain/shader/ground_layer_images.ts's own textures/{terrain,
+      // objects}/ imports. Explicitly allowing the repo root fixes every
+      // such path at once instead of allow-listing each package.
+      fs: { allow: [path.resolve(__dirname, "..", "..")] },
       proxy: {
         "/api": {
           target: apiBase,

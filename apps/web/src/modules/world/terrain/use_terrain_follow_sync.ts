@@ -6,8 +6,8 @@ import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
-import { useTileStore } from "./tile_store.ts";
-import { with_ele } from "./use_elevation.ts";
+import { useTileStore } from "./store.ts";
+import { with_ele } from "./elevation.ts";
 
 /**
  * Re-samples terrain elevation under the current map_center and snaps it in, if

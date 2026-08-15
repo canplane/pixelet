@@ -8,7 +8,7 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
 import { decode_terrain, type Terrain, type Tile } from "@pxl/shared/bake/format.ts";
-import { useTileStore } from "./tile_store.ts";
+import { useTileStore } from "./store.ts";
 import { CLEANUP_RADIUS, LOAD_RADIUS } from "./config.ts";
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";

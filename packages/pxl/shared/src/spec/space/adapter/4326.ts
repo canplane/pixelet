@@ -22,7 +22,6 @@
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 import type { FVec, IVec, PVF3 } from "../pvf3/mod.ts";
-import { FROM_L3_IDX, L3_LIMIT } from "../indexer.ts";
 
 import type { G3857 } from "./3857.ts";
 import * as epsg3857 from "./3857.ts";
@@ -166,31 +165,20 @@ export const dist = (a: G4326, b: G4326): f64 => {
 
 // ---- Bounding Box ----
 
-// NOTE:
-// This bbox assumes the page does not cross the ±180° longitude seam.
-// Seam-crossing pages require a wrapped bbox representation instead of plain min/max.
 export type BBox4326 = [min: G4326, max: G4326];
 
 export const get_page_bbox = (page_idx: IVec): BBox4326 => {
-  const base: IVec = FROM_L3_IDX(page_idx);
-  const limit: IVec = L3_LIMIT(base);
+  const [min_m, max_m] = epsg3857.get_page_bbox(page_idx);
 
-  const p1: G4326 = [0, 0, 0];
-  const p2: G4326 = [0, 0, 0];
-  unproject(p1, base, 0n);
-  unproject(p2, limit, 0n);
+  const min: G4326 = [0, 0, 0];
+  const max: G4326 = [0, 0, 0];
+  from_mercator(min, min_m);
+  from_mercator(max, max_m);
 
-  // Prevent accidental min/max inversion from floating-point error or projection singularities.
-  return [
-    [
-      p1[0] < p2[0] ? p1[0] : p2[0],
-      p1[1] < p2[1] ? p1[1] : p2[1],
-      (p1[2] ?? 0) < (p2[2] ?? 0) ? (p1[2] ?? 0) : (p2[2] ?? 0),
-    ],
-    [
-      p1[0] > p2[0] ? p1[0] : p2[0],
-      p1[1] > p2[1] ? p1[1] : p2[1],
-      (p1[2] ?? 0) > (p2[2] ?? 0) ? (p1[2] ?? 0) : (p2[2] ?? 0),
-    ],
-  ];
+  // from_mercator normally canonicalizes +180° to -180°. A bbox maximum is
+  // an exclusive interval endpoint rather than a coordinate, so preserve
+  // +180° for the final eastern page instead of inverting the min/max pair.
+  if (max_m[0] > min_m[0] && max[0] < min[0]) max[0] = 180;
+
+  return [min, max];
 };

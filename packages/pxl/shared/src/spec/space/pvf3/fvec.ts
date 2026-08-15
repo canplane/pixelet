@@ -7,25 +7,10 @@
  * This module provides atomic, stateless operations for the packed fractional
  * residue layer within the PVF3 coordinate system.
  *
- * Offset Architecture (Internal Resolution), each lane's own MSB is its
- * guard bit (see Guard-Bit Headroom below):
- * [ 31 .. 30 | 29 | 28 ...... 20 | 19 | 18 ...... 10 | 9 | 8 ....... 0 ]
- * [ Reserved | Gx |  Res X (9b)  | Gy |  Res Y (9b)  | Gz|  Res Z (9b) ]
- * [  Unused  |    |  Residue X   |    |  Residue Y   |   |  Residue Z  ]
- *
- * Guard-Bit Headroom (mirrors ivec.ts's own convention, see its module doc):
- * - Each 10-bit lane's legitimate/normalized residue is conventionally bounded to
- *   9 bits (|value| < 2^9 = 512) — one bit narrower than the field. This is a
- *   SEPARATE reservation from the 2-bit "Reserved" region above, which sits once
- *   at the whole word's own top rather than once per lane.
- * - Reserved purely as headroom for unspecified future use, same reasoning as
- *   ivec.ts — NOT because it's been shown to enable a packed-word optimization
- *   here. See this package's README for why (fvec's lanes are UNSIGNED, so the
- *   specific carry-bleed failure mode differs in the details from ivec's signed
- *   case, but the underlying conclusion — packed add/sub isn't worth it for a
- *   fixed 3-lane BigInt word — holds the same for both).
- * - At u ≈ 4.778m, 9 usable bits alone (ignoring ivec's own contribution) already
- *   gives ~4.778m / 2^9 ≈ 0.933cm resolution — comfortably sub-centimeter.
+ * Offset Architecture (Internal Resolution):
+ * [ 31 .. 30 | 29 ....... 20 | 19 ....... 10 | 9 ........ 0 ]
+ * [ Reserved |  Lane X (10b) |  Lane Y (10b) |  Lane Z (10b) ]
+ * [  Unused  |  Residue X    |  Residue Y    |  Residue Z    ]
  *
  * Operational Integrity & Masking Policy:
  * - Deterministic Isolation: Each lane is strictly bound to its bit-field

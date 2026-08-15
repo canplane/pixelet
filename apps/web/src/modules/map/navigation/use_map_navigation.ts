@@ -11,6 +11,8 @@ import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import { type DeviceLocation, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
 import { useMapStore } from "../store.ts";
 
+const $navigation_delta: PVF3 = { i: 0n, f: 0n };
+
 export function useMapNavigation() {
   /** Device sensor data. */
   const device_location: DeviceLocation | null = useDeviceLocationStore((state) => state.location);
@@ -48,7 +50,11 @@ export function useMapNavigation() {
       return;
     }
 
-    const dx: f64 = pvf3.to_real(pvf3.X(device_coord) - pvf3.X(store.map_center));
+    // X occupies one complete signed lane/world period, so PVF3 subtraction
+    // gives the short delta across the antimeridian instead of a nearly
+    // world-wide raw difference. Y remains ordinary/clamped Mercator space.
+    pvf3.sub($navigation_delta, device_coord, store.map_center);
+    const dx: f64 = pvf3.to_real(pvf3.X($navigation_delta));
     const dy: f64 = pvf3.to_real(pvf3.Y(device_coord) - pvf3.Y(store.map_center));
     const dist: f64 = Math.sqrt(dx * dx + dy * dy);
 

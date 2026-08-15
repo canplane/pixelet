@@ -5,6 +5,7 @@ import { CameraStatus, useCameraStore } from "@/modules/camera/store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { CurrentAddress } from "./current_address.tsx";
 import { SensorStatus } from "./sensor_status.tsx";
+import { DummyChatText } from "./dummy_chat_text.tsx";
 import { useReverseGeocode } from "./use_reverse_geocode.ts";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale_bar.tsx";
@@ -20,8 +21,9 @@ import { TrackingButton } from "@/modules/map/ui/control/tracking_button.tsx";
  * bottom_overlays.tsx) is planned to grow into this app's main control
  * surface, and per that direction the bottom edge is meant to stay clear
  * for it rather than sharing space with unrelated controls. The debug
- * toggle (dev_panel.tsx, a separate app-level component) swapped from
- * top-right to top-left to make room here.
+ * toggle (dev_panel.tsx, a separate app-level component) has since moved
+ * to bottom-left (see its own comment), freeing top-left for
+ * DummyChatText instead.
  */
 export function TopOverlays() {
   const camera_status: CameraStatus = useCameraStore((state) => state.camera_status);
@@ -47,7 +49,10 @@ export function TopOverlays() {
       </div> */
       }
 
-      {/* 2. top-right: sensor status + current location (dong), compass/scale_bar/GPS below it */}
+      {/* 2. top-left: dummy chat-text preview (mirrors mode_bar.tsx's message input live) */}
+      <DummyChatText />
+
+      {/* 3. top-right: sensor status + current location (dong), compass/scale_bar/GPS below it */}
       <div
         className={cn(
           // gap-3 -> gap-5: the address bar and the control row below it

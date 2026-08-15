@@ -8,40 +8,34 @@ record of why that's the right call here, not an oversight.
 
 ## The naive idea
 
-X/Y/Z each carry one bit of guard headroom already (see the "Guard-Bit
-Headroom" section in `ivec.ts`'s and `fvec.ts`'s own module docs — X needs it
-for wrap-around math near the antimeridian seam, Y/Z/fvec mirror it for
-consistency rather than their own domain-forced reason). Given that headroom
-already exists, the obvious question was: can `gather()`'s per-lane
-unpack/mask/repack be skipped for `add`/`sub`, doing one raw
-`(v + w) & WORD_MASK` on the whole packed word instead?
+Because the lanes are adjacent fields in one packed word, the obvious question
+was whether `gather()`'s per-lane unpack/mask/repack could be skipped for
+`add`/`sub`, doing one raw `(v + w) & WORD_MASK` on the whole packed word
+instead. The current format deliberately has no guard bits: every bit in the
+24/24/16 integer lanes and 10/10/10 fractional lanes belongs to data.
 
 ## What was tried, and why each attempt failed
 
 Three variants were implemented and empirically verified (BigInt test
 scripts, not just reasoned through):
 
-1. **Plain packed add/sub** on the current layout (1 guard bit, zero spacing
-   between lanes — `Z_SHAMT=0`, `Y_SHAMT=Z_W`, immediately adjacent). Fails:
+1. **Plain packed add/sub** on an immediately adjacent layout
+   (`Z_SHAMT=0`, `Y_SHAMT=Z_W`). Fails:
    a negative lane's own two's-complement sign-extension bit pattern produces
-   a carry/borrow at that lane's own field boundary as a *normal* part of
+   a carry/borrow at that lane's own field boundary as a _normal_ part of
    representing the negative value — nothing to do with real overflow — and
    that bleeds straight into the next lane's LSB.
 2. **Biased/offset encoding for subtraction** (bias cancels exactly for an
    isolated single-lane subtraction, unlike addition). Still fails: whenever
    a lane's own difference needs a borrow, that borrow corrupts the next lane
    up by exactly 1, regardless of biasing.
-3. **Pre-primed "guard=1" borrow-firewall** (prime the guard bit to 1 in both
+3. **Pre-primed "guard=1" borrow-firewall** (prime a guard bit to 1 in both
    operands before subtracting, matching a real bit-trick that does work —
-   *given an actual dedicated slot*). Fails on the current layout for the
-   same structural reason as (1): there is no dedicated slot to prime. The
-   "guard bit" in this module's own doc is each lane's own unused top bit —
-   it only ever catches overflow generated *within* that lane escaping
-   upward, never overflow *arriving* from the lane below.
+   _given an actual dedicated slot_). Fails on the current layout for the
+   same structural reason as (1): there is no dedicated slot to prime.
 
 Common root cause, all three: **the layout has zero physical spacing between
-adjacent lanes.** A guard bit reserved inside a lane's own top does not
-create a firewall against something arriving at the *next* lane's bottom.
+adjacent lanes.** A carry/borrow leaving one field lands directly in the next.
 
 ## The wide-guard version (data-width guard, detect + correct)
 
@@ -73,6 +67,6 @@ Two reasons it still doesn't pay off here:
 ## Bottom line
 
 Unpack → compute per-lane → `gather()` stays. Revisit only if profiling ever
-shows `add()`/`sub()` as a real hot path *and* the workload looks like bulk
+shows `add()`/`sub()` as a real hot path _and_ the workload looks like bulk
 parallel arrays (where real SIMD/WASM lanes would apply) rather than
 one-off coordinate math — nothing calls `add()`/`sub()` that often today.

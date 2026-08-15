@@ -5,17 +5,18 @@
  * Multi-level spatial topology and packed hierarchy helpers.
  *
  * This module defines the packed level hierarchy over IVec and provides:
- * - aligned level boundary helpers (BASE / LIMIT)
+ * - aligned level boundary helpers (BASE / CENTER / LIMIT)
  * - parent-relative local indices (IDX_IN)
  * - packed logical index conversion (IDX / FROM_*_IDX)
  *
- * Hierarchy:
+ * Hierarchy (dimension-agnostic — a space-axis scale tier, independent of
+ * what shape of data any given layer stores at that tier):
  * - L5 (Shard)         : global sharding domain
  * - L4 (Anchor)        : floating-origin anchor domain
  * - L3 (Page)          : network transaction / paging unit
  * - L2 (Chunk)         : render / LOD batching unit
  * - L1 (Block)         : fundamental canonical spatial unit (`u`)
- * - L0 (SVO/sub-block) : fractional / sub-block layer handled outside this module
+ * - L0 (Sub-block/SVO) : fractional / sub-block layer handled outside this module
  *
  * Packed lane layout (inherited from PVF3 IVec):
  * [ 63 ................. 40 | 39 ................. 16 | 15 ................. 0 ]
@@ -30,12 +31,11 @@
  * - `addr` is a packed L1-granularity address in IVec space.
  * - IVec storage is a packed bitfield. Signedness is a lane interpretation rule,
  *   not a storage rule.
- * - This module intentionally uses raw packed masking and shifting for hierarchy
- *   extraction and logical indexing.
- * - Therefore IDX / IDX_IN are unsigned logical keys in registry space, not signed
- *   spatial coordinates.
- * - Do not reuse IDX / IDX_IN for spatial arithmetic. Convert back to world/local
- *   coordinate space first if signed math is needed.
+ * - IDX / IDX_IN are per-axis coordinates at the named level, computed via
+ *   ivec.sh's per-lane shift — never a raw packed-word shift, which leaks
+ *   bits across lane boundaries and corrupts every lane but the outermost
+ *   one, positive or negative alike. Safe to reuse for spatial arithmetic
+ *   (add/sub) directly.
  *
  * Offset rule:
  * - "offset" is reserved for addr diffs only, i.e. differences between two L1 addrs.
@@ -52,10 +52,6 @@
  * - X / Y remain hierarchical through L5.
  * - Z collapses at L5 (Z_W = 16, L5_SHAMT = 16), so L5 is effectively horizontal.
  *
- * Representation rule:
- * - BASE / LIMIT remain packed IVec values.
- * - IDX / IDX_IN are raw unsigned logical keys derived from those packed values.
- *
  * Naming:
  * - RANGE   = absolute coordinate range at that level, measured in canonical `u` units
  * - SPAN_IN = number of child slots / units contained in the parent level
@@ -67,7 +63,6 @@
 
 import { BIT64, FIELD_MASK64, type u32, type u64 } from "@xpute/core/kit/word.ts";
 import { type IVec, ivec } from "../space/pvf3/mod.ts";
-import { IVEC_WORD_MASK } from "../space/pvf3/core.ts";
 
 const { add, fill } = ivec;
 
@@ -76,21 +71,21 @@ const { add, fill } = ivec;
 /**
  * SHAMT is the cumulative packed bit distance from the canonical base unit (`u` = L1).
  */
-export const L2_SHAMT: u32 = 5 as const;
-export const L3_SHAMT: u32 = 7 as const;
+export const L2_SHAMT: u32 = 6 as const;
+export const L3_SHAMT: u32 = 10 as const;
 export const L4_SHAMT: u32 = 12 as const;
 // export const L5_SHAMT: u32 = 16 as const;
 
-const _L2_SHAMT: u64 = BigInt(L2_SHAMT);
-const _L3_SHAMT: u64 = BigInt(L3_SHAMT);
-const _L4_SHAMT: u64 = BigInt(L4_SHAMT);
-// const _L5_SHAMT: u64 = BigInt(L5_SHAMT);
+const _L2_SHAMT = Number(L2_SHAMT);
+const _L3_SHAMT = Number(L3_SHAMT);
+const _L4_SHAMT = Number(L4_SHAMT);
+// const _L5_SHAMT = Number(L5_SHAMT);
 
 // ---- Absolute Ranges (in Canonical `u` Units) ----
 
 // canonical base unit: 1u = 1 L1 block
-export const L2_RANGE: u64 = BIT64(L2_SHAMT); // 1 << 5  = 32u
-export const L3_RANGE: u64 = BIT64(L3_SHAMT); // 1 << 7  = 128u
+export const L2_RANGE: u64 = BIT64(L2_SHAMT); // 1 << 6  = 64u
+export const L3_RANGE: u64 = BIT64(L3_SHAMT); // 1 << 10 = 1024u
 export const L4_RANGE: u64 = BIT64(L4_SHAMT); // 1 << 12 = 4096u
 // export const L5_RANGE: u64 = BIT64(L5_SHAMT); // 1 << 16 = 65536u
 
@@ -130,7 +125,7 @@ export const L4_CENTER = (addr: IVec): IVec => L4_BASE(addr) | (fill(L4_RANGE) >
 export const L2_LIMIT = (addr: IVec): IVec => add(L2_BASE(addr), fill(L2_RANGE));
 export const L3_LIMIT = (addr: IVec): IVec => add(L3_BASE(addr), fill(L3_RANGE));
 export const L4_LIMIT = (addr: IVec): IVec => add(L4_BASE(addr), fill(L4_RANGE));
-// export const L5_LIMIT = (addr: IVec): IVec => L5_BASE(addr) + fill(L5_RANGE);
+// export const L5_LIMIT = (addr: IVec): IVec => add(L5_BASE(addr), fill(L5_RANGE));
 
 // ---- Parent-relative Local Indexing ----
 
@@ -138,10 +133,8 @@ export const L4_LIMIT = (addr: IVec): IVec => add(L4_BASE(addr), fill(L4_RANGE))
  * Returns the raw packed local index of a child level within its parent level.
  *
  * Semantics:
- * - IDX_IN is an unsigned logical local key in registry space.
- * - It is a packed local index in parent space, not a compact ordinal slot number.
- * - It is derived by isolating the bits that participate inside the parent level.
- * - It is not a signed spatial displacement and must not be reused for spatial arithmetic.
+ * - IDX_IN is a logical local key, derived by isolating the bits that
+ *   participate inside the parent level.
  */
 export const L1_IDX_IN_L2 = (addr: IVec): IVec => addr & L2_MASK;
 export const L1_IDX_IN_L3 = (addr: IVec): IVec => addr & L3_MASK;
@@ -155,34 +148,20 @@ export const L3_IDX_IN_L4 = (addr: IVec): IVec => addr & (L4_MASK & ~L3_MASK);
 // ---- Global Index Conversion ----
 
 /**
- * Converts between aligned packed level bases and unsigned logical indices.
+ * Converts between aligned packed level bases and logical indices.
  *
  * Semantics:
- * - IDX is a registry / hash / routing key, not a signed spatial coordinate.
- * - BASE(addr) first clears lower-level bits; raw packed shifts then expose the
- *   corresponding unsigned logical index field.
+ * - BASE(addr) first clears lower-level bits; ivec.sh then shifts each lane
+ *   independently, never the whole packed word, so no lane leaks bits into
+ *   its neighbor.
  * - FROM_*_IDX restores packed base form from that logical index field.
- * - Do not apply signed spatial arithmetic directly to IDX values.
  */
-export const L2_IDX = (addr: IVec): IVec => L2_BASE(addr) >> _L2_SHAMT;
-export const L3_IDX = (addr: IVec): IVec => L3_BASE(addr) >> _L3_SHAMT;
-export const L4_IDX = (addr: IVec): IVec => L4_BASE(addr) >> _L4_SHAMT;
-// export const L5_IDX = (addr: IVec): IVec => L5_BASE(addr) >> _L5_SHAMT; // Z has collapsed at L5
+export const L2_IDX = (addr: IVec): IVec => ivec.sh(L2_BASE(addr), -_L2_SHAMT);
+export const L3_IDX = (addr: IVec): IVec => ivec.sh(L3_BASE(addr), -_L3_SHAMT);
+export const L4_IDX = (addr: IVec): IVec => ivec.sh(L4_BASE(addr), -_L4_SHAMT);
+// export const L5_IDX = (addr: IVec): IVec => ivec.sh(L5_BASE(addr), -_L5_SHAMT); // Z has collapsed at L5
 
-export const FROM_L2_IDX = (idx: IVec): IVec => idx << _L2_SHAMT;
-export const FROM_L3_IDX = (idx: IVec): IVec => idx << _L3_SHAMT;
-export const FROM_L4_IDX = (idx: IVec): IVec => idx << _L4_SHAMT;
-// export const FROM_L5_IDX = (idx: IVec): IVec => idx << _L5_SHAMT;
-
-/**
- * Upper bound of a valid L3_IDX: the packed IVec word is a full 64-bit
- * unsigned range (IVEC_WORD_MASK), and L3_IDX only ever shifts that range
- * right by L3_SHAMT — it never adds bits — so no legitimate L3_IDX can
- * exceed `IVEC_WORD_MASK >> L3_SHAMT`. Exists mainly for boundary callers
- * (e.g. the terrain tile HTTP route) that receive an L3_IDX from outside
- * this process and need to reject an out-of-domain value before it's fed
- * into FROM_L3_IDX/get_page_bbox-style math, which has no range checks of
- * its own (raw packed shifts on an out-of-domain BigInt don't throw, they
- * just silently produce a garbage bbox).
- */
-export const MAX_L3_IDX: u64 = IVEC_WORD_MASK >> _L3_SHAMT;
+export const FROM_L2_IDX = (idx: IVec): IVec => ivec.sh(idx, _L2_SHAMT);
+export const FROM_L3_IDX = (idx: IVec): IVec => ivec.sh(idx, _L3_SHAMT);
+export const FROM_L4_IDX = (idx: IVec): IVec => ivec.sh(idx, _L4_SHAMT);
+// export const FROM_L5_IDX = (idx: IVec): IVec => ivec.sh(idx, _L5_SHAMT);
