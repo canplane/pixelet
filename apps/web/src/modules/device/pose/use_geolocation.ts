@@ -1,6 +1,7 @@
 // @pxl/web/modules/device/pose/use_geolocation.ts
 
 import { useCallback, useEffect } from "react";
+import i18next from "i18next";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
@@ -33,7 +34,7 @@ export function useGeolocation() {
     if (geolocation_watch_id !== null) return;
 
     if (!("geolocation" in navigator)) {
-      set_error("이 환경에서는 위치 정보를 지원하지 않습니다.");
+      set_error(i18next.t("device.geolocation.unsupported"));
       return;
     }
 
@@ -74,16 +75,16 @@ export function useGeolocation() {
         }
         useDeviceLocationStore.getState().set_is_tracking_location(false);
 
-        let error_message: string = "위치 정보를 가져올 수 없습니다.";
+        let error_message: string = i18next.t("device.geolocation.generic_error");
         if (err.code === err.PERMISSION_DENIED) {
           // actionable, not just descriptive — unlike POSITION_UNAVAILABLE/
           // TIMEOUT below, this is the one case the user can actually fix
           // themselves (re-grant permission in browser/OS settings).
-          error_message = "위치 권한을 허용해주세요.";
+          error_message = i18next.t("device.geolocation.permission_denied");
         } else if (err.code === err.POSITION_UNAVAILABLE) {
-          error_message = "위치 신호를 잡을 수 없습니다.";
+          error_message = i18next.t("device.geolocation.position_unavailable");
         } else if (err.code === err.TIMEOUT) {
-          error_message = "수신 시간이 초과되었습니다.";
+          error_message = i18next.t("device.geolocation.timeout");
         }
         set_error(error_message);
       },

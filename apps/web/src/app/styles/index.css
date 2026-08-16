@@ -12,20 +12,20 @@
     @apply w-full h-full m-0 p-0 overflow-hidden;
 
     font-family:
-      /* 1. Apple 전용 키워드 (가장 먼저 배치) */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", /* 2. 영문 전용 웹폰트 (Windows/Android에서 영문을 담당) */ "Inter",
-      /* 3. 한글 담당 및 Fallback 웹폰트 */ "Pretendard Variable", /* 4. 시스템 기본 폰트 (웹폰트 로드 실패 대비) */ system-ui, sans-serif;
+      /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", /* 2. Latin-only webfont, carries Latin text on Windows/Android */ "Inter",
+      /* 3. Hangul coverage, and general fallback */ "Pretendard Variable", /* 4. System default, in case no webfont loads */ system-ui, sans-serif;
   }
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    /* Apple SF Pro 폰트는 자간이 살짝 좁을 때 가독성과 미감이 극대화됩니다. */
+    /* SF Pro reads best slightly tightened */
     letter-spacing: -0.01em;
     @apply bg-background text-foreground antialiased;
   }
 }
 
-/* 애니메이션 물리 정의: scale이 1을 넘었다가 돌아오는 것이 핵심 */
+/* Animation physics: the point is that scale overshoots past 1 and settles back */
 @keyframes bounceIn {
   0% {
     opacity: 0;
@@ -44,7 +44,7 @@
 }
 
 @layer components {
-  /* Apple 스타일 유리 패널 */
+  /* Apple-style glass panel */
   .liquid-glass {
     @apply relative overflow-hidden bg-white/5 backdrop-blur-md
       border border-white/5 border-t-white/30 border-l-white/10
@@ -56,19 +56,19 @@
     @apply absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[20%]
       bg-gradient-to-b from-white/[0.08] to-transparent blur-[8px] pointer-events-none;
   }
-  /* 동물의 숲 스타일 둥근 말풍선 */
+  /* Animal Crossing-style rounded speech bubble */
   .cozy-bubble {
     @apply border-[4px] border-white shadow-[0_6px_0_rgba(0,0,0,0.05)] bg-white rounded-[2rem];
   }
 }
 
 @theme inline {
-  /* 변수 이름만 등록: 실체는 각 테마(root/cozy)에서 주입 */
+  /* Declares the variable names only — each theme (root/cozy) injects the values */
   --animate-spin-slow: var(--animate-spin-slow);
   --animate-bounce-in: var(--animate-bounce-in);
 
-  /* 곡률(Radius) 시스템 */
-  /* 🚀 안쪽 요소 전용 곡률 (Nested Radius) */
+  /* Radius system */
+  /* Nested radius, for elements sitting inside a rounded parent */
   --radius-inner: calc(var(--radius) - 1.25rem); /* 40px - 20px = 20px */
 
   --radius-sm: calc(var(--radius) - 4px);
@@ -79,7 +79,7 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  /* 컬러 시스템 매핑 */
+  /* Color system mapping */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -118,11 +118,11 @@
 /** * [1. DEFAULT SYSTEM: Liquid Glass] 
  */
 :root {
-  /* Liquid Glass의 물리 법칙: 정교하고 여유로운 회전 */
+  /* Liquid Glass physics: precise, unhurried rotation */
   --animate-spin-slow: spin 3s linear infinite;
 
-  /* 등장 애니메이션 (기존 설정 유지) */
-  --animate-bounce-in: fadeIn 0.3s ease-out; /* 기본 상태는 부드러운 등장 */
+  /* Entrance animation (kept as it was) */
+  --animate-bounce-in: fadeIn 0.3s ease-out; /* the default is a soft fade-in */
 
   --radius: 2.5rem;
 
@@ -167,7 +167,7 @@
   --sidebar-ring: oklch(1 0 0 / 0.2);
 }
 
-/* 시스템 다크 모드 (Liquid Glass 심화) */
+/* System dark mode (Liquid Glass, deepened) */
 .dark {
   --background: oklch(0.1 0.01 240);
   --card: oklch(1 0 0 / 0.03);
@@ -184,22 +184,22 @@
 /** * [2. THEME OVERRIDE: Cozy Voxel] 
  */
 .theme-cozy {
-  /* Cozy의 물리 법칙: 쫀득하고 활기찬 회전 */
-  /* 코지 테마 구역에서 스피너를 쓰면 훨씬 활동적으로 변합니다. */
+  /* Cozy physics: springy, lively rotation */
+  /* a spinner inside a cozy-theme area reads as much more animated */
   --animate-spin-slow: spin 1s linear infinite;
 
-  /* Cozy의 아이덴티티: 쫀득한 바운스 */
+  /* Cozy's identity: a springy bounce */
   --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
   font-family: "DungGeunMo", sans-serif;
-  @apply pixel-antialiasing-off; /* 분리한 파일의 유틸리티 적용 */
+  @apply pixel-antialiasing-off; /* utility from the split-out fonts.css */
 
-  /* 🚀 폰트 번짐 방지 핵심 속성 */
-  -webkit-font-smoothing: none; /* 크롬, 사파리 등 */
-  -moz-osx-font-smoothing: unset; /* 파이어폭스 */
-  font-smooth: never; /* 표준 (일부 브라우저) */
+  /* Core properties that stop the pixel face from being smeared */
+  -webkit-font-smoothing: none; /* Chrome, Safari, etc. */
+  -moz-osx-font-smoothing: unset; /* Firefox */
+  font-smooth: never; /* standard, honored by some browsers */
 
-  /* 🚀 픽셀 렌더링 최적화 */
+  /* Pixel rendering */
   text-rendering: pixelated;
   image-rendering: pixelated;
 
@@ -213,26 +213,26 @@
   --popover: oklch(0.99 0.005 80 / 0.8);
   --popover-foreground: oklch(0.25 0.02 80);
 
-  --primary: oklch(0.35 0.05 70); /* 나무껍질 갈색 */
+  --primary: oklch(0.35 0.05 70); /* tree-bark brown */
   --primary-foreground: oklch(0.98 0.01 80);
   --secondary: oklch(0.95 0.02 80 / 0.5);
   --secondary-foreground: oklch(0.35 0.05 70);
   --muted: oklch(0.95 0.02 80 / 0.5);
   --muted-foreground: oklch(0.5 0.02 80);
-  --accent: oklch(0.92 0.03 80 / 0.6); /* 따뜻한 포인트 */
+  --accent: oklch(0.92 0.03 80 / 0.6); /* warm accent */
   --accent-foreground: oklch(0.35 0.05 70);
   --destructive: oklch(0.577 0.245 27.325);
 
-  --border: oklch(0.25 0.02 80 / 0.1); /* 배경보다 살짝 어두운 톤으로 경계선 명확화 */
+  --border: oklch(0.25 0.02 80 / 0.1); /* slightly darker than the background so edges stay legible */
   --input: oklch(1 0 0 / 0.1);
   --ring: oklch(0.709 0.01 56.259 / 0.5);
 
   /* Cozy Charts (Nature/Fruit Palette) */
-  --chart-1: oklch(0.7 0.12 30); /* 사과 레드 */
-  --chart-2: oklch(0.75 0.1 140); /* 새싹 그린 */
-  --chart-3: oklch(0.65 0.12 250); /* 바다 블루 */
-  --chart-4: oklch(0.8 0.14 85); /* 오렌지 골드 */
-  --chart-5: oklch(0.6 0.1 320); /* 포도 퍼플 */
+  --chart-1: oklch(0.7 0.12 30); /* apple red */
+  --chart-2: oklch(0.75 0.1 140); /* sprout green */
+  --chart-3: oklch(0.65 0.12 250); /* sea blue */
+  --chart-4: oklch(0.8 0.14 85); /* orange gold */
+  --chart-5: oklch(0.6 0.1 320); /* grape purple */
 
   /* Cozy Sidebar (Paper Texture Feel) */
   --sidebar: oklch(0.985 0.001 106.423 / 0.8);
@@ -247,14 +247,14 @@
   /* --- DARK MODE (Cozy Night) --- */
   &.dark,
   .dark & {
-    --background: oklch(0.2 0.02 85); /* 밤의 숲 배경 */
+    --background: oklch(0.2 0.02 85); /* night-forest background */
     --foreground: oklch(0.95 0.01 85);
     --card: oklch(0.25 0.02 85 / 0.45);
     --card-foreground: oklch(0.95 0.01 85);
     --popover: oklch(0.25 0.02 85 / 0.75);
     --popover-foreground: oklch(0.95 0.01 85);
 
-    --primary: oklch(0.85 0.08 90); /* 달빛 골드 */
+    --primary: oklch(0.85 0.08 90); /* moonlight gold */
     --primary-foreground: oklch(0.2 0.02 85);
     --secondary: oklch(0.3 0.02 85 / 0.5);
     --secondary-foreground: oklch(0.9 0.02 85);
@@ -264,7 +264,7 @@
     --accent-foreground: oklch(0.95 0.01 85);
     --destructive: oklch(0.704 0.191 22.216);
 
-    --border: oklch(1 0 0 / 0.05); /* 밤에는 아주 은은한 발광 느낌만 */
+    --border: oklch(1 0 0 / 0.05); /* at night, only the faintest glow */
     --input: oklch(1 0 0 / 0.1);
     --ring: oklch(0.5 0.03 85 / 0.5);
 

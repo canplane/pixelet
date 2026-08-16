@@ -1,3 +1,5 @@
+// @pxl/shared/spec/cell/objects.test.ts
+
 import { assertEquals } from "@std/assert";
 import { OBJECT_LAYOUT } from "@pxl/shared/bake/constants.ts";
 import { pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";

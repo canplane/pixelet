@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/terrain/use_terrain_follow_sync.ts
+// @pxl/web/modules/world/terrain/use_ground_snap_sync.ts
 
 import { useEffect } from "react";
 
@@ -11,12 +11,12 @@ import { with_ele } from "./elevation.ts";
 
 /**
  * Re-samples terrain elevation under the current map_center and snaps it in, if
- * follow_terrain is on. Shared by the tile-arrival retry below and by any one-shot
+ * ground_snap is on. Shared by the tile-arrival retry below and by any one-shot
  * interaction (e.g. the compass's reset-orientation click) that should also leave
  * the view properly grounded instead of only fixing angles/distance.
  */
 export function reground_map_center(): void {
-  if (!useCameraStore.getState().follow_terrain) return;
+  if (!useCameraStore.getState().ground_snap) return;
 
   const map_center = useMapStore.getState().map_center;
   if (!map_center) return;
@@ -38,7 +38,7 @@ export function reground_map_center(): void {
  * falls back to the stale pre-drag height and nothing else re-checks it once
  * the tile does arrive — the center can stay ungrounded indefinitely.
  */
-export function useTerrainFollowSync() {
+export function useGroundSnapSync() {
   useEffect(() => {
     reground_map_center();
     return useTileStore.subscribe(reground_map_center);

@@ -47,14 +47,26 @@ const sheetVariants = cva(
   },
 );
 
-interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>, VariantProps<typeof sheetVariants> {}
+interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>, VariantProps<typeof sheetVariants> {
+  /** Overrides SheetOverlay's own default bg-black/80 — e.g. a lighter/no-op sheet (settings) that shouldn't dim the whole page behind it. */
+  overlayClassName?: string;
+  /**
+   * Radix's own DialogOverlayImpl sets `style={{ pointerEvents: "auto", ...ownStyle }}` —
+   * an inline style, which wins over any CSS class (including a
+   * `pointer-events-none` Tailwind utility) regardless of specificity. A
+   * className alone can never make the overlay click-through; this has to
+   * go through an actual style prop, which Radix's own spread order lets
+   * override its default.
+   */
+  overlayStyle?: React.CSSProperties;
+}
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
+>(({ side = "right", className, overlayClassName, overlayStyle, children, ...props }, ref) => (
   <SheetPortal>
-    <SheetOverlay />
+    <SheetOverlay className={overlayClassName} style={overlayStyle} />
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}

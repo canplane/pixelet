@@ -82,7 +82,7 @@ const BEACON_Z_BIAS: f64 = 0.5;
 const zone_style = {
   COLOR: marker_colors.ACTION,
   FILL_OPACITY: .4,
-  BORDER_WIDTH: .085,
+  BORDER_WIDTH: .04,
 } as const;
 
 const beacon_style = {

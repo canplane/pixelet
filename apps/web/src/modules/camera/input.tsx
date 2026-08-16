@@ -63,11 +63,11 @@ function handle_tap(hovered: PVF3): void {
     // own size on every axis, so this still needs object_center rather than
     // using the corner as-is.
     //
-    // Known consequence: do_pan's follow_terrain re-grounds Z on every pan
+    // Known consequence: do_pan's ground_snap re-grounds Z on every pan
     // step, so the very next drag after this will snap the camera target
     // down to the terrain surface at whatever X/Y you've panned to — a
     // visible jump if the object sat well above ground. Not fixed here;
-    // fixing it properly means follow_terrain preserving a height-above-
+    // fixing it properly means ground_snap preserving a height-above-
     // terrain offset while panning instead of hugging the raw surface,
     // which changes panning in general, not just this recenter.
     const { hovered_object_id } = useCameraStore.getState();
@@ -116,6 +116,31 @@ export function CameraInput() {
   const tap_start_y = useRef<f64>(0);
   const $center = useRef<V3>([0, 0, 0]);
   const hover_raf_pending = useRef(false);
+
+  // ---- drag-continuation coalescing ----
+  // Raw pointermove fires far more often than the render loop (same reason
+  // request_hover_update below exists) — do_pan/do_rotate/update_pinch all
+  // write to zustand stores (set_map_center/set_view_state), and each write
+  // fans out through reactive subscribers (chunk_stage.tsx's LOD system
+  // among them). Profiled: without this, on_pointer_move dominated a whole
+  // trace's CPU time during a drag. last_x/y and did_drag's tap-vs-drag
+  // threshold still update on every raw event below (cheap ref writes, no
+  // store write) — only the store-touching calls get deferred to once per
+  // animation frame, coalescing however many raw events arrived since.
+  const drag_raf_pending = useRef(false);
+  const pending_pan_dx = useRef<f64>(0);
+  const pending_pan_dy = useRef<f64>(0);
+  const pending_rotate_dy = useRef<f64>(0);
+  const pending_client_x = useRef<f64>(0);
+  const pending_client_y = useRef<f64>(0);
+  // wheel/trackpad-pinch zoom — same unthrottled-store-write shape as the
+  // drag path above, and the more likely culprit for LOD-storm lag: zooming
+  // changes camera distance, which can cross every visible chunk's LOD
+  // threshold at once, unlike a pan (which mostly just changes *which*
+  // chunks are visible). Summing deltaY before one exp() is exact — chained
+  // multiplicative updates (exp(a)*exp(b) == exp(a+b)), not an approximation.
+  const wheel_raf_pending = useRef(false);
+  const pending_wheel_delta_y = useRef<f64>(0);
 
   // ---- rotate-drag (mouse right-drag / trackpad two-finger-click-drag) ----
   const rotate_start_angle = useRef<f64>(0);
@@ -190,10 +215,10 @@ export function CameraInput() {
 
     // ground_or_raw shares the exact same "zero Z, then sample real terrain
     // height" step every map_center-setting interaction that respects
-    // follow_terrain goes through (see its own doc comment) — the GPS
+    // ground_snap goes through (see its own doc comment) — the GPS
     // recenter button in tracking_button.tsx uses it too, instead of
     // each call site hand-rolling its own probe.
-    set_map_center(useCameraStore.getState().follow_terrain ? ground_or_raw(next_center) : next_center);
+    set_map_center(useCameraStore.getState().ground_snap ? ground_or_raw(next_center) : next_center);
   }
 
   /** Azimuth tracks the cursor's angle around screen center since drag-start
@@ -404,6 +429,26 @@ export function CameraInput() {
     });
   }
 
+  function request_drag_flush() {
+    if (drag_raf_pending.current) return;
+    drag_raf_pending.current = true;
+
+    requestAnimationFrame(() => {
+      drag_raf_pending.current = false;
+      // gesture may have ended (pointerup) since this was scheduled.
+      if (drag_mode.current === DragMode.PAN) {
+        do_pan(pending_pan_dx.current, pending_pan_dy.current);
+      } else if (drag_mode.current === DragMode.ROTATE) {
+        do_rotate(pending_client_x.current, pending_client_y.current, pending_rotate_dy.current);
+      } else if (drag_mode.current === DragMode.PINCH) {
+        update_pinch();
+      }
+      pending_pan_dx.current = 0;
+      pending_pan_dy.current = 0;
+      pending_rotate_dy.current = 0;
+    });
+  }
+
   function on_pointer_move(e: PointerEvent) {
     if (e.pointerType === "touch") {
       const pt = active_pointers.current.get(e.pointerId);
@@ -413,7 +458,7 @@ export function CameraInput() {
       }
 
       if (drag_mode.current === DragMode.PINCH && active_pointers.current.size >= 2) {
-        update_pinch();
+        request_drag_flush();
         return;
       }
 
@@ -425,7 +470,9 @@ export function CameraInput() {
         }
         last_x.current = e.clientX;
         last_y.current = e.clientY;
-        do_pan(dx, dy);
+        pending_pan_dx.current += dx;
+        pending_pan_dy.current += dy;
+        request_drag_flush();
       }
       return;
     }
@@ -448,13 +495,18 @@ export function CameraInput() {
 
     last_x.current = e.clientX;
     last_y.current = e.clientY;
+    pending_client_x.current = e.clientX;
+    pending_client_y.current = e.clientY;
 
     if (drag_mode.current === DragMode.ROTATE) {
-      do_rotate(e.clientX, e.clientY, dy);
+      pending_rotate_dy.current += dy;
+      request_drag_flush();
       return;
     }
 
-    do_pan(dx, dy);
+    pending_pan_dx.current += dx;
+    pending_pan_dy.current += dy;
+    request_drag_flush();
   }
 
   function clear_hovered_once() {
@@ -502,9 +554,7 @@ export function CameraInput() {
       // precise_box). Terrain/no-resolved-object hits have no more precise
       // source, so this is null and world_adjacent_corner uses hit's own
       // box as before.
-      const struck_object = hit.material_class === MaterialClass.OBJECT
-        ? resolve_hit_object(hit, map_origin)
-        : null;
+      const struck_object = hit.material_class === MaterialClass.OBJECT ? resolve_hit_object(hit, map_origin) : null;
       const precise_box = struck_object ? object_aabb(struck_object, map_origin) : undefined;
 
       set_hovered_coord(world_adjacent_corner(hit, object_size, map_origin, precise_box));
@@ -571,11 +621,23 @@ export function CameraInput() {
     clear_hovered_once();
   }
 
+  function request_wheel_flush() {
+    if (wheel_raf_pending.current) return;
+    wheel_raf_pending.current = true;
+
+    requestAnimationFrame(() => {
+      wheel_raf_pending.current = false;
+      const view_state = useCameraStore.getState().view_state;
+      set_view_state({ dist: view_state.dist * Math.exp(pending_wheel_delta_y.current * DOLLY_GAIN) });
+      pending_wheel_delta_y.current = 0;
+    });
+  }
+
   function on_wheel(e: WheelEvent) {
     if (e.ctrlKey) e.preventDefault();
 
-    const view_state = useCameraStore.getState().view_state;
-    set_view_state({ dist: view_state.dist * Math.exp(e.deltaY * DOLLY_GAIN) });
+    pending_wheel_delta_y.current += e.deltaY;
+    request_wheel_flush();
   }
 
   useEffect(() => {

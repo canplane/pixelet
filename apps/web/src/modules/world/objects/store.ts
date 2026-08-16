@@ -40,7 +40,7 @@ export type PlacedObject = ObjectEntryBase & { kind: "solid"; color_id: ObjectCo
 export type ObjectAir = ObjectEntryBase & { kind: "air" };
 export type ObjectLayerEntry = PlacedObject | ObjectAir;
 
-const STORAGE_KEY = "pixelet:objects:v4";
+const STORAGE_KEY = "pxl:objects:v4";
 const EMPTY: readonly PlacedObject[] = [];
 const EMPTY_ENTRIES: readonly ObjectLayerEntry[] = [];
 

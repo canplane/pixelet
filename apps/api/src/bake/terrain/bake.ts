@@ -52,7 +52,13 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
     }
   }
 
-  const ground: Ground = bake_ground(feats);
+  // whether *any* coastline row touched this page's envelope at all, even
+  // if osm_adapter dropped it (covers_page => full land, see from_coast_row)
+  // — bake_ground needs this to tell "no land data at all (open ocean)"
+  // apart from "land data present but not worth rasterizing (full land)".
+  const has_coast_row: boolean = _coasts.len > 0;
+
+  const ground: Ground = bake_ground(feats, has_coast_row);
   const pois: POI[] = extract_pois(feats);
 
   return encode_terrain(ele, ground, pois);

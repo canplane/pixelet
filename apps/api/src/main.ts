@@ -12,6 +12,7 @@ import { Server as SocketIoServer } from "socket.io";
 import { type AppResources, make_app_resrcs } from "@/app/resources.ts";
 import { mount_app } from "@/app/mount.ts";
 import { type AppConfig, make_cfg } from "@/app/config.ts";
+import { admin_auth } from "@/lib/admin_auth.ts";
 
 export type ServerContext = {
   server: ReturnType<typeof createServer>; // Node HTTP server (owns the listening port and request lifecycle)
@@ -29,6 +30,9 @@ function make_router(cfg: AppConfig): Hono {
   // fetch() on the client (Content-Encoding is auto-decoded), no wire-format
   // or client change needed.
   router.use("/api/*", compress());
+  // ops-only routes (cache invalidation, etc.) — everything else under
+  // /api/* stays public, this prefix requires the shared admin token.
+  router.use("/api/internal/*", admin_auth(cfg.admin_token));
   return router;
 }
 

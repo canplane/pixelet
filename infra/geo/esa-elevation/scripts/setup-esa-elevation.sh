@@ -3,11 +3,11 @@
 set -e
 set -o pipefail
 
-# 기본 경로 및 환경 설정
+# Base paths and environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELEV_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# .env 로드
+# Load .env
 DOTENV_PATH="$(cd "$ELEV_ROOT/../../../" && pwd)/.env"
 
 if [ -f "$DOTENV_PATH" ]; then
@@ -18,7 +18,7 @@ else
     exit 1
 fi
 
-# 변수 가드
+# Required-variable guard
 if [ -z "$DB_GEO_CONTAINER" ]; then
     echo "❌ Error: DB_GEO_CONTAINER is not set. Check your .env file."
     exit 1
@@ -26,14 +26,14 @@ fi
 
 export PGPASSWORD="${DB_GEO_PASSWORD}"
 
-# [설정] DB 연결 정보
+# DB connection settings
 DB_CONTAINER="${DB_GEO_CONTAINER}"
 PGUSER="${DB_GEO_USER:-admin}"
 PGDATABASE="${DB_GEO_NAME:-geo}"
 PGPORT="${DB_GEO_PORT:-5433}"
 DB_HOST="${DB_GEO_HOST:-localhost}"
 
-# 메타데이터 파일 위치
+# Metadata file location
 METADATA_FILE="$ELEV_ROOT/metadata.json"
 GDAL_IMAGE="ghcr.io/osgeo/gdal:ubuntu-small-latest"
 
@@ -100,7 +100,7 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
         
         WARPED_DIR="$(dirname "$RAW_FILE")/../warped"
         
-        # 파일명 변환 로직 (4326 -> 3857)
+        # Derive the warped filename (4326 -> 3857)
         if [[ "$FILENAME" == *"4326"* ]]; then
             WARPED_FILENAME="${FILENAME//4326/3857}"
         else
@@ -112,23 +112,37 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
         mkdir -p "$(dirname "$RAW_FILE")"
         mkdir -p "$WARPED_DIR"
 
+        # Auto-download only when the metadata URL actually points at a file.
+        # provider.url here is OpenTopography's interactive portal page, and an
+        # unguarded curl saves that HTML under the .tif name and exits 0 — the
+        # failure then surfaces much later as GDAL's opaque "not recognized as
+        # being in a supported file format", and because the bogus file now
+        # exists, every re-run skips the download and fails identically forever.
+        # Refuse up front and say where the file has to come from instead.
         if [ ! -f "$RAW_FILE" ]; then
-            if [ -n "$DOWNLOAD_URL" ]; then
-                echo "⬇️  Downloading from $DOWNLOAD_URL..."
-                curl -L -o "$RAW_FILE" "$DOWNLOAD_URL"
-            else
-                echo "❌ Error: File missing ($RAW_FILE)"
-                exit 1
-            fi
+            case "$DOWNLOAD_URL" in
+                *.tif | *.tiff | *.zip)
+                    echo "⬇️  Downloading from $DOWNLOAD_URL..."
+                    curl -fL -o "$RAW_FILE" "$DOWNLOAD_URL"
+                    ;;
+                *)
+                    echo "❌ Missing raw file: $RAW_FILE"
+                    echo "   This source has no direct download URL — provider.url is a portal page,"
+                    echo "   not a file, so it cannot be fetched automatically."
+                    echo "   See infra/geo/README.md > 'Obtaining the raw data' for the exact"
+                    echo "   bounding box to request for this file, and the filename to save it as."
+                    exit 1
+                    ;;
+            esac
         fi
 
-        # 상태 등록
+        # Register status
         docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
         "INSERT INTO esa_elevation_catalog (region_code, data_date, file_name, status) 
          VALUES ('$REGION_CODE', '$DATA_DATE', '$FILENAME', 'PROCESSING')
          ON CONFLICT (file_name) DO UPDATE SET status = 'PROCESSING', updated_at = CURRENT_TIMESTAMP;"
 
-        # Warping 실행 (Docker)
+        # Warp, inside the container
         echo "🔄 Re-projecting to 3857 (Warping)..."
         docker run --rm -v "$ELEV_ROOT":/data "$GDAL_IMAGE" \
             gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 \
@@ -149,26 +163,26 @@ fi
 
 echo "📦 Building global VRT index..."
 
-# 1. 로컬 파일 리스트 생성
+# 1. Build the list of warped files, as host paths
 find "$ELEV_ROOT" -type f -path "*/warped/*_3857.tif" > "$ELEV_ROOT/warped_file_list.txt"
 
-# 2. Docker가 인식할 수 있도록 경로 치환 (Host -> Container)
+# 2. Rewrite those paths for the container (host -> container)
 sed "s|$ELEV_ROOT|/data|g" "$ELEV_ROOT/warped_file_list.txt" > "$ELEV_ROOT/warped_file_list_docker.txt"
 
-# 3. Docker로 VRT 생성 (Docker는 /data 경로만 기록함)
+# 3. Build the VRT in the container, which records only /data paths
 docker run --rm -v "$ELEV_ROOT":/data "$GDAL_IMAGE" \
     gdalbuildvrt -input_file_list /data/warped_file_list_docker.txt /data/index.vrt
 
-# 4. 생성된 VRT 내부의 경로를 다시 로컬 경로로 환원 (Container -> Host)
-# raster2pgsql이 로컬 환경에서 실제 파일을 찾을 수 있게 함
+# 4. Rewrite the paths inside the VRT back to host paths (container -> host),
+#    so raster2pgsql running on the host can find the actual files
 sed "s|/data|$ELEV_ROOT|g" "$ELEV_ROOT/index.vrt" > "$ELEV_ROOT/index_local.vrt"
 
 echo "📥 Ingesting raster VRT..."
-# 5. 로컬 도구로 주입 실행
+# 5. Ingest using the host-side tool
 raster2pgsql -d -s 3857 -I -C -M -t 256x256 "$ELEV_ROOT/index_local.vrt" public.esa_elevation_raster \
     | docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE"
 
-# 6. 임시 아티팩트 정리
+# 6. Clean up temporary artifacts
 rm -f "$ELEV_ROOT/warped_file_list.txt" \
       "$ELEV_ROOT/warped_file_list_docker.txt" \
       "$ELEV_ROOT/index.vrt" \

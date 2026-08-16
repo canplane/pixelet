@@ -89,7 +89,7 @@ export function ray_hit_chunk(ray: RayLike, volume: ChunkVolume, chunk_ox: f64, 
     // Same cross-band runs as the mesher: a cache boundary cannot manufacture
     // a hidden face or a different ray target.
     for (const run of merge_column_runs(volume, cx, cy)) {
-      const box = run_to_box(volume, cx, cy, run);
+      const box = run_to_box(cx, cy, run);
       $box_min[0] = box.min[0] + chunk_ox;
       $box_min[1] = box.min[1] + chunk_oy;
       $box_min[2] = box.min[2];

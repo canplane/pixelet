@@ -20,7 +20,7 @@ land-polygons*/
 temp_tile.png
 
 # [4] Ingestion Pipeline Artifacts (Temporary)
-# 스크립트 내부에서 SQL 해석 오류 방지를 위해 생성하는 파일들
+# Written out by the setup scripts so the shell never reinterprets the SQL
 **/temp_migration.sql
 **/temp_optimization.sql
 **/warped_file_list.txt

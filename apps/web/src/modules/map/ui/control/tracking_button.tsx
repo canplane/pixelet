@@ -1,6 +1,7 @@
 // @pxl/web/modules/map/ui/control/tracking_button.tsx
 
 import { Compass, Loader2, Locate, Navigation } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { type DeviceLocation, type DeviceOrientation, DevicePoseStatus, useDeviceLocationStore, useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
 import { useDeviceOrientation } from "@/modules/device/pose/use_device_orientation.ts";
@@ -16,6 +17,7 @@ import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 export function TrackingButton() {
+  const { t } = useTranslation();
   useFollowMode();
 
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
@@ -50,7 +52,7 @@ export function TrackingButton() {
         // device_coord's own Z is whatever the device's raw GPS sensor
         // reported for altitude — not the map's actual baked terrain
         // height. Recentering straight onto it used to visibly disagree
-        // with where a normal pan/follow_terrain grounds the camera (real
+        // with where a normal pan/ground_snap grounds the camera (real
         // content — debug markers, anything anchored near map_center —
         // would jump to that raw sensor altitude instead of the real
         // ground). ground_or_raw applies the exact same "sample real
@@ -59,7 +61,7 @@ export function TrackingButton() {
         // would, instead of each interaction picking its own idea of
         // "where the ground is".
         set_map_center(
-          useCameraStore.getState().follow_terrain ? ground_or_raw(device_coord) : device_coord,
+          useCameraStore.getState().ground_snap ? ground_or_raw(device_coord) : device_coord,
         );
       }
       set_is_follow_mode(false);
@@ -100,7 +102,7 @@ export function TrackingButton() {
         Icon: Compass,
         style: { transform: `rotate(${final_rotation_deg}deg)` },
         // unified active-state color (see CircularButton's isActive ring and
-        // TerrainFollowToggle's text-amber-500) — this was still the old
+        // GroundSnapToggle's text-amber-500) — this was still the old
         // sky-500 blue, left over from before that convention settled.
         className: "text-amber-500 scale-110",
       };
@@ -114,6 +116,16 @@ export function TrackingButton() {
 
   const { Icon, className, style } = get_icon_style();
 
+  // Mirrors get_icon_style's own state branching (see handle_action above
+  // for what each state actually does) — three distinct actions live behind
+  // this one button depending on current state, so a single static title
+  // would describe the wrong action most of the time.
+  const title = can_show_location_control
+    ? t("map.controls.move_to_location")
+    : is_follow_mode
+    ? t("map.controls.exit_compass_mode")
+    : t("map.controls.start_compass_mode");
+
   return (
     <CircularButton
       className="w-11 h-11"
@@ -122,6 +134,7 @@ export function TrackingButton() {
       onClick={handle_action}
       isActive={is_follow_mode}
       disabled={!is_enabled || is_loading}
+      title={title}
     >
       <Icon
         className={cn(

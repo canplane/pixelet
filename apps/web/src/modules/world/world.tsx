@@ -17,7 +17,7 @@ import { forwardRef, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { type FVec, type IVec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { L1_IDX_IN_L4, L3_BASE, L3_CENTER } from "@pxl/shared/spec/space/indexer.ts";
+import { L1_IDX_IN_L4, L3_BASE, L3_CENTER, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { fill3, floor3n, type V3 } from "@pxl/shared/spec/space/v3.ts";
 
@@ -25,7 +25,7 @@ import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
-import { get_ele } from "./terrain/elevation.ts";
+import { get_ele, get_ele_at_local } from "./terrain/elevation.ts";
 import { useDebugStore } from "@/app/dev/debug_store.ts";
 
 import { AnchorSpace } from "./anchor/space.tsx";
@@ -40,7 +40,7 @@ import { get_local_world_origin } from "./frame/coord.ts";
 
 import { LocationPuck } from "./markers/location_puck.tsx";
 import { HoverCursor } from "./markers/hover_cursor.tsx";
-import { Cube } from "./cube.tsx";
+import { DebugBox, DebugPoint, GyroRing, LabeledLine } from "./markers/frame_gizmo.tsx";
 
 // Unified terrain/object render pipeline — replaces the old split
 // TerrainLayer+ObjectLayer (archived: see checkpoint/20260813-before-
@@ -55,21 +55,16 @@ type DebugDotProps = {
   i: IVec;
   f?: FVec;
 
-  color: string;
+  label?: string;
 };
 function DebugDot(props: DebugDotProps) {
-  const { i, f = 0n, color } = props;
+  const { i, f = 0n, label } = props;
 
   const v: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(i), f);
   v[2] = get_ele(i, f) ?? 0;
   const center: V3 = floor3n(v, U_PER_CELL);
 
-  return (
-    <mesh name="debug-dot" position={center}>
-      <sphereGeometry args={[0.5]} />
-      <meshBasicMaterial color={color} wireframe />
-    </mesh>
-  );
+  return <DebugPoint position={center} label={label} />;
 }
 
 type DebugLayerProps = {
@@ -82,21 +77,50 @@ function DebugLayer(props: DebugLayerProps) {
   const page_base: IVec = TO_XY(L3_BASE(map_center.i));
   const page_center: IVec = TO_XY(L3_CENTER(map_center.i));
 
+  // raw_v: true, continuous anchor position (matches what AnchorNode below
+  // actually places the map_center point at — no elevation override).
+  // quant_v: ground-snapped, floored to the voxel grid — the cell it
+  // rounds into (floor(map_center)), one U_PER_CELL cell, drawn as a box
+  // because a floored voxel position IS a cell, not a point. map_center
+  // itself stays a point (no implied cell) and remains the conceptual
+  // center this whole gizmo group is built around — the box merely shows
+  // where it floors to, not a recentering.
+  const raw_v: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(map_center.i), map_center.f);
+  const gnd_v: V3 = [raw_v[0], raw_v[1], get_ele(map_center.i, map_center.f) ?? 0];
+  const quant_v: V3 = floor3n(gnd_v, U_PER_CELL);
+
+  // Same math DebugDot(i=map_origin) uses internally, duplicated here so the
+  // line below can reach its exact rendered position — map_origin IS the
+  // floating-origin anchor (get_local_world_origin(map_center) in World),
+  // labeled anchor_base everywhere in this gizmo group (matches World's own
+  // anchor_base further down, a differently-computed but conceptually same
+  // point — that one skips unproject/floor3n since local-world-frame's own
+  // translation already puts map_origin at local (0,0,*)). Tier naming
+  // mirrors raw_v/gnd_v/quant_v above (no raw_v-equivalent — f is
+  // always 0n here, so there's no separate pre-elevation point worth naming).
+  const anchor_base_gnd_v: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(map_origin), 0n);
+  anchor_base_gnd_v[2] = get_ele(map_origin, 0n) ?? 0;
+  const anchor_base_quant_v: V3 = floor3n(anchor_base_gnd_v, U_PER_CELL);
+
   return (
     <group name="debug-layer">
-      <DebugDot i={map_center.i} f={map_center.f} color="red" />
+      <DebugBox base={quant_v} span={U_PER_CELL} label="floor(map_center)" />
 
-      <DebugDot i={map_origin} color="blue" />
+      <DebugDot i={map_origin} label="anchor_base (map_origin)" />
+
+      <LabeledLine from={quant_v} to={raw_v} />
+
+      <LabeledLine from={quant_v} to={anchor_base_quant_v} label="floor(map_center) <-> anchor_base (map_origin)" dashed />
 
       <GroundedNode i={page_base}>
-        <Cube base={[0, U_PER_CELL, 0]} span={1} color="green" />
+        <DebugBox base={fill3(0)} span={1} label="page_base" />
       </GroundedNode>
       <GroundedNode i={page_center}>
-        <Cube base={[U_PER_CELL, 0, 0]} span={1} color="red" />
+        <DebugBox base={fill3(0)} span={1} label="page_center" />
       </GroundedNode>
 
       <AnchorNode i={map_center.i} f={map_center.f}>
-        <Cube base={fill3(0)} span={1} color="blue" />
+        <DebugPoint position={[0, 0, 0]} label="map_center" />
       </AnchorNode>
     </group>
   );
@@ -148,27 +172,53 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
     <group name="world" ref={ref}>
       <group name="view-frame" ref={view_frame_ref}>
         {__IS_DEV__ && show_debug_objects && (
-          <mesh name="view-frame-origin" position={[5, 0, 0]}>
-            <sphereGeometry args={[1]} />
-            <meshBasicMaterial color="green" wireframe />
-          </mesh>
+          <>
+            {
+              /* view-frame is never rotated by useFrameRotation (only its
+              world-frame child is) — a marker here stays fixed relative to
+              the camera/screen regardless of azimuth, i.e. "my right"
+              regardless of how the world has been rotated underneath. */
+            }
+            <GyroRing radius={4} vertex={[4, 0, 0]} label="view-frame (4,0,0)" />
+            <DebugPoint position={[0, 0, 4]} label="view-frame (0,0,4)" />
+          </>
         )}
 
         <group name="world-frame" ref={world_frame_ref}>
           {__IS_DEV__ && show_debug_objects && (
-            <mesh name="world-frame-origin" position={[0, 5, 0]}>
-              <sphereGeometry args={[1]} />
-              <meshBasicMaterial color="yellow" wireframe />
-            </mesh>
+            // world-frame's own rotation.z is driven straight from camera
+            // azimuth (useFrameRotation) — a marker here rotates exactly
+            // opposite the camera's orbit, so it stays pointed at a fixed
+            // geographic bearing (north) on screen no matter how the camera
+            // orbits.
+            <GyroRing radius={4} vertex={[0, 4, 0]} label="north (world-frame, azimuth-locked)" show_radius />
           )}
 
           <group name="local-world-frame" ref={local_world_frame_ref}>
-            {__IS_DEV__ && show_debug_objects && (
-              <mesh name="local-world-frame-origin" position={[2048, 2048, 0]}>
-                <sphereGeometry args={[100]} />
-                <meshBasicMaterial color="black" wireframe />
-              </mesh>
-            )}
+            {__IS_DEV__ && show_debug_objects && (() => {
+              // This marker's children are positioned relative to
+              // map_origin — the same convention DebugDot/DebugLayer use
+              // (map_origin itself renders at (0,0,0)) — so (2048,2048) is
+              // not an arbitrary offset: L4_RANGE is 4096 and L4_CENTER =
+              // L4_BASE | (L4_RANGE >> 1), so the center of the L4 tile that
+              // owns the current floating origin sits at exactly
+              // (2048,2048) relative to map_origin, always, by construction
+              // — not a "just visible" nudge. Z is elevation-snapped the
+              // same way every other DebugLayer marker is (get_ele_at_local
+              // — the local-coordinate-relative sibling of get_ele used
+              // here since this point, unlike DebugLayer's own markers,
+              // isn't itself a real PVF3 address, only a local offset), so
+              // it sits on the ground instead of floating at whatever
+              // height map_origin's own Z happens to be.
+              const anchor_center: V3 = [2048, 2048, get_ele_at_local(TO_XY(L3_IDX(map_origin)), 2048, 2048) ?? 0];
+              const anchor_base: V3 = [0, 0, get_ele(map_origin, 0n) ?? 0];
+              return (
+                <>
+                  <DebugPoint position={anchor_center} label="anchor_center" />
+                  <LabeledLine from={anchor_base} to={anchor_center} label="anchor_center <-> anchor_base (map_origin)" dashed />
+                </>
+              );
+            })()}
 
             <AnchorSpace registry={registry}>
               <ChunkStage stack={CHUNK_STAGE_LAYERS} />

@@ -17,6 +17,7 @@ export type BaseModalProps = {
 /** Modal-related UI actions */
 export type ModalController = {
   open_update_foo_modal: (id: number) => void; // DUMMY: Open the "Update Foo" modal for a specific entity
+  open_settings_modal: () => void; // Opens the settings modal (rendering effects / debug / license)
 };
 
 /**

@@ -7,7 +7,10 @@ type CurrentAddressProps = {
 };
 
 /**
- * "OO시 OO구 OO동" label for the current map center. Plain text only, no
+ * Locality-level address label for the current map center (see
+ * use_reverse_geocode.ts for how it's built from Nominatim's own
+ * display_name, not a hand-picked/hardcoded set of address fields). Plain
+ * text only, no
  * background/padding of its own — this now sits inside the shared
  * status-bar chrome map_overlays.tsx wraps around it (alongside
  * SensorStatus, in one row) rather than floating as its own separate pill.

@@ -9,6 +9,7 @@ export type AppConfig = {
   port: i32;
   host: string;
   socket_path: string;
+  admin_token: string;
 };
 
 export function make_cfg(): AppConfig {
@@ -21,5 +22,8 @@ export function make_cfg(): AppConfig {
   const host = env.get("API_HOST") || "0.0.0.0";
   const socket_path = env.get("SOCKET_PATH") || "/io";
 
-  return { max_body_sz, port, host, socket_path };
+  // gates /api/internal/* (cache invalidation, etc.) — see lib/admin_auth.ts
+  const admin_token = env.must("ADMIN_TOKEN");
+
+  return { max_body_sz, port, host, socket_path, admin_token };
 }

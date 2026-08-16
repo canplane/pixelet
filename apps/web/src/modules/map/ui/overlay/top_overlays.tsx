@@ -10,6 +10,7 @@ import { useReverseGeocode } from "./use_reverse_geocode.ts";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale_bar.tsx";
 import { TrackingButton } from "@/modules/map/ui/control/tracking_button.tsx";
+import { SettingsTriggerButton } from "@/app/settings/settings_trigger_button.tsx";
 
 /**
  * Everything anchored to the top edge of the map canvas — split out of
@@ -20,10 +21,10 @@ import { TrackingButton } from "@/modules/map/ui/control/tracking_button.tsx";
  * used to live at the bottom, but the floating mode bar (bottom-center,
  * bottom_overlays.tsx) is planned to grow into this app's main control
  * surface, and per that direction the bottom edge is meant to stay clear
- * for it rather than sharing space with unrelated controls. The debug
- * toggle (dev_panel.tsx, a separate app-level component) has since moved
- * to bottom-left (see its own comment), freeing top-left for
- * DummyChatText instead.
+ * for it rather than sharing space with unrelated controls. Top-left holds
+ * the settings trigger (app/settings/settings_trigger_button.tsx — always
+ * visible, opens the rendering-effects/debug/license modal) alongside
+ * DummyChatText.
  */
 export function TopOverlays() {
   const camera_status: CameraStatus = useCameraStore((state) => state.camera_status);
@@ -49,8 +50,13 @@ export function TopOverlays() {
       </div> */
       }
 
-      {/* 2. top-left: dummy chat-text preview (mirrors mode_bar.tsx's message input live) */}
-      <DummyChatText />
+      {/* 2. top-left: settings trigger + dummy chat-text preview (mirrors mode_bar.tsx's message input live) */}
+      <div className={cn("absolute top-4 left-4 z-50 flex flex-col items-start gap-3", interaction_style)}>
+        <div className="pointer-events-auto">
+          <SettingsTriggerButton />
+        </div>
+        <DummyChatText />
+      </div>
 
       {/* 3. top-right: sensor status + current location (dong), compass/scale_bar/GPS below it */}
       <div

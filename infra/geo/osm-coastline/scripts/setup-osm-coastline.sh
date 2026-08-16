@@ -3,11 +3,11 @@
 set -e
 set -o pipefail
 
-# 기본 경로 및 환경 설정
+# Base paths and environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COASTLINE_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# .env 로드 (대칭성 유지: Root .env 참조)
+# Load .env — the repo-root one, same as the sibling pipelines
 DOTENV_PATH="$(cd "$COASTLINE_ROOT/../../../" && pwd)/.env"
 
 if [ -f "$DOTENV_PATH" ]; then
@@ -18,7 +18,7 @@ else
     exit 1
 fi
 
-# 변수 가드
+# Required-variable guard
 if [ -z "$DB_GEO_CONTAINER" ]; then
     echo "❌ Error: DB_GEO_CONTAINER is not set. Check your .env file."
     exit 1
@@ -26,14 +26,14 @@ fi
 
 export PGPASSWORD="${DB_GEO_PASSWORD}"
 
-# [설정] DB 연결 정보
+# DB connection settings
 DB_CONTAINER="${DB_GEO_CONTAINER}"
 PGUSER="${DB_GEO_USER:-admin}"
 PGDATABASE="${DB_GEO_NAME:-geo}"
 PGPORT="${DB_GEO_PORT:-5433}"
 DB_HOST="${DB_GEO_HOST:-localhost}"
 
-# 메타데이터 파일 위치 (Root 기준)
+# Metadata file, relative to this pipeline's root
 METADATA_FILE="$COASTLINE_ROOT/metadata.json"
 
 echo "🌊 Starting osm-coastline integration (Driven by metadata.json)"
@@ -46,7 +46,7 @@ if [ ! -f "$METADATA_FILE" ]; then
   exit 1
 fi
 
-# 메타데이터 엔트리 개수 확인
+# Count metadata entries
 ENTRY_COUNT=$(jq '. | length' "$METADATA_FILE")
 
 if [ "$ENTRY_COUNT" -eq 0 ]; then
@@ -61,11 +61,11 @@ echo "🔍 Found $ENTRY_COUNT region(s) in metadata.json"
 # ---------------------------------------------------------
 echo "🧹 Initializing Database Schema for OSM Coastline..."
 
-# 1. 테이블 초기화 (Clean Start)
+# 1. Drop existing tables (clean start)
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
 "DROP TABLE IF EXISTS osm_coastline_polygons, osm_coastline_catalog CASCADE;"
 
-# 2. 스키마 주입
+# 2. Apply the schema
 SCHEMA_FILE="$COASTLINE_ROOT/init/01_osm_coastline_schema.sql"
 if [ -f "$SCHEMA_FILE" ]; then
     docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" < "$SCHEMA_FILE"
@@ -81,14 +81,14 @@ IS_FIRST_RUN=true
 
 # Outer Loop: Regions defined in metadata
 for ((i=0; i<ENTRY_COUNT; i++)); do
-    # 현재 인덱스의 객체 파싱
+    # Parse the entry at the current index
     ENTRY=$(jq -r ".[$i]" "$METADATA_FILE")
     
     REGION_CODE=$(echo "$ENTRY" | jq -r '.region_code')
     DATA_DATE=$(echo "$ENTRY" | jq -r '.data_date // empty')
     if [ -z "$DATA_DATE" ]; then DATA_DATE=$(date +%Y-%m-%d); fi
     
-    # 해당 리전의 파일 목록 파싱
+    # Parse this region's file list
     FILES=()
     while IFS= read -r line; do
         FILES+=("$line")
@@ -100,13 +100,13 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
 
     # Inner Loop: Files in current region
     for REL_FILE in "${FILES[@]}"; do
-        # JSON 경로는 COASTLINE_ROOT 기준
+        # Paths in the JSON are relative to COASTLINE_ROOT
         TARGET_FILE="$COASTLINE_ROOT/$REL_FILE"
         FILE_NAME=$(basename "$TARGET_FILE")
         
-        # [중요] Shapefile 세트 중 .shp 파일만 처리 대상임
+        # Only the .shp of a shapefile set is processed
         if [[ "$FILE_NAME" != *.shp ]]; then
-            # .dbf, .shx 등은 건너뜀 (ogr2ogr이 알아서 참조함)
+            # skip .dbf, .shx and friends — ogr2ogr picks them up on its own
             continue
         fi
 
@@ -114,8 +114,15 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
         echo "📂 Processing Main Shapefile: $FILE_NAME"
         echo "---------------------------------------------------"
 
+        # No auto-download here: the artifact is a zip that has to be extracted
+        # into this exact layout first, and provider.url is a landing page.
         if [ ! -f "$TARGET_FILE" ]; then
-            echo "❌ Error: Main shapefile missing at $TARGET_FILE"
+            echo "❌ Missing shapefile: $TARGET_FILE"
+            echo "   Download and extract it first:"
+            echo "     curl -LO https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip"
+            echo "     unzip land-polygons-split-3857.zip"
+            echo "   The .shx/.dbf/.prj/.cpg sidecars must end up beside the .shp."
+            echo "   See infra/geo/README.md > 'Obtaining the raw data'."
             exit 1
         fi
 
@@ -149,23 +156,23 @@ done
 # ---------------------------------------------------------
 echo "🔧 Validating Geometries & Optimizing..."
 
-# [수정됨] 쉘 해석 오류 방지를 위해 SQL 파일 생성 후 실행 방식 적용
+# Written to a file and executed, rather than passed inline, so the shell never reinterprets the SQL
 TEMP_SQL="$COASTLINE_ROOT/temp_optimization.sql"
 
 cat <<EOF > "$TEMP_SQL"
--- 1. 유효성 검사 및 보정 (Self-intersection 등 수정)
--- 해안선 데이터는 렌더링 시 오류가 치명적이므로 MakeValid 필수
+-- 1. Validate and repair (self-intersections and similar)
+-- MakeValid is mandatory here: invalid coastline geometry breaks rendering outright
 UPDATE osm_coastline_polygons
 SET geom = ST_MakeValid(geom)
 WHERE NOT ST_IsValid(geom);
 
--- 2. 통계 갱신
+-- 2. Refresh statistics
 ANALYZE osm_coastline_polygons;
 
--- 3. 클러스터링 (공간적 인접성 기반 물리 정렬)
+-- 3. Cluster — physically order rows by spatial adjacency
 CLUSTER osm_coastline_polygons USING idx_osm_coastline_geom;
 
--- 4. 카탈로그 완료 처리
+-- 4. Mark the catalog entry complete
 UPDATE osm_coastline_catalog 
 SET status = 'COMPLETED', 
     total_count = (SELECT count(*) FROM osm_coastline_polygons),
@@ -173,11 +180,11 @@ SET status = 'COMPLETED',
 WHERE status = 'PROCESSING';
 EOF
 
-# SQL 파일 컨테이너로 복사 및 실행
+# Copy the SQL into the container and run it
 docker cp "$TEMP_SQL" "$DB_CONTAINER":/tmp/optimization.sql
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -f /tmp/optimization.sql
 
-# 임시 파일 삭제
+# Remove the temporary file
 rm -f "$TEMP_SQL"
 
 echo "✨ OSM coastline integration completed successfully!"

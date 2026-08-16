@@ -1,0 +1,157 @@
+{
+  "settings": {
+    "title": "Settings",
+    "description": "Adjust language, rendering, and quality options.",
+    "trigger_aria_label": "Settings",
+    "language": {
+      "section_title": "Language",
+      "korean": "한국어",
+      "english": "English"
+    },
+    "lighting": {
+      "section_title": "Lighting & Shadows",
+      "section_caption": "Real-time sun/moon lighting effects.",
+      "shadow_map": {
+        "label": "Shadows",
+        "description": "Casts real-time shadows from the sun and moon."
+      },
+      "blob_shadow": {
+        "label": "Contact Shadow",
+        "description": "A soft shadow blob under placed objects so they look grounded."
+      },
+      "rim_light": {
+        "label": "Rim Light",
+        "description": "A thin highlight along object edges to help them stand out."
+      },
+      "god_rays": {
+        "label": "God Rays",
+        "description": "Sunlight shafts shining through gaps in terrain and objects."
+      }
+    },
+    "post_fx": {
+      "section_title": "Post-Processing",
+      "section_caption": "Full-screen post-processing effects.",
+      "ao": {
+        "label": "AO",
+        "description": "Soft shading in corners and where objects touch, for a bit more depth."
+      },
+      "bloom": {
+        "label": "Bloom",
+        "description": "Glow on very bright pixels (sun/moon, the night location beacon)."
+      },
+      "tilt_shift": {
+        "label": "Tilt-Shift",
+        "description": "Blurs the top/bottom of the screen for a miniature-diorama lens look."
+      },
+      "chromatic_aberration": {
+        "label": "Chromatic Aberration",
+        "description": "Subtle color fringing toward the edges of the screen."
+      },
+      "smaa": {
+        "label": "SMAA",
+        "description": "Polygon-edge anti-aliasing."
+      }
+    },
+    "quality": {
+      "section_title": "Quality",
+      "texture_pack": {
+        "label": "Texture",
+        "description": "Uses detailed ground/object textures instead of flat colors."
+      },
+      "high_dpr": {
+        "label": "High Resolution",
+        "description": "Renders the canvas at up to 2x resolution (supersampling)."
+      }
+    },
+    "debug": {
+      "section_title": "Debug",
+      "objects": {
+        "label": "Debug Gizmos",
+        "description": "Shows coordinate-system markers (map center, tile boundaries, etc.) for debugging."
+      },
+      "structures": {
+        "label": "Buildings",
+        "description": "Whether buildings are rendered on the terrain."
+      },
+      "ground_snap": {
+        "label": "Ground Snap",
+        "description": "Keeps the camera's focus point snapped to the ground while panning."
+      },
+      "dummy_toast": {
+        "label": "Dummy Toasts",
+        "description": "Shows sample notification toasts for testing.",
+        "message": "Dummy Toast {{index}}"
+      }
+    },
+    "license": {
+      "section_title": "License",
+      "geocoding_notice": "To show place names, the map's center coordinates are rounded to about 11 m and sent to OpenStreetMap's Nominatim service. No location history is kept."
+    }
+  },
+  "cost": {
+    "low": "LOW",
+    "med": "MED",
+    "high": "HIGH"
+  },
+  "object_colors": {
+    "white": "White",
+    "grey": "Grey",
+    "dark_grey": "Dark Grey",
+    "black": "Black",
+    "red": "Red",
+    "orange": "Orange",
+    "brown": "Brown",
+    "yellow": "Yellow",
+    "green": "Green",
+    "dark_green": "Dark Green",
+    "cyan": "Cyan",
+    "blue": "Blue",
+    "violet": "Violet",
+    "magenta": "Magenta",
+    "pink": "Pink"
+  },
+  "device": {
+    "orientation": {
+      "unsupported": "This environment doesn't support the orientation sensor.",
+      "permission_denied": "Orientation sensor permission was denied.",
+      "permission_error": "An error occurred while requesting orientation sensor permission.",
+      "signal_lost": "Orientation sensor signal lost."
+    },
+    "geolocation": {
+      "unsupported": "This environment doesn't support location services.",
+      "generic_error": "Couldn't get your location.",
+      "permission_denied": "Please allow location access.",
+      "position_unavailable": "Couldn't acquire a location signal.",
+      "timeout": "Location request timed out."
+    }
+  },
+  "toast": {
+    "location_weak_signal": "Location signal is weak.",
+    "location_checking": "Checking your location…",
+    "map_load_error": "Couldn't load the map.",
+    "map_load_success": "Area loaded.",
+    "map_loading": "Loading area…"
+  },
+  "map": {
+    "scale_bar": {
+      "reset_zoom": "Reset zoom"
+    },
+    "mode_bar": {
+      "message_placeholder": "Type a message...",
+      "message_tooltip": "Message",
+      "send": "Send",
+      "palette_tooltip": "Palette",
+      "pointer": "Pointer",
+      "eraser": "Eraser"
+    },
+    "chat": {
+      "self_label": "Me"
+    },
+    "controls": {
+      "reset_orientation": "Align north",
+      "move_to_location": "Move to my location",
+      "start_compass_mode": "Start compass mode",
+      "exit_compass_mode": "Exit compass mode"
+    }
+  }
+}

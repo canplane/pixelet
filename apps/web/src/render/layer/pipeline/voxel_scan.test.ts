@@ -45,7 +45,7 @@ Deno.test("voxel scan - sub-cell offsets and size decode on an exact 1/256 grid"
   const quarter = pack_sub_cell_fraction(0.25);
   set_chunk_voxel(volume, 4, 5, 6, OBJECT, [half, quarter, half, half]);
   const run = merge_column_runs(volume, 4, 5)[0];
-  const box = run_to_box(volume, 4, 5, run);
+  const box = run_to_box(4, 5, run);
   assertEquals(half, 128);
   assertEquals(box.min, [4.5, 5.25, 6.5]);
   assertEquals(box.max, [5, 5.75, 7]);

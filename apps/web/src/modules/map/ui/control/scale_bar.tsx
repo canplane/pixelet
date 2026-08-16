@@ -1,5 +1,7 @@
 // @pxl/web/modules/map/ui/control/scale_bar.tsx
 
+import { useTranslation } from "react-i18next";
+
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
 import { useMapStore } from "@/modules/map/store.ts";
@@ -41,6 +43,7 @@ function round_to_nice_scale(raw: f64): f64 {
 const G3857_SCRATCH: G3857 = [0, 0, 0];
 
 export function MapScaleBar() {
+  const { t } = useTranslation();
   const view_state = useCameraStore((state) => state.view_state);
   const reset_dist = useCameraStore.getState().reset_dist;
   const map_center = useMapStore((state) => state.map_center);
@@ -121,7 +124,7 @@ export function MapScaleBar() {
         // rectangular bounding box). filter: drop-shadow wraps the union of
         // every child's actual rendered shape into one outline instead.
         className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 py-2 min-w-[44px] filter-[drop-shadow(1px_0_0_rgba(0,0,0,0.9))_drop-shadow(-1px_0_0_rgba(0,0,0,0.9))_drop-shadow(0_1px_0_rgba(0,0,0,0.9))_drop-shadow(0_-1px_0_rgba(0,0,0,0.9))]"
-        title="줌 리셋"
+        title={t("map.scale_bar.reset_zoom")}
       >
         {/* 1. scale bar — width matches exactly the distance the label shows. */}
         <div

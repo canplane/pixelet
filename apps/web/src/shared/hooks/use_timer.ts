@@ -1,4 +1,4 @@
-// @pxl/web/shared/lib/hooks/use_timer.ts
+// @pxl/web/shared/hooks/use_timer.ts
 
 import { useEffect, useRef } from "react";
 

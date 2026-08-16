@@ -64,9 +64,9 @@ export type CameraStore = {
   set_is_follow_mode: (is_follow_mode: boolean) => void;
 
   /** When enabled, panning re-samples terrain elevation under the map center every drag step. */
-  follow_terrain: boolean;
-  set_follow_terrain: (follow_terrain: boolean) => void;
-  toggle_follow_terrain: () => void;
+  ground_snap: boolean;
+  set_ground_snap: (ground_snap: boolean) => void;
+  toggle_ground_snap: () => void;
 };
 
 export const useCameraStore = create<CameraStore>((set) => ({
@@ -130,7 +130,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
   is_follow_mode: false,
   set_is_follow_mode: (is_follow_mode) => set((state) => state.is_follow_mode === is_follow_mode ? state : { is_follow_mode }),
 
-  follow_terrain: true,
-  set_follow_terrain: (follow_terrain) => set((state) => state.follow_terrain === follow_terrain ? state : { follow_terrain }),
-  toggle_follow_terrain: () => set((state) => ({ follow_terrain: !state.follow_terrain })),
+  ground_snap: true,
+  set_ground_snap: (ground_snap) => set((state) => state.ground_snap === ground_snap ? state : { ground_snap }),
+  toggle_ground_snap: () => set((state) => ({ ground_snap: !state.ground_snap })),
 }));

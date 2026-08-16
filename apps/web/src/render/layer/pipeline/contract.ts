@@ -9,7 +9,6 @@
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import type { ChunkVolume } from "./volume.ts";
-import type { ChunkSurface } from "./chunk_surface.ts";
 
 /**
  * One renderer-owned 64x64 chunk inside an L3 terrain page. `page_off` is
@@ -41,14 +40,6 @@ export interface WorldLayer {
    * layer contributed at least one voxel.
    */
   paint(key: ChunkKey, target: ChunkVolume): boolean;
-
-  /**
-   * Optional top-only fast path used by coarse LODs. A stack falls back to
-   * dense composition unless every registered layer implements it, keeping
-   * future layer correctness ahead of this optimization.
-   */
-  /** `undefined` means this key requires the dense path for correctness. */
-  paint_surface?(key: ChunkKey, target: ChunkSurface): boolean | undefined;
 }
 
 /** Registration order is override priority: later layers win. */

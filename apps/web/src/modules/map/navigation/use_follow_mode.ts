@@ -113,7 +113,7 @@ export function useFollowMode() {
     // too, on the final coordinate right before it becomes map_center, is
     // what makes follow mode agree with pan/recenter on "where the ground
     // is" instead of only two of the three call sites agreeing.
-    set_map_center(useCameraStore.getState().follow_terrain ? ground_or_raw(smoothed_coord.current) : smoothed_coord.current);
+    set_map_center(useCameraStore.getState().ground_snap ? ground_or_raw(smoothed_coord.current) : smoothed_coord.current);
   }, [is_follow_mode, device_coord]);
 
   // dropping the smoothing anchors on exit means re-entering follow mode

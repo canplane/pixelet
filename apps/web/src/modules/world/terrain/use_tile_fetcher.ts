@@ -7,7 +7,8 @@ import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
-import { decode_terrain, type Terrain, type Tile } from "@pxl/shared/bake/format.ts";
+import type { Tile } from "@pxl/shared/bake/format.ts";
+import { fetch_terrain } from "./tile_repository.ts";
 import { useTileStore } from "./store.ts";
 import { CLEANUP_RADIUS, LOAD_RADIUS } from "./config.ts";
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
@@ -17,18 +18,14 @@ export const CHEBYSHEV_DIST = (v: IVec): u32 => Number(ivec.max_comp(ivec.abs(v)
 
 const pending_page_demands = new Set<IVec>();
 
-/** Fetches a single terrain page over plain HTTP and stores the decoded result. */
-async function fetch_tile(page_idx: IVec): Promise<void> {
+/** Loads a single terrain page and stores the decoded result. Transport lives
+ * in tile_repository.ts; this only owns the store write and the demand-set
+ * bookkeeping the effect below depends on. */
+async function load_tile(page_idx: IVec): Promise<void> {
   const set_tile = useTileStore.getState().set_tile;
 
   try {
-    const res = await fetch(`/api/world/terrain/tile/${page_idx.toString()}`);
-    if (!res.ok) throw new Error(`[tile/${ivec.repr(page_idx)}] http ${res.status}`);
-
-    const _tile = new Uint8Array(await res.arrayBuffer());
-
-    const terrain: Terrain = decode_terrain(_tile);
-    const tile: Tile = { terrain };
+    const tile: Tile = { terrain: await fetch_terrain(page_idx) };
     // logs only the id, not the decoded tile itself — that's a full terrain
     // payload (elevation grid + feature/coastline rows), and this fires on
     // every tile load, including rapid-fire ones during a pan/zoom gesture;
@@ -151,7 +148,7 @@ export function useTileFetcher() {
     const set_map_status = useMapStore.getState().set_map_status;
     set_map_status(MapStatus.LOADING);
 
-    Promise.all(demands.map((page_idx) => fetch_tile(page_idx))).then(() => {
+    Promise.all(demands.map((page_idx) => load_tile(page_idx))).then(() => {
       // pending_page_demands is module-level, shared across every call to
       // this effect — a later pan can kick off a fresh, still-loading batch
       // before this one's promises settle, and this batch finishing

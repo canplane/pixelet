@@ -3,6 +3,7 @@
 /** L3 heightfield -> temporary dense signed-Z render bands. */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
+import type { I16Array } from "@xpute/core/kit/array.ts";
 
 import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { common_types } from "@pxl/shared/spec/cell/common.ts";
@@ -13,8 +14,7 @@ import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { slice_chunk } from "./chunk.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT } from "./shader_meta.ts";
 
-import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN, MaterialClass, NO_LAYER, pack_material, type VoxelMaterial } from "../pipeline/volume.ts";
-import { type ChunkSurface, set_surface_pixel } from "../pipeline/chunk_surface.ts";
+import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN, MaterialClass, NO_LAYER, type VoxelMaterial } from "../pipeline/volume.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
 
@@ -58,6 +58,17 @@ function ground_material_at(ground: RenderGround, idx: u32, show_structures: boo
   return { material_class, r, g, b, layer_idx };
 }
 
+/**
+ * One band-aligned floor shared by the whole chunk. Unlike the old single
+ * 64-high band, sparse signed-Z bands can extend through every actual
+ * peak, so no z_top clamp can cut mountainous terrain or raycasts flat.
+ */
+function terrain_floor_of(ele: I16Array): number {
+  let min_ele = Infinity;
+  for (let i = 0; i < CHUNK_CELL_SPAN2; i++) min_ele = Math.min(min_ele, ele[i]);
+  return Math.floor((min_ele - TERRAIN_Z_MARGIN) / L2_BAND_CELL_SPAN) * L2_BAND_CELL_SPAN;
+}
+
 export class TerrainWorldLayer implements WorldLayer {
   readonly name = "terrain";
 
@@ -71,36 +82,13 @@ export class TerrainWorldLayer implements WorldLayer {
 
     const { ground, ele } = slice_chunk(tile.terrain.ground, tile.terrain.ele, key.page_off);
     const show_structures = useDebugStore.getState().show_structures;
-
-    let min_ele = Infinity;
-    for (let i = 0; i < CHUNK_CELL_SPAN2; i++) min_ele = Math.min(min_ele, ele[i]);
-
-    // One band-aligned floor shared by the column. Unlike the old single
-    // 64-high band, sparse signed-Z bands can extend through every actual
-    // peak, so no z_top clamp can cut mountainous terrain or raycasts flat.
-    const terrain_floor = Math.floor((min_ele - TERRAIN_Z_MARGIN) / L2_BAND_CELL_SPAN) * L2_BAND_CELL_SPAN;
+    const terrain_floor = terrain_floor_of(ele);
 
     for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
       for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
         const i = cy * CHUNK_CELL_SPAN + cx;
         const material = ground_material_at(ground, i, show_structures);
         fill_chunk_column(target, cx, cy, terrain_floor, ele[i] - 1, material);
-      }
-    }
-    return true;
-  }
-
-  paint_surface(key: ChunkKey, target: ChunkSurface): boolean {
-    const tile = useTileStore.getState().get_tile(key.page_idx);
-    if (!tile) return false;
-    const { ground, ele } = slice_chunk(tile.terrain.ground, tile.terrain.ele, key.page_off);
-    const show_structures = useDebugStore.getState().show_structures;
-
-    for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
-      for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
-        const i = cy * CHUNK_CELL_SPAN + cx;
-        const material = ground_material_at(ground, i, show_structures);
-        set_surface_pixel(target, cx, cy, ele[i] - 1, pack_material(material), material.layer_idx);
       }
     }
     return true;

@@ -1,7 +1,5 @@
 // @pxl/web/modules/map/ui/overlay/bottom_overlays.tsx
 
-import { useState } from "react";
-
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { CameraStatus, useCameraStore } from "@/modules/camera/store.ts";
 import { ModeBar } from "./mode_bar.tsx";
@@ -16,21 +14,16 @@ import { ModeBar } from "./mode_bar.tsx";
  * reasoning/shared footprint constants that decision feeds into (the toast
  * container in toaster.tsx still reads BOTTOM_OVERLAY_SAFE_PX to clear the
  * mode bar).
+ *
+ * The required OSM/Copernicus data-source attribution used to collapse
+ * behind a bottom-right ⓘ here — moved to the settings modal's own license
+ * section (app/settings/settings_modal.tsx), reachable from the always-
+ * visible top-left settings trigger, per the OSMF Attribution Guidelines'
+ * accommodation for collapsing it behind a discoverable information control.
  */
 export function BottomOverlays() {
   const camera_status: CameraStatus = useCameraStore((state) => state.camera_status);
   const is_camera_busy: boolean = camera_status !== CameraStatus.IDLE;
-
-  // Both required data-source notices (see this file's attribution block
-  // below) collapse behind a tap instead of sitting permanently on-screen —
-  // Copernicus's notice alone is too long for a phone-width viewport, and
-  // OSM's stays collapsed too rather than getting a different rule just
-  // because it happens to be short. Allowed by the OSMF Attribution
-  // Guidelines' own accommodation for this ("may be collapsed... [if]
-  // discoverable through an information button"). This is a stopgap, not
-  // the final home for this content — once a real Settings/About screen
-  // exists, this belongs there instead of behind a map-corner ⓘ.
-  const [show_data_credits, set_show_data_credits] = useState(false);
 
   const interaction_style = cn(
     "transition-all duration-500 ease-in-out",
@@ -41,78 +34,6 @@ export function BottomOverlays() {
     <>
       {/* 4. bottom-left: origin-jump debug utility */}
       <div className={cn("absolute bottom-8 left-8 z-50", interaction_style)} />
-
-      {
-        /* Click-outside-to-close backdrop for the data-credits panel below
-      — rendered OUTSIDE the interaction_style-bearing wrapper on purpose:
-      that wrapper always carries a `scale-*` class (even scale-100 at
-      rest), and ANY transform value (identity included) makes an element
-      a containing block for its own `position: fixed` descendants — a
-      fixed backdrop nested inside it would resolve `inset-0` against that
-      small wrapper's own box instead of the real viewport, silently
-      failing to catch outside clicks. No explicit z-index needed: it has
-      none, so the z-50 panel/button below it win by explicit z-index
-      regardless of DOM order. */
-      }
-      {show_data_credits && (
-        <div
-          className="fixed inset-0 pointer-events-auto"
-          onClick={() => set_show_data_credits(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {
-        /* Data source attribution — the ⓘ trigger itself stays visible
-      whenever the map is up (matches the top-4 right-4 top-right address
-      menu's own margin for symmetry), independent of whether the
-      Nominatim reverse-geocode lookup succeeds, since what it discloses
-      covers the whole terrain/road/building bake, not just that lookup.
-      Two required notices live behind it: OSM covers roads/buildings/
-      coastline + Nominatim, Copernicus WorldDEM-30 covers elevation
-      (infra/geo/esa-elevation/) — see infra/geo/README.md's own "Data
-      Licensing & Attribution" section for why each notice is worded the
-      way it is; neither text is something to edit/shorten. */
-      }
-      <div
-        className={cn(
-          "absolute bottom-4 right-4 z-50 text-[8px] text-white/30 text-right leading-tight",
-          interaction_style,
-        )}
-      >
-        {
-          /* Both notices collapse behind the same disclosure, symmetrically
-          — OSM's own text would fit permanently on-screen on its own, but
-          leaving it uncollapsed while Copernicus collapses would make the
-          two look like they're held to different rules for no real reason.
-          The ⓘ and the panel are mutually exclusive (one or the other, never
-          both) rather than the ⓘ persisting alongside an expanding panel —
-          closing only ever happens via the outside-click backdrop above, so
-          there's no separate "close" affordance to keep the ⓘ around for.
-          Both share this exact same bottom-4/right-4 anchor, so their outer
-          margins are identical by construction, matching the top-4/right-4
-          top-right address menu. */
-        }
-        {show_data_credits
-          ? (
-            <div className="pointer-events-auto flex w-[min(320px,calc(100vw-2rem))] flex-col gap-2 rounded bg-black/40 backdrop-blur-sm p-2 text-white/70">
-              <span>© OpenStreetMap contributors</span>
-              <span>
-                produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved
-              </span>
-            </div>
-          )
-          : (
-            <button
-              type="button"
-              onClick={() => set_show_data_credits(true)}
-              aria-label="데이터 출처 표시"
-              className="pointer-events-auto flex h-4 w-4 items-center justify-center rounded-full border border-white/30 text-[8px] leading-none hover:text-white/50"
-            >
-              i
-            </button>
-          )}
-      </div>
 
       {
         /* 5. bottom-center: floating mode bar. z-40 — the toast pill uses
