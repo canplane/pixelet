@@ -77,7 +77,7 @@ export function InfiniteScroll<T>(props: InfiniteScrollProps<T>) {
     <>
       {children(visibleItems)}
 
-      {/* IntersectionObserver용 빈 div */}
+      {/* empty div for IntersectionObserver to watch */}
       <div ref={observerTarget} className="h-px w-full" />
     </>
   );

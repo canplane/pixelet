@@ -15,6 +15,7 @@
     "npm:@radix-ui/react-scroll-area@^1.2.10": "1.2.10_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@radix-ui/react-separator@^1.1.8": "1.1.8_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@radix-ui/react-slot@^1.2.4": "1.2.4_@types+react@19.2.14_react@19.2.4",
+    "npm:@radix-ui/react-switch@^1.2.6": "1.2.6_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@radix-ui/react-tooltip@^1.2.8": "1.2.8_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@react-three/drei@^10.7.7": "10.7.7_@react-three+fiber@9.5.0__react@19.2.4__react-dom@19.2.4___react@19.2.4__three@0.183.2__@types+react@19.2.14__immer@11.1.4_react@19.2.4_react-dom@19.2.4__react@19.2.4_three@0.183.2_@types+react@19.2.14_@types+three@0.183.1_immer@11.1.4",
     "npm:@react-three/fiber@^9.5.0": "9.5.0_react@19.2.4_react-dom@19.2.4__react@19.2.4_three@0.183.2_@types+react@19.2.14_immer@11.1.4",
@@ -704,6 +705,26 @@
         "@types/react"
       ]
     },
+    "@radix-ui/react-switch@1.2.6_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4": {
+      "integrity": "sha512-bByzr1+ep1zk4VubeEVViV592vu2lHE2BZY5OnzehZqOOgogN80+mNtCqPkhn2gklJqOpxWgPoYTSnhBCqpOXQ==",
+      "dependencies": [
+        "@radix-ui/primitive",
+        "@radix-ui/react-compose-refs",
+        "@radix-ui/react-context",
+        "@radix-ui/react-primitive@2.1.3_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
+        "@radix-ui/react-use-controllable-state",
+        "@radix-ui/react-use-previous",
+        "@radix-ui/react-use-size",
+        "@types/react",
+        "@types/react-dom",
+        "react",
+        "react-dom"
+      ],
+      "optionalPeers": [
+        "@types/react",
+        "@types/react-dom"
+      ]
+    },
     "@radix-ui/react-tooltip@1.2.8_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4": {
       "integrity": "sha512-tY7sVt1yL9ozIxvmbtN5qtmH2krXcBCfjEiCgKGLqunJHvgvZG2Pcl2oQ3kbcZARb1BGEHdkLzcYGO8ynVlieg==",
       "dependencies": [
@@ -775,6 +796,16 @@
     },
     "@radix-ui/react-use-layout-effect@1.1.1_@types+react@19.2.14_react@19.2.4": {
       "integrity": "sha512-RbJRS4UWQFkzHTTwVymMTUv8EqYhOp8dOOviLj2ugtTiXRaRQS7GLGxZTLL1jWhMeoSCf5zmcZkqTl9IiYfXcQ==",
+      "dependencies": [
+        "@types/react",
+        "react"
+      ],
+      "optionalPeers": [
+        "@types/react"
+      ]
+    },
+    "@radix-ui/react-use-previous@1.1.1_@types+react@19.2.14_react@19.2.4": {
+      "integrity": "sha512-2dHfToCj/pzca2Ck724OZ5L0EVrr3eHRNsG/b3xQJLA2hZpVCS99bLAX+hm1IHXDEnzU6by5z/5MIY794/a8NQ==",
       "dependencies": [
         "@types/react",
         "react"
@@ -2368,6 +2399,7 @@
           "npm:@radix-ui/react-scroll-area@^1.2.10",
           "npm:@radix-ui/react-separator@^1.1.8",
           "npm:@radix-ui/react-slot@^1.2.4",
+          "npm:@radix-ui/react-switch@^1.2.6",
           "npm:@radix-ui/react-tooltip@^1.2.8",
           "npm:@react-three/drei@^10.7.7",
           "npm:@react-three/fiber@^9.5.0",

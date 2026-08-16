@@ -3,10 +3,10 @@
 import { assertEquals } from "@std/assert";
 import * as THREE from "three";
 
-import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, MaterialClass, NO_LAYER, pack_material, set_chunk_voxel } from "./volume.ts";
-import { build_chunk_instances, build_chunk_surface, type BuiltChunk } from "./chunk_mesher.ts";
-import { set_surface_pixel } from "./chunk_surface.ts";
-import { composite_chunk_layers, composite_chunk_surface_layers } from "./compositor.ts";
+import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, MaterialClass, NO_LAYER, set_chunk_voxel } from "./volume.ts";
+import { build_chunk_instances, type BuiltChunk } from "./chunk_mesher.ts";
+import { scan_all_column_runs } from "./voxel_scan.ts";
+import { composite_chunk_layers } from "./compositor.ts";
 import { ray_hit_chunk } from "./chunk_raycast.ts";
 import type { ChunkKey, WorldLayer } from "./contract.ts";
 
@@ -36,10 +36,6 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
       fill_chunk_column(target, 2, 3, -18, 18, LAND);
       return true;
     },
-    paint_surface: (_key, target) => {
-      set_surface_pixel(target, 2, 3, 18, pack_material(LAND), LAND.layer_idx);
-      return true;
-    },
   };
   const objects: WorldLayer = {
     name: "test-objects",
@@ -49,19 +45,17 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
       set_chunk_voxel(target, 2, 3, 20, OBJECT, [64, 128, 192, 128]);
       return true;
     },
-    paint_surface: (_key, target) => {
-      set_surface_pixel(target, 2, 3, 20, pack_material(OBJECT), OBJECT.layer_idx);
-      return true;
-    },
   };
 
   const volume = composite_chunk_layers([terrain, objects], KEY)!;
-  const dense_surface = build_chunk_surface(volume);
-  const direct_surface = composite_chunk_surface_layers([terrain, objects], KEY)!;
-  assertEquals(direct_surface, dense_surface);
   assertEquals(chunk_band_zs(volume), [-1, 0]);
 
-  const built = build_chunk_instances(volume, 1);
+  // scan_all_column_runs (see voxel_scan.ts) is the shared entry point
+  // build_chunk_bucket/chunk_stage.tsx use — one full-chunk scan, reused
+  // across LOD builds, instead of build_chunk_instances touching the
+  // volume itself.
+  const column_runs = scan_all_column_runs(volume);
+  const built = build_chunk_instances(column_runs, 1);
   assertEquals([built.terrain.cnt, built.objects.cnt], [1, 1]);
   assertEquals(Array.from(built.terrain.matrices.slice(12, 15)), [2.5, 3.5, 0.5]);
   assertEquals(Array.from(built.objects.matrices.slice(12, 15)), [2.5, 3.75, 21]);
@@ -75,6 +69,9 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
   assertEquals(Number.isFinite(terrain_bounds.sphere.radius) && terrain_bounds.sphere.radius > 0, true);
   assertEquals(Number.isFinite(object_bounds.sphere.radius) && object_bounds.sphere.radius > 0, true);
 
+  // ray_hit_chunk still reads the live volume directly (merge_column_runs
+  // per column, on demand) — a separate, unrelated-to-column_runs path, so
+  // it has to agree with build_chunk_instances' own boxes independently.
   const down = ray_hit_chunk(new THREE.Ray(new THREE.Vector3(2.5, 3.75, 30), new THREE.Vector3(0, 0, -1)), volume, 0, 0, 100)!;
   assertEquals(down.material_class, MaterialClass.OBJECT);
   assertEquals(down.face_normal, [0, 0, 1]);

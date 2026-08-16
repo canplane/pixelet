@@ -15,6 +15,7 @@ import {
   MaterialClass,
   ordered_chunk_bands,
   SUB_CELL_NONE,
+  type SubVoxelEntry,
   unpack_sub_cell_fraction,
   type VoxelBand,
 } from "./volume.ts";
@@ -33,7 +34,56 @@ export type MeshRun = {
   sub_oz: u32;
 };
 
-export function merge_column_runs(volume: ChunkVolume, cx: u32, cy: u32, only_band_z?: i32): MeshRun[] {
+function push_sub_voxel_run(runs: MeshRun[], entry: SubVoxelEntry): void {
+  runs.push({
+    z0: entry.z,
+    z1: entry.z,
+    r: entry.r,
+    g: entry.g,
+    b: entry.b,
+    layer_idx: entry.layer_idx,
+    material_class: entry.material_class,
+    sub_sz: entry.sub_sz,
+    sub_ox: entry.sub_ox,
+    sub_oy: entry.sub_oy,
+    sub_oz: entry.sub_oz,
+  });
+}
+
+/**
+ * Per-(band, column) buckets of `extra_sub_voxels`, built once and reused
+ * across every column `merge_column_runs` visits for the same chunk
+ * (`scan_all_column_runs` below) — a band's `extra_sub_voxels` used to get
+ * filtered by `cx`/`cy` fresh on every one of those 4096 calls, an O(4096 *
+ * N) re-scan of the same array. Profiled: a chunk with a lot of placed
+ * sub-cell objects (large N) cost far more than its band count alone
+ * predicted — this was why.
+ */
+export type SubVoxelIndex = ReadonlyMap<VoxelBand, ReadonlyMap<u32, readonly SubVoxelEntry[]>>;
+
+export function index_extra_sub_voxels(bands: readonly VoxelBand[]): SubVoxelIndex {
+  const index = new Map<VoxelBand, Map<u32, SubVoxelEntry[]>>();
+  for (const band of bands) {
+    if (band.extra_sub_voxels.length === 0) continue;
+    const per_column = new Map<u32, SubVoxelEntry[]>();
+    for (const entry of band.extra_sub_voxels) {
+      const key = entry.cy * L2_BAND_CELL_SPAN + entry.cx;
+      let list = per_column.get(key);
+      if (!list) per_column.set(key, list = []);
+      list.push(entry);
+    }
+    index.set(band, per_column);
+  }
+  return index;
+}
+
+export function merge_column_runs(
+  volume: ChunkVolume,
+  cx: u32,
+  cy: u32,
+  only_band_z?: i32,
+  sub_voxel_index?: SubVoxelIndex,
+): MeshRun[] {
   const runs: MeshRun[] = [];
   if (volume.bands.length === 0) return runs;
 
@@ -96,21 +146,14 @@ export function merge_column_runs(volume: ChunkVolume, cx: u32, cy: u32, only_ba
       }
     }
 
-    for (const entry of band.extra_sub_voxels) {
-      if (entry.cx !== cx || entry.cy !== cy) continue;
-      runs.push({
-        z0: entry.z,
-        z1: entry.z,
-        r: entry.r,
-        g: entry.g,
-        b: entry.b,
-        layer_idx: entry.layer_idx,
-        material_class: entry.material_class,
-        sub_sz: entry.sub_sz,
-        sub_ox: entry.sub_ox,
-        sub_oy: entry.sub_oy,
-        sub_oz: entry.sub_oz,
-      });
+    if (sub_voxel_index) {
+      const entries = sub_voxel_index.get(band)?.get(cy * L2_BAND_CELL_SPAN + cx);
+      if (entries) { for (const entry of entries) push_sub_voxel_run(runs, entry); }
+    } else {
+      for (const entry of band.extra_sub_voxels) {
+        if (entry.cx !== cx || entry.cy !== cy) continue;
+        push_sub_voxel_run(runs, entry);
+      }
     }
   }
   return runs;
@@ -163,9 +206,29 @@ function topmost_in_band(
   return null;
 }
 
+/**
+ * Every column's runs, scanned once. `merge_column_runs` walks live band
+ * data (`ChunkVolume`), which the renderer only keeps alive for one
+ * synchronous composite pass — this copies each column's result out into
+ * plain `MeshRun` objects (already true of `merge_column_runs`'s own
+ * output, never a view into the volume's typed arrays) so callers can
+ * retain and reuse `MeshRun[][]` across LOD rebuilds long after that
+ * volume has been released back to its pool.
+ */
+export function scan_all_column_runs(volume: ChunkVolume): MeshRun[][] {
+  const sub_voxel_index = index_extra_sub_voxels(volume.bands);
+  const out: MeshRun[][] = new Array(L2_BAND_CELL_SPAN * L2_BAND_CELL_SPAN);
+  for (let cy: u32 = 0; cy < L2_BAND_CELL_SPAN; cy++) {
+    for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) {
+      out[cy * L2_BAND_CELL_SPAN + cx] = merge_column_runs(volume, cx, cy, undefined, sub_voxel_index);
+    }
+  }
+  return out;
+}
+
 export type RunBox = { min: V3; max: V3 };
 
-export function run_to_box(_volume: ChunkVolume, cx: u32, cy: u32, run: MeshRun): RunBox {
+export function run_to_box(cx: u32, cy: u32, run: MeshRun): RunBox {
   if (run.sub_sz === SUB_CELL_NONE) {
     return {
       min: [cx * U_PER_CELL, cy * U_PER_CELL, run.z0 * U_PER_CELL],

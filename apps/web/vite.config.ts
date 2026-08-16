@@ -55,6 +55,17 @@ export default defineConfig(({ mode }) => {
 
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
+  // Static tile origin for the serverless deployment: the pre-baked tiles
+  // (apps/api/src/bake/terrain/tools/bake_tiles.ts) live in an object store
+  // and are fetched directly, with no API server anywhere in the request
+  // path. Left empty in dev, where the client keeps hitting the live
+  // /api route through the proxy below and tiles are baked on demand.
+  const tileBase = env.VITE_TILE_BASE_URL || "";
+
+  // Reverse geocoding origin. Defaults to OSM's shared public Nominatim;
+  // see lib/env/config.ts for why this is configurable at all.
+  const geocodeBase = env.VITE_GEOCODE_BASE_URL || "https://nominatim.openstreetmap.org";
+
   return {
     // root `deno task dev` runs dev:api and dev:web concurrently in one
     // terminal (`sh -c "(deno task dev:api) & (deno task dev:web) & wait"`).
@@ -114,6 +125,9 @@ export default defineConfig(({ mode }) => {
       __ENV__: JSON.stringify("browser"),
       __APP_ENV__: JSON.stringify(appEnv),
       __IS_DEV__: JSON.stringify(isDev),
+
+      __TILE_BASE_URL__: JSON.stringify(tileBase),
+      __GEOCODE_BASE_URL__: JSON.stringify(geocodeBase),
 
       /** A droplet fades. A pixelet remains. 🫧 */
       __APP_NAME__: JSON.stringify("pixelet"),

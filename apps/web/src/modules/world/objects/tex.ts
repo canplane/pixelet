@@ -24,7 +24,7 @@ function create_object_texture(url: string): THREE.Texture {
   // frame rendered before the image arrived (a blank/white texture, since
   // that's what an unresolved THREE.Texture samples as) and never redraw
   // it, even though the texture object itself updated correctly — most
-  // visible right after flipping the low_spec ("텍스처팩") toggle with the
+  // visible right after flipping the low_spec ("Texture Pack") toggle with the
   // camera otherwise idle, since nothing else happens to trigger a frame.
   const tex = loader.load(url, () => invalidate());
   tex.colorSpace = THREE.SRGBColorSpace;

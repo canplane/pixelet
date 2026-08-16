@@ -3,11 +3,11 @@
 set -e
 set -o pipefail
 
-# 기본 경로 및 환경 설정
+# Base paths and environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OSM_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# .env 로드
+# Load .env
 DOTENV_PATH="$(cd "$OSM_ROOT/../../../" && pwd)/.env"
 
 if [ -f "$DOTENV_PATH" ]; then
@@ -18,7 +18,7 @@ else
     exit 1
 fi
 
-# 변수 가드
+# Required-variable guard
 if [ -z "$DB_GEO_CONTAINER" ]; then
     echo "❌ Error: DB_GEO_CONTAINER is not set. Check your .env file."
     exit 1
@@ -26,14 +26,14 @@ fi
 
 export PGPASSWORD="${DB_GEO_PASSWORD}"
 
-# [설정] DB 연결 정보
+# DB connection settings
 DB_CONTAINER="${DB_GEO_CONTAINER}"
 PGUSER="${DB_GEO_USER:-admin}"
 PGDATABASE="${DB_GEO_NAME:-geo}"
 PGPORT="${DB_GEO_PORT:-5433}"
 DB_HOST="${DB_GEO_HOST:-localhost}"
 
-# OSM 설정
+# OSM settings
 OSM_CACHE_SIZE=2000
 OSM_STYLE_NAME=default.style
 METADATA_FILE="$OSM_ROOT/metadata.json"
@@ -60,10 +60,10 @@ echo "🔍 Found $ENTRY_COUNT region(s) in metadata.json"
 # Step 2: Schema Initialization
 # ---------------------------------------------------------
 echo "🧹 Initializing Database Schema..."
-# HSTORE 확장 필수 확인
+# hstore extension is required
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c "CREATE EXTENSION IF NOT EXISTS hstore;"
 
-# 테이블 초기화
+# Drop existing tables
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
 "DROP TABLE IF EXISTS osm_elements, osm_roads, osm_features_catalog CASCADE;"
 
@@ -102,18 +102,26 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
         FILE_NAME=$(basename "$TARGET_PBF")
         mkdir -p "$(dirname "$TARGET_PBF")"
 
-        # 다운로드 로직
+        # Download if absent. Guarded the same way as the elevation pipeline:
+        # only fetch when the URL points at a file, so a provider landing page
+        # can never be saved under a .pbf name. `-f` makes curl fail on an HTTP
+        # error instead of writing the error body to the target.
         if [ ! -f "$TARGET_PBF" ]; then
-            if [ -n "$DOWNLOAD_URL" ]; then
-                echo "⬇️  Downloading from $DOWNLOAD_URL..."
-                curl -L -o "$TARGET_PBF" "$DOWNLOAD_URL"
-            else
-                echo "❌ Error: File missing ($TARGET_PBF) and cannot auto-download."
-                exit 1
-            fi
+            case "$DOWNLOAD_URL" in
+                *.pbf)
+                    echo "⬇️  Downloading from $DOWNLOAD_URL..."
+                    curl -fL -o "$TARGET_PBF" "$DOWNLOAD_URL"
+                    ;;
+                *)
+                    echo "❌ Missing raw file: $TARGET_PBF"
+                    echo "   provider.url does not point at a .pbf, so it cannot be fetched automatically."
+                    echo "   See infra/geo/README.md > 'Obtaining the raw data'."
+                    exit 1
+                    ;;
+            esac
         fi
 
-        # 카탈로그 등록
+        # Register in the catalog
         docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
         "INSERT INTO osm_features_catalog (region_code, data_date, file_name, status) 
          VALUES ('$REGION_CODE', '$DATA_DATE', '$FILE_NAME', 'PROCESSING')
@@ -126,7 +134,7 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
 
         STYLE_PATH="$OSM_ROOT/${OSM_STYLE_NAME:-default.style}"
         
-        # 🎯 핵심: --hstore-all 옵션이 있어 tags 컬럼에 모든 데이터가 들어감
+        # --hstore-all is the key flag: it puts every tag into the tags column
         osm2pgsql -U "$PGUSER" -d "$PGDATABASE" -H "$DB_HOST" -P "$PGPORT" \
           --slim --cache ${OSM_CACHE:-2000} \
           --hstore-all --extra-attributes \
@@ -151,7 +159,7 @@ MIGRATION_SQL="$OSM_ROOT/temp_migration.sql"
 cat <<EOF > "$MIGRATION_SQL"
 BEGIN;
 
--- 1. Point Data (tags 컬럼만 가져옴 - hstore-all 덕분에 데이터 완벽함)
+-- 1. Point data — only the tags column is needed, since --hstore-all captured everything
 INSERT INTO osm_elements (osm_id, type, tags, way) 
 SELECT DISTINCT ON (osm_id) 
     osm_id, 'point', tags, way 
@@ -165,7 +173,7 @@ SELECT DISTINCT ON (osm_id)
 FROM planet_osm_line
 ON CONFLICT (osm_id, type) DO UPDATE SET tags = osm_elements.tags || EXCLUDED.tags;
 
--- 3. Polygon Data (Relation ID 등 포함)
+-- 3. Polygon data (includes relation IDs)
 INSERT INTO osm_elements (osm_id, type, tags, way) 
 SELECT DISTINCT ON (osm_id) 
     osm_id, 'polygon', tags, way 
@@ -185,14 +193,14 @@ COMMIT;
 ANALYZE osm_elements;
 ANALYZE osm_roads;
 
--- 데이터가 들어온 후 정렬해야 물리적 배치가 최적화됩니다.
--- 시간이 좀 걸릴 수 있으므로 로그를 남기거나 필요 시 주석 처리
+-- Clustering only pays off once the data is in, so it runs last.
+-- It can take a while; comment it out if that is a problem.
 CLUSTER osm_elements USING idx_osm_elements_way;
 
--- 임시 테이블 삭제 (용량 확보)
+-- Drop the staging tables to reclaim space
 DROP TABLE IF EXISTS planet_osm_point, planet_osm_line, planet_osm_polygon, planet_osm_roads, planet_osm_nodes, planet_osm_rels, planet_osm_ways;
 
--- 상태 업데이트
+-- Update status
 UPDATE osm_features_catalog 
 SET status = 'COMPLETED', 
     total_count = (SELECT count(*) FROM osm_elements),
@@ -200,10 +208,10 @@ SET status = 'COMPLETED',
 WHERE status = 'PROCESSING';
 EOF
 
-# SQL 파일 실행
+# Run the SQL file
 docker cp "$MIGRATION_SQL" "$DB_CONTAINER":/tmp/migration.sql
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -f /tmp/migration.sql
 
-# 임시 파일 삭제
+# Remove the temporary file
 rm -f "$MIGRATION_SQL"
 echo "✨ OSM features integration completed! (primary: osm_elements, generalized: osm_roads)"

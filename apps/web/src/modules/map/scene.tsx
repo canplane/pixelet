@@ -1,15 +1,16 @@
 // @pxl/web/modules/map/scene.tsx
 
-import { useRef } from "react";
-import { Canvas } from "@react-three/fiber";
+import { type JSX, useEffect, useMemo, useRef } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { BrightnessContrast, EffectComposer, HueSaturation, Vignette } from "@react-three/postprocessing";
-import { BlendFunction } from "postprocessing";
+import { Bloom, BrightnessContrast, ChromaticAberration, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, TiltShift2, Vignette } from "@react-three/postprocessing";
+import { BlendFunction, SMAAPreset } from "postprocessing";
 
 import { useCamera } from "@/modules/camera/use_camera.ts";
 import { CameraInput } from "@/modules/camera/input.tsx";
 import { camera_cfg } from "@/modules/camera/config.ts";
 import { post_cfg, render_cfg } from "@/modules/world/environment/config.ts";
+import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { themes, type WorldTheme } from "@/modules/world/environment/themes.ts";
 import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { FrameProvider } from "@/modules/world/frame/context.tsx";
@@ -18,10 +19,9 @@ import { MapEnvironment } from "./environment.tsx";
 import { World } from "@/modules/world/world.tsx";
 import { useMapBootstrap } from "./navigation/use_map_bootstrap.ts";
 import { useTileFetcher } from "@/modules/world/terrain/use_tile_fetcher.ts";
-import { useTerrainFollowSync } from "@/modules/world/terrain/use_terrain_follow_sync.ts";
+import { useGroundSnapSync } from "@/modules/world/terrain/use_ground_snap_sync.ts";
 import { MapOverlays } from "./ui/overlay/map_overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
-import { DevPanel } from "@/app/dev/dev_panel.tsx";
 
 import { MapToastController } from "./ui/toast/toast_controller.tsx";
 
@@ -33,15 +33,57 @@ function CameraRig() {
   return <CameraInput />;
 }
 
+/**
+ * frameloop="demand" only repaints on invalidate() — a plain prop change
+ * reaching Canvas/EffectComposer from outside the Canvas tree (MapScene's
+ * own useRenderSettingsStore reads, e.g. dpr or an effect toggle) does update the
+ * underlying render/postprocessing state, but never triggers a new frame on
+ * its own, so the change stays invisible until something else happens to
+ * invalidate. Mounted inside the Canvas so useThree works, purely to force
+ * that missing invalidate whenever any dev render-toggle changes.
+ */
+function DevRenderToggleInvalidator(props: { deps: readonly unknown[] }) {
+  const invalidate = useThree((state) => state.invalidate);
+  useEffect(() => {
+    invalidate();
+  }, [invalidate, ...props.deps]);
+  return null;
+}
+
 export function MapScene() {
   useMapBootstrap();
   useTileFetcher();
-  useTerrainFollowSync();
+  useGroundSnapSync();
 
   const world_ref = useRef<THREE.Group>(null);
+  // Shared with environment.tsx (MapEnvironment writes this mesh's position
+  // every frame off the real-time sun direction) — see SUN_PROXY_DISTANCE's
+  // own doc comment there for why GodRays needs a real occludable Mesh
+  // rather than the sky dome's shader-drawn sun disc.
+  const sun_proxy_ref = useRef<THREE.Mesh>(null);
 
   const theme_key = useThemeKey();
   const theme: WorldTheme = themes[theme_key];
+
+  const show_ao = useRenderSettingsStore((state) => state.show_ao);
+  const show_bloom = useRenderSettingsStore((state) => state.show_bloom);
+  const show_tilt_shift = useRenderSettingsStore((state) => state.show_tilt_shift);
+  const show_smaa = useRenderSettingsStore((state) => state.show_smaa);
+  const show_chromatic_aberration = useRenderSettingsStore((state) => state.show_chromatic_aberration);
+  const show_god_rays = useRenderSettingsStore((state) => state.show_god_rays);
+  const high_dpr = useRenderSettingsStore((state) => state.high_dpr);
+  const show_shadow_map = useRenderSettingsStore((state) => state.show_shadow_map);
+
+  // ChromaticAberrationEffect's offset setter expects a real THREE.Vector2
+  // (it copies .x/.y off the argument) — unlike TiltShift2's own props,
+  // this component is the library's generic wrapEffect() wrapper, which
+  // passes props straight through to the constructor with no array
+  // coercion, so a plain [x, y] tuple would silently produce {x: undefined,
+  // y: undefined}.
+  const chromatic_aberration_offset = useMemo(
+    () => new THREE.Vector2(...post_cfg.CHROMATIC_ABERRATION.OFFSET),
+    [],
+  );
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
@@ -55,36 +97,32 @@ export function MapScene() {
         }}
       >
         <Canvas
-          // dpr={[1, 2]}: real spatial supersampling, not just edge AA.
-          // MSAA (tried below, previously multisampling={4}) only resolves
-          // per-sample *coverage/depth* — the fragment shader itself still
-          // runs once per output pixel, so it never re-evaluates shading at
-          // sub-pixel positions. That's fine for a triangle's silhouette
-          // edge, but this terrain is thousands of independently
-          // flat-shaded boxes that minify well below one pixel at any real
-          // distance (see the EffectComposer comment below) — the visible
-          // artifact there is shading-value flicker between neighboring
-          // facets sharing a pixel, which MSAA structurally cannot fix.
-          // Rendering the whole canvas (WebGL draw + the full post stack)
-          // at up to 2x linear resolution and letting the browser's own
-          // canvas-to-CSS downscale do a real per-pixel color average fixes
-          // both classes of aliasing at once. Was pinned to a flat 1
-          // specifically to bound close-zoom cost; revisiting now that
-          // CELL_SHAMT going -2 -> -1 cut instanced-terrain vertex/fragment
-          // load ~4x, freeing up roughly the budget this costs (dpr 2
-          // means ~4x the pixels, so ~4x the fragment-shading work of the
-          // whole pipeline, post stack included) — if this turns out too
-          // expensive on real devices, that's the number to re-check
-          // against, and the [1,2] cap keeps it from ever exceeding 2x even
-          // on a 3x/4x-DPR phone.
-          // TEMPORARY 2026-08-13: pinned to [1,1] to isolate resolution's
-          // own contribution to the desktop/Retina perf investigation
-          // (dpr=2 on a Retina display means 4x the pixels, hence ~4x the
-          // fragment-shading work, vs dpr=1) — separate from chunk-count/
-          // frustum-culling effects, which don't depend on pixel count at
-          // all. Kept at [1,1] deliberately — do not raise back to [1,2],
-          // that quadruples fragment-shading cost.
-          dpr={[1, 1]}
+          // dpr [1,2] (debug_store.ts's high_dpr, default off): real spatial
+          // supersampling, not just edge AA. MSAA (tried below, previously
+          // multisampling={4}) only resolves per-sample *coverage/depth* —
+          // the fragment shader itself still runs once per output pixel, so
+          // it never re-evaluates shading at sub-pixel positions. That's
+          // fine for a triangle's silhouette edge, but this terrain is
+          // thousands of independently flat-shaded boxes that minify well
+          // below one pixel at any real distance (see the EffectComposer
+          // comment below) — the visible artifact there is shading-value
+          // flicker between neighboring facets sharing a pixel, which MSAA
+          // structurally cannot fix. Rendering the whole canvas (WebGL draw +
+          // the full post stack) at up to 2x linear resolution and letting
+          // the browser's own canvas-to-CSS downscale do a real per-pixel
+          // color average fixes both classes of aliasing at once — but costs
+          // roughly 4x the fragment-shading work of the whole pipeline (post
+          // stack included), since dpr=2 on a Retina/high-DPI display means
+          // 4x the pixels; separate from chunk-count/frustum-culling
+          // effects, which don't depend on pixel count at all. TEMPORARY
+          // 2026-08-13: defaulted off (pinned at [1,1]) to isolate
+          // resolution's own contribution to a desktop/Retina perf
+          // investigation that's still open — settings-modal-only (Quality
+          // section's "High Resolution" toggle) until that's resolved and
+          // this can ship on by default.
+          // The [1,2] cap keeps it from ever exceeding 2x even on a
+          // 3x/4x-DPR phone once it is.
+          dpr={high_dpr ? [1, 2] : [1, 1]}
           gl={{
             antialias: false,
             powerPreference: "high-performance",
@@ -97,6 +135,14 @@ export function MapScene() {
             near: NEAR,
             far: FAR_CLIP,
           }}
+          // "percentage" (THREE.PCFShadowMap), not the bare `shadows` prop
+          // (defaults to the deprecated PCFSoftShadowMap, which the
+          // installed three.js version silently substitutes anyway while
+          // spamming a deprecation warning every frame — see git history on
+          // this exact string). false when show_shadow_map is off: r3f skips
+          // enabling renderer.shadowMap entirely rather than paying for a
+          // shadow-capable renderer state no light ever casts into.
+          shadows={show_shadow_map ? "percentage" : false}
           // Confirmed live via profiling: getProgramInfoLog/getShaderInfoLog
           // (three.js's post-compile GL log validation, run by default on
           // every new WebGLProgram — renderer.debug.checkShaderErrors
@@ -110,9 +156,15 @@ export function MapScene() {
           // bucket, previously one per L2) regardless of whether the
           // underlying compiled program is shared. Standard production
           // three.js/r3f advice (WebGLRenderer.debug.checkShaderErrors's own
-          // doc comment) is to disable this once shaders are known-good.
+          // doc comment) is to disable this once shaders are known-good —
+          // but "known-good" is exactly what onBeforeCompile's hand-written
+          // GLSL string surgery (chunk_stage.tsx) can't assume: a broken
+          // .replace() target or an undeclared identifier fails silently
+          // with this off, no console error at all (found the hard way
+          // debugging rim light). Dev keeps checks on to actually catch
+          // that; only production pays zero for the confirmed cost above.
           onCreated={(state) => {
-            state.gl.debug.checkShaderErrors = false;
+            state.gl.debug.checkShaderErrors = import.meta.env.DEV;
           }}
           // "always" rendered every frame unconditionally, even fully at
           // rest. "demand" only renders when something calls invalidate() —
@@ -131,11 +183,12 @@ export function MapScene() {
           // queues drain.
           frameloop="demand"
         >
+          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_tilt_shift, show_smaa, show_chromatic_aberration, show_god_rays, high_dpr, show_shadow_map]} />
           <FrameProvider>
             <CameraRig />
 
             {/* Lighting and sky environment */}
-            <MapEnvironment />
+            <MapEnvironment sun_proxy_ref={sun_proxy_ref} />
 
             {/* World layers in the floating-origin local frame */}
             <World ref={world_ref} />
@@ -143,16 +196,21 @@ export function MapScene() {
 
           {
             /*
-            "Miniature diorama" post stack — N8AO/Bloom/TiltShift2/SMAA
-            (2026-08-13) disabled, not deleted: confirmed real cost via live
-            profiling of the terrain pipeline (WebGLRenderer.renderBufferDirect/
-            setProgram time scaling with the post stack), and none of the four
-            are things a Minecraft-default-options level would even offer as a
-            toggle (SSAO/bloom/tilt-shift/post-AA are shader-pack territory,
-            not vanilla settings) — so turned fully off rather than kept behind
-            a runtime option. Commented out (not removed) so the "miniature
-            diorama" look this was built for is easy to bring back later, not
-            lost. Order mattered when these were active:
+            "Miniature diorama" post stack — N8AO/Bloom/TiltShift2/
+            ChromaticAberration/SMAA all default OFF, but not all for the
+            same reason. The umbrella reason is mobile: none of these are
+            things a Minecraft-default-options level would even offer as a
+            toggle (SSAO/bloom/tilt-shift/lens fringing/post-AA are
+            shader-pack territory, not vanilla settings). N8AO/Bloom/
+            TiltShift2/SMAA additionally have a confirmed real cost from
+            live profiling of the terrain pipeline (WebGLRenderer.
+            renderBufferDirect/setProgram time scaling with the post
+            stack) — ChromaticAberration wasn't part of that profiling run,
+            it's off purely on the mobile-default-options principle above.
+            All are user-reachable via the settings modal's Lighting/PostFx
+            sections (render/settings_store.ts's show_ao/show_bloom/
+            show_tilt_shift/show_chromatic_aberration/show_smaa) rather
+            than on by default. Order matters when these are on:
             1. N8AO — real screen-space contact/crevice AO. See git history
                (this comment block, pre-2026-08-13) for the normal-pass/
                radius-tuning notes from when it was built.
@@ -161,13 +219,19 @@ export function MapScene() {
                washing out.
             3. Color grade (contrast/saturation) — the flat/raw output reads
                washed out next to the punchy reference stills; this is cheap
-               and global, stays active below.
+               and global, stays active unconditionally below.
             4. TiltShift2 — screen-space blur band, the actual "macro lens"
                illusion that sold the miniature look. Worked because this
                camera holds a fixed top-down-ish angle, so screen-Y already
                correlates with depth the way a real tilt-shift lens exploits.
-            5. Vignette — subtle framing; cheap, stays active below.
-            6. SMAA last — edge cleanup after every other pass ran.
+            5. Vignette — subtle framing; cheap, stays active unconditionally
+               below.
+            6. ChromaticAberration — small radial RG/B channel split, a lens-
+               fringing cue toward the frame edge. Placed after Vignette/
+               TiltShift2 (so it displaces already-graded/blurred color) and
+               before SMAA (so AA smooths the fringe edges it introduces,
+               same reasoning as running SMAA last overall).
+            7. SMAA last — edge cleanup after every other pass ran.
           */
           }
           {
@@ -185,41 +249,82 @@ export function MapScene() {
           }
           <EffectComposer>
             {
-              /* <N8AO
-              quality={post_cfg.AO.QUALITY}
-              halfRes={post_cfg.AO.HALF_RES}
-              aoRadius={post_cfg.AO.RADIUS}
-              intensity={post_cfg.AO.INTENSITY}
-              distanceFalloff={post_cfg.AO.DISTANCE_FALLOFF}
-              color={post_cfg.AO.COLOR}
-            /> */
+              // EffectComposerProps types children as JSX.Element | JSX.Element[],
+              // not accepting `cond && <X/>`'s `false` branch — build the array
+              // and filter falsy entries out instead of inlining the conditionals.
+              [
+                show_ao && (
+                  <N8AO
+                    key="ao"
+                    quality={post_cfg.AO.QUALITY}
+                    halfRes={post_cfg.AO.HALF_RES}
+                    aoRadius={post_cfg.AO.RADIUS}
+                    intensity={post_cfg.AO.INTENSITY}
+                    distanceFalloff={post_cfg.AO.DISTANCE_FALLOFF}
+                    color={post_cfg.AO.COLOR}
+                  />
+                ),
+                show_bloom && (
+                  <Bloom
+                    key="bloom"
+                    intensity={post_cfg.BLOOM.INTENSITY}
+                    luminanceThreshold={post_cfg.BLOOM.LUMINANCE_THRESHOLD}
+                    luminanceSmoothing={post_cfg.BLOOM.LUMINANCE_SMOOTHING}
+                    mipmapBlur={post_cfg.BLOOM.MIPMAP_BLUR}
+                  />
+                ),
+                // sun_proxy_ref.current is only non-null once environment.tsx
+                // actually mounts the light-source mesh, which it only does
+                // while show_god_rays is on (same condition) — so this can't
+                // construct GodRaysEffect with a null sun the one frame
+                // between the setting flipping and the mesh's own ref
+                // attaching.
+                show_god_rays && sun_proxy_ref.current && (
+                  <GodRays
+                    key="god-rays"
+                    sun={sun_proxy_ref.current}
+                    samples={post_cfg.GOD_RAYS.SAMPLES}
+                    density={post_cfg.GOD_RAYS.DENSITY}
+                    decay={post_cfg.GOD_RAYS.DECAY}
+                    weight={post_cfg.GOD_RAYS.WEIGHT}
+                    exposure={post_cfg.GOD_RAYS.EXPOSURE}
+                    clampMax={post_cfg.GOD_RAYS.CLAMP_MAX}
+                    blendFunction={BlendFunction.SCREEN}
+                  />
+                ),
+                <BrightnessContrast key="grade-bc" brightness={post_cfg.GRADE.BRIGHTNESS} contrast={post_cfg.GRADE.CONTRAST} />,
+                <HueSaturation key="grade-hs" saturation={post_cfg.GRADE.SATURATION} />,
+                show_tilt_shift && (
+                  <TiltShift2
+                    key="tilt-shift"
+                    blur={post_cfg.TILT_SHIFT.BLUR}
+                    taper={post_cfg.TILT_SHIFT.TAPER}
+                    start={post_cfg.TILT_SHIFT.START}
+                    end={post_cfg.TILT_SHIFT.END}
+                    direction={post_cfg.TILT_SHIFT.DIRECTION}
+                    samples={post_cfg.TILT_SHIFT.SAMPLES}
+                  />
+                ),
+                <Vignette
+                  key="vignette"
+                  blendFunction={BlendFunction.NORMAL}
+                  darkness={post_cfg.VIGNETTE.DARKNESS}
+                  offset={post_cfg.VIGNETTE.OFFSET}
+                />,
+                show_chromatic_aberration && (
+                  <ChromaticAberration
+                    key="chromatic-aberration"
+                    offset={chromatic_aberration_offset}
+                    radialModulation={post_cfg.CHROMATIC_ABERRATION.RADIAL_MODULATION}
+                    modulationOffset={post_cfg.CHROMATIC_ABERRATION.MODULATION_OFFSET}
+                  />
+                ),
+                // preset defaults to SMAAPreset.MEDIUM if unset — bumped to
+                // HIGH for more edge-detection sensitivity (catches more/
+                // subtler edges), a moderate step up rather than ULTRA.
+                show_smaa && <SMAA key="smaa" preset={SMAAPreset.HIGH} />,
+              ].filter((effect): effect is JSX.Element => Boolean(effect))
             }
-            {
-              /* <Bloom
-              intensity={post_cfg.BLOOM.INTENSITY}
-              luminanceThreshold={post_cfg.BLOOM.LUMINANCE_THRESHOLD}
-              luminanceSmoothing={post_cfg.BLOOM.LUMINANCE_SMOOTHING}
-              mipmapBlur={post_cfg.BLOOM.MIPMAP_BLUR}
-            /> */
-            }
-            <BrightnessContrast brightness={post_cfg.GRADE.BRIGHTNESS} contrast={post_cfg.GRADE.CONTRAST} />
-            <HueSaturation saturation={post_cfg.GRADE.SATURATION} />
-            {
-              /* <TiltShift2
-              blur={post_cfg.TILT_SHIFT.BLUR}
-              taper={post_cfg.TILT_SHIFT.TAPER}
-              start={post_cfg.TILT_SHIFT.START}
-              end={post_cfg.TILT_SHIFT.END}
-              direction={post_cfg.TILT_SHIFT.DIRECTION}
-              samples={post_cfg.TILT_SHIFT.SAMPLES}
-            /> */
-            }
-            <Vignette
-              blendFunction={BlendFunction.NORMAL}
-              darkness={post_cfg.VIGNETTE.DARKNESS}
-              offset={post_cfg.VIGNETTE.OFFSET}
-            />
-            {/* <SMAA /> */}
           </EffectComposer>
         </Canvas>
       </div>
@@ -229,19 +334,6 @@ export function MapScene() {
 
       {/* Absolute-position UI layer */}
       <MapOverlays />
-
-      {
-        /* Debugging UI — moved here from app.tsx (was a root-level sibling
-        of AppRouter) so its z-10 actually compares against ModeBar's z-40
-        (bottom_overlays.tsx). This div's own `fixed inset-0` establishes
-        its own stacking context per spec (position:fixed always does,
-        independent of z-index), so a z-index living OUTSIDE it — like
-        DevPanel's old root-level placement — never actually competed
-        against anything inside; it just painted above the whole subtree
-        regardless of the number. Living inside now, the two z-indexes
-        finally resolve against each other as their numbers suggest. */
-      }
-      {__IS_DEV__ && <DevPanel />}
     </div>
   );
 }

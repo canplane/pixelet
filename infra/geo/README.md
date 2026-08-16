@@ -41,11 +41,13 @@ brew install osm2pgsql gdal postgis jq gettext
 brew link --force gettext
 ```
 
-- **osm2pgsql**: Vector data ingestion engine (PBF processing)
+- **osm2pgsql**: Vector data ingestion engine (PBF processing) — verified against 2.2.0
 - **gdal**: Raster/vector data conversion toolkit (warping, `ogr2ogr`, `raster2pgsql`, etc.)
 - **postgis**: PostgreSQL spatial extension and DB ingestion utilities
 - **jq**: JSON metadata parsing and manipulation
 - **gettext (envsubst)**: Environment variable substitution inside shell scripts
+
+> **Toolchain versions drift, and this pipeline has already been broken by it once.** `default.style` used to declare the `route` column twice; older osm2pgsql tolerated that, 2.2.0 rejects the whole run with `column "route" specified more than once`. If ingestion fails on something that looks like a schema complaint rather than a data problem, suspect the style file against your osm2pgsql version first.
 
 ### Execution Steps
 
@@ -54,6 +56,8 @@ All commands are run from the **project root (`pixelet/`)**.
 #### 1. Start the Geo Database container and health-check it
 
 Brings up the container using the `.env` file at the root.
+
+> **`down -v` destroys the data volume, and on this machine that volume is the only surviving copy of the ingested data.** The raw source files are not in the repository and are no longer on disk either (`region/*/raw/` holds only `.gitkeep`), and the OSM extract they came from is no longer downloadable — see the retention note in the next section. Re-ingesting would produce an equivalent dataset, not the same one. `down -v` belongs in a first build or a deliberate rebuild; to start an already-built database, drop that line.
 
 ```bash
 # 1. Bring up the infrastructure (clean start, dropping any existing data volume)
@@ -72,7 +76,57 @@ done
 echo '✅ DB is ready!'
 ```
 
-#### 2. Ingest each layer (order doesn't matter)
+#### 2. Obtain the raw data
+
+**None of the raw data is in this repository** — every source file is gitignored (see `infra/geo/.gitignore`), and only `.gitkeep` placeholders mark the directories. The ingestion scripts assume the files are already in place.
+
+Each pipeline's `metadata.json` lists the exact paths, and its `acquisition` block records whether the download is automated and where the file actually comes from. Paths there are relative to that pipeline's own directory (e.g. `infra/geo/osm-features/`).
+
+| Layer | Automated? | Source |
+| :--- | :--- | :--- |
+| OSM Features | **yes** — the script curls it if missing | [Geofabrik South Korea extract](https://download.geofabrik.de/asia/south-korea-latest.osm.pbf) |
+| OSM Coastline | no — download and unzip manually | [`land-polygons-split-3857.zip`](https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip) |
+| ESA Elevation | no — request each tile manually | [OpenTopography, Copernicus GLO-30](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3) |
+
+##### OSM Features (automated)
+
+Nothing to do. `setup-osm-features.sh` downloads `south-korea-latest.osm.pbf` if it is absent. Geofabrik publishes an `.md5` sidecar next to it if you want to verify the download.
+
+> **`-latest` is a moving target.** Re-running fetches whatever Geofabrik published today, while `data_date` in `metadata.json` stays pinned — so the catalog will claim a provenance it no longer has. Geofabrik does publish dated snapshots (`south-korea-YYMMDD.osm.pbf`), but retains them only a few months: the 2025-12-26 extract this dataset was originally built from is already gone. **Reproducing that exact dataset is no longer possible.** A current extract gets you an equivalent world, not an identical one — if that matters, pin a dated snapshot now and update `data_date` to match.
+
+##### OSM Coastline (manual)
+
+```bash
+cd infra/geo/osm-coastline/region/global/raw
+curl -LO https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip
+unzip land-polygons-split-3857.zip     # -> land-polygons-split-3857/land_polygons.shp
+rm land-polygons-split-3857.zip
+```
+
+The result must be `region/global/raw/land-polygons-split-3857/land_polygons.shp`, with its `.shx`/`.dbf`/`.prj`/`.cpg` sidecars beside it. The script names only the `.shp`; `ogr2ogr` resolves the rest itself. It errors out with `Main shapefile missing` if the path is wrong.
+
+This is the **split** version (large polygons pre-split), not the plain one — it is what the coastline/land classification is tuned for.
+
+##### ESA Elevation (manual, and the fiddly one)
+
+`provider.url` is an interactive portal page, not a file. Do **not** rely on the script's curl fallback here: it would happily save that HTML page under a `.tif` name, exit 0, and fail confusingly later inside GDAL — and since all four entries share one URL, you would get four identical HTML files with four different GeoTIFF names.
+
+Request four separate rasters from the OpenTopography portal, selecting **Copernicus GLO-30** and entering each bounding box. `metadata.json`'s `coverage[]` block gives the exact boxes and what each one is for:
+
+| Save as | Bounding box (EPSG:4326) | Covers |
+| :--- | :--- | :--- |
+| `GLO30_KOR_W125E130_S34N39_4326.tif` | W125 E130 S34 N39 | mainland South Korea |
+| `GLO30_KOR_W126E127_S33N34_4326.tif` | W126 E127 S33 N34 | Jeju |
+| `GLO30_KOR_W124E125_S37N39_4326.tif` | W124 E125 S37 N39 | far western islands |
+| `GLO30_KOR_W130E132_S37N38_4326.tif` | W130 E132 S37 N38 | Ulleungdo, Dokdo |
+
+Save each into `region/KR/raw/` under exactly the name above — the script derives the warped filename by substituting `4326` with `3857`, so it depends on that naming.
+
+OpenTopography also exposes a direct API (`portal.opentopography.org/API/globaldem?demtype=COP30&south=&north=&west=&east=&outputFormat=GTiff`) which would automate this, but it requires a free API key and currently returns `401` without one. If you register for a key, that is the route to automate.
+
+> **What this coverage actually means.** These four boxes do not tile the full 124–132°E / 33–39°N rectangle, but the ingestion pipeline builds a VRT spanning their union bounding box, so the mosaic *appears* to cover the whole rectangle — the gaps are filled with zeros that are indistinguishable from real sea-level data downstream. Real elevation exists only over the four boxes. Anywhere else inside the bbox (Japan, most of North Korea, China) bakes as flat terrain. That is fine for a South Korea demo and is why the boxes were chosen this way, but it is not a property the data announces about itself.
+
+#### 3. Ingest each layer (order doesn't matter)
 
 Each script internally loads the environment variables from the root `.env` to handle authentication and connection details.
 

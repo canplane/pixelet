@@ -1,26 +1,43 @@
 // @pxl/web/modules/map/environment.tsx
 
-import { useEffect, useMemo, useRef } from "react";
+import { type RefObject, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { invalidate, useFrame, useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
 
-import { render_cfg } from "@/modules/world/environment/config.ts";
+import { render_cfg, shadow_cfg } from "@/modules/world/environment/config.ts";
+import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { themes, type WorldTheme, WorldThemeKey } from "@/modules/world/environment/themes.ts";
 import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
 import { SUN_DIR } from "@/modules/world/environment/sun_dir.ts";
 import { get_moon_position, get_sun_position } from "@/modules/world/environment/celestial_position.ts";
 import { useFrameRotation } from "@/modules/world/frame/use_frame_rotation.ts";
+import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { rotate2 } from "@/modules/camera/orbit.ts";
+import { ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { L4_BASE } from "@pxl/shared/spec/space/indexer.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 
 const { FOG_NEAR, FOG_FAR, FAR_CLIP } = render_cfg;
 const { MAX_DIST } = camera_cfg.view;
+
+// get_sun_position/get_moon_position track real wall-clock time (a full
+// sweep is 24 real hours — celestial_position.ts), so from frame to frame
+// the light direction barely moves at all; re-rendering a full shadow map
+// (SUN_MAP_SIZE/MOON_MAP_SIZE-texel) every single frame regardless would be
+// pure waste. shadow.autoUpdate is turned off per-light (JSX shadow-autoUpdate
+// prop below) and shadow.needsUpdate is instead set by hand exactly when the
+// light's own direction has actually drifted past this angle since the last
+// shadow render — small enough that the shadow's own visible position
+// doesn't noticeably lag, large enough that at the real ~0.0042deg/s sweep
+// rate this fires roughly once every 10ish seconds during full daylight
+// instead of every frame.
+const SHADOW_UPDATE_DOT_THRESHOLD = Math.cos((shadow_cfg.UPDATE_ANGLE_DEG * Math.PI) / 180);
 
 // Same Seoul coordinate use_map_bootstrap.ts seeds map_center with before a
 // real GPS fix (or that fallback itself) resolves — reused here so the very
@@ -42,6 +59,18 @@ const FALLBACK_LON = 126.978;
 // out the MAX_DIST margin clips the dome exactly where a wide-shot camera
 // is most likely to be looking.
 const SKY_DOME_SCALE = (FAR_CLIP - MAX_DIST) * 0.9;
+
+// GodRaysEffect (scene.tsx's EffectComposer) needs a real, occludable scene
+// Mesh to sample as its light source — get_sun_position's own real position
+// (celestial_position.ts's SUN_DISTANCE=100) sits far too close, well inside
+// real terrain's own visible range (render_cfg's FOG_FAR≈900, and the camera
+// itself can orbit up to MAX_DIST=512 further out), so a sun proxy placed
+// there would constantly clip into/through nearby chunks instead of reading
+// as a distant light source. FRUSTUM-safe middle ground: past everywhere
+// real terrain/objects actually render, short of SKY_DOME_SCALE so the dome
+// doesn't clip it.
+const SUN_PROXY_DISTANCE = FOG_FAR + MAX_DIST + 400;
+const SUN_PROXY_RADIUS = SUN_PROXY_DISTANCE * 0.02;
 
 const sky_vert = /* glsl */ `
 varying vec3 v_world_pos;
@@ -257,8 +286,18 @@ const ENV_INVALIDATE_SLOW_MS = 2000;
 // counts as "done" and this can drop back to the slow rate.
 const ENV_TRANSITION_SETTLE_EPS = 0.005;
 
-export function MapEnvironment() {
+type MapEnvironmentProps = {
+  // Owned by MapScene (scene.tsx), not here — scene.tsx's own <GodRays sun={...}>
+  // needs this same Mesh instance to read, so the ref has to be created
+  // above both consumers rather than a new one made and kept local here.
+  sun_proxy_ref: RefObject<THREE.Mesh | null>;
+};
+
+export function MapEnvironment(props: MapEnvironmentProps) {
+  const { sun_proxy_ref } = props;
   const { scene } = useThree();
+
+  const show_god_rays = useRenderSettingsStore((state) => state.show_god_rays);
 
   // Real sun/moon position needs the map's actual latitude/longitude — this
   // read doesn't gate anything, just supplies a location for celestial_position.ts.
@@ -271,6 +310,8 @@ export function MapEnvironment() {
     }
     return { lat: FALLBACK_LAT, lon: FALLBACK_LON };
   };
+
+  const show_shadow_map = useRenderSettingsStore((state) => state.show_shadow_map);
 
   const theme_key = useThemeKey();
   const theme: WorldTheme = themes[theme_key];
@@ -285,6 +326,13 @@ export function MapEnvironment() {
   const sun_ref = useRef<THREE.DirectionalLight>(null);
   const moon_ref = useRef<THREE.DirectionalLight>(null);
   const hemi_ref = useRef<THREE.HemisphereLight>(null);
+
+  // read-only: MapEnvironment is a FrameProvider sibling of World (scene.tsx),
+  // not nested under it. Needed below to compose map_center's true world
+  // position via local_world_frame_ref.localToWorld() — see the shadow
+  // anchor block's own comment for why. Never write to this ref (owned by
+  // World's own useFrameTranslation call).
+  const { local_world_frame_ref } = useFrameRefs();
 
   /**
    * Rotating the dome mesh itself is a no-op: the sky shader colors purely
@@ -379,6 +427,26 @@ export function MapEnvironment() {
     [],
   );
 
+  // last light direction that actually triggered a shadow-map render (see
+  // SHADOW_UPDATE_DOT_THRESHOLD above) — zero-vector start is deliberate,
+  // not a magic sentinel: no real (normalized) light direction can dot to
+  // >= the threshold against a zero vector, so the very first frame always
+  // triggers the initial shadow render for free, without a separate
+  // "already initialized" flag.
+  const last_sun_shadow_dir = useRef(new THREE.Vector3());
+  const last_moon_shadow_dir = useRef(new THREE.Vector3());
+  const prev_is_night = useRef(is_night);
+  const prev_show_shadow_map = useRef(show_shadow_map);
+
+  // map_center's true world position (composing local-world-frame's
+  // translation AND world-frame's rotation via localToWorld — see the big
+  // comment where this is computed, below in "Light interpolation", for why
+  // this and not local-world-frame's own raw position or camera.position)
+  // — the point both shadow frustums recenter on every frame the setting is
+  // on.
+  const shadow_anchor_scratch = useRef(new THREE.Vector3());
+  const last_shadow_anchor = useRef(new THREE.Vector3());
+
   // stars/moon-disc visibility — lerped the same way as the light intensities
   // below (theme.lighting.hemisphere.intensity etc.), so night doesn't just
   // cut in but fades in alongside the rest of the theme transition. Also
@@ -434,6 +502,20 @@ export function MapEnvironment() {
     current_sun_position.current.lerp(sun_position_scratch.current, lerp_factor);
     moon_position_scratch.current.set(...get_moon_position(observer_lat, observer_lon));
     current_moon_position.current.lerp(moon_position_scratch.current, lerp_factor);
+
+    // Hoisted out of the sky block below (it's also read there) because the
+    // shadow-casting sun_ref/moon_ref direction needs it too — see the
+    // shadow-position block's own comment for why: a shadow's projected
+    // shape is only rotation-rigid (an L staying an L, not shearing into an
+    // I) if BOTH the geometry AND the light direction rotate together by
+    // the same azimuth. world_frame_ref's rotation is a pure Z-axis spin
+    // simulating "the camera turned" by turning the world under a fixed
+    // camera instead — so anything meant to represent a real,
+    // camera-independent physical direction (the actual sun) has to rotate
+    // WITH that spin to stay attached to the (rotating) world it's lighting,
+    // the same way SUN_DIR already does for the sky dome below.
+    const az = sky_frame_ref.current?.rotation.z ?? 0;
+
     if (sky_material_ref.current) {
       const { uniforms } = sky_material_ref.current;
       uniforms.u_sky_top.value.lerp(sky_top_color, lerp_factor);
@@ -446,14 +528,13 @@ export function MapEnvironment() {
       SUN_DIR.copy(current_sun_position.current).normalize();
 
       // rotate the *shader's own copies* of the sun/moon directions by the
-      // same azimuth world_frame_ref rotates by, so the visible disc sweeps
-      // across the sky as the map turns instead of sitting fixed on screen.
-      // sky_frame_ref is read purely as an already-damped azimuth value
-      // here (see its doc comment above) — this hook call registers its
-      // useFrame before this one runs (called earlier in this component
-      // body), so rotation.z is current as of this same frame, not one
-      // frame stale.
-      const az = sky_frame_ref.current?.rotation.z ?? 0;
+      // same azimuth world_frame_ref rotates by (az, hoisted above), so the
+      // visible disc sweeps across the sky as the map turns instead of
+      // sitting fixed on screen. sky_frame_ref is read purely as an
+      // already-damped azimuth value (see its doc comment above) — this
+      // hook call registers its useFrame before this one runs (called
+      // earlier in this component body), so rotation.z is current as of
+      // this same frame, not one frame stale.
       // stars/clouds (sky_frag) key off raw screen-ray direction, which
       // rotating the dome mesh itself can't fix (a sphere occupies the same
       // world-space point set regardless of its own spin, so v_world_pos for
@@ -480,20 +561,171 @@ export function MapEnvironment() {
 
     // ---- 3. Light interpolation ----
 
+    // day/night flips which of sun/moon actually casts (castShadow={!is_night}
+    // / castShadow={is_night} below) — the newly-active one may not have
+    // rendered a shadow map in a while (its own angular-delta check below
+    // still ran while it was inactive, so last_*_shadow_dir was already
+    // "caught up" and wouldn't otherwise re-trigger right on this transition
+    // frame), which would leave it showing a stale shadow angle from
+    // whenever it last actually cast one until the next natural angular
+    // update. Force both fresh exactly on the transition instead.
+    if (show_shadow_map && is_night !== prev_is_night.current) {
+      prev_is_night.current = is_night;
+      if (sun_ref.current) sun_ref.current.shadow.needsUpdate = true;
+      if (moon_ref.current) moon_ref.current.shadow.needsUpdate = true;
+    }
+
+    // Toggling show_shadow_map back on can't rely on the angular-delta
+    // checks below alone: those only fire once the light has drifted past
+    // SHADOW_UPDATE_DOT_THRESHOLD since last_*_shadow_dir was last touched,
+    // but last_*_shadow_dir is frozen while the setting is off — so a quick
+    // off/on cycle with the sun barely moving would otherwise skip a refresh
+    // even though chunk streaming (independent of the toggle) may have
+    // mounted/unmounted geometry the last-rendered shadow map never saw.
+    if (show_shadow_map !== prev_show_shadow_map.current) {
+      prev_show_shadow_map.current = show_shadow_map;
+      if (show_shadow_map) {
+        if (sun_ref.current) sun_ref.current.shadow.needsUpdate = true;
+        if (moon_ref.current) moon_ref.current.shadow.needsUpdate = true;
+      }
+    }
+
+    // sun_ref/moon_ref (below) live outside World's floating-origin frame
+    // chain (view-frame > world-frame [rotates by azimuth] > local-world-frame
+    // [translates] > per-L4-anchor group > per-page group > per-chunk group —
+    // world.tsx/registry.ts/anchor/node.tsx), so their shadow-camera frustum
+    // never inherits either the rotation or the translation that keeps
+    // actually-rendered chunk/object geometry positioned correctly as you pan
+    // and rotate. camera.position (use_camera.ts) is NOT a substitute for
+    // this: it's a fixed local orbit offset, always calling
+    // camera.lookAt(0, 0, 0), completely uninvolved in panning — an earlier
+    // version of this fix tracked it because rendered geometry happened to
+    // still be nearby in one un-rotated test, but it doesn't move or rotate
+    // at all, so it silently breaks the instant azimuth is non-zero (this
+    // file's own history has that attempt, plus an even earlier one that
+    // tracked local-world-frame's raw position alone, off by whatever
+    // additional offset the anchor/page/chunk levels below it contribute).
+    //
+    // The only correct anchor is "map_center's own true world position",
+    // computed the same way AnchorNode positions any of its children
+    // (anchor/node.tsx): map_center.i's offset from its owning L4 anchor's
+    // base, converted to real units, taken as a LOCAL point within
+    // local-world-frame and pushed through localToWorld() — which composes
+    // local-world-frame's translation AND world-frame's rotation correctly
+    // via its matrixWorld, unlike a raw vector add (which is what silently
+    // broke this the first two times: local-world-frame's own position
+    // already has the rotation baked in for ITS OWN origin, but a residual
+    // local offset on top of that still needs its own rotation applied, or
+    // it points the same raw direction regardless of current azimuth).
+    if (show_shadow_map && local_world_frame_ref.current && map_center) {
+      const anchor_base = L4_BASE(map_center.i);
+      const local: PVF3 = { i: ivec.sub(map_center.i, anchor_base), f: map_center.f };
+      shadow_anchor_scratch.current.set(
+        pvf3.to_real(pvf3.X(local)),
+        pvf3.to_real(pvf3.Y(local)),
+        pvf3.to_real(pvf3.Z(local)),
+      );
+      local_world_frame_ref.current.localToWorld(shadow_anchor_scratch.current);
+
+      if (!shadow_anchor_scratch.current.equals(last_shadow_anchor.current)) {
+        last_shadow_anchor.current.copy(shadow_anchor_scratch.current);
+        if (sun_ref.current) sun_ref.current.shadow.needsUpdate = true;
+        if (moon_ref.current) moon_ref.current.shadow.needsUpdate = true;
+      }
+    }
+
     if (ambient_ref.current) {
       ambient_ref.current.color.lerp(ambient_color, lerp_factor);
       ambient_ref.current.intensity = THREE.MathUtils.lerp(ambient_ref.current.intensity, theme.lighting.ambient.intensity, lerp_factor);
     }
 
     if (sun_ref.current) {
-      sun_ref.current.position.copy(current_sun_position.current);
+      // Rotated by az (unlike SUN_DIR/terrain's own uniform above) — sun_ref
+      // is a real DirectionalLight, illuminating real MeshStandardMaterial
+      // surfaces (placed objects, chunk_stage.tsx) via ordinary dot-product
+      // lighting AND driving the shadow camera below, and for a shadow's
+      // projected shape to stay rigid under rotation (an L staying an L,
+      // not shearing into an I as azimuth changes — this is what an
+      // un-rotated light direction against rotating geometry does: the
+      // light-to-geometry angle keeps changing even though nothing "really"
+      // moved) the light has to rotate WITH the geometry it's lighting, the
+      // same way the sky dome's own u_sun_dir already does above. This
+      // does NOT touch SUN_DIR (terrain's own shader uniform stays as
+      // before) — a real, pre-existing inconsistency this surfaces but
+      // doesn't fix, since unifying that is a bigger change than tonight's
+      // shadow-rotation fix.
+      const rotated_sun_dir = rotate2(current_sun_position.current.x, current_sun_position.current.y, az);
+      sun_ref.current.position.set(rotated_sun_dir.x, rotated_sun_dir.y, current_sun_position.current.z);
       sun_ref.current.color.lerp(sun_color, lerp_factor);
       sun_ref.current.intensity = THREE.MathUtils.lerp(sun_ref.current.intensity, theme.lighting.directional.intensity, lerp_factor);
+
+      // GodRaysEffect's own light-source Mesh (see SUN_PROXY_DISTANCE's doc
+      // comment) — same rotated direction as sun_ref itself, just normalized
+      // and scaled out to a distance real terrain/objects can't clip into.
+      // Not floating-frame-anchored, same reasoning as sun_ref/the sky dome
+      // (MapEnvironment's own doc comment above): this whole component
+      // renders outside World's floating-origin chain, so raw world
+      // coordinates already track the (fixed, lookAt(0,0,0)) camera
+      // correctly without an anchor offset. Kept mounted and updated
+      // unconditionally (show_god_rays or not) rather than conditionally
+      // mounted — scene.tsx's own <GodRays sun={...}> needs a real,
+      // already-attached Mesh ref the first render the setting flips on;
+      // conditionally mounting this element would leave sun_proxy_ref.current
+      // null for that render (refs attach during commit, one render after
+      // the JSX first appears), so GodRaysEffect would either skip a frame
+      // or need extra state just to know when the ref becomes available. A
+      // permanently-mounted 16-segment sphere is cheap enough that avoiding
+      // that complexity is worth it outright.
+      if (sun_proxy_ref.current) {
+        sun_proxy_ref.current.position
+          .set(rotated_sun_dir.x, rotated_sun_dir.y, current_sun_position.current.z)
+          .normalize()
+          .multiplyScalar(SUN_PROXY_DISTANCE);
+      }
+
+      // shadow.autoUpdate=false (JSX below) means this is the only thing
+      // that ever asks for a new shadow render — see
+      // SHADOW_UPDATE_DOT_THRESHOLD's own comment.
+      if (show_shadow_map) {
+        // sun_position_scratch is free to reuse here: its own job (this
+        // frame's fresh get_sun_position() target) is already done by the
+        // lerp above, nothing later in this frame reads it again. Must use
+        // the ROTATED direction (rotated_sun_dir), not current_sun_position
+        // directly — otherwise a pure azimuth change (sun angle itself
+        // unchanged) would never trip SHADOW_UPDATE_DOT_THRESHOLD below,
+        // leaving the shadow map stale after rotating even though the
+        // light's actual direction (post-rotation) demonstrably moved.
+        sun_ref.current.target.position.copy(shadow_anchor_scratch.current);
+        sun_ref.current.target.updateMatrixWorld();
+        sun_ref.current.position.add(shadow_anchor_scratch.current);
+
+        const sun_dir_now = sun_position_scratch.current.set(rotated_sun_dir.x, rotated_sun_dir.y, current_sun_position.current.z).normalize();
+        if (sun_dir_now.dot(last_sun_shadow_dir.current) < SHADOW_UPDATE_DOT_THRESHOLD) {
+          sun_ref.current.shadow.needsUpdate = true;
+          last_sun_shadow_dir.current.copy(sun_dir_now);
+        }
+      }
     }
 
     if (moon_ref.current) {
-      moon_ref.current.position.copy(current_moon_position.current);
+      // same rotation reasoning as the sun block above.
+      const rotated_moon_dir = rotate2(current_moon_position.current.x, current_moon_position.current.y, az);
+      moon_ref.current.position.set(rotated_moon_dir.x, rotated_moon_dir.y, current_moon_position.current.z);
       moon_ref.current.color.lerp(moon_color, lerp_factor);
+
+      // same reasoning as the sun block above, reusing moon_position_scratch
+      // the same way.
+      if (show_shadow_map) {
+        moon_ref.current.target.position.copy(shadow_anchor_scratch.current);
+        moon_ref.current.target.updateMatrixWorld();
+        moon_ref.current.position.add(shadow_anchor_scratch.current);
+
+        const moon_shadow_dir_now = moon_position_scratch.current.set(rotated_moon_dir.x, rotated_moon_dir.y, current_moon_position.current.z).normalize();
+        if (moon_shadow_dir_now.dot(last_moon_shadow_dir.current) < SHADOW_UPDATE_DOT_THRESHOLD) {
+          moon_ref.current.shadow.needsUpdate = true;
+          last_moon_shadow_dir.current.copy(moon_shadow_dir_now);
+        }
+      }
 
       moon_ref.current.intensity = THREE.MathUtils.lerp(
         moon_ref.current.intensity,
@@ -541,13 +773,68 @@ export function MapEnvironment() {
         color={theme.lighting.directional.color}
         intensity={theme.lighting.directional.intensity}
         position={current_sun_position.current}
+        castShadow={show_shadow_map && !is_night}
+        // manual update instead — see SHADOW_UPDATE_DOT_THRESHOLD's comment
+        // and the sun_ref block in the useFrame above.
+        shadow-autoUpdate={false}
+        shadow-mapSize={[shadow_cfg.SUN_MAP_SIZE, shadow_cfg.SUN_MAP_SIZE]}
+        // see shadow_cfg's own doc comment (environment/config.ts) for why
+        // this extent reuses its original tuned value unchanged.
+        shadow-camera-left={-shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-right={shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-top={shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-bottom={-shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-far={shadow_cfg.SUN_CAMERA_FAR}
+        shadow-bias={shadow_cfg.SUN_BIAS}
+        shadow-normalBias={shadow_cfg.SUN_NORMAL_BIAS}
       />
+
+      {
+        // GodRaysEffect's light-source Mesh (see SUN_PROXY_DISTANCE's doc
+        // comment above and scene.tsx's own <GodRays sun={sun_proxy_ref}>) —
+        // permanently mounted (see the useFrame block's own comment on why),
+        // visible only toggles whether it's ever drawn into the main color
+        // pass; GodRaysEffect reads the ref directly, unaffected by this.
+        // depthWrite={false} + transparent: GodRaysEffect's own constructor
+        // doc comment requires both, so real terrain/objects between the
+        // camera and this mesh occlude the light source for the effect's
+        // own occlusion pass without this sphere ever writing into (or
+        // fighting) the main depth buffer itself.
+        //
+        // Tried colorWrite={false} (2026-08-16) to hide this sphere's own
+        // visible disc — assumed GodRaysEffect built its occlusion mask via
+        // its own separate internal render, independent of the main color
+        // buffer. Wrong: with colorWrite off, the rays disappeared
+        // entirely, so this mesh's actual contribution to the main frame is
+        // load-bearing for the effect, not just a byproduct. Reverted —
+        // this means it really does show two "suns" (this sphere plus the
+        // sky dome's own procedural disc) whenever god rays are on; known,
+        // not fixed.
+      }
+      <mesh ref={sun_proxy_ref} visible={show_god_rays} position={current_sun_position.current}>
+        <sphereGeometry args={[SUN_PROXY_RADIUS, 16, 16]} />
+        <meshBasicMaterial color="#fff6d8" transparent depthWrite={false} toneMapped={false} />
+      </mesh>
 
       <directionalLight
         ref={moon_ref}
         color="#9fb4d6"
         intensity={is_night ? 0.18 : 0.0}
         position={current_moon_position.current}
+        castShadow={show_shadow_map && is_night}
+        // manual update instead — see SHADOW_UPDATE_DOT_THRESHOLD's comment
+        // and the moon_ref block in the useFrame above.
+        shadow-autoUpdate={false}
+        shadow-mapSize={[shadow_cfg.MOON_MAP_SIZE, shadow_cfg.MOON_MAP_SIZE]}
+        // same resolution reasoning as the sun above, scaled to this
+        // light's smaller map (see shadow_cfg's own doc comment).
+        shadow-camera-left={-shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-right={shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-top={shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-bottom={-shadow_cfg.FRUSTUM_HALF_EXTENT}
+        shadow-camera-far={shadow_cfg.MOON_CAMERA_FAR}
+        shadow-bias={shadow_cfg.MOON_BIAS}
+        shadow-normalBias={shadow_cfg.MOON_NORMAL_BIAS}
       />
 
       <hemisphereLight

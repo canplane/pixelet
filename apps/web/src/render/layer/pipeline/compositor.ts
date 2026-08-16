@@ -5,7 +5,6 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 
 import { alloc_chunk_volume, type ChunkVolume, release_chunk_volume, seal_chunk_volume } from "./volume.ts";
-import { alloc_chunk_surface, type ChunkSurface } from "./chunk_surface.ts";
 import type { ChunkKey, WorldLayerRevision, WorldLayerStack } from "./contract.ts";
 
 const stats = {
@@ -15,11 +14,8 @@ const stats = {
   render_builds: 0,
   render_compose_ms: 0,
   render_consume_ms: 0,
-  surface_builds: 0,
-  surface_compose_ms: 0,
   max_compose_ms: 0,
   max_consume_ms: 0,
-  max_surface_compose_ms: 0,
 };
 
 export function same_layer_revisions(a: readonly WorldLayerRevision[], b: readonly WorldLayerRevision[]): boolean {
@@ -44,31 +40,6 @@ export function composite_chunk_layers(stack: WorldLayerStack, key: ChunkKey): C
     return null;
   }
   return seal_chunk_volume(out);
-}
-
-/**
- * Minecraft-style heightmap path for coarse LODs. `undefined` means at least
- * one layer lacks the top-only contract and the caller must use dense
- * composition; `null` means the supported stack painted no surface.
- */
-export function composite_chunk_surface_layers(
-  stack: WorldLayerStack,
-  key: ChunkKey,
-): ChunkSurface | null | undefined {
-  if (stack.some((layer) => layer.paint_surface === undefined)) return undefined;
-  const start = performance.now();
-  const out = alloc_chunk_surface();
-  let any_present = false;
-  for (const layer of stack) {
-    const painted = layer.paint_surface!(key, out);
-    if (painted === undefined) return undefined;
-    any_present = painted || any_present;
-  }
-  const elapsed = performance.now() - start;
-  stats.surface_builds++;
-  stats.surface_compose_ms += elapsed;
-  stats.max_surface_compose_ms = Math.max(stats.max_surface_compose_ms, elapsed);
-  return any_present ? out : null;
 }
 
 /**

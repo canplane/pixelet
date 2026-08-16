@@ -1,13 +1,16 @@
 // @pxl/web/modules/map/ui/control/compass.tsx
 
+import { useTranslation } from "react-i18next";
+
 import { useCameraStore } from "@/modules/camera/store.ts";
 
 import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
 import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
 
-import { reground_map_center } from "@/modules/world/terrain/use_terrain_follow_sync.ts";
+import { reground_map_center } from "@/modules/world/terrain/use_ground_snap_sync.ts";
 
 export function MapCompass() {
+  const { t } = useTranslation();
   const view_state = useCameraStore((state) => state.view_state);
   const reset_azimuth = useCameraStore.getState().reset_azimuth;
   const { dist, azimuth } = view_state;
@@ -50,7 +53,7 @@ export function MapCompass() {
           actually show. This is a one-shot reset button, not a toggle with
           a real "currently active" state to indicate. */
       }
-      <CircularButton className="w-11 h-11" dark shadow={false} onClick={handle_reset}>
+      <CircularButton className="w-11 h-11" dark shadow={false} onClick={handle_reset} title={t("map.controls.reset_orientation")}>
         {
           /* N label — same dead-branch reasoning as the dropped isActive prop
         above: MotionContainer only mounts this while !is_default_orientation,

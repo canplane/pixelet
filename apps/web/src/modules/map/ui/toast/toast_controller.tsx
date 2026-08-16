@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, MapPinOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { DevicePoseStatus, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
@@ -60,6 +61,7 @@ function StatusIcon({ children }: { children: React.ReactNode }) {
  * spot instead of just both existing when both apply.
  */
 export function MapToastController() {
+  const { t } = useTranslation();
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
   const location_error_msg: string | null = useDeviceLocationStore((state) => state.error_msg);
 
@@ -86,7 +88,7 @@ export function MapToastController() {
         index={index}
         stack_size={stack_size}
         is_removing={is_removing}
-        message={is_error ? (location_error_msg || "위치 신호가 약합니다.") : "위치를 확인하고 있습니다."}
+        message={is_error ? (location_error_msg || t("toast.location_weak_signal")) : t("toast.location_checking")}
         statusColor={is_error ? "bg-red-500" : "bg-[#34C759]/30"}
         icon={<StatusIcon>{is_error ? <MapPinOff key="location-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
         backgroundColor={is_error ? "bg-red-50/85" : undefined}
@@ -94,7 +96,7 @@ export function MapToastController() {
       />
     ));
     // errors are state-persistent — no self-timer, dismissed only once location_status leaves LOADING/ERROR
-  }, [location_status, location_error_msg]);
+  }, [location_status, location_error_msg, t]);
 
   /** Map/center load status — purely about whether tiles have loaded around the current map_center, nothing about GPS. */
   const shown_map_toast_ref = useRef(false);
@@ -118,7 +120,7 @@ export function MapToastController() {
         index={index}
         stack_size={stack_size}
         is_removing={is_removing}
-        message={is_error ? "지도를 불러올 수 없습니다." : is_success ? "공간을 불러왔습니다." : "공간을 불러오고 있습니다."}
+        message={is_error ? t("toast.map_load_error") : is_success ? t("toast.map_load_success") : t("toast.map_loading")}
         statusColor={is_error ? "bg-red-500" : is_success ? "bg-[#34C759]" : "bg-[#34C759]/30"}
         icon={<StatusIcon>{is_error ? <MapPinOff key="map-error-icon" className="w-4 h-4 text-red-500" /> : is_success ? SuccessIcon : LoadingIcon}</StatusIcon>}
         backgroundColor={is_error ? "bg-red-50/85" : undefined}
@@ -131,7 +133,7 @@ export function MapToastController() {
     // flips true in Toast) — 3000ms total leaves ~2.55s of actually readable text.
     const timer = setTimeout(() => toast_dismiss("map-status"), 3000);
     return () => clearTimeout(timer);
-  }, [map_status]);
+  }, [map_status, t]);
 
   return null;
 }

@@ -51,19 +51,16 @@ Three independent axes describe any piece of world data, and none of them implie
 
 - **Layer** — which domain owns the data: `terrain` or `object`. See [Unified World-Layer Pipeline](#unified-world-layer-pipeline).
 - **Space** — which scale tier addresses it: the L0–L5 hierarchy above. Purely a size/addressing concept; a level's own name (Page, Chunk, Anchor, ...) says nothing about what shape of data lives at that tier.
-- **Shape** — how the data itself is structured: a **Tile** is a 2D/2.5D raster (terrain's own storage form, currently sized at L3/Page granularity); a **Volume** is a full 3D structure (the object octree's storage form, and the renderer's own temporary composited field at L2/Chunk granularity). A **Cell** is just a position/address — no size or dimensionality of its own, no payload; any space level's `addr`/`idx` is a Cell. A **Pixel** is a Cell plus its 2D payload — the atomic sample inside a Tile. A **Voxel** is a Cell plus its 3D material payload — the atomic sample inside a Volume. Neither Pixel nor Voxel is a container in its own right. A **Band** is one materialized `64³` Volume: the renderer's concrete in-memory instance holding a single occupied Z-band of an L2 column (see [Temporary dense bands](#temporary-dense-bands)) — renderer-only working storage, not a hierarchy level or a persisted format. A **Surface** is the renderer's own Tile: a compact top-only heightmap of one L2 chunk, used as a coarse-LOD shortcut instead of building a full Volume — the Tile-side counterpart to Band, at the same L2/Chunk granularity a Band uses.
+- **Shape** — how the data itself is structured: a **Tile** is a 2D/2.5D raster (terrain's own storage form, currently sized at L3/Page granularity); a **Volume** is a full 3D structure (the object octree's storage form, and the renderer's own temporary composited field at L2/Chunk granularity). A **Cell** is just a position/address — no size or dimensionality of its own, no payload; any space level's `addr`/`idx` is a Cell. A **Pixel** is a Cell plus its 2D payload — the atomic sample inside a Tile. A **Voxel** is a Cell plus its 3D material payload — the atomic sample inside a Volume. Neither Pixel nor Voxel is a container in its own right. A **Band** is one materialized `64³` Volume: the renderer's concrete in-memory instance holding a single occupied Z-band of an L2 column (see [Temporary dense bands](#temporary-dense-bands)) — renderer-only working storage, not a hierarchy level or a persisted format.
 
 Terrain today is Tile-shaped data addressed at Page granularity; objects are Volume-shaped (sparse octree) data anchored at Block granularity, with the renderer composing an L2/Chunk-sized Volume as their shared transport/render envelope (see [Temporary dense bands](#temporary-dense-bands)).
 
 | Layer                     | Space level             | Shape             | Concrete type                            | Atomic unit |
 | -------------------------- | ------------------------ | ------------------ | ----------------------------------------- | ----------- |
 | terrain (source)           | L3 Page                  | Tile               | `Tile` / `TileStore`                      | Pixel       |
-| terrain (renderer, coarse) | L2 Chunk                 | Tile               | `ChunkSurface` ("Surface")                | Pixel       |
 | object (source)            | L1 Block (sub-block SVO) | Volume             | sparse SVO octree                         | Voxel       |
 | terrain+object (renderer, composed) | L2 Chunk        | Volume             | `ChunkVolume`, sliced into `VoxelBand`s ("Band") | Voxel |
 | — (any)                    | L4 Anchor                | none               | `AnchorRegistry`                          | —           |
-
-L2/Chunk hosts both a Tile-shaped renderer artifact (Surface) and a Volume-shaped one (Volume/Band) side by side — the clearest concrete proof that a space level carries no shape of its own; shape is always the consuming layer's choice.
 
 ## Terrain Data and Streaming
 
@@ -113,8 +110,7 @@ object octrees → ObjectLayer ──┘       ├─→ shared mesher → GPU i
 Each layer provides:
 
 - `revision(key)`: a cheap layer-owned cache identity;
-- `paint(key, target)`: full voxel composition;
-- optional `paint_surface(key, target)`: top-only coarse-LOD composition.
+- `paint(key, target)`: full voxel composition.
 
 Registration order is override priority, so later layers replace earlier material at the same voxel. Cache invalidation does not know terrain- or object-specific stores; it compares the revision tuples owned by the registered layers.
 
@@ -126,19 +122,31 @@ One chunk composes into its L2/Chunk-sized Volume as sorted, signed 64-cell Z ba
 - `Uint8Array layer_idx`: texture-array layer;
 - optional sub-cell payload only for bands containing fine objects.
 
-The common payload is five bytes per voxel. One `64³` band is therefore about `1.25 MiB`; retaining one for hundreds of visible chunks would exceed a mobile memory budget. Bands are pooled scratch storage and released immediately after meshing. Long-lived chunk state keeps GPU-ready instance buffers and a compact ~36 KiB top surface sufficient for coarse LOD rebuilds.
+The common payload is five bytes per voxel. One `64³` band is therefore about `1.25 MiB`; retaining one for hundreds of visible chunks would exceed a mobile memory budget. Bands are pooled scratch storage (a small 2-entry pool) and released immediately after meshing — `ChunkVolume` never survives past one synchronous composite pass.
+
+What *does* survive that pass, per in-frustum chunk, is `column_runs: MeshRun[][]` — every one of the chunk's `64²` columns' already-merged material runs (`voxel_scan.ts`'s `scan_all_column_runs`), plain copied values rather than a view into the released bands. It's scanned once and reused across every LOD tier and every LOD transition after that, until the chunk leaves frustum or its source revision changes — the expensive part (walking bands) happens once per chunk's visible lifetime instead of once per rebuild. This replaced an earlier ~36–40 KiB top-only (or top-and-bottom) heightmap shortcut; `column_runs` is real per-run data instead of one flattened sample per column, so it costs meaningfully more per chunk (roughly several hundred KiB to ~1 MiB, depending on how many runs a chunk's columns actually have) in exchange for not needing a separate coarse-LOD-only shortcut format at all — the same `column_runs` feeds LOD1 and every coarse tier. `chunk_stage.tsx` also keeps a small `BuiltChunkBucket` (GPU-ready instance buffers) per LOD tier a chunk has actually built, retained rather than evicted on every tier change, since rebuilding one from `column_runs` isn't free either.
 
 Raycasting needs exact composed voxels but only near the pointer ray, so it uses a separate LRU capped at four chunks and eight total bands (about 10 MiB of common payload). An oversized vertical chunk is consumed once instead of entering the cache.
 
 ## Rendering and LOD
 
-The calculation side — layer composition, surface extraction, meshing, bounds, and voxel ray tests — returns plain typed-array data and is renderer-independent. Three.js / React Three Fiber begins at the submission boundary, where it owns meshes, materials, texture arrays, camera/frustum math, scene lifecycle, and GPU resources. In the repo: `apps/web/src/render/` (including `render/layer/pipeline/`) stays Three.js-free; the R3F-owning consumers (`ChunkStage`, `Cube`, the anchor/frame components, ...) live under `apps/web/src/modules/world/` instead.
+The calculation side — layer composition, column scanning, meshing, bounds, and voxel ray tests — returns plain typed-array data and is renderer-independent. Three.js / React Three Fiber begins at the submission boundary, where it owns meshes, materials, texture arrays, camera/frustum math, scene lifecycle, and GPU resources. In the repo: `apps/web/src/render/` (including `render/layer/pipeline/`) stays Three.js-free; the R3F-owning consumers (`ChunkStage`, `Cube`, the anchor/frame components, ...) live under `apps/web/src/modules/world/` instead.
 
 LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. Handoffs occur at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. The current fog distance is 900 units, so visible chunks normally reach at most stride 8; strides 16/32/64 remain valid for future longer ranges and fallback states.
 
 The visible handoffs use complementary stochastic visibility between adjacent LOD meshes rather than alpha-overlapping them. LOD work is frame-budgeted, while a newly visible chunk starts from its distance-derived tier instead of always flashing through the coarsest proxy.
 
 Frustum culling uses the exact union of terrain/object and primary/secondary mesh bounds. Measured bounds survive GPU/surface eviction and are invalidated with their source revisions. Until a chunk has measured geometry, a conservative camera-projection guard prevents the low-camera-polar false negative that previously removed the ground directly beneath the view.
+
+### Coarse-LOD box averaging
+
+Coarse LOD (`lod_step > 1`, `chunk_mesher.ts`'s `build_chunk_instances_coarse`) box-averages every real fine column under each coarse cell — the mipmap / voxel-cone-tracing style of screen-footprint filtering, not a nearest-neighbor pick of one representative column. For each `lod_step`-wide XY cell, every one of its `lod_step²` real columns' runs (from `column_runs`, see [Temporary dense bands](#temporary-dense-bands)) gets binned into `lod_step`-tall Z buckets and accumulated: color sums are weighted by how many fine cells of that bucket the run actually covers, and terrain and object runs are summed into the *same* bucket unconditionally — material class plays no role in the average. Blending across a material boundary this way is intentional, not a bug to special-case away: at a coarse enough distance a mixed-color cell reads as a blended color the same way a photographed or mip-mapped surface would, and averaging is the whole point of this design.
+
+Coverage (how many of a bucket's `lod_step³` fine cells actually got hit) doubles as the cell's fill fraction — air simply never contributes to a bucket's sum, so a partly-empty bucket's average dilutes toward "less full" on its own, with no separate occupancy threshold. A bucket with any coverage at all still emits exactly one box, isotropically shrunk on X, Y, *and* Z together (`span * Math.cbrt(fill)`, never Z alone) instead of being dropped — an earlier design that grid-snapped Z into fixed slabs and required a cell to clear a 50%-occupancy threshold before drawing anything could make a real, fully-placed object flicker out of existence entirely whenever its footprint happened to straddle two coarse cells (each half individually under the threshold); continuous fill-based shrinking can't produce that failure mode, since there is no threshold to fall under. Sub-cell (fractional, precisely-placed) runs contribute their true volumetric fraction (linear size fraction cubed) rather than a full cell's weight. The resulting box carries no texture-array tap (`layer_idx` is always written as `NO_LAYER`) — once a box's color can be a blend of several materials, sampling any one material's texture for it no longer means anything, so the shader's existing flat-RGB fallback path handles it instead.
+
+Both halves of building a coarse LOD tier — scanning a chunk's `column_runs` in the first place, and this per-tier averaging pass — are cooperatively scheduled rather than always paid for immediately: each estimates its own likely cost from a cheap signal (occupied Z-band count for a scan; total run count for an average build) against a running session average, and defers to a later frame — at most once per chunk, to guarantee eventual progress — when the estimate clears a budget multiple. This is deliberately not a Web Worker: the renderer follows a single-threaded, cooperative-yield scheduling model (closer to Figma's than to a preemptive-multithreaded one) so that expensive work never blocks a frame for longer than a bounded slice, without the cross-origin-isolation/`SharedArrayBuffer` deployment cost real threading would add.
+
+At LOD1 (`lod_step === 1`, exact per-run boxes, no averaging), a run that is fully boxed in by solid material — not the topmost run in its own column, and all 4 horizontal neighbor columns solid across its exact `z0..z1` span — never gets an instance at all, since none of its faces could ever be visible. Chunk-edge columns are exempt (a neighboring chunk's data isn't available to check, and assuming it's solid would risk a visible hole for a cosmetic win).
 
 ## XTP — Xpute Tree Packet
 

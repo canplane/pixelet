@@ -73,6 +73,7 @@
     "@radix-ui/react-dialog": "npm:@radix-ui/react-dialog@^1.1.15",
     "@radix-ui/react-scroll-area": "npm:@radix-ui/react-scroll-area@^1.2.10",
     "@radix-ui/react-tooltip": "npm:@radix-ui/react-tooltip@^1.2.8",
+    "@radix-ui/react-switch": "npm:@radix-ui/react-switch@^1.2.6",
 
     // internationalization
     "react-i18next": "npm:react-i18next@^16.0.0",

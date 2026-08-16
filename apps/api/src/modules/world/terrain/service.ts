@@ -3,22 +3,17 @@
 import type { Hono } from "@hono/hono";
 
 import type { AppResources } from "@/app/resources.ts";
+import * as env from "@/lib/env/mod.ts";
 
-import type { f64, i16, u32 } from "@xpute/core/kit/word.ts";
-import type { Bytes, I16Array } from "@xpute/core/kit/array.ts";
-import { to_tuple } from "@xpute/core/kit/lower.ts";
-import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
+import type { Bytes } from "@xpute/core/kit/array.ts";
 
-import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
-import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
-import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 
-import { COAST_ROW_KEYS, type CoastRow, FEAT_ROW_KEYS, type FeatRow } from "@pxl/shared/bake/format.ts";
-import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
 import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
-import { bake_terrain } from "@pxl/api/bake/terrain/bake.ts";
 import { TerrainRepository } from "./repository.ts";
+import { fetch_tile } from "./source.ts";
 
 const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 
@@ -35,73 +30,85 @@ const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
  */
 const PAGE_IDX_PATTERN = /^\d{1,20}$/;
 
-const ELE_PADDED_SPAN2: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN;
+/** Baked tile bytes, plus the gzip encoding of them once a caller has needed it. */
+type TileCacheEntry = { raw: Bytes; gz: Bytes | null };
+
+/** Insertion-order Map used as a fixed-capacity LRU: a `get` re-inserts its
+ * key to bump recency, so the oldest (least-recently-used) key is always
+ * the first one `.keys()` yields once the cap is exceeded. */
+function make_lru_cache<K, V>(cap: u32) {
+  const map = new Map<K, V>();
+  return {
+    get(key: K): V | undefined {
+      const v = map.get(key);
+      if (v === undefined) return undefined;
+      map.delete(key);
+      map.set(key, v);
+      return v;
+    },
+    set(key: K, value: V): void {
+      map.delete(key);
+      map.set(key, value);
+      if (map.size > cap) {
+        const oldest = map.keys().next().value as K;
+        map.delete(oldest);
+      }
+    },
+    delete(key: K): void {
+      map.delete(key);
+    },
+    clear(): void {
+      map.clear();
+    },
+  };
+}
 
 function make_services(repo: TerrainRepository) {
-  const fetch_terrain_source = async (page_idx: IVec): Promise<Bytes> => {
-    const page_bbox: BBox3857 = epsg3857.get_page_bbox(page_idx);
-    const page_z_scale: f64 = epsg3857.Z_SCALE(page_bbox[0][1]);
+  // page_idx -> baked bytes is a pure function of static source data (OSM +
+  // DEM don't change underneath a running server), so it's cacheable as-is.
+  const cache_cap = env.must_int("TERRAIN_TILE_CACHE_CAP", { fallback: 500, min: 1 }) as u32;
+  const tile_cache = make_lru_cache<IVec, TileCacheEntry>(cache_cap);
+  // Coalesces concurrent requests for a still-uncached page_idx into a
+  // single bake instead of one DB round trip per request — without this,
+  // N simultaneous requests for the same cold page_idx (e.g. everyone
+  // panning into a newly-visible tile at once) would independently repeat
+  // the full fetch_terrain_source + bake_terrain pipeline.
+  const in_flight = new Map<IVec, Promise<Bytes>>();
 
-    // DB fetch
-    let _ele: i16[] | null;
-    let feat_rows: FeatRow[];
-    let coast_rows: CoastRow[];
-    try {
-      [_ele, feat_rows, coast_rows] = await Promise.all([
-        repo.fetch_ele(page_bbox, page_z_scale),
-        repo.fetch_feat_rows(page_bbox),
-        repo.fetch_coast_rows(page_bbox),
-      ]);
-    } catch (err) {
-      console.error(`[terrain/source/${ivec.repr(page_idx)}] db error:`, err);
-      throw err;
+  const get_tile_cached = async (page_idx: IVec): Promise<TileCacheEntry> => {
+    const cached = tile_cache.get(page_idx);
+    if (cached) return cached;
+
+    let pending = in_flight.get(page_idx);
+    if (!pending) {
+      pending = fetch_tile(repo, page_idx);
+      in_flight.set(page_idx, pending);
+      pending.finally(() => in_flight.delete(page_idx));
     }
 
-    let ele: I16Array;
-    if (_ele && _ele.length === ELE_PADDED_SPAN2) {
-      ele = new Int16Array(_ele);
-    } else {
-      console.warn(`[terrain/source/${ivec.repr(page_idx)}] invalid ele shape`, _ele?.length ?? null);
-      ele = new Int16Array(ELE_PADDED_SPAN2); // fallback
-    }
-
-    console.debug(
-      `[terrain/source/${ivec.repr(page_idx)}] ele=${ele.length}, feat_rows=${feat_rows.length}, coast_rows=${coast_rows.length}`,
-    );
-
-    const feats_view = new TreeView().branch((__) => {
-      for (const row of feat_rows) {
-        __.put(to_tuple(row, FEAT_ROW_KEYS));
-      }
-    });
-    const coasts_view = new TreeView().branch((__) => {
-      for (const row of coast_rows) {
-        __.put(to_tuple(row, COAST_ROW_KEYS));
-      }
-    });
-
-    return encoder.encode(new TreeView().branch((__) =>
-      __.i16_array(ele)
-        .subtree(feats_view)
-        .subtree(coasts_view)
-    ));
+    const raw = await pending;
+    const entry: TileCacheEntry = { raw, gz: null };
+    tile_cache.set(page_idx, entry);
+    return entry;
   };
 
-  // Raw OSM/elevation source, baked into client-ready ground channels.
-  // This step used to run inside the (now-dropped) WASM worker.
-  const fetch_tile = async (page_idx: IVec): Promise<Bytes> => {
-    const raw: Bytes = await fetch_terrain_source(page_idx);
-    return bake_terrain(page_idx, raw);
+  // page_idx omitted -> drop everything (e.g. after a re-bake pass or a
+  // fix like the ocean/land ground_baker.ts change). Only affects the
+  // cache; a request already in flight for `page_idx` still lands and
+  // repopulates it with whatever it fetched, invalidation or not.
+  const invalidate = (page_idx?: IVec): void => {
+    if (page_idx === undefined) tile_cache.clear();
+    else tile_cache.delete(page_idx);
   };
 
-  return { fetch_terrain_source, fetch_tile };
+  return { get_tile_cached, invalidate };
 }
 
 export function register(router: Hono, resrc: AppResources): void {
   const repo = new TerrainRepository(resrc.geo_pool);
   const service = make_services(repo);
 
-  router.get("/api/world/terrain/tile/:page_idx", async (c) => {
+  router.get("/api/world/terrain/tiles/:page_idx", async (c) => {
     const raw_page_idx: string = c.req.param("page_idx");
 
     // page_idx is an L3_IDX (see indexer.ts): an *unsigned* logical key in
@@ -119,7 +126,7 @@ export function register(router: Hono, resrc: AppResources): void {
       return c.text("bad page_idx", 400);
     }
 
-    const bytes: Bytes = await service.fetch_tile(page_idx);
+    const entry = await service.get_tile_cached(page_idx);
 
     // hono's own compress() middleware (main.ts) skips this response: it
     // gates on Content-Type, and application/octet-stream isn't in its
@@ -130,13 +137,38 @@ export function register(router: Hono, resrc: AppResources): void {
     // fetch() on the client decodes Content-Encoding transparently, so this
     // needs no client-side change.
     if ((c.req.header("accept-encoding") ?? "").includes("gzip")) {
-      const gzip_body = new Response(bytes).body!.pipeThrough(new CompressionStream("gzip"));
-      return new Response(gzip_body, {
-        status: 200,
-        headers: { "content-type": "application/octet-stream", "content-encoding": "gzip" },
-      });
+      // entry is the same cached object every hit reaches, so compressing
+      // once and stashing it back means every subsequent request for this
+      // page_idx (gzip-accepting or not) skips CompressionStream entirely.
+      if (!entry.gz) {
+        const gzip_body = new Response(entry.raw).body!.pipeThrough(new CompressionStream("gzip"));
+        entry.gz = new Uint8Array(await new Response(gzip_body).arrayBuffer());
+      }
+      return c.body(entry.gz, 200, { "content-type": "application/octet-stream", "content-encoding": "gzip" });
     }
 
-    return c.body(bytes, 200, { "content-type": "application/octet-stream" });
+    return c.body(entry.raw, 200, { "content-type": "application/octet-stream" });
+  });
+
+  // gated by admin_auth on the /api/internal/* prefix (see main.ts)
+  router.post("/api/internal/world/terrain/cache/invalidate", async (c) => {
+    const body = await c.req.json().catch(() => ({}) as { page_idx?: string });
+    const raw_page_idx = body.page_idx;
+
+    if (raw_page_idx === undefined) {
+      service.invalidate();
+      return c.text("invalidated all", 200);
+    }
+
+    if (!PAGE_IDX_PATTERN.test(raw_page_idx)) {
+      return c.text("bad page_idx", 400);
+    }
+    const page_idx: IVec = BigInt(raw_page_idx);
+    if (page_idx > MAX_L3_IDX) {
+      return c.text("bad page_idx", 400);
+    }
+
+    service.invalidate(page_idx);
+    return c.text(`invalidated ${raw_page_idx}`, 200);
   });
 }

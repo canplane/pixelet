@@ -1,3 +1,5 @@
+// @pxl/shared/spec/space/pvf3/core.test.ts
+
 import { assertEquals } from "@std/assert";
 
 import { fvec, ivec } from "./mod.ts";

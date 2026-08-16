@@ -15,6 +15,13 @@
       "region/global/raw/land-polygons-split-3857/land_polygons.prj",
       "region/global/raw/land-polygons-split-3857/land_polygons.cpg",
       "region/global/raw/land-polygons-split-3857/README.txt"
-    ]
+    ],
+    "acquisition": {
+      "automated": false,
+      "download_url": "https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip",
+      "reason": "provider.url is a landing page, and the artifact is a zip that must be extracted before ingestion. The setup script does not download or unzip; it errors out if land_polygons.shp is absent.",
+      "instructions": "see infra/geo/README.md, 'Obtaining the raw data'",
+      "note": "Extract so that land_polygons.shp lands at region/global/raw/land-polygons-split-3857/. The .shx/.dbf/.prj/.cpg sidecars must sit beside it — ogr2ogr resolves them itself, and the script only ever names the .shp."
+    }
   }
 ]

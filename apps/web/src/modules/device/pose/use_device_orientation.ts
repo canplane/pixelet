@@ -1,6 +1,7 @@
 // @pxl/web/modules/device/pose/use_device_orientation.ts
 
 import { useCallback, useEffect } from "react";
+import i18next from "i18next";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
@@ -55,7 +56,7 @@ export function useDeviceOrientation() {
     const { set_status, set_error } = useDeviceOrientationStore.getState();
 
     if (typeof DeviceOrientationEvent === "undefined") {
-      set_error("이 환경에서는 방향 센서를 지원하지 않습니다.");
+      set_error(i18next.t("device.orientation.unsupported"));
       return false;
     }
 
@@ -72,9 +73,9 @@ export function useDeviceOrientation() {
           set_is_tracking_orientation(true);
           return true;
         }
-        set_error("방향 센서 권한이 거부되었습니다.");
+        set_error(i18next.t("device.orientation.permission_denied"));
       } catch (err) {
-        set_error("방향 센서 권한 요청 중 오류가 발생했습니다.");
+        set_error(i18next.t("device.orientation.permission_error"));
         console.error("[device_orientation] permission error:", err);
       }
     } else {
@@ -165,7 +166,7 @@ export function useDeviceOrientation() {
       if (Date.now() - last_orientation_event_at > WATCHDOG_TIMEOUT_MS) {
         remove_orientation_listener();
         set_is_tracking_orientation(false);
-        useDeviceOrientationStore.getState().set_error("방향 센서 신호가 끊겼습니다.");
+        useDeviceOrientationStore.getState().set_error(i18next.t("device.orientation.signal_lost"));
         last_orientation_event_at = null;
       }
     }, WATCHDOG_INTERVAL_MS);

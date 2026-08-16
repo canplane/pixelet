@@ -1,4 +1,4 @@
-// @pxl/web/modules/map/ui/control/terrain_follow_toggle.tsx
+// @pxl/web/modules/map/ui/control/ground_snap_toggle.tsx
 
 import { Mountain } from "lucide-react";
 
@@ -8,16 +8,16 @@ import { cn } from "@/shared/lib/utils/cn.ts";
 import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
 
 /** Toggles whether panning re-samples terrain elevation under the map center. */
-export function TerrainFollowToggle() {
-  const follow_terrain = useCameraStore((state) => state.follow_terrain);
-  const toggle_follow_terrain = useCameraStore.getState().toggle_follow_terrain;
+export function GroundSnapToggle() {
+  const ground_snap = useCameraStore((state) => state.ground_snap);
+  const toggle_ground_snap = useCameraStore.getState().toggle_ground_snap;
 
   return (
-    <CircularButton className="w-11 h-11" onClick={toggle_follow_terrain} isActive={follow_terrain}>
+    <CircularButton className="w-11 h-11" onClick={toggle_ground_snap} isActive={ground_snap}>
       <Mountain
         className={cn(
           "w-5 h-5 transition-all duration-500 ease-out",
-          follow_terrain ? "text-amber-500" : "text-[#5B4636]/40",
+          ground_snap ? "text-amber-500" : "text-[#5B4636]/40",
         )}
       />
     </CircularButton>

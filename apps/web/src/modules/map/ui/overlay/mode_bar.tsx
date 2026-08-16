@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { Eraser, MessageCircle, MousePointer, Palette, Send } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
@@ -201,6 +202,7 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
  * anchor, not one button for color and a separate one for size.
  */
 function ColorSwatchButton({ id }: { id: ObjectColorId }) {
+  const { t } = useTranslation();
   const active_tool = useUiStore((state) => state.active_tool);
   const object_color_id = useUiStore((state) => state.object_color_id);
   const object_size = useUiStore((state) => state.object_size);
@@ -246,7 +248,7 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
           active_tool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
         )}
         style={{ backgroundColor: object_color_hex(id) }}
-        title={id}
+        title={t(`object_colors.${id}`)}
       />
     </div>
   );
@@ -284,6 +286,7 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
  * described one of its two pills.
  */
 export function ModeBar() {
+  const { t } = useTranslation();
   const [mode, set_mode] = useState<ModeId>("message");
   const active_tool = useUiStore((state) => state.active_tool);
   const set_active_tool = useUiStore((state) => state.set_active_tool);
@@ -483,7 +486,7 @@ export function ModeBar() {
                 // uses.
                 message_expanded ? "w-8 h-8" : "w-12 h-12",
               )}
-              title="message"
+              title={t("map.mode_bar.message_tooltip")}
             >
               <MessageCircle className="w-4 h-4" strokeWidth={2} />
             </motion.button>
@@ -528,7 +531,7 @@ export function ModeBar() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.nativeEvent.isComposing) send_message();
                     }}
-                    placeholder="메시지 입력..."
+                    placeholder={t("map.mode_bar.message_placeholder")}
                     autoFocus
                     // opacity fades to 0 over is_sending instead of the text
                     // just vanishing the instant send_message clears it — the
@@ -706,7 +709,7 @@ export function ModeBar() {
                         "transition-all duration-200 hover:from-orange-400 hover:to-orange-600 hover:shadow-lg hover:shadow-orange-500/50",
                         "active:from-orange-500 active:to-orange-700 active:scale-95",
                       )}
-                      title="전송"
+                      title={t("map.mode_bar.send")}
                     >
                       <Send className="w-4 h-4" strokeWidth={2} />
                     </motion.button>
@@ -723,7 +726,7 @@ export function ModeBar() {
                       style={{ borderRadius: "999px" }}
                       onClick={() => set_mode("palette")}
                       className="absolute inset-0 flex items-center justify-center cursor-pointer bg-neutral-900 border border-white/15 text-white/60 hover:text-white/90 transition-colors shrink-0"
-                      title="palette"
+                      title={t("map.mode_bar.palette_tooltip")}
                     >
                       <Palette className="w-4 h-4" strokeWidth={2} />
                     </motion.button>
@@ -790,7 +793,7 @@ export function ModeBar() {
                         "flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-colors shrink-0",
                         active_tool === "pointer" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
-                      title="포인터"
+                      title={t("map.mode_bar.pointer")}
                     >
                       <MousePointer className="w-4 h-4" strokeWidth={2} />
                     </button>
@@ -802,7 +805,7 @@ export function ModeBar() {
                         "flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-colors shrink-0",
                         active_tool === "eraser" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
-                      title="지우개"
+                      title={t("map.mode_bar.eraser")}
                     >
                       <Eraser className="w-4 h-4" strokeWidth={2} />
                     </button>

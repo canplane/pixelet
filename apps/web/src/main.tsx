@@ -1,7 +1,5 @@
 // @pxl/web/main.tsx
 
-// TODO: i18n initialization (not wired up yet)
-
 import { enableMapSet } from "immer";
 import { bootstrap_app } from "@/bootstrap/app.ts";
 
@@ -18,7 +16,7 @@ let root: ReturnType<typeof createRoot> | null = null;
 // starts rendering after async engine init
 export function main(): void {
   try {
-    // 1. infra bootstrap (Three.js renderer setup)
+    // 1. infra bootstrap (Three.js basis, i18n)
     bootstrap_app();
 
     // 2. UI render

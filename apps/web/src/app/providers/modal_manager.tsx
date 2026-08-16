@@ -1,4 +1,4 @@
-// @pxl/web/app/providers/modal_manager.ts
+// @pxl/web/app/providers/modal_manager.tsx
 
 import { useEffect, useState } from "react";
 
@@ -6,12 +6,13 @@ import type { ModalController, UIController } from "../types/ui.types.ts";
 
 import { EditFooModal } from "@/features/manage_foo/ui/edit_foo_modal.tsx";
 import type { EditFooProps } from "@/features/manage_foo/ui/edit_foo_modal.tsx";
+import { SettingsModal, type SettingsModalProps } from "@/app/settings/settings_modal.tsx";
 
 /**
  * Represents the currently active modal state.
  * `null` means no modal is visible.
  */
-export type ModalState = EditFooProps | null;
+export type ModalState = EditFooProps | SettingsModalProps | null;
 
 /** ModalManagerProps */
 type ModalManagerProps = {
@@ -39,6 +40,7 @@ export function ModalManager(props: ModalManagerProps) {
    */
   const [modals_controller] = useState<ModalController>({
     open_update_foo_modal: (id) => set_modal_state({ type: "foo:update", params: { id } }),
+    open_settings_modal: () => set_modal_state({ type: "settings" }),
   });
 
   /**
@@ -58,6 +60,13 @@ export function ModalManager(props: ModalManagerProps) {
     <>
       {type === "foo:update" && (
         <EditFooModal
+          open={!!modal_state}
+          on_open_change={(open: boolean) => !open && set_modal_state(null)}
+          {...modal_state}
+        />
+      )}
+      {type === "settings" && (
+        <SettingsModal
           open={!!modal_state}
           on_open_change={(open: boolean) => !open && set_modal_state(null)}
           {...modal_state}

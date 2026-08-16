@@ -61,7 +61,7 @@ const CELL_IDX = (x: u32, y: u32): u32 => y * PAGE_CELL_SPAN + x;
 
 const IS_SEA = (f: OSMFeature): boolean => f.extra.is_ocean;
 
-export function bake_ground(elements: OSMFeature[]): Ground {
+export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Ground {
   const ground: Ground = {
     land: new Uint8Array(PAGE_CELL_SPAN2),
     water: new Uint8Array(PAGE_CELL_SPAN2),
@@ -89,8 +89,19 @@ export function bake_ground(elements: OSMFeature[]): Ground {
         );
       }
     });
-  } else {
+  } else if (has_coast_row) {
+    // no sea_feats reached here, but osm_adapter's from_coast_row() did see a
+    // coastline row for this page (and dropped it — see its covers_page
+    // comment): a single land polygon covers the page's full envelope, so
+    // painting BARE directly is equivalent to carving it via render_polygon,
+    // without paying for the scanline rasterization.
     ground.land.fill(terrain_types.land.BARE);
+  } else {
+    // no coastline row touched this page's envelope at all — there's no
+    // land anywhere nearby, so this is open ocean, not "no data yet".
+    // Before this branch existed, this case fell through to the BARE
+    // default above and every open-ocean page baked as flat dry land.
+    ground.land.fill(terrain_types.land.SEA);
   }
 
   // render categorized ground features.

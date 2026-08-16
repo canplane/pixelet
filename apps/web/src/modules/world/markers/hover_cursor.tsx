@@ -19,8 +19,8 @@ import { AnchorNode } from "../anchor/node.tsx";
 import { marker_colors } from "./style.ts";
 
 // terrain-cell highlight style (pointer tool over bare ground) — embeds
-// into the hovered cell. Same color is reused (at OBJECT_PREVIEW_OPACITY,
-// object-shaped) when the pointer tool is aimed at an object instead — see
+// into the hovered cell. Same color and opacity are reused (object-shaped)
+// when the pointer tool is aimed at an object instead — see
 // use_object_style below. Color itself is location_puck.tsx's own zone-ring
 // teal (see that constant's own comment) rather than a separate hex here —
 // both mark "you/your own actions", so sharing one color language reads as
@@ -29,17 +29,17 @@ import { marker_colors } from "./style.ts";
 // marker_colors.DESTRUCTIVE below).
 const highlight_style = {
   COLOR: marker_colors.ACTION,
-  FILL_OPACITY: .6,
-  BORDER_WIDTH: .05,
+  FILL_OPACITY: .4,
+  BORDER_WIDTH: 0.04,
 };
 
 // placement/erase preview style (object/eraser tools) — sits on top of the
-// terrain hit, see object_pos below. Border width unchanged from the terrain
-// highlight — only color/opacity/position differ by mode. Eraser gets its
-// own destructive-red instead of reusing the terrain highlight's own color
-// (no palette-color relation either way) — the two mean different things
-// (hover/select vs. about to remove this) and shouldn't share one color.
-const OBJECT_PREVIEW_OPACITY = .45;
+// terrain hit, see object_pos below. Border width and fill opacity
+// unchanged from the terrain highlight — only color/position differ by
+// mode. Eraser gets its own destructive-red instead of reusing the terrain
+// highlight's own color (no palette-color relation either way) — the two
+// mean different things (hover/select vs. about to remove this) and
+// shouldn't share one color.
 
 const HIGHLIGHT_BOX = new THREE.BoxGeometry(1, 1, 1);
 
@@ -144,9 +144,11 @@ void main() {
   // object color either, so it never reads object_color_hex — it gets its
   // own shared destructive marker color instead.
   let color: string = highlight_style.COLOR;
-  const opacity: number = use_object_style ? OBJECT_PREVIEW_OPACITY : highlight_style.FILL_OPACITY;
+  const opacity: number = highlight_style.FILL_OPACITY;
   if (active_tool === "object") color = object_color_hex(object_color_id);
   else if (active_tool === "eraser") color = marker_colors.DESTRUCTIVE;
+
+  const current_scale = use_object_style ? preview_size : U_PER_CELL;
 
   useLayoutEffect(() => {
     mat.uniforms.u_color.value.set(color);
@@ -172,7 +174,7 @@ void main() {
         <mesh
           geometry={HIGHLIGHT_BOX}
           material={mat}
-          scale={use_object_style ? preview_size : U_PER_CELL}
+          scale={current_scale}
           // terrain-cell mode still forces draw-order priority (9999) to
           // pair with its own strong polygon offset above; object mode
           // uses the default order so the transparent-queue's normal

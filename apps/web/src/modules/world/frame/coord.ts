@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/frame/coord.tsx
+// @pxl/web/modules/world/frame/coord.ts
 
 import { type IVec, ivec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L4_BASE } from "@pxl/shared/spec/space/indexer.ts";

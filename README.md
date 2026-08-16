@@ -98,3 +98,5 @@ Dense `64³` Volumes exist only while composing and meshing. Long-lived state ke
 ## Learn More
 
 Curious how the coordinate system, spatial hierarchy, unified world-layer pipeline, or wire format works under the hood? See [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+Curious *why* something was built the way it was — the alternatives weighed, the numbers a decision rested on, the constraint that ruled out the obvious approach? See [discussions/](./discussions/).
