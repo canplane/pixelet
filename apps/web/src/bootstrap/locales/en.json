@@ -1,0 +1,152 @@
+{
+  "settings": {
+    "title": "Settings",
+    "description": "Adjust language, rendering, and quality options.",
+    "trigger_aria_label": "Settings",
+    "close": "Close",
+    "language": {
+      "section_title": "Language",
+      "korean": "한국어",
+      "english": "English"
+    },
+    "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
+    "lighting": {
+      "section_title": "Lighting & Shadows",
+      "section_caption": "Real-time lighting effects for the Sun and Moon",
+      "shadow_map": {
+        "label": "Shadows",
+        "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."
+      },
+      "blob_shadow": {
+        "label": "Ground Shadows",
+        "description": "Generates soft shadows beneath objects so they sit on the ground rather than float."
+      },
+      "rim_light": {
+        "label": "Rim Light",
+        "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
+      },
+      "god_rays": {
+        "label": "God Rays",
+        "description": "Realistic sun shafts streaming through gaps in terrain and objects."
+      }
+    },
+    "post_fx": {
+      "section_title": "Post-Processing",
+      "section_caption": "Visual effects applied across the entire screen",
+      "ao": {
+        "label": "Ambient Occlusion (AO)",
+        "description": "Enhances depth by adding detailed contact shadows in crevices and corners."
+      },
+      "bloom": {
+        "label": "Bloom",
+        "description": "Adds a soft glow to the brightest things in the scene — the sun, the moon, and the night location beacon."
+      },
+      "tilt_shift": {
+        "label": "Tilt-Shift",
+        "description": "Blurs the top and bottom of the screen to create a miniature diorama effect."
+      },
+      "chromatic_aberration": {
+        "label": "Chromatic Aberration",
+        "description": "Fringes light slightly at the edges of the screen to simulate camera lens distortion."
+      },
+      "smaa": {
+        "label": "Anti-Aliasing (SMAA)",
+        "description": "Smooths jagged object edges for a cleaner, crisper display."
+      }
+    },
+    "quality": {
+      "section_title": "Graphics Quality",
+      "texture_pack": {
+        "label": "Textures",
+        "description": "Applies detailed pixel art textures to block and object surfaces instead of solid colors."
+      },
+      "structures": {
+        "label": "Render Buildings",
+        "description": "Toggles whether buildings are rendered on top of the terrain."
+      },
+      "high_dpr": {
+        "label": "High-Resolution Rendering",
+        "description": "Renders the screen at up to 2x resolution (supersampling) for a sharper image."
+      },
+      "section_caption": "Adjust screen clarity and detail settings"
+    },
+    "disclaimer": {
+      "section_title": "Disclaimer",
+      "demo_notice": "This service is a demo, and data may disappear or it may be discontinued without notice.",
+      "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
+      "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
+      "location_notice": "Location names are queried using OSM Nominatim, and your location data is neither collected nor saved.",
+      "texture_notice": "Textures are an experimental feature. The CC0-licensed <pack>SimplePixel</pack> texture pack is applied."
+    },
+    "attribution": {
+      "section_title": "Attribution"
+    },
+    "about": {
+      "section_title": "About",
+      "tagline": "An experimental project — stack virtual blocks on real-world terrain."
+    }
+  },
+  "cost": {
+    "low": "LOW",
+    "med": "MED",
+    "high": "HIGH"
+  },
+  "object_colors": {
+    "white": "White",
+    "grey": "Grey",
+    "dark_grey": "Dark Grey",
+    "black": "Black",
+    "red": "Red",
+    "orange": "Orange",
+    "brown": "Brown",
+    "yellow": "Yellow",
+    "green": "Green",
+    "dark_green": "Dark Green",
+    "cyan": "Cyan",
+    "blue": "Blue",
+    "violet": "Violet",
+    "magenta": "Magenta",
+    "pink": "Pink"
+  },
+  "device": {
+    "orientation": {
+      "unsupported": "This environment doesn't support the orientation sensor.",
+      "permission_denied": "Orientation sensor permission was denied.",
+      "permission_error": "An error occurred while requesting orientation sensor permission.",
+      "signal_lost": "Orientation sensor signal lost."
+    },
+    "geolocation": {
+      "unsupported": "This environment doesn't support location services.",
+      "generic_error": "Couldn't get your location.",
+      "permission_denied": "Please allow location access.",
+      "position_unavailable": "Couldn't acquire a location signal.",
+      "timeout": "Location request timed out."
+    }
+  },
+  "toast": {
+    "location_weak_signal": "Location signal is weak.",
+    "location_checking": "Checking your location…",
+    "map_load_error": "Couldn't load the map.",
+    "map_load_success": "Area loaded.",
+    "map_loading": "Loading area…"
+  },
+  "map": {
+    "scale_bar": {
+      "reset_zoom": "Reset zoom"
+    },
+    "mode_bar": {
+      "palette_tooltip": "Palette",
+      "pointer": "Pointer",
+      "eraser": "Eraser"
+    },
+    "controls": {
+      "reset_orientation": "Align north",
+      "move_to_location": "Move to my location",
+      "start_compass_mode": "Start compass mode",
+      "exit_compass_mode": "Exit compass mode"
+    },
+    "sensors": {
+      "enable": "Enable location and orientation sensors"
+    }
+  }
+}

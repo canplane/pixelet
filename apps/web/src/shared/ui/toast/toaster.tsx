@@ -56,14 +56,26 @@ const Toaster = () => {
       style={{
         position: "fixed",
         left: "50%",
-        bottom: `${BOTTOM_OVERLAY_SAFE_PX + TOAST_EXTRA_LIFT_PX}px`,
+        // + --vv-bottom so toasts ride above the keyboard alongside the mode
+        // bar they sit over, rather than being the one thing left underneath it.
+        bottom: `calc(${BOTTOM_OVERLAY_SAFE_PX + TOAST_EXTRA_LIFT_PX}px + var(--vv-bottom, 0px))`,
+        // Matches the mode bar's own easing (bottom_overlays.tsx) so the two
+        // rise together; a toast sits directly above that bar, and the pair
+        // separating mid-animation would be more noticeable than either
+        // moving.
+        transition: "bottom 150ms ease-out",
         transform: "translateX(-50%)",
-        // without an explicit z-index this defaults to auto (effectively
-        // 0), which loses to the map overlay chrome around it (mode
-        // bar z-40, address/compass cluster z-50) — the toast rendered
-        // with fully correct opacity/position/content, just invisibly
-        // behind those. Comfortably above every z-* already in use here.
-        zIndex: 1000,
+        // Without an explicit z-index this defaults to auto (effectively
+        // 0), which loses to the map overlay chrome around it (mode bar
+        // z-40, address/compass cluster z-50) — the toast rendered with
+        // fully correct opacity/position/content, just invisibly behind
+        // those.
+        //
+        // Above that chrome, but deliberately BELOW a modal. This used to
+        // be 1000, which also beat the settings sheet's z-50 and left
+        // toasts floating over an open dialog. The ladder is: map chrome
+        // 40-50 < toast 60 < modal 70 (sheet.tsx).
+        zIndex: 60,
         // ignore pointer events so the map underneath stays interactive;
         // each toast's own pill re-enables pointer-events on itself
         pointerEvents: "none",

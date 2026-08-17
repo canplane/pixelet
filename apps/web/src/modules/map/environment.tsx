@@ -819,7 +819,10 @@ export function MapEnvironment(props: MapEnvironmentProps) {
       <directionalLight
         ref={moon_ref}
         color="#9fb4d6"
-        intensity={is_night ? 0.18 : 0.0}
+        // 0.18 -> 0.3, raised alongside light_cfg.FLOOR (see its comment).
+        // Directional, unlike that floor: it brightens without flattening,
+        // because faces still catch it at different angles.
+        intensity={is_night ? 0.3 : 0.0}
         position={current_moon_position.current}
         castShadow={show_shadow_map && is_night}
         // manual update instead — see SHADOW_UPDATE_DOT_THRESHOLD's comment

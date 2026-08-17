@@ -3,7 +3,18 @@
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { VIEW_DIST } from "@/modules/camera/config.ts";
 
-const FOG_FAR = 900;
+// 2x, matching the camera's own distances (see VIEW_DIST). This is the
+// expensive end of that chain: CHUNK_RENDER_DIST below derives from it, so
+// the ground AREA that builds chunk geometry goes as its square — 2x here is
+// 4x the area.
+//
+// That is knowingly the same fog value an iPhone 13 mini discarded the tab
+// under. What is different is that RENDER_RADIUS is not coming with it this
+// time (2, not 3), so mounted pages stay at 25 rather than 49. Whether the
+// area alone was the trigger or whether it needed the page count too is the
+// open question this setting is here to answer — if the reload returns, the
+// area was enough on its own and this is the number to walk back.
+const FOG_FAR = 900 * 2;
 
 /** Render-distance and fog configuration. */
 export const render_cfg = {
@@ -20,7 +31,7 @@ export const render_cfg = {
   // full vista — only ground geometry fades.
   FAR_CLIP: VIEW_DIST * 1.5,
 
-  FOG_NEAR: 320,
+  FOG_NEAR: 320 * 2,
   FOG_FAR,
 
   // How far out chunk_stage.tsx actually mounts a chunk, in real
@@ -30,7 +41,7 @@ export const render_cfg = {
   // this decides which of *those* chunks actually become scene objects.
   // Needed because RENDER_RADIUS can only step in whole L3_RANGE
   // increments (1024u at the current L3_SHAMT) — nowhere near fine enough
-  // to land close to FOG_FAR=900 without either cutting geometry off
+  // to land close to FOG_FAR without either cutting geometry off
   // before fog hides it (RENDER_RADIUS=1, ~0u worst case) or badly
   // overshooting it (RENDER_RADIUS=2, up to ~2048u — a real, measured
   // mobile rendering-load regression: reported live stutter that wasn't
@@ -55,12 +66,17 @@ export const render_cfg = {
  * both surfaces' night floor at once.
  */
 export const light_cfg = {
-  // 0.82 -> 0.5 -> 0.3: still trending down toward a real night floor.
-  // 0.5 read as too bright to sell "night" at all; 0.3 keeps just enough
-  // lift that a block's own hue is still legible in near-black shadow
-  // instead of crushing to true black, which would make unlit geometry
-  // indistinguishable from empty space (no depth cue left to read at all).
-  FLOOR: 0.3,
+  // 0.82 -> 0.5 -> 0.3 -> 0.6. The walk down was chasing "does this read as
+  // night", judged on a desktop display; 0.3 won that on a monitor and then
+  // lost badly on a real device, where it was simply too dark to see the
+  // world. That earlier pass had called even 0.5 too bright — a verdict
+  // reached on the wrong screen, and now overshot in the other direction.
+  //
+  // Raising this alone flattens the scene, since it lifts every face by the
+  // same amount and erases the shading that carries depth. It moved together
+  // with the moon's directional light (environment.tsx, 0.18 -> 0.3), which
+  // adds brightness that still differs face to face.
+  FLOOR: 0.6,
 } as const;
 
 /**
@@ -98,8 +114,9 @@ export const rim_cfg = {
  * ~4 texels/cell on the sun's 2048-texel map at the original U_PER_CELL of
  * 0.25) when this was restored — but a live scene-graph trace (2026-08-15)
  * found actually-rendered chunk geometry extending out to ~940 world units
- * from the anchor the shadow frustum recenters on (matches render_cfg's own
- * FOG_FAR≈900), while a ±96 frustum only covers the inner ~20% of that.
+ * from the anchor the shadow frustum recenters on (matched render_cfg's own
+ * FOG_FAR, 900 at the time), while a ±96 frustum only covered the inner
+ * ~20% of that.
  * Settled on 200 (400-unit box, ~5.1 texels/cell) as the coverage/sharpness
  * middle ground — covers most on-screen near/mid-range geometry without
  * cratering texel density the way ±400 did.

@@ -41,14 +41,20 @@ export const CLEANUP_RADIUS: u32 = 3;
 // real-distance filter, global reveal/LOD budgets, and batching are all
 // required because page radius alone is too coarse to bound that cost.
 //
-// r=2, not r=1: worst case (camera sitting at the far edge of its own
-// page, looking outward) the render boundary is only (r-1) full pages
-// away, i.e. (r-1)*L3_RANGE real units — at r=1 that's ~0u, well inside
-// FOG_FAR and exactly the pop-in this constant was split out to fix in
-// the first place. r=2 guarantees a worst-case reach of 1*L3_RANGE=1024u,
-// comfortably past FOG_FAR=900 in every camera position, not just the
-// average one. (This is the same margin the original RENDER_RADIUS=8 @
-// 128u/page — (8-1)*128=896u, almost exactly FOG_FAR — already implied;
-// r=2 here is that same margin re-derived at the new 1024u page size, not
-// an arbitrary new number.)
+// Worst case (camera sitting at the far edge of its own page, looking
+// outward) the render boundary is only (r-1) full pages away, i.e.
+// (r-1)*L3_RANGE real units — at r=1 that's ~0u, well inside FOG_FAR and
+// exactly the pop-in this constant was split out to fix in the first place.
+// By that rule r should satisfy (r-1)*1024 >= FOG_FAR, and at FOG_FAR=900
+// r=2 did — a worst-case reach of 1*L3_RANGE=1024u. (Same margin the
+// original RENDER_RADIUS=8 @ 128u/page — (8-1)*128=896u, almost exactly
+// FOG_FAR — already implied, re-derived at the 1024u page size.)
+//
+// At FOG_FAR=1800 it no longer does, and r stays 2 anyway. Geometry ends at
+// 1024u, where fog is only ~33% opaque — so unlike at the intermediate
+// FOG_FAR=1350 (~62%), the seam is not hidden and may well be visible on a
+// hard zoom-out. It is left that way on purpose: raising r to satisfy the
+// rule is measured to be the wrong lever — it mounts (2r+1)^2 pages, and a
+// phone discarded the tab under r=3. Bring FOG_FAR down to meet r before
+// moving r up to meet FOG_FAR.
 export const RENDER_RADIUS: u32 = 2;

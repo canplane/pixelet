@@ -7,11 +7,22 @@ interface CircularButtonProps extends React.ComponentProps<typeof Button> {
   /** Strip the floating-card chrome (background/border/shadow) for use inside a shared control tray. */
   bare?: boolean;
   /**
-   * Dark-toned chrome (bg-neutral-900/50 + backdrop-blur, white icon)
-   * instead of this theme's default warm-cream card — palette only, depth
-   * is controlled independently by `shadow`. Used by the map's floating
-   * controls (compass, GPS/TrackingButton) while everything else using
-   * this shared button keeps the light cozy default untouched.
+   * Dark-toned chrome (bg-neutral-900/60, white icon) instead of this
+   * theme's default warm-cream card — palette only, depth is controlled
+   * independently by `shadow`. Used by the map's floating controls
+   * (compass, GPS/TrackingButton) while everything else using this shared
+   * button keeps the light cozy default untouched.
+   *
+   * No backdrop-blur, deliberately. These sit on top of a WebGL canvas that
+   * repaints every frame, and a backdrop-filter has to re-read and re-blur
+   * what is behind it every one of those frames — the cost is paid
+   * continuously, not once. Chromium on Android is where that showed
+   * (a Galaxy S23 janked badly while an iPhone 13 mini did not), which is
+   * the same engine-dependent story AGENTS.md already records for filters
+   * over this canvas. The fill went from /50 to /70 and back to /60 —
+   * /70 was chosen in isolation when the blur was dropped here, and read
+   * as darker than the address pill's own /55 once both were on screen
+   * together (top_overlays.tsx). /60 is the number the two agreed on.
    */
   dark?: boolean;
   /**
@@ -48,7 +59,7 @@ export function CircularButton({
         // a neutral dark color instead of the warm cream tint — palette-only
         // difference, `shadow` controls whether either palette casts one
         dark && cn(
-          "backdrop-blur-md border border-white/15 text-white/80",
+          "border border-white/15 text-white/80",
           shadow ? "shadow-[0_4px_14px_rgba(0,0,0,0.35)]" : "shadow-none",
         ),
         // active-state bg and base `dark` bg used to be two separate cn()
@@ -60,7 +71,7 @@ export function CircularButton({
         // fixed by computing one background class per state instead of
         // stacking two. Amber (not blue) matches the active convention used
         // elsewhere (scale_bar.tsx, dev_panel's toggle badge).
-        dark ? (isActive ? "!bg-amber-500/20 ring-2 ring-amber-400/60" : "!bg-neutral-900/50") : (isActive ? "bg-amber-50/80 ring-2 ring-amber-400/60" : ""),
+        dark ? (isActive ? "!bg-amber-500/25 ring-2 ring-amber-400/60" : "!bg-neutral-900/60") : (isActive ? "bg-amber-50/80 ring-2 ring-amber-400/60" : ""),
         disabled && "opacity-40 grayscale-[0.5] cursor-not-allowed pointer-events-none shadow-none",
         className,
       )}

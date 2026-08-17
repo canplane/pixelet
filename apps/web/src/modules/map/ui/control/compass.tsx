@@ -12,6 +12,7 @@ import { reground_map_center } from "@/modules/world/terrain/use_ground_snap_syn
 export function MapCompass() {
   const { t } = useTranslation();
   const view_state = useCameraStore((state) => state.view_state);
+  const is_follow_mode = useCameraStore((state) => state.is_follow_mode);
   const reset_azimuth = useCameraStore.getState().reset_azimuth;
   const { dist, azimuth } = view_state;
 
@@ -26,6 +27,19 @@ export function MapCompass() {
   // off-default), where clicking it would visibly do nothing, or disappear
   // while still rotated because tilt happened to be back at default.
   const is_default_orientation: boolean = !is_rotated;
+
+  // Hidden entirely while following. Follow mode drives azimuth from the live
+  // compass heading (use_follow_mode.ts), so the map is essentially always
+  // rotated and this button would always be showing — with a needle twitching
+  // on every heading sample, and a reset that cannot hold: reset_azimuth()
+  // sets north, and the next heading update immediately turns it back. Two
+  // things steering the same value, one of which always loses.
+  //
+  // Nothing is lost by hiding it. In follow mode the map is oriented to the
+  // user rather than to north, so "reset to north" is not a state they can be
+  // in; leaving follow mode (any gesture does it — camera/input.tsx) brings
+  // the button back the moment it means something again.
+  const show_compass: boolean = !is_default_orientation && !is_follow_mode;
 
   // reset_azimuth only touches azimuth — it doesn't re-sample elevation, so if
   // map_center had drifted (or was never grounded) the view can visibly "float" once
@@ -44,7 +58,7 @@ export function MapCompass() {
     // button's bounding box whenever the *column's* size changes (e.g. its
     // own mount/unmount reflowing the shared flex container), which could
     // leave it stuck mid-transition instead of cleanly disappearing.
-    <MotionContainer show={!is_default_orientation} variant="compass" delay={0.4} layout={false}>
+    <MotionContainer show={show_compass} variant="compass" delay={0.4} layout={false}>
       {
         /* isActive dropped: MotionContainer only mounts this while
           !is_default_orientation, so is_default_orientation is always false
@@ -53,14 +67,14 @@ export function MapCompass() {
           actually show. This is a one-shot reset button, not a toggle with
           a real "currently active" state to indicate. */
       }
-      <CircularButton className="w-11 h-11" dark shadow={false} onClick={handle_reset} title={t("map.controls.reset_orientation")}>
+      <CircularButton className="w-[42px] h-[42px]" dark shadow={false} onClick={handle_reset} title={t("map.controls.reset_orientation")}>
         {
           /* N label — same dead-branch reasoning as the dropped isActive prop
         above: MotionContainer only mounts this while !is_default_orientation,
         so is_default_orientation is always false here. The "red when
         pointing exactly north" branch could never actually render. */
         }
-        <span className="absolute top-0.5 text-[8px] font-medium tracking-tighter select-none z-20 text-white/40">
+        <span className="absolute top-0.5 text-[10px] font-medium tracking-tighter select-none z-20 text-white/40">
           N
         </span>
 

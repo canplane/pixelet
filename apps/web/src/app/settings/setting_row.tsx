@@ -20,7 +20,12 @@ function CostBadge(props: { cost: SettingCost }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-1 py-px text-[8px] font-semibold leading-none tracking-wide",
+        // py-0.5, up from py-px. leading-none means the line box is the font
+        // size and nothing more, so 1px of vertical padding put the border
+        // almost on the glyphs — the chip read as a rule around the text
+        // rather than a pill containing it. The horizontal padding was
+        // already fine at px-1; only the vertical axis was starved.
+        "inline-flex items-center rounded-full border px-1 py-0.5 text-[9px] font-semibold leading-none tracking-wide",
         COST_CLASS[props.cost],
       )}
     >
@@ -42,13 +47,16 @@ type SettingRowProps = {
 export function SettingRow(props: SettingRowProps) {
   const { label, description, active, on_toggle, cost } = props;
   return (
-    <label className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-1.5 -mx-3 transition-colors hover:bg-accent/50 cursor-pointer">
-      <div className="min-w-0">
+    <label className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2.5 -mx-3 transition-colors hover:bg-accent/50 cursor-pointer">
+      {/* gap-1, the same value SectionTitle uses between its own title and
+      caption: a label and the line explaining it are the same relationship
+      at both levels, and this pair had no gap at all. */}
+      <div className="min-w-0 flex flex-col gap-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-[13px] font-medium leading-tight">{label}</span>
+          <span className="text-[15px] font-medium leading-tight">{label}</span>
           {cost && <CostBadge cost={cost} />}
         </div>
-        <div className="text-[11px] leading-snug text-muted-foreground">{description}</div>
+        <div className="text-[12px] leading-snug text-muted-foreground">{description}</div>
       </div>
       <Switch checked={active} onCheckedChange={on_toggle} />
     </label>
@@ -57,7 +65,12 @@ export function SettingRow(props: SettingRowProps) {
 
 type SectionTitleProps = {
   children: string;
-  icon: LucideIcon;
+  /** Optional. The sections that hold controls carry one; the three at the
+   * bottom that are only text (disclaimer, licence, about) deliberately do
+   * not — an icon beside a heading you cannot act on reads as a button that
+   * does nothing, and dropping them is what separates the two halves of the
+   * panel without adding a rule. */
+  icon?: LucideIcon;
   caption?: string;
 };
 
@@ -65,12 +78,12 @@ type SectionTitleProps = {
 export function SectionTitle(props: SectionTitleProps) {
   const { children, icon: Icon, caption } = props;
   return (
-    <div className="flex flex-col gap-0.5 mb-1">
-      <h3 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <Icon className="size-3" />
+    <div className="flex flex-col gap-1 mb-1">
+      <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {Icon && <Icon className="size-4" />}
         {children}
       </h3>
-      {caption && <p className="text-[10px] text-muted-foreground/70">{caption}</p>}
+      {caption && <p className="text-[11px] text-muted-foreground/70">{caption}</p>}
     </div>
   );
 }

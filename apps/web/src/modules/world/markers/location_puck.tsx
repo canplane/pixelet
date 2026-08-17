@@ -79,6 +79,35 @@ ZONE_SAMPLE_BOX.setAttribute("a_borders", new THREE.InstancedBufferAttribute(new
 // above the now-larger ring instead of sitting low relative to it.
 const BEACON_Z_BIAS: f64 = 0.5;
 
+/**
+ * Exponential rate the beacon closes the gap to a new fix at, per second:
+ * `1 - exp(-RATE * dt)`, so it is frame-rate independent rather than "some
+ * fraction per frame".
+ *
+ * Geolocation delivers roughly one fix a second, and the beacon reads the
+ * raw store (use_map_navigation.ts's device_coord, not follow mode's own
+ * EMA'd copy), so without this it teleports once per fix — a few metres at
+ * walking pace, more at a run. 6 closes ~95% of the gap in half a second:
+ * fast enough that the beacon is never meaningfully behind where the device
+ * says it is, slow enough to read as travel rather than a cut.
+ *
+ * Only the horizontal axes are smoothed. Z is terrain elevation, which
+ * changes when the ground under the marker changes, and easing that would
+ * sink the beacon into a slope on the way up it.
+ */
+const BEACON_SMOOTH_RATE: f64 = 6;
+
+/**
+ * Past this much of a jump the beacon cuts instead of sliding, in world
+ * units. The zone ring's own radius is the threshold because it is what the
+ * marker visually occupies: inside it, a slide reads as the marker moving
+ * within its own footprint; beyond it, the fix has landed somewhere the
+ * previous position had nothing to do with (a first fix, a return from a
+ * dropout, an accuracy correction jumping a block over) and sliding across
+ * that gap would draw a trip that never happened.
+ */
+const BEACON_SNAP_DIST2: f64 = (ZONE_RADIUS_CELL * U_PER_CELL) ** 2;
+
 const zone_style = {
   COLOR: marker_colors.ACTION,
   FILL_OPACITY: .4,
@@ -152,6 +181,23 @@ export function LocationPuck(props: LocationPuckProps) {
   const center_coord = useMemo(() => {
     return projection.project({ i: 0n, f: 0n }, ...center_pos);
   }, [center_pos]);
+
+  // Where the device actually is *within* its cell, on the horizontal axes
+  // only. center_pos floors to the cell grid because the zone ring is built
+  // out of cell-sized boxes and has to line up with them; the beacon is a
+  // free-floating octahedron under no such constraint, and snapping it too
+  // quantized the reported position — walking across a cell moved the
+  // beacon not at all, then a whole cell at once. Adding the remainder back
+  // puts it at the real coordinate while the ring underneath stays snapped.
+  //
+  // Z is deliberately not part of this: it is terrain elevation plus the
+  // bob, both written every frame in useFrame below, so there is nothing
+  // here for a sub-cell correction to contribute.
+  const beacon_offset: [f64, f64] = useMemo(() => {
+    if (effective_device_coord === null) return [0, 0];
+    const pos: V3 = projection.unproject(fill3(0), effective_device_coord.i, effective_device_coord.f);
+    return [pos[0] - center_pos[0], pos[1] - center_pos[1]];
+  }, [effective_device_coord, center_pos]);
 
   const zone_ref = useRef<THREE.InstancedMesh | null>(null);
   // AnchorNode is a two-pass portal (target starts null, resolves via its
@@ -273,7 +319,33 @@ void main() {
 
   const $beacon_pos = useRef(new THREE.Vector3());
 
-  useFrame((state) => {
+  /** Where the beacon is actually drawn, in the same local frame as
+   * beacon_offset. null until the first fix seeds it. */
+  const shown_offset = useRef<[f64, f64] | null>(null);
+
+  /**
+   * Rebases shown_offset whenever the anchor moves.
+   *
+   * center_pos floors to the cell grid, so crossing a cell boundary jumps it
+   * a whole cell while the true position moved a fraction of one. The world
+   * position is continuous across that; the *local* offset is not — it drops
+   * by a cell at the same instant the anchor gains one. Easing the local
+   * value directly would therefore play that discontinuity as a visible
+   * slide backwards across the cell, once per boundary, in the opposite
+   * direction to travel. Subtracting the anchor's own delta keeps what is
+   * being eased anchored to the world instead.
+   */
+  const prev_center = useRef<V3 | null>(null);
+  useLayoutEffect(() => {
+    const prev = prev_center.current;
+    if (prev !== null && shown_offset.current !== null) {
+      shown_offset.current[0] -= center_pos[0] - prev[0];
+      shown_offset.current[1] -= center_pos[1] - prev[1];
+    }
+    prev_center.current = [center_pos[0], center_pos[1], center_pos[2]];
+  }, [center_pos]);
+
+  useFrame((state, delta) => {
     if (!beacon_ref.current) return;
 
     beacon_ref.current.getWorldPosition($beacon_pos.current);
@@ -285,6 +357,25 @@ void main() {
     if (zone_ref.current) zone_ref.current.visible = visible;
 
     if (!visible) return;
+
+    // Ease toward the fix rather than cutting to it — see
+    // BEACON_SMOOTH_RATE. Written here, not through the mesh's `position`
+    // prop, so React re-rendering on a new fix never fights the frame that
+    // is mid-slide.
+    if (shown_offset.current === null) shown_offset.current = [beacon_offset[0], beacon_offset[1]];
+    const shown: [f64, f64] = shown_offset.current;
+    const gap_x: f64 = beacon_offset[0] - shown[0];
+    const gap_y: f64 = beacon_offset[1] - shown[1];
+    if (gap_x * gap_x + gap_y * gap_y > BEACON_SNAP_DIST2) {
+      shown[0] = beacon_offset[0];
+      shown[1] = beacon_offset[1];
+    } else {
+      const alpha: f64 = 1 - Math.exp(-BEACON_SMOOTH_RATE * delta);
+      shown[0] += gap_x * alpha;
+      shown[1] += gap_y * alpha;
+    }
+    beacon_ref.current.position.x = shown[0];
+    beacon_ref.current.position.y = shown[1];
 
     const t: f64 = state.clock.getElapsedTime();
     beacon_ref.current.rotation.z = t * 1.2;
@@ -314,12 +405,10 @@ void main() {
 
       <mesh
         ref={beacon_ref}
-        // U_PER_CELL, not 1 — every other position here (center_pos, each
-        // zone tile, hover_cursor.tsx's POS) snaps to that same cell
-        // grid. Snapping to the 1-unit grid instead put the beacon up to 2
-        // cells away from where center_pos/center_coord actually anchor —
-        // visible as sitting off-center from the zone ring.
-        position={center3n([0, 0, BEACON_Z_BIAS], U_PER_CELL)}
+        // Placeholder for the frame before useFrame first runs; it owns all
+        // three axes from then on — x/y easing toward beacon_offset, z the
+        // terrain-relative bob.
+        position={[beacon_offset[0], beacon_offset[1], BEACON_Z_BIAS]}
       >
         {
           /* 1/2 of the original 0.6 — bumped back up from 0.15 (1/4) so the

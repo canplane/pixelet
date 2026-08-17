@@ -12,8 +12,9 @@
     @apply w-full h-full m-0 p-0 overflow-hidden;
 
     font-family:
-      /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", /* 2. Latin-only webfont, carries Latin text on Windows/Android */ "Inter",
-      /* 3. Hangul coverage, and general fallback */ "Pretendard Variable", /* 4. System default, in case no webfont loads */ system-ui, sans-serif;
+      /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+      /* 2. Hangul coverage, and the whole face everywhere else. "Inter" used to sit ahead of this for Latin on Windows/Android; nothing ever loaded it — fonts.css declares only Pretendard now — so it resolved for whoever happened to have Inter installed locally and was skipped by everyone else. */ "Pretendard Variable",
+      /* 3. System default, in case no webfont loads */ system-ui, sans-serif;
   }
   * {
     @apply border-border outline-ring/50;
@@ -22,6 +23,36 @@
     /* SF Pro reads best slightly tightened */
     letter-spacing: -0.01em;
     @apply bg-background text-foreground antialiased;
+
+    /* This is an app surface, not a document. A long press here is aiming at
+       a control — the size flyout, the tracking button, a swatch — and the
+       browser answers the same gesture with its own affordances: the iOS
+       callout menu, a text selection, a drag ghost. None of them have
+       anything to offer over a map, and all of them interrupt the gesture
+       that was actually intended.
+
+       Set once at the root rather than per control, because it is a property
+       of the whole surface and the alternative is remembering it on every
+       new button. Distinct from touch-action, which governs scrolling and
+       genuinely does differ per element (see mode_bar.tsx's swatches). */
+    -webkit-touch-callout: none;
+    @apply select-none;
+  }
+
+  /* -webkit-user-drag does not inherit, so it has to be stated broadly. Safe
+     here only because nothing in this app uses native drag and drop — no
+     dragstart handlers, no dataTransfer, nothing draggable on purpose. */
+  * {
+    -webkit-user-drag: none;
+  }
+
+  /* Wherever a caret goes, selection has to work again. Safari will not
+     select inside a field whose ancestor is user-select:none, so this is
+     load-bearing rather than defensive. */
+  input,
+  textarea,
+  [contenteditable] {
+    @apply select-text;
   }
 }
 
@@ -190,18 +221,6 @@
 
   /* Cozy's identity: a springy bounce */
   --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-
-  font-family: "DungGeunMo", sans-serif;
-  @apply pixel-antialiasing-off; /* utility from the split-out fonts.css */
-
-  /* Core properties that stop the pixel face from being smeared */
-  -webkit-font-smoothing: none; /* Chrome, Safari, etc. */
-  -moz-osx-font-smoothing: unset; /* Firefox */
-  font-smooth: never; /* standard, honored by some browsers */
-
-  /* Pixel rendering */
-  text-rendering: pixelated;
-  image-rendering: pixelated;
 
   --radius: 1.25rem;
 

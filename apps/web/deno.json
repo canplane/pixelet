@@ -5,9 +5,23 @@
 
   "tasks": {
     "dev": "deno run -A --node-modules-dir=auto npm:vite",
+    // Tiles from the published deployment instead of a local API + PostGIS.
+    // See vite.config.ts's VITE_TILE_SOURCE comment for what this trades away.
+    "dev:remote": "VITE_TILE_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite",
 
     "build": "deno run -A --node-modules-dir=auto npm:vite build",
     "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
+
+    // Build, then publish the Worker (app + R2 tile route). Run through Deno
+    // rather than npx: wrangler requires Node >=22 and the system Node may be
+    // older, while Deno's compat layer satisfies it — and it keeps the repo on
+    // one toolchain. Needs `wrangler login` once.
+    // Guards the artifact, not the source: a dev surface can be gated
+    // correctly and still leave its strings in the bundle. Runs between build
+    // and publish so a leak stops the deploy rather than being noticed on the
+    // live site.
+    "check:bundle": "deno run -A scripts/check_bundle.ts",
+    "deploy": "deno task build && deno task check:bundle && deno run -A --node-modules-dir=auto npm:wrangler deploy",
 
     "check": "deno check src/index.ts",
     // Pure-logic modules only (camera orbit math, LOD selection, ...) — none
@@ -77,8 +91,7 @@
 
     // internationalization
     "react-i18next": "npm:react-i18next@^16.0.0",
-    "i18next-browser-languagedetector": "npm:i18next-browser-languagedetector@^8.0.2",
-    "i18next-http-backend": "npm:i18next-http-backend@^3.0.0"
+    "i18next-browser-languagedetector": "npm:i18next-browser-languagedetector@^8.0.2"
     // "@tensorflow/tfjs-backend-webgpu": "npm:@tensorflow/tfjs-backend-webgpu@^4.22.0",
   }
 }

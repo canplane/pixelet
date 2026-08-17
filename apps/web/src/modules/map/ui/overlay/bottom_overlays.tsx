@@ -26,7 +26,13 @@ export function BottomOverlays() {
   const is_camera_busy: boolean = camera_status !== CameraStatus.IDLE;
 
   const interaction_style = cn(
-    "transition-all duration-500 ease-in-out",
+    // Not transition-all: these containers position themselves from
+    // --vv-top/--vv-bottom, and `all` swept top/bottom into the same 500ms
+    // ease. The result was an overlay easing toward where the keyboard had
+    // been half a second ago — a motion of its own, visibly not attached to
+    // anything. Only the properties this state actually changes are listed,
+    // so viewport tracking is immediate and the fade still eases.
+    "transition-[opacity,transform,filter] duration-500 ease-in-out",
     is_camera_busy ? "pointer-events-none opacity-40 scale-[0.98] blur-[0.5px]" : "opacity-100 scale-100 blur-0",
   );
 
@@ -46,13 +52,30 @@ export function BottomOverlays() {
       cosmetic concept it started as. */
       }
       <div
-        // left-6 right-6 (not left-1/2 -translate-x-1/2 + max-w), so the
-        // reserved 24px inset — the same number as this bar's own
-        // bottom-6 — comes from real layout width, not a clipped/
-        // scrollable overflow area: the box's width IS 100vw - 48px,
+        // left-4 right-4 (not left-1/2 -translate-x-1/2 + max-w), so the
+        // reserved 16px inset — the same number as this bar's own
+        // bottom-4 — comes from real layout width, not a clipped/
+        // scrollable overflow area: the box's width IS 100vw - 32px,
         // full stop, so there's nothing for content to overflow past in
         // the first place.
-        className={cn("absolute bottom-6 left-6 right-6 z-40 pointer-events-none", interaction_style)}
+        // 16 rather than the 24 this used: it is what the top overlays
+        // already sit at, and what iOS's own floating keyboard accessory
+        // bar uses — measured at 16pt on device, against this bar's 24.
+        // Being the one element inset further than everything else is
+        // what read as misaligned.
+        // --vv-bottom lifts this clear of the on-screen keyboard. The message
+        // input lives in here, so without it the bar this row exists to show
+        // is the one thing the keyboard covers. Zero when no keyboard is up,
+        // which is every other moment.
+        // A short ease on `bottom` alone. iOS delivers visualViewport events
+        // inconsistently — streaming through the keyboard animation when it
+        // opens fresh, and as a single final value when the keyboard was
+        // already up — so the bar tracked smoothly sometimes and snapped
+        // others. 150ms is short enough to stay attached in the streaming
+        // case and long enough to make the snap read as motion rather than a
+        // jump. Only `bottom`: the opacity/blur state above still owns its
+        // own, slower transition.
+        className={cn("absolute bottom-[calc(1rem+var(--vv-bottom,0px))] left-4 right-4 z-40 pointer-events-none transition-[bottom] duration-150 ease-out", interaction_style)}
       >
         {
           // w-full + flex justify-center here (not on the div above) —

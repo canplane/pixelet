@@ -1,6 +1,6 @@
 // @pxl/web/app/settings/settings_trigger_button.tsx
 
-import { Settings } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useAppContext } from "@/app/providers/app_context.ts";
@@ -18,14 +18,18 @@ export function SettingsTriggerButton() {
 
   return (
     <CircularButton
-      className="w-11 h-11"
+      className="w-[42px] h-[42px]"
       dark
       shadow={false}
       onClick={ui.open_settings_modal}
       aria-label={t("settings.trigger_aria_label")}
       title={t("settings.trigger_aria_label")}
     >
-      <Settings className="w-5 h-5 text-white/80" />
+      {/* A hamburger, not a gear. This opens the app's only menu — language,
+          rendering, licence, and whatever else lands there — and a gear
+          promises settings specifically, which undersells it and reads as
+          secondary chrome in the corner. */}
+      <Menu className="w-6 h-6 text-white/80" />
     </CircularButton>
   );
 }

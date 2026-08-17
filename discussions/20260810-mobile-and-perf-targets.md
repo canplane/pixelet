@@ -113,6 +113,85 @@ Note one honest gap in that store: `show_chromatic_aberration` was defaulted off
 by the same principle as the rest but, unlike `show_ao`/`show_bloom`/
 `show_tilt_shift`/`show_smaa`, was never itself profiled.
 
+## Device reports, 2026-08-17
+
+Two failures observed on real hardware while the UI was being sized. Neither was
+profiled — the mechanism in each case is inferred from what changed and what
+broke — so both are recorded as leads, not conclusions.
+
+### Galaxy S23 janks where an iPhone 13 mini does not
+
+Same build, same scene. The leading suspect is `backdrop-filter`: every blurred
+element over the canvas has to re-read and re-blur its backdrop, and the backdrop
+here repaints every frame, so the cost is continuous rather than one-off. WebKit
+and Chromium do not pay it the same way, which matches the shape of the report.
+
+`backdrop-blur` was removed from the map's circular controls and the address
+pill as a first experiment; the fill went from `/50` to `/70` to keep the icons
+legible without it. Three blurred elements remain — the size flyout, the toast,
+and `app/styles/index.css`'s glass utility — deliberately, so that if the
+symptom is unchanged it is evidence against the hypothesis rather than a partial
+fix that proves nothing.
+
+This bears directly on the parked idea of doing tilt-shift as a CSS
+`backdrop-filter` over the canvas instead of a WebGL pass. That idea now has
+evidence against it from the same surface it would live on.
+
+### iPhone 13 mini reloads itself after wandering
+
+Silent reload with no crash dialog: WebKit discarding the tab under memory
+pressure. It appeared immediately after a pass that doubled every view distance.
+
+The chain matters more than the numbers. `MAX_DIST`, fog and `RENDER_RADIUS` are
+not independent: the camera sits `MAX_DIST` from its pivot, so fog has to reach
+past that or full zoom-out is a screen of solid fog, and geometry has to exist as
+far as fog can see. Doubling `MAX_DIST` therefore dragged `FOG_FAR` to 1800 and
+`RENDER_RADIUS` to 3 — and `CHUNK_RENDER_DIST` derives from `FOG_FAR`, so the
+ground **area** that builds chunk geometry went up as its square: 4x.
+
+What it settled at: distances 2x, fog and `VIEW_DIST` 1.5x, `RENDER_RADIUS` back
+at 2. Fog does not have to match `MAX_DIST` one for one — it only has to leave
+something visible at full zoom-out, and 480/1350 against a 1024 pivot puts the
+ground at ~62% haze there. That buys the full 2x zoom range for 2.25x area
+instead of 4x. `RENDER_RADIUS=2` now knowingly breaks its own
+`(r-1)*1024 >= FOG_FAR` rule; geometry ends at 1024u where fog is already ~62%
+opaque, so the seam sits inside the haze. **If that seam reads on a device,
+lower `FOG_FAR` — do not raise `RENDER_RADIUS`, which is the move that failed.**
+
+### A decoded page is 4.01 MiB, always
+
+Measured by fetching a published tile and decoding it with the shared package,
+rather than by arithmetic. Four dense 1024x1024 `U8` ground channels plus a
+68x68 `I16` elevation grid. **Including the all-ocean tile** — the sparse tree
+compresses on the wire (~21 KB average in the bucket, ~195:1) and expands to the
+same dense arrays regardless of content, so no page is cheap.
+
+That makes `CLEANUP_RADIUS` a straight memory dial: `(2r+1)^2 * 4.01 MiB`, i.e.
+100 MiB at r=2 and 197 MiB at r=3 (its current value). It is a retention cap,
+not a working set — `LOAD_RADIUS=1` only prefetches 9 pages; the rest accumulate
+by panning.
+
+### Client-side tile caching: mostly redundant
+
+Raised as "should tiles go into localStorage with an LRU?". They should not, and
+neither should Cache Storage or OPFS for the same job: tiles are served
+`immutable, max-age=31536000`, so the browser's own HTTP cache already answers a
+repeat request from disk without revalidating. `localStorage` is additionally
+disqualified on its own terms — synchronous, so it blocks the very thread that
+is already the bottleneck, and capped around 5–10 MB against tiles that decode
+to 4 MiB each.
+
+The one version that is not redundant is persisting the **decoded** structures,
+which nothing does today (`tile_map` dies with the tab) and which is where the
+expensive work actually is. `IndexedDB` fits that best, not Cache Storage:
+structured clone stores typed arrays directly, while a Response-shaped store
+would need them serialised and parsed back. It is unusually promising here
+because the app opens at the user's real location, so the same pages repeat.
+
+**Gated on A above.** Move the decode off the main thread first, then measure
+whether cold start still hurts. In the other order it is impossible to tell
+whether the persistence bought anything.
+
 ## Superseded: the original speculative list
 
 Kept for the record, since two of three have since been addressed:

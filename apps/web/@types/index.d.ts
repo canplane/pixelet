@@ -20,6 +20,9 @@ declare global {
   /** Reverse-geocoding origin, e.g. "https://nominatim.openstreetmap.org". */
   const __GEOCODE_BASE_URL__: string;
 
+  /** Build timestamp, ISO-8601 UTC. Changes every build by construction. */
+  const __BUILD_TIME__: string;
+
   /** A droplet fades. A pixelet remains. 🫧 */
   const __APP_NAME__: string;
 

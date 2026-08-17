@@ -1,7 +1,6 @@
 // @pxl/web/modules/device/pose/use_geolocation.ts
 
-import { useCallback, useEffect } from "react";
-import i18next from "i18next";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
@@ -12,14 +11,43 @@ import { DevicePoseStatus, useDeviceLocationStore } from "./store.ts";
 let geolocation_subscriber_cnt: u32 = 0;
 let geolocation_watch_id: number | null = null;
 
+/**
+ * A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
+ * the session: indoors, in a tunnel, between buildings, a fix simply does not
+ * arrive for a while. The error path has to clearWatch() — a dead watch left
+ * subscribed is what once had two of them racing and flickering device_coord
+ * null/non-null — but that left nothing running afterwards either, and the
+ * only things that ever restart it are a permission change or a return to the
+ * foreground. So one bad minute underground ended location tracking until the
+ * app was backgrounded and reopened, taking follow mode with it.
+ *
+ * Retried instead, once, after a pause. Single timer, cleared by
+ * stop_watching, so this cannot become the second racing watch.
+ */
+const GEOLOCATION_RETRY_MS = 5000;
+let geolocation_retry_timer: number | null = null;
+
+function cancel_geolocation_retry(): void {
+  if (geolocation_retry_timer !== null) {
+    globalThis.clearTimeout(geolocation_retry_timer);
+    geolocation_retry_timer = null;
+  }
+}
+
 /** Singleton service hook: watches the device's GPS sensor and syncs it to the global store. */
 export function useGeolocation() {
   const set_location = useDeviceLocationStore((s) => s.set_location);
   const set_error = useDeviceLocationStore((s) => s.set_error);
   const set_status = useDeviceLocationStore((s) => s.set_status);
 
+  // start_watching cannot call itself from inside its own definition, and the
+  // retry fires long after this render — a ref keeps the timer pointed at the
+  // current callback rather than capturing a stale one.
+  const start_watching_ref = useRef<(() => void) | null>(null);
+
   /** Stops sensor reception and releases resources. */
   const stop_watching = useCallback(() => {
+    cancel_geolocation_retry();
     if (geolocation_watch_id !== null) {
       navigator.geolocation.clearWatch(geolocation_watch_id);
       geolocation_watch_id = null;
@@ -30,11 +58,12 @@ export function useGeolocation() {
 
   /** Starts sensor reception (guarded against duplicate activation). */
   const start_watching = useCallback(() => {
+    cancel_geolocation_retry();
     // already active — nothing to do
     if (geolocation_watch_id !== null) return;
 
     if (!("geolocation" in navigator)) {
-      set_error(i18next.t("device.geolocation.unsupported"));
+      set_error("device.geolocation.unsupported");
       return;
     }
 
@@ -75,22 +104,39 @@ export function useGeolocation() {
         }
         useDeviceLocationStore.getState().set_is_tracking_location(false);
 
-        let error_message: string = i18next.t("device.geolocation.generic_error");
+        let error_key: string = "device.geolocation.generic_error";
         if (err.code === err.PERMISSION_DENIED) {
           // actionable, not just descriptive — unlike POSITION_UNAVAILABLE/
           // TIMEOUT below, this is the one case the user can actually fix
           // themselves (re-grant permission in browser/OS settings).
-          error_message = i18next.t("device.geolocation.permission_denied");
+          error_key = "device.geolocation.permission_denied";
         } else if (err.code === err.POSITION_UNAVAILABLE) {
-          error_message = i18next.t("device.geolocation.position_unavailable");
+          error_key = "device.geolocation.position_unavailable";
         } else if (err.code === err.TIMEOUT) {
-          error_message = i18next.t("device.geolocation.timeout");
+          error_key = "device.geolocation.timeout";
         }
-        set_error(error_message);
+        set_error(error_key);
+
+        // Permission denial is the user's to undo; anything else is worth
+        // another try, since the sensor itself is presumed fine.
+        if (err.code !== err.PERMISSION_DENIED) {
+          cancel_geolocation_retry();
+          geolocation_retry_timer = globalThis.setTimeout(() => {
+            geolocation_retry_timer = null;
+            start_watching_ref.current?.();
+          }, GEOLOCATION_RETRY_MS);
+        }
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
+      // timeout 10s -> 30s and maximumAge 0 -> 5s. Both were asking for a
+      // brand-new high-accuracy fix within ten seconds, which a phone indoors
+      // routinely misses; a five-second-old fix is indistinguishable at
+      // walking pace, and the longer window rides out a gap instead of
+      // declaring failure in the middle of one.
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
     );
   }, [set_location, set_error, set_status]);
+
+  start_watching_ref.current = start_watching;
 
   /** Lifecycle management and tab-visibility optimization. */
   useEffect(() => {
@@ -160,4 +206,10 @@ export function useGeolocation() {
       status?.removeEventListener("change", handle_change);
     };
   }, [start_watching]);
+
+  // Exposed so a user gesture can retry. The effect above starts the watch on
+  // mount, but a dismissed or failed prompt leaves nothing running and nothing
+  // to run it again — see SensorStatus, which turns the indicator itself into
+  // that retry.
+  return { start_watching };
 }

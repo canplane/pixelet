@@ -30,7 +30,14 @@ export function CurrentAddress(props: CurrentAddressProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="text-xs font-medium text-white/70 whitespace-nowrap"
+          // The pill this sits in is w-fit and pinned to right-4, so an
+          // unbounded label grows it leftward until it runs into the
+          // top-left cluster. Nominatim joins three display_name segments,
+          // which for a long address is well past the room available.
+          // min-w-0 is required for truncation to happen at all: this is a
+          // flex item, and a flex item's default min-width:auto refuses to
+          // shrink below its content.
+          className="text-xs font-medium text-white/70 whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-[40vw]"
         >
           {label}
         </motion.span>

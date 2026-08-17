@@ -44,7 +44,13 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     lighting: {
       ambient: { color: "#fff2e3", intensity: 0.62 },
       hemisphere: { sky: "#fff3df", ground: "#d8b894", intensity: 0.78 },
-      directional: { color: "#ffd9a8", intensity: 0.72 },
+      // Down from 0.72 — reported as too strong on the terrain (blown-out
+      // highlights on sun-facing slopes). Only the directional (sun) light
+      // moved; ambient/hemisphere are the soft fill and weren't what read
+      // as harsh. Landed at 0.45 after an intermediate 0.56 (~62% of the
+      // original — morning/day/evening all settled near that same ratio,
+      // not independently tuned to it).
+      directional: { color: "#ffd9a8", intensity: 0.45 },
     },
     grid: { cell: "#ddd2c4", major: "#c5b6a4" },
   },
@@ -62,7 +68,9 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     lighting: {
       ambient: { color: "#f9fcff", intensity: 0.68 },
       hemisphere: { sky: "#edf6ff", ground: "#c2cbd3", intensity: 0.82 },
-      directional: { color: "#fff8ef", intensity: 0.82 },
+      // Down from 0.82, same reasoning as MORNING's own cut just above.
+      // 0.5 is ~61% of the original, in step with the other two.
+      directional: { color: "#fff8ef", intensity: 0.50 },
     },
     grid: { cell: "#c7d4df", major: "#9fb0bf" },
   },
@@ -80,7 +88,11 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     lighting: {
       ambient: { color: "#ffe4cd", intensity: 0.58 },
       hemisphere: { sky: "#ffb874", ground: "#6a3920", intensity: 0.82 },
-      directional: { color: "#ffc29d", intensity: 0.66 },
+      // Down from 0.66, same pass as DAY's own cut above. 0.35 (~53% of the
+      // original) rather than the same ~61% ratio the other two landed on —
+      // chosen so the day(0.5)->evening->night(0.15) taper falls in roughly
+      // even steps (0.15, 0.20) instead of a small step then a big one.
+      directional: { color: "#ffc29d", intensity: 0.35 },
     },
     grid: { cell: "#8c5a3d", major: "#5e3927" },
   },
@@ -98,7 +110,9 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
     lighting: {
       ambient: { color: "#24304a", intensity: 0.40 },
       hemisphere: { sky: "#314764", ground: "#0b1322", intensity: 0.68 },
-      directional: { color: "#5a6d8d", intensity: 0.12 },
+      // Up from 0.12 — the one theme that moved the other direction,
+      // rather than folded into the daytime cut above.
+      directional: { color: "#5a6d8d", intensity: 0.15 },
     },
     grid: { cell: "#314258", major: "#223247" },
   },

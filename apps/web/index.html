@@ -3,13 +3,36 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- Favicon -->
+    <!-- Favicon. The manifest's icon srcs are absolute and include the
+         /favicon/ prefix: they used to be bare /web-app-manifest-*.png,
+         which 404s, so an installed Android shortcut had no icon at all. A
+         manifest resolves its own relative paths against itself, but these
+         were absolute and simply wrong. -->
     <link rel="icon" href="/favicon/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Matches the app's own --background (oklch(0.15 0.01 240)). Android
+         paints its browser chrome and the standalone splash with this; the
+         manifest defaulted to #ffffff, which flashed white before a map
+         that is almost black. -->
+    <meta name="theme-color" content="#080c0f" />
+
+    <!--
+      viewport-fit=cover: lets content reach under the notch and home
+      indicator, which is also the prerequisite for env(safe-area-inset-*)
+      to report anything but zero.
+
+      No interactive-widget=resizes-content, deliberately. It does keep the
+      overlays on screen when the keyboard opens — by shrinking the layout
+      viewport — but the canvas is sized off that same viewport, so the 3D
+      view resized and reframed itself every time the keyboard appeared.
+      Holding the layout viewport still keeps the world where it was, and the
+      overlays are repositioned instead, from visualViewport (see
+      use_visual_viewport.ts). One mechanism rather than two that disagree.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>pixelet</title>
   </head>
   <body>

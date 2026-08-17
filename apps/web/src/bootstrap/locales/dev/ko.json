@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "debug": {
+      "section_title": "디버그",
+      "objects": {
+        "label": "디버그 기즈모",
+        "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
+      },
+      "ground_snap": {
+        "label": "고도 접지 고정",
+        "description": "지도를 이동(패닝)하는 동안 카메라 초점의 고도를 실제 지형 높이에 맞춰 고정합니다."
+      },
+      "dummy_toast": {
+        "label": "테스트 토스트 알림",
+        "description": "UI 테스트용 샘플 토스트 알림을 화면에 출력합니다.",
+        "message": "더미 토스트 {{index}}"
+      }
+    }
+  },
+  "map": {
+    "mode_bar": {
+      "message_placeholder": "메시지 입력...",
+      "message_tooltip": "메시지",
+      "send": "전송"
+    },
+    "chat": {
+      "self_label": "나"
+    }
+  }
+}

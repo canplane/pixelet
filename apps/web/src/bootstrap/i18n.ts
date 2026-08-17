@@ -3,7 +3,44 @@
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
-import HttpBackend from "i18next-http-backend";
+
+import ko from "./locales/ko.json" with { type: "json" };
+import en from "./locales/en.json" with { type: "json" };
+import ko_dev from "./locales/dev/ko.json" with { type: "json" };
+import en_dev from "./locales/dev/en.json" with { type: "json" };
+
+/**
+ * Copy for development-only surfaces lives in its own catalogue, folded in
+ * only when __IS_DEV__ is true. Gating the *components* is not enough: their
+ * strings would still ride along inside the bundled catalogue, so a
+ * production build shipped the debug section's labels — every toggle it
+ * offers, named — even with the section itself eliminated. Behind a
+ * compile-time constant the merge and both dev imports drop out entirely.
+ */
+type Catalogue = { [key: string]: string | Catalogue };
+
+/**
+ * Merges every level, not just the top one. This used to spread
+ * `settings` alone, which was right while the debug section was the only
+ * dev-only surface and wrong the moment a second one appeared elsewhere in
+ * the tree: the dev catalogue's `map` branch was dropped without a word, so
+ * the gated component rendered its raw key instead of its label. A merge
+ * that only knows about the branches it was written for fails silently by
+ * construction, which is the worst way for a catalogue to fail.
+ */
+function deep_merge(base: Catalogue, extra: Catalogue): Catalogue {
+  const out: Catalogue = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    const current = out[key];
+    out[key] = typeof value === "object" && typeof current === "object" ? deep_merge(current, value) : value;
+  }
+  return out;
+}
+
+function with_dev<T>(base: T, dev: unknown): T {
+  if (!__IS_DEV__) return base;
+  return deep_merge(base as Catalogue, dev as Catalogue) as T;
+}
 
 let booted = false;
 
@@ -15,22 +52,23 @@ let booted = false;
  * which is outside that try/catch and ordered by import hoisting rather than
  * by intent.
  *
- * Deliberately not awaited. `init()` kicks off the backend fetch and returns
- * immediately; rendering proceeds while translations are still in flight, and
- * `useSuspense: false` below means a `t()` call that lands first just renders
- * the key for that one pass. Awaiting would block first paint on a network
- * round trip instead — a different tradeoff than the one this app has chosen.
+ * Catalogues are bundled rather than fetched, which makes this synchronous:
+ * `init()` has its resources in hand and `t()` is correct from the first
+ * render. Fetching them meant every string rendered before the request landed
+ * showed its raw key — visible on a cold load as a flash of `settings.title`
+ * and friends, and unfixable from the call sites, since the gap is in
+ * initialization rather than in any one component.
+ *
+ * The cost is 10.5 kB of JSON in a 1.97 MB bundle, and re-deploying to change
+ * a string. The previous arrangement traded that flash for the ability to edit
+ * a translation without rebuilding — a trade that never paid off, because the
+ * app ships as a built bundle anyway, so a copy change was always a deploy.
  */
 export function bootstrap_i18n(): void {
   if (booted) return;
   booted = true;
 
-  // Locale JSON lives in public/locales/{{lng}}/translation.json (Vite serves
-  // public/ at the site root, so this resolves to /locales/ko/translation.json
-  // etc. in both dev and prod) — fetched at runtime rather than bundled, so a
-  // copy fix doesn't need a rebuild.
   i18next
-    .use(HttpBackend)
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
@@ -38,8 +76,9 @@ export function bootstrap_i18n(): void {
       supportedLngs: ["ko", "en"],
       ns: ["translation"],
       defaultNS: "translation",
-      backend: {
-        loadPath: "/locales/{{lng}}/{{ns}}.json",
+      resources: {
+        ko: { translation: with_dev(ko, ko_dev) },
+        en: { translation: with_dev(en, en_dev) },
       },
       detection: {
         order: ["localStorage", "navigator"],
