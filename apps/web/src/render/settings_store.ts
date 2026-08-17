@@ -24,6 +24,23 @@ export type RenderSettingsStore = {
   toggle_low_spec: () => void;
 
   /**
+   * Whether the terrain shader paints the STRUCTURE ground channel, i.e.
+   * whether OSM buildings are drawn. The bake writes that channel either way
+   * (see osm_policy.ts's determine_cell_cfg), so this is purely a render
+   * decision.
+   *
+   * Lived in app/dev/debug_store.ts until 2026-08-17, which made buildings
+   * unreachable in a production build — the section holding its toggle is
+   * __IS_DEV__-gated, so the flag was false for every real user with no way
+   * to change it. It is a visual feature with a cost, not a diagnostic, so
+   * it belongs with the rest of them. Still false by default; whether that
+   * is the right default is a separate question from where the switch is.
+   */
+  show_structures: boolean;
+  set_show_structures: (show: boolean) => void;
+  toggle_structures: () => void;
+
+  /**
    * N8AO (screen-space contact/crevice ambient occlusion). Disabled by
    * default: confirmed real cost via live profiling (WebGLRenderer.
    * renderBufferDirect/setProgram time scaling with the post stack — see
@@ -127,6 +144,10 @@ export const useRenderSettingsStore = create<RenderSettingsStore>()(persist((set
   low_spec: true,
   set_low_spec: (low_spec) => set({ low_spec }),
   toggle_low_spec: () => set((state) => ({ low_spec: !state.low_spec })),
+
+  show_structures: false,
+  set_show_structures: (show_structures) => set({ show_structures }),
+  toggle_structures: () => set((state) => ({ show_structures: !state.show_structures })),
 
   show_ao: false,
   set_show_ao: (show_ao) => set({ show_ao }),

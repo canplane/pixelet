@@ -9,7 +9,7 @@ import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { common_types } from "@pxl/shared/spec/cell/common.ts";
 import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
 
-import { useDebugStore } from "@/app/dev/debug_store.ts";
+import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { slice_chunk } from "./chunk.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT } from "./shader_meta.ts";
@@ -73,7 +73,7 @@ export class TerrainWorldLayer implements WorldLayer {
   readonly name = "terrain";
 
   revision(key: ChunkKey): WorldLayerRevision {
-    return [useTileStore.getState().get_tile(key.page_idx), useDebugStore.getState().show_structures];
+    return [useTileStore.getState().get_tile(key.page_idx), useRenderSettingsStore.getState().show_structures];
   }
 
   paint(key: ChunkKey, target: ChunkVolume): boolean {
@@ -81,7 +81,7 @@ export class TerrainWorldLayer implements WorldLayer {
     if (!tile) return false;
 
     const { ground, ele } = slice_chunk(tile.terrain.ground, tile.terrain.ele, key.page_off);
-    const show_structures = useDebugStore.getState().show_structures;
+    const show_structures = useRenderSettingsStore.getState().show_structures;
     const terrain_floor = terrain_floor_of(ele);
 
     for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {

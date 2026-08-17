@@ -101,9 +101,9 @@ export function TrackingButton() {
       return {
         Icon: Compass,
         style: { transform: `rotate(${final_rotation_deg}deg)` },
-        // unified active-state color (see CircularButton's isActive ring and
-        // GroundSnapToggle's text-amber-500) — this was still the old
-        // sky-500 blue, left over from before that convention settled.
+        // unified active-state color (see CircularButton's own isActive
+        // ring) — this was still the old sky-500 blue, left over from before
+        // that convention settled.
         className: "text-amber-500 scale-110",
       };
     }
@@ -128,7 +128,7 @@ export function TrackingButton() {
 
   return (
     <CircularButton
-      className="w-11 h-11"
+      className="w-[42px] h-[42px]"
       dark
       shadow={false}
       onClick={handle_action}
@@ -138,7 +138,7 @@ export function TrackingButton() {
     >
       <Icon
         className={cn(
-          "w-5 h-5 transition-all duration-500 ease-out",
+          "w-6 h-6 transition-all duration-500 ease-out",
           className,
         )}
         style={style}

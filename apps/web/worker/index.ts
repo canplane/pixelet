@@ -1,0 +1,146 @@
+// @pxl/web/../worker/index.ts
+
+/**
+ * Cloudflare Worker that serves the app and its terrain tiles from one origin.
+ *
+ * Static assets are handled by the platform before this script runs (see
+ * wrangler.jsonc); the only path routed here is `/tiles/*`, which is read
+ * straight out of the R2 bucket. Keeping tiles on the app's own hostname is
+ * what makes them same-origin, so no CORS policy exists to configure or get
+ * wrong — see discussions/20260816-deployment-hosting.md.
+ *
+ * Lives outside src/ deliberately: this is the only server-side code in the
+ * deployment, it targets the Workers runtime rather than the browser, and
+ * `deno task check` covers src/ only. The handful of platform types it needs
+ * are declared inline rather than pulling in @cloudflare/workers-types for
+ * one file.
+ */
+
+type R2Object = {
+  body: ReadableStream;
+  httpEtag: string;
+  writeHttpMetadata(headers: Headers): void;
+};
+type R2Bucket = {
+  get(key: string): Promise<R2Object | null>;
+  head(key: string): Promise<Omit<R2Object, "body"> | null>;
+};
+
+/** Cloudflare's ResponseInit extension: "manual" suppresses the runtime's
+ * own content-encoding handling for a body that is already encoded. */
+declare global {
+  interface ResponseInit {
+    encodeBody?: "auto" | "manual";
+  }
+  /** Workers' edge cache; `default` is the shared per-colo cache. */
+  const caches: { default: { match(r: Request): Promise<Response | undefined>; put(r: Request, res: Response): Promise<void> } };
+}
+
+/** Third handler argument: `waitUntil` keeps work alive past the response. */
+type ExecutionContext = { waitUntil(p: Promise<unknown>): void };
+
+export type Env = {
+  /** Bucket holding the pre-baked tiles, one object per page_idx. */
+  TILES: R2Bucket;
+  /** Static asset binding, used only for the fallthrough below. */
+  ASSETS: { fetch(request: Request): Promise<Response> };
+};
+
+const PREFIX = "/tiles/";
+
+/**
+ * Object keys this Worker is willing to ask R2 for: `<version>/<page_idx>`,
+ * plus the one shared `<version>/_ocean` tile. page_idx is an L3 index
+ * printed as a decimal BigInt (see tile_repository.ts), so it can be
+ * negative; the version segment is whatever the bake wrote as its output
+ * directory's last path component (`v1` by default), kept permissive enough
+ * to survive a rename.
+ *
+ * This exists for cost, not correctness. A miss is still a billed R2 class-B
+ * operation, so without it anyone can walk `/tiles/<anything>` and charge
+ * this account one read per request while every single one 404s. Matching
+ * the shape first means a scraper's garbage never reaches the bucket at all.
+ * It is not rate limiting and does not pretend to be — that needs WAF rules,
+ * which need a real zone rather than a workers.dev hostname.
+ */
+const KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20})$/;
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+
+    // `run_worker_first` should mean this only ever sees /tiles/*, but the
+    // guard keeps the Worker correct on its own rather than relying on
+    // routing config staying in sync with it.
+    if (!url.pathname.startsWith(PREFIX)) return env.ASSETS.fetch(request);
+
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response("method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
+    }
+
+    const key = url.pathname.slice(PREFIX.length);
+    // Rejected before R2 is touched — see KEY_RE. Same 404 a real miss
+    // returns, deliberately: a distinct status would tell a prober which of
+    // its guesses were the right shape, and the client cannot act on the
+    // difference anyway (tile_repository.ts turns any 404 into the ocean
+    // tile).
+    if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
+
+    // A missing object is not an error here: open-ocean pages are never
+    // baked, and the client turns this 404 into its shared `_ocean` tile.
+    // See tile_repository.ts.
+    if (request.method === "HEAD") {
+      const meta = await env.TILES.head(key);
+      if (meta === null) return new Response(null, { status: 404 });
+      const headers = new Headers();
+      meta.writeHttpMetadata(headers);
+      headers.set("etag", meta.httpEtag);
+      return new Response(null, { headers });
+    }
+
+    // Edge cache in front of R2. Sound without any invalidation story because
+    // tiles are immutable and versioned by URL — a re-bake publishes a new
+    // prefix rather than replacing bytes, so a cached entry can never go
+    // stale. This is also the only real cost control available: R2 has no
+    // spend limit, and class-B reads are the one meter that scales with
+    // traffic, so every edge hit is a read that never happens.
+    const cache = caches.default;
+    const cached = await cache.match(request);
+    if (cached) {
+      // `encodeBody: "manual"` does not survive the cache round trip: the
+      // entry comes back as an ordinary Response, and the runtime re-encodes
+      // an already-gzipped body on the way out. Re-assert it here.
+      return new Response(cached.body, { headers: cached.headers, encodeBody: "manual" });
+    }
+
+    const object = await env.TILES.get(key);
+    if (object === null) return new Response("not found", { status: 404 });
+
+    // writeHttpMetadata replays what was set at upload time — crucially
+    // `content-encoding: gzip`, since objects are stored pre-compressed and
+    // the client relies on fetch() transparently decoding them.
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+
+    // `encodeBody: "manual"` is load-bearing, and its absence fails quietly.
+    // By default the runtime assumes a Response body is *not* encoded and
+    // applies its own compression, so an already-gzipped R2 object goes out
+    // as gzip-inside-gzip — measured: a stored 8,653-byte tile served as
+    // 4,343 bytes to a gzip-accepting client, and as raw gzip bytes with no
+    // content-encoding header at all to one asking for identity. Either way
+    // decode_terrain() receives compressed bytes and fails far from here.
+    // "manual" tells the runtime the body is already in its final encoding.
+    //
+    // `no-transform` is added on the way into the cache: without it the edge
+    // is free to re-encode a stored response, which would reintroduce exactly
+    // the double-compression this flag exists to prevent — just one layer
+    // further away, and only on cache hits.
+    const cc = headers.get("cache-control");
+    if (cc && !cc.includes("no-transform")) headers.set("cache-control", `${cc}, no-transform`);
+
+    const response = new Response(object.body, { headers, encodeBody: "manual" });
+    ctx.waitUntil(cache.put(request, response.clone()));
+    return response;
+  },
+};

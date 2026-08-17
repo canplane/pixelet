@@ -98,34 +98,102 @@ Tiles are immutable per version. **Never overwrite an existing version in
 place** — publish a new prefix and point the app at it. That invalidates the CDN
 edge, browser caches, and any future OPFS cache at once, with no purge call.
 
+The deployment is one Cloudflare Worker serving both the built app and the
+tiles (`apps/web/wrangler.jsonc`), so tiles live on the app's own hostname
+under `/tiles/`. That is what makes them same-origin: there is no CORS policy
+to configure, and `VITE_TILE_BASE_URL` stays a relative path that survives a
+domain change.
+
+### One-time setup
+
+Done in the Cloudflare dashboard, not from here:
+
+1. Create the R2 bucket. Its name must match `r2_buckets[0].bucket_name` in
+   `wrangler.jsonc`. Keep it **private** — the Worker reads it through a
+   binding, so it never needs to be publicly readable.
+2. Create an R2 API token (S3-compatible Access Key ID + Secret) for uploads.
+3. Note the account ID; the S3 endpoint is
+   `https://<account_id>.r2.cloudflarestorage.com`.
+
+Store the credentials in a dedicated AWS CLI profile so an existing default
+profile is left alone:
+
 ```bash
-# 1. bake into the new version directory
-deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts --out ./out/tiles/v2
-
-# 2. upload the whole prefix, pre-gzipped
-rclone copy ./out/tiles/v2 r2:<bucket>/v2 \
-  --header-upload "Content-Encoding: gzip" \
-  --header-upload "Content-Type: application/octet-stream" \
-  --header-upload "Cache-Control: public, max-age=31536000, immutable" \
-  --transfers 32
-
-# 3. point the app at it and rebuild
-#    apps/web/.env  ->  VITE_TILE_BASE_URL=<origin>/v2
-deno task build:web
+aws configure --profile r2          # region: auto
 ```
 
-Objects are stored already gzipped, so the upload must set
-`Content-Encoding: gzip` or clients will receive compressed bytes and fail to
-decode them. This is the single easiest step to get wrong.
+### Upload
 
-`wrangler r2 object put` handles one object per invocation and is not usable at
-this scale; use an S3-compatible bulk tool.
+`aws s3 sync` is used rather than `rclone` because the AWS CLI is already
+present; either works, since R2 is S3-compatible. `wrangler r2 object put`
+handles one object per invocation and is not usable at this scale.
 
-If the app and the tiles end up on different origins, the bucket also needs a
-CORS policy naming the app's domain. Same-origin serving (binding the bucket to
-a path on the app's own hostname) avoids that entirely, and
-`VITE_TILE_BASE_URL` accepts a relative value like `/tiles/v2` for exactly that
-case.
+```bash
+aws s3 sync ./out/tiles/v1 s3://<bucket>/v1 \
+  --profile r2 \
+  --endpoint-url https://<account_id>.r2.cloudflarestorage.com \
+  --content-type application/octet-stream \
+  --content-encoding gzip \
+  --cache-control "public, max-age=31536000, immutable"
+```
+
+**Objects are stored already gzipped, so the upload must set
+`Content-Encoding: gzip`.** Without it the client receives compressed bytes it
+does not know to decode. This is the single easiest step to get wrong, and it
+fails as a decode error far from its cause.
+
+If the AWS CLI rejects the upload over checksums (v2 sends `x-amz-checksum-*`
+headers that some S3-compatible stores refuse), set
+`AWS_REQUEST_CHECKSUM_CALCULATION=when_required` for the command.
+
+### Verify before pointing the app at it
+
+```bash
+# object count should match the manifest's `objects`
+aws s3 ls s3://<bucket>/v1/ --profile r2 --endpoint-url <endpoint> --recursive | wc -l
+
+# the shared ocean tile must exist
+aws s3api head-object --bucket <bucket> --key v1/_ocean \
+  --profile r2 --endpoint-url <endpoint>
+
+# and metadata must have survived: expect ContentEncoding "gzip"
+aws s3api head-object --bucket <bucket> --key v1/<some_page_idx> \
+  --profile r2 --endpoint-url <endpoint>
+```
+
+### Deploy
+
+```bash
+# apps/web/.env -> VITE_TILE_BASE_URL=/tiles/v1
+deno task build:web
+cd apps/web && npx wrangler deploy
+```
+
+Then attach the custom domain to the Worker in the dashboard.
+
+**Check the served bytes, not just the stored ones.** The bucket can be
+perfectly correct while the serving path is not:
+
+```bash
+U=https://<host>/tiles/v1/<page_idx>
+curl -s -H "Accept-Encoding: gzip" -D - -o /dev/null "$U"   # expect content-encoding: gzip
+curl -s --compressed "$U" | head -c 2 | xxd -p              # expect 5854 (XT), never 1f8b
+```
+
+A response whose gzip body is *smaller* than the stored object means the
+runtime compressed it a second time — `encodeBody: "manual"` is missing from
+the Worker's `Response`. A body that still starts `1f8b` after `--compressed`
+means the same thing from the other direction.
+
+**Request each tile twice.** Edge caching sits in front of R2, and
+`encodeBody: "manual"` does not survive the cache round trip — a first request
+can be correct while every cached hit after it is double-compressed. Compare
+both responses against the stored size, and check `cf-cache-status` to confirm
+the second one actually hit.
+
+Also confirm an unbaked ocean page returns **404 `text/plain`**, not
+`index.html`: that is what a missing `run_worker_first` produces, and the
+client would try to decode the HTML as terrain.
 
 Old version prefixes simply stop being requested; delete them whenever.
 

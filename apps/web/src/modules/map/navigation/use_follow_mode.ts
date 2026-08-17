@@ -32,6 +32,11 @@ const HEADING_SMOOTH_ALPHA: f64 = 0.25;
  */
 const POSITION_SMOOTH_ALPHA: f64 = 0.25;
 
+/** How long either sensor may be away from READY before follow mode gives
+ * up. Longer than use_geolocation.ts's own retry delay, so a recoverable gap
+ * gets its retry before this fires. */
+const SENSOR_GRACE_MS = 12000;
+
 const $pos_delta: PVF3 = { i: 0n, f: 0n };
 
 /**
@@ -73,9 +78,21 @@ export function useFollowMode() {
 
   useEffect(() => {
     if (!is_follow_mode) return;
-    if (location_status !== DevicePoseStatus.READY || orientation_status !== DevicePoseStatus.READY) {
-      set_is_follow_mode(false);
-    }
+    if (location_status === DevicePoseStatus.READY && orientation_status === DevicePoseStatus.READY) return;
+
+    // Not immediately. Either sensor can leave READY for a moment — a GPS fix
+    // that misses its window indoors, an orientation gap — and dropping follow
+    // mode on the first blip read as the mode switching itself off at random,
+    // with nothing on screen to explain it. use_geolocation.ts retries after
+    // GEOLOCATION_RETRY_MS, so most of these recover on their own; waiting
+    // longer than that lets them.
+    //
+    // The exit still has to happen eventually. Without it, follow mode stays
+    // on with dead sensors: the camera freezes at whatever heading and
+    // position it last saw, TrackingButton is disabled (it needs READY) so it
+    // cannot be used to back out, and only a manual pan breaks the deadlock.
+    const timer = globalThis.setTimeout(() => set_is_follow_mode(false), SENSOR_GRACE_MS);
+    return () => globalThis.clearTimeout(timer);
   }, [is_follow_mode, location_status, orientation_status, set_is_follow_mode]);
 
   // 1. [Position sync] runs only when the GPS coordinate changes

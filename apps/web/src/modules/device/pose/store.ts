@@ -68,13 +68,13 @@ type DeviceLocationState = {
   /** Overall location-service reception status. */
   status: DevicePoseStatus;
   /** System message (error detail, etc). */
-  error_msg: string | null;
+  error_key: string | null;
 
   // ---- Common actions ----
   /** Service status transition (idle, loading, ready). */
   set_status: (status: DevicePoseStatus) => void;
   /** Records an error on failure. */
-  set_error: (error_msg: string) => void;
+  set_error: (error_key: string) => void;
 };
 
 type DeviceOrientationState = {
@@ -93,13 +93,13 @@ type DeviceOrientationState = {
   /** Overall location-service reception status. */
   status: DevicePoseStatus;
   /** System message (error detail, etc). */
-  error_msg: string | null;
+  error_key: string | null;
 
   // ---- Common actions ----
   /** Service status transition (idle, loading, ready). */
   set_status: (status: DevicePoseStatus) => void;
   /** Records an error on failure. */
-  set_error: (error_msg: string) => void;
+  set_error: (error_key: string) => void;
 };
 
 export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
@@ -107,7 +107,7 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
   location: null,
 
   status: DevicePoseStatus.IDLE,
-  error_msg: null,
+  error_key: null,
 
   /** Validates raw GPS data from hardware, and only updates state on a significant change. */
   set_location: (coords, accuracy, course) =>
@@ -121,7 +121,7 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
           location: { coords, accuracy, course, timestamp },
 
           status: DevicePoseStatus.READY,
-          error_msg: null,
+          error_key: null,
         };
       }
 
@@ -152,7 +152,7 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
         },
 
         status: DevicePoseStatus.READY,
-        error_msg: null,
+        error_key: null,
       };
     }),
 
@@ -175,10 +175,10 @@ export const useDeviceLocationStore = create<DeviceLocationState>((set) => ({
       return { status };
     }),
 
-  set_error: (error_msg) =>
+  set_error: (error_key) =>
     set((state) => {
-      if (state.status === DevicePoseStatus.ERROR && state.error_msg === error_msg) return state;
-      return { status: DevicePoseStatus.ERROR, error_msg };
+      if (state.status === DevicePoseStatus.ERROR && state.error_key === error_key) return state;
+      return { status: DevicePoseStatus.ERROR, error_key };
     }),
 }));
 
@@ -187,7 +187,7 @@ export const useDeviceOrientationStore = create<DeviceOrientationState>((set) =>
   is_tracking_orientation: false,
 
   status: DevicePoseStatus.IDLE,
-  error_msg: null,
+  error_key: null,
 
   set_orientation: (heading, beta, gamma) =>
     set((state) => {
@@ -199,7 +199,7 @@ export const useDeviceOrientationStore = create<DeviceOrientationState>((set) =>
           orientation: { heading, beta, gamma, timestamp },
 
           status: DevicePoseStatus.READY, // orientation data alone is enough to count as usable
-          error_msg: null,
+          error_key: null,
         };
       }
 
@@ -236,9 +236,9 @@ export const useDeviceOrientationStore = create<DeviceOrientationState>((set) =>
       return { status };
     }),
 
-  set_error: (error_msg) =>
+  set_error: (error_key) =>
     set((state) => {
-      if (state.status === DevicePoseStatus.ERROR && state.error_msg === error_msg) return state;
-      return { status: DevicePoseStatus.ERROR, error_msg };
+      if (state.status === DevicePoseStatus.ERROR && state.error_key === error_key) return state;
+      return { status: DevicePoseStatus.ERROR, error_key };
     }),
 }));

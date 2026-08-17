@@ -23,7 +23,26 @@ const { DEFAULT_DIST } = camera_cfg.view;
 // distance's real width, so the number and the line under it always agree
 // to the pixel (instead of a fixed-width bar labeled with whatever
 // arbitrary-precision distance fell out of the math, e.g. "37.2m")
-const SCALE_BAR_MAX_WIDTH_PX = 64;
+// 64 before. This is the one number that decides how much room the bar
+// takes horizontally — round_to_nice_scale picks the largest 1/2/5 step
+// whose pixel length fits under it — and at 64 the bar was claiming more
+// width than a readout nobody reads continuously deserves. Not lower than
+// this: a step lands anywhere in [budget/2.5, budget], so the shortest bar
+// this can draw is ~22px, and past that the label starts coming out wider
+// than the bar it belongs to.
+const SCALE_BAR_MAX_WIDTH_PX = 56;
+
+/** Height of the end ticks. Down from 8 with the width, so the |—| keeps
+ * its proportions rather than getting stubby. */
+const SCALE_BAR_TICK_PX = 6;
+
+/** Room the svg adds on every side so the outline stroke has somewhere to go.
+ * A 4-wide stroke reaches 2px past the path it outlines, so a tick drawn at
+ * x=0 has half its outline outside the box, where it is clipped. That showed
+ * first as the shadow cut off along the top and bottom, and — once only the
+ * vertical axis had been padded — as the end ticks having no outline on their
+ * outer sides at all. Both axes now. */
+const SCALE_BAR_PAD_PX = 3;
 
 // 1/2/5 × 10^n is the standard cartographic scale_bar step sequence (same
 // one Leaflet/Mapbox/Google Maps use) — each step is at most a ×2.5 jump
@@ -104,9 +123,12 @@ export function MapScaleBar() {
     <MotionContainer show={!is_default_zoom} variant="riseUp" delay={0.2} layout={false}>
       <div
         onClick={reset_dist}
-        // py-2 (top and bottom): restored the top half after a prior pass
-        // snugged it to the row's own top edge, which read as too tight
-        // next to the GPS button's breathing room.
+        // pt-1 pb-2, not py-2 on both: the row this sits in is items-start,
+        // so the top padding is the only thing deciding how far below the
+        // GPS button's own top edge the bar lands. 8 sat it a touch low
+        // against that button; 4 is the small nudge up. The bottom half
+        // stays at 8 — it is what separates the label from the compass
+        // underneath, which is a different gap with a different job.
         //
         // min-w-[44px]: the click/tap target, decoupled from the bar's own
         // visual width (bar_width_px, set on the inner div below) — at some
@@ -117,59 +139,114 @@ export function MapScaleBar() {
         // width this adds, so the visible bar itself never changes size or
         // position, only the hit-area around it grows.
         //
-        // the outline lives here, on the parent, as ONE filter, not a real
-        // CSS `outline` per shape — a real per-element outline (tried
-        // first) read as four disconnected halos instead of one cohesive
-        // outline, and doesn't follow text glyphs anyway (only the
-        // rectangular bounding box). filter: drop-shadow wraps the union of
-        // every child's actual rendered shape into one outline instead.
-        className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 py-2 min-w-[44px] filter-[drop-shadow(1px_0_0_rgba(0,0,0,0.9))_drop-shadow(-1px_0_0_rgba(0,0,0,0.9))_drop-shadow(0_1px_0_rgba(0,0,0,0.9))_drop-shadow(0_-1px_0_rgba(0,0,0,0.9))]"
+        // The outline used to be one filter: drop-shadow(...) x4 here on the
+        // parent, chosen because a per-element CSS `outline` read as four
+        // disconnected halos and does not follow text glyphs. It worked, and
+        // on iOS Safari it broke two other things: the bar's left edge was
+        // clipped once its children were transformed, and the whole outline
+        // vanished while the overlay layer faded its opacity. Chromium showed
+        // neither — a filter interacting badly with transforms and opacity is
+        // a WebKit trait, not something to work around case by case.
+        //
+        // Same result without a filter: box-shadow rings the rectangles
+        // exactly (they are rectangles, so a ring is the outline), and
+        // text-shadow follows the glyphs, which is what drop-shadow was
+        // approximating for the label anyway. No filter means no filter
+        // region to clip against and nothing for an opacity transition to
+        // drop.
+        className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 pt-1 pb-2 min-w-[44px]"
         title={t("map.scale_bar.reset_zoom")}
       >
-        {/* 1. scale bar — width matches exactly the distance the label shows. */}
-        <div
-          // transition-[width]: a genuine box-model width tween (not a
-          // transform), so the bar visibly grows/shrinks in place without
-          // scaling anything inside it — this is the "just animate width"
-          // half of the fix; layout={false} above is the other half.
-          className="relative flex items-center transition-[width] duration-300 ease-out"
-          style={{ width: `${bar_width_px}px` }}
+        {
+          /* 1. scale bar — one SVG path, drawn twice.
+             |—| as a single path means one outline instead of three: the
+             previous version was three divs, each ringed by its own
+             box-shadow, and the rings met at the corners as visible seams on
+             every platform. Before that it was a filter: drop-shadow on the
+             parent, which produced one cohesive outline and broke on iOS
+             Safari — clipping the left edge once children were transformed,
+             and disappearing entirely while the overlay layer faded. A path
+             stroked wide-and-dark then narrow-and-light is the outline, with
+             no filter to go wrong and nothing to seam.
+
+             Drawn at its real width, with no transform and no length
+             animation. Three attempts went the other way — width tween, then
+             scaleX, then scaleX with vector-effect="non-scaling-stroke" — and
+             each broke somewhere: ghosting on iOS, then strokes thinning and
+             stretching mid-transition, since non-scaling-stroke is not
+             honoured consistently while a transform is being interpolated.
+
+             The length does not need to animate. This bar moves in 1/2/5
+             steps, and the cartographic convention it follows (Google Maps,
+             Mapbox, Leaflet) snaps between them rather than tweening. Dropping
+             the tween removes every one of those failures at once and costs a
+             flourish nobody asked for. Colour still transitions — that one is
+             a plain property and never misbehaved. */
+        }
+        <svg
+          width={bar_width_px + SCALE_BAR_PAD_PX * 2}
+          height={SCALE_BAR_TICK_PX + SCALE_BAR_PAD_PX * 2}
+          viewBox={`0 0 ${bar_width_px + SCALE_BAR_PAD_PX * 2} ${SCALE_BAR_TICK_PX + SCALE_BAR_PAD_PX * 2}`}
+          aria-hidden="true"
         >
-          {/* base horizontal line */}
-          <div
-            className={cn(
-              "h-px w-full relative transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-white",
-            )}
-          />
-
-          {/* left tick */}
-          <div
-            className={cn(
-              "absolute left-0 h-2 w-px transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-white",
-            )}
-          />
-
-          {/* right tick */}
-          <div
-            className={cn(
-              "absolute right-0 h-2 w-px transition-colors",
-              is_default_zoom ? "bg-amber-400" : "bg-white",
-            )}
-          />
-        </div>
+          {/* left tick, mid line, right tick — the .5 offsets put each stroke
+              on a pixel centre so a 1px line lands crisp rather than split
+              across two rows. */}
+          {(() => {
+            // Inset on both axes by the padding, so the bar's own length is
+            // still exactly bar_width_px while its outline has room outside.
+            const left = SCALE_BAR_PAD_PX + 0.5;
+            const right = SCALE_BAR_PAD_PX + bar_width_px - 0.5;
+            const top = SCALE_BAR_PAD_PX;
+            const bottom = SCALE_BAR_PAD_PX + SCALE_BAR_TICK_PX;
+            const mid = top + SCALE_BAR_TICK_PX / 2;
+            const d = `M${left} ${top}V${bottom} M${left} ${mid}H${right} M${right} ${top}V${bottom}`;
+            return (
+              <>
+                {/* 3.5 against a 1.5 body leaves exactly 1px of dark on each
+                    side, which is what the label's own 1px text-shadow draws.
+                    They were 1.25 and 1.0 before — close enough to look like
+                    a mistake rather than a difference. The body stays at 1.5
+                    even now that the bar is shorter and the label is 8px;
+                    that is the part that had read as too thin, and shrinking
+                    the bar is not a reason to bring the complaint back. */}
+                <path d={d} stroke="rgba(0,0,0,0.9)" strokeWidth={3.5} fill="none" strokeLinecap="square" />
+                <path
+                  d={d}
+                  className={cn("transition-colors", is_default_zoom ? "stroke-amber-400" : "stroke-white")}
+                  strokeWidth={1.5}
+                  fill="none"
+                  strokeLinecap="square"
+                />
+              </>
+            );
+          })()}
+        </svg>
 
         {
-          /* 2. scale label — accent color at the default zoom. The filter
-          above wraps this text into the same single outline too. */
+          /* 2. scale label — accent colour at the default zoom. Outlined by
+          its own text-shadow, which follows the glyphs; the svg above carries
+          its outline in its own stroke. The column's items-center lines the
+          two up, now that the bar is sized to itself rather than drawn inside
+          a fixed box. */
         }
         <span
           className={cn(
+            // Eight offsets, not four. The cardinal-only version left the
+            // diagonals uncovered, so every corner of every glyph thinned to
+            // nothing and the label read as more lightly outlined than the
+            // bar above it — which carries a full 1.25px on each side from
+            // its own stroke pair. The four diagonals close those gaps.
+            //
+            // -mt-0.5 rather than mt-1: the svg now carries SCALE_BAR_PAD_PX
+            // of its own space below the bar, so the old margin sat the label
+            // that much further off than it looks in the markup. Pulling back
+            // past zero closes the gap the padding opened.
+            //
             // SI units are case-sensitive: m (meter) != M (mega), km != KM —
             // the `uppercase` that used to be here was force-uppercasing a
             // label string that already composed its unit lowercase correctly.
-            "text-[8px] font-bold mt-1 tracking-widest transition-colors",
+            "text-[8px] font-bold -mt-0.5 tracking-widest [text-shadow:1px_0_0_rgba(0,0,0,0.9),-1px_0_0_rgba(0,0,0,0.9),0_1px_0_rgba(0,0,0,0.9),0_-1px_0_rgba(0,0,0,0.9),1px_1px_0_rgba(0,0,0,0.9),-1px_1px_0_rgba(0,0,0,0.9),1px_-1px_0_rgba(0,0,0,0.9),-1px_-1px_0_rgba(0,0,0,0.9)] transition-colors",
             is_default_zoom ? "text-amber-400" : "text-white",
           )}
         >

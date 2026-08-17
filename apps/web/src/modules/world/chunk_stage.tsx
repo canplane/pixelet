@@ -19,7 +19,6 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { useDebugStore } from "@/app/dev/debug_store.ts";
 import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
@@ -507,7 +506,7 @@ type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack
 const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
   const low_spec = useRenderSettingsStore((state) => state.low_spec);
   const show_rim_light = useRenderSettingsStore((state) => state.show_rim_light);
-  const show_structures = useDebugStore((state) => state.show_structures);
+  const show_structures = useRenderSettingsStore((state) => state.show_structures);
   const tile = useTileStore((state) => state.get_tile(page_idx));
   const camera = useThree((state) => state.camera);
   const anchor_registry = useAnchorRegistry();

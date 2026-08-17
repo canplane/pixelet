@@ -24,6 +24,15 @@
  * `import.meta.env.DEV === true` while `__IS_DEV__ === false`.
  */
 
+/** Application environment name, from VITE_APP_ENV (falling back to Vite's
+ * mode). Shown in settings so it is possible to tell which build is on screen
+ * — on a phone there is no URL bar or devtools to check against. */
+export const APP_ENV: string = __APP_ENV__;
+
+/** When this bundle was built, ISO-8601 in UTC. Formatted at the point it is
+ * shown rather than here, so it reads in the viewer's own timezone. */
+export const BUILD_TIME: string = __BUILD_TIME__;
+
 /**
  * Origin the pre-baked terrain tiles are served from, version prefix
  * included, with any trailing slashes removed so callers can always join

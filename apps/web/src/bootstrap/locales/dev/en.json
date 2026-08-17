@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "debug": {
+      "section_title": "Debug",
+      "objects": {
+        "label": "Debug Gizmos",
+        "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
+      },
+      "ground_snap": {
+        "label": "Ground Altitude Lock",
+        "description": "Constrains the camera focus altitude to the actual terrain height while panning."
+      },
+      "dummy_toast": {
+        "label": "Test Toast Notifications",
+        "description": "Displays sample toast notifications for UI testing.",
+        "message": "Dummy Toast {{index}}"
+      }
+    }
+  },
+  "map": {
+    "mode_bar": {
+      "message_placeholder": "Type a message...",
+      "message_tooltip": "Message",
+      "send": "Send"
+    },
+    "chat": {
+      "self_label": "Me"
+    }
+  }
+}

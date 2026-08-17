@@ -19,6 +19,9 @@ Always drive the repo through its tasks, run from the repo root:
 | Task | Purpose |
 | --- | --- |
 | `deno task dev` | web + api together |
+| `deno task dev:remote` | client only, tiles from the published deployment |
+| `deno task bake:tiles` | bake every land page into `./out/tiles/<version>` |
+| `deno task deploy` | build the client and publish the Cloudflare Worker |
 | `deno task check` | type-check every workspace member |
 | `deno task test` | tests (only `apps/web` and `packages/pxl/shared` have any) |
 | `deno task fmt` / `lint` | format / lint |
@@ -106,6 +109,71 @@ alone on purpose. Re-flagging them as fresh discoveries wastes everyone's time;
   `OSM_COAST_SQL` already clips via `ST_Intersection` and is not affected.
 - **Placed objects live in `localStorage`.** Deliberate for a demo with no
   server-side user state.
+- **Nothing configures a spending cap, and R2 still cannot bill.** The
+  guarantee is a composition, not a setting: the bucket is private, so every
+  read goes through the Worker; Workers is on the free plan, which fails
+  closed at 100k requests/day rather than charging. Three deliberate acts
+  break it — moving Workers to a paid plan, enabling the `r2.dev` public URL,
+  or attaching a custom domain to the **bucket** (as opposed to the Worker,
+  which is what `plei.me` is). Do not propose any of the three as an
+  improvement without saying what it costs; see
+  [discussions/20260816-deployment-hosting.md](./discussions/20260816-deployment-hosting.md).
+
+## Overlay CSS over the canvas
+
+The UI layer sits on top of a WebGL canvas that repaints continuously, and
+WebKit handles that combination worse than Chromium does. Two rules came out of
+chasing the same symptom three times through the scale bar:
+
+- **Prefer `box-shadow` / `text-shadow` to `filter: drop-shadow()`.** A filter
+  builds a new rendering context and a filter region; over the canvas on iOS
+  that produced smearing, clipped the element once its children were
+  transformed, and vanished outright while an ancestor animated opacity — none
+  of it reproducible on Android or desktop Chromium. Reach for `filter` only
+  when the shape is genuinely irregular and following its alpha is the point;
+  a rectangle or a rounded pill does not need it.
+- **Animate `transform` and `opacity`, not layout properties.** A `width` tween
+  over the canvas ghosted on iOS for the same reason. And when neither is
+  available cleanly, consider whether the animation is worth having at all —
+  the scale bar ended up snapping between its 1/2/5 steps, which is what the
+  convention it follows does anyway.
+
+- **Avoid `backdrop-filter` over the canvas.** It is the same trap one level
+  up: a backdrop filter re-reads and re-blurs whatever is behind it, and what
+  is behind it here repaints every frame, so the cost is paid continuously
+  rather than once. This is the leading suspect behind a Galaxy S23 janking on
+  a build an iPhone 13 mini ran fine, and it is why the map's circular controls
+  and the address pill carry a more opaque fill instead of a blur. Reach for it
+  only where the element is rarely on screen.
+
+Both are cross-browser rules rather than iOS workarounds: what a layout
+animation or a filter costs over a canvas differs per engine, so the portable
+choice is the one that stays on the compositor.
+
+## Sizing UI against something
+
+Chrome sizes here come from measuring screenshots of apps doing the same job,
+at their real device scale, not from picking round numbers. The ones already
+derived that way, so they don't get re-derived or drifted off:
+
+| | Measured from | Value |
+| --- | --- | --- |
+| Map circular controls | Naver / Kakao Map | 42, stacked 5 apart |
+| mode_bar tool & swatch pitch | Instagram DM icon row | 38, 18 between glyphs |
+| Equal-width action button pair | Instagram Follow / Message | 32 tall, ~13 label |
+| Floating overlay inset | iOS keyboard accessory bar | 16 |
+
+Two rules that came out of doing it:
+
+- **A tap target can be as wide as the pitch and no wider.** Past that it
+  overlaps a neighbour, and the overlap silently belongs to whichever element
+  is later in the DOM. Where the visible thing is smaller than that (the colour
+  swatches), the button is a transparent box at full pitch with the visible
+  shape centred inside — costs nothing, roughly doubles the target.
+- **The named radius steps are theme tokens in this repo.** `app/styles/index.css`
+  derives `--radius-*` from `--radius`, which themes redefine as far as 2.5rem,
+  so `rounded-md` is not 6px and is not even a fixed number. Spell literals out
+  (`rounded-[6px]`) when a specific radius is meant.
 
 ## Code conventions
 
@@ -132,6 +200,18 @@ that is not an inconsistency to fix.
 **Code ported from elsewhere keeps its original conventions.** Some of
 `@xpute/core` came in from other projects to stay reusable. Do not sweep it into
 house style; the divergence is deliberate.
+
+**`pxl` is for code, `pixelet` is for infrastructure.** Import paths and storage
+keys abbreviate (`@pxl/shared`, `pxl:lang`); provisioned resources spell the
+project out — `pixelet-db-geo`, `pixelet-network`, `pixelet_geo` in
+`.env.example`, and the tile bucket in `apps/web/wrangler.jsonc`. Neither is a
+lapse to normalize into the other.
+
+Word separator follows the target system rather than one repo-wide choice:
+snake for Postgres identifiers, where a hyphen would force quoting at every
+use; kebab for Docker and for R2, where names are DNS-shaped — R2 rejects
+underscores in bucket names outright. Check what the platform accepts before
+assuming either.
 
 **Comments explain why, not what.** This codebase carries unusually long
 rationale comments — which bug a branch exists to prevent, why an obvious
@@ -160,6 +240,16 @@ just don't treat them as authority.
   Wait for an explicit go-ahead before editing or deleting.
 - **Never commit unless asked.** Finishing a task is not a reason to commit.
   Leave the working tree for review.
+- **Let work accumulate before committing.** Don't commit at the end of each
+  report or fix — that produces a commit per round trip, which is finer than
+  anyone wants to read. Keep going, and commit once there's a coherent batch
+  (or when asked).
+- **Then: one commit per thing worth reverting or reading on its own** — not
+  one per file, and not one per bug. Several small fixes found in the same
+  pass, in the same layer, belong together; an infrastructure repair and an
+  unrelated new tool do not, because reverting one should not drag in the
+  other. When in doubt, ask whether the two halves would ever be undone
+  separately.
 - **Verify claims against a running system where one exists.** A conclusion
   reached only by reading code is a hypothesis. Say so when that's all you have,
   and if a predicted fix turns out not to work, revert it rather than leaving it

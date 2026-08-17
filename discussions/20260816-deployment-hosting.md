@@ -263,6 +263,168 @@ Even the pathological case stays trivial — going over 10 GB of storage costs
 about $0.015/GB/month. Egress, the thing that stopped this deployment from
 happening in the first place, is free on R2 no matter the volume.
 
+### There is no spending cap, and that is fine here
+
+R2 has **no native spend limit**. Cloudflare shipped spend limits in June 2026,
+but for Workers AI only; for R2 it remains an open feature request. Nothing
+stops service at a threshold, so exposure has to be reasoned about rather than
+bounded by a switch.
+
+Three of the four meters are effectively fixed and cannot drift:
+
+| Meter | This deployment | Free tier |
+| --- | --- | --- |
+| Storage | 892.5 MB, and the dataset does not grow on its own | 10 GB |
+| Class A (writes) | 43,506, one-time at publish | 1M/month |
+| Egress | — | always free |
+| **Class B (reads)** | **scales with traffic** | 10M/month, then $0.36/M |
+
+Only reads vary. One tile request is one class-B operation, and a session that
+pans around pulls roughly 50–200 tiles, so the free tier covers on the order of
+60,000 sessions a month. Past that the cost is small enough that reaching it
+would be a different kind of problem.
+
+**The effective control is caching, not billing configuration.** The Worker
+reads R2 on every request; putting responses through the Cache API means edge
+hits never touch R2 at all, which is sound precisely because tiles are
+immutable and versioned by URL. That turns the one variable meter into a
+fraction of itself.
+
+That change touches the same content-encoding path as the double-compression
+trap above, and it did in fact regress on the first attempt — see "the same
+trap again" above for what broke and why `no-transform` alone was not the fix.
+Verified after: six tiles across the dataset serve at exactly their stored size
+on both MISS and HIT, and decode byte-identically to a local `gunzip`.
+
+A dashboard usage notification is worth setting up as a backstop, but it
+reports rather than prevents.
+
+### What actually bounds the spend (verified 2026-08-17)
+
+The paragraph above guessed that leaving no payment method on file was the
+closest thing to a hard ceiling. That is wrong twice over: R2 cannot be enabled
+without one, and there is no auto-stop once the free tier is passed — usage is
+billed pay-as-you-go against the card. The real bound is somewhere else, and it
+is stronger than a billing setting.
+
+Three facts, each checked rather than assumed:
+
+- **The bucket is private.** `wrangler r2 bucket dev-url get pixelet-tiles`
+  reports public access via the r2.dev URL disabled, and no custom domain is
+  attached to it. Every path to the bucket goes through the Worker.
+- **Workers is on the free plan**, whose limit is 100k requests/day and whose
+  behaviour past it is to fail with a 1027 error, not to bill. `run_worker_first`
+  routes `/tiles/*` through the Worker, so a tile read cannot happen without a
+  Worker invocation.
+- **The edge cache is real here.** A repeat request for `/tiles/v1/_ocean`
+  answers `cf-cache-status: HIT` with an `age` in the hours. This is worth
+  stating because the opposite is widely believed — that the Cache API is inert
+  on `*.workers.dev` — and it is not what this deployment does.
+
+Together those compose into a ceiling nobody configured: at most 100k Worker
+invocations a day is at most ~3M class-B reads a month even at a 0% cache hit
+rate, against a 10M free tier. Storage (941 MB) and class-A (one bake's worth of
+uploads) are nowhere near their own limits. **R2 cannot bill while those three
+hold.** Exactly three things break it, and all three are deliberate acts:
+moving Workers to a paid plan, enabling the r2.dev URL, or attaching a custom
+domain to the bucket.
+
+The Worker also validates the object key shape before touching R2:
+
+```
+^[A-Za-z0-9][A-Za-z0-9._-]{0,31}/(?:_ocean|-?\d{1,20})$
+```
+
+A miss is a billed class-B operation, so without this anyone can walk
+`/tiles/<anything>` and charge one read per request while every one of them
+404s. It returns the same 404 a real miss does — a distinct status would tell a
+prober which guesses had the right shape, and the client cannot act on the
+difference anyway.
+
+### On its own domain — and what that took (2026-08-17)
+
+Closed, by moving the app off `*.workers.dev` and onto `plei.me`. The
+`wrangler.jsonc` half is two keys:
+
+```jsonc
+"routes": [{ "pattern": "plei.me", "custom_domain": true }],
+"workers_dev": false,
+```
+
+`custom_domain: true` means wrangler owns the DNS record and the certificate
+— neither is created by hand, and an existing record at the same name makes
+the deploy fail rather than being silently replaced. `workers_dev: false` is
+not optional bookkeeping: WAF rules attach to a zone, so leaving the old
+hostname up means every rule written against `plei.me` is bypassable by
+asking for `pixelet.canplane.workers.dev` instead. A firewall with the side
+door propped open. It disabled Preview URLs as a side effect, which wrangler
+warns about; nothing needed them.
+
+`plei.me` rather than one of the `xpute.*` domains the account also holds.
+`@xpute/core` is a runtime kit that carries no pixelet knowledge and is meant
+to stay portable (AGENTS.md), so spending that name on one of the things
+built with it would be the same conflation the package boundary exists to
+prevent.
+
+**The rest of it lives only in the Cloudflare dashboard**, which is worth
+writing down precisely because it is not in version control and cannot be
+diffed, reviewed, or restored from this repository.
+
+| Where | What | Why |
+| --- | --- | --- |
+| DNS | `plei.me` — created by wrangler | Do not hand-edit; deploys recreate it |
+| DNS | `www` A `192.0.2.1`, **proxied** | Placeholder so the redirect below can fire |
+| Rules → Redirect Rules | `www -> apex (301)` | Dynamic, `concat("https://plei.me", http.request.uri.path)`, preserve query |
+| Security → WAF → Rate limiting | `Throttle /tiles/* per IP` | 100 requests / 10 seconds, block |
+
+Two of those have a reason that is not obvious from the setting itself.
+
+**The dummy A record.** Cloudflare only receives traffic for hostnames it has
+a DNS record for, so a Redirect Rule cannot fire for a name that does not
+resolve — `www` has to exist and be proxied before any rule applies to it.
+`192.0.2.1` is RFC 5737's documentation range: not routable, so nothing can
+accidentally reach it, and the request terminates at the edge in the rule
+before the address is ever used. Both records carry a comment saying as much,
+since a stray A record pointing at a documentation IP is exactly the kind of
+thing a future reader deletes as junk. (The 100-character comment limit is
+why they are terse.)
+
+This whole pattern is a consequence of having no origin. With a real server
+the same redirect was three lines of nginx and the A record held that
+server's own address; the placeholder exists only because the edge replaced
+the machine.
+
+**Ten seconds, not one minute.** The Free plan allows a single rate-limiting
+rule and only a 10-second counting period; the longer windows are paid. So
+the limit is expressed as 100 requests per 10 seconds rather than the 300 per
+minute it would otherwise be — and deliberately loose. A moving client pulls
+9 tiles per position and up to 6 more per page boundary crossed, and Korean
+mobile carriers put many users behind one CGNAT address, so a tight limit
+costs real sessions. At 100/10s a full sweep of all 43,506 objects takes
+about 72 minutes, which is friction rather than prevention, and friction is
+the right goal: **the actual ceiling is the Workers free plan's 100k/day**,
+and this rule only stops one address from spending that budget alone.
+
+### The other shape of "custom domain", which is not this one
+
+Kept because the two are easy to confuse, and only one of them is safe here.
+The move above put the domain on the **Worker**. Putting it on the **bucket**
+instead is a different trade entirely:
+
+| | Custom domain on the **Worker** | Custom domain on the **bucket** |
+| --- | --- | --- |
+| Tiles still pass through the Worker | yes | **no** |
+| 100k/day fail-closed ceiling | kept | **gone** |
+| R2 billing exposure | none | real (cache absorbs most) |
+| WAF / rate limiting | available | available |
+| CORS | none (same origin) | reintroduced (separate hostname) |
+
+The first adds WAF and changes nothing else, which is why it is what shipped.
+The second is what you would do once 100k/day became the binding constraint
+rather than the safety net — a good problem, and not this one. It also
+reintroduces CORS, which the same-origin `/tiles/*` path was chosen to avoid
+in the first place.
+
 > Pricing figures are from model knowledge and should be re-checked against the
 > providers' current pages before committing. Note also that Cloudflare has been
 > steering new projects toward Workers-with-static-assets rather than Pages, so
@@ -313,6 +475,86 @@ were judged out of scope (see project notes). They're moot for the static
 deployment, which has no API to harden. The in-process LRU cache and
 single-flight added to the live tile endpoint stay useful for development and for
 any future non-static path.
+
+## Deploying it: what actually broke
+
+The shape that shipped is one Cloudflare Worker serving both the built app and
+the tiles (`apps/web/wrangler.jsonc`, `apps/web/worker/index.ts`), so tiles live
+under `/tiles/` on the app's own hostname and are same-origin by construction.
+Two settings make that work together, and both matter:
+
+```jsonc
+"not_found_handling": "single-page-application",
+"run_worker_first": ["/tiles/*"]
+```
+
+The first is needed so a deep link falls back to `index.html` instead of 404ing.
+On its own it would also swallow every tile request and hand back `index.html`,
+which the client would then try to decode as terrain — a failure with no
+resemblance to its cause. The second routes `/tiles/*` to the Worker before the
+asset fallback sees it.
+
+### The trap: the runtime re-compresses an already-compressed body
+
+Tiles are stored pre-gzipped, and the Worker replays R2's stored metadata onto
+the response with `writeHttpMetadata()`, including `content-encoding: gzip`.
+That is not enough. By default the Workers runtime assumes a `Response` body is
+*not* encoded and applies its own compression on top.
+
+Measured against a stored 8,653-byte tile:
+
+| Client sends | Bytes received | `content-encoding` | Result |
+| --- | --- | --- | --- |
+| `Accept-Encoding: gzip` | **4,343** | `gzip` | gzip inside gzip — one decode leaves it still compressed |
+| `Accept-Encoding: identity` | 8,653 | **absent** | raw gzip bytes, client never told to decode |
+
+Both paths end with `decode_terrain()` receiving compressed input, and neither
+announces itself at the point of failure.
+
+The fix is `encodeBody: "manual"` in the `ResponseInit`, which tells the runtime
+the body is already in its final encoding. After it, the same request returns
+exactly 8,653 bytes with `content-encoding: gzip`, and the decoded payload is
+byte-identical to a local `gunzip` of the same object — 4,203,672 bytes opening
+with the XTP magic.
+
+**Uploading 50 tiles before the other 43,455 is what surfaced this.** The bytes
+in R2 were correct the whole time; only the serving path was wrong, so no amount
+of checking the upload would have found it. Verify what comes back over the
+wire, not what went into the bucket.
+
+### The same trap again, one layer out
+
+Putting the Cache API in front of R2 — the cost control described below —
+reintroduced the identical failure on cache hits alone. A tile stored at 34,261
+bytes served at 34,261 on a MISS and **30,728 on a HIT**, and the decode broke.
+
+`no-transform` on the cached response, which community reports suggest, did not
+prevent it. The actual cause: **`encodeBody: "manual"` does not survive the
+cache round trip.** A cached entry comes back as an ordinary `Response` with no
+memory of that flag, so the runtime re-encodes the already-gzipped body on its
+way out. Re-asserting it on the hit path fixes it:
+
+```ts
+const cached = await cache.match(request);
+if (cached) {
+  return new Response(cached.body, { headers: cached.headers, encodeBody: "manual" });
+}
+```
+
+Worth noting how this failed: only on the second request, only through the
+edge, and with a *smaller* response — the sort of thing that looks like the
+compression working rather than breaking. Comparing served size against stored
+size is what catches it; nothing about the response is otherwise suspicious.
+
+### Verified end to end
+
+| Check | Result |
+| --- | --- |
+| App loads | 200, `text/html` |
+| Uploaded tile | 200, `content-encoding: gzip`, decodes byte-identical to local |
+| **Page never baked** | **404 `text/plain`** — not `index.html`, so the routing split holds |
+| `_ocean` fallback | 200, decodes to 100% SEA at elevation 0 |
+| Seoul tile content | 218,976 building pixels, 283,752 road pixels, elevation 12–110 m |
 
 ## Pre-deployment secret audit
 

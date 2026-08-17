@@ -31,7 +31,13 @@ export function TopOverlays() {
   const is_camera_busy: boolean = camera_status !== CameraStatus.IDLE;
 
   const interaction_style = cn(
-    "transition-all duration-500 ease-in-out",
+    // Not transition-all: these containers position themselves from
+    // --vv-top/--vv-bottom, and `all` swept top/bottom into the same 500ms
+    // ease. The result was an overlay easing toward where the keyboard had
+    // been half a second ago — a motion of its own, visibly not attached to
+    // anything. Only the properties this state actually changes are listed,
+    // so viewport tracking is immediate and the fade still eases.
+    "transition-[opacity,transform,filter] duration-500 ease-in-out",
     is_camera_busy ? "pointer-events-none opacity-40 scale-[0.98] blur-[0.5px]" : "opacity-100 scale-100 blur-0",
   );
 
@@ -51,19 +57,26 @@ export function TopOverlays() {
       }
 
       {/* 2. top-left: settings trigger + dummy chat-text preview (mirrors mode_bar.tsx's message input live) */}
-      <div className={cn("absolute top-4 left-4 z-50 flex flex-col items-start gap-3", interaction_style)}>
+      <div className={cn("absolute top-[calc(1rem+var(--vv-top,0px))] left-4 z-50 flex flex-col items-start gap-3", interaction_style)}>
         <div className="pointer-events-auto">
           <SettingsTriggerButton />
         </div>
-        <DummyChatText />
+        {/* Dev-only, same gate as the message pill it mirrors
+        (mode_bar.tsx): this log is fed by that input and by nothing else,
+        so without it there is never a line to draw. */}
+        {__IS_DEV__ && <DummyChatText />}
       </div>
 
       {/* 3. top-right: sensor status + current location (dong), compass/scale_bar/GPS below it */}
       <div
         className={cn(
-          // gap-3 -> gap-5: the address bar and the control row below it
-          // read as too close together at gap-3.
-          "absolute top-4 right-4 z-50 flex flex-col items-end gap-5 pointer-events-none",
+          // gap-4 between the address row and the control cluster below it,
+          // against the 8 the buttons inside that cluster sit at and the 8
+          // between the cluster and the scale bar — so "same group" and
+          // "different group" still read as different distances. Naver/Kakao
+          // stack their own map buttons 5 apart (measured), which turned out
+          // tighter than this wants to be.
+          "absolute top-[calc(1rem+var(--vv-top,0px))] right-4 z-50 flex flex-col items-end gap-4 pointer-events-none",
           interaction_style,
         )}
       >
@@ -81,7 +94,13 @@ export function TopOverlays() {
           closest to the screen edge should be, making the icon visibly
           drift left/right every time the address length changed. */
           }
-          <div className="flex items-center gap-2 h-6 bg-black/40 backdrop-blur-sm rounded px-2 w-fit">
+          {/* No backdrop-blur, same reasoning as the round controls below (see
+          cozy/circular_button.tsx): a backdrop-filter over a canvas that
+          repaints every frame pays for itself every frame. /60 rather than
+          /40 keeps the text readable without it — and matches the round
+          controls' own bg-neutral-900/60, so the two chrome elements read as
+          one system rather than two independently-tuned opacities. */}
+          <div className="flex items-center gap-2 h-6 bg-black/60 rounded px-2 w-fit">
             <CurrentAddress label={address_label} />
             <SensorStatus />
           </div>
@@ -94,10 +113,10 @@ export function TopOverlays() {
         compass sits under GPS in the same right-hand column, not under the
         scale bar. */
         }
-        <div className={cn("flex items-start gap-3", !is_camera_busy && "pointer-events-auto")}>
+        <div className={cn("flex items-start gap-2", !is_camera_busy && "pointer-events-auto")}>
           <MapScaleBar />
 
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-2">
             <TrackingButton />
             <MapCompass />
           </div>

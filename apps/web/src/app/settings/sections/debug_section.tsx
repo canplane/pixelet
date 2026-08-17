@@ -45,8 +45,6 @@ export function DebugSection() {
 
   const show_debug_objects = useDebugStore((state) => state.show_debug_objects);
   const toggle_debug_objects = useDebugStore((state) => state.toggle_debug_objects);
-  const show_structures = useDebugStore((state) => state.show_structures);
-  const toggle_structures = useDebugStore((state) => state.toggle_structures);
 
   const ground_snap = useCameraStore((state) => state.ground_snap);
   const toggle_ground_snap = useCameraStore((state) => state.toggle_ground_snap);
@@ -65,12 +63,6 @@ export function DebugSection() {
         description={t("settings.debug.objects.description")}
         active={show_debug_objects}
         on_toggle={toggle_debug_objects}
-      />
-      <SettingRow
-        label={t("settings.debug.structures.label")}
-        description={t("settings.debug.structures.description")}
-        active={show_structures}
-        on_toggle={toggle_structures}
       />
       <SettingRow
         label={t("settings.debug.ground_snap.label")}

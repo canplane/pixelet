@@ -1,7 +1,6 @@
 // @pxl/web/modules/device/pose/use_device_orientation.ts
 
 import { useCallback, useEffect } from "react";
-import i18next from "i18next";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
@@ -56,7 +55,7 @@ export function useDeviceOrientation() {
     const { set_status, set_error } = useDeviceOrientationStore.getState();
 
     if (typeof DeviceOrientationEvent === "undefined") {
-      set_error(i18next.t("device.orientation.unsupported"));
+      set_error("device.orientation.unsupported");
       return false;
     }
 
@@ -73,9 +72,9 @@ export function useDeviceOrientation() {
           set_is_tracking_orientation(true);
           return true;
         }
-        set_error(i18next.t("device.orientation.permission_denied"));
+        set_error("device.orientation.permission_denied");
       } catch (err) {
-        set_error(i18next.t("device.orientation.permission_error"));
+        set_error("device.orientation.permission_error");
         console.error("[device_orientation] permission error:", err);
       }
     } else {
@@ -166,7 +165,7 @@ export function useDeviceOrientation() {
       if (Date.now() - last_orientation_event_at > WATCHDOG_TIMEOUT_MS) {
         remove_orientation_listener();
         set_is_tracking_orientation(false);
-        useDeviceOrientationStore.getState().set_error(i18next.t("device.orientation.signal_lost"));
+        useDeviceOrientationStore.getState().set_error("device.orientation.signal_lost");
         last_orientation_event_at = null;
       }
     }, WATCHDOG_INTERVAL_MS);

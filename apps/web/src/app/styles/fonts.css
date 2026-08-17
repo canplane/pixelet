@@ -12,23 +12,17 @@ http://scripts.sil.org/OFL
   font-weight: 45 920;
   font-style: normal;
   font-display: swap;
-  src: url("/fonts/pretendard-v1.3.9/pretendard-variable.woff2") format("woff2-variations");
+  /* "woff2", not "woff2-variations". A browser that doesn't recognize a
+     format() hint drops that src entirely per spec — and since this was the
+     only src, an engine that rejects "-variations" ends up with zero usable
+     sources for this @font-face, silently falling through the stack past
+     "Pretendard Variable" to system-ui (Roboto on Android). Reported live as
+     intermittent, which tracked with which app's embedded WebView opened the
+     link rather than true randomness — different in-app browsers (KakaoTalk,
+     Naver) ship different Chromium builds on the same device.
+     A browser detects variable-font support from the font binary's own fvar
+     table, not from this string, so the hint was never load-bearing —
+     dropping "-variations" costs nothing and removes the failure mode. */
+  src: url("/fonts/pretendard-v1.3.9/pretendard-variable.woff2") format("woff2");
 }
 
-@font-face {
-  font-family: "DungGeunMo";
-  src: url("/fonts/dung-geun-mo-v1.3/dung-geun-mo.woff2") format("woff2"); /* path relative to public/ */
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap; /* show text in the fallback face while this one loads, rather than blocking on it */
-}
-
-/* Utility class that keeps the pixel face legible: every smoothing/interpolation
-   step a browser would normally apply blurs pixel-grid glyphs instead of helping. */
-@utility pixel-antialiasing-off {
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: unset;
-  font-smooth: never;
-  text-rendering: pixelated;
-  image-rendering: pixelated;
-}
