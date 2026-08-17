@@ -22,11 +22,9 @@ const LOD_MARGIN: f64 = 1.4;
 
 // Explicit world-space distances. Each threshold doubles with the sampling
 // stride, keeping a coarse cell's projected size approximately constant at
-// every handoff. The previous compressed tail (576/736/832/896) made the
-// visible world race through 8/16/32/64 just before FOG_FAR=900, which is why
-// the horizon read as a handful of giant blocks. With this ladder the current
-// fog range reaches step 8 at most; 32/64 stay available for future longer
-// ranges and as renderer fallback states without appearing in today's view.
+// every handoff. With this ladder the current fog range reaches step 8 at
+// most; 32/64 stay available for future longer ranges and as renderer
+// fallback states without appearing in today's view.
 const LOD_DIST_BY_LEVEL = {
   LOD0: 192,
   LOD1: 384,
@@ -49,22 +47,22 @@ const LOD_THRESHOLDS: readonly f64[] = [
 
 /**
  * Half-width (fraction of the threshold's own distance) of the band where
- * two LOD steps dither-blend. At 0.2, a wide pulled-back/top-down view (a
- * huge range of per-chunk distances at once) put over half of all loaded
- * chunks inside some band simultaneously (438/800 chunk-mesh slots, walked
- * live) — the overlapping dither read as uniform speckle, arguably worse
- * than the hard pop it was built to hide. 0.05 keeps each band narrow
- * enough that only chunks genuinely near one threshold ever blend.
+ * two LOD steps dither-blend. A wide pulled-back/top-down view puts a huge
+ * range of per-chunk distances on screen at once, so too wide a band lets
+ * over half of all loaded chunks fall inside some band simultaneously,
+ * reading as uniform speckle — arguably worse than the hard pop it was
+ * built to hide. 0.05 keeps each band narrow enough that only chunks
+ * genuinely near one threshold ever blend.
  */
 const BLEND_BAND_FRACTION: f64 = 0.05;
 
 /**
  * Only thresholds inside the current visible range get dither-blended. The
- * third handoff moved from 576 to 768 and is now the last visible transition
- * before FOG_FAR=900, so including it removes both its hard pop and the old
- * 29% non-blended hysteresis gap. Later thresholds start past the fog range
- * and remain hard transitions to avoid retaining unused secondary meshes if
- * the render distance is expanded later.
+ * third handoff (768) is the last visible transition before FOG_FAR=900, so
+ * including it removes both its hard pop and the old 29% non-blended
+ * hysteresis gap. Later thresholds start past the fog range and remain hard
+ * transitions, to avoid retaining unused secondary meshes if the render
+ * distance is expanded later.
  */
 const BLEND_ELIGIBLE_THRESHOLDS: u32 = 3;
 
@@ -150,11 +148,10 @@ export type LODGuide = {
    * True inside a transition band around one of the LOD_THRESHOLDS — the
    * chunk that owns this guide should mount a *second* instancedMesh at
    * blend_other_step (chunk.tsx) alongside its normal lod_step one. Two
-   * neighboring chunks that both straddle the same threshold (the exact
-   * scenario that showed up as a hard-edged tile/LOD boundary — see the
-   * commit this was written to fix) end up with similar coarse_fraction
-   * values and thus a similar finer/coarser instance mix, turning what was a
-   * single-step pop into a shared gradient across the pair.
+   * neighboring chunks that both straddle the same threshold end up with
+   * similar coarse_fraction values and thus a similar finer/coarser
+   * instance mix, turning what would otherwise be a single-step pop at a
+   * hard-edged tile/LOD boundary into a shared gradient across the pair.
    */
   blend_active: boolean;
   /**
