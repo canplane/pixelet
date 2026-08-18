@@ -211,7 +211,6 @@ project already does.
 ## How to use this
 
 Don't implement any of it preemptively — this is a forward-looking analysis, not
-a task list. When a real mobile-perf pass starts, A is the lead item. And for
-anything here, re-measure before cutting: the whole value of this document is
-that its claims came from instrumentation rather than from reading code and
-guessing.
+a task list. When a real mobile-perf pass starts, A is the lead item. Re-measure
+before cutting anything here; the claims came from instrumentation, not from
+reading code and guessing.

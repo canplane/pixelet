@@ -94,10 +94,9 @@ export function useGeolocation() {
         // it the "dead" watch keeps calling back (a timeout/unavailable
         // error can still be followed by a late success) *and* a later
         // start_watching() registers a second, fully independent watch on
-        // top of it. Two watches racing each other is what turned a single
+        // top of it. Two watches racing each other is what turns a single
         // transient error into location flapping null/non-null on every
-        // callback from either one — see the device_coord-flicker
-        // investigation this comment came out of.
+        // callback from either one.
         if (geolocation_watch_id !== null) {
           navigator.geolocation.clearWatch(geolocation_watch_id);
           geolocation_watch_id = null;
@@ -127,10 +126,9 @@ export function useGeolocation() {
           }, GEOLOCATION_RETRY_MS);
         }
       },
-      // timeout 10s -> 30s and maximumAge 0 -> 5s. Both were asking for a
-      // brand-new high-accuracy fix within ten seconds, which a phone indoors
-      // routinely misses; a five-second-old fix is indistinguishable at
-      // walking pace, and the longer window rides out a gap instead of
+      // A brand-new high-accuracy fix within ten seconds is more than a phone
+      // indoors routinely produces; a five-second-old fix is indistinguishable
+      // at walking pace, and the longer 30s timeout rides out a gap instead of
       // declaring failure in the middle of one.
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
     );

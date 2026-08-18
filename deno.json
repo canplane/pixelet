@@ -58,7 +58,6 @@
 
   "compilerOptions": {
     "lib": ["deno.window", "deno.ns", "deno.unstable", "esnext"],
-    "strict": true,
     "verbatimModuleSyntax": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,

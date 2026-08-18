@@ -53,11 +53,10 @@ function push_sub_voxel_run(runs: MeshRun[], entry: SubVoxelEntry): void {
 /**
  * Per-(band, column) buckets of `extra_sub_voxels`, built once and reused
  * across every column `merge_column_runs` visits for the same chunk
- * (`scan_all_column_runs` below) — a band's `extra_sub_voxels` used to get
- * filtered by `cx`/`cy` fresh on every one of those 4096 calls, an O(4096 *
- * N) re-scan of the same array. Profiled: a chunk with a lot of placed
- * sub-cell objects (large N) cost far more than its band count alone
- * predicted — this was why.
+ * (`scan_all_column_runs` below) — filtering a band's `extra_sub_voxels` by
+ * `cx`/`cy` fresh on every one of those 4096 calls would be an O(4096 * N)
+ * re-scan of the same array, dominating cost on a chunk with many placed
+ * sub-cell objects (large N).
  */
 export type SubVoxelIndex = ReadonlyMap<VoxelBand, ReadonlyMap<u32, readonly SubVoxelEntry[]>>;
 

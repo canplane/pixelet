@@ -85,7 +85,7 @@ This tree packet format is a good fit when you want:
 - large payloads you do not want to fully decode up front
 - a lower-level binary substrate that higher layers can build on
 
-It is best understood as a **binary tree packet layer**, not as a replacement for every serializer.
+It is best understood as a **binary tree packet layer** — one piece of a larger serialization stack.
 
 ---
 
@@ -606,16 +606,12 @@ for (const child of b) {
 
 ## Object-Like Data
 
-Plain objects are intentionally **not** auto-lowered in the generic path.
-
-Why? Because object lowering immediately raises schema questions:
+Plain objects are not auto-lowered in the generic path, because object lowering immediately raises schema questions this layer leaves to a higher one:
 
 - are keys encoded?
 - in what order?
 - are missing fields allowed?
 - what does compatibility mean?
-
-This layer does **not** want to silently invent those rules.
 
 If you want object-like data today, use explicit tuple mapping in a higher layer.
 If your higher layer already owns field order, tuples are usually enough.
@@ -683,8 +679,7 @@ parent.graft(child_packet);
 const parent_packet = new TreeEncoder().encode(parent);
 ```
 
-`graft()` does **not** attach an arbitrary byte blob.
-It expects a packet intended for this tree format.
+`graft()` expects a packet intended for this tree format, not an arbitrary byte blob.
 
 Important detail:
 

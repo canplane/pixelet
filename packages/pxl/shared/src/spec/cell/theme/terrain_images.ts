@@ -42,15 +42,14 @@ export type GroundLayerImageEntry = {
  * requirement. */
 // Deliberately a *small* bank of clean, saturated, iconic materials reused
 // across many types — not one bespoke real-world-matched material per type.
-// An earlier version hunted for a visually-unique material per type
-// (silver_sandstone, silver_sandstone_brick, ...) and the result was a
-// muddy patchwork of similar-but-not-quite grayish-browns fighting each
-// other, the opposite of vanilla Minecraft's own look: a real Minecraft
-// world is legible precisely *because* it's built from a handful of bold
-// materials (grass, stone brick, sand, wood, water) repeated everywhere,
-// reinterpreting many different real-world categories onto the same block
-// rather than inventing a new one for each. Not every terrain type needs
-// its own unique material here for the same reason. Raw default_dirt and
+// A distinct material per type produces a muddy patchwork of
+// similar-but-not-quite grayish-browns fighting each other, the opposite of
+// vanilla Minecraft's own look: a real Minecraft world is legible precisely
+// *because* it's built from a handful of bold materials (grass, stone
+// brick, sand, wood, water) repeated everywhere, reinterpreting many
+// different real-world categories onto the same block rather than
+// inventing a new one for each. Not every terrain type needs its own
+// unique material here for the same reason. Raw default_dirt and
 // default_stone specifically are avoided as top surfaces (dirt stays
 // side-only, see GROUND_LAYER_SIDE_OVERRIDES below) — Minecraft itself
 // doesn't lead with bare stone/dirt either; what you actually see above
@@ -121,24 +120,16 @@ export const GROUND_LAYER_IMAGE_MAP: Record<string, Record<string, GroundLayerIm
 
 /** Side-face overrides — vegetation-topped land types (GREEN_DEEP/
  * GREEN_LIGHT/SPORTS) get default_dirt as their side instead of their own
- * top image, matching vanilla Minecraft's own
- * grass-block convention (green top, dirt-brown exposed sides). Earlier
- * versions of this map used default_grass_side.png/default_dry_grass_side.png
- * here instead, and default_junglegrass.png for GREEN_DEEP's own top — all
- * three turned out to be alpha-cutout decorative sprites (a jungle-grass
- * tuft, a grass-fringe overlay meant to sit *over* a separate dirt image),
- * not solid material tiles: 38-44% of their pixels are fully transparent,
- * and this shader only ever reads `.rgb` (see shader.ts's
+ * top image, matching vanilla Minecraft's own grass-block convention
+ * (green top, dirt-brown exposed sides). Alpha-cutout decorative sprites
+ * are unsafe here: this shader only ever reads `.rgb` (see shader.ts's
  * sample_ground_layer_color), so a transparent source pixel renders as
- * flat black instead of "see-through" — which is exactly what made a whole
- * GREEN_DEEP mountain's top *and* side both read as broken/near-black and
- * indistinguishable from each other. Every image used anywhere in this file
- * has been verified to have no significant transparency (see the audit that
- * found this — real browser canvas decode, not just eyeballing a preview).
- * Every other type's side face is visually identical to its top, so mat.ts
- * derives the *full* per-layer side map by falling back to
- * GROUND_LAYER_IMAGE_MAP's own top entry wherever this sparse map has
- * nothing — see build_side_image_map below. */
+ * flat black instead of "see-through" — every image used anywhere in this
+ * file has been verified (real browser canvas decode) to have no
+ * significant transparency. Every other type's side face is visually
+ * identical to its top, so mat.ts derives the *full* per-layer side map by
+ * falling back to GROUND_LAYER_IMAGE_MAP's own top entry wherever this
+ * sparse map has nothing — see build_side_image_map below. */
 const GROUND_LAYER_SIDE_OVERRIDES: Partial<Record<string, Partial<Record<string, GroundLayerImageEntry>>>> = {
   land: {
     BARE: { url: default_dirt },

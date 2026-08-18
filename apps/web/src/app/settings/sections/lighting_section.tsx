@@ -6,16 +6,6 @@ import { useTranslation } from "react-i18next";
 import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { SectionTitle, SettingRow } from "@/app/settings/setting_row.tsx";
 
-/**
- * Real-time lighting/shadow toggles — environment.tsx's sun/moon lights and
- * the effects layered on top of them, ordered low-to-high cost top-to-
- * bottom. Both god_rays and shadow_map are tagged "high" (only 3 tiers
- * exist), but shadow_map's own doc comment (render/settings_store.ts)
- * explicitly calls it out as the single most expensive toggle in the whole
- * store — a full extra shadow-camera depth pass per light — while
- * god_rays is only "likely pricier" than the med-tier post-stack effects,
- * a weaker claim. shadow_map goes last.
- */
 export function LightingSection() {
   const { t } = useTranslation();
 

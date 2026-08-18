@@ -19,7 +19,7 @@ function ErrorPage() {
   return null;
 }
 
-/** AppLayoutProps */
+/** AppLayout props */
 type AppLayoutProps = {
   children: ReactNode;
 };

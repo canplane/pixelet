@@ -33,8 +33,7 @@ at the time, what turned out to be false — is usually more valuable than eithe
 decision on its own, and editing in place is exactly what destroys it.
 
 Correcting a factual error, or updating measurements as better numbers arrive, is
-ordinary editing and needs none of this. The rule is about *conclusions*, not
-about typos.
+ordinary editing and needs none of this — this convention applies to *conclusions*.
 
 ## Index
 

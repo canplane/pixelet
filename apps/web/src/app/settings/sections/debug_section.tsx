@@ -12,22 +12,13 @@ import { get_toast_entries, subscribe_toast_entries, toast_custom, toast_dismiss
 
 const DUMMY_TOAST_IDS = ["dummy-1", "dummy-2", "dummy-3", "dummy-4"];
 
-/** Derived from the toast store itself, not local component state: this
- * section unmounts whenever the settings modal closes (see
- * settings_modal.tsx), which used to reset a plain useState back to false
- * even while the 4 dummy toasts were still actually on screen — the toggle
- * would show "off" right after reopening settings although nothing had
- * changed. The toast store's entries already persist across that remount
- * on their own; this just reads them instead of tracking a second, easily
- * stale copy of the same fact. */
+/** Reads the toast store directly rather than local state: this section
+ * unmounts whenever settings closes, which would reset a plain useState
+ * to false even while the dummy toasts were still on screen. */
 function any_dummy_toast_shown(): boolean {
   return get_toast_entries().some((entry) => DUMMY_TOAST_IDS.includes(entry.id));
 }
 
-/** Spawns 4 dummy toasts for testing the card-deck/swipe-to-rotate stack (one
- * more than toast.tsx's MAX_STACK_DEPTH+1 visible slots, to exercise the
- * beyond-visible/opacity-0 case) — a code-level trigger so it survives
- * reloads and doesn't need re-injecting via console every time. */
 function spawn_dummy_toasts(t: ReturnType<typeof useTranslation>["t"]) {
   DUMMY_TOAST_IDS.forEach((id, i) => {
     const message = t("settings.debug.dummy_toast.message", { index: i + 1 });
@@ -39,7 +30,6 @@ function dismiss_dummy_toasts() {
   DUMMY_TOAST_IDS.forEach((id) => toast_dismiss(id));
 }
 
-/** __IS_DEV__-only diagnostics — never rendered in production (see settings_modal.tsx's own gate). */
 export function DebugSection() {
   const { t } = useTranslation();
 

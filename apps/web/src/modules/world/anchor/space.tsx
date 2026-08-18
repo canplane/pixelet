@@ -5,14 +5,11 @@
  * - mounts the registry root into the scene
  * - provides the registry (owned by the caller, see World) to descendants
  *
- * Rebasing anchors on origin change used to happen in a useFrame here, as
- * its own independent subscription from use_frame_translation.ts's frame
- * snap — two separate per-frame callbacks reacting to the same map_origin
- * change with no ordering contract between them, which could leave anchors
- * and the local-world-frame disagreeing about the origin for a tick (seen
- * as a stray offset/doubled instance). The registry is now owned by World
- * and rebased from inside useFrameTranslation's own callback instead, so
- * it's one atomic step rather than two independently-scheduled ones.
+ * The registry is rebased from inside useFrameTranslation's own callback
+ * rather than its own useFrame here, so origin rebasing and the frame snap
+ * happen as one atomic step instead of two independently-scheduled per-frame
+ * callbacks that could leave anchors and the local-world-frame disagreeing
+ * about the origin for a tick (a stray offset/doubled instance).
  */
 
 import type { ReactNode } from "react";

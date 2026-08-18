@@ -10,25 +10,19 @@ export type ActiveTool = "pointer" | "object" | "eraser";
 
 export type ChatLine = { id: number; text: string };
 
-// dummy_chat_text.tsx's own log cap — oldest line drops off once a new one
-// would push the count past this, giving that display its "keeps rising
-// and old lines fall off the top" behavior without any CSS scroll math.
 const MAX_CHAT_LINES = 10;
 let next_chat_line_id = 0;
 
 type UiState = {
-  /** Which map-canvas tap gesture currently means: "pointer" recenters the map, "object" places a cube, "eraser" removes one. */
   active_tool: ActiveTool;
   set_active_tool: (active_tool: ActiveTool) => void;
 
   object_color_id: ObjectColorId;
   set_object_color_id: (object_color_id: ObjectColorId) => void;
 
-  /** One of objects/size.ts's OBJECT_SIZES — grid size the object/eraser tools place/erase at. */
   object_size: f64;
   set_object_size: (object_size: f64) => void;
 
-  /** Sent-message log for top_overlays.tsx's dummy chat-text preview (dummy_chat_text.tsx) — appended only on an actual send (mode_bar.tsx's send button), not live per keystroke; mode_bar.tsx's own input value stays local component state. Still cosmetic-only (see mode_bar.tsx's own doc comment): nothing here reaches a real chat system yet. Capped to MAX_CHAT_LINES, oldest first. */
   chat_lines: ChatLine[];
   append_chat_line: (text: string) => void;
 };

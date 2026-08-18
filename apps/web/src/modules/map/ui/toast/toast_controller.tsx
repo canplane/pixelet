@@ -44,44 +44,21 @@ function StatusIcon({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * Two independent toasts, not one shared "map-status-island" — location and
- * map load status used to be crammed into a single id with a hand-rolled
- * priority order (map errors > map loading > map success > location errors
- * > location loading) to fake mutual exclusion between them. But they
- * genuinely aren't the same axis: map_status only ever reflects tiles
- * loading around map_center (use_tile_fetcher.ts), which moves just as much
- * from the user panning/dragging the map as it does from GPS — location
- * failing (permission denied, no signal) says nothing about whether tiles
- * can load, and use_map_bootstrap.ts's Seoul fallback means they usually
- * can. Squashing both into one slot meant only one of two simultaneously
- * true, unrelated facts could ever be shown at a time. The toast deck
- * already supports multiple simultaneous toasts (that's the whole point of
- * the card-deck stack) — there's no reason these two need to fight over one
- * spot instead of just both existing when both apply.
- */
 export function MapToastController() {
   const { t } = useTranslation();
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
-  // The KEY, not a message: resolving it here rather than where the error
-  // fires is what makes it translate at all. i18next loads its catalogue over
-  // the network, so an imperative t() at sensor-error time — which happens
-  // during startup — returns the key itself and freezes it in the store. It
-  // also never followed a language change. Rendering through t() fixes both.
+  // Rendered through t() here (not resolved to a message where the error
+  // fires) because i18next loads its catalogue over the network — an
+  // imperative t() at sensor-error/startup time would freeze the raw key
+  // in the store and never follow a later language change.
   const location_error_key: string | null = useDeviceLocationStore((state) => state.error_key);
 
   const map_status: MapStatus = useMapStore((state) => state.map_status);
 
-  /** Location (GPS) — purely about whether we know where the device is, nothing about the map/tiles. */
   const shown_location_toast_ref = useRef(false);
-  // t through a ref, not as a dependency. react-i18next hands back a new
-  // function identity on every language change, so listing it re-ran these
-  // effects and called toast_custom() again with an unchanged status — the
-  // "map loaded" toast reappeared just because someone switched language.
-  // The render callbacks read the current one instead, so a toast created
-  // later still uses the right language without the switch itself creating
-  // one. A toast already on screen keeps the wording it was built with; it
-  // outlives the change by seconds at most.
+  // t via a ref, not a dependency — react-i18next hands back a new function
+  // identity on every language change, so listing it as a dependency re-ran
+  // these effects and re-showed a toast just from switching language.
   const t_ref = useRef(t);
   t_ref.current = t;
 
@@ -111,10 +88,8 @@ export function MapToastController() {
         className={is_error ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
       />
     ));
-    // errors are state-persistent — no self-timer, dismissed only once location_status leaves LOADING/ERROR
   }, [location_status, location_error_key]);
 
-  /** Map/center load status — purely about whether tiles have loaded around the current map_center, nothing about GPS. */
   const shown_map_toast_ref = useRef(false);
   useEffect(() => {
     const is_loading = map_status === MapStatus.LOADING;
@@ -144,9 +119,7 @@ export function MapToastController() {
       />
     ));
 
-    if (!is_success) return; // loading/error persist until map_status actually changes
-    // the pill spends its first ~450ms collapsed (icon-only, before wasExpanded
-    // flips true in Toast) — 3000ms total leaves ~2.55s of actually readable text.
+    if (!is_success) return;
     const timer = setTimeout(() => toast_dismiss("map-status"), 3000);
     return () => clearTimeout(timer);
   }, [map_status]);

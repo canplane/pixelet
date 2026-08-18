@@ -10,9 +10,8 @@ covers *why*, and what the design went through to get there.
 
 ## Eight independent justifications
 
-The striking thing about this design is that no single reason carries it. Each of
-the following would be sufficient motivation on its own, and they happen to point
-the same way:
+No single reason carries this design on its own. Each of the following would be
+sufficient motivation by itself, and they all point the same way:
 
 1. **GPU float32 precision.** At Web Mercator's full extent (2×10⁷ m), one
    float32 ULP is about 2 m; float64's is 3.7 nm. Local coordinates have to be
@@ -82,8 +81,8 @@ only a handful of objects in the scene, moving everything at once was fine at
 that size.
 
 **2026-01 (`361c796`, "full platform rewrite") — PVF3 and AnchorRegistry arrive
-in the same commit.** Not a coincidence: they were designed as a pair. PVF3 owns
-correctness, L4 owns scalability.
+in the same commit,** designed as a pair: PVF3 handles correctness, L4 handles
+scalability.
 
 **2026-03~04 — Z-up unification and basis transpose.** Three separate
 transformation concerns were pulled apart into three separate layers in this

@@ -20,65 +20,28 @@ export function MapCompass() {
 
   const is_rotated: boolean = Math.abs(azimuth) > azimuth_thres;
 
-  // visibility is azimuth-only now — this button's own action
-  // (reset_azimuth) only ever touches azimuth, not tilt (see handle_reset's
-  // comment), so showing/hiding it for tilt changes too was inconsistent:
-  // it could appear while already pointing exactly north (tilt merely
-  // off-default), where clicking it would visibly do nothing, or disappear
-  // while still rotated because tilt happened to be back at default.
   const is_default_orientation: boolean = !is_rotated;
 
-  // Hidden entirely while following. Follow mode drives azimuth from the live
-  // compass heading (use_follow_mode.ts), so the map is essentially always
-  // rotated and this button would always be showing — with a needle twitching
-  // on every heading sample, and a reset that cannot hold: reset_azimuth()
-  // sets north, and the next heading update immediately turns it back. Two
-  // things steering the same value, one of which always loses.
-  //
-  // Nothing is lost by hiding it. In follow mode the map is oriented to the
-  // user rather than to north, so "reset to north" is not a state they can be
-  // in; leaving follow mode (any gesture does it — camera/input.tsx) brings
-  // the button back the moment it means something again.
   const show_compass: boolean = !is_default_orientation && !is_follow_mode;
 
-  // reset_azimuth only touches azimuth — it doesn't re-sample elevation, so if
-  // map_center had drifted (or was never grounded) the view can visibly "float" once
-  // the angle change makes that mismatch obvious. Re-ground alongside the angle reset,
-  // same as every other camera-settling interaction (see reground_map_center's callers).
+  // reset_azimuth doesn't re-sample elevation, so map_center can be left
+  // stale relative to the new angle if it isn't re-grounded alongside it.
   const handle_reset = () => {
     reset_azimuth();
     reground_map_center();
   };
 
   return (
-    // layout={false}: this now sits in a flex column alongside
-    // TrackingButton (top_overlays.tsx puts GPS above compass in one
-    // shared column) instead of its own standalone wrapper — without this,
-    // framer-motion's default layout={true} tries to auto-animate this
-    // button's bounding box whenever the *column's* size changes (e.g. its
-    // own mount/unmount reflowing the shared flex container), which could
-    // leave it stuck mid-transition instead of cleanly disappearing.
+    // layout={false}: without it, framer-motion's default layout={true}
+    // auto-animates this button's bounding box whenever the shared flex
+    // column it sits in (top_overlays.tsx) resizes for any reason, which
+    // can leave it stuck mid-transition instead of cleanly disappearing.
     <MotionContainer show={show_compass} variant="compass" delay={0.4} layout={false}>
-      {
-        /* isActive dropped: MotionContainer only mounts this while
-          !is_default_orientation, so is_default_orientation is always false
-          for every render that actually reaches the screen — passing it as
-          isActive was dead code, CircularButton's amber ring could never
-          actually show. This is a one-shot reset button, not a toggle with
-          a real "currently active" state to indicate. */
-      }
       <CircularButton className="w-[42px] h-[42px]" dark shadow={false} onClick={handle_reset} title={t("map.controls.reset_orientation")}>
-        {
-          /* N label — same dead-branch reasoning as the dropped isActive prop
-        above: MotionContainer only mounts this while !is_default_orientation,
-        so is_default_orientation is always false here. The "red when
-        pointing exactly north" branch could never actually render. */
-        }
         <span className="absolute top-0.5 text-[10px] font-medium tracking-tighter select-none z-20 text-white/40">
           N
         </span>
 
-        {/* needle rotation */}
         <div
           className="relative w-[2px] h-6 flex flex-col z-10 transition-transform duration-200 ease-[cubic-bezier(0.1,0,0,1)]"
           style={{ transform: `rotate(${(-azimuth * 180) / Math.PI}deg)` }}

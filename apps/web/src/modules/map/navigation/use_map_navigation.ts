@@ -31,17 +31,13 @@ export function useMapNavigation() {
   }, [device_location]);
 
   /**
-   * Off-center hysteresis over horizontal (X/Y only) distance.
-   *
-   * Was full 3D distance — found while investigating a report that the GPS
-   * button's second tap (recenter -> toggle follow mode) never reached the
-   * follow-mode branch: device_coord's Z is raw GPS altitude, map_center's Z
-   * is baked terrain elevation from a different source (see ground_or_raw),
-   * so real GPS altitude being tens of meters off true elevation could keep
-   * that difference alone above the recenter threshold forever, even
-   * sitting exactly on the recentered X/Y spot. Navigation here is
-   * inherently horizontal (a top-down map), so only X/Y should decide "did
-   * the user wander away".
+   * Off-center hysteresis over horizontal (X/Y only) distance, not full 3D.
+   * device_coord's Z is raw GPS altitude while map_center's Z is baked
+   * terrain elevation from a different source (see ground_or_raw) — a real
+   * altitude/elevation mismatch of tens of meters could otherwise hold the
+   * distance above threshold indefinitely, even sitting exactly on the
+   * recentered X/Y spot. Navigation here is inherently horizontal (a
+   * top-down map), so only X/Y should decide "did the user wander away".
    */
   const [is_off_center, set_is_off_center] = useState(false);
   useEffect(() => {

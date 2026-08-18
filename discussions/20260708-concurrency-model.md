@@ -18,8 +18,8 @@ threading model inside a browser tab.
 
 ## Why it stopped
 
-**The complexity exceeded the benefit** — the classic case of the tail wagging
-the dog. Three specific things, and the third is the one that actually broke it.
+**The complexity exceeded the benefit.** Three specific things, and the third is
+the one that actually broke it.
 
 **1. `wgpu` was not as mature as Three.js.** Rendering WebGPU from inside Rust
 meant worse engine and library tooling than what Three.js already provided, and
@@ -42,7 +42,7 @@ does not exist there anyway.** And WebGPU command submission is already
 asynchronous and queued, so OS-thread-grade parallelism was never the
 prerequisite it was assumed to be.
 
-## The false dichotomy, resolved
+## A third option: transferable objects
 
 "SAB or copy overhead" was never the real choice. **Transferable objects** are
 the third option: `postMessage` with a transfer list moves `ArrayBuffer`
@@ -89,12 +89,11 @@ copying, and offscreen-render issues — an engine-level rewrite on the scale of
 what Figma or eaglercraft did. That scale does not fit the MVP stage.
 
 **Consequence for the infrastructure built during the WASM era:** XTP and
-`sparse_tree/` are **not** dead code to be trimmed because "nothing uses them
-right now". They are deliberately retained as insurance against a conditional
-restart. Their quality was assessed and found good — relocatable offsets, WORD
-alignment, typed-optional semantics, zero-copy cursor reads. The open question
-is necessity, not quality. Until a restart condition actually holds, neither trim
-them nor invest further in them.
+`sparse_tree/` are deliberately retained as insurance against a conditional
+restart, even though nothing uses them right now. Their quality was assessed
+and found good — relocatable offsets, WORD alignment, typed-optional
+semantics, zero-copy cursor reads. Until a restart condition actually holds,
+neither trim them nor invest further in them.
 
 ## Restart conditions and cautions
 

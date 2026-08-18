@@ -90,7 +90,6 @@ export async function fetch_terrain_source(repo: TerrainRepository, page_idx: IV
 
 /**
  * Raw OSM/elevation source, baked into client-ready ground channels.
- * This step used to run inside the (now-dropped) WASM worker.
  */
 export async function fetch_tile(repo: TerrainRepository, page_idx: IVec): Promise<Bytes> {
   const raw: Bytes = await fetch_terrain_source(repo, page_idx);

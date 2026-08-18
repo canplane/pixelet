@@ -1,10 +1,14 @@
 # pixelet
 
+**[▶ Play](https://plei.me)**
+
 > _A droplet fades. A pixelet remains._
 
 _Started on December 15, 2025._
 
-**pxl** (pixelet) is a location-based social/building game — real-time presence, voxel-style building, and a persistent social space — built around a voxel-style 3D representation of real-world (OpenStreetMap) geographic data.
+**pixelet** is a location-based spatial world built over real-world geodata ([OpenStreetMap](https://www.openstreetmap.org/) + [Copernicus GLO-30](https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
+
+<img alt="Voxel objects built on real-world terrain" src=".github/assets/screenshot.png" height="480">
 
 ---
 
@@ -45,15 +49,17 @@ The web app uses Vite as its bundling/build entry; the api runs directly under D
 
 | Layer               | Technology                                   |
 | ------------------- | -------------------------------------------- |
-| Runtime / Workspace | Deno + TypeScript (strict)                   |
+| Runtime / Workspace | Deno + TypeScript                            |
 | Bundler (web)       | Vite                                         |
 | Web UI              | React 19                                     |
 | API                 | Hono                                         |
 | 3D Rendering        | Three.js + React Three Fiber                 |
 | Database            | PostgreSQL (main + geographic/PostGIS)       |
-| Geodata             | OpenStreetMap (OSM)                          |
-| Spatial math        | PVF3 packed fixed-point (BigInt)             |
-| Terrain transport   | XTP typed-array packets over compressed HTTP |
+| Geodata             | OpenStreetMap (OSM) + Copernicus GLO-30 (elevation) |
+
+Two more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3) and a typed-array wire protocol (XTP) for terrain transport. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
+
+**Naming:** Most identifiers here — files, functions, locals — use `snake_case` rather than TypeScript's usual `camelCase` (React hooks, stores, and components keep the ecosystem's own convention, since fighting that adds no value). The engine side of pixelet leans toward data-oriented design, closer to systems programming than typical frontend code, and a WebGPU/WASM path — including a partial Rust port — has been on the table from early on. C/C++/Rust-style abbreviations show up throughout (`len`, `u32`, `new_len` in `@xpute/core/ds`, for instance), and those read oddly bolted onto camelCase (`newLen` next to `len`); `snake_case` sits naturally with them instead. Unifying most of the TypeScript around it also keeps the two languages visually consistent at the boundary.
 
 ---
 
@@ -86,7 +92,7 @@ Storage, network transfer, and rendering deliberately use different scales. See 
 - **L1 Block** (`1u` per axis): the canonical cell — a **Voxel** once it carries a material payload.
 - **L2 Chunk** (`64` blocks per axis): the renderer's render/LOD/raycasting unit. The renderer composes it into a `64³` **Volume** per occupied **Band** (one signed-Z slice), grouping all occupied L2 bands at one XY address into one column component.
 - **L3 Page** (`1024` blocks per axis): terrain's streaming/storage unit — terrain stores a `1024²` **Tile** there, X/Y only.
-- **L4 Anchor** (`4096` blocks per axis): the floating-origin frame. `get_local_world_origin` snaps the camera's map center down to its L4 base; `AnchorRegistry` keeps one ref-counted `THREE.Group` per live L4 index and re-bases every group's local position when that snapped origin shifts. Carries no Tile/Volume payload of its own — a pure addressing/reparenting mechanism, proof that a space level doesn't need a shape at all.
+- **L4 Anchor** (`4096` blocks per axis): the floating-origin frame. `get_local_world_origin` snaps the camera's map center down to its L4 base; `AnchorRegistry` keeps one ref-counted `THREE.Group` per live L4 index and re-bases every group's local position when that snapped origin shifts. Carries no Tile/Volume payload of its own — a pure addressing/reparenting mechanism.
 - **L5 Shard** (`65536` blocks per axis): reserved for a future global sharding domain — not implemented (`L5_SHAMT` stays commented out in `indexer.ts`). Once active, its Z lane collapses (Z is only 16 bits, narrower than `L5_SHAMT`), so L5 can only ever address X/Y.
 
 Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) stay sparse octrees in source storage. Object leaf byte `0` is `UNDEF` (sparse absence/fallback); every explicit object-layer value owns the high bit, including explicit AIR used for terrain removal. At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
@@ -97,6 +103,7 @@ Dense `64³` Volumes exist only while composing and meshing. Long-lived state ke
 
 ## Learn More
 
-Curious how the coordinate system, spatial hierarchy, unified world-layer pipeline, or wire format works under the hood? See [ARCHITECTURE.md](./ARCHITECTURE.md).
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the coordinate system, spatial hierarchy, unified world-layer pipeline, and wire format work under the hood. See [discussions/](./discussions/) for the reasoning behind those design decisions.
 
-Curious *why* something was built the way it was — the alternatives weighed, the numbers a decision rested on, the constraint that ruled out the obvious approach? See [discussions/](./discussions/).
+---
+[github.com/canplane/pixelet](https://github.com/canplane/pixelet)

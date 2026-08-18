@@ -179,14 +179,11 @@ void main() {
 
   // ---- sun: soft glow halo + a clearly visible disc ----
   //
-  // the disc used to be smoothstep(0.9990, 0.9997, sun_dot) — an angular
-  // radius matching the *real* sun (~0.5°), which is accurate but reads as
-  // a barely-there pinprick against a sky this size, easy to lose entirely
-  // in bloom. This is a stylized miniature-diorama sky, not a physically
-  // accurate one (see the reference stills this whole render pass has been
-  // chasing, which all show a graphic, clearly-placed sun/moon) — widened
-  // both the glow falloff and the disc itself well past real proportions so
-  // it actually reads as an object sitting in the sky.
+  // This is a stylized miniature-diorama sky, not a physically accurate one:
+  // the real sun's angular radius (~0.5°) reads as a barely-there pinprick
+  // against a sky this size, easy to lose entirely in bloom, so both the
+  // glow falloff and the disc itself are widened well past real proportions
+  // so it actually reads as an object sitting in the sky.
   float sun_dot = max(dot(dir, normalize(u_sun_dir)), 0.0);
   float sun_glow = pow(sun_dot, 6.0);
   color = mix(color, u_sun_glow, sun_glow * 0.35);
@@ -273,9 +270,9 @@ void main() {
 // in flight (lerp_factor decays over roughly a second, and this cadence
 // needs to stay well under that to still read as a smooth fade rather than
 // a visible step), slow the rest of the time — which, given the real
-// sun/moon sweep is a full lap every 24 real hours, is almost always. Flat
-// 200ms was the first pass at this; adaptive gets the same transition
-// smoothness while the idle case (the much more common one) drops further
+// sun/moon sweep is a full lap every 24 real hours, is almost always. This
+// adaptive scheme gets the same transition smoothness while the idle case
+// (the much more common one) drops further
 // still, the same "give each element its own real update need instead of
 // one shared rate" reasoning the location_puck beacon (always, no gap) and
 // the camera/frame damping hooks (event-driven, no fixed cadence at all)
@@ -598,13 +595,8 @@ export function MapEnvironment(props: MapEnvironmentProps) {
     // actually-rendered chunk/object geometry positioned correctly as you pan
     // and rotate. camera.position (use_camera.ts) is NOT a substitute for
     // this: it's a fixed local orbit offset, always calling
-    // camera.lookAt(0, 0, 0), completely uninvolved in panning — an earlier
-    // version of this fix tracked it because rendered geometry happened to
-    // still be nearby in one un-rotated test, but it doesn't move or rotate
-    // at all, so it silently breaks the instant azimuth is non-zero (this
-    // file's own history has that attempt, plus an even earlier one that
-    // tracked local-world-frame's raw position alone, off by whatever
-    // additional offset the anchor/page/chunk levels below it contribute).
+    // camera.lookAt(0, 0, 0), completely uninvolved in panning, so it
+    // silently breaks the instant azimuth is non-zero.
     //
     // The only correct anchor is "map_center's own true world position",
     // computed the same way AnchorNode positions any of its children
@@ -612,11 +604,11 @@ export function MapEnvironment(props: MapEnvironmentProps) {
     // base, converted to real units, taken as a LOCAL point within
     // local-world-frame and pushed through localToWorld() — which composes
     // local-world-frame's translation AND world-frame's rotation correctly
-    // via its matrixWorld, unlike a raw vector add (which is what silently
-    // broke this the first two times: local-world-frame's own position
-    // already has the rotation baked in for ITS OWN origin, but a residual
-    // local offset on top of that still needs its own rotation applied, or
-    // it points the same raw direction regardless of current azimuth).
+    // via its matrixWorld. A raw vector add is not equivalent:
+    // local-world-frame's own position already has the rotation baked in
+    // for ITS OWN origin, but a residual local offset on top of that still
+    // needs its own rotation applied, or it points the same raw direction
+    // regardless of current azimuth.
     if (show_shadow_map && local_world_frame_ref.current && map_center) {
       const anchor_base = L4_BASE(map_center.i);
       const local: PVF3 = { i: ivec.sub(map_center.i, anchor_base), f: map_center.f };
@@ -801,15 +793,13 @@ export function MapEnvironment(props: MapEnvironmentProps) {
         // own occlusion pass without this sphere ever writing into (or
         // fighting) the main depth buffer itself.
         //
-        // Tried colorWrite={false} (2026-08-16) to hide this sphere's own
-        // visible disc — assumed GodRaysEffect built its occlusion mask via
-        // its own separate internal render, independent of the main color
-        // buffer. Wrong: with colorWrite off, the rays disappeared
-        // entirely, so this mesh's actual contribution to the main frame is
-        // load-bearing for the effect, not just a byproduct. Reverted —
-        // this means it really does show two "suns" (this sphere plus the
-        // sky dome's own procedural disc) whenever god rays are on; known,
-        // not fixed.
+        // colorWrite={false} would seem like a way to hide this sphere's own
+        // visible disc, but GodRaysEffect samples this mesh's actual
+        // contribution to the main color buffer for its occlusion pass — it
+        // is not a separate internal render — so hiding it that way removes
+        // the rays too. This means it really does show two "suns" (this
+        // sphere plus the sky dome's own procedural disc) whenever god rays
+        // are on; known, not fixed.
       }
       <mesh ref={sun_proxy_ref} visible={show_god_rays} position={current_sun_position.current}>
         <sphereGeometry args={[SUN_PROXY_RADIUS, 16, 16]} />
@@ -819,9 +809,9 @@ export function MapEnvironment(props: MapEnvironmentProps) {
       <directionalLight
         ref={moon_ref}
         color="#9fb4d6"
-        // 0.18 -> 0.3, raised alongside light_cfg.FLOOR (see its comment).
-        // Directional, unlike that floor: it brightens without flattening,
-        // because faces still catch it at different angles.
+        // Raised alongside light_cfg.FLOOR (see its comment). Directional,
+        // unlike that floor: it brightens without flattening, because faces
+        // still catch it at different angles.
         intensity={is_night ? 0.3 : 0.0}
         position={current_moon_position.current}
         castShadow={show_shadow_map && is_night}

@@ -23,13 +23,11 @@ type UseFrameTranslationProps = {
   map_origin: IVec;
 
   /**
-   * Anchor registry to rebase alongside the frame, in the same callback.
-   * These used to be two independent useFrame subscriptions reacting to the
-   * same map_origin change — nothing guaranteed which ran first, or that
-   * both landed within the same tick, so a rebase could show anchors and
-   * the local-world-frame briefly disagreeing about the origin (a stray
-   * offset/duplicate look). Folding the rebase in here makes the two
-   * updates one atomic step instead of two independently-scheduled ones.
+   * Anchor registry to rebase alongside the frame, in the same callback —
+   * keeps the origin rebase and the translation update as one atomic step
+   * instead of two independently-scheduled per-frame subscriptions, which
+   * could otherwise leave anchors and the local-world-frame disagreeing
+   * about the origin for a tick (a stray offset/duplicate look).
    */
   registry?: AnchorRegistry;
 };

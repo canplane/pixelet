@@ -2,7 +2,6 @@
 
 import { AnimatePresence, type HTMLMotionProps, motion } from "framer-motion";
 
-// animation presets shared by every map UI element
 export const MAP_UI_VARIANTS = {
   slideUp: {
     initial: { opacity: 0, y: 15 },
@@ -19,12 +18,6 @@ export const MAP_UI_VARIANTS = {
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -10 },
   },
-  // mirror of `drop` (falls into place from above) — for UI that now lives
-  // near the top edge of the screen (scale_bar.tsx, after it moved from
-  // bottom-right to top-right), "falling from above" no longer makes
-  // sense; this rises into place from below instead. No `scale` term (see
-  // `drop`) — this element's own width already changes on every zoom tick,
-  // so it shouldn't also be doing a mount/exit scale wobble on top of that.
   riseUp: {
     initial: { opacity: 0, y: 15 },
     animate: { opacity: 1, y: 0 },
@@ -58,7 +51,7 @@ export function MotionContainer({
           exit={MAP_UI_VARIANTS[variant].exit}
           transition={{
             duration: 0.6,
-            ease: [0.16, 1, 0.3, 1], // Apple Quintic Ease
+            ease: [0.16, 1, 0.3, 1],
             delay,
           }}
           className={className}

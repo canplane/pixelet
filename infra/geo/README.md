@@ -276,7 +276,7 @@ The internal mechanics of each pipeline. Refer to this section for debugging and
 
 ## 6. Data Licensing & Attribution
 
-Both external data sources this pipeline ingests require a specific attribution notice wherever the baked result is shown to end users — implemented in `apps/web/src/modules/map/ui/overlay/bottom_overlays.tsx`. Neither notice is a style choice; don't shorten, reword, or drop either one without re-checking the source license first.
+Both external data sources this pipeline ingests require a specific attribution notice wherever the baked result is shown to end users — implemented in `apps/web/src/app/settings/sections/attribution_section.tsx`. Neither notice is a style choice; don't shorten, reword, or drop either one without re-checking the source license first.
 
 | Source                                   | License                | Required notice                                                                                                                                                                                          |
 | :---------------------------------------- | :---------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

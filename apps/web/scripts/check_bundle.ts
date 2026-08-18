@@ -21,8 +21,8 @@ const DIST = "./dist";
  * dev catalogues are the authoritative list of dev-only copy, so deriving the
  * check from them means a new dev string is covered the day it is added. */
 const DEV_LOCALE_FILES = [
-  "./src/bootstrap/locales/dev/ko.json",
   "./src/bootstrap/locales/dev/en.json",
+  "./src/bootstrap/locales/dev/ko.json",
 ];
 
 /** Markers that are not copy — route paths and the like.

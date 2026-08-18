@@ -1,12 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/shared/lib/utils/cn.ts";
 
-/**
- * Define Button Styles using CVA
- * - base: Common styles for all buttons
- * - variants: Differing styles based on props
- * - defaultVariants: Fallback values if props are missing
- */
 const buttonVariants = cva(
   "inline-flex justify-center items-center gap-1.5 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
   {
@@ -29,7 +23,6 @@ const buttonVariants = cva(
   },
 );
 
-/** ButtonProps */
 type ButtonProps =
   & React.ButtonHTMLAttributes<HTMLButtonElement>
   & VariantProps<typeof buttonVariants>
@@ -38,9 +31,6 @@ type ButtonProps =
     icon?: React.ReactNode;
   };
 
-/**
- * Common Button Component
- */
 export function Button(props: ButtonProps) {
   const {
     size = "md",
