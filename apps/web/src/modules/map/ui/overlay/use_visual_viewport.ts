@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+const SETTLE_MS = 250;
+
 /**
  * Publishes the visual viewport's offset as CSS variables so the overlay
  * layer can stay pinned to what is actually on screen.
@@ -10,24 +12,11 @@ import { useEffect } from "react";
  * this unnecessary — the browser shrinks the layout viewport when the
  * keyboard opens, so `absolute top-4` keeps meaning "below the visible top".
  * Chromium honours it; iOS Safari does not, and instead scrolls the visual
- * viewport over an unchanged layout viewport. Everything positioned against
- * that layout viewport then rides off the top of the screen — the settings
- * button, the address row, the compass — which is what was reported.
- *
- * The meta tag stays: where it works it does this properly, and it is also
- * what makes `env(safe-area-inset-*)` report real values. This covers the
- * engine that ignores it.
- *
- * Written as variables on the document element rather than as React state on
- * purpose. These update on every frame of a keyboard animation, and a state
- * write per frame would re-render the overlay tree with it; a custom property
- * change repaints only what reads it.
+ * viewport over an unchanged layout viewport, riding everything positioned
+ * against the layout viewport off the top of the screen. The meta tag stays
+ * — it's still what makes `env(safe-area-inset-*)` report real values — this
+ * just covers the engine that ignores its resize behavior.
  */
-/** How long the visual viewport has to hold still before the top overlays
- * are repositioned. Long enough to sit out a keyboard animation, short enough
- * that a genuine change lands without feeling stuck. */
-const SETTLE_MS = 250;
-
 export function useVisualViewport(): void {
   useEffect(() => {
     const vv = globalThis.visualViewport;

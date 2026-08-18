@@ -114,12 +114,10 @@ export function MapScene() {
           // roughly 4x the fragment-shading work of the whole pipeline (post
           // stack included), since dpr=2 on a Retina/high-DPI display means
           // 4x the pixels; separate from chunk-count/frustum-culling
-          // effects, which don't depend on pixel count at all. TEMPORARY
-          // 2026-08-13: defaulted off (pinned at [1,1]) to isolate
-          // resolution's own contribution to a desktop/Retina perf
-          // investigation that's still open — settings-modal-only (Quality
-          // section's "High Resolution" toggle) until that's resolved and
-          // this can ship on by default.
+          // effects, which don't depend on pixel count at all. Confirmed the
+          // single biggest post-stack cost on real devices, so it defaults
+          // off (pinned at [1,1]) — settings-modal-only (Quality section's
+          // "High Resolution" toggle) rather than on by default.
           // The [1,2] cap keeps it from ever exceeding 2x even on a
           // 3x/4x-DPR phone once it is.
           dpr={high_dpr ? [1, 2] : [1, 1]}

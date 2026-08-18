@@ -131,9 +131,8 @@ export const terrain_types = {
 // Color Definitions — loaded from JSON (see ./palette/)
 // ============================================================================
 //
-// Used to be inline `as const` object literals here, keyed by
-// `[terrain_types.X.Y]` computed properties — moved out to plain JSON so
-// color values (and the human-readable `note` next to each one) can be
+// Color values (and the human-readable `note` next to each one) live in
+// JSON files instead of inline `as const` object literals so they can be
 // edited without touching TypeScript. JSON object keys can't reference
 // another module's values the way `[terrain_types.land.BARE]` could, so
 // each JSON file keys by the type's own NAME string ("BARE", "SEA", ...)

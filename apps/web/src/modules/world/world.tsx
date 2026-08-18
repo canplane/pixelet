@@ -42,12 +42,9 @@ import { LocationPuck } from "./markers/location_puck.tsx";
 import { HoverCursor } from "./markers/hover_cursor.tsx";
 import { DebugBox, DebugPoint, GyroRing, LabeledLine } from "./markers/frame_gizmo.tsx";
 
-// Unified terrain/object render pipeline — replaces the old split
-// TerrainLayer+ObjectLayer (archived: see checkpoint/20260813-before-
-// layer-unification for the pre-unification state). CHUNK_STAGE_LAYERS
-// lives in modules/world/stack.ts (not inline here) so camera/ray.ts's own
-// unified raycast can composite the exact same layer stack instead of a
-// second, possibly-drifting registration.
+// CHUNK_STAGE_LAYERS lives in modules/world/stack.ts (not inline here) so
+// camera/ray.ts's own raycast can composite the exact same layer stack
+// instead of a second, possibly-drifting registration.
 import { ChunkStage } from "./chunk_stage.tsx";
 import { CHUNK_STAGE_LAYERS } from "./stack.ts";
 

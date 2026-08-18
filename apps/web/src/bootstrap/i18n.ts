@@ -4,10 +4,10 @@ import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 
-import ko from "./locales/ko.json" with { type: "json" };
 import en from "./locales/en.json" with { type: "json" };
-import ko_dev from "./locales/dev/ko.json" with { type: "json" };
+import ko from "./locales/ko.json" with { type: "json" };
 import en_dev from "./locales/dev/en.json" with { type: "json" };
+import ko_dev from "./locales/dev/ko.json" with { type: "json" };
 
 /**
  * Copy for development-only surfaces lives in its own catalogue, folded in
@@ -20,13 +20,9 @@ import en_dev from "./locales/dev/en.json" with { type: "json" };
 type Catalogue = { [key: string]: string | Catalogue };
 
 /**
- * Merges every level, not just the top one. This used to spread
- * `settings` alone, which was right while the debug section was the only
- * dev-only surface and wrong the moment a second one appeared elsewhere in
- * the tree: the dev catalogue's `map` branch was dropped without a word, so
- * the gated component rendered its raw key instead of its label. A merge
- * that only knows about the branches it was written for fails silently by
- * construction, which is the worst way for a catalogue to fail.
+ * Merges every level, not just the top one — a shallow merge silently drops
+ * a nested dev-only branch instead of erroring, so a gated component would
+ * render its raw key instead of its label.
  */
 function deep_merge(base: Catalogue, extra: Catalogue): Catalogue {
   const out: Catalogue = { ...base };
@@ -60,9 +56,8 @@ let booted = false;
  * initialization rather than in any one component.
  *
  * The cost is 10.5 kB of JSON in a 1.97 MB bundle, and re-deploying to change
- * a string. The previous arrangement traded that flash for the ability to edit
- * a translation without rebuilding — a trade that never paid off, because the
- * app ships as a built bundle anyway, so a copy change was always a deploy.
+ * a string — accepted because the app ships as a built bundle anyway, so a
+ * copy change is always a deploy regardless of where the catalogue lives.
  */
 export function bootstrap_i18n(): void {
   if (booted) return;
@@ -72,13 +67,13 @@ export function bootstrap_i18n(): void {
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
-      fallbackLng: "ko",
-      supportedLngs: ["ko", "en"],
+      fallbackLng: "en",
+      supportedLngs: ["en", "ko"],
       ns: ["translation"],
       defaultNS: "translation",
       resources: {
-        ko: { translation: with_dev(ko, ko_dev) },
         en: { translation: with_dev(en, en_dev) },
+        ko: { translation: with_dev(ko, ko_dev) },
       },
       detection: {
         order: ["localStorage", "navigator"],
@@ -94,4 +89,13 @@ export function bootstrap_i18n(): void {
         useSuspense: false,
       },
     });
+
+  // index.html ships a static lang="en" for crawlers, which never run the
+  // bundle that would otherwise correct it. For real visitors, keep it in
+  // sync with whatever i18next actually resolves/switches to — detection
+  // is synchronous (see above), so this is correct from the first paint.
+  document.documentElement.lang = i18next.language;
+  i18next.on("languageChanged", (lng) => {
+    document.documentElement.lang = lng;
+  });
 }

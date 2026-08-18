@@ -47,10 +47,9 @@ function page_off_of(cx: u32, cy: u32): IVec {
  * function of compile-time constants), computed once at module load and
  * handed back by reference on every call. Callers filter/order this by
  * whatever's relevant (e.g. real-world distance from camera,
- * chunk_stage.tsx) *before* paying slice_chunk's real per-chunk
- * cost, rather than slicing every chunk in a page up front only to throw
- * most of them away — that reordering is the whole reason this used to be
- * one combined page_to_chunks() and now isn't.
+ * chunk_stage.tsx) *before* paying slice_chunk's real per-chunk cost,
+ * rather than slicing every chunk in a page up front only to throw most of
+ * them away.
  */
 const CHUNK_OFFSETS: readonly IVec[] = (() => {
   const out: IVec[] = [];

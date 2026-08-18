@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
 
@@ -34,6 +34,16 @@
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>pixelet</title>
+
+    <!-- Open Graph / Twitter link-preview card. Static, not run through
+         t() — a crawler reads this HTML as-served and never executes the
+         client bundle, so there is no language to switch on. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://plei.me" />
+    <meta property="og:title" content="pixelet" />
+    <meta property="og:description" content="Real-world terrain becomes a canvas for stacking virtual blocks." />
+    <meta property="og:image" content="https://plei.me/og-image.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>

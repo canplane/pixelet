@@ -24,8 +24,8 @@ import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 
 import * as env from "@/lib/env/mod.ts";
 
-// Current esa_elevation_raster coverage bbox (see conversation: confirmed via
-// `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM esa_elevation_raster`).
+// Current esa_elevation_raster coverage bbox — confirmed via
+// `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM esa_elevation_raster`.
 const SW: [lng: number, lat: number] = [123.9998611, 33.000244913560735];
 const NE: [lng: number, lat: number] = [131.9997935265517, 39.000138899999996];
 

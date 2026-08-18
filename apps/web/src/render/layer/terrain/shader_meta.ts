@@ -91,13 +91,10 @@ export const build_color_mappings = (meta: TerrainColorMeta[]): {
 // order matters). Kept next to get_color_meta/build_color_mappings since all
 // three read the same terrain_colors/terrain_types tables and must agree.
 
-// exported so render/layer/'s WorldLayer adapters (terrain/adapter.ts,
-// objects/adapter.ts) can resolve a hex color to bytes the same way this file's
-// own decode_ground_rgba/build_layer_texture_data already do, instead of a
-// second hand-rolled copy of the same parse — temporary reuse across the
-// terrain/object unification's migration window (see render/layer/'s own
-// doc comments); this function itself isn't going anywhere even once
-// decode_ground_rgba's callers are archived.
+// Exported so render/layer/'s WorldLayer adapters (terrain/adapter.ts,
+// objects/adapter.ts) can resolve a hex color to bytes the same way this
+// file's own decode_ground_rgba/build_layer_texture_data already do,
+// instead of a second hand-rolled copy of the same parse.
 export const hex_to_rgb255 = (hex: string): [number, number, number] => {
   const h = hex.length <= 5 ? hex.slice(1, 4).split("").map((c) => c + c).join("") : hex.slice(1, 7);
   const num = parseInt(h, 16);

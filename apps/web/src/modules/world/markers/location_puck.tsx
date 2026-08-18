@@ -27,15 +27,9 @@ type ZoneSample = {
   borders: [f64, f64, f64, f64]; // top, bottom, right, left
 };
 
-// radius in cell units, with a half-diagonal shave so box cells fit the circular zone more cleanly.
-// 4 == 2 doubled — when CELL_SHAMT doubled U_PER_CELL (0.5u -> 1u), this
-// world-space numerator stayed as-is (by design — see the .707 note below),
-// which kept the zone's world-space footprint fixed but rendered it with
-// half as many, twice-as-big cells: same size, visibly blockier. Doubling
-// the numerator instead doubles the zone's actual world-space radius, which
-// reads as "bigger, not just blockier" and is what was asked for. The .707
-// shave stays as-is — it's a fixed one-cell diagonal correction in CELL
-// units, not a world-space dimension that scales with the marker's size.
+// Numerator (4) is a world-space distance, not a cell count — it fixes the zone's
+// footprint size independent of U_PER_CELL. The .707 shave is a fixed one-cell
+// diagonal correction in CELL units, so it does not scale with U_PER_CELL either.
 const ZONE_RADIUS_CELL: f64 = 4 / U_PER_CELL - .707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
@@ -74,38 +68,12 @@ const ZONE_SAMPLES: ZoneSample[] = (() => {
 const ZONE_SAMPLE_BOX = new THREE.BoxGeometry(1, 1, 1);
 ZONE_SAMPLE_BOX.setAttribute("a_borders", new THREE.InstancedBufferAttribute(new Float32Array(ZONE_SAMPLES.length * 4), 4));
 
-// 1/2 of the original 1 — doubled back up from 0.25 (1/4) along with the
-// zone ring and octahedron radius, so the beacon floats proportionally
-// above the now-larger ring instead of sitting low relative to it.
 const BEACON_Z_BIAS: f64 = 0.5;
 
-/**
- * Exponential rate the beacon closes the gap to a new fix at, per second:
- * `1 - exp(-RATE * dt)`, so it is frame-rate independent rather than "some
- * fraction per frame".
- *
- * Geolocation delivers roughly one fix a second, and the beacon reads the
- * raw store (use_map_navigation.ts's device_coord, not follow mode's own
- * EMA'd copy), so without this it teleports once per fix — a few metres at
- * walking pace, more at a run. 6 closes ~95% of the gap in half a second:
- * fast enough that the beacon is never meaningfully behind where the device
- * says it is, slow enough to read as travel rather than a cut.
- *
- * Only the horizontal axes are smoothed. Z is terrain elevation, which
- * changes when the ground under the marker changes, and easing that would
- * sink the beacon into a slope on the way up it.
- */
+// Frame-rate independent exponential smoothing: `1 - exp(-RATE * dt)`. Only x/y are
+// eased — Z is terrain elevation, and easing it would sink the beacon into a slope.
 const BEACON_SMOOTH_RATE: f64 = 6;
 
-/**
- * Past this much of a jump the beacon cuts instead of sliding, in world
- * units. The zone ring's own radius is the threshold because it is what the
- * marker visually occupies: inside it, a slide reads as the marker moving
- * within its own footprint; beyond it, the fix has landed somewhere the
- * previous position had nothing to do with (a first fix, a return from a
- * dropout, an accuracy correction jumping a block over) and sliding across
- * that gap would draw a trip that never happened.
- */
 const BEACON_SNAP_DIST2: f64 = (ZONE_RADIUS_CELL * U_PER_CELL) ** 2;
 
 const zone_style = {
@@ -128,15 +96,10 @@ export function LocationPuck(props: LocationPuckProps) {
 
   const theme_key = useThemeKey();
 
-  // Holds the last known device position across a transient GPS dropout
-  // (device_coord going null — e.g. right after a tab resumes and the
-  // sensor is still reacquiring). Previously this component was fully
-  // unmounted/remounted by its caller on every such blip, tearing down and
-  // rebuilding the zone's InstancedMesh (and its shared singleton geometry)
-  // each time — the repeated remounts, not the position math itself (which
-  // always computed correctly), were the source of a "stacked/cube"
-  // rendering glitch seen right after tab-away-and-back. Same "hold the
-  // last good value" idiom as last_known_center_z below, just one level up.
+  // Holds the last known device position across a transient GPS dropout (device_coord
+  // going null). Without this, the caller previously remounted this component on every
+  // such blip, tearing down and rebuilding the zone's InstancedMesh — that remount, not
+  // the position math, was the source of a "stacked/cube" rendering glitch after tab-away-and-back.
   const last_known_device_coord = useRef<PVF3 | null>(null);
   if (device_coord !== null) last_known_device_coord.current = device_coord;
   const effective_device_coord: PVF3 | null = last_known_device_coord.current;
@@ -145,25 +108,18 @@ export function LocationPuck(props: LocationPuckProps) {
   const tile = useTileStore((state) => state.get_tile(own_page_idx));
 
   const [recompute_tick, set_recompute_tick] = useState(0);
-  // the zone ring samples get_ele() across its own L3 page plus its
-  // immediate neighbors, which can reach past the device's own page into a
-  // neighbor not yet loaded on first mount — those samples fall back to a
-  // flat guess and never get revisited unless something tells the ring a
-  // page it originally missed has since streamed in. Registering interest
-  // in just that 3x3 page neighborhood (rather than every page load
-  // anywhere in the world) means the ring only recomputes when a page it
-  // could actually be sampling from finishes loading.
+  // The zone ring samples get_ele() across its own L3 page plus its immediate
+  // neighbors, which can reach a page not yet loaded on first mount. Without this,
+  // those samples would fall back to a flat guess and never get revisited once the
+  // missing page streams in.
   useEffect(() => {
     return register_tile_interest(
       (page_idx) => Number(ivec.max_comp(ivec.abs(ivec.sub(page_idx, own_page_idx)))) <= 1,
       () => set_recompute_tick((t) => t + 1),
     );
   }, [own_page_idx]);
-  // A placeholder height (sea level, or a "last known good" value) while
-  // the device's own page isn't loaded still renders the marker at a
-  // guess — floating or sinking wherever real terrain differs. null (not
-  // yet grounded) instead gates rendering below rather than papering over
-  // it with an estimate.
+  // null (not yet grounded) gates rendering below instead of rendering the marker at
+  // a guessed height while the device's own page isn't loaded yet.
   const last_known_center_z = useRef<f64 | null>(null);
   const center_pos: V3 = useMemo(() => {
     if (effective_device_coord === null) return fill3(0);
@@ -174,25 +130,15 @@ export function LocationPuck(props: LocationPuckProps) {
     return floor3n(pos, U_PER_CELL);
   }, [effective_device_coord, tile]);
 
-  // nothing to place the marker at yet at all (no fix has ever landed), or
-  // nothing to ground it to (same last_known_center_z reasoning as before).
   const has_ground: boolean = effective_device_coord !== null && last_known_center_z.current !== null;
 
   const center_coord = useMemo(() => {
     return projection.project({ i: 0n, f: 0n }, ...center_pos);
   }, [center_pos]);
 
-  // Where the device actually is *within* its cell, on the horizontal axes
-  // only. center_pos floors to the cell grid because the zone ring is built
-  // out of cell-sized boxes and has to line up with them; the beacon is a
-  // free-floating octahedron under no such constraint, and snapping it too
-  // quantized the reported position — walking across a cell moved the
-  // beacon not at all, then a whole cell at once. Adding the remainder back
-  // puts it at the real coordinate while the ring underneath stays snapped.
-  //
-  // Z is deliberately not part of this: it is terrain elevation plus the
-  // bob, both written every frame in useFrame below, so there is nothing
-  // here for a sub-cell correction to contribute.
+  // center_pos floors to the cell grid to line up with the zone ring's cell-sized
+  // boxes; the beacon has no such constraint, so this adds the remainder back —
+  // otherwise it would quantize to whole-cell jumps instead of moving smoothly.
   const beacon_offset: [f64, f64] = useMemo(() => {
     if (effective_device_coord === null) return [0, 0];
     const pos: V3 = projection.unproject(fill3(0), effective_device_coord.i, effective_device_coord.f);
@@ -200,20 +146,12 @@ export function LocationPuck(props: LocationPuckProps) {
   }, [effective_device_coord, center_pos]);
 
   const zone_ref = useRef<THREE.InstancedMesh | null>(null);
-  // AnchorNode is a two-pass portal (target starts null, resolves via its
-  // own useLayoutEffect — see node.tsx): zone_ref's instancedMesh doesn't
-  // actually exist in the scene until that second pass commits. The
-  // matrix-writing effect below is keyed on [center_pos, temp_obj,
-  // recompute_tick] — none of which change between AnchorNode's first and
-  // second pass — so a plain useRef here meant that effect's one real,
-  // useful run (the one where zone_ref.current is finally non-null) never
-  // happened: it ran once early with mesh=null (a no-op, guarded away) and
-  // never got a reason to run again. The instancedMesh then kept
-  // three.js's default identity instanceMatrix for every one of its
-  // ZONE_SAMPLES instances — all of them sitting exactly on top of each
-  // other at local (0,0,0), which reads as one solid stacked cube instead
-  // of a ring. zone_mesh_ready flips true the moment the mesh actually
-  // attaches, giving the effect below a real dependency change to fire on.
+  // AnchorNode is a two-pass portal (node.tsx): the instancedMesh doesn't exist in the
+  // scene until the second pass commits, after the matrix-writing effect below's deps
+  // have already settled. A plain useRef here means that effect never gets a reason to
+  // re-run once the mesh attaches, leaving every instance at three.js's default identity
+  // matrix — all stacked at local (0,0,0), rendering as one solid cube instead of a ring.
+  // zone_mesh_ready gives the effect a real dependency change to fire on when that happens.
   const [zone_mesh_ready, set_zone_mesh_ready] = useState(false);
   const set_zone_ref = useCallback((mesh: THREE.InstancedMesh | null) => {
     zone_ref.current = mesh;
@@ -294,10 +232,9 @@ void main() {
 
       add3(center_pos, off, v);
       const coord: PVF3 = projection.project({ i: 0n, f: 0n }, ...v);
-      // same reasoning as last_known_center_z: a sample can land on a
-      // neighboring page not loaded yet — falling back to absolute 0 there
-      // would sink/launch that instance away from the rest of the zone, so
-      // assume it's flat (same height as center) until the real sample streams in.
+      // Falls back to flat (center height) rather than 0 when a sample lands on an
+      // unloaded neighboring page — absolute 0 would sink/launch that instance away
+      // from the rest of the zone.
       const delta_ele: f64 = (get_ele(coord.i, coord.f) ?? center_pos[2]) - center_pos[2];
 
       set3(off[0], off[1], off[2] + delta_ele, v);
@@ -319,22 +256,12 @@ void main() {
 
   const $beacon_pos = useRef(new THREE.Vector3());
 
-  /** Where the beacon is actually drawn, in the same local frame as
-   * beacon_offset. null until the first fix seeds it. */
   const shown_offset = useRef<[f64, f64] | null>(null);
 
-  /**
-   * Rebases shown_offset whenever the anchor moves.
-   *
-   * center_pos floors to the cell grid, so crossing a cell boundary jumps it
-   * a whole cell while the true position moved a fraction of one. The world
-   * position is continuous across that; the *local* offset is not — it drops
-   * by a cell at the same instant the anchor gains one. Easing the local
-   * value directly would therefore play that discontinuity as a visible
-   * slide backwards across the cell, once per boundary, in the opposite
-   * direction to travel. Subtracting the anchor's own delta keeps what is
-   * being eased anchored to the world instead.
-   */
+  // Rebases shown_offset whenever the anchor moves. center_pos floors to the cell
+  // grid, so crossing a cell boundary jumps it a whole cell while the true position
+  // moved a fraction of one — without subtracting the anchor's own delta here, easing
+  // the local offset directly would play that discontinuity as a visible backward slide.
   const prev_center = useRef<V3 | null>(null);
   useLayoutEffect(() => {
     const prev = prev_center.current;
@@ -358,10 +285,8 @@ void main() {
 
     if (!visible) return;
 
-    // Ease toward the fix rather than cutting to it — see
-    // BEACON_SMOOTH_RATE. Written here, not through the mesh's `position`
-    // prop, so React re-rendering on a new fix never fights the frame that
-    // is mid-slide.
+    // Written directly here, not through the mesh's `position` prop, so a React
+    // re-render on a new fix never fights the frame that is mid-slide.
     if (shown_offset.current === null) shown_offset.current = [beacon_offset[0], beacon_offset[1]];
     const shown: [f64, f64] = shown_offset.current;
     const gap_x: f64 = beacon_offset[0] - shown[0];
@@ -379,19 +304,14 @@ void main() {
 
     const t: f64 = state.clock.getElapsedTime();
     beacon_ref.current.rotation.z = t * 1.2;
-    // bob amplitude — doubled back up too, see BEACON_Z_BIAS above.
     beacon_ref.current.position.z = BEACON_Z_BIAS + Math.sin(t * 2) * (0.1);
 
-    // this spin/bob never converges by design (it's meant to animate
-    // forever while the marker is on screen) — under frameloop="demand"
-    // (scene.tsx) that means it has to keep asking for a next frame itself,
-    // every frame, for as long as it stays visible. Unlike the damped
-    // camera/frame hooks, there's no settling point here to stop at.
+    // This spin/bob never converges by design, so under frameloop="demand" (scene.tsx)
+    // it must keep requesting a next frame itself for as long as it stays visible —
+    // unlike the damped camera/frame hooks, there's no settling point to stop at.
     state.invalidate();
   });
 
-  // nothing to ground the marker to yet — see last_known_center_z above.
-  // briefly absent beats briefly floating/sunk at a guessed height.
   if (!has_ground) return null;
 
   return (
@@ -405,15 +325,8 @@ void main() {
 
       <mesh
         ref={beacon_ref}
-        // Placeholder for the frame before useFrame first runs; it owns all
-        // three axes from then on — x/y easing toward beacon_offset, z the
-        // terrain-relative bob.
         position={[beacon_offset[0], beacon_offset[1], BEACON_Z_BIAS]}
       >
-        {
-          /* 1/2 of the original 0.6 — bumped back up from 0.15 (1/4) so the
-        beacon doesn't look undersized against the now-bigger zone ring. */
-        }
         <octahedronGeometry args={[0.3, 0]} />
         <meshStandardMaterial
           color={beacon_color}

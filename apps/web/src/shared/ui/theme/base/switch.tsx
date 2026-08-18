@@ -3,8 +3,8 @@ import * as SwitchPrimitive from "@radix-ui/react-switch";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
 
-// Track 20x36 with a 16 thumb, one notch up from the 16x28/12 this was.
-// The three numbers are not independent: the thumb is inset 2px all round,
+// Track 20x36 with a 16 thumb. The three numbers are not independent: the
+// thumb is inset 2px all round,
 // so the checked translate is track − thumb − 2 (36 − 16 − 2 = 18, which
 // translate-x-4 plus the 2 of unchecked offset lands on). Changing one
 // without the other two puts the thumb off-centre or past the track.

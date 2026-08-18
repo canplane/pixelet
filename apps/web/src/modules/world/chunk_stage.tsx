@@ -325,9 +325,7 @@ function create_material(with_rim: boolean): THREE.MeshStandardMaterial {
   // hash identically and can share one cached WebGLProgram, silently
   // running whichever one compiled FIRST on both — the object mesh
   // rendering with terrain's rim-less shader, no error, no visible effect
-  // no matter what u_rim_intensity is set to. Diagnosed 2026-08-16 after
-  // ruling out every other cause (vViewPosition varying, checkShaderErrors
-  // being off, uniform wiring) one at a time.
+  // no matter what u_rim_intensity is set to.
   material.customProgramCacheKey = () => with_rim ? "chunk-object-rim" : "chunk-terrain";
   material.onBeforeCompile = (shader) => {
     inject_instance_shader(shader, with_rim);

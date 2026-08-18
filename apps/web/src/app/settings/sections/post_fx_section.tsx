@@ -6,17 +6,6 @@ import { useTranslation } from "react-i18next";
 import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { SectionTitle, SettingRow } from "@/app/settings/setting_row.tsx";
 
-/**
- * Screen-space post-processing toggles (scene.tsx's EffectComposer) — all
- * default off, real cost confirmed via profiling as a group. The `cost`
- * tags below split that group by typical per-technique cost — reasoned
- * from what each technique actually does (and, for AO, from how it's
- * actually configured here: post_cfg.AO's QUALITY: "performance" +
- * HALF_RES: true are both deliberate cost cuts off N8AO's own defaults,
- * not an out-of-the-box SSAO cost — so it lands at "med" alongside Bloom's
- * own downsampled mipmap blur, not "high"), not a separate individual
- * measurement per effect. Ordered low-to-high top-to-bottom.
- */
 export function PostFxSection() {
   const { t } = useTranslation();
 

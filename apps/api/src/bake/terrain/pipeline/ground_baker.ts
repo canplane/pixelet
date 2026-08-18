@@ -69,7 +69,6 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
     transport: new Uint8Array(PAGE_CELL_SPAN2),
   } as const;
 
-  // split features into sea polygons and all remaining features.
   const sea_feats: OSMFeature[] = elements.filter(IS_SEA);
   const other_feats: OSMFeature[] = elements.filter((f) => !IS_SEA(f)).sort((a, b) => a.extra.rank - b.extra.rank);
   const has_sea: boolean = sea_feats.length > 0;
@@ -123,7 +122,6 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
     const mask_ch: U8Array | undefined = has_sea && is_land_or_water ? ground.land : undefined;
     const mask_val: u8 = terrain_types.land.SEA;
 
-    // closed shapes render as polygons; open shapes render as linear features.
     if (shape.is_closed) {
       render_polygon(
         shape.points,
@@ -254,7 +252,7 @@ function render_linear_feat(
     const p2: V3 = pixel_points[i + 1];
 
     // preserve the old tile-baker cap behavior at pixel centers.
-    draw_circle(SNAP_PX(p1[0]), SNAP_PX(p1[1]), thickness); // 🎯 p1.x -> p1[0]
+    draw_circle(SNAP_PX(p1[0]), SNAP_PX(p1[1]), thickness);
     if (i === pixel_points.length - 2) {
       draw_circle(SNAP_PX(p2[0]), SNAP_PX(p2[1]), thickness);
     }

@@ -14,7 +14,7 @@ import { SettingsModal, type SettingsModalProps } from "@/app/settings/settings_
  */
 export type ModalState = EditFooProps | SettingsModalProps | null;
 
-/** ModalManagerProps */
+/** ModalManager props */
 type ModalManagerProps = {
   merge_ui_controller: (o: Partial<UIController>) => void; // Merges modal-related UI actions into the global UI controller
 };

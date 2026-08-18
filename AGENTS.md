@@ -269,8 +269,7 @@ just don't treat them as authority.
   redesign is worked out by discussing and building it directly. Plan documents,
   approval gates, and exploratory agent fan-outs are overhead here — skip them
   unless asked for.
-- The author works in Korean. Respond in Korean unless asked otherwise; code,
-  comments, and documentation stay in English.
+- Code, comments, and documentation stay in English.
 
 ## Skills
 

@@ -2,10 +2,9 @@
 
 import * as React from "react";
 
-// NOTE: z-[70] rather than stock shadcn's z-50. A modal has to sit above the
-// toaster (z-60, see shared/ui/toast/toaster.tsx), which in turn has to sit
-// above the map overlay chrome (z-40/z-50) — at z-50 the sheet tied with that
-// chrome and lost to toasts rendered over it.
+// z-[70] rather than stock shadcn's z-50: has to sit above the toaster
+// (z-60, shared/ui/toast/toaster.tsx), which sits above the map overlay
+// chrome (z-40/z-50) — keep these three in that order.
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { X } from "lucide-react";
@@ -53,25 +52,12 @@ const sheetVariants = cva(
 );
 
 interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>, VariantProps<typeof sheetVariants> {
-  /** Overrides SheetOverlay's own default bg-black/80 — e.g. a lighter/no-op sheet (settings) that shouldn't dim the whole page behind it. */
   overlayClassName?: string;
-  /**
-   * Radix's own DialogOverlayImpl sets `style={{ pointerEvents: "auto", ...ownStyle }}` —
-   * an inline style, which wins over any CSS class (including a
-   * `pointer-events-none` Tailwind utility) regardless of specificity. A
-   * className alone can never make the overlay click-through; this has to
-   * go through an actual style prop, which Radix's own spread order lets
-   * override its default.
-   */
+  // Radix's DialogOverlayImpl sets `style={{ pointerEvents: "auto", ...ownStyle }}`
+  // — an inline style always wins over a CSS class regardless of
+  // specificity, so a `pointer-events-none` className alone can never make
+  // the overlay click-through; it has to go through this style prop instead.
   overlayStyle?: React.CSSProperties;
-  /**
-   * Suppresses the corner close button. A sheet that lays out its own header
-   * — a sticky bar with a real close control in it — does not want a second
-   * one floating over its content, and cannot position this one usefully
-   * anyway: it is pinned to the content box's corner, which is the wrong
-   * place once the content box is edge-to-edge and the header owns the
-   * padding.
-   */
   hideClose?: boolean;
 }
 

@@ -38,9 +38,9 @@ function ScrollBar({
       data-slot="scroll_area-scrollbar"
       orientation={orientation}
       className={cn(
-        "flex touch-none p-0.5 transition-colors select-none", // slightly larger padding for a steadier feel
+        "flex touch-none p-0.5 transition-colors select-none",
         orientation === "vertical" &&
-          "h-full w-2 border-l border-l-transparent", // 2.5 -> 2, a touch slimmer
+          "h-full w-2 border-l border-l-transparent",
         orientation === "horizontal" &&
           "h-2 flex-col border-t border-t-transparent",
         className,
@@ -49,8 +49,6 @@ function ScrollBar({
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll_area-thumb"
-        // primary/30 or foreground/20 instead of bg-border, so the
-        // scrollbar reads as a subtle overlay instead of hiding the background
         className="bg-primary/30 relative flex-1 rounded-full transition-colors hover:bg-primary/50 active:bg-primary/70"
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>

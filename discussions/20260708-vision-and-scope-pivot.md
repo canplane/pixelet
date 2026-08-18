@@ -93,13 +93,12 @@ cross-language validated. Plausible spin-out asset.
 
 ## Why `xpute` and `pxl` are separate packages
 
-Not filing tidiness. The intent was to grow `xpute` into a general-purpose
+The intent was to grow `xpute` into a general-purpose
 runtime — a "spatial OS" — not tied to pixelet, with the worker/IPC/transferable
 design and XTP's cross-language format both serving that ambition.
 
 **PVF3 was deliberately left in `pxl`, not moved to `xpute`**, because the
-coordinate system is domain-specific. The line drawn was: *coordinates are domain,
-execution and transport are general.*
+coordinate system is domain-specific, while execution and transport are general.
 
 On the term: "spatial OS" is not standard academic vocabulary, but it isn't
 invented either. The concrete precedent is Improbable's **SpatialOS** (~2016) —

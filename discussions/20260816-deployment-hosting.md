@@ -241,8 +241,8 @@ enters the picture. `VITE_TILE_BASE_URL=/tiles/v1` then suffices.
 43,505 tiles can't live there even in principle. Vercel and Netlify permit it but
 would make builds absurd and would meter tile traffic against the 100 GB
 allowance — a session panning around pulls tens of megabytes, so that allowance
-is a number that genuinely depletes. **Whichever host is picked, tiles belong in
-object storage, not in the deployment.**
+is a number that genuinely depletes. Tiles belong in object storage regardless
+of which host is picked.
 
 **Vercel's Hobby terms** prohibit commercial use. Irrelevant to a portfolio demo;
 relevant if the demo ever becomes anything, at which point it's $20/mo.
@@ -519,8 +519,8 @@ with the XTP magic.
 
 **Uploading 50 tiles before the other 43,455 is what surfaced this.** The bytes
 in R2 were correct the whole time; only the serving path was wrong, so no amount
-of checking the upload would have found it. Verify what comes back over the
-wire, not what went into the bucket.
+of checking the upload would have found it — only checking what comes back over
+the wire did.
 
 ### The same trap again, one layer out
 
@@ -577,7 +577,7 @@ Two secret-looking literals in the bundle were checked and are benign: React's
 own list of input types (which contains `password`), and the deliberate
 attribution link in the licence section.
 
-**The sensitive surface is not secrets, it is location.** The only personal data
+**Location is the sensitive surface here.** The only personal data
 leaving the client is the map-centre coordinate sent to Nominatim — rounded to
 four decimal places (~11 m) and debounced, never stored. That is now disclosed
 in the settings licence section, translated rather than hardcoded, because it is

@@ -29,12 +29,12 @@ export type RenderSettingsStore = {
    * (see osm_policy.ts's determine_cell_cfg), so this is purely a render
    * decision.
    *
-   * Lived in app/dev/debug_store.ts until 2026-08-17, which made buildings
-   * unreachable in a production build — the section holding its toggle is
-   * __IS_DEV__-gated, so the flag was false for every real user with no way
-   * to change it. It is a visual feature with a cost, not a diagnostic, so
-   * it belongs with the rest of them. Still false by default; whether that
-   * is the right default is a separate question from where the switch is.
+   * Belongs here rather than app/dev/debug_store.ts because that store's
+   * toggles are __IS_DEV__-gated — living there would make buildings
+   * unreachable in a production build for a setting that is a visual
+   * feature with a cost, not a diagnostic. Still false by default; whether
+   * that is the right default is a separate question from where the switch
+   * lives.
    */
   show_structures: boolean;
   set_show_structures: (show: boolean) => void;
@@ -95,15 +95,13 @@ export type RenderSettingsStore = {
   toggle_rim_light: () => void;
 
   /**
-   * Canvas dpr cap (scene.tsx). false (default) pins dpr to [1,1] — a
-   * TEMPORARY 2026-08-13 measure to isolate resolution's own contribution to
-   * a desktop/Retina perf investigation, kept as the shipped default since
-   * that investigation's conclusion is still open. true opts into [1,2]:
-   * real spatial supersampling (fixes both edge aliasing and the
-   * shading-value flicker thousands of small flat-shaded boxes produce once
-   * they minify below a pixel). Costs roughly 4x the fragment-shading work
-   * of the whole pipeline on a Retina/high-DPI display, since dpr=2 means 4x
-   * the pixels.
+   * Canvas dpr cap (scene.tsx). false (default) pins dpr to [1,1] — the
+   * single biggest post-stack cost, confirmed on real devices. true opts
+   * into [1,2]: real spatial supersampling (fixes both edge aliasing and
+   * the shading-value flicker thousands of small flat-shaded boxes produce
+   * once they minify below a pixel). Costs roughly 4x the fragment-shading
+   * work of the whole pipeline on a Retina/high-DPI display, since dpr=2
+   * means 4x the pixels.
    */
   high_dpr: boolean;
   set_high_dpr: (show: boolean) => void;
@@ -124,10 +122,8 @@ export type RenderSettingsStore = {
 
   /**
    * Real-time shadow mapping (environment.tsx's sun/moon DirectionalLights
-   * + chunk_stage.tsx's instanced meshes) — see environment/config.ts's
-   * shadow_cfg doc comment for the full history (built, tuned, removed for
-   * mobile-perf reasons, restored as opt-in). Disabled by default: this is
-   * the single most expensive effect in this store, a full second
+   * + chunk_stage.tsx's instanced meshes). Disabled by default: this is the
+   * single most expensive effect in this store, a full second
    * shadow-camera depth pass per casting light, even with manual
    * shadow.needsUpdate throttling instead of a per-frame refresh.
    */
@@ -138,8 +134,7 @@ export type RenderSettingsStore = {
 
 // Persisted (localStorage) — these are real user preferences (which
 // effects to pay for), not session-scoped state, so they should survive a
-// reload instead of silently resetting to defaults every time (previously
-// confirmed live: toggling a setting, then reloading, always reverted it).
+// reload instead of silently resetting to defaults every time.
 export const useRenderSettingsStore = create<RenderSettingsStore>()(persist((set) => ({
   low_spec: true,
   set_low_spec: (low_spec) => set({ low_spec }),

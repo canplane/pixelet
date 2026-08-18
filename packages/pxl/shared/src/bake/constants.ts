@@ -96,15 +96,13 @@ export const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
 // ---- Sparse Tree ----
 
-// TERRAIN_LAYOUT — orphaned, no consumers anywhere in the repo (confirmed
-// 2026-08-13). Left from an earlier, never-implemented investigation into
-// using sparse_tree for terrain itself. Commented out rather than deleted
-// (terrain currently stores/serves dense arrays via bake/format.ts's
-// encode_terrain/decode_terrain + gzip, and switching it to sparse_tree
-// isn't recommended — see project_future_design_discussions memory for
-// why: terrain data is dense/varied, not sparse/mergeable like objects,
-// so a tree would likely add overhead without a clear payoff). Restore if
-// that direction is ever actually revisited.
+// TERRAIN_LAYOUT — orphaned, no consumers anywhere in the repo. Terrain
+// currently stores/serves dense arrays via bake/format.ts's
+// encode_terrain/decode_terrain + gzip; moving it onto sparse_tree isn't
+// recommended, since terrain data is dense/varied rather than
+// sparse/mergeable like objects, so a tree would likely add overhead
+// without a clear payoff. Commented out rather than deleted in case that
+// direction is ever revisited.
 // export const TERRAIN_LAYOUT = {
 //   dim: 2,
 //
@@ -123,9 +121,8 @@ export const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
  * 3 halving steps down to U_PER_CELL/8). max = CELL_SHAMT (not L3_SHAMT,
  * unlike the old TERRAIN_LAYOUT above) because objects never merge past
  * one cell — sparse_tree's own set()/compact() enforce that ceiling
- * structurally (there's no coarser level for a tree this shallow to ever
- * report), which used to be a hand-rolled MERGE_CEILING constant before
- * objects/store.ts moved onto sparse_tree.
+ * structurally, since there's no coarser level for a tree this shallow to
+ * ever report.
  */
 export const OBJECT_LAYOUT = {
   dim: 3,

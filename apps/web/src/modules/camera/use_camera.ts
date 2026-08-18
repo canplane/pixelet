@@ -80,13 +80,12 @@ export function useCamera() {
     }
 
     // ground-collision clamping used to live here — removed rather than
-    // patched again. Five rounds of fixes all traced back to the same
-    // structural issue: the ground probe's location is tied to dist/polar
+    // patched again: the ground probe's location is tied to dist/polar
     // themselves, so a small terrain height gets amplified (divided by a
     // near-zero cos(polar)) into a large, noisy correction whenever dist is
     // large or polar is near the horizon. Worth revisiting with a real
     // ray/sphere-cast against the terrain instead of another correction
-    // bolted onto orbit math — see git history for the removed implementation.
+    // bolted onto orbit math.
     const { horiz_dist, vert_dist } = orbit_local_offset(dist.current, polar.current);
 
     const pos: V3 = [0, -horiz_dist, vert_dist];
