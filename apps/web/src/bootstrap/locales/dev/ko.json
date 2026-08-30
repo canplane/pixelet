@@ -14,6 +14,10 @@
         "label": "테스트 토스트 알림",
         "description": "UI 테스트용 샘플 토스트 알림을 화면에 출력합니다.",
         "message": "더미 토스트 {{index}}"
+      },
+      "lock_camera_tilt": {
+        "label": "카메라 틸트 제스처 잠금",
+        "description": "켜면 드래그/핀치 제스처로 카메라 기울기(polar)를 바꿀 수 없습니다. 회전(azimuth)과 줌은 그대로 동작합니다."
       }
     }
   },
