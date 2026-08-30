@@ -36,6 +36,9 @@ export function DebugSection() {
   const show_debug_objects = useDebugStore((state) => state.show_debug_objects);
   const toggle_debug_objects = useDebugStore((state) => state.toggle_debug_objects);
 
+  const lock_camera_tilt = useDebugStore((state) => state.lock_camera_tilt);
+  const toggle_lock_camera_tilt = useDebugStore((state) => state.toggle_lock_camera_tilt);
+
   const ground_snap = useCameraStore((state) => state.ground_snap);
   const toggle_ground_snap = useCameraStore((state) => state.toggle_ground_snap);
 
@@ -65,6 +68,12 @@ export function DebugSection() {
         description={t("settings.debug.dummy_toast.description")}
         active={dummy_toasts_shown}
         on_toggle={toggle_dummy_toasts}
+      />
+      <SettingRow
+        label={t("settings.debug.lock_camera_tilt.label")}
+        description={t("settings.debug.lock_camera_tilt.description")}
+        active={lock_camera_tilt}
+        on_toggle={toggle_lock_camera_tilt}
       />
     </div>
   );

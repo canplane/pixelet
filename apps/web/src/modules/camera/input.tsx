@@ -9,6 +9,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
+import { useDebugStore } from "@/app/dev/debug_store.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
@@ -258,8 +259,16 @@ export function CameraInput() {
     const view_state = useCameraStore.getState().view_state;
 
     if (rotate_axis_lock.current === RotateAxisLock.TILT) {
-      const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
-      set_view_state({ polar: view_state.polar + dy * ROT_GAIN_POLAR * norm });
+      // lock_camera_tilt (debug_store.ts) only gates this write — the axis-
+      // lock decision above still commits to TILT on a vertical drag either
+      // way, it just becomes a no-op instead of changing polar. An
+      // experiment toggle for a fixed-tilt UX, not yet a decided product
+      // change, hence living in the debug menu rather than removing this
+      // path outright.
+      if (!useDebugStore.getState().lock_camera_tilt) {
+        const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
+        set_view_state({ polar: view_state.polar + dy * ROT_GAIN_POLAR * norm });
+      }
       return;
     }
 
@@ -363,7 +372,16 @@ export function CameraInput() {
       twist_anchored.current = false;
     }
 
-    set_view_state({ dist: next_dist, azimuth: next_azimuth, polar: next_polar });
+    // lock_camera_tilt (debug_store.ts) — same gate as do_rotate's TILT
+    // branch, see its own comment. next_polar is still tracked/computed
+    // above either way; this just decides whether it reaches the store.
+    // The polar key must be omitted entirely when locked, not set to
+    // undefined — set_view_state spreads its argument over the existing
+    // view_state, so an explicit `polar: undefined` would overwrite the
+    // real value with undefined instead of leaving it untouched.
+    const view_update: { dist: f64; azimuth: f64; polar?: f64 } = { dist: next_dist, azimuth: next_azimuth };
+    if (!useDebugStore.getState().lock_camera_tilt) view_update.polar = next_polar;
+    set_view_state(view_update);
   }
 
   function on_pointer_down(e: PointerEvent) {

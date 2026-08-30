@@ -20,6 +20,19 @@ export type DebugStore = {
   set_show_debug_objects: (show: boolean) => void;
   toggle_debug_objects: () => void;
 
+  /**
+   * When true, camera/input.tsx's rotate-drag and pinch gestures no longer
+   * write polar (tilt) — azimuth still works exactly the same either way.
+   * The gesture code itself (axis-lock, pinch tracking) is untouched by
+   * this; the flag only gates the final set_view_state call each path
+   * would otherwise make. Defaults to true — free-tilt-by-gesture was
+   * validated (2026-08-30) as UX complexity not worth keeping on by
+   * default, not a bug fix, which is why this is a toggle here rather
+   * than a deleted code path: easy to flip back on to compare against.
+   */
+  lock_camera_tilt: boolean;
+  set_lock_camera_tilt: (lock: boolean) => void;
+  toggle_lock_camera_tilt: () => void;
 };
 
 // Persisted (localStorage) — same reasoning as render/settings_store.ts's
@@ -30,4 +43,7 @@ export const useDebugStore = create<DebugStore>()(persist((set) => ({
   set_show_debug_objects: (show_debug_objects) => set({ show_debug_objects }),
   toggle_debug_objects: () => set((state) => ({ show_debug_objects: !state.show_debug_objects })),
 
+  lock_camera_tilt: true,
+  set_lock_camera_tilt: (lock_camera_tilt) => set({ lock_camera_tilt }),
+  toggle_lock_camera_tilt: () => set((state) => ({ lock_camera_tilt: !state.lock_camera_tilt })),
 }), { name: "pxl:debug_settings" }));
