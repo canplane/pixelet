@@ -205,7 +205,10 @@ function inject_instance_shader(shader: {
       varying float v_${INSTANCE_VISIBLE_ATTR};
       varying vec2 v_box_uv;
       varying float v_is_side;
-      ${with_rim ? "varying vec3 v_rim_view_pos;" : ""}`,
+      varying float v_side_x_dominant;
+      varying vec3 v_local_pos;
+      varying vec3 v_inst_scale;
+      varying vec3 v_rim_view_pos;`,
     )
     .replace(
       "void main() {",
@@ -213,9 +216,35 @@ function inject_instance_shader(shader: {
         v_${INSTANCE_RGB_ATTR} = ${INSTANCE_RGB_ATTR};
         v_${INSTANCE_LAYER_TAPS_ATTR} = ${INSTANCE_LAYER_TAPS_ATTR};
         v_${INSTANCE_VISIBLE_ATTR} = ${INSTANCE_VISIBLE_ATTR};
-        v_box_uv = uv;
+        v_local_pos = position;
         v_is_side = (abs(normal.z) < 0.5) ? 1.0 : 0.0;
-        ${with_rim ? "v_rim_view_pos = -(modelViewMatrix * instanceMatrix * vec4(position, 1.0)).xyz;" : ""}`,
+        v_side_x_dominant = (abs(normal.x) > 0.5) ? 1.0 : 0.0;
+        // Real-size tile UV, not the box's own raw 0..1 face UV: write_scale_translation
+        // (chunk_mesher.ts) bakes a merged run's real cell-unit extent straight into
+        // instanceMatrix's diagonal (never a rotation, per that function's own contract),
+        // so a run spanning many cells — any coarse-LOD box, or same-material cells merged
+        // at any LOD — was one whole texture tile stretched across the entire face instead
+        // of repeating once per real cell. Most visible on patterned side art (theme/
+        // textures/terrain/cozy/side_*.png): its layered-strata look read as a flat smear
+        // once stretched that far. position is the unit box's own local [-0.5,0.5]
+        // coordinate, so (position.axis + 0.5) * scale reconstructs a per-face 0..N
+        // coordinate directly from it — sidesteps ever needing BoxGeometry's own per-face
+        // UV axis convention. Side faces always put z (height) in the second component so
+        // the strata art's up/down orientation stays consistent on all four side faces,
+        // not flipped on two of them. GROUND_LAYERS_SIDE (texture_array.ts) is an untransformed
+        // DataArrayTexture (flipY defaults false), so v=0 samples the source PNG's own top row
+        // — (0.5 - position.z), not (position.z + 0.5), so the box's physical top (position.z
+        // = +0.5) lands on v=0 and actually gets the image's top edge instead of its bottom
+        // (e.g. side_bare.png's grass cap rendering at a cliff's foot instead of its crest).
+        // RepeatWrapping (texture_array.ts) turns >1 straight into tiling.
+        vec3 inst_scale = vec3(instanceMatrix[0].x, instanceMatrix[1].y, instanceMatrix[2].z);
+        v_inst_scale = inst_scale;
+        v_box_uv = v_is_side > 0.5
+          ? (abs(normal.x) > 0.5
+            ? vec2((position.y + 0.5) * inst_scale.y, (0.5 - position.z) * inst_scale.z)
+            : vec2((position.x + 0.5) * inst_scale.x, (0.5 - position.z) * inst_scale.z))
+          : vec2((position.x + 0.5) * inst_scale.x, (position.y + 0.5) * inst_scale.y);
+        v_rim_view_pos = -(modelViewMatrix * instanceMatrix * vec4(position, 1.0)).xyz;`,
     );
   shader.fragmentShader = shader.fragmentShader
     .replace(
@@ -226,13 +255,16 @@ function inject_instance_shader(shader: {
       varying float v_${INSTANCE_VISIBLE_ATTR};
       varying vec2 v_box_uv;
       varying float v_is_side;
+      varying float v_side_x_dominant;
+      varying vec3 v_local_pos;
+      varying vec3 v_inst_scale;
+      varying vec3 v_rim_view_pos;
       uniform sampler2DArray u_ground_layers_top;
       uniform sampler2DArray u_ground_layers_side;
       uniform bool u_low_spec;
       ${
         with_rim
-          ? `varying vec3 v_rim_view_pos;
-      uniform vec3 u_rim_color;
+          ? `uniform vec3 u_rim_color;
       uniform float u_rim_intensity;`
           : ""
       }
@@ -241,6 +273,54 @@ function inject_instance_shader(shader: {
         return v_is_side > 0.5
           ? texture(u_ground_layers_side, vec3(v_box_uv, layer_idx)).rgb
           : texture(u_ground_layers_top, vec3(v_box_uv, layer_idx)).rgb;
+      }
+      // Fake edge bevel — MS2/Animal Crossing's own soft-corner read turned out to come
+      // from rounded props/characters and soft shading, not genuinely rounded terrain
+      // geometry (a real rounded-box mesh was prototyped and measured at 13-56x this
+      // box's vertex count for real-time-viable segment counts — not worth it for what's
+      // actually just a subtle edge highlight). Tried reshaping the lit *normal* near
+      // edges first (toward normalize(local position), the same direction real corner-
+      // rounding geometry would use) — measurably had zero visible effect, because this
+      // block's own final color is emissive-driven (totalEmissiveRadiance = base_rgb *
+      // FLOOR below), not real-light diffuse/specular, and the one normal-dependent term
+      // that exists (rim light) both reads the untouched vNormal varying directly rather
+      // than this local normal variable, and never runs for terrain (with_rim is object-only, see
+      // create_material's own doc comment) — a normal tweak had nothing left to influence.
+      // Darkening base_rgb directly, in the same thin edge band, works with this pipeline
+      // instead of against it: a soft, direction-independent crease exactly where a real
+      // chamfer would catch a shadow, with no dependency on which way anything is lit.
+      //
+      // That static darkening alone still reads flatter than the reference: real MS2
+      // screenshots show edges catching an actual highlight that shifts as the camera
+      // orbits, not just a fixed shadow line — the same view-angle-dependent cue
+      // rim_cfg's own object-only rim light uses (pow(1-N.V, POWER), brightest at grazing
+      // angles), just localized to the edge band instead of the whole silhouette, and
+      // using the true rounded-corner direction (normalize(local position), the direction
+      // real corner-rounding geometry would put its normal in) rather than the flat box
+      // normal — so *this* narrow band is where a normal-based effect actually still
+      // works, unlike the full-face attempt above: it's blended in as a separate additive
+      // term below (outgoingLight), never routed back through the ignored lit normal variable.
+      const float BEVEL_WORLD_WIDTH = 0.06;
+      const float BEVEL_DARKEN = 0.72;
+      const float EDGE_SHEEN_POWER = 2.0;
+      const float EDGE_SHEEN_INTENSITY = 0.35;
+      float edge_factor() {
+        vec3 dist_to_edge = (0.5 - abs(v_local_pos)) * v_inst_scale;
+        float d = v_is_side > 0.5
+          ? (v_side_x_dominant > 0.5 ? min(dist_to_edge.y, dist_to_edge.z) : min(dist_to_edge.x, dist_to_edge.z))
+          : min(dist_to_edge.x, dist_to_edge.y);
+        return 1.0 - smoothstep(0.0, BEVEL_WORLD_WIDTH, d);
+      }
+      vec3 apply_fake_bevel(vec3 color) {
+        return color * mix(1.0, BEVEL_DARKEN, edge_factor());
+      }
+      // Additive, not multiplied into base_rgb like apply_fake_bevel: a highlight brightens
+      // regardless of what's under it, the same reasoning rim light itself is additive.
+      vec3 edge_sheen() {
+        vec3 corner_normal = normalize(v_local_pos);
+        vec3 view_dir = normalize(v_rim_view_pos);
+        float grazing = pow(1.0 - max(dot(corner_normal, view_dir), 0.0), EDGE_SHEEN_POWER);
+        return vec3(grazing * edge_factor() * EDGE_SHEEN_INTENSITY);
       }`,
     )
     .replace("void main() {", `void main() { if (v_${INSTANCE_VISIBLE_ATTR} < 0.5) discard;`)
@@ -255,9 +335,15 @@ function inject_instance_shader(shader: {
           sample_layer_tap(v_${INSTANCE_LAYER_TAPS_ATTR}.w, base_rgb)
         ) * 0.25;
       }
+      base_rgb = apply_fake_bevel(base_rgb);
       vec4 diffuseColor = vec4(diffuse * base_rgb, opacity);`,
     )
-    .replace("vec3 totalEmissiveRadiance = emissive;", `vec3 totalEmissiveRadiance = base_rgb * ${light_cfg.FLOOR};`);
+    .replace("vec3 totalEmissiveRadiance = emissive;", `vec3 totalEmissiveRadiance = base_rgb * ${light_cfg.FLOOR};`)
+    .replace(
+      "vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;",
+      `vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
+      outgoingLight += edge_sheen();`,
+    );
 
   if (with_rim) {
     // vNormal is a standard varying the base meshphysical fragment shader

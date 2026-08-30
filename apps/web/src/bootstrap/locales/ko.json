@@ -75,8 +75,7 @@
       "demo_notice": "본 서비스는 데모로, 예고 없이 데이터가 사라지거나 제공이 중단될 수 있습니다.",
       "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
       "storage_notice": "배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
-      "location_notice": "지역명은 OSM Nominatim을 통해 조회하며, 사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
-      "texture_notice": "텍스처는 실험적 기능입니다. CC0 라이선스의 <pack>SimplePixel</pack> 텍스처 팩이 적용됩니다."
+      "location_notice": "지역명은 OSM Nominatim을 통해 조회하며, 사용자의 위치 정보는 수집하거나 저장하지 않습니다."
     },
     "attribution": {
       "section_title": "출처"

@@ -13,6 +13,9 @@ import type { I16Array } from "@xpute/core/kit/array.ts";
 import { clamp, lerp } from "@xpute/core/kit/math.ts";
 
 import { ELE_PAD, ELE_PADDED_SPAN, CHUNK_CELL_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN } from "@pxl/shared/bake/constants.ts";
+import type { Ground } from "@pxl/shared/bake/format.ts";
+import { common_types } from "@pxl/shared/spec/cell/common.ts";
+import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
 
 const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN / PAGE_ELE_SPAN;
 
@@ -139,16 +142,47 @@ function sample_ele_bicubic(page_ele: I16Array, tx: u32, ty: u32): i16 {
 
 export const sample_ele = sample_ele_bicubic;
 
+/** How much real ground elevation drops for water-look terrain (RIVER/LAKE/
+ * WETLAND, and SEA — its own land type, not the WATER channel, see
+ * is_water_family_at) — a real height change, not a cosmetic mesh-only
+ * offset: it's applied here, at the one shared elevation query surface, so
+ * every consumer (chunk mesh, placement/snap raycast — both read this
+ * through chunk.ts's slice_chunk — and modules/world/terrain/elevation.ts's
+ * own camera ground-snap, which reads a page's raw ele directly) sees the
+ * same lowered height instead of only the rendered mesh looking recessed
+ * while placement math, ground-snap, or a cell marker still reasons about
+ * the un-recessed one. */
+export const WATER_RECESS_CELLS: i16 = 1;
+
+/** Mirrors render/layer/terrain/adapter.ts's ground_material_at priority
+ * (LAND < WATER < STRUCTURE < TRANSPORT, last non-AIR wins) enough to
+ * answer one question: does this cell look like open water? Kept
+ * independent rather than imported from adapter.ts, which pulls in
+ * Zustand store bindings this pure math module has no business depending
+ * on — if adapter.ts's channel priority ever changes, this needs the same
+ * change made here too. SEA is checked separately from the WATER channel:
+ * terrain.ts models it as land.SEA (a masked BARE-family id), not one of
+ * WATER's own RIVER/LAKE/WETLAND types. */
+export function is_water_family_at(ground: Ground, idx: u32): boolean {
+  if (ground.structure[idx] !== common_types.AIR) return false;
+  if (ground.transport[idx] !== common_types.AIR) return false;
+  if (ground.water[idx] !== common_types.AIR) return true;
+  return ground.land[idx] === terrain_types.land.SEA;
+}
+
 /**
  * Unpacks a dense (CHUNK_CELL_SPAN x CHUNK_CELL_SPAN) elevation chunk from the coarse heightmap.
  * Samples are taken at cell centers (0.5 offset) to match DB-side resampling.
  */
-export function dense_ele(page_ele: I16Array, tx0: u32, ty0: u32): I16Array {
-  return dense_ele_region(page_ele, tx0, ty0, CHUNK_CELL_SPAN);
+export function dense_ele(page_ele: I16Array, tx0: u32, ty0: u32, ground?: Ground): I16Array {
+  return dense_ele_region(page_ele, tx0, ty0, CHUNK_CELL_SPAN, ground);
 }
 
-/** Dense reconstruction for a renderer-owned square region. */
-export function dense_ele_region(page_ele: I16Array, tx0: u32, ty0: u32, span: u32): I16Array {
+/** Dense reconstruction for a renderer-owned square region. `ground`, when
+ * given, must already be sliced/aligned to this same tx0/ty0/span region
+ * (see chunk.ts's slice_chunk) — every water-family cell in it gets
+ * WATER_RECESS_CELLS subtracted from its sampled height. */
+export function dense_ele_region(page_ele: I16Array, tx0: u32, ty0: u32, span: u32, ground?: Ground): I16Array {
   const out = new Int16Array(span * span);
 
   let idx: u32 = 0;
@@ -156,7 +190,9 @@ export function dense_ele_region(page_ele: I16Array, tx0: u32, ty0: u32, span: u
     const ty: u32 = ty0 + dy;
     for (let dx: u32 = 0; dx < span; dx++) {
       const tx: u32 = tx0 + dx;
-      out[idx++] = sample_ele(page_ele, tx, ty);
+      let ele = sample_ele(page_ele, tx, ty);
+      if (ground && is_water_family_at(ground, idx)) ele -= WATER_RECESS_CELLS;
+      out[idx++] = ele;
     }
   }
 

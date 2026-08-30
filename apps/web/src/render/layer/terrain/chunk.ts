@@ -70,13 +70,18 @@ export function slice_chunk(page_ground: Ground, page_ele: I16Array, page_off: I
   const tx0: u32 = Number(ivec.X(page_off)) << -CELL_SHAMT;
   const ty0: u32 = Number(ivec.Y(page_off)) << -CELL_SHAMT;
   const span = CHUNK_CELL_SPAN;
+  const ground: Ground = {
+    land: slice_ground_ch(page_ground.land, tx0, ty0, span),
+    water: slice_ground_ch(page_ground.water, tx0, ty0, span),
+    structure: slice_ground_ch(page_ground.structure, tx0, ty0, span),
+    transport: slice_ground_ch(page_ground.transport, tx0, ty0, span),
+  };
   return {
-    ground: {
-      land: slice_ground_ch(page_ground.land, tx0, ty0, span),
-      water: slice_ground_ch(page_ground.water, tx0, ty0, span),
-      structure: slice_ground_ch(page_ground.structure, tx0, ty0, span),
-      transport: slice_ground_ch(page_ground.transport, tx0, ty0, span),
-    },
-    ele: dense_ele_region(page_ele, tx0, ty0, span),
+    ground,
+    // ground passed through so water-family cells get their real elevation
+    // recess applied here (see elevation.ts's WATER_RECESS_CELLS) — ground
+    // is already sliced to this exact tx0/ty0/span region, matching what
+    // dense_ele_region indexes internally.
+    ele: dense_ele_region(page_ele, tx0, ty0, span, ground),
   };
 }

@@ -32,7 +32,11 @@ import { GROUND_LAYER_IMAGE_MAP, GROUND_LAYER_SIDE_IMAGE_MAP, type GroundLayerIm
 import { object_color_hex, object_color_ids, type ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
 import { OBJECT_IMAGE_MAP } from "@pxl/shared/spec/cell/theme/object_images.ts";
 
-const LAYER_TEX_SZ = 16;
+// 64, matching the active "cozy" pack's own tile size (theme/object_images.ts,
+// theme/terrain_images.ts) — every real image gets canvas-drawn down/up to
+// this size regardless, so it just needs to match the active pack's native
+// resolution to avoid a lossy resize on top of the intentional art.
+const LAYER_TEX_SZ = 64;
 
 type LayerMetaLike = { ch_key: string; type_key: string; layer_index: u32 };
 

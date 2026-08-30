@@ -75,8 +75,7 @@
       "demo_notice": "This service is a demo, and data may disappear or it may be discontinued without notice.",
       "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
       "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
-      "location_notice": "Location names are queried using OSM Nominatim, and your location data is neither collected nor saved.",
-      "texture_notice": "Textures are an experimental feature. The CC0-licensed <pack>SimplePixel</pack> texture pack is applied."
+      "location_notice": "Location names are queried using OSM Nominatim, and your location data is neither collected nor saved."
     },
     "attribution": {
       "section_title": "Attribution"

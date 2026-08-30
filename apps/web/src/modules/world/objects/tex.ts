@@ -28,9 +28,9 @@ function create_object_texture(url: string): THREE.Texture {
   // camera otherwise idle, since nothing else happens to trigger a frame.
   const tex = loader.load(url, () => invalidate());
   tex.colorSpace = THREE.SRGBColorSpace;
-  // NearestFilter (not the default Linear/mipmap) — these are 16x16
-  // pixel-art tiles; smoothing them blurs the wool weave into mush instead
-  // of keeping the blocky look terrain's own splatmap/heightmap textures
+  // NearestFilter (not the default Linear/mipmap) — these are pixel-art
+  // tiles; smoothing them blurs the wool weave into mush instead of
+  // keeping the blocky look terrain's own splatmap/heightmap textures
   // (shader/tex.ts) already use.
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;

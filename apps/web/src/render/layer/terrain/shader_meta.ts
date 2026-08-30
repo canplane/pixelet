@@ -321,14 +321,14 @@ export const build_ground_layer_resolver = (meta: TerrainLayerMeta[]): string =>
  * Flat RGBA texture-array source data — one size*size solid-color block per
  * layer (meta's own layer_index order). Real image data (not raw category
  * ids), so hardware mipmap generation/filtering just works, same reasoning
- * as decode_ground_rgba's own doc comment. size defaults to 16: large
- * enough to be a real, swappable placeholder for an eventual texture-pack
- * image, small enough (16*16*4 bytes/layer) that even ~30 layers costs
+ * as decode_ground_rgba's own doc comment. size defaults to 64, matching
+ * render/texture_array.ts's own LAYER_TEX_SZ (the active pack's tile
+ * size) — small enough (64*64*4 bytes/layer) that even ~30 layers costs
  * nothing worth measuring in texture memory.
  */
 export const build_layer_texture_data = (
   meta: TerrainLayerMeta[],
-  size: u32 = 16,
+  size: u32 = 64,
 ): { data: Uint8Array; width: u32; height: u32; depth: u32 } => {
   const depth = meta.length as u32;
   const data = new Uint8Array(size * size * depth * 4);

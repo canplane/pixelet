@@ -1,6 +1,6 @@
 // @pxl/web/app/settings/sections/disclaimer_section.tsx
 
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 
@@ -17,22 +17,6 @@ export function DisclaimerSection() {
         <span>{t("settings.disclaimer.storage_notice")}</span>
 
         <span>{t("settings.disclaimer.location_notice")}</span>
-
-        <span>
-          <Trans
-            i18nKey="settings.disclaimer.texture_notice"
-            components={{
-              pack: (
-                <a
-                  href="https://content.luanti.org/packages/StarNinjas/simplepixel/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline hover:text-foreground"
-                />
-              ),
-            }}
-          />
-        </span>
       </div>
     </div>
   );

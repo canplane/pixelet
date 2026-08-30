@@ -6,11 +6,24 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
 import { type FVec, type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L1_IDX_IN_L3, L3_IDX, L3_RANGE } from "@pxl/shared/spec/space/indexer.ts";
-import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import type { Tile } from "@pxl/shared/bake/format.ts";
-import { sample_ele } from "@/render/layer/terrain/elevation.ts";
+import { PAGE_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import type { Terrain, Tile } from "@pxl/shared/bake/format.ts";
+import { is_water_family_at, sample_ele, WATER_RECESS_CELLS } from "@/render/layer/terrain/elevation.ts";
 
 const L3_RANGE_REAL: f64 = Number(L3_RANGE);
+
+/** Same real height chunk.ts's slice_chunk bakes into the mesh/raycast path
+ * (elevation.ts's WATER_RECESS_CELLS) — applied here too so this module's
+ * own consumers (camera ground-snap, ground_or_raw, any future cell-marker
+ * probe) agree with the rendered terrain instead of reasoning about the
+ * un-recessed height while the mesh they're looking at shows the lowered
+ * one. `tile.terrain.ele`/`.ground` are both page-level here (unsliced,
+ * unlike chunk.ts's chunk-local copies), so tx/ty index them directly at
+ * PAGE_CELL_SPAN stride. */
+function sample_ele_grounded(terrain: Terrain, tx: u32, ty: u32): number {
+  const ele = sample_ele(terrain.ele, tx, ty);
+  return is_water_family_at(terrain.ground, ty * PAGE_CELL_SPAN + tx) ? ele - WATER_RECESS_CELLS : ele;
+}
 
 /** Returns ground height in lattice/render units. */
 export function get_ele(i: IVec, f: FVec): f64 | null {
@@ -23,7 +36,7 @@ export function get_ele(i: IVec, f: FVec): f64 | null {
   const page_off: PVF3 = { i: L1_IDX_IN_L3(i), f };
   const tx: u32 = Math.floor(pvf3.to_real(pvf3.X(page_off)) / U_PER_CELL);
   const ty: u32 = Math.floor(pvf3.to_real(pvf3.Y(page_off)) / U_PER_CELL);
-  return sample_ele(tile.terrain.ele, tx, ty) * U_PER_CELL;
+  return sample_ele_grounded(tile.terrain, tx, ty) * U_PER_CELL;
 }
 
 /**
@@ -58,7 +71,7 @@ export function get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y
 
   const tx: u32 = Math.floor(page_local_x / U_PER_CELL);
   const ty: u32 = Math.floor(page_local_y / U_PER_CELL);
-  return sample_ele(tile.terrain.ele, tx, ty) * U_PER_CELL;
+  return sample_ele_grounded(tile.terrain, tx, ty) * U_PER_CELL;
 }
 
 export function with_ele(out: PVF3, i: IVec, f: FVec): PVF3 | null {
