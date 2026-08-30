@@ -16,7 +16,7 @@ const apiBaseDefault = "http://127.0.0.1:3000";
 
 // Where `deno task dev:remote` points when nothing overrides it: the project's
 // own published tile deployment. Override with VITE_TILE_PROXY_TARGET.
-const tileOriginDefault = "https://pixelet.canplane.workers.dev";
+const tileOriginDefault = "https://plei.me";
 const tileVersionDefault = "v1";
 
 // anti-HMR
