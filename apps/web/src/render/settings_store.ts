@@ -13,11 +13,12 @@ import { persist } from "zustand/middleware";
 export type RenderSettingsStore = {
   /**
    * Ground-color resolution mode (see chunk_stage.tsx's own u_low_spec
-   * uniform). true (default) is the flat per-instance averaged color —
-   * cheapest, and what the app ships showing out of the box. false opts
-   * into real texture-pack sampling (GROUND_LAYERS_TOP/SIDE, 4-tap
-   * supersampled) instead — more expensive (4 extra sampler2DArray
-   * reads/instance).
+   * uniform). false (default) is real texture-pack sampling
+   * (GROUND_LAYERS_TOP/SIDE, 4-tap supersampled) — more expensive (4 extra
+   * sampler2DArray reads/instance), but what the app ships showing out of
+   * the box now that a real art pack ("cozy") backs it. true is the flat
+   * per-instance averaged color instead — cheapest, a fallback for
+   * low-end devices rather than the default.
    */
   low_spec: boolean;
   set_low_spec: (low_spec: boolean) => void;
@@ -136,7 +137,7 @@ export type RenderSettingsStore = {
 // effects to pay for), not session-scoped state, so they should survive a
 // reload instead of silently resetting to defaults every time.
 export const useRenderSettingsStore = create<RenderSettingsStore>()(persist((set) => ({
-  low_spec: true,
+  low_spec: false,
   set_low_spec: (low_spec) => set({ low_spec }),
   toggle_low_spec: () => set((state) => ({ low_spec: !state.low_spec })),
 

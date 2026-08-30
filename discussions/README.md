@@ -41,6 +41,7 @@ Newest first.
 
 | Document | Topic |
 | --- | --- |
+| [20260830-cozy-texture-pack-side-audit.md](./20260830-cozy-texture-pack-side-audit.md) | Cozy texture pack side-face audit: BARE/SPORTS/HELIPAD mismatches found and fixed same day; 4 land-use types still unaudited |
 | [20260817-object-placement-reach-cap.md](./20260817-object-placement-reach-cap.md) | Object placement silently failing at elevation — reach-cap hypothesis ruled out, write path traced clean, root cause still open |
 | [20260817-lod-hysteresis-dead-zone.md](./20260817-lod-hysteresis-dead-zone.md) | Why LOD sharpens/coarsens at different distances, why the 1536 threshold's dead zone is now visible after FOG_FAR doubled, and why it isn't a performance issue |
 | [20260816-deployment-hosting.md](./20260816-deployment-hosting.md) | Serverless live-demo deployment: pre-baked tiles, object storage, hosting/cost comparison |
