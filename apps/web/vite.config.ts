@@ -15,7 +15,13 @@ const __dirname = path.dirname(__filename);
 const apiBaseDefault = "http://127.0.0.1:3000";
 
 // Where `deno task dev:remote` points when nothing overrides it: the project's
-// own published tile deployment. Override with VITE_TILE_PROXY_TARGET.
+// own published tile deployment. Override with VITE_TILE_PROXY_TARGET — which
+// .env.example now pre-fills with this exact value, so updating that file
+// alone (no source edit) is enough going forward; this constant only exists
+// so dev:remote still works before anyone has copied .env.example to .env.
+// (Previously pointed at the workers.dev subdomain, which silently 404'd on
+// every request once that route was disabled at the Cloudflare edge —
+// nothing here ever surfaced that a hardcoded domain had gone stale.)
 const tileOriginDefault = "https://plei.me";
 const tileVersionDefault = "v1";
 
