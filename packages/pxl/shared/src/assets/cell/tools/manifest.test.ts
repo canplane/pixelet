@@ -1,4 +1,4 @@
-// @pxl/shared/spec/cell/theme/tools/manifest.test.ts
+// @pxl/shared/assets/cell/tools/manifest.test.ts
 //
 // Validates pixelet_ms2_texture_manifest.json's own shape and distinctness
 // invariants — the same ones download_texture_pack.ts enforces at fetch
