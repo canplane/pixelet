@@ -2,7 +2,7 @@
 // [Layer: objects] Placed-object type/color catalog — object layer's counterpart to terrain.ts
 
 import { common_colors, common_types } from "./common.ts";
-import default_colors_json from "./theme/palette/objects/default.json" with { type: "json" };
+import default_colors_json from "@pxl/shared/assets/cell/palette/objects/default.json" with { type: "json" };
 
 // ============================================================================
 // Type Definitions
@@ -20,7 +20,7 @@ import default_colors_json from "./theme/palette/objects/default.json" with { ty
 // way terrain_types' own land/water/structure/transport channels each
 // name a domain, not a channel's own visual property. Not "wool" either
 // — wool is just the texture pack this catalog happens to render its
-// blocks with today (theme/object_images.ts), an implementation detail
+// blocks with today (../../assets/cell/object_images.ts), an implementation detail
 // exactly as disconnected from this type namespace as terrain_types'
 // channels are from "simplepixel" (terrain's own texture pack, never
 // appears in terrain_types). More channels land here once real object
@@ -66,7 +66,7 @@ export const object_types = {
 export type ObjectChannelKey = keyof typeof object_types;
 
 // ============================================================================
-// Color Definitions — loaded from JSON (see ./theme/palette/objects/)
+// Color Definitions — loaded from JSON (see ../../assets/cell/palette/objects/)
 // ============================================================================
 //
 // Same reasoning and same build_colors_from_json shape as terrain.ts's own

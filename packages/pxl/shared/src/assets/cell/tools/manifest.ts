@@ -1,4 +1,4 @@
-// @pxl/shared/spec/cell/theme/tools/manifest.ts
+// @pxl/shared/assets/cell/tools/manifest.ts
 //
 // pixelet_ms2_texture_manifest.json (repo root) loading/flattening, shared
 // between download_texture_pack.ts (fetches+normalizes every entry) and
@@ -32,7 +32,7 @@ export type WorkItem = {
   label: string;
   url: string;
   file: string;
-  /** Destination file, resolved against this tool's own ../textures/ dir. */
+  /** Destination file, resolved against ../textures/. */
   dest: URL;
   paletteHex: string | null;
 };

@@ -1,10 +1,11 @@
-// @pxl/shared/spec/cell/theme/tools/download_texture_pack.ts
+// @pxl/shared/assets/cell/tools/download_texture_pack.ts
 //
 // Re-runnable, one-off tool (same role as apps/api's bake/terrain/tools/*)
 // — not part of the app build. Downloads every image URL in the repo-root
 // pixelet_ms2_texture_manifest.json, normalizes each to a standalone 64x64
 // RGBA PNG, and writes it under ../textures/{terrain,objects}/cozy/. Run
-// with: deno run -A packages/pxl/shared/src/spec/cell/theme/tools/download_texture_pack.ts
+// with:
+//   deno run -A packages/pxl/shared/src/assets/cell/tools/download_texture_pack.ts
 //
 // Safety properties the manifest's own integration spec asked for:
 // - already-valid files are never re-fetched (idempotent re-run) — tracked

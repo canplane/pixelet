@@ -28,12 +28,12 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import * as THREE from "three";
 
 import { GROUND_LAYER_META, hex_to_rgb255 } from "./layer/terrain/shader_meta.ts";
-import { GROUND_LAYER_IMAGE_MAP, GROUND_LAYER_SIDE_IMAGE_MAP, type GroundLayerImageEntry } from "@pxl/shared/spec/cell/theme/terrain_images.ts";
+import { GROUND_LAYER_IMAGE_MAP, GROUND_LAYER_SIDE_IMAGE_MAP, type GroundLayerImageEntry } from "@pxl/shared/assets/cell/terrain_images.ts";
 import { object_color_hex, object_color_ids, type ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
-import { OBJECT_IMAGE_MAP } from "@pxl/shared/spec/cell/theme/object_images.ts";
+import { OBJECT_IMAGE_MAP } from "@pxl/shared/assets/cell/object_images.ts";
 
-// 64, matching the active "cozy" pack's own tile size (theme/object_images.ts,
-// theme/terrain_images.ts) — every real image gets canvas-drawn down/up to
+// 64, matching the active "cozy" pack's own tile size (cell/object_images.ts,
+// cell/terrain_images.ts) — every real image gets canvas-drawn down/up to
 // this size regardless, so it just needs to match the active pack's native
 // resolution to avoid a lossy resize on top of the intentional art.
 const LAYER_TEX_SZ = 64;

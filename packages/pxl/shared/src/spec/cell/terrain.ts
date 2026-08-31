@@ -4,9 +4,9 @@
 import { common_colors, common_types } from "./common.ts";
 import { CELL_MASKS } from "./utils.ts";
 
-import brick_colors_json from "./theme/palette/terrain/brick.json" with { type: "json" };
-import soft_theme_colors_json from "./theme/palette/terrain/soft.json" with { type: "json" };
-import carto_colors_json from "./theme/palette/terrain/carto.json" with { type: "json" };
+import brick_colors_json from "@pxl/shared/assets/cell/palette/terrain/brick.json" with { type: "json" };
+import soft_theme_colors_json from "@pxl/shared/assets/cell/palette/terrain/soft.json" with { type: "json" };
+import carto_colors_json from "@pxl/shared/assets/cell/palette/terrain/carto.json" with { type: "json" };
 
 // ============================================================================
 // Type Definitions
@@ -128,7 +128,7 @@ export const terrain_types = {
 } as const;
 
 // ============================================================================
-// Color Definitions — loaded from JSON (see ./palette/)
+// Color Definitions — loaded from JSON (see ../../assets/cell/palette/)
 // ============================================================================
 //
 // Color values (and the human-readable `note` next to each one) live in

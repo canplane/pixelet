@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
 import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
-import { OBJECT_IMAGE_MAP } from "@pxl/shared/spec/cell/theme/object_images.ts";
+import { OBJECT_IMAGE_MAP } from "@pxl/shared/assets/cell/object_images.ts";
 
 /**
  * Configured THREE.Texture from a URL — same create_* shape as
