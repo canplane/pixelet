@@ -241,8 +241,10 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
               <Suspense fallback={null}>
                 <Companion
                   origin_page_idx_xy={TO_XY(L3_IDX(map_origin))}
+                  map_origin={map_origin}
                   center_x={local_map_center[0]}
                   center_y={local_map_center[1]}
+                  center_z={local_map_center[2]}
                 />
               </Suspense>
 

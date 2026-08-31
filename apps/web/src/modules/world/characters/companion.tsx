@@ -29,10 +29,11 @@ import { useFrame } from "@react-three/fiber";
 import type { f64 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { get_ele_at_local } from "../terrain/elevation.ts";
+import { get_surface_z_at_local } from "../surface_height.ts";
 import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
 import { useCharacterModel } from "./use_character_model.ts";
 import { useCharacterStore } from "./store.ts";
+import { ChatBubble } from "./chat_bubble.tsx";
 import { type CharacterVariant, find_person_variant, find_pet_variant } from "@pxl/shared/assets/characters/variants.ts";
 
 // A little to the side of the person, so the two don't occupy the same
@@ -59,12 +60,25 @@ type WalkerProps = {
    * live camera target) don't force Walker itself to re-render 60x/sec for
    * no reason. */
   origin_ref: MutableRefObject<IVec>;
+  /** Full floating-origin IVec (not just its XY page index) — needed to
+   * convert a local XY probe into the absolute PVF3 get_surface_z_at_local
+   * queries placed objects with. Changes far less often than target_ref
+   * (only on an L4 rebase), but threaded the same ref way for consistency
+   * and to avoid forcing a re-render on every map_center tick. */
+  map_origin_ref: MutableRefObject<IVec>;
   target_ref: MutableRefObject<Vec2>;
+  /** map_center's own current Z — the hint get_surface_z_at_local uses to
+   * pick which shelf to land on when there's a gap under this walker's
+   * XY. Not this walker's own target height (the pet's target_ref has an
+   * XY offset from map_center, but there's only one map_center Z). */
+  target_z_ref: MutableRefObject<f64>;
   variant: CharacterVariant;
+  /** Only the person talks — the pet doesn't get a chat bubble. */
+  show_chat_bubble?: boolean;
 };
 
 const Walker = memo(function Walker(props: WalkerProps) {
-  const { origin_ref, target_ref, variant } = props;
+  const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble } = props;
   const { root: character_root, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
 
   const walk_plan_ref = useRef<WalkPlan | null>(null);
@@ -126,10 +140,12 @@ const Walker = memo(function Walker(props: WalkerProps) {
     const step = plan ? sample_walk_plan(plan, now) : { x: character_root.position.x, y: character_root.position.y, heading: null, arrived: true };
     if (step.arrived) walk_plan_ref.current = null;
 
-    // Z always aligns to the ground under the walker's (possibly just-
-    // updated) x/y, independent of whether it moved this frame at all.
-    const ground_z: f64 | null = get_ele_at_local(origin_page_idx_xy, step.x, step.y);
-    character_root.position.set(step.x, step.y, ground_z ?? character_root.position.z);
+    // Z always aligns to the surface under the walker's (possibly just-
+    // updated) x/y, independent of whether it moved this frame at all —
+    // terrain, or the top of a placed object standing on it, whichever is
+    // higher (get_surface_z_at_local's own doc comment).
+    const surface_z: f64 | null = get_surface_z_at_local(origin_page_idx_xy, map_origin_ref.current, step.x, step.y, target_z_ref.current);
+    character_root.position.set(step.x, step.y, surface_z ?? character_root.position.z);
 
     // Facing: direction of travel while walking. Otherwise, a one-time
     // camera-facing pose the very first frame a parent transform exists to
@@ -166,17 +182,25 @@ const Walker = memo(function Walker(props: WalkerProps) {
     state.invalidate();
   });
 
-  return character_root ? <primitive object={character_root} /> : null;
+  return character_root
+    ? (
+      <primitive object={character_root}>
+        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} />}
+      </primitive>
+    )
+    : null;
 });
 
 type CompanionProps = {
   origin_page_idx_xy: IVec;
+  map_origin: IVec;
   center_x: f64;
   center_y: f64;
+  center_z: f64;
 };
 
 export function Companion(props: CompanionProps) {
-  const { origin_page_idx_xy, center_x, center_y } = props;
+  const { origin_page_idx_xy, map_origin, center_x, center_y, center_z } = props;
 
   const person_variant_key = useCharacterStore((state) => state.person_variant_key);
   const pet_variant_key = useCharacterStore((state) => state.pet_variant_key);
@@ -187,6 +211,10 @@ export function Companion(props: CompanionProps) {
   // own doc comment for why these are refs rather than plain props.
   const origin_ref = useRef<IVec>(origin_page_idx_xy);
   origin_ref.current = origin_page_idx_xy;
+  const map_origin_ref = useRef<IVec>(map_origin);
+  map_origin_ref.current = map_origin;
+  const target_z_ref = useRef<f64>(center_z);
+  target_z_ref.current = center_z;
   const person_target_ref = useRef<Vec2>({ x: center_x, y: center_y });
   person_target_ref.current.x = center_x;
   person_target_ref.current.y = center_y;
@@ -196,8 +224,16 @@ export function Companion(props: CompanionProps) {
 
   return (
     <>
-      <Walker key={person_variant.key} origin_ref={origin_ref} target_ref={person_target_ref} variant={person_variant} />
-      <Walker key={pet_variant.key} origin_ref={origin_ref} target_ref={pet_target_ref} variant={pet_variant} />
+      <Walker
+        key={person_variant.key}
+        origin_ref={origin_ref}
+        map_origin_ref={map_origin_ref}
+        target_ref={person_target_ref}
+        target_z_ref={target_z_ref}
+        variant={person_variant}
+        show_chat_bubble
+      />
+      <Walker key={pet_variant.key} origin_ref={origin_ref} map_origin_ref={map_origin_ref} target_ref={pet_target_ref} target_z_ref={target_z_ref} variant={pet_variant} />
     </>
   );
 }
