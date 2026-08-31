@@ -22,19 +22,10 @@
         "label": "Test Toast Notifications",
         "description": "Displays sample toast notifications for UI testing.",
         "message": "Dummy Toast {{index}}"
-      },
-      "lock_camera_tilt": {
-        "label": "Lock Camera Tilt Gesture",
-        "description": "When on, drag/pinch gestures can no longer change camera tilt (polar). Rotate (azimuth) and zoom still work normally."
       }
     }
   },
   "map": {
-    "mode_bar": {
-      "message_placeholder": "Type a message...",
-      "message_tooltip": "Message",
-      "send": "Send"
-    },
     "chat": {
       "self_label": "Me"
     }

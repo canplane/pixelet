@@ -14,6 +14,13 @@
       "korean": "한국어",
       "english": "English"
     },
+    "camera": {
+      "section_title": "카메라",
+      "lock_tilt": {
+        "label": "카메라 틸트 제스처 잠금",
+        "description": "켜면 드래그/핀치 제스처로 카메라 기울기(polar)를 바꿀 수 없습니다. 회전(azimuth)과 줌은 그대로 동작합니다."
+      }
+    },
     "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍(버벅임)이 발생하면 HIGH 항목부터 해제해 주세요.",
     "lighting": {
       "section_title": "조명 & 그림자",
@@ -140,7 +147,10 @@
     "mode_bar": {
       "palette_tooltip": "팔레트",
       "pointer": "포인터",
-      "eraser": "지우개"
+      "eraser": "지우개",
+      "message_placeholder": "메시지 입력...",
+      "message_tooltip": "메시지",
+      "send": "전송"
     },
     "controls": {
       "reset_orientation": "북쪽으로 정렬",

@@ -14,6 +14,13 @@
       "korean": "한국어",
       "english": "English"
     },
+    "camera": {
+      "section_title": "Camera",
+      "lock_tilt": {
+        "label": "Lock Camera Tilt Gesture",
+        "description": "When on, drag/pinch gestures can no longer change camera tilt (polar). Rotate (azimuth) and zoom still work normally."
+      }
+    },
     "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
     "lighting": {
       "section_title": "Lighting & Shadows",
@@ -140,7 +147,10 @@
     "mode_bar": {
       "palette_tooltip": "Palette",
       "pointer": "Pointer",
-      "eraser": "Eraser"
+      "eraser": "Eraser",
+      "message_placeholder": "Type a message...",
+      "message_tooltip": "Message",
+      "send": "Send"
     },
     "controls": {
       "reset_orientation": "Align north",

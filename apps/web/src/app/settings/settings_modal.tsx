@@ -9,6 +9,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@
 import { Separator } from "@/shared/ui/theme/base/separator.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/theme/base/tabs.tsx";
 import { CharacterSection } from "./sections/character_section.tsx";
+import { CameraSection } from "./sections/camera_section.tsx";
 import { LanguageSection } from "./sections/language_section.tsx";
 import { LightingSection } from "./sections/lighting_section.tsx";
 import { PostFxSection } from "./sections/post_fx_section.tsx";
@@ -77,6 +78,8 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             </TabsContent>
 
             <TabsContent value="effects">
+              <CameraSection />
+              <Separator />
               <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
               <LightingSection />
               <PostFxSection />
