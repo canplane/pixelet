@@ -8,7 +8,12 @@ import { DEFAULT_OBJECT_SIZE } from "@/modules/world/objects/size.ts";
 
 export type ActiveTool = "pointer" | "object" | "eraser";
 
-export type ChatLine = { id: number; text: string };
+// ts (Date.now() at append) lets ChatBubble derive its own remaining show
+// time from wall-clock, not from when its own component happened to mount —
+// without it, a character swap (Walker remounts under a new variant.key,
+// see companion.tsx) resets ChatBubble's local state and it has no way to
+// tell an old, already-dismissed line apart from a brand new one.
+export type ChatLine = { id: number; text: string; ts: number };
 
 const MAX_CHAT_LINES = 10;
 let next_chat_line_id = 0;
@@ -40,6 +45,6 @@ export const useUiStore = create<UiState>((set) => ({
   chat_lines: [],
   append_chat_line: (text) =>
     set((state) => ({
-      chat_lines: [...state.chat_lines, { id: next_chat_line_id++, text }].slice(-MAX_CHAT_LINES),
+      chat_lines: [...state.chat_lines, { id: next_chat_line_id++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
     })),
 }));
