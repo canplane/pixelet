@@ -84,7 +84,7 @@ export function MapToastController() {
         message={is_error ? (location_error_key ? t_ref.current(location_error_key) : t_ref.current("toast.location_weak_signal")) : t_ref.current("toast.location_checking")}
         statusColor={is_error ? "bg-red-500" : "bg-[#34C759]/30"}
         icon={<StatusIcon>{is_error ? <MapPinOff key="location-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
-        backgroundColor={is_error ? "bg-red-50/85" : undefined}
+        backgroundColor={is_error ? "bg-red-50" : undefined}
         className={is_error ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
       />
     ));
@@ -114,7 +114,7 @@ export function MapToastController() {
         message={is_error ? t_ref.current("toast.map_load_error") : is_success ? t_ref.current("toast.map_load_success") : t_ref.current("toast.map_loading")}
         statusColor={is_error ? "bg-red-500" : is_success ? "bg-[#34C759]" : "bg-[#34C759]/30"}
         icon={<StatusIcon>{is_error ? <MapPinOff key="map-error-icon" className="w-4 h-4 text-red-500" /> : is_success ? SuccessIcon : LoadingIcon}</StatusIcon>}
-        backgroundColor={is_error ? "bg-red-50/85" : undefined}
+        backgroundColor={is_error ? "bg-red-50" : undefined}
         className={is_error ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
       />
     ));

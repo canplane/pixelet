@@ -35,7 +35,7 @@ export function CircularButton({
       disabled={disabled}
       className={cn(
         "relative w-14 h-14 rounded-full cursor-pointer transition-all duration-500 active:scale-95 group",
-        !bare && !dark && (shadow ? "border-2 border-white/90 shadow-[0_4px_14px_rgba(200,160,100,0.22)]" : "border-2 border-white/90 shadow-none"),
+        !bare && !dark && (shadow ? "shadow-[0_6px_20px_rgba(0,0,0,0.25)]" : "shadow-none"),
         dark && cn(
           "border border-white/15 text-white/80",
           shadow ? "shadow-[0_4px_14px_rgba(0,0,0,0.35)]" : "shadow-none",
@@ -45,7 +45,7 @@ export function CircularButton({
         // each other, so two separate `!bg-*` entries could both reach the
         // browser and silently lose the active tint depending on stylesheet
         // order.
-        dark ? (isActive ? "!bg-amber-500/25 ring-2 ring-amber-400/60" : "!bg-neutral-900/60") : (isActive ? "bg-amber-50/80 ring-2 ring-amber-400/60" : ""),
+        dark ? (isActive ? "!bg-amber-500/25 ring-2 ring-amber-400/60" : "!bg-neutral-900/60") : (isActive ? "bg-amber-50 ring-2 ring-amber-400/60" : ""),
         disabled && "opacity-40 grayscale-[0.5] cursor-not-allowed pointer-events-none shadow-none",
         className,
       )}

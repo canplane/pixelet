@@ -31,7 +31,11 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
       <SheetContent
         side="left"
         hideClose
-        className="sm:w-[360px] p-0 gap-0 flex flex-col"
+        // theme-cozy: the settings panel's own warm-cream shadcn palette
+        // (index.css's own --background/--card/--border/etc overrides for
+        // this class) — scoped to this subtree only, not applied globally,
+        // so the rest of the app keeps its dark "Deep Dark Glass" theme.
+        className="theme-cozy sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground"
         overlayClassName="bg-transparent"
         overlayStyle={{ pointerEvents: "none" }}
       >

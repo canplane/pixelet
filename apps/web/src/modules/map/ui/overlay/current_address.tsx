@@ -17,7 +17,7 @@ export function CurrentAddress(props: CurrentAddressProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="text-xs font-medium text-white/70 whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-[40vw]"
+          className="text-xs font-medium text-[#5B4636]/80 whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-[40vw]"
         >
           {label}
         </motion.span>
