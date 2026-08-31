@@ -224,8 +224,8 @@ function inject_instance_shader(shader: {
         // instanceMatrix's diagonal (never a rotation, per that function's own contract),
         // so a run spanning many cells — any coarse-LOD box, or same-material cells merged
         // at any LOD — was one whole texture tile stretched across the entire face instead
-        // of repeating once per real cell. Most visible on patterned side art (theme/
-        // textures/terrain/cozy/side_*.png): its layered-strata look read as a flat smear
+        // of repeating once per real cell. Most visible on patterned side art (assets/cell/
+        // textures/terrain/side_*.png): its layered-strata look read as a flat smear
         // once stretched that far. position is the unit box's own local [-0.5,0.5]
         // coordinate, so (position.axis + 0.5) * scale reconstructs a per-face 0..N
         // coordinate directly from it — sidesteps ever needing BoxGeometry's own per-face

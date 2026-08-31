@@ -3,7 +3,7 @@
 // Re-runnable, one-off tool (same role as apps/api's bake/terrain/tools/*)
 // — not part of the app build. Downloads every image URL in the repo-root
 // pixelet_ms2_texture_manifest.json, normalizes each to a standalone 64x64
-// RGBA PNG, and writes it under ../textures/{terrain,objects}/cozy/. Run
+// RGBA PNG, and writes it under ../textures/{terrain,objects}/. Run
 // with:
 //   deno run -A packages/pxl/shared/src/assets/cell/tools/download_texture_pack.ts
 //

@@ -81,9 +81,9 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
               <CameraSection />
               <Separator />
               <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
+              <QualitySection />
               <LightingSection />
               <PostFxSection />
-              <QualitySection />
             </TabsContent>
 
             <TabsContent value="info">
