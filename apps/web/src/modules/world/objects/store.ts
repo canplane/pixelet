@@ -57,7 +57,12 @@ function floor_div(a: bigint, b: bigint): bigint {
   return a % b !== 0n && a < 0n ? q - 1n : q;
 }
 
-function cell_index(coord: PVF3): [bigint, bigint, bigint] {
+/** Exported for callers that need to probe exact-cell occupancy directly
+ * (get_objects_in_cell) instead of get_objects_near's ±1-cell neighborhood —
+ * e.g. decor/decor_layer.tsx, which must tell "no object in this exact
+ * ground cell" apart from "an object one cell over" to decide whether a
+ * scattered decoration (a tree, say) should render there. */
+export function cell_index(coord: PVF3): [bigint, bigint, bigint] {
   return [
     floor_div(pvf3.X(coord), CELL_SIZE_FP),
     floor_div(pvf3.Y(coord), CELL_SIZE_FP),
@@ -65,7 +70,7 @@ function cell_index(coord: PVF3): [bigint, bigint, bigint] {
   ];
 }
 
-function cell_key(ix: bigint, iy: bigint, iz: bigint): string {
+export function cell_key(ix: bigint, iy: bigint, iz: bigint): string {
   return `${ix},${iy},${iz}`;
 }
 

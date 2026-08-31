@@ -247,82 +247,80 @@ export function ModeBar() {
   return (
     <div className="flex items-center justify-center gap-2 min-w-0 w-full">
       <LayoutGroup id="mode-bar">
-        {__IS_DEV__ && (
+        <motion.div
+          layout
+          transition={SPRING}
+          // borderRadius via style, not a rounded-full class: an element
+          // with `layout` fakes width changes via transform: scale()
+          // (FLIP), and framer-motion only auto-corrects a shape's radius
+          // against that squish when the radius comes through its own
+          // tracked `style` prop — a Tailwind class is invisible to it and
+          // renders as an oval mid-transition. Applies to every
+          // `layout`-tracked motion.div below that sets this same style.
+          style={{ borderRadius: "999px" }}
+          className={cn(
+            // box-shadow, not filter: drop-shadow — this element is an
+            // opaque rectangle, and filters render badly over the WebGL
+            // canvas in WebKit (see AGENTS.md's Overlay CSS section).
+            "flex items-center h-12 bg-white shadow-[0_3px_6px_rgba(0,0,0,0.25)] min-w-0",
+          )}
+        >
           <motion.div
             layout
             transition={SPRING}
-            // borderRadius via style, not a rounded-full class: an element
-            // with `layout` fakes width changes via transform: scale()
-            // (FLIP), and framer-motion only auto-corrects a shape's radius
-            // against that squish when the radius comes through its own
-            // tracked `style` prop — a Tailwind class is invisible to it and
-            // renders as an oval mid-transition. Applies to every
-            // `layout`-tracked motion.div below that sets this same style.
             style={{ borderRadius: "999px" }}
-            className={cn(
-              // box-shadow, not filter: drop-shadow — this element is an
-              // opaque rectangle, and filters render badly over the WebGL
-              // canvas in WebKit (see AGENTS.md's Overlay CSS section).
-              "flex items-center h-12 bg-white shadow-[0_3px_6px_rgba(0,0,0,0.25)] min-w-0",
-            )}
+            className={cn("relative flex items-center h-full overflow-hidden border border-black/10", message_expanded && "pl-2")}
           >
-            <motion.div
+            <motion.button
+              type="button"
               layout
               transition={SPRING}
-              style={{ borderRadius: "999px" }}
-              className={cn("relative flex items-center h-full overflow-hidden border border-black/10", message_expanded && "pl-2")}
+              onClick={() => set_mode("message")}
+              className={cn(
+                "flex items-center justify-center rounded-full cursor-pointer text-black/50 hover:text-black/80 transition-colors shrink-0",
+                message_expanded ? "w-9 h-9" : "h-full aspect-square",
+              )}
+              title={t("map.mode_bar.message_tooltip")}
             >
-              <motion.button
-                type="button"
-                layout
-                transition={SPRING}
-                onClick={() => set_mode("message")}
-                className={cn(
-                  "flex items-center justify-center rounded-full cursor-pointer text-black/50 hover:text-black/80 transition-colors shrink-0",
-                  message_expanded ? "w-9 h-9" : "h-full aspect-square",
-                )}
-                title={t("map.mode_bar.message_tooltip")}
-              >
-                <MessageCircle className="w-5 h-5" strokeWidth={2} />
-              </motion.button>
+              <MessageCircle className="w-5 h-5" strokeWidth={2} />
+            </motion.button>
 
-              <AnimatePresence mode="popLayout">
-                {message_expanded && (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    transition={SPRING}
-                    className="flex items-center gap-2 min-w-0 pr-2"
-                  >
-                    <input
-                      ref={input_ref}
-                      value={message_text}
-                      onChange={(e) => set_message_text(e.target.value)}
-                      // isComposing guards against a Korean/IME composition's
-                      // own Enter (confirming a candidate syllable) also
-                      // triggering send.
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.nativeEvent.isComposing) send_message();
-                      }}
-                      placeholder={t("map.mode_bar.message_placeholder")}
-                      autoFocus
-                      className={cn(
-                        // text-base on mobile, not text-sm: iOS auto-zooms
-                        // the page when a focused input's font-size is under
-                        // 16px, with no way to opt out that doesn't also
-                        // disable pinch-zoom entirely.
-                        "bg-transparent text-base md:text-sm text-black placeholder:text-black/40 outline-none w-96 max-w-full min-w-0 transition-opacity duration-200",
-                        is_sending && "opacity-0",
-                      )}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+            <AnimatePresence mode="popLayout">
+              {message_expanded && (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={SPRING}
+                  className="flex items-center gap-2 min-w-0 pr-2"
+                >
+                  <input
+                    ref={input_ref}
+                    value={message_text}
+                    onChange={(e) => set_message_text(e.target.value)}
+                    // isComposing guards against a Korean/IME composition's
+                    // own Enter (confirming a candidate syllable) also
+                    // triggering send.
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) send_message();
+                    }}
+                    placeholder={t("map.mode_bar.message_placeholder")}
+                    autoFocus
+                    className={cn(
+                      // text-base on mobile, not text-sm: iOS auto-zooms
+                      // the page when a focused input's font-size is under
+                      // 16px, with no way to opt out that doesn't also
+                      // disable pinch-zoom entirely.
+                      "bg-transparent text-base md:text-sm text-black placeholder:text-black/40 outline-none w-96 max-w-full min-w-0 transition-opacity duration-200",
+                      is_sending && "opacity-0",
+                    )}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
-        )}
+        </motion.div>
 
         <motion.div
           layout
@@ -335,8 +333,7 @@ export function ModeBar() {
             // painting its own rounded background). box-shadow would draw
             // one rectangle around the lot. This is the exception AGENTS.md's
             // rule carves out: filter for a genuinely irregular shape.
-            "flex items-center h-12 filter-[drop-shadow(0_3px_6px_rgba(0,0,0,0.25))] shrink-0",
-            __IS_DEV__ ? "max-w-[calc(100vw-5.75rem)]" : "max-w-[calc(100vw-2rem)]",
+            "flex items-center h-12 filter-[drop-shadow(0_3px_6px_rgba(0,0,0,0.25))] shrink-0 max-w-[calc(100vw-5.75rem)]",
           )}
         >
           <motion.div

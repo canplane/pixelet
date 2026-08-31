@@ -57,10 +57,10 @@ export function TopOverlays() {
           </div>
         </div>
 
-        <div className={cn("flex items-start gap-2", !is_camera_busy && "pointer-events-auto")}>
+        <div className={cn("flex items-start gap-2.5", !is_camera_busy && "pointer-events-auto")}>
           <MapScaleBar />
 
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-2.5">
             <TrackingButton />
             <MapCompass />
           </div>

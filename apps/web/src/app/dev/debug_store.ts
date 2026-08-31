@@ -7,6 +7,13 @@ import { persist } from "zustand/middleware";
  * Dev-only diagnostic toggles — __IS_DEV__-gated, never shipped visible in
  * production (see render/settings_store.ts for the user-facing
  * rendering-quality settings that used to live here alongside these).
+ *
+ * lock_camera_tilt is the one exception: its own UI (settings/sections/
+ * camera_section.tsx) is a real, always-visible production setting now,
+ * not gated by DebugSection's own __IS_DEV__ wrapper — it's kept in this
+ * store anyway (rather than moved to camera/store.ts) purely to avoid
+ * touching camera/input.tsx's two direct useDebugStore.getState() reads
+ * and to keep its existing localStorage persistence for free.
  */
 export type DebugStore = {
   /**

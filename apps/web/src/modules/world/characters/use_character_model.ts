@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useAnimations } from "@react-three/drei";
-import { GLTFLoader, SkeletonUtils } from "three-stdlib";
+import { SkeletonUtils } from "three-stdlib";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import { load_gltf, load_texture } from "@/modules/world/gltf_cache.ts";
 
 export type CharacterModel = {
   /** Ready-to-place group: textured, scaled to height_u, Y-up geometry
@@ -15,36 +16,6 @@ export type CharacterModel = {
   root: THREE.Group | null;
   actions: ReturnType<typeof useAnimations>["actions"];
 };
-
-const gltf_loader = new GLTFLoader();
-
-// Cache of in-flight/completed loads, keyed by model_url — plain module-
-// level Map, not React state: this is a POJO cache like useGLTF's own, just
-// deliberately *not* wired through React's Suspense integration.
-const gltf_cache = new Map<string, Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>>();
-
-function load_gltf(url: string): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
-  let entry = gltf_cache.get(url);
-  if (!entry) {
-    entry = new Promise((resolve, reject) => {
-      gltf_loader.load(url, (gltf) => resolve({ scene: gltf.scene, animations: gltf.animations }), undefined, reject);
-    });
-    gltf_cache.set(url, entry);
-  }
-  return entry;
-}
-
-const texture_cache = new Map<string, Promise<THREE.Texture>>();
-const texture_loader = new THREE.TextureLoader();
-
-function load_texture(url: string): Promise<THREE.Texture> {
-  let entry = texture_cache.get(url);
-  if (!entry) {
-    entry = texture_loader.loadAsync(url);
-    texture_cache.set(url, entry);
-  }
-  return entry;
-}
 
 /**
  * Loads a Kenney-style rigged glTF (model_url) sharing a flat-swatch
