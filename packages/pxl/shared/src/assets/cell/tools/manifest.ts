@@ -7,8 +7,6 @@
 
 import { parse as parse_jsonc } from "jsr:@std/jsonc@^1";
 
-export const PACK = "cozy";
-
 export type ManifestImageEntry = {
   sourceCreation?: number;
   sourceCreationId?: string;
@@ -75,7 +73,7 @@ export function flatten_manifest(manifest: Manifest): WorkItem[] {
       label,
       url: entry.url,
       file: entry.file,
-      dest: new URL(`terrain/${PACK}/${filename}`, textures_dir),
+      dest: new URL(`terrain/${filename}`, textures_dir),
       paletteHex: entry.paletteHex ?? null,
     });
   };
@@ -94,7 +92,7 @@ export function flatten_manifest(manifest: Manifest): WorkItem[] {
       label: `objects.block.${color_key}`,
       url: entry.url,
       file: entry.file,
-      dest: new URL(`objects/${PACK}/${filename}`, textures_dir),
+      dest: new URL(`objects/${filename}`, textures_dir),
       paletteHex: entry.paletteHex ?? null,
     });
   }

@@ -17,7 +17,7 @@ const TRAIN_KIND_TAG = 0x7ba1_5eed_0004_dec0n;
 
 // Very sparse, deliberately — trains are meant to read as occasional, not
 // as a train sitting on every visible stretch of track.
-const TRAIN_DENSITY = 0.002;
+const TRAIN_DENSITY = 0.004;
 
 // Matches train_decor.ts's TRAIN_MODEL_URLS length.
 const TRAIN_VARIANT_COUNT = 4;

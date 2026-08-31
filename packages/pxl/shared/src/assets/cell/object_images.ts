@@ -8,21 +8,21 @@
 // provenance (pixelet_ms2_texture_manifest.json, downloaded/normalized by
 // ./tools/download_texture_pack.ts). Each of the 15 colors gets its own
 // distinct felt/wool-style file, never a flat color swatch.
-import cozy_wool_white from "./textures/objects/cozy/wool_white.png";
-import cozy_wool_grey from "./textures/objects/cozy/wool_grey.png";
-import cozy_wool_dark_grey from "./textures/objects/cozy/wool_dark_grey.png";
-import cozy_wool_black from "./textures/objects/cozy/wool_black.png";
-import cozy_wool_red from "./textures/objects/cozy/wool_red.png";
-import cozy_wool_pink from "./textures/objects/cozy/wool_pink.png";
-import cozy_wool_brown from "./textures/objects/cozy/wool_brown.png";
-import cozy_wool_orange from "./textures/objects/cozy/wool_orange.png";
-import cozy_wool_yellow from "./textures/objects/cozy/wool_yellow.png";
-import cozy_wool_green from "./textures/objects/cozy/wool_green.png";
-import cozy_wool_dark_green from "./textures/objects/cozy/wool_dark_green.png";
-import cozy_wool_cyan from "./textures/objects/cozy/wool_cyan.png";
-import cozy_wool_blue from "./textures/objects/cozy/wool_blue.png";
-import cozy_wool_violet from "./textures/objects/cozy/wool_violet.png";
-import cozy_wool_magenta from "./textures/objects/cozy/wool_magenta.png";
+import cozy_wool_white from "./textures/objects/wool_white.png";
+import cozy_wool_grey from "./textures/objects/wool_grey.png";
+import cozy_wool_dark_grey from "./textures/objects/wool_dark_grey.png";
+import cozy_wool_black from "./textures/objects/wool_black.png";
+import cozy_wool_red from "./textures/objects/wool_red.png";
+import cozy_wool_pink from "./textures/objects/wool_pink.png";
+import cozy_wool_brown from "./textures/objects/wool_brown.png";
+import cozy_wool_orange from "./textures/objects/wool_orange.png";
+import cozy_wool_yellow from "./textures/objects/wool_yellow.png";
+import cozy_wool_green from "./textures/objects/wool_green.png";
+import cozy_wool_dark_green from "./textures/objects/wool_dark_green.png";
+import cozy_wool_cyan from "./textures/objects/wool_cyan.png";
+import cozy_wool_blue from "./textures/objects/wool_blue.png";
+import cozy_wool_violet from "./textures/objects/wool_violet.png";
+import cozy_wool_magenta from "./textures/objects/wool_magenta.png";
 
 /**
  * ch_key -> type name -> texture URL — same two-level shape and same
