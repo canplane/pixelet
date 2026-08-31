@@ -12,14 +12,13 @@ export function SettingsTriggerButton() {
 
   return (
     <CircularButton
-      className="w-[42px] h-[42px]"
-      dark
+      className="w-12 h-12"
       shadow={false}
       onClick={ui.open_settings_modal}
       aria-label={t("settings.trigger_aria_label")}
       title={t("settings.trigger_aria_label")}
     >
-      <Menu className="w-6 h-6 text-white/80" />
+      <Menu className="w-5 h-5 text-[#5B4636]/80" />
     </CircularButton>
   );
 }

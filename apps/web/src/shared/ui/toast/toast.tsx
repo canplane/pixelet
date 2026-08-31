@@ -42,7 +42,7 @@ export function Toast({
   message,
   statusColor,
   className,
-  backgroundColor = "bg-[#FFFDF7]/85",
+  backgroundColor = "bg-[#FFFDF7]",
 }: ToastProps) {
   const isExpanded = !!message;
 
@@ -262,7 +262,7 @@ export function Toast({
               // nothing else establishes the pill's height, so it would
               // collapse to ~0 and then snap open once wasExpanded flips.
               // min-w matches so the collapsed pill reads as a circle.
-              "h-8 min-w-8 origin-bottom border-2 border-white/90 backdrop-blur-md shadow-[0_6px_20px_rgba(200,160,100,0.25)]",
+              "h-8 min-w-8 origin-bottom border-2 border-white/90 shadow-[0_6px_20px_rgba(0,0,0,0.25)]",
               // Without this, a swipe-to-rotate drag fights the browser's
               // native text-selection drag on the same gesture.
               "select-none",

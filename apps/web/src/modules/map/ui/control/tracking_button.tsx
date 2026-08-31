@@ -78,7 +78,7 @@ export function TrackingButton() {
     }
 
     if (can_show_location_control) {
-      return { Icon: Locate, className: "text-white/50 scale-90" };
+      return { Icon: Locate, className: "text-[#5B4636]/60 scale-90" };
     }
 
     if (is_follow_mode) {
@@ -94,7 +94,7 @@ export function TrackingButton() {
 
     return {
       Icon: Navigation,
-      className: "text-white/80 group-hover:rotate-[45deg]",
+      className: "text-[#5B4636]/80 group-hover:rotate-[45deg]",
     };
   };
 
@@ -104,8 +104,7 @@ export function TrackingButton() {
 
   return (
     <CircularButton
-      className="w-[42px] h-[42px]"
-      dark
+      className="w-12 h-12"
       shadow={false}
       onClick={handle_action}
       isActive={is_follow_mode}
@@ -114,7 +113,7 @@ export function TrackingButton() {
     >
       <Icon
         className={cn(
-          "w-6 h-6 transition-all duration-500 ease-out",
+          "w-5 h-5 transition-all duration-500 ease-out",
           className,
         )}
         style={style}

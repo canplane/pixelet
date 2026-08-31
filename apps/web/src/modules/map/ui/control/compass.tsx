@@ -37,8 +37,8 @@ export function MapCompass() {
     // column it sits in (top_overlays.tsx) resizes for any reason, which
     // can leave it stuck mid-transition instead of cleanly disappearing.
     <MotionContainer show={show_compass} variant="compass" delay={0.4} layout={false}>
-      <CircularButton className="w-[42px] h-[42px]" dark shadow={false} onClick={handle_reset} title={t("map.controls.reset_orientation")}>
-        <span className="absolute top-0.5 text-[10px] font-medium tracking-tighter select-none z-20 text-white/40">
+      <CircularButton className="w-12 h-12" shadow={false} onClick={handle_reset} title={t("map.controls.reset_orientation")}>
+        <span className="absolute top-0.5 text-[10px] font-medium tracking-tighter select-none z-20 text-[#5B4636]/50">
           N
         </span>
 
@@ -47,7 +47,7 @@ export function MapCompass() {
           style={{ transform: `rotate(${(-azimuth * 180) / Math.PI}deg)` }}
         >
           <div className="flex-1 bg-red-500/80 rounded-t-full shadow-[0_0_12px_rgba(239,68,68,0.4)]" />
-          <div className="flex-1 bg-white/25 rounded-b-full" />
+          <div className="flex-1 bg-[#5B4636]/30 rounded-b-full" />
         </div>
       </CircularButton>
     </MotionContainer>

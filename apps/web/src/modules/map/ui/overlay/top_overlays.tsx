@@ -47,14 +47,11 @@ export function TopOverlays() {
       >
         <div className="flex flex-col items-end gap-1">
           {
-            /* No backdrop-blur, same reasoning as the round controls below (see
-          cozy/circular_button.tsx): a backdrop-filter over a canvas that
-          repaints every frame pays for itself every frame. /60 rather than
-          /40 keeps the text readable without it — and matches the round
-          controls' own bg-neutral-900/60, so the two chrome elements read as
-          one system rather than two independently-tuned opacities. */
+            /* Solid, not translucent — same as mode_bar.tsx's own chrome
+          (its tool strip is a flat bg-neutral-900, not an alpha'd one), and
+          matches the round controls' own solid cream bg-[#FFFDF7]. */
           }
-          <div className="flex items-center gap-2 h-6 bg-black/60 rounded px-2 w-fit">
+          <div className="flex items-center gap-2 h-6 bg-[#FFFDF7] rounded-full px-3 w-fit">
             <CurrentAddress label={address_label} />
             <SensorStatus />
           </div>

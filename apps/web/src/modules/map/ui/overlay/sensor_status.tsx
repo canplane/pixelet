@@ -19,7 +19,7 @@ function status_class(status: DevicePoseStatus): string {
       return "text-red-400";
     case DevicePoseStatus.IDLE:
     default:
-      return "text-white/30";
+      return "text-[#5B4636]/30";
   }
 }
 
