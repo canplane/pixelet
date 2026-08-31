@@ -13,7 +13,7 @@
  * Each layer is responsible for its own local coordinate correction.
  */
 
-import { forwardRef, useMemo, useRef } from "react";
+import { forwardRef, lazy, Suspense, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { type FVec, type IVec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -47,6 +47,15 @@ import { DebugBox, DebugPoint, GyroRing, LabeledLine } from "./markers/frame_giz
 // instead of a second, possibly-drifting registration.
 import { ChunkStage } from "./chunk_stage.tsx";
 import { CHUNK_STAGE_LAYERS } from "./stack.ts";
+
+// Dynamic rather than a plain top-level import so the character/pet model
+// code (GLTFLoader, skinning, animation mixer — otherwise unused anywhere
+// else in the app) lands in its own chunk instead of bloating the main one.
+// This lazy() still uses Suspense, but only once — for the code chunk
+// itself, at initial mount — not per-frame like the model-loading inside
+// Companion used to (see use_character_model.ts's own doc comment for why
+// that had to stop being Suspense-based entirely).
+const Companion = lazy(() => import("./characters/companion.tsx").then((m) => ({ default: m.Companion })));
 
 type DebugDotProps = {
   i: IVec;
@@ -165,6 +174,12 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
   // be conditionally mounted here either.
   if (map_center === null) return null;
 
+  // Same computation DebugLayer's own raw_v uses — map_center's position in
+  // the local floating-origin frame. Companion needs this (not the fixed
+  // L4-tile-center point DebugLayer's anchor_center marker uses) so it sits
+  // wherever the camera actually is, not up to 2048u/~4.9km away.
+  const local_map_center: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(map_center.i), map_center.f);
+
   return (
     <group name="world" ref={ref}>
       <group name="view-frame" ref={view_frame_ref}>
@@ -222,6 +237,14 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
               <HoverCursor />
               <LocationPuck device_coord={device_coord} />
+
+              <Suspense fallback={null}>
+                <Companion
+                  origin_page_idx_xy={TO_XY(L3_IDX(map_origin))}
+                  center_x={local_map_center[0]}
+                  center_y={local_map_center[1]}
+                />
+              </Suspense>
 
               {__IS_DEV__ && show_debug_objects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
             </AnchorSpace>

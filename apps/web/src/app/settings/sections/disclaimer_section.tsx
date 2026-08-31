@@ -1,6 +1,6 @@
 // @pxl/web/app/settings/sections/disclaimer_section.tsx
 
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 
@@ -17,6 +17,15 @@ export function DisclaimerSection() {
         <span>{t("settings.disclaimer.storage_notice")}</span>
 
         <span>{t("settings.disclaimer.location_notice")}</span>
+
+        <span>
+          <Trans
+            i18nKey="settings.disclaimer.character_notice"
+            components={{
+              kenney: <a href="https://kenney.nl/" target="_blank" rel="noreferrer" className="underline hover:text-foreground" />,
+            }}
+          />
+        </span>
       </div>
     </div>
   );

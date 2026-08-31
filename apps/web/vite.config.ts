@@ -168,6 +168,17 @@ export default defineConfig(({ mode }) => {
       alias: { "@": path.resolve(__dirname, "src") },
     },
 
+    // .glb isn't in Vite's default recognized-asset extension list, so
+    // without this each import (companion character/pet models) has to
+    // rely solely on its own `?url` query suffix to be treated as an
+    // asset rather than parsed as JS — which held up fine at a handful of
+    // files but became flaky once the character variant list grew to 36
+    // (concurrent dev-server requests would occasionally misclassify one
+    // and throw "invalid JS syntax", nondeterministically, a different
+    // file each time). Declaring the extension here makes every .glb a
+    // recognized asset unconditionally, in both dev and build.
+    assetsInclude: ["**/*.glb"],
+
     build: {
       target: "esnext",
       minify: "esbuild",
