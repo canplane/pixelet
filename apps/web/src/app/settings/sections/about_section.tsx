@@ -39,7 +39,7 @@ export function AboutSection() {
           . All rights reserved.
         </span>
 
-        <span className="text-white/30">
+        <span className="text-muted-foreground/70">
           {APP_ENV !== "production" && `${env_label} · `}
           {build_label()}
           {` · ${HAS_STATIC_TILES ? `Tile version ${tile_version}` : "Live tile"}`}
