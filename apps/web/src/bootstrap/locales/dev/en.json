@@ -2,6 +2,14 @@
   "settings": {
     "debug": {
       "section_title": "Debug",
+      "texture_pack": {
+        "label": "Textures",
+        "description": "Applies detailed pixel art textures to block and object surfaces instead of solid colors."
+      },
+      "structures": {
+        "label": "Render Buildings",
+        "description": "Toggles whether buildings are rendered on top of the terrain."
+      },
       "objects": {
         "label": "Debug Gizmos",
         "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."

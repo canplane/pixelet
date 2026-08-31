@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDebugStore } from "@/app/dev/debug_store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
+import { useRenderSettingsStore } from "@/render/settings_store.ts";
 import { SectionTitle, SettingRow } from "@/app/settings/setting_row.tsx";
 import { Toast } from "@/shared/ui/toast/toast.tsx";
 import { get_toast_entries, subscribe_toast_entries, toast_custom, toast_dismiss } from "@/shared/ui/toast/store.ts";
@@ -33,6 +34,11 @@ function dismiss_dummy_toasts() {
 export function DebugSection() {
   const { t } = useTranslation();
 
+  const low_spec = useRenderSettingsStore((state) => state.low_spec);
+  const toggle_low_spec = useRenderSettingsStore((state) => state.toggle_low_spec);
+  const show_structures = useRenderSettingsStore((state) => state.show_structures);
+  const toggle_structures = useRenderSettingsStore((state) => state.toggle_structures);
+
   const show_debug_objects = useDebugStore((state) => state.show_debug_objects);
   const toggle_debug_objects = useDebugStore((state) => state.toggle_debug_objects);
 
@@ -51,6 +57,20 @@ export function DebugSection() {
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle icon={Bug}>{t("settings.debug.section_title")}</SectionTitle>
+      <SettingRow
+        label={t("settings.debug.texture_pack.label")}
+        description={t("settings.debug.texture_pack.description")}
+        active={!low_spec}
+        on_toggle={toggle_low_spec}
+        cost="med"
+      />
+      <SettingRow
+        label={t("settings.debug.structures.label")}
+        description={t("settings.debug.structures.description")}
+        active={show_structures}
+        on_toggle={toggle_structures}
+        cost="low"
+      />
       <SettingRow
         label={t("settings.debug.objects.label")}
         description={t("settings.debug.objects.description")}

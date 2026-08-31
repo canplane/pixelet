@@ -4,6 +4,11 @@
     "description": "Adjust language, rendering, and quality options.",
     "trigger_aria_label": "Settings",
     "close": "Close",
+    "tabs": {
+      "theme": "Theme",
+      "effects": "Effects",
+      "info": "Info"
+    },
     "language": {
       "section_title": "Language",
       "korean": "한국어",
@@ -54,16 +59,14 @@
         "description": "Smooths jagged object edges for a cleaner, crisper display."
       }
     },
+    "character": {
+      "section_title": "Companion",
+      "section_caption": "Choose who walks around with you on the map",
+      "person_label": "Character",
+      "pet_label": "Pet"
+    },
     "quality": {
       "section_title": "Graphics Quality",
-      "texture_pack": {
-        "label": "Textures",
-        "description": "Applies detailed pixel art textures to block and object surfaces instead of solid colors."
-      },
-      "structures": {
-        "label": "Render Buildings",
-        "description": "Toggles whether buildings are rendered on top of the terrain."
-      },
       "high_dpr": {
         "label": "High-Resolution Rendering",
         "description": "Renders the screen at up to 2x resolution (supersampling) for a sharper image."
@@ -75,7 +78,8 @@
       "demo_notice": "This service is a demo, and data may disappear or it may be discontinued without notice.",
       "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
       "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
-      "location_notice": "Location names are queried using OSM Nominatim, and your location data is neither collected nor saved."
+      "location_notice": "Location names are queried using OSM Nominatim, and your location data is neither collected nor saved.",
+      "character_notice": "Theme is an experimental feature. The CC0-licensed <kenney>Kenney</kenney> asset pack is applied."
     },
     "attribution": {
       "section_title": "Attribution"

@@ -2,6 +2,14 @@
   "settings": {
     "debug": {
       "section_title": "디버그",
+      "texture_pack": {
+        "label": "텍스처",
+        "description": "블록과 오브젝트 표면에 단색 대신 디테일한 픽셀 아트 텍스처를 적용합니다."
+      },
+      "structures": {
+        "label": "건물 표시",
+        "description": "지형 위에 건물을 렌더링할지 설정합니다."
+      },
       "objects": {
         "label": "디버그 기즈모",
         "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
