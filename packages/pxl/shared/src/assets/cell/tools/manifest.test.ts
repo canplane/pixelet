@@ -13,6 +13,7 @@ import { assertEquals, assertNotEquals } from "@std/assert";
 import { PNG } from "npm:pngjs@7";
 import { Buffer } from "node:buffer";
 import { flatten_manifest, load_manifest } from "./manifest.ts";
+import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
 
 const EXPECTED_SIDE_TYPES = [
   "BARE",
@@ -30,14 +31,18 @@ const EXPECTED_SIDE_TYPES = [
   "HELIPAD",
 ].sort();
 
-// The two source images at the center of the BARE/SPORTS side-texture audit
-// (see terrain_images.ts's own GROUND_LAYER_SIDE_OVERRIDES_COZY comment):
-// #28 is bare exposed soil with no grass cap — a visible seam against
+// The source image at the center of the original BARE/SPORTS side-texture
+// audit (see terrain_images.ts's own GROUND_LAYER_SIDE_OVERRIDES_COZY
+// comment): bare exposed soil with no grass cap — a visible seam against
 // BARE's grassy top — and must never come back as an active mapping for
-// any type. #30 is grass-capped soil, confirmed the better match for
-// BARE's own top texture.
+// any type, regardless of which pack generation is currently active.
 const SOURCE_28_EXPOSED_SOIL_URL = "https://image-assets.jianhua.art/public/1788082415653_ee1ee5.png";
-const SOURCE_30_GRASS_CAPPED_URL = "https://image-assets.jianhua.art/public/1788082420916_1yy77b.png";
+
+// BARE's side in the current (cute-painted-fantasy-v1) pack generation —
+// pinned so a future manifest edit that quietly repoints BARE's side back
+// at exposed soil (or anything else) fails loudly here instead of only
+// showing up as a visual seam.
+const SOURCE_BARE_SIDE_CUTE_PAINTED_URL = "https://image-assets.jianhua.art/public/1788243271391_ajtb22.png";
 
 Deno.test("manifest - top has 32 entries across land/water/structure/transport", async () => {
   const manifest = await load_manifest();
@@ -59,6 +64,28 @@ Deno.test("manifest - 60 entries total (32 top + 13 side + 15 objects)", async (
   const manifest = await load_manifest();
   const items = flatten_manifest(manifest);
   assertEquals(items.length, 60);
+});
+
+Deno.test("manifest - exactly 45 cute-painted-fantasy-v1 entries and 15 legacy entries", async () => {
+  const manifest = await load_manifest();
+  const items = flatten_manifest(manifest);
+  const cute_painted = items.filter((item) => item.style === "cute-painted-fantasy-v1");
+  const legacy = items.filter((item) => item.style === "legacy");
+  assertEquals(cute_painted.length, 45, `cute-painted entries: ${JSON.stringify(cute_painted.map((i) => i.label))}`);
+  assertEquals(legacy.length, 15, `legacy entries: ${JSON.stringify(legacy.map((i) => i.label))}`);
+  assertEquals(cute_painted.length + legacy.length, items.length, "every entry must have a style, no third bucket");
+});
+
+Deno.test("manifest - the cute-painted-fantasy-v1 set is exactly terrain.top (land+water+structure+transport) + terrain.side", async () => {
+  const manifest = await load_manifest();
+  const items = flatten_manifest(manifest);
+  const cute_painted_labels = new Set(items.filter((item) => item.style === "cute-painted-fantasy-v1").map((item) => item.label));
+  for (const key of Object.keys(manifest.terrain.top.land)) assertEquals(cute_painted_labels.has(`terrain.top.land.${key}`), true, `land.${key} should be cute-painted-fantasy-v1`);
+  for (const key of Object.keys(manifest.terrain.top.water)) assertEquals(cute_painted_labels.has(`terrain.top.water.${key}`), true, `water.${key} should be cute-painted-fantasy-v1`);
+  for (const key of Object.keys(manifest.terrain.top.structure)) assertEquals(cute_painted_labels.has(`terrain.top.structure.${key}`), true, `structure.${key} should be cute-painted-fantasy-v1`);
+  for (const key of Object.keys(manifest.terrain.top.transport)) assertEquals(cute_painted_labels.has(`terrain.top.transport.${key}`), true, `transport.${key} should be cute-painted-fantasy-v1`);
+  for (const key of Object.keys(manifest.terrain.side)) assertEquals(cute_painted_labels.has(`terrain.side.${key}`), true, `side.${key} should be cute-painted-fantasy-v1`);
+  for (const key of Object.keys(manifest.objects.block)) assertEquals(cute_painted_labels.has(`objects.block.${key}`), false, `objects.block.${key} should still be legacy`);
 });
 
 Deno.test("manifest - no two distinct entries share a source URL", async () => {
@@ -88,9 +115,10 @@ Deno.test("manifest - SPORTS has its own dedicated side asset, not reused from B
   assertNotEquals(sports_url, SOURCE_28_EXPOSED_SOIL_URL);
 });
 
-Deno.test("manifest - BARE's side is the grass-capped asset (#30), never the bare-soil one (#28)", async () => {
+Deno.test("manifest - BARE's side is the current cute-painted asset, never the old bare-soil one", async () => {
   const manifest = await load_manifest();
-  assertEquals(manifest.terrain.side.BARE.url, SOURCE_30_GRASS_CAPPED_URL);
+  assertEquals(manifest.terrain.side.BARE.url, SOURCE_BARE_SIDE_CUTE_PAINTED_URL);
+  assertEquals(manifest.terrain.side.BARE.style, "cute-painted-fantasy-v1");
   assertNotEquals(manifest.terrain.side.BARE.url, SOURCE_28_EXPOSED_SOIL_URL);
 });
 
@@ -115,4 +143,33 @@ Deno.test("manifest - every entry's destination file exists on disk as a valid, 
       assertEquals(png.data[i], 255, `${item.label} has an unflattened transparent pixel`);
     }
   }
+});
+
+Deno.test("manifest - no two active on-disk files are byte-identical (SHA-256)", async () => {
+  const manifest = await load_manifest();
+  const items = flatten_manifest(manifest);
+  const by_hash = new Map<string, string[]>();
+  for (const item of items) {
+    const bytes = await Deno.readFile(item.dest);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const hash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    by_hash.set(hash, [...(by_hash.get(hash) ?? []), item.label]);
+  }
+  const collisions = [...by_hash.entries()].filter(([, labels]) => labels.length > 1);
+  assertEquals(collisions, [], `distinct active entries must never end up byte-identical on disk: ${JSON.stringify(collisions)}`);
+});
+
+// terrain_types.ts is a plain spec module (JSON palette imports only, no
+// PNG/GLB assets) — safe to import directly here, unlike terrain_images.ts.
+// A texture-pack swap must never renumber the actual type IDs baked into
+// stored tiles; this is a tripwire, not exhaustive.
+Deno.test("manifest integration - terrain type IDs are untouched by this pack's own image swap", () => {
+  assertEquals(terrain_types.land.BARE, 1);
+  assertEquals(terrain_types.land.GREEN_DEEP, 10);
+  assertEquals(terrain_types.land.GREEN_LIGHT, 11);
+  assertEquals(terrain_types.land.SAND, 12);
+  assertEquals(terrain_types.land.HELIPAD, 31);
+  assertEquals(terrain_types.water.RIVER, 1);
+  assertEquals(terrain_types.water.LAKE, 2);
+  assertEquals(terrain_types.water.WETLAND, 3);
 });

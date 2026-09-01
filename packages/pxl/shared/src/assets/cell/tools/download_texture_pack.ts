@@ -17,6 +17,11 @@
 //   silently swapped for a different image
 // - a source image whose aspect ratio isn't square is treated as a
 //   possible multi-frame sheet and rejected rather than squashed to 64x64
+// - resize algorithm is chosen per entry's own manifest "style": Lanczos3
+//   (via sharp) for "cute-painted-fantasy-v1" sources, which are painted at
+//   well above 64x64 and need real band-limiting on the way down; plain
+//   nearest-neighbor (unchanged from before) for "legacy" pixel-art sources,
+//   which blur under any smoothing filter instead of staying crisp
 // - partial alpha is flattened onto the manifest's own paletteHex (or, for
 //   the one entry with no paletteHex, the image's own opaque-pixel
 //   average) so no transparent pixel can render as unintended black
@@ -24,6 +29,7 @@
 //   two distinct manifest entries can never silently end up byte-identical
 
 import { PNG } from "npm:pngjs@7";
+import sharp from "npm:sharp@0.33";
 import { Buffer } from "node:buffer";
 
 import { flatten_manifest, load_manifest, type WorkItem } from "./manifest.ts";
@@ -93,6 +99,22 @@ function nearest_resize(src: Uint8Array, sw: number, sh: number, dw: number, dh:
     }
   }
   return dst;
+}
+
+/** Real smoothing resample for the hand-painted "cute-painted-fantasy-v1"
+ * sources (often 400x400+) — a Lanczos3 kernel band-limits before
+ * downsampling, unlike nearest-neighbor (which just drops samples and
+ * would alias fine painted detail into pixelation, the exact artifact
+ * these sources need to avoid). Sharp's `fit: "fill"` matches
+ * nearest_resize's own contract: stretch to exactly dw x dh, no
+ * letterboxing — safe here because looks_like_sprite_sheet already
+ * rejected any non-square source before this is ever called. */
+async function lanczos_resize(src: Uint8Array, sw: number, sh: number, dw: number, dh: number): Promise<Uint8Array> {
+  const out = await sharp(Buffer.from(src), { raw: { width: sw, height: sh, channels: 4 } })
+    .resize(dw, dh, { kernel: "lanczos3", fit: "fill" })
+    .raw()
+    .toBuffer();
+  return new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
 }
 
 /** A single 64x64 tile should be square. Anything else is either a
@@ -194,7 +216,7 @@ async function process_item(item: WorkItem, state: SourceState): Promise<ItemRes
     if (looks_like_sprite_sheet(w, h)) {
       return { label: item.label, status: "failed", url: item.url, reason: `suspected sprite sheet / non-square source (${w}x${h}) — needs manual review, not auto-resized` };
     }
-    rgba = nearest_resize(rgba, w, h, 64, 64);
+    rgba = item.style === "cute-painted-fantasy-v1" ? await lanczos_resize(rgba, w, h, 64, 64) : nearest_resize(rgba, w, h, 64, 64);
     w = h = 64;
   }
 

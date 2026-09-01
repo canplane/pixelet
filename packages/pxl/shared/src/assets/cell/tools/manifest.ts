@@ -7,12 +7,22 @@
 
 import { parse as parse_jsonc } from "jsr:@std/jsonc@^1";
 
+/** "cute-painted-fantasy-v1" sources are hand-painted at a size well above
+ * 64x64 and need a real smoothing resample (see download_texture_pack.ts's
+ * lanczos_resize) or they'd re-pixelate on the way down; "legacy" sources
+ * are the original pixel-art set and keep nearest-neighbor. Absent (an
+ * older manifest, or a hand-edited entry) defaults to "legacy" — the
+ * conservative choice, since nearest-neighbor never blurs a source that
+ * genuinely was already pixel-perfect at 64x64. */
+export type ManifestImageStyle = "cute-painted-fantasy-v1" | "legacy";
+
 export type ManifestImageEntry = {
   sourceCreation?: number;
   sourceCreationId?: string;
   url: string;
   file: string;
   paletteHex?: string | null;
+  style?: ManifestImageStyle;
 };
 
 export type Manifest = {
@@ -33,6 +43,7 @@ export type WorkItem = {
   /** Destination file, resolved against ../textures/. */
   dest: URL;
   paletteHex: string | null;
+  style: ManifestImageStyle;
 };
 
 /** Walks up looking for the WORKSPACE ROOT deno.json specifically — several
@@ -75,6 +86,7 @@ export function flatten_manifest(manifest: Manifest): WorkItem[] {
       file: entry.file,
       dest: new URL(`terrain/${filename}`, textures_dir),
       paletteHex: entry.paletteHex ?? null,
+      style: entry.style ?? "legacy",
     });
   };
 
@@ -94,6 +106,7 @@ export function flatten_manifest(manifest: Manifest): WorkItem[] {
       file: entry.file,
       dest: new URL(`objects/${filename}`, textures_dir),
       paletteHex: entry.paletteHex ?? null,
+      style: entry.style ?? "legacy",
     });
   }
 
