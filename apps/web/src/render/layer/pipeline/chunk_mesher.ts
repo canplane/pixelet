@@ -5,7 +5,7 @@
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
-import type { LODStep } from "@/render/lod.ts";
+import type { LodStep } from "@/render/lod.ts";
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE, unpack_sub_cell_fraction } from "./volume.ts";
 import { type MeshRun, run_to_box } from "./voxel_scan.ts";
 
@@ -184,7 +184,7 @@ function is_run_occluded(column_runs: readonly MeshRun[][], cx: u32, cy: u32, ru
  */
 export function build_chunk_instances(
   column_runs: readonly MeshRun[][],
-  lod_step: LODStep,
+  lod_step: LodStep,
 ): BuiltChunkSet {
   if (lod_step === 1) {
     let total_terrain: u32 = 0;
@@ -272,7 +272,7 @@ function collect_layer_tap(acc: ZBucketAccum, layer_idx: u32): void {
  * below `lod_step^3`). A sub-cell run occupies one fine voxel fractionally;
  * its weight is the volumetric fraction (linear fraction cubed), not 1.
  */
-function accumulate_run(buckets: ZBucketAccum[], lod_step: LODStep, run: MeshRun): void {
+function accumulate_run(buckets: ZBucketAccum[], lod_step: LodStep, run: MeshRun): void {
   if (run.sub_sz !== SUB_CELL_NONE) {
     const frac = unpack_sub_cell_fraction(run.sub_sz);
     const w = frac * frac * frac;
@@ -319,7 +319,7 @@ function write_averaged_instance(
   cnt: u32,
   bx: u32,
   by: u32,
-  lod_step: LODStep,
+  lod_step: LodStep,
   acc: ZBucketAccum,
 ): void {
   const max_coverage: f64 = lod_step * lod_step * lod_step;
@@ -374,7 +374,7 @@ function write_averaged_instance(
  * that, the same amortization the old per-chunk surface cache had, without
  * that surface's single-height-per-column ceiling (see `accumulate_run`).
  */
-export function build_chunk_instances_coarse(column_runs: readonly MeshRun[][], lod_step: LODStep): BuiltChunkSet {
+export function build_chunk_instances_coarse(column_runs: readonly MeshRun[][], lod_step: LodStep): BuiltChunkSet {
   if (lod_step === 1) throw new Error("render: finest LOD requires per-run meshing");
 
   const res: u32 = CHUNK_CELL_SPAN / lod_step;

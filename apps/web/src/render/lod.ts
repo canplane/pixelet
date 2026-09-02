@@ -7,11 +7,11 @@ import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 /** XY sampling stride in L1 blocks inside one 64x64 chunk. */
 export const LOD_STEP_BY_LEVEL = [1, 2, 4, 8, 16, 32, 64] as const;
 
-export type LODLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-export type LODStep = (typeof LOD_STEP_BY_LEVEL)[LODLevel];
+export type LodLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type LodStep = (typeof LOD_STEP_BY_LEVEL)[LodLevel];
 
 /** Moves one adjacent tier so sudden camera/page changes never jump 64 -> 1. */
-export function step_lod_toward(current: LODStep, target: LODStep): LODStep {
+export function step_lod_toward(current: LodStep, target: LodStep): LodStep {
   if (current === target) return target;
   const current_level = LOD_STEP_BY_LEVEL.indexOf(current);
   const direction = target < current ? -1 : 1;
@@ -104,10 +104,10 @@ export function get_lod_pair_visibility(r: f64, coarse_fraction: f64): { finer: 
 // have no band to stay consistent with, so they keep the original, wider
 // LOD_MARGIN-based cushion — a hard pop there is already the least
 // noticeable case (see BLEND_ELIGIBLE_THRESHOLDS's own comment).
-function calculate_lod_step(dist: f64, current_lod_step: LODStep): LODStep {
+function calculate_lod_step(dist: f64, current_lod_step: LodStep): LodStep {
   for (let i = 0; i < LOD_THRESHOLDS.length; i++) {
     const raw_t: f64 = LOD_THRESHOLDS[i];
-    const finer_step: LODStep = LOD_STEP_BY_LEVEL[i];
+    const finer_step: LodStep = LOD_STEP_BY_LEVEL[i];
 
     // hysteresis only ever resists *becoming finer* (shrinking the
     // threshold once already coarser than this tier) — there's no
@@ -124,7 +124,7 @@ function calculate_lod_step(dist: f64, current_lod_step: LODStep): LODStep {
   return LOD_STEP_BY_LEVEL[LOD_STEP_BY_LEVEL.length - 1];
 }
 
-function get_lod_level(lod_step: LODStep): LODLevel {
+function get_lod_level(lod_step: LodStep): LodLevel {
   if (lod_step === 1) return 0;
   if (lod_step === 2) return 1;
   if (lod_step === 4) return 2;
@@ -134,14 +134,14 @@ function get_lod_level(lod_step: LODStep): LODLevel {
   return 6;
 }
 
-export function get_instance_cnt(lod_step: LODStep): u32 {
+export function get_instance_cnt(lod_step: LodStep): u32 {
   const side: u32 = Math.floor(CHUNK_CELL_SPAN / lod_step);
   return side * side;
 }
 
-export type LODGuide = {
-  lod_level: LODLevel;
-  lod_step: LODStep;
+export type LodGuide = {
+  lod_level: LodLevel;
+  lod_step: LodStep;
   instance_cnt: u32;
 
   /**
@@ -166,14 +166,14 @@ export type LODGuide = {
    */
   coarse_fraction: f64;
   /** The finer of the two steps this threshold separates. null unless blend_active. */
-  blend_finer_step: LODStep | null;
+  blend_finer_step: LodStep | null;
   /** The coarser of the two steps this threshold separates. null unless blend_active. */
-  blend_coarser_step: LODStep | null;
+  blend_coarser_step: LodStep | null;
 };
 
-export function get_lod_guide(dist: f64, current_lod_step: LODStep): LODGuide {
-  const lod_step: LODStep = calculate_lod_step(dist, current_lod_step);
-  const lod_level: LODLevel = get_lod_level(lod_step);
+export function get_lod_guide(dist: f64, current_lod_step: LodStep): LodGuide {
+  const lod_step: LodStep = calculate_lod_step(dist, current_lod_step);
+  const lod_level: LodLevel = get_lod_level(lod_step);
   const instance_cnt: u32 = get_instance_cnt(lod_step);
 
   const blend_eligible_len: u32 = Math.min(LOD_THRESHOLDS.length, BLEND_ELIGIBLE_THRESHOLDS);
@@ -182,8 +182,8 @@ export function get_lod_guide(dist: f64, current_lod_step: LODStep): LODGuide {
     const half_band: f64 = t * BLEND_BAND_FRACTION;
     if (dist < t - half_band || dist > t + half_band) continue;
 
-    const finer: LODStep = LOD_STEP_BY_LEVEL[i];
-    const coarser: LODStep = LOD_STEP_BY_LEVEL[i + 1];
+    const finer: LodStep = LOD_STEP_BY_LEVEL[i];
+    const coarser: LodStep = LOD_STEP_BY_LEVEL[i + 1];
     // calculate_lod_step's hysteresis can occasionally leave lod_step
     // outside this specific {finer, coarser} pair even while `dist` sits
     // inside this threshold's band (e.g. right after a large, sudden
