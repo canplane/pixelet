@@ -97,7 +97,7 @@ export function MapScene() {
         }}
       >
         <Canvas
-          // dpr [1,2] (debug_store.ts's high_dpr, default off): real spatial
+          // dpr [1,2] (settings_store.ts's high_dpr, default on): real spatial
           // supersampling, not just edge AA. MSAA (tried below, previously
           // multisampling={4}) only resolves per-sample *coverage/depth* —
           // the fragment shader itself still runs once per output pixel, so
@@ -115,9 +115,10 @@ export function MapScene() {
           // stack included), since dpr=2 on a Retina/high-DPI display means
           // 4x the pixels; separate from chunk-count/frustum-culling
           // effects, which don't depend on pixel count at all. Confirmed the
-          // single biggest post-stack cost on real devices, so it defaults
-          // off (pinned at [1,1]) — settings-modal-only (Quality section's
-          // "High Resolution" toggle) rather than on by default.
+          // single biggest post-stack cost on real devices, but the app now
+          // ships with a real art pack behind it and defaults this on
+          // anyway — off is a Quality section ("High Resolution" toggle)
+          // opt-out for low-end devices, not the shipped default.
           // The [1,2] cap keeps it from ever exceeding 2x even on a
           // 3x/4x-DPR phone once it is.
           dpr={high_dpr ? [1, 2] : [1, 1]}
