@@ -17,9 +17,12 @@
  * nested frame automatically) is the only way this stays exact.
  */
 
-import type { Camera, Frustum, Group, Matrix4, Vector3 } from "three";
+import { Frustum, Matrix4, Sphere, Vector3 } from "three";
+import type { Camera, Group } from "three";
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { get_lod_guide, type LodStep } from "@/render/lod.ts";
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 
@@ -60,4 +63,59 @@ export function chunk_distance_to_camera(
 export function update_frustum(frustum: Frustum, camera: Camera, scratch_matrix: Matrix4): void {
   scratch_matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   frustum.setFromProjectionMatrix(scratch_matrix);
+}
+
+export type InitialChunkView = { in_frustum: boolean; distance2: f64; lod_step: LodStep };
+
+/**
+ * A one-shot, synchronous camera-relative estimate for a chunk that has no
+ * mounted group yet to measure through chunk_distance_to_camera — computed
+ * straight from `canonical_origin` (the chunk's own anchor-space origin,
+ * page_base + its own offset) against `map_origin`
+ * (AnchorRegistry.cur_map_origin), the exact "before any group exists"
+ * hand-rolled math this file's own top doc comment warns drifts from the
+ * live floating-origin frame. That drift is acceptable here specifically
+ * because this is a ONE-SHOT seed, not the ongoing per-frame measurement:
+ * without it, a ChunkLodControl starts with distance2 at a true sentinel
+ * (Infinity) and in_frustum guessed some other way, so an entire batch of
+ * controls mounted in the same frame (a big pan/zoom) has nothing but
+ * registration order to rank by until each one gets its own first real
+ * recheck() — which, for a large batch under the scheduler's own recheck
+ * budget, can take several frames, during which "closest to the camera
+ * gets attention first" silently degrades to "mounted first gets attention
+ * first" instead. A same-frame batch that starts with a real (if
+ * approximate) camera-distance instead ranks correctly from frame one;
+ * the first genuine recheck() (using a real mounted group's matrixWorld)
+ * then corrects any drift, exactly like the in_frustum guess already does.
+ * z=0 (no real elevation yet) is the same approximation the ongoing
+ * frustum test already accepts for a chunk that hasn't measured its own
+ * true bounds yet.
+ */
+export function estimate_initial_chunk_view(
+  camera: Camera,
+  map_origin: IVec,
+  canonical_origin: IVec,
+): InitialChunkView {
+  const local_origin = ivec.sub(canonical_origin, map_origin);
+  const center = new Vector3(
+    ivec.to_real(ivec.X(local_origin)) + CHUNK_WORLD_SPAN * 0.5,
+    ivec.to_real(ivec.Y(local_origin)) + CHUNK_WORLD_SPAN * 0.5,
+    0,
+  );
+  const frustum = new Frustum();
+  update_frustum(frustum, camera, new Matrix4());
+  const sphere = new Sphere(center, APPROXIMATE_CHUNK_RADIUS);
+  // Same "camera sits directly over/inside this chunk" fallback
+  // chunk_stage.tsx's own Chunk.recheck() applies for its unbuilt-bounds
+  // case — a low-angle frustum can otherwise rule out the one chunk
+  // directly beneath the camera.
+  const camera_projection_inside = Math.abs(camera.position.x - center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
+    Math.abs(camera.position.y - center.y) <= CHUNK_WORLD_SPAN * 0.5;
+  const in_frustum = camera_projection_inside || frustum.intersectsSphere(sphere);
+  const distance2 = center.distanceToSquared(camera.position);
+  return {
+    in_frustum,
+    distance2,
+    lod_step: in_frustum ? get_lod_guide(Math.sqrt(distance2), 64).lod_step : 64,
+  };
 }

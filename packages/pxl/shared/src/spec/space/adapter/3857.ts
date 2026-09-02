@@ -26,7 +26,7 @@
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { type FVec, type IVec, projection, type PVF3 } from "../pvf3/mod.ts";
-import { FRAC_W, IVEC_X_W } from "../pvf3/core.ts";
+import { FRAC_W, IVEC_X_W, IVEC_Y_W } from "../pvf3/core.ts";
 import { FROM_L3_IDX, L3_RANGE } from "../indexer.ts";
 import { fill3, type V3 } from "../v3.ts";
 
@@ -74,9 +74,18 @@ export const M_PER_U: f64 = WORLD_WIDTH_3857 / U_TOTAL_X; // 1 [u] ≈ 2.389 [m]
 
 // Y is clamped rather than cyclic. Its positive bound must stay half-open:
 // +2^23u is the signed lane's negative endpoint, so the northernmost valid
-// value is the final 1/1024u lattice point immediately below that boundary.
+// value is the final 1/2^FRAC_W u lattice point immediately below that
+// boundary. This bound is expressed in meters only for the coarse Z_SCALE
+// lookup below; the bit-exact lattice clamp happens in `project()` directly
+// in u-space (see comment there) since round-tripping the boundary through
+// meters<->u conversion loses just enough precision to floor to the wrong
+// lattice point.
 const Y_MIN_3857: f64 = -HALF_W_3857;
-const Y_MAX_3857: f64 = HALF_W_3857 - M_PER_U / 2 ** FRAC_W;
+const Y_MAX_3857: f64 = HALF_W_3857;
+
+// Exact (power-of-two, hence lossless in f64) u-space pole clamp bounds.
+const Y_MIN_U: f64 = -(2 ** (IVEC_Y_W - 1));
+const Y_MAX_U: f64 = 2 ** (IVEC_Y_W - 1) - 2 ** -FRAC_W;
 
 /**
  * Public Mercator vertical scale contract.
@@ -134,13 +143,19 @@ export const project = (out: PVF3, x: f64, y: f64, z: f64 = 0): PVF3 => {
   x = ((((x + HALF_W_3857) % WORLD_WIDTH_3857) + WORLD_WIDTH_3857) % WORLD_WIDTH_3857) - HALF_W_3857;
   // The signed Y lane represents a half-open Mercator square. Unlike X, Y
   // clamps at the poles instead of wrapping through the opposite boundary.
+  // This meters-space clamp is coarse (±HALF_W_3857, the exact poles) and
+  // feeds only Z_SCALE below, which is itself page-quantized; the bit-exact
+  // lattice boundary is enforced after conversion to u, below.
   y = Math.max(Y_MIN_3857, Math.min(Y_MAX_3857, y));
   // Vertical Mercator correction
   z = z * Z_SCALE(y);
 
   // Physical meters -> normalized lattice units
   x *= U_PER_M;
-  y *= U_PER_M;
+  // Exact clamp in u-space: Y_MIN_U/Y_MAX_U are power-of-two-derived and
+  // therefore representable without rounding, unlike the meters-space
+  // boundary they replace.
+  y = Math.max(Y_MIN_U, Math.min(Y_MAX_U, y * U_PER_M));
   z *= U_PER_M;
   projection.project(out, x, y, z);
 

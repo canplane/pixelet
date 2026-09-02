@@ -88,7 +88,7 @@ work itself faster. Two independent, stackable levers — not one fix.
 
 ### B. GPU fill rate scaling with screen area — addressed
 
-A large viewport with only *small* camera movements — no tile loading at all —
+A large viewport with only _small_ camera movements — no tile loading at all —
 still stuttered, while shrinking the window to phone size made it smooth. A
 different bottleneck from A: present on every frame, scaling with on-screen pixel
 count.

@@ -1,6 +1,6 @@
 // @pxl/web/modules/world/markers/hover_cursor.tsx
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import type { PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -13,10 +13,12 @@ import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { get_local_world_origin } from "../frame/coord.ts";
 import { find_overlapping_object } from "../objects/collision.ts";
-import { usePlacedObject } from "../objects/store.ts";
-import { object_color_hex } from "@pxl/shared/spec/cell/objects.ts";
+import { set_virtual_hide, usePlacedObject } from "../objects/store.ts";
+import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import { get_object_texture } from "../objects/tex.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { marker_colors } from "./style.ts";
+import { light_cfg } from "@/modules/world/environment/config.ts";
 
 // Flat, no border: a bordered box only reads cleanly on a primitive with
 // per-face UVs mapped 0-1 (this one's own previous implementation) — an
@@ -57,12 +59,54 @@ export function HoverCursor() {
     return false;
   }, [activeTool, hovered, map_center, object_size, hovered_object]);
 
-  // The real target ghosts at its own true color, whether it's an existing
-  // object under the cursor (eraser or pointer alike — both are "here's the
-  // real thing", not "here's what this tool does") or a placement
-  // candidate. Bare terrain with no object and no placement in flight has
-  // no real color to borrow, so it keeps the generic marker color.
-  const color: string = hovered_object ? object_color_hex(hovered_object.color_id) : activeTool === "object" ? object_color_hex(object_color_id) : marker_colors.ACTION;
+  // Makes the real erase candidate actually stop rendering (see
+  // set_virtual_hide's own doc comment) — the ghost mesh below then reads as
+  // a translucent preview over whatever's really behind/below it, not a
+  // ghost merely laid on top of a still fully-opaque real object. Depends on
+  // the plain id, not `hovered_object` itself, so an unrelated re-derivation
+  // of the same cell (same id, new object literal) doesn't spuriously
+  // clear-then-reset the hide and force a needless chunk rebuild.
+  //
+  // This ghost's own appearance/disappearance is instant, and the real
+  // object's isn't (its own hide has to propagate through a few React
+  // commits via chunk_stage.tsx's Chunk) — accepted as-is, a deliberate
+  // choice, not an oversight: see set_virtual_hide's own doc comment for
+  // the fade/multi-slot system that was built to mask the resulting few
+  // milliseconds of overlap, then reverted for being real added complexity
+  // for a barely-visible cosmetic gap.
+  const virtual_hide_target = activeTool === "eraser" && hovered_object ? hovered_object.id : null;
+  useEffect(() => {
+    set_virtual_hide(virtual_hide_target);
+    return () => set_virtual_hide(null);
+  }, [virtual_hide_target]);
+
+  // Pointer (select/move) always reads as the generic marker color, whether
+  // it's hovering bare terrain or an existing object — the two need to look
+  // identical (same cyan/sky-blue ghost) since neither is "here's the real
+  // thing you're about to add or remove", just "here's what you could grab".
+  // Object placement and eraser instead ghost at the real thing's own true
+  // color_id — the placement candidate's for object mode, the existing
+  // object's own for eraser — since both of those really are "here's the
+  // real thing". Bare terrain with no real color_id to borrow (pointer, or
+  // object mode with no candidate color context) has none.
+  const color_id: ObjectColorId | null = activeTool === "pointer" ? null : hovered_object ? hovered_object.color_id : activeTool === "object" ? object_color_id : null;
+
+  // The real thing's own actual painted texture (objects/tex.ts's own
+  // cached, pixel-art-filtered load — the exact file a real placed cube of
+  // this color renders with), not just its flat hex swatch: a flat color
+  // was reading as an "unlit UI highlight" shape with the real surface
+  // detail gone, even after the material itself became lit (see this file's
+  // own emissive/roughness comment below) — texture is what a real render
+  // actually looks like, lighting alone wasn't enough. Loaded directly from
+  // the source PNG via a plain THREE.Texture, not chunk_stage.tsx's own
+  // DataArrayTexture + per-instance-layer-index shader: that path needs the
+  // same per-instance attributes and instanceMatrix this file's own
+  // material comment already ruled out reusing, for the exact same reason.
+  // `color` becomes white whenever a real texture is used — MeshStandardMaterial
+  // multiplies map by color, and the texture already carries the real hue,
+  // so leaving color at the hex value would double-tint it.
+  const map = color_id ? get_object_texture(color_id) : null;
+  const color: string = map ? "#ffffff" : marker_colors.ACTION;
 
   const current_scale = use_object_style ? preview_size : U_PER_CELL;
 
@@ -77,8 +121,43 @@ export function HoverCursor() {
           // object mode uses the default order so real depth occlusion works.
           renderOrder={use_object_style ? 0 : 9999}
         >
-          <meshBasicMaterial
+          <meshStandardMaterial
             color={color}
+            map={map}
+            // Lit, not meshBasicMaterial's flat/unlit fill: the goal is "a
+            // real render of the thing, just half-transparent", not a flat
+            // color swatch shaped like it — an unlit ghost reads as a UI
+            // highlight overlay, a lit one reads as the thing itself. Plain
+            // MeshStandardMaterial (roughness/metalness matched to
+            // chunk_stage.tsx's own create_material()), not that file's
+            // actual material: that one's onBeforeCompile hard-requires
+            // per-instance attributes (INSTANCE_RGB_ATTR/LAYER_TAPS/VISIBLE)
+            // and instanceMatrix that only exist on a real ChunkInstanceMesh
+            // — reusing it here would mean wrapping this single ghost box in
+            // a 1-count InstancedMesh just to satisfy that contract, real
+            // coupling to chunk_stage.tsx's own instancing internals for a
+            // rim-light/terrain-layer-texturing payoff this preview doesn't
+            // need — the actual texture pattern (this material's own `map`
+            // above) already comes from the same source PNG a real object
+            // renders with, just loaded as a plain Texture instead of
+            // through that shader's DataArrayTexture.
+            //
+            // emissive+emissiveMap+emissiveIntensity mirrors
+            // environment/config.ts's shared light_cfg.FLOOR — the exact
+            // same minimum-brightness floor every other real-lit surface in
+            // the scene gets (terrain and objects alike, via
+            // chunk_stage.tsx's own shader injection: `totalEmissiveRadiance
+            // = base_rgb * FLOOR`, base_rgb there being the sampled texture
+            // itself, not a flat color). emissiveMap (not just emissive)
+            // matters here for the same texture-vs-flat-color reason as map
+            // above: without it the floor would glow as a flat tinted
+            // rectangle in the dark instead of dimly showing the same
+            // texture pattern the lit portion shows.
+            emissive={color}
+            emissiveMap={map}
+            emissiveIntensity={light_cfg.FLOOR}
+            roughness={1}
+            metalness={0}
             transparent
             opacity={GHOST_OPACITY}
             side={THREE.DoubleSide}

@@ -47,14 +47,14 @@ deno task dev
 The monorepo, package management, and task execution are unified under Deno.
 The web app uses Vite as its bundling/build entry; the api runs directly under Deno.
 
-| Layer               | Technology                                   |
-| ------------------- | -------------------------------------------- |
-| Runtime / Workspace | Deno + TypeScript                            |
-| Bundler (web)       | Vite                                         |
-| Web UI              | React 19                                     |
-| API                 | Hono                                         |
-| 3D Rendering        | Three.js + React Three Fiber                 |
-| Database            | PostgreSQL (main + geographic/PostGIS)       |
+| Layer               | Technology                                          |
+| ------------------- | --------------------------------------------------- |
+| Runtime / Workspace | Deno + TypeScript                                   |
+| Bundler (web)       | Vite                                                |
+| Web UI              | React 19                                            |
+| API                 | Hono                                                |
+| 3D Rendering        | Three.js + React Three Fiber                        |
+| Database            | PostgreSQL (main + geographic/PostGIS)              |
 | Geodata             | OpenStreetMap (OSM) + Copernicus GLO-30 (elevation) |
 
 Two more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3) and a typed-array wire protocol (XTP) for terrain transport. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
@@ -106,4 +106,5 @@ Dense `64³` Volumes exist only while composing and meshing. Long-lived state ke
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the coordinate system, spatial hierarchy, unified world-layer pipeline, and wire format work under the hood. See [discussions/](./discussions/) for the reasoning behind those design decisions.
 
 ---
+
 [github.com/canplane/pixelet](https://github.com/canplane/pixelet)

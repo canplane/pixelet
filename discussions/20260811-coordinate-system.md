@@ -3,8 +3,8 @@
 **2026-08-11**, reconstructed from git history — the reasoning behind PVF3, the
 L4 anchor registry, the three-tier camera frame, and the 3857/4326 adapters.
 
-[ARCHITECTURE.md](../ARCHITECTURE.md) describes *what* these are. This document
-covers *why*, and what the design went through to get there.
+[ARCHITECTURE.md](../ARCHITECTURE.md) describes _what_ these are. This document
+covers _why_, and what the design went through to get there.
 
 ---
 
@@ -38,7 +38,7 @@ sufficient motivation by itself, and they all point the same way:
    about a later XR transition. On desktop and touch the camera is fixed and the
    world moves; in AR/VR the device genuinely moves with 6DOF and the world is
    fixed. With content already separated by which invariance it needs, switching
-   *who moves* becomes a swap rather than a rewrite. **No WebXR code exists — this
+   _who moves_ becomes a swap rather than a rewrite. **No WebXR code exists — this
    is design motivation only, not implementation.**
 
 ## The three-tier camera frame, and the combination it can't express
@@ -46,19 +46,19 @@ sufficient motivation by itself, and they all point the same way:
 Translation and rotation each being variant or invariant gives four theoretical
 combinations. The tree has room for three:
 
-| Combination | Where it lives | Actually used for |
-| --- | --- | --- |
-| Both invariant | `view-frame` (no hook touches it) | Screen-fixed HUD/gizmos — no real content yet, debug markers only |
-| Rotation variant only | `world-frame` (`useFrameRotation`) | **In real use** — `environment.tsx` reads `world_frame_ref.rotation.z` to spin the sky with bearing; celestial bodies are "infinitely far", so translating them is meaningless |
-| Both variant | `local-world-frame` (nested inside `world-frame`, `useFrameTranslation`) | All actual world content — terrain, markers |
-| **Translation variant, rotation invariant** | **no slot** | Unimplemented |
+| Combination                                 | Where it lives                                                           | Actually used for                                                                                                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Both invariant                              | `view-frame` (no hook touches it)                                        | Screen-fixed HUD/gizmos — no real content yet, debug markers only                                                                                                              |
+| Rotation variant only                       | `world-frame` (`useFrameRotation`)                                       | **In real use** — `environment.tsx` reads `world_frame_ref.rotation.z` to spin the sky with bearing; celestial bodies are "infinitely far", so translating them is meaningless |
+| Both variant                                | `local-world-frame` (nested inside `world-frame`, `useFrameTranslation`) | All actual world content — terrain, markers                                                                                                                                    |
+| **Translation variant, rotation invariant** | **no slot**                                                              | Unimplemented                                                                                                                                                                  |
 
 The missing one is the interesting case: POI place labels, which should follow a
 position but stay upright regardless of bearing — the same counter-rotation
 pattern Google Maps and Mapbox use for labels. `poi/layer.tsx` and `poi_item.tsx`
 exist, but there is no text-label feature yet, so the need hasn't surfaced.
 
-**Why the slot doesn't exist:** `local-world-frame` is nested *inside*
+**Why the slot doesn't exist:** `local-world-frame` is nested _inside_
 `world-frame`, and there is no way to inherit a parent's translation without its
 rotation.
 

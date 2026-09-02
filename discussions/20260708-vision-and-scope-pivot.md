@@ -35,7 +35,7 @@ infrastructure — which means a server exists anyway. The premise that motivate
 every downstream system doesn't survive contact with the platform.
 
 **WASM obfuscation doesn't defend anything.** As long as the client holds the
-whole binary, it is not real protection. Worse, it *contradicts* the BFT premise
+whole binary, it is not real protection. Worse, it _contradicts_ the BFT premise
 sitting next to it: BFT says "do not trust the client", obfuscation says "hide
 the client's code and you're fine". Those are opposite postures, and holding both
 at once meant neither was being taken seriously.
@@ -75,7 +75,7 @@ integers natively). TypeScript/BigInt was the spec and reference implementation;
 Rust was to be the performant one — the same "core lives inside WASM" posture
 Figma has.
 
-*Implication of the no-WASM pivot:* the problem Rust was going to solve reopens.
+_Implication of the no-WASM pivot:_ the problem Rust was going to solve reopens.
 Either keep BigInt in plain JS and accept the cost, or replace it with
 floating-origin rebasing onto float64 (52-bit mantissa gives sub-millimeter
 precision over a wide region near the origin). The latter is this field's standard
@@ -87,7 +87,7 @@ actually built.
 "schemaless FlatBuffers-feeling, C-memory-layout friendly, relocatable across
 languages". FlatBuffers and Cap'n Proto need a schema plus codegen; msgpack and
 CBOR are schemaless but give no zero-copy lazy access. XTP offers relative-offset
-lazy/random access *and* relocation (subtree splice) without a schema — a real
+lazy/random access _and_ relocation (subtree splice) without a schema — a real
 gap. It already has both TypeScript and Rust implementations, so it is
 cross-language validated. Plausible spin-out asset.
 

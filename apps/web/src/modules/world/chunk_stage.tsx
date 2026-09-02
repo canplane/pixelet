@@ -46,7 +46,7 @@ import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { type MeshRun, scan_all_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
-import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, update_frustum } from "@/render/chunk_lod.ts";
+import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view, update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_WORK_BUDGET_MS: f64 = 4;
@@ -527,36 +527,6 @@ function blend_hash(key: string): f64 {
   return (hash >>> 0) / 0x1_0000_0000;
 }
 
-type InitialChunkView = { in_frustum: boolean; lod_step: LodStep };
-
-function get_initial_chunk_view(
-  camera: THREE.Camera,
-  map_origin: IVec,
-  page_idx: IVec,
-  page_off: IVec,
-): InitialChunkView {
-  const canonical_origin = ivec.add(FROM_L3_IDX(page_idx), page_off);
-  const local_origin = ivec.sub(canonical_origin, map_origin);
-  const center = new THREE.Vector3(
-    ivec.to_real(ivec.X(local_origin)) + CHUNK_WORLD_SPAN * 0.5,
-    ivec.to_real(ivec.Y(local_origin)) + CHUNK_WORLD_SPAN * 0.5,
-    0,
-  );
-  const frustum = new THREE.Frustum();
-  update_frustum(frustum, camera, new THREE.Matrix4());
-  const sphere = new THREE.Sphere(center, APPROXIMATE_CHUNK_RADIUS);
-  // A never-built chunk has no exact Z bounds yet. Preserve the camera's
-  // projected chunk as a one-chunk safety guard; a full signed-Z column makes
-  // nearly every horizontal chunk intersect a low-angle frustum.
-  const camera_projection_inside = Math.abs(camera.position.x - center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
-    Math.abs(camera.position.y - center.y) <= CHUNK_WORLD_SPAN * 0.5;
-  const in_frustum = camera_projection_inside || frustum.intersectsSphere(sphere);
-  return {
-    in_frustum,
-    lod_step: in_frustum ? get_lod_guide(center.distanceTo(camera.position), 64).lod_step : 64,
-  };
-}
-
 type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack };
 
 const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
@@ -608,7 +578,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
       if (!column_runs_ref.current) {
         let deferred = false;
         const scan_t0 = performance.now();
-        with_temporary_composite(stack, key, (volume) => {
+        const compose_result = with_temporary_composite(stack, key, (volume) => {
           const band_count = volume.bands.length;
           const avg_bands = lod_build_stats.scan_count > 0 ? lod_build_stats.scan_bands / lod_build_stats.scan_count : 0;
           const avg_ms = lod_build_stats.scan_count > 0 ? lod_build_stats.scan_ms / lod_build_stats.scan_count : 0;
@@ -625,6 +595,21 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
           lod_build_stats.scan_bands_max = Math.max(lod_build_stats.scan_bands_max, band_count);
         });
         if (deferred) return null;
+        // with_temporary_composite itself returns null (its own callback
+        // never runs at all) when composite_chunk_layers finds nothing
+        // painted by any layer for this exact key — a real, if rare,
+        // transient case (a batch of chunks racing their very first build
+        // around the same moment can all momentarily read a layer as empty)
+        // — NOT the same as "genuinely nothing here, done forever". Falling
+        // through to the empty-bucket-list return below would make
+        // commit() treat this as a fully successful build (ready: true,
+        // pending: false, buckets: []) with no way to ever retry — a
+        // permanent black hole exactly where this one-off race happened,
+        // and since a whole neighboring batch can hit it at once, a
+        // contiguous shape (a hole, a ring) rather than one stray chunk.
+        // Returning null here instead — same as a deferred scan — keeps
+        // this chunk pending so the scheduler just tries it again.
+        if (compose_result === null) return null;
         const scan_ms = performance.now() - scan_t0;
         lod_build_stats.scan_ms += scan_ms;
         lod_build_stats.scan_count++;
@@ -676,7 +661,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
   };
 
   const initial_view = useMemo(
-    () => get_initial_chunk_view(camera, anchor_registry.cur_map_origin, page_idx, page_off),
+    () => estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, ivec.add(FROM_L3_IDX(page_idx), page_off)),
     [anchor_registry, camera, page_idx, page_off],
   );
 
@@ -755,7 +740,15 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
       blend_active: true,
       settling: false,
       in_frustum: initial_view.in_frustum,
-      distance2: Infinity,
+      // Seeded from the same one-shot camera-relative estimate in_frustum
+      // above already used, not a true (Infinity) sentinel — see
+      // estimate_initial_chunk_view's own doc comment for why a real,
+      // if approximate, distance matters here: the scheduler's recheck loop
+      // ranks a same-frame batch of freshly mounted controls by this field,
+      // and every one of them starts blend_active with no group mounted yet
+      // to measure exactly, so Infinity would make that ranking degrade to
+      // registration order for the whole batch.
+      distance2: initial_view.distance2,
       pending: false,
       recheck(camera, frustum) {
         const group = group_ref.current;
@@ -926,7 +919,7 @@ PageChunks.displayName = "PageChunks";
  * ChunkStage keeping ownership of something it no longer exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set() }), []);
+  const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set(), ready: new Set() }), []);
   const lod_elapsed = useRef(LOD_RECHECK_INTERVAL);
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const { gl } = useThree();
@@ -965,15 +958,60 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // recheck()-ing every one of them every single frame (previously
     // unconditional) cost up to ~23ms by itself — a stale blend/settling
     // flag for one skipped frame is a much smaller visual cost than that.
+    //
+    // Sorted, not left in whatever order controls happened to register into
+    // the Set — plain registration order has no relationship to real 3D
+    // distance from the camera, so under real budget pressure (a big
+    // pan/zoom mounting many chunks in one frame) it could let a handful of
+    // far chunks resolve first purely because they mounted first, while much
+    // closer chunks queued behind them for a frame or more — the opposite
+    // of the "resolves outward from the camera" this whole scheduler exists
+    // for. Same (in_frustum desc, distance2 asc) key the commit loop below
+    // sorts pending by — one shared notion of priority, not two.
+    //
+    // distance2 is always a real, if sometimes approximate, camera-relative
+    // value now (every control seeds it from estimate_initial_chunk_view at
+    // construction — see that control's own distance2 field comment — never
+    // a true Infinity sentinel), so this alone is enough: a brand new
+    // control mounted this very frame competes fairly on real distance
+    // against an older still-pending one instead of needing a separate
+    // "urgent" tier. An earlier version of this sort DID give blend_active/
+    // settling controls a whole tier ahead of distance — that seemed right
+    // (their own first-ever recheck matters most) but backfires under
+    // sustained camera movement: a continuously panning camera keeps
+    // minting brand-new blend_active chunks at its leading edge, an
+    // unbounded stream that could occupy the "urgent" tier forever and
+    // starve an older, still-pending, genuinely-closer chunk that merely
+    // isn't blend_active/settling anymore — exactly "far keeps cutting in
+    // line over near" during continuous motion, not just a one-off frame.
+    // Distance alone doesn't have that failure mode: a far new chunk sorts
+    // behind a near old one no matter how continuously the camera moves.
+    //
+    // Filtered to this frame's actually-eligible controls BEFORE sorting,
+    // not sorted-then-filtered — controls can number in the thousands
+    // (every terrain chunk across LOAD_RADIUS's whole page window, times
+    // every decor kind on top), and on all but a full_recheck frame only
+    // the blend_active/settling subset (usually far smaller) needs
+    // anything done at all. Sorting the full set every single frame
+    // regardless of eligibility would size this copy+sort to the total
+    // registrant count instead of the actual per-frame workload — real,
+    // needless GC pressure and comparisons on the common (non-full_recheck)
+    // frame, for a subset most of which was about to be skipped anyway.
+    const eligible = controls.filter((control) => full_recheck || control.blend_active || control.settling);
+    eligible.sort((a, b) => Number(b.in_frustum) - Number(a.in_frustum) || a.distance2 - b.distance2);
     const recheck_deadline = performance.now() + LOD_WORK_BUDGET_MS;
     let blend_active = false;
     let rechecked: u32 = 0;
-    for (const control of controls) {
-      const needs_recheck = full_recheck || control.blend_active || control.settling;
-      if (needs_recheck && (rechecked === 0 || performance.now() < recheck_deadline)) {
+    for (const control of eligible) {
+      if (rechecked === 0 || performance.now() < recheck_deadline) {
         control.recheck(state.camera, frustum);
         rechecked++;
       }
+      // Every blend_active-true control is by construction included in
+      // eligible above (it's one of the three needs_recheck conditions),
+      // so this OR over just the eligible subset still sees every one of
+      // them — equivalent to scanning all of controls for this specific
+      // flag, just without paying to visit the ones that couldn't have it.
       blend_active ||= control.blend_active;
     }
     const recheck_ms = import.meta.env.DEV ? performance.now() - recheck_t0 : 0;

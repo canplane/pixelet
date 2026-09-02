@@ -8,8 +8,8 @@
  * residue layer within the PVF3 coordinate system.
  *
  * Offset Architecture (Internal Resolution):
- * [ 31 .. 30 | 29 ....... 20 | 19 ....... 10 | 9 ........ 0 ]
- * [ Reserved |  Lane X (10b) |  Lane Y (10b) |  Lane Z (10b) ]
+ * [ 31 .. 24 | 23 ....... 16 | 15 ....... 8 | 7 ........ 0 ]
+ * [ Reserved |  Lane X (8b) |  Lane Y (8b) |  Lane Z (8b) ]
  * [  Unused  |  Residue X    |  Residue Y    |  Residue Z    ]
  *
  * Operational Integrity & Masking Policy:
@@ -54,7 +54,7 @@ export type FVec = u64;
 // ---- Bit Layout Configuration (Symmetric Lane-based) ----
 
 /**
- * SHAMT: Bit-shift alignment for Z-Y-X sequential packing.
+ * SHAMT: Bit-shift alignment for X-Y-Z sequential packing.
  * Calculated internally based on the core specification.
  */
 const Z_SHAMT: u32 = 0;

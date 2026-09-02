@@ -38,8 +38,19 @@ export interface WorldLayer {
    * Paints directly into the shared signed-band target. Later registered
    * layers overwrite earlier layers at the same voxel. Returns true when the
    * layer contributed at least one voxel.
+   *
+   * `opts.for_raycast` tells a layer this composite is for hit-testing
+   * (compositor.ts's own with_raycast_composite), not the real GPU-mesh
+   * build (with_temporary_composite) — see ObjectWorldLayer's own use of it
+   * in render/layer/objects/adapter.ts. A layer that paints a cosmetic,
+   * render-only exclusion (an object hover-hidden for the eraser tool's
+   * preview, objects/store.ts's set_virtual_hide) must still paint the real
+   * thing for a raycast pass, or the raycaster can no longer hit what the
+   * user is pointing at — hover clears, the exclusion lifts, the raycaster
+   * hits it again, hover sets, the exclusion reapplies — an infinite loop
+   * (confirmed live, "Maximum update depth exceeded" 2026-09-03).
    */
-  paint(key: ChunkKey, target: ChunkVolume): boolean;
+  paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean;
 }
 
 /** Registration order is override priority: later layers win. */

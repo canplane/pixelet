@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 import { APP_ENV, BUILD_TIME, HAS_STATIC_TILES, TILE_BASE_URL } from "@/lib/env/config.ts";
+import { OBJECT_STORAGE_VERSION } from "@/modules/world/objects/store.ts";
 
 const tile_version: string = (TILE_BASE_URL.split("/").filter(Boolean).pop() ?? "").replace(/^v/, "");
 
@@ -42,7 +43,8 @@ export function AboutSection() {
         <span className="text-muted-foreground/70">
           {APP_ENV !== "production" && `${env_label} · `}
           {build_label()}
-          {` · ${HAS_STATIC_TILES ? `Tile version ${tile_version}` : "Live tile"}`}
+          {` · ${HAS_STATIC_TILES ? `Tile v${tile_version}` : "Live tile"}`}
+          {` · Object v${OBJECT_STORAGE_VERSION}`}
         </span>
       </div>
     </div>

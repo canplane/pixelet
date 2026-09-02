@@ -16,15 +16,15 @@ did, see [discussions/](./discussions/).
 install from, and `node_modules/` exists only because Deno materializes it.
 Always drive the repo through its tasks, run from the repo root:
 
-| Task | Purpose |
-| --- | --- |
-| `deno task dev` | web + api together |
-| `deno task dev:remote` | client only, tiles from the published deployment |
-| `deno task bake:tiles` | bake every land page into `./out/tiles/<version>` |
-| `deno task deploy` | build the client and publish the Cloudflare Worker |
-| `deno task check` | type-check every workspace member |
-| `deno task test` | tests (only `apps/web` and `packages/pxl/shared` have any) |
-| `deno task fmt` / `lint` | format / lint |
+| Task                     | Purpose                                                    |
+| ------------------------ | ---------------------------------------------------------- |
+| `deno task dev`          | web + api together                                         |
+| `deno task dev:remote`   | client only, tiles from the published deployment           |
+| `deno task bake:tiles`   | bake every land page into `./out/tiles/<version>`          |
+| `deno task deploy`       | build the client and publish the Cloudflare Worker         |
+| `deno task check`        | type-check every workspace member                          |
+| `deno task test`         | tests (only `apps/web` and `packages/pxl/shared` have any) |
+| `deno task fmt` / `lint` | format / lint                                              |
 
 `deno task check` is the gate. Do not report work as done without it passing.
 
@@ -76,6 +76,21 @@ current code before characterizing any part of the product surface.
 **Don't volunteer the Rust/WASM port.** It's parked deliberately (see
 [discussions/](./discussions/)); finishing the MVP in TypeScript with Three.js
 used directly, unwrapped, is the current direction.
+
+**That doesn't license implementation-shaped architecture.** The MVP is
+expected to eventually be rewritten regardless — by whoever ends up doing
+it, on whatever timeline — so building in TypeScript/Three.js now is a
+language/runtime choice, not licence to let a Three.js or React quirk decide
+a core design. Pick the structurally correct shape for the problem (matching
+real prior art where one exists, e.g. Minecraft's own chunk model for
+grid-content rendering) even in TS, so a later rewrite carries the design
+over rather than rediscovering it. Two failure modes to avoid, both hit in
+practice (2026-09-03, terrain/decor render-pipeline desync): don't use "we
+might rewrite this later" to justify a lesser design now, and don't treat
+implementation size/effort as a cost that argues for a smaller ad-hoc patch
+over the correct structure — the only real costs are server spend and
+end-user device load, and a correct larger rewrite usually beats several
+rounds of patching a wrong one anyway.
 
 **One validated UI pattern worth keeping:** `mode_bar` reuses an idle slot
 instead of adding a new element — the send button borrows the palette pill's
@@ -156,12 +171,12 @@ Chrome sizes here come from measuring screenshots of apps doing the same job,
 at their real device scale, not from picking round numbers. The ones already
 derived that way, so they don't get re-derived or drifted off:
 
-| | Measured from | Value |
-| --- | --- | --- |
-| Map circular controls | Naver / Kakao Map | 42, stacked 5 apart |
-| mode_bar tool & swatch pitch | Instagram DM icon row | 38, 18 between glyphs |
-| Equal-width action button pair | Instagram Follow / Message | 32 tall, ~13 label |
-| Floating overlay inset | iOS keyboard accessory bar | 16 |
+|                                | Measured from              | Value                 |
+| ------------------------------ | -------------------------- | --------------------- |
+| Map circular controls          | Naver / Kakao Map          | 42, stacked 5 apart   |
+| mode_bar tool & swatch pitch   | Instagram DM icon row      | 38, 18 between glyphs |
+| Equal-width action button pair | Instagram Follow / Message | 32 tall, ~13 label    |
+| Floating overlay inset         | iOS keyboard accessory bar | 16                    |
 
 Two rules that came out of doing it:
 
@@ -219,7 +234,7 @@ valuable thing in many files. Preserve them when refactoring, extend them when
 you add a non-obvious decision, and never trim one just because it is long. Write
 them in English.
 
-A comment earns its place only when the *current* reasoning is genuinely
+A comment earns its place only when the _current_ reasoning is genuinely
 non-obvious. Never restate something the code already shows on the same or
 next line (a literal value, a class name, an effect a reasonable reader would
 infer) — that isn't a "what" comment given for free, it's the same fact said
@@ -239,7 +254,7 @@ than deleted outright, so the reasoning stays recoverable.
 doc-string, or "the contract says X" as evidence when justifying something —
 verify against the actual code, its behavior, or git history instead, every
 time. Much of the prose in this repository was written by a previous agent turn
-describing what it decided the semantics *should* be, occasionally without
+describing what it decided the semantics _should_ be, occasionally without
 matching what the code does. When the author contradicts a comment — including
 one added earlier in the same session — defer immediately rather than arguing
 from the old text. This is not licence to let comments rot: keep them accurate,

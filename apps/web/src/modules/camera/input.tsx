@@ -399,7 +399,6 @@ export function CameraInput() {
         tap_start_x.current = e.clientX;
         tap_start_y.current = e.clientY;
         update_pointer(e.clientX, e.clientY);
-        set_hovered_coord(null);
       } else if (active_pointers.current.size === 2) {
         begin_pinch();
       }
@@ -432,7 +431,6 @@ export function CameraInput() {
     update_pointer(e.clientX, e.clientY);
     set_camera_status(CameraStatus.DRAG);
     set_is_follow_mode(false);
-    set_hovered_coord(null);
   }
 
   function request_hover_update() {

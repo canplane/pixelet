@@ -31,10 +31,10 @@ export function same_layer_revisions(a: readonly WorldLayerRevision[], b: readon
 }
 
 /** Pure composition, retained for tests and the bounded raycast cache. */
-export function composite_chunk_layers(stack: WorldLayerStack, key: ChunkKey): ChunkVolume | null {
+export function composite_chunk_layers(stack: WorldLayerStack, key: ChunkKey, opts?: { for_raycast?: boolean }): ChunkVolume | null {
   const out = alloc_chunk_volume();
   let any_present = false;
-  for (const layer of stack) any_present = layer.paint(key, out) || any_present;
+  for (const layer of stack) any_present = layer.paint(key, out, opts) || any_present;
   if (!any_present) {
     release_chunk_volume(out);
     return null;
@@ -118,7 +118,7 @@ function acquire_raycast_composite(stack: WorldLayerStack, key: ChunkKey): Acqui
     release_chunk_volume(hit.volume);
   }
   ray_cache.delete(cache_key);
-  const volume = composite_chunk_layers(stack, key);
+  const volume = composite_chunk_layers(stack, key, { for_raycast: true });
   const new_bands = volume?.bands.length ?? 0;
   if (new_bands > MAX_RAY_BANDS) return { volume, temporary: true };
   ray_cache.set(cache_key, { stack, revisions, volume });

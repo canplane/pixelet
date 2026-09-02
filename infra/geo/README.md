@@ -82,11 +82,11 @@ echo '✅ DB is ready!'
 
 Each pipeline's `metadata.json` lists the exact paths, and its `acquisition` block records whether the download is automated and where the file actually comes from. Paths there are relative to that pipeline's own directory (e.g. `infra/geo/osm-features/`).
 
-| Layer | Automated? | Source |
-| :--- | :--- | :--- |
-| OSM Features | **yes** — the script curls it if missing | [Geofabrik South Korea extract](https://download.geofabrik.de/asia/south-korea-latest.osm.pbf) |
-| OSM Coastline | no — download and unzip manually | [`land-polygons-split-3857.zip`](https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip) |
-| ESA Elevation | no — request each tile manually | [OpenTopography, Copernicus GLO-30](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3) |
+| Layer         | Automated?                               | Source                                                                                                        |
+| :------------ | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
+| OSM Features  | **yes** — the script curls it if missing | [Geofabrik South Korea extract](https://download.geofabrik.de/asia/south-korea-latest.osm.pbf)                |
+| OSM Coastline | no — download and unzip manually         | [`land-polygons-split-3857.zip`](https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip)      |
+| ESA Elevation | no — request each tile manually          | [OpenTopography, Copernicus GLO-30](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3) |
 
 ##### OSM Features (automated)
 
@@ -113,18 +113,18 @@ This is the **split** version (large polygons pre-split), not the plain one — 
 
 Request four separate rasters from the OpenTopography portal, selecting **Copernicus GLO-30** and entering each bounding box. `metadata.json`'s `coverage[]` block gives the exact boxes and what each one is for:
 
-| Save as | Bounding box (EPSG:4326) | Covers |
-| :--- | :--- | :--- |
-| `GLO30_KOR_W125E130_S34N39_4326.tif` | W125 E130 S34 N39 | mainland South Korea |
-| `GLO30_KOR_W126E127_S33N34_4326.tif` | W126 E127 S33 N34 | Jeju |
-| `GLO30_KOR_W124E125_S37N39_4326.tif` | W124 E125 S37 N39 | far western islands |
-| `GLO30_KOR_W130E132_S37N38_4326.tif` | W130 E132 S37 N38 | Ulleungdo, Dokdo |
+| Save as                              | Bounding box (EPSG:4326) | Covers               |
+| :----------------------------------- | :----------------------- | :------------------- |
+| `GLO30_KOR_W125E130_S34N39_4326.tif` | W125 E130 S34 N39        | mainland South Korea |
+| `GLO30_KOR_W126E127_S33N34_4326.tif` | W126 E127 S33 N34        | Jeju                 |
+| `GLO30_KOR_W124E125_S37N39_4326.tif` | W124 E125 S37 N39        | far western islands  |
+| `GLO30_KOR_W130E132_S37N38_4326.tif` | W130 E132 S37 N38        | Ulleungdo, Dokdo     |
 
 Save each into `region/KR/raw/` under exactly the name above — the script derives the warped filename by substituting `4326` with `3857`, so it depends on that naming.
 
 OpenTopography also exposes a direct API (`portal.opentopography.org/API/globaldem?demtype=COP30&south=&north=&west=&east=&outputFormat=GTiff`) which would automate this, but it requires a free API key and currently returns `401` without one. If you register for a key, that is the route to automate.
 
-> **What this coverage actually means.** These four boxes do not tile the full 124–132°E / 33–39°N rectangle, but the ingestion pipeline builds a VRT spanning their union bounding box, so the mosaic *appears* to cover the whole rectangle — the gaps are filled with zeros that are indistinguishable from real sea-level data downstream. Real elevation exists only over the four boxes. Anywhere else inside the bbox (Japan, most of North Korea, China) bakes as flat terrain. That is fine for a South Korea demo and is why the boxes were chosen this way, but it is not a property the data announces about itself.
+> **What this coverage actually means.** These four boxes do not tile the full 124–132°E / 33–39°N rectangle, but the ingestion pipeline builds a VRT spanning their union bounding box, so the mosaic _appears_ to cover the whole rectangle — the gaps are filled with zeros that are indistinguishable from real sea-level data downstream. Real elevation exists only over the four boxes. Anywhere else inside the bbox (Japan, most of North Korea, China) bakes as flat terrain. That is fine for a South Korea demo and is why the boxes were chosen this way, but it is not a property the data announces about itself.
 
 #### 3. Ingest each layer (order doesn't matter)
 
@@ -278,10 +278,10 @@ The internal mechanics of each pipeline. Refer to this section for debugging and
 
 Both external data sources this pipeline ingests require a specific attribution notice wherever the baked result is shown to end users — implemented in `apps/web/src/app/settings/sections/attribution_section.tsx`. Neither notice is a style choice; don't shorten, reword, or drop either one without re-checking the source license first.
 
-| Source                                   | License                | Required notice                                                                                                                                                                                          |
-| :---------------------------------------- | :---------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenStreetMap (features, coastline, and Nominatim reverse geocoding) | ODbL | `© OpenStreetMap contributors` — the "historical form" explicitly listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). Covers both the baked map data and the Nominatim results (`use_reverse_geocode.ts`) under one notice — no separate wording needed per source. |
-| Copernicus WorldDEM-30 (`esa-elevation/`) | [License-COPDEM-30](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Data/DEM/resources/license/License-COPDEM-30.pdf), Article 6 | Since this pipeline reprojects (`gdalwarp`) and bakes the raw DEM — i.e. the data is adapted/modified, not redistributed as-is — Article 6(b)'s modified-data notice applies, quoted verbatim: `produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved` |
+| Source                                                               | License                                                                                                                                         | Required notice                                                                                                                                                                                                                                                                                                                                                                        |
+| :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenStreetMap (features, coastline, and Nominatim reverse geocoding) | ODbL                                                                                                                                            | `© OpenStreetMap contributors` — the "historical form" explicitly listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). Covers both the baked map data and the Nominatim results (`use_reverse_geocode.ts`) under one notice — no separate wording needed per source.                                              |
+| Copernicus WorldDEM-30 (`esa-elevation/`)                            | [License-COPDEM-30](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Data/DEM/resources/license/License-COPDEM-30.pdf), Article 6 | Since this pipeline reprojects (`gdalwarp`) and bakes the raw DEM — i.e. the data is adapted/modified, not redistributed as-is — Article 6(b)'s modified-data notice applies, quoted verbatim: `produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved` |
 
 ## 7. Security & Sensitive Information
 
