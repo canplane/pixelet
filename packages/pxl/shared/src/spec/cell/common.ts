@@ -1,11 +1,13 @@
 // @pxl/shared/spec/cell/common.ts
-// [Layer: common] Shared state definitions across terrain / other cell layers
+// Shared state/constants across terrain / other cell layers.
 
-import { FULL, ZERO } from "./utils.ts";
+export const ZERO = 0x00;
+export const FULL = 0xff;
 
-// ============================================================================
-// Shared Cell Types
-// ============================================================================
+export const CELL_MASKS = {
+  SEA_FLAG: 0x80, // 1000 0000 (128)
+  ID_VALUE: 0x7f, // 0111 1111 (127)
+} as const;
 
 export const common_types = {
   /** valid empty space */
@@ -14,10 +16,6 @@ export const common_types = {
   /** missing / invalid / unresolved data */
   UNKNOWN: FULL,
 } as const;
-
-// ============================================================================
-// Shared Cell Colors
-// ============================================================================
 
 export const common_colors = {
   [common_types.AIR]: null,

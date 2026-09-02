@@ -195,10 +195,8 @@ export default defineConfig(({ mode }) => {
       // (those go through the deno plugin's own resolution, not this gate)
       // but broke real asset imports (import x from "*.png") the moment
       // any of them started pointing into packages/pxl/shared instead of
-      // staying under apps/web, e.g. objects/wool_images.ts and
-      // terrain/shader/ground_layer_images.ts's own textures/{terrain,
-      // objects}/ imports. Explicitly allowing the repo root fixes every
-      // such path at once instead of allow-listing each package.
+      // staying under apps/web. Explicitly allowing the repo root fixes
+      // every such path at once instead of allow-listing each package.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
       proxy: {
         ...(tileProxyTarget

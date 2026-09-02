@@ -4,7 +4,7 @@
 // ./kenney_cube_pets/ (not apps/web, where this used to sit, and not
 // ../../spec/, where the domain type-numbering/logic lives) — this file's
 // whole job is bridging real model files to typed URLs, so it sits with
-// the assets it bridges, same reasoning ../cell/terrain_images.ts uses
+// the assets it bridges, same reasoning ../cell/textures/terrain.ts uses
 // (see its own comment). Consumers (apps/web) import this file itself via
 // the @pxl/shared/* bare specifier; only the asset imports below stay
 // relative, since that bare specifier can't be used for non-JS/JSON files.
@@ -15,7 +15,7 @@
 // directly — the equivalent glob pattern here left PERSON_VARIANTS/
 // PET_VARIANTS empty at runtime with no error, unlike a plain `import`
 // statement at the same path depth, which resolves fine). Same reasoning
-// terrain_images.ts/object_images.ts already apply to their own dozens of
+// cell/textures/terrain.ts and objects.ts already apply to their own dozens of
 // PNG imports.
 import female_a_url from "./kenney_mini_characters/female-a.glb?url";
 import female_b_url from "./kenney_mini_characters/female-b.glb?url";
