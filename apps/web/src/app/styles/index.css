@@ -13,8 +13,8 @@
 
     font-family:
       /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-      /* 2. Hangul coverage, and the whole face everywhere else. "Inter" used to sit ahead of this for Latin on Windows/Android; nothing ever loaded it — fonts.css declares only Pretendard now — so it resolved for whoever happened to have Inter installed locally and was skipped by everyone else. */ "Pretendard Variable",
-      /* 3. System default, in case no webfont loads */ system-ui, sans-serif;
+      /* 2. Hangul coverage, and the whole face everywhere else. "Inter" used to sit ahead of this for Latin on Windows/Android; nothing ever loaded it — fonts.css declares only Pretendard now — so it resolved for whoever happened to have Inter installed locally and was skipped by everyone else. */
+      "Pretendard Variable", /* 3. System default, in case no webfont loads */ system-ui, sans-serif;
   }
   * {
     @apply border-border outline-ring/50;
@@ -243,7 +243,9 @@
   --destructive: oklch(0.577 0.245 27.325);
 
   --border: oklch(0.25 0.02 80 / 0.1); /* slightly darker than the background so edges stay legible */
-  --input: oklch(1 0 0 / 0.1);
+  --input: oklch(
+    0.85 0.02 80
+  ); /* opaque and clearly darker than --background (0.98) — white/10% here was nearly invisible (an off Switch's track needs to read against a near-white surface, not just tint it) */
   --ring: oklch(0.709 0.01 56.259 / 0.5);
 
   /* Cozy Charts (Nature/Fruit Palette) */
@@ -284,7 +286,7 @@
     --destructive: oklch(0.704 0.191 22.216);
 
     --border: oklch(1 0 0 / 0.05); /* at night, only the faintest glow */
-    --input: oklch(1 0 0 / 0.1);
+    --input: oklch(1 0 0 / 0.22); /* bumped from 0.1 for the same reason as the light variant — a visible off-state track, not just a tint */
     --ring: oklch(0.5 0.03 85 / 0.5);
 
     --chart-1: oklch(0.65 0.15 30);

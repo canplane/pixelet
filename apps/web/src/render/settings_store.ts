@@ -96,13 +96,13 @@ export type RenderSettingsStore = {
   toggle_rim_light: () => void;
 
   /**
-   * Canvas dpr cap (scene.tsx). false (default) pins dpr to [1,1] — the
-   * single biggest post-stack cost, confirmed on real devices. true opts
-   * into [1,2]: real spatial supersampling (fixes both edge aliasing and
-   * the shading-value flicker thousands of small flat-shaded boxes produce
-   * once they minify below a pixel). Costs roughly 4x the fragment-shading
-   * work of the whole pipeline on a Retina/high-DPI display, since dpr=2
-   * means 4x the pixels.
+   * Canvas dpr cap (scene.tsx). true (default) opts into [1,2]: real
+   * spatial supersampling (fixes both edge aliasing and the shading-value
+   * flicker thousands of small flat-shaded boxes produce once they minify
+   * below a pixel). Costs roughly 4x the fragment-shading work of the
+   * whole pipeline on a Retina/high-DPI display, since dpr=2 means 4x the
+   * pixels — false pins dpr to [1,1] instead, the single biggest
+   * post-stack cost, confirmed on real devices.
    */
   high_dpr: boolean;
   set_high_dpr: (show: boolean) => void;
@@ -173,7 +173,7 @@ export const useRenderSettingsStore = create<RenderSettingsStore>()(persist((set
   set_show_rim_light: (show_rim_light) => set({ show_rim_light }),
   toggle_rim_light: () => set((state) => ({ show_rim_light: !state.show_rim_light })),
 
-  high_dpr: false,
+  high_dpr: true,
   set_high_dpr: (high_dpr) => set({ high_dpr }),
   toggle_high_dpr: () => set((state) => ({ high_dpr: !state.high_dpr })),
 
