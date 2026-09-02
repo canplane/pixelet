@@ -45,7 +45,8 @@ import {
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { type MeshRun, scan_all_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
-import { get_lod_guide, get_lod_pair_visibility, type LODStep, step_lod_toward } from "@/render/lod.ts";
+import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
+import { chunk_distance_to_camera } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_WORK_BUDGET_MS: f64 = 4;
@@ -488,8 +489,8 @@ const ChunkInstanceMesh = memo(({ built, role, base, low_spec, show_rim_light, r
 ChunkInstanceMesh.displayName = "ChunkInstanceMesh";
 
 type LodLayout = {
-  primary: LODStep;
-  secondary: LODStep | null;
+  primary: LodStep;
+  secondary: LodStep | null;
   buckets: BuiltChunkBucket[];
   bounds: ChunkBounds | null;
   ready: boolean;
@@ -523,7 +524,7 @@ function blend_hash(key: string): f64 {
   return (hash >>> 0) / 0x1_0000_0000;
 }
 
-type InitialChunkView = { in_frustum: boolean; lod_step: LODStep };
+type InitialChunkView = { in_frustum: boolean; lod_step: LodStep };
 
 function get_initial_chunk_view(
   camera: THREE.Camera,
@@ -573,7 +574,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
   const object_key = useMemo(() => l2_column_key_of(page_idx, page_off), [page_idx, page_off]);
   const objects_revision = useObjectL2ColumnRevision(object_key);
 
-  const bucket_cache_ref = useRef(new Map<LODStep, BuiltChunkBucket>());
+  const bucket_cache_ref = useRef(new Map<LodStep, BuiltChunkBucket>());
   // Every column's runs, scanned once from the live volume and reused
   // across every LOD tier and every LOD transition after that (cleared
   // alongside bucket_cache_ref below) — the composited dense bands still
@@ -595,7 +596,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
   const build_deferred_ref = useRef(false);
   // null return means "a needed scan was just deferred, not built yet" —
   // distinct from an empty array (built, genuinely nothing to draw).
-  const build_ref = useRef<(primary: LODStep, secondary: LODStep | null) => BuiltChunkBucket[] | null>(() => []);
+  const build_ref = useRef<(primary: LodStep, secondary: LodStep | null) => BuiltChunkBucket[] | null>(() => []);
   build_ref.current = (primary, secondary) => {
     const steps = secondary === null || secondary === primary ? [primary] : [primary, secondary];
     const missing = steps.filter((step) => !bucket_cache_ref.current.has(step));
@@ -698,7 +699,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
   });
   const layout_ref = useRef(layout);
   layout_ref.current = layout;
-  const desired_ref = useRef<{ primary: LODStep; secondary: LODStep | null }>({
+  const desired_ref = useRef<{ primary: LodStep; secondary: LodStep | null }>({
     primary: initial_view.lod_step,
     secondary: null,
   });
@@ -759,7 +760,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
         const current = layout_ref.current;
         const bounds = current.bounds;
         if (bounds === null) {
-          center.set(CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0).applyMatrix4(group.matrixWorld);
+          chunk_distance_to_camera(group, CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0, camera, center);
         } else {
           set_three_box(local_box, bounds);
           local_box.getCenter(center).applyMatrix4(group.matrixWorld);

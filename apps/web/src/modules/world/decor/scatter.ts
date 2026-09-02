@@ -126,6 +126,12 @@ export function scatter_decor_candidates(
   page_seed: bigint,
   kind: DecorKindSeed,
   is_eligible: DecorEligibility,
+  /** Multiplies kind.density before the per-cell roll — the caller's own
+   * distance-based falloff (e.g. decor_layer.tsx thinning candidates past a
+   * given LOD tier), kept as a plain scalar here so this function stays
+   * free of any renderer/LOD concept of its own. 1 (every candidate rolled
+   * at the kind's own density) unless a caller passes otherwise. */
+  density_scale: f64 = 1,
 ): DecorCandidate[] {
   const out: DecorCandidate[] = [];
   const land = ground[GroundChannelKey.LAND];
@@ -147,7 +153,7 @@ export function scatter_decor_candidates(
       const cell_tag = (BigInt(cell_x) << 16n) | BigInt(cell_y);
       const rng = make_rng(derive_seed_u64(kind_seed, cell_tag));
 
-      if (u32_to_unit(rng()) >= kind.density) continue;
+      if (u32_to_unit(rng()) >= kind.density * density_scale) continue;
       const variant = Math.min(Math.floor(u32_to_unit(rng()) * kind.variant_count), kind.variant_count - 1);
       const rotation = kind.orientation === "align_transport" ? transport_aligned_rotation(transport, cell_x, cell_y, u32_to_unit(rng()) < 0.5) : u32_to_unit(rng()) * Math.PI * 2;
       const scale = 1 + (u32_to_unit(rng()) * 2 - 1) * SCALE_JITTER;

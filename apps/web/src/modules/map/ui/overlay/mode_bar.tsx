@@ -251,7 +251,7 @@ export function ModeBar() {
   const show_send_in_palette_slot = message_expanded && !palette_expanded && message_text.trim() !== "";
 
   return (
-    <div className="flex items-center justify-center gap-2 min-w-0 w-full">
+    <div className="flex items-center justify-center gap-2.5 min-w-0 w-full">
       <LayoutGroup id="mode-bar">
         <motion.div
           layout

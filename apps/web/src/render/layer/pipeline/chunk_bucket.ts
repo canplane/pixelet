@@ -3,7 +3,7 @@
 /** One renderer-owned L2 64x64 XY column. */
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import type { LODStep } from "@/render/lod.ts";
+import type { LodStep } from "@/render/lod.ts";
 import type { MeshRun } from "./voxel_scan.ts";
 import { build_chunk_instances, type BuiltChunk } from "./chunk_mesher.ts";
 
@@ -22,7 +22,7 @@ export type BuiltChunkMesh = BuiltChunk & {
 };
 
 export type BuiltChunkBucket = {
-  lod_step: LODStep;
+  lod_step: LodStep;
   role: ChunkLodRole;
   terrain: BuiltChunkMesh;
   objects: BuiltChunkMesh;
@@ -94,7 +94,7 @@ function with_visibility(built: BuiltChunk, role: ChunkLodRole): BuiltChunkMesh 
 }
 
 function bucket_from_built(
-  lod_step: LODStep,
+  lod_step: LodStep,
   role: ChunkLodRole,
   built: ReturnType<typeof build_chunk_instances>,
 ): BuiltChunkBucket {
@@ -113,7 +113,7 @@ function bucket_from_built(
  */
 export function build_chunk_bucket(
   column_runs: readonly MeshRun[][],
-  lod_step: LODStep,
+  lod_step: LodStep,
   role: ChunkLodRole,
 ): BuiltChunkBucket {
   return bucket_from_built(lod_step, role, build_chunk_instances(column_runs, lod_step));
@@ -122,8 +122,8 @@ export function build_chunk_bucket(
 /** Builds one primary LOD and, only while blending, one adjacent LOD. */
 export function build_chunk_buckets(
   column_runs: readonly MeshRun[][],
-  primary_step: LODStep,
-  secondary_step: LODStep | null,
+  primary_step: LodStep,
+  secondary_step: LodStep | null,
 ): BuiltChunkBucket[] {
   const out: BuiltChunkBucket[] = [];
   out.push(build_chunk_bucket(column_runs, primary_step, "primary"));
