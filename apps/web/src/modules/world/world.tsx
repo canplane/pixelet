@@ -45,7 +45,7 @@ import { DebugBox, DebugPoint, GyroRing, LabeledLine } from "./markers/frame_giz
 // CHUNK_STAGE_LAYERS lives in modules/world/stack.ts (not inline here) so
 // camera/ray.ts's own raycast can composite the exact same layer stack
 // instead of a second, possibly-drifting registration.
-import { ChunkStage } from "./chunk_stage.tsx";
+import { ChunkStage, LodSchedulerProvider } from "./chunk_stage.tsx";
 import { CHUNK_STAGE_LAYERS } from "./stack.ts";
 import { DecorLayer } from "./decor/decor_layer.tsx";
 import { TREE_DECOR_BUNDLE } from "./decor/tree_decor.ts";
@@ -238,11 +238,13 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
             })()}
 
             <AnchorSpace registry={registry}>
-              <ChunkStage stack={CHUNK_STAGE_LAYERS} />
-              <DecorLayer bundle={TREE_DECOR_BUNDLE} />
-              <DecorLayer bundle={BOAT_DECOR_BUNDLE} />
-              <DecorLayer bundle={CAR_DECOR_BUNDLE} />
-              <DecorLayer bundle={TRAIN_DECOR_BUNDLE} />
+              <LodSchedulerProvider>
+                <ChunkStage stack={CHUNK_STAGE_LAYERS} />
+                <DecorLayer bundle={TREE_DECOR_BUNDLE} />
+                <DecorLayer bundle={BOAT_DECOR_BUNDLE} />
+                <DecorLayer bundle={CAR_DECOR_BUNDLE} />
+                <DecorLayer bundle={TRAIN_DECOR_BUNDLE} />
+              </LodSchedulerProvider>
 
               <HoverCursor />
               <LocationPuck device_coord={device_coord} />

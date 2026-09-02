@@ -10,7 +10,7 @@
  * 36 KiB top-surface summary for coarse LOD rebuilds, never the dense bands.
  */
 
-import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, type ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -46,7 +46,7 @@ import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { type MeshRun, scan_all_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
-import { chunk_distance_to_camera } from "@/render/chunk_lod.ts";
+import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_WORK_BUDGET_MS: f64 = 4;
@@ -152,7 +152,6 @@ const commit_step_stats = {
 const render_call_stats = { total_ms: 0, count: 0, max_ms: 0 };
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
-const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
 
 function set_three_box(box: THREE.Box3, bounds: ChunkBounds): THREE.Box3 {
   box.min.set(bounds.min_x, bounds.min_y, bounds.min_z);
@@ -496,7 +495,11 @@ type LodLayout = {
   ready: boolean;
 };
 
-type ChunkLodControl = {
+// Exported: chunk_stage.tsx's Chunk and decor_layer.tsx's ChunkDecor are
+// equal registrants in one shared scheduler (see LodSchedulerProvider below)
+// — a chunk-shaped thing's own recheck/commit shape, not something owned by
+// terrain specifically, even though this file is still where it's defined.
+export type ChunkLodControl = {
   blend_active: boolean;
   settling: boolean;
   in_frustum: boolean;
@@ -506,12 +509,12 @@ type ChunkLodControl = {
   commit(): boolean;
 };
 
-type LodSchedulerRegistry = { controls: Set<ChunkLodControl> };
+export type LodSchedulerRegistry = { controls: Set<ChunkLodControl> };
 const LodSchedulerContext = createContext<LodSchedulerRegistry | null>(null);
 
-function use_lod_scheduler(): LodSchedulerRegistry {
+export function use_lod_scheduler(): LodSchedulerRegistry {
   const scheduler = useContext(LodSchedulerContext);
-  if (!scheduler) throw new Error("Chunk must be mounted under ChunkStage");
+  if (!scheduler) throw new Error("Chunk/ChunkDecor must be mounted under LodSchedulerProvider");
   return scheduler;
 }
 
@@ -539,8 +542,8 @@ function get_initial_chunk_view(
     ivec.to_real(ivec.Y(local_origin)) + CHUNK_WORLD_SPAN * 0.5,
     0,
   );
-  const projection = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-  const frustum = new THREE.Frustum().setFromProjectionMatrix(projection);
+  const frustum = new THREE.Frustum();
+  update_frustum(frustum, camera, new THREE.Matrix4());
   const sphere = new THREE.Sphere(center, APPROXIMATE_CHUNK_RADIUS);
   // A never-built chunk has no exact Z bounds yet. Preserve the camera's
   // projected chunk as a one-chunk safety guard; a full signed-Z column makes
@@ -911,11 +914,18 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
 });
 PageChunks.displayName = "PageChunks";
 
-export type ChunkStageProps = { stack: WorldLayerStack };
-
-export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
-  const map_center = useMapStore((state) => state.map_center);
-  const tile_map = useTileStore((state) => state.tile_map);
+/**
+ * Owns the one LodSchedulerRegistry chunk_stage.tsx's own Chunk and
+ * decor_layer.tsx's ChunkDecor register into as equal ChunkLodControl
+ * instances — mount above both (world.tsx) so terrain and decor compete for
+ * the exact same per-frame recheck/commit budget instead of each running
+ * (or, for decor previously, not running at all) their own. Everything
+ * here — the registry, the frustum, the recheck/commit loop, the dev
+ * stats — used to live inside ChunkStage itself, back when it was the only
+ * registrant; none of it is terrain-specific, so it moved out rather than
+ * ChunkStage keeping ownership of something it no longer exclusively uses.
+ */
+export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set() }), []);
   const lod_elapsed = useRef(LOD_RECHECK_INTERVAL);
   const frustum = useMemo(() => new THREE.Frustum(), []);
@@ -945,8 +955,7 @@ export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
     lod_elapsed.current += delta;
     const full_recheck = lod_elapsed.current >= LOD_RECHECK_INTERVAL;
     if (full_recheck) lod_elapsed.current = 0;
-    projection.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
-    frustum.setFromProjectionMatrix(projection);
+    update_frustum(frustum, state.camera, projection);
 
     const recheck_t0 = import.meta.env.DEV ? performance.now() : 0;
     // Same cooperative shape as the commit loop below: the first eligible
@@ -1022,6 +1031,15 @@ export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
     if (committed > 0 || pending.length > committed || blend_active) state.invalidate();
   });
 
+  return <LodSchedulerContext.Provider value={scheduler}>{children}</LodSchedulerContext.Provider>;
+}
+
+export type ChunkStageProps = { stack: WorldLayerStack };
+
+export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
+  const map_center = useMapStore((state) => state.map_center);
+  const tile_map = useTileStore((state) => state.tile_map);
+
   const center_page_idx = map_center === null ? null : L3_IDX(map_center.i);
   const center_page_key = center_page_idx?.toString() ?? null;
   const tiles = useMemo(() => Array.from(tile_map.keys()), [tile_map]);
@@ -1044,11 +1062,9 @@ export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
 
   if (range_anchor === null) return null;
   return (
-    <LodSchedulerContext.Provider value={scheduler}>
-      <group name="chunk-stage">
-        {visible_pages.map((page_idx) => <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />)}
-      </group>
-    </LodSchedulerContext.Provider>
+    <group name="chunk-stage">
+      {visible_pages.map((page_idx) => <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />)}
+    </group>
   );
 });
 ChunkStage.displayName = "ChunkStage";

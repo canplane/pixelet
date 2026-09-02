@@ -5,15 +5,15 @@
  * every visible chunk — mirrors chunk_stage.tsx's own page/chunk
  * enumeration (visible_pages by RENDER_RADIUS, in_range_chunks for the
  * chunk offsets within each page) closely enough that decorations pop in
- * and out of view in lockstep with the terrain they sit on, but is
- * deliberately its own much simpler pipeline rather than a hook into
- * chunk_stage.tsx's LOD-aware box-instancing machinery: that machinery
- * exists because terrain is dense (every cell, every frame, multiple LOD
- * tiers blended live), while a scattered decoration layer only has to
- * redraw when its own chunk's terrain or placed objects actually change —
- * duplicated here rather than refactored out of chunk_stage.tsx to avoid
- * touching that file's own tuned scheduler for a concern it was never
- * built to share.
+ * and out of view in lockstep with the terrain they sit on. The scheduling
+ * lifecycle (frustum culling, LOD-tier recheck/commit, shared work budget)
+ * IS shared with chunk_stage.tsx today — see the ChunkLodControl paragraph
+ * below. What's still separate is the build/render pipeline itself:
+ * chunk_stage.tsx bakes terrain by instancing one shared unit box, while
+ * this file instances arbitrary per-variant GLB geometry — a scattered,
+ * sparse decoration layer never needed that box-instancing machinery's own
+ * complexity (dense per-cell scanning, multi-tier blending), so it keeps
+ * its own much simpler build step rather than folding into chunk_stage.tsx's.
  *
  * No decoration is ever stored: scatter.ts's placement is a pure function
  * of terrain + a fixed seed, recomputed on demand. A cell that currently
@@ -23,24 +23,18 @@
  * on the next objects-revision-triggered recompute, so the decoration
  * reappears with no bookkeeping of its own.
  *
- * KNOWN LIMITATION, deliberately not addressed yet: this layer gets only
- * three.js's own automatic per-InstancedMesh frustum culling (each chunk's
- * combined bounding sphere, via DecorVariantMesh's computeBoundingSphere)
- * — real per-chunk frustum testing and a work budget, the way
- * chunk_stage.tsx's own Chunk.recheck()/commit() give terrain (skipping
- * CPU work and releasing GPU buffers for chunks the camera isn't actually
- * looking at, not just ones outside RENDER_RADIUS/fog), never happens here.
- * This is a real gap, not overlooked: this pipeline exists right now to
- * prove out scattered-GLB placement as a pattern, ahead of the actual goal
- * (letting a user place arbitrary objects, not just voxel blocks) — the
- * cost of skipping proper scheduler integration is worth paying twice
- * (once here, once for that feature) only once real usage shows it's
- * needed, rather than building it against a moving, still-hypothetical
- * target. When it is worth doing: register each decor chunk into the same
- * LodSchedulerRegistry chunk_stage.tsx's Chunk components use
- * (use_lod_scheduler() in that file) with its own ChunkLodControl-shaped
- * object, so ChunkStage's existing per-frame recheck/commit loop governs
- * decor visibility and work exactly like terrain.
+ * Each ChunkDecor registers its own ChunkLodControl (frustum test, distance,
+ * LOD-step recheck()/commit()) into the exact same LodSchedulerRegistry
+ * chunk_stage.tsx's own Chunk components use — see LodSchedulerProvider in
+ * that file, mounted once above both ChunkStage and every DecorLayer
+ * (world.tsx), so terrain and decor compete for one shared per-frame work
+ * budget and chunk count cap instead of each spending its own. Frustum
+ * culling and LOD-tier selection are not two separate systems here: a
+ * chunk's own recheck() does the frustum sphere test first and returns
+ * immediately if it fails, before ever sampling elevation or asking
+ * render/lod.ts for a tier — an off-screen chunk costs nothing beyond that
+ * one sphere check, and only commit() (gated by the same shared budget)
+ * ever actually rebuilds anything.
  *
  * Density DOES already fall off with distance, snapped to the exact same
  * LOD tiers terrain hands off at — not by reimplementing "distance to
@@ -50,6 +44,27 @@
  * Chunk uses for its own real per-frame LOD. See DECOR_DENSITY_BY_LOD_STEP
  * below for the actual falloff curve and why it's steep rather than a
  * gentle taper.
+ *
+ * CURRENT LIMITATIONS, left as-is deliberately rather than gaps to close:
+ * - No blend/secondary-tier dithering across an LOD threshold band, unlike
+ *   chunk_stage.tsx's own Chunk (get_lod_pair_visibility's stochastic
+ *   finer/coarser split in render/lod.ts). That machinery exists there to
+ *   hide a *dense, screen-filling* surface snapping to a new tier all at
+ *   once; a decor chunk's density merely stepping down (1 -> 0.5 -> 0.25 ->
+ *   0) already reads as individual sparse objects thinning out, not a
+ *   visible surface repainting itself, so the same fix would cost real
+ *   complexity (a second built instance set per chunk, the same per-chunk
+ *   hash/coarse_fraction machinery) for a pop that isn't actually
+ *   objectionable here. Not planned unless that changes.
+ * - A source-data change (tile arrives, an object is placed/removed) is
+ *   picked up inside recheck() itself by comparing against what was last
+ *   committed, not through an immediate-reaction path — unlike
+ *   chunk_stage.tsx's own Chunk, which has a separate source_ref-keyed
+ *   useEffect that reacts the same React commit a change happens, ahead of
+ *   the next scheduler tick. A decor chunk instead waits for its next
+ *   recheck (at most LOD_RECHECK_INTERVAL, 0.15s, since decor's
+ *   blend_active is only ever true for its first frame) — an imperceptible
+ *   delay, so the extra machinery wasn't worth duplicating.
  *
  * LONGER-TERM DIRECTION: Minecraft's own block model is the reference point
  * here, and it's a 3-tier split, not 2 — (1) static grid content (full
@@ -68,9 +83,10 @@
  * block shape. Full parity means folding this bundle's geometry into
  * chunk_stage.tsx's own build step instead of a second InstancedMesh
  * pipeline — a materially bigger, separate effort from the scheduler
- * registration above (a new geometry-agnostic per-chunk baking scheme, not
- * just wiring into an existing one), and not worth starting before
- * scheduler parity lands. User-placed decor (a candle a player places, as
+ * registration above (already landed — this file's ChunkDecor and that
+ * file's Chunk are equal ChunkLodControl registrants today) since it needs
+ * a new geometry-agnostic per-chunk baking scheme, not just wiring into an
+ * existing one. User-placed decor (a candle a player places, as
  * opposed to a procedurally scattered tree) should still land in
  * objects/store.ts's existing per-cell tree as its own ObjectLayerEntry
  * kind alongside "solid" — same tier-1 storage Minecraft gives decorative
@@ -79,11 +95,11 @@
  * separate store.
  */
 
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { useFrame, useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import type { Tile } from "@pxl/shared/bake/format.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -97,7 +113,8 @@ import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_key, get_objects_in_cell, l2_column_key_of, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
 import { in_range_chunks } from "@/render/chunk_range.ts";
 import { get_lod_guide, type LodStep, step_lod_toward } from "@/render/lod.ts";
-import { chunk_distance_to_camera } from "@/render/chunk_lod.ts";
+import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera } from "@/render/chunk_lod.ts";
+import { type ChunkLodControl, use_lod_scheduler } from "@/modules/world/chunk_stage.tsx";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
@@ -152,95 +169,187 @@ type ChunkDecorProps = {
   materials: readonly (THREE.MeshBasicMaterial | null)[];
 };
 
+/** Pure "what would this chunk look like at this LOD tier, given this
+ * source data" computation — the whole scan+placement pipeline, pulled out
+ * of ChunkDecor itself so the ChunkLodControl closure below can call it from
+ * commit() without capturing component state directly (mirrors
+ * chunk_stage.tsx's own build_ref: control logic reads its inputs fresh
+ * through refs, not through a React dependency array). */
+function build_decor_instances(
+  tile: Tile | undefined,
+  lod_step: LodStep,
+  page_idx: IVec,
+  base_x: number,
+  base_y: number,
+  bundle: DecorKindBundle,
+): ModelInstanceTransformList[] {
+  const by_variant: ModelInstanceTransformList[] = bundle.variants.map(() => []);
+  const density_scale = DECOR_DENSITY_BY_LOD_STEP[lod_step];
+  // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
+  // density instead of running it only to have every candidate rejected
+  // by its own probability check below — density_scale=0 means "nothing
+  // here", decided once, not discovered 4096 times.
+  if (!tile || density_scale === 0) return by_variant;
+
+  const page_seed = derive_seed_u64(DECOR_MASTER_SEED, page_idx);
+  const candidates = scatter_decor_candidates(
+    tile.terrain.ground,
+    base_x,
+    base_y,
+    CHUNK_CELL_SPAN,
+    page_seed,
+    bundle.seed,
+    bundle.is_eligible,
+    density_scale,
+  );
+
+  const page_base = FROM_L3_IDX(page_idx);
+  for (const candidate of candidates) {
+    const x: f64 = candidate.cell_x * U_PER_CELL + U_PER_CELL / 2;
+    const y: f64 = candidate.cell_y * U_PER_CELL + U_PER_CELL / 2;
+    const ele = get_ele_at_local(page_idx, x, y);
+    if (ele === null) continue;
+
+    const cell_ivec = ivec.add(page_base, ivec.gather(BigInt(candidate.cell_x), BigInt(candidate.cell_y), BigInt(Math.floor(ele))));
+    const [ix, iy, iz] = cell_index({ i: cell_ivec, f: 0n });
+    if (get_objects_in_cell(cell_key(ix, iy, iz)).length > 0) continue;
+
+    by_variant[candidate.variant].push({ position: [x, y, ele], rotation_z: candidate.rotation, scale: candidate.scale });
+  }
+  return by_variant;
+}
+
 const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materials }: ChunkDecorProps) => {
   const tile = useTileStore((state) => state.get_tile(page_idx));
   const page_off = useMemo(() => ivec.gather(BigInt(base_x), BigInt(base_y), 0n), [base_x, base_y]);
   const object_key = useMemo(() => l2_column_key_of(page_idx, page_off), [page_idx, page_off]);
   const objects_revision = useObjectL2ColumnRevision(object_key);
+  const scheduler = use_lod_scheduler();
 
-  // Same camera -> distance -> render/lod.ts tier chunk_stage.tsx's own
-  // Chunk uses for its real per-frame LOD (chunk_lod.ts's own doc comment)
-  // — same shape as that file's own Chunk too: its own chunk-offset group
-  // (lod_group_ref), positioned exactly like Chunk's, purely so chunk_lod.ts
-  // has a real mounted group to measure through.
-  const camera = useThree((state) => state.camera);
-  const [lod_step, set_lod_step] = useState<LodStep>(1);
+  // recheck()/commit() (inside the control useMemo below) read the latest
+  // tile/objects_revision through these refs rather than closing over them
+  // directly — the control itself is deliberately NOT rebuilt (and
+  // re-registered into the scheduler) on every tile fetch or object edit,
+  // only on page_idx/base_x/base_y/bundle, which never change for an
+  // already-mounted chunk.
+  const tile_ref = useRef(tile);
+  tile_ref.current = tile;
+  const objects_revision_ref = useRef(objects_revision);
+  objects_revision_ref.current = objects_revision;
+
+  // Exists ONLY to give chunk_lod.ts a real mounted group to measure
+  // through — see the return statement below for why it carries no meshes
+  // of its own.
   const lod_group_ref = useRef<THREE.Group>(null);
-  const scratch = useRef(new THREE.Vector3()).current;
-  // Same one-tier-at-a-time easing chunk_stage.tsx's own Chunk applies
-  // (step_lod_toward) — without it this jumps straight to the target tier
-  // every frame while terrain eases in gradually, so the two visibly
-  // disagree mid-transition even though both converge on the same tier once
-  // the camera settles. has_measured_ref mirrors that file's own
-  // current.ready: the very first measurement has nothing on screen yet to
-  // ease from, so it commits directly instead of stepping up from 1.
-  const has_measured_ref = useRef(false);
-  useFrame(() => {
-    const group = lod_group_ref.current;
-    if (!group) return;
+  const [instances_by_variant, set_instances_by_variant] = useState<ModelInstanceTransformList[]>(
+    () => bundle.variants.map(() => []),
+  );
+
+  const control = useMemo<ChunkLodControl>(() => {
     const half = CHUNK_CELL_SPAN * U_PER_CELL * 0.5;
-    // Real ground height at this chunk's own center, not an assumed 0 —
-    // chunk_stage.tsx's own Chunk gets this for free once it has actually
-    // built geometry to measure a real AABB from (local_box.getCenter);
-    // decor never builds anything chunk-shaped to measure, so it has to
-    // sample the same elevation data its own candidates already use
-    // instead, or a hillside chunk's distance would be measured as if it
-    // sat at sea level while the trees on it are genuinely much closer to
-    // (or farther from) the camera than that.
-    const ele = get_ele_at_local(page_idx, base_x * U_PER_CELL + half, base_y * U_PER_CELL + half) ?? 0;
-    const dist = chunk_distance_to_camera(group, half, half, ele, camera, scratch);
-    const guide_step = get_lod_guide(dist, lod_step).lod_step;
-    const next = has_measured_ref.current ? step_lod_toward(lod_step, guide_step) : guide_step;
-    has_measured_ref.current = true;
-    if (next !== lod_step) set_lod_step(next);
-  });
+    // Own scratch Vector3/Sphere, not shared across chunks — same shape as
+    // chunk_stage.tsx's own Chunk control closure, so every chunk's
+    // per-frame measurement costs no allocation without a registry-wide
+    // scratch pool.
+    const center = new THREE.Vector3();
+    const sphere = new THREE.Sphere(center, APPROXIMATE_CHUNK_RADIUS);
+    // committed_* is what's currently on screen (what instances_by_variant
+    // was last built from); desired_lod_step is recheck()'s candidate for
+    // the next commit(). Unlike chunk_stage.tsx's own Chunk, there is no
+    // blend/secondary tier to track here — decor never blends between
+    // tiers, it just thins or fills back in.
+    let committed_lod_step: LodStep = 1;
+    let committed_tile: Tile | undefined = undefined;
+    let committed_objects_revision = -1;
+    let desired_lod_step: LodStep = 1;
+    // Same one-tier-at-a-time easing chunk_stage.tsx's own Chunk applies
+    // (step_lod_toward) — without it this jumps straight to the target tier
+    // in one commit while terrain eases in gradually, so the two visibly
+    // disagree mid-transition even though both converge on the same tier
+    // once the camera settles. has_measured mirrors that file's own
+    // current.ready: the very first measurement has nothing on screen yet
+    // to ease from, so it commits directly instead of stepping up from 1.
+    let has_measured = false;
 
-  // instances_by_variant[v] holds every placed (not object-occupied)
-  // instance's transform for bundle.variants[v] — recomputed whenever this
-  // chunk's own tile data, object column, or LOD tier changes, never
-  // persisted.
-  const instances_by_variant = useMemo(() => {
-    const by_variant: ModelInstanceTransformList[] = bundle.variants.map(() => []);
-    const density_scale = DECOR_DENSITY_BY_LOD_STEP[lod_step];
-    // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
-    // density instead of running it only to have every candidate rejected
-    // by its own probability check below — density_scale=0 means "nothing
-    // here", decided once, not discovered 4096 times.
-    if (!tile || density_scale === 0) return by_variant;
+    return {
+      // Sentinel only, matching chunk_stage.tsx's own Chunk convention —
+      // decor never actually blends between tiers; this flag's only
+      // remaining job is "recheck me on the very first frame regardless of
+      // the periodic full_recheck cadence", cleared right after that first
+      // recheck runs.
+      blend_active: true,
+      settling: false,
+      in_frustum: true,
+      distance2: Infinity,
+      pending: false,
+      recheck(camera, frustum) {
+        const group = lod_group_ref.current;
+        if (!group) return;
 
-    const page_seed = derive_seed_u64(DECOR_MASTER_SEED, page_idx);
-    const candidates = scatter_decor_candidates(
-      tile.terrain.ground,
-      base_x,
-      base_y,
-      CHUNK_CELL_SPAN,
-      page_seed,
-      bundle.seed,
-      bundle.is_eligible,
-      density_scale,
-    );
+        // Frustum test first, same gate chunk_stage.tsx's own Chunk.recheck()
+        // applies before its own (much heavier) scan/build step — a chunk
+        // behind or beside the camera reads as "close" by distance alone, so
+        // skipping this would keep scanning/building decor for chunks the
+        // renderer was never going to draw in the first place. z=0 here is
+        // an approximation (real elevation is sampled below, only once this
+        // chunk is worth the cost), the same slack APPROXIMATE_CHUNK_RADIUS
+        // already covers for chunk_stage.tsx's own equivalent fallback-
+        // bounds case.
+        center.set(half, half, 0).applyMatrix4(group.matrixWorld);
+        this.in_frustum = frustum.intersectsSphere(sphere);
+        this.blend_active = false;
 
-    const page_base = FROM_L3_IDX(page_idx);
-    for (const candidate of candidates) {
-      const x: f64 = candidate.cell_x * U_PER_CELL + U_PER_CELL / 2;
-      const y: f64 = candidate.cell_y * U_PER_CELL + U_PER_CELL / 2;
-      const ele = get_ele_at_local(page_idx, x, y);
-      if (ele === null) continue;
+        // Identity/value comparison against what instances_by_variant was
+        // actually last built from — same "don't cache what a live store
+        // already owns" shape as chunk_stage.tsx's own source_ref, just
+        // folded into this same recheck() instead of a parallel useEffect:
+        // decor's periodic full_recheck cadence (0.15s) is imperceptible,
+        // so there's no need for chunk_stage.tsx's extra machinery to react
+        // to a data change on the very same frame it happens.
+        const source_changed = !Object.is(tile_ref.current, committed_tile) ||
+          objects_revision_ref.current !== committed_objects_revision;
 
-      const cell_ivec = ivec.add(page_base, ivec.gather(BigInt(candidate.cell_x), BigInt(candidate.cell_y), BigInt(Math.floor(ele))));
-      const [ix, iy, iz] = cell_index({ i: cell_ivec, f: 0n });
-      if (get_objects_in_cell(cell_key(ix, iy, iz)).length > 0) continue;
+        if (!this.in_frustum) {
+          this.distance2 = center.distanceToSquared(camera.position);
+          desired_lod_step = has_measured ? step_lod_toward(committed_lod_step, 64) : 64;
+          has_measured = true;
+          this.pending = desired_lod_step !== committed_lod_step || source_changed;
+          return;
+        }
 
-      by_variant[candidate.variant].push({ position: [x, y, ele], rotation_z: candidate.rotation, scale: candidate.scale });
-    }
-    return by_variant;
-    // objects_revision is read only to retrigger this memo when this
-    // chunk's own placed objects change — the actual occupancy check above
-    // always re-reads get_objects_in_cell's live state directly, same
-    // "don't cache what a live store already owns" convention chunk_stage.tsx
-    // itself follows for tile/objects_revision.
+        // Real ground height at this chunk's own center, not an assumed 0 —
+        // chunk_stage.tsx's own Chunk gets this for free once it has
+        // actually built geometry to measure a real AABB from; decor never
+        // builds anything chunk-shaped to measure, so it has to sample the
+        // same elevation data its own candidates already use instead, or a
+        // hillside chunk's distance would be measured as if it sat at sea
+        // level while the trees on it are genuinely much closer to (or
+        // farther from) the camera than that.
+        const ele = get_ele_at_local(page_idx, base_x * U_PER_CELL + half, base_y * U_PER_CELL + half) ?? 0;
+        const dist = chunk_distance_to_camera(group, half, half, ele, camera, center);
+        this.distance2 = dist * dist;
+        const guide_step = get_lod_guide(dist, committed_lod_step).lod_step;
+        desired_lod_step = has_measured ? step_lod_toward(committed_lod_step, guide_step) : guide_step;
+        has_measured = true;
+        this.pending = desired_lod_step !== committed_lod_step || source_changed;
+      },
+      commit() {
+        if (!this.pending) return false;
+        committed_lod_step = desired_lod_step;
+        committed_tile = tile_ref.current;
+        committed_objects_revision = objects_revision_ref.current;
+        this.pending = false;
+        set_instances_by_variant(build_decor_instances(committed_tile, committed_lod_step, page_idx, base_x, base_y, bundle));
+        return true;
+      },
+    };
     // deno-lint-ignore-next-line
-  }, [tile, page_idx, base_x, base_y, lod_step, bundle, objects_revision]);
+  }, [page_idx, base_x, base_y, bundle]);
+
+  useEffect(() => {
+    scheduler.controls.add(control);
+    return () => void scheduler.controls.delete(control);
+  }, [scheduler, control]);
 
   // lod_group_ref below exists ONLY to give chunk_lod.ts a real mounted
   // group to measure through — it carries no meshes of its own. Actual
