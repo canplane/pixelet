@@ -1,8 +1,8 @@
-// @pxl/web/app/providers/modal_manager.tsx
+// @pxl/web/app/providers/modal-manager.tsx
 
 import { useEffect, useState } from "react";
 
-import type { ModalController, UIController } from "../types/ui.types.ts";
+import type { ModalController, UiController } from "../types/ui.types.ts";
 
 import { EditFooModal } from "@/features/manage_foo/ui/edit_foo_modal.tsx";
 import type { EditFooProps } from "@/features/manage_foo/ui/edit_foo_modal.tsx";
@@ -16,7 +16,7 @@ export type ModalState = EditFooProps | SettingsModalProps | null;
 
 /** ModalManager props */
 type ModalManagerProps = {
-  merge_ui_controller: (o: Partial<UIController>) => void; // Merges modal-related UI actions into the global UI controller
+  mergeUiController: (o: Partial<UiController>) => void; // Merges modal-related UI actions into the global UI controller
 };
 
 /**
@@ -28,9 +28,9 @@ type ModalManagerProps = {
  * - Rendering active modals at the application root level
  */
 export function ModalManager(props: ModalManagerProps) {
-  const { merge_ui_controller } = props;
+  const { mergeUiController } = props;
 
-  const [modal_state, set_modal_state] = useState<ModalState>(null);
+  const [modalState, setModalState] = useState<ModalState>(null);
 
   /**
    * Modal-specific UI controller
@@ -38,38 +38,38 @@ export function ModalManager(props: ModalManagerProps) {
    * This controller exposes imperative actions
    * (e.g. opening a modal from anywhere in the app)
    */
-  const [modals_controller] = useState<ModalController>({
-    open_update_foo_modal: (id) => set_modal_state({ type: "foo:update", params: { id } }),
-    open_settings_modal: () => set_modal_state({ type: "settings" }),
+  const [modalsController] = useState<ModalController>({
+    openUpdateFooModal: (id) => setModalState({ type: "foo:update", params: { id } }),
+    openSettingsModal: () => setModalState({ type: "settings" }),
   });
 
   /**
    * Register modal actions to the global UI controller
    */
   useEffect(() => {
-    merge_ui_controller(modals_controller);
-  }, [modals_controller, merge_ui_controller]);
+    mergeUiController(modalsController);
+  }, [modalsController, mergeUiController]);
 
   // no active modal
-  if (!modal_state) {
+  if (!modalState) {
     return null;
   }
-  const { type } = modal_state;
+  const { type } = modalState;
 
   return (
     <>
       {type === "foo:update" && (
         <EditFooModal
-          open={!!modal_state}
-          on_open_change={(open: boolean) => !open && set_modal_state(null)}
-          {...modal_state}
+          open={!!modalState}
+          onOpenChange={(open: boolean) => !open && setModalState(null)}
+          {...modalState}
         />
       )}
       {type === "settings" && (
         <SettingsModal
-          open={!!modal_state}
-          on_open_change={(open: boolean) => !open && set_modal_state(null)}
-          {...modal_state}
+          open={!!modalState}
+          onOpenChange={(open: boolean) => !open && setModalState(null)}
+          {...modalState}
         />
       )}
     </>

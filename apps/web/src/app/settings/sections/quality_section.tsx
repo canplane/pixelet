@@ -3,25 +3,57 @@
 import { Gauge } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { useRenderSettingsStore } from "@/render/settings_store.ts";
-import { SectionTitle, SettingRow } from "@/app/settings/setting_row.tsx";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { SectionTitle, SettingRadioRow, SettingRow } from "@/app/settings/setting_row.tsx";
 
 export function QualitySection() {
   const { t } = useTranslation();
 
-  const high_dpr = useRenderSettingsStore((state) => state.high_dpr);
-  const toggle_high_dpr = useRenderSettingsStore((state) => state.toggle_high_dpr);
+  const aa_mode = useSettingsStore((state) => state.aa_mode);
+  const set_aa_mode = useSettingsStore((state) => state.set_aa_mode);
+  const low_spec = useSettingsStore((state) => state.low_spec);
+  const toggle_low_spec = useSettingsStore((state) => state.toggle_low_spec);
 
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle icon={Gauge} caption={t("settings.quality.section_caption")}>{t("settings.quality.section_title")}</SectionTitle>
-      <SettingRow
-        label={t("settings.quality.high_dpr.label")}
-        description={t("settings.quality.high_dpr.description")}
-        active={high_dpr}
-        on_toggle={toggle_high_dpr}
-        cost="high"
-      />
+      {
+        /* Grouped visually (bordered box + radios, not switches) since these
+          three are mutually exclusive — one choice, not three independent
+          toggles — unlike texture_pack below, which stands on its own. */
+      }
+      <div className="flex flex-col gap-0.5 -mx-3 rounded-[10px] border border-border p-1">
+        <SettingRadioRow
+          label={t("settings.quality.aa_mode.none.label")}
+          description={t("settings.quality.aa_mode.none.description")}
+          selected={aa_mode === "none"}
+          on_select={() => set_aa_mode("none")}
+        />
+        <SettingRadioRow
+          label={t("settings.quality.aa_mode.smaa.label")}
+          description={t("settings.quality.aa_mode.smaa.description")}
+          selected={aa_mode === "smaa"}
+          on_select={() => set_aa_mode("smaa")}
+          cost="med"
+        />
+        <SettingRadioRow
+          label={t("settings.quality.aa_mode.supersample.label")}
+          description={t("settings.quality.aa_mode.supersample.description")}
+          selected={aa_mode === "supersample"}
+          on_select={() => set_aa_mode("supersample")}
+          cost="high"
+        />
+      </div>
+      {__IS_DEV__ && (
+        <SettingRow
+          label={t("settings.quality.texture_pack.label")}
+          description={t("settings.quality.texture_pack.description")}
+          active={!low_spec}
+          on_toggle={toggle_low_spec}
+          cost="med"
+          dev
+        />
+      )}
     </div>
   );
 }

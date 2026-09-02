@@ -20,6 +20,12 @@ const SWAP_FADE = { ...SPRING, opacity: { duration: 0.12, ease: "easeOut" as con
 
 const SEND_FADE_MS = 200;
 
+// Mirrors the h-12 pills below (Tailwind's JIT scanner can't take this as a
+// variable, so it stays a literal class there — see this file's own note a
+// few lines down) — app_layout.tsx reads this to keep Toaster clear of
+// wherever BottomOverlays ends up placing this bar.
+export const MODE_BAR_HEIGHT_PX = 48;
+
 // Static strings, not a computed w-[Npx] — Tailwind's JIT scanner needs
 // literal classes to generate them.
 function size_button_dims(i: number): string {
@@ -149,7 +155,7 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
       // stacking context as this portal, so a Tailwind z-50 class would
       // lose to it outright.
       style={{ position: "fixed", left: anchor.left, bottom: anchor.bottom, transform: "translateX(-50%)", zIndex: 2000 }}
-      className="flex flex-col items-center gap-1.5 rounded-full bg-neutral-900/60 backdrop-blur-sm border border-white/10 shadow-[0_6px_20px_rgba(0,0,0,0.25)] py-2 px-1.5"
+      className="flex flex-col items-center gap-1.5 rounded-full bg-neutral-900/60 backdrop-blur-sm shadow-[0_6px_20px_rgba(0,0,0,0.25)] py-2 px-1.5"
     >
       {tiers.map((tier) => {
         const s = OBJECT_SIZES[tier];
@@ -180,15 +186,15 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
 
 function ColorSwatchButton({ id }: { id: ObjectColorId }) {
   const { t } = useTranslation();
-  const active_tool = useUiStore((state) => state.active_tool);
+  const activeTool = useUiStore((state) => state.activeTool);
   const object_color_id = useUiStore((state) => state.object_color_id);
   const object_size = useUiStore((state) => state.object_size);
-  const set_active_tool = useUiStore((state) => state.set_active_tool);
+  const set_activeTool = useUiStore((state) => state.set_activeTool);
   const set_object_color_id = useUiStore((state) => state.set_object_color_id);
 
   const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => {
     set_object_color_id(id);
-    set_active_tool("object");
+    set_activeTool("object");
   });
   const tiers = size_tiers_for(id);
 
@@ -206,7 +212,7 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
           style={{ backgroundColor: object_color_hex(id) }}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            active_tool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -217,8 +223,8 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
 export function ModeBar() {
   const { t } = useTranslation();
   const [mode, set_mode] = useState<ModeId>("palette");
-  const active_tool = useUiStore((state) => state.active_tool);
-  const set_active_tool = useUiStore((state) => state.set_active_tool);
+  const activeTool = useUiStore((state) => state.activeTool);
+  const set_activeTool = useUiStore((state) => state.set_activeTool);
   const append_chat_line = useUiStore((state) => state.append_chat_line);
   const [message_text, set_message_text] = useState("");
   const [is_sending, set_is_sending] = useState(false);
@@ -262,14 +268,14 @@ export function ModeBar() {
             // box-shadow, not filter: drop-shadow — this element is an
             // opaque rectangle, and filters render badly over the WebGL
             // canvas in WebKit (see AGENTS.md's Overlay CSS section).
-            "flex items-center h-12 bg-white shadow-[0_3px_6px_rgba(0,0,0,0.25)] min-w-0",
+            "flex items-center h-12 bg-white shadow-[0_6px_20px_rgba(0,0,0,0.25)] min-w-0",
           )}
         >
           <motion.div
             layout
             transition={SPRING}
             style={{ borderRadius: "999px" }}
-            className={cn("relative flex items-center h-full overflow-hidden border border-black/10", message_expanded && "pl-2")}
+            className={cn("relative flex items-center h-full overflow-hidden", message_expanded && "pl-2")}
           >
             <motion.button
               type="button"
@@ -362,7 +368,7 @@ export function ModeBar() {
                       onClick={send_message}
                       disabled={is_sending}
                       className={cn(
-                        "absolute inset-0 flex items-center justify-center shrink-0 cursor-pointer border border-white/15",
+                        "absolute inset-0 flex items-center justify-center shrink-0 cursor-pointer",
                         "bg-linear-to-br from-orange-400 to-orange-500 text-white shadow-md shadow-orange-500/40",
                         "transition-all duration-200 hover:from-orange-400 hover:to-orange-600 hover:shadow-lg hover:shadow-orange-500/50",
                         "active:from-orange-500 active:to-orange-700 active:scale-95",
@@ -383,7 +389,7 @@ export function ModeBar() {
                       transition={SWAP_FADE}
                       style={{ borderRadius: "999px" }}
                       onClick={() => set_mode("palette")}
-                      className="absolute inset-0 flex items-center justify-center cursor-pointer bg-neutral-900 border border-white/15 text-white/60 hover:text-white/90 transition-colors shrink-0"
+                      className="absolute inset-0 flex items-center justify-center cursor-pointer bg-neutral-900 text-white/60 hover:text-white/90 transition-colors shrink-0"
                       title={t("map.mode_bar.palette_tooltip")}
                     >
                       <Palette className="w-5 h-5" strokeWidth={2} />
@@ -402,15 +408,15 @@ export function ModeBar() {
                   exit={{ opacity: 0, x: -10 }}
                   transition={SPRING}
                   style={{ borderRadius: "999px" }}
-                  className="flex items-center min-w-0 bg-neutral-900 border border-white/15 h-full"
+                  className="flex items-center min-w-0 bg-neutral-900 h-full"
                 >
                   <div className="flex items-center p-[4px] shrink-0">
                     <button
                       type="button"
-                      onClick={() => set_active_tool("pointer")}
+                      onClick={() => set_activeTool("pointer")}
                       className={cn(
                         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-                        active_tool === "pointer" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+                        activeTool === "pointer" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
                       title={t("map.mode_bar.pointer")}
                     >
@@ -419,10 +425,10 @@ export function ModeBar() {
 
                     <button
                       type="button"
-                      onClick={() => set_active_tool("eraser")}
+                      onClick={() => set_activeTool("eraser")}
                       className={cn(
                         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-                        active_tool === "eraser" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+                        activeTool === "eraser" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
                       title={t("map.mode_bar.eraser")}
                     >

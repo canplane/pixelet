@@ -26,7 +26,7 @@ import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
 import { get_ele, get_ele_at_local } from "./terrain/elevation.ts";
-import { useDebugStore } from "@/app/dev/debug_store.ts";
+import { useDebugStore } from "@/app/settings/debug_store.ts";
 
 import { AnchorSpace } from "./anchor/space.tsx";
 import { AnchorNode } from "./anchor/node.tsx";
@@ -142,7 +142,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
   const map_center = useMapStore((state) => state.map_center);
   const { device_coord } = useMapNavigation();
-  const show_debug_objects = useDebugStore((state) => state.show_debug_objects);
+  const showDebugObjects = useDebugStore((state) => state.showDebugObjects);
 
   const view_frame_ref = useRef<THREE.Group>(null);
   const map_origin: IVec = get_local_world_origin(map_center);
@@ -188,7 +188,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
   return (
     <group name="world" ref={ref}>
       <group name="view-frame" ref={view_frame_ref}>
-        {__IS_DEV__ && show_debug_objects && (
+        {__IS_DEV__ && showDebugObjects && (
           <>
             {
               /* view-frame is never rotated by useFrameRotation (only its
@@ -202,7 +202,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
         )}
 
         <group name="world-frame" ref={world_frame_ref}>
-          {__IS_DEV__ && show_debug_objects && (
+          {__IS_DEV__ && showDebugObjects && (
             // world-frame's own rotation.z is driven straight from camera
             // azimuth (useFrameRotation) — a marker here rotates exactly
             // opposite the camera's orbit, so it stays pointed at a fixed
@@ -212,7 +212,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
           )}
 
           <group name="local-world-frame" ref={local_world_frame_ref}>
-            {__IS_DEV__ && show_debug_objects && (() => {
+            {__IS_DEV__ && showDebugObjects && (() => {
               // This marker's children are positioned relative to
               // map_origin — the same convention DebugDot/DebugLayer use
               // (map_origin itself renders at (0,0,0)) — so (2048,2048) is
@@ -257,7 +257,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
                 />
               </Suspense>
 
-              {__IS_DEV__ && show_debug_objects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
+              {__IS_DEV__ && showDebugObjects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
             </AnchorSpace>
           </group>
         </group>

@@ -22,7 +22,7 @@
  * custom skin is tracked separately, not blocking on it.
  */
 
-import { memo, type MutableRefObject, useLayoutEffect, useRef } from "react";
+import { memo, type MutableRefObject, useEffect, useLayoutEffect, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 
@@ -32,7 +32,8 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { get_surface_z_at_local } from "../surface_height.ts";
 import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
 import { useCharacterModel } from "./use_character_model.ts";
-import { useCharacterStore } from "./store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { useCompanionLoadStore } from "./store.ts";
 import { ChatBubble } from "./chat_bubble.tsx";
 import { type CharacterVariant, find_person_variant, find_pet_variant } from "@pxl/shared/assets/characters/variants.ts";
 
@@ -75,11 +76,20 @@ type WalkerProps = {
   variant: CharacterVariant;
   /** Only the person talks — the pet doesn't get a chat bubble. */
   show_chat_bubble?: boolean;
+  /** Which half of useCompanionLoadStore this instance reports readiness
+   * into — see store.ts's own doc comment on why that state lives outside
+   * this component's tree. */
+  role: "person" | "pet";
 };
 
 const Walker = memo(function Walker(props: WalkerProps) {
-  const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble } = props;
+  const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
   const { root: character_root, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
+
+  useEffect(() => {
+    const set_ready = role === "person" ? useCompanionLoadStore.getState().set_person_ready : useCompanionLoadStore.getState().set_pet_ready;
+    set_ready(character_root !== null);
+  }, [character_root, role]);
 
   const walk_plan_ref = useRef<WalkPlan | null>(null);
   const settle_ref = useRef<SettleTracker>(init_settle_tracker(target_ref.current, 0));
@@ -202,8 +212,8 @@ type CompanionProps = {
 export function Companion(props: CompanionProps) {
   const { origin_page_idx_xy, map_origin, center_x, center_y, center_z } = props;
 
-  const person_variant_key = useCharacterStore((state) => state.person_variant_key);
-  const pet_variant_key = useCharacterStore((state) => state.pet_variant_key);
+  const person_variant_key = useSettingsStore((state) => state.person_variant_key);
+  const pet_variant_key = useSettingsStore((state) => state.pet_variant_key);
   const person_variant = find_person_variant(person_variant_key);
   const pet_variant = find_pet_variant(pet_variant_key);
 
@@ -232,8 +242,17 @@ export function Companion(props: CompanionProps) {
         target_z_ref={target_z_ref}
         variant={person_variant}
         show_chat_bubble
+        role="person"
       />
-      <Walker key={pet_variant.key} origin_ref={origin_ref} map_origin_ref={map_origin_ref} target_ref={pet_target_ref} target_z_ref={target_z_ref} variant={pet_variant} />
+      <Walker
+        key={pet_variant.key}
+        origin_ref={origin_ref}
+        map_origin_ref={map_origin_ref}
+        target_ref={pet_target_ref}
+        target_z_ref={target_z_ref}
+        variant={pet_variant}
+        role="pet"
+      />
     </>
   );
 }

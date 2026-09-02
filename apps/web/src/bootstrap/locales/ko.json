@@ -17,8 +17,8 @@
     "camera": {
       "section_title": "카메라",
       "lock_tilt": {
-        "label": "카메라 틸트 제스처 잠금",
-        "description": "켜면 드래그/핀치 제스처로 카메라 기울기(polar)를 바꿀 수 없습니다. 회전(azimuth)과 줌은 그대로 동작합니다."
+        "label": "카메라 기울기 고정",
+        "description": "카메라의 수직 회전은 고정하고 수평 회전은 유지합니다."
       }
     },
     "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍(버벅임)이 발생하면 HIGH 항목부터 해제해 주세요.",
@@ -28,10 +28,6 @@
       "shadow_map": {
         "label": "그림자",
         "description": "태양과 달의 위치에 따라 실시간으로 변화하는 그림자를 구현합니다."
-      },
-      "blob_shadow": {
-        "label": "접지 그림자",
-        "description": "오브젝트 하단에 부드러운 그림자를 생성하여 바닥에 놓인 느낌을 줍니다."
       },
       "rim_light": {
         "label": "림 라이트",
@@ -60,23 +56,33 @@
       "chromatic_aberration": {
         "label": "크로매틱 애버레이션",
         "description": "화면 가장자리의 빛을 미세하게 분산시켜 카메라 렌즈 왜곡 효과를 줍니다."
-      },
-      "smaa": {
-        "label": "안티에일리어싱 (SMAA)",
-        "description": "물체의 외곽선(계단 현상)을 부드럽게 다듬어 화면을 깔끔하게 만듭니다."
       }
     },
     "character": {
       "section_title": "동행",
-      "section_caption": "지도 위에서 함께 다닐 캐릭터와 반려동물을 선택하세요",
+      "section_caption": "지도 위에서 함께 다닐 캐릭터와 펫을 선택하세요",
       "person_label": "캐릭터",
-      "pet_label": "반려동물"
+      "pet_label": "펫"
     },
     "quality": {
       "section_title": "그래픽 품질",
-      "high_dpr": {
-        "label": "고해상도 렌더링",
-        "description": "화면 해상도를 최대 2배로 높여 더 선명하고 깨끗한 화질(슈퍼샘플링)을 구현합니다."
+      "aa_mode": {
+        "none": {
+          "label": "기본",
+          "description": "별도 안티에일리어싱 없이 렌더링합니다."
+        },
+        "smaa": {
+          "label": "SMAA",
+          "description": "물체의 외곽선(계단 현상)을 부드럽게 다듬어 화면을 깔끔하게 만듭니다."
+        },
+        "supersample": {
+          "label": "고해상도 렌더링",
+          "description": "화면 해상도를 최대 2배로 높여 더 선명하고 깨끗한 화질(슈퍼샘플링)을 구현합니다."
+        }
+      },
+      "texture_pack": {
+        "label": "텍스처",
+        "description": "블록과 오브젝트 표면에 단색 대신 디테일한 픽셀 아트 텍스처를 적용합니다."
       },
       "section_caption": "화면의 선명도와 디테일을 설정합니다"
     },
@@ -95,11 +101,6 @@
       "section_title": "정보",
       "tagline": "실제 지형을 캔버스 삼아 가상의 블록을 쌓는 프로젝트입니다."
     }
-  },
-  "cost": {
-    "low": "LOW",
-    "med": "MED",
-    "high": "HIGH"
   },
   "object_colors": {
     "white": "흰색",
@@ -136,9 +137,10 @@
   "toast": {
     "location_weak_signal": "위치 신호가 약합니다.",
     "location_checking": "위치를 확인하고 있습니다.",
-    "map_load_error": "지도를 불러올 수 없습니다.",
-    "map_load_success": "공간을 불러왔습니다.",
-    "map_loading": "공간을 불러오고 있습니다."
+    "map_load_error": "공간을 불러올 수 없습니다.",
+    "world_ready": "공간을 불러왔습니다.",
+    "map_loading": "공간을 불러오고 있습니다.",
+    "companion_loading": "동행을 준비하는 중입니다."
   },
   "map": {
     "scale_bar": {

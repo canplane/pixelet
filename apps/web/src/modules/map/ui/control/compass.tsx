@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useCameraStore } from "@/modules/camera/store.ts";
 
 import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
-import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
+import { CircularButton } from "@/shared/ui/shadcn/circular_button.tsx";
 
 import { reground_map_center } from "@/modules/world/terrain/use_ground_snap_sync.ts";
 

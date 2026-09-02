@@ -121,8 +121,8 @@ export const PET_VARIANTS: readonly CharacterVariant[] = [
   { key: "tiger", label: "Tiger", model_url: tiger_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
 ];
 
-export const DEFAULT_PERSON_VARIANT_KEY: string = PERSON_VARIANTS[0].key;
-export const DEFAULT_PET_VARIANT_KEY: string = PET_VARIANTS[0].key;
+export const DEFAULT_PERSON_VARIANT_KEY: string = "female-b";
+export const DEFAULT_PET_VARIANT_KEY: string = "chick";
 
 export function find_person_variant(key: string): CharacterVariant {
   return PERSON_VARIANTS.find((v) => v.key === key) ?? PERSON_VARIANTS[0];

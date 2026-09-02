@@ -8,7 +8,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
 
 import { render_cfg, shadow_cfg } from "@/modules/world/environment/config.ts";
-import { useRenderSettingsStore } from "@/render/settings_store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { themes, type WorldTheme, WorldThemeKey } from "@/modules/world/environment/themes.ts";
 import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
@@ -294,7 +294,7 @@ export function MapEnvironment(props: MapEnvironmentProps) {
   const { sun_proxy_ref } = props;
   const { scene } = useThree();
 
-  const show_god_rays = useRenderSettingsStore((state) => state.show_god_rays);
+  const show_god_rays = useSettingsStore((state) => state.show_god_rays);
 
   // Real sun/moon position needs the map's actual latitude/longitude — this
   // read doesn't gate anything, just supplies a location for celestial_position.ts.
@@ -308,7 +308,7 @@ export function MapEnvironment(props: MapEnvironmentProps) {
     return { lat: FALLBACK_LAT, lon: FALLBACK_LON };
   };
 
-  const show_shadow_map = useRenderSettingsStore((state) => state.show_shadow_map);
+  const show_shadow_map = useSettingsStore((state) => state.show_shadow_map);
 
   const theme_key = useThemeKey();
   const theme: WorldTheme = themes[theme_key];

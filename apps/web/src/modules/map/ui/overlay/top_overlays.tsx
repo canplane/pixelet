@@ -1,7 +1,7 @@
 // @pxl/web/modules/map/ui/overlay/top_overlays.tsx
 
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { CameraStatus, useCameraStore } from "@/modules/camera/store.ts";
+import { use_camera_busy_interaction_style } from "@/modules/camera/use_camera_busy_interaction_style.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { CurrentAddress } from "./current_address.tsx";
 import { SensorStatus } from "./sensor_status.tsx";
@@ -13,13 +13,7 @@ import { TrackingButton } from "@/modules/map/ui/control/tracking_button.tsx";
 import { SettingsTriggerButton } from "@/app/settings/settings_trigger_button.tsx";
 
 export function TopOverlays() {
-  const camera_status: CameraStatus = useCameraStore((state) => state.camera_status);
-  const is_camera_busy: boolean = camera_status !== CameraStatus.IDLE;
-
-  const interaction_style = cn(
-    "transition-[opacity,transform,filter] duration-500 ease-in-out",
-    is_camera_busy ? "pointer-events-none opacity-40 scale-[0.98] blur-[0.5px]" : "opacity-100 scale-100 blur-0",
-  );
+  const { is_camera_busy, interaction_style } = use_camera_busy_interaction_style();
 
   const map_center = useMapStore((state) => state.map_center);
   const { label: address_label } = useReverseGeocode(map_center);

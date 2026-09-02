@@ -7,9 +7,10 @@ import { useTranslation } from "react-i18next";
 
 import { DevicePoseStatus, useDeviceLocationStore } from "@/modules/device/pose/store.ts";
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
+import { useCompanionLoadStore } from "@/modules/world/characters/store.ts";
 
 import { Toast } from "@/shared/ui/toast/toast.tsx";
-import { toast_custom, toast_dismiss } from "@/shared/ui/toast/store.ts";
+import { toastCustom, toastDismiss } from "@/shared/ui/toast/store.ts";
 
 const LoadingIcon = (
   <motion.div
@@ -44,7 +45,7 @@ function StatusIcon({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function MapToastController() {
+export function ToastController() {
   const { t } = useTranslation();
   const location_status: DevicePoseStatus = useDeviceLocationStore((state) => state.status);
   // Rendered through t() here (not resolved to a message where the error
@@ -54,8 +55,14 @@ export function MapToastController() {
   const location_error_key: string | null = useDeviceLocationStore((state) => state.error_key);
 
   const map_status: MapStatus = useMapStore((state) => state.map_status);
+  // Merged with map_status below into a single "world-status" toast, not a
+  // toast of its own — both represent the same thing to a viewer ("is the
+  // world I'm looking at actually ready yet"), unlike location_status
+  // (device GPS sensor state, a genuinely separate concern that keeps its
+  // own toast).
+  const companion_loading: boolean = useCompanionLoadStore((state) => !state.person_ready || !state.pet_ready);
 
-  const shown_location_toast_ref = useRef(false);
+  const shownLocationToastRef = useRef(false);
   // t via a ref, not a dependency — react-i18next hands back a new function
   // identity on every language change, so listing it as a dependency re-ran
   // these effects and re-showed a toast just from switching language.
@@ -63,66 +70,81 @@ export function MapToastController() {
   t_ref.current = t;
 
   useEffect(() => {
-    const is_loading = location_status === DevicePoseStatus.LOADING;
-    const is_error = location_status === DevicePoseStatus.ERROR;
+    const isLoading = location_status === DevicePoseStatus.LOADING;
+    const isError = location_status === DevicePoseStatus.ERROR;
 
-    if (!is_loading && !is_error) {
-      if (shown_location_toast_ref.current) {
-        toast_dismiss("location-status");
-        shown_location_toast_ref.current = false;
+    if (!isLoading && !isError) {
+      if (shownLocationToastRef.current) {
+        toastDismiss("location-status");
+        shownLocationToastRef.current = false;
       }
       return;
     }
 
-    shown_location_toast_ref.current = true;
-    toast_custom("location-status", ({ index, stack_size, is_removing }) => (
+    shownLocationToastRef.current = true;
+    toastCustom("location-status", ({ index, stackSize, isRemoving }) => (
       <Toast
         id="location-status"
         index={index}
-        stack_size={stack_size}
-        is_removing={is_removing}
-        message={is_error ? (location_error_key ? t_ref.current(location_error_key) : t_ref.current("toast.location_weak_signal")) : t_ref.current("toast.location_checking")}
-        statusColor={is_error ? "bg-red-500" : "bg-[#34C759]/30"}
-        icon={<StatusIcon>{is_error ? <MapPinOff key="location-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
-        backgroundColor={is_error ? "bg-red-50" : undefined}
-        className={is_error ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
+        stackSize={stackSize}
+        isRemoving={isRemoving}
+        message={isError ? (location_error_key ? t_ref.current(location_error_key) : t_ref.current("toast.location_weak_signal")) : t_ref.current("toast.location_checking")}
+        statusColor={isError ? "bg-red-500" : "bg-[#34C759]/30"}
+        icon={<StatusIcon>{isError ? <MapPinOff key="location-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
+        backgroundColor={isError ? "bg-red-50" : undefined}
+        className={isError ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
       />
     ));
   }, [location_status, location_error_key]);
 
-  const shown_map_toast_ref = useRef(false);
+  // Tracks only "was the combined loading/error state active last run" —
+  // the transition into !isLoading && !isError is what distinguishes
+  // "just finished, flash success" from "never started, nothing to show."
+  const wasWorldLoadingRef = useRef(false);
   useEffect(() => {
-    const is_loading = map_status === MapStatus.LOADING;
-    const is_error = map_status === MapStatus.ERROR;
-    const is_success = map_status === MapStatus.SUCCESS;
+    const isMapLoading = map_status === MapStatus.LOADING;
+    const isError = map_status === MapStatus.ERROR;
+    const isLoading = isMapLoading || companion_loading;
 
-    if (!is_loading && !is_error && !is_success) {
-      if (shown_map_toast_ref.current) {
-        toast_dismiss("map-status");
-        shown_map_toast_ref.current = false;
-      }
+    if (isLoading || isError) {
+      wasWorldLoadingRef.current = true;
+      // Map load takes priority in the message when both are in flight —
+      // it's the more foundational "is there a world to stand on at all"
+      // concern; companion_loading only surfaces once map_status has
+      // nothing left to report.
+      const message_key = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
+      toastCustom("world-status", ({ index, stackSize, isRemoving }) => (
+        <Toast
+          id="world-status"
+          index={index}
+          stackSize={stackSize}
+          isRemoving={isRemoving}
+          message={t_ref.current(message_key)}
+          statusColor={isError ? "bg-red-500" : "bg-[#34C759]/30"}
+          icon={<StatusIcon>{isError ? <MapPinOff key="world-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
+          backgroundColor={isError ? "bg-red-50" : undefined}
+          className={isError ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
+        />
+      ));
       return;
     }
 
-    shown_map_toast_ref.current = true;
-    toast_custom("map-status", ({ index, stack_size, is_removing }) => (
+    if (!wasWorldLoadingRef.current) return;
+    wasWorldLoadingRef.current = false;
+    toastCustom("world-status", ({ index, stackSize, isRemoving }) => (
       <Toast
-        id="map-status"
+        id="world-status"
         index={index}
-        stack_size={stack_size}
-        is_removing={is_removing}
-        message={is_error ? t_ref.current("toast.map_load_error") : is_success ? t_ref.current("toast.map_load_success") : t_ref.current("toast.map_loading")}
-        statusColor={is_error ? "bg-red-500" : is_success ? "bg-[#34C759]" : "bg-[#34C759]/30"}
-        icon={<StatusIcon>{is_error ? <MapPinOff key="map-error-icon" className="w-4 h-4 text-red-500" /> : is_success ? SuccessIcon : LoadingIcon}</StatusIcon>}
-        backgroundColor={is_error ? "bg-red-50" : undefined}
-        className={is_error ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
+        stackSize={stackSize}
+        isRemoving={isRemoving}
+        message={t_ref.current("toast.world_ready")}
+        statusColor="bg-[#34C759]"
+        icon={<StatusIcon>{SuccessIcon}</StatusIcon>}
       />
     ));
-
-    if (!is_success) return;
-    const timer = setTimeout(() => toast_dismiss("map-status"), 3000);
+    const timer = setTimeout(() => toastDismiss("world-status"), 3000);
     return () => clearTimeout(timer);
-  }, [map_status]);
+  }, [map_status, companion_loading]);
 
   return null;
 }

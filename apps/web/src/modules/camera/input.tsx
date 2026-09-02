@@ -9,7 +9,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { useDebugStore } from "@/app/dev/debug_store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
@@ -53,9 +53,9 @@ const $pointer = new THREE.Vector2();
  * drop-to-zero-fingers branch).
  */
 function handle_tap(hovered: PVF3): void {
-  const { active_tool, object_color_id, object_size } = useUiStore.getState();
+  const { activeTool, object_color_id, object_size } = useUiStore.getState();
 
-  if (active_tool === "pointer") {
+  if (activeTool === "pointer") {
     // hovering an object recenters on its actual middle — real height
     // included, deliberately NOT re-grounded to terrain (unlike a
     // terrain-sourced `hovered`, which is already grounded via with_ele and
@@ -79,7 +79,7 @@ function handle_tap(hovered: PVF3): void {
     return;
   }
 
-  if (active_tool === "eraser") {
+  if (activeTool === "eraser") {
     // targets the object the raycast actually struck (see update_hover()),
     // not a grid-key lookup — correct for any size, any face.
     const { hovered_object_id } = useCameraStore.getState();
@@ -87,7 +87,7 @@ function handle_tap(hovered: PVF3): void {
     return;
   }
 
-  // active_tool === "object" — `hovered` is already either a terrain corner
+  // activeTool === "object" — `hovered` is already either a terrain corner
   // or, when the cursor is over an existing object, the corner flush against
   // whichever face was struck (adjacent_corner() in update_hover()). Still
   // guard against that candidate slot itself already being occupied (e.g.
@@ -219,7 +219,7 @@ export function CameraInput() {
     // ground_snap goes through (see its own doc comment) — the GPS
     // recenter button in tracking_button.tsx uses it too, instead of
     // each call site hand-rolling its own probe.
-    set_map_center(useCameraStore.getState().ground_snap ? ground_or_raw(next_center) : next_center);
+    set_map_center(useSettingsStore.getState().ground_snap ? ground_or_raw(next_center) : next_center);
   }
 
   /** Azimuth tracks the cursor's angle around screen center since drag-start
@@ -259,13 +259,13 @@ export function CameraInput() {
     const view_state = useCameraStore.getState().view_state;
 
     if (rotate_axis_lock.current === RotateAxisLock.TILT) {
-      // lock_camera_tilt (debug_store.ts) only gates this write — the axis-
+      // lock_camera_tilt (settings_store.ts) only gates this write — the axis-
       // lock decision above still commits to TILT on a vertical drag either
       // way, it just becomes a no-op instead of changing polar. An
       // experiment toggle for a fixed-tilt UX, not yet a decided product
       // change, hence living in the debug menu rather than removing this
       // path outright.
-      if (!useDebugStore.getState().lock_camera_tilt) {
+      if (!useSettingsStore.getState().lock_camera_tilt) {
         const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
         set_view_state({ polar: view_state.polar + dy * ROT_GAIN_POLAR * norm });
       }
@@ -372,7 +372,7 @@ export function CameraInput() {
       twist_anchored.current = false;
     }
 
-    // lock_camera_tilt (debug_store.ts) — same gate as do_rotate's TILT
+    // lock_camera_tilt (settings_store.ts) — same gate as do_rotate's TILT
     // branch, see its own comment. next_polar is still tracked/computed
     // above either way; this just decides whether it reaches the store.
     // The polar key must be omitted entirely when locked, not set to
@@ -380,7 +380,7 @@ export function CameraInput() {
     // view_state, so an explicit `polar: undefined` would overwrite the
     // real value with undefined instead of leaving it untouched.
     const view_update: { dist: f64; azimuth: f64; polar?: f64 } = { dist: next_dist, azimuth: next_azimuth };
-    if (!useDebugStore.getState().lock_camera_tilt) view_update.polar = next_polar;
+    if (!useSettingsStore.getState().lock_camera_tilt) view_update.polar = next_polar;
     set_view_state(view_update);
   }
 
@@ -543,7 +543,7 @@ export function CameraInput() {
     $pointer.set(pointer_x.current, pointer_y.current);
     raycaster.setFromCamera($pointer, camera);
 
-    const { active_tool, object_size } = useUiStore.getState();
+    const { activeTool, object_size } = useUiStore.getState();
     const map_origin = get_local_world_origin(map_center);
 
     // One unified raycast — terrain (top or a wall) and any placed object
@@ -558,7 +558,7 @@ export function CameraInput() {
     }
     const { hit } = pick;
 
-    if (active_tool === "object") {
+    if (activeTool === "object") {
       // the one tool that wants an ADJACENT empty slot, not the struck
       // surface itself.
       set_hovered_object_id(null);

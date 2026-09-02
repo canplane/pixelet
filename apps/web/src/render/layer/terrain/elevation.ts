@@ -12,7 +12,7 @@ import type { f64, i16, i32, u32 } from "@xpute/core/kit/word.ts";
 import type { I16Array } from "@xpute/core/kit/array.ts";
 import { clamp, lerp } from "@xpute/core/kit/math.ts";
 
-import { ELE_PAD, ELE_PADDED_SPAN, CHUNK_CELL_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN } from "@pxl/shared/bake/constants.ts";
 import type { Ground } from "@pxl/shared/bake/format.ts";
 import { common_types } from "@pxl/shared/spec/cell/common.ts";
 import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";

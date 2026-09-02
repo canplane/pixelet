@@ -3,22 +3,20 @@
 import { Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { useRenderSettingsStore } from "@/render/settings_store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { SectionTitle, SettingRow } from "@/app/settings/setting_row.tsx";
 
 export function PostFxSection() {
   const { t } = useTranslation();
 
-  const show_ao = useRenderSettingsStore((state) => state.show_ao);
-  const toggle_ao = useRenderSettingsStore((state) => state.toggle_ao);
-  const show_bloom = useRenderSettingsStore((state) => state.show_bloom);
-  const toggle_bloom = useRenderSettingsStore((state) => state.toggle_bloom);
-  const show_tilt_shift = useRenderSettingsStore((state) => state.show_tilt_shift);
-  const toggle_tilt_shift = useRenderSettingsStore((state) => state.toggle_tilt_shift);
-  const show_chromatic_aberration = useRenderSettingsStore((state) => state.show_chromatic_aberration);
-  const toggle_chromatic_aberration = useRenderSettingsStore((state) => state.toggle_chromatic_aberration);
-  const show_smaa = useRenderSettingsStore((state) => state.show_smaa);
-  const toggle_smaa = useRenderSettingsStore((state) => state.toggle_smaa);
+  const show_ao = useSettingsStore((state) => state.show_ao);
+  const toggle_ao = useSettingsStore((state) => state.toggle_ao);
+  const show_bloom = useSettingsStore((state) => state.show_bloom);
+  const toggle_bloom = useSettingsStore((state) => state.toggle_bloom);
+  const show_tilt_shift = useSettingsStore((state) => state.show_tilt_shift);
+  const toggle_tilt_shift = useSettingsStore((state) => state.toggle_tilt_shift);
+  const show_chromatic_aberration = useSettingsStore((state) => state.show_chromatic_aberration);
+  const toggle_chromatic_aberration = useSettingsStore((state) => state.toggle_chromatic_aberration);
 
   return (
     <div className="flex flex-col gap-1">
@@ -33,32 +31,28 @@ export function PostFxSection() {
         cost="low"
       />
       <SettingRow
-        label={t("settings.post_fx.smaa.label")}
-        description={t("settings.post_fx.smaa.description")}
-        active={show_smaa}
-        on_toggle={toggle_smaa}
-        cost="low"
-      />
-      <SettingRow
         label={t("settings.post_fx.tilt_shift.label")}
         description={t("settings.post_fx.tilt_shift.description")}
         active={show_tilt_shift}
         on_toggle={toggle_tilt_shift}
-        cost="low"
-      />
-      <SettingRow
-        label={t("settings.post_fx.bloom.label")}
-        description={t("settings.post_fx.bloom.description")}
-        active={show_bloom}
-        on_toggle={toggle_bloom}
         cost="med"
       />
+      {__IS_DEV__ && (
+        <SettingRow
+          label={t("settings.post_fx.bloom.label")}
+          description={t("settings.post_fx.bloom.description")}
+          active={show_bloom}
+          on_toggle={toggle_bloom}
+          cost="med"
+          dev
+        />
+      )}
       <SettingRow
         label={t("settings.post_fx.ao.label")}
         description={t("settings.post_fx.ao.description")}
         active={show_ao}
         on_toggle={toggle_ao}
-        cost="med"
+        cost="high"
       />
     </div>
   );

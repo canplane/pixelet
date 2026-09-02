@@ -16,11 +16,11 @@ export type ActiveTool = "pointer" | "object" | "eraser";
 export type ChatLine = { id: number; text: string; ts: number };
 
 const MAX_CHAT_LINES = 10;
-let next_chat_line_id = 0;
+let nextChatLineID = 0;
 
 type UiState = {
-  active_tool: ActiveTool;
-  set_active_tool: (active_tool: ActiveTool) => void;
+  activeTool: ActiveTool;
+  set_activeTool: (activeTool: ActiveTool) => void;
 
   object_color_id: ObjectColorId;
   set_object_color_id: (object_color_id: ObjectColorId) => void;
@@ -28,13 +28,13 @@ type UiState = {
   object_size: f64;
   set_object_size: (object_size: f64) => void;
 
-  chat_lines: ChatLine[];
+  chatLines: ChatLine[];
   append_chat_line: (text: string) => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
-  active_tool: "pointer",
-  set_active_tool: (active_tool) => set({ active_tool }),
+  activeTool: "pointer",
+  set_activeTool: (activeTool) => set({ activeTool }),
 
   object_color_id: "red",
   set_object_color_id: (object_color_id) => set({ object_color_id }),
@@ -42,9 +42,9 @@ export const useUiStore = create<UiState>((set) => ({
   object_size: DEFAULT_OBJECT_SIZE,
   set_object_size: (object_size) => set({ object_size }),
 
-  chat_lines: [],
+  chatLines: [],
   append_chat_line: (text) =>
     set((state) => ({
-      chat_lines: [...state.chat_lines, { id: next_chat_line_id++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
+      chatLines: [...state.chatLines, { id: nextChatLineID++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
     })),
 }));

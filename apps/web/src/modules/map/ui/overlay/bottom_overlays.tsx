@@ -1,32 +1,33 @@
 // @pxl/web/modules/map/ui/overlay/bottom_overlays.tsx
 
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { CameraStatus, useCameraStore } from "@/modules/camera/store.ts";
+import { use_camera_busy_interaction_style } from "@/modules/camera/use_camera_busy_interaction_style.ts";
 import { ModeBar } from "./mode_bar.tsx";
 
-export function BottomOverlays() {
-  const camera_status: CameraStatus = useCameraStore((state) => state.camera_status);
-  const is_camera_busy: boolean = camera_status !== CameraStatus.IDLE;
+// How far off the screen bottom this positions ModeBar — app_layout.tsx
+// reads this (together with mode_bar.tsx's own MODE_BAR_HEIGHT_PX) to keep
+// Toaster clear of it.
+export const BOTTOM_OFFSET_PX = 16;
 
-  const interaction_style = cn(
-    // Not transition-all: these containers position from --vv-top/--vv-bottom,
-    // and `all` swept top/bottom into the same 500ms ease, so an overlay
-    // visibly eased toward where the keyboard had been half a second ago.
-    "transition-[opacity,transform,filter] duration-500 ease-in-out",
-    is_camera_busy ? "pointer-events-none opacity-40 scale-[0.98] blur-[0.5px]" : "opacity-100 scale-100 blur-0",
-  );
+export function BottomOverlays() {
+  const { is_camera_busy, interaction_style } = use_camera_busy_interaction_style();
 
   return (
     <>
       <div className={cn("absolute bottom-8 left-8 z-50", interaction_style)} />
 
-      {/* Keep this bottom offset in sync with MODE_BAR_BOTTOM_OFFSET_PX (overlay_safe_area.ts) — toaster.tsx's own safe margin depends on it. */}
       <div
         // iOS delivers visualViewport events inconsistently (streamed while the
         // keyboard opens, or as one final value if it was already up), so only
         // `bottom` gets a short ease here — long enough to read as motion, short
         // enough to stay attached during the streaming case.
-        className={cn("absolute bottom-[calc(1rem+var(--vv-bottom,0px))] left-4 right-4 z-40 pointer-events-none transition-[bottom] duration-150 ease-out", interaction_style)}
+        //
+        // bottom via inline style, not a Tailwind bottom-[calc(...)] class:
+        // BOTTOM_OFFSET_PX needs to reach here as a real value, and
+        // Tailwind's JIT scanner can't see a variable interpolated into an
+        // arbitrary-value class (see mode_bar.tsx's own note on this).
+        className={cn("absolute left-4 right-4 z-40 pointer-events-none transition-[bottom] duration-150 ease-out", interaction_style)}
+        style={{ bottom: `calc(${BOTTOM_OFFSET_PX}px + var(--vv-bottom, 0px))` }}
       >
         {/* ModeBar's own w-full/flex-1 chain needs a real ancestor width to resolve against — without this wrapper, flex-grow has nothing to grow into. */}
         <div className={cn("min-w-0 w-full flex justify-center", !is_camera_busy && "pointer-events-auto")}>

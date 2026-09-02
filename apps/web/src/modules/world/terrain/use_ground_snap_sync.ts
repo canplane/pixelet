@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { useCameraStore } from "@/modules/camera/store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useTileStore } from "./store.ts";
 import { with_ele } from "./elevation.ts";
@@ -16,7 +16,7 @@ import { with_ele } from "./elevation.ts";
  * the view properly grounded instead of only fixing angles/distance.
  */
 export function reground_map_center(): void {
-  if (!useCameraStore.getState().ground_snap) return;
+  if (!useSettingsStore.getState().ground_snap) return;
 
   const map_center = useMapStore.getState().map_center;
   if (!map_center) return;

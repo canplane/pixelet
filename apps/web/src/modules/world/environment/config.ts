@@ -77,31 +77,31 @@ export const light_cfg = {
 } as const;
 
 /**
- * Fresnel/rim highlight for placed objects only (chunk_stage.tsx's
- * OBJECT_BOX-based ChunkInstanceMesh, not the TERRAIN_BOX one) — a thin
- * bright edge on faces that graze the view direction, the classic
- * "toy block catching light at its silhouette" cue that helps placed
- * objects read as distinct from terrain cells even when the same block
- * palette overlaps both.
+ * Fresnel/rim highlight, applied uniformly to every chunk_stage.tsx instance
+ * mesh — terrain and placed objects alike, both TERRAIN_BOX and OBJECT_BOX —
+ * a thin bright edge on faces that graze the view direction, the classic
+ * "toy block catching light at its silhouette" cue. Originally object-only
+ * (meant to help placed objects read as distinct from terrain cells sharing
+ * the same block palette), but a shared render pipeline shouldn't treat one
+ * geometry role differently from another for the same shader term, so it now
+ * applies everywhere show_rim_light is on.
  */
 export const rim_cfg = {
   COLOR: "#ffffff",
-  // pow(1 - N.V, POWER) falloff — 2.5 keeps the highlight a thin band right
-  // at the silhouette instead of washing across the whole visible face the
-  // way a low power (close to 1) would.
-  POWER: 2.5,
-  // The first tuned value shipped blind under a since-fixed program-cache
-  // bug that silently no-opped rim light entirely (see create_material's
-  // customProgramCacheKey comment), so it was never actually visually
-  // validated. Once the bug was fixed, that value read as too strong for
-  // the "thin edge cue" this is meant to be, not a wash across the face —
-  // 0.2 is the value validated against the real rendered output.
-  INTENSITY: 0.2,
+  // pow(1 - N.V, POWER) falloff. POWER doesn't change peak brightness (at
+  // N.V=0, right at the silhouette, pow(1, POWER) is always 1 regardless of
+  // the exponent) — it controls how wide the lit band reads, low values
+  // spreading the same falloff into a softer, more gradual transition
+  // instead of a hard narrow line.
+  POWER: 1,
+  // Linear scale on the falloff term above — this is the one that actually
+  // controls peak brightness.
+  INTENSITY: 0.1,
 } as const;
 
 /**
  * Real shadow-map tuning (environment.tsx's sun/moon DirectionalLights,
- * gated by render/settings_store.ts's show_shadow_map). Opt-in rather than
+ * gated by app/settings/settings_store.ts's show_shadow_map). Opt-in rather than
  * on by default, since it was previously pulled once for a mobile-perf
  * tradeoff before coming back with manual shadow.needsUpdate throttling
  * instead of per-frame autoUpdate.
