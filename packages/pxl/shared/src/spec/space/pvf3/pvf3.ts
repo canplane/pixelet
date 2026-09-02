@@ -55,7 +55,7 @@ import * as fvec from "./fvec.ts";
  * - This type is unitless. Physical meaning (meters, tiles, voxels, etc.)
  *   is defined entirely by the caller through scaling outside the kernel.
  * - Default configuration provides fractional resolution of 2^-FRAC_W
- *   per axis (e.g. FRAC_W=10 -> 1024 steps per lattice unit).
+ *   per axis (e.g. FRAC_W=8 -> 256 steps per lattice unit).
  *
  * @property i - 64-bit packed integer address (coarse lattice).
  * @property f - 32-bit packed fractional remainder (fixed-point lanes).

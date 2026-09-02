@@ -27,7 +27,7 @@ offscreen rendering through OffscreenCanvas was not officially supported at the
 time.
 
 **2. The SAB dilemma had no good side.** Using SharedArrayBuffer forces
-COOP/COEP cross-origin isolation on the *entire application*. Not using it means
+COOP/COEP cross-origin isolation on the _entire application_. Not using it means
 paying a structured-copy cost every time data crosses a worker or WASM boundary.
 Both options were bad, and the choice looked forced.
 
@@ -108,7 +108,7 @@ reference candidate because it uses workers and SAB in varied ways — but VS Co
 desktop's multi-process architecture (extension host and friends) depends on
 **real OS processes provided by Electron**, which a browser tab does not have.
 Whether the browser build (vscode.dev) is actually SAB-backed preemptive or
-Figma-style cooperative message-passing needs checking *first*. Assuming
+Figma-style cooperative message-passing needs checking _first_. Assuming
 otherwise repeats exactly the mistake made with Skype and Figma: pattern-matching
 on a reference whose real constraints turned out not to apply.
 

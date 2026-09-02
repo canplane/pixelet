@@ -162,6 +162,14 @@ export function LocationPuck(props: LocationPuckProps) {
   const is_night: boolean = theme_key === WorldThemeKey.NIGHT;
   const beacon_color: string = is_night ? beacon_style.COLOR_NIGHT : beacon_style.COLOR_DAY;
 
+  // Deliberately unlit (not chunk_stage.tsx's/hover_cursor.tsx's own
+  // real-lit approach) — tried the lit version (2026-09-03) and reverted:
+  // this zone's whole job is standing out as a clear "here's your
+  // interaction radius" indicator, not reading as a real painted-on
+  // surface. Blending into the scene's actual lighting made it LESS
+  // legible, the opposite of a location marker's actual requirement —
+  // unlike hover_cursor.tsx's ghost, which wants to look like a real
+  // preview of a real thing, this has no "real thing" to resemble.
   const mat: THREE.ShaderMaterial = useMemo(
     () =>
       new THREE.ShaderMaterial({

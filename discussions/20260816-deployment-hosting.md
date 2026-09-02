@@ -42,11 +42,11 @@ Classifying the coverage bbox against `osm_coastline_polygons` (the same
 predicate `repository.ts`'s `OSM_COAST_SQL` already uses, so "has land" means
 exactly what it means to the live bake path) splits it three ways:
 
-| Page kind | Land polygons touching its bbox | Count |
-| --- | --- | --- |
-| Land or coastal — must be baked | ≥ 1 | **43,505** |
-| Pure open ocean — nothing but water | 0 | **80,230** |
-| | | 123,735 total |
+| Page kind                           | Land polygons touching its bbox | Count         |
+| ----------------------------------- | ------------------------------- | ------------- |
+| Land or coastal — must be baked     | ≥ 1                             | **43,505**    |
+| Pure open ocean — nothing but water | 0                               | **80,230**    |
+|                                     |                                 | 123,735 total |
 
 **65% of the bbox is open sea.** Baking and uploading 80,230 copies of "flat
 water" would triple the dataset for no information.
@@ -111,16 +111,16 @@ This matters more than expected — see the numbers below.
 
 Full bake against the local geo DB, concurrency 8, completed:
 
-| | Value |
-| --- | --- |
-| Land tiles baked | **43,505**, zero failures |
+|                     | Value                                       |
+| ------------------- | ------------------------------------------- |
+| Land tiles baked    | **43,505**, zero failures                   |
 | Ocean pages skipped | 80,230 (one shared `_ocean` object instead) |
-| Objects to upload | 43,506 (tiles + `_ocean`) |
-| Raw, uncompressed | 170.24 GB |
-| **Gzipped total** | **892.5 MB** |
-| Gzipped per tile | 21.0 kB average — **0.5% of raw** |
-| Wall clock | 36m58s |
-| App bundle | 1.97 MB (655 kB gzipped) |
+| Objects to upload   | 43,506 (tiles + `_ocean`)                   |
+| Raw, uncompressed   | 170.24 GB                                   |
+| **Gzipped total**   | **892.5 MB**                                |
+| Gzipped per tile    | 21.0 kB average — **0.5% of raw**           |
+| Wall clock          | 36m58s                                      |
+| App bundle          | 1.97 MB (655 kB gzipped)                    |
 
 The earlier estimate of "100–150 kB/tile → 4–6 GB" was measuring **uncompressed**
 tiles. These payloads are dense per-cell ground channels built from polygon
@@ -152,7 +152,7 @@ inward neighbours shows why that would be worse:
   sampled tile). So the geometric discontinuity at the boundary exists either
   way — dropping the ring does not remove the cliff, since the ocean fallback is
   also flat at zero.
-- Dropping it *adds* a second error on top: land recolored as sea. Composition
+- Dropping it _adds_ a second error on top: land recolored as sea. Composition
   across the ring is mixed — sampled tiles ran from 99.4% sea to 100% bare land —
   so the ocean fallback would assert open water over genuine land in part of it.
 - Where a ring tile is ~100% sea already, the two options are indistinguishable.
@@ -172,14 +172,14 @@ reappears at whatever the new boundary is.
 Not a defect, but it shapes what the demo actually contains. Comparing decoded
 tiles:
 
-| | interior (Seoul area) | periphery (toward Japan / China / North Korea) |
-| --- | --- | --- |
-| `land` channel | 15–99% landuse classes | **only SEA and BARE, 0% everything else** |
-| structure pixels | 184 – 184,000 | **0** |
-| transport pixels | 20,000 – 218,000 | **0** |
+|                  | interior (Seoul area)  | periphery (toward Japan / China / North Korea) |
+| ---------------- | ---------------------- | ---------------------------------------------- |
+| `land` channel   | 15–99% landuse classes | **only SEA and BARE, 0% everything else**      |
+| structure pixels | 184 – 184,000          | **0**                                          |
+| transport pixels | 20,000 – 218,000       | **0**                                          |
 
 `osm_coastline_polygons` is global, so any page touching a landmass classifies as
-land and gets baked — but the OSM *feature* extract is Geofabrik's South Korea
+land and gets baked — but the OSM _feature_ extract is Geofabrik's South Korea
 file. Those pages therefore bake into a bare land/sea silhouette and nothing
 else.
 
@@ -187,7 +187,7 @@ The elevation data behaves the same way, and less visibly. The DEM is four
 GeoTIFFs covering mainland South Korea, Jeju, the far western islands, and
 Ulleungdo/Dokdo — they do not tile the full 124–132°E / 33–39°N rectangle. The
 ingestion pipeline builds a VRT over their union bounding box, so the mosaic
-*reports* full-rectangle coverage while the gaps hold zeros that are
+_reports_ full-rectangle coverage while the gaps hold zeros that are
 indistinguishable from sea level downstream. Verified by probing the raster
 directly: Jeju returns 934 m, a point in one of the implied gaps returns 0.
 
@@ -198,13 +198,13 @@ reading anything into terrain outside them.
 
 Size distribution over the 43,505 tiles confirms the scale:
 
-| | |
-| --- | --- |
-| min / p10 | 4,190 B — identical in size to the `_ocean` tile, i.e. fully uniform |
-| median | 19,331 B |
-| max | 172,927 B |
-| under 6 kB (effectively featureless) | **6,949 tiles (16.0%)** |
-| total bytes in those | **29 MB** |
+|                                      |                                                                      |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| min / p10                            | 4,190 B — identical in size to the `_ocean` tile, i.e. fully uniform |
+| median                               | 19,331 B                                                             |
+| max                                  | 172,927 B                                                            |
+| under 6 kB (effectively featureless) | **6,949 tiles (16.0%)**                                              |
+| total bytes in those                 | **29 MB**                                                            |
 
 **16% of the tile count, 3% of the bytes** — featureless tiles compress to almost
 nothing, which is exactly why pruning them isn't worth doing. Panning east, south
@@ -218,21 +218,21 @@ its bandwidth is negligible anywhere. Effectively all traffic is tiles, and
 tiles go to object storage regardless of host. So the free-bandwidth numbers the
 three providers advertise barely enter into it.
 
-| | Cloudflare Pages | Vercel (Hobby) | Netlify (Free) |
-| --- | --- | --- | --- |
-| Static bandwidth | Unlimited | 100 GB/mo | 100 GB/mo |
-| Builds | 500/mo | ample | 300 min/mo |
-| Files per deployment | 20,000 cap | effectively unbounded | effectively unbounded |
-| Commercial use on free tier | allowed | **prohibited** | allowed |
-| Same account as R2 | **yes** | no | no |
-| CORS needed for tiles | **avoidable** | required | required |
-| DX | fine | best | good |
+|                             | Cloudflare Pages | Vercel (Hobby)        | Netlify (Free)        |
+| --------------------------- | ---------------- | --------------------- | --------------------- |
+| Static bandwidth            | Unlimited        | 100 GB/mo             | 100 GB/mo             |
+| Builds                      | 500/mo           | ample                 | 300 min/mo            |
+| Files per deployment        | 20,000 cap       | effectively unbounded | effectively unbounded |
+| Commercial use on free tier | allowed          | **prohibited**        | allowed               |
+| Same account as R2          | **yes**          | no                    | no                    |
+| CORS needed for tiles       | **avoidable**    | required              | required              |
+| DX                          | fine             | best                  | good                  |
 
 Three things actually differentiate them:
 
 **CORS avoidance.** With the app on Vercel or Netlify, app origin ≠ tile origin,
 so the bucket needs a CORS policy naming the app domain — extra state to keep in
-sync per domain change, and its absence fails *only* in production, never
+sync per domain change, and its absence fails _only_ in production, never
 locally. On Cloudflare the bucket can be bound to a path on the app's own
 hostname (`pixelet.app/tiles/*`), making tile requests same-origin, so CORS never
 enters the picture. `VITE_TILE_BASE_URL=/tiles/v1` then suffices.
@@ -272,12 +272,12 @@ bounded by a switch.
 
 Three of the four meters are effectively fixed and cannot drift:
 
-| Meter | This deployment | Free tier |
-| --- | --- | --- |
-| Storage | 892.5 MB, and the dataset does not grow on its own | 10 GB |
-| Class A (writes) | 43,506, one-time at publish | 1M/month |
-| Egress | — | always free |
-| **Class B (reads)** | **scales with traffic** | 10M/month, then $0.36/M |
+| Meter               | This deployment                                    | Free tier               |
+| ------------------- | -------------------------------------------------- | ----------------------- |
+| Storage             | 892.5 MB, and the dataset does not grow on its own | 10 GB                   |
+| Class A (writes)    | 43,506, one-time at publish                        | 1M/month                |
+| Egress              | —                                                  | always free             |
+| **Class B (reads)** | **scales with traffic**                            | 10M/month, then $0.36/M |
 
 Only reads vary. One tile request is one class-B operation, and a session that
 pans around pulls roughly 50–200 tiles, so the free tier covers on the order of
@@ -370,12 +370,12 @@ prevent.
 writing down precisely because it is not in version control and cannot be
 diffed, reviewed, or restored from this repository.
 
-| Where | What | Why |
-| --- | --- | --- |
-| DNS | `plei.me` — created by wrangler | Do not hand-edit; deploys recreate it |
-| DNS | `www` A `192.0.2.1`, **proxied** | Placeholder so the redirect below can fire |
-| Rules → Redirect Rules | `www -> apex (301)` | Dynamic, `concat("https://plei.me", http.request.uri.path)`, preserve query |
-| Security → WAF → Rate limiting | `Throttle /tiles/* per IP` | 100 requests / 10 seconds, block |
+| Where                          | What                             | Why                                                                         |
+| ------------------------------ | -------------------------------- | --------------------------------------------------------------------------- |
+| DNS                            | `plei.me` — created by wrangler  | Do not hand-edit; deploys recreate it                                       |
+| DNS                            | `www` A `192.0.2.1`, **proxied** | Placeholder so the redirect below can fire                                  |
+| Rules → Redirect Rules         | `www -> apex (301)`              | Dynamic, `concat("https://plei.me", http.request.uri.path)`, preserve query |
+| Security → WAF → Rate limiting | `Throttle /tiles/* per IP`       | 100 requests / 10 seconds, block                                            |
 
 Two of those have a reason that is not obvious from the setting itself.
 
@@ -411,13 +411,13 @@ Kept because the two are easy to confuse, and only one of them is safe here.
 The move above put the domain on the **Worker**. Putting it on the **bucket**
 instead is a different trade entirely:
 
-| | Custom domain on the **Worker** | Custom domain on the **bucket** |
-| --- | --- | --- |
-| Tiles still pass through the Worker | yes | **no** |
-| 100k/day fail-closed ceiling | kept | **gone** |
-| R2 billing exposure | none | real (cache absorbs most) |
-| WAF / rate limiting | available | available |
-| CORS | none (same origin) | reintroduced (separate hostname) |
+|                                     | Custom domain on the **Worker** | Custom domain on the **bucket**  |
+| ----------------------------------- | ------------------------------- | -------------------------------- |
+| Tiles still pass through the Worker | yes                             | **no**                           |
+| 100k/day fail-closed ceiling        | kept                            | **gone**                         |
+| R2 billing exposure                 | none                            | real (cache absorbs most)        |
+| WAF / rate limiting                 | available                       | available                        |
+| CORS                                | none (same origin)              | reintroduced (separate hostname) |
 
 The first adds WAF and changes nothing else, which is why it is what shipped.
 The second is what you would do once 100k/day became the binding constraint
@@ -499,14 +499,14 @@ asset fallback sees it.
 Tiles are stored pre-gzipped, and the Worker replays R2's stored metadata onto
 the response with `writeHttpMetadata()`, including `content-encoding: gzip`.
 That is not enough. By default the Workers runtime assumes a `Response` body is
-*not* encoded and applies its own compression on top.
+_not_ encoded and applies its own compression on top.
 
 Measured against a stored 8,653-byte tile:
 
-| Client sends | Bytes received | `content-encoding` | Result |
-| --- | --- | --- | --- |
-| `Accept-Encoding: gzip` | **4,343** | `gzip` | gzip inside gzip — one decode leaves it still compressed |
-| `Accept-Encoding: identity` | 8,653 | **absent** | raw gzip bytes, client never told to decode |
+| Client sends                | Bytes received | `content-encoding` | Result                                                   |
+| --------------------------- | -------------- | ------------------ | -------------------------------------------------------- |
+| `Accept-Encoding: gzip`     | **4,343**      | `gzip`             | gzip inside gzip — one decode leaves it still compressed |
+| `Accept-Encoding: identity` | 8,653          | **absent**         | raw gzip bytes, client never told to decode              |
 
 Both paths end with `decode_terrain()` receiving compressed input, and neither
 announces itself at the point of failure.
@@ -542,31 +542,31 @@ if (cached) {
 ```
 
 Worth noting how this failed: only on the second request, only through the
-edge, and with a *smaller* response — the sort of thing that looks like the
+edge, and with a _smaller_ response — the sort of thing that looks like the
 compression working rather than breaking. Comparing served size against stored
 size is what catches it; nothing about the response is otherwise suspicious.
 
 ### Verified end to end
 
-| Check | Result |
-| --- | --- |
-| App loads | 200, `text/html` |
-| Uploaded tile | 200, `content-encoding: gzip`, decodes byte-identical to local |
+| Check                | Result                                                              |
+| -------------------- | ------------------------------------------------------------------- |
+| App loads            | 200, `text/html`                                                    |
+| Uploaded tile        | 200, `content-encoding: gzip`, decodes byte-identical to local      |
 | **Page never baked** | **404 `text/plain`** — not `index.html`, so the routing split holds |
-| `_ocean` fallback | 200, decodes to 100% SEA at elevation 0 |
-| Seoul tile content | 218,976 building pixels, 283,752 road pixels, elevation 12–110 m |
+| `_ocean` fallback    | 200, decodes to 100% SEA at elevation 0                             |
+| Seoul tile content   | 218,976 building pixels, 283,752 road pixels, elevation 12–110 m    |
 
 ## Pre-deployment secret audit
 
 Run against the built bundle rather than reasoned about, since the whole point
 is what actually ships.
 
-| Check | Result |
-| --- | --- |
-| All 21 root `.env` variable **names** in the bundle (`ADMIN_TOKEN`, `DB_*_PASSWORD`, `DB_*_URL`, `postgresql://`, …) | **0 hits** |
-| All root `.env` **values** matched literally against the bundle | only `DB_MAIN_HOST`/`DB_GEO_HOST`, whose value is `localhost` — a false positive |
-| Source maps in `dist/` | **0** (`sourcemap: mode !== "production"`) |
-| Stray files in `dist/` | none — bundle, css, fonts, favicons, locales |
+| Check                                                                                                                | Result                                                                           |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| All 21 root `.env` variable **names** in the bundle (`ADMIN_TOKEN`, `DB_*_PASSWORD`, `DB_*_URL`, `postgresql://`, …) | **0 hits**                                                                       |
+| All root `.env` **values** matched literally against the bundle                                                      | only `DB_MAIN_HOST`/`DB_GEO_HOST`, whose value is `localhost` — a false positive |
+| Source maps in `dist/`                                                                                               | **0** (`sourcemap: mode !== "production"`)                                       |
+| Stray files in `dist/`                                                                                               | none — bundle, css, fonts, favicons, locales                                     |
 
 Structurally this holds because Vite's `loadEnv(mode, cwd, "VITE_")` only reads
 `VITE_`-prefixed variables, so the database credentials are never loaded into
@@ -592,12 +592,12 @@ Two items remain for deploy time: the R2 bucket must be public **read-only**
 
 ## Changes this produced
 
-| File | Change |
-| --- | --- |
-| `apps/api/src/modules/world/terrain/source.ts` | new — tile assembly extracted so offline bake and live API share one path |
-| `apps/api/src/modules/world/terrain/service.ts` | uses the extracted source instead of its own copy |
-| `apps/api/src/bake/terrain/tools/bake_tiles.ts` | new — classify, bake, gzip, resumable, writes a manifest |
-| `apps/web/vite.config.ts` | reads `VITE_TILE_BASE_URL` → `__TILE_BASE_URL__` |
-| `apps/web/@types/index.d.ts` | declares the new build constant |
-| `apps/web/.env.example` | documents the tile origin and its versioning rule |
-| `apps/web/src/modules/world/terrain/use_tile_fetcher.ts` | tile-origin URL builder + 404 → shared ocean tile |
+| File                                                     | Change                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `apps/api/src/modules/world/terrain/source.ts`           | new — tile assembly extracted so offline bake and live API share one path |
+| `apps/api/src/modules/world/terrain/service.ts`          | uses the extracted source instead of its own copy                         |
+| `apps/api/src/bake/terrain/tools/bake_tiles.ts`          | new — classify, bake, gzip, resumable, writes a manifest                  |
+| `apps/web/vite.config.ts`                                | reads `VITE_TILE_BASE_URL` → `__TILE_BASE_URL__`                          |
+| `apps/web/@types/index.d.ts`                             | declares the new build constant                                           |
+| `apps/web/.env.example`                                  | documents the tile origin and its versioning rule                         |
+| `apps/web/src/modules/world/terrain/use_tile_fetcher.ts` | tile-origin URL builder + 404 → shared ocean tile                         |

@@ -42,8 +42,8 @@ export const IVEC_Z_W: u32 = 16 as const;
 /** Total nominal bit-width for the packed fractional word. */
 export const FVEC_WORD_W: bits = 32 as const;
 /** Symmetric bit-depth resolution assigned per fractional lane. */
-export const FRAC_W: u32 = 10 as const;
-/** Mask for the 3 packed lanes (30 bits used of 32). */
+export const FRAC_W: u32 = 8 as const;
+/** Mask for the 3 packed lanes (24 bits used of 32). */
 export const FVEC_WORD_MASK: u64 = FIELD_MASK64(FRAC_W * 3);
 /** Cardinality of one fractional lane (2^FRAC_W). */
 export const ONE: u64 = BIT64(FRAC_W);

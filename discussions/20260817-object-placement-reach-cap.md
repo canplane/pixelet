@@ -16,7 +16,7 @@ It doesn't. Neither the sparse-tree implementation
 (`packages/pxl/shared/src/spec/space/sparse_tree/{tree,mem}.ts`) nor its
 consumer (`apps/web/src/modules/world/objects/store.ts`) bounds the Y
 coordinate — `cells` is an unbounded `Map<string, ObjectTree>`, and
-`sparse_tree.set()` only bounds the size *tier* (`OBJECT_LAYOUT.level`),
+`sparse_tree.set()` only bounds the size _tier_ (`OBJECT_LAYOUT.level`),
 never position.
 
 That first pass instead found a real but unrelated reach limit —
@@ -34,8 +34,8 @@ The failure is downstream of the raycast, not the raycast itself.
 Traced the full chain from the same `hovered` coordinate `update_hover()`
 already computed — `handle_tap()` in `camera/input.tsx` passes it as-is to
 both `find_overlapping_object()` and `place()`
-(`store.ts`'s own comment confirms this is deliberate: *"i/f is taken as-is
-... never re-derived or re-snapped here"*), so hover and placement share one
+(`store.ts`'s own comment confirms this is deliberate: _"i/f is taken as-is
+... never re-derived or re-snapped here"_), so hover and placement share one
 coordinate object, not two independently computed ones that could disagree.
 
 `place()` (`store.ts:343-375`):
@@ -48,7 +48,10 @@ export function place(i: IVec, f: FVec, size: f64, color_id: ObjectColorId): voi
   const [ix, iy, iz] = cell_index(coord);
   const key = cell_key(ix, iy, iz);
   let tree = cells.get(key);
-  if (!tree) { tree = new_tree(); cells.set(key, tree); }
+  if (!tree) {
+    tree = new_tree();
+    cells.set(key, tree);
+  }
   const val = object_color_num_id(color_id);
   if (is_whole_cell) {
     sparse_tree.fill(tree, val);
@@ -149,8 +152,8 @@ Traced `volume.ts`, `compositor.ts`, `chunk_mesher.ts`/`voxel_scan.ts`, and
   every object entry currently indexed under that XY (L2) column **at any
   Z** straight from the live store — not a fixed/precomputed band loop.
 - Terrain's own paint function explicitly documents itself as built to have
-  no Z cap: *"sparse signed-Z bands can extend through every actual peak, so
-  no z_top clamp can cut mountainous terrain or raycasts flat"*
+  no Z cap: _"sparse signed-Z bands can extend through every actual peak, so
+  no z_top clamp can cut mountainous terrain or raycasts flat"_
   (`render/layer/terrain/adapter.ts`).
 
 By this trace, a newly placed high-altitude object should be picked up on the
@@ -175,7 +178,7 @@ plausible than anything ruled out so far:
    `is_topmost_run` (lines ~145-176) intentionally drops instances it judges
    hidden. The code explicitly excludes the `OBJECT` class from culling logic
    per an existing 2026-08-16 bugfix comment, so this should already be
-   handled — but it's the one place in the pipeline that *intentionally*
+   handled — but it's the one place in the pipeline that _intentionally_
    drops instances, so it's worth confirming live rather than trusting the
    comment, especially at chunk boundaries.
 

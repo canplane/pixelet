@@ -40,7 +40,24 @@ export type PlacedObject = ObjectEntryBase & { kind: "solid"; color_id: ObjectCo
 export type ObjectAir = ObjectEntryBase & { kind: "air" };
 export type ObjectLayerEntry = PlacedObject | ObjectAir;
 
-const STORAGE_KEY = "pxl:objects:v4";
+// Renamed from "pxl:objects:v4" (2026-09-03) — singular ("object", matching
+// this module's own type names PlacedObject/ObjectLayerEntry) since there
+// was never a real reason for the old key to be plural — but the number
+// still carries forward as v5, not reset to v1: the version count has real
+// history (four prior encoding breaks), and the rename is incidental to
+// that history, not a reason to erase it. This bump specifically:
+// pvf3/core.ts's FRAC_W dropped from 10 to 8 bits, so an existing v4 entry's
+// raw `f: FVec` bit-packing no longer means what its own X/Y/Z lane shifts
+// assumed; decoding old data under the new layout would silently scramble
+// every placed object's fractional position rather than fail loudly. Bump
+// this again whenever a future change makes an older entry's encoding mean
+// something different from what it meant when it was written. Exported so
+// app/settings/sections/about_section.tsx can display it next to the tile
+// version — both are "which on-disk/on-device format am I reading" facts,
+// useful for the same reason (diagnosing a report against a specific
+// format generation).
+export const OBJECT_STORAGE_VERSION: number = 5;
+const STORAGE_KEY = `pxl:object:v${OBJECT_STORAGE_VERSION}`;
 const EMPTY: readonly PlacedObject[] = [];
 const EMPTY_ENTRIES: readonly ObjectLayerEntry[] = [];
 
@@ -197,9 +214,85 @@ export function get_objects_in_cell(key: string): readonly PlacedObject[] {
   return objects_by_cell.get(key) ?? EMPTY;
 }
 
-/** All layer entries in one renderer-owned 64-wide L2 XY column. */
+/** All layer entries in one renderer-owned 64-wide L2 XY column — the real,
+ * unfiltered set. Used directly by ObjectWorldLayer.revision() and by its
+ * own paint() whenever painting for a raycast (see that file's own
+ * `opts.for_raycast` handling): a raycast must always be able to hit the
+ * real thing, set_virtual_hide's cosmetic exclusion below is for the real
+ * GPU-mesh build only. */
 export function get_object_entries_in_l2_column(l2_key: string): readonly ObjectLayerEntry[] {
   return entries_by_l2_column.get(l2_key) ?? EMPTY_ENTRIES;
+}
+
+/** The one object currently painted as absent from the real render build —
+ * see set_virtual_hide's own doc comment. Scoped to this file's module
+ * state, not zustand: it's read from render/layer/objects/adapter.ts's
+ * ObjectWorldLayer.paint(), which runs inside chunk_stage.tsx's synchronous
+ * build step, not a React render. */
+let virtual_hide_id: string | null = null;
+
+/**
+ * Makes exactly one placed object paint as if it didn't exist, for the real
+ * GPU-mesh build ONLY — for the eraser tool's own hover preview
+ * (markers/hover_cursor.tsx), which needs the real target to actually stop
+ * rendering (so whatever's behind/below it becomes visible) with a
+ * translucent ghost of it laid on top, not a ghost merely overlaid on the
+ * still-fully-opaque real thing.
+ *
+ * Deliberately does NOT affect get_objects_in_cell/get_objects_near
+ * (collision.ts, decor's own occupancy check) OR a raycast composite
+ * (ObjectWorldLayer.paint's own `opts.for_raycast` branch, which reads
+ * get_object_entries_in_l2_column directly, unfiltered) — the object hasn't
+ * actually been removed. Skipping the raycast case specifically isn't
+ * optional: the raycaster is exactly what resolves hovered_object_id in the
+ * first place, so if it stopped seeing the hidden object, hover would clear,
+ * the exclusion would lift, the raycaster would hit it again, hover would
+ * set again — an infinite loop (confirmed live, "Maximum update depth
+ * exceeded" 2026-09-03, fixed by scoping this to the build path only).
+ *
+ * Bumps and notifies the affected l2 column's own revision — the exact same
+ * reactivity path a real place()/remove() uses — so chunk_stage.tsx's Chunk
+ * picks this up through its already-existing objects_revision-triggered
+ * rebuild, not a parallel invalidation mechanism.
+ *
+ * The real object and this ghost's own instant appearance briefly overlap
+ * on entry (and briefly gap on exit) while that rebuild propagates through
+ * a few React commits — accepted as-is (2026-09-03): a fade/multi-slot
+ * system was built to mask it and then deliberately reverted, since it
+ * traded a barely-visible cosmetic overlap for real added complexity (a
+ * multi-id hide set, per-slot fade lifecycles, a cap to bound how many
+ * objects could end up simultaneously hidden during a fast sweep) — not a
+ * good trade for a few milliseconds of overlap. See
+ * discussions/20260903-terrain-decor-render-unification.md for the fuller
+ * account.
+ */
+export function set_virtual_hide(id: string | null): void {
+  const previous = virtual_hide_id;
+  if (previous === id) return;
+  virtual_hide_id = id;
+  if (previous) bump_l2_column_for_object(previous);
+  if (id) bump_l2_column_for_object(id);
+}
+
+function bump_l2_column_for_object(id: string): void {
+  const parsed = parse_leaf_id(id);
+  if (!parsed) return;
+  const [ix, iy, iz] = parse_cell_key(parsed.key);
+  const l2_key = l2_column_key_of_cell(ix, iy, iz);
+  l2_column_revisions.set(l2_key, (l2_column_revisions.get(l2_key) ?? 0) + 1);
+  notify(l2_column_listeners, l2_key);
+}
+
+/** Same as get_object_entries_in_l2_column, with set_virtual_hide's own
+ * target (if any) filtered out — the real GPU-mesh build path's own view,
+ * never the raycast path's (see set_virtual_hide's own doc comment on why
+ * that split has to hold). Returns the live backing array unchanged (no
+ * allocation) whenever the hidden id isn't even in this column, which is
+ * the common case. */
+export function get_render_object_entries_in_l2_column(l2_key: string): readonly ObjectLayerEntry[] {
+  const entries = get_object_entries_in_l2_column(l2_key);
+  if (!virtual_hide_id) return entries;
+  return entries.some((entry) => entry.id === virtual_hide_id) ? entries.filter((entry) => entry.id !== virtual_hide_id) : entries;
 }
 
 /** Objects near a candidate corner+size — the cell it's in plus the 26 neighbors, since a candidate near a cell face can legitimately need to see an object one cell over (collision.ts's find_overlapping_object, ray.ts's resolve_hit_object). 27 O(1) lookups, still independent of total object count. */

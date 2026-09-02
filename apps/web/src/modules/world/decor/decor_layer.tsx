@@ -10,10 +10,10 @@
  * IS shared with chunk_stage.tsx today — see the ChunkLodControl paragraph
  * below. What's still separate is the build/render pipeline itself:
  * chunk_stage.tsx bakes terrain by instancing one shared unit box, while
- * this file instances arbitrary per-variant GLB geometry — a scattered,
- * sparse decoration layer never needed that box-instancing machinery's own
- * complexity (dense per-cell scanning, multi-tier blending), so it keeps
- * its own much simpler build step rather than folding into chunk_stage.tsx's.
+ * this file instances arbitrary per-variant GLB geometry — transitional,
+ * not a settled design choice: see LONGER-TERM DIRECTION below for the
+ * decided (not hypothetical) plan to fold both into one geometry-agnostic
+ * per-chunk baking pipeline, matching Minecraft's own actual block model.
  *
  * No decoration is ever stored: scatter.ts's placement is a pure function
  * of terrain + a fixed seed, recomputed on demand. A cell that currently
@@ -65,10 +65,25 @@
  *   recheck (at most LOD_RECHECK_INTERVAL, 0.15s, since decor's
  *   blend_active is only ever true for its first frame) — an imperceptible
  *   delay, so the extra machinery wasn't worth duplicating.
+ * - A decor chunk's own commit() has no dependency at all on whether the
+ *   co-located terrain Chunk has actually finished building — they share
+ *   one scheduler but two fully independent `ready` states, so decor (a
+ *   cheap, never-deferred build) can visibly show trees/cars/boats over
+ *   terrain that hasn't rendered anything yet (still ready:false, or
+ *   mid-scan-defer). CONFIRMED, NOT PATCHED (2026-09-03): a cross-registry
+ *   gate (terrain publishes its own per-chunk ready key, decor reads it
+ *   before committing) was drafted and explicitly rejected — it's exactly
+ *   the kind of fix that stops being needed at all once the LONGER-TERM
+ *   DIRECTION below actually lands (one build step, one ready flag, no two
+ *   states to desync in the first place), so adding it now would just be
+ *   scaffolding to delete later. Left as a known, accepted symptom until
+ *   that unification happens — not scheduled for this session ("귀찮아서
+ *   안 한다", explicit user call, 2026-09-03), but decided, not optional.
  *
- * LONGER-TERM DIRECTION: Minecraft's own block model is the reference point
- * here, and it's a 3-tier split, not 2 — (1) static grid content (full
- * cubes AND non-cube decorative blocks like candles alike) shares one
+ * LONGER-TERM DIRECTION — DECIDED, not a someday-maybe: full geometry-level
+ * unification, Minecraft's own block model as the literal reference, not
+ * just an inspiration. It's a 3-tier split, not 2 — (1) static grid content
+ * (full cubes AND non-cube decorative blocks like candles alike) shares one
  * per-cell storage array and gets baked into one shared per-chunk mesh, no
  * instancing at all; (2) static content that still needs a per-frame
  * visual update (an open chest, sign text) keeps that (1) baked mesh and
@@ -76,26 +91,33 @@
  * moves under its own logic every frame (mobs, minecarts) lives entirely
  * outside the grid as its own object. Tier 3 already has a match here —
  * characters/companion.tsx's own useFrame loop, untouched by any of this.
- * Tier 1 is the actual gap: chunk_stage.tsx bakes terrain by instancing one
- * shared unit box (TERRAIN_BOX/OBJECT_BOX), while this file instances
- * arbitrary GLB geometry per variant — two different primitives standing in
- * for what Minecraft treats as one baked buffer per chunk regardless of
- * block shape. Full parity means folding this bundle's geometry into
- * chunk_stage.tsx's own build step instead of a second InstancedMesh
- * pipeline — a materially bigger, separate effort from the scheduler
- * registration above (already landed — this file's ChunkDecor and that
- * file's Chunk are equal ChunkLodControl registrants today) since it needs
- * a new geometry-agnostic per-chunk baking scheme, not just wiring into an
- * existing one. User-placed decor (a candle a player places, as
- * opposed to a procedurally scattered tree) should still land in
- * objects/store.ts's existing per-cell tree as its own ObjectLayerEntry
- * kind alongside "solid" — same tier-1 storage Minecraft gives decorative
- * blocks — with its instances merged into this file's own
- * instances_by_variant next to scatter_decor_candidates' output, not a
- * separate store.
+ * Tier 1 is the actual gap: chunk_stage.tsx bakes terrain by INSTANCING one
+ * shared unit box (TERRAIN_BOX/OBJECT_BOX) at many transforms, while this
+ * file instances arbitrary GLB geometry per variant — neither is what
+ * Minecraft actually does. Minecraft BAKES: every block, cube or not,
+ * contributes its own real geometry into one merged per-chunk vertex
+ * buffer, not a shared primitive restyled per instance. Getting there means
+ * replacing chunk_stage.tsx's entire box-instancing build path with a
+ * geometry-agnostic baking pipeline — the rim-light shader (currently
+ * written against per-instance attributes), occlusion culling (currently
+ * run-based, chunk_mesher.ts's is_run_occluded), the LOD bucket cache
+ * (chunk_bucket.ts), and the blend/dither transition system (render/lod.ts)
+ * all currently assume one shared instanced box and need redesigning
+ * against merged arbitrary geometry instead — a real rendering-engine
+ * rewrite, not a wire-in. Not started per explicit user instruction
+ * (2026-09-03: correct direction, deliberately not scheduled this session)
+ * — but decided, and this file's own instancing pipeline should be read as
+ * transitional once it does land, not as an alternative worth preserving.
+ * User-placed decor (a candle a player places, as opposed to a
+ * procedurally scattered tree) should still land in objects/store.ts's
+ * existing per-cell tree as its own ObjectLayerEntry kind alongside
+ * "solid" — same tier-1 storage Minecraft gives decorative blocks — with
+ * its instances merged into this file's own instances_by_variant next to
+ * scatter_decor_candidates' output, not a separate store.
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -113,8 +135,9 @@ import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_key, get_objects_in_cell, l2_column_key_of, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
 import { in_range_chunks } from "@/render/chunk_range.ts";
 import { get_lod_guide, type LodStep, step_lod_toward } from "@/render/lod.ts";
-import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera } from "@/render/chunk_lod.ts";
+import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
 import { type ChunkLodControl, use_lod_scheduler } from "@/modules/world/chunk_stage.tsx";
+import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
@@ -225,6 +248,18 @@ const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materia
   const object_key = useMemo(() => l2_column_key_of(page_idx, page_off), [page_idx, page_off]);
   const objects_revision = useObjectL2ColumnRevision(object_key);
   const scheduler = use_lod_scheduler();
+  const camera = useThree((state) => state.camera);
+  const anchor_registry = useAnchorRegistry();
+  // Same one-shot camera-relative seed chunk_stage.tsx's own Chunk uses
+  // (estimate_initial_chunk_view's own doc comment) — without it this
+  // control would start at a true (Infinity) distance2 sentinel, so a
+  // whole batch of decor chunks mounted in the same frame (a big pan/zoom)
+  // would rank by mount order instead of real camera distance until each
+  // one gets its own first real recheck().
+  const initial_view = useMemo(
+    () => estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, ivec.add(FROM_L3_IDX(page_idx), page_off)),
+    [anchor_registry, camera, page_idx, page_off],
+  );
 
   // recheck()/commit() (inside the control useMemo below) read the latest
   // tile/objects_revision through these refs rather than closing over them
@@ -236,6 +271,37 @@ const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materia
   tile_ref.current = tile;
   const objects_revision_ref = useRef(objects_revision);
   objects_revision_ref.current = objects_revision;
+
+  // Accumulated LOD-tracking state, kept in refs OUTSIDE the control
+  // useMemo below rather than as plain closure-local `let`s — exactly
+  // mirroring where chunk_stage.tsx's own Chunk keeps its equivalent state
+  // (bucket_cache_ref, column_runs_ref, etc.), all declared outside that
+  // file's own control useMemo for the same reason: the control object
+  // itself can legitimately get rebuilt (its own deps include
+  // initial_view.in_frustum, which can flip on an anchor rebase) without
+  // that being a reason to forget how far this chunk had already
+  // progressed. A previous version of this file kept committed_lod_step/
+  // committed_tile/committed_objects_revision/has_measured as closure
+  // locals inside the useMemo factory — every control rebuild silently
+  // reset them to their initial values (has_measured back to false,
+  // committed_lod_step back to 1), replaying the "first measurement, no
+  // easing" path and any real settled state got thrown away — a chunk that
+  // had already resolved to a real density could suddenly re-measure from
+  // scratch and, worse, briefly show stale content built from before the
+  // reset until the next commit overwrote it: a visible pop-then-vanish,
+  // not just a wasted recompute.
+  const committed_lod_step_ref = useRef<LodStep>(1);
+  const committed_tile_ref = useRef<Tile | undefined>(undefined);
+  const committed_objects_revision_ref = useRef(-1);
+  const desired_lod_step_ref = useRef<LodStep>(1);
+  // Same one-tier-at-a-time easing chunk_stage.tsx's own Chunk applies
+  // (step_lod_toward) — without it this jumps straight to the target tier
+  // in one commit while terrain eases in gradually, so the two visibly
+  // disagree mid-transition even though both converge on the same tier
+  // once the camera settles. has_measured mirrors that file's own
+  // current.ready: the very first measurement has nothing on screen yet
+  // to ease from, so it commits directly instead of stepping up from 1.
+  const has_measured_ref = useRef(false);
 
   // Exists ONLY to give chunk_lod.ts a real mounted group to measure
   // through — see the return statement below for why it carries no meshes
@@ -253,23 +319,6 @@ const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materia
     // scratch pool.
     const center = new THREE.Vector3();
     const sphere = new THREE.Sphere(center, APPROXIMATE_CHUNK_RADIUS);
-    // committed_* is what's currently on screen (what instances_by_variant
-    // was last built from); desired_lod_step is recheck()'s candidate for
-    // the next commit(). Unlike chunk_stage.tsx's own Chunk, there is no
-    // blend/secondary tier to track here — decor never blends between
-    // tiers, it just thins or fills back in.
-    let committed_lod_step: LodStep = 1;
-    let committed_tile: Tile | undefined = undefined;
-    let committed_objects_revision = -1;
-    let desired_lod_step: LodStep = 1;
-    // Same one-tier-at-a-time easing chunk_stage.tsx's own Chunk applies
-    // (step_lod_toward) — without it this jumps straight to the target tier
-    // in one commit while terrain eases in gradually, so the two visibly
-    // disagree mid-transition even though both converge on the same tier
-    // once the camera settles. has_measured mirrors that file's own
-    // current.ready: the very first measurement has nothing on screen yet
-    // to ease from, so it commits directly instead of stepping up from 1.
-    let has_measured = false;
 
     return {
       // Sentinel only, matching chunk_stage.tsx's own Chunk convention —
@@ -278,9 +327,19 @@ const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materia
       // the periodic full_recheck cadence", cleared right after that first
       // recheck runs.
       blend_active: true,
+      // True whenever desired_lod_step hasn't yet caught up to this frame's
+      // real target (64 out of frustum, or the guide step in it) — the
+      // scheduler forces a recheck every frame for a settling control
+      // (chunk_stage.tsx's own LodSchedulerProvider useFrame, same as it
+      // does for chunk_stage.tsx's own Chunk), instead of once per
+      // full_recheck tick (0.15s). Without this, a multi-tier jump (e.g. 64
+      // -> 1 after a fast zoom, one tier per commit) would take several
+      // full_recheck ticks to actually converge — worth noticing, unlike
+      // blend_active's one-shot job, since it has to stay true across
+      // however many frames the catch-up takes.
       settling: false,
-      in_frustum: true,
-      distance2: Infinity,
+      in_frustum: initial_view.in_frustum,
+      distance2: initial_view.distance2,
       pending: false,
       recheck(camera, frustum) {
         const group = lod_group_ref.current;
@@ -306,14 +365,18 @@ const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materia
         // decor's periodic full_recheck cadence (0.15s) is imperceptible,
         // so there's no need for chunk_stage.tsx's extra machinery to react
         // to a data change on the very same frame it happens.
-        const source_changed = !Object.is(tile_ref.current, committed_tile) ||
-          objects_revision_ref.current !== committed_objects_revision;
+        const source_changed = !Object.is(tile_ref.current, committed_tile_ref.current) ||
+          objects_revision_ref.current !== committed_objects_revision_ref.current;
 
         if (!this.in_frustum) {
           this.distance2 = center.distanceToSquared(camera.position);
-          desired_lod_step = has_measured ? step_lod_toward(committed_lod_step, 64) : 64;
-          has_measured = true;
-          this.pending = desired_lod_step !== committed_lod_step || source_changed;
+          desired_lod_step_ref.current = has_measured_ref.current ? step_lod_toward(committed_lod_step_ref.current, 64) : 64;
+          has_measured_ref.current = true;
+          // Not yet at the actual target (64) — keep getting rechecked every
+          // frame (see settling's own field comment above) instead of
+          // crawling one tier per 0.15s full_recheck tick.
+          this.settling = desired_lod_step_ref.current !== 64;
+          this.pending = desired_lod_step_ref.current !== committed_lod_step_ref.current || source_changed;
           return;
         }
 
@@ -328,23 +391,30 @@ const ChunkDecor = memo(({ page_idx, base_x, base_y, bundle, geometries, materia
         const ele = get_ele_at_local(page_idx, base_x * U_PER_CELL + half, base_y * U_PER_CELL + half) ?? 0;
         const dist = chunk_distance_to_camera(group, half, half, ele, camera, center);
         this.distance2 = dist * dist;
-        const guide_step = get_lod_guide(dist, committed_lod_step).lod_step;
-        desired_lod_step = has_measured ? step_lod_toward(committed_lod_step, guide_step) : guide_step;
-        has_measured = true;
-        this.pending = desired_lod_step !== committed_lod_step || source_changed;
+        const guide_step = get_lod_guide(dist, committed_lod_step_ref.current).lod_step;
+        desired_lod_step_ref.current = has_measured_ref.current ? step_lod_toward(committed_lod_step_ref.current, guide_step) : guide_step;
+        has_measured_ref.current = true;
+        // Same reasoning as the out-of-frustum branch above — a multi-tier
+        // catch-up (e.g. 64 -> 1 across a fast zoom, one tier per commit)
+        // needs a recheck every frame to actually converge in a handful of
+        // frames instead of stalling for multiple full_recheck ticks.
+        this.settling = desired_lod_step_ref.current !== guide_step;
+        this.pending = desired_lod_step_ref.current !== committed_lod_step_ref.current || source_changed;
       },
       commit() {
         if (!this.pending) return false;
-        committed_lod_step = desired_lod_step;
-        committed_tile = tile_ref.current;
-        committed_objects_revision = objects_revision_ref.current;
+        committed_lod_step_ref.current = desired_lod_step_ref.current;
+        committed_tile_ref.current = tile_ref.current;
+        committed_objects_revision_ref.current = objects_revision_ref.current;
         this.pending = false;
-        set_instances_by_variant(build_decor_instances(committed_tile, committed_lod_step, page_idx, base_x, base_y, bundle));
+        set_instances_by_variant(
+          build_decor_instances(committed_tile_ref.current, committed_lod_step_ref.current, page_idx, base_x, base_y, bundle),
+        );
         return true;
       },
     };
     // deno-lint-ignore-next-line
-  }, [page_idx, base_x, base_y, bundle]);
+  }, [page_idx, base_x, base_y, bundle, initial_view.in_frustum]);
 
   useEffect(() => {
     scheduler.controls.add(control);

@@ -5,6 +5,7 @@ import { assertAlmostEquals, assertEquals } from "@std/assert";
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { fvec, ivec, type PVF3, pvf3 } from "../pvf3/mod.ts";
+import { FRAC_W } from "../pvf3/core.ts";
 
 import * as epsg3857 from "./3857.ts";
 import * as epsg4326 from "./4326.ts";
@@ -73,7 +74,7 @@ Deno.test("epsg3857 project - keeps the clamped north edge below the signed Y se
   epsg3857.project(coord, 0, HALF_WORLD_M, 0);
 
   assertEquals(ivec.Y(coord.i), (1n << 23n) - 1n);
-  assertEquals(fvec.Y(coord.f), (1n << 10n) - 1n);
+  assertEquals(fvec.Y(coord.f), (1n << BigInt(FRAC_W)) - 1n);
 
   const [, y] = epsg3857.unproject([0, 0, 0], coord.i, coord.f);
   assertEquals(y > 0, true);

@@ -32,13 +32,13 @@ deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts \
   --out ./out/tiles/v1 --concurrency 8
 ```
 
-| Flag | Meaning |
-| --- | --- |
-| `--out <dir>` | output directory; its last path segment is the version |
+| Flag                | Meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `--out <dir>`       | output directory; its last path segment is the version          |
 | `--concurrency <n>` | parallel bakes — match `DB_POOL_SIZE`, the DB is the bottleneck |
-| `--limit <n>` | stop after n tiles (smoke test) |
-| `--force` | re-bake tiles already on disk |
-| `--reclassify` | ignore the cached land/ocean scan and redo it |
+| `--limit <n>`       | stop after n tiles (smoke test)                                 |
+| `--force`           | re-bake tiles already on disk                                   |
+| `--reclassify`      | ignore the cached land/ocean scan and redo it                   |
 
 It runs long enough to want a log file rather than a terminal:
 
@@ -56,7 +56,7 @@ is reused unless `--reclassify` is passed.
 What it produces:
 
 - one gzipped object per land-or-coastal page, named by its `page_idx` with no
-  extension — the filename *is* the object key
+  extension — the filename _is_ the object key
 - one `_ocean` object, the shared fallback every open-ocean page resolves to
 - `manifest.json` and `land_pages.json` one level above the version directory
 
@@ -76,11 +76,11 @@ bbox is open sea, and the client turns a 404 into the shared `_ocean` tile.
    of the DEM coverage is expected and accepted (the padded sampling window falls
    outside the source raster there). A large number, or any away from the
    boundary, means something else is wrong.
-2. **The ocean tile stayed page-independent.** The tool bakes an empty source at
+3. **The ocean tile stayed page-independent.** The tool bakes an empty source at
    three different pages and aborts if the bytes differ. If it ever does abort,
    the single-fallback design no longer holds — stop and re-read the discussion
    doc rather than working around it.
-3. **Spot-check a known tile against the live API.** Static and live tiles are
+4. **Spot-check a known tile against the live API.** Static and live tiles are
    supposed to be byte-identical, since both go through
    `apps/api/src/modules/world/terrain/source.ts`. With the API running:
 
@@ -180,7 +180,7 @@ curl -s -H "Accept-Encoding: gzip" -D - -o /dev/null "$U"   # expect content-enc
 curl -s --compressed "$U" | head -c 2 | xxd -p              # expect 5854 (XT), never 1f8b
 ```
 
-A response whose gzip body is *smaller* than the stored object means the
+A response whose gzip body is _smaller_ than the stored object means the
 runtime compressed it a second time — `encodeBody: "manual"` is missing from
 the Worker's `Response`. A body that still starts `1f8b` after `--compressed`
 means the same thing from the other direction.

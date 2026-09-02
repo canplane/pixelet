@@ -9,7 +9,7 @@ import { object_color_hex } from "@pxl/shared/spec/cell/objects.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { get_object_entries_in_l2_column, l2_column_key_of, type ObjectLayerEntry } from "@/modules/world/objects/store.ts";
+import { get_object_entries_in_l2_column, get_render_object_entries_in_l2_column, l2_column_key_of, type ObjectLayerEntry } from "@/modules/world/objects/store.ts";
 import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
 import { hex_to_rgb255 } from "../terrain/shader_meta.ts";
 
@@ -33,6 +33,14 @@ function objects_in_chunk(key: ChunkKey): readonly ObjectLayerEntry[] {
   return get_object_entries_in_l2_column(l2_column_key_of(key.page_idx, key.page_off));
 }
 
+/** Same as objects_in_chunk, with set_virtual_hide's own render-only
+ * exclusion applied — never used for revision() or a raycast paint, both of
+ * which must see the real, unfiltered set (see set_virtual_hide's own doc
+ * comment for why). */
+function render_objects_in_chunk(key: ChunkKey): readonly ObjectLayerEntry[] {
+  return get_render_object_entries_in_l2_column(l2_column_key_of(key.page_idx, key.page_off));
+}
+
 export class ObjectWorldLayer implements WorldLayer {
   readonly name = "objects";
 
@@ -40,8 +48,8 @@ export class ObjectWorldLayer implements WorldLayer {
     return [objects_in_chunk(key)];
   }
 
-  paint(key: ChunkKey, target: ChunkVolume): boolean {
-    const objects = objects_in_chunk(key);
+  paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean {
+    const objects = opts?.for_raycast ? objects_in_chunk(key) : render_objects_in_chunk(key);
     if (objects.length === 0) return false;
 
     const chunk_origin = chunk_origin_of(key.page_idx, key.page_off);

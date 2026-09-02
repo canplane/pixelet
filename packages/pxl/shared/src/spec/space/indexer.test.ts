@@ -3,17 +3,7 @@
 import { assertEquals } from "@std/assert";
 
 import { ivec } from "./pvf3/mod.ts";
-import {
-  FROM_L3_IDX,
-  L2_BASE,
-  L2_RANGE,
-  L2_SPAN_IN_L3,
-  L3_BASE,
-  L3_CENTER,
-  L3_IDX,
-  L3_LIMIT,
-  L3_RANGE,
-} from "./indexer.ts";
+import { FROM_L3_IDX, L2_BASE, L2_RANGE, L2_SPAN_IN_L3, L3_BASE, L3_CENTER, L3_IDX, L3_LIMIT, L3_RANGE } from "./indexer.ts";
 
 Deno.test("indexer - L2 is a signed 64-cubed render chunk", () => {
   const addr = ivec.gather(-1n, 95n, -65n);

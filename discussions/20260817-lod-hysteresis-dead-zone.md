@@ -28,7 +28,7 @@ const margin: f64 = i < BLEND_ELIGIBLE_THRESHOLDS ? (1 - BLEND_BAND_FRACTION) : 
   snap back to finer detail.
 
 The asymmetry itself is intentional and documented — hysteresis only resists
-*becoming finer*, there's no symmetric cushion against becoming coarser. What's
+_becoming finer_, there's no symmetric cushion against becoming coarser. What's
 stale is the reasoning for **why 1536 was left in the wide/unblended group**:
 
 > Only thresholds inside the current visible range get dither-blended. The
