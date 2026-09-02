@@ -24,7 +24,7 @@ export function LanguageSection() {
             type="button"
             onClick={() => i18n.changeLanguage(code)}
             className={cn(
-              "flex-1 h-8 flex items-center justify-center rounded-[8px] border px-2 text-[13px] font-medium transition-colors",
+              "flex-1 h-8 flex items-center justify-center rounded-full border px-2 text-[13px] font-medium transition-colors",
               i18n.resolvedLanguage === code ? "border-primary bg-primary/10 text-foreground" : "border-transparent bg-accent/50 text-muted-foreground hover:bg-accent",
             )}
           >

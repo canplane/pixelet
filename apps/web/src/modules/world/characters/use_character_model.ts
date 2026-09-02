@@ -42,7 +42,7 @@ export type CharacterModel = {
  * rebind a SkinnedMesh's skeleton correctly) rather than sharing the
  * cached scene directly: the cache is keyed by URL, so two callers loading
  * the *same* model_url — the in-world companion and its settings preview
- * both defaulting to "male-a", say — would otherwise get the exact same
+ * both defaulting to "male-1", say — would otherwise get the exact same
  * live Object3D and fight over its position every frame.
  */
 export function useCharacterModel(model_url: string, skin_url: string, height_u: f64): CharacterModel {

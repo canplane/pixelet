@@ -61,7 +61,6 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 
 export type CharacterVariant = {
   key: string;
-  label: string;
   model_url: string;
   skin_url: string;
   height_u: f64;
@@ -79,53 +78,60 @@ export type CharacterVariant = {
 const PERSON_HEIGHT_U: f64 = 1;
 const PET_HEIGHT_U: f64 = 0.25;
 
-export const PERSON_VARIANTS: readonly CharacterVariant[] = [
-  { key: "female-a", label: "Female A", model_url: female_a_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "female-b", label: "Female B", model_url: female_b_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "female-c", label: "Female C", model_url: female_c_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "female-d", label: "Female D", model_url: female_d_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "female-e", label: "Female E", model_url: female_e_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "female-f", label: "Female F", model_url: female_f_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "male-a", label: "Male A", model_url: male_a_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "male-b", label: "Male B", model_url: male_b_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "male-c", label: "Male C", model_url: male_c_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "male-d", label: "Male D", model_url: male_d_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "male-e", label: "Male E", model_url: male_e_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
-  { key: "male-f", label: "Male F", model_url: male_f_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+// Split by gender (not one flat PERSON_VARIANTS) so the settings UI can show
+// two separate rows instead of one row a user has to scan by label text to
+// tell apart — display names live in locale files (settings.character.persons.<key>),
+// keyed off `key` below, not hardcoded here.
+export const PERSON_VARIANTS_FEMALE: readonly CharacterVariant[] = [
+  { key: "female-1", model_url: female_a_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "female-2", model_url: female_b_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "female-3", model_url: female_c_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "female-4", model_url: female_d_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "female-5", model_url: female_e_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "female-6", model_url: female_f_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+];
+
+export const PERSON_VARIANTS_MALE: readonly CharacterVariant[] = [
+  { key: "male-1", model_url: male_a_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "male-2", model_url: male_b_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "male-3", model_url: male_c_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "male-4", model_url: male_d_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "male-5", model_url: male_e_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
+  { key: "male-6", model_url: male_f_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
 ];
 
 export const PET_VARIANTS: readonly CharacterVariant[] = [
-  { key: "beaver", label: "Beaver", model_url: beaver_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "bee", label: "Bee", model_url: bee_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "bunny", label: "Bunny", model_url: bunny_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "cat", label: "Cat", model_url: cat_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "caterpillar", label: "Caterpillar", model_url: caterpillar_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "chick", label: "Chick", model_url: chick_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "cow", label: "Cow", model_url: cow_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "crab", label: "Crab", model_url: crab_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "deer", label: "Deer", model_url: deer_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "dog", label: "Dog", model_url: dog_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "elephant", label: "Elephant", model_url: elephant_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "fish", label: "Fish", model_url: fish_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "fox", label: "Fox", model_url: fox_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "giraffe", label: "Giraffe", model_url: giraffe_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "hog", label: "Hog", model_url: hog_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "koala", label: "Koala", model_url: koala_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "lion", label: "Lion", model_url: lion_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "monkey", label: "Monkey", model_url: monkey_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "panda", label: "Panda", model_url: panda_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "parrot", label: "Parrot", model_url: parrot_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "penguin", label: "Penguin", model_url: penguin_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "pig", label: "Pig", model_url: pig_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "polar", label: "Polar", model_url: polar_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
-  { key: "tiger", label: "Tiger", model_url: tiger_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "beaver", model_url: beaver_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "bee", model_url: bee_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "bunny", model_url: bunny_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "cat", model_url: cat_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "caterpillar", model_url: caterpillar_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "chick", model_url: chick_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "cow", model_url: cow_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "crab", model_url: crab_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "deer", model_url: deer_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "dog", model_url: dog_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "elephant", model_url: elephant_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "fish", model_url: fish_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "fox", model_url: fox_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "giraffe", model_url: giraffe_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "hog", model_url: hog_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "koala", model_url: koala_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "lion", model_url: lion_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "monkey", model_url: monkey_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "panda", model_url: panda_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "parrot", model_url: parrot_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "penguin", model_url: penguin_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "pig", model_url: pig_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "polar", model_url: polar_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
+  { key: "tiger", model_url: tiger_url, skin_url: pet_skin_url, height_u: PET_HEIGHT_U, move_clip: "run" },
 ];
 
-export const DEFAULT_PERSON_VARIANT_KEY: string = "female-b";
+export const DEFAULT_PERSON_VARIANT_KEY: string = "female-2";
 export const DEFAULT_PET_VARIANT_KEY: string = "chick";
 
 export function find_person_variant(key: string): CharacterVariant {
-  return PERSON_VARIANTS.find((v) => v.key === key) ?? PERSON_VARIANTS[0];
+  return PERSON_VARIANTS_FEMALE.find((v) => v.key === key) ?? PERSON_VARIANTS_MALE.find((v) => v.key === key) ?? PERSON_VARIANTS_FEMALE[0];
 }
 
 export function find_pet_variant(key: string): CharacterVariant {
