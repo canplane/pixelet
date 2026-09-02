@@ -32,7 +32,7 @@ import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { NO_LAYER } from "@/render/layer/pipeline/volume.ts";
 import { in_range_chunks } from "@/render/chunk_range.ts";
 import { compositor_cache_stats, with_temporary_composite } from "@/render/layer/pipeline/compositor.ts";
-import { GROUND_LAYERS_SIDE, GROUND_LAYERS_TOP } from "@/render/texture_array.ts";
+import { GROUND_LAYERS_SIDE, GROUND_LAYERS_TOP } from "@/render/tex_array.ts";
 import {
   build_chunk_bucket,
   type BuiltChunkBucket,
@@ -231,12 +231,12 @@ function inject_instance_shader(shader: {
         // coordinate directly from it — sidesteps ever needing BoxGeometry's own per-face
         // UV axis convention. Side faces always put z (height) in the second component so
         // the strata art's up/down orientation stays consistent on all four side faces,
-        // not flipped on two of them. GROUND_LAYERS_SIDE (texture_array.ts) is an untransformed
+        // not flipped on two of them. GROUND_LAYERS_SIDE (tex_array.ts) is an untransformed
         // DataArrayTexture (flipY defaults false), so v=0 samples the source PNG's own top row
         // — (0.5 - position.z), not (position.z + 0.5), so the box's physical top (position.z
         // = +0.5) lands on v=0 and actually gets the image's top edge instead of its bottom
         // (e.g. side_bare.png's grass cap rendering at a cliff's foot instead of its crest).
-        // RepeatWrapping (texture_array.ts) turns >1 straight into tiling.
+        // RepeatWrapping (tex_array.ts) turns >1 straight into tiling.
         vec3 inst_scale = vec3(instanceMatrix[0].x, instanceMatrix[1].y, instanceMatrix[2].z);
         v_inst_scale = inst_scale;
         v_box_uv = v_is_side > 0.5

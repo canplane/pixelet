@@ -322,7 +322,7 @@ export const build_ground_layer_resolver = (meta: TerrainLayerMeta[]): string =>
  * layer (meta's own layer_index order). Real image data (not raw category
  * ids), so hardware mipmap generation/filtering just works, same reasoning
  * as decode_ground_rgba's own doc comment. size defaults to 64, matching
- * render/texture_array.ts's own LAYER_TEX_SZ (the active pack's tile
+ * render/tex_array.ts's own LAYER_TEX_SZ (the active pack's tile
  * size) — small enough (64*64*4 bytes/layer) that even ~30 layers costs
  * nothing worth measuring in texture memory.
  */

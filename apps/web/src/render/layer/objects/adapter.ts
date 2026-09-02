@@ -10,7 +10,7 @@ import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { get_object_entries_in_l2_column, l2_column_key_of, type ObjectLayerEntry } from "@/modules/world/objects/store.ts";
-import { OBJECT_LAYER_IDX } from "../../texture_array.ts";
+import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
 import { hex_to_rgb255 } from "../terrain/shader_meta.ts";
 
 import { append_chunk_sub_voxel, type ChunkVolume, MaterialClass, NO_LAYER, pack_sub_cell_fraction, set_chunk_voxel, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/volume.ts";

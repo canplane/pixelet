@@ -4,14 +4,14 @@ import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
 import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
-import { OBJECT_IMAGE_MAP } from "@pxl/shared/assets/cell/object_images.ts";
+import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
 
 /**
  * Configured THREE.Texture from a URL — same create_* shape as
- * render/texture_array.ts's own create_layer_array_tex, just a plain image
+ * render/tex_array.ts's own create_layer_array_tex, just a plain image
  * load instead of a raw DataArrayTexture built from typed-array pixel data
  * (this one has a real source image to decode, so THREE.TextureLoader —
- * which texture_array.ts deliberately avoids, since ITS job is writing
+ * which tex_array.ts deliberately avoids, since ITS job is writing
  * decoded pixels into an existing DataArrayTexture's own buffer, something
  * TextureLoader has no hook for — is the correct, unreinvented tool here).
  */
@@ -29,9 +29,9 @@ function create_object_texture(url: string): THREE.Texture {
   const tex = loader.load(url, () => invalidate());
   tex.colorSpace = THREE.SRGBColorSpace;
   // NearestFilter (not the default Linear/mipmap) — these are pixel-art
-  // tiles; smoothing them blurs the wool weave into mush instead of
-  // keeping the blocky look terrain's own splatmap/heightmap textures
-  // (shader/tex.ts) already use.
+  // tiles; smoothing them blurs their painted surface detail into mush
+  // instead of keeping the blocky look terrain's own splatmap/heightmap
+  // textures (shader/tex.ts) already use.
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
@@ -47,7 +47,7 @@ function create_object_texture(url: string): THREE.Texture {
 
 // One real THREE.Texture per color, built once and reused by every placed
 // cube of that color — same "build once, share across every consumer"
-// lifecycle terrain's own module-level texture_array.ts texture has,
+// lifecycle terrain's own module-level tex_array.ts texture has,
 // just lazily per-color instead of eagerly for every layer at
 // module load, since objects.ts's catalog can grow far larger (200+
 // planned) than terrain's own channel/type count and most colors may
@@ -57,7 +57,7 @@ const cache = new Map<ObjectColorId, THREE.Texture>();
 export function get_object_texture(id: ObjectColorId): THREE.Texture {
   let tex = cache.get(id);
   if (tex) return tex;
-  tex = create_object_texture(OBJECT_IMAGE_MAP.block[id]);
+  tex = create_object_texture(object_wire.top.block[id].url);
   cache.set(id, tex);
   return tex;
 }
