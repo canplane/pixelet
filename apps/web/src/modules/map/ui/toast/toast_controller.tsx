@@ -101,10 +101,18 @@ export function ToastController() {
   // the transition into !isLoading && !isError is what distinguishes
   // "just finished, flash success" from "never started, nothing to show."
   const wasWorldLoadingRef = useRef(false);
+  // Once the companion has completed its very first load, every later
+  // person_ready/pet_ready dip is from the user swapping a variant in
+  // settings (Walker remounts on a key change, so a fresh instance briefly
+  // reports not-ready) — a costume change, not the world going unready —
+  // so companion_loading stops feeding this toast after that point.
+  const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {
     const isMapLoading = map_status === MapStatus.LOADING;
     const isError = map_status === MapStatus.ERROR;
-    const isLoading = isMapLoading || companion_loading;
+    const relevantCompanionLoading = companion_loading && !companionFirstLoadDoneRef.current;
+    if (!companion_loading) companionFirstLoadDoneRef.current = true;
+    const isLoading = isMapLoading || relevantCompanionLoading;
 
     if (isLoading || isError) {
       wasWorldLoadingRef.current = true;

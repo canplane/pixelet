@@ -21,7 +21,7 @@
         "description": "카메라의 수직 회전은 고정하고 수평 회전은 유지합니다."
       }
     },
-    "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍(버벅임)이 발생하면 HIGH 항목부터 해제해 주세요.",
+    "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍이 발생하면 HIGH 항목부터 해제해 주세요.",
     "lighting": {
       "section_title": "조명 & 그림자",
       "section_caption": "태양과 달의 실시간 조명 효과",
@@ -47,11 +47,11 @@
       },
       "bloom": {
         "label": "블룸",
-        "description": "해와 달, 야간 위치 비콘처럼 밝은 영역에 부드러운 번짐(글로우) 효과를 더합니다."
+        "description": "해와 달, 야간 위치 비콘처럼 밝은 영역에 부드러운 번짐 효과를 더합니다."
       },
       "tilt_shift": {
         "label": "틸트 시프트",
-        "description": "화면 상하단을 블러 처리하여 미니어처(디오라마) 같은 느낌을 연출합니다."
+        "description": "화면 상하단을 블러 처리하여 미니어처 같은 느낌을 연출합니다."
       },
       "chromatic_aberration": {
         "label": "크로매틱 애버레이션",
@@ -60,9 +60,51 @@
     },
     "character": {
       "section_title": "동행",
-      "section_caption": "지도 위에서 함께 다닐 캐릭터와 펫을 선택하세요",
+      "section_caption": "지도 위에서 함께 다닐 캐릭터와 펫을 선택하세요.",
       "person_label": "캐릭터",
-      "pet_label": "펫"
+      "female_label": "여성",
+      "male_label": "남성",
+      "pet_label": "펫",
+      "persons": {
+        "female-1": "1",
+        "female-2": "2",
+        "female-3": "3",
+        "female-4": "4",
+        "female-5": "5",
+        "female-6": "6",
+        "male-1": "1",
+        "male-2": "2",
+        "male-3": "3",
+        "male-4": "4",
+        "male-5": "5",
+        "male-6": "6"
+      },
+      "pets": {
+        "beaver": "비버",
+        "bee": "꿀벌",
+        "bunny": "토끼",
+        "cat": "고양이",
+        "caterpillar": "애벌레",
+        "chick": "병아리",
+        "cow": "소",
+        "crab": "게",
+        "deer": "사슴",
+        "dog": "강아지",
+        "elephant": "코끼리",
+        "fish": "물고기",
+        "fox": "여우",
+        "giraffe": "기린",
+        "hog": "멧돼지",
+        "koala": "코알라",
+        "lion": "사자",
+        "monkey": "원숭이",
+        "panda": "판다",
+        "parrot": "앵무새",
+        "penguin": "펭귄",
+        "pig": "돼지",
+        "polar": "북극곰",
+        "tiger": "호랑이"
+      }
     },
     "quality": {
       "section_title": "그래픽 품질",
@@ -73,11 +115,11 @@
         },
         "smaa": {
           "label": "SMAA",
-          "description": "물체의 외곽선(계단 현상)을 부드럽게 다듬어 화면을 깔끔하게 만듭니다."
+          "description": "물체의 외곽선을 부드럽게 다듬어 화면을 깔끔하게 만듭니다."
         },
         "supersample": {
           "label": "고해상도 렌더링",
-          "description": "화면 해상도를 최대 2배로 높여 더 선명하고 깨끗한 화질(슈퍼샘플링)을 구현합니다."
+          "description": "화면 해상도를 최대 2배로 높여 더 선명하고 깨끗한 화질을 구현합니다."
         }
       },
       "texture_pack": {

@@ -62,7 +62,49 @@
       "section_title": "Companion",
       "section_caption": "Choose who walks around with you on the map",
       "person_label": "Character",
-      "pet_label": "Pet"
+      "female_label": "Female",
+      "male_label": "Male",
+      "pet_label": "Pet",
+      "persons": {
+        "female-1": "1",
+        "female-2": "2",
+        "female-3": "3",
+        "female-4": "4",
+        "female-5": "5",
+        "female-6": "6",
+        "male-1": "1",
+        "male-2": "2",
+        "male-3": "3",
+        "male-4": "4",
+        "male-5": "5",
+        "male-6": "6"
+      },
+      "pets": {
+        "beaver": "Beaver",
+        "bee": "Bee",
+        "bunny": "Bunny",
+        "cat": "Cat",
+        "caterpillar": "Caterpillar",
+        "chick": "Chick",
+        "cow": "Cow",
+        "crab": "Crab",
+        "deer": "Deer",
+        "dog": "Dog",
+        "elephant": "Elephant",
+        "fish": "Fish",
+        "fox": "Fox",
+        "giraffe": "Giraffe",
+        "hog": "Hog",
+        "koala": "Koala",
+        "lion": "Lion",
+        "monkey": "Monkey",
+        "panda": "Panda",
+        "parrot": "Parrot",
+        "penguin": "Penguin",
+        "pig": "Pig",
+        "polar": "Polar Bear",
+        "tiger": "Tiger"
+      }
     },
     "quality": {
       "section_title": "Graphics Quality",
@@ -77,7 +119,7 @@
         },
         "supersample": {
           "label": "High-Resolution Rendering",
-          "description": "Renders the screen at up to 2x resolution (supersampling) for a sharper image."
+          "description": "Renders the screen at up to 2x resolution for a sharper image."
         }
       },
       "texture_pack": {
