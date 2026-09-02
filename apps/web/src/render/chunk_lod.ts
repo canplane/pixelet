@@ -17,8 +17,18 @@
  * nested frame automatically) is the only way this stays exact.
  */
 
-import type { Camera, Group, Vector3 } from "three";
+import type { Camera, Frustum, Group, Matrix4, Vector3 } from "three";
 import type { f64 } from "@xpute/core/kit/word.ts";
+import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+
+const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
+
+/** Same slack chunk_stage.tsx's own Chunk.recheck() uses for its
+ * fallback-bounds sphere test — a chunk's contents (terrain or decor alike)
+ * never reach further from its own center than this in practice, so it's
+ * generous enough to never falsely cull a chunk that's actually still
+ * partly on screen. */
+export const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
 
 /**
  * World-space distance from `camera` to the point (local_x, local_y,
@@ -38,4 +48,16 @@ export function chunk_distance_to_camera(
 ): f64 {
   scratch.set(local_x, local_y, local_z).applyMatrix4(group.matrixWorld);
   return scratch.distanceTo(camera.position);
+}
+
+/**
+ * Refreshes `frustum` to `camera`'s current one — the same
+ * projectionMatrix*matrixWorldInverse incantation chunk_stage.tsx's own
+ * ChunkStage and get_initial_chunk_view each spelled out independently
+ * before this existed. `scratch_matrix` is mutated and reused so this, like
+ * chunk_distance_to_camera, costs no allocation per call.
+ */
+export function update_frustum(frustum: Frustum, camera: Camera, scratch_matrix: Matrix4): void {
+  scratch_matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  frustum.setFromProjectionMatrix(scratch_matrix);
 }

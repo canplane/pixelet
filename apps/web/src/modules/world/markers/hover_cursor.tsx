@@ -1,6 +1,6 @@
 // @pxl/web/modules/world/markers/hover_cursor.tsx
 
-import { useLayoutEffect, useMemo } from "react";
+import { useMemo } from "react";
 import * as THREE from "three";
 
 import type { PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -18,11 +18,14 @@ import { object_color_hex } from "@pxl/shared/spec/cell/objects.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { marker_colors } from "./style.ts";
 
-const highlight_style = {
-  COLOR: marker_colors.ACTION,
-  FILL_OPACITY: .4,
-  BORDER_WIDTH: 0.04,
-};
+// Flat, no border: a bordered box only reads cleanly on a primitive with
+// per-face UVs mapped 0-1 (this one's own previous implementation) — an
+// arbitrary decor mesh's own UV layout has nothing to do with its
+// silhouette, so the same trick breaks on anything that isn't a box. A
+// screen-space silhouette outline would generalize instead, but that's a
+// real post-processing pass, not a per-mesh shader — tracked separately,
+// not worth it just for this.
+const GHOST_OPACITY = 0.5;
 
 const HIGHLIGHT_BOX = new THREE.BoxGeometry(1, 1, 1);
 
@@ -54,67 +57,14 @@ export function HoverCursor() {
     return false;
   }, [activeTool, hovered, map_center, object_size, hovered_object]);
 
-  const mat: THREE.ShaderMaterial = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        extensions: { derivatives: true } as any,
-        uniforms: {
-          u_color: { value: new THREE.Color(highlight_style.COLOR) },
-          u_opacity: { value: highlight_style.FILL_OPACITY },
-          u_border_width: { value: highlight_style.BORDER_WIDTH },
-        },
-        vertexShader: `varying vec2 v_uv;
-void main() {
-    v_uv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`,
-        fragmentShader: `uniform vec3 u_color;
-uniform float u_opacity;
-uniform float u_border_width;
-varying vec2 v_uv;
-
-float aastep(float thres, float value) {
-    float afwidth = fwidth(value) * 0.5;
-    return smoothstep(thres - afwidth, thres + afwidth, value);
-}
-
-void main() {
-    float bx = aastep(u_border_width, v_uv.x) * aastep(v_uv.x, 1.0 - u_border_width);
-    float by = aastep(u_border_width, v_uv.y) * aastep(v_uv.y, 1.0 - u_border_width);
-
-    float is_center = bx * by;
-    float is_border = 1.0 - is_center;
-
-    float alpha = mix(u_opacity, 1.0, is_border);
-    gl_FragColor = vec4(u_color, alpha);
-}`,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthTest: true,
-        polygonOffset: true,
-        polygonOffsetFactor: -2.0,
-        polygonOffsetUnits: -8.0,
-      }),
-    [],
-  );
-
-  let color: string = highlight_style.COLOR;
-  const opacity: number = highlight_style.FILL_OPACITY;
-  if (activeTool === "object") color = object_color_hex(object_color_id);
-  else if (activeTool === "eraser") color = marker_colors.DESTRUCTIVE;
+  // The real target ghosts at its own true color, whether it's an existing
+  // object under the cursor (eraser or pointer alike — both are "here's the
+  // real thing", not "here's what this tool does") or a placement
+  // candidate. Bare terrain with no object and no placement in flight has
+  // no real color to borrow, so it keeps the generic marker color.
+  const color: string = hovered_object ? object_color_hex(hovered_object.color_id) : activeTool === "object" ? object_color_hex(object_color_id) : marker_colors.ACTION;
 
   const current_scale = use_object_style ? preview_size : U_PER_CELL;
-
-  useLayoutEffect(() => {
-    mat.uniforms.u_color.value.set(color);
-    mat.uniforms.u_opacity.value = opacity;
-    // Object mode needs only a small polygon-offset nudge (it's not
-    // coplanar with a distant surface like the terrain case is) — reusing
-    // the terrain case's strong bias here would also push the cursor in
-    // front of a placed cube that should legitimately occlude it.
-    mat.polygonOffsetFactor = use_object_style ? -1 : -2;
-    mat.polygonOffsetUnits = use_object_style ? -1 : -8;
-  }, [mat, color, opacity, use_object_style]);
 
   if (!hovered || blocked) return null;
   return (
@@ -122,12 +72,27 @@ void main() {
       <group position={use_object_style ? object_pos : TERRAIN_POS}>
         <mesh
           geometry={HIGHLIGHT_BOX}
-          material={mat}
           scale={current_scale}
-          // 9999 pairs with the terrain case's strong polygon offset above;
+          // 9999 pairs with the terrain case's strong polygon offset below;
           // object mode uses the default order so real depth occlusion works.
           renderOrder={use_object_style ? 0 : 9999}
-        />
+        >
+          <meshBasicMaterial
+            color={color}
+            transparent
+            opacity={GHOST_OPACITY}
+            side={THREE.DoubleSide}
+            depthTest
+            polygonOffset
+            // Object mode needs only a small polygon-offset nudge (it's not
+            // coplanar with a distant surface like the terrain case is) —
+            // reusing the terrain case's strong bias here would also push
+            // the cursor in front of a placed cube that should legitimately
+            // occlude it.
+            polygonOffsetFactor={use_object_style ? -1 : -2}
+            polygonOffsetUnits={use_object_style ? -1 : -8}
+          />
+        </mesh>
       </group>
     </AnchorNode>
   );
