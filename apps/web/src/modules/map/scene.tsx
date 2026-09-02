@@ -10,7 +10,7 @@ import { useCamera } from "@/modules/camera/use_camera.ts";
 import { CameraInput } from "@/modules/camera/input.tsx";
 import { camera_cfg } from "@/modules/camera/config.ts";
 import { post_cfg, render_cfg } from "@/modules/world/environment/config.ts";
-import { useRenderSettingsStore } from "@/render/settings_store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { themes, type WorldTheme } from "@/modules/world/environment/themes.ts";
 import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { FrameProvider } from "@/modules/world/frame/context.tsx";
@@ -20,10 +20,10 @@ import { World } from "@/modules/world/world.tsx";
 import { useMapBootstrap } from "./navigation/use_map_bootstrap.ts";
 import { useTileFetcher } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { useGroundSnapSync } from "@/modules/world/terrain/use_ground_snap_sync.ts";
-import { MapOverlays } from "./ui/overlay/map_overlays.tsx";
+import { Overlays } from "./ui/overlay/overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
 
-import { MapToastController } from "./ui/toast/toast_controller.tsx";
+import { ToastController } from "./ui/toast/toast_controller.tsx";
 
 const { FOV, NEAR } = camera_cfg.projection;
 const { FAR_CLIP } = render_cfg;
@@ -36,7 +36,7 @@ function CameraRig() {
 /**
  * frameloop="demand" only repaints on invalidate() — a plain prop change
  * reaching Canvas/EffectComposer from outside the Canvas tree (MapScene's
- * own useRenderSettingsStore reads, e.g. dpr or an effect toggle) does update the
+ * own useSettingsStore reads, e.g. dpr or an effect toggle) does update the
  * underlying render/postprocessing state, but never triggers a new frame on
  * its own, so the change stays invisible until something else happens to
  * invalidate. Mounted inside the Canvas so useThree works, purely to force
@@ -65,14 +65,13 @@ export function MapScene() {
   const theme_key = useThemeKey();
   const theme: WorldTheme = themes[theme_key];
 
-  const show_ao = useRenderSettingsStore((state) => state.show_ao);
-  const show_bloom = useRenderSettingsStore((state) => state.show_bloom);
-  const show_tilt_shift = useRenderSettingsStore((state) => state.show_tilt_shift);
-  const show_smaa = useRenderSettingsStore((state) => state.show_smaa);
-  const show_chromatic_aberration = useRenderSettingsStore((state) => state.show_chromatic_aberration);
-  const show_god_rays = useRenderSettingsStore((state) => state.show_god_rays);
-  const high_dpr = useRenderSettingsStore((state) => state.high_dpr);
-  const show_shadow_map = useRenderSettingsStore((state) => state.show_shadow_map);
+  const show_ao = useSettingsStore((state) => state.show_ao);
+  const show_bloom = useSettingsStore((state) => state.show_bloom);
+  const show_tilt_shift = useSettingsStore((state) => state.show_tilt_shift);
+  const show_chromatic_aberration = useSettingsStore((state) => state.show_chromatic_aberration);
+  const show_god_rays = useSettingsStore((state) => state.show_god_rays);
+  const aa_mode = useSettingsStore((state) => state.aa_mode);
+  const show_shadow_map = useSettingsStore((state) => state.show_shadow_map);
 
   // ChromaticAberrationEffect's offset setter expects a real THREE.Vector2
   // (it copies .x/.y off the argument) — unlike TiltShift2's own props,
@@ -87,7 +86,7 @@ export function MapScene() {
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
-      <MapToastController />
+      <ToastController />
 
       {/* Theme background layer matched to fog color to hide the 2D/3D seam. */}
       <div
@@ -97,31 +96,34 @@ export function MapScene() {
         }}
       >
         <Canvas
-          // dpr [1,2] (settings_store.ts's high_dpr, default on): real spatial
-          // supersampling, not just edge AA. MSAA (tried below, previously
-          // multisampling={4}) only resolves per-sample *coverage/depth* —
-          // the fragment shader itself still runs once per output pixel, so
-          // it never re-evaluates shading at sub-pixel positions. That's
-          // fine for a triangle's silhouette edge, but this terrain is
-          // thousands of independently flat-shaded boxes that minify well
-          // below one pixel at any real distance (see the EffectComposer
-          // comment below) — the visible artifact there is shading-value
-          // flicker between neighboring facets sharing a pixel, which MSAA
-          // structurally cannot fix. Rendering the whole canvas (WebGL draw +
-          // the full post stack) at up to 2x linear resolution and letting
-          // the browser's own canvas-to-CSS downscale do a real per-pixel
-          // color average fixes both classes of aliasing at once — but costs
-          // roughly 4x the fragment-shading work of the whole pipeline (post
-          // stack included), since dpr=2 on a Retina/high-DPI display means
-          // 4x the pixels; separate from chunk-count/frustum-culling
-          // effects, which don't depend on pixel count at all. Confirmed the
-          // single biggest post-stack cost on real devices, but the app now
-          // ships with a real art pack behind it and defaults this on
-          // anyway — off is a Quality section ("High Resolution" toggle)
-          // opt-out for low-end devices, not the shipped default.
+          // dpr [1,2] when aa_mode is "supersample" (settings_store.ts,
+          // default): real spatial supersampling, not just edge AA. MSAA
+          // (tried below, previously multisampling={4}) only resolves
+          // per-sample *coverage/depth* — the fragment shader itself still
+          // runs once per output pixel, so it never re-evaluates shading at
+          // sub-pixel positions. That's fine for a triangle's silhouette
+          // edge, but this terrain is thousands of independently flat-shaded
+          // boxes that minify well below one pixel at any real distance (see
+          // the EffectComposer comment below) — the visible artifact there
+          // is shading-value flicker between neighboring facets sharing a
+          // pixel, which MSAA structurally cannot fix. Rendering the whole
+          // canvas (WebGL draw + the full post stack) at up to 2x linear
+          // resolution and letting the browser's own canvas-to-CSS
+          // downscale do a real per-pixel color average fixes both classes
+          // of aliasing at once — but costs roughly 4x the fragment-shading
+          // work of the whole pipeline (post stack included), since dpr=2 on
+          // a Retina/high-DPI display means 4x the pixels; separate from
+          // chunk-count/frustum-culling effects, which don't depend on
+          // pixel count at all. Confirmed the single biggest post-stack cost
+          // on real devices, but the app now ships with a real art pack
+          // behind it and defaults to this anyway — aa_mode's other two
+          // options ("none", "smaa") are the Quality section's opt-out for
+          // low-end/non-Retina devices, where this [1,2] clamp is a no-op
+          // in the first place (clamp(1, 1, 2) = 1) and SMAA is the only
+          // one of the two that does anything.
           // The [1,2] cap keeps it from ever exceeding 2x even on a
           // 3x/4x-DPR phone once it is.
-          dpr={high_dpr ? [1, 2] : [1, 1]}
+          dpr={aa_mode === "supersample" ? [1, 2] : [1, 1]}
           gl={{
             antialias: false,
             powerPreference: "high-performance",
@@ -182,7 +184,7 @@ export function MapScene() {
           // queues drain.
           frameloop="demand"
         >
-          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_tilt_shift, show_smaa, show_chromatic_aberration, show_god_rays, high_dpr, show_shadow_map]} />
+          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_tilt_shift, show_chromatic_aberration, show_god_rays, aa_mode, show_shadow_map]} />
           <FrameProvider>
             <CameraRig />
 
@@ -207,9 +209,11 @@ export function MapScene() {
             stack) — ChromaticAberration wasn't part of that profiling run,
             it's off purely on the mobile-default-options principle above.
             All are user-reachable via the settings modal's Lighting/PostFx
-            sections (render/settings_store.ts's show_ao/show_bloom/
-            show_tilt_shift/show_chromatic_aberration/show_smaa) rather
-            than on by default. Order matters when these are on:
+            sections (app/settings/settings_store.ts's show_ao/show_bloom/
+            show_tilt_shift/show_chromatic_aberration) rather than on by
+            default — SMAA moved out to the Quality section's aa_mode radio
+            (grouped with supersampling, not toggled independently here; see
+            aa_mode's own doc comment for why). Order matters when these are on:
             1. N8AO — real screen-space contact/crevice AO. See git history
                (this comment block, pre-2026-08-13) for the normal-pass/
                radius-tuning notes from when it was built.
@@ -321,7 +325,11 @@ export function MapScene() {
                 // preset defaults to SMAAPreset.MEDIUM if unset — bumped to
                 // HIGH for more edge-detection sensitivity (catches more/
                 // subtler edges), a moderate step up rather than ULTRA.
-                show_smaa && <SMAA key="smaa" preset={SMAAPreset.HIGH} />,
+                // aa_mode === "smaa", not a standalone show_smaa boolean:
+                // mutually exclusive with supersampling (dpr [1,2] above) —
+                // see aa_mode's own doc comment for why running both wastes
+                // GPU budget for essentially no extra sharpness.
+                aa_mode === "smaa" && <SMAA key="smaa" preset={SMAAPreset.HIGH} />,
               ].filter((effect): effect is JSX.Element => Boolean(effect))
             }
           </EffectComposer>
@@ -332,7 +340,7 @@ export function MapScene() {
       <MapHTMLPortal />
 
       {/* Absolute-position UI layer */}
-      <MapOverlays />
+      <Overlays />
     </div>
   );
 }

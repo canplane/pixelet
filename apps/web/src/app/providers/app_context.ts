@@ -3,7 +3,7 @@
 import { createContext, useContext } from "react";
 
 // import AppStore from "../model/app.store";
-import type { UIController } from "../types/ui.types.ts";
+import type { UiController } from "../types/ui.types.ts";
 
 /**
  * Values provided by the AppContext
@@ -23,7 +23,7 @@ type AppContextValue = {
    * Provides access to global UI actions
    * such as opening modals or triggering overlays.
    */
-  ui: UIController;
+  ui: UiController;
 };
 
 /**

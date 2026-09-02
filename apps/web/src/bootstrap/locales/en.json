@@ -17,8 +17,8 @@
     "camera": {
       "section_title": "Camera",
       "lock_tilt": {
-        "label": "Lock Camera Tilt Gesture",
-        "description": "When on, drag/pinch gestures can no longer change camera tilt (polar). Rotate (azimuth) and zoom still work normally."
+        "label": "Camera Tilt Lock",
+        "description": "Locks vertical camera rotation while horizontal rotation stays free."
       }
     },
     "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
@@ -28,10 +28,6 @@
       "shadow_map": {
         "label": "Shadows",
         "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."
-      },
-      "blob_shadow": {
-        "label": "Ground Shadows",
-        "description": "Generates soft shadows beneath objects so they sit on the ground rather than float."
       },
       "rim_light": {
         "label": "Rim Light",
@@ -60,10 +56,6 @@
       "chromatic_aberration": {
         "label": "Chromatic Aberration",
         "description": "Fringes light slightly at the edges of the screen to simulate camera lens distortion."
-      },
-      "smaa": {
-        "label": "Anti-Aliasing (SMAA)",
-        "description": "Smooths jagged object edges for a cleaner, crisper display."
       }
     },
     "character": {
@@ -74,9 +66,23 @@
     },
     "quality": {
       "section_title": "Graphics Quality",
-      "high_dpr": {
-        "label": "High-Resolution Rendering",
-        "description": "Renders the screen at up to 2x resolution (supersampling) for a sharper image."
+      "aa_mode": {
+        "none": {
+          "label": "Basic",
+          "description": "Renders without any anti-aliasing."
+        },
+        "smaa": {
+          "label": "SMAA",
+          "description": "Smooths jagged object edges for a cleaner, crisper display."
+        },
+        "supersample": {
+          "label": "High-Resolution Rendering",
+          "description": "Renders the screen at up to 2x resolution (supersampling) for a sharper image."
+        }
+      },
+      "texture_pack": {
+        "label": "Textures",
+        "description": "Applies detailed pixel-art textures to block and object surfaces instead of flat colors."
       },
       "section_caption": "Adjust screen clarity and detail settings"
     },
@@ -95,11 +101,6 @@
       "section_title": "About",
       "tagline": "Real-world terrain becomes a canvas for stacking virtual blocks."
     }
-  },
-  "cost": {
-    "low": "LOW",
-    "med": "MED",
-    "high": "HIGH"
   },
   "object_colors": {
     "white": "White",
@@ -136,9 +137,10 @@
   "toast": {
     "location_weak_signal": "Location signal is weak.",
     "location_checking": "Checking your location…",
-    "map_load_error": "Couldn't load the map.",
-    "map_load_success": "Area loaded.",
-    "map_loading": "Loading area…"
+    "map_load_error": "Couldn't load the area.",
+    "world_ready": "Area loaded.",
+    "map_loading": "Loading area…",
+    "companion_loading": "Preparing your companions…"
   },
   "map": {
     "scale_bar": {

@@ -12,23 +12,23 @@ const TEXT_OUTLINE_SHADOW = "-1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0
 
 export function DummyChatText() {
   const { t } = useTranslation();
-  const chat_lines = useUiStore((state) => state.chat_lines);
-  const [hovered, set_hovered] = useState(false);
+  const chatLines = useUiStore((state) => state.chatLines);
+  const [hovered, setHovered] = useState(false);
 
-  if (chat_lines.length === 0) return null;
+  if (chatLines.length === 0) return null;
 
   return (
     // pointer-events-auto against the map's default — needed for this group to receive hover.
     <div
-      onMouseEnter={() => set_hovered(true)}
-      onMouseLeave={() => set_hovered(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className="pointer-events-auto max-w-[min(320px,calc(100vw-2rem))] flex flex-col items-start gap-1"
     >
-      {chat_lines.map((line, i) => (
+      {chatLines.map((line, i) => (
         <div
           key={line.id}
           className="flex items-baseline gap-1.5 max-w-full transition-opacity duration-200"
-          style={{ opacity: hovered ? 0.95 : 0.23 + 0.47 * ((i + 1) / chat_lines.length) }}
+          style={{ opacity: hovered ? 0.95 : 0.23 + 0.47 * ((i + 1) / chatLines.length) }}
         >
           <span className="text-orange-400 text-xs font-medium shrink-0" style={{ textShadow: TEXT_OUTLINE_SHADOW }}>
             {t("map.chat.self_label")}

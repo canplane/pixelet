@@ -5,9 +5,9 @@ import { useTranslation } from "react-i18next";
 import type { BaseModalProps } from "@/app/types/ui.types.ts";
 import { Info, Palette, Sparkles, X } from "lucide-react";
 
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/theme/base/sheet.tsx";
-import { Separator } from "@/shared/ui/theme/base/separator.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/theme/base/tabs.tsx";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
+import { Separator } from "@/shared/ui/shadcn/separator.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
 import { CharacterSection } from "./sections/character_section.tsx";
 import { CameraSection } from "./sections/camera_section.tsx";
 import { LanguageSection } from "./sections/language_section.tsx";
@@ -24,19 +24,15 @@ export type SettingsModalProps = {
 };
 
 export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
-  const { open, on_open_change } = props;
+  const { open, onOpenChange } = props;
   const { t } = useTranslation();
 
   return (
-    <Sheet open={open} onOpenChange={on_open_change}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="left"
         hideClose
-        // theme-cozy: the settings panel's own warm-cream shadcn palette
-        // (index.css's own --background/--card/--border/etc overrides for
-        // this class) — scoped to this subtree only, not applied globally,
-        // so the rest of the app keeps its dark "Deep Dark Glass" theme.
-        className="theme-cozy sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground"
+        className="sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground"
         overlayClassName="bg-transparent"
         overlayStyle={{ pointerEvents: "none" }}
       >
@@ -78,23 +74,23 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             </TabsContent>
 
             <TabsContent value="effects">
-              <CameraSection />
-              <Separator />
               <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
+              <Separator />
+              <CameraSection />
               <QualitySection />
               <LightingSection />
               <PostFxSection />
+              {__IS_DEV__ && (
+                <>
+                  <Separator />
+                  <DebugSection />
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="info">
               <LanguageSection />
               <Separator />
-              {__IS_DEV__ && (
-                <>
-                  <DebugSection />
-                  <Separator />
-                </>
-              )}
               <DisclaimerSection />
               <AttributionSection />
               <AboutSection />

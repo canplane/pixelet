@@ -186,11 +186,10 @@ Two rules that came out of doing it:
 This is the import-map path, not the filesystem path — extension included, so
 a `.tsx` file says `.tsx`. New files get one too, tests included.
 
-The one exception is `shared/ui/theme/`, where no file carries a header. That
-tree is shadcn-derived and its authored variants (`glass/`, `cozy/`) follow the
-same shape deliberately, so it is uniformly header-less rather than
-inconsistently so. Don't mass-add headers there, and don't read its absence as
-licence to drop them anywhere else.
+The one exception is `shared/ui/shadcn/`, where no file carries a header —
+it's a flat, one-file-per-component shadcn tree, uniformly header-less rather
+than inconsistently so. Don't mass-add headers there, and don't read its
+absence as licence to drop them anywhere else.
 
 **Naming:** `snake_case` for files, functions, and locals; `PascalCase` for types;
 `SCREAMING_SNAKE_CASE` for module constants. React hooks, stores, and components
@@ -219,6 +218,19 @@ optimization is wrong, what a constant was re-derived from. They are the most
 valuable thing in many files. Preserve them when refactoring, extend them when
 you add a non-obvious decision, and never trim one just because it is long. Write
 them in English.
+
+A comment earns its place only when the *current* reasoning is genuinely
+non-obvious. Never restate something the code already shows on the same or
+next line (a literal value, a class name, an effect a reasonable reader would
+infer) — that isn't a "what" comment given for free, it's the same fact said
+twice. Never write it as a changelog entry either ("X -> Y, changed because
+...", "previously did Z, now does ..."): state only why the code is the way it
+is now, not the history of how it got there. This bar is almost never cleared
+by trivial or purely visual code (a Tailwind class, a small UI tweak) — those
+default to no comment at all, unless the choice is backed by something as
+load-bearing as real profiling data or a non-trivial derivation (the same bar
+"what a constant was re-derived from" already sets above), not just a
+stylistic preference.
 
 **No dead code by deletion.** Code being retired gets archived on a branch rather
 than deleted outright, so the reasoning stays recoverable.

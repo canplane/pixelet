@@ -31,28 +31,28 @@ const TERRAIN_POS = center3n([0, 0, -U_PER_CELL], U_PER_CELL);
 export function HoverCursor() {
   const hovered: PVF3 | null = useCameraStore((state) => state.hovered_coord);
   const hovered_object_id = useCameraStore((state) => state.hovered_object_id);
-  const active_tool = useUiStore((state) => state.active_tool);
+  const activeTool = useUiStore((state) => state.activeTool);
   const object_color_id = useUiStore((state) => state.object_color_id);
   const object_size = useUiStore((state) => state.object_size);
   const map_center = useMapStore((state) => state.map_center);
 
   const hovered_object = usePlacedObject(hovered_object_id);
 
-  const use_object_style = active_tool === "object" || active_tool === "eraser" || hovered_object !== null;
+  const use_object_style = activeTool === "object" || activeTool === "eraser" || hovered_object !== null;
 
-  const preview_size = (active_tool === "eraser" || active_tool === "pointer") && hovered_object ? hovered_object.size : object_size;
+  const preview_size = (activeTool === "eraser" || activeTool === "pointer") && hovered_object ? hovered_object.size : object_size;
 
   const object_pos = useMemo(() => center3n(fill3(0), preview_size), [preview_size]);
 
   const blocked = useMemo(() => {
-    if (active_tool === "object") {
+    if (activeTool === "object") {
       if (!hovered) return false;
       const map_origin = get_local_world_origin(map_center);
       return find_overlapping_object(hovered, object_size, map_origin) !== null;
     }
-    if (active_tool === "eraser") return hovered_object === null;
+    if (activeTool === "eraser") return hovered_object === null;
     return false;
-  }, [active_tool, hovered, map_center, object_size, hovered_object]);
+  }, [activeTool, hovered, map_center, object_size, hovered_object]);
 
   const mat: THREE.ShaderMaterial = useMemo(
     () =>
@@ -100,8 +100,8 @@ void main() {
 
   let color: string = highlight_style.COLOR;
   const opacity: number = highlight_style.FILL_OPACITY;
-  if (active_tool === "object") color = object_color_hex(object_color_id);
-  else if (active_tool === "eraser") color = marker_colors.DESTRUCTIVE;
+  if (activeTool === "object") color = object_color_hex(object_color_id);
+  else if (activeTool === "eraser") color = marker_colors.DESTRUCTIVE;
 
   const current_scale = use_object_style ? preview_size : U_PER_CELL;
 

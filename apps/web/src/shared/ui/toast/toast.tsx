@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { animate as animate_value, AnimatePresence, LayoutGroup, motion, useMotionValue } from "framer-motion";
+import { animate as animateValue, AnimatePresence, LayoutGroup, motion, useMotionValue } from "framer-motion";
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { get_toast_stack_rotation, reset_toast_stack_rotation, rotate_toast_stack, set_toast_drag_active, subscribe_toast_stack_rotation } from "./store.ts";
+import { getToastStackRotation, resetToastStackRotation, rotateToastStack, setToastDragActive, subscribeToastStackRotation } from "./store.ts";
 
 export const TOAST_STACK_PEEK_PX = 6;
 
@@ -23,8 +23,8 @@ const DRAG_FOLLOW_MAX_PX = 28;
 type ToastProps = {
   id: string;
   index: number;
-  stack_size: number;
-  is_removing: boolean;
+  stackSize: number;
+  isRemoving: boolean;
   children?: ReactNode;
   icon?: ReactNode;
   message: string;
@@ -36,8 +36,8 @@ type ToastProps = {
 export function Toast({
   id,
   index,
-  stack_size,
-  is_removing,
+  stackSize,
+  isRemoving,
   icon,
   message,
   statusColor,
@@ -46,31 +46,31 @@ export function Toast({
 }: ToastProps) {
   const isExpanded = !!message;
 
-  const [rotation, set_rotation] = useState(get_toast_stack_rotation);
+  const [rotation, setRotation] = useState(getToastStackRotation);
   // Written from the subscription callback (a pointer-event handler), not
   // during render — so unlike a ref write during render, there's no
   // StrictMode double-invoke hazard here.
-  const rotation_direction = useRef<-1 | 0 | 1>(0);
+  const rotationDirection = useRef<-1 | 0 | 1>(0);
   useEffect(
     () =>
-      subscribe_toast_stack_rotation((r, direction) => {
-        rotation_direction.current = direction;
-        set_rotation(r);
+      subscribeToastStackRotation((r, direction) => {
+        rotationDirection.current = direction;
+        setRotation(r);
       }),
     [],
   );
 
   useEffect(() => {
-    if (stack_size <= 1 && rotation !== 0) reset_toast_stack_rotation();
-  }, [stack_size, rotation]);
+    if (stackSize <= 1 && rotation !== 0) resetToastStackRotation();
+  }, [stackSize, rotation]);
 
   // Deliberately unclamped — a toast queued past MAX_STACK_DEPTH still gets
   // a real, continuous depth (3, 4, 5, ...) instead of being pinned or
-  // unmounted; is_visible below just forces its opacity to 0. Clamping the
+  // unmounted; isVisible below just forces its opacity to 0. Clamping the
   // depth itself would let visibility alone change this toast's position,
-  // which breaks the "never moves except when stack_depth genuinely
+  // which breaks the "never moves except when stackDepth genuinely
   // changes" invariant the rest of this component relies on.
-  const rotated_depth = stack_size > 0 ? ((index - rotation) % stack_size + stack_size) % stack_size : 0;
+  const rotatedDepth = stackSize > 0 ? ((index - rotation) % stackSize + stackSize) % stackSize : 0;
 
   // Detects the render where this card becomes the new front via a
   // downward swipe (wraps from the back of the deck) — every other depth
@@ -82,14 +82,14 @@ export function Toast({
   // React's state-adjustment-during-render idiom, so the comparison would
   // always be false. Reading from effect means it always sees last
   // commit's value.
-  const prev_rotated_depth = useRef(rotated_depth);
-  const just_entered_front_via_down_swipe = prev_rotated_depth.current !== 0 && rotated_depth === 0 && rotation_direction.current === -1;
+  const prevRotatedDepth = useRef(rotatedDepth);
+  const justEnteredFrontViaDownSwipe = prevRotatedDepth.current !== 0 && rotatedDepth === 0 && rotationDirection.current === -1;
   useEffect(() => {
-    prev_rotated_depth.current = rotated_depth;
-  }, [rotated_depth]);
+    prevRotatedDepth.current = rotatedDepth;
+  }, [rotatedDepth]);
 
-  const is_visible = rotated_depth <= MAX_STACK_DEPTH;
-  const stack_depth = Math.min(rotated_depth, MAX_STACK_DEPTH);
+  const isVisible = rotatedDepth <= MAX_STACK_DEPTH;
+  const stackDepth = Math.min(rotatedDepth, MAX_STACK_DEPTH);
 
   const springConfig = useMemo(
     () => ({
@@ -116,108 +116,108 @@ export function Toast({
     }
   }, [isExpanded]);
 
-  const is_draggable = stack_depth === 0 && stack_size > 1 && !is_removing;
+  const isDraggable = stackDepth === 0 && stackSize > 1 && !isRemoving;
 
-  const stack_y = is_removing ? 0 : stack_depth * TOAST_STACK_PEEK_PX;
-  const stack_opacity = is_removing ? 0 : (is_visible ? STACK_OPACITY[stack_depth] : 0);
-  const stack_scale = is_removing ? 0.9 : STACK_SCALE[stack_depth];
+  const stackY = isRemoving ? 0 : stackDepth * TOAST_STACK_PEEK_PX;
+  const stackOpacity = isRemoving ? 0 : (isVisible ? STACK_OPACITY[stackDepth] : 0);
+  const stackScale = isRemoving ? 0.9 : STACK_SCALE[stackDepth];
 
-  // Driven imperatively (like drag_y below) rather than through framer's
+  // Driven imperatively (like dragY below) rather than through framer's
   // declarative `animate` — an `animate={{ y: [from, to] }}` keyframe array
   // didn't reliably override the "continue from wherever the value
   // currently is" default for the down-swipe entrance. Explicitly `.set()`
-  // to a hard jump before calling `animate_value` removes the ambiguity.
-  const wrapper_y = useMotionValue(stack_y);
-  const wrapper_opacity = useMotionValue(0);
+  // to a hard jump before calling `animateValue` removes the ambiguity.
+  const wrapperY = useMotionValue(stackY);
+  const wrapperOpacity = useMotionValue(0);
 
   useEffect(() => {
-    if (just_entered_front_via_down_swipe) {
-      wrapper_y.set(DOWN_SWIPE_ENTRY_Y_PX);
-      wrapper_opacity.set(0);
+    if (justEnteredFrontViaDownSwipe) {
+      wrapperY.set(DOWN_SWIPE_ENTRY_Y_PX);
+      wrapperOpacity.set(0);
     }
-    const wrapper_transition = { duration: is_removing ? 0.15 : 0.3, ease: "easeOut" as const };
-    animate_value(wrapper_y, stack_y, wrapper_transition);
-    animate_value(wrapper_opacity, stack_opacity, wrapper_transition);
-    // wrapper_y/wrapper_opacity are stable MotionValue refs (framer-motion
+    const wrapperTransition = { duration: isRemoving ? 0.15 : 0.3, ease: "easeOut" as const };
+    animateValue(wrapperY, stackY, wrapperTransition);
+    animateValue(wrapperOpacity, stackOpacity, wrapperTransition);
+    // wrapperY/wrapperOpacity are stable MotionValue refs (framer-motion
     // guarantees identity across renders, same as useRef) — deliberately
     // excluded so eslint doesn't ask for them.
     // deno-lint-ignore react-hooks/exhaustive-deps
-  }, [stack_y, stack_opacity, just_entered_front_via_down_swipe, is_removing]);
+  }, [stackY, stackOpacity, justEnteredFrontViaDownSwipe, isRemoving]);
 
-  const drag_start_y = useRef<number | null>(null);
-  const active_pointer_id = useRef<number | null>(null);
+  const dragStartY = useRef<number | null>(null);
+  const activePointerId = useRef<number | null>(null);
   // Rotation fires the instant the drag crosses the threshold, not on
   // release — this guards the rest of the same drag from firing again, so
   // holding past the threshold rotates the deck once per gesture, not once
   // per pixel.
-  const has_rotated_this_drag = useRef(false);
+  const hasRotatedThisDrag = useRef(false);
 
-  const drag_y = useMotionValue(0);
+  const dragY = useMotionValue(0);
 
-  function end_drag() {
-    animate_value(drag_y, 0, springConfig);
+  function endDrag() {
+    animateValue(dragY, 0, springConfig);
   }
 
-  function handle_window_pointer_move(e: PointerEvent) {
-    if (drag_start_y.current === null || e.pointerId !== active_pointer_id.current) return;
-    if (has_rotated_this_drag.current) return;
+  function handleWindowPointerMove(e: PointerEvent) {
+    if (dragStartY.current === null || e.pointerId !== activePointerId.current) return;
+    if (hasRotatedThisDrag.current) return;
 
-    const raw_delta = e.clientY - drag_start_y.current;
+    const rawDelta = e.clientY - dragStartY.current;
 
     // Ending the follow the moment rotation fires (rather than waiting for
     // pointerup) makes both swipe directions resolve the same way: rotation
-    // always demotes the card, which always pushes drag_y positive — left
+    // always demotes the card, which always pushes dragY positive — left
     // to keep following the pointer until release, that would additively
     // stack with a down-swipe's own positive delta, or partially cancel an
     // up-swipe's negative one.
-    if (raw_delta < -STACK_SWIPE_THRESHOLD_PX) {
-      has_rotated_this_drag.current = true;
-      end_drag();
-      rotate_toast_stack(1);
+    if (rawDelta < -STACK_SWIPE_THRESHOLD_PX) {
+      hasRotatedThisDrag.current = true;
+      endDrag();
+      rotateToastStack(1);
       return;
     }
-    if (raw_delta > STACK_SWIPE_THRESHOLD_PX) {
-      has_rotated_this_drag.current = true;
-      end_drag();
-      rotate_toast_stack(-1);
+    if (rawDelta > STACK_SWIPE_THRESHOLD_PX) {
+      hasRotatedThisDrag.current = true;
+      endDrag();
+      rotateToastStack(-1);
       return;
     }
 
-    const followed = Math.max(-DRAG_FOLLOW_MAX_PX, Math.min(DRAG_FOLLOW_MAX_PX, raw_delta * DRAG_FOLLOW_RATIO));
-    drag_y.set(followed);
+    const followed = Math.max(-DRAG_FOLLOW_MAX_PX, Math.min(DRAG_FOLLOW_MAX_PX, rawDelta * DRAG_FOLLOW_RATIO));
+    dragY.set(followed);
   }
 
-  function detach_window_listeners() {
-    window.removeEventListener("pointermove", handle_window_pointer_move);
-    window.removeEventListener("pointerup", finish_drag);
-    window.removeEventListener("pointercancel", finish_drag);
+  function detachWindowListeners() {
+    window.removeEventListener("pointermove", handleWindowPointerMove);
+    window.removeEventListener("pointerup", finishDrag);
+    window.removeEventListener("pointercancel", finishDrag);
   }
 
-  function finish_drag(e: PointerEvent) {
-    if (drag_start_y.current === null || e.pointerId !== active_pointer_id.current) return;
-    drag_start_y.current = null;
-    active_pointer_id.current = null;
-    detach_window_listeners();
-    end_drag();
-    set_toast_drag_active(false);
+  function finishDrag(e: PointerEvent) {
+    if (dragStartY.current === null || e.pointerId !== activePointerId.current) return;
+    dragStartY.current = null;
+    activePointerId.current = null;
+    detachWindowListeners();
+    endDrag();
+    setToastDragActive(false);
   }
 
-  function handle_pointer_down(e: React.PointerEvent<HTMLDivElement>) {
-    if (!is_draggable) return;
-    drag_start_y.current = e.clientY;
-    active_pointer_id.current = e.pointerId;
-    has_rotated_this_drag.current = false;
-    window.addEventListener("pointermove", handle_window_pointer_move);
-    window.addEventListener("pointerup", finish_drag);
-    window.addEventListener("pointercancel", finish_drag);
-    set_toast_drag_active(true);
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isDraggable) return;
+    dragStartY.current = e.clientY;
+    activePointerId.current = e.pointerId;
+    hasRotatedThisDrag.current = false;
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    setToastDragActive(true);
   }
 
   // Safety net if the component unmounts mid-drag: window listeners
   // otherwise outlive it and fire into stale closures.
   useEffect(() => () => {
-    detach_window_listeners();
-    set_toast_drag_active(false);
+    detachWindowListeners();
+    setToastDragActive(false);
   }, []);
 
   return (
@@ -228,34 +228,34 @@ export function Toast({
     // it. Scoping each toast to its own group keeps that from crossing.
     <LayoutGroup id={id}>
       <motion.div
-        initial={{ scale: stack_scale }}
-        animate={{ scale: stack_scale }}
-        transition={{ duration: is_removing ? 0.15 : 0.3, ease: "easeOut" }}
+        initial={{ scale: stackScale }}
+        animate={{ scale: stackScale }}
+        transition={{ duration: isRemoving ? 0.15 : 0.3, ease: "easeOut" }}
         style={{
           position: "relative",
           // zIndex is a no-op on a statically-positioned element by CSS
           // default, so it has to be set explicitly here.
-          zIndex: MAX_STACK_DEPTH - stack_depth,
+          zIndex: MAX_STACK_DEPTH - stackDepth,
           transformOrigin: "center bottom",
-          y: wrapper_y,
-          opacity: wrapper_opacity,
+          y: wrapperY,
+          opacity: wrapperOpacity,
         }}
         className="flex items-end justify-center w-full h-8 pointer-events-none"
       >
         <div
-          onPointerDown={handle_pointer_down}
+          onPointerDown={handlePointerDown}
           // Negative margin + equal padding expands the swipe hit area past
           // the pill's own edges with zero visual footprint. Kept on this
           // wrapper rather than the pill itself, since the pill's own
           // overflow-hidden (for clipping its resizing content) would clip
           // the trick.
-          style={is_draggable ? { margin: "-8px", padding: "8px" } : undefined}
-          className={cn("inline-flex", is_visible ? "pointer-events-auto" : "pointer-events-none", is_draggable && "touch-none")}
+          style={isDraggable ? { margin: "-8px", padding: "8px" } : undefined}
+          className={cn("inline-flex", isVisible ? "pointer-events-auto" : "pointer-events-none", isDraggable && "touch-none")}
         >
           <motion.div
             layout
-            transition={is_removing ? { duration: 0.15, ease: "easeOut" } : springConfig}
-            style={{ borderRadius: "999px", y: drag_y }}
+            transition={isRemoving ? { duration: 0.15, ease: "easeOut" } : springConfig}
+            style={{ borderRadius: "999px", y: dragY }}
             className={cn(
               "relative inline-flex items-center justify-start overflow-hidden shrink-0",
               // Explicit h-8, not left implicit: without an icon present,
@@ -276,7 +276,7 @@ export function Toast({
                 // Same spring as the pill itself — otherwise `layout` alone
                 // falls back to framer-motion's default spring, and this box
                 // visibly desyncs from the pill's own tuned curve.
-                transition={is_removing ? { duration: 0.15, ease: "easeOut" } : springConfig}
+                transition={isRemoving ? { duration: 0.15, ease: "easeOut" } : springConfig}
                 // -mx-0.5 offsets the pill's own border-2 so this box's
                 // intrinsic width doesn't push the pill past min-w-8 into an
                 // oval instead of a circle in the collapsed state.
@@ -290,7 +290,7 @@ export function Toast({
               {isExpanded && wasExpanded && (
                 <motion.div
                   layout
-                  transition={is_removing ? { duration: 0.15, ease: "easeOut" } : springConfig}
+                  transition={isRemoving ? { duration: 0.15, ease: "easeOut" } : springConfig}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
@@ -311,7 +311,7 @@ export function Toast({
               {isExpanded && wasExpanded && statusColor && (
                 <motion.div
                   layout
-                  transition={is_removing ? { duration: 0.15, ease: "easeOut" } : springConfig}
+                  transition={isRemoving ? { duration: 0.15, ease: "easeOut" } : springConfig}
                   initial={{ opacity: 0, scale: 0 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0 }}

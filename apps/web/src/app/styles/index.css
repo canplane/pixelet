@@ -3,8 +3,6 @@
 
 @import "./fonts.css";
 
-@custom-variant dark (&:is(.dark *));
-
 @layer base {
   html,
   body,
@@ -74,27 +72,7 @@
   }
 }
 
-@layer components {
-  /* Apple-style glass panel */
-  .liquid-glass {
-    @apply relative overflow-hidden bg-white/5 backdrop-blur-md
-      border border-white/5 border-t-white/30 border-l-white/10
-      shadow-[0_20px_50px_rgba(0,0,0,0.2),inset_0_0_15px_rgba(255,255,255,0.05)]
-      rounded-[2.5rem] transition-all duration-500 ease-out;
-  }
-  .liquid-glass::before {
-    content: "";
-    @apply absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[20%]
-      bg-gradient-to-b from-white/[0.08] to-transparent blur-[8px] pointer-events-none;
-  }
-  /* Animal Crossing-style rounded speech bubble */
-  .cozy-bubble {
-    @apply border-[4px] border-white shadow-[0_6px_0_rgba(0,0,0,0.05)] bg-white rounded-[2rem];
-  }
-}
-
 @theme inline {
-  /* Declares the variable names only — each theme (root/cozy) injects the values */
   --animate-spin-slow: var(--animate-spin-slow);
   --animate-bounce-in: var(--animate-bounce-in);
 
@@ -146,85 +124,12 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/** * [1. DEFAULT SYSTEM: Liquid Glass] 
- */
 :root {
-  /* Liquid Glass physics: precise, unhurried rotation */
-  --animate-spin-slow: spin 3s linear infinite;
-
-  /* Entrance animation (kept as it was) */
-  --animate-bounce-in: fadeIn 0.3s ease-out; /* the default is a soft fade-in */
-
-  --radius: 2.5rem;
-
-  /* Surface & Background (Deep Dark Glass) */
-  --background: oklch(0.15 0.01 240);
-  --foreground: oklch(0.98 0.005 240);
-  --card: oklch(1 0 0 / 0.05);
-  --card-foreground: oklch(0.98 0.005 240);
-  --popover: oklch(0.15 0.01 240 / 0.8);
-  --popover-foreground: oklch(0.98 0.005 240);
-
-  /* Brand Colors (Pure White/Silver) */
-  --primary: oklch(1 0 0);
-  --primary-foreground: oklch(0.15 0.01 240);
-  --secondary: oklch(1 0 0 / 0.1);
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(1 0 0 / 0.05);
-  --muted-foreground: oklch(1 0 0 / 0.4);
-  --accent: oklch(1 0 0 / 0.1);
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-
-  --border: oklch(1 0 0 / 0.1);
-  --input: oklch(1 0 0 / 0.1);
-  --ring: oklch(1 0 0 / 0.3);
-
-  /* Liquid Glass Charts (Neon Glow) */
-  --chart-1: oklch(0.7 0.2 250);
-  --chart-2: oklch(0.8 0.2 190);
-  --chart-3: oklch(0.6 0.2 300);
-  --chart-4: oklch(0.85 0.15 90);
-  --chart-5: oklch(0.75 0.2 340);
-
-  /* Liquid Glass Sidebar (Translucent Panel) */
-  --sidebar: oklch(1 0 0 / 0.03);
-  --sidebar-foreground: oklch(0.98 0.005 240);
-  --sidebar-primary: oklch(1 0 0);
-  --sidebar-primary-foreground: oklch(0.15 0.01 240);
-  --sidebar-accent: oklch(1 0 0 / 0.08);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(1 0 0 / 0.05);
-  --sidebar-ring: oklch(1 0 0 / 0.2);
-}
-
-/* System dark mode (Liquid Glass, deepened) */
-.dark {
-  --background: oklch(0.1 0.01 240);
-  --card: oklch(1 0 0 / 0.03);
-  --sidebar: oklch(1 0 0 / 0.02);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
-
-/** * [2. THEME OVERRIDE: Cozy Voxel] 
- */
-.theme-cozy {
-  /* Cozy physics: springy, lively rotation */
-  /* a spinner inside a cozy-theme area reads as much more animated */
   --animate-spin-slow: spin 1s linear infinite;
-
-  /* Cozy's identity: a springy bounce */
   --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
   --radius: 1.25rem;
 
-  /* --- LIGHT MODE (Cozy) --- */
   --background: oklch(0.98 0.01 80);
   --foreground: oklch(0.25 0.02 80);
   --card: oklch(0.99 0.005 80 / 0.4);
@@ -248,14 +153,12 @@
   ); /* opaque and clearly darker than --background (0.98) — white/10% here was nearly invisible (an off Switch's track needs to read against a near-white surface, not just tint it) */
   --ring: oklch(0.709 0.01 56.259 / 0.5);
 
-  /* Cozy Charts (Nature/Fruit Palette) */
   --chart-1: oklch(0.7 0.12 30); /* apple red */
   --chart-2: oklch(0.75 0.1 140); /* sprout green */
   --chart-3: oklch(0.65 0.12 250); /* sea blue */
   --chart-4: oklch(0.8 0.14 85); /* orange gold */
   --chart-5: oklch(0.6 0.1 320); /* grape purple */
 
-  /* Cozy Sidebar (Paper Texture Feel) */
   --sidebar: oklch(0.985 0.001 106.423 / 0.8);
   --sidebar-foreground: oklch(0.147 0.004 49.25);
   --sidebar-primary: oklch(0.216 0.006 56.043);
@@ -264,53 +167,4 @@
   --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
   --sidebar-border: oklch(0.923 0.003 48.717 / 0.2);
   --sidebar-ring: oklch(0.709 0.01 56.259);
-
-  /* --- DARK MODE (Cozy Night) --- */
-  &.dark,
-  .dark & {
-    --background: oklch(0.2 0.02 85); /* night-forest background */
-    --foreground: oklch(0.95 0.01 85);
-    --card: oklch(0.25 0.02 85 / 0.45);
-    --card-foreground: oklch(0.95 0.01 85);
-    --popover: oklch(0.25 0.02 85 / 0.75);
-    --popover-foreground: oklch(0.95 0.01 85);
-
-    --primary: oklch(0.85 0.08 90); /* moonlight gold */
-    --primary-foreground: oklch(0.2 0.02 85);
-    --secondary: oklch(0.3 0.02 85 / 0.5);
-    --secondary-foreground: oklch(0.9 0.02 85);
-    --muted: oklch(0.3 0.02 85 / 0.5);
-    --muted-foreground: oklch(0.65 0.02 85);
-    --accent: oklch(0.35 0.03 85 / 0.5);
-    --accent-foreground: oklch(0.95 0.01 85);
-    --destructive: oklch(0.704 0.191 22.216);
-
-    --border: oklch(1 0 0 / 0.05); /* at night, only the faintest glow */
-    --input: oklch(1 0 0 / 0.22); /* bumped from 0.1 for the same reason as the light variant — a visible off-state track, not just a tint */
-    --ring: oklch(0.5 0.03 85 / 0.5);
-
-    --chart-1: oklch(0.65 0.15 30);
-    --chart-2: oklch(0.7 0.12 140);
-    --chart-3: oklch(0.6 0.15 250);
-    --chart-4: oklch(0.75 0.18 85);
-    --chart-5: oklch(0.55 0.12 320);
-
-    --sidebar: oklch(0.22 0.02 85 / 0.8);
-    --sidebar-foreground: oklch(0.95 0.01 85);
-    --sidebar-primary: oklch(0.85 0.08 90);
-    --sidebar-primary-foreground: oklch(0.2 0.02 85);
-    --sidebar-accent: oklch(0.3 0.02 85 / 0.5);
-    --sidebar-accent-foreground: oklch(0.95 0.01 85);
-    --sidebar-border: oklch(0.3 0.02 85 / 0.2);
-    --sidebar-ring: oklch(0.5 0.03 85);
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
 }

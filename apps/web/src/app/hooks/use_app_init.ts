@@ -11,7 +11,7 @@ export const enum LoadState {
 }
 
 type AppInitResult = {
-  load_state: LoadState;
+  loadState: LoadState;
   store: unknown;
 };
 
@@ -19,8 +19,8 @@ type AppInitResult = {
  * Hook to manage the global application initialization process.
  */
 export function useAppInit(): AppInitResult {
-  const [load_state] = useState<LoadState>(LoadState.SUCCESS);
+  const [loadState] = useState<LoadState>(LoadState.SUCCESS);
   const [store] = useState<unknown>({});
 
-  return { store, load_state };
+  return { store, loadState };
 }

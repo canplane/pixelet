@@ -8,6 +8,7 @@ import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { DevicePoseStatus, useDeviceLocationStore, useDeviceOrientationStore } from "@/modules/device/pose/store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 
 import { useMapStore } from "../store.ts";
@@ -130,7 +131,7 @@ export function useFollowMode() {
     // too, on the final coordinate right before it becomes map_center, is
     // what makes follow mode agree with pan/recenter on "where the ground
     // is" instead of only two of the three call sites agreeing.
-    set_map_center(useCameraStore.getState().ground_snap ? ground_or_raw(smoothed_coord.current) : smoothed_coord.current);
+    set_map_center(useSettingsStore.getState().ground_snap ? ground_or_raw(smoothed_coord.current) : smoothed_coord.current);
   }, [is_follow_mode, device_coord]);
 
   // dropping the smoothing anchors on exit means re-entering follow mode

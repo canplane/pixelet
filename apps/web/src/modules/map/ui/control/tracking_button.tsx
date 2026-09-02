@@ -8,11 +8,12 @@ import { useDeviceOrientation } from "@/modules/device/pose/use_device_orientati
 import { useMapStore } from "@/modules/map/store.ts";
 import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useFollowMode } from "@/modules/map/navigation/use_follow_mode.ts";
 import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
-import { CircularButton } from "@/shared/ui/theme/cozy/circular_button.tsx";
+import { CircularButton } from "@/shared/ui/shadcn/circular_button.tsx";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
@@ -52,7 +53,7 @@ export function TrackingButton() {
         // sample do_pan (input.tsx) uses, so this recenter lands exactly
         // where panning there normally would.
         set_map_center(
-          useCameraStore.getState().ground_snap ? ground_or_raw(device_coord) : device_coord,
+          useSettingsStore.getState().ground_snap ? ground_or_raw(device_coord) : device_coord,
         );
       }
       set_is_follow_mode(false);

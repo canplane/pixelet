@@ -5,9 +5,16 @@ import type { ReactNode } from "react";
 import { AppContext } from "../providers/app_context.ts";
 
 import { useAppInit } from "../hooks/use_app_init.ts";
-import { useUIController } from "../hooks/use_ui_controller.ts";
+import { useUiController } from "../hooks/use_ui_controller.ts";
 import { ModalManager } from "../providers/modal_manager.tsx";
 import { Toaster } from "@/shared/ui/toast/toaster.tsx";
+import { BOTTOM_OFFSET_PX } from "@/modules/map/ui/overlay/bottom_overlays.tsx";
+import { MODE_BAR_HEIGHT_PX } from "@/modules/map/ui/overlay/mode_bar.tsx";
+
+// Toaster itself has no feature-specific knowledge — this is the composition
+// root, so it's the one place allowed to know the map's mode bar exists and
+// hand Toaster the room to stay clear of it.
+const TOASTER_BOTTOM_PX = BOTTOM_OFFSET_PX + MODE_BAR_HEIGHT_PX;
 
 /** Loading page */
 function LoadingPage() {
@@ -28,23 +35,23 @@ type AppLayoutProps = {
 export function AppLayout(props: AppLayoutProps) {
   const { children } = props;
 
-  const { load_state, store } = useAppInit(); // init
+  const { loadState, store } = useAppInit(); // init
 
-  const { ui_controller, merge_ui_controller } = useUIController(store);
+  const { uiController, mergeUiController } = useUiController(store);
 
   return (
-    <AppContext.Provider value={{ store, ui: ui_controller }}>
-      <Toaster />
+    <AppContext.Provider value={{ store, ui: uiController }}>
+      <Toaster bottomPx={TOASTER_BOTTOM_PX} />
 
       <div className="min-h-screen flex flex-col items-center">
-        {load_state === "success" && children}
+        {loadState === "success" && children}
 
-        {load_state == "loading" && <LoadingPage />}
-        {(load_state === "timeout" || load_state === "error") && <ErrorPage />}
+        {loadState == "loading" && <LoadingPage />}
+        {(loadState === "timeout" || loadState === "error") && <ErrorPage />}
       </div>
 
       {/* Global modal host */}
-      <ModalManager merge_ui_controller={merge_ui_controller} />
+      <ModalManager mergeUiController={mergeUiController} />
     </AppContext.Provider>
   );
 }

@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 import { CharacterPreview } from "@/modules/world/characters/character_preview.tsx";
-import { useCharacterStore } from "@/modules/world/characters/store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { type CharacterVariant, PERSON_VARIANTS, PET_VARIANTS } from "@pxl/shared/assets/characters/variants.ts";
 
 type VariantPickerProps = {
@@ -48,10 +48,10 @@ function VariantPicker(props: VariantPickerProps) {
 export function CharacterSection() {
   const { t } = useTranslation();
 
-  const person_variant_key = useCharacterStore((state) => state.person_variant_key);
-  const set_person_variant_key = useCharacterStore((state) => state.set_person_variant_key);
-  const pet_variant_key = useCharacterStore((state) => state.pet_variant_key);
-  const set_pet_variant_key = useCharacterStore((state) => state.set_pet_variant_key);
+  const person_variant_key = useSettingsStore((state) => state.person_variant_key);
+  const set_person_variant_key = useSettingsStore((state) => state.set_person_variant_key);
+  const pet_variant_key = useSettingsStore((state) => state.pet_variant_key);
+  const set_pet_variant_key = useSettingsStore((state) => state.set_pet_variant_key);
 
   return (
     <div className="flex flex-col gap-3">

@@ -4,10 +4,17 @@
 // toast feature, so this owns layout end to end instead.
 
 import { memo, useEffect, useState } from "react";
-import { BOTTOM_OVERLAY_SAFE_PX } from "@/shared/ui/overlay_safe_area.ts";
-import { get_toast_entries, is_toast_removing, subscribe_toast_entries, type ToastRenderFn } from "./store.ts";
+import { getToastEntries, isToastRemoving, subscribeToastEntries, type ToastRenderFn } from "./store.ts";
 
 const TOAST_EXTRA_LIFT_PX = 20;
+const BOTTOM_SAFE_GAP_PX = 16;
+
+type ToasterProps = {
+  /** Whatever's already reserved at the bottom of the screen (e.g. a mode
+   * bar) that this toast stack shouldn't overlap — this component has no
+   * feature-specific knowledge of its own, the caller supplies it. */
+  bottomPx?: number;
+};
 
 // Toaster re-renders on ANY entry changing (one shared subscription below), which
 // re-invokes entries.map() for every toast, not just the one that changed. Without
@@ -15,20 +22,20 @@ const TOAST_EXTRA_LIFT_PX = 20;
 // which ticks every few seconds) re-triggered every other toast's layout spring too,
 // even ones nothing had actually happened to.
 const ToastEntry = memo(function ToastEntry(
-  { render, index, stack_size, is_removing }: { render: ToastRenderFn; index: number; stack_size: number; is_removing: boolean },
+  { render, index, stackSize, isRemoving }: { render: ToastRenderFn; index: number; stackSize: number; isRemoving: boolean },
 ) {
-  return <>{render({ index, stack_size, is_removing })}</>;
+  return <>{render({ index, stackSize, isRemoving })}</>;
 });
 
-const Toaster = () => {
-  const [, force_render] = useState(0);
-  useEffect(() => subscribe_toast_entries(() => force_render((n) => n + 1)), []);
+const Toaster = ({ bottomPx = 0 }: ToasterProps) => {
+  const [, forceRender] = useState(0);
+  useEffect(() => subscribeToastEntries(() => forceRender((n) => n + 1)), []);
 
-  // Not capped here — stack_size has to reflect the true queued count for toast.tsx's
-  // rotation math (index/stack_size drive a modulo). The visible-count cap lives in
+  // Not capped here — stackSize has to reflect the true queued count for toast.tsx's
+  // rotation math (index/stackSize drive a modulo). The visible-count cap lives in
   // toast.tsx's own depth math instead; capping the array here would shrink the queue
   // itself instead of just what's drawn.
-  const entries = get_toast_entries();
+  const entries = getToastEntries();
 
   return (
     // Fixed, centered anchor — every entry below is absolutely positioned to this same
@@ -38,7 +45,7 @@ const Toaster = () => {
       style={{
         position: "fixed",
         left: "50%",
-        bottom: `calc(${BOTTOM_OVERLAY_SAFE_PX + TOAST_EXTRA_LIFT_PX}px + var(--vv-bottom, 0px))`,
+        bottom: `calc(${bottomPx + BOTTOM_SAFE_GAP_PX + TOAST_EXTRA_LIFT_PX}px + var(--vv-bottom, 0px))`,
         transition: "bottom 150ms ease-out",
         transform: "translateX(-50%)",
         // Explicit z-index needed or this loses to the map overlay chrome around it
@@ -60,7 +67,7 @@ const Toaster = () => {
       }
       {entries.map((entry, index) => (
         <div key={entry.id} style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
-          <ToastEntry render={entry.render} index={index} stack_size={entries.length} is_removing={is_toast_removing(entry.id)} />
+          <ToastEntry render={entry.render} index={index} stackSize={entries.length} isRemoving={isToastRemoving(entry.id)} />
         </div>
       ))}
     </div>

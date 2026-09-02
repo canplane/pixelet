@@ -12,7 +12,7 @@ import { useAppContext } from "@/app/providers/app_context.ts";
  */
 function Dialog(props: {
   open: boolean;
-  on_open_change: (open: boolean) => void;
+  onOpenChange: (open: boolean) => void;
 }) {
   return null;
 }
@@ -43,7 +43,7 @@ export function EditFooModal(props: BaseModalProps & EditFooProps) {
   /**
    * Initializes modal state when the modal opens
    */
-  const initialize_modal = useCallback((): void => {
+  const initializeModal = useCallback((): void => {
     if (type === "foo:update") {
       // initialize state using params.id and store
     }
@@ -54,8 +54,8 @@ export function EditFooModal(props: BaseModalProps & EditFooProps) {
    *
    * Closing the dialog triggers cleanup / initialization logic.
    */
-  const handle_open_change = (newOpen: boolean): void => {
-    props.on_open_change(newOpen);
+  const handleOpenChange = (newOpen: boolean): void => {
+    props.onOpenChange(newOpen);
 
     // NOTE: close hook point (commit/cleanup) - fill later as needed.
     if (!newOpen) {
@@ -67,8 +67,8 @@ export function EditFooModal(props: BaseModalProps & EditFooProps) {
    * Run initialization when the modal becomes visible
    */
   useEffect(() => {
-    if (open) initialize_modal();
+    if (open) initializeModal();
   }, [open]);
 
-  return <Dialog open={open} on_open_change={handle_open_change} />;
+  return <Dialog open={open} onOpenChange={handleOpenChange} />;
 }

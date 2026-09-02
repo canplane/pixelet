@@ -19,13 +19,12 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { useRenderSettingsStore } from "@/render/settings_store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { l2_column_key_of, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
-import { ObjectShadows } from "@/modules/world/objects/blob_shadow.tsx";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
@@ -160,6 +159,16 @@ function set_three_box(box: THREE.Box3, bounds: ChunkBounds): THREE.Box3 {
   return box;
 }
 
+// Drops BoxGeometry's bottom face (its last group/index run) — a fill-rate
+// and vertex-count optimization, not a stylistic difference from OBJECT_BOX.
+// Every terrain instance either sits on another terrain instance below it or
+// on the chunk's own floor, so its bottom face is never visible from any
+// camera angle a player can reach; instanced at the volume of terrain in a
+// loaded chunk (thousands of boxes), skipping one face per instance is a
+// real triangle/vertex saving, not a micro-optimization. OBJECT_BOX keeps
+// all six faces since placed objects can be viewed from underneath (stacked,
+// on a ledge, camera clipped below one) or moved/removed at runtime in ways
+// terrain's own baked stack never is.
 function create_open_bottom_box(): THREE.BoxGeometry {
   const geo = new THREE.BoxGeometry(1, 1, 1);
   const idx = geo.getIndex();
@@ -176,23 +185,33 @@ const INSTANCE_RGB_ATTR = "color_ch_instance";
 const INSTANCE_LAYER_TAPS_ATTR = "layer_idx_taps";
 const INSTANCE_VISIBLE_ATTR = "lod_visible";
 
+// GLSL ES 3.00 has no int-to-float overload for arithmetic on a float/vector
+// operand (pow(float, int), vec3 * int, etc. simply fail to compile) — a
+// whole-number config constant like rim_cfg.POWER=1 template-interpolates
+// as the bare token "1", not "1.0", and silently takes down the entire
+// shader (every terrain/object mesh sharing this material goes blank, no
+// visible error unless the console is checked). Route every numeric config
+// constant injected into GLSL through this so a future whole-number tuning
+// value can't reintroduce the same compile failure.
+function glsl_float(n: number): string {
+  return Number.isInteger(n) ? `${n}.0` : `${n}`;
+}
+
 function inject_instance_shader(shader: {
   vertexShader: string;
   fragmentShader: string;
   uniforms: Record<string, THREE.IUniform>;
-}, with_rim: boolean): void {
+}): void {
   shader.uniforms.u_ground_layers_top = { value: GROUND_LAYERS_TOP };
   shader.uniforms.u_ground_layers_side = { value: GROUND_LAYERS_SIDE };
   shader.uniforms.u_low_spec = { value: true };
-  if (with_rim) {
-    shader.uniforms.u_rim_color = { value: new THREE.Color(rim_cfg.COLOR) };
-    // starts at 0, not rim_cfg.INTENSITY — ChunkInstanceMesh's own effect
-    // (mirroring u_low_spec's) sets the real value from
-    // render/settings_store.ts's show_rim_light once mounted, same
-    // "compiled in unconditionally, toggled via a uniform" reasoning as
-    // u_low_spec so flipping the setting never needs a shader recompile.
-    shader.uniforms.u_rim_intensity = { value: 0 };
-  }
+  shader.uniforms.u_rim_color = { value: new THREE.Color(rim_cfg.COLOR) };
+  // starts at 0, not rim_cfg.INTENSITY — ChunkInstanceMesh's own effect
+  // (mirroring u_low_spec's) sets the real value from
+  // app/settings/settings_store.ts's show_rim_light once mounted, same
+  // "compiled in unconditionally, toggled via a uniform" reasoning as
+  // u_low_spec so flipping the setting never needs a shader recompile.
+  shader.uniforms.u_rim_intensity = { value: 0 };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
@@ -216,8 +235,8 @@ function inject_instance_shader(shader: {
         v_${INSTANCE_RGB_ATTR} = ${INSTANCE_RGB_ATTR};
         v_${INSTANCE_LAYER_TAPS_ATTR} = ${INSTANCE_LAYER_TAPS_ATTR};
         v_${INSTANCE_VISIBLE_ATTR} = ${INSTANCE_VISIBLE_ATTR};
-        v_local_pos = position;
         v_is_side = (abs(normal.z) < 0.5) ? 1.0 : 0.0;
+        v_local_pos = position;
         v_side_x_dominant = (abs(normal.x) > 0.5) ? 1.0 : 0.0;
         // Real-size tile UV, not the box's own raw 0..1 face UV: write_scale_translation
         // (chunk_mesher.ts) bakes a merged run's real cell-unit extent straight into
@@ -262,65 +281,29 @@ function inject_instance_shader(shader: {
       uniform sampler2DArray u_ground_layers_top;
       uniform sampler2DArray u_ground_layers_side;
       uniform bool u_low_spec;
-      ${
-        with_rim
-          ? `uniform vec3 u_rim_color;
-      uniform float u_rim_intensity;`
-          : ""
-      }
+      uniform vec3 u_rim_color;
+      uniform float u_rim_intensity;
       vec3 sample_layer_tap(float layer_idx, vec3 fallback_rgb) {
         if (layer_idx > ${NO_LAYER}.0 - 0.5) return fallback_rgb;
         return v_is_side > 0.5
           ? texture(u_ground_layers_side, vec3(v_box_uv, layer_idx)).rgb
           : texture(u_ground_layers_top, vec3(v_box_uv, layer_idx)).rgb;
       }
-      // Fake edge bevel — MS2/Animal Crossing's own soft-corner read turned out to come
-      // from rounded props/characters and soft shading, not genuinely rounded terrain
-      // geometry (a real rounded-box mesh was prototyped and measured at 13-56x this
-      // box's vertex count for real-time-viable segment counts — not worth it for what's
-      // actually just a subtle edge highlight). Tried reshaping the lit *normal* near
-      // edges first (toward normalize(local position), the same direction real corner-
-      // rounding geometry would use) — measurably had zero visible effect, because this
-      // block's own final color is emissive-driven (totalEmissiveRadiance = base_rgb *
-      // FLOOR below), not real-light diffuse/specular, and the one normal-dependent term
-      // that exists (rim light) both reads the untouched vNormal varying directly rather
-      // than this local normal variable, and never runs for terrain (with_rim is object-only, see
-      // create_material's own doc comment) — a normal tweak had nothing left to influence.
-      // Darkening base_rgb directly, in the same thin edge band, works with this pipeline
-      // instead of against it: a soft, direction-independent crease exactly where a real
-      // chamfer would catch a shadow, with no dependency on which way anything is lit.
-      //
-      // That static darkening alone still reads flatter than the reference: real MS2
-      // screenshots show edges catching an actual highlight that shifts as the camera
-      // orbits, not just a fixed shadow line — the same view-angle-dependent cue
-      // rim_cfg's own object-only rim light uses (pow(1-N.V, POWER), brightest at grazing
-      // angles), just localized to the edge band instead of the whole silhouette, and
-      // using the true rounded-corner direction (normalize(local position), the direction
-      // real corner-rounding geometry would put its normal in) rather than the flat box
-      // normal — so *this* narrow band is where a normal-based effect actually still
-      // works, unlike the full-face attempt above: it's blended in as a separate additive
-      // term below (outgoingLight), never routed back through the ignored lit normal variable.
-      const float BEVEL_WORLD_WIDTH = 0.06;
-      const float BEVEL_DARKEN = 0.72;
-      const float EDGE_SHEEN_POWER = 2.0;
-      const float EDGE_SHEEN_INTENSITY = 0.35;
+      // Per-cell edge crease — a static darken only, view-independent (no Fresnel/sheen
+      // term), so it reads the same regardless of camera angle. Narrow width with a
+      // hard-ish falloff (pow, not a wide smoothstep) keeps it a crisp seam rather than a
+      // soft/hazy gradient.
+      const float BEVEL_WORLD_WIDTH = 0.025;
+      const float BEVEL_DARKEN = 0.78;
       float edge_factor() {
         vec3 dist_to_edge = (0.5 - abs(v_local_pos)) * v_inst_scale;
         float d = v_is_side > 0.5
           ? (v_side_x_dominant > 0.5 ? min(dist_to_edge.y, dist_to_edge.z) : min(dist_to_edge.x, dist_to_edge.z))
           : min(dist_to_edge.x, dist_to_edge.y);
-        return 1.0 - smoothstep(0.0, BEVEL_WORLD_WIDTH, d);
+        return pow(1.0 - smoothstep(0.0, BEVEL_WORLD_WIDTH, d), 2.0);
       }
       vec3 apply_fake_bevel(vec3 color) {
         return color * mix(1.0, BEVEL_DARKEN, edge_factor());
-      }
-      // Additive, not multiplied into base_rgb like apply_fake_bevel: a highlight brightens
-      // regardless of what's under it, the same reasoning rim light itself is additive.
-      vec3 edge_sheen() {
-        vec3 corner_normal = normalize(v_local_pos);
-        vec3 view_dir = normalize(v_rim_view_pos);
-        float grazing = pow(1.0 - max(dot(corner_normal, view_dir), 0.0), EDGE_SHEEN_POWER);
-        return vec3(grazing * edge_factor() * EDGE_SHEEN_INTENSITY);
       }`,
     )
     .replace("void main() {", `void main() { if (v_${INSTANCE_VISIBLE_ATTR} < 0.5) discard;`)
@@ -338,37 +321,29 @@ function inject_instance_shader(shader: {
       base_rgb = apply_fake_bevel(base_rgb);
       vec4 diffuseColor = vec4(diffuse * base_rgb, opacity);`,
     )
-    .replace("vec3 totalEmissiveRadiance = emissive;", `vec3 totalEmissiveRadiance = base_rgb * ${light_cfg.FLOOR};`)
-    .replace(
-      "vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;",
-      `vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
-      outgoingLight += edge_sheen();`,
-    );
+    .replace("vec3 totalEmissiveRadiance = emissive;", `vec3 totalEmissiveRadiance = base_rgb * ${glsl_float(light_cfg.FLOOR)};`);
 
-  if (with_rim) {
-    // vNormal is a standard varying the base meshphysical fragment shader
-    // already declares — but vViewPosition is NOT: that one only exists in
-    // the Lambert/Phong/Toon shader chunks (lights_lambert/phong/toon_pars_
-    // fragment.glsl.js), never in meshphysical's own lights_physical_pars_
-    // fragment.glsl.js, which MeshStandardMaterial/MeshPhysicalMaterial
-    // both compile against. Referencing it here was an undeclared-
-    // identifier shader compile error the whole time (rim silently never
-    // applied, regardless of u_rim_intensity) — v_rim_view_pos above is our
-    // own varying, computed in the vertex injection instead of assuming a
-    // standard one that doesn't exist for this material. pow(1 - N.V,
-    // POWER) is the classic fresnel/rim falloff: near 0 face-on (N.V close
-    // to 1), rising toward 1 right at the silhouette (N.V close to 0) — see
-    // rim_cfg's own doc comment for why this is object-only (with_rim is
-    // only ever true for the OBJECT_BOX ChunkInstanceMesh, never
-    // TERRAIN_BOX's).
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;",
-      `vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
-      vec3 rim_view_dir = normalize(v_rim_view_pos);
-      float rim = pow(1.0 - max(dot(normalize(vNormal), rim_view_dir), 0.0), ${rim_cfg.POWER});
-      outgoingLight += u_rim_color * rim * u_rim_intensity;`,
-    );
-  }
+  // vNormal is a standard varying the base meshphysical fragment shader
+  // already declares — but vViewPosition is NOT: that one only exists in
+  // the Lambert/Phong/Toon shader chunks (lights_lambert/phong/toon_pars_
+  // fragment.glsl.js), never in meshphysical's own lights_physical_pars_
+  // fragment.glsl.js, which MeshStandardMaterial/MeshPhysicalMaterial
+  // both compile against. Referencing it here was an undeclared-
+  // identifier shader compile error the whole time (rim silently never
+  // applied, regardless of u_rim_intensity) — v_rim_view_pos above is our
+  // own varying, computed in the vertex injection instead of assuming a
+  // standard one that doesn't exist for this material. pow(1 - N.V,
+  // POWER) is the classic fresnel/rim falloff: near 0 face-on (N.V close
+  // to 1), rising toward 1 right at the silhouette (N.V close to 0).
+  // Applied uniformly to terrain and objects alike (both compile the same
+  // shader now) — see rim_cfg's own doc comment for why.
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;",
+    `vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
+    vec3 rim_view_dir = normalize(v_rim_view_pos);
+    float rim = pow(1.0 - max(dot(normalize(vNormal), rim_view_dir), 0.0), ${glsl_float(rim_cfg.POWER)});
+    outgoingLight += u_rim_color * rim * u_rim_intensity;`,
+  );
 }
 
 type MountedChunkMesh = {
@@ -396,7 +371,7 @@ function create_geometry(built: BuiltChunkMesh, base: THREE.BoxGeometry): THREE.
   return geo;
 }
 
-function create_material(with_rim: boolean): THREE.MeshStandardMaterial {
+function create_material(): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   // Shadow map records back-face depth instead of front-face — the receiver
   // then tests against the far side of the caster instead of its own lit
@@ -406,17 +381,16 @@ function create_material(with_rim: boolean): THREE.MeshStandardMaterial {
   material.shadowSide = THREE.BackSide;
   // Material.customProgramCacheKey() defaults to "" — WebGLPrograms' cache
   // key is built only from the defines/parameters three.js itself tracks,
-  // never from onBeforeCompile's own identity or its string output. The
-  // terrain (with_rim=false) and object (with_rim=true) materials otherwise
-  // hash identically and can share one cached WebGLProgram, silently
-  // running whichever one compiled FIRST on both — the object mesh
-  // rendering with terrain's rim-less shader, no error, no visible effect
-  // no matter what u_rim_intensity is set to.
-  material.customProgramCacheKey = () => with_rim ? "chunk-object-rim" : "chunk-terrain";
+  // never from onBeforeCompile's own identity or its string output. Terrain
+  // and object meshes now compile the exact same injected shader (no more
+  // with_rim branch), so sharing one cached WebGLProgram between them is
+  // correct rather than the stale-cache bug this key used to guard against
+  // when their shaders still differed.
+  material.customProgramCacheKey = () => "chunk-instance";
   material.onBeforeCompile = (shader) => {
-    inject_instance_shader(shader, with_rim);
-    shader.uniforms.u_low_spec.value = useRenderSettingsStore.getState().low_spec;
-    if (with_rim) shader.uniforms.u_rim_intensity.value = useRenderSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
+    inject_instance_shader(shader);
+    shader.uniforms.u_low_spec.value = useSettingsStore.getState().low_spec;
+    shader.uniforms.u_rim_intensity.value = useSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
     material.userData.shader = shader;
   };
   return material;
@@ -427,21 +401,16 @@ type ChunkInstanceMeshProps = {
   role: ChunkLodRole;
   base: THREE.BoxGeometry;
   low_spec: boolean;
-  // static per call site (TERRAIN_BOX vs OBJECT_BOX — see rim_cfg's own doc
-  // comment) — not itself reactive, unlike show_rim_light below, which
-  // toggles this mesh's own u_rim_intensity uniform once with_rim compiled
-  // the term in at all.
-  with_rim: boolean;
   show_rim_light: boolean;
   registry: ChunkMeshRegistry;
 };
 
-const ChunkInstanceMesh = memo(({ built, role, base, low_spec, with_rim, show_rim_light, registry }: ChunkInstanceMeshProps) => {
-  const material = useMemo(() => create_material(with_rim), [with_rim]);
+const ChunkInstanceMesh = memo(({ built, role, base, low_spec, show_rim_light, registry }: ChunkInstanceMeshProps) => {
+  const material = useMemo(() => create_material(), []);
   const mesh = useMemo(() => {
     const m = new THREE.InstancedMesh(base.clone() as THREE.BufferGeometry, material, 1);
     // Unconditional: real cost is gated at the renderer level by Canvas's
-    // own `shadows` prop (scene.tsx, driven by render/settings_store.ts's
+    // own `shadows` prop (scene.tsx, driven by app/settings/settings_store.ts's
     // show_shadow_map) — three.js doesn't compile any shadow-map shader
     // code, on a caster or a receiver, while gl.shadowMap.enabled is false,
     // so this flag alone costs nothing when the setting is off.
@@ -466,10 +435,9 @@ const ChunkInstanceMesh = memo(({ built, role, base, low_spec, with_rim, show_ri
     if (shader) shader.uniforms.u_low_spec.value = low_spec;
   }, [material, low_spec]);
   useEffect(() => {
-    if (!with_rim) return;
     const shader = material.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
     if (shader) shader.uniforms.u_rim_intensity.value = show_rim_light ? rim_cfg.INTENSITY : 0;
-  }, [material, with_rim, show_rim_light]);
+  }, [material, show_rim_light]);
 
   useLayoutEffect(() => {
     const mount_t0 = import.meta.env.DEV ? performance.now() : 0;
@@ -588,9 +556,9 @@ function get_initial_chunk_view(
 type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack };
 
 const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
-  const low_spec = useRenderSettingsStore((state) => state.low_spec);
-  const show_rim_light = useRenderSettingsStore((state) => state.show_rim_light);
-  const show_structures = useRenderSettingsStore((state) => state.show_structures);
+  const low_spec = useSettingsStore((state) => state.low_spec);
+  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
+  const show_structures = useSettingsStore((state) => state.show_structures);
   const tile = useTileStore((state) => state.get_tile(page_idx));
   const camera = useThree((state) => state.camera);
   const anchor_registry = useAnchorRegistry();
@@ -915,8 +883,8 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
     >
       {layout.buckets.map((bucket) => (
         <group key={bucket.role} name={`${bucket.role}/lod/${bucket.lod_step}`}>
-          {bucket.terrain.cnt > 0 && <ChunkInstanceMesh built={bucket.terrain} role={bucket.role} base={TERRAIN_BOX} low_spec={low_spec} with_rim={false} show_rim_light={false} registry={registry} />}
-          {bucket.objects.cnt > 0 && <ChunkInstanceMesh built={bucket.objects} role={bucket.role} base={OBJECT_BOX} low_spec={low_spec} with_rim show_rim_light={show_rim_light} registry={registry} />}
+          {bucket.terrain.cnt > 0 && <ChunkInstanceMesh built={bucket.terrain} role={bucket.role} base={TERRAIN_BOX} low_spec={low_spec} show_rim_light={show_rim_light} registry={registry} />}
+          {bucket.objects.cnt > 0 && <ChunkInstanceMesh built={bucket.objects} role={bucket.role} base={OBJECT_BOX} low_spec={low_spec} show_rim_light={show_rim_light} registry={registry} />}
         </group>
       ))}
     </group>
@@ -928,7 +896,6 @@ type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: I
 
 const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => {
   const page_base = FROM_L3_IDX(page_idx);
-  const show_blob_shadow = useRenderSettingsStore((state) => state.show_blob_shadow);
   const offsets = useMemo(
     () => in_range_chunks(page_base, range_anchor),
     [page_base, range_anchor],
@@ -937,14 +904,6 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
     <AnchorNode i={page_base}>
       <group name={`chunk-stage-page/${ivec.repr(page_idx)}`}>
         {offsets.map((offset) => <Chunk key={offset.key} page_idx={page_idx} offset={offset} stack={stack} />)}
-        {show_blob_shadow && offsets.map((offset) => (
-          <group key={`shadow/${offset.key}`} position={[offset.base_x * U_PER_CELL, offset.base_y * U_PER_CELL, 0]}>
-            <ObjectShadows
-              page_idx={page_idx}
-              page_off={ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n)}
-            />
-          </group>
-        ))}
       </group>
     </AnchorNode>
   );

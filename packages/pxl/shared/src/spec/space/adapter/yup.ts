@@ -17,7 +17,7 @@ import { fill3, type V3 } from "@pxl/shared/spec/space/v3.ts";
  *
  * What it is kept for has not arrived yet: **imported assets.** All geometry
  * is currently generated in code (BufferGeometry / InstancedMesh built by
- * chunk_stage, location_puck, blob_shadow, and friends), and the repository
+ * chunk_stage, location_puck, and friends), and the repository
  * has no GLTF/GLB loader at all. The moment one is added — avatars or props
  * for the social layer, say — it lands Y-up, because Blender and the glTF
  * spec both are, and this is the seam that converts it.

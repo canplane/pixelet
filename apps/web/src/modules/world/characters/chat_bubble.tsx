@@ -4,7 +4,7 @@
  * A billboarded speech bubble over the companion's head, showing the most
  * recent line from the (currently dev-only) map chat — see
  * modules/map/ui/overlay/mode_bar.tsx / dummy_chat_text.tsx for where
- * chat_lines actually comes from. Pure THREE.Sprite (not a DOM overlay):
+ * chatLines actually comes from. Pure THREE.Sprite (not a DOM overlay):
  * always faces the camera regardless of the character's own rotation.z,
  * with no lookAt bookkeeping needed — that's what a Sprite's own material
  * does by construction.
@@ -48,7 +48,7 @@ const TAIL_H = 10;
 const MAX_TEXT_WIDTH_PX = 220;
 
 // The canvas below is built at this many real pixels per logical unit —
-// independent of the renderer's own high_dpr/supersampling setting (that
+// independent of the renderer's own aa_mode/supersampling setting (that
 // only affects the main WebGL canvas's render target, never a texture an
 // app draws itself). Without this, the canvas was sized directly off
 // FONT's own px metrics — maybe 150x50 real pixels — then stretched onto a
@@ -190,8 +190,8 @@ export type ChatBubbleProps = {
 
 export function ChatBubble(props: ChatBubbleProps) {
   const { anchor_z } = props;
-  const chat_lines = useUiStore((state) => state.chat_lines);
-  const last = chat_lines.length > 0 ? chat_lines[chat_lines.length - 1] : null;
+  const chatLines = useUiStore((state) => state.chatLines);
+  const last = chatLines.length > 0 ? chatLines[chatLines.length - 1] : null;
 
   const [visible_line, set_visible_line] = useState<{ id: number; text: string } | null>(null);
 
