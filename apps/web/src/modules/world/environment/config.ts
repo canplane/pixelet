@@ -77,9 +77,10 @@ export const light_cfg = {
 } as const;
 
 /**
- * Fresnel/rim highlight, applied uniformly to every chunk_stage.tsx instance
- * mesh — terrain and placed objects alike, both TERRAIN_BOX and OBJECT_BOX —
- * a thin bright edge on faces that graze the view direction, the classic
+ * Fresnel/rim highlight, applied uniformly to every chunk_stage.tsx baked
+ * chunk mesh — terrain and placed objects alike, merged into one mesh per
+ * chunk (chunk_mesher.ts) — a thin bright edge on faces that graze the view
+ * direction, the classic
  * "toy block catching light at its silhouette" cue. Originally object-only
  * (meant to help placed objects read as distinct from terrain cells sharing
  * the same block palette), but a shared render pipeline shouldn't treat one

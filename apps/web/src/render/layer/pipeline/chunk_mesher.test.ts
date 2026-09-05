@@ -7,7 +7,7 @@ import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./volume.ts";
 import type { MeshRun } from "./voxel_scan.ts";
-import { build_chunk_instances, build_chunk_instances_coarse, coarse_instance_stats, occlusion_stats } from "./chunk_mesher.ts";
+import { bake_chunk_mesh, bake_chunk_mesh_coarse, type BakedChunkMesh, coarse_instance_stats, occlusion_stats } from "./chunk_mesher.ts";
 
 function empty_columns(): MeshRun[][] {
   return Array.from({ length: CHUNK_CELL_SPAN * CHUNK_CELL_SPAN }, () => []);
@@ -28,6 +28,30 @@ function run(
   return { z0, z1, r, g, b, layer_idx: NO_LAYER, material_class, sub_sz: SUB_CELL_NONE, sub_ox: 0, sub_oy: 0, sub_oz: 0 };
 }
 
+/** One baked box's own face count from its vertex count — 4 verts/face, and
+ * every emitted box either drops the bottom face (5) or keeps it (6). */
+function box_cnt(built: BakedChunkMesh, faces_per_box: 5 | 6): number {
+  return built.vertex_cnt / (faces_per_box * 4);
+}
+
+/** A baked box's own real-unit size — reads straight off any one of its
+ * baked vertices' own a_box_scale copy (identical across the whole box). */
+function box_scale_of(built: BakedChunkMesh, box_index: number, faces_per_box: 5 | 6): [number, number, number] {
+  const vi = box_index * faces_per_box * 4;
+  return [built.box_scale[vi * 3], built.box_scale[vi * 3 + 1], built.box_scale[vi * 3 + 2]];
+}
+
+/** A baked box's own real-unit center, exact from any single one of its own
+ * vertices: emit_box bakes `position = center + local_pos * box_scale`, so
+ * `center = position - local_pos * box_scale` recovers it directly —
+ * reading its very first vertex is enough, not an average across a face
+ * (whose 4 corners average to that FACE's own center, offset from the
+ * box's true center by 0.5*normal*scale, not to the box center itself). */
+function box_center_of(built: BakedChunkMesh, box_index: number, faces_per_box: 5 | 6): [number, number, number] {
+  const vi = box_index * faces_per_box * 4 * 3;
+  return [0, 1, 2].map((k) => built.position[vi + k] - built.local_pos[vi + k] * built.box_scale[vi + k]) as [number, number, number];
+}
+
 Deno.test("coarse mesher - a fully-covered cell doesn't shrink and blends its columns' colors", () => {
   const columns = empty_columns();
   // lod_step=2: all 4 sub-columns of the one coarse cell, same color/z.
@@ -35,11 +59,11 @@ Deno.test("coarse mesher - a fully-covered cell doesn't shrink and blends its co
     columns[idx(cx, cy)] = [run(4, 5, 255, 0, 0)];
   }
 
-  const built = build_chunk_instances_coarse(columns, 2);
-  assertEquals(built.terrain.cnt, 1);
-  assertEquals(built.terrain.matrices[10], 2); // span(2) * cbrt(fill=1) = 2, no shrink
-  assert(built.terrain.rgb[0] > 0); // red channel present
-  assertEquals(built.terrain.rgb[2], 0); // no blue contributed anywhere
+  const built = bake_chunk_mesh(columns, 2);
+  assertEquals(box_cnt(built, 5), 1); // coarse boxes are always open-bottom
+  assertEquals(box_scale_of(built, 0, 5)[2], 2); // span(2) * cbrt(fill=1) = 2, no shrink
+  assert(built.rgb[0] > 0); // red channel present
+  assertEquals(built.rgb[2], 0); // no blue contributed anywhere
 });
 
 Deno.test("coarse mesher - terrain and object columns in the same cell blend into one color", () => {
@@ -52,11 +76,10 @@ Deno.test("coarse mesher - terrain and object columns in the same cell blend int
   columns[idx(0, 1)] = [run(4, 5, 0, 0, 255, MaterialClass.OBJECT)];
   columns[idx(1, 1)] = [run(4, 5, 0, 0, 255, MaterialClass.OBJECT)];
 
-  const built = build_chunk_instances_coarse(columns, 2);
-  assertEquals(built.terrain.cnt, 1);
-  assertEquals(built.objects.cnt, 0); // coarse output is always the single merged "terrain" channel
-  assert(built.terrain.rgb[0] > 0); // red contributed
-  assert(built.terrain.rgb[2] > 0); // blue contributed too — genuinely blended, not one or the other
+  const built = bake_chunk_mesh(columns, 2);
+  assertEquals(box_cnt(built, 5), 1); // coarse output is always one merged, open-bottom box
+  assert(built.rgb[0] > 0); // red contributed
+  assert(built.rgb[2] > 0); // blue contributed too — genuinely blended, not one or the other
 });
 
 Deno.test("coarse mesher - a partially-covered cell shrinks isotropically instead of vanishing", () => {
@@ -66,18 +89,19 @@ Deno.test("coarse mesher - a partially-covered cell shrinks isotropically instea
   // threshold drops it.
   columns[idx(0, 0)] = [run(4, 4, 200, 100, 50)];
 
-  const built = build_chunk_instances_coarse(columns, 2);
-  assertEquals(built.terrain.cnt, 1);
+  const built = bake_chunk_mesh(columns, 2);
+  assertEquals(box_cnt(built, 5), 1);
   const expected_scale = 2 * Math.cbrt(1 / 8);
-  assertEquals(built.terrain.matrices[0], expected_scale); // X
-  assertEquals(built.terrain.matrices[5], expected_scale); // Y
-  assertEquals(built.terrain.matrices[10], expected_scale); // Z — same factor, isotropic
+  const [sx, sy, sz] = box_scale_of(built, 0, 5);
+  assertEquals(sx, expected_scale);
+  assertEquals(sy, expected_scale);
+  assertEquals(sz, expected_scale); // Z — same factor, isotropic
 });
 
 Deno.test("coarse mesher - finest LOD still requires per-run meshing", () => {
   let threw = false;
   try {
-    build_chunk_instances_coarse(empty_columns(), 1);
+    bake_chunk_mesh_coarse(empty_columns(), 1);
   } catch {
     threw = true;
   }
@@ -101,11 +125,11 @@ Deno.test("LOD1 - a terrain run fully boxed in by solid terrain neighbors and co
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
   const culled_before = occlusion_stats.culled;
-  const built = build_chunk_instances(columns, 1);
+  const built = bake_chunk_mesh(columns, 1);
   // 4 neighbor terrain runs (each topmost in its own column, never culled)
   // + the center column's own top (STRUCTURE) run + 0 for its buried
-  // bottom (LAND) run.
-  assertEquals(built.terrain.cnt, 5);
+  // bottom (LAND) run — all non-OBJECT, so all open-bottom (5 faces).
+  assertEquals(box_cnt(built, 5), 5);
   assertEquals(occlusion_stats.culled, culled_before + 1);
 });
 
@@ -127,10 +151,13 @@ Deno.test("LOD1 - an object placed on terrain does not occlusion-cull the terrai
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
   const culled_before = occlusion_stats.culled;
-  const built = build_chunk_instances(columns, 1);
-  // 4 neighbor terrain runs + the center's own terrain run, none culled.
-  assertEquals(built.terrain.cnt, 5);
-  assertEquals(built.objects.cnt, 1);
+  const built = bake_chunk_mesh(columns, 1);
+  // 4 neighbor terrain runs + the center's own terrain run (5, open-bottom,
+  // none culled) + the object on top (1, full box — OBJECT keeps its bottom
+  // face). Total vertices = 5*5*4 + 1*6*4 = 124, not evenly divisible by
+  // one single faces_per_box, so assert the two classes directly instead of
+  // reusing box_cnt's single-shape assumption.
+  assertEquals(built.vertex_cnt, 5 * 5 * 4 + 1 * 6 * 4);
   assertEquals(occlusion_stats.culled, culled_before);
 });
 
@@ -144,11 +171,11 @@ Deno.test("LOD1 - a chunk-edge column is never occlusion-culled even if it looks
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
   // (cx-1, cy) doesn't exist — this column is at the chunk's own edge.
 
-  const built = build_chunk_instances(columns, 1);
+  const built = bake_chunk_mesh(columns, 1);
   // The edge column's own terrain run is never culled: 1 (edge) + 3
-  // (neighbors, each topmost in their own column) = 4.
-  assertEquals(built.terrain.cnt, 4);
-  assertEquals(built.objects.cnt, 1);
+  // (neighbors, each topmost in their own column) = 4 open-bottom terrain
+  // boxes, plus 1 full-box object.
+  assertEquals(built.vertex_cnt, 4 * 5 * 4 + 1 * 6 * 4);
 });
 
 Deno.test("coarse_instance_stats tracks low-fill instances the always-shrink policy would have dropped under a threshold rule", () => {
@@ -157,7 +184,16 @@ Deno.test("coarse_instance_stats tracks low-fill instances the always-shrink pol
 
   const total_before = coarse_instance_stats.total;
   const low_fill_before = coarse_instance_stats.low_fill;
-  build_chunk_instances_coarse(columns, 2);
+  bake_chunk_mesh(columns, 2);
   assertEquals(coarse_instance_stats.total, total_before + 1);
   assertEquals(coarse_instance_stats.low_fill, low_fill_before + 1);
+});
+
+Deno.test("bake_chunk_mesh - a box's baked position matches its own real-unit center", () => {
+  const columns = empty_columns();
+  columns[idx(1, 2)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
+
+  const built = bake_chunk_mesh(columns, 1);
+  assertEquals(box_cnt(built, 5), 1);
+  assertEquals(box_center_of(built, 0, 5), [1.5, 2.5, 0.5]);
 });

@@ -161,6 +161,9 @@
     "magenta": "마젠타",
     "pink": "분홍"
   },
+  "object_decors": {
+    "tree": "나무"
+  },
   "device": {
     "orientation": {
       "unsupported": "이 환경에서는 방향 센서를 지원하지 않습니다.",

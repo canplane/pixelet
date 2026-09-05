@@ -13,6 +13,7 @@ import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { get_local_world_origin } from "../frame/coord.ts";
 import { find_overlapping_object } from "../objects/collision.ts";
+import { DECOR_SIZE } from "../objects/size.ts";
 import { set_virtual_hide, usePlacedObject } from "../objects/store.ts";
 import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
 import { get_object_texture } from "../objects/tex.ts";
@@ -43,9 +44,9 @@ export function HoverCursor() {
 
   const hovered_object = usePlacedObject(hovered_object_id);
 
-  const use_object_style = activeTool === "object" || activeTool === "eraser" || hovered_object !== null;
+  const use_object_style = activeTool === "object" || activeTool === "decor" || activeTool === "eraser" || hovered_object !== null;
 
-  const preview_size = (activeTool === "eraser" || activeTool === "pointer") && hovered_object ? hovered_object.size : object_size;
+  const preview_size = (activeTool === "eraser" || activeTool === "pointer") && hovered_object ? hovered_object.size : activeTool === "decor" ? DECOR_SIZE : object_size;
 
   const object_pos = useMemo(() => center3n(fill3(0), preview_size), [preview_size]);
 
@@ -54,6 +55,11 @@ export function HoverCursor() {
       if (!hovered) return false;
       const map_origin = get_local_world_origin(map_center);
       return find_overlapping_object(hovered, object_size, map_origin) !== null;
+    }
+    if (activeTool === "decor") {
+      if (!hovered) return false;
+      const map_origin = get_local_world_origin(map_center);
+      return find_overlapping_object(hovered, DECOR_SIZE, map_origin) !== null;
     }
     if (activeTool === "eraser") return hovered_object === null;
     return false;
@@ -88,8 +94,17 @@ export function HoverCursor() {
   // color_id — the placement candidate's for object mode, the existing
   // object's own for eraser — since both of those really are "here's the
   // real thing". Bare terrain with no real color_id to borrow (pointer, or
-  // object mode with no candidate color context) has none.
-  const color_id: ObjectColorId | null = activeTool === "pointer" ? null : hovered_object ? hovered_object.color_id : activeTool === "object" ? object_color_id : null;
+  // object mode with no candidate color context), an eraser hovering a
+  // decor entry (it has a decor_id, not a color_id — no swatch texture
+  // exists for it in this pass), and decor mode itself (no color concept at
+  // all) all fall back to the flat marker ghost instead.
+  const color_id: ObjectColorId | null = activeTool === "pointer" || activeTool === "decor"
+    ? null
+    : hovered_object?.kind === "solid"
+    ? hovered_object.color_id
+    : activeTool === "object"
+    ? object_color_id
+    : null;
 
   // The real thing's own actual painted texture (objects/tex.ts's own
   // cached, pixel-art-filtered load — the exact file a real placed cube of
@@ -131,13 +146,14 @@ export function HoverCursor() {
             // MeshStandardMaterial (roughness/metalness matched to
             // chunk_stage.tsx's own create_material()), not that file's
             // actual material: that one's onBeforeCompile hard-requires
-            // per-instance attributes (INSTANCE_RGB_ATTR/LAYER_TAPS/VISIBLE)
-            // and instanceMatrix that only exist on a real ChunkInstanceMesh
-            // — reusing it here would mean wrapping this single ghost box in
-            // a 1-count InstancedMesh just to satisfy that contract, real
-            // coupling to chunk_stage.tsx's own instancing internals for a
-            // rim-light/terrain-layer-texturing payoff this preview doesn't
-            // need — the actual texture pattern (this material's own `map`
+            // baked per-vertex attributes (a_rgb/a_layer_taps/a_visible/
+            // a_local_pos/a_box_scale) that only exist on a real baked
+            // ChunkMesh geometry (chunk_mesher.ts) — reusing it here would
+            // mean baking this single ghost box through that same pipeline
+            // just to satisfy that contract, real coupling to
+            // chunk_stage.tsx's own baking internals for a rim-light/
+            // terrain-layer-texturing payoff this preview doesn't need — the
+            // actual texture pattern (this material's own `map`
             // above) already comes from the same source PNG a real object
             // renders with, just loaded as a plain Texture instead of
             // through that shader's DataArrayTexture.

@@ -32,3 +32,13 @@ import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 export const OBJECT_SIZES: readonly f64[] = [U_PER_CELL, U_PER_CELL / 2, U_PER_CELL / 4, U_PER_CELL / 8];
 
 export const DEFAULT_OBJECT_SIZE: f64 = OBJECT_SIZES[0];
+
+/** Every decor kind places at exactly one terrain cell — unlike a color
+ * cube, decor has no mode_bar size flyout of its own (yet) to vary this, and
+ * a scattered tree (decor/tree_kind.ts) already assumes its own candidates
+ * are one full cell wide. Deliberately the same value as OBJECT_SIZES[0],
+ * not a re-export of it — object_size (ui_store.ts) is a live, user-changed
+ * selection for the object tool specifically; this is decor's own fixed
+ * constant and must keep working even if a future size flyout moves
+ * object_size elsewhere. */
+export const DECOR_SIZE: f64 = OBJECT_SIZES[0];

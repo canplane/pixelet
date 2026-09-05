@@ -1,13 +1,23 @@
 // @pxl/web/modules/world/chunk_stage.tsx
 
 /**
- * Unified terrain/object renderer.
+ * Unified terrain/object/decor renderer.
  *
- * One component represents one renderer-owned L2 XY column and all occupied
- * signed 64-high L2 bands beneath it. A temporary dense
- * signed-Z field is composited synchronously, converted to instance buffers,
- * and immediately returned to the scratch pool. In-frustum chunks retain a
+ * One Chunk component represents one renderer-owned L2 XY column and all
+ * occupied signed 64-high L2 bands beneath it — AND, as of 2026-09-05, every
+ * decor kind's own instances for that same column too. A temporary dense
+ * signed-Z field is composited synchronously, converted to a baked mesh, and
+ * immediately returned to the scratch pool. In-frustum chunks retain a
  * 36 KiB top-surface summary for coarse LOD rebuilds, never the dense bands.
+ *
+ * Decor used to be a fully separate, independently-scheduled component tree
+ * (decor_layer.tsx's own ChunkDecor/PageDecor/DecorLayer, one registrant per
+ * (chunk, decor kind) in the shared LodSchedulerRegistry below) — retired
+ * once Chunk absorbed decor's own build into its own commit(), the fix for
+ * the documented terrain/decor ready-state desync (decor could render a
+ * frame before its own co-located terrain). See decor_layer.tsx's own top
+ * doc comment and discussions/20260905-tier1-geometry-baking-implemented.md
+ * (and its own same-day follow-up) for the fuller account.
  */
 
 import { createContext, memo, type ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -47,15 +57,23 @@ import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/
 import { type MeshRun, scan_all_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
 import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view, update_frustum } from "@/render/chunk_lod.ts";
+import {
+  build_decor_instances,
+  type DecorBundleAssets,
+  type DecorKindBundle,
+  DecorVariantMesh,
+  type ModelInstanceTransformList,
+  useAllDecorBundleAssets,
+} from "@/modules/world/decor/decor_layer.tsx";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_WORK_BUDGET_MS: f64 = 4;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
 
 /**
- * ChunkInstanceMesh's useLayoutEffect — geometry creation + GPU buffer
- * upload (InstancedBufferAttribute) + bounds — runs in React's own render/
- * commit phase, outside chunk_stage.tsx's useFrame entirely. A commit()
+ * ChunkMesh's useLayoutEffect — geometry creation + GPU buffer upload
+ * (BufferAttribute) + bounds — runs in React's own render/commit phase,
+ * outside chunk_stage.tsx's useFrame entirely. A commit()
  * only calls set_layout(); it doesn't force this work to happen inside the
  * useFrame timing window that scheduler_peak_stats covers, so a storm of
  * simultaneous LOD-transition mounts (many chunks blend_active at once)
@@ -159,31 +177,16 @@ function set_three_box(box: THREE.Box3, bounds: ChunkBounds): THREE.Box3 {
   return box;
 }
 
-// Drops BoxGeometry's bottom face (its last group/index run) — a fill-rate
-// and vertex-count optimization, not a stylistic difference from OBJECT_BOX.
-// Every terrain instance either sits on another terrain instance below it or
-// on the chunk's own floor, so its bottom face is never visible from any
-// camera angle a player can reach; instanced at the volume of terrain in a
-// loaded chunk (thousands of boxes), skipping one face per instance is a
-// real triangle/vertex saving, not a micro-optimization. OBJECT_BOX keeps
-// all six faces since placed objects can be viewed from underneath (stacked,
-// on a ledge, camera clipped below one) or moved/removed at runtime in ways
-// terrain's own baked stack never is.
-function create_open_bottom_box(): THREE.BoxGeometry {
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  const idx = geo.getIndex();
-  const bottom = geo.groups[geo.groups.length - 1];
-  if (!idx || !bottom) return geo;
-  geo.setIndex(new THREE.BufferAttribute((idx.array as Uint16Array).slice(0, bottom.start), 1));
-  geo.groups = geo.groups.slice(0, -1);
-  return geo;
-}
-
-const TERRAIN_BOX = create_open_bottom_box();
-const OBJECT_BOX = new THREE.BoxGeometry(1, 1, 1);
-const INSTANCE_RGB_ATTR = "color_ch_instance";
-const INSTANCE_LAYER_TAPS_ATTR = "layer_idx_taps";
-const INSTANCE_VISIBLE_ATTR = "lod_visible";
+// Per-vertex attribute names for the baked chunk mesh (chunk_mesher.ts) —
+// replaces what used to be per-INSTANCE attributes read through
+// instanceMatrix; every vertex now already carries its own real
+// position/normal, so these are the only extra material/shading inputs the
+// shader needs (see inject_chunk_shader's own doc comment).
+const RGB_ATTR = "a_rgb";
+const LAYER_TAPS_ATTR = "a_layer_taps";
+const VISIBLE_ATTR = "a_visible";
+const LOCAL_POS_ATTR = "a_local_pos";
+const BOX_SCALE_ATTR = "a_box_scale";
 
 // GLSL ES 3.00 has no int-to-float overload for arithmetic on a float/vector
 // operand (pow(float, int), vec3 * int, etc. simply fail to compile) — a
@@ -197,7 +200,16 @@ function glsl_float(n: number): string {
   return Number.isInteger(n) ? `${n}.0` : `${n}`;
 }
 
-function inject_instance_shader(shader: {
+/**
+ * Injected once per baked chunk-mesh material. Every vertex here is a real,
+ * final position (chunk_mesher.ts bakes it directly — no instanceMatrix to
+ * decompose), so this shader is actually SIMPLER than the instanced version
+ * it replaced: `a_local_pos`/`a_box_scale` are baked per-vertex copies of
+ * exactly what the old vertex shader used to reconstruct from `position` +
+ * `instanceMatrix`'s diagonal, so the UV-tiling and bevel formulas below are
+ * otherwise unchanged from before.
+ */
+function inject_chunk_shader(shader: {
   vertexShader: string;
   fragmentShader: string;
   uniforms: Record<string, THREE.IUniform>;
@@ -206,7 +218,7 @@ function inject_instance_shader(shader: {
   shader.uniforms.u_ground_layers_side = { value: GROUND_LAYERS_SIDE };
   shader.uniforms.u_low_spec = { value: true };
   shader.uniforms.u_rim_color = { value: new THREE.Color(rim_cfg.COLOR) };
-  // starts at 0, not rim_cfg.INTENSITY — ChunkInstanceMesh's own effect
+  // starts at 0, not rim_cfg.INTENSITY — ChunkMesh's own effect
   // (mirroring u_low_spec's) sets the real value from
   // app/settings/settings_store.ts's show_rim_light once mounted, same
   // "compiled in unconditionally, toggled via a uniform" reasoning as
@@ -216,67 +228,67 @@ function inject_instance_shader(shader: {
     .replace(
       "#include <common>",
       `#include <common>
-      attribute vec3 ${INSTANCE_RGB_ATTR};
-      attribute vec4 ${INSTANCE_LAYER_TAPS_ATTR};
-      attribute float ${INSTANCE_VISIBLE_ATTR};
-      varying vec3 v_${INSTANCE_RGB_ATTR};
-      varying vec4 v_${INSTANCE_LAYER_TAPS_ATTR};
-      varying float v_${INSTANCE_VISIBLE_ATTR};
+      attribute vec3 ${RGB_ATTR};
+      attribute vec4 ${LAYER_TAPS_ATTR};
+      attribute float ${VISIBLE_ATTR};
+      attribute vec3 ${LOCAL_POS_ATTR};
+      attribute vec3 ${BOX_SCALE_ATTR};
+      varying vec3 v_rgb;
+      varying vec4 v_layer_taps;
+      varying float v_visible;
       varying vec2 v_box_uv;
       varying float v_is_side;
       varying float v_side_x_dominant;
       varying vec3 v_local_pos;
-      varying vec3 v_inst_scale;
+      varying vec3 v_box_scale;
       varying vec3 v_rim_view_pos;`,
     )
     .replace(
       "void main() {",
       `void main() {
-        v_${INSTANCE_RGB_ATTR} = ${INSTANCE_RGB_ATTR};
-        v_${INSTANCE_LAYER_TAPS_ATTR} = ${INSTANCE_LAYER_TAPS_ATTR};
-        v_${INSTANCE_VISIBLE_ATTR} = ${INSTANCE_VISIBLE_ATTR};
+        v_rgb = ${RGB_ATTR};
+        v_layer_taps = ${LAYER_TAPS_ATTR};
+        v_visible = ${VISIBLE_ATTR};
         v_is_side = (abs(normal.z) < 0.5) ? 1.0 : 0.0;
-        v_local_pos = position;
+        v_local_pos = ${LOCAL_POS_ATTR};
         v_side_x_dominant = (abs(normal.x) > 0.5) ? 1.0 : 0.0;
-        // Real-size tile UV, not the box's own raw 0..1 face UV: write_scale_translation
-        // (chunk_mesher.ts) bakes a merged run's real cell-unit extent straight into
-        // instanceMatrix's diagonal (never a rotation, per that function's own contract),
-        // so a run spanning many cells — any coarse-LOD box, or same-material cells merged
+        // Real-size tile UV, not the box's own raw 0..1 face UV: chunk_mesher.ts
+        // bakes each box's own real cell-unit size straight into a_box_scale, so a
+        // box spanning many cells — any coarse-LOD box, or same-material cells merged
         // at any LOD — was one whole texture tile stretched across the entire face instead
         // of repeating once per real cell. Most visible on patterned side art (assets/cell/
         // textures/terrain/side_*.png): its layered-strata look read as a flat smear
-        // once stretched that far. position is the unit box's own local [-0.5,0.5]
-        // coordinate, so (position.axis + 0.5) * scale reconstructs a per-face 0..N
-        // coordinate directly from it — sidesteps ever needing BoxGeometry's own per-face
-        // UV axis convention. Side faces always put z (height) in the second component so
+        // once stretched that far. a_local_pos is the box's own canonical [-0.5,0.5]
+        // corner, so (a_local_pos.axis + 0.5) * a_box_scale.axis reconstructs a per-face
+        // 0..N coordinate directly from it — sidesteps ever needing a per-face UV axis
+        // convention. Side faces always put z (height) in the second component so
         // the strata art's up/down orientation stays consistent on all four side faces,
         // not flipped on two of them. GROUND_LAYERS_SIDE (tex_array.ts) is an untransformed
         // DataArrayTexture (flipY defaults false), so v=0 samples the source PNG's own top row
-        // — (0.5 - position.z), not (position.z + 0.5), so the box's physical top (position.z
-        // = +0.5) lands on v=0 and actually gets the image's top edge instead of its bottom
-        // (e.g. side_bare.png's grass cap rendering at a cliff's foot instead of its crest).
-        // RepeatWrapping (tex_array.ts) turns >1 straight into tiling.
-        vec3 inst_scale = vec3(instanceMatrix[0].x, instanceMatrix[1].y, instanceMatrix[2].z);
-        v_inst_scale = inst_scale;
+        // — (0.5 - a_local_pos.z), not (a_local_pos.z + 0.5), so the box's physical top
+        // (a_local_pos.z = +0.5) lands on v=0 and actually gets the image's top edge instead
+        // of its bottom (e.g. side_bare.png's grass cap rendering at a cliff's foot instead
+        // of its crest). RepeatWrapping (tex_array.ts) turns >1 straight into tiling.
+        v_box_scale = ${BOX_SCALE_ATTR};
         v_box_uv = v_is_side > 0.5
           ? (abs(normal.x) > 0.5
-            ? vec2((position.y + 0.5) * inst_scale.y, (0.5 - position.z) * inst_scale.z)
-            : vec2((position.x + 0.5) * inst_scale.x, (0.5 - position.z) * inst_scale.z))
-          : vec2((position.x + 0.5) * inst_scale.x, (position.y + 0.5) * inst_scale.y);
-        v_rim_view_pos = -(modelViewMatrix * instanceMatrix * vec4(position, 1.0)).xyz;`,
+            ? vec2((${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z)
+            : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z))
+          : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y);
+        v_rim_view_pos = -(modelViewMatrix * vec4(position, 1.0)).xyz;`,
     );
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
       `#include <common>
-      varying vec3 v_${INSTANCE_RGB_ATTR};
-      varying vec4 v_${INSTANCE_LAYER_TAPS_ATTR};
-      varying float v_${INSTANCE_VISIBLE_ATTR};
+      varying vec3 v_rgb;
+      varying vec4 v_layer_taps;
+      varying float v_visible;
       varying vec2 v_box_uv;
       varying float v_is_side;
       varying float v_side_x_dominant;
       varying vec3 v_local_pos;
-      varying vec3 v_inst_scale;
+      varying vec3 v_box_scale;
       varying vec3 v_rim_view_pos;
       uniform sampler2DArray u_ground_layers_top;
       uniform sampler2DArray u_ground_layers_side;
@@ -296,7 +308,7 @@ function inject_instance_shader(shader: {
       const float BEVEL_WORLD_WIDTH = 0.025;
       const float BEVEL_DARKEN = 0.78;
       float edge_factor() {
-        vec3 dist_to_edge = (0.5 - abs(v_local_pos)) * v_inst_scale;
+        vec3 dist_to_edge = (0.5 - abs(v_local_pos)) * v_box_scale;
         float d = v_is_side > 0.5
           ? (v_side_x_dominant > 0.5 ? min(dist_to_edge.y, dist_to_edge.z) : min(dist_to_edge.x, dist_to_edge.z))
           : min(dist_to_edge.x, dist_to_edge.y);
@@ -306,16 +318,16 @@ function inject_instance_shader(shader: {
         return color * mix(1.0, BEVEL_DARKEN, edge_factor());
       }`,
     )
-    .replace("void main() {", `void main() { if (v_${INSTANCE_VISIBLE_ATTR} < 0.5) discard;`)
+    .replace("void main() {", `void main() { if (v_visible < 0.5) discard;`)
     .replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `vec3 base_rgb = v_${INSTANCE_RGB_ATTR};
+      `vec3 base_rgb = v_rgb;
       if (!u_low_spec) {
         base_rgb = (
-          sample_layer_tap(v_${INSTANCE_LAYER_TAPS_ATTR}.x, base_rgb) +
-          sample_layer_tap(v_${INSTANCE_LAYER_TAPS_ATTR}.y, base_rgb) +
-          sample_layer_tap(v_${INSTANCE_LAYER_TAPS_ATTR}.z, base_rgb) +
-          sample_layer_tap(v_${INSTANCE_LAYER_TAPS_ATTR}.w, base_rgb)
+          sample_layer_tap(v_layer_taps.x, base_rgb) +
+          sample_layer_tap(v_layer_taps.y, base_rgb) +
+          sample_layer_tap(v_layer_taps.z, base_rgb) +
+          sample_layer_tap(v_layer_taps.w, base_rgb)
         ) * 0.25;
       }
       base_rgb = apply_fake_bevel(base_rgb);
@@ -335,8 +347,8 @@ function inject_instance_shader(shader: {
   // standard one that doesn't exist for this material. pow(1 - N.V,
   // POWER) is the classic fresnel/rim falloff: near 0 face-on (N.V close
   // to 1), rising toward 1 right at the silhouette (N.V close to 0).
-  // Applied uniformly to terrain and objects alike (both compile the same
-  // shader now) — see rim_cfg's own doc comment for why.
+  // Applied uniformly to terrain and objects alike (one merged mesh, one
+  // shader — see rim_cfg's own doc comment for why).
   shader.fragmentShader = shader.fragmentShader.replace(
     "vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;",
     `vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
@@ -349,7 +361,7 @@ function inject_instance_shader(shader: {
 type MountedChunkMesh = {
   built: BuiltChunkMesh;
   role: ChunkLodRole;
-  attribute: THREE.InstancedBufferAttribute;
+  attribute: THREE.BufferAttribute;
 };
 type ChunkMeshRegistry = { meshes: Set<MountedChunkMesh> };
 type ChunkVisibilityDecision = { primary: boolean; secondary: boolean };
@@ -363,11 +375,19 @@ function apply_visibility(registry: ChunkMeshRegistry, decision: ChunkVisibility
   }
 }
 
-function create_geometry(built: BuiltChunkMesh, base: THREE.BoxGeometry): THREE.BufferGeometry {
-  const geo = base.clone();
-  geo.setAttribute(INSTANCE_RGB_ATTR, new THREE.InstancedBufferAttribute(built.rgb, 3));
-  geo.setAttribute(INSTANCE_LAYER_TAPS_ATTR, new THREE.InstancedBufferAttribute(built.layer_taps, 4));
-  geo.setAttribute(INSTANCE_VISIBLE_ATTR, new THREE.InstancedBufferAttribute(built.visibility, 1));
+/** Builds a fresh, real (non-cloned-from-a-shared-base) BufferGeometry
+ * directly from one chunk's own baked vertex/index arrays — there's no
+ * shared base to clone anymore, every chunk's geometry is entirely its own. */
+function create_geometry(built: BuiltChunkMesh): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(built.position, 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(built.normal, 3));
+  geo.setAttribute(RGB_ATTR, new THREE.BufferAttribute(built.rgb, 3));
+  geo.setAttribute(LAYER_TAPS_ATTR, new THREE.BufferAttribute(built.layer_taps, 4));
+  geo.setAttribute(VISIBLE_ATTR, new THREE.BufferAttribute(built.visibility, 1));
+  geo.setAttribute(LOCAL_POS_ATTR, new THREE.BufferAttribute(built.local_pos, 3));
+  geo.setAttribute(BOX_SCALE_ATTR, new THREE.BufferAttribute(built.box_scale, 3));
+  geo.setIndex(new THREE.BufferAttribute(built.index, 1));
   return geo;
 }
 
@@ -382,13 +402,12 @@ function create_material(): THREE.MeshStandardMaterial {
   // Material.customProgramCacheKey() defaults to "" — WebGLPrograms' cache
   // key is built only from the defines/parameters three.js itself tracks,
   // never from onBeforeCompile's own identity or its string output. Terrain
-  // and object meshes now compile the exact same injected shader (no more
-  // with_rim branch), so sharing one cached WebGLProgram between them is
-  // correct rather than the stale-cache bug this key used to guard against
-  // when their shaders still differed.
-  material.customProgramCacheKey = () => "chunk-instance";
+  // and object cubes now bake into one merged mesh and compile the exact
+  // same injected shader, so sharing one cached WebGLProgram across every
+  // chunk mesh is correct.
+  material.customProgramCacheKey = () => "chunk-mesh";
   material.onBeforeCompile = (shader) => {
-    inject_instance_shader(shader);
+    inject_chunk_shader(shader);
     shader.uniforms.u_low_spec.value = useSettingsStore.getState().low_spec;
     shader.uniforms.u_rim_intensity.value = useSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
     material.userData.shader = shader;
@@ -396,19 +415,21 @@ function create_material(): THREE.MeshStandardMaterial {
   return material;
 }
 
-type ChunkInstanceMeshProps = {
+type ChunkMeshProps = {
   built: BuiltChunkMesh;
   role: ChunkLodRole;
-  base: THREE.BoxGeometry;
   low_spec: boolean;
   show_rim_light: boolean;
   registry: ChunkMeshRegistry;
 };
 
-const ChunkInstanceMesh = memo(({ built, role, base, low_spec, show_rim_light, registry }: ChunkInstanceMeshProps) => {
+/** One real, non-instanced THREE.Mesh per chunk per LOD role — every cube
+ * (terrain and solid objects alike) baked directly into its own geometry
+ * (chunk_mesher.ts), not a shared box restyled per instance. */
+const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: ChunkMeshProps) => {
   const material = useMemo(() => create_material(), []);
   const mesh = useMemo(() => {
-    const m = new THREE.InstancedMesh(base.clone() as THREE.BufferGeometry, material, 1);
+    const m = new THREE.Mesh(new THREE.BufferGeometry(), material);
     // Unconditional: real cost is gated at the renderer level by Canvas's
     // own `shadows` prop (scene.tsx, driven by app/settings/settings_store.ts's
     // show_shadow_map) — three.js doesn't compile any shadow-map shader
@@ -417,7 +438,7 @@ const ChunkInstanceMesh = memo(({ built, role, base, low_spec, show_rim_light, r
     m.castShadow = true;
     m.receiveShadow = true;
     return m;
-  }, [base, material]);
+  }, [material]);
 
   useEffect(() => () => {
     const t0 = import.meta.env.DEV ? performance.now() : 0;
@@ -442,63 +463,72 @@ const ChunkInstanceMesh = memo(({ built, role, base, low_spec, show_rim_light, r
   useLayoutEffect(() => {
     const mount_t0 = import.meta.env.DEV ? performance.now() : 0;
     const previous_geometry = mesh.geometry;
-    const geometry = create_geometry(built, base);
+    const geometry = create_geometry(built);
     mesh.geometry = geometry;
     previous_geometry.dispose();
-    mesh.instanceMatrix = new THREE.InstancedBufferAttribute(built.matrices, 16);
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.count = built.cnt;
-    mesh.visible = built.cnt > 0;
+    mesh.visible = built.vertex_cnt > 0;
     built.visibility.fill(role === "primary" ? 1 : 0);
-    // Not mesh.computeBoundingBox()/computeBoundingSphere(): those walk
-    // every instance through three.js's generic (rotation-capable)
-    // transform, real cost on a chunk rebuild storm (profiled). Every box
-    // this mesher emits is axis-aligned scale+translation only
-    // (write_scale_translation's own contract), so mesh_bounds's direct
-    // min/max scan is exact and far cheaper — same math chunk_bounds
-    // already uses for the whole layout, just per mesh here.
+    // Not geometry.computeBoundingBox()/computeBoundingSphere(): those walk
+    // every vertex through three.js's own generic accumulation, real cost on
+    // a chunk rebuild storm (profiled, back when this walked per-instance —
+    // still true per-vertex). mesh_bounds's direct min/max scan over the
+    // already-baked real positions is exact and far cheaper — same math
+    // chunk_bounds already uses for the whole layout, just per mesh here.
+    // A plain (non-Instanced) Mesh has no bounding fields of its own — those
+    // live on the geometry, unlike InstancedMesh's own instance-level ones.
     const bounds = mesh_bounds(built);
     if (bounds) {
-      mesh.boundingBox = new THREE.Box3(
+      geometry.boundingBox = new THREE.Box3(
         new THREE.Vector3(bounds.min_x, bounds.min_y, bounds.min_z),
         new THREE.Vector3(bounds.max_x, bounds.max_y, bounds.max_z),
       );
-      const center = mesh.boundingBox.getCenter(new THREE.Vector3());
-      mesh.boundingSphere = new THREE.Sphere(center, center.distanceTo(mesh.boundingBox.max));
+      const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+      geometry.boundingSphere = new THREE.Sphere(center, center.distanceTo(geometry.boundingBox.max));
     } else {
-      mesh.boundingBox = new THREE.Box3();
-      mesh.boundingSphere = new THREE.Sphere();
+      geometry.boundingBox = new THREE.Box3();
+      geometry.boundingSphere = new THREE.Sphere();
     }
-    const attribute = geometry.getAttribute(INSTANCE_VISIBLE_ATTR);
+    const attribute = geometry.getAttribute(VISIBLE_ATTR);
     if (import.meta.env.DEV) {
       const mount_ms = performance.now() - mount_t0;
       mesh_mount_stats.total_ms += mount_ms;
       mesh_mount_stats.count++;
       mesh_mount_stats.max_ms = Math.max(mesh_mount_stats.max_ms, mount_ms);
     }
-    if (!(attribute instanceof THREE.InstancedBufferAttribute)) return;
+    if (!(attribute instanceof THREE.BufferAttribute)) return;
     attribute.needsUpdate = true;
     const mounted = { built, role, attribute };
     registry.meshes.add(mounted);
     return () => void registry.meshes.delete(mounted);
-  }, [base, built, mesh, registry, role]);
+  }, [built, mesh, registry, role]);
 
   return <primitive object={mesh} />;
 });
-ChunkInstanceMesh.displayName = "ChunkInstanceMesh";
+ChunkMesh.displayName = "ChunkMesh";
+
+/** One built (primary/secondary cube buckets, decor) result — build_ref's
+ * own return shape, named so both that ref's type and every call site can
+ * say it once. `decor` is keyed by the SAME index/order as the `bundle_assets`
+ * prop (one entry per bundle, each itself one entry per that bundle's own
+ * variant) — always the primary tier's own density, never a secondary/blend
+ * pair (decor never blends between tiers — see decor_layer.tsx's own
+ * DECOR_DENSITY_BY_LOD_STEP doc comment). */
+type ChunkBuild = { buckets: BuiltChunkBucket[]; decor: ModelInstanceTransformList[][] };
 
 type LodLayout = {
   primary: LodStep;
   secondary: LodStep | null;
   buckets: BuiltChunkBucket[];
+  decor: ModelInstanceTransformList[][];
   bounds: ChunkBounds | null;
   ready: boolean;
 };
 
-// Exported: chunk_stage.tsx's Chunk and decor_layer.tsx's ChunkDecor are
-// equal registrants in one shared scheduler (see LodSchedulerProvider below)
-// — a chunk-shaped thing's own recheck/commit shape, not something owned by
-// terrain specifically, even though this file is still where it's defined.
+// Exported for reference, though Chunk is the only implementation now —
+// decor_layer.tsx's own ChunkDecor (a separate, independently-scheduled
+// registrant) was retired 2026-09-05 once Chunk absorbed decor's own build
+// into its own commit() (see this file's own LodSchedulerProvider doc
+// comment and decor_layer.tsx's top doc comment for the fuller account).
 export type ChunkLodControl = {
   blend_active: boolean;
   settling: boolean;
@@ -514,7 +544,7 @@ const LodSchedulerContext = createContext<LodSchedulerRegistry | null>(null);
 
 export function use_lod_scheduler(): LodSchedulerRegistry {
   const scheduler = useContext(LodSchedulerContext);
-  if (!scheduler) throw new Error("Chunk/ChunkDecor must be mounted under LodSchedulerProvider");
+  if (!scheduler) throw new Error("Chunk must be mounted under LodSchedulerProvider");
   return scheduler;
 }
 
@@ -527,9 +557,9 @@ function blend_hash(key: string): f64 {
   return (hash >>> 0) / 0x1_0000_0000;
 }
 
-type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack };
+type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack; bundle_assets: readonly DecorBundleAssets[] };
 
-const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
+const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   const low_spec = useSettingsStore((state) => state.low_spec);
   const show_rim_light = useSettingsStore((state) => state.show_rim_light);
   const show_structures = useSettingsStore((state) => state.show_structures);
@@ -567,9 +597,16 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
   // scan and build costs vary independently (scan tracks band count, build
   // tracks total run count).
   const build_deferred_ref = useRef(false);
+  // Decor's own build result per LOD step — populated in lockstep with
+  // bucket_cache_ref below (same missing steps, same branch, same clear
+  // points), never independently, so the two caches can never disagree
+  // about which steps are actually built. Keyed by lod_step alone (not
+  // primary/secondary) since decor never blends between tiers — only ever
+  // needs whichever step is currently `primary`.
+  const decor_cache_ref = useRef(new Map<LodStep, ModelInstanceTransformList[][]>());
   // null return means "a needed scan was just deferred, not built yet" —
-  // distinct from an empty array (built, genuinely nothing to draw).
-  const build_ref = useRef<(primary: LodStep, secondary: LodStep | null) => BuiltChunkBucket[] | null>(() => []);
+  // distinct from an empty result (built, genuinely nothing to draw).
+  const build_ref = useRef<(primary: LodStep, secondary: LodStep | null) => ChunkBuild | null>(() => ({ buckets: [], decor: [] }));
   build_ref.current = (primary, secondary) => {
     const steps = secondary === null || secondary === primary ? [primary] : [primary, secondary];
     const missing = steps.filter((step) => !bucket_cache_ref.current.has(step));
@@ -632,6 +669,11 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
         const build_t0 = performance.now();
         for (const step of missing) {
           bucket_cache_ref.current.set(step, build_chunk_bucket(column_runs, step, "primary"));
+          // Decor's own build, right alongside cube content's — this is the
+          // literal "one build step" fix: decor for this chunk can never be
+          // committed without the cube content it sits on also having just
+          // been (re)built for the exact same step.
+          decor_cache_ref.current.set(step, bundle_assets.map(({ bundle }) => build_decor_instances(tile, step, page_idx, offset.base_x, offset.base_y, bundle)));
         }
         const build_ms = performance.now() - build_t0;
         lod_build_stats.build_ms += build_ms;
@@ -650,7 +692,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
     // bucket_cache_ref is only actually cleared on frustum-exit or a source
     // revision change (below), at most LOD_STEP_BY_LEVEL.length (7) small
     // entries retained per chunk — cheap next to column_runs_ref.
-    return steps
+    const buckets = steps
       .map((step) => bucket_cache_ref.current.get(step))
       .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
       .map((bucket) => ({
@@ -658,6 +700,12 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
         role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole,
       }))
       .sort((a, b) => a.lod_step - b.lod_step);
+
+    // Same "populated together, so always present together" invariant as
+    // bucket_cache_ref above — this fallback is defensive, not an expected
+    // path (see decor_cache_ref's own doc comment).
+    const decor = decor_cache_ref.current.get(primary) ?? bundle_assets.map(() => []);
+    return { buckets, decor };
   };
 
   const initial_view = useMemo(
@@ -667,20 +715,21 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
 
   const [layout, set_layout] = useState<LodLayout>(() => {
     if (!initial_view.in_frustum) {
-      return { primary: 64, secondary: null, buckets: [], bounds: null, ready: false };
+      return { primary: 64, secondary: null, buckets: [], decor: [], bounds: null, ready: false };
     }
-    const buckets = build_ref.current(initial_view.lod_step, null);
-    if (buckets === null) {
+    const built = build_ref.current(initial_view.lod_step, null);
+    if (built === null) {
       // Scan deferred on the very first build — start not-ready (same
       // shape as an out-of-frustum chunk) so the first recheck() sets
       // pending and retries, instead of rendering nothing forever.
-      return { primary: initial_view.lod_step, secondary: null, buckets: [], bounds: null, ready: false };
+      return { primary: initial_view.lod_step, secondary: null, buckets: [], decor: [], bounds: null, ready: false };
     }
     const initial: LodLayout = {
       primary: initial_view.lod_step,
       secondary: null,
-      buckets,
-      bounds: chunk_bounds(buckets),
+      buckets: built.buckets,
+      decor: built.decor,
+      bounds: chunk_bounds(built.buckets),
       ready: true,
     };
     return initial;
@@ -705,6 +754,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
     source_ref.current = { tile, objects_revision, show_structures };
     const current = layout_ref.current;
     bucket_cache_ref.current.clear();
+    decor_cache_ref.current.clear();
     column_runs_ref.current = null;
     if (!current.ready) {
       if (current.bounds !== null) {
@@ -714,8 +764,8 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
       }
       return;
     }
-    const buckets = build_ref.current(current.primary, current.secondary);
-    if (buckets === null) {
+    const built = build_ref.current(current.primary, current.secondary);
+    if (built === null) {
       // Deferred — keep whatever's currently showing, just mark not-ready
       // so the next recheck() sets pending and retries.
       if (current.ready) {
@@ -725,7 +775,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
       }
       return;
     }
-    const next = { ...current, buckets, bounds: chunk_bounds(buckets), ready: true };
+    const next = { ...current, buckets: built.buckets, decor: built.decor, bounds: chunk_bounds(built.buckets), ready: true };
     layout_ref.current = next;
     set_layout(next);
   }, [tile, objects_revision, show_structures]);
@@ -785,6 +835,9 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
           for (const step of bucket_cache_ref.current.keys()) {
             if (step !== 64) bucket_cache_ref.current.delete(step);
           }
+          for (const step of decor_cache_ref.current.keys()) {
+            if (step !== 64) decor_cache_ref.current.delete(step);
+          }
           apply_visibility(registry, { primary: true, secondary: false });
           return;
         }
@@ -816,6 +869,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
         if (!this.pending) return false;
         if (!this.in_frustum) {
           bucket_cache_ref.current.clear();
+          decor_cache_ref.current.clear();
           column_runs_ref.current = null;
           // Keep the tiny measured AABB after releasing GPU/surface data so a
           // later polar change can re-enter using real geometry, not z=0.
@@ -823,6 +877,7 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
             primary: 64,
             secondary: null,
             buckets: [],
+            decor: [],
             bounds: layout_ref.current.bounds,
             ready: false,
           };
@@ -833,25 +888,26 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
         }
         const desired = desired_ref.current;
         const build_t0 = import.meta.env.DEV ? performance.now() : 0;
-        const buckets = build_ref.current(desired.primary, desired.secondary);
+        const built = build_ref.current(desired.primary, desired.secondary);
         if (import.meta.env.DEV) {
           commit_step_stats.build_ms_max = Math.max(commit_step_stats.build_ms_max, performance.now() - build_t0);
         }
-        if (buckets === null) {
+        if (built === null) {
           // A needed scan was deferred to a calmer frame — stay pending
           // (retried next tick) and leave whatever's currently on screen
           // alone rather than popping it to empty.
           return false;
         }
         const bounds_t0 = import.meta.env.DEV ? performance.now() : 0;
-        const bounds = chunk_bounds(buckets);
+        const bounds = chunk_bounds(built.buckets);
         if (import.meta.env.DEV) {
           commit_step_stats.bounds_ms_max = Math.max(commit_step_stats.bounds_ms_max, performance.now() - bounds_t0);
         }
         const next: LodLayout = {
           primary: desired.primary,
           secondary: desired.secondary,
-          buckets,
+          buckets: built.buckets,
+          decor: built.decor,
           bounds,
           ready: true,
         };
@@ -880,18 +936,39 @@ const Chunk = memo(({ page_idx, offset, stack }: ChunkProps) => {
     >
       {layout.buckets.map((bucket) => (
         <group key={bucket.role} name={`${bucket.role}/lod/${bucket.lod_step}`}>
-          {bucket.terrain.cnt > 0 && <ChunkInstanceMesh built={bucket.terrain} role={bucket.role} base={TERRAIN_BOX} low_spec={low_spec} show_rim_light={show_rim_light} registry={registry} />}
-          {bucket.objects.cnt > 0 && <ChunkInstanceMesh built={bucket.objects} role={bucket.role} base={OBJECT_BOX} low_spec={low_spec} show_rim_light={show_rim_light} registry={registry} />}
+          {bucket.cubes.vertex_cnt > 0 && <ChunkMesh built={bucket.cubes} role={bucket.role} low_spec={low_spec} show_rim_light={show_rim_light} registry={registry} />}
         </group>
       ))}
+      {
+        /* One coordinate convention for everything this chunk renders now:
+        build_decor_instances (decor_layer.tsx) returns chunk-local
+        positions, matching chunk_mesher.ts's own baked cube positions
+        exactly, so decor nests inside this same offset group instead of
+        needing its own separate, unoffset one. */
+      }
+      {bundle_assets.map(({ bundle, geometries, materials }, bi) => {
+        const by_variant = layout.decor[bi];
+        if (!by_variant) return null;
+        return (
+          <group key={bundle.seed.tag.toString()} name={`chunk-decor/${offset.key}/${bundle.seed.tag.toString()}`}>
+            {geometries.map((geometry, variant) => {
+              const material = materials[variant];
+              const instances = by_variant[variant];
+              return geometry && material && instances && instances.length > 0
+                ? <DecorVariantMesh key={variant} geometry={geometry} material={material} instances={instances} />
+                : null;
+            })}
+          </group>
+        );
+      })}
     </group>
   );
 });
 Chunk.displayName = "Chunk";
 
-type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec };
+type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec; bundle_assets: readonly DecorBundleAssets[] };
 
-const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => {
+const PageChunks = memo(({ page_idx, stack, range_anchor, bundle_assets }: PageChunksProps) => {
   const page_base = FROM_L3_IDX(page_idx);
   const offsets = useMemo(
     () => in_range_chunks(page_base, range_anchor),
@@ -900,7 +977,7 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
   return (
     <AnchorNode i={page_base}>
       <group name={`chunk-stage-page/${ivec.repr(page_idx)}`}>
-        {offsets.map((offset) => <Chunk key={offset.key} page_idx={page_idx} offset={offset} stack={stack} />)}
+        {offsets.map((offset) => <Chunk key={offset.key} page_idx={page_idx} offset={offset} stack={stack} bundle_assets={bundle_assets} />)}
       </group>
     </AnchorNode>
   );
@@ -908,15 +985,19 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
 PageChunks.displayName = "PageChunks";
 
 /**
- * Owns the one LodSchedulerRegistry chunk_stage.tsx's own Chunk and
- * decor_layer.tsx's ChunkDecor register into as equal ChunkLodControl
- * instances — mount above both (world.tsx) so terrain and decor compete for
- * the exact same per-frame recheck/commit budget instead of each running
- * (or, for decor previously, not running at all) their own. Everything
- * here — the registry, the frustum, the recheck/commit loop, the dev
- * stats — used to live inside ChunkStage itself, back when it was the only
- * registrant; none of it is terrain-specific, so it moved out rather than
- * ChunkStage keeping ownership of something it no longer exclusively uses.
+ * Owns the one LodSchedulerRegistry chunk_stage.tsx's own Chunk registers
+ * into as a ChunkLodControl — mounted once above ChunkStage (world.tsx).
+ * Chunk is the only registrant now: decor used to register its own separate
+ * ChunkDecor per (chunk, decor kind) here too, competing for this same
+ * budget as an independent component with its own `ready` state; as of
+ * 2026-09-05 Chunk builds decor alongside its own cube content in one
+ * commit() instead (see decor_layer.tsx's own top doc comment), so this
+ * registry now only ever holds one control per chunk position, not up to
+ * five. Everything here — the registry, the frustum, the recheck/commit
+ * loop, the dev stats — used to live inside ChunkStage itself, back when it
+ * was the only registrant; none of it is terrain-specific, so it moved out
+ * rather than ChunkStage keeping ownership of something it no longer
+ * exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set(), ready: new Set() }), []);
@@ -1072,11 +1153,18 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   return <LodSchedulerContext.Provider value={scheduler}>{children}</LodSchedulerContext.Provider>;
 }
 
-export type ChunkStageProps = { stack: WorldLayerStack };
+export type ChunkStageProps = { stack: WorldLayerStack; decor_bundles: readonly DecorKindBundle[] };
 
-export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
+/** Renders terrain/objects AND every decor kind together — see this file's
+ * own top doc comment and decor_layer.tsx's for why decor no longer has its
+ * own top-level component (DecorLayer, retired 2026-09-05). `decor_bundles`
+ * should be a stable (module-level) reference — see world.tsx's own
+ * DECOR_BUNDLES — useAllDecorBundleAssets relies on that to avoid
+ * needlessly re-slicing its own already-loaded assets every render. */
+export const ChunkStage = memo(({ stack, decor_bundles }: ChunkStageProps) => {
   const map_center = useMapStore((state) => state.map_center);
   const tile_map = useTileStore((state) => state.tile_map);
+  const bundle_assets = useAllDecorBundleAssets(decor_bundles);
 
   const center_page_idx = map_center === null ? null : L3_IDX(map_center.i);
   const center_page_key = center_page_idx?.toString() ?? null;
@@ -1101,7 +1189,9 @@ export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
   if (range_anchor === null) return null;
   return (
     <group name="chunk-stage">
-      {visible_pages.map((page_idx) => <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />)}
+      {visible_pages.map((page_idx) => (
+        <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} bundle_assets={bundle_assets} />
+      ))}
     </group>
   );
 });

@@ -147,6 +147,13 @@ export type ModelInstanceTransform = {
    * every glTF asset here is Y-up by spec. */
   rotation_z: f64;
   scale: f64;
+  /** This instance's own objects/store.ts leaf id, or null for a procedural
+   * (scatter.ts-derived, never-stored) placement — decor_hit.ts's own
+   * raycast_decor uses this to resolve a real mesh hit's own faceIndex back
+   * to a selectable/erasable entry, and to tell a procedural placement
+   * apart from one (it has no id, so it stays transparent to hit-testing,
+   * exactly as it always has been). */
+  id: string | null;
 };
 
 const Y_UP_TO_Z_UP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
@@ -155,14 +162,49 @@ const _quaternion = new THREE.Quaternion();
 const _z_spin = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 
-/** Bakes the Y-up -> Z-up axis fix directly into the instance matrix — an
- * InstancedMesh's own instances are flat matrices, not nested Object3Ds, so
- * there's no separate wrapper-group to hold this the way
- * use_character_model.ts's up_axis_fix Group does for a single companion. */
+/** Bakes the Y-up -> Z-up axis fix directly into the instance matrix — a
+ * merged/baked mesh's own instances are real, separately-transformed vertex
+ * copies, not nested Object3Ds, so there's no separate wrapper-group to hold
+ * this the way use_character_model.ts's up_axis_fix Group does for a single
+ * companion. */
 export function compose_instance_matrix(out: THREE.Matrix4, transform: ModelInstanceTransform): THREE.Matrix4 {
   _position.set(transform.position[0], transform.position[1], transform.position[2]);
   _z_spin.setFromAxisAngle(new THREE.Vector3(0, 0, 1), transform.rotation_z);
   _quaternion.copy(_z_spin).multiply(Y_UP_TO_Z_UP);
   _scale.setScalar(transform.scale);
   return out.compose(_position, _quaternion, _scale);
+}
+
+/**
+ * Bakes every one of `instances`' own real, separately-transformed copies
+ * of `geometry` into one merged BufferGeometry — the same "each block
+ * contributes its own real geometry into one merged per-chunk buffer"
+ * baking model chunk_mesher.ts's own cube bake uses, not a shared primitive
+ * restyled per instance (what an InstancedMesh would do instead). Returns
+ * null for zero instances — callers already gate mounting on a nonempty
+ * instance list (decor_layer.tsx's ChunkDecor), so this is a defensive
+ * fallback, not an expected path.
+ *
+ * `BufferGeometry.applyMatrix4` (not chunk_mesher.ts's own hand-rolled
+ * position math) does the real transform work here: unlike that module's
+ * own boxes, whose normals are always axis-aligned under a diagonal-only
+ * scale (so direction survives untouched — see that module's own doc
+ * comment), an arbitrary GLB's normals have no such guarantee, and
+ * three.js's own applyMatrix4 already applies the correct inverse-transpose
+ * normal-matrix correction for a general transform.
+ */
+export function bake_decor_instances(geometry: THREE.BufferGeometry, instances: readonly ModelInstanceTransform[]): THREE.BufferGeometry | null {
+  if (instances.length === 0) return null;
+  const scratch = new THREE.Matrix4();
+  const clones: THREE.BufferGeometry[] = [];
+  for (const instance of instances) {
+    compose_instance_matrix(scratch, instance);
+    const clone = geometry.clone();
+    clone.applyMatrix4(scratch);
+    clones.push(clone);
+  }
+  const merged = clones.length === 1 ? clones[0] : mergeBufferGeometries(clones, false);
+  if (clones.length > 1) { for (const clone of clones) clone.dispose(); }
+  merged?.computeBoundingSphere();
+  return merged;
 }
