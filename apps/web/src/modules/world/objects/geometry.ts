@@ -5,7 +5,7 @@ import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mo
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { local_world_to_canonical } from "@/modules/world/frame/coord.ts";
-import type { PlacedObject } from "./store.ts";
+import type { OccupiedEntry } from "./store.ts";
 
 /**
  * obj.i/f is this object's corner (min-x, min-y, min-z) — the same
@@ -14,19 +14,19 @@ import type { PlacedObject } from "./store.ts";
  * map_origin-relative real units, the same low-magnitude space AnchorNode's
  * own local_pos and camera/ray.ts's terrain raycast already operate in.
  */
-export function object_local_corner(obj: Pick<PlacedObject, "i" | "f">, map_origin: IVec): V3 {
+export function object_local_corner(obj: Pick<OccupiedEntry, "i" | "f">, map_origin: IVec): V3 {
   const local: PVF3 = { i: ivec.sub(obj.i, map_origin), f: obj.f };
   return [pvf3.to_real(pvf3.X(local)), pvf3.to_real(pvf3.Y(local)), pvf3.to_real(pvf3.Z(local))];
 }
 
 export type AABB = { min: V3; max: V3 };
 
-export function object_aabb(obj: PlacedObject, map_origin: IVec): AABB {
+export function object_aabb(obj: OccupiedEntry, map_origin: IVec): AABB {
   return corner_aabb(obj, obj.size, map_origin);
 }
 
-/** Same box shape object_aabb produces, for a candidate corner+size that isn't (yet) a stored PlacedObject — e.g. a placement/overlap check before committing. */
-export function corner_aabb(corner: Pick<PlacedObject, "i" | "f">, size: f64, map_origin: IVec): AABB {
+/** Same box shape object_aabb produces, for a candidate corner+size that isn't (yet) a stored OccupiedEntry — e.g. a placement/overlap check before committing. */
+export function corner_aabb(corner: Pick<OccupiedEntry, "i" | "f">, size: f64, map_origin: IVec): AABB {
   const min = object_local_corner(corner, map_origin);
   const max: V3 = [min[0] + size, min[1] + size, min[2] + size];
   return { min, max };
@@ -54,7 +54,7 @@ export function aabb_overlap(a: AABB, b: AABB): boolean {
 }
 
 /** This object's true center (corner + size/2 on every axis), as an absolute PVF3 — e.g. for recentering the map on an object rather than its corner. */
-export function object_center(obj: PlacedObject, map_origin: IVec): PVF3 {
+export function object_center(obj: OccupiedEntry, map_origin: IVec): PVF3 {
   const corner = object_local_corner(obj, map_origin);
   const half = obj.size / 2;
   const center: V3 = [corner[0] + half, corner[1] + half, corner[2] + half];

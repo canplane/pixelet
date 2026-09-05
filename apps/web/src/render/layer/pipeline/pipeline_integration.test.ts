@@ -4,7 +4,7 @@ import { assertEquals } from "@std/assert";
 import * as THREE from "three";
 
 import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, MaterialClass, NO_LAYER, set_chunk_voxel } from "./volume.ts";
-import { build_chunk_instances, type BuiltChunk } from "./chunk_mesher.ts";
+import { bake_chunk_mesh, type BakedChunkMesh } from "./chunk_mesher.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { composite_chunk_layers } from "./compositor.ts";
 import { ray_hit_chunk } from "./chunk_raycast.ts";
@@ -14,18 +14,39 @@ const KEY: ChunkKey = { page_idx: 0n, page_off: 0n };
 const LAND = { material_class: MaterialClass.LAND, r: 10, g: 20, b: 30, layer_idx: NO_LAYER } as const;
 const OBJECT = { material_class: MaterialClass.OBJECT, r: 200, g: 100, b: 50, layer_idx: NO_LAYER } as const;
 
-function bounds_of(built: BuiltChunk): { box: THREE.Box3; sphere: THREE.Sphere } {
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const material = new THREE.MeshBasicMaterial();
-  const mesh = new THREE.InstancedMesh(geometry, material, built.cnt);
-  mesh.instanceMatrix = new THREE.InstancedBufferAttribute(built.matrices, 16);
-  mesh.computeBoundingBox();
-  mesh.computeBoundingSphere();
-  const box = mesh.boundingBox!.clone();
-  const sphere = mesh.boundingSphere!.clone();
+/** Real bounding box/sphere off a baked mesh's own vertex positions — same
+ * attribute wiring chunk_stage.tsx's own create_geometry does. */
+function bounds_of(built: BakedChunkMesh): { box: THREE.Box3; sphere: THREE.Sphere } {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(built.position, 3));
+  geometry.setIndex(new THREE.BufferAttribute(built.index, 1));
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  const box = geometry.boundingBox!.clone();
+  const sphere = geometry.boundingSphere!.clone();
   geometry.dispose();
-  material.dispose();
   return { box, sphere };
+}
+
+/** Splits one bake_chunk_mesh output back into its terrain-only vs
+ * object-only vertex ranges, purely from each vertex's own baked face
+ * count (open-bottom terrain boxes bake 20 vertices, full object boxes
+ * bake 24) — this test scenario only ever has one box of each, so a single
+ * split point (the terrain box's own 20 vertices) is unambiguous. */
+function split_terrain_and_object(built: BakedChunkMesh, terrain_vertex_cnt: number): { terrain: BakedChunkMesh; object: BakedChunkMesh } {
+  function slice(from: number, to: number): BakedChunkMesh {
+    return {
+      vertex_cnt: to - from,
+      position: built.position.slice(from * 3, to * 3),
+      normal: built.normal.slice(from * 3, to * 3),
+      local_pos: built.local_pos.slice(from * 3, to * 3),
+      box_scale: built.box_scale.slice(from * 3, to * 3),
+      rgb: built.rgb.slice(from * 3, to * 3),
+      layer_taps: built.layer_taps.slice(from * 4, to * 4),
+      index: new Uint32Array(0),
+    };
+  }
+  return { terrain: slice(0, terrain_vertex_cnt), object: slice(terrain_vertex_cnt, built.vertex_cnt) };
 }
 
 Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast share exact boxes", () => {
@@ -52,16 +73,22 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
 
   // scan_all_column_runs (see voxel_scan.ts) is the shared entry point
   // build_chunk_bucket/chunk_stage.tsx use — one full-chunk scan, reused
-  // across LOD builds, instead of build_chunk_instances touching the
-  // volume itself.
+  // across LOD builds, instead of bake_chunk_mesh touching the volume
+  // itself.
   const column_runs = scan_all_column_runs(volume);
-  const built = build_chunk_instances(column_runs, 1);
-  assertEquals([built.terrain.cnt, built.objects.cnt], [1, 1]);
-  assertEquals(Array.from(built.terrain.matrices.slice(12, 15)), [2.5, 3.5, 0.5]);
-  assertEquals(Array.from(built.objects.matrices.slice(12, 15)), [2.5, 3.75, 21]);
+  const built = bake_chunk_mesh(column_runs, 1);
+  // One open-bottom terrain box (20 verts) + one full object box (24 verts,
+  // OBJECT-class runs always keep their bottom face) — both merged into
+  // this one baked mesh, terrain first (its column run is pushed to this
+  // column's own run list before the object's, since it's encountered at a
+  // lower Z during merge_column_runs' own forward scan).
+  assertEquals(built.vertex_cnt, 20 + 24);
+  const split = split_terrain_and_object(built, 20);
 
-  const terrain_bounds = bounds_of(built.terrain);
-  const object_bounds = bounds_of(built.objects);
+  const terrain_bounds = bounds_of(split.terrain);
+  const object_bounds = bounds_of(split.object);
+  assertEquals(terrain_bounds.box.getCenter(new THREE.Vector3()).toArray(), [2.5, 3.5, 0.5]);
+  assertEquals(object_bounds.box.getCenter(new THREE.Vector3()).toArray(), [2.5, 3.75, 21]);
   assertEquals(terrain_bounds.box.min.toArray(), [2, 3, -18]);
   assertEquals(terrain_bounds.box.max.toArray(), [3, 4, 19]);
   assertEquals(object_bounds.box.min.toArray(), [2.25, 3.5, 20.75]);

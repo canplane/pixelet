@@ -6,7 +6,7 @@ import { useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
-import { projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { type IVec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
@@ -17,9 +17,10 @@ import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 import { get_local_world_origin } from "@/modules/world/frame/coord.ts";
 import { find_overlapping_object } from "@/modules/world/objects/collision.ts";
 import { object_aabb, object_center } from "@/modules/world/objects/geometry.ts";
-import { MaterialClass } from "@/render/layer/pipeline/volume.ts";
-import { get_placed_object, place, remove } from "@/modules/world/objects/store.ts";
-import { ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3 } from "./ray.ts";
+import { DECOR_SIZE } from "@/modules/world/objects/size.ts";
+import { get_placed_object, type OccupiedEntry, place, place_decor, remove } from "@/modules/world/objects/store.ts";
+import { raycast_decor } from "@/modules/world/decor/decor_hit.ts";
+import { ray_pick, resolve_hit_object, type WorldHit, world_adjacent_corner, world_hover_pvf3 } from "./ray.ts";
 import { CameraStatus, useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
 
@@ -47,13 +48,36 @@ const $ray = new THREE.Ray();
 const $pointer = new THREE.Vector2();
 
 /**
+ * Which OccupiedEntry `hit` actually struck, decor included — tries a real
+ * mesh raycast against baked decor first (decor_hit.ts's raycast_decor,
+ * bounded by hit.t: decor sitting on solid ground can only be the right
+ * answer when it's genuinely closer along the ray than whatever the
+ * abstract voxel raycast already found there), falling back to
+ * ray.ts's own solid-object AABB resolution otherwise. Split out of
+ * ray.ts itself because only this module holds the live THREE.Raycaster
+ * (`raycaster`, from useThree()) a real mesh intersection test needs —
+ * ray.ts's own raycast is deliberately THREE-free (chunk_raycast.ts's own
+ * doc comment), so wiring a scene-graph raycast into it would mean
+ * threading a THREE.Raycaster through a module that otherwise never
+ * imports three's runtime types at all.
+ */
+function resolve_hit_target(raycaster: THREE.Raycaster, hit: WorldHit, map_origin: IVec): OccupiedEntry | null {
+  const decor_id = raycast_decor(raycaster, hit.t);
+  if (decor_id) {
+    const decor = get_placed_object(decor_id);
+    if (decor) return decor;
+  }
+  return resolve_hit_object(hit, map_origin);
+}
+
+/**
  * What a non-drag tap on the terrain means — recenter the map (pointer
  * tool), place a cube (object tool), or remove one (eraser tool). Shared by
  * both tap-detection sites below (mouse pointerup, touch's
  * drop-to-zero-fingers branch).
  */
 function handle_tap(hovered: PVF3): void {
-  const { activeTool, object_color_id, object_size } = useUiStore.getState();
+  const { activeTool, object_color_id, object_size, decor_id } = useUiStore.getState();
 
   if (activeTool === "pointer") {
     // hovering an object recenters on its actual middle — real height
@@ -87,13 +111,22 @@ function handle_tap(hovered: PVF3): void {
     return;
   }
 
-  // activeTool === "object" — `hovered` is already either a terrain corner
-  // or, when the cursor is over an existing object, the corner flush against
-  // whichever face was struck (adjacent_corner() in update_hover()). Still
-  // guard against that candidate slot itself already being occupied (e.g.
-  // something else placed in the same spot since the last hover update).
+  // activeTool === "object" | "decor" — `hovered` is already either a
+  // terrain corner or, when the cursor is over an existing object, the
+  // corner flush against whichever face was struck (adjacent_corner() in
+  // update_hover()). Still guard against that candidate slot itself already
+  // being occupied (e.g. something else placed in the same spot since the
+  // last hover update).
   const map_center = useMapStore.getState().map_center;
   const map_origin = get_local_world_origin(map_center);
+
+  if (activeTool === "decor") {
+    if (!find_overlapping_object(hovered, DECOR_SIZE, map_origin)) {
+      place_decor(hovered.i, hovered.f, DECOR_SIZE, decor_id);
+    }
+    return;
+  }
+
   if (!find_overlapping_object(hovered, object_size, map_origin)) {
     place(hovered.i, hovered.f, object_size, object_color_id);
   }
@@ -556,12 +589,14 @@ export function CameraInput() {
     }
     const { hit } = pick;
 
-    if (activeTool === "object") {
-      // the one tool that wants an ADJACENT empty slot, not the struck
-      // surface itself.
+    if (activeTool === "object" || activeTool === "decor") {
+      // the one tool group that wants an ADJACENT empty slot, not the
+      // struck surface itself. Decor always places at its own fixed
+      // DECOR_SIZE, never the object tool's own adjustable object_size.
       set_hovered_object_id(null);
+      const placement_size = activeTool === "decor" ? DECOR_SIZE : object_size;
 
-      // When the struck thing is a real, known PlacedObject, hand
+      // When the struck thing is a real, known OccupiedEntry, hand
       // world_adjacent_corner its exact stored AABB instead of letting it
       // fall back to hit's own box_min/box_max — those come back through
       // the u8-packed sub_cell payload (voxel.ts), accurate to only
@@ -569,17 +604,19 @@ export function CameraInput() {
       // silently drift (see world_adjacent_corner's own doc comment on
       // precise_box). Terrain/no-resolved-object hits have no more precise
       // source, so this is null and world_adjacent_corner uses hit's own
-      // box as before.
-      const struck_object = hit.material_class === MaterialClass.OBJECT ? resolve_hit_object(hit, map_origin) : null;
+      // box as before. resolve_hit_target also resolves a real mesh hit
+      // against baked decor (decor_hit.ts) — see that function's own doc
+      // comment.
+      const struck_object = resolve_hit_target(raycaster, hit, map_origin);
       const precise_box = struck_object ? object_aabb(struck_object, map_origin) : undefined;
 
-      set_hovered_coord(world_adjacent_corner(hit, object_size, map_origin, precise_box));
+      set_hovered_coord(world_adjacent_corner(hit, placement_size, map_origin, precise_box));
       return;
     }
 
     // pointer (recenter on it) and eraser (remove it) both target the
     // struck thing itself, not an adjacent slot.
-    const struck_object = resolve_hit_object(hit, map_origin);
+    const struck_object = resolve_hit_target(raycaster, hit, map_origin);
     set_hovered_object_id(struck_object?.id ?? null);
     if (struck_object) {
       set_hovered_coord({ i: struck_object.i, f: struck_object.f });

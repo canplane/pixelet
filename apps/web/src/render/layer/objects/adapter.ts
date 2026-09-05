@@ -57,6 +57,11 @@ export class ObjectWorldLayer implements WorldLayer {
     let any = false;
 
     for (const obj of objects) {
+      // Decor (a user-placed tree, say) never paints a voxel of its own —
+      // it renders as decor_layer.tsx's own separate instanced GLB geometry,
+      // not a chunk_mesher.ts box, and has no color_id to paint with anyway.
+      if (obj.kind === "decor") continue;
+
       const [local_x, local_y, base_z_real] = object_local_xyz(obj, chunk_origin);
       const is_sub_cell = obj.size < U_PER_CELL;
       const cx0 = is_sub_cell ? Math.max(0, Math.floor(local_x / U_PER_CELL)) : Math.max(0, Math.round(local_x / U_PER_CELL));

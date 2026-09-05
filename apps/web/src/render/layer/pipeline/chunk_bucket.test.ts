@@ -6,8 +6,20 @@ import * as THREE from "three";
 import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, release_chunk_volume } from "./volume.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { build_chunk_bucket, build_chunk_buckets, chunk_bounds } from "./chunk_bucket.ts";
+import type { BakedChunkMesh } from "./chunk_mesher.ts";
 
 const LAND = { material_class: MaterialClass.LAND, r: 10, g: 20, b: 30, layer_idx: NO_LAYER } as const;
+
+/** Builds a real, renderer-facing BufferGeometry from one baked mesh — the
+ * same attribute wiring chunk_stage.tsx's own create_geometry does — so a
+ * test can hand it to THREE's own frustum/bounding-volume machinery, same
+ * as this file always has. */
+function geometry_of(built: BakedChunkMesh): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(built.position, 3));
+  geo.setIndex(new THREE.BufferAttribute(built.index, 1));
+  return geo;
+}
 
 Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
   const volume = alloc_chunk_volume();
@@ -17,10 +29,9 @@ Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
 
   const buckets = build_chunk_buckets(column_runs, 1, null);
   assertEquals(buckets.map((bucket) => bucket.lod_step), [1]);
-  assertEquals(buckets[0].terrain.cnt, 2);
-  assertEquals(Array.from(buckets[0].terrain.matrices.slice(12, 15)), [1.5, 2.5, 0.5]);
-  assertEquals(Array.from(buckets[0].terrain.matrices.slice(28, 31)), [49.5, 2.5, 0.5]);
-  assertEquals(Array.from(buckets[0].terrain.visibility), [1, 1]);
+  // Two open-bottom (5-face) terrain boxes: 5*4 = 20 vertices each.
+  assertEquals(buckets[0].cubes.vertex_cnt, 40);
+  assertEquals(Array.from(buckets[0].cubes.visibility), new Array(40).fill(1));
   assertEquals(buckets.map((bucket) => bucket.role), ["primary"]);
   assertEquals(chunk_bounds(buckets), {
     min_x: 1,
@@ -31,14 +42,13 @@ Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
     max_z: 1,
   });
 
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  const geometry = geometry_of(buckets[0].cubes);
   const material = new THREE.MeshBasicMaterial();
-  const mesh = new THREE.InstancedMesh(geometry, material, buckets[0].terrain.cnt);
-  mesh.instanceMatrix = new THREE.InstancedBufferAttribute(buckets[0].terrain.matrices, 16);
-  mesh.computeBoundingBox();
-  mesh.computeBoundingSphere();
-  assertEquals(mesh.boundingBox!.min.toArray(), [1, 2, 0]);
-  assertEquals(mesh.boundingBox!.max.toArray(), [50, 3, 1]);
+  const mesh = new THREE.Mesh(geometry, material);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  assertEquals(geometry.boundingBox!.min.toArray(), [1, 2, 0]);
+  assertEquals(geometry.boundingBox!.max.toArray(), [50, 3, 1]);
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
   camera.position.set(25, 2.5, 80);
@@ -57,31 +67,27 @@ Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
   material.dispose();
 });
 
-Deno.test("chunk bucket - bounds include signed Z and object instances", () => {
+Deno.test("chunk bucket - bounds include signed Z and a second (e.g. object) bucket's own mesh", () => {
   const volume = alloc_chunk_volume();
   fill_chunk_column(volume, 4, 7, -70, -65, LAND);
   const column_runs = scan_all_column_runs(volume);
   const buckets = build_chunk_buckets(column_runs, 1, null);
-  const object = buckets[0].objects;
-  object.cnt = 1;
-  object.matrices = new Float32Array([
-    2,
-    0,
-    0,
-    0,
-    0,
-    4,
-    0,
-    0,
-    0,
-    0,
-    6,
-    0,
-    20,
-    30,
-    40,
-    1,
-  ]);
+
+  // Synthetic already-baked mesh spanning a known AABB, standing in for a
+  // real placed-object bake — chunk_bounds only ever reads position data,
+  // never material/kind, so this isolates its own aggregation from
+  // bake_chunk_mesh's real geometry.
+  const object_mesh: BakedChunkMesh = {
+    vertex_cnt: 2,
+    position: new Float32Array([20, 30, 40, 21, 32, 43]),
+    normal: new Float32Array(6),
+    local_pos: new Float32Array(6),
+    box_scale: new Float32Array(6),
+    rgb: new Float32Array(6),
+    layer_taps: new Float32Array(8),
+    index: new Uint32Array(0),
+  };
+  buckets.push({ lod_step: 1, role: "secondary", cubes: { ...object_mesh, visibility: new Float32Array(2).fill(1) } });
 
   assertEquals(chunk_bounds(buckets), {
     min_x: 4,
@@ -126,12 +132,12 @@ Deno.test("chunk bucket - a fully-covered coarse cell draws one unshrunk box per
   const column_runs = scan_all_column_runs(volume);
 
   const bucket = build_chunk_bucket(column_runs, 2, "primary");
-  assertEquals(bucket.terrain.cnt, 2);
-  const span = 2; // lod_step * U_PER_CELL
-  assertEquals(bucket.terrain.matrices[10], span); // full coverage -> no isotropic shrink
-  assertEquals(bucket.terrain.matrices[26], span);
-  assertEquals(Array.from(bucket.terrain.matrices.slice(12, 15)), [1, 1, 5]);
-  assertEquals(Array.from(bucket.terrain.matrices.slice(28, 31)), [49, 1, 5]);
+  // Two coarse boxes, each open-bottom (5 faces * 4 verts = 20).
+  assertEquals(bucket.cubes.vertex_cnt, 40);
+  const bounds = chunk_bounds([bucket]);
+  assert(bounds !== null);
+  assertEquals(bounds.min_z, 4);
+  assertEquals(bounds.max_z, 6); // span(2), full coverage -> no isotropic shrink
 });
 
 Deno.test("chunk bucket - a partially-covered coarse cell shrinks isotropically instead of vanishing", () => {
@@ -143,10 +149,13 @@ Deno.test("chunk bucket - a partially-covered coarse cell shrinks isotropically 
   const column_runs = scan_all_column_runs(volume);
 
   const bucket = build_chunk_bucket(column_runs, 2, "primary");
-  assertEquals(bucket.terrain.cnt, 1);
-  assertEquals(bucket.terrain.matrices[0], 1); // X scale: span(2) * cbrt(1/8)(0.5)
-  assertEquals(bucket.terrain.matrices[5], 1); // Y scale
-  assertEquals(bucket.terrain.matrices[10], 1); // Z scale — same factor, isotropic
+  assertEquals(bucket.cubes.vertex_cnt, 20); // one open-bottom coarse box
+  const bounds = chunk_bounds([bucket]);
+  assert(bounds !== null);
+  const size_x = bounds.max_x - bounds.min_x;
+  const size_z = bounds.max_z - bounds.min_z;
+  assertEquals(size_x, 1); // span(2) * cbrt(1/8)(0.5)
+  assertEquals(size_z, 1); // Z — same factor, isotropic
 });
 
 Deno.test("chunk bucket - column_runs survive the volume they were scanned from being released", () => {
@@ -156,9 +165,7 @@ Deno.test("chunk bucket - column_runs survive the volume they were scanned from 
   release_chunk_volume(volume);
 
   const bucket = build_chunk_bucket(column_runs, 2, "primary");
-  assertEquals(bucket.terrain.cnt, 1);
-  assertEquals(bucket.objects.cnt, 0);
+  assertEquals(bucket.cubes.vertex_cnt, 20);
   assertEquals(bucket.role, "primary");
-  assertEquals(Array.from(bucket.terrain.visibility), [1]);
-  assertEquals(Array.from(bucket.terrain.matrices.slice(12, 15)), [1, 1, 5]);
+  assertEquals(Array.from(bucket.cubes.visibility), new Array(20).fill(1));
 });

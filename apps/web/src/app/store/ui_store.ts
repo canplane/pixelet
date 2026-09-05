@@ -3,10 +3,10 @@
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import type { ObjectColorId, ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
 import { DEFAULT_OBJECT_SIZE } from "@/modules/world/objects/size.ts";
 
-export type ActiveTool = "pointer" | "object" | "eraser";
+export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 
 // ts (Date.now() at append) lets ChatBubble derive its own remaining show
 // time from wall-clock, not from when its own component happened to mount —
@@ -28,6 +28,9 @@ type UiState = {
   object_size: f64;
   set_object_size: (object_size: f64) => void;
 
+  decor_id: ObjectDecorId;
+  set_decor_id: (decor_id: ObjectDecorId) => void;
+
   chatLines: ChatLine[];
   append_chat_line: (text: string) => void;
 };
@@ -41,6 +44,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   object_size: DEFAULT_OBJECT_SIZE,
   set_object_size: (object_size) => set({ object_size }),
+
+  decor_id: "tree",
+  set_decor_id: (decor_id) => set({ decor_id }),
 
   chatLines: [],
   append_chat_line: (text) =>

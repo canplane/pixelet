@@ -47,11 +47,17 @@ import { DebugBox, DebugPoint, GyroRing, LabeledLine } from "./markers/frame_giz
 // instead of a second, possibly-drifting registration.
 import { ChunkStage, LodSchedulerProvider } from "./chunk_stage.tsx";
 import { CHUNK_STAGE_LAYERS } from "./stack.ts";
-import { DecorLayer } from "./decor/decor_layer.tsx";
+import type { DecorKindBundle } from "./decor/decor_layer.tsx";
 import { TREE_DECOR_BUNDLE } from "./decor/tree_decor.ts";
 import { BOAT_DECOR_BUNDLE } from "./decor/boat_decor.ts";
 import { CAR_DECOR_BUNDLE } from "./decor/car_decor.ts";
 import { TRAIN_DECOR_BUNDLE } from "./decor/train_decor.ts";
+
+// Module-level, not an inline array literal in JSX — ChunkStage's own
+// useAllDecorBundleAssets (decor_layer.tsx) keys its memoization off this
+// reference staying stable across renders; a fresh literal on every render
+// of this file's own component would defeat that.
+const DECOR_BUNDLES: readonly DecorKindBundle[] = [TREE_DECOR_BUNDLE, BOAT_DECOR_BUNDLE, CAR_DECOR_BUNDLE, TRAIN_DECOR_BUNDLE];
 
 // Dynamic rather than a plain top-level import so the character/pet model
 // code (GLTFLoader, skinning, animation mixer — otherwise unused anywhere
@@ -239,11 +245,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
             <AnchorSpace registry={registry}>
               <LodSchedulerProvider>
-                <ChunkStage stack={CHUNK_STAGE_LAYERS} />
-                <DecorLayer bundle={TREE_DECOR_BUNDLE} />
-                <DecorLayer bundle={BOAT_DECOR_BUNDLE} />
-                <DecorLayer bundle={CAR_DECOR_BUNDLE} />
-                <DecorLayer bundle={TRAIN_DECOR_BUNDLE} />
+                <ChunkStage stack={CHUNK_STAGE_LAYERS} decor_bundles={DECOR_BUNDLES} />
               </LodSchedulerProvider>
 
               <HoverCursor />

@@ -38,7 +38,7 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { with_ele } from "@/modules/world/terrain/elevation.ts";
 import { get_local_world_origin, local_world_to_canonical } from "../world/frame/coord.ts";
 import { aabb_overlap, object_aabb } from "@/modules/world/objects/geometry.ts";
-import { get_objects_near, type PlacedObject } from "@/modules/world/objects/store.ts";
+import { get_objects_near, type OccupiedEntry } from "@/modules/world/objects/store.ts";
 
 import { with_raycast_composite } from "@/render/layer/pipeline/compositor.ts";
 import { chunk_origin_of } from "@/render/layer/objects/adapter.ts";
@@ -300,16 +300,22 @@ export function world_adjacent_corner(hit: WorldHit, new_size: f64, map_origin: 
   return local_world_to_canonical({ i: 0n, f: 0n }, out, map_origin);
 }
 
-/** Which PlacedObject `hit` actually struck, when hit.material_class is
- * MaterialClass.OBJECT — the sectioned voxel field itself carries no object
- * identity (chunk_stage.tsx never needs it, only color/material), so this
- * is a small secondary lookup: whichever placed object's own real AABB
+/** Which solid placed object `hit` actually struck, when hit.material_class
+ * is MaterialClass.OBJECT — whichever placed object's own real AABB
  * (object_aabb — full precision, including sub-cell) overlaps the hit box.
- * Linear scan over the same small objects list every other object
- * operation already walks (see objects/adapter.ts's own "fine at current
- * placement counts" doc comment) — not the raycast itself, just resolving
- * an already-found hit back to its source. */
-export function resolve_hit_object(hit: WorldHit, map_origin: IVec): PlacedObject | null {
+ * The sectioned voxel field itself carries no object identity
+ * (chunk_stage.tsx never needs it, only color/material), so this is a small
+ * secondary lookup, not the raycast itself. Decor is never resolved here —
+ * it never paints a voxel of its own (render/layer/objects/adapter.ts's
+ * paint() skips "decor" entries) and has its own real-mesh hit-test now
+ * that it bakes into a real THREE.Mesh instead (decor_hit.ts's
+ * raycast_decor, called directly from camera/input.tsx alongside this
+ * function, since it needs the live THREE.Raycaster this module never
+ * touches). Linear scan over the same small objects list every other
+ * object operation already walks (see objects/adapter.ts's own "fine at
+ * current placement counts" doc comment) — not the raycast itself, just
+ * resolving an already-found hit back to its source. */
+export function resolve_hit_object(hit: WorldHit, map_origin: IVec): OccupiedEntry | null {
   if (hit.material_class !== MaterialClass.OBJECT) return null;
   const hit_aabb = { min: hit.box_min, max: hit.box_max };
 
@@ -328,7 +334,7 @@ export function resolve_hit_object(hit: WorldHit, map_origin: IVec): PlacedObjec
   // same hit_aabb right at their shared boundary — picking whichever is
   // actually closest to where the ray landed resolves that correctly
   // instead of silently depending on iteration order.
-  let best: PlacedObject | null = null;
+  let best: OccupiedEntry | null = null;
   let best_dist2 = Infinity;
   for (const o of nearby) {
     const aabb = object_aabb(o, map_origin);

@@ -3,13 +3,13 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { Eraser, MessageCircle, MousePointer, Palette, Send } from "lucide-react";
+import { Eraser, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { object_color_hex, object_color_ids, object_scale_exponents, type ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import { object_color_hex, object_color_ids, object_decor_ids, object_scale_exponents, type ObjectColorId, type ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
 import { OBJECT_SIZES } from "@/modules/world/objects/size.ts";
 
 type ModeId = "message" | "palette";
@@ -217,6 +217,43 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
         />
       </button>
     </div>
+  );
+}
+
+// Icon per decor id — TypeScript enforces one entry per ObjectDecorId, so
+// adding a new decor kind (objects.ts's own "decor" channel) can't silently
+// ship without a button icon for it.
+const DECOR_ICONS: Record<ObjectDecorId, typeof TreePine> = {
+  tree: TreePine,
+};
+
+/** Same activate-on-tap shape as ColorSwatchButton, minus its size flyout —
+ * decor has no adjustable size yet (DECOR_SIZE, objects/size.ts, is fixed),
+ * so a plain tap is enough. */
+function DecorButton({ id }: { id: ObjectDecorId }) {
+  const { t } = useTranslation();
+  const activeTool = useUiStore((state) => state.activeTool);
+  const decor_id = useUiStore((state) => state.decor_id);
+  const set_activeTool = useUiStore((state) => state.set_activeTool);
+  const set_decor_id = useUiStore((state) => state.set_decor_id);
+  const Icon = DECOR_ICONS[id];
+  const active = activeTool === "decor" && decor_id === id;
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        set_decor_id(id);
+        set_activeTool("decor");
+      }}
+      className={cn(
+        "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
+        active ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+      )}
+      title={t(`object_decors.${id}`)}
+    >
+      <Icon className="w-5 h-5" strokeWidth={2} />
+    </button>
   );
 }
 
@@ -434,6 +471,12 @@ export function ModeBar() {
                     >
                       <Eraser className="w-5 h-5" strokeWidth={2} />
                     </button>
+                  </div>
+
+                  <div className="w-px h-7 bg-white/15 shrink-0" />
+
+                  <div className="flex items-center p-[4px] shrink-0">
+                    {object_decor_ids.map((id) => <DecorButton key={id} id={id} />)}
                   </div>
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />

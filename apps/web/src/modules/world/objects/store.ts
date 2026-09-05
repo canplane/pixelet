@@ -30,15 +30,37 @@ import { pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/core/kit/encoding.ts";
 
 import { OBJECT_LAYOUT, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import { object_color_id_from_num, object_color_num_id, object_types, OBJECT_UNDEF, object_value_is_air, object_value_is_present, type ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import {
+  object_color_id_from_num,
+  object_color_num_id,
+  object_decor_id_from_num,
+  object_decor_num_id,
+  type ObjectDecorId,
+  object_types,
+  OBJECT_UNDEF,
+  object_value_is_air,
+  object_value_is_decor,
+  object_value_is_present,
+  type ObjectColorId,
+} from "@pxl/shared/spec/cell/objects.ts";
 import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
 type ObjectEntryBase = { id: string; i: IVec; f: FVec; size: f64 };
 export type PlacedObject = ObjectEntryBase & { kind: "solid"; color_id: ObjectColorId };
+export type PlacedDecor = ObjectEntryBase & { kind: "decor"; decor_id: ObjectDecorId };
 export type ObjectAir = ObjectEntryBase & { kind: "air" };
-export type ObjectLayerEntry = PlacedObject | ObjectAir;
+export type ObjectLayerEntry = PlacedObject | PlacedDecor | ObjectAir;
+
+/** Anything a placement/erase/selection query should actually treat as "a
+ * real thing occupying this slot" — a solid color cube or a decor object
+ * alike, just never `kind: "air"` (that's a virtual erase-marker, not a
+ * placed thing). collision.ts/geometry.ts/camera/ray.ts only ever touch the
+ * shared ObjectEntryBase fields (i/f/size/id) on this union, never
+ * color_id/decor_id, so widening every "which objects are here" query from
+ * PlacedObject to this doesn't change any of their own logic. */
+export type OccupiedEntry = PlacedObject | PlacedDecor;
 
 // Renamed from "pxl:objects:v4" (2026-09-03) — singular ("object", matching
 // this module's own type names PlacedObject/ObjectLayerEntry) since there
@@ -58,7 +80,7 @@ export type ObjectLayerEntry = PlacedObject | ObjectAir;
 // format generation).
 export const OBJECT_STORAGE_VERSION: number = 5;
 const STORAGE_KEY = `pxl:object:v${OBJECT_STORAGE_VERSION}`;
-const EMPTY: readonly PlacedObject[] = [];
+const EMPTY: readonly OccupiedEntry[] = [];
 const EMPTY_ENTRIES: readonly ObjectLayerEntry[] = [];
 
 // ---- Cell tree storage (unchanged shape) ----
@@ -151,7 +173,11 @@ function derive_cell_entries(key: string, tree: ObjectTree): ObjectLayerEntry[] 
       f: abs.f,
       size: 2 ** level,
     };
-    out.push(object_value_is_air(val) ? { ...base, kind: "air" } : { ...base, kind: "solid", color_id: object_color_id_from_num(val) });
+    if (object_value_is_decor(val)) {
+      out.push({ ...base, kind: "decor", decor_id: object_decor_id_from_num(val) });
+    } else {
+      out.push(object_value_is_air(val) ? { ...base, kind: "air" } : { ...base, kind: "solid", color_id: object_color_id_from_num(val) });
+    }
   });
 
   return out;
@@ -159,7 +185,7 @@ function derive_cell_entries(key: string, tree: ObjectTree): ObjectLayerEntry[] 
 
 // ---- Spatial index (outside zustand — see this file's own doc comment) ----
 
-const objects_by_cell = new Map<string, PlacedObject[]>();
+const objects_by_cell = new Map<string, OccupiedEntry[]>();
 const entries_by_l2_column = new Map<string, ObjectLayerEntry[]>();
 /** Monotonic per-render-L2-column revision. */
 const l2_column_revisions = new Map<string, number>();
@@ -193,7 +219,9 @@ function reindex_cell(ix: bigint, iy: bigint, iz: bigint): void {
   const l2_key = l2_column_key_of_cell(ix, iy, iz);
   const tree = cells.get(key);
   const fresh_entries = tree ? derive_cell_entries(key, tree) : [];
-  const fresh_objects = fresh_entries.filter((entry): entry is PlacedObject => entry.kind === "solid");
+  // "solid" and "decor" both really occupy this slot — see OccupiedEntry's
+  // own doc comment; only "air" (a virtual erase-marker) is excluded.
+  const fresh_objects = fresh_entries.filter((entry): entry is OccupiedEntry => entry.kind !== "air");
 
   if (fresh_objects.length > 0) objects_by_cell.set(key, fresh_objects);
   else objects_by_cell.delete(key);
@@ -210,7 +238,7 @@ function reindex_cell(ix: bigint, iy: bigint, iz: bigint): void {
 }
 
 /** Every object currently claiming cell `key`, or EMPTY — O(1) lookup, non-reactive (read live state directly, same convention WorldLayer.flatten's own doc comment establishes for every other backing store). */
-export function get_objects_in_cell(key: string): readonly PlacedObject[] {
+export function get_objects_in_cell(key: string): readonly OccupiedEntry[] {
   return objects_by_cell.get(key) ?? EMPTY;
 }
 
@@ -296,12 +324,12 @@ export function get_render_object_entries_in_l2_column(l2_key: string): readonly
 }
 
 /** Objects near a candidate corner+size — the cell it's in plus the 26 neighbors, since a candidate near a cell face can legitimately need to see an object one cell over (collision.ts's find_overlapping_object, ray.ts's resolve_hit_object). 27 O(1) lookups, still independent of total object count. */
-export function get_objects_near(corner: PVF3, _size: f64): readonly PlacedObject[] {
+export function get_objects_near(corner: PVF3, _size: f64): readonly OccupiedEntry[] {
   const [cx, cy, cz] = cell_index(corner);
   // size can push the candidate's own far corner into the NEXT cell too —
   // covered by the same 3x3x3 neighborhood as long as size <= one cell
   // (objects/size.ts's own largest tier), which every placeable size is.
-  const out: PlacedObject[] = [];
+  const out: OccupiedEntry[] = [];
   for (let dx = -1n; dx <= 1n; dx++) {
     for (let dy = -1n; dy <= 1n; dy++) {
       for (let dz = -1n; dz <= 1n; dz++) {
@@ -314,7 +342,7 @@ export function get_objects_near(corner: PVF3, _size: f64): readonly PlacedObjec
 }
 
 /** One object by id, or null — parses the id's own embedded cell key (leaf_id's own doc comment) instead of a reverse index, so this is a single O(objects in one cell) lookup, not O(total objects). */
-export function get_placed_object(id: string): PlacedObject | null {
+export function get_placed_object(id: string): OccupiedEntry | null {
   const parsed = parse_leaf_id(id);
   if (!parsed) return null;
   return objects_by_cell.get(parsed.key)?.find((o) => o.id === id) ?? null;
@@ -329,7 +357,7 @@ export function useObjectL2ColumnRevision(l2_key: string): number {
 }
 
 /** React hook: same as useObjectsInChunk, scoped to one object's own hovered_object_id lookup — re-renders only when that object's own cell changes (placed/removed/moved), not on unrelated world activity. */
-export function usePlacedObject(id: string | null): PlacedObject | null {
+export function usePlacedObject(id: string | null): OccupiedEntry | null {
   const parsed = id ? parse_leaf_id(id) : null;
   return useSyncExternalStore(
     (on_change) => parsed ? subscribe(cell_listeners, parsed.key, on_change) : () => {},
@@ -438,7 +466,7 @@ for (const [key] of cells) {
  * check used), never re-derived or re-snapped here. One source of truth
  * for where a placement goes, not a second one that quietly overrides it.
  */
-export function place(i: IVec, f: FVec, size: f64, color_id: ObjectColorId): void {
+function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   const coord: PVF3 = { i, f };
 
   // size is always an exact power of two by construction (see
@@ -460,7 +488,6 @@ export function place(i: IVec, f: FVec, size: f64, color_id: ObjectColorId): voi
     cells.set(key, tree);
   }
 
-  const val = object_color_num_id(color_id);
   if (is_whole_cell) {
     sparse_tree.fill(tree, val);
   } else {
@@ -470,6 +497,20 @@ export function place(i: IVec, f: FVec, size: f64, color_id: ObjectColorId): voi
 
   save();
   reindex_cell(ix, iy, iz);
+}
+
+export function place(i: IVec, f: FVec, size: f64, color_id: ObjectColorId): void {
+  write_object_value(i, f, size, object_color_num_id(color_id));
+}
+
+/** Same write path as place(), just tagged with a decor kind instead of a
+ * color — see objects.ts's own "decor" channel doc comment. Always the
+ * whole-cell tier in practice today (mode_bar.tsx's decor buttons don't
+ * expose place()'s own size flyout), but this doesn't assume that: any
+ * OBJECT_SIZES tier still round-trips correctly through the exact same
+ * level/is_whole_cell logic a color cube uses. */
+export function place_decor(i: IVec, f: FVec, size: f64, decor_id: ObjectDecorId): void {
+  write_object_value(i, f, size, object_decor_num_id(decor_id));
 }
 
 export function remove(id: string): void {

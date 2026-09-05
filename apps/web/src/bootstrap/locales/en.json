@@ -161,6 +161,9 @@
     "magenta": "Magenta",
     "pink": "Pink"
   },
+  "object_decors": {
+    "tree": "Tree"
+  },
   "device": {
     "orientation": {
       "unsupported": "This environment doesn't support the orientation sensor.",
