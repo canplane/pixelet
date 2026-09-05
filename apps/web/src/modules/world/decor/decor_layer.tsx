@@ -155,7 +155,14 @@ export type DecorKindBundle = {
 // DECOR_MASTER_SEED as the same root every procedural stream already shares,
 // so a user-placed tree's own variant/heading pick lives in the same seed
 // space, not a parallel one.
-function user_decor_pick(i: IVec, variant_count: number): { variant: number; rotation: number } {
+//
+// Exported: markers/hover_cursor.tsx's own ghost preview calls this too, at
+// the exact same `i` a placement/hover resolves to, so the ghost shows the
+// real variant/heading a real placement would get (or, for an already-
+// placed entry, the real one it actually got) instead of an arbitrary
+// stand-in — this function being pure and keyed only on `i` is exactly what
+// makes that prediction exact rather than a guess.
+export function user_decor_pick(i: IVec, variant_count: number): { variant: number; rotation: number } {
   const rng = make_rng(derive_seed_u64(DECOR_MASTER_SEED, i));
   const variant = Math.min(Math.floor(u32_to_unit(rng()) * variant_count), variant_count - 1);
   const rotation = u32_to_unit(rng()) * Math.PI * 2;

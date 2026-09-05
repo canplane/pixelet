@@ -26,6 +26,27 @@ import type { ModelInstanceTransform } from "./instanced_model.ts";
 type DecorMeshEntry = { mesh: THREE.Mesh; instances: readonly ModelInstanceTransform[] };
 const registry = new Set<DecorMeshEntry>();
 
+// A decor mesh sitting on the ground it also intersects (any tree's own
+// trunk-base, by construction) has its own hit distance land almost exactly
+// AT max_dist, not comfortably inside it — the two distances are computed by
+// two entirely independent algorithms (THREE's own Möller-Trumbore triangle
+// test against decor's baked mesh vertices here, chunk_raycast.ts's own
+// closed-form ray/AABB-slab test against a voxel-derived box for max_dist
+// itself), not two evaluations of the same formula, so they only ever agree
+// up to float noise, never exactly. A strict `hit.distance > max_dist`
+// reject flips on essentially every frame right at that boundary — a real
+// mouse's own sub-pixel sensor jitter (no automation, no camera motion
+// needed) perturbs the ray just enough each frame to walk the disagreement
+// across zero in either direction, which read as the hover ghost itself
+// flickering on and off while the cursor sat still (reported 2026-09-05,
+// right after hover_cursor.tsx's own real-silhouette ghost made a hovered
+// hovered_object_id toggle newly visible as a visual flicker rather than a
+// silent no-op). 1e-3 world units is small enough to never let a decor mesh
+// that's genuinely occluded by terrain win (that gap is always at least a
+// real fraction of a cell, orders of magnitude bigger), comfortably larger
+// than pure float64 round-off between the two algorithms.
+const SAME_SURFACE_EPS: f64 = 1e-3;
+
 /**
  * Registers one currently-mounted, currently-baked decor mesh
  * (decor_layer.tsx's own DecorVariantMesh) — call again (a fresh entry) on
@@ -68,7 +89,7 @@ export function raycast_decor(raycaster: THREE.Raycaster, max_dist: f64): string
   const hits = raycaster.intersectObjects(entries.map((entry) => entry.mesh), false);
 
   for (const hit of hits) {
-    if (hit.distance > max_dist) break; // intersectObjects returns hits sorted nearest-first
+    if (hit.distance > max_dist + SAME_SURFACE_EPS) break; // intersectObjects returns hits sorted nearest-first
     if (hit.faceIndex === undefined || hit.faceIndex === null) continue;
     const entry = entries.find((candidate) => candidate.mesh === hit.object);
     if (!entry || entry.instances.length === 0) continue;

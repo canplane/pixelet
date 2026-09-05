@@ -118,3 +118,110 @@ Verified the same way as the rest of this pass: `deno task check`/`lint`/
 positional drift), and place → hover → erase on a freshly-placed, spatially
 isolated tree confirmed the raycast and removal still resolve correctly
 under the new coordinate convention.
+
+## Addendum, same day: the merge's own regression — a decor-only hover was
+## rebuilding cube content too
+
+Reported live: hovering the eraser over a placed tree (right after
+hover_cursor.tsx's own real-decor-silhouette ghost, a separate same-day
+change, made it obvious) showed the terrain/cube content for that spot
+visibly flickering along with the decor ghost. Root cause was this merge's
+own doing, not the silhouette ghost: `hover_cursor.tsx`'s
+`set_virtual_hide(id)` bumps the object store's per-L2-column revision
+(`objects/store.ts`) regardless of the target's kind, and `Chunk`'s single
+`objects_revision`-keyed `useEffect` (added by this merge) reacts to *any*
+bump by clearing `bucket_cache_ref`/`column_runs_ref` and fully rescanning/
+rebaking cube content — even though `ObjectWorldLayer.paint()` never paints
+a voxel for a decor entry in the first place (adapter.ts's own "decor never
+paints a voxel of its own" comment), so a decor-only change can never
+actually change what that rescan would produce. Before this merge, decor's
+own `ChunkDecor` reacted to the same revision but only re-ran its own cheap
+`build_decor_instances` call — the expensive terrain/cube rescan was a
+separate component's concern entirely, so this exact bump never reached it.
+
+Fixed by splitting the store's own per-L2-column revision into two
+independent counters (`objects/store.ts`): `l2_column_revisions`
+(cube-relevant — solid object place/remove/virtual-hide) and the new
+`decor_l2_column_revisions` (decor place/remove/virtual-hide).
+`set_virtual_hide` now looks up the target's own `kind` and bumps only the
+matching counter (falling back to bumping both only if the object's
+already gone from the store by the time it's unhidden — a rare edge case,
+not a correctness gap). `chunk_stage.tsx`'s `Chunk` correspondingly splits
+`build_ref` (cube content only now, returns `BuiltChunkBucket[] | null`)
+from a new `decor_build_ref` (decor only, a plain `build_decor_instances`
+call per bundle, no scan, no shared cache with cube content), and the
+single structural `useEffect` splits into two: the original (still keyed
+on the cube-only `objects_revision`, still clears+rebuilds *both* caches,
+since a solid placement can occlude a procedural decor candidate) plus a
+new decor-only effect keyed on `decor_revision` that touches only
+`decor_cache_ref`/`layout.decor` — never `bucket_cache_ref`,
+`column_runs_ref`, or `layout.buckets` — so `ChunkMesh` never remounts over
+a decor-only change.
+
+This doesn't undo the original fix this document describes: a solid
+object's own change still rebuilds decor alongside cube content (occupancy
+can shift what a procedural decor candidate resolves to), and decor is
+still never committed without the cube content it sits on already having
+been built for the same step — a decor-only change is the one case that
+was always supposed to be cheap and wasn't.
+
+Verified live via the dev-only `window.__PXL_RENDER_STATS__.mesh_mount`
+counter (chunk_stage.tsx's own `ChunkMesh` mount-timing tracker): before the
+fix, each eraser hover enter/exit on a placed decor entry incremented
+`mesh_mount.count`; after, three full hover-enter/exit cycles on the same
+tree left the count exactly unchanged, while the decor ghost itself still
+rendered and updated correctly. `deno task check`/`lint`/`test` all green
+(138 tests, unchanged).
+
+## Addendum, same day: a second, unrelated flicker — the raycast boundary
+## itself was unstable, independent of the rebuild bug above
+
+After the fix above, live testing still showed a tree's hover ghost
+alternating with its own normal (non-ghosted) render while the cursor sat
+still — not the same symptom as the cube-rebuild flicker (that one showed
+terrain content flickering alongside a *correctly* rendering ghost; this one
+is the ghost/normal state of the tree itself flipping). Root cause is in
+`decor_hit.ts`'s `raycast_decor`, unrelated to `objects/store.ts` or
+`chunk_stage.tsx` entirely: the function rejects a decor hit with a strict
+`hit.distance > max_dist`, where `hit.distance` is THREE's own
+Möller-Trumbore triangle intersection against the baked decor mesh, and
+`max_dist` is `chunk_raycast.ts`'s own, entirely independent closed-form
+ray/AABB-slab intersection against a voxel-derived box (passed in via
+`camera/input.tsx`'s `resolve_hit_target` as the already-found terrain/object
+hit's own `t`). Near a decor object's own base — any tree's trunk touching
+the ground it stands on, by construction — these two independently-computed
+float64 distances land almost exactly together, and disagree only by pure
+computation noise. A strict `>` comparison flips on essentially every frame
+right at that boundary; a real mouse's own continuous sub-pixel sensor
+jitter (present with no camera motion and no automation involved) walks the
+disagreement across zero in either direction each frame, which reads as the
+hover ghost itself flickering while the cursor appears stationary. This is
+why the session's own browser-automation `hover` tool (a single discrete
+mousemove) could never reproduce it directly — `update_hover()` only runs
+from real `pointermove` events, and one event settles into whichever state
+that one ray happened to land in, with nothing to perturb it again.
+
+Fixed with a new tolerance constant, `SAME_SURFACE_EPS = 1e-3` world units
+(`decor_hit.ts`), added to the comparison:
+`hit.distance > max_dist + SAME_SURFACE_EPS`. 1e-3 is small enough that a
+decor mesh genuinely occluded by terrain still loses (that gap is always at
+least a real fraction of a cell, orders of magnitude bigger than this), and
+comfortably larger than the float64 round-off between the two algorithms.
+Two existing, purpose-built epsilons elsewhere in the codebase
+(`objects/geometry.ts`'s `OVERLAP_EPS`, `camera/ray.ts`'s private
+`SAME_EXTENT_EPS`) were considered and rejected as the wrong semantic fit
+rather than reused blindly — this is a distinct concern (cross-algorithm
+raycast-distance noise, not AABB-overlap noise or sub-cell quantization).
+
+Verified with a new deterministic unit test
+(`decor_hit.test.ts`, "tolerates float noise at the max_dist boundary
+instead of flickering"): a synthetic box at a known analytic distance (9.5)
+with `max_dist` set 0.0005 under that (inside the tolerance) still resolves
+the hit; `max_dist` set 0.01 under that (outside the tolerance, a real
+occlusion gap) still correctly resolves to `null` — the fix closes the
+flickering boundary without swallowing genuine occlusion. Live, the
+placement-preview ghost and the eraser-hover ghost on a freshly-placed tree
+both still render as the real silhouette with no console errors.
+`deno task check`/`lint`/`test` all green (139 tests — one new test added,
+138 prior unchanged; lint's pre-existing 76-problem `xpute/core` baseline
+unchanged).
