@@ -34,7 +34,7 @@ import { useMapStore } from "@/modules/map/store.ts";
 import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
-import { l2_column_key_of, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
+import { l2_column_key_of, useDecorL2ColumnRevision, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
@@ -506,19 +506,17 @@ const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: Chu
 });
 ChunkMesh.displayName = "ChunkMesh";
 
-/** One built (primary/secondary cube buckets, decor) result — build_ref's
- * own return shape, named so both that ref's type and every call site can
- * say it once. `decor` is keyed by the SAME index/order as the `bundle_assets`
- * prop (one entry per bundle, each itself one entry per that bundle's own
- * variant) — always the primary tier's own density, never a secondary/blend
- * pair (decor never blends between tiers — see decor_layer.tsx's own
- * DECOR_DENSITY_BY_LOD_STEP doc comment). */
-type ChunkBuild = { buckets: BuiltChunkBucket[]; decor: ModelInstanceTransformList[][] };
-
 type LodLayout = {
   primary: LodStep;
   secondary: LodStep | null;
   buckets: BuiltChunkBucket[];
+  // Keyed by the SAME index/order as the `bundle_assets` prop (one entry per
+  // bundle, each itself one entry per that bundle's own variant) — always
+  // the primary tier's own density, never a secondary/blend pair (decor
+  // never blends between tiers — see decor_layer.tsx's own
+  // DECOR_DENSITY_BY_LOD_STEP doc comment). Populated by decor_build_ref
+  // below, entirely independently of `buckets` — see that ref's own doc
+  // comment for why the two builds don't share a cache or a rebuild trigger.
   decor: ModelInstanceTransformList[][];
   bounds: ChunkBounds | null;
   ready: boolean;
@@ -576,6 +574,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   const key = useMemo<ChunkKey>(() => ({ page_idx, page_off }), [page_idx, page_off]);
   const object_key = useMemo(() => l2_column_key_of(page_idx, page_off), [page_idx, page_off]);
   const objects_revision = useObjectL2ColumnRevision(object_key);
+  const decor_revision = useDecorL2ColumnRevision(object_key);
 
   const bucket_cache_ref = useRef(new Map<LodStep, BuiltChunkBucket>());
   // Every column's runs, scanned once from the live volume and reused
@@ -597,16 +596,28 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   // scan and build costs vary independently (scan tracks band count, build
   // tracks total run count).
   const build_deferred_ref = useRef(false);
-  // Decor's own build result per LOD step — populated in lockstep with
-  // bucket_cache_ref below (same missing steps, same branch, same clear
-  // points), never independently, so the two caches can never disagree
-  // about which steps are actually built. Keyed by lod_step alone (not
-  // primary/secondary) since decor never blends between tiers — only ever
-  // needs whichever step is currently `primary`.
+  // Decor's own build result per LOD step — its own cache, independent of
+  // bucket_cache_ref (see decor_build_ref's own doc comment for why the two
+  // builds don't share a cache or a rebuild trigger anymore). Keyed by
+  // lod_step alone (not primary/secondary) since decor never blends between
+  // tiers — only ever needs whichever step is currently `primary`.
   const decor_cache_ref = useRef(new Map<LodStep, ModelInstanceTransformList[][]>());
-  // null return means "a needed scan was just deferred, not built yet" —
-  // distinct from an empty result (built, genuinely nothing to draw).
-  const build_ref = useRef<(primary: LodStep, secondary: LodStep | null) => ChunkBuild | null>(() => ({ buckets: [], decor: [] }));
+  // Cube content only (terrain + solid objects, chunk_mesher.ts's baked
+  // mesh) — null return means "a needed scan was just deferred, not built
+  // yet", distinct from an empty result (built, genuinely nothing to draw).
+  // Decor used to build right alongside this (2026-09-05's "one build step"
+  // fix for the terrain/decor ready-state desync), but that meant ANY
+  // decor-only change — including set_virtual_hide's hover-driven churn —
+  // forced this whole function to re-run, rescanning/rebaking cube content
+  // that never actually changed (see objects/store.ts's
+  // decor_l2_column_revisions doc comment for the flicker this caused).
+  // decor_build_ref below is the split-out replacement; the two still run
+  // together whenever cube content itself rebuilds (every call site below
+  // calls both), so the original desync fix still holds — decor is never
+  // committed without the cube content it sits on having already been built
+  // for the exact same step — it's specifically a decor-only change that no
+  // longer touches this function at all.
+  const build_ref = useRef<(primary: LodStep, secondary: LodStep | null) => BuiltChunkBucket[] | null>(() => []);
   build_ref.current = (primary, secondary) => {
     const steps = secondary === null || secondary === primary ? [primary] : [primary, secondary];
     const missing = steps.filter((step) => !bucket_cache_ref.current.has(step));
@@ -669,11 +680,6 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
         const build_t0 = performance.now();
         for (const step of missing) {
           bucket_cache_ref.current.set(step, build_chunk_bucket(column_runs, step, "primary"));
-          // Decor's own build, right alongside cube content's — this is the
-          // literal "one build step" fix: decor for this chunk can never be
-          // committed without the cube content it sits on also having just
-          // been (re)built for the exact same step.
-          decor_cache_ref.current.set(step, bundle_assets.map(({ bundle }) => build_decor_instances(tile, step, page_idx, offset.base_x, offset.base_y, bundle)));
         }
         const build_ms = performance.now() - build_t0;
         lod_build_stats.build_ms += build_ms;
@@ -692,7 +698,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
     // bucket_cache_ref is only actually cleared on frustum-exit or a source
     // revision change (below), at most LOD_STEP_BY_LEVEL.length (7) small
     // entries retained per chunk — cheap next to column_runs_ref.
-    const buckets = steps
+    return steps
       .map((step) => bucket_cache_ref.current.get(step))
       .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
       .map((bucket) => ({
@@ -700,12 +706,23 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
         role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole,
       }))
       .sort((a, b) => a.lod_step - b.lod_step);
+  };
 
-    // Same "populated together, so always present together" invariant as
-    // bucket_cache_ref above — this fallback is defensive, not an expected
-    // path (see decor_cache_ref's own doc comment).
-    const decor = decor_cache_ref.current.get(primary) ?? bundle_assets.map(() => []);
-    return { buckets, decor };
+  // Decor's own build — a plain per-bundle build_decor_instances call, no
+  // volume scan, no dependency on bucket_cache_ref/column_runs_ref at all
+  // (ObjectWorldLayer.paint() never paints a voxel for a decor entry, so
+  // decor's own output can never depend on anything build_ref above
+  // computes). Only ever needs `primary` — decor never blends between tiers
+  // (LodLayout's own `decor` field doc comment). Deliberately NOT keyed off
+  // build_ref's own `missing` list: that would re-tie decor's own staleness
+  // to cube content's cache, exactly the coupling this split exists to
+  // remove (see build_ref's own doc comment).
+  const decor_build_ref = useRef<(primary: LodStep) => ModelInstanceTransformList[][]>(() => []);
+  decor_build_ref.current = (primary) => {
+    if (!decor_cache_ref.current.has(primary)) {
+      decor_cache_ref.current.set(primary, bundle_assets.map(({ bundle }) => build_decor_instances(tile, primary, page_idx, offset.base_x, offset.base_y, bundle)));
+    }
+    return decor_cache_ref.current.get(primary)!;
   };
 
   const initial_view = useMemo(
@@ -717,8 +734,8 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
     if (!initial_view.in_frustum) {
       return { primary: 64, secondary: null, buckets: [], decor: [], bounds: null, ready: false };
     }
-    const built = build_ref.current(initial_view.lod_step, null);
-    if (built === null) {
+    const buckets = build_ref.current(initial_view.lod_step, null);
+    if (buckets === null) {
       // Scan deferred on the very first build — start not-ready (same
       // shape as an out-of-frustum chunk) so the first recheck() sets
       // pending and retries, instead of rendering nothing forever.
@@ -727,9 +744,9 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
     const initial: LodLayout = {
       primary: initial_view.lod_step,
       secondary: null,
-      buckets: built.buckets,
-      decor: built.decor,
-      bounds: chunk_bounds(built.buckets),
+      buckets,
+      decor: decor_build_ref.current(initial_view.lod_step),
+      bounds: chunk_bounds(buckets),
       ready: true,
     };
     return initial;
@@ -745,6 +762,13 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   // A source revision rebuilds the currently displayed LOD, not the entire
   // visible world. Comparing the actual source tuple also prevents React
   // StrictMode's development-only effect replay from rebuilding every chunk.
+  // objects_revision here is the SOLID-only revision (see
+  // useObjectL2ColumnRevision's own doc comment) — a decor-only change
+  // (place/remove/virtual-hide of a tree, say) never touches it, so it never
+  // lands here. A solid change still clears/rebuilds decor_cache_ref too,
+  // though: a newly placed solid cube can occlude a procedurally-scattered
+  // decor candidate that used to render there, which only decor's own build
+  // (via get_objects_in_cell) knows how to react to.
   useEffect(() => {
     const previous = source_ref.current;
     if (
@@ -764,8 +788,8 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
       }
       return;
     }
-    const built = build_ref.current(current.primary, current.secondary);
-    if (built === null) {
+    const buckets = build_ref.current(current.primary, current.secondary);
+    if (buckets === null) {
       // Deferred — keep whatever's currently showing, just mark not-ready
       // so the next recheck() sets pending and retries.
       if (current.ready) {
@@ -775,10 +799,33 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
       }
       return;
     }
-    const next = { ...current, buckets: built.buckets, decor: built.decor, bounds: chunk_bounds(built.buckets), ready: true };
+    const next = { ...current, buckets, decor: decor_build_ref.current(current.primary), bounds: chunk_bounds(buckets), ready: true };
     layout_ref.current = next;
     set_layout(next);
   }, [tile, objects_revision, show_structures]);
+
+  const decor_source_ref = useRef(decor_revision);
+
+  // decor's own revision-only rebuild — see objects/store.ts's
+  // decor_l2_column_revisions doc comment for why this has to be a separate
+  // effect from the one above: it must NEVER touch bucket_cache_ref/
+  // column_runs_ref (that would reintroduce the exact needless cube
+  // rescan/rebake — visible as a flicker — that this split exists to avoid).
+  // A decor-only change updates layout.decor alone; buckets/bounds/ready are
+  // carried over from whatever the cube-content effect above last set.
+  useEffect(() => {
+    if (decor_source_ref.current === decor_revision) return;
+    decor_source_ref.current = decor_revision;
+    const current = layout_ref.current;
+    decor_cache_ref.current.clear();
+    // Not ready yet (a scan/build is still pending) — the cube-content
+    // effect/commit() will populate decor once it actually builds; nothing
+    // for this effect to do until then.
+    if (!current.ready) return;
+    const next = { ...current, decor: decor_build_ref.current(current.primary) };
+    layout_ref.current = next;
+    set_layout(next);
+  }, [decor_revision]);
 
   const control = useMemo<ChunkLodControl>(() => {
     const center = new THREE.Vector3();
@@ -888,26 +935,26 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
         }
         const desired = desired_ref.current;
         const build_t0 = import.meta.env.DEV ? performance.now() : 0;
-        const built = build_ref.current(desired.primary, desired.secondary);
+        const buckets = build_ref.current(desired.primary, desired.secondary);
         if (import.meta.env.DEV) {
           commit_step_stats.build_ms_max = Math.max(commit_step_stats.build_ms_max, performance.now() - build_t0);
         }
-        if (built === null) {
+        if (buckets === null) {
           // A needed scan was deferred to a calmer frame — stay pending
           // (retried next tick) and leave whatever's currently on screen
           // alone rather than popping it to empty.
           return false;
         }
         const bounds_t0 = import.meta.env.DEV ? performance.now() : 0;
-        const bounds = chunk_bounds(built.buckets);
+        const bounds = chunk_bounds(buckets);
         if (import.meta.env.DEV) {
           commit_step_stats.bounds_ms_max = Math.max(commit_step_stats.bounds_ms_max, performance.now() - bounds_t0);
         }
         const next: LodLayout = {
           primary: desired.primary,
           secondary: desired.secondary,
-          buckets: built.buckets,
-          decor: built.decor,
+          buckets,
+          decor: decor_build_ref.current(desired.primary),
           bounds,
           ready: true,
         };

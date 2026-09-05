@@ -187,12 +187,33 @@ function derive_cell_entries(key: string, tree: ObjectTree): ObjectLayerEntry[] 
 
 const objects_by_cell = new Map<string, OccupiedEntry[]>();
 const entries_by_l2_column = new Map<string, ObjectLayerEntry[]>();
-/** Monotonic per-render-L2-column revision. */
+/** Monotonic per-render-L2-column revision — bumped whenever a SOLID
+ * object's own presence in this column might have changed (place/remove of
+ * a color cube, or set_virtual_hide targeting a solid). Never bumped by a
+ * decor-only change — see decor_l2_column_revisions's own doc comment for
+ * why the two have to stay independent. Consumed by chunk_stage.tsx's Chunk
+ * to decide whether this column's cube content (chunk_mesher.ts's baked
+ * terrain+object mesh) needs rescanning/rebaking. */
 const l2_column_revisions = new Map<string, number>();
+/** Same shape as l2_column_revisions, for decor's own (cheap, no-scan)
+ * rebuild instead of cube content. ObjectWorldLayer.paint() never paints a
+ * voxel for a decor entry (adapter.ts's own "decor never paints a voxel of
+ * its own" comment), so nothing about decor can ever change what
+ * l2_column_revisions exists to signal. Sharing one counter between the two
+ * used to mean hovering the eraser over a placed tree (set_virtual_hide)
+ * bumped the exact revision chunk_stage.tsx's Chunk reads to decide "does my
+ * terrain+cube geometry need a full rescan/rebake" — every hover enter/exit
+ * on a decor entry forced a needless full chunk cube rebuild, visible as the
+ * terrain/cube content flickering right where the decor ghost was hovering
+ * (reported 2026-09-05, the same day decor's own real-silhouette ghost was
+ * added — the flicker was always latent, just not something anyone was
+ * staring at a hovered decor entry closely enough to notice before). */
+const decor_l2_column_revisions = new Map<string, number>();
 
 /** Live per-key listener registrations — same "don't wake every consumer on every change" reasoning as terrain/store.ts's own interests registry, just keyed directly instead of predicate-matched (every subscriber here already knows its own exact cell/chunk key). */
 const cell_listeners = new Map<string, Set<() => void>>();
 const l2_column_listeners = new Map<string, Set<() => void>>();
+const decor_l2_column_listeners = new Map<string, Set<() => void>>();
 
 function subscribe(registry: Map<string, Set<() => void>>, key: string, listener: () => void): () => void {
   let set = registry.get(key);
@@ -233,8 +254,10 @@ function reindex_cell(ix: bigint, iy: bigint, iz: bigint): void {
   else entries_by_l2_column.delete(l2_key);
 
   l2_column_revisions.set(l2_key, (l2_column_revisions.get(l2_key) ?? 0) + 1);
+  decor_l2_column_revisions.set(l2_key, (decor_l2_column_revisions.get(l2_key) ?? 0) + 1);
   notify(cell_listeners, key);
   notify(l2_column_listeners, l2_key);
+  notify(decor_l2_column_listeners, l2_key);
 }
 
 /** Every object currently claiming cell `key`, or EMPTY — O(1) lookup, non-reactive (read live state directly, same convention WorldLayer.flatten's own doc comment establishes for every other backing store). */
@@ -302,13 +325,31 @@ export function set_virtual_hide(id: string | null): void {
   if (id) bump_l2_column_for_object(id);
 }
 
+/** Bumps only the revision(s) relevant to `id`'s own kind — a decor id
+ * bumps decor_l2_column_revisions only, a solid id bumps l2_column_revisions
+ * only, so set_virtual_hide's own hover-driven churn (this function's only
+ * caller) never forces chunk_stage.tsx's Chunk to rescan/rebake cube content
+ * over a decor-only hide (see decor_l2_column_revisions's own doc comment),
+ * or run a needless extra decor rebuild over a solid-only hide. Falls back
+ * to bumping both only when the object's kind can't be determined (already
+ * gone from the store by the time this runs, e.g. erased while still
+ * virtual-hidden) — a rare edge case where erring conservative costs one
+ * extra revision bump on each side, not a correctness gap. */
 function bump_l2_column_for_object(id: string): void {
   const parsed = parse_leaf_id(id);
   if (!parsed) return;
   const [ix, iy, iz] = parse_cell_key(parsed.key);
   const l2_key = l2_column_key_of_cell(ix, iy, iz);
-  l2_column_revisions.set(l2_key, (l2_column_revisions.get(l2_key) ?? 0) + 1);
-  notify(l2_column_listeners, l2_key);
+  const kind = get_placed_object(id)?.kind ?? null;
+
+  if (kind !== "decor") {
+    l2_column_revisions.set(l2_key, (l2_column_revisions.get(l2_key) ?? 0) + 1);
+    notify(l2_column_listeners, l2_key);
+  }
+  if (kind !== "solid") {
+    decor_l2_column_revisions.set(l2_key, (decor_l2_column_revisions.get(l2_key) ?? 0) + 1);
+    notify(decor_l2_column_listeners, l2_key);
+  }
 }
 
 /** Same as get_object_entries_in_l2_column, with set_virtual_hide's own
@@ -348,11 +389,23 @@ export function get_placed_object(id: string): OccupiedEntry | null {
   return objects_by_cell.get(parsed.key)?.find((o) => o.id === id) ?? null;
 }
 
-/** One renderer L2 column subscribes to one primitive revision. */
+/** One renderer L2 column subscribes to one primitive revision — cube
+ * content only (see l2_column_revisions's own doc comment). A decor-only
+ * change never bumps this. */
 export function useObjectL2ColumnRevision(l2_key: string): number {
   return useSyncExternalStore(
     (on_change) => subscribe(l2_column_listeners, l2_key, on_change),
     () => l2_column_revisions.get(l2_key) ?? 0,
+  );
+}
+
+/** Same as useObjectL2ColumnRevision, for decor's own build instead of cube
+ * content — see decor_l2_column_revisions's own doc comment for why the two
+ * must stay independent. A solid-only change never bumps this. */
+export function useDecorL2ColumnRevision(l2_key: string): number {
+  return useSyncExternalStore(
+    (on_change) => subscribe(decor_l2_column_listeners, l2_key, on_change),
+    () => decor_l2_column_revisions.get(l2_key) ?? 0,
   );
 }
 

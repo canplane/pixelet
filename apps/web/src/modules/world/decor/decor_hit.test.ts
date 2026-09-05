@@ -79,6 +79,29 @@ Deno.test("raycast_decor - bounded by max_dist, same as the caller's own already
   }
 });
 
+Deno.test("raycast_decor - tolerates float noise at the max_dist boundary instead of flickering", () => {
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  const instances: ModelInstanceTransform[] = [{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "on-the-boundary" }];
+  const merged = bake_decor_instances(geometry, instances)!;
+  const mesh = new THREE.Mesh(merged, new THREE.MeshBasicMaterial());
+  const unregister = register_decor_mesh(mesh, instances);
+  try {
+    // Real hit distance is exactly 9.5 (ray origin z=10, box top face z=0.5).
+    // A caller-supplied max_dist a hair under that (as chunk_raycast.ts's own
+    // independently-computed AABB distance would be, from pure float64 noise
+    // between the two algorithms, never from real occlusion) must still
+    // resolve — this is the exact case that used to flip every frame under a
+    // real mouse's own sub-pixel jitter (reported 2026-09-05).
+    assertEquals(raycast_decor(downward_raycaster(0), 9.5 - 0.0005), "on-the-boundary");
+    // A gap an order of magnitude past the tolerance is a real occlusion
+    // (something actually closer than this decor mesh), and must still lose —
+    // the tolerance must not swallow legitimate max_dist rejections.
+    assertEquals(raycast_decor(downward_raycaster(0), 9.5 - 0.01), null);
+  } finally {
+    unregister();
+  }
+});
+
 Deno.test("raycast_decor - nothing registered, or the ray misses everything, resolves to null", () => {
   assertEquals(raycast_decor(downward_raycaster(0), 100), null);
 

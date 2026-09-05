@@ -17,6 +17,9 @@ import { DECOR_SIZE } from "../objects/size.ts";
 import { set_virtual_hide, usePlacedObject } from "../objects/store.ts";
 import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
 import { get_object_texture } from "../objects/tex.ts";
+import { user_decor_pick } from "../decor/decor_layer.tsx";
+import { decor_bundle_for } from "../decor/decor_registry.ts";
+import { compose_instance_matrix, type DecorVariantAsset, useInstancedModelVariants } from "../decor/instanced_model.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { marker_colors } from "./style.ts";
 import { light_cfg } from "@/modules/world/environment/config.ts";
@@ -24,15 +27,36 @@ import { light_cfg } from "@/modules/world/environment/config.ts";
 // Flat, no border: a bordered box only reads cleanly on a primitive with
 // per-face UVs mapped 0-1 (this one's own previous implementation) — an
 // arbitrary decor mesh's own UV layout has nothing to do with its
-// silhouette, so the same trick breaks on anything that isn't a box. A
-// screen-space silhouette outline would generalize instead, but that's a
-// real post-processing pass, not a per-mesh shader — tracked separately,
-// not worth it just for this.
+// silhouette, so the same trick breaks on anything that isn't a box. Decor
+// specifically no longer needs this fallback (see decor_geometry below —
+// it gets its own real silhouette instead), but the box stays as the
+// treatment for everything else (cube placement, plain terrain/pointer)
+// this file's own doc comment always described. A screen-space silhouette
+// outline would generalize the border further, but that's a real
+// post-processing pass, not a per-mesh shader — tracked separately, not
+// worth it just for this.
 const GHOST_OPACITY = 0.5;
 
 const HIGHLIGHT_BOX = new THREE.BoxGeometry(1, 1, 1);
 
 const TERRAIN_POS = center3n([0, 0, -U_PER_CELL], U_PER_CELL);
+
+// Stable empty reference — passed to useInstancedModelVariants whenever no
+// decor bundle is relevant this render, so its own internal variants_key
+// stays a constant "" instead of churning every render a fresh `[]`
+// literal would cause.
+const EMPTY_VARIANTS: readonly DecorVariantAsset[] = [];
+
+// Scratch, reused every render — compose_instance_matrix's own real bake
+// output, decomposed into just the rotation/scale a ghost mesh needs
+// (position is always zero here: the ghost's own position comes from the
+// group wrapper below, exactly like the real per-instance bake's own
+// translation would, just supplied by AnchorNode/decor_ghost_pos instead of
+// baked into this matrix).
+const $decor_matrix = new THREE.Matrix4();
+const $decor_translation = new THREE.Vector3();
+const $decor_quaternion = new THREE.Quaternion();
+const $decor_scale = new THREE.Vector3();
 
 export function HoverCursor() {
   const hovered: PVF3 | null = useCameraStore((state) => state.hovered_coord);
@@ -40,6 +64,7 @@ export function HoverCursor() {
   const activeTool = useUiStore((state) => state.activeTool);
   const object_color_id = useUiStore((state) => state.object_color_id);
   const object_size = useUiStore((state) => state.object_size);
+  const ui_decor_id = useUiStore((state) => state.decor_id);
   const map_center = useMapStore((state) => state.map_center);
 
   const hovered_object = usePlacedObject(hovered_object_id);
@@ -94,10 +119,10 @@ export function HoverCursor() {
   // color_id — the placement candidate's for object mode, the existing
   // object's own for eraser — since both of those really are "here's the
   // real thing". Bare terrain with no real color_id to borrow (pointer, or
-  // object mode with no candidate color context), an eraser hovering a
-  // decor entry (it has a decor_id, not a color_id — no swatch texture
-  // exists for it in this pass), and decor mode itself (no color concept at
-  // all) all fall back to the flat marker ghost instead.
+  // object mode with no candidate color context) falls back to the flat
+  // marker ghost instead. decor_id-carrying cases (decor mode, or an eraser
+  // hovering a decor entry) never reach this — decor_geometry below gives
+  // them their own real silhouette+texture instead of a color swatch.
   const color_id: ObjectColorId | null = activeTool === "pointer" || activeTool === "decor"
     ? null
     : hovered_object?.kind === "solid"
@@ -105,6 +130,44 @@ export function HoverCursor() {
     : activeTool === "object"
     ? object_color_id
     : null;
+
+  // Which decor kind's own real silhouette this ghost should show, if any —
+  // the kind about to be placed (decor tool active) or the kind already
+  // sitting where an eraser/pointer hover landed. `useInstancedModelVariants`
+  // is called unconditionally, once, with whichever bundle's variants (or
+  // the stable EMPTY_VARIANTS) currently applies — its own internal loading
+  // effects are keyed by a content hash of the variant list, so switching
+  // between decor kinds (or away from decor entirely) just re-triggers
+  // exactly the loads that actually changed, same as any other consumer of
+  // that hook.
+  const decor_id = activeTool === "decor" ? ui_decor_id : hovered_object?.kind === "decor" ? hovered_object.decor_id : null;
+  const decor_bundle = decor_id ? decor_bundle_for(decor_id) : null;
+  const { geometries: decor_geometries, materials: decor_materials } = useInstancedModelVariants(decor_bundle?.variants ?? EMPTY_VARIANTS);
+
+  // The exact `i` a real placement/hover resolves to — user_decor_pick is
+  // pure and keyed only on this, so calling it here predicts (for a
+  // placement candidate) or recovers (for an already-placed entry) the
+  // real variant/heading a real render would use, not an arbitrary stand-in.
+  const decor_pick_i = activeTool === "decor" ? hovered?.i ?? null : hovered_object?.kind === "decor" ? hovered_object.i : null;
+  const decor_pick = decor_bundle && decor_pick_i !== null ? user_decor_pick(decor_pick_i, decor_bundle.variants.length) : null;
+  const decor_geometry = decor_pick ? decor_geometries[decor_pick.variant] ?? null : null;
+  const decor_map = decor_pick ? decor_materials[decor_pick.variant]?.map ?? null : null;
+  // Both must be ready — an untextured white silhouette (geometry loaded,
+  // texture not yet) would read as a real rendering glitch, not a loading
+  // state, so this falls back to the flat box ghost until both resolve.
+  const is_decor_ghost = decor_geometry !== null && decor_map !== null;
+
+  if (is_decor_ghost && decor_pick) {
+    // Position is intentionally zero here — real decor's own position comes
+    // from the group wrapper below (AnchorNode already sits at hovered.i/f,
+    // decor's own base-anchored corner, unlike a cube's center-anchored
+    // object_pos), so only rotation/scale from this matrix are used.
+    // scale is always 1: real user-placed decor never gets scatter.ts's own
+    // jitter (see objects/store.ts's "decor" channel doc comment) — only
+    // procedural placements do, and those are never hoverable/selectable.
+    compose_instance_matrix($decor_matrix, { position: [0, 0, 0], rotation_z: decor_pick.rotation, scale: 1, id: null });
+    $decor_matrix.decompose($decor_translation, $decor_quaternion, $decor_scale);
+  }
 
   // The real thing's own actual painted texture (objects/tex.ts's own
   // cached, pixel-art-filtered load — the exact file a real placed cube of
@@ -126,6 +189,37 @@ export function HoverCursor() {
   const current_scale = use_object_style ? preview_size : U_PER_CELL;
 
   if (!hovered || blocked) return null;
+
+  // Decor's own real silhouette+texture, unlit — matching how a real
+  // DecorVariantMesh actually renders (instanced_model.ts's own doc comment:
+  // "every material is unlit... no guarantee of real scene lights bright
+  // enough"), unlike the lit MeshStandardMaterial treatment below, which
+  // matches cube content's own real (lit) render instead. Position is zero
+  // (base-anchored, matching real user-placed decor's own corner-anchored
+  // storage) rather than object_pos (center-anchored, correct for a cube
+  // but not a model whose own origin sits at its base).
+  if (is_decor_ghost && decor_geometry && decor_map) {
+    return (
+      <AnchorNode i={hovered.i} f={hovered.f}>
+        <group position={fill3(0)}>
+          <mesh geometry={decor_geometry} quaternion={$decor_quaternion} scale={$decor_scale} renderOrder={0}>
+            <meshBasicMaterial
+              map={decor_map}
+              color="#ffffff"
+              transparent
+              opacity={GHOST_OPACITY}
+              side={THREE.DoubleSide}
+              depthTest
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </mesh>
+        </group>
+      </AnchorNode>
+    );
+  }
+
   return (
     <AnchorNode i={hovered.i} f={hovered.f}>
       <group position={use_object_style ? object_pos : TERRAIN_POS}>
