@@ -190,11 +190,17 @@ export function HoverCursor() {
 
   if (!hovered || blocked) return null;
 
-  // Decor's own real silhouette+texture, unlit — matching how a real
-  // DecorVariantMesh actually renders (instanced_model.ts's own doc comment:
-  // "every material is unlit... no guarantee of real scene lights bright
-  // enough"), unlike the lit MeshStandardMaterial treatment below, which
-  // matches cube content's own real (lit) render instead. Position is zero
+  // Decor's own real silhouette+texture, lit — matching how a real
+  // DecorVariantMesh actually renders since instanced_model.ts's own
+  // material stopped being unlit (see that file's own doc comment and
+  // discussions/20260906-decor-lit-shading.md); this ghost's whole point is
+  // "what a real render of this looks like, just translucent", so it has to
+  // track that. Same emissive-floor treatment as the real thing
+  // (emissiveMap mirrors map, emissiveIntensity=light_cfg.FLOOR) so the
+  // ghost doesn't go darker than a real placed instance would in the same
+  // spot. No rim-light injection here though — same reasoning the cube
+  // ghost below skips it for: real coupling to a shader-injection path for a
+  // payoff this translucent preview doesn't need. Position is zero
   // (base-anchored, matching real user-placed decor's own corner-anchored
   // storage) rather than object_pos (center-anchored, correct for a cube
   // but not a model whose own origin sits at its base).
@@ -203,9 +209,14 @@ export function HoverCursor() {
       <AnchorNode i={hovered.i} f={hovered.f}>
         <group position={fill3(0)}>
           <mesh geometry={decor_geometry} quaternion={$decor_quaternion} scale={$decor_scale} renderOrder={0}>
-            <meshBasicMaterial
+            <meshStandardMaterial
               map={decor_map}
               color="#ffffff"
+              emissive="#ffffff"
+              emissiveMap={decor_map}
+              emissiveIntensity={light_cfg.FLOOR}
+              roughness={1}
+              metalness={0}
               transparent
               opacity={GHOST_OPACITY}
               side={THREE.DoubleSide}

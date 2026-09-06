@@ -85,7 +85,17 @@ export function register_decor_mesh(mesh: THREE.Mesh, instances: readonly ModelI
  */
 export function raycast_decor(raycaster: THREE.Raycaster, max_dist: f64): string | null {
   if (registry.size === 0) return null;
-  const entries = Array.from(registry);
+  // THREE.Raycaster.intersectObjects does NOT check `.mesh.visible` on its
+  // own (that flag only affects the render pass, not raycasting) — this
+  // matters now that a mesh can be registered but genuinely invisible
+  // (chunk_stage.tsx's own LOD blend, 2026-09-06: a decor bundle's
+  // secondary-tier mesh sits registered-but-hidden for most of its
+  // lifetime, flipping to visible only inside a threshold's own blend
+  // band). Without this filter, hovering could resolve a hit against
+  // whichever of the two blend-pair meshes happens to be nearer along the
+  // ray, regardless of which one is actually on screen.
+  const entries = Array.from(registry).filter((entry) => entry.mesh.visible);
+  if (entries.length === 0) return null;
   const hits = raycaster.intersectObjects(entries.map((entry) => entry.mesh), false);
 
   for (const hit of hits) {

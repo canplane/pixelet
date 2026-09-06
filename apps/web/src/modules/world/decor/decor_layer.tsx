@@ -40,17 +40,25 @@
  * DECOR_DENSITY_BY_LOD_STEP below for the actual falloff curve and why it's
  * steep rather than a gentle taper.
  *
- * CURRENT LIMITATIONS, left as-is deliberately rather than gaps to close:
- * - No blend/secondary-tier dithering across an LOD threshold band, unlike
- *   chunk_stage.tsx's own cube content (get_lod_pair_visibility's stochastic
- *   finer/coarser split in render/lod.ts). That machinery exists there to
- *   hide a *dense, screen-filling* surface snapping to a new tier all at
- *   once; a decor chunk's density merely stepping down (1 -> 0.5 -> 0.25 ->
- *   0) already reads as individual sparse objects thinning out, not a
- *   visible surface repainting itself, so the same fix would cost real
- *   complexity (a second built instance set per chunk, the same per-chunk
- *   hash/coarse_fraction machinery) for a pop that isn't actually
- *   objectionable here. Not planned unless that changes.
+ * LOD BLEND — DONE (2026-09-06). Decor density stepping down a tier
+ * (1 -> 0.5 -> 0.25 -> 0) used to pop synchronized across every chunk that
+ * crossed a threshold in the same frame — a whole ring of forest visibly
+ * thinning at once. Now mirrors chunk_stage.tsx's own cube-content blend
+ * (get_lod_pair_visibility's stochastic finer/coarser split, render/lod.ts):
+ * inside a threshold's own band, a chunk holds BOTH density levels' own
+ * built instance sets (chunk_stage.tsx's DecorLayoutPair) and shows exactly
+ * one, chosen by comparing the chunk's own stable hash against how far the
+ * camera has moved through the band — staggering which chunks have already
+ * switched across a range of distances instead of all of them switching on
+ * the same frame. This does NOT make an individual tree fade or shrink —
+ * decor still never blends an instance's own scale/opacity with distance
+ * (see DECOR_DENSITY_BY_LOD_STEP below) — it only smears WHERE the
+ * population-level thinning happens across space, the same thing cube
+ * content's own blend does for its tier pop. Toggled via a plain
+ * `THREE.Object3D.visible` flip (render/lod_visibility.ts), not a per-vertex
+ * attribute the way cube content's own a_visible works: decor's blend is
+ * always whole-mesh (an entire density level's own built set, on or off),
+ * so there was never a need for cube's finer per-vertex granularity here.
  *
  * TIER-1 UNIFICATION — DONE (2026-09-05), Minecraft's own block model as the
  * literal reference, not just an inspiration. It's a 3-tier split, not 2 —
@@ -80,7 +88,7 @@
  * not a separate store.
  */
 
-import { memo, useEffect, useMemo } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -91,9 +99,13 @@ import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
 import type { ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
 
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { rim_cfg } from "@/modules/world/environment/config.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_key, get_objects_in_cell, get_render_object_entries_in_l2_column, l2_column_key_of } from "@/modules/world/objects/store.ts";
 import type { LodStep } from "@/render/lod.ts";
+import type { ChunkLodRole } from "@/render/layer/pipeline/chunk_bucket.ts";
+import { type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
 import { bake_decor_instances, type DecorVariantAsset, type ModelInstanceTransform, useInstancedModelVariants } from "./instanced_model.ts";
@@ -271,8 +283,20 @@ export function build_decor_instances(
 
 export type DecorVariantMeshProps = {
   geometry: THREE.BufferGeometry;
-  material: THREE.MeshBasicMaterial;
+  material: THREE.MeshStandardMaterial;
   instances: ModelInstanceTransformList;
+  /** Which half of chunk_stage.tsx's own primary/secondary LOD blend pair
+   * this mesh is (2026-09-06) — "secondary" starts invisible and only shows
+   * once the shared registry below says so; see this file's own
+   * DECOR_DENSITY_BY_LOD_STEP doc comment for why decor never needed
+   * per-vertex blend granularity the way cube content's own a_visible does. */
+  role: ChunkLodRole;
+  /** Same registry chunk_stage.tsx's own ChunkMesh registers into — one
+   * shared decision (render/lod_visibility.ts's apply_visibility, driven by
+   * chunk_stage.tsx's own recheck()) flips both a chunk's cube content and
+   * its decor between LOD tiers together, not two independently-timed
+   * transitions. */
+  registry: ChunkMeshRegistry;
 };
 
 /** One real, non-instanced THREE.Mesh per (chunk, variant) pair with at
@@ -287,7 +311,7 @@ export type DecorVariantMeshProps = {
  * geometry is what lets this variant's own tree model bake into the exact
  * same "one merged per-chunk buffer" model chunk_mesher.ts's own cube bake
  * uses — see this file's own top doc comment. */
-export const DecorVariantMesh = memo(({ geometry, material, instances }: DecorVariantMeshProps) => {
+export const DecorVariantMesh = memo(({ geometry, material, instances, role, registry }: DecorVariantMeshProps) => {
   const mesh = useMemo(() => {
     const merged = bake_decor_instances(geometry, instances);
     return new THREE.Mesh(merged ?? new THREE.BufferGeometry(), material);
@@ -303,9 +327,30 @@ export const DecorVariantMesh = memo(({ geometry, material, instances }: DecorVa
   // (fresh mesh+instances) on every rebuild, matching mesh's own dependency
   // list above — a stale entry would map a real hit's faceIndex against an
   // instances array that no longer corresponds to the live geometry.
+  // decor_hit.ts's own raycast_decor skips a registered-but-invisible mesh
+  // itself (THREE.Raycaster doesn't honor `.visible` on its own), so a
+  // hidden half of a blend pair registering here is harmless.
   useEffect(() => {
     return register_decor_mesh(mesh, instances);
   }, [mesh, instances]);
+
+  // render/lod_visibility.ts's shared registry: sets this mesh's own default
+  // visibility (primary starts shown, secondary starts hidden — the sane
+  // guess before chunk_stage.tsx's own recheck() runs its first real
+  // decision) and lets that shared decision flip `mesh.visible` directly,
+  // same mechanism ChunkMesh uses for cube content, just via a plain
+  // Object3D flag instead of a per-vertex attribute (see lod_visibility.ts's
+  // own top doc comment for why that's the right level of granularity here).
+  // useLayoutEffect, not useEffect, for the same reason ChunkMesh's own
+  // mount effect needs it: without it, a freshly created secondary mesh
+  // would render at its THREE.Mesh default (visible = true) for one frame
+  // before this corrects it.
+  useLayoutEffect(() => {
+    mesh.visible = role === "primary";
+    const mounted: MountedLodMesh = { kind: "decor", mesh, role };
+    registry.meshes.add(mounted);
+    return () => void registry.meshes.delete(mounted);
+  }, [mesh, role, registry]);
 
   return <primitive object={mesh} />;
 });
@@ -314,7 +359,7 @@ DecorVariantMesh.displayName = "DecorVariantMesh";
 export type DecorBundleAssets = {
   bundle: DecorKindBundle;
   geometries: readonly (THREE.BufferGeometry | null)[];
-  materials: readonly (THREE.MeshBasicMaterial | null)[];
+  materials: readonly (THREE.MeshStandardMaterial | null)[];
 };
 
 /**
@@ -332,6 +377,25 @@ export type DecorBundleAssets = {
 export function useAllDecorBundleAssets(bundles: readonly DecorKindBundle[]): readonly DecorBundleAssets[] {
   const all_variants = useMemo(() => bundles.flatMap((bundle) => bundle.variants), [bundles]);
   const { geometries, materials } = useInstancedModelVariants(all_variants);
+
+  // instanced_model.ts's own material deliberately doesn't know the live
+  // show_rim_light setting (importing app/settings/settings_store.ts there
+  // would drag deno test into a module graph it can't load — see that
+  // file's own top doc comment) — this is the one real (non-test) consumer
+  // that needs it live, so it owns the subscription instead, updating every
+  // currently-loaded material's own compiled shader uniform directly.
+  // Cheaper than each of the (potentially many, one per chunk)
+  // DecorVariantMesh consumers subscribing individually, and correct
+  // regardless of how many chunks currently render a given variant: the
+  // material object itself is the same one shared across all of them
+  // (bundle_assets is computed once here, at ChunkStage level).
+  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
+  useEffect(() => {
+    for (const material of materials) {
+      const shader = material?.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
+      if (shader) shader.uniforms.u_rim_intensity.value = show_rim_light ? rim_cfg.INTENSITY : 0;
+    }
+  }, [materials, show_rim_light]);
 
   return useMemo(() => {
     const out: DecorBundleAssets[] = [];

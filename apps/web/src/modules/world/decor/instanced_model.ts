@@ -12,11 +12,31 @@
  * come from entirely different Kenney packs with different colormap
  * atlases (tree_decor.ts mixes fantasy-town-kit and graveyard-kit trees
  * this way), so nothing here assumes one shared texture across a kind's
- * whole variant list. Every material is unlit, matching every other model
- * in this renderer (chunk_stage.tsx's own boxes are emissive-only,
- * characters/use_character_model.ts's MeshBasicMaterial reasoning applies
- * unchanged: no guarantee of real scene lights bright enough for a lit
- * material).
+ * whole variant list.
+ *
+ * Every material is lit (MeshStandardMaterial), matching chunk_stage.tsx's
+ * own baked cube content — a plain MeshBasicMaterial used to be the choice
+ * here (2026-09-05, "no guarantee of real scene lights bright enough for a
+ * lit material"), but environment/config.ts's own rim_cfg doc comment
+ * already states the actual governing principle: "a shared render pipeline
+ * shouldn't treat one geometry role differently from another for the same
+ * shader term" — decor staying unlit-and-rim-less was that principle not
+ * having reached this file yet, not a deliberate exception. The same
+ * emissive-floor treatment every other lit surface gets (light_cfg.FLOOR)
+ * covers the original "no guaranteed light" concern — see
+ * discussions/20260906-decor-lit-shading.md.
+ *
+ * Deliberately does NOT import app/settings/settings_store.ts here (unlike
+ * chunk_stage.tsx's own create_material()) even though u_rim_intensity needs
+ * to track its show_rim_light setting: that store composes in
+ * settings/slices/character_slice.ts, which reaches characters/variants.ts's
+ * own `*.glb?url` asset imports — fine for Vite, but `deno test` has no
+ * loader for that specifier, and this file is imported directly by
+ * decor_hit.test.ts/instanced_model.test.ts. Pulling that whole chain into a
+ * module those tests import would break `deno task test` outright, not just
+ * slow it down. decor_layer.tsx's own useAllDecorBundleAssets — the only
+ * real (non-test) consumer that needs live updates — owns that
+ * subscription instead, one level up from here.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -24,7 +44,9 @@ import * as THREE from "three";
 import { mergeBufferGeometries } from "three-stdlib";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import { light_cfg } from "@/modules/world/environment/config.ts";
 import { load_gltf, load_texture } from "@/modules/world/gltf_cache.ts";
+import { inject_rim_light_shader } from "@/modules/world/render/rim_light_shader.ts";
 
 /**
  * Merges every mesh found in a loaded glTF scene into one static
@@ -69,7 +91,7 @@ export type LoadedModelVariants = {
   geometries: (THREE.BufferGeometry | null)[];
   /** One material per variant, null until that variant's own skin texture
    * has loaded. */
-  materials: (THREE.MeshBasicMaterial | null)[];
+  materials: (THREE.MeshStandardMaterial | null)[];
 };
 
 /**
@@ -84,7 +106,7 @@ export type LoadedModelVariants = {
  */
 export function useInstancedModelVariants(variants: readonly DecorVariantAsset[]): LoadedModelVariants {
   const [geometries, set_geometries] = useState<(THREE.BufferGeometry | null)[]>(() => variants.map(() => null));
-  const [materials, set_materials] = useState<(THREE.MeshBasicMaterial | null)[]>(() => variants.map(() => null));
+  const [materials, set_materials] = useState<(THREE.MeshStandardMaterial | null)[]>(() => variants.map(() => null));
 
   // variants is expected to be a stable module-level constant (every
   // current DecorKind's own list — see tree_decor.ts) — joined into one key
@@ -122,7 +144,36 @@ export function useInstancedModelVariants(variants: readonly DecorVariantAsset[]
         if (cancelled) return;
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.flipY = false;
-        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 1,
+          metalness: 0,
+          // Same emissive-floor treatment every other lit surface gets
+          // (chunk_stage.tsx's own inject_chunk_shader, hover_cursor.tsx's
+          // own object ghost) — a minimum brightness that still shows the
+          // real texture pattern rather than a flat tinted rectangle,
+          // covering the "no guaranteed scene light" concern this file's
+          // top comment used to solve by staying unlit entirely.
+          emissive: 0xffffff,
+          emissiveMap: texture,
+          emissiveIntensity: light_cfg.FLOOR,
+        });
+        // Distinct per-variant skin textures mean distinct materials
+        // regardless (map/emissiveMap differ), but the compiled WebGLProgram
+        // itself is identical for every one of them — same reasoning
+        // chunk_stage.tsx's own create_material() gives for "chunk-mesh".
+        material.customProgramCacheKey = () => "decor-mesh";
+        // u_rim_intensity starts at 0 (inject_rim_light_shader's own
+        // default) — this file doesn't know the live show_rim_light setting
+        // (see this file's own top doc comment for why), so the real value
+        // gets set from outside, by whichever caller actually needs it live
+        // (decor_layer.tsx's own useAllDecorBundleAssets, for the real
+        // render path) via material.userData.shader once it's populated
+        // here.
+        material.onBeforeCompile = (shader) => {
+          inject_rim_light_shader(shader);
+          material.userData.shader = shader;
+        };
         set_materials((current) => {
           const next = current.slice();
           next[i] = material;
