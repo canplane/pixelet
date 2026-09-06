@@ -29,7 +29,7 @@ import * as THREE from "three";
 
 import { GROUND_LAYER_META, hex_to_rgb255 } from "./layer/terrain/shader_meta.ts";
 import terrain_wire from "@pxl/shared/assets/cell/textures/terrain/wire.ts";
-import { object_color_hex, object_color_ids, type ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import { cube_hex, cube_ids, type CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
 import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
 import type { ChannelMap, ImageEntry } from "@pxl/shared/spec/cell/type.ts";
 
@@ -53,9 +53,18 @@ type LayerMetaLike = { ch_key: string; type_key: string; layer_index: u32 };
 /** Object colors, numbered starting right after every ground layer — see
  * this file's own doc comment. objects/adapter.ts reads this to resolve
  * VoxelMaterial.layer_idx the same way terrain/adapter.ts reads
- * GROUND_LAYER_INDEX_LOOKUP_FLAT. */
-export const OBJECT_LAYER_IDX: Partial<Record<ObjectColorId, u32>> = {};
-const LAYER_META: LayerMetaLike[] = object_color_ids.map((color_id, i) => {
+ * GROUND_LAYER_INDEX_LOOKUP_FLAT.
+ *
+ * cube_ids (cell/mod.ts) is only ever the original 15 flat colors — the
+ * terrain-styled catalog (2026-09-06's own cell/mod.ts, derived from
+ * cube_types' own land/water/structure/transport channels) is a completely
+ * separate numbering, deliberately never mixed into this one: those ids are
+ * meant to look identical to an existing ground layer, not get a new one of
+ * their own — objects/adapter.ts's own resolve_solid_material reads
+ * GROUND_LAYER_INDEX_LOOKUP_FLAT directly for them instead of this table, so
+ * cube_ids never needs filtering here. */
+export const OBJECT_LAYER_IDX: Partial<Record<CubeColorId, u32>> = {};
+const LAYER_META: LayerMetaLike[] = cube_ids.map((color_id, i) => {
   const layer_index = GROUND_LAYER_META.length + i;
   OBJECT_LAYER_IDX[color_id] = layer_index;
   return { ch_key: "block", type_key: color_id, layer_index };
@@ -94,10 +103,10 @@ function build_placeholder_data(sz: u32): Uint8Array {
     const [r, g, b] = hex_to_rgb255(m.hex_color);
     fill_layer(data, m.layer_index, sz, r, g, b);
   }
-  for (const color_id of object_color_ids) {
+  for (const color_id of cube_ids) {
     const layer_index = OBJECT_LAYER_IDX[color_id];
-    if (layer_index === undefined) continue; // unreachable — every id in object_color_ids gets an entry above.
-    const [r, g, b] = hex_to_rgb255(object_color_hex(color_id));
+    if (layer_index === undefined) continue; // unreachable — every id in cube_ids gets an entry above.
+    const [r, g, b] = hex_to_rgb255(cube_hex(color_id));
     fill_layer(data, layer_index, sz, r, g, b);
   }
   return data;

@@ -31,25 +31,24 @@ import { b64url_to_bytes, bytes_to_b64url } from "@xpute/core/kit/encoding.ts";
 
 import { OBJECT_LAYOUT, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import {
-  object_color_id_from_num,
-  object_color_num_id,
-  object_decor_id_from_num,
-  object_decor_num_id,
-  type ObjectDecorId,
-  object_types,
-  OBJECT_UNDEF,
+  cube_types,
+  decor_id_from_num,
+  decor_num_id,
+  type DecorId,
   object_value_is_air,
   object_value_is_decor,
   object_value_is_present,
-  type ObjectColorId,
-} from "@pxl/shared/spec/cell/objects.ts";
+  placeable_cube_id_from_num,
+  placeable_cube_num_id,
+  type PlaceableCubeId,
+} from "@pxl/shared/spec/cell/mod.ts";
 import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
 type ObjectEntryBase = { id: string; i: IVec; f: FVec; size: f64 };
-export type PlacedObject = ObjectEntryBase & { kind: "solid"; color_id: ObjectColorId };
-export type PlacedDecor = ObjectEntryBase & { kind: "decor"; decor_id: ObjectDecorId };
+export type PlacedObject = ObjectEntryBase & { kind: "solid"; color_id: PlaceableCubeId };
+export type PlacedDecor = ObjectEntryBase & { kind: "decor"; decor_id: DecorId };
 export type ObjectAir = ObjectEntryBase & { kind: "air" };
 export type ObjectLayerEntry = PlacedObject | PlacedDecor | ObjectAir;
 
@@ -164,8 +163,7 @@ function derive_cell_entries(key: string, tree: ObjectTree): ObjectLayerEntry[] 
   const out: ObjectLayerEntry[] = [];
 
   sparse_tree.walk(tree, (x, y, z, level, val) => {
-    if (val === OBJECT_UNDEF) return;
-    if (!object_value_is_present(val) || val === object_types.block.UNKNOWN) return;
+    if (!object_value_is_present(val) || val === cube_types.common.UNKNOWN) return;
     const abs = pvf3.add({ i: 0n, f: 0n }, corner, local_offset(x, y, z));
     const base: ObjectEntryBase = {
       id: leaf_id(key, x, y, z, level),
@@ -174,9 +172,9 @@ function derive_cell_entries(key: string, tree: ObjectTree): ObjectLayerEntry[] 
       size: 2 ** level,
     };
     if (object_value_is_decor(val)) {
-      out.push({ ...base, kind: "decor", decor_id: object_decor_id_from_num(val) });
+      out.push({ ...base, kind: "decor", decor_id: decor_id_from_num(val) });
     } else {
-      out.push(object_value_is_air(val) ? { ...base, kind: "air" } : { ...base, kind: "solid", color_id: object_color_id_from_num(val) });
+      out.push(object_value_is_air(val) ? { ...base, kind: "air" } : { ...base, kind: "solid", color_id: placeable_cube_id_from_num(val) });
     }
   });
 
@@ -552,18 +550,18 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   reindex_cell(ix, iy, iz);
 }
 
-export function place(i: IVec, f: FVec, size: f64, color_id: ObjectColorId): void {
-  write_object_value(i, f, size, object_color_num_id(color_id));
+export function place(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId): void {
+  write_object_value(i, f, size, placeable_cube_num_id(color_id));
 }
 
 /** Same write path as place(), just tagged with a decor kind instead of a
- * color — see objects.ts's own "decor" channel doc comment. Always the
- * whole-cell tier in practice today (mode_bar.tsx's decor buttons don't
- * expose place()'s own size flyout), but this doesn't assume that: any
- * OBJECT_SIZES tier still round-trips correctly through the exact same
- * level/is_whole_cell logic a color cube uses. */
-export function place_decor(i: IVec, f: FVec, size: f64, decor_id: ObjectDecorId): void {
-  write_object_value(i, f, size, object_decor_num_id(decor_id));
+ * color — see decor.ts's own doc comment. Always the whole-cell tier in
+ * practice today (mode_bar.tsx's decor buttons don't expose place()'s own
+ * size flyout), but this doesn't assume that: any OBJECT_SIZES tier still
+ * round-trips correctly through the exact same level/is_whole_cell logic a
+ * color cube uses. */
+export function place_decor(i: IVec, f: FVec, size: f64, decor_id: DecorId): void {
+  write_object_value(i, f, size, decor_num_id(decor_id));
 }
 
 export function remove(id: string): void {
@@ -576,19 +574,19 @@ export function remove(id: string): void {
 
   // level===max (the whole-cell tier) — see place()'s matching comment.
   if (parsed.level >= OBJECT_LAYOUT.max) {
-    sparse_tree.fill(tree, OBJECT_UNDEF);
+    sparse_tree.fill(tree, cube_types.common.VOID);
   } else {
     const [ix, iy, iz] = parse_cell_key(key);
     const corner = cell_corner(ix, iy, iz);
     const abs = pvf3.add({ i: 0n, f: 0n }, corner, local_offset(parsed.x, parsed.y, parsed.z));
 
-    sparse_tree.write(tree, abs, OBJECT_UNDEF, parsed.level);
+    sparse_tree.write(tree, abs, cube_types.common.VOID, parsed.level);
     sparse_tree.compact(tree);
   }
 
   let empty = true;
   sparse_tree.walk(tree, (_x, _y, _z, _level, val) => {
-    if (val !== OBJECT_UNDEF) empty = false;
+    if (val !== cube_types.common.VOID) empty = false;
   });
   if (empty) cells.delete(key);
 

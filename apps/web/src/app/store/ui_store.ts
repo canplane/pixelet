@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import type { ObjectColorId, ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
+import type { DecorId, PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { DEFAULT_OBJECT_SIZE } from "@/modules/world/objects/size.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
@@ -22,14 +22,18 @@ type UiState = {
   activeTool: ActiveTool;
   set_activeTool: (activeTool: ActiveTool) => void;
 
-  object_color_id: ObjectColorId;
-  set_object_color_id: (object_color_id: ObjectColorId) => void;
+  // Widened to the full placeable catalog (2026-09-06, palette_modal.tsx's
+  // own terrain-styled entries alongside mode_bar.tsx's original 15 flat
+  // colors) — the hotbar only ever sets this to the narrower CubeColorId
+  // subset, but the field itself has to hold whatever the modal picks too.
+  object_color_id: PlaceableCubeId;
+  set_object_color_id: (object_color_id: PlaceableCubeId) => void;
 
   object_size: f64;
   set_object_size: (object_size: f64) => void;
 
-  decor_id: ObjectDecorId;
-  set_decor_id: (decor_id: ObjectDecorId) => void;
+  decor_id: DecorId;
+  set_decor_id: (decor_id: DecorId) => void;
 
   chatLines: ChatLine[];
   append_chat_line: (text: string) => void;

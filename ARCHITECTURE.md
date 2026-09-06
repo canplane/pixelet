@@ -96,7 +96,7 @@ Polygon rasterization uses even-odd fill with hole support. Linear features use 
 Terrain and objects deliberately keep different source storage:
 
 - **Terrain** is dense and varied — a Tile-shaped layer — so L3 pages retain dense 2D channels and elevation data.
-- **Objects** are sparse and fully 3D — a Volume-shaped layer — so each occupied L1 block owns a small sparse octree. Leaf byte `0` is `UNDEF`, meaning absence/fallback. Explicit object-layer values set bit 7: `0x81` is explicit AIR, material values start at `0x82`, and `0xff` is UNKNOWN.
+- **Objects** are sparse and fully 3D — a Volume-shaped layer — so each occupied L1 block owns a small sparse octree. Leaf byte `0` is `OBJECT_UNDEF`, meaning absence/fallback. `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`).
 
 They unify only at the renderer boundary through `WorldLayer`:
 

@@ -1,8 +1,8 @@
 // @pxl/shared/assets/cell/textures/objects/wire.ts
 //
 // Bridges the real object-block PNGs in this same textures/ dir to typed
-// URLs — not to be confused with spec/cell/objects.ts, which defines the
-// numeric object_types/object_colors identity these images just decorate.
+// URLs — not to be confused with spec/cell/cube.ts, which defines the
+// numeric cube_types/cube_colors identity these images just decorate.
 // Provenance: tools/manifest.json, downloaded/normalized by
 // ./tools/download_texture_pack.ts.
 import type { ChannelMap } from "@pxl/shared/spec/cell/type.ts";

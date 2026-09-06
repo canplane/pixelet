@@ -13,7 +13,7 @@ import { assertEquals, assertNotEquals } from "@std/assert";
 import { PNG } from "npm:pngjs@7";
 import { Buffer } from "node:buffer";
 import { flatten_manifest, load_manifest } from "./manifest.ts";
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 const EXPECTED_SIDE_TYPES = [
   "BARE",
@@ -150,17 +150,17 @@ Deno.test("manifest - no two active on-disk files are byte-identical (SHA-256)",
   assertEquals(collisions, [], `distinct active entries must never end up byte-identical on disk: ${JSON.stringify(collisions)}`);
 });
 
-// terrain_types.ts is a plain spec module (JSON palette imports only, no
-// PNG/GLB assets) — safe to import directly here, unlike ../terrain/wire.ts.
+// cube.ts is a plain spec module (JSON palette imports only, no PNG/GLB
+// assets) — safe to import directly here, unlike ../terrain/wire.ts.
 // A texture-pack swap must never renumber the actual type IDs baked into
 // stored tiles; this is a tripwire, not exhaustive.
 Deno.test("manifest integration - terrain type IDs are untouched by this pack's own image swap", () => {
-  assertEquals(terrain_types.land.BARE, 1);
-  assertEquals(terrain_types.land.GREEN_DEEP, 10);
-  assertEquals(terrain_types.land.GREEN_LIGHT, 11);
-  assertEquals(terrain_types.land.SAND, 12);
-  assertEquals(terrain_types.land.HELIPAD, 31);
-  assertEquals(terrain_types.water.RIVER, 1);
-  assertEquals(terrain_types.water.LAKE, 2);
-  assertEquals(terrain_types.water.WETLAND, 3);
+  assertEquals(cube_types.land.BARE, 1);
+  assertEquals(cube_types.land.GREEN_DEEP, 10);
+  assertEquals(cube_types.land.GREEN_LIGHT, 11);
+  assertEquals(cube_types.land.SAND, 12);
+  assertEquals(cube_types.land.HELIPAD, 31);
+  assertEquals(cube_types.water.RIVER, 1);
+  assertEquals(cube_types.water.LAKE, 2);
+  assertEquals(cube_types.water.WETLAND, 3);
 });

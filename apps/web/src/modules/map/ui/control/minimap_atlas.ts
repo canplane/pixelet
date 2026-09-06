@@ -8,7 +8,7 @@ import { type IVec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { FROM_L3_IDX, L3_CENTER, L3_IDX, L3_RANGE } from "@pxl/shared/spec/space/indexer.ts";
 import { GROUND_CH_KEYS, type GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
-import { terrain_colors, terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_colors, cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
@@ -30,8 +30,8 @@ export const MINIMAP_PX_PER_U: f64 = ATLAS_PAGE_PX / L3_RANGE_REAL;
 // Ground channel bytes are type IDs, not weights, so this must reuse the same
 // per-channel override order the 3D shader blends with (shader.ts) — reordering
 // GROUND_CH_KEYS here would silently mismatch the 3D terrain's colors.
-const COLOR_TABLE: Record<GroundChannelKey, Record<u8, string | null>> = terrain_colors;
-const BASE_COLOR: string = terrain_colors.land[terrain_types.land.BARE];
+const COLOR_TABLE: Record<GroundChannelKey, Record<u8, string | null>> = cube_colors;
+const BASE_COLOR: string = cube_colors.land[cube_types.land.BARE];
 
 const $delta: PVF3 = { i: 0n, f: 0n };
 

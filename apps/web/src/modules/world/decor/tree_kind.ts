@@ -11,8 +11,7 @@
  * doc comment for why those live in a separate file instead of here.
  */
 
-import { common_types } from "@pxl/shared/spec/cell/common.ts";
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
 
 // Arbitrary, fixed — only has to stay stable across sessions (see
@@ -58,8 +57,8 @@ export const TREE_KIND: DecorKindSeed = {
  * left out: it's a maintained field, not natural ground, and reads wrong
  * with trees scattered across it. */
 export const is_tree_eligible: DecorEligibility = (land, water, structure, transport) => {
-  if (water !== common_types.AIR) return false;
-  if (structure !== common_types.AIR) return false;
-  if (transport !== common_types.AIR) return false;
-  return land === terrain_types.land.GREEN_LIGHT || land === terrain_types.land.GREEN_DEEP || land === terrain_types.land.BARE;
+  if (water !== cube_types.common.VOID) return false;
+  if (structure !== cube_types.common.VOID) return false;
+  if (transport !== cube_types.common.VOID) return false;
+  return land === cube_types.land.GREEN_LIGHT || land === cube_types.land.GREEN_DEEP || land === cube_types.land.BARE;
 };

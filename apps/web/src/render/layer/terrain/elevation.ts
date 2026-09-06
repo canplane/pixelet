@@ -14,8 +14,7 @@ import { clamp, lerp } from "@xpute/core/kit/math.ts";
 
 import { CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN } from "@pxl/shared/bake/constants.ts";
 import type { Ground } from "@pxl/shared/bake/format.ts";
-import { common_types } from "@pxl/shared/spec/cell/common.ts";
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN / PAGE_ELE_SPAN;
 
@@ -155,19 +154,19 @@ export const sample_ele = sample_ele_bicubic;
 export const WATER_RECESS_CELLS: i16 = 1;
 
 /** Mirrors render/layer/terrain/adapter.ts's ground_material_at priority
- * (LAND < WATER < STRUCTURE < TRANSPORT, last non-AIR wins) enough to
+ * (LAND < WATER < STRUCTURE < TRANSPORT, last non-VOID wins) enough to
  * answer one question: does this cell look like open water? Kept
  * independent rather than imported from adapter.ts, which pulls in
  * Zustand store bindings this pure math module has no business depending
  * on — if adapter.ts's channel priority ever changes, this needs the same
  * change made here too. SEA is checked separately from the WATER channel:
- * terrain.ts models it as land.SEA (a masked BARE-family id), not one of
+ * cube.ts models it as land.SEA (a masked BARE-family id), not one of
  * WATER's own RIVER/LAKE/WETLAND types. */
 export function is_water_family_at(ground: Ground, idx: u32): boolean {
-  if (ground.structure[idx] !== common_types.AIR) return false;
-  if (ground.transport[idx] !== common_types.AIR) return false;
-  if (ground.water[idx] !== common_types.AIR) return true;
-  return ground.land[idx] === terrain_types.land.SEA;
+  if (ground.structure[idx] !== cube_types.common.VOID) return false;
+  if (ground.transport[idx] !== cube_types.common.VOID) return false;
+  if (ground.water[idx] !== cube_types.common.VOID) return true;
+  return ground.land[idx] === cube_types.land.SEA;
 }
 
 /**

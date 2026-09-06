@@ -97,7 +97,7 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
-import type { ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
+import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { rim_cfg } from "@/modules/world/environment/config.ts";
@@ -150,13 +150,13 @@ export type DecorKindBundle = {
    * one Kenney pack, each with its own colormap atlas. */
   variants: readonly DecorVariantAsset[];
   /** Which objects/store.ts "decor" channel value a user-placed instance of
-   * this kind is tagged with (cell/objects.ts's object_types.decor) — links
+   * this kind is tagged with (cell/decor.ts's decor_types) — links
    * mode_bar.tsx's own decor button back to this bundle's variant list, so a
    * placed tree renders through the exact same instancing path a scattered
    * one does. See build_decor_instances' own doc comment. Omitted entirely
    * for a kind with no user-placeable equivalent yet (boats/cars/trains
    * today — scattered-only, no mode_bar button of their own). */
-  decor_id?: ObjectDecorId;
+  decor_id?: DecorId;
 };
 
 // Seeded purely by the placed object's own absolute position — unlike

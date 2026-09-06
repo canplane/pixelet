@@ -9,7 +9,7 @@
  * drifting out of sync with each other.
  */
 
-import type { ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
+import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
 import type { DecorKindBundle } from "./decor_layer.tsx";
 import { TREE_DECOR_BUNDLE } from "./tree_decor.ts";
 import { BOAT_DECOR_BUNDLE } from "./boat_decor.ts";
@@ -18,7 +18,7 @@ import { TRAIN_DECOR_BUNDLE } from "./train_decor.ts";
 
 export const DECOR_BUNDLES: readonly DecorKindBundle[] = [TREE_DECOR_BUNDLE, BOAT_DECOR_BUNDLE, CAR_DECOR_BUNDLE, TRAIN_DECOR_BUNDLE];
 
-const BY_DECOR_ID = new Map<ObjectDecorId, DecorKindBundle>();
+const BY_DECOR_ID = new Map<DecorId, DecorKindBundle>();
 for (const bundle of DECOR_BUNDLES) {
   if (bundle.decor_id) BY_DECOR_ID.set(bundle.decor_id, bundle);
 }
@@ -27,6 +27,6 @@ for (const bundle of DECOR_BUNDLES) {
  * belongs to — null for a decor_id somehow missing its own bundle, which
  * would itself be a real bug (every decor_id-carrying bundle registers
  * here), not an expected runtime case. */
-export function decor_bundle_for(decor_id: ObjectDecorId): DecorKindBundle | null {
+export function decor_bundle_for(decor_id: DecorId): DecorKindBundle | null {
   return BY_DECOR_ID.get(decor_id) ?? null;
 }

@@ -1,0 +1,16 @@
+// @pxl/shared/spec/cell/decor.ts
+// [Layer: objects] User-placed decor kind catalog — cube.ts's own sibling, non-cube content (GLB instances, not a chunk_mesher.ts box).
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+//
+// Numbered well clear of cube.ts's own values (128, 130-144, 255) even
+// though the two never collide in practice (each placed leaf holds one
+// value from exactly one of the two catalogs) — just so a raw byte's value
+// alone still hints at which catalog it came from during debugging.
+export const decor_types = {
+  tree: 228,
+} as const satisfies Record<string, number>;
+
+export type DecorId = keyof typeof decor_types;

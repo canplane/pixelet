@@ -12,7 +12,7 @@
 
 import type { f64, i32, u32, u8 } from "@xpute/core/kit/word.ts";
 
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import type { OSMExtra, OSMFeature, OSMTags } from "@pxl/shared/bake/model/osm_feature.ts";
 
@@ -80,24 +80,24 @@ function determine_road(highway_tag: string): u8 {
     case "motorway_link":
     case "trunk":
     case "trunk_link":
-      return terrain_types.transport.ROAD_MOTORWAY;
+      return cube_types.transport.ROAD_MOTORWAY;
 
     case "primary":
     case "primary_link":
-      return terrain_types.transport.ROAD_PRIMARY;
+      return cube_types.transport.ROAD_PRIMARY;
 
     case "secondary":
     case "secondary_link":
     case "tertiary":
     case "tertiary_link":
-      return terrain_types.transport.ROAD_SECONDARY;
+      return cube_types.transport.ROAD_SECONDARY;
 
     case "residential":
     case "living_street":
     case "unclassified":
     case "service":
     default:
-      return terrain_types.transport.ROAD_DEFAULT;
+      return cube_types.transport.ROAD_DEFAULT;
   }
 }
 
@@ -106,14 +106,14 @@ function determine_railway(tags: OSMTags): u8 {
   const type = tags.railway;
 
   if (type === "subway" || type === "light_rail") {
-    return terrain_types.transport.RAIL_SUBWAY;
+    return cube_types.transport.RAIL_SUBWAY;
   }
 
   if (type === "rail") {
-    return terrain_types.transport.RAIL_MAIN;
+    return cube_types.transport.RAIL_MAIN;
   }
 
-  return terrain_types.transport.RAIL_MAIN;
+  return cube_types.transport.RAIL_MAIN;
 }
 
 /**
@@ -333,18 +333,18 @@ export type CellConfig = {
 export const determine_cell_cfg = (category: string, tags: OSMTags, extra: OSMExtra): CellConfig | null => {
   // 1. 🏔️ Land: sea and foundation areas
   if (extra.is_ocean || category === "sea") {
-    return { cell_type: terrain_types.land.SEA, ch_key: GroundChannelKey.LAND };
+    return { cell_type: cube_types.land.SEA, ch_key: GroundChannelKey.LAND };
   }
 
   // 2. 💧 Water: inland water features
   if (category === "water" || tags.waterway || tags.natural === "water" || tags.wetland || ["reservoir", "basin"].includes(tags.landuse || "")) {
     if (tags.natural === "wetland" || tags.wetland || tags.water === "mud") {
-      return { cell_type: terrain_types.water.WETLAND, ch_key: GroundChannelKey.WATER };
+      return { cell_type: cube_types.water.WETLAND, ch_key: GroundChannelKey.WATER };
     }
 
     const is_flowing = !!tags.waterway || ["river", "canal", "stream", "drain"].includes(tags.water || "");
 
-    const water_value = is_flowing ? terrain_types.water.RIVER : terrain_types.water.LAKE;
+    const water_value = is_flowing ? cube_types.water.RIVER : cube_types.water.LAKE;
     return { cell_type: water_value, ch_key: GroundChannelKey.WATER };
   }
 
@@ -353,19 +353,19 @@ export const determine_cell_cfg = (category: string, tags: OSMTags, extra: OSMEx
     const amenity = tags.amenity || "";
     const building = tags.building || "";
 
-    let cell_type: u8 = terrain_types.structure.BUILDING;
+    let cell_type: u8 = cube_types.structure.BUILDING;
 
     if (
       tags.railway === "station" || tags.public_transport === "station" || amenity === "bus_station" ||
       ["train_station", "transportation", "station"].includes(building)
     ) {
-      cell_type = terrain_types.structure.BUILDING_STATION;
+      cell_type = cube_types.structure.BUILDING_STATION;
     } else if (MEDICAL_TYPES.has(amenity) || MEDICAL_TYPES.has(building)) {
-      cell_type = terrain_types.structure.BUILDING_MEDICAL;
+      cell_type = cube_types.structure.BUILDING_MEDICAL;
     } else if (EDU_TYPES.has(amenity) || EDU_TYPES.has(building)) {
-      cell_type = terrain_types.structure.BUILDING_EDUCATION;
+      cell_type = cube_types.structure.BUILDING_EDUCATION;
     } else if (extra.is_institutional) {
-      cell_type = terrain_types.structure.BUILDING_PUBLIC;
+      cell_type = cube_types.structure.BUILDING_PUBLIC;
     }
 
     return { cell_type, ch_key: GroundChannelKey.STRUCTURE };
@@ -373,18 +373,18 @@ export const determine_cell_cfg = (category: string, tags: OSMTags, extra: OSMEx
 
   // 4. 🛣️ Transport: roads, rail, runways, parking
   if (category === "road" || tags.highway || tags.railway || category === "parking") {
-    let cell_type: u8 = terrain_types.transport.ROAD_DEFAULT;
+    let cell_type: u8 = cube_types.transport.ROAD_DEFAULT;
 
     if (tags.aeroway === "runway") {
-      cell_type = terrain_types.transport.RUNWAY;
+      cell_type = cube_types.transport.RUNWAY;
     } else if (tags.aeroway === "taxiway" || tags.aeroway === "taxilane") {
-      cell_type = terrain_types.transport.TAXIWAY;
+      cell_type = cube_types.transport.TAXIWAY;
     } else if (extra.is_parking) {
-      cell_type = terrain_types.transport.PARKING;
+      cell_type = cube_types.transport.PARKING;
     } else if (tags.railway) {
       cell_type = determine_railway(tags);
     } else if (["pedestrian", "footway", "living_street", "path"].includes(tags.highway || "")) {
-      cell_type = terrain_types.transport.PEDESTRIAN;
+      cell_type = cube_types.transport.PEDESTRIAN;
     } else {
       cell_type = determine_road(tags.highway || "");
     }
@@ -404,23 +404,23 @@ export const determine_cell_cfg = (category: string, tags: OSMTags, extra: OSMEx
 /** Resolves detailed land-channel cell types. */
 function resolve_land(category: string, tags: OSMTags, extra: OSMExtra): u8 | null {
   const category_map: Record<string, u8> = {
-    forest: terrain_types.land.GREEN_DEEP,
-    park: terrain_types.land.GREEN_LIGHT,
-    sand: terrain_types.land.SAND,
+    forest: cube_types.land.GREEN_DEEP,
+    park: cube_types.land.GREEN_LIGHT,
+    sand: cube_types.land.SAND,
   };
   if (category_map[category]) return category_map[category];
 
   const amenity = tags.amenity || "";
   const landuse = tags.landuse || "";
 
-  if (EDU_TYPES.has(amenity) || landuse === "education") return terrain_types.land.EDUCATION;
-  if (MEDICAL_TYPES.has(amenity) || landuse === "medical") return terrain_types.land.MEDICAL;
-  if (extra.is_institutional) return terrain_types.land.PUBLIC;
-  if (extra.is_sports) return terrain_types.land.SPORTS;
+  if (EDU_TYPES.has(amenity) || landuse === "education") return cube_types.land.EDUCATION;
+  if (MEDICAL_TYPES.has(amenity) || landuse === "medical") return cube_types.land.MEDICAL;
+  if (extra.is_institutional) return cube_types.land.PUBLIC;
+  if (extra.is_sports) return cube_types.land.SPORTS;
 
   // forest, deep green
   if ((tags.natural && ["wood", "scrub", "heath", "peak", "ridge", "cliff", "mountain", "volcano"].includes(tags.natural)) || tags.landuse === "forest") {
-    return terrain_types.land.GREEN_DEEP;
+    return cube_types.land.GREEN_DEEP;
   }
 
   // grass, light green
@@ -429,34 +429,34 @@ function resolve_land(category: string, tags: OSMTags, extra: OSMExtra): u8 | nu
     (tags.landuse && ["grass", "village_green", "meadow", "allotments"].includes(tags.landuse)) ||
     (tags.leisure && ["park", "garden", "nature_reserve"].includes(tags.leisure))
   ) {
-    return terrain_types.land.GREEN_LIGHT;
+    return cube_types.land.GREEN_LIGHT;
   }
 
   // sand, rock
   if ((tags.natural && ["sand", "shingle", "bare_rock", "beach", "scree"].includes(tags.natural)) || tags.landuse === "quarry") {
-    return terrain_types.land.SAND;
+    return cube_types.land.SAND;
   }
 
   // human activity
   if (landuse) {
-    if (["residential", "cemetery"].includes(landuse)) return terrain_types.land.RESIDENTIAL;
-    if (["commercial", "retail"].includes(landuse)) return terrain_types.land.COMMERCIAL;
-    if (["industrial", "construction"].includes(landuse)) return terrain_types.land.INDUSTRIAL;
+    if (["residential", "cemetery"].includes(landuse)) return cube_types.land.RESIDENTIAL;
+    if (["commercial", "retail"].includes(landuse)) return cube_types.land.COMMERCIAL;
+    if (["industrial", "construction"].includes(landuse)) return cube_types.land.INDUSTRIAL;
   }
 
   // sports fallback
   if (tags.leisure && ["pitch", "playground", "golf_course", "track", "stadium"].includes(tags.leisure)) {
-    return terrain_types.land.SPORTS;
+    return cube_types.land.SPORTS;
   }
 
   // airport area
-  if (tags.aeroway === "apron") return terrain_types.land.APRON;
-  if (tags.aeroway === "helipad") return terrain_types.land.HELIPAD;
-  if (tags.aeroway === "aerodrome") return terrain_types.land.BARE;
+  if (tags.aeroway === "apron") return cube_types.land.APRON;
+  if (tags.aeroway === "helipad") return cube_types.land.HELIPAD;
+  if (tags.aeroway === "aerodrome") return cube_types.land.BARE;
 
   // general fallback
   if (tags.landuse || tags.natural || tags.leisure || tags.highway || tags.building) {
-    return terrain_types.land.BARE;
+    return cube_types.land.BARE;
   }
 
   return null;

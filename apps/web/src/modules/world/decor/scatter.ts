@@ -14,14 +14,14 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
-import { common_types } from "@pxl/shared/spec/cell/common.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { type Ground, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
 /** True if this cell's raw ground-channel values are safe ground for this
  * decoration kind to stand on — mirrors render/layer/terrain/adapter.ts's
  * own ground_material_at precedence (land is the base, water/structure/
- * transport each override it only when not AIR), since that's the same
+ * transport each override it only when not VOID), since that's the same
  * "what does this cell actually look like" question a texture-pack-based
  * predicate has to answer. */
 export type DecorEligibility = (land: u32, water: u32, structure: u32, transport: u32) => boolean;
@@ -98,10 +98,10 @@ function transport_aligned_rotation(transport: Uint8Array, cell_x: u32, cell_y: 
   let horizontal_votes = 0;
   let vertical_votes = 0;
   for (let d = 1; d <= ALIGN_NEIGHBOR_RADIUS; d++) {
-    if (cell_x - d >= 0 && transport[idx - d] !== common_types.AIR) horizontal_votes++;
-    if (cell_x + d < PAGE_CELL_SPAN && transport[idx + d] !== common_types.AIR) horizontal_votes++;
-    if (cell_y - d >= 0 && transport[idx - d * PAGE_CELL_SPAN] !== common_types.AIR) vertical_votes++;
-    if (cell_y + d < PAGE_CELL_SPAN && transport[idx + d * PAGE_CELL_SPAN] !== common_types.AIR) vertical_votes++;
+    if (cell_x - d >= 0 && transport[idx - d] !== cube_types.common.VOID) horizontal_votes++;
+    if (cell_x + d < PAGE_CELL_SPAN && transport[idx + d] !== cube_types.common.VOID) horizontal_votes++;
+    if (cell_y - d >= 0 && transport[idx - d * PAGE_CELL_SPAN] !== cube_types.common.VOID) vertical_votes++;
+    if (cell_y + d < PAGE_CELL_SPAN && transport[idx + d * PAGE_CELL_SPAN] !== cube_types.common.VOID) vertical_votes++;
   }
   const axis_rotation = horizontal_votes > vertical_votes ? Math.PI / 2 : 0;
   return flip ? axis_rotation + Math.PI : axis_rotation;

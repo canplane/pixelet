@@ -10,7 +10,7 @@
  * as derailed.
  */
 
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
 
 const TRAIN_KIND_TAG = 0x7ba1_5eed_0004_dec0n;
@@ -31,4 +31,4 @@ export const TRAIN_KIND: DecorKindSeed = {
 
 /** Only the transport channel matters — same reasoning as
  * car_kind.ts's own is_car_eligible. */
-export const is_train_eligible: DecorEligibility = (_land, _water, _structure, transport) => transport === terrain_types.transport.RAIL_MAIN;
+export const is_train_eligible: DecorEligibility = (_land, _water, _structure, transport) => transport === cube_types.transport.RAIL_MAIN;

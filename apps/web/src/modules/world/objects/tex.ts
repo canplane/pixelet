@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
-import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
 
 /**
@@ -52,12 +52,25 @@ function create_object_texture(url: string): THREE.Texture {
 // module load, since objects.ts's catalog can grow far larger (200+
 // planned) than terrain's own channel/type count and most colors may
 // never actually get placed in a given session.
-const cache = new Map<ObjectColorId, THREE.Texture>();
+const cache = new Map<PlaceableCubeId, THREE.Texture>();
 
-export function get_object_texture(id: ObjectColorId): THREE.Texture {
-  let tex = cache.get(id);
+/**
+ * `null` for a terrain-styled id (cell/mod.ts's own TERRAIN_STYLE_SOURCE,
+ * 2026-09-06) — those have no entry of their own in object_wire (they're
+ * not a separate texture-array layer at all, see tex_array.ts's own
+ * TERRAIN_STYLE_SOURCE-skip), so there's no per-color wire image to load
+ * here. hover_cursor.tsx's own ghost preview already degrades gracefully
+ * to a flat color swatch when this returns null; a real placed cube of
+ * this kind still renders with its own real terrain texture regardless,
+ * through chunk_stage.tsx's own shader — this only affects the
+ * pre-placement preview's fidelity, not the real render.
+ */
+export function get_object_texture(id: PlaceableCubeId): THREE.Texture | null {
+  let tex = cache.get(id) ?? null;
   if (tex) return tex;
-  tex = create_object_texture(object_wire.top.block[id].url);
+  const wire = object_wire.top.block[id as keyof typeof object_wire.top.block] as { url: string } | undefined;
+  if (!wire) return null;
+  tex = create_object_texture(wire.url);
   cache.set(id, tex);
   return tex;
 }

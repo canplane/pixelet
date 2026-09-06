@@ -159,10 +159,66 @@
     "blue": "Blue",
     "violet": "Violet",
     "magenta": "Magenta",
-    "pink": "Pink"
+    "pink": "Pink",
+    "land": {
+      "BARE": "Bare Ground",
+      "SEA": "Sea",
+      "GREEN_DEEP": "Forest",
+      "GREEN_LIGHT": "Grass",
+      "SAND": "Sand",
+      "RESIDENTIAL": "Residential Area",
+      "COMMERCIAL": "Commercial Area",
+      "INDUSTRIAL": "Industrial Area",
+      "SPORTS": "Sports Area",
+      "EDUCATION": "Education Area",
+      "MEDICAL": "Medical Area",
+      "PUBLIC": "Public Area",
+      "APRON": "Apron",
+      "HELIPAD": "Helipad"
+    },
+    "water": {
+      "RIVER": "River",
+      "LAKE": "Lake",
+      "WETLAND": "Wetland"
+    },
+    "structure": {
+      "BUILDING": "Building",
+      "BUILDING_STATION": "Station",
+      "BUILDING_EDUCATION": "School Building",
+      "BUILDING_MEDICAL": "Medical Building",
+      "BUILDING_PUBLIC": "Public Building"
+    },
+    "transport": {
+      "ROAD_DEFAULT": "Road",
+      "ROAD_MOTORWAY": "Motorway",
+      "ROAD_PRIMARY": "Primary Road",
+      "ROAD_SECONDARY": "Secondary Road",
+      "PEDESTRIAN": "Pedestrian Path",
+      "PARKING": "Parking Lot",
+      "RAIL_MAIN": "Railway",
+      "RAIL_SUBWAY": "Subway",
+      "RUNWAY": "Runway",
+      "TAXIWAY": "Taxiway"
+    }
   },
   "object_decors": {
     "tree": "Tree"
+  },
+  "palette_modal": {
+    "title": "Palette",
+    "description": "Every placeable cube color and decor kind.",
+    "close": "Close",
+    "tabs": {
+      "cube": "Cube",
+      "decor": "Decor"
+    },
+    "sections": {
+      "colors": "Colors",
+      "land": "Land",
+      "water": "Water",
+      "structure": "Structure",
+      "transport": "Transport"
+    }
   },
   "device": {
     "orientation": {
@@ -197,7 +253,8 @@
       "eraser": "Eraser",
       "message_placeholder": "Type a message...",
       "message_tooltip": "Message",
-      "send": "Send"
+      "send": "Send",
+      "catalog_tooltip": "Open full catalog"
     },
     "controls": {
       "reset_orientation": "Align north",

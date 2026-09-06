@@ -16,7 +16,7 @@ import { Vector } from "@xpute/core/ds/arena.ts";
 
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { type Ground, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
@@ -75,14 +75,14 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
 
   // Inverse sea pass: initialize the land channel with the sea/land base first.
   if (has_sea) {
-    ground.land.fill(terrain_types.land.SEA);
+    ground.land.fill(cube_types.land.SEA);
 
     sea_feats.forEach((f) => {
       // only closed polygons carve land out of the sea base.
       if (f.shape.is_closed) {
         render_polygon(
           f.shape.points,
-          terrain_types.land.BARE,
+          cube_types.land.BARE,
           ground.land,
           f.shape.holes,
         );
@@ -94,13 +94,13 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
     // comment): a single land polygon covers the page's full envelope, so
     // painting BARE directly is equivalent to carving it via render_polygon,
     // without paying for the scanline rasterization.
-    ground.land.fill(terrain_types.land.BARE);
+    ground.land.fill(cube_types.land.BARE);
   } else {
     // no coastline row touched this page's envelope at all — there's no
     // land anywhere nearby, so this is open ocean, not "no data yet".
     // Before this branch existed, this case fell through to the BARE
     // default above and every open-ocean page baked as flat dry land.
-    ground.land.fill(terrain_types.land.SEA);
+    ground.land.fill(cube_types.land.SEA);
   }
 
   // render categorized ground features.
@@ -120,7 +120,7 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
     // water and land overlays must not paint over true SEA cells.
     const is_land_or_water: boolean = ch_key === GroundChannelKey.LAND || ch_key === GroundChannelKey.WATER;
     const mask_ch: U8Array | undefined = has_sea && is_land_or_water ? ground.land : undefined;
-    const mask_val: u8 = terrain_types.land.SEA;
+    const mask_val: u8 = cube_types.land.SEA;
 
     if (shape.is_closed) {
       render_polygon(
