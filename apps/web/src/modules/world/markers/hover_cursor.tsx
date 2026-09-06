@@ -12,7 +12,7 @@ import { useCameraStore } from "@/modules/camera/store.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { get_local_world_origin } from "../frame/coord.ts";
-import { find_overlapping_object } from "../objects/collision.ts";
+import { is_placement_blocked } from "../objects/collision.ts";
 import { DECOR_SIZE } from "../objects/size.ts";
 import { set_virtual_hide, usePlacedObject } from "../objects/store.ts";
 import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
@@ -58,6 +58,58 @@ const $decor_translation = new THREE.Vector3();
 const $decor_quaternion = new THREE.Quaternion();
 const $decor_scale = new THREE.Vector3();
 
+type GhostMaterialProps = {
+  map: THREE.Texture | null;
+  color: string;
+  polygonOffsetFactor: number;
+  polygonOffsetUnits: number;
+};
+
+/**
+ * The one ghost-preview material shape both hover ghosts below use (the
+ * decor silhouette and the generic cube/terrain box) — lit
+ * (MeshStandardMaterial), not meshBasicMaterial's flat/unlit fill: the goal
+ * is "a real render of the thing, just half-transparent," not a flat color
+ * swatch shaped like it — an unlit ghost reads as a UI highlight overlay, a
+ * lit one reads as the thing itself. Plain MeshStandardMaterial (roughness/
+ * metalness matched to chunk_stage.tsx's own create_material()), not that
+ * file's actual material or instanced_model.ts's own decor material: both
+ * hard-require baked per-vertex attributes or a live shader injection this
+ * single translucent preview mesh doesn't have — real coupling to a baking/
+ * shader-injection pipeline for a rim-light/terrain-layer-texturing payoff
+ * neither ghost needs.
+ *
+ * emissive+emissiveMap+emissiveIntensity mirrors environment/config.ts's
+ * shared light_cfg.FLOOR — the same minimum-brightness floor every other
+ * real-lit surface in the scene gets, so a ghost never reads darker than a
+ * real instance would in the same spot. emissiveMap (not just emissive)
+ * matters for the same texture-vs-flat-color reason `map` does: without it
+ * the floor would glow as a flat tinted rectangle in the dark instead of
+ * dimly showing the same texture pattern the lit portion shows. `color`
+ * doubles as `emissive` directly — both ghosts want the exact same hue lit
+ * and floor-lit, never two independently-tuned colors.
+ */
+function GhostMaterial({ map, color, polygonOffsetFactor, polygonOffsetUnits }: GhostMaterialProps) {
+  return (
+    <meshStandardMaterial
+      map={map}
+      color={color}
+      emissive={color}
+      emissiveMap={map}
+      emissiveIntensity={light_cfg.FLOOR}
+      roughness={1}
+      metalness={0}
+      transparent
+      opacity={GHOST_OPACITY}
+      side={THREE.DoubleSide}
+      depthTest
+      polygonOffset
+      polygonOffsetFactor={polygonOffsetFactor}
+      polygonOffsetUnits={polygonOffsetUnits}
+    />
+  );
+}
+
 export function HoverCursor() {
   const hovered: PVF3 | null = useCameraStore((state) => state.hovered_coord);
   const hovered_object_id = useCameraStore((state) => state.hovered_object_id);
@@ -75,16 +127,16 @@ export function HoverCursor() {
 
   const object_pos = useMemo(() => center3n(fill3(0), preview_size), [preview_size]);
 
+  // Same "object size vs decor's own fixed DECOR_SIZE" dispatch
+  // camera/input.tsx's own handle_tap needs to actually commit a placement —
+  // objects/collision.ts's own is_placement_blocked is the one shared place
+  // that decides it, so the preview here and the real commit there can't
+  // silently disagree about what counts as blocked.
   const blocked = useMemo(() => {
-    if (activeTool === "object") {
-      if (!hovered) return false;
+    if (!hovered) return false;
+    if (activeTool === "object" || activeTool === "decor") {
       const map_origin = get_local_world_origin(map_center);
-      return find_overlapping_object(hovered, object_size, map_origin) !== null;
-    }
-    if (activeTool === "decor") {
-      if (!hovered) return false;
-      const map_origin = get_local_world_origin(map_center);
-      return find_overlapping_object(hovered, DECOR_SIZE, map_origin) !== null;
+      return is_placement_blocked(activeTool, hovered, object_size, map_origin);
     }
     if (activeTool === "eraser") return hovered_object === null;
     return false;
@@ -190,41 +242,22 @@ export function HoverCursor() {
 
   if (!hovered || blocked) return null;
 
-  // Decor's own real silhouette+texture, lit — matching how a real
-  // DecorVariantMesh actually renders since instanced_model.ts's own
-  // material stopped being unlit (see that file's own doc comment and
-  // discussions/20260906-decor-lit-shading.md); this ghost's whole point is
-  // "what a real render of this looks like, just translucent", so it has to
-  // track that. Same emissive-floor treatment as the real thing
-  // (emissiveMap mirrors map, emissiveIntensity=light_cfg.FLOOR) so the
-  // ghost doesn't go darker than a real placed instance would in the same
-  // spot. No rim-light injection here though — same reasoning the cube
-  // ghost below skips it for: real coupling to a shader-injection path for a
-  // payoff this translucent preview doesn't need. Position is zero
-  // (base-anchored, matching real user-placed decor's own corner-anchored
-  // storage) rather than object_pos (center-anchored, correct for a cube
-  // but not a model whose own origin sits at its base).
+  // Decor's own real silhouette+texture — matching how a real
+  // DecorVariantMesh actually renders (see GhostMaterial's own doc comment
+  // for the lit/emissive-floor reasoning shared with the generic ghost
+  // below). No rim-light injection here though — that's GhostMaterial's own
+  // choice too, for the same reason. Position is zero (base-anchored,
+  // matching real user-placed decor's own corner-anchored storage) rather
+  // than object_pos (center-anchored, correct for a cube but not a model
+  // whose own origin sits at its base). Offset values match the generic
+  // ghost's own "object mode" case below — decor places like an object, not
+  // like flush terrain.
   if (is_decor_ghost && decor_geometry && decor_map) {
     return (
       <AnchorNode i={hovered.i} f={hovered.f}>
         <group position={fill3(0)}>
           <mesh geometry={decor_geometry} quaternion={$decor_quaternion} scale={$decor_scale} renderOrder={0}>
-            <meshStandardMaterial
-              map={decor_map}
-              color="#ffffff"
-              emissive="#ffffff"
-              emissiveMap={decor_map}
-              emissiveIntensity={light_cfg.FLOOR}
-              roughness={1}
-              metalness={0}
-              transparent
-              opacity={GHOST_OPACITY}
-              side={THREE.DoubleSide}
-              depthTest
-              polygonOffset
-              polygonOffsetFactor={-1}
-              polygonOffsetUnits={-1}
-            />
+            <GhostMaterial map={decor_map} color="#ffffff" polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
           </mesh>
         </group>
       </AnchorNode>
@@ -241,54 +274,22 @@ export function HoverCursor() {
           // object mode uses the default order so real depth occlusion works.
           renderOrder={use_object_style ? 0 : 9999}
         >
-          <meshStandardMaterial
-            color={color}
-            map={map}
-            // Lit, not meshBasicMaterial's flat/unlit fill: the goal is "a
-            // real render of the thing, just half-transparent", not a flat
-            // color swatch shaped like it — an unlit ghost reads as a UI
-            // highlight overlay, a lit one reads as the thing itself. Plain
-            // MeshStandardMaterial (roughness/metalness matched to
-            // chunk_stage.tsx's own create_material()), not that file's
-            // actual material: that one's onBeforeCompile hard-requires
-            // baked per-vertex attributes (a_rgb/a_layer_taps/a_visible/
-            // a_local_pos/a_box_scale) that only exist on a real baked
-            // ChunkMesh geometry (chunk_mesher.ts) — reusing it here would
-            // mean baking this single ghost box through that same pipeline
-            // just to satisfy that contract, real coupling to
-            // chunk_stage.tsx's own baking internals for a rim-light/
-            // terrain-layer-texturing payoff this preview doesn't need — the
-            // actual texture pattern (this material's own `map`
-            // above) already comes from the same source PNG a real object
-            // renders with, just loaded as a plain Texture instead of
-            // through that shader's DataArrayTexture.
+          {
+            // The actual texture pattern (`map`) already comes from the same
+            // source PNG a real object renders with (objects/tex.ts), just
+            // loaded as a plain Texture instead of through chunk_stage.tsx's
+            // own DataArrayTexture — see GhostMaterial's own doc comment for
+            // why that file's real material isn't reused here.
             //
-            // emissive+emissiveMap+emissiveIntensity mirrors
-            // environment/config.ts's shared light_cfg.FLOOR — the exact
-            // same minimum-brightness floor every other real-lit surface in
-            // the scene gets (terrain and objects alike, via
-            // chunk_stage.tsx's own shader injection: `totalEmissiveRadiance
-            // = base_rgb * FLOOR`, base_rgb there being the sampled texture
-            // itself, not a flat color). emissiveMap (not just emissive)
-            // matters here for the same texture-vs-flat-color reason as map
-            // above: without it the floor would glow as a flat tinted
-            // rectangle in the dark instead of dimly showing the same
-            // texture pattern the lit portion shows.
-            emissive={color}
-            emissiveMap={map}
-            emissiveIntensity={light_cfg.FLOOR}
-            roughness={1}
-            metalness={0}
-            transparent
-            opacity={GHOST_OPACITY}
-            side={THREE.DoubleSide}
-            depthTest
-            polygonOffset
             // Object mode needs only a small polygon-offset nudge (it's not
             // coplanar with a distant surface like the terrain case is) —
             // reusing the terrain case's strong bias here would also push
             // the cursor in front of a placed cube that should legitimately
             // occlude it.
+          }
+          <GhostMaterial
+            map={map}
+            color={color}
             polygonOffsetFactor={use_object_style ? -1 : -2}
             polygonOffsetUnits={use_object_style ? -1 : -8}
           />

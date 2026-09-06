@@ -15,7 +15,7 @@ import { useMapStore } from "@/modules/map/store.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 import { get_local_world_origin } from "@/modules/world/frame/coord.ts";
-import { find_overlapping_object } from "@/modules/world/objects/collision.ts";
+import { is_placement_blocked } from "@/modules/world/objects/collision.ts";
 import { object_aabb, object_center } from "@/modules/world/objects/geometry.ts";
 import { DECOR_SIZE } from "@/modules/world/objects/size.ts";
 import { get_placed_object, type OccupiedEntry, place, place_decor, remove } from "@/modules/world/objects/store.ts";
@@ -121,13 +121,13 @@ function handle_tap(hovered: PVF3): void {
   const map_origin = get_local_world_origin(map_center);
 
   if (activeTool === "decor") {
-    if (!find_overlapping_object(hovered, DECOR_SIZE, map_origin)) {
+    if (!is_placement_blocked("decor", hovered, object_size, map_origin)) {
       place_decor(hovered.i, hovered.f, DECOR_SIZE, decor_id);
     }
     return;
   }
 
-  if (!find_overlapping_object(hovered, object_size, map_origin)) {
+  if (!is_placement_blocked("object", hovered, object_size, map_origin)) {
     place(hovered.i, hovered.f, object_size, object_color_id);
   }
 }
