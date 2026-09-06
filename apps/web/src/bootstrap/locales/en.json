@@ -5,7 +5,6 @@
     "trigger_aria_label": "Settings",
     "close": "Close",
     "tabs": {
-      "theme": "Theme",
       "effects": "Effects",
       "info": "Info"
     },
@@ -58,54 +57,6 @@
         "description": "Fringes light slightly at the edges of the screen to simulate camera lens distortion."
       }
     },
-    "character": {
-      "section_title": "Companion",
-      "section_caption": "Choose who walks around with you on the map",
-      "person_label": "Character",
-      "female_label": "Female",
-      "male_label": "Male",
-      "pet_label": "Pet",
-      "persons": {
-        "female-1": "1",
-        "female-2": "2",
-        "female-3": "3",
-        "female-4": "4",
-        "female-5": "5",
-        "female-6": "6",
-        "male-1": "1",
-        "male-2": "2",
-        "male-3": "3",
-        "male-4": "4",
-        "male-5": "5",
-        "male-6": "6"
-      },
-      "pets": {
-        "beaver": "Beaver",
-        "bee": "Bee",
-        "bunny": "Bunny",
-        "cat": "Cat",
-        "caterpillar": "Caterpillar",
-        "chick": "Chick",
-        "cow": "Cow",
-        "crab": "Crab",
-        "deer": "Deer",
-        "dog": "Dog",
-        "elephant": "Elephant",
-        "fish": "Fish",
-        "fox": "Fox",
-        "giraffe": "Giraffe",
-        "hog": "Hog",
-        "koala": "Koala",
-        "lion": "Lion",
-        "monkey": "Monkey",
-        "panda": "Panda",
-        "parrot": "Parrot",
-        "penguin": "Penguin",
-        "pig": "Pig",
-        "polar": "Polar Bear",
-        "tiger": "Tiger"
-      }
-    },
     "quality": {
       "section_title": "Graphics Quality",
       "aa_mode": {
@@ -134,7 +85,7 @@
       "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
       "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
       "location_notice": "Location names are queried using OSM Nominatim, and your location data is neither collected nor saved.",
-      "character_notice": "Theme is an experimental feature. The CC0-licensed <kenney>Kenney</kenney> asset pack is applied."
+      "character_notice": "Character customization is an experimental feature. The CC0-licensed <kenney>Kenney</kenney> asset pack is applied."
     },
     "attribution": {
       "section_title": "Attribution"
@@ -206,11 +157,12 @@
   },
   "palette_modal": {
     "title": "Palette",
-    "description": "Every placeable cube color and decor kind.",
+    "description": "Every placeable cube color and decor kind, plus your companion's appearance.",
     "close": "Close",
     "tabs": {
       "cube": "Cube",
-      "decor": "Decor"
+      "decor": "Decor",
+      "character": "Character"
     },
     "sections": {
       "colors": "Colors",
@@ -218,6 +170,52 @@
       "water": "Water",
       "structure": "Structure",
       "transport": "Transport"
+    },
+    "character": {
+      "person_label": "Character",
+      "female_label": "Female",
+      "male_label": "Male",
+      "pet_label": "Pet",
+      "persons": {
+        "female-1": "1",
+        "female-2": "2",
+        "female-3": "3",
+        "female-4": "4",
+        "female-5": "5",
+        "female-6": "6",
+        "male-1": "1",
+        "male-2": "2",
+        "male-3": "3",
+        "male-4": "4",
+        "male-5": "5",
+        "male-6": "6"
+      },
+      "pets": {
+        "beaver": "Beaver",
+        "bee": "Bee",
+        "bunny": "Bunny",
+        "cat": "Cat",
+        "caterpillar": "Caterpillar",
+        "chick": "Chick",
+        "cow": "Cow",
+        "crab": "Crab",
+        "deer": "Deer",
+        "dog": "Dog",
+        "elephant": "Elephant",
+        "fish": "Fish",
+        "fox": "Fox",
+        "giraffe": "Giraffe",
+        "hog": "Hog",
+        "koala": "Koala",
+        "lion": "Lion",
+        "monkey": "Monkey",
+        "panda": "Panda",
+        "parrot": "Parrot",
+        "penguin": "Penguin",
+        "pig": "Pig",
+        "polar": "Polar Bear",
+        "tiger": "Tiger"
+      }
     }
   },
   "device": {

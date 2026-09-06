@@ -4,7 +4,7 @@ import type { StateCreator } from "zustand";
 
 import { DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY } from "@pxl/shared/assets/characters/variants.ts";
 
-/** Fields backing settings/sections/character_section.tsx. */
+/** Fields backing modules/world/characters/character_picker.tsx (palette_modal.tsx's Character tab). */
 export type CharacterSettingsSlice = {
   person_variant_key: string;
   set_person_variant_key: (key: string) => void;

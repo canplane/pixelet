@@ -19,6 +19,7 @@ import { useUiStore } from "@/app/store/ui_store.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
+import { CharacterPicker } from "@/modules/world/characters/character_picker.tsx";
 import { DECOR_ICONS } from "./mode_bar.tsx";
 
 export type PaletteModalProps = {
@@ -115,31 +116,30 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
   );
 }
 
-/** The full cube/decor catalog — mode_bar.tsx's own hotbar (its horizontal
- * scrolling color strip + decor buttons) stays untouched and is the
- * everyday quick-pick; this is the Minecraft-inventory-style "everything"
- * view opened from its own new trigger button, never a replacement for the
- * hotbar. Picking an entry here does exactly what its hotbar counterpart
- * does (set the same ui_store fields, no separate selection state of its
- * own), then closes. */
+/** The full cube/decor/character catalog — mode_bar.tsx's own hotbar (its
+ * horizontal scrolling color strip) stays untouched and is the everyday
+ * quick-pick; this is the Minecraft-inventory-style "everything" view opened
+ * from its own trigger button, never a replacement for the hotbar. Picking a
+ * Cube/Decor entry does exactly what its (now-removed) hotbar counterpart
+ * used to (set the same ui_store fields), then closes. The Character tab is
+ * the odd one out: it equips the single always-on companion rather than
+ * placing anything, so its picks (CharacterPicker) apply immediately and
+ * deliberately leave the sheet open — see that component's own comment. */
 export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
   const { open, onOpenChange } = props;
   const { t } = useTranslation();
-  const set_activeTool = useUiStore((state) => state.set_activeTool);
-  const set_object_color_id = useUiStore((state) => state.set_object_color_id);
-  const set_decor_id = useUiStore((state) => state.set_decor_id);
+  const select_cube = useUiStore((state) => state.select_cube);
+  const select_decor = useUiStore((state) => state.select_decor);
 
   const sections = group_by_section(placeable_cube_ids);
 
   function pick_cube(id: PlaceableCubeId): void {
-    set_object_color_id(id);
-    set_activeTool("object");
+    select_cube(id);
     onOpenChange(false);
   }
 
   function pick_decor(id: DecorId): void {
-    set_decor_id(id);
-    set_activeTool("decor");
+    select_decor(id);
     onOpenChange(false);
   }
 
@@ -163,6 +163,7 @@ export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
           <TabsList className="mx-5 mt-4">
             <TabsTrigger value="cube">{t("palette_modal.tabs.cube")}</TabsTrigger>
             <TabsTrigger value="decor">{t("palette_modal.tabs.decor")}</TabsTrigger>
+            <TabsTrigger value="character">{t("palette_modal.tabs.character")}</TabsTrigger>
           </TabsList>
 
           <div
@@ -188,6 +189,10 @@ export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
               <div className="grid grid-cols-5 gap-1">
                 {decor_ids.map((id) => <DecorGridButton key={id} id={id} onPick={pick_decor} />)}
               </div>
+            </TabsContent>
+
+            <TabsContent value="character">
+              <CharacterPicker />
             </TabsContent>
           </div>
         </Tabs>

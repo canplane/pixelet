@@ -10,7 +10,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { useAppContext } from "@/app/providers/app_context.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { cube_hex, cube_ids, type CubeColorId, type DecorId } from "@pxl/shared/spec/cell/mod.ts";
+import { type DecorId, placeable_cube_hex, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/modules/world/objects/size.ts";
 
 type ModeId = "message" | "palette";
@@ -36,7 +36,7 @@ function size_button_dims(i: number): string {
 // Tier index i is exponent -i (object_scale_exponents), sign-flipped and
 // sorted here for display only — item_refs/drag_index/on_up still index by
 // tier (OBJECT_SIZES' own index), not by render position.
-function size_tiers_for(id: CubeColorId): number[] {
+function size_tiers_for(id: PlaceableCubeId): number[] {
   return object_scale_exponents(id).map((exp) => -exp).sort((a, b) => b - a);
 }
 
@@ -185,18 +185,14 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
   );
 }
 
-function ColorSwatchButton({ id }: { id: CubeColorId }) {
+function ColorSwatchButton({ id }: { id: PlaceableCubeId }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((state) => state.activeTool);
   const object_color_id = useUiStore((state) => state.object_color_id);
   const object_size = useUiStore((state) => state.object_size);
-  const set_activeTool = useUiStore((state) => state.set_activeTool);
-  const set_object_color_id = useUiStore((state) => state.set_object_color_id);
+  const select_cube = useUiStore((state) => state.select_cube);
 
-  const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => {
-    set_object_color_id(id);
-    set_activeTool("object");
-  });
+  const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => select_cube(id));
   const tiers = size_tiers_for(id);
 
   return (
@@ -210,7 +206,7 @@ function ColorSwatchButton({ id }: { id: CubeColorId }) {
       >
         <span
           ref={button_ref}
-          style={{ backgroundColor: cube_hex(id) }}
+          style={{ backgroundColor: placeable_cube_hex(id) ?? undefined }}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
             activeTool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
@@ -221,13 +217,39 @@ function ColorSwatchButton({ id }: { id: CubeColorId }) {
   );
 }
 
+// The hotbar's decor slot(s) — reinstated (2026-09-07) now that recent_picks
+// (ui_store.ts) is one shared MRU list across cube and decor: unlike a
+// ColorSwatchButton, a decor pick has no size flyout of its own (DECOR_SIZE
+// is fixed, objects/size.ts), so this stays a plain tap button.
+function DecorIconButton({ id }: { id: DecorId }) {
+  const { t } = useTranslation();
+  const activeTool = useUiStore((state) => state.activeTool);
+  const decor_id = useUiStore((state) => state.decor_id);
+  const select_decor = useUiStore((state) => state.select_decor);
+  const Icon = DECOR_ICONS[id];
+  const active = activeTool === "decor" && decor_id === id;
+
+  return (
+    <button
+      type="button"
+      onClick={() => select_decor(id)}
+      className={cn(
+        "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
+        active ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+      )}
+      title={t(`object_decors.${id}`)}
+    >
+      <Icon className="w-5 h-5" strokeWidth={2} />
+    </button>
+  );
+}
+
 // Icon per decor id — TypeScript enforces one entry per DecorId, so
 // adding a new decor kind (decor.ts's own decor_types) can't silently ship
-// without a button icon for it. Lives here (not palette_modal.tsx) purely
-// because ModeBar's own hotbar used to render decor buttons directly too —
-// now that palette_modal.tsx's Decor tab is the only place a decor kind
-// gets picked (2026-09-06, see this file's own catalog-button comment
-// below), this map only has the one real consumer left.
+// without a button icon for it. Lives here (this file's own DecorIconButton
+// is one consumer) and is also imported by palette_modal.tsx's own
+// DecorGridButton, so a new decor kind's icon shows up in both the hotbar
+// and the drawer for free.
 export const DECOR_ICONS: Record<DecorId, typeof TreePine> = {
   tree: TreePine,
 };
@@ -238,6 +260,7 @@ export function ModeBar() {
   const [mode, set_mode] = useState<ModeId>("palette");
   const activeTool = useUiStore((state) => state.activeTool);
   const set_activeTool = useUiStore((state) => state.set_activeTool);
+  const recent_picks = useUiStore((state) => state.recent_picks);
   const append_chat_line = useUiStore((state) => state.append_chat_line);
   const [message_text, set_message_text] = useState("");
   const [is_sending, set_is_sending] = useState(false);
@@ -452,20 +475,22 @@ export function ModeBar() {
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {cube_ids.map((id) => <ColorSwatchButton key={id} id={id} />)}
+                    {recent_picks.map((pick) =>
+                      pick.kind === "object"
+                        ? <ColorSwatchButton key={`object:${pick.id}`} id={pick.id} />
+                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />
+                    )}
                   </div>
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
                   {
-                    // Opens the full catalog (2026-09-06): every
-                    // terrain-styled block type alongside the flat colors,
-                    // plus every decor kind (decor's own hotbar button was
-                    // removed the same day this went in — palette_modal.tsx's
-                    // Decor tab is its only pick point now) — Minecraft's own
-                    // hotbar/inventory relationship. Outside the scrolling
-                    // color strip above so it's always reachable regardless
-                    // of scroll position.
+                    // Opens the full catalog: every terrain-styled block
+                    // type and decor kind that hasn't (yet) earned a hotbar
+                    // slot, plus Character — Minecraft's own hotbar/
+                    // inventory relationship. Outside the scrolling strip
+                    // above so it's always reachable regardless of scroll
+                    // position.
                   }
                   <div className="flex items-center p-[4px] shrink-0">
                     <button

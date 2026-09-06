@@ -5,7 +5,6 @@
     "trigger_aria_label": "설정",
     "close": "닫기",
     "tabs": {
-      "theme": "테마",
       "effects": "효과",
       "info": "정보"
     },
@@ -58,54 +57,6 @@
         "description": "화면 가장자리의 빛을 미세하게 분산시켜 카메라 렌즈 왜곡 효과를 줍니다."
       }
     },
-    "character": {
-      "section_title": "동행",
-      "section_caption": "지도 위에서 함께 다닐 캐릭터와 펫을 선택하세요.",
-      "person_label": "캐릭터",
-      "female_label": "여성",
-      "male_label": "남성",
-      "pet_label": "펫",
-      "persons": {
-        "female-1": "1",
-        "female-2": "2",
-        "female-3": "3",
-        "female-4": "4",
-        "female-5": "5",
-        "female-6": "6",
-        "male-1": "1",
-        "male-2": "2",
-        "male-3": "3",
-        "male-4": "4",
-        "male-5": "5",
-        "male-6": "6"
-      },
-      "pets": {
-        "beaver": "비버",
-        "bee": "꿀벌",
-        "bunny": "토끼",
-        "cat": "고양이",
-        "caterpillar": "애벌레",
-        "chick": "병아리",
-        "cow": "소",
-        "crab": "게",
-        "deer": "사슴",
-        "dog": "강아지",
-        "elephant": "코끼리",
-        "fish": "물고기",
-        "fox": "여우",
-        "giraffe": "기린",
-        "hog": "멧돼지",
-        "koala": "코알라",
-        "lion": "사자",
-        "monkey": "원숭이",
-        "panda": "판다",
-        "parrot": "앵무새",
-        "penguin": "펭귄",
-        "pig": "돼지",
-        "polar": "북극곰",
-        "tiger": "호랑이"
-      }
-    },
     "quality": {
       "section_title": "그래픽 품질",
       "aa_mode": {
@@ -134,7 +85,7 @@
       "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
       "storage_notice": "배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
       "location_notice": "지역명은 OSM Nominatim을 통해 조회하며, 사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
-      "character_notice": "테마는 실험적 기능입니다. CC0 라이선스의 <kenney>Kenney</kenney> 에셋 팩이 적용됩니다."
+      "character_notice": "캐릭터 커스터마이징은 실험적 기능입니다. CC0 라이선스의 <kenney>Kenney</kenney> 에셋 팩이 적용됩니다."
     },
     "attribution": {
       "section_title": "출처"
@@ -206,11 +157,12 @@
   },
   "palette_modal": {
     "title": "팔레트",
-    "description": "배치할 수 있는 모든 큐브 색상과 데코 종류입니다.",
+    "description": "배치할 수 있는 모든 큐브 색상과 데코 종류, 그리고 동행의 외형입니다.",
     "close": "닫기",
     "tabs": {
       "cube": "큐브",
-      "decor": "데코"
+      "decor": "데코",
+      "character": "캐릭터"
     },
     "sections": {
       "colors": "색상",
@@ -218,6 +170,52 @@
       "water": "수역",
       "structure": "건물",
       "transport": "교통"
+    },
+    "character": {
+      "person_label": "캐릭터",
+      "female_label": "여성",
+      "male_label": "남성",
+      "pet_label": "펫",
+      "persons": {
+        "female-1": "1",
+        "female-2": "2",
+        "female-3": "3",
+        "female-4": "4",
+        "female-5": "5",
+        "female-6": "6",
+        "male-1": "1",
+        "male-2": "2",
+        "male-3": "3",
+        "male-4": "4",
+        "male-5": "5",
+        "male-6": "6"
+      },
+      "pets": {
+        "beaver": "비버",
+        "bee": "꿀벌",
+        "bunny": "토끼",
+        "cat": "고양이",
+        "caterpillar": "애벌레",
+        "chick": "병아리",
+        "cow": "소",
+        "crab": "게",
+        "deer": "사슴",
+        "dog": "강아지",
+        "elephant": "코끼리",
+        "fish": "물고기",
+        "fox": "여우",
+        "giraffe": "기린",
+        "hog": "멧돼지",
+        "koala": "코알라",
+        "lion": "사자",
+        "monkey": "원숭이",
+        "panda": "판다",
+        "parrot": "앵무새",
+        "penguin": "펭귄",
+        "pig": "돼지",
+        "polar": "북극곰",
+        "tiger": "호랑이"
+      }
     }
   },
   "device": {

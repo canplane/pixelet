@@ -2,7 +2,7 @@
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import type { CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
+import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 
 /**
  * Placeable cube sizes — grid-aligned steps down from one terrain cell
@@ -49,11 +49,14 @@ export type ObjectScaleExponent = typeof OBJECT_SCALE_EXPONENTS[number];
 
 const DEFAULT_ACTIVE_SCALES: readonly ObjectScaleExponent[] = [0, -1, -2, -3];
 
-/** Per-color override of which of OBJECT_SIZES' tiers mode_bar.tsx's size
- * flyout offers — empty today (every color offers every tier), reserved for
- * a future color that shouldn't (a huge painted mural block, say). */
-const ACTIVE_SCALES: Partial<Record<CubeColorId, readonly ObjectScaleExponent[]>> = {};
+/** Per-cube override of which of OBJECT_SIZES' tiers mode_bar.tsx's size
+ * flyout offers — empty today (every cube, flat color or terrain-styled,
+ * offers every tier), reserved for a future one that shouldn't (a huge
+ * painted mural block, say). Keyed by the full PlaceableCubeId (not just
+ * CubeColorId) since the hotbar's own MRU list (ui_store.ts's recent_picks)
+ * can now surface a terrain-styled pick too. */
+const ACTIVE_SCALES: Partial<Record<PlaceableCubeId, readonly ObjectScaleExponent[]>> = {};
 
-export function object_scale_exponents(id: CubeColorId): readonly ObjectScaleExponent[] {
+export function object_scale_exponents(id: PlaceableCubeId): readonly ObjectScaleExponent[] {
   return ACTIVE_SCALES[id] ?? DEFAULT_ACTIVE_SCALES;
 }
