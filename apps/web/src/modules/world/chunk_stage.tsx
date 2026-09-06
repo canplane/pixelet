@@ -35,6 +35,8 @@ import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { l2_column_key_of, useDecorL2ColumnRevision, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
+import { glsl_float, inject_rim_light_shader } from "@/modules/world/render/rim_light_shader.ts";
+import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
@@ -188,18 +190,6 @@ const VISIBLE_ATTR = "a_visible";
 const LOCAL_POS_ATTR = "a_local_pos";
 const BOX_SCALE_ATTR = "a_box_scale";
 
-// GLSL ES 3.00 has no int-to-float overload for arithmetic on a float/vector
-// operand (pow(float, int), vec3 * int, etc. simply fail to compile) — a
-// whole-number config constant like rim_cfg.POWER=1 template-interpolates
-// as the bare token "1", not "1.0", and silently takes down the entire
-// shader (every terrain/object mesh sharing this material goes blank, no
-// visible error unless the console is checked). Route every numeric config
-// constant injected into GLSL through this so a future whole-number tuning
-// value can't reintroduce the same compile failure.
-function glsl_float(n: number): string {
-  return Number.isInteger(n) ? `${n}.0` : `${n}`;
-}
-
 /**
  * Injected once per baked chunk-mesh material. Every vertex here is a real,
  * final position (chunk_mesher.ts bakes it directly — no instanceMatrix to
@@ -214,16 +204,14 @@ function inject_chunk_shader(shader: {
   fragmentShader: string;
   uniforms: Record<string, THREE.IUniform>;
 }): void {
+  // Composes with the rest of this function regardless of call order (see
+  // rim_light_shader.ts's own doc comment) — called first here purely by
+  // convention, not because it has to run before the terrain-specific
+  // replacements below.
+  inject_rim_light_shader(shader);
   shader.uniforms.u_ground_layers_top = { value: GROUND_LAYERS_TOP };
   shader.uniforms.u_ground_layers_side = { value: GROUND_LAYERS_SIDE };
   shader.uniforms.u_low_spec = { value: true };
-  shader.uniforms.u_rim_color = { value: new THREE.Color(rim_cfg.COLOR) };
-  // starts at 0, not rim_cfg.INTENSITY — ChunkMesh's own effect
-  // (mirroring u_low_spec's) sets the real value from
-  // app/settings/settings_store.ts's show_rim_light once mounted, same
-  // "compiled in unconditionally, toggled via a uniform" reasoning as
-  // u_low_spec so flipping the setting never needs a shader recompile.
-  shader.uniforms.u_rim_intensity = { value: 0 };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
@@ -240,8 +228,7 @@ function inject_chunk_shader(shader: {
       varying float v_is_side;
       varying float v_side_x_dominant;
       varying vec3 v_local_pos;
-      varying vec3 v_box_scale;
-      varying vec3 v_rim_view_pos;`,
+      varying vec3 v_box_scale;`,
     )
     .replace(
       "void main() {",
@@ -274,8 +261,7 @@ function inject_chunk_shader(shader: {
           ? (abs(normal.x) > 0.5
             ? vec2((${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z)
             : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z))
-          : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y);
-        v_rim_view_pos = -(modelViewMatrix * vec4(position, 1.0)).xyz;`,
+          : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y);`,
     );
   shader.fragmentShader = shader.fragmentShader
     .replace(
@@ -289,12 +275,9 @@ function inject_chunk_shader(shader: {
       varying float v_side_x_dominant;
       varying vec3 v_local_pos;
       varying vec3 v_box_scale;
-      varying vec3 v_rim_view_pos;
       uniform sampler2DArray u_ground_layers_top;
       uniform sampler2DArray u_ground_layers_side;
       uniform bool u_low_spec;
-      uniform vec3 u_rim_color;
-      uniform float u_rim_intensity;
       vec3 sample_layer_tap(float layer_idx, vec3 fallback_rgb) {
         if (layer_idx > ${NO_LAYER}.0 - 0.5) return fallback_rgb;
         return v_is_side > 0.5
@@ -334,45 +317,6 @@ function inject_chunk_shader(shader: {
       vec4 diffuseColor = vec4(diffuse * base_rgb, opacity);`,
     )
     .replace("vec3 totalEmissiveRadiance = emissive;", `vec3 totalEmissiveRadiance = base_rgb * ${glsl_float(light_cfg.FLOOR)};`);
-
-  // vNormal is a standard varying the base meshphysical fragment shader
-  // already declares — but vViewPosition is NOT: that one only exists in
-  // the Lambert/Phong/Toon shader chunks (lights_lambert/phong/toon_pars_
-  // fragment.glsl.js), never in meshphysical's own lights_physical_pars_
-  // fragment.glsl.js, which MeshStandardMaterial/MeshPhysicalMaterial
-  // both compile against. Referencing it here was an undeclared-
-  // identifier shader compile error the whole time (rim silently never
-  // applied, regardless of u_rim_intensity) — v_rim_view_pos above is our
-  // own varying, computed in the vertex injection instead of assuming a
-  // standard one that doesn't exist for this material. pow(1 - N.V,
-  // POWER) is the classic fresnel/rim falloff: near 0 face-on (N.V close
-  // to 1), rising toward 1 right at the silhouette (N.V close to 0).
-  // Applied uniformly to terrain and objects alike (one merged mesh, one
-  // shader — see rim_cfg's own doc comment for why).
-  shader.fragmentShader = shader.fragmentShader.replace(
-    "vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;",
-    `vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
-    vec3 rim_view_dir = normalize(v_rim_view_pos);
-    float rim = pow(1.0 - max(dot(normalize(vNormal), rim_view_dir), 0.0), ${glsl_float(rim_cfg.POWER)});
-    outgoingLight += u_rim_color * rim * u_rim_intensity;`,
-  );
-}
-
-type MountedChunkMesh = {
-  built: BuiltChunkMesh;
-  role: ChunkLodRole;
-  attribute: THREE.BufferAttribute;
-};
-type ChunkMeshRegistry = { meshes: Set<MountedChunkMesh> };
-type ChunkVisibilityDecision = { primary: boolean; secondary: boolean };
-
-function apply_visibility(registry: ChunkMeshRegistry, decision: ChunkVisibilityDecision): void {
-  for (const mounted of registry.meshes) {
-    const value = (mounted.role === "primary" ? decision.primary : decision.secondary) ? 1 : 0;
-    if (mounted.built.visibility[0] === value) continue;
-    mounted.built.visibility.fill(value);
-    mounted.attribute.needsUpdate = true;
-  }
 }
 
 /** Builds a fresh, real (non-cloned-from-a-shared-base) BufferGeometry
@@ -497,7 +441,7 @@ const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: Chu
     }
     if (!(attribute instanceof THREE.BufferAttribute)) return;
     attribute.needsUpdate = true;
-    const mounted = { built, role, attribute };
+    const mounted: MountedLodMesh = { kind: "cube", built, role, attribute };
     registry.meshes.add(mounted);
     return () => void registry.meshes.delete(mounted);
   }, [built, mesh, registry, role]);
@@ -506,18 +450,28 @@ const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: Chu
 });
 ChunkMesh.displayName = "ChunkMesh";
 
+// One entry per bundle (matching bundle_assets' own order), each itself one
+// entry per that bundle's own variant — build_decor_instances' own return
+// shape, once per density level. `secondary` mirrors `LodLayout.secondary`
+// exactly (null outside a blend band) rather than decor tracking its own
+// independent blend state: decor_build_ref's own per-LodStep cache below
+// means a second density level costs one more cache lookup, not a second
+// concept, so there's no reason for decor's own blend window to differ from
+// cube content's.
+type DecorLayoutPair = {
+  primary: ModelInstanceTransformList[][];
+  secondary: ModelInstanceTransformList[][] | null;
+};
+const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: [], secondary: null };
+
 type LodLayout = {
   primary: LodStep;
   secondary: LodStep | null;
   buckets: BuiltChunkBucket[];
-  // Keyed by the SAME index/order as the `bundle_assets` prop (one entry per
-  // bundle, each itself one entry per that bundle's own variant) — always
-  // the primary tier's own density, never a secondary/blend pair (decor
-  // never blends between tiers — see decor_layer.tsx's own
-  // DECOR_DENSITY_BY_LOD_STEP doc comment). Populated by decor_build_ref
-  // below, entirely independently of `buckets` — see that ref's own doc
-  // comment for why the two builds don't share a cache or a rebuild trigger.
-  decor: ModelInstanceTransformList[][];
+  // Populated by decor_build_ref below, entirely independently of `buckets`
+  // — see that ref's own doc comment for why the two builds don't share a
+  // cache or a rebuild trigger.
+  decor: DecorLayoutPair;
   bounds: ChunkBounds | null;
   ready: boolean;
 };
@@ -599,8 +553,12 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   // Decor's own build result per LOD step — its own cache, independent of
   // bucket_cache_ref (see decor_build_ref's own doc comment for why the two
   // builds don't share a cache or a rebuild trigger anymore). Keyed by
-  // lod_step alone (not primary/secondary) since decor never blends between
-  // tiers — only ever needs whichever step is currently `primary`.
+  // lod_step alone, not by role: 2026-09-06's own blend support (mirroring
+  // cube content's primary/secondary pair — see DecorLayoutPair above) needs
+  // both steps of a pair built when one is active, and keying by the step
+  // itself rather than by which role it currently holds means asking for
+  // both is just two lookups against the one cache below, not a second
+  // cache or a second build path.
   const decor_cache_ref = useRef(new Map<LodStep, ModelInstanceTransformList[][]>());
   // Cube content only (terrain + solid objects, chunk_mesher.ts's baked
   // mesh) — null return means "a needed scan was just deferred, not built
@@ -712,18 +670,31 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   // volume scan, no dependency on bucket_cache_ref/column_runs_ref at all
   // (ObjectWorldLayer.paint() never paints a voxel for a decor entry, so
   // decor's own output can never depend on anything build_ref above
-  // computes). Only ever needs `primary` — decor never blends between tiers
-  // (LodLayout's own `decor` field doc comment). Deliberately NOT keyed off
-  // build_ref's own `missing` list: that would re-tie decor's own staleness
-  // to cube content's cache, exactly the coupling this split exists to
-  // remove (see build_ref's own doc comment).
-  const decor_build_ref = useRef<(primary: LodStep) => ModelInstanceTransformList[][]>(() => []);
-  decor_build_ref.current = (primary) => {
-    if (!decor_cache_ref.current.has(primary)) {
-      decor_cache_ref.current.set(primary, bundle_assets.map(({ bundle }) => build_decor_instances(tile, primary, page_idx, offset.base_x, offset.base_y, bundle)));
+  // computes). Takes a single LodStep, not a primary/secondary pair — one
+  // call per step needed, same as bucket_cache_ref's own per-step entries;
+  // build_decor_pair below is what turns "the pair currently active" into
+  // "the right one or two calls here". Deliberately NOT keyed off build_ref's
+  // own `missing` list: that would re-tie decor's own staleness to cube
+  // content's cache, exactly the coupling this split exists to remove (see
+  // build_ref's own doc comment).
+  const decor_build_ref = useRef<(step: LodStep) => ModelInstanceTransformList[][]>(() => []);
+  decor_build_ref.current = (step) => {
+    if (!decor_cache_ref.current.has(step)) {
+      decor_cache_ref.current.set(step, bundle_assets.map(({ bundle }) => build_decor_instances(tile, step, page_idx, offset.base_x, offset.base_y, bundle)));
     }
-    return decor_cache_ref.current.get(primary)!;
+    return decor_cache_ref.current.get(step)!;
   };
+
+  // The one place that turns "primary/secondary LodStep pair" into "decor's
+  // own built instances for that pair" — every LodLayout.decor assignment
+  // below goes through this rather than repeating the null-check/dedup
+  // logic build_ref's own `steps` line already established for cube content.
+  function build_decor_pair(primary: LodStep, secondary: LodStep | null): DecorLayoutPair {
+    return {
+      primary: decor_build_ref.current(primary),
+      secondary: secondary !== null && secondary !== primary ? decor_build_ref.current(secondary) : null,
+    };
+  }
 
   const initial_view = useMemo(
     () => estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, ivec.add(FROM_L3_IDX(page_idx), page_off)),
@@ -732,20 +703,20 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
 
   const [layout, set_layout] = useState<LodLayout>(() => {
     if (!initial_view.in_frustum) {
-      return { primary: 64, secondary: null, buckets: [], decor: [], bounds: null, ready: false };
+      return { primary: 64, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
     }
     const buckets = build_ref.current(initial_view.lod_step, null);
     if (buckets === null) {
       // Scan deferred on the very first build — start not-ready (same
       // shape as an out-of-frustum chunk) so the first recheck() sets
       // pending and retries, instead of rendering nothing forever.
-      return { primary: initial_view.lod_step, secondary: null, buckets: [], decor: [], bounds: null, ready: false };
+      return { primary: initial_view.lod_step, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
     }
     const initial: LodLayout = {
       primary: initial_view.lod_step,
       secondary: null,
       buckets,
-      decor: decor_build_ref.current(initial_view.lod_step),
+      decor: build_decor_pair(initial_view.lod_step, null),
       bounds: chunk_bounds(buckets),
       ready: true,
     };
@@ -799,7 +770,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
       }
       return;
     }
-    const next = { ...current, buckets, decor: decor_build_ref.current(current.primary), bounds: chunk_bounds(buckets), ready: true };
+    const next = { ...current, buckets, decor: build_decor_pair(current.primary, current.secondary), bounds: chunk_bounds(buckets), ready: true };
     layout_ref.current = next;
     set_layout(next);
   }, [tile, objects_revision, show_structures]);
@@ -822,7 +793,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
     // effect/commit() will populate decor once it actually builds; nothing
     // for this effect to do until then.
     if (!current.ready) return;
-    const next = { ...current, decor: decor_build_ref.current(current.primary) };
+    const next = { ...current, decor: build_decor_pair(current.primary, current.secondary) };
     layout_ref.current = next;
     set_layout(next);
   }, [decor_revision]);
@@ -924,7 +895,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
             primary: 64,
             secondary: null,
             buckets: [],
-            decor: [],
+            decor: EMPTY_DECOR_PAIR,
             bounds: layout_ref.current.bounds,
             ready: false,
           };
@@ -954,7 +925,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
           primary: desired.primary,
           secondary: desired.secondary,
           buckets,
-          decor: decor_build_ref.current(desired.primary),
+          decor: build_decor_pair(desired.primary, desired.secondary),
           bounds,
           ready: true,
         };
@@ -994,17 +965,31 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
         needing its own separate, unoffset one. */
       }
       {bundle_assets.map(({ bundle, geometries, materials }, bi) => {
-        const by_variant = layout.decor[bi];
-        if (!by_variant) return null;
+        const primary_variants = layout.decor.primary[bi];
+        const secondary_variants = layout.decor.secondary?.[bi] ?? null;
+        if (!primary_variants) return null;
         return (
           <group key={bundle.seed.tag.toString()} name={`chunk-decor/${offset.key}/${bundle.seed.tag.toString()}`}>
-            {geometries.map((geometry, variant) => {
-              const material = materials[variant];
-              const instances = by_variant[variant];
-              return geometry && material && instances && instances.length > 0
-                ? <DecorVariantMesh key={variant} geometry={geometry} material={material} instances={instances} />
-                : null;
-            })}
+            <group name="primary">
+              {geometries.map((geometry, variant) => {
+                const material = materials[variant];
+                const instances = primary_variants[variant];
+                return geometry && material && instances && instances.length > 0
+                  ? <DecorVariantMesh key={variant} geometry={geometry} material={material} instances={instances} role="primary" registry={registry} />
+                  : null;
+              })}
+            </group>
+            {secondary_variants && (
+              <group name="secondary">
+                {geometries.map((geometry, variant) => {
+                  const material = materials[variant];
+                  const instances = secondary_variants[variant];
+                  return geometry && material && instances && instances.length > 0
+                    ? <DecorVariantMesh key={variant} geometry={geometry} material={material} instances={instances} role="secondary" registry={registry} />
+                    : null;
+                })}
+              </group>
+            )}
           </group>
         );
       })}
