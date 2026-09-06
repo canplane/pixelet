@@ -3,12 +3,11 @@
 import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/types/ui.types.ts";
-import { Info, Palette, Sparkles, X } from "lucide-react";
+import { Info, Sparkles, X } from "lucide-react";
 
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Separator } from "@/shared/ui/shadcn/separator.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
-import { CharacterSection } from "./sections/character_section.tsx";
 import { CameraSection } from "./sections/camera_section.tsx";
 import { LanguageSection } from "./sections/language_section.tsx";
 import { LightingSection } from "./sections/lighting_section.tsx";
@@ -49,12 +48,8 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
           </div>
         </div>
 
-        <Tabs defaultValue="theme" className="flex-1 min-h-0">
+        <Tabs defaultValue="effects" className="flex-1 min-h-0">
           <TabsList className="mx-5 mt-4">
-            <TabsTrigger value="theme">
-              <Palette className="size-3.5" />
-              {t("settings.tabs.theme")}
-            </TabsTrigger>
             <TabsTrigger value="effects">
               <Sparkles className="size-3.5" />
               {t("settings.tabs.effects")}
@@ -69,10 +64,6 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
           >
-            <TabsContent value="theme">
-              <CharacterSection />
-            </TabsContent>
-
             <TabsContent value="effects">
               <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
               <Separator />

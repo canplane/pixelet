@@ -80,7 +80,7 @@ const PET_HEIGHT_U: f64 = 0.25;
 
 // Split by gender (not one flat PERSON_VARIANTS) so the settings UI can show
 // two separate rows instead of one row a user has to scan by label text to
-// tell apart — display names live in locale files (settings.character.persons.<key>),
+// tell apart — display names live in locale files (palette_modal.character.persons.<key>),
 // keyed off `key` below, not hardcoded here.
 export const PERSON_VARIANTS_FEMALE: readonly CharacterVariant[] = [
   { key: "female-1", model_url: female_a_url, skin_url: person_skin_url, height_u: PERSON_HEIGHT_U, move_clip: "sprint" },
