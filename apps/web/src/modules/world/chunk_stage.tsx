@@ -72,6 +72,17 @@ const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_WORK_BUDGET_MS: f64 = 4;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
 
+// Shared shape/update for every dev-only "how long did this recurring thing
+// take, worst case" counter below (mesh_mount_stats, mesh_unmount_stats,
+// render_call_stats) — three independently-named objects used to each
+// inline their own identical three-line total/count/max update.
+type TimingStats = { total_ms: number; count: number; max_ms: number };
+function record_timing(stats: TimingStats, ms: number): void {
+  stats.total_ms += ms;
+  stats.count++;
+  stats.max_ms = Math.max(stats.max_ms, ms);
+}
+
 /**
  * ChunkMesh's useLayoutEffect — geometry creation + GPU buffer upload
  * (BufferAttribute) + bounds — runs in React's own render/commit phase,
@@ -81,11 +92,11 @@ const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
  * simultaneous LOD-transition mounts (many chunks blend_active at once)
  * could be expensive here without showing up in that measurement at all.
  */
-const mesh_mount_stats = { total_ms: 0, count: 0, max_ms: 0 };
+const mesh_mount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
 // geometry.dispose()/material.dispose() on unmount — a zoom-out flipping
 // many chunks out of frustum at once disposes many meshes in one React
 // commit, same shape of risk as the mount side above, never measured.
-const mesh_unmount_stats = { total_ms: 0, count: 0, max_ms: 0 };
+const mesh_unmount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
 
 /**
  * Cumulative (since page load) LOD build timing, dev-only — no console.log
@@ -169,7 +180,7 @@ const commit_step_stats = {
  * window, not real work, so a plain performance.now() wrapper is the only
  * trustworthy way left to see this number.
  */
-const render_call_stats = { total_ms: 0, count: 0, max_ms: 0 };
+const render_call_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 
@@ -388,12 +399,7 @@ const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: Chu
     const t0 = import.meta.env.DEV ? performance.now() : 0;
     mesh.geometry.dispose();
     material.dispose();
-    if (import.meta.env.DEV) {
-      const unmount_ms = performance.now() - t0;
-      mesh_unmount_stats.total_ms += unmount_ms;
-      mesh_unmount_stats.count++;
-      mesh_unmount_stats.max_ms = Math.max(mesh_unmount_stats.max_ms, unmount_ms);
-    }
+    if (import.meta.env.DEV) record_timing(mesh_unmount_stats, performance.now() - t0);
   }, [material, mesh]);
   useEffect(() => {
     const shader = material.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
@@ -433,12 +439,7 @@ const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: Chu
       geometry.boundingSphere = new THREE.Sphere();
     }
     const attribute = geometry.getAttribute(VISIBLE_ATTR);
-    if (import.meta.env.DEV) {
-      const mount_ms = performance.now() - mount_t0;
-      mesh_mount_stats.total_ms += mount_ms;
-      mesh_mount_stats.count++;
-      mesh_mount_stats.max_ms = Math.max(mesh_mount_stats.max_ms, mount_ms);
-    }
+    if (import.meta.env.DEV) record_timing(mesh_mount_stats, performance.now() - mount_t0);
     if (!(attribute instanceof THREE.BufferAttribute)) return;
     attribute.needsUpdate = true;
     const mounted: MountedLodMesh = { kind: "cube", built, role, attribute };
@@ -509,6 +510,24 @@ function blend_hash(key: string): f64 {
   return (hash >>> 0) / 0x1_0000_0000;
 }
 
+// The coarsest LOD_STEP_BY_LEVEL tier (render/lod.ts) doubles as the
+// memory-saving "nothing built" state for a chunk that's off-screen or
+// hasn't measured its own real target yet — one real box's worth of
+// geometry per chunk instead of zero, so a later re-entry always has
+// *something* to transition from rather than popping in from a true void.
+const OFF_SCREEN_LOD_STEP: LodStep = 64;
+
+/** Drops every cached step except OFF_SCREEN_LOD_STEP's own — used when a
+ * chunk leaves the frustum: recheck() still wants this chunk to keep
+ * *something* cheap resident (so a later re-entry has a real tier to
+ * transition from, not a void), just not every tier it happened to have
+ * built while it was in view. */
+function prune_cache_except_default<T>(cache: Map<LodStep, T>): void {
+  for (const step of cache.keys()) {
+    if (step !== OFF_SCREEN_LOD_STEP) cache.delete(step);
+  }
+}
+
 type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack; bundle_assets: readonly DecorBundleAssets[] };
 
 const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
@@ -560,6 +579,21 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
   // both is just two lookups against the one cache below, not a second
   // cache or a second build path.
   const decor_cache_ref = useRef(new Map<LodStep, ModelInstanceTransformList[][]>());
+
+  // Both build caches AND the scan they were built from — the two moments
+  // that actually need a hard reset (a source revision changed, or this
+  // chunk just left the frustum for commit() to act on) always want every
+  // one of these three gone together, never a subset. recheck()'s own
+  // out-of-frustum branch wants the softer prune_cache_except_default
+  // instead (keep something cheap resident, not nothing) — a different
+  // policy, not just a different moment, so it stays separate rather than
+  // folding in here.
+  function reset_all_caches(): void {
+    bucket_cache_ref.current.clear();
+    decor_cache_ref.current.clear();
+    column_runs_ref.current = null;
+  }
+
   // Cube content only (terrain + solid objects, chunk_mesher.ts's baked
   // mesh) — null return means "a needed scan was just deferred, not built
   // yet", distinct from an empty result (built, genuinely nothing to draw).
@@ -696,6 +730,23 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
     };
   }
 
+  // The shared "given a (primary, secondary) pair, what would this chunk's
+  // whole layout actually contain" computation — the initial useState below
+  // and the source-revision effect after it both need exactly this (build
+  // cube content, bail on a deferred scan, else build decor's own pair and
+  // measure bounds), differing only in what they do with a null result.
+  // commit() keeps its own inline copy rather than calling this: it already
+  // measures build_ref/chunk_bounds as two separate DEV timings
+  // (commit_step_stats), which this single call would collapse into one.
+  function build_layout_content(
+    primary: LodStep,
+    secondary: LodStep | null,
+  ): { buckets: BuiltChunkBucket[]; decor: DecorLayoutPair; bounds: ChunkBounds | null } | null {
+    const buckets = build_ref.current(primary, secondary);
+    if (buckets === null) return null;
+    return { buckets, decor: build_decor_pair(primary, secondary), bounds: chunk_bounds(buckets) };
+  }
+
   const initial_view = useMemo(
     () => estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, ivec.add(FROM_L3_IDX(page_idx), page_off)),
     [anchor_registry, camera, page_idx, page_off],
@@ -703,24 +754,16 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
 
   const [layout, set_layout] = useState<LodLayout>(() => {
     if (!initial_view.in_frustum) {
-      return { primary: 64, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
+      return { primary: OFF_SCREEN_LOD_STEP, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
     }
-    const buckets = build_ref.current(initial_view.lod_step, null);
-    if (buckets === null) {
+    const content = build_layout_content(initial_view.lod_step, null);
+    if (content === null) {
       // Scan deferred on the very first build — start not-ready (same
       // shape as an out-of-frustum chunk) so the first recheck() sets
       // pending and retries, instead of rendering nothing forever.
       return { primary: initial_view.lod_step, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
     }
-    const initial: LodLayout = {
-      primary: initial_view.lod_step,
-      secondary: null,
-      buckets,
-      decor: build_decor_pair(initial_view.lod_step, null),
-      bounds: chunk_bounds(buckets),
-      ready: true,
-    };
-    return initial;
+    return { primary: initial_view.lod_step, secondary: null, ...content, ready: true };
   });
   const layout_ref = useRef(layout);
   layout_ref.current = layout;
@@ -748,9 +791,7 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
     ) return;
     source_ref.current = { tile, objects_revision, show_structures };
     const current = layout_ref.current;
-    bucket_cache_ref.current.clear();
-    decor_cache_ref.current.clear();
-    column_runs_ref.current = null;
+    reset_all_caches();
     if (!current.ready) {
       if (current.bounds !== null) {
         const invalidated = { ...current, bounds: null };
@@ -759,18 +800,18 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
       }
       return;
     }
-    const buckets = build_ref.current(current.primary, current.secondary);
-    if (buckets === null) {
+    const content = build_layout_content(current.primary, current.secondary);
+    if (content === null) {
       // Deferred — keep whatever's currently showing, just mark not-ready
-      // so the next recheck() sets pending and retries.
-      if (current.ready) {
-        const invalidated = { ...current, ready: false };
-        layout_ref.current = invalidated;
-        set_layout(invalidated);
-      }
+      // so the next recheck() sets pending and retries. current.ready is
+      // always true here (the check above already returned otherwise), so
+      // this needs no guard of its own.
+      const invalidated = { ...current, ready: false };
+      layout_ref.current = invalidated;
+      set_layout(invalidated);
       return;
     }
-    const next = { ...current, buckets, decor: build_decor_pair(current.primary, current.secondary), bounds: chunk_bounds(buckets), ready: true };
+    const next = { ...current, ...content, ready: true };
     layout_ref.current = next;
     set_layout(next);
   }, [tile, objects_revision, show_structures]);
@@ -846,23 +887,19 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
           // Do not let GPU buffers or derived surfaces accumulate as the
           // camera visits the world. An off-screen component keeps only its
           // source key and rebuilds if it re-enters the frustum.
-          desired_ref.current = { primary: 64, secondary: null };
+          desired_ref.current = { primary: OFF_SCREEN_LOD_STEP, secondary: null };
           this.pending = current.ready;
           this.blend_active = false;
           this.settling = false;
-          for (const step of bucket_cache_ref.current.keys()) {
-            if (step !== 64) bucket_cache_ref.current.delete(step);
-          }
-          for (const step of decor_cache_ref.current.keys()) {
-            if (step !== 64) decor_cache_ref.current.delete(step);
-          }
+          prune_cache_except_default(bucket_cache_ref.current);
+          prune_cache_except_default(decor_cache_ref.current);
           apply_visibility(registry, { primary: true, secondary: false });
           return;
         }
         const guide = get_lod_guide(Math.sqrt(this.distance2), current.primary);
         // An unloaded chunk has nothing on screen to transition from. Build
         // its correct tier immediately instead of flashing 32 -> 16 -> target
-        // merely because the memory-saving empty state uses step 64.
+        // merely because the memory-saving empty state uses OFF_SCREEN_LOD_STEP.
         const primary = current.ready ? step_lod_toward(current.primary, guide.lod_step) : guide.lod_step;
         this.settling = primary !== guide.lod_step;
         const secondary = !this.settling && guide.blend_active && guide.blend_finer_step !== null && guide.blend_coarser_step !== null
@@ -886,13 +923,11 @@ const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
       commit() {
         if (!this.pending) return false;
         if (!this.in_frustum) {
-          bucket_cache_ref.current.clear();
-          decor_cache_ref.current.clear();
-          column_runs_ref.current = null;
+          reset_all_caches();
           // Keep the tiny measured AABB after releasing GPU/surface data so a
           // later polar change can re-enter using real geometry, not z=0.
           const empty: LodLayout = {
-            primary: 64,
+            primary: OFF_SCREEN_LOD_STEP,
             secondary: null,
             buckets: [],
             decor: EMPTY_DECOR_PAIR,
@@ -1032,7 +1067,7 @@ PageChunks.displayName = "PageChunks";
  * exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set(), ready: new Set() }), []);
+  const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set() }), []);
   const lod_elapsed = useRef(LOD_RECHECK_INTERVAL);
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const { gl } = useThree();
@@ -1043,10 +1078,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     gl.render = (scene, camera) => {
       const t0 = performance.now();
       original_render(scene, camera);
-      const render_ms = performance.now() - t0;
-      render_call_stats.total_ms += render_ms;
-      render_call_stats.count++;
-      render_call_stats.max_ms = Math.max(render_call_stats.max_ms, render_ms);
+      record_timing(render_call_stats, performance.now() - t0);
     };
     return () => {
       gl.render = original_render;

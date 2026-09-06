@@ -100,18 +100,3 @@ export function build_chunk_bucket(
 ): BuiltChunkBucket {
   return { lod_step, role, cubes: with_visibility(bake_chunk_mesh(column_runs, lod_step), role) };
 }
-
-/** Builds one primary LOD and, only while blending, one adjacent LOD. */
-export function build_chunk_buckets(
-  column_runs: readonly MeshRun[][],
-  primary_step: LodStep,
-  secondary_step: LodStep | null,
-): BuiltChunkBucket[] {
-  const out: BuiltChunkBucket[] = [];
-  out.push(build_chunk_bucket(column_runs, primary_step, "primary"));
-
-  if (secondary_step !== null && secondary_step !== primary_step) {
-    out.push(build_chunk_bucket(column_runs, secondary_step, "secondary"));
-  }
-  return out.sort((a, b) => a.lod_step - b.lod_step);
-}

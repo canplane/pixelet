@@ -5,7 +5,7 @@ import * as THREE from "three";
 
 import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, release_chunk_volume } from "./volume.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
-import { build_chunk_bucket, build_chunk_buckets, chunk_bounds } from "./chunk_bucket.ts";
+import { build_chunk_bucket, chunk_bounds } from "./chunk_bucket.ts";
 import type { BakedChunkMesh } from "./chunk_mesher.ts";
 
 const LAND = { material_class: MaterialClass.LAND, r: 10, g: 20, b: 30, layer_idx: NO_LAYER } as const;
@@ -27,7 +27,7 @@ Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
   fill_chunk_column(volume, 49, 2, 0, 0, LAND);
   const column_runs = scan_all_column_runs(volume);
 
-  const buckets = build_chunk_buckets(column_runs, 1, null);
+  const buckets = [build_chunk_bucket(column_runs, 1, "primary")];
   assertEquals(buckets.map((bucket) => bucket.lod_step), [1]);
   // Two open-bottom (5-face) terrain boxes: 5*4 = 20 vertices each.
   assertEquals(buckets[0].cubes.vertex_cnt, 40);
@@ -71,7 +71,7 @@ Deno.test("chunk bucket - bounds include signed Z and a second (e.g. object) buc
   const volume = alloc_chunk_volume();
   fill_chunk_column(volume, 4, 7, -70, -65, LAND);
   const column_runs = scan_all_column_runs(volume);
-  const buckets = build_chunk_buckets(column_runs, 1, null);
+  const buckets = [build_chunk_bucket(column_runs, 1, "primary")];
 
   // Synthetic already-baked mesh spanning a known AABB, standing in for a
   // real placed-object bake — chunk_bounds only ever reads position data,
@@ -103,7 +103,7 @@ Deno.test("chunk bucket - measured bounds survive a low-polar frustum that rejec
   const volume = alloc_chunk_volume();
   fill_chunk_column(volume, 31, 31, 200, 200, LAND);
   const column_runs = scan_all_column_runs(volume);
-  const bounds = chunk_bounds(build_chunk_buckets(column_runs, 1, null));
+  const bounds = chunk_bounds([build_chunk_bucket(column_runs, 1, "primary")]);
   assert(bounds !== null);
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);

@@ -233,8 +233,8 @@ export function compose_instance_matrix(out: THREE.Matrix4, transform: ModelInst
  * baking model chunk_mesher.ts's own cube bake uses, not a shared primitive
  * restyled per instance (what an InstancedMesh would do instead). Returns
  * null for zero instances — callers already gate mounting on a nonempty
- * instance list (decor_layer.tsx's ChunkDecor), so this is a defensive
- * fallback, not an expected path.
+ * instance list (chunk_stage.tsx's own Chunk, in its bundle_assets.map()
+ * JSX), so this is a defensive fallback, not an expected path.
  *
  * `BufferGeometry.applyMatrix4` (not chunk_mesher.ts's own hand-rolled
  * position math) does the real transform work here: unlike that module's
