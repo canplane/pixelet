@@ -183,65 +183,69 @@ export function user_decor_pick(i: IVec, variant_count: number): { variant: numb
 
 export type ModelInstanceTransformList = ModelInstanceTransform[];
 
-/** Pure "what would this chunk look like at this LOD tier, given this
- * source data" computation — called directly from chunk_stage.tsx's own
- * Chunk (build_ref.current(), alongside its own cube build), which already
- * has every one of these inputs in scope from building its own content.
- *
- * Returned positions are chunk-local (relative to this chunk's own
- * [base_x, base_y] corner), matching chunk_mesher.ts's own baked cube
- * positions exactly — both render inside the same offset `<group>` in
- * Chunk's own JSX (chunk_stage.tsx), one coordinate convention for
- * everything a chunk renders, not two. Elevation sampling
- * (get_ele_at_local) and occupancy checks (get_objects_in_cell) still work
- * in absolute/page-relative terms internally, exactly as before — only the
- * final position actually pushed into by_variant is shifted to chunk-local,
- * right at the point of return, so nothing upstream of that needs to change
- * meaning. */
-export function build_decor_instances(
+// User-placed instances of this bundle's own decor kind (a tree a player
+// planted via mode_bar.tsx's decor button) — merged in unconditionally,
+// never gated by density_scale: that falloff exists to thin PROCEDURAL
+// clutter at distance, not to hide deliberate user content, the same
+// reasoning ObjectWorldLayer's own solid cubes never fade with LOD either.
+// Real geometry (this instancing path), not a chunk_mesher.ts box — see
+// objects/store.ts's own "decor" channel and ObjectWorldLayer.paint's own
+// decor skip. The "user" half of the same system/user split
+// TerrainWorldLayer/ObjectWorldLayer keep as two classes (render/layer/
+// terrain, objects/adapter.ts) — kept as a plain function here instead of a
+// matching class of its own: nothing polymorphically iterates "every decor
+// source" the way WorldLayerStack iterates world layers, so there's no
+// shared interface for a class split to actually buy anything.
+function collect_user_decor_instances(
+  by_variant: ModelInstanceTransformList[],
+  bundle: DecorKindBundle,
+  page_idx: IVec,
+  page_base: IVec,
+  base_x: number,
+  base_y: number,
+): void {
+  if (!bundle.decor_id) return;
+  const page_off = ivec.gather(BigInt(base_x), BigInt(base_y), 0n);
+  const l2_key = l2_column_key_of(page_idx, page_off);
+  for (const entry of get_render_object_entries_in_l2_column(l2_key)) {
+    if (entry.kind !== "decor" || entry.decor_id !== bundle.decor_id) continue;
+    const local = ivec.sub(entry.i, page_base);
+    const x: f64 = ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(entry.f));
+    const y: f64 = ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(entry.f));
+    const z: f64 = ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(entry.f));
+    const { variant, rotation } = user_decor_pick(entry.i, bundle.variants.length);
+    // Chunk-local: see build_decor_instances' own doc comment on why the
+    // page-relative x/y computed above gets shifted here, at the last
+    // possible moment, rather than earlier (everything upstream — the
+    // entry's own absolute i/f, page_base — stays in its own natural frame;
+    // only the final stored position changes convention).
+    by_variant[variant].push({ position: [x - base_x * U_PER_CELL, y - base_y * U_PER_CELL, z], rotation_z: rotation, scale: 1, id: entry.id });
+  }
+}
+
+// The "system/procedural" half — scatter_decor_candidates' own output,
+// thinned by density_scale, filtered against real elevation and existing
+// occupancy. Mirrors TerrainWorldLayer's own role (system-generated content,
+// elevation-derived Z) the same way collect_user_decor_instances above
+// mirrors ObjectWorldLayer's (user-stored content, stored Z) — see this
+// file's own top doc comment and the 2026-09-06 industry-comparison
+// discussion for the fuller account of that symmetry.
+function collect_procedural_decor_instances(
+  by_variant: ModelInstanceTransformList[],
+  bundle: DecorKindBundle,
   tile: Tile | undefined,
   lod_step: LodStep,
   page_idx: IVec,
+  page_base: IVec,
   base_x: number,
   base_y: number,
-  bundle: DecorKindBundle,
-): ModelInstanceTransformList[] {
-  const by_variant: ModelInstanceTransformList[] = bundle.variants.map(() => []);
-  const page_base = FROM_L3_IDX(page_idx);
-
-  // User-placed instances of this bundle's own decor kind (a tree a player
-  // planted via mode_bar.tsx's decor button) — merged in unconditionally,
-  // never gated by density_scale below: that falloff exists to thin
-  // PROCEDURAL clutter at distance, not to hide deliberate user content, the
-  // same reasoning ObjectWorldLayer's own solid cubes never fade with LOD
-  // either. Real geometry (this instancing path), not a chunk_mesher.ts box
-  // — see objects/store.ts's own "decor" channel and ObjectWorldLayer.paint's
-  // own decor skip.
-  if (bundle.decor_id) {
-    const page_off = ivec.gather(BigInt(base_x), BigInt(base_y), 0n);
-    const l2_key = l2_column_key_of(page_idx, page_off);
-    for (const entry of get_render_object_entries_in_l2_column(l2_key)) {
-      if (entry.kind !== "decor" || entry.decor_id !== bundle.decor_id) continue;
-      const local = ivec.sub(entry.i, page_base);
-      const x: f64 = ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(entry.f));
-      const y: f64 = ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(entry.f));
-      const z: f64 = ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(entry.f));
-      const { variant, rotation } = user_decor_pick(entry.i, bundle.variants.length);
-      // Chunk-local: see this function's own doc comment on why the
-      // page-relative x/y computed above gets shifted here, at the last
-      // possible moment, rather than earlier (everything upstream — the
-      // entry's own absolute i/f, page_base — stays in its own natural
-      // frame; only the final stored position changes convention).
-      by_variant[variant].push({ position: [x - base_x * U_PER_CELL, y - base_y * U_PER_CELL, z], rotation_z: rotation, scale: 1, id: entry.id });
-    }
-  }
-
+): void {
   const density_scale = DECOR_DENSITY_BY_LOD_STEP[lod_step];
   // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
-  // density instead of running it only to have every candidate rejected
-  // by its own probability check below — density_scale=0 means "nothing
-  // here", decided once, not discovered 4096 times.
-  if (!tile || density_scale === 0) return by_variant;
+  // density instead of running it only to have every candidate rejected by
+  // its own probability check below — density_scale=0 means "nothing here",
+  // decided once, not discovered 4096 times.
+  if (!tile || density_scale === 0) return;
 
   const page_seed = derive_seed_u64(DECOR_MASTER_SEED, page_idx);
   const candidates = scatter_decor_candidates(
@@ -268,9 +272,9 @@ export function build_decor_instances(
     // id: null — procedural placements are never stored (this file's own
     // top doc comment), so there's nothing for decor_hit.ts's raycast_decor
     // to resolve a hit back to; they stay transparent to hit-testing.
-    // Chunk-local position (see this function's own doc comment) — x/y
-    // above stay page-relative for the elevation lookup right above this,
-    // shifted only in the value actually stored.
+    // Chunk-local position (see build_decor_instances' own doc comment) —
+    // x/y above stay page-relative for the elevation lookup right above
+    // this, shifted only in the value actually stored.
     by_variant[candidate.variant].push({
       position: [x - base_x * U_PER_CELL, y - base_y * U_PER_CELL, ele],
       rotation_z: candidate.rotation,
@@ -278,6 +282,35 @@ export function build_decor_instances(
       id: null,
     });
   }
+}
+
+/** Pure "what would this chunk look like at this LOD tier, given this
+ * source data" computation — called directly from chunk_stage.tsx's own
+ * Chunk (build_ref.current(), alongside its own cube build), which already
+ * has every one of these inputs in scope from building its own content.
+ *
+ * Returned positions are chunk-local (relative to this chunk's own
+ * [base_x, base_y] corner), matching chunk_mesher.ts's own baked cube
+ * positions exactly — both render inside the same offset `<group>` in
+ * Chunk's own JSX (chunk_stage.tsx), one coordinate convention for
+ * everything a chunk renders, not two. Elevation sampling
+ * (get_ele_at_local) and occupancy checks (get_objects_in_cell) still work
+ * in absolute/page-relative terms internally, exactly as before — only the
+ * final position actually pushed into by_variant is shifted to chunk-local,
+ * right at the point of return, so nothing upstream of that needs to change
+ * meaning. */
+export function build_decor_instances(
+  tile: Tile | undefined,
+  lod_step: LodStep,
+  page_idx: IVec,
+  base_x: number,
+  base_y: number,
+  bundle: DecorKindBundle,
+): ModelInstanceTransformList[] {
+  const by_variant: ModelInstanceTransformList[] = bundle.variants.map(() => []);
+  const page_base = FROM_L3_IDX(page_idx);
+  collect_user_decor_instances(by_variant, bundle, page_idx, page_base, base_x, base_y);
+  collect_procedural_decor_instances(by_variant, bundle, tile, lod_step, page_idx, page_base, base_x, base_y);
   return by_variant;
 }
 
