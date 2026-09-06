@@ -15,7 +15,7 @@ import { get_local_world_origin } from "../frame/coord.ts";
 import { is_placement_blocked } from "../objects/collision.ts";
 import { DECOR_SIZE } from "../objects/size.ts";
 import { set_virtual_hide, usePlacedObject } from "../objects/store.ts";
-import type { ObjectColorId } from "@pxl/shared/spec/cell/objects.ts";
+import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { get_object_texture } from "../objects/tex.ts";
 import { user_decor_pick } from "../decor/decor_layer.tsx";
 import { decor_bundle_for } from "../decor/decor_registry.ts";
@@ -175,7 +175,7 @@ export function HoverCursor() {
   // marker ghost instead. decor_id-carrying cases (decor mode, or an eraser
   // hovering a decor entry) never reach this — decor_geometry below gives
   // them their own real silhouette+texture instead of a color swatch.
-  const color_id: ObjectColorId | null = activeTool === "pointer" || activeTool === "decor"
+  const color_id: PlaceableCubeId | null = activeTool === "pointer" || activeTool === "decor"
     ? null
     : hovered_object?.kind === "solid"
     ? hovered_object.color_id

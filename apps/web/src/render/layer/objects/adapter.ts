@@ -5,13 +5,13 @@
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import { object_color_hex } from "@pxl/shared/spec/cell/objects.ts";
+import { cube_hex, is_terrain_style_cube, type PlaceableCubeId, terrain_style_cube_source } from "@pxl/shared/spec/cell/mod.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { get_object_entries_in_l2_column, get_render_object_entries_in_l2_column, l2_column_key_of, type ObjectLayerEntry } from "@/modules/world/objects/store.ts";
 import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
-import { hex_to_rgb255 } from "../terrain/shader_meta.ts";
+import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255 } from "../terrain/shader_meta.ts";
 
 import { append_chunk_sub_voxel, type ChunkVolume, MaterialClass, NO_LAYER, pack_sub_cell_fraction, set_chunk_voxel, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/volume.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
@@ -27,6 +27,42 @@ export function object_local_xyz(obj: ObjectLayerEntry, chunk_origin: IVec): [f6
     ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(obj.f)),
     ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(obj.f)),
   ];
+}
+
+/**
+ * A placed "solid" cube's own real color/layer_idx — either a flat color
+ * (this file's own long-standing path) or, for a terrain-styled pick
+ * (cell/mod.ts's own TERRAIN_STYLE_SOURCE, 2026-09-06), the exact same
+ * color/layer_idx real baked terrain of that type gets, read straight from
+ * shader_meta.ts's own lookup tables rather than this file's own flat-color
+ * ones. material_class stays MaterialClass.OBJECT either way — chunk_mesher.ts's
+ * own open-bottom/occlusion-exemption/run-merge behavior for OBJECT-classed
+ * runs (see that file's own doc comments) has nothing to do with which
+ * texture a cube samples, and reusing a terrain MaterialClass here would
+ * trade away real, already-fixed correctness (a solid object no longer
+ * shields whatever's beneath it from occlusion culling, chunk_mesher.ts's
+ * own 2026-08-16 bug) for a distinction this function's own two branches
+ * already don't need it for: layer-tap blending itself only cares whether
+ * layer_idx is real, never material_class.
+ */
+function resolve_solid_material(color_id: PlaceableCubeId): VoxelMaterial {
+  if (is_terrain_style_cube(color_id)) {
+    const { channel, terrain_num_id } = terrain_style_cube_source(color_id);
+    const color_flat = GROUND_COLOR_LOOKUP_FLAT[channel];
+    const layer_flat = GROUND_LAYER_INDEX_LOOKUP_FLAT[channel];
+    const off = terrain_num_id * 3;
+    const has_color = color_flat?.has[terrain_num_id];
+    return {
+      material_class: MaterialClass.OBJECT,
+      r: has_color ? color_flat.rgb[off] : 0,
+      g: has_color ? color_flat.rgb[off + 1] : 0,
+      b: has_color ? color_flat.rgb[off + 2] : 0,
+      layer_idx: layer_flat?.has[terrain_num_id] ? layer_flat.index[terrain_num_id] : NO_LAYER,
+    };
+  }
+  const [r, g, b] = hex_to_rgb255(cube_hex(color_id));
+  const layer_idx = OBJECT_LAYER_IDX[color_id] ?? NO_LAYER;
+  return { material_class: MaterialClass.OBJECT, r, g, b, layer_idx };
 }
 
 function objects_in_chunk(key: ChunkKey): readonly ObjectLayerEntry[] {
@@ -72,11 +108,9 @@ export class ObjectWorldLayer implements WorldLayer {
       const sz_cells = Math.max(1, Math.round(obj.size / U_PER_CELL));
       const cx1 = Math.min(CHUNK_CELL_SPAN, cx0 + sz_cells);
       const cy1 = Math.min(CHUNK_CELL_SPAN, cy0 + sz_cells);
-      const material: VoxelMaterial = obj.kind === "air" ? { material_class: MaterialClass.AIR, r: 0, g: 0, b: 0, layer_idx: NO_LAYER } : (() => {
-        const [r, g, b] = hex_to_rgb255(object_color_hex(obj.color_id));
-        const layer_idx = OBJECT_LAYER_IDX[obj.color_id] ?? NO_LAYER;
-        return { material_class: MaterialClass.OBJECT, r, g, b, layer_idx };
-      })();
+      const material: VoxelMaterial = obj.kind === "air"
+        ? { material_class: MaterialClass.AIR, r: 0, g: 0, b: 0, layer_idx: NO_LAYER }
+        : resolve_solid_material(obj.color_id);
 
       const sub_sz = is_sub_cell ? pack_sub_cell_fraction(obj.size / U_PER_CELL) : SUB_CELL_NONE;
       const sub_ox = is_sub_cell ? pack_sub_cell_fraction((local_x - cx0 * U_PER_CELL) / U_PER_CELL) : 0;

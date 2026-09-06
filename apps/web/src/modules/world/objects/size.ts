@@ -2,6 +2,7 @@
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import type { CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
 
 /**
  * Placeable cube sizes — grid-aligned steps down from one terrain cell
@@ -42,3 +43,17 @@ export const DEFAULT_OBJECT_SIZE: f64 = OBJECT_SIZES[0];
  * constant and must keep working even if a future size flyout moves
  * object_size elsewhere. */
 export const DECOR_SIZE: f64 = OBJECT_SIZES[0];
+
+export const OBJECT_SCALE_EXPONENTS = [0, -1, -2, -3] as const;
+export type ObjectScaleExponent = typeof OBJECT_SCALE_EXPONENTS[number];
+
+const DEFAULT_ACTIVE_SCALES: readonly ObjectScaleExponent[] = [0, -1, -2, -3];
+
+/** Per-color override of which of OBJECT_SIZES' tiers mode_bar.tsx's size
+ * flyout offers — empty today (every color offers every tier), reserved for
+ * a future color that shouldn't (a huge painted mural block, say). */
+const ACTIVE_SCALES: Partial<Record<CubeColorId, readonly ObjectScaleExponent[]>> = {};
+
+export function object_scale_exponents(id: CubeColorId): readonly ObjectScaleExponent[] {
+  return ACTIVE_SCALES[id] ?? DEFAULT_ACTIVE_SCALES;
+}

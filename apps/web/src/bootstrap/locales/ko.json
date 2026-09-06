@@ -159,10 +159,66 @@
     "blue": "파랑",
     "violet": "보라",
     "magenta": "마젠타",
-    "pink": "분홍"
+    "pink": "분홍",
+    "land": {
+      "BARE": "맨땅",
+      "SEA": "바다",
+      "GREEN_DEEP": "숲",
+      "GREEN_LIGHT": "잔디",
+      "SAND": "모래",
+      "RESIDENTIAL": "주거지역",
+      "COMMERCIAL": "상업지역",
+      "INDUSTRIAL": "공업지역",
+      "SPORTS": "체육시설",
+      "EDUCATION": "교육시설",
+      "MEDICAL": "의료시설",
+      "PUBLIC": "공공시설",
+      "APRON": "계류장",
+      "HELIPAD": "헬리패드"
+    },
+    "water": {
+      "RIVER": "강",
+      "LAKE": "호수",
+      "WETLAND": "습지"
+    },
+    "structure": {
+      "BUILDING": "건물",
+      "BUILDING_STATION": "역사",
+      "BUILDING_EDUCATION": "교육시설 건물",
+      "BUILDING_MEDICAL": "의료시설 건물",
+      "BUILDING_PUBLIC": "공공시설 건물"
+    },
+    "transport": {
+      "ROAD_DEFAULT": "도로",
+      "ROAD_MOTORWAY": "고속도로",
+      "ROAD_PRIMARY": "주요도로",
+      "ROAD_SECONDARY": "보조도로",
+      "PEDESTRIAN": "보행로",
+      "PARKING": "주차장",
+      "RAIL_MAIN": "철도",
+      "RAIL_SUBWAY": "지하철",
+      "RUNWAY": "활주로",
+      "TAXIWAY": "유도로"
+    }
   },
   "object_decors": {
     "tree": "나무"
+  },
+  "palette_modal": {
+    "title": "팔레트",
+    "description": "배치할 수 있는 모든 큐브 색상과 데코 종류입니다.",
+    "close": "닫기",
+    "tabs": {
+      "cube": "큐브",
+      "decor": "데코"
+    },
+    "sections": {
+      "colors": "색상",
+      "land": "육지",
+      "water": "수역",
+      "structure": "건물",
+      "transport": "교통"
+    }
   },
   "device": {
     "orientation": {
@@ -197,7 +253,8 @@
       "eraser": "지우개",
       "message_placeholder": "메시지 입력...",
       "message_tooltip": "메시지",
-      "send": "전송"
+      "send": "전송",
+      "catalog_tooltip": "전체 카탈로그 열기"
     },
     "controls": {
       "reset_orientation": "북쪽으로 정렬",

@@ -7,12 +7,13 @@ import type { ModalController, UiController } from "../types/ui.types.ts";
 import { EditFooModal } from "@/features/manage_foo/ui/edit_foo_modal.tsx";
 import type { EditFooProps } from "@/features/manage_foo/ui/edit_foo_modal.tsx";
 import { SettingsModal, type SettingsModalProps } from "@/app/settings/settings_modal.tsx";
+import { PaletteModal, type PaletteModalProps } from "@/modules/map/ui/overlay/palette_modal.tsx";
 
 /**
  * Represents the currently active modal state.
  * `null` means no modal is visible.
  */
-export type ModalState = EditFooProps | SettingsModalProps | null;
+export type ModalState = EditFooProps | SettingsModalProps | PaletteModalProps | null;
 
 /** ModalManager props */
 type ModalManagerProps = {
@@ -41,6 +42,7 @@ export function ModalManager(props: ModalManagerProps) {
   const [modalsController] = useState<ModalController>({
     openUpdateFooModal: (id) => setModalState({ type: "foo:update", params: { id } }),
     openSettingsModal: () => setModalState({ type: "settings" }),
+    openPaletteModal: () => setModalState({ type: "palette" }),
   });
 
   /**
@@ -67,6 +69,13 @@ export function ModalManager(props: ModalManagerProps) {
       )}
       {type === "settings" && (
         <SettingsModal
+          open={!!modalState}
+          onOpenChange={(open: boolean) => !open && setModalState(null)}
+          {...modalState}
+        />
+      )}
+      {type === "palette" && (
+        <PaletteModal
           open={!!modalState}
           onOpenChange={(open: boolean) => !open && setModalState(null)}
           {...modalState}

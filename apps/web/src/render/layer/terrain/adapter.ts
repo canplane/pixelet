@@ -6,8 +6,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { I16Array } from "@xpute/core/kit/array.ts";
 
 import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
-import { common_types } from "@pxl/shared/spec/cell/common.ts";
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
@@ -31,7 +30,7 @@ const CH_TO_CLASS: Record<GroundChannelKey, MaterialClass> = {
 type RenderGround = ReturnType<typeof slice_chunk>["ground"];
 
 function ground_material_at(ground: RenderGround, idx: u32, show_structures: boolean): VoxelMaterial {
-  const base_type = terrain_types.land.BARE;
+  const base_type = cube_types.land.BARE;
   const base_flat = GROUND_COLOR_LOOKUP_FLAT[GroundChannelKey.LAND];
   let r = base_flat?.has[base_type] ? base_flat.rgb[base_type * 3] : 0;
   let g = base_flat?.has[base_type] ? base_flat.rgb[base_type * 3 + 1] : 0;
@@ -43,7 +42,7 @@ function ground_material_at(ground: RenderGround, idx: u32, show_structures: boo
   for (const ch_key of GROUND_CH_KEYS) {
     if (ch_key === GroundChannelKey.STRUCTURE && !show_structures) continue;
     const type_id = ground[ch_key][idx];
-    if (type_id === common_types.AIR) continue;
+    if (type_id === cube_types.common.VOID) continue;
     const flat = GROUND_COLOR_LOOKUP_FLAT[ch_key];
     if (!flat?.has[type_id]) continue;
 

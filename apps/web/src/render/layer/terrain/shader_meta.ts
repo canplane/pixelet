@@ -3,7 +3,7 @@
 import type { u32, u8 } from "@xpute/core/kit/word.ts";
 import type { U8Array } from "@xpute/core/kit/array.ts";
 
-import { terrain_colors, terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_colors, cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 
 export const KEYS = <T extends object>(v: T): Array<keyof T> => Object.keys(v) as Array<keyof T>;
@@ -37,8 +37,16 @@ export const get_color_meta = (): TerrainColorMeta[] => {
   const out: TerrainColorMeta[] = [];
 
   GROUND_CH_KEYS.forEach((ch_key) => {
-    const types = terrain_types[ch_key];
-    const colors = terrain_colors[ch_key];
+    // cube_types[ch_key] (land/water/structure/transport) carries only its
+    // own real types — VOID/AIR/UNKNOWN live in cube_types.common instead
+    // (cube.ts's own top comment) and aren't spread in, so this channel's
+    // own real cell values wouldn't otherwise include them. Merged in only
+    // for this iteration, not the data itself: AIR never actually resolves
+    // to a color for any of these channels (no seed defines one, see
+    // cube.ts's own RASTER_SEED comment), so it's filtered out below same
+    // as any other type with no real color; VOID and UNKNOWN do.
+    const types = { ...cube_types.common, ...cube_types[ch_key] };
+    const colors = cube_colors[ch_key];
     KEYS(types).forEach((type_key) => {
       const type_id = types[type_key];
       const hex_color = colors[type_id];
@@ -89,7 +97,7 @@ export const build_color_mappings = (meta: TerrainColorMeta[]): {
 // pre-resolve every texel to a real color before three.js builds a mipmap
 // chain over the result (see decode_ground_rgba's own comment for why that
 // order matters). Kept next to get_color_meta/build_color_mappings since all
-// three read the same terrain_colors/terrain_types tables and must agree.
+// three read the same cube_colors/cube_types tables and must agree.
 
 // Exported so render/layer/'s WorldLayer adapters (terrain/adapter.ts,
 // objects/adapter.ts) can resolve a hex color to bytes the same way this
@@ -112,7 +120,7 @@ export const build_color_lookup = (meta: TerrainColorMeta[]): GroundColorLookup 
   return out;
 };
 
-/** Static — terrain_colors/terrain_types never change at runtime, so this is built once at module load rather than per-chunk. */
+/** Static — cube_colors/cube_types never change at runtime, so this is built once at module load rather than per-chunk. */
 export const GROUND_COLOR_LOOKUP: GroundColorLookup = build_color_lookup(get_color_meta());
 
 /**
@@ -194,7 +202,7 @@ export const decode_ground_rgba = (
   show_structures: boolean = false,
   lookup: FlatGroundColorLookup = GROUND_COLOR_LOOKUP_FLAT,
 ): Uint8Array => {
-  const base: u8 = terrain_types.land.BARE;
+  const base: u8 = cube_types.land.BARE;
   const base_flat = lookup[GroundChannelKey.LAND];
   const base_rgb: [number, number, number] = base_flat?.has[base] ? [base_flat.rgb[base * 3], base_flat.rgb[base * 3 + 1], base_flat.rgb[base * 3 + 2]] : [0, 0, 0];
   const n = row_stride * row_stride;
@@ -304,7 +312,7 @@ const build_layer_mapping_funcs = (meta: TerrainLayerMeta[]): string => {
  * Included verbatim in both create_vert and create_frag (see shader.ts).
  */
 export const build_ground_layer_resolver = (meta: TerrainLayerMeta[]): string => {
-  const land_base_type: u8 = terrain_types.land.BARE;
+  const land_base_type: u8 = cube_types.land.BARE;
   return `
   ${build_layer_mapping_funcs(meta)}
   float resolve_ground_layer(float ch_land, float ch_water, float ch_structure, float ch_transport, bool show_structures) {

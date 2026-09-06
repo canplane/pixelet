@@ -5,7 +5,7 @@ import { assertEquals } from "@std/assert";
 import type { I16Array } from "@xpute/core/kit/array.ts";
 import type { Ground } from "@pxl/shared/bake/format.ts";
 import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { dense_ele_region, is_water_family_at, WATER_RECESS_CELLS } from "./elevation.ts";
 
@@ -31,7 +31,7 @@ function empty_ground(span: number): Ground {
 Deno.test("dense_ele_region - a WATER-channel cell is recessed by WATER_RECESS_CELLS", () => {
   const span = 2;
   const ground = empty_ground(span);
-  ground.water[0] = terrain_types.water.RIVER; // cell (0,0)
+  ground.water[0] = cube_types.water.RIVER; // cell (0,0)
 
   const out = dense_ele_region(flat_page_ele(), 0, 0, span, ground);
   assertEquals(out[0], FLAT_ELE - WATER_RECESS_CELLS);
@@ -41,7 +41,7 @@ Deno.test("dense_ele_region - a WATER-channel cell is recessed by WATER_RECESS_C
 Deno.test("dense_ele_region - land.SEA is recessed too, even though it's not the WATER channel", () => {
   const span = 2;
   const ground = empty_ground(span);
-  ground.land[0] = terrain_types.land.SEA;
+  ground.land[0] = cube_types.land.SEA;
 
   const out = dense_ele_region(flat_page_ele(), 0, 0, span, ground);
   assertEquals(out[0], FLAT_ELE - WATER_RECESS_CELLS);
@@ -50,8 +50,8 @@ Deno.test("dense_ele_region - land.SEA is recessed too, even though it's not the
 Deno.test("dense_ele_region - a structure over water (e.g. a bridge) is not recessed", () => {
   const span = 2;
   const ground = empty_ground(span);
-  ground.water[0] = terrain_types.water.RIVER;
-  ground.structure[0] = terrain_types.structure.BUILDING; // outranks water, same as adapter.ts's own priority
+  ground.water[0] = cube_types.water.RIVER;
+  ground.structure[0] = cube_types.structure.BUILDING; // outranks water, same as adapter.ts's own priority
 
   const out = dense_ele_region(flat_page_ele(), 0, 0, span, ground);
   assertEquals(out[0], FLAT_ELE);
@@ -60,8 +60,8 @@ Deno.test("dense_ele_region - a structure over water (e.g. a bridge) is not rece
 Deno.test("dense_ele_region - transport over water (e.g. a road) is not recessed", () => {
   const span = 2;
   const ground = empty_ground(span);
-  ground.water[0] = terrain_types.water.LAKE;
-  ground.transport[0] = terrain_types.transport.ROAD_DEFAULT;
+  ground.water[0] = cube_types.water.LAKE;
+  ground.transport[0] = cube_types.transport.ROAD_DEFAULT;
 
   const out = dense_ele_region(flat_page_ele(), 0, 0, span, ground);
   assertEquals(out[0], FLAT_ELE);
@@ -75,6 +75,6 @@ Deno.test("dense_ele_region - omitting ground recesses nothing (existing callers
 
 Deno.test("is_water_family_at - plain land is not water-family", () => {
   const ground = empty_ground(1);
-  ground.land[0] = terrain_types.land.BARE;
+  ground.land[0] = cube_types.land.BARE;
   assertEquals(is_water_family_at(ground, 0), false);
 });

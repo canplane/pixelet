@@ -5,8 +5,7 @@
  * tree_kind.ts's own doc comment for why this file stays asset-free.
  */
 
-import { common_types } from "@pxl/shared/spec/cell/common.ts";
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
 
 const BOAT_KIND_TAG = 0xb0a7_5eed_0002_dec0n;
@@ -29,13 +28,13 @@ export const BOAT_KIND: DecorKindSeed = {
 };
 
 /** Open river/lake water only — WETLAND is excluded (too shallow/marshy for
- * a boat to sit in), and structure/transport must both still be AIR: per
+ * a boat to sit in), and structure/transport must both still be VOID: per
  * render/layer/terrain/adapter.ts's own ground_material_at precedence,
  * either one (a pier, a bridge deck) would win over water and actually
  * render as itself, not water, at that cell — a boat there would visually
  * float on top of a bridge instead of the water beneath it. */
 export const is_boat_eligible: DecorEligibility = (_land, water, structure, transport) => {
-  if (structure !== common_types.AIR) return false;
-  if (transport !== common_types.AIR) return false;
-  return water === terrain_types.water.RIVER || water === terrain_types.water.LAKE;
+  if (structure !== cube_types.common.VOID) return false;
+  if (transport !== cube_types.common.VOID) return false;
+  return water === cube_types.water.RIVER || water === cube_types.water.LAKE;
 };

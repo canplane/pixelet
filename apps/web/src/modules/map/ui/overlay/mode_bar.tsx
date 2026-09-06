@@ -3,14 +3,15 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { Eraser, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react";
+import { Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
+import { useAppContext } from "@/app/providers/app_context.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { object_color_hex, object_color_ids, object_decor_ids, object_scale_exponents, type ObjectColorId, type ObjectDecorId } from "@pxl/shared/spec/cell/objects.ts";
-import { OBJECT_SIZES } from "@/modules/world/objects/size.ts";
+import { cube_hex, cube_ids, type CubeColorId, type DecorId } from "@pxl/shared/spec/cell/mod.ts";
+import { object_scale_exponents, OBJECT_SIZES } from "@/modules/world/objects/size.ts";
 
 type ModeId = "message" | "palette";
 
@@ -35,7 +36,7 @@ function size_button_dims(i: number): string {
 // Tier index i is exponent -i (object_scale_exponents), sign-flipped and
 // sorted here for display only — item_refs/drag_index/on_up still index by
 // tier (OBJECT_SIZES' own index), not by render position.
-function size_tiers_for(id: ObjectColorId): number[] {
+function size_tiers_for(id: CubeColorId): number[] {
   return object_scale_exponents(id).map((exp) => -exp).sort((a, b) => b - a);
 }
 
@@ -184,7 +185,7 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
   );
 }
 
-function ColorSwatchButton({ id }: { id: ObjectColorId }) {
+function ColorSwatchButton({ id }: { id: CubeColorId }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((state) => state.activeTool);
   const object_color_id = useUiStore((state) => state.object_color_id);
@@ -209,7 +210,7 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
       >
         <span
           ref={button_ref}
-          style={{ backgroundColor: object_color_hex(id) }}
+          style={{ backgroundColor: cube_hex(id) }}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
             activeTool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
@@ -220,45 +221,20 @@ function ColorSwatchButton({ id }: { id: ObjectColorId }) {
   );
 }
 
-// Icon per decor id — TypeScript enforces one entry per ObjectDecorId, so
-// adding a new decor kind (objects.ts's own "decor" channel) can't silently
-// ship without a button icon for it.
-const DECOR_ICONS: Record<ObjectDecorId, typeof TreePine> = {
+// Icon per decor id — TypeScript enforces one entry per DecorId, so
+// adding a new decor kind (decor.ts's own decor_types) can't silently ship
+// without a button icon for it. Lives here (not palette_modal.tsx) purely
+// because ModeBar's own hotbar used to render decor buttons directly too —
+// now that palette_modal.tsx's Decor tab is the only place a decor kind
+// gets picked (2026-09-06, see this file's own catalog-button comment
+// below), this map only has the one real consumer left.
+export const DECOR_ICONS: Record<DecorId, typeof TreePine> = {
   tree: TreePine,
 };
 
-/** Same activate-on-tap shape as ColorSwatchButton, minus its size flyout —
- * decor has no adjustable size yet (DECOR_SIZE, objects/size.ts, is fixed),
- * so a plain tap is enough. */
-function DecorButton({ id }: { id: ObjectDecorId }) {
-  const { t } = useTranslation();
-  const activeTool = useUiStore((state) => state.activeTool);
-  const decor_id = useUiStore((state) => state.decor_id);
-  const set_activeTool = useUiStore((state) => state.set_activeTool);
-  const set_decor_id = useUiStore((state) => state.set_decor_id);
-  const Icon = DECOR_ICONS[id];
-  const active = activeTool === "decor" && decor_id === id;
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        set_decor_id(id);
-        set_activeTool("decor");
-      }}
-      className={cn(
-        "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-        active ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
-      )}
-      title={t(`object_decors.${id}`)}
-    >
-      <Icon className="w-5 h-5" strokeWidth={2} />
-    </button>
-  );
-}
-
 export function ModeBar() {
   const { t } = useTranslation();
+  const { ui } = useAppContext();
   const [mode, set_mode] = useState<ModeId>("palette");
   const activeTool = useUiStore((state) => state.activeTool);
   const set_activeTool = useUiStore((state) => state.set_activeTool);
@@ -475,14 +451,31 @@ export function ModeBar() {
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
-                  <div className="flex items-center p-[4px] shrink-0">
-                    {object_decor_ids.map((id) => <DecorButton key={id} id={id} />)}
+                  <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {cube_ids.map((id) => <ColorSwatchButton key={id} id={id} />)}
                   </div>
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
-                  <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {object_color_ids.map((id) => <ColorSwatchButton key={id} id={id} />)}
+                  {
+                    // Opens the full catalog (2026-09-06): every
+                    // terrain-styled block type alongside the flat colors,
+                    // plus every decor kind (decor's own hotbar button was
+                    // removed the same day this went in — palette_modal.tsx's
+                    // Decor tab is its only pick point now) — Minecraft's own
+                    // hotbar/inventory relationship. Outside the scrolling
+                    // color strip above so it's always reachable regardless
+                    // of scroll position.
+                  }
+                  <div className="flex items-center p-[4px] shrink-0">
+                    <button
+                      type="button"
+                      onClick={ui.openPaletteModal}
+                      className="flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer text-white/60 hover:text-white/90 transition-colors shrink-0"
+                      title={t("map.mode_bar.catalog_tooltip")}
+                    >
+                      <LayoutGrid className="w-5 h-5" strokeWidth={2} />
+                    </button>
                   </div>
                 </motion.div>
               )}

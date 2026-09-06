@@ -14,7 +14,7 @@
  * traffic.
  */
 
-import { terrain_types } from "@pxl/shared/spec/cell/terrain.ts";
+import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
 
 const CAR_KIND_TAG = 0xca5_eed0_0003_dec0n;
@@ -40,6 +40,6 @@ export const CAR_KIND: DecorKindSeed = {
  * value happens to sit underneath it. ROAD_DEFAULT and PEDESTRIAN are
  * deliberately excluded — see this file's own doc comment. */
 export const is_car_eligible: DecorEligibility = (_land, _water, _structure, transport) =>
-  transport === terrain_types.transport.ROAD_MOTORWAY ||
-  transport === terrain_types.transport.ROAD_PRIMARY ||
-  transport === terrain_types.transport.ROAD_SECONDARY;
+  transport === cube_types.transport.ROAD_MOTORWAY ||
+  transport === cube_types.transport.ROAD_PRIMARY ||
+  transport === cube_types.transport.ROAD_SECONDARY;
