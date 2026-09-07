@@ -41,6 +41,7 @@ import { get_local_world_origin } from "./frame/coord.ts";
 import { LocationPuck } from "./markers/location_puck.tsx";
 import { HoverCursor } from "./markers/hover_cursor.tsx";
 import { DebugBox, DebugPoint, GyroRing, LabeledLine } from "./markers/frame_gizmo.tsx";
+import { PoiLayer } from "./poi/poi_layer.tsx";
 
 // CHUNK_STAGE_LAYERS lives in modules/world/stack.ts (not inline here) so
 // camera/ray.ts's own raycast can composite the exact same layer stack
@@ -240,6 +241,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
               <HoverCursor />
               <LocationPuck device_coord={device_coord} />
+              <PoiLayer />
 
               <Suspense fallback={null}>
                 <Companion

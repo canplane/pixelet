@@ -4,40 +4,35 @@
  * A billboarded speech bubble over the companion's head, showing the most
  * recent line from the (currently dev-only) map chat — see
  * modules/map/ui/overlay/mode_bar.tsx / dummy_chat_text.tsx for where
- * chatLines actually comes from. Pure THREE.Sprite (not a DOM overlay):
- * always faces the camera regardless of the character's own rotation.z,
- * with no lookAt bookkeeping needed — that's what a Sprite's own material
- * does by construction.
+ * chatLines comes from. World-anchored-billboard tier (see
+ * discussions/20260907-world-rendering-tiers.md); the actual render is
+ * billboard/billboard.tsx's `<Billboard>`, shared with poi_layer.tsx. This
+ * file owns only what's chat-bubble-specific: reading chatLines, the
+ * show/expire timer, and drawing the notched speech-bubble shape onto a
+ * canvas.
  *
- * The bubble itself is drawn on a plain 2D canvas (black notched-corner
- * border, white fill, a downward tail) rather than sourced from any image
- * asset — its size has to track the message's own text, which a fixed-
- * image asset would still need runtime 9-slice code to stretch, so
- * drawing it procedurally costs the same and skips an external CC0
- * dependency for something this simple. THREE.NearestFilter on the
- * resulting texture is what actually gives the "pixel" read: the canvas
- * itself is drawn with regular anti-aliased text (readability), and
- * Nearest sampling keeps the border/corner edges hard instead of blurring
- * them when the sprite is scaled in the 3D scene — same idea as the
- * terrain/character textures elsewhere in this pipeline, just applied to
- * a canvas-drawn texture instead of a decoded PNG.
+ * The bubble is drawn on a plain 2D canvas (notched-corner border, tail)
+ * rather than an image asset, since its size has to track the message text
+ * anyway.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
+import { wrap_text } from "../billboard/canvas_text.ts";
+import { FONT_FAMILY } from "../billboard/canvas_scale.ts";
+import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10
 // lines forever), so this is tracked locally here, not in ui_store.
 const SHOW_DURATION_MS = 8000;
 
-const FONT = "bold 16px ui-monospace, SFMono-Regular, Menlo, monospace";
-const PADDING_X = 14;
-const PADDING_Y = 10;
-const LINE_H = 19;
+const FONT = `bold 14px ${FONT_FAMILY}`;
+const PADDING_X = 11;
+const PADDING_Y = 8;
+const LINE_H = 17;
 const BORDER = 3;
 const NOTCH = 4;
 const TAIL_W = 14;
@@ -59,13 +54,6 @@ const MAX_TEXT_WIDTH_PX = 220;
 // only ever preserve source detail, not add any.
 const RENDER_SCALE = 3;
 
-// World units [u] per logical (pre-RENDER_SCALE) canvas pixel — applied
-// uniformly to both the canvas's own width and height, so a two-line
-// message's text renders at the same real-world size as a one-line
-// message's, rather than the whole sprite being squashed into a fixed
-// on-screen height regardless of how many lines it grew to.
-const WORLD_UNITS_PER_PX: f64 = 0.0072;
-
 // Air gap between the character model's own top (ChatBubbleProps.anchor_z
 // — its configured height_u) and the bubble's tail tip. Previously the
 // caller (companion.tsx) passed `height_u * 1.15`, an arbitrary multiplier
@@ -84,53 +72,7 @@ function fill_notched_rect(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.fillRect(x, y + notch, w, Math.max(0, h - notch * 2));
 }
 
-/** Greedy word wrap against ctx's currently-set font, then a per-character
- * fallback pass for any line still too wide on its own — a single long
- * word, or (the common case that broke this the first time around) a
- * Korean message typed with no spacing between words at all, which the
- * word pass alone treats as one unbreakable "word" spanning the whole
- * message. */
-function wrap_text(ctx: CanvasRenderingContext2D, text: string, max_width: number): string[] {
-  const words = text.split(/\s+/).filter((w) => w.length > 0);
-  if (words.length === 0) return [""];
-
-  const word_lines: string[] = [];
-  let current = words[0];
-  for (let i = 1; i < words.length; i++) {
-    const candidate = `${current} ${words[i]}`;
-    if (ctx.measureText(candidate).width <= max_width) {
-      current = candidate;
-    } else {
-      word_lines.push(current);
-      current = words[i];
-    }
-  }
-  word_lines.push(current);
-
-  const lines: string[] = [];
-  for (const line of word_lines) {
-    if (ctx.measureText(line).width <= max_width) {
-      lines.push(line);
-      continue;
-    }
-    let chunk = "";
-    for (const ch of line) {
-      const candidate = chunk + ch;
-      if (chunk !== "" && ctx.measureText(candidate).width > max_width) {
-        lines.push(chunk);
-        chunk = ch;
-      } else {
-        chunk = candidate;
-      }
-    }
-    if (chunk !== "") lines.push(chunk);
-  }
-  return lines;
-}
-
-type BuiltBubble = { canvas: HTMLCanvasElement; logical_w: f64; logical_h: f64 };
-
-function build_bubble_canvas(text: string): BuiltBubble {
+function build_bubble_canvas(text: string): BuiltBillboard {
   const measure_ctx = document.createElement("canvas").getContext("2d")!;
   measure_ctx.font = FONT;
   const lines = wrap_text(measure_ctx, text, MAX_TEXT_WIDTH_PX);
@@ -177,7 +119,7 @@ function build_bubble_canvas(text: string): BuiltBubble {
     ctx.fillText(line, box_w / 2, PADDING_Y + LINE_H * (i + 0.5));
   });
 
-  return { canvas, logical_w: box_w, logical_h };
+  return { canvas, logical_w: box_w, logical_h, center_y: logical_h };
 }
 
 export type ChatBubbleProps = {
@@ -218,37 +160,9 @@ export function ChatBubble(props: ChatBubbleProps) {
     return () => clearTimeout(timer);
   }, [last]);
 
-  const built = useMemo(() => {
-    if (!visible_line) return null;
-    const { canvas, logical_w, logical_h } = build_bubble_canvas(visible_line.text);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    return { texture, width: logical_w * WORLD_UNITS_PER_PX, height: logical_h * WORLD_UNITS_PER_PX };
-  }, [visible_line]);
+  const built = useMemo(() => (visible_line ? build_bubble_canvas(visible_line.text) : null), [visible_line]);
 
-  // CanvasTexture holds a real WebGL resource — useMemo alone doesn't clean
-  // one up when a newer message replaces it (or the bubble is dismissed).
-  useEffect(() => {
-    if (!built) return;
-    return () => built.texture.dispose();
-  }, [built]);
-
-  if (!built) return null;
-
-  // Sprite position is its own center; the tail tip is its bottom edge, so
-  // the center sits half the sprite's own height above the intended tip.
+  // tip_z is the tail's fixed bottom edge (Billboard's own base_z).
   const tip_z = anchor_z + HEAD_CLEARANCE_U;
-  const sprite_z = tip_z + built.height / 2;
-
-  return (
-    <sprite position={[0, 0, sprite_z]} scale={[built.width, built.height, 1]} renderOrder={999}>
-      {
-        /* depthTest off + high renderOrder: a chat bubble reads as UI, not as
-      a real object the terrain/buildings should be able to hide. */
-      }
-      <spriteMaterial map={built.texture} transparent depthTest={false} />
-    </sprite>
-  );
+  return <Billboard built={built} base_z={tip_z} />;
 }
