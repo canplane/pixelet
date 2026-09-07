@@ -300,6 +300,53 @@ export function world_adjacent_corner(hit: WorldHit, new_size: f64, map_origin: 
   return local_world_to_canonical({ i: 0n, f: 0n }, out, map_origin);
 }
 
+/**
+ * The single real `size`-tall voxel `hit` actually struck, exactly as
+ * raycast against the live rendered voxel field — eraser's own targeting
+ * for its "nothing placed here, dig into the terrain itself" case.
+ * Deliberately NOT just hit.box_min/box_max directly — those bound whichever
+ * merged run the mesher/raycaster happened to combine same-material voxels
+ * into for efficiency (voxel_scan.ts's merge_column_runs). A flat,
+ * uniformly-colored terrain column routinely merges dozens of cells deep
+ * into ONE box, so box_min there can sit far below the real surface, nowhere
+ * near what was actually visually struck — an earlier version of this
+ * function used box_min as-is, and both the hover ghost and the real write
+ * landed at that buried address instead: invisible, and no-op-looking, even
+ * though the write genuinely happened.
+ *
+ * Same per-axis shape as world_adjacent_corner (this file, one rule per
+ * axis, direction chosen by that axis's own face_normal sign) but the
+ * OPPOSITE choice on the axis with a nonzero normal: world_adjacent_corner
+ * steps OUTSIDE the struck box on that axis (flush-against, for placing a
+ * NEW box beside it); this stays INSIDE it, landing on the exact `size`-tall
+ * slice the struck face itself bounds — one cell below the boundary for a
+ * n>0 face (a top, or a wall's +axis side), one cell at-and-above it for a
+ * n<0 face (an underside, or a wall's -axis side) — regardless of how many
+ * more identical voxels the run actually merged beneath/behind it. The one
+ * axis with no face_normal component (both, for an edge-on hit) instead
+ * uses hit_point itself, same as world_adjacent_corner's own n===0 case:
+ * whichever `size`-grid cell the ray actually landed in, since only
+ * hit_point — not box_min/box_max — is guaranteed to fall inside the ONE
+ * real cell that was struck rather than the merged run's whole footprint.
+ */
+export function world_struck_corner(hit: WorldHit, size: f64, map_origin: IVec): PVF3 {
+  const { face_normal, hit_point, box_min, box_max } = hit;
+  const out: V3 = [0, 0, 0];
+
+  for (const axis of [0, 1, 2] as const) {
+    const n = face_normal[axis];
+    if (n > 0) {
+      out[axis] = grid_ceil(box_max[axis], size) - size;
+    } else if (n < 0) {
+      out[axis] = grid_floor(box_min[axis], size);
+    } else {
+      out[axis] = grid_floor(hit_point[axis], size);
+    }
+  }
+
+  return local_world_to_canonical({ i: 0n, f: 0n }, out, map_origin);
+}
+
 /** Which solid placed object `hit` actually struck, when hit.material_class
  * is MaterialClass.OBJECT — whichever placed object's own real AABB
  * (object_aabb — full precision, including sub-cell) overlaps the hit box.

@@ -35,16 +35,19 @@ import {
   decor_id_from_num,
   decor_num_id,
   type DecorId,
+  is_terrain_style_cube,
   object_value_is_air,
   object_value_is_decor,
   object_value_is_present,
   placeable_cube_id_from_num,
   placeable_cube_num_id,
   type PlaceableCubeId,
+  terrain_style_cube_source,
 } from "@pxl/shared/spec/cell/mod.ts";
 import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { get_ground_type } from "../terrain/elevation.ts";
 
 type ObjectEntryBase = { id: string; i: IVec; f: FVec; size: f64 };
 export type PlacedObject = ObjectEntryBase & { kind: "solid"; color_id: PlaceableCubeId };
@@ -350,16 +353,75 @@ function bump_l2_column_for_object(id: string): void {
   }
 }
 
+/** Eraser's own "dig into bare terrain" hover preview (markers/
+ * hover_cursor.tsx) — the terrain-side counterpart to virtual_hide_id
+ * above. That mechanism only ever HIDES a real, already-stored object leaf;
+ * there's no leaf to hide when the hover target is real terrain (see
+ * place_air's own doc comment on why terrain has none), so instead this
+ * INJECTS one real AIR entry into the render build that was never actually
+ * written — same "real GPU-mesh build ONLY, never raycast or collision"
+ * scoping as virtual_hide_id, for the same reason (an injected entry the
+ * raycaster could see would make it hit air rather than terrain, clearing
+ * hovered_object_id, clearing this preview, hitting terrain again — the
+ * exact loop virtual_hide_id's own doc comment already describes). Without
+ * this, the hover ghost there just tints the still-fully-opaque real
+ * terrain in place — a flat color shift, not a see-through preview — since
+ * there's nothing genuinely different showing through it the way an
+ * object's own hidden self reveals the real terrain around/behind it. */
+let virtual_carve_preview: { key: string; entry: ObjectLayerEntry } | null = null;
+
+/** `i`/`f`/`size` exactly match what a real place_air() call at this same
+ * hover would write — same cell address, same leaf shape derive_cell_entries
+ * would itself produce, so the preview renders pixel-identical to the real
+ * thing it's standing in for. A no-op re-call for the same cell (the common
+ * case — the cursor sits still, or moves within the same cell, across many
+ * consecutive hover ticks) skips the revision bump entirely. */
+export function set_virtual_carve_preview(i: IVec, f: FVec, size: f64): void {
+  const [ix, iy, iz] = cell_index({ i, f });
+  const key = cell_key(ix, iy, iz);
+  if (virtual_carve_preview?.key === key) return;
+  const previous = virtual_carve_preview;
+  virtual_carve_preview = { key, entry: { id: `virtual-carve:${key}`, i, f, size, kind: "air" } };
+  if (previous) bump_l2_column_for_cell_key(previous.key);
+  bump_l2_column_for_cell_key(key);
+}
+
+export function clear_virtual_carve_preview(): void {
+  if (!virtual_carve_preview) return;
+  const { key } = virtual_carve_preview;
+  virtual_carve_preview = null;
+  bump_l2_column_for_cell_key(key);
+}
+
+/** Cube-content-only revision bump for one cell key — the half of
+ * bump_l2_column_for_object's own pair that virtual_carve_preview ever
+ * needs, since an injected "air" entry is never decor. */
+function bump_l2_column_for_cell_key(key: string): void {
+  const [ix, iy, iz] = parse_cell_key(key);
+  const l2_key = l2_column_key_of_cell(ix, iy, iz);
+  l2_column_revisions.set(l2_key, (l2_column_revisions.get(l2_key) ?? 0) + 1);
+  notify(l2_column_listeners, l2_key);
+}
+
 /** Same as get_object_entries_in_l2_column, with set_virtual_hide's own
- * target (if any) filtered out — the real GPU-mesh build path's own view,
- * never the raycast path's (see set_virtual_hide's own doc comment on why
- * that split has to hold). Returns the live backing array unchanged (no
- * allocation) whenever the hidden id isn't even in this column, which is
- * the common case. */
+ * target (if any) filtered out and set_virtual_carve_preview's own target
+ * (if any) injected — the real GPU-mesh build path's own view, never the
+ * raycast path's (see set_virtual_hide's own doc comment on why that split
+ * has to hold — set_virtual_carve_preview's own doc comment explains why it
+ * needs the identical split). Returns the live backing array unchanged (no
+ * allocation) whenever neither applies to this column, which is the common
+ * case. */
 export function get_render_object_entries_in_l2_column(l2_key: string): readonly ObjectLayerEntry[] {
   const entries = get_object_entries_in_l2_column(l2_key);
-  if (!virtual_hide_id) return entries;
-  return entries.some((entry) => entry.id === virtual_hide_id) ? entries.filter((entry) => entry.id !== virtual_hide_id) : entries;
+  let out = entries;
+  if (virtual_hide_id && out.some((entry) => entry.id === virtual_hide_id)) {
+    out = out.filter((entry) => entry.id !== virtual_hide_id);
+  }
+  if (virtual_carve_preview) {
+    const [ix, iy, iz] = parse_cell_key(virtual_carve_preview.key);
+    if (l2_column_key_of_cell(ix, iy, iz) === l2_key) out = [...out, virtual_carve_preview.entry];
+  }
+  return out;
 }
 
 /** Objects near a candidate corner+size — the cell it's in plus the 26 neighbors, since a candidate near a cell face can legitimately need to see an object one cell over (collision.ts's find_overlapping_object, ray.ts's resolve_hit_object). 27 O(1) lookups, still independent of total object count. */
@@ -511,6 +573,21 @@ for (const [key] of cells) {
 
 // ---- Mutations ----
 
+/** Frees `key`'s own cells entry entirely once every leaf in its tree reads
+ * back as VOID — the shared tail write_object_value() and remove() both
+ * need. Neither reaching this state is exclusive to an explicit erase: a
+ * redundant place() (see place_value_is_redundant below) also writes VOID
+ * on purpose, and a Map entry whose tree carries zero real information
+ * would otherwise sit there forever, padding out encode_objects()'s own
+ * saved blob for nothing. */
+function prune_if_empty(tree: ObjectTree, key: string): void {
+  let empty = true;
+  sparse_tree.walk(tree, (_x, _y, _z, _level, val) => {
+    if (val !== cube_types.common.VOID) empty = false;
+  });
+  if (empty) cells.delete(key);
+}
+
 /**
  * i/f is taken as-is — whatever camera/ray.ts's world_adjacent_corner
  * already computed (the same coordinate the hover preview and overlap
@@ -546,12 +623,45 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
     sparse_tree.compact(tree);
   }
 
+  prune_if_empty(tree, key);
   save();
   reindex_cell(ix, iy, iz);
 }
 
+/**
+ * Whether painting `color_id` at this exact whole cell would actually
+ * change anything a viewer could see — true only for a terrain-styled pick
+ * (cell/mod.ts's own TERRAIN_STYLE_SOURCE) whose own channel+type exactly
+ * matches what the REAL baked terrain already shows there. Painting
+ * "land.GREEN_DEEP" over ground the bake already recorded as GREEN_DEEP
+ * land is a no-op visually — the object layer would just be shadowing the
+ * exact same information the terrain layer underneath it already carries,
+ * permanently, for every future save/load of this cell. Scoped to whole-cell
+ * writes only: a sub-cell pick paints a fraction of the cell, never fully
+ * standing in for what the terrain layer shows across the whole thing, so
+ * it can never be redundant by this same reasoning.
+ */
+function place_value_is_redundant(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId): boolean {
+  if (size < U_PER_CELL) return false;
+  if (!is_terrain_style_cube(color_id)) return false;
+  const { channel, terrain_num_id } = terrain_style_cube_source(color_id);
+  return get_ground_type(i, f, channel) === terrain_num_id;
+}
+
+/**
+ * Carving a cell (place_air) and then re-painting it with the exact
+ * terrain-styled cube the real ground already is there cancels back out to
+ * nothing, not to two stacked-but-inert entries: rather than storing a
+ * "solid" leaf that only ever repaints what terrain would already show,
+ * this writes VOID instead — the same absence remove() itself produces —
+ * so write_object_value's own prune_if_empty can reclaim the cell entirely
+ * the moment nothing else in it carries real information. A real color (or
+ * a terrain-styled pick that doesn't match the real ground) still writes
+ * normally.
+ */
 export function place(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId): void {
-  write_object_value(i, f, size, placeable_cube_num_id(color_id));
+  const val = place_value_is_redundant(i, f, size, color_id) ? cube_types.common.VOID : placeable_cube_num_id(color_id);
+  write_object_value(i, f, size, val);
 }
 
 /** Same write path as place(), just tagged with a decor kind instead of a
@@ -564,6 +674,20 @@ export function place_decor(i: IVec, f: FVec, size: f64, decor_id: DecorId): voi
   write_object_value(i, f, size, decor_num_id(decor_id));
 }
 
+/** Eraser's own write path for its "nothing placed here" case
+ * (camera/input.tsx's handle_tap) — a real, present leaf
+ * (cube_types.common.AIR, object_value_is_air) that means "nothing here, on
+ * purpose," unlike remove() below. remove() deletes a leaf outright and lets
+ * whatever's underneath (almost always real baked terrain) show through
+ * again; that's no help against terrain itself, which has no object-layer
+ * leaf of its own to delete. Writing AIR instead overrides it regardless of
+ * what's there — real terrain, or a placed cube/decor entry, all get
+ * overwritten the same way write_object_value already overwrites any prior
+ * value at this slot. */
+export function place_air(i: IVec, f: FVec, size: f64): void {
+  write_object_value(i, f, size, cube_types.common.AIR);
+}
+
 export function remove(id: string): void {
   const parsed = parse_leaf_id(id);
   if (!parsed) return;
@@ -572,11 +696,12 @@ export function remove(id: string): void {
   const tree = cells.get(key);
   if (!tree) return;
 
+  const [ix, iy, iz] = parse_cell_key(key);
+
   // level===max (the whole-cell tier) — see place()'s matching comment.
   if (parsed.level >= OBJECT_LAYOUT.max) {
     sparse_tree.fill(tree, cube_types.common.VOID);
   } else {
-    const [ix, iy, iz] = parse_cell_key(key);
     const corner = cell_corner(ix, iy, iz);
     const abs = pvf3.add({ i: 0n, f: 0n }, corner, local_offset(parsed.x, parsed.y, parsed.z));
 
@@ -584,13 +709,7 @@ export function remove(id: string): void {
     sparse_tree.compact(tree);
   }
 
-  let empty = true;
-  sparse_tree.walk(tree, (_x, _y, _z, _level, val) => {
-    if (val !== cube_types.common.VOID) empty = false;
-  });
-  if (empty) cells.delete(key);
-
+  prune_if_empty(tree, key);
   save();
-  const [ix, iy, iz] = parse_cell_key(key);
   reindex_cell(ix, iy, iz);
 }

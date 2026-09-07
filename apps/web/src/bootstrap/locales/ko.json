@@ -18,6 +18,10 @@
       "lock_tilt": {
         "label": "카메라 기울기 고정",
         "description": "카메라의 수직 회전은 고정하고 수평 회전은 유지합니다."
+      },
+      "terrain_carving": {
+        "label": "지형 파내기",
+        "description": "아무것도 놓여있지 않은 곳에서 지우개로 실제 지형을 한 칸씩 파낼 수 있게 합니다."
       }
     },
     "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍이 발생하면 HIGH 항목부터 해제해 주세요.",

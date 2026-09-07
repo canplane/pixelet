@@ -18,6 +18,10 @@
       "lock_tilt": {
         "label": "Camera Tilt Lock",
         "description": "Locks vertical camera rotation while horizontal rotation stays free."
+      },
+      "terrain_carving": {
+        "label": "Terrain Carving",
+        "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
       }
     },
     "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",

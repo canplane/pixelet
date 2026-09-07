@@ -33,6 +33,18 @@ export type CameraSettingsSlice = {
   show_structures: boolean;
   set_show_structures: (show: boolean) => void;
   toggle_structures: () => void;
+
+  /**
+   * Whether the eraser tool's "nothing placed here" case (camera/input.tsx's
+   * handle_tap) digs into the terrain's own real surface (place_air) instead
+   * of no-op'ing the way it always did before this flag existed. Off by
+   * default: the terrain here is real, baked map data (OSM-derived), not a
+   * user's own scratch canvas the way placed objects are — carving into it
+   * is a deliberate, opt-in mode, not eraser's default behavior.
+   */
+  enable_terrain_carving: boolean;
+  set_enable_terrain_carving: (enable: boolean) => void;
+  toggle_terrain_carving: () => void;
 };
 
 export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [], [], CameraSettingsSlice> = (set) => ({
@@ -47,4 +59,8 @@ export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [],
   show_structures: false,
   set_show_structures: (show_structures) => set({ show_structures }),
   toggle_structures: () => set((state) => ({ show_structures: !state.show_structures })),
+
+  enable_terrain_carving: false,
+  set_enable_terrain_carving: (enable_terrain_carving) => set({ enable_terrain_carving }),
+  toggle_terrain_carving: () => set((state) => ({ enable_terrain_carving: !state.enable_terrain_carving })),
 });
