@@ -3,11 +3,11 @@
 
 import { GROUND_CH_KEYS, type GroundChannelKey } from "@pxl/shared/bake/format.ts";
 
-import { cube_colors, type CubeColorId, cube_types } from "./cube.ts";
-import { type DecorId, decor_types } from "./decor.ts";
+import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
+import { decor_types, type DecorId } from "./decor.ts";
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
-export { type DecorId, decor_types } from "./decor.ts";
+export { decor_types, type DecorId } from "./decor.ts";
 
 // =============================================================================
 // Aggregated Types

@@ -12,7 +12,7 @@ import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_
 // companion *appearance* pick, not a setting you configure once and forget —
 // same "which of these do I want equipped" shape as a cube color or decor
 // kind, just always-on-one-of-each instead of placed-many. It now lives in
-// palette_modal.tsx's own Character tab, and this file moved alongside the
+// drawer_modal.tsx's own Character tab, and this file moved alongside the
 // rest of the character world module (character_preview.tsx, companion.tsx)
 // since it's no longer a settings-modal-specific component.
 
@@ -49,14 +49,14 @@ function PersonPicker(props: PersonPickerProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-medium text-muted-foreground">{t("palette_modal.character.person_label")}</span>
+      <span className="text-[13px] font-medium text-muted-foreground">{t("drawer_modal.character.person_label")}</span>
       <div className="flex gap-3 items-center">
         <CharacterPreview variant={selected} className="size-20 shrink-0 rounded-[10px] bg-accent/40" />
         <div className="flex flex-col gap-1.5 min-w-0">
           <div className="flex flex-wrap gap-1.5">
             {(["female", "male"] as const).map((g) => (
               <button key={g} type="button" onClick={() => on_gender_change(g)} className={chip_class(gender === g)}>
-                {t(`palette_modal.character.${g}_label`)}
+                {t(`drawer_modal.character.${g}_label`)}
               </button>
             ))}
           </div>
@@ -64,7 +64,7 @@ function PersonPicker(props: PersonPickerProps) {
           <div className="flex flex-wrap gap-1.5">
             {variants.map((v) => (
               <button key={v.key} type="button" onClick={() => on_select(v.key)} className={chip_class(v.key === selected_key)}>
-                {t(`palette_modal.character.persons.${v.key}`)}
+                {t(`drawer_modal.character.persons.${v.key}`)}
               </button>
             ))}
           </div>
@@ -86,13 +86,13 @@ function PetPicker(props: PetPickerProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-medium text-muted-foreground">{t("palette_modal.character.pet_label")}</span>
+      <span className="text-[13px] font-medium text-muted-foreground">{t("drawer_modal.character.pet_label")}</span>
       <div className="flex gap-3 items-center">
         <CharacterPreview variant={selected} className="size-20 shrink-0 rounded-[10px] bg-accent/40" />
         <div className="flex flex-wrap gap-1.5">
           {PET_VARIANTS.map((v) => (
             <button key={v.key} type="button" onClick={() => on_select(v.key)} className={chip_class(v.key === selected_key)}>
-              {t(`palette_modal.character.pets.${v.key}`)}
+              {t(`drawer_modal.character.pets.${v.key}`)}
             </button>
           ))}
         </div>
@@ -101,7 +101,7 @@ function PetPicker(props: PetPickerProps) {
   );
 }
 
-/** palette_modal.tsx's Character tab content — equips the single always-on
+/** drawer_modal.tsx's Character tab content — equips the single always-on
  * companion (world.tsx's own one `<Companion>` instance), never a
  * placed-into-the-world pick the way Cube/Decor are; selecting a chip here
  * takes effect immediately and the sheet stays open (unlike CubeSwatchButton/

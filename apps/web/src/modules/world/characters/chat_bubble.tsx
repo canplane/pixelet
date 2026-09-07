@@ -33,8 +33,8 @@ const FONT = `bold 14px ${FONT_FAMILY}`;
 const PADDING_X = 11;
 const PADDING_Y = 8;
 const LINE_H = 17;
-const BORDER = 3;
-const NOTCH = 4;
+const BORDER = 2;
+const NOTCH = 3;
 const TAIL_W = 14;
 const TAIL_H = 10;
 

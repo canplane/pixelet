@@ -18,7 +18,7 @@ export type BaseModalProps = {
 export type ModalController = {
   openUpdateFooModal: (id: number) => void; // DUMMY: Open the "Update Foo" modal for a specific entity
   openSettingsModal: () => void; // Opens the settings modal (rendering effects / debug / license)
-  openPaletteModal: () => void; // Opens the full cube/decor catalog modal (mode_bar.tsx's own hotbar stays separate)
+  openDrawerModal: () => void; // Opens the full cube/decor/character catalog drawer (mode_bar.tsx's own hotbar stays separate)
 };
 
 /**

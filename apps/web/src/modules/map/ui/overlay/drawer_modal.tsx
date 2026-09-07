@@ -1,18 +1,10 @@
-// @pxl/web/modules/map/ui/overlay/palette_modal.tsx
+// @pxl/web/modules/map/ui/overlay/drawer_modal.tsx
 
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
 import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
-import {
-  type DecorId,
-  decor_ids,
-  is_terrain_style_cube,
-  placeable_cube_hex,
-  placeable_cube_ids,
-  type PlaceableCubeId,
-  terrain_style_cube_source,
-} from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, type DecorId, is_terrain_style_cube, placeable_cube_ids, type PlaceableCubeId, terrain_style_cube_source } from "@pxl/shared/spec/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/types/ui.types.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
@@ -20,10 +12,11 @@ import { cn } from "@/shared/lib/utils/cn.ts";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
 import { CharacterPicker } from "@/modules/world/characters/character_picker.tsx";
+import { cube_swatch_style } from "./cube_swatch.ts";
 import { DECOR_ICONS } from "./mode_bar.tsx";
 
-export type PaletteModalProps = {
-  type: "palette";
+export type DrawerModalProps = {
+  type: "drawer";
 };
 
 /** The full catalog's own grouping — mode_bar.tsx's hotbar stays a flat
@@ -74,7 +67,7 @@ function CubeSwatchButton({ id, onPick }: { id: PlaceableCubeId; onPick: (id: Pl
       title={label}
     >
       <span
-        style={{ backgroundColor: placeable_cube_hex(id) ?? undefined }}
+        style={cube_swatch_style(id)}
         className={cn(
           "w-8 h-8 rounded-md transition-transform",
           active ? "ring-2 ring-foreground ring-offset-1 ring-offset-background scale-105" : "ring-1 ring-border",
@@ -125,7 +118,7 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
  * the odd one out: it equips the single always-on companion rather than
  * placing anything, so its picks (CharacterPicker) apply immediately and
  * deliberately leave the sheet open — see that component's own comment. */
-export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
+export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
   const { open, onOpenChange } = props;
   const { t } = useTranslation();
   const select_cube = useUiStore((state) => state.select_cube);
@@ -145,14 +138,14 @@ export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" hideClose className="sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground">
+      <SheetContent side="right" hideClose className="sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground">
         <div className="shrink-0 border-b border-border/60" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <div className="flex h-14 items-center gap-2 px-5">
-            <SheetTitle className="flex-1 text-[17px] font-semibold">{t("palette_modal.title")}</SheetTitle>
-            <SheetDescription className="sr-only">{t("palette_modal.description")}</SheetDescription>
+            <SheetTitle className="flex-1 text-[17px] font-semibold">{t("drawer_modal.title")}</SheetTitle>
+            <SheetDescription className="sr-only">{t("drawer_modal.description")}</SheetDescription>
             <SheetClose
               className="-mr-2.5 flex size-[42px] items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-              aria-label={t("palette_modal.close")}
+              aria-label={t("drawer_modal.close")}
             >
               <X className="size-5" />
             </SheetClose>
@@ -161,9 +154,9 @@ export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
 
         <Tabs defaultValue="cube" className="flex-1 min-h-0">
           <TabsList className="mx-5 mt-4">
-            <TabsTrigger value="cube">{t("palette_modal.tabs.cube")}</TabsTrigger>
-            <TabsTrigger value="decor">{t("palette_modal.tabs.decor")}</TabsTrigger>
-            <TabsTrigger value="character">{t("palette_modal.tabs.character")}</TabsTrigger>
+            <TabsTrigger value="cube">{t("drawer_modal.tabs.cube")}</TabsTrigger>
+            <TabsTrigger value="decor">{t("drawer_modal.tabs.decor")}</TabsTrigger>
+            <TabsTrigger value="character">{t("drawer_modal.tabs.character")}</TabsTrigger>
           </TabsList>
 
           <div
@@ -176,7 +169,7 @@ export function PaletteModal(props: BaseModalProps & PaletteModalProps) {
                 if (!ids || ids.length === 0) return null;
                 return (
                   <div key={section}>
-                    <h3 className="text-xs font-medium text-muted-foreground mb-2">{t(`palette_modal.sections.${section}`)}</h3>
+                    <h3 className="text-xs font-medium text-muted-foreground mb-2">{t(`drawer_modal.sections.${section}`)}</h3>
                     <div className="grid grid-cols-5 gap-1">
                       {ids.map((id) => <CubeSwatchButton key={id} id={id} onPick={pick_cube} />)}
                     </div>

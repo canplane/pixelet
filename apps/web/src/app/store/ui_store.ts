@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { cube_ids, type DecorId, decor_ids, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { cube_ids, decor_ids, type DecorId, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { DEFAULT_OBJECT_SIZE } from "@/modules/world/objects/size.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
@@ -20,7 +20,7 @@ let nextChatLineID = 0;
 
 // mode_bar.tsx's hotbar (2026-09-07): used to be a fixed, always-complete
 // enumeration (every flat color, plus its own separate decor row) — now that
-// palette_modal.tsx's drawer holds the *entire* catalog (colors,
+// drawer_modal.tsx holds the *entire* catalog (colors,
 // terrain-styled cubes, decor), the hotbar's job shrunk to "whatever you
 // actually reached for lately," across cube and decor alike, one shared MRU
 // list instead of two side-by-side ones. Tagged (not a bare id union): a
@@ -39,15 +39,21 @@ function is_same_pick(a: RecentPick, b: RecentPick): boolean {
   return a.kind === b.kind && a.id === b.id;
 }
 
+// Only ever inserts a genuinely new pick at the front — re-picking one
+// already in the strip leaves the list untouched, so tapping an existing
+// hotbar slot doesn't reshuffle the ones around it (confirmed live as
+// disorienting: the strip's own order should only change when something new
+// actually joins it, not every time you use it).
 function touch_recent(recent_picks: readonly RecentPick[], pick: RecentPick): RecentPick[] {
-  return [pick, ...recent_picks.filter((p) => !is_same_pick(p, pick))].slice(0, MAX_RECENT_PICKS);
+  if (recent_picks.some((p) => is_same_pick(p, pick))) return recent_picks as RecentPick[];
+  return [pick, ...recent_picks].slice(0, MAX_RECENT_PICKS);
 }
 
 type UiState = {
   activeTool: ActiveTool;
   set_activeTool: (activeTool: ActiveTool) => void;
 
-  // Widened to the full placeable catalog (2026-09-06, palette_modal.tsx's
+  // Widened to the full placeable catalog (2026-09-06, drawer_modal.tsx's
   // own terrain-styled entries alongside mode_bar.tsx's original 15 flat
   // colors) — the hotbar only ever sets this to the narrower CubeColorId
   // subset, but the field itself has to hold whatever the modal picks too.
@@ -61,7 +67,7 @@ type UiState = {
   // The hotbar's own shared MRU list (see RecentPick's own comment) — most
   // recent first. select_cube/select_decor are the only way to advance it;
   // there's no bare set_object_color_id/set_decor_id left; every real caller
-  // (mode_bar's swatch/decor buttons, palette_modal's pick_cube/pick_decor)
+  // (mode_bar's swatch/decor buttons, drawer_modal's pick_cube/pick_decor)
   // wanted the activeTool switch and the recency bump every single time
   // anyway, so a setter that skipped either was never actually useful.
   recent_picks: RecentPick[];
