@@ -170,14 +170,22 @@ function ray_hit_world(ray: THREE.Ray, map_origin: IVec, max_dist: f64): WorldHi
   return null;
 }
 
-/** The struck box's own owning cell, grounded to its real top — for the
+/** The struck top terrain cell's own (min-x, min-y, min-z) CORNER — for the
  * pointer tool's hover cursor over plain terrain OR a wall (both give the
  * same "which cell" answer via box_min's own XY, since a wall hit's box is
- * still that wall's OWN cell, not a neighbor's). Objects don't go through
- * this — see resolve_hit_object, which hands back the real PlacedObject's
- * own i/f directly instead. */
+ * still that wall's OWN cell, not a neighbor's). X/Y come straight from
+ * box_min; Z is the real terrain surface (with_ele) stepped DOWN one cell,
+ * so the anchor is the struck voxel's floor, not its top face — the same
+ * min-corner convention world_struck_corner / world_adjacent_corner already
+ * use, which lets the ghost (markers/hover_cursor.tsx) and the recenter
+ * (camera/input.tsx's anchor_center) both apply a symmetric + half a cell on
+ * all three axes. Objects don't go through this — see resolve_hit_object,
+ * which hands back the real PlacedObject's own i/f directly instead. */
 export function world_hover_pvf3(hit: WorldHit, map_origin: IVec): PVF3 | null {
-  const p: PVF3 = projection.project({ i: 0n, f: 0n }, hit.box_min[0], hit.box_min[1], 0);
+  // -U_PER_CELL, not 0: with_ele adds the real surface height onto this Z, so
+  // starting one cell low lands the result on the struck top voxel's floor
+  // (min-z corner) instead of its top face — see this function's doc comment.
+  const p: PVF3 = projection.project({ i: 0n, f: 0n }, hit.box_min[0], hit.box_min[1], -U_PER_CELL);
   p.i = ivec.add(p.i, map_origin);
   return with_ele(p, p.i, p.f);
 }

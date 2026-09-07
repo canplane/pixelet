@@ -214,12 +214,22 @@ function collect_user_decor_instances(
     const y: f64 = ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(entry.f));
     const z: f64 = ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(entry.f));
     const { variant, rotation } = user_decor_pick(entry.i, bundle.variants.length);
+    // +size/2 on X/Y: the entry stores a cell's min corner (objects/store.ts),
+    // but a free-standing model plants itself at the middle of that footprint
+    // — the same center collect_procedural_decor_instances below places a
+    // scattered tree at (`+ U_PER_CELL / 2`), and the X/Y half of what
+    // objects/geometry.ts's anchor_center does for the pointer tap (Z stays
+    // on the slot here — a decor model's origin is at its base, not its
+    // middle). entry.size is DECOR_SIZE (one whole cell) in practice, so this
+    // is U_PER_CELL / 2; written as size/2 so a future sub-cell decor tier
+    // still centers in its own footprint rather than a whole cell's.
+    const hcenter = entry.size / 2;
     // Chunk-local: see build_decor_instances' own doc comment on why the
     // page-relative x/y computed above gets shifted here, at the last
     // possible moment, rather than earlier (everything upstream — the
     // entry's own absolute i/f, page_base — stays in its own natural frame;
     // only the final stored position changes convention).
-    by_variant[variant].push({ position: [x - base_x * U_PER_CELL, y - base_y * U_PER_CELL, z], rotation_z: rotation, scale: 1, id: entry.id });
+    by_variant[variant].push({ position: [x - base_x * U_PER_CELL + hcenter, y - base_y * U_PER_CELL + hcenter, z], rotation_z: rotation, scale: 1, id: entry.id });
   }
 }
 
