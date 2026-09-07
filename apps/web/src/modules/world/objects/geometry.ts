@@ -3,9 +3,40 @@
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
+import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import { local_world_to_canonical } from "@/modules/world/frame/coord.ts";
 import type { OccupiedEntry } from "./store.ts";
+
+// Half a cell on one axis, as a packed fixed-point scalar.
+const HALF_CELL_FP = pvf3.from_real(U_PER_CELL / 2);
+
+/**
+ * The center of the cell a hover anchor (`i`/`f`) points at — the point that
+ * anchor actually *represents* to the player: where the camera recenters when
+ * you tap, which is exactly the spot the hover-cursor ghost box is drawn
+ * centered on. "Tap the highlighted box, the camera goes to that box."
+ *
+ * `+ half` on every axis, symmetric — a hover anchor is a cell's (min-x,
+ * min-y, min-z) corner on all three (camera/ray.ts: X/Y straight from
+ * box_min, Z the surface stepped down one cell to the struck voxel's floor),
+ * so an anchor at (x,y,z) occupies (x,y,z)..(x+1,y+1,z+1) and its middle is
+ * (x+.5, y+.5, z+.5) — v3.ts's own span3/center3 convention, Minecraft's
+ * block model. object_center below is the placed-cube counterpart: the exact
+ * same shape, since a cube's anchor is a true min corner too.
+ *
+ * decor/decor_layer.tsx centers user-placed decor the same way on X/Y but
+ * keeps Z on the slot (a decor model's origin sits at its base, not its
+ * middle) — the X/Y half of this, not the whole thing.
+ */
+export function anchor_center(anchor: PVF3): PVF3 {
+  return pvf3.gather(
+    { i: 0n, f: 0n },
+    pvf3.X(anchor) + HALF_CELL_FP,
+    pvf3.Y(anchor) + HALF_CELL_FP,
+    pvf3.Z(anchor) + HALF_CELL_FP,
+  );
+}
 
 /**
  * obj.i/f is this object's corner (min-x, min-y, min-z) — the same

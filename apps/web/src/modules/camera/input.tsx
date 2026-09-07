@@ -16,7 +16,7 @@ import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
 import { get_local_world_origin } from "@/modules/world/frame/coord.ts";
 import { is_placement_blocked } from "@/modules/world/objects/collision.ts";
-import { object_aabb, object_center } from "@/modules/world/objects/geometry.ts";
+import { anchor_center, object_aabb, object_center } from "@/modules/world/objects/geometry.ts";
 import { DECOR_SIZE } from "@/modules/world/objects/size.ts";
 import { get_placed_object, type OccupiedEntry, place, place_air, place_decor, remove } from "@/modules/world/objects/store.ts";
 import { raycast_decor } from "@/modules/world/decor/decor_hit.ts";
@@ -81,24 +81,26 @@ function handle_tap(hovered: PVF3): void {
   const { activeTool, object_color_id, object_size, decor_id } = useUiStore.getState();
 
   if (activeTool === "pointer") {
-    // hovering an object recenters on its actual middle — real height
-    // included, deliberately NOT re-grounded to terrain (unlike a
-    // terrain-sourced `hovered`, which is already grounded via with_ele and
-    // stays that way). hovered/hovered_coord stores the corner (see
-    // camera/store.ts and update_hover() below), off by half the object's
-    // own size on every axis, so this still needs object_center rather than
-    // using the corner as-is.
+    // Recenter on the middle of whatever the cursor is on — the exact point
+    // the hover-cursor ghost box is drawn centered on, so "tap the
+    // highlighted box, the camera goes to that box". hovered/hovered_coord
+    // always stores a cell's (min-x, min-y, min-z) corner (see camera/store.ts
+    // and update_hover() below); an object hit resolves it via object_center,
+    // a bare-terrain hit via anchor_center, and both are the same symmetric
+    // corner + half a cell on all three axes. Before, the object branch
+    // centered but terrain recentered on the corner.
     //
-    // Known consequence: do_pan's ground_snap re-grounds Z on every pan
-    // step, so the very next drag after this will snap the camera target
-    // down to the terrain surface at whatever X/Y you've panned to — a
-    // visible jump if the object sat well above ground. Not fixed here;
-    // fixing it properly means ground_snap preserving a height-above-
-    // terrain offset while panning instead of hugging the raw surface,
-    // which changes panning in general, not just this recenter.
+    // Known consequence: do_pan's ground_snap (elevation.ts's ground_or_raw)
+    // re-grounds Z to the bare terrain surface on the next pan step, so the
+    // first drag after this nudges the camera target by up to half a cell
+    // (terrain) or an object's full height above ground (a stacked cube).
+    // Not fixed here: the camera's own terrain-only ground-snap and the
+    // companion's object-aware surface query (surface_height.ts) are
+    // deliberately kept separate for now — reconciling them is a larger
+    // design call, not a tweak to this line.
     const { hovered_object_id } = useCameraStore.getState();
     const hovered_object = hovered_object_id ? get_placed_object(hovered_object_id) : null;
-    const target = hovered_object ? object_center(hovered_object, get_local_world_origin(useMapStore.getState().map_center)) : hovered;
+    const target = hovered_object ? object_center(hovered_object, get_local_world_origin(useMapStore.getState().map_center)) : anchor_center(hovered);
 
     useMapStore.getState().set_map_center(target);
     return;

@@ -40,8 +40,6 @@ const GHOST_OPACITY = 0.5;
 
 const HIGHLIGHT_BOX = new THREE.BoxGeometry(1, 1, 1);
 
-const TERRAIN_POS = center3n([0, 0, -U_PER_CELL], U_PER_CELL);
-
 // Stable empty reference — passed to useInstancedModelVariants whenever no
 // decor bundle is relevant this render, so its own internal variants_key
 // stays a constant "" instead of churning every render a fresh `[]`
@@ -141,7 +139,13 @@ export function HoverCursor() {
   // flyout).
   const preview_size = (activeTool === "eraser" || activeTool === "pointer") && hovered_object ? hovered_object.size : activeTool === "decor" ? DECOR_SIZE : object_size;
 
-  const object_pos = useMemo(() => center3n(fill3(0), preview_size), [preview_size]);
+  // The ghost box fills [anchor, anchor + current_scale] on every axis — one
+  // cell for a bare-terrain hover (world_hover_pvf3's anchor is the struck
+  // voxel's own min corner now, see camera/ray.ts), the placement/erase size
+  // otherwise. No separate terrain-vs-object offset: every anchor this file
+  // sees is a min corner, so the box always sits at + current_scale/2.
+  const current_scale = use_object_style ? preview_size : U_PER_CELL;
+  const ghost_pos = useMemo(() => center3n(fill3(0), current_scale), [current_scale]);
 
   // Same "object size vs decor's own fixed DECOR_SIZE" dispatch
   // camera/input.tsx's own handle_tap needs to actually commit a placement —
@@ -255,9 +259,9 @@ export function HoverCursor() {
 
   if (is_decor_ghost && decor_pick) {
     // Position is intentionally zero here — real decor's own position comes
-    // from the group wrapper below (AnchorNode already sits at hovered.i/f,
-    // decor's own base-anchored corner, unlike a cube's center-anchored
-    // object_pos), so only rotation/scale from this matrix are used.
+    // from the group wrapper below (AnchorNode sits at hovered.i/f and the
+    // wrapper offsets to the cell's horizontal center), so only rotation/
+    // scale from this matrix are used.
     // scale is always 1: real user-placed decor never gets scatter.ts's own
     // jitter (see objects/store.ts's "decor" channel doc comment) — only
     // procedural placements do, and those are never hoverable/selectable.
@@ -286,17 +290,15 @@ export function HoverCursor() {
   // becomes nothing" rather than "here's what you could grab".
   const color: string = map ? "#ffffff" : digging_terrain ? marker_colors.VOID : marker_colors.ACTION;
 
-  const current_scale = use_object_style ? preview_size : U_PER_CELL;
-
   // Whether this ghost sits flush/coincident with real, already-rendered
   // solid geometry rather than floating clear of anything else — decides
   // which of the two polygon-offset/renderOrder biases below actually wins
-  // the depth test, independently of use_object_style's own position choice
-  // (object_pos vs TERRAIN_POS). Pointer/no-candidate-context's own bare-
-  // terrain ghost (use_object_style === false) was always this case — a
-  // normal "object mode" ghost (a placement candidate, or an existing
-  // object eraser is about to remove) floats one cell clear of anything
-  // else and never needed it. Eraser digging into bare terrain is the one
+  // the depth test, independently of current_scale / where the box sits.
+  // Pointer/no-candidate-context's own bare-terrain ghost (use_object_style
+  // === false) was always this case — a normal "object mode" ghost (a
+  // placement candidate, or an existing object eraser is about to remove)
+  // floats one cell clear of anything else and never needed it. Eraser
+  // digging into bare terrain is the one
   // use_object_style === true case that's ALSO coincident: unlike a real
   // placed object, world_struck_corner's own anchor (see camera/ray.ts) is
   // deliberately the terrain's own real topmost voxel, not a slot above it,
@@ -312,16 +314,16 @@ export function HoverCursor() {
   // DecorVariantMesh actually renders (see GhostMaterial's own doc comment
   // for the lit/emissive-floor reasoning shared with the generic ghost
   // below). No rim-light injection here though — that's GhostMaterial's own
-  // choice too, for the same reason. Position is zero (base-anchored,
-  // matching real user-placed decor's own corner-anchored storage) rather
-  // than object_pos (center-anchored, correct for a cube but not a model
-  // whose own origin sits at its base). Offset values match the generic
-  // ghost's own "object mode" case below — decor places like an object, not
-  // like flush terrain.
+  // choice too, for the same reason. Horizontally centered in the hovered
+  // cell (+preview_size/2 on X/Y, matching decor_layer.tsx's own
+  // collect_user_decor_instances — every decor lands at its footprint's
+  // middle, not a corner), Z left at the anchor (the model's own origin sits
+  // at its base, which rests on the on-top slot world_adjacent_corner
+  // already resolved).
   if (is_decor_ghost && decor_geometry && decor_map) {
     return (
       <AnchorNode i={hovered.i} f={hovered.f}>
-        <group position={fill3(0)}>
+        <group position={[preview_size / 2, preview_size / 2, 0]}>
           <mesh geometry={decor_geometry} quaternion={$decor_quaternion} scale={$decor_scale} renderOrder={0}>
             <GhostMaterial map={decor_map} color="#ffffff" polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
           </mesh>
@@ -332,7 +334,7 @@ export function HoverCursor() {
 
   return (
     <AnchorNode i={hovered.i} f={hovered.f}>
-      <group position={use_object_style ? object_pos : TERRAIN_POS}>
+      <group position={ghost_pos}>
         <mesh
           geometry={HIGHLIGHT_BOX}
           scale={current_scale}
