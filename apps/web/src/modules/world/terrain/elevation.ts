@@ -7,7 +7,7 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { type FVec, type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L1_IDX_IN_L3, L3_IDX, L3_RANGE } from "@pxl/shared/spec/space/indexer.ts";
 import { PAGE_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
-import type { Terrain, Tile } from "@pxl/shared/bake/format.ts";
+import type { GroundChannelKey, Terrain, Tile } from "@pxl/shared/bake/format.ts";
 import { is_water_family_at, sample_ele, WATER_RECESS_CELLS } from "@/render/layer/terrain/elevation.ts";
 
 const L3_RANGE_REAL: f64 = Number(L3_RANGE);
@@ -37,6 +37,26 @@ export function get_ele(i: IVec, f: FVec): f64 | null {
   const tx: u32 = Math.floor(pvf3.to_real(pvf3.X(page_off)) / U_PER_CELL);
   const ty: u32 = Math.floor(pvf3.to_real(pvf3.Y(page_off)) / U_PER_CELL);
   return sample_ele_grounded(tile.terrain, tx, ty) * U_PER_CELL;
+}
+
+/** Raw baked ground-channel value at this exact cell, one specific channel
+ * (LAND/WATER/STRUCTURE/TRANSPORT) — get_ele's own sibling, same tile/tx/ty
+ * lookup, just reading `.ground[channel]` instead of sampling `.ele`. Used
+ * by objects/store.ts's place() to tell whether a terrain-styled pick
+ * (cell/mod.ts's own TERRAIN_STYLE_SOURCE) would actually change anything —
+ * painting "land.GREEN_DEEP" over ground the bake already recorded as
+ * GREEN_DEEP land paints nothing new. */
+export function get_ground_type(i: IVec, f: FVec, channel: GroundChannelKey): number | null {
+  const get_tile = useTileStore.getState().get_tile;
+
+  const page_idx: IVec = L3_IDX(i);
+  const tile: Tile | undefined = get_tile(page_idx);
+  if (!tile) return null;
+
+  const page_off: PVF3 = { i: L1_IDX_IN_L3(i), f };
+  const tx: u32 = Math.floor(pvf3.to_real(pvf3.X(page_off)) / U_PER_CELL);
+  const ty: u32 = Math.floor(pvf3.to_real(pvf3.Y(page_off)) / U_PER_CELL);
+  return tile.terrain.ground[channel][ty * PAGE_CELL_SPAN + tx];
 }
 
 /**

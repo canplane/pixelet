@@ -11,10 +11,11 @@ import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_local_world_origin } from "../frame/coord.ts";
 import { is_placement_blocked } from "../objects/collision.ts";
 import { DECOR_SIZE } from "../objects/size.ts";
-import { set_virtual_hide, usePlacedObject } from "../objects/store.ts";
+import { clear_virtual_carve_preview, set_virtual_carve_preview, set_virtual_hide, usePlacedObject } from "../objects/store.ts";
 import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { get_object_texture } from "../objects/tex.ts";
 import { user_decor_pick } from "../decor/decor_layer.tsx";
@@ -118,11 +119,26 @@ export function HoverCursor() {
   const object_size = useUiStore((state) => state.object_size);
   const ui_decor_id = useUiStore((state) => state.decor_id);
   const map_center = useMapStore((state) => state.map_center);
+  const enable_terrain_carving = useSettingsStore((state) => state.enable_terrain_carving);
 
   const hovered_object = usePlacedObject(hovered_object_id);
 
+  // Eraser's own "dig into the terrain itself" case (camera/input.tsx's
+  // handle_tap/update_hover) — gated on the same settings flag those use, so
+  // this ghost never previews an edit the tap handler wouldn't actually
+  // commit. With the flag off, eraser hovering bare terrain falls through to
+  // exactly the same blocked/no-ghost treatment it always had before this
+  // feature existed (see `blocked` below).
+  const digging_terrain = activeTool === "eraser" && !hovered_object && enable_terrain_carving;
+
   const use_object_style = activeTool === "object" || activeTool === "decor" || activeTool === "eraser" || hovered_object !== null;
 
+  // Eraser sizes to whatever's actually hovered when there's a real object
+  // under the cursor (about to be removed at its own size) but falls
+  // through to object_size, like the object tool, over bare terrain — its
+  // "dig into the terrain itself" case has no fixed size of its own, it
+  // shares the same tier picker object placement uses (mode_bar.tsx's size
+  // flyout).
   const preview_size = (activeTool === "eraser" || activeTool === "pointer") && hovered_object ? hovered_object.size : activeTool === "decor" ? DECOR_SIZE : object_size;
 
   const object_pos = useMemo(() => center3n(fill3(0), preview_size), [preview_size]);
@@ -138,9 +154,13 @@ export function HoverCursor() {
       const map_origin = get_local_world_origin(map_center);
       return is_placement_blocked(activeTool, hovered, object_size, map_origin);
     }
-    if (activeTool === "eraser") return hovered_object === null;
+    // Eraser hovering an existing object is never blocked (removing it is
+    // always valid). Bare terrain is blocked exactly when digging into it
+    // isn't even enabled (enable_terrain_carving off) — the tap handler
+    // would no-op there too, so there's nothing this ghost should preview.
+    if (activeTool === "eraser") return hovered_object === null && !enable_terrain_carving;
     return false;
-  }, [activeTool, hovered, map_center, object_size, hovered_object]);
+  }, [activeTool, hovered, map_center, object_size, hovered_object, enable_terrain_carving]);
 
   // Makes the real erase candidate actually stop rendering (see
   // set_virtual_hide's own doc comment) — the ghost mesh below then reads as
@@ -163,18 +183,42 @@ export function HoverCursor() {
     return () => set_virtual_hide(null);
   }, [virtual_hide_target]);
 
+  // Terrain's own counterpart to virtual_hide_target above — eraser hovering
+  // bare terrain has no real leaf to hide (see place_air's own doc comment),
+  // so set_virtual_carve_preview injects a real AIR entry into the render
+  // build instead, at this exact hover, so whatever's really one voxel below
+  // shows through the ghost the same way an object's own hidden self does —
+  // see that function's own doc comment for why a plain tinted overlay on
+  // the still-opaque real terrain doesn't read as transparent at all.
+  //
+  // Depends on hovered's own i/f fields directly, not the hovered object
+  // itself — world_struck_corner already snaps to the struck cell's own
+  // grid, so two hover ticks landing in the same cell produce bit-identical
+  // BigInts and this effect correctly skips re-running; depending on
+  // `hovered` (a fresh PVF3 literal every tick) instead would re-trigger the
+  // cleanup/re-set pair on every mouse-move frame regardless of whether the
+  // cell actually changed.
+  const carve_preview_active = digging_terrain && hovered !== null;
+  useEffect(() => {
+    if (carve_preview_active && hovered) set_virtual_carve_preview(hovered.i, hovered.f, preview_size);
+    else clear_virtual_carve_preview();
+    return () => clear_virtual_carve_preview();
+  }, [carve_preview_active, hovered?.i, hovered?.f, preview_size]);
+
   // Pointer (select/move) always reads as the generic marker color, whether
   // it's hovering bare terrain or an existing object — the two need to look
   // identical (same cyan/sky-blue ghost) since neither is "here's the real
   // thing you're about to add or remove", just "here's what you could grab".
-  // Object placement and eraser instead ghost at the real thing's own true
-  // color_id — the placement candidate's for object mode, the existing
-  // object's own for eraser — since both of those really are "here's the
-  // real thing". Bare terrain with no real color_id to borrow (pointer, or
-  // object mode with no candidate color context) falls back to the flat
-  // marker ghost instead. decor_id-carrying cases (decor mode, or an eraser
-  // hovering a decor entry) never reach this — decor_geometry below gives
-  // them their own real silhouette+texture instead of a color swatch.
+  // Object placement and eraser-on-an-existing-object instead ghost at the
+  // real thing's own true color_id — the placement candidate's for object
+  // mode, the existing object's own for eraser — since both of those really
+  // are "here's the real thing". Eraser hovering bare terrain is the one
+  // exception: there's no existing "real thing" to borrow a color from
+  // (it's about to dig into the terrain itself, not remove something placed
+  // on it), so that case falls through to null here and gets its own VOID
+  // marker color below instead. decor_id-carrying cases (decor mode, or an
+  // eraser hovering a decor entry) never reach this — decor_geometry below
+  // gives them their own real silhouette+texture instead of a color swatch.
   const color_id: PlaceableCubeId | null = activeTool === "pointer" || activeTool === "decor"
     ? null
     : hovered_object?.kind === "solid"
@@ -236,9 +280,31 @@ export function HoverCursor() {
   // multiplies map by color, and the texture already carries the real hue,
   // so leaving color at the hex value would double-tint it.
   const map = color_id ? get_object_texture(color_id) : null;
-  const color: string = map ? "#ffffff" : marker_colors.ACTION;
+  // Eraser hovering bare terrain (about to dig into it, not remove a real
+  // placed thing — see color_id's own doc comment) gets the dark VOID marker
+  // instead of pointer's neutral cyan ACTION one, so it reads as "this
+  // becomes nothing" rather than "here's what you could grab".
+  const color: string = map ? "#ffffff" : digging_terrain ? marker_colors.VOID : marker_colors.ACTION;
 
   const current_scale = use_object_style ? preview_size : U_PER_CELL;
+
+  // Whether this ghost sits flush/coincident with real, already-rendered
+  // solid geometry rather than floating clear of anything else — decides
+  // which of the two polygon-offset/renderOrder biases below actually wins
+  // the depth test, independently of use_object_style's own position choice
+  // (object_pos vs TERRAIN_POS). Pointer/no-candidate-context's own bare-
+  // terrain ghost (use_object_style === false) was always this case — a
+  // normal "object mode" ghost (a placement candidate, or an existing
+  // object eraser is about to remove) floats one cell clear of anything
+  // else and never needed it. Eraser digging into bare terrain is the one
+  // use_object_style === true case that's ALSO coincident: unlike a real
+  // placed object, world_struck_corner's own anchor (see camera/ray.ts) is
+  // deliberately the terrain's own real topmost voxel, not a slot above it,
+  // so this ghost occupies the exact same space real terrain geometry
+  // already renders into. Reusing the small "object mode" bias there left
+  // it losing the depth test almost every frame — invisible, not merely
+  // faint.
+  const coplanar_with_terrain = !use_object_style || digging_terrain;
 
   if (!hovered || blocked) return null;
 
@@ -270,9 +336,10 @@ export function HoverCursor() {
         <mesh
           geometry={HIGHLIGHT_BOX}
           scale={current_scale}
-          // 9999 pairs with the terrain case's strong polygon offset below;
-          // object mode uses the default order so real depth occlusion works.
-          renderOrder={use_object_style ? 0 : 9999}
+          // 9999 pairs with the coplanar case's strong polygon offset below;
+          // a floating (non-coplanar) ghost uses the default order so real
+          // depth occlusion against everything else still works.
+          renderOrder={coplanar_with_terrain ? 9999 : 0}
         >
           {
             // The actual texture pattern (`map`) already comes from the same
@@ -281,17 +348,17 @@ export function HoverCursor() {
             // own DataArrayTexture — see GhostMaterial's own doc comment for
             // why that file's real material isn't reused here.
             //
-            // Object mode needs only a small polygon-offset nudge (it's not
-            // coplanar with a distant surface like the terrain case is) —
-            // reusing the terrain case's strong bias here would also push
-            // the cursor in front of a placed cube that should legitimately
-            // occlude it.
+            // A floating ghost needs only a small polygon-offset nudge (it's
+            // not coincident with a distant surface the way the coplanar
+            // case is) — reusing the coplanar case's strong bias here would
+            // also push the cursor in front of a placed cube that should
+            // legitimately occlude it.
           }
           <GhostMaterial
             map={map}
             color={color}
-            polygonOffsetFactor={use_object_style ? -1 : -2}
-            polygonOffsetUnits={use_object_style ? -1 : -8}
+            polygonOffsetFactor={coplanar_with_terrain ? -2 : -1}
+            polygonOffsetUnits={coplanar_with_terrain ? -8 : -1}
           />
         </mesh>
       </group>

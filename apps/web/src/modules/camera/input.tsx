@@ -18,9 +18,9 @@ import { get_local_world_origin } from "@/modules/world/frame/coord.ts";
 import { is_placement_blocked } from "@/modules/world/objects/collision.ts";
 import { object_aabb, object_center } from "@/modules/world/objects/geometry.ts";
 import { DECOR_SIZE } from "@/modules/world/objects/size.ts";
-import { get_placed_object, type OccupiedEntry, place, place_decor, remove } from "@/modules/world/objects/store.ts";
+import { get_placed_object, type OccupiedEntry, place, place_air, place_decor, remove } from "@/modules/world/objects/store.ts";
 import { raycast_decor } from "@/modules/world/decor/decor_hit.ts";
-import { ray_pick, resolve_hit_object, type WorldHit, world_adjacent_corner, world_hover_pvf3 } from "./ray.ts";
+import { ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner, type WorldHit } from "./ray.ts";
 import { CameraStatus, useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
 
@@ -72,9 +72,10 @@ function resolve_hit_target(raycaster: THREE.Raycaster, hit: WorldHit, map_origi
 
 /**
  * What a non-drag tap on the terrain means — recenter the map (pointer
- * tool), place a cube (object tool), or remove one (eraser tool). Shared by
- * both tap-detection sites below (mouse pointerup, touch's
- * drop-to-zero-fingers branch).
+ * tool), place a cube (object tool), or remove/dig with the eraser tool
+ * (an existing placed object if there's one under the cursor, the terrain's
+ * own real surface otherwise). Shared by both tap-detection sites below
+ * (mouse pointerup, touch's drop-to-zero-fingers branch).
  */
 function handle_tap(hovered: PVF3): void {
   const { activeTool, object_color_id, object_size, decor_id } = useUiStore.getState();
@@ -107,7 +108,23 @@ function handle_tap(hovered: PVF3): void {
     // targets the object the raycast actually struck (see update_hover()),
     // not a grid-key lookup — correct for any size, any face.
     const { hovered_object_id } = useCameraStore.getState();
-    if (hovered_object_id) remove(hovered_object_id);
+    if (hovered_object_id) {
+      remove(hovered_object_id);
+    } else if (useSettingsStore.getState().enable_terrain_carving) {
+      // Nothing placed here — dig into the terrain's own real surface
+      // instead of no-op'ing, but only once the user has actually opted
+      // into that (settings/slices/camera_slice.ts's enable_terrain_carving
+      // — off by default, this is real baked map data, not a scratch
+      // canvas). AIR, not VOID: unlike an ordinary placed object, real
+      // terrain has no object-layer leaf of its own to delete, so an
+      // explicit "nothing here on purpose" leaf is the only way to override
+      // it. `hovered` is already the struck voxel's own real corner in this
+      // branch (update_hover()'s world_struck_corner case) — real height
+      // included, so erasing the same bare spot again digs one voxel deeper
+      // each time: the next raycast simply hits whatever's now topmost,
+      // never a cached, never-updated bake height.
+      place_air(hovered.i, hovered.f, object_size);
+    }
     return;
   }
 
@@ -614,15 +631,26 @@ export function CameraInput() {
       return;
     }
 
-    // pointer (recenter on it) and eraser (remove it) both target the
+    // pointer (recenter on it) and eraser (remove/dig it) both target the
     // struck thing itself, not an adjacent slot.
     const struck_object = resolve_hit_target(raycaster, hit, map_origin);
     set_hovered_object_id(struck_object?.id ?? null);
     if (struck_object) {
       set_hovered_coord({ i: struck_object.i, f: struck_object.f });
+    } else if (activeTool === "eraser" && useSettingsStore.getState().enable_terrain_carving) {
+      // Bare terrain under eraser wants the struck voxel's OWN corner (real,
+      // possibly already-dug-into height included), not world_hover_pvf3's
+      // baked-elevation "flush on top" slot below — see world_struck_corner's
+      // own doc comment for why those two disagree and eraser needs the
+      // former to actually reach the terrain itself. Gated on
+      // enable_terrain_carving (settings/slices/camera_slice.ts) the same as
+      // handle_tap's own write — with it off, eraser falls through to the
+      // exact same bare-terrain branch pointer already uses, just below.
+      set_hovered_coord(world_struck_corner(hit, object_size, map_origin));
     } else {
-      // terrain (top or wall) — the struck cell's own owning corner,
-      // grounded to its real top.
+      // pointer, and eraser with terrain-carving off — the struck cell's own
+      // owning corner, grounded to its real top (for recentering the
+      // camera, not editing).
       const grounded = world_hover_pvf3(hit, map_origin);
       grounded ? set_hovered_coord(grounded) : clear_hovered_once();
     }
