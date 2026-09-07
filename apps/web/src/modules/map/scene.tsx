@@ -19,6 +19,7 @@ import { MapEnvironment } from "./environment.tsx";
 import { World } from "@/modules/world/world.tsx";
 import { useMapBootstrap } from "./navigation/use_map_bootstrap.ts";
 import { useTileFetcher } from "@/modules/world/terrain/use_tile_fetcher.ts";
+import { usePoiFetcher } from "@/modules/world/poi/use_poi_fetcher.ts";
 import { useGroundSnapSync } from "@/modules/world/terrain/use_ground_snap_sync.ts";
 import { Overlays } from "./ui/overlay/overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
@@ -53,6 +54,7 @@ function DevRenderToggleInvalidator(props: { deps: readonly unknown[] }) {
 export function MapScene() {
   useMapBootstrap();
   useTileFetcher();
+  usePoiFetcher();
   useGroundSnapSync();
 
   const world_ref = useRef<THREE.Group>(null);
