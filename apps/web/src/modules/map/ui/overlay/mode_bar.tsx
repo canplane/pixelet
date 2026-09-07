@@ -10,8 +10,9 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { useAppContext } from "@/app/providers/app_context.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { type DecorId, placeable_cube_hex, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { type DecorId, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/modules/world/objects/size.ts";
+import { cube_swatch_style } from "./cube_swatch.ts";
 
 type ModeId = "message" | "palette";
 
@@ -206,7 +207,7 @@ function ColorSwatchButton({ id }: { id: PlaceableCubeId }) {
       >
         <span
           ref={button_ref}
-          style={{ backgroundColor: placeable_cube_hex(id) ?? undefined }}
+          style={cube_swatch_style(id)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
             activeTool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
@@ -247,7 +248,7 @@ function DecorIconButton({ id }: { id: DecorId }) {
 // Icon per decor id — TypeScript enforces one entry per DecorId, so
 // adding a new decor kind (decor.ts's own decor_types) can't silently ship
 // without a button icon for it. Lives here (this file's own DecorIconButton
-// is one consumer) and is also imported by palette_modal.tsx's own
+// is one consumer) and is also imported by drawer_modal.tsx's own
 // DecorGridButton, so a new decor kind's icon shows up in both the hotbar
 // and the drawer for free.
 export const DECOR_ICONS: Record<DecorId, typeof TreePine> = {
@@ -475,11 +476,7 @@ export function ModeBar() {
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {recent_picks.map((pick) =>
-                      pick.kind === "object"
-                        ? <ColorSwatchButton key={`object:${pick.id}`} id={pick.id} />
-                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />
-                    )}
+                    {recent_picks.map((pick) => pick.kind === "object" ? <ColorSwatchButton key={`object:${pick.id}`} id={pick.id} /> : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />)}
                   </div>
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />
@@ -495,7 +492,7 @@ export function ModeBar() {
                   <div className="flex items-center p-[4px] shrink-0">
                     <button
                       type="button"
-                      onClick={ui.openPaletteModal}
+                      onClick={ui.openDrawerModal}
                       className="flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer text-white/60 hover:text-white/90 transition-colors shrink-0"
                       title={t("map.mode_bar.catalog_tooltip")}
                     >

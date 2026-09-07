@@ -4,7 +4,7 @@ This directory is the current, only member of the "Actor" rendering tier —
 see [discussions/20260907-world-rendering-tiers.md](../../../../../../discussions/20260907-world-rendering-tiers.md)
 for the full taxonomy this belongs to. Kept as `characters/`, not renamed to
 `actors/`, on purpose: "Character" is already a real user-facing concept
-(Settings > Character, palette_modal.tsx's Character tab — which variant a
+(Settings > Character, drawer_modal.tsx's Character tab — which variant a
 person/pet uses), and renaming the folder to the engine's own tier name would
 make it read as a different thing from that settings surface when it's the
 same one.
