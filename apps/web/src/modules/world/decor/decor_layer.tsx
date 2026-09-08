@@ -101,6 +101,7 @@ import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { rim_cfg } from "@/modules/world/environment/config.ts";
+import { set_rim_intensity } from "@/modules/world/render/lit_gltf_material.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_key, get_objects_in_cell, get_render_object_entries_in_l2_column, l2_column_key_of } from "@/modules/world/objects/store.ts";
 import type { LodStep } from "@/render/lod.ts";
@@ -357,7 +358,13 @@ export type DecorVariantMeshProps = {
 export const DecorVariantMesh = memo(({ geometry, material, instances, role, registry }: DecorVariantMeshProps) => {
   const mesh = useMemo(() => {
     const merged = bake_decor_instances(geometry, instances);
-    return new THREE.Mesh(merged ?? new THREE.BufferGeometry(), material);
+    const m = new THREE.Mesh(merged ?? new THREE.BufferGeometry(), material);
+    // Never set before now — decor didn't cast or receive shadows at all
+    // regardless of show_shadow_map, unlike chunk_stage.tsx's own terrain/
+    // objects mesh which has always set both.
+    m.castShadow = true;
+    m.receiveShadow = true;
+    return m;
   }, [geometry, material, instances]);
 
   useEffect(() => {
@@ -435,8 +442,7 @@ export function useAllDecorBundleAssets(bundles: readonly DecorKindBundle[]): re
   const show_rim_light = useSettingsStore((state) => state.show_rim_light);
   useEffect(() => {
     for (const material of materials) {
-      const shader = material?.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
-      if (shader) shader.uniforms.u_rim_intensity.value = show_rim_light ? rim_cfg.INTENSITY : 0;
+      if (material) set_rim_intensity(material, show_rim_light ? rim_cfg.INTENSITY : 0);
     }
   }, [materials, show_rim_light]);
 
