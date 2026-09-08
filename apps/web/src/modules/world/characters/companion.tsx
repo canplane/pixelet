@@ -41,6 +41,8 @@ import { get_surface_z_at_local } from "../surface_height.ts";
 import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
 import { useCharacterModel } from "./use_character_model.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { rim_cfg } from "@/modules/world/environment/config.ts";
+import { set_rim_intensity } from "@/modules/world/render/lit_gltf_material.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
 import { damp_alpha } from "@/modules/camera/orbit.ts";
@@ -137,7 +139,17 @@ type WalkerProps = {
 
 const Walker = memo(function Walker(props: WalkerProps) {
   const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
-  const { root: character_root, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
+  const { root: character_root, material: character_material, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
+
+  // Same live show_rim_light wiring decor_layer.tsx's own
+  // useAllDecorBundleAssets does for decor's materials — use_character_model.ts
+  // itself doesn't know this setting (matching instanced_model.ts's own
+  // reason for the same split), so whichever real render path needs it live
+  // owns the subscription instead.
+  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
+  useEffect(() => {
+    if (character_material) set_rim_intensity(character_material, show_rim_light ? rim_cfg.INTENSITY : 0);
+  }, [character_material, show_rim_light]);
 
   // Rare toggle, so subscribing (and the re-render it costs) is fine — unlike
   // map_center, this doesn't churn per frame.

@@ -44,9 +44,8 @@ import * as THREE from "three";
 import { mergeBufferGeometries } from "three-stdlib";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { light_cfg } from "@/modules/world/environment/config.ts";
 import { load_gltf, load_texture } from "@/modules/world/gltf_cache.ts";
-import { inject_rim_light_shader } from "@/modules/world/render/rim_light_shader.ts";
+import { make_lit_gltf_material } from "@/modules/world/render/lit_gltf_material.ts";
 
 /**
  * Merges every mesh found in a loaded glTF scene into one static
@@ -144,36 +143,20 @@ export function useInstancedModelVariants(variants: readonly DecorVariantAsset[]
         if (cancelled) return;
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.flipY = false;
-        const material = new THREE.MeshStandardMaterial({
-          map: texture,
-          roughness: 1,
-          metalness: 0,
-          // Same emissive-floor treatment every other lit surface gets
-          // (chunk_stage.tsx's own inject_chunk_shader, hover_cursor.tsx's
-          // own object ghost) — a minimum brightness that still shows the
-          // real texture pattern rather than a flat tinted rectangle,
-          // covering the "no guaranteed scene light" concern this file's
-          // top comment used to solve by staying unlit entirely.
-          emissive: 0xffffff,
-          emissiveMap: texture,
-          emissiveIntensity: light_cfg.FLOOR,
-        });
         // Distinct per-variant skin textures mean distinct materials
         // regardless (map/emissiveMap differ), but the compiled WebGLProgram
         // itself is identical for every one of them — same reasoning
-        // chunk_stage.tsx's own create_material() gives for "chunk-mesh".
-        material.customProgramCacheKey = () => "decor-mesh";
-        // u_rim_intensity starts at 0 (inject_rim_light_shader's own
-        // default) — this file doesn't know the live show_rim_light setting
-        // (see this file's own top doc comment for why), so the real value
-        // gets set from outside, by whichever caller actually needs it live
-        // (decor_layer.tsx's own useAllDecorBundleAssets, for the real
-        // render path) via material.userData.shader once it's populated
-        // here.
-        material.onBeforeCompile = (shader) => {
-          inject_rim_light_shader(shader);
-          material.userData.shader = shader;
-        };
+        // chunk_stage.tsx's own create_material() gives for "chunk-mesh",
+        // hence the shared cache key (decor's own geometry never has
+        // skinning attributes, unlike characters/use_character_model.ts's
+        // own call into this same helper — see lit_gltf_material.ts's own
+        // doc comment on why that one doesn't pass one).
+        const material = make_lit_gltf_material(texture, "decor-mesh");
+        // this file doesn't know the live show_rim_light setting (see this
+        // file's own top doc comment for why) — the real value gets set
+        // from outside, by whichever caller actually needs it live
+        // (decor_layer.tsx's own useAllDecorBundleAssets, via
+        // lit_gltf_material.ts's own set_rim_intensity).
         set_materials((current) => {
           const next = current.slice();
           next[i] = material;
