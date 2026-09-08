@@ -17,6 +17,12 @@ declare global {
    * store configured, fall back to the live /api route. */
   const __TILE_BASE_URL__: string;
 
+  /** Same as __TILE_BASE_URL__, for the pre-baked POI set — a sibling
+   * prefix in the same bucket (e.g. ".../tiles/poi/v1"), not part of
+   * __TILE_BASE_URL__'s own path. Empty string => fall back to the live
+   * /api route. */
+  const __POI_TILE_BASE_URL__: string;
+
   /** Reverse-geocoding origin, e.g. "https://nominatim.openstreetmap.org". */
   const __GEOCODE_BASE_URL__: string;
 

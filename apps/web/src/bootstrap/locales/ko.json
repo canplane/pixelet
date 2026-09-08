@@ -160,7 +160,7 @@
     "tree": "나무"
   },
   "drawer_modal": {
-    "title": "팔레트",
+    "title": "서랍",
     "description": "배치할 수 있는 모든 큐브 색상과 데코 종류, 그리고 동행의 외형입니다.",
     "close": "닫기",
     "tabs": {

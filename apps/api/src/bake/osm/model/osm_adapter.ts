@@ -1,4 +1,4 @@
-// @pxl/api/bake/terrain/model/osm_adapter.ts
+// @pxl/api/bake/osm/model/osm_adapter.ts
 
 /**
  * OSM ingress adapter for WKB-based terrain source rows.

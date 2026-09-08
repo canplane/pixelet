@@ -10,11 +10,12 @@ section specifically for why POI is wired the way it is here.
   registry) since `poi_layer.tsx` is the only reader today.
 - **`repository.ts`** / **`use_poi_fetcher.ts`** — client transport + demand
   scheduling, mirroring `terrain/tile_repository.ts` / `use_tile_fetcher.ts`'s
-  shape but always hitting the live API (`/api/world/poi/:page_idx`), never
-  a pre-baked static origin. This is deliberate, not a gap to close later:
-  POI data stays off the terrain tile format entirely so shipping a POI
-  change never requires re-baking/re-uploading the whole tile set under a
-  new version prefix (see the API side below).
+  shape: a pre-baked static origin when one is configured
+  (`HAS_STATIC_POI`/`POI_TILE_BASE_URL`, `lib/env/config.ts`), the live API
+  otherwise. POI still stays off *terrain's own* tile format — its static
+  set is a sibling prefix in the same bucket (`poi/<version>/…`, not
+  `<version>/…`), so shipping a POI re-bake never touches terrain's own
+  version or requires re-uploading it (see the API side below).
 - **`poi_layer.tsx`** — the render: one `SpriteBillboard` (`../billboard/`)
   per POI, anchored via `AnchorNode` and grounded to the real terrain
   surface (a POI's own baked `center.z` is always 0 — see `poi_anchor`'s own
@@ -30,11 +31,25 @@ section specifically for why POI is wired the way it is here.
 - **`poi_theme.ts`** — category (OSM `amenity`/`shop`/`tourism` tag value) ->
   icon/color, drawn as the badge's icon circle.
 
-**Server side**: `apps/api/src/modules/world/poi/{source.ts,service.ts}`,
-registered in `apps/api/src/modules/world/mod.ts`. `source.ts`'s own doc
-comment explains why this reuses `TerrainRepository.fetch_feat_rows` and
-`osm_normalizer.ts`'s `normalize` directly rather than routing through
-`bake.ts`'s `bake_terrain`/`fetch_tile`.
+**Server side**: `apps/api/src/modules/world/poi/{provider.ts,providers/osm_provider.ts,service.ts}`,
+registered in `apps/api/src/modules/world/mod.ts`. `provider.ts`'s
+`PoiProvider` interface (2026-09-07) is the seam behind which POI's data
+source can be swapped — OSM's own re-bake cadence is a property of
+`osm_provider.ts` specifically, not of POI as a concept, so a future
+commercial provider (Naver/Kakao Local Search) with a live-query freshness
+model instead of a periodic re-bake slots in without touching `service.ts`
+or the bake tool. `osm_provider.ts`'s own doc comment explains why it reuses
+`TerrainRepository.fetch_feat_rows` and `osm_normalizer.ts`'s `normalize`
+directly rather than routing through `bake.ts`'s `bake_terrain`/`fetch_tile`.
+
+**Static bake**: `apps/api/src/bake/poi/tools/bake_poi_tiles.ts` reuses
+terrain's own `land_pages.json` classification (no separate "does this page
+have POI" pre-pass — that would cost about as much as just fetching), calls
+the same `PoiProvider` the live endpoint does, and skips writing an object
+for a page with none (a local-only `.empty` marker instead, so a resume
+doesn't re-query it — never uploaded). No shared "everything's the same"
+fallback object exists the way terrain's `_ocean` tile does: a missing POI
+key just means `[]`, directly.
 
 ## Design reference
 
@@ -65,6 +80,10 @@ being enough; it was deliberately not ported this pass (see below).
 - No cache eviction in `store.ts`/`use_poi_fetcher.ts` (terrain's own
   `CLEANUP_RADIUS`) — POI payloads are tiny JSON, not a real memory concern
   yet at single-session scale.
-- A production live API server for this endpoint — today's dev-server-only
-  scope, per the same discussion doc's decision to keep POI off the
-  pre-baked path deployment currently relies on.
+- The static POI set (`bake/poi/tools/bake_poi_tiles.ts`) is built but not
+  yet published anywhere — no re-bake cadence has been decided (see
+  `provider.ts`'s own doc comment on why that's a provider-specific
+  question, not a POI-wide one), and `VITE_POI_TILE_BASE_URL` is unset in
+  every deployed environment today, so production still resolves every POI
+  fetch against a live API that isn't deployed there either (an existing
+  gap, not a new one this pass introduces — see the discussion doc).

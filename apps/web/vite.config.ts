@@ -24,6 +24,7 @@ const apiBaseDefault = "http://127.0.0.1:3000";
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
 const tileOriginDefault = "https://plei.me";
 const tileVersionDefault = "v1";
+const poiTileVersionDefault = "v1";
 
 // anti-HMR
 const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
@@ -121,6 +122,16 @@ export default defineConfig(({ mode }) => {
   const tileVersion = env.VITE_TILE_VERSION || tileVersionDefault;
   const tileBase = env.VITE_TILE_BASE_URL ||
     (remoteTiles || mode === "production" ? `/tiles/${tileVersion}` : "");
+
+  // Same reasoning as tileBase, one path segment over: apps/api/src/bake/
+  // poi/tools/bake_poi_tiles.ts publishes under /tiles/poi/<version> (a
+  // sibling prefix in the same bucket, not terrain's own <version> root —
+  // see discussions/20260907-world-rendering-tiers.md's own note on why POI
+  // stays off terrain's tile format even as a static artifact). Empty in
+  // dev, where poi/repository.ts keeps hitting the live /api route.
+  const poiTileVersion = env.VITE_POI_TILE_VERSION || poiTileVersionDefault;
+  const poiTileBase = env.VITE_POI_TILE_BASE_URL ||
+    (remoteTiles || mode === "production" ? `/tiles/poi/${poiTileVersion}` : "");
 
   // Reverse geocoding origin. Defaults to OSM's shared public Nominatim;
   // see lib/env/config.ts for why this is configurable at all.
@@ -225,6 +236,7 @@ export default defineConfig(({ mode }) => {
       __IS_DEV__: JSON.stringify(isDev),
 
       __TILE_BASE_URL__: JSON.stringify(tileBase),
+      __POI_TILE_BASE_URL__: JSON.stringify(poiTileBase),
       __GEOCODE_BASE_URL__: JSON.stringify(geocodeBase),
 
       /** When this bundle was built, ISO-8601 in UTC. Evaluated here, so it

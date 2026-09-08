@@ -13,7 +13,8 @@ import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 import { TerrainRepository } from "../terrain/repository.ts";
-import { fetch_poi } from "./source.ts";
+import { make_osm_provider } from "./providers/osm_provider.ts";
+import type { PoiProvider } from "./provider.ts";
 
 const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 
@@ -22,7 +23,7 @@ const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 // BigInt", not just a length guard.
 const PAGE_IDX_PATTERN = /^\d{1,20}$/;
 
-function make_services(repo: TerrainRepository) {
+function make_services(provider: PoiProvider) {
   // POI, like terrain, is a pure function of static OSM source data — same
   // cacheability reasoning as terrain/service.ts's own tile_cache, a
   // separate cache (own cap/env var) since POI payloads are tiny JSON, not
@@ -37,7 +38,7 @@ function make_services(repo: TerrainRepository) {
 
     let pending = in_flight.get(page_idx);
     if (!pending) {
-      pending = fetch_poi(repo, page_idx);
+      pending = provider.fetch_pois(page_idx);
       in_flight.set(page_idx, pending);
       pending.finally(() => in_flight.delete(page_idx));
     }
@@ -68,7 +69,7 @@ function make_services(repo: TerrainRepository) {
 
 export function register(router: Hono, resrc: AppResources): void {
   const repo = new TerrainRepository(resrc.geo_pool);
-  const service = make_services(repo);
+  const service = make_services(make_osm_provider(repo));
 
   router.get("/api/world/poi/:page_idx", async (c) => {
     const raw_page_idx: string = c.req.param("page_idx");

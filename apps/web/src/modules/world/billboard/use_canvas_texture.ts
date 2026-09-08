@@ -10,27 +10,31 @@ import * as THREE from "three";
  * space setup every billboard-tier consumer needs and the disposal a plain
  * useMemo alone can't provide (a CanvasTexture holds a real WebGL resource;
  * without this effect, a newer canvas replacing an older one — or the
- * billboard unmounting — would leak it). NearestFilter is what actually
- * gives billboard content its "pixel" read: the canvas itself is drawn with
- * regular anti-aliased strokes/text (readability), and Nearest sampling
- * keeps hard edges hard instead of blurring them when the sprite scales up
- * close to the camera — same texture-filtering choice this codebase's
+ * billboard unmounting — would leak it). NearestFilter magFilter is what
+ * gives billboard content its "pixel" read when the sprite scales up close
+ * to the camera — same texture-filtering choice this codebase's
  * terrain/character textures already make, just applied to a canvas-drawn
  * source instead of a decoded PNG.
  *
- * `canvas` should already be rendered at a supersampled resolution (see
- * chat_bubble.tsx's own RENDER_SCALE) if its content includes text or fine
- * detail — NearestFilter alone can only preserve source detail, never add
- * any, so a canvas sized directly off its own logical pixel metrics would
- * still blur once magnified onto a sprite occupying many more screen
- * pixels.
+ * minFilter stays a mipmapped Linear, deliberately not matching magFilter:
+ * distance_fade.ts holds a billboard's on-screen size to a roughly constant
+ * CSS-pixel scale, but that's still a slight minification against the
+ * canvas's own supersampled resolution (chat_bubble.tsx's RENDER_SCALE),
+ * and Nearest has no mipmap — every camera micro-movement then resamples a
+ * different single texel, which reads as text visibly crawling/shimmering.
+ * Mipmapped Linear filters that away on shrink while magFilter still keeps
+ * the up-close "pixel" look untouched (min/mag are independent axes).
+ *
+ * `canvas` should still be rendered at a supersampled resolution (see
+ * chat_bubble.tsx's own RENDER_SCALE) — the mipmap chain built from it only
+ * preserves source detail, it can't add any beyond what's already drawn.
  */
 export function use_canvas_texture(canvas: HTMLCanvasElement | null): THREE.CanvasTexture | null {
   const texture = useMemo(() => {
     if (!canvas) return null;
     const t = new THREE.CanvasTexture(canvas);
     t.magFilter = THREE.NearestFilter;
-    t.minFilter = THREE.NearestFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }, [canvas]);

@@ -1,9 +1,10 @@
 // @pxl/web/app/store/ui_store.ts
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { cube_ids, decor_ids, type DecorId, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, type DecorId, placeable_cube_ids, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { DEFAULT_OBJECT_SIZE } from "@/modules/world/objects/size.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
@@ -37,6 +38,14 @@ const MAX_RECENT_PICKS = 6;
 
 function is_same_pick(a: RecentPick, b: RecentPick): boolean {
   return a.kind === b.kind && a.id === b.id;
+}
+
+// A pick persisted from an older session can name an id the catalog no
+// longer has (a cube/decor kind renamed or removed since) — dropped here
+// rather than trusted as-is, so a stale localStorage entry can't leave a
+// dead id sitting in the hotbar forever.
+function is_known_pick(pick: RecentPick): boolean {
+  return pick.kind === "object" ? (placeable_cube_ids as readonly string[]).includes(pick.id) : (decor_ids as readonly string[]).includes(pick.id);
 }
 
 // Only ever inserts a genuinely new pick at the front — re-picking one
@@ -78,7 +87,12 @@ type UiState = {
   append_chat_line: (text: string) => void;
 };
 
-export const useUiStore = create<UiState>((set) => ({
+// Persisted (localStorage): object_color_id/decor_id/recent_picks — real
+// picks worth remembering across a reload, mirroring settings_store.ts's
+// own reasoning. activeTool and chatLines are deliberately left out
+// (partialize below): a fresh load should always start at the neutral
+// pointer tool, and chatLines is dev-only dummy data, not user state.
+export const useUiStore = create<UiState>()(persist((set) => ({
   activeTool: "pointer",
   set_activeTool: (activeTool) => set({ activeTool }),
 
@@ -89,12 +103,17 @@ export const useUiStore = create<UiState>((set) => ({
 
   decor_id: "tree",
 
-  // Seeded with the first 5 flat colors plus the first decor kind — the
-  // same lineup the hotbar used to show unconditionally before this went
-  // in — so a fresh session's hotbar looks like the old static one at a
-  // glance, and only starts reflecting real usage once something's picked.
+  // One representative per placeable genre, not the first 5 flat colors —
+  // a fresh session's hotbar should hint at everything you *can* place
+  // (a plain color, and one of each terrain-styled channel) rather than
+  // just the color catalog's own first few entries, which only ever showed
+  // colors. Each id is that channel's own first-declared key (cube.ts).
   recent_picks: [
-    ...cube_ids.slice(0, MAX_RECENT_PICKS - 1).map((id): RecentPick => ({ kind: "object", id })),
+    { kind: "object", id: "white" },
+    { kind: "object", id: "land.BARE" },
+    { kind: "object", id: "water.RIVER" },
+    { kind: "object", id: "structure.BUILDING" },
+    { kind: "object", id: "transport.ROAD_DEFAULT" },
     { kind: "decor", id: decor_ids[0] },
   ],
   select_cube: (id) =>
@@ -115,4 +134,27 @@ export const useUiStore = create<UiState>((set) => ({
     set((state) => ({
       chatLines: [...state.chatLines, { id: nextChatLineID++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
     })),
+}), {
+  name: "pxl:ui_hotbar",
+  partialize: (state) => ({
+    object_color_id: state.object_color_id,
+    decor_id: state.decor_id,
+    recent_picks: state.recent_picks,
+  }),
+  // Default merge is a blind `{...current, ...persisted}` — fine for
+  // settings_store.ts's own always-valid fields, not here: a persisted id
+  // might no longer exist (is_known_pick above), and an empty persisted
+  // recent_picks (every entry filtered out) should fall back to the fresh
+  // default seeded above rather than leaving the hotbar empty.
+  merge: (persisted, current) => {
+    const p = persisted as Partial<{ object_color_id: PlaceableCubeId; decor_id: DecorId; recent_picks: RecentPick[] }> | null;
+    if (!p) return current;
+    const recent_picks = Array.isArray(p.recent_picks) ? p.recent_picks.filter(is_known_pick) : [];
+    return {
+      ...current,
+      object_color_id: p.object_color_id && is_known_pick({ kind: "object", id: p.object_color_id }) ? p.object_color_id : current.object_color_id,
+      decor_id: p.decor_id && is_known_pick({ kind: "decor", id: p.decor_id }) ? p.decor_id : current.decor_id,
+      recent_picks: recent_picks.length > 0 ? recent_picks : current.recent_picks,
+    };
+  },
 }));
