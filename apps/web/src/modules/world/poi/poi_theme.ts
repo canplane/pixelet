@@ -18,6 +18,12 @@
  * amenity/shop/tourism value a feature actually carries), so this table is
  * keyed more granularly and falls back to DEFAULT_THEME for anything not
  * explicitly listed rather than guessing a mapping.
+ *
+ * `icon` is a plain emoji — tried swapping these for tinted Lucide glyphs
+ * (2026-09-08) and reverted: at this badge's actual on-screen size a thin
+ * stroked icon reads far less recognizably than an emoji's own dense,
+ * multi-shape glyph does, and that shape-level legibility (not stroke
+ * weight, tried thickening it first) was the real problem.
  */
 
 export type PoiTheme = { icon: string; color: string };
@@ -28,12 +34,14 @@ const CATEGORY_THEME: Record<string, PoiTheme> = {
   clinic: { icon: "🏥", color: "#e57373" },
   pharmacy: { icon: "💊", color: "#e57373" },
   dentist: { icon: "🦷", color: "#e57373" },
-  // food & drink
+  // food & drink — restaurant/fast_food/bar used to all share this exact
+  // amber; fine with the emoji's own glyph carrying enough identity on its
+  // own, but worth keeping separated regardless of icon style.
   restaurant: { icon: "🍴", color: "#ffb74d" },
   cafe: { icon: "☕", color: "#a1887f" },
-  fast_food: { icon: "🍔", color: "#ffb74d" },
-  bar: { icon: "🍺", color: "#ffb74d" },
-  pub: { icon: "🍺", color: "#ffb74d" },
+  fast_food: { icon: "🍔", color: "#ff8a65" },
+  bar: { icon: "🍺", color: "#f06292" },
+  pub: { icon: "🍺", color: "#f06292" },
   // money
   bank: { icon: "🏦", color: "#64b5f6" },
   atm: { icon: "🏧", color: "#64b5f6" },

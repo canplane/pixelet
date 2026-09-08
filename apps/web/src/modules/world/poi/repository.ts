@@ -4,18 +4,28 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 
+import { HAS_STATIC_POI, POI_TILE_BASE_URL } from "@/lib/env/config.ts";
+
 /**
- * POI transport — always the live API, never the pre-baked static tile
- * origin terrain/tile_repository.ts falls back to (2026-09-07 decision: POI
- * data stays off the pre-baked tile format entirely, see
- * discussions/20260907-world-rendering-tiers.md, specifically so shipping a
- * POI change never requires re-baking/re-uploading the whole terrain tile
- * set under a new version prefix). No HAS_STATIC_TILES branch here for that
- * same reason — this always hits `/api/world/poi/:page_idx` on the actual
- * API server.
+ * POI transport: the pre-baked static set when one is configured
+ * (apps/api/src/bake/poi/tools/bake_poi_tiles.ts), the live API otherwise —
+ * same HAS_STATIC_TILES shape terrain/tile_repository.ts uses, one page
+ * simpler: a missing object just means "no POI here", not "open ocean,
+ * resolve to a shared fallback tile". There is no fallback object to fetch,
+ * so a 404 (static) resolves straight to `[]` with no extra round trip.
+ *
+ * Static and live are supposed to agree byte-for-semantics (both go through
+ * providers/osm_provider.ts's own PoiProvider — see provider.ts), so which
+ * one serves a given request is purely a deployment concern, not something
+ * either the client or the bake tool needs to reconcile on its own.
  */
+function poi_url(key: string): string {
+  return HAS_STATIC_POI ? `${POI_TILE_BASE_URL}/${key}` : `/api/world/poi/${key}`;
+}
+
 export async function fetch_poi(page_idx: IVec): Promise<POI[]> {
-  const res = await fetch(`/api/world/poi/${page_idx.toString()}`);
+  const res = await fetch(poi_url(page_idx.toString()));
+  if (res.status === 404 && HAS_STATIC_POI) return [];
   if (!res.ok) throw new Error(`[poi/${ivec.repr(page_idx)}] http ${res.status}`);
   return await res.json() as POI[];
 }

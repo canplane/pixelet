@@ -1,4 +1,4 @@
-// @pxl/api/bake/terrain/pipeline/poi_extractor.ts
+// @pxl/api/bake/osm/pipeline/poi_extractor.ts
 
 import type { OSMFeature, POI } from "@pxl/shared/bake/model/osm_feature.ts";
 

@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { wrap_text } from "../billboard/canvas_text.ts";
-import { FONT_FAMILY } from "../billboard/canvas_scale.ts";
+import { FONT_FAMILY, FONT_WEIGHT_BOLD } from "../billboard/canvas_scale.ts";
 import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
 
 // A new chat line shows for this long, then the bubble disappears — chat
@@ -29,7 +29,7 @@ import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
 // lines forever), so this is tracked locally here, not in ui_store.
 const SHOW_DURATION_MS = 8000;
 
-const FONT = `bold 14px ${FONT_FAMILY}`;
+const FONT = `${FONT_WEIGHT_BOLD} 14px ${FONT_FAMILY}`;
 const PADDING_X = 11;
 const PADDING_Y = 8;
 const LINE_H = 17;

@@ -41,6 +41,7 @@ import { bake_terrain } from "@pxl/api/bake/terrain/bake.ts";
 
 import { TerrainRepository } from "@pxl/api/modules/world/terrain/repository.ts";
 import { fetch_tile, source_stats } from "@pxl/api/modules/world/terrain/source.ts";
+import { exists, fmt_bytes, fmt_dur, gzip, read_source_catalogs } from "@pxl/api/bake/bake_util.ts";
 import * as env from "@/lib/env/mod.ts";
 
 // Current esa_elevation_raster coverage bbox — confirmed via
@@ -113,32 +114,6 @@ function project_page(lng: number, lat: number): IVec {
   return L3_IDX(pvf3.i);
 }
 
-async function gzip(raw: Bytes): Promise<Bytes> {
-  const body = new Response(raw).body!.pipeThrough(new CompressionStream("gzip"));
-  return new Uint8Array(await new Response(body).arrayBuffer());
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await Deno.stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function fmt_bytes(n: number): string {
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} kB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function fmt_dur(ms: number): string {
-  const s = Math.round(ms / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h > 0 ? `${h}h${m}m` : `${m}m${s % 60}s`;
-}
-
 /** Counts and sizes every finished object in the output directory, ignoring
  * `.part` files left behind by an interrupted write. */
 async function measure_output(dir: string): Promise<{ count: u32; bytes: number }> {
@@ -155,45 +130,6 @@ function same_bytes(a: Bytes, b: Bytes): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
-}
-
-// ------------------------------------------------------------------------------
-// source provenance
-// ------------------------------------------------------------------------------
-
-type CatalogRow = { region_code: string; data_date: string; file_name: string; status: string };
-
-/**
- * Snapshot of what the geo DB was holding when this version was baked.
- *
- * A URL prefix like `v1` is a cache key — deliberately short and stable, since
- * putting a date in it would drag the app build along on every re-bake. That
- * leaves it opaque about *what* v1 actually is, which is what this records
- * instead: the same provenance the ingestion pipelines already track in their
- * catalog tables (see infra/geo/README.md), copied into the manifest so a
- * published tile set can always be traced back to its source data.
- */
-async function read_source_catalogs(pool: Pool): Promise<Record<string, CatalogRow[]>> {
-  const tables = ["osm_features_catalog", "esa_elevation_catalog", "osm_coastline_catalog"];
-  const out: Record<string, CatalogRow[]> = {};
-
-  for (const table of tables) {
-    const client = await pool.connect();
-    try {
-      const res = await client.queryObject<CatalogRow>(
-        `SELECT region_code, data_date::text AS data_date, file_name, status FROM ${table} ORDER BY file_name`,
-      );
-      out[table] = res.rows;
-    } catch (err) {
-      // a missing catalog table isn't fatal to the bake — record the gap
-      // rather than pretending the provenance is complete.
-      console.warn(`[bake/provenance] could not read ${table}:`, (err as Error).message);
-      out[table] = [];
-    } finally {
-      client.release();
-    }
-  }
-  return out;
 }
 
 // ------------------------------------------------------------------------------

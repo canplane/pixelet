@@ -160,7 +160,7 @@
     "tree": "Tree"
   },
   "drawer_modal": {
-    "title": "Palette",
+    "title": "Drawer",
     "description": "Every placeable cube color and decor kind, plus your companion's appearance.",
     "close": "Close",
     "tabs": {

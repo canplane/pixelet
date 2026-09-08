@@ -20,7 +20,7 @@
  *   scale; revisit if it stops being fine.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
@@ -30,9 +30,10 @@ import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { local_world_to_canonical } from "../frame/coord.ts";
 import { with_ele } from "../terrain/elevation.ts";
+import { register_tile_interest } from "../terrain/store.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { FAR_END } from "../billboard/distance_fade.ts";
-import { FONT_FAMILY } from "../billboard/canvas_scale.ts";
+import { FONT_FAMILY, FONT_WEIGHT_REGULAR } from "../billboard/canvas_scale.ts";
 import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
 import { resolve_poi_theme } from "./poi_theme.ts";
 import { usePoiStore } from "./store.ts";
@@ -44,12 +45,17 @@ import { usePoiStore } from "./store.ts";
 // element was.
 const MAX_RENDERED = 80;
 
-const FONT = `12px ${FONT_FAMILY}`;
+const FONT = `${FONT_WEIGHT_REGULAR} 12px ${FONT_FAMILY}`;
 const ICON_FONT = "14px sans-serif";
 const NAME_MAX_CHARS = 12;
 const ICON_SIZE = 20;
-const ICON_GAP = 4;
-const BADGE_PAD_X = 7;
+// Icon-to-text gap and text's own right-edge margin — kept equal
+// deliberately (the actual ask: not "pad both ends of the pill the same,"
+// the icon end has no padding of its own at all, it sits flush against the
+// pill's own rounded left cap — just "the text's own left and right
+// breathing room should match each other").
+const GAP = 8;
+const PAD_Y = 7;
 // Same supersampling reasoning as chat_bubble.tsx's own RENDER_SCALE — a
 // canvas sized directly off FONT's own px metrics blurs once magnified onto
 // a sprite occupying many more screen pixels close to the camera.
@@ -81,8 +87,10 @@ function build_poi_badge_canvas(poi: POI): BuiltBillboard {
   measure_ctx.font = FONT;
   const text_w = Math.ceil(measure_ctx.measureText(name).width);
 
-  const pill_h = ICON_SIZE + BADGE_PAD_X;
-  const logical_w = BADGE_PAD_X + ICON_SIZE + ICON_GAP + text_w + BADGE_PAD_X;
+  const pill_h = ICON_SIZE + PAD_Y;
+  const r = pill_h / 2;
+  const text_x = r + ICON_SIZE / 2 + GAP;
+  const logical_w = text_x + text_w + GAP;
   const logical_h = pill_h + DOT_GAP + DOT_DIAM;
 
   const canvas = document.createElement("canvas");
@@ -93,19 +101,25 @@ function build_poi_badge_canvas(poi: POI): BuiltBillboard {
   ctx.scale(RENDER_SCALE, RENDER_SCALE);
 
   // Pill background — a rect with fully-rounded ends (radius = half height).
-  const r = pill_h / 2;
   ctx.fillStyle = "rgba(20,20,26,0.72)";
   ctx.beginPath();
   ctx.roundRect(0, 0, logical_w, pill_h, r);
   ctx.fill();
 
-  // Icon circle, theme-colored, centered in the pill's own left end.
+  // Icon circle is concentric with the pill's own rounded left cap (same
+  // center `r`, smaller radius) rather than padded off it — no separate
+  // left-margin constant, `GAP` is the one deliberate breathing-room value
+  // in this layout: icon-to-text and text-to-right-tip, equal on purpose.
   const icon_cx = r;
   const icon_cy = pill_h / 2;
   ctx.fillStyle = theme.color;
   ctx.beginPath();
   ctx.arc(icon_cx, icon_cy, ICON_SIZE / 2, 0, Math.PI * 2);
   ctx.fill();
+  // Tried pixel-scanning each glyph's actual rendered ink to correct for
+  // per-emoji font-metric quirks (2026-09-08) — still came out wrong for at
+  // least one glyph, and font-substitution behavior for color emoji isn't
+  // worth chasing further than this: plain center/middle, one hand nudge.
   ctx.font = ICON_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -116,7 +130,7 @@ function build_poi_badge_canvas(poi: POI): BuiltBillboard {
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#fff";
-  ctx.fillText(name, BADGE_PAD_X + ICON_SIZE + ICON_GAP, pill_h / 2 + 1);
+  ctx.fillText(name, text_x, pill_h / 2 + 1);
 
   // Anchor dot, centered under the whole pill.
   const dot_cx = logical_w / 2;
@@ -203,7 +217,18 @@ function poi_anchor(poi: POI, page_idx: IVec): PVF3 | null {
 }
 
 function PoiBadge({ poi, page_idx }: { poi: POI; page_idx: IVec }) {
-  const anchor = useMemo(() => poi_anchor(poi, page_idx), [poi, page_idx]);
+  // poi_anchor can come back null on first evaluation if this page's terrain
+  // hasn't loaded yet — a real race against use_poi_fetcher.ts's own
+  // independent fetch, most likely to land badly on a cold cache. Without
+  // this, nothing ever re-renders this badge once terrain does arrive (this
+  // component keeps its identity across PoiLayer's own re-selections as long
+  // as it stays in the top MAX_RENDERED, so a plain useMemo would stay stuck
+  // at its first, terrain-less null forever). Same fix markers/location_puck.tsx
+  // already applies for the same class of race.
+  const [ground_tick, set_ground_tick] = useState(0);
+  useEffect(() => register_tile_interest((p) => p === page_idx, () => set_ground_tick((t) => t + 1)), [page_idx]);
+
+  const anchor = useMemo(() => poi_anchor(poi, page_idx), [poi, page_idx, ground_tick]);
   const built = useMemo(() => build_poi_badge_canvas(poi), [poi]);
 
   if (!anchor) return null;

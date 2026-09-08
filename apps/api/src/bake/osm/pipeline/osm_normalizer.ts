@@ -1,4 +1,4 @@
-// @pxl/api/bake/terrain/pipeline/osm_normalizer.ts
+// @pxl/api/bake/osm/pipeline/osm_normalizer.ts
 // OSM feature normalization and local coordinate projection.
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
@@ -9,7 +9,11 @@ import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import { XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
 
 import { type OSMExtra, type OSMFeature, type OSMRawFeature, OSMType } from "@pxl/shared/bake/model/osm_feature.ts";
-import { compute_extra, compute_metrics, determine_category, should_force_closed } from "./osm_policy.ts";
+// osm_policy.ts stays under bake/terrain/ — it's genuinely mixed (POI
+// category rules alongside terrain-cell config), not cleanly splittable
+// without untangling that, unlike this file, poi_extractor.ts, and
+// osm_adapter.ts, which had zero terrain-specific content to begin with.
+import { compute_extra, compute_metrics, determine_category, should_force_closed } from "@pxl/api/bake/terrain/pipeline/osm_policy.ts";
 
 export const V3_ARENA = new Arena<V3>(() => fill3(0), { init_cap: 1 << 12 });
 

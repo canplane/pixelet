@@ -53,6 +53,19 @@ export const TILE_BASE_URL: string = __TILE_BASE_URL__.replace(/\/+$/, "");
  * ocean, never baked" or a genuine failure. */
 export const HAS_STATIC_TILES: boolean = TILE_BASE_URL.length > 0;
 
+/** Same as TILE_BASE_URL, for the pre-baked POI set (apps/api/src/bake/poi/
+ * tools/bake_poi_tiles.ts) — a sibling prefix in the same bucket, not part
+ * of TILE_BASE_URL's own path (POI was deliberately kept out of terrain's
+ * own tile format — see discussions/20260907-world-rendering-tiers.md). */
+export const POI_TILE_BASE_URL: string = __POI_TILE_BASE_URL__.replace(/\/+$/, "");
+
+/** True when POI comes from the static set rather than the live API. Here a
+ * 404 means "no POI on this page" rather than "genuine failure" — POI has
+ * no shared-fallback-tile concept the way terrain's ocean tile does, since
+ * "nothing here" is just an empty list, not a real payload some other
+ * page's bytes could stand in for. */
+export const HAS_STATIC_POI: boolean = POI_TILE_BASE_URL.length > 0;
+
 /**
  * Base URL for reverse geocoding, trailing slashes removed.
  *
