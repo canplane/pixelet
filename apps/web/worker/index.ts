@@ -1,12 +1,14 @@
 // @pxl/web/../worker/index.ts
 
 /**
- * Cloudflare Worker that serves the app and its terrain tiles from one origin.
+ * Cloudflare Worker that serves the app, its terrain tiles, and forward
+ * search's own live API — all from one origin.
  *
  * Static assets are handled by the platform before this script runs (see
- * wrangler.jsonc); the only path routed here is `/tiles/*`, which is read
- * straight out of the R2 bucket. Keeping tiles on the app's own hostname is
- * what makes them same-origin, so no CORS policy exists to configure or get
+ * wrangler.jsonc); the two paths routed here are `/tiles/*` (read straight
+ * out of the R2 bucket) and `/api/*` (reverse-proxied to API_ORIGIN, see
+ * infra/prod/README.md). Keeping both on the app's own hostname is what
+ * makes them same-origin, so no CORS policy exists to configure or get
  * wrong — see discussions/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
@@ -44,9 +46,14 @@ export type Env = {
   TILES: R2Bucket;
   /** Static asset binding, used only for the fallthrough below. */
   ASSETS: { fetch(request: Request): Promise<Response> };
+  /** Forward search's own live origin (infra/prod/README.md) — an env var
+   * (wrangler.jsonc's own `vars`), not a literal here, so pointing this at
+   * a different box never needs a code change. */
+  API_ORIGIN: string;
 };
 
 const PREFIX = "/tiles/";
+const API_PREFIX = "/api/";
 
 /**
  * Object keys this Worker is willing to ask R2 for. Three shapes:
@@ -88,9 +95,22 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // `run_worker_first` should mean this only ever sees /tiles/*, but the
-    // guard keeps the Worker correct on its own rather than relying on
-    // routing config staying in sync with it.
+    // Plain reverse proxy — same origin from the browser's own point of
+    // view (no CORS to configure), the request forwarded verbatim onto
+    // API_ORIGIN. `host` is overwritten explicitly rather than left as
+    // whatever the incoming request carried (this app's own hostname):
+    // Caddy on the other end (infra/prod/Caddyfile) routes on Host, so a
+    // mismatched header there would 404 or hit the wrong site entirely.
+    if (url.pathname.startsWith(API_PREFIX)) {
+      const target = new URL(url.pathname + url.search, env.API_ORIGIN);
+      const headers = new Headers(request.headers);
+      headers.set("host", target.host);
+      return fetch(new Request(target, { method: request.method, headers, body: request.body }));
+    }
+
+    // `run_worker_first` should mean this only ever sees /tiles/* (and the
+    // API proxy above), but the guard keeps the Worker correct on its own
+    // rather than relying on routing config staying in sync with it.
     if (!url.pathname.startsWith(PREFIX)) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {

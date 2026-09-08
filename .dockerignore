@@ -1,0 +1,15 @@
+# Repo-root .dockerignore — apps/api/Dockerfile builds from this context
+# (see that file's own top comment on why the context is the whole repo,
+# not just apps/api/).
+
+.git
+node_modules
+**/node_modules
+out
+dist
+**/dist
+**/.vite
+**/.venv
+.env
+.env.*
+!.env.example

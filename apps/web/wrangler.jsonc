@@ -35,6 +35,16 @@
   "workers_dev": false,
   "compatibility_date": "2026-08-16",
 
+  // Forward search's own origin (infra/prod/README.md) — a plain reverse
+  // proxy through this same Worker keeps /api/* same-origin with the app,
+  // same "no CORS policy exists to configure or get wrong" reasoning this
+  // file's own top comment already gives for /tiles/*. An env var, not a
+  // literal in worker/index.ts, so pointing at a different box later (or a
+  // local one for testing) never needs a code change.
+  "vars": {
+    "API_ORIGIN": "https://api.plei.me"
+  },
+
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -43,10 +53,11 @@
     // index.html, or a deep link 404s instead of routing client-side.
     "not_found_handling": "single-page-application",
 
-    // ...but that fallback would also swallow tile requests, handing back
-    // index.html for every page_idx. Routing /tiles/* to the Worker first
-    // keeps both behaviours: SPA fallback for the app, R2 for tiles.
-    "run_worker_first": ["/tiles/*"]
+    // ...but that fallback would also swallow tile/API requests, handing
+    // back index.html for every page_idx or /api/* call. Routing both to
+    // the Worker first keeps every behaviour straight: SPA fallback for the
+    // app, R2 for tiles, a reverse proxy for the live API.
+    "run_worker_first": ["/tiles/*", "/api/*"]
   },
 
   "r2_buckets": [

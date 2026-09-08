@@ -1,0 +1,9 @@
+# infra/prod/Caddyfile
+#
+# Automatic HTTPS (Let's Encrypt) for the API's own subdomain — needs a
+# real DNS A record for this host pointed at the VM's public IP before
+# Caddy can complete the ACME challenge (see infra/prod/README.md).
+
+api.plei.me {
+	reverse_proxy api:3000
+}
