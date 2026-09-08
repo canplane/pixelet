@@ -1,0 +1,91 @@
+# infra/prod/docker-compose.yml
+#
+# The Hetzner VM's own stack — apps/api plus the two Postgres instances it
+# needs (same DB_MAIN/DB_GEO split infra/docker-compose.yml already uses
+# for local dev, kept identical here rather than consolidating into one
+# Postgres server: same env var shape, same mental model, and Postgres's
+# own idle footprint is small enough that two containers costs nothing
+# real on a 4GB box). db-geo only ever holds overture_places/
+# overture_divisions/overture_division_points — see
+# discussions/20260908-overture-poi-adoption.md and the geocode/search
+# provider files for why terrain's own osm_elements/esa_elevation_raster
+# tables never belong here at all (terrain is baked offline, already
+# static on R2 — this VM's Postgres has nothing to do with it).
+#
+# api has no published host port on purpose — only caddy talks to it, over
+# this compose file's own internal network, so the raw HTTP port is never
+# reachable from the public internet directly.
+#
+# Usage (on the VM, from this directory):
+#   cp .env.example .env   # fill in real values, chmod 600 it
+#   docker compose up -d --build
+
+services:
+  db-main:
+    image: postgres:16
+    container_name: pixelet-db-main
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_MAIN_USER}
+      POSTGRES_PASSWORD: ${DB_MAIN_PASSWORD}
+      POSTGRES_DB: ${DB_MAIN_NAME}
+    volumes:
+      - pgdata-main:/var/lib/postgresql/data
+    networks:
+      - pixelet
+
+  db-geo:
+    image: postgis/postgis:16-3.4
+    container_name: pixelet-db-geo
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_GEO_USER}
+      POSTGRES_PASSWORD: ${DB_GEO_PASSWORD}
+      POSTGRES_DB: ${DB_GEO_NAME}
+    volumes:
+      - pgdata-geo:/var/lib/postgresql/data
+    networks:
+      - pixelet
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    container_name: pixelet-api
+    restart: unless-stopped
+    depends_on:
+      - db-main
+      - db-geo
+    environment:
+      DB_MAIN_URL: postgresql://${DB_MAIN_USER}:${DB_MAIN_PASSWORD}@db-main:5432/${DB_MAIN_NAME}
+      DB_GEO_URL: postgresql://${DB_GEO_USER}:${DB_GEO_PASSWORD}@db-geo:5432/${DB_GEO_NAME}
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      API_PORT: "3000"
+    networks:
+      - pixelet
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: pixelet-caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - pixelet
+
+networks:
+  pixelet:
+    name: pixelet-prod
+
+volumes:
+  pgdata-main:
+  pgdata-geo:
+  caddy_data:
+  caddy_config:
