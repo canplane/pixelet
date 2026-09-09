@@ -3,7 +3,7 @@
 /** Shared band scan used by rendering and raycasting. */
 
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
-import type { Block } from "@xpute/core/ds/pool.ts";
+import type { Block } from "@xpute/core/ds/buddy.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 

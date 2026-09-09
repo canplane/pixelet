@@ -2,12 +2,12 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { Pool } from "./pool.ts";
+import { BuddyAllocator } from "./buddy.ts";
 
 /** 4KB blocks in a 64KB region: 16 leaves, 5 orders. Small enough to reason
  * about exactly, which is the point — buddy's failure modes are arithmetic. */
 function pool(overrides: Record<string, unknown> = {}) {
-  return new Pool({ min_block_bytes: 1 << 12, region_bytes: 1 << 16, ...overrides });
+  return new BuddyAllocator({ min_block_bytes: 1 << 12, region_bytes: 1 << 16, ...overrides });
 }
 
 Deno.test("pool - a released block's exact span is handed to the next request of that order", () => {

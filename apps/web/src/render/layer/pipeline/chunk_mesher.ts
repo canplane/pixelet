@@ -28,7 +28,7 @@
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Arena, Vector } from "@xpute/core/ds/arena.ts";
-import type { Block } from "@xpute/core/ds/pool.ts";
+import type { Block } from "@xpute/core/ds/buddy.ts";
 import { MESH_POOL } from "./mesh_pool.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
