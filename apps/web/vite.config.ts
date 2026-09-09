@@ -90,11 +90,8 @@ export default defineConfig(({ mode }) => {
   // VITE_TILE_SOURCE=remote (deno task dev:remote): tiles from a published deployment instead of the local API.
   const remoteTiles = (env.VITE_TILE_SOURCE || "local") === "remote";
 
-  // Whether tiles carry a published bake's version token. One question, asked
-  // here and injected — src/lib/env/routes.ts builds every path from it, and
-  // src/lib/env/config.ts reads the same answer for what a 404 means. It used
-  // to be re-derived per consumer, and dev:remote was the combination where
-  // `mode === "production"` and "reading a published deployment" disagreed.
+  // Injected as __PUBLISHED_TILES__: routes.ts builds every tile path from
+  // it, config.ts reads it for what a 404 means.
   const published = mode === "production" || remoteTiles;
 
   //   local  (default) — live API, bakes on demand.
@@ -152,8 +149,7 @@ export default defineConfig(({ mode }) => {
       // staying under apps/web. Explicitly allowing the repo root fixes
       // every such path at once instead of allow-listing each package.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
-      // Each prefix forwarded whole and unrewritten; what sits under one is
-      // the origin's business, not this server's.
+      // Each prefix forwarded whole and unrewritten.
       proxy: Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
         route.path,
         route.origin === "published" && tileProxyTarget

@@ -140,6 +140,14 @@ Idea only, nothing built. Worth doing the first time either need is real,
 not before — same premature-abstraction caution as the rest of this
 document.
 
+## Follow-up (2026-09-09): the reverse-geocoding data-layer question, resolved
+
+`poi_extractor.ts` is gone — POI comes from
+`apps/api/src/bake/poi/providers/overture_provider.ts` (Overture Places).
+Reverse geocoding shipped its own `GeocodeProvider` (`apps/api/src/bake/geocode/provider.ts`,
+`providers/overture_provider.ts`) against Overture's Divisions theme, not
+Naver/Kakao/Nominatim. `VITE_GEOCODE_BASE_URL` no longer exists.
+
 ## Status
 
 Discussion only — no code changed. Nothing here supersedes an earlier

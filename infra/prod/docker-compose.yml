@@ -9,10 +9,9 @@
 # overture_divisions/overture_division_points — see
 # discussions/20260908-overture-poi-adoption.md and the geocode/search
 # provider files for why terrain's own ingestion tables (overture_buildings/
-# overture_transportation/overture_base_*/esa_elevation_raster/
-# osm_coastline_polygons) never belong here at all (terrain is baked
-# offline, already static on R2 — this VM's Postgres has nothing to do
-# with it).
+# overture_transportation/overture_base_*/elevation_raster) never
+# belong here at all (terrain is baked offline, already static on R2 —
+# this VM's Postgres has nothing to do with it).
 #
 # api has no published host port on purpose — only caddy talks to it, over
 # this compose file's own internal network, so the raw HTTP port is never

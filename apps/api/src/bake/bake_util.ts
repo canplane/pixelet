@@ -57,15 +57,15 @@ type CatalogRow = { region_code: string; data_date: string; file_name: string; s
  * putting a date in it would drag the app build along on every re-bake.
  * That leaves it opaque about *what* v1 actually is, which is what this
  * records instead: the same provenance the ingestion pipelines already
- * track in their catalog tables (see infra/geo/README.md), copied into the
+ * track in their catalog tables (see infra/README.md), copied into the
  * manifest so a published tile set can always be traced back to its source
  * data. Shared by every bake tool — they all read the same geo DB.
  */
 export async function read_source_catalogs(pool: Pool): Promise<Record<string, CatalogRow[]>> {
   // overture_catalog covers Buildings/Transportation/Base/Places/Divisions/
   // coastline, one row per overture_* table (bake/overture/catalog.ts);
-  // elevation is GEDTM30 (esa_elevation_catalog).
-  const tables = ["overture_catalog", "esa_elevation_catalog"];
+  // elevation is GEDTM30 (elevation_catalog).
+  const tables = ["overture_catalog", "elevation_catalog"];
   const out: Record<string, CatalogRow[]> = {};
 
   for (const table of tables) {

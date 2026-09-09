@@ -31,7 +31,7 @@ Always drive the repo through its tasks, run from the repo root:
 The two Postgres containers come from `infra/docker-compose.yml`, and the geo one
 (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset that is expensive to
 rebuild. **Never `down -v` it casually** — the volume is the data. Ingestion and
-operational procedures are documented in [infra/geo/README.md](./infra/geo/README.md);
+operational procedures are documented in [infra/README.md](./infra/README.md);
 follow that rather than improvising SQL against the raw tables.
 
 ## Repository layers
@@ -39,15 +39,16 @@ follow that rather than improvising SQL against the raw tables.
 ```
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
-apps/api                Hono server + the OSM/DEM bake pipeline
+apps/api                Hono server + the Overture/DEM bake pipeline
 apps/web                Vite + React 19 + React Three Fiber client
 ```
 
 Two boundaries matter, and both are easy to erode by accident:
 
 - **`@xpute/core` must contain no pixelet domain knowledge.** It is meant to stay
-  portable to other projects. Coordinates, terrain, tiles, OSM — none of those
-  concepts belong there. If something needs them, it belongs in `@pxl/shared`.
+  portable to other projects. Coordinates, terrain, tiles, Overture — none of
+  those concepts belong there. If something needs them, it belongs in
+  `@pxl/shared`.
 - **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between
@@ -114,14 +115,18 @@ alone on purpose. Re-flagging them as fresh discoveries wastes everyone's time;
   swallowed; the effect sets `SUCCESS` regardless of per-tile outcome, even
   though the toast UI has real ERROR rendering wired up. Known, same reasoning as
   above.
-- **`OSM_FEAT_SQL` does not clip feature geometry to the page envelope.** A
-  sprawling polygon that merely grazes a page's bbox can spike that one page's
-  bake cost, independent of page size. Clipping was tried and destroyed
-  closed-ring topology — polygons rendered broken. The unclipped version is the
-  fix for that regression, not an oversight. Any future attempt has to preserve
-  ring closure across the boundary (clip-and-reclose, Weiler–Atherton,
-  Sutherland–Hodgman with hole handling), never naive bbox clipping.
-  `OSM_COAST_SQL` already clips via `ST_Intersection` and is not affected.
+- **`OVERTURE_BUILDINGS_SQL`/`OVERTURE_TRANSPORTATION_SQL` (repository.ts) do not
+  clip feature geometry to the page envelope.** A sprawling polygon that merely
+  grazes a page's bbox can spike that one page's bake cost, independent of page
+  size. Clipping was tried and destroyed closed-ring topology — polygons
+  rendered broken. The unclipped version is the fix for that regression, not an
+  oversight. Any future attempt has to preserve ring closure across the
+  boundary (clip-and-reclose, Weiler–Atherton, Sutherland–Hodgman with hole
+  handling), never naive bbox clipping. `OVERTURE_BASE_SQL`'s water branch and
+  `OVERTURE_COAST_SQL` already clip via `ST_Intersection` (guarded by
+  `ST_IsEmpty` against `&&`'s bbox-only false positives) and are not affected —
+  their rows run large enough (up to 444,626 points) that skipping the clip
+  costs far more than any topology risk.
 - **Placed objects live in `localStorage`.** Deliberate for a demo with no
   server-side user state.
 - **Nothing configures a spending cap, and R2 still cannot bill.** The

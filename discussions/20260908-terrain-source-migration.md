@@ -176,3 +176,17 @@ Sources: existing pipeline — `apps/api/src/bake/terrain/`,
 `.agents/skills/bake-tiles/SKILL.md` ·
 [20260908-overture-poi-adoption.md](./20260908-overture-poi-adoption.md) ·
 [20260816-deployment-hosting.md](./20260816-deployment-hosting.md)
+
+## Resolved (2026-09-09)
+
+Migrated. The coastline gotcha's option (a) is what shipped, not the hybrid
+in option (b): `overture_base_water`'s `ocean` subtype, inverted per page
+(`OVERTURE_COAST_SQL` in `apps/api/src/bake/terrain/repository.ts`) — no
+OSM table anywhere in the pipeline. `osm_policy.ts` became `coast_policy.ts`
+(`apps/api/src/bake/terrain/pipeline/`); Buildings/Transportation/Base map
+through `overture_policy.ts` in the same directory. Elevation is GEDTM30,
+queried as `elevation_raster` (`infra/README.md`). Tile publishing kept its
+immutable-versioned convention (`PUBLISHED_VERSION.terrain` in
+`packages/pxl/shared/src/bake/published.ts`, read by both the bake tools and
+the client); the monthly workflow join (sequencing
+step 4) has not happened — terrain re-bakes are still manual.

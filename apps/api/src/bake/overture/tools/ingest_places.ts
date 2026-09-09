@@ -15,11 +15,9 @@
 // terrain pipeline, not layered on top of it (see
 // discussions/20260908-overture-poi-adoption.md).
 //
-// Attribution: Places is CDLA-Permissive-2.0, which (unlike OSM's ODbL)
-// imposes no attribution requirement as a condition of use — still shown
-// in-app as a courtesy (apps/web/src/app/settings/sections/
-// attribution_section.tsx), matching this project's own norm of crediting
-// sources even where not strictly required.
+// Attribution: Places is CDLA-Permissive-2.0, which imposes no attribution
+// requirement as a condition of use — still shown in-app as a courtesy
+// (apps/web/src/app/settings/sections/attribution_section.tsx).
 //
 // Requires the official `overturemaps` Python CLI (pip), auto-installed on
 // first run into a local venv (./.venv, gitignored) next to this file — the
@@ -46,7 +44,7 @@ import * as env from "@/lib/env/mod.ts";
 import { get_overture_release, record_overture_catalog } from "../catalog.ts";
 
 // Mainland + Jeju + far western islands + Ulleungdo/Dokdo — the same
-// overall coverage rationale infra/geo/README.md's ESA Elevation section
+// overall coverage rationale infra/README.md's Elevation section
 // already documents for this project's own Korea bbox.
 const KR_BBOX_DEFAULT = "124,33,132,39";
 const BATCH_SIZE = 500;

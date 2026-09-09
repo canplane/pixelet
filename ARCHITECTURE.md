@@ -43,7 +43,7 @@ L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `indexe
 
 Objects have no server persistence or transfer protocol yet — the current prototype is client-local only, storing one SVO per occupied L1 cell and keeping just the L2-column render index live. When a persistence layer is built, the design intends to reuse one full-3D L2 Volume as the storage/transfer envelope rather than introduce a second spatial level at the same `64³` extent.
 
-One React renderer component owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
+One chunk node (`modules/world/chunk_node.ts`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
 
 ### Layer, space, and shape
 
@@ -66,7 +66,7 @@ Terrain today is Tile-shaped data addressed at Page granularity; objects are Vol
 
 L3 pages are the primary terrain streaming unit, storing terrain's Tile-shaped data. The client requests pages around the current center and keeps terrain in its source-appropriate 2.5D form: dense categorical ground rasters plus a padded elevation raster reconstructed with bicubic sampling.
 
-Each page carries four ground channels rasterized from Overture/OSM geometry (Buildings/Transportation/Base from Overture Maps, coastline from Overture's Base `water` theme via the same OSM-coastline-tool lineage its own coarse land/ocean pre-filter still reads OSM for):
+Each page carries four ground channels rasterized from Overture Maps geometry (Buildings/Transportation/Base, plus coastline derived from Overture's Base `water` theme):
 
 | Channel     | Contents                                            |
 | ----------- | --------------------------------------------------- |
@@ -80,10 +80,10 @@ Sea cells use `SEA_FLAG = 0x80` to distinguish sea from ordinary land while reta
 ## Bake Pipeline
 
 ```text
-Overture/OSM PostGIS rows
+Overture PostGIS rows
   → XTP decode
-  → overture_adapter / osm_adapter (row → feature)
-  → normalizer (classify, rank, assign tags — policy-parameterized: overture_policy / osm_policy)
+  → overture_adapter / coast_adapter (row → feature)
+  → normalizer (classify, rank, assign tags — policy-parameterized: overture_policy / coast_policy)
   → ground_baker (rasterize geometry into ground channels)
   → encode_terrain (elevation + ground → XTP)
   → compressed HTTP page response
@@ -103,7 +103,7 @@ They unify only at the renderer boundary through `WorldLayer`:
 ```text
 terrain page ──→ TerrainLayer ──┐
                                ├─→ temporary signed-Z voxel bands
-object octrees → ObjectLayer ──┘       ├─→ shared mesher → GPU instance buffers
+object octrees → ObjectLayer ──┘       ├─→ shared mesher → baked per-chunk geometry
                                        └─→ shared raycaster → world hit
 ```
 
@@ -122,15 +122,15 @@ One chunk composes into its L2/Chunk-sized Volume as sorted, signed 64-cell Z ba
 - `Uint8Array layer_idx`: texture-array layer;
 - optional sub-cell payload only for bands containing fine objects.
 
-The common payload is five bytes per voxel. One `64³` band is therefore about `1.25 MiB`; retaining one for hundreds of visible chunks would exceed a mobile memory budget. Bands are pooled scratch storage (a small 2-entry pool) and released immediately after meshing — `ChunkVolume` never survives past one synchronous composite pass.
+The common payload is five bytes per voxel. One `64³` band is therefore about `1.25 MiB`; retaining one for hundreds of visible chunks would exceed a mobile memory budget. Bands are pooled scratch storage and released immediately after meshing — `ChunkVolume` never survives past one synchronous composite pass.
 
-What _does_ survive that pass, per in-frustum chunk, is `column_runs: MeshRun[][]` — every one of the chunk's `64²` columns' already-merged material runs (`voxel_scan.ts`'s `scan_all_column_runs`), plain copied values rather than a view into the released bands. It's scanned once and reused across every LOD tier and every LOD transition after that, until the chunk leaves frustum or its source revision changes — the expensive part (walking bands) happens once per chunk's visible lifetime instead of once per rebuild. This replaced an earlier ~36–40 KiB top-only (or top-and-bottom) heightmap shortcut; `column_runs` is real per-run data instead of one flattened sample per column, so it costs meaningfully more per chunk (roughly several hundred KiB to ~1 MiB, depending on how many runs a chunk's columns actually have) in exchange for not needing a separate coarse-LOD-only shortcut format at all — the same `column_runs` feeds LOD1 and every coarse tier. `chunk_stage.tsx` also keeps a small `BuiltChunkBucket` (GPU-ready instance buffers) per LOD tier a chunk has actually built, retained rather than evicted on every tier change, since rebuilding one from `column_runs` isn't free either.
+What _does_ survive that pass, per in-frustum chunk, is `column_runs: MeshRun[][]` — every one of the chunk's `64²` columns' already-merged material runs (`voxel_scan.ts`'s `scan_all_column_runs`), plain copied values rather than a view into the released bands. It's scanned once and reused across every LOD tier and every LOD transition after that, until the chunk leaves frustum or its source revision changes — the expensive part (walking bands) happens once per chunk's visible lifetime instead of once per rebuild. This replaced an earlier ~36–40 KiB top-only (or top-and-bottom) heightmap shortcut; `column_runs` is real per-run data instead of one flattened sample per column, so it costs meaningfully more per chunk (roughly several hundred KiB to ~1 MiB, depending on how many runs a chunk's columns actually have) in exchange for not needing a separate coarse-LOD-only shortcut format at all — the same `column_runs` feeds LOD1 and every coarse tier. A `BuiltChunkBucket` (`render/layer/pipeline/chunk_bucket.ts`) is kept per LOD tier a chunk has actually built, retained rather than evicted on every tier change, since rebuilding one from `column_runs` isn't free either. Its buffers are carved out of one pooled block per mesh (`@xpute/core/ds/buddy.ts`), so a mesh's several typed-array spans are one allocation whose lifetime ends together.
 
 Raycasting needs exact composed voxels but only near the pointer ray, so it uses a separate LRU capped at four chunks and eight total bands (about 10 MiB of common payload). An oversized vertical chunk is consumed once instead of entering the cache.
 
 ## Rendering and LOD
 
-The calculation side — layer composition, column scanning, meshing, bounds, and voxel ray tests — returns plain typed-array data and is renderer-independent. Three.js / React Three Fiber begins at the submission boundary, where it owns meshes, materials, texture arrays, camera/frustum math, scene lifecycle, and GPU resources. In the repo: `apps/web/src/render/` (including `render/layer/pipeline/`) stays Three.js-free; the R3F-owning consumers (`ChunkStage`, `Cube`, the anchor/frame components, ...) live under `apps/web/src/modules/world/` instead.
+The calculation side — layer composition, column scanning, meshing, bounds, and voxel ray tests — returns plain typed-array data and is renderer-independent. Three.js / React Three Fiber begins at the submission boundary, where it owns meshes, materials, texture arrays, camera/frustum math, scene lifecycle, and GPU resources. In the repo: `apps/web/src/render/` (including `render/layer/pipeline/`) stays Three.js-free; the R3F-owning consumers (`ChunkStage`, `Cube`, the anchor/frame components, ...) live under `apps/web/src/modules/world/` instead. Chunk ownership itself is imperative: `chunk_node.ts` drives meshes and buckets directly rather than through a component tree, since one component per chunk per tier made React's reconciler the thing deciding when GPU buffers live and die.
 
 LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. Handoffs occur at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. The current fog distance is 900 units, so visible chunks normally reach at most stride 8; strides 16/32/64 remain valid for future longer ranges and fallback states.
 
@@ -138,15 +138,96 @@ The visible handoffs use complementary stochastic visibility between adjacent LO
 
 Frustum culling uses the exact union of terrain/object and primary/secondary mesh bounds. Measured bounds survive GPU/surface eviction and are invalidated with their source revisions. Until a chunk has measured geometry, a conservative camera-projection guard prevents the low-camera-polar false negative that previously removed the ground directly beneath the view.
 
-### Coarse-LOD box averaging
+### Coarse LOD
 
-Coarse LOD (`lod_step > 1`, `chunk_mesher.ts`'s `build_chunk_instances_coarse`) box-averages every real fine column under each coarse cell — the mipmap / voxel-cone-tracing style of screen-footprint filtering, not a nearest-neighbor pick of one representative column. For each `lod_step`-wide XY cell, every one of its `lod_step²` real columns' runs (from `column_runs`, see [Temporary dense bands](#temporary-dense-bands)) gets binned into `lod_step`-tall Z buckets and accumulated: color sums are weighted by how many fine cells of that bucket the run actually covers, and terrain and object runs are summed into the _same_ bucket unconditionally — material class plays no role in the average. Blending across a material boundary this way is intentional: at a coarse enough distance a mixed-color cell reads as a blended color the same way a photographed or mip-mapped surface would.
+A coarse cell (`lod_step > 1`, `chunk_mesher.ts`'s `bake_chunk_mesh_coarse`)
+merges `lod_step³` voxels into one box, and says three things about them.
 
-Coverage (how many of a bucket's `lod_step³` fine cells actually got hit) doubles as the cell's fill fraction — air simply never contributes to a bucket's sum, so a partly-empty bucket's average dilutes toward "less full" on its own, with no separate occupancy threshold. A bucket with any coverage at all still emits exactly one box, isotropically shrunk on X, Y, _and_ Z together (`span * Math.cbrt(fill)`, never Z alone) instead of being dropped — an earlier design that grid-snapped Z into fixed slabs and required a cell to clear a 50%-occupancy threshold before drawing anything could make a real, fully-placed object flicker out of existence entirely whenever its footprint happened to straddle two coarse cells (each half individually under the threshold); continuous fill-based shrinking can't produce that failure mode, since there is no threshold to fall under. Sub-cell (fractional, precisely-placed) runs contribute their true volumetric fraction (linear size fraction cubed) rather than a full cell's weight. The resulting box carries no texture-array tap (`layer_idx` is always written as `NO_LAYER`) — once a box's color can be a blend of several materials, sampling any one material's texture for it no longer means anything, so the shader's existing flat-RGB fallback path handles it instead.
+- **How much is there.** Fill is coverage over `lod_step³` — one scalar, no
+  axis singled out — and the box shrinks by its cube root about the cell's
+  own centre, so its volume is the fill fraction of the cell's. There is no
+  occupancy threshold: seven VOID and one red block is one quarter-size red
+  cube, never a dropped one.
+- **What it looks like.** Colour is a *surface* average: only the topmost run
+  of each sub-column contributes, because that is the voxel visible from
+  above. Runs arrive ascending, so a later one supersedes the one before it
+  by subtracting what that column last contributed, keeping the pass O(1)
+  per run.
+- **What it is made of.** Up to four texture-array layers blend per cell, so
+  a coarse cell spanning grass, road and roof is not whichever it met first.
 
-Both halves of building a coarse LOD tier — scanning a chunk's `column_runs` in the first place, and this per-tier averaging pass — are cooperatively scheduled rather than always paid for immediately: each estimates its own likely cost from a cheap signal (occupied Z-band count for a scan; total run count for an average build) against a running session average, and defers to a later frame — at most once per chunk, to guarantee eventual progress — when the estimate clears a budget multiple. This is deliberately not a Web Worker: the renderer follows a single-threaded, cooperative-yield scheduling model (closer to Figma's than to a preemptive-multithreaded one) so that expensive work never blocks a frame for longer than a bounded slice, without the cross-origin-isolation/`SharedArrayBuffer` deployment cost real threading would add.
+Sub-cell (fractional, precisely placed) runs contribute their true
+volumetric fraction. Full cells stay ordinary runs and keep greedy merging
+and face culling; only shrunken ones take the inset path, where they get all
+four creases because nothing touches their walls.
 
-At LOD1 (`lod_step === 1`, exact per-run boxes, no averaging), a run that is fully boxed in by solid material — not the topmost run in its own column, and all 4 horizontal neighbor columns solid across its exact `z0..z1` span — never gets an instance at all, since none of its faces could ever be visible. Chunk-edge columns are exempt (a neighboring chunk's data isn't available to check, and assuming it's solid would risk a visible hole for a cosmetic win).
+Density-as-size costs something and the cost is accepted: a surface has low
+volumetric fill in every cell it crosses, so flat ground shrinks too and
+distant terrain reads as separated cubes rather than a sheet. The
+alternatives — dimming a full-size box by fill, or fitting a box per axis to
+the voxels present — each make XY the axis the renderer is built around with
+Z as the exception, and orientation then decides existence: thirty-two
+voxels laid flat drew, the same thirty-two standing up vanished.
+
+### Face culling and greedy merging
+
+At every tier, a run whose faces could never be seen emits nothing: not the
+topmost run in its own column, and all four horizontal neighbours solid
+across its exact `z0..z1` span. Chunk-edge columns are exempt, since a
+neighbouring chunk's data is not available to check and assuming it solid
+would risk a visible hole.
+
+Surviving runs merge in the run domain rather than the face domain: adjacent
+columns holding the same run — identical z span, identical material — become
+one box several cells wide, so a flat plateau emits one box instead of one
+per cell. A merge consumes the border between two cells, so it may only
+cross a border that carries nothing to draw or shade, and each pass tests
+the border it is about to swallow rather than the one the box started at.
+
+### Scheduling
+
+Building a tier — scanning a chunk's `column_runs`, then meshing them — is
+cooperatively scheduled rather than always paid for immediately. Work
+estimates its own cost from a cheap signal (occupied Z-band count for a
+scan, total run count for a mesh) against a running session average and
+defers to a later frame, at most once per chunk so progress is guaranteed.
+
+This is deliberately not a Web Worker. The renderer follows a
+single-threaded cooperative-yield model, closer to Figma's than to a
+preemptive-multithreaded one, so expensive work never blocks a frame for
+longer than a bounded slice without the cross-origin-isolation and
+`SharedArrayBuffer` deployment cost real threading would add.
+`modules/world/sched/` holds the two schedulers this rests on — a fetch
+scheduler bounding I/O concurrency by category, and a frame budget bounding
+CPU per frame — plus a read-only task ledger that records what they did.
+The ledger observes; it never feeds back into the schedulers' own decisions.
+
+## Camera
+
+The orbit camera is driven by three controls — `dist`, `polar`, `azimuth` —
+and nothing else writes them. Terrain is allowed one question, in
+`modules/camera/terrain_gate.ts`: would this view state put the eye inside
+it. The gate is a pure function of the three controls rather than of the
+live scene graph, and it sits in `set_view_state`, the one funnel every
+input path goes through, so a refused move never leaves the controls and the
+drawn camera disagreeing.
+
+`Settings > Camera` picks what the answer does: `through` ignores terrain,
+`stop` takes a control as far as it asked or as far as it can, and `climb`
+grants every control and raises the *drawn* pitch instead, leaving
+`view_state` untouched so the pitch relaxes back on its own.
+
+## Billboards
+
+World-anchored billboards (POI badges, chat bubbles) are `THREE.Sprite`s,
+which are depth-tested as a point but shaded as a quad — so partial
+occlusion is incoherent and the choice is all or nothing. `render/scene_depth.ts`
+copies world depth after the scene render, and
+`modules/world/billboard/anchor_occlusion.ts` reprojects each sprite's
+ground anchor through that copy and discards the whole sprite when the
+anchor is behind terrain. The same pass writes `gl_FragDepth` from an
+upright twin of the quad, so billboards sort against the world along
+world-up rather than camera-up.
 
 ## XTP — Xpute Tree Packet
 

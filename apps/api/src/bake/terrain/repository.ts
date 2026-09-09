@@ -8,7 +8,7 @@ import type { BaseRow, BuildingRow, CoastRow, SegmentRow } from "@pxl/shared/bak
 import { ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
 import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 
-const ESA_ELE_SQL = `WITH cfg AS (
+const ELEVATION_SQL = `WITH cfg AS (
   SELECT
     ${PAGE_ELE_SPAN}::float8 AS ele_span,
     $5::float8 AS z_cell_per_m,
@@ -44,7 +44,7 @@ env AS (
 mosaic AS (
   -- Clip source rasters to the expanded envelope before union
   SELECT ST_Union(ST_Clip(r.rast, env.e)) AS rast
-  FROM esa_elevation_raster r, env
+  FROM elevation_raster r, env
   WHERE r.rast && env.e AND ST_Intersects(r.rast, env.e)
 ),
 resampled AS (
@@ -152,7 +152,7 @@ WHERE NOT ST_IsEmpty(g)`;
 // expressions in the command text itself, hence lit() below rather than a
 // second args array.
 const PREPARED_STATEMENTS: Record<string, { name: string; param_types: string; sql: string }> = {
-  ele: { name: "pxl_ele", param_types: "float8, float8, float8, float8, float8", sql: ESA_ELE_SQL },
+  ele: { name: "pxl_ele", param_types: "float8, float8, float8, float8, float8", sql: ELEVATION_SQL },
   buildings: { name: "pxl_buildings", param_types: "float8, float8, float8, float8", sql: OVERTURE_BUILDINGS_SQL },
   segments: { name: "pxl_segments", param_types: "float8, float8, float8, float8", sql: OVERTURE_TRANSPORTATION_SQL },
   base: { name: "pxl_base", param_types: "float8, float8, float8, float8", sql: OVERTURE_BASE_SQL },
