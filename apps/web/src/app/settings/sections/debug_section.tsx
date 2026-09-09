@@ -42,6 +42,8 @@ export function DebugSection() {
   const toggleLedgerOverlay = useDebugStore((state) => state.toggleLedgerOverlay);
 
   const logLedger = useDebugStore((state) => state.logLedger);
+  const edgeShadeStrength = useDebugStore((state) => state.edgeShadeStrength);
+  const setEdgeShade = useDebugStore((state) => state.setEdgeShade);
   const toggleLogLedger = useDebugStore((state) => state.toggleLogLedger);
 
   const dummy_toasts_shown = useSyncExternalStore(subscribeToastEntries, any_dummy_toast_shown);
@@ -70,6 +72,12 @@ export function DebugSection() {
         description={t("settings.debug.ledger_log.description")}
         active={logLedger}
         on_toggle={toggleLogLedger}
+      />
+      <SettingRow
+        label={t("settings.debug.edge_shade.label")}
+        description={t("settings.debug.edge_shade.description")}
+        active={edgeShadeStrength > 0}
+        on_toggle={() => setEdgeShade({ edgeShadeStrength: edgeShadeStrength > 0 ? 0 : 0.3 })}
       />
       <SettingRow
         label={t("settings.debug.dummy_toast.label")}

@@ -26,6 +26,10 @@
       "ledger_log": {
         "label": "Scheduler Ledger Console Log",
         "description": "Streams each settled fetch, missed frame and long animation frame to the browser console as it happens."
+      },
+      "edge_shade": {
+        "label": "Cube edge shading",
+        "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line. Tune with __pxl_edge({ strength, width })."
       }
     }
   },

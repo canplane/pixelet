@@ -40,6 +40,25 @@ export type DebugStore = {
   logLedger: boolean;
   setLogLedger: (on: boolean) => void;
   toggleLogLedger: () => void;
+
+  /**
+   * Cube edge shading — knobs, not a feature. The old fake bevel darkened
+   * every cube edge unconditionally, which drew a grid across flat ground
+   * and read as artificial; it now darkens only edges that border open air,
+   * which chunk_mesher.ts's face mask already identifies (an edge of a top
+   * face is a silhouette exactly when the side face in that direction
+   * survived culling). Whether that reads as "the terrain has height" or as
+   * "the terrain has outlines" is a judgement to make by eye, so the three
+   * numbers behind it are adjustable until one set is chosen and frozen.
+   *
+   * `edgeShadeStrength` 0 turns it off entirely; the defaults are what read
+   * best by eye once only silhouette and concave edges were shaded, not the
+   * old bevel's numbers, which were tuned when every edge was.
+   * `edgeShadeWidth` is in world units.
+   */
+  edgeShadeStrength: number;
+  edgeShadeWidth: number;
+  setEdgeShade: (next: Partial<{ edgeShadeStrength: number; edgeShadeWidth: number }>) => void;
 };
 
 // Persisted (localStorage) — same reasoning as settings_store.ts's own
@@ -56,4 +75,8 @@ export const useDebugStore = create<DebugStore>()(persist((set) => ({
   logLedger: false,
   setLogLedger: (logLedger) => set({ logLedger }),
   toggleLogLedger: () => set((state) => ({ logLedger: !state.logLedger })),
+
+  edgeShadeStrength: 0.3,
+  edgeShadeWidth: 0.03,
+  setEdgeShade: (next) => set(next),
 }), { name: "pxl:debug_settings" }));
