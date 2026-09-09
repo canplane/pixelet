@@ -80,7 +80,14 @@ function inject_chunk_shader(shader: {
       varying float v_side_sign;
       varying vec3 v_local_pos;
       varying vec3 v_box_scale;
-      varying float v_faces;`,
+      // flat: the mask is one integer per box, identical at all four corners
+      // of every face, so interpolating it is meaningless work — and a
+      // hazard now that it reaches bit 23. A float32 varying carrying a
+      // value near 2^24 has an interpolation error of about one whole unit,
+      // which is enough to flip the low bits and mis-shade an edge. three
+      // compiles GLSL3 under WebGL2, rewriting varying to out/in with a
+      // define, so the qualifier survives that rewrite.
+      flat varying float v_faces;`,
     )
     .replace(
       "void main() {",
@@ -132,7 +139,7 @@ function inject_chunk_shader(shader: {
       varying float v_side_sign;
       varying vec3 v_local_pos;
       varying vec3 v_box_scale;
-      varying float v_faces;
+      flat varying float v_faces;
       uniform float u_edge_strength;
       uniform float u_edge_width;
       uniform sampler2DArray u_ground_layers_top;
