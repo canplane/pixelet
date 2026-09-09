@@ -133,10 +133,24 @@ already documents for the source data itself).
 
 ## Cloudflare Worker wiring
 
-`apps/web`'s production Worker reverse-proxies `/search` to `API_ORIGIN`'s
-`/api/search` (`wrangler.jsonc`'s own `vars`, `https://api.plei.me` — see
-`worker/index.ts`), matching Vite's dev-time proxy
-(`vite.config.ts`'s own `proxy: { "/search": ... }`).
+Everything the server answers is under `/api`. The production Worker claims
+`/api/tiles/*` and reads it out of R2; everything else under that root is
+reverse-proxied whole to `API_ORIGIN` (`wrangler.jsonc`'s own `vars`,
+`https://api.plei.me`), path unchanged. Vite's dev-time proxy splits the same
+root the same way, both from `src/lib/env/routes.ts`, and nothing is
+rewritten on the way through — client, relay and origin use identical paths.
+
+Neither relay knows which routes answer under the root, so adding a live
+route is a change to `apps/api` and to nothing else. That matters while the
+shape of the interface is still open: a set of REST resources and a single
+RPC root address very differently, and only the root survives either.
+
+Every route therefore has to be mounted under `/api` on the API server
+(`apps/api/src/app/mount.ts`). A bare path is unreachable in production —
+the edge never forwards it, and the static-asset fallback answers with
+`index.html`. The root is reserved on the server's side rather than the
+app's because the app routes on paths of its own: giving *it* the prefix
+would put one in every URL a user sees.
 
 ## Backups
 

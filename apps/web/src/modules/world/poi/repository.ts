@@ -4,12 +4,12 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 
-import { HAS_STATIC_POI, POI_TILE_BASE_URL } from "@/lib/env/config.ts";
+import { PUBLISHED_TILES, POI_TILE_BASE_URL } from "@/lib/env/config.ts";
 
 /**
  * POI transport: the pre-baked static set when one is configured
  * (apps/api/src/bake/poi/tools/bake_poi_tiles.ts), the live API otherwise —
- * same HAS_STATIC_TILES shape terrain/tile_repository.ts uses, one page
+ * same PUBLISHED_TILES shape terrain/tile_repository.ts uses, one page
  * simpler: a missing object just means "no POI here", not "open ocean,
  * resolve to a shared fallback tile". There is no fallback object to fetch,
  * so a 404 (static) resolves straight to `[]` with no extra round trip.
@@ -35,7 +35,7 @@ export async function fetch_poi(
 ): Promise<POI[]> {
   const t0 = performance.now();
   const res = await fetch(poi_url(page_idx.toString()), { signal });
-  if (res.status === 404 && HAS_STATIC_POI) return [];
+  if (res.status === 404 && PUBLISHED_TILES) return [];
   if (!res.ok) throw new Error(`[poi/${ivec.repr(page_idx)}] http ${res.status}`);
 
   const text = await res.text();

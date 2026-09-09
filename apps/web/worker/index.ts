@@ -5,11 +5,12 @@
  * search's own live API — all from one origin.
  *
  * Static assets are handled by the platform before this script runs (see
- * wrangler.jsonc); the two paths routed here are `/tiles/*` (read straight
- * out of the R2 bucket) and `/search` (reverse-proxied to API_ORIGIN's
- * `/api/search`, see infra/prod/README.md). Keeping both on the app's own
- * hostname is what makes them same-origin, so no CORS policy exists to
- * configure or get wrong — see discussions/20260816-deployment-hosting.md.
+ * wrangler.jsonc); what is routed here is `/api/*`, split into `/api/tiles/*`
+ * (read straight out of the R2 bucket) and everything else (reverse-proxied
+ * to API_ORIGIN as-is, see infra/prod/README.md). Keeping it on the app's
+ * own hostname is what
+ * makes them same-origin, so no CORS policy exists to configure or get
+ * wrong — see discussions/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
  * deployment, it targets the Workers runtime rather than the browser, and
@@ -46,13 +47,28 @@ export type Env = {
   TILES: R2Bucket;
   /** Static asset binding, used only for the fallthrough below. */
   ASSETS: { fetch(request: Request): Promise<Response> };
-  /** Forward search's own live origin (infra/prod/README.md) — an env var
+  /** The live API's own origin (infra/prod/README.md) — an env var
    * (wrangler.jsonc's own `vars`), not a literal here, so pointing this at
    * a different box never needs a code change. */
   API_ORIGIN: string;
 };
 
-const PREFIX = "/tiles/";
+/**
+ * Everything the server answers sits under one root, and the only split
+ * inside it is where the bytes come from: a bucket for what was baked
+ * ahead of time, the live API for everything else. Neither branch reads
+ * further — whether the API stays a set of REST routes or becomes a single
+ * RPC root is undecided, and a relay that enumerates route names is
+ * rewritten by that decision. Adding a live route is an API change and
+ * nothing else.
+ *
+ * Mirrors src/lib/env/routes.ts's EDGE_* prefixes. Kept as literals because
+ * this file targets the Workers runtime and is bundled separately from src/
+ * — wrangler.jsonc's `run_worker_first` carries the root for the same
+ * reason.
+ */
+const API_PREFIX = "/api/";
+const PREFIX = "/api/tiles/";
 
 /**
  * Object keys this Worker is willing to ask R2 for. Three shapes:
@@ -94,18 +110,21 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // reverse proxy to API_ORIGIN's /api/search, host header rewritten for Caddy
-    if (url.pathname === "/search") {
-      const target = new URL("/api/search" + url.search, env.API_ORIGIN);
-      const headers = new Headers(request.headers);
-      headers.set("host", target.host);
-      return fetch(new Request(target, { method: request.method, headers, body: request.body }));
+    // Tiles are a prefix inside the API root, so they are claimed first;
+    // everything else under that root is reverse-proxied to API_ORIGIN,
+    // same path, host header rewritten for Caddy.
+    if (!url.pathname.startsWith(PREFIX)) {
+      if (url.pathname.startsWith(API_PREFIX)) {
+        const target = new URL(url.pathname + url.search, env.API_ORIGIN);
+        const headers = new Headers(request.headers);
+        headers.set("host", target.host);
+        return fetch(new Request(target, { method: request.method, headers, body: request.body }));
+      }
+      // `run_worker_first` should mean this only ever sees the API root, but
+      // the guard keeps the Worker correct on its own rather than relying on
+      // routing config staying in sync with it.
+      return env.ASSETS.fetch(request);
     }
-
-    // `run_worker_first` should mean this only ever sees /tiles/* (and /search
-    // above), but the guard keeps the Worker correct on its own rather than
-    // relying on routing config staying in sync with it.
-    if (!url.pathname.startsWith(PREFIX)) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });

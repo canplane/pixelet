@@ -9,6 +9,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
+import { DEV_PROXY_ROUTES } from "./src/lib/env/routes.ts";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -88,37 +90,16 @@ export default defineConfig(({ mode }) => {
   // VITE_TILE_SOURCE=remote (deno task dev:remote): tiles from a published deployment instead of the local API.
   const remoteTiles = (env.VITE_TILE_SOURCE || "local") === "remote";
 
-  // tile path: /tiles/<TILE_PATH_kind>[/<PUBLISHED_VERSION_kind>]/<page_idx>. Read from .env.example (gitignored .env can't hold reviewable version bumps).
-  const settings = Object.fromEntries(
-    Deno.readTextFileSync(path.resolve(__dirname, ".env.example"))
-      .split("\n")
-      .map((line) => line.match(/^([A-Z_]+)=(.*)$/))
-      .filter((m): m is RegExpMatchArray => m !== null)
-      .map((m) => [m[1], m[2].trim()]),
-  );
-  const trim = (part: string) => part.replace(/^\/+|\/+$/g, "");
-  const tile_base = (kind: string) => {
-    const version = mode === "production" ? settings[`PUBLISHED_VERSION_${kind}`] : "";
-    const tail = [settings[`TILE_PATH_${kind}`], version].filter(Boolean).map(trim).join("/");
-    return `/${tail}`;
-  };
-  const tileBase = tile_base("TERRAIN");
-  const poiTileBase = tile_base("POI");
-  const geocodeTileBase = tile_base("GEOCODE");
+  // Whether tiles carry a published bake's version token. One question, asked
+  // here and injected — src/lib/env/routes.ts builds every path from it, and
+  // src/lib/env/config.ts reads the same answer for what a 404 means. It used
+  // to be re-derived per consumer, and dev:remote was the combination where
+  // `mode === "production"` and "reading a published deployment" disagreed.
+  const published = mode === "production" || remoteTiles;
 
   //   local  (default) — live API, bakes on demand.
   //   remote            — an already-published deployment.
   const tileProxyTarget = remoteTiles ? (env.VITE_TILE_PROXY_TARGET || tileOriginDefault) : "";
-
-  for (
-    const [name, base] of [
-      ["TILE_PATH_TERRAIN", tileBase],
-      ["TILE_PATH_POI", poiTileBase],
-      ["TILE_PATH_GEOCODE", geocodeTileBase],
-    ] as const
-  ) {
-    if (base === "/") throw new Error(`${name} is empty — check the tiles section of apps/web/.env.example.`);
-  }
 
   return {
     // root `deno task dev` runs dev:api and dev:web concurrently in one
@@ -171,16 +152,14 @@ export default defineConfig(({ mode }) => {
       // staying under apps/web. Explicitly allowing the repo root fixes
       // every such path at once instead of allow-listing each package.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
-      proxy: {
-        // local: rewrite onto the live API's tile routes. remote: forward as-is.
-        "/tiles": tileProxyTarget ? { target: tileProxyTarget, changeOrigin: true } : { target: apiBase, changeOrigin: true, rewrite: (p: string) => `/api${p}` },
-        "/search": { target: apiBase, changeOrigin: true, rewrite: (p: string) => `/api${p}` },
-        "/io": {
-          target: apiBase,
-          changeOrigin: true,
-          ws: true,
-        },
-      },
+      // Each prefix forwarded whole and unrewritten; what sits under one is
+      // the origin's business, not this server's.
+      proxy: Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
+        route.path,
+        route.origin === "published" && tileProxyTarget
+          ? { target: tileProxyTarget, changeOrigin: true }
+          : { target: apiBase, changeOrigin: true, ws: route.ws },
+      ])),
     },
 
     define: {
@@ -188,9 +167,7 @@ export default defineConfig(({ mode }) => {
       __APP_ENV__: JSON.stringify(appEnv),
       __IS_DEV__: JSON.stringify(isDev),
 
-      __TILE_BASE_URL__: JSON.stringify(tileBase),
-      __POI_TILE_BASE_URL__: JSON.stringify(poiTileBase),
-      __GEOCODE_TILE_BASE_URL__: JSON.stringify(geocodeTileBase),
+      __PUBLISHED_TILES__: JSON.stringify(published),
 
       /** When this bundle was built, ISO-8601 in UTC. Evaluated here, so it
        * updates itself on every build with nothing to remember — which is

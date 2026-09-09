@@ -35,10 +35,10 @@
   "workers_dev": false,
   "compatibility_date": "2026-08-16",
 
-  // Forward search's own origin (infra/prod/README.md) — a plain reverse
+  // The live API's own origin (infra/prod/README.md) — a plain reverse
   // proxy through this same Worker keeps /api/* same-origin with the app,
   // same "no CORS policy exists to configure or get wrong" reasoning this
-  // file's own top comment already gives for /tiles/*. An env var, not a
+  // file's own top comment already gives for the bucket half. An env var, not a
   // literal in worker/index.ts, so pointing at a different box later (or a
   // local one for testing) never needs a code change.
   "vars": {
@@ -53,9 +53,15 @@
     // index.html, or a deep link 404s instead of routing client-side.
     "not_found_handling": "single-page-application",
 
-    // ...but that fallback would also swallow tile/search requests, handing
-    // back index.html for every page_idx or search query.
-    "run_worker_first": ["/tiles/*", "/search"]
+    // ...but that fallback would also swallow every request meant for the
+    // server, handing back index.html for a page_idx or a query — which
+    // fails far from here, as a decode error on a body that turned out to
+    // be HTML.
+    //
+    // One entry, and it stays one: everything the server answers is under
+    // this root, so neither a new live route nor a new bake target is a
+    // change to this file.
+    "run_worker_first": ["/api/*"]
   },
 
   "r2_buckets": [

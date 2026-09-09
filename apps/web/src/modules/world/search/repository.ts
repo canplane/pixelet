@@ -1,5 +1,6 @@
 // @pxl/web/modules/world/search/repository.ts
 
+import { SEARCH_URL } from "@/lib/env/routes.ts";
 import type { GeocodePart } from "@/modules/world/geocode/repository.ts";
 
 /**
@@ -30,7 +31,7 @@ export type SearchResult = {
 
 /**
  * Forward search's own transport — always the live API, never a static
- * bake: unlike POI/geocode/repository.ts, there is no HAS_STATIC_* branch
+ * bake: unlike POI/geocode/repository.ts, there is no PUBLISHED_TILES branch
  * here, because free-text search has no finite L3-page key to bake ahead
  * of time (see the API's own search/service.ts top comment). This is the
  * one world/ feature that genuinely requires a reachable server at request
@@ -40,7 +41,7 @@ export async function fetch_search(query: string, opts?: { near?: { lon: number;
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await fetch(`/search?${params.toString()}`, { signal: opts?.signal });
+  const res = await fetch(`${SEARCH_URL}?${params.toString()}`, { signal: opts?.signal });
   if (!res.ok) throw new Error(`[search] http ${res.status}`);
   return await res.json() as SearchResult[];
 }
