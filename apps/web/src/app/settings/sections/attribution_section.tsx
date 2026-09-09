@@ -4,7 +4,18 @@ import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 
-// OSM/GEDTM30/Overture attribution text — hardcoded rather than run through t(): required (OSM, GEDTM30's CC-BY 4.0) or shown as a courtesy (Overture's Places theme, CDLA-Permissive-2.0 imposes no attribution requirement) verbatim regardless of UI language.
+// OSM/GEDTM30 attribution text — hardcoded rather than run through t(), both
+// legally required verbatim regardless of UI language: OSM's ODbL, and
+// GEDTM30's CC-BY 4.0. No separate Overture Maps Foundation line: Places'
+// CDLA-Permissive-2.0 has no attribution clause at all (confirmed against
+// the license text — it only requires sharing the license text alongside
+// the data, not crediting a source), and Buildings/Transportation/Base/
+// Divisions carry ODbL only because they're substantially OSM-sourced —
+// that obligation runs to OSM's contributors, already covered by the line
+// below, not to Overture as the redistributor. Overture's own attribution
+// page (docs.overturemaps.org/attribution) recommends co-crediting itself
+// for those themes as its own best practice, but that's a suggestion, not
+// something either license mandates — kept at the legally-required minimum.
 export function AttributionSection() {
   const { t } = useTranslation();
   return (
@@ -35,18 +46,6 @@ export function AttributionSection() {
           </a>{" "}
           data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ
           13:e19673, CC-BY 4.0
-        </span>
-        <span>
-          Places data ©{" "}
-          <a
-            href="https://overturemaps.org/"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-foreground"
-          >
-            Overture Maps Foundation
-          </a>{" "}
-          and contributors
         </span>
       </div>
     </div>

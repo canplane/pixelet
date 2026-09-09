@@ -34,6 +34,21 @@ export function fmt_dur(ms: number): string {
   return h > 0 ? `${h}h${m}m` : `${m}m${s % 60}s`;
 }
 
+/** The commit that produced a published tile set — the other half of "what is v2":
+ * the catalog says which *data* it was baked from, this says which *code*
+ * did the baking. Falls back to null rather than throwing when run outside
+ * a git checkout (e.g. a stripped CI artifact) — a missing sha in the
+ * manifest is a visible gap, not a reason to fail the bake. */
+export async function get_git_sha(): Promise<string | null> {
+  try {
+    const p = new Deno.Command("git", { args: ["rev-parse", "HEAD"], stdout: "piped", stderr: "null" });
+    const { success, stdout } = await p.output();
+    return success ? new TextDecoder().decode(stdout).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 type CatalogRow = { region_code: string; data_date: string; file_name: string; status: string };
 
 /**
@@ -47,7 +62,12 @@ type CatalogRow = { region_code: string; data_date: string; file_name: string; s
  * data. Shared by every bake tool — they all read the same geo DB.
  */
 export async function read_source_catalogs(pool: Pool): Promise<Record<string, CatalogRow[]>> {
-  const tables = ["osm_features_catalog", "esa_elevation_catalog", "osm_coastline_catalog"];
+  // osm_features_catalog dropped: osm_elements stopped being read once
+  // Buildings/Transportation/Base moved to Overture (bake.ts). Coastline
+  // stays OSM-sourced (osm_coastline_catalog), elevation is GEDTM30
+  // (esa_elevation_catalog) — overture_catalog covers everything else,
+  // one row per overture_* table (bake/overture/catalog.ts).
+  const tables = ["overture_catalog", "esa_elevation_catalog", "osm_coastline_catalog"];
   const out: Record<string, CatalogRow[]> = {};
 
   for (const table of tables) {

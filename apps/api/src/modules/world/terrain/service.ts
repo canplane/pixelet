@@ -12,8 +12,8 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 
 import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
-import { TerrainRepository } from "./repository.ts";
-import { fetch_tile } from "./source.ts";
+import { TerrainRepository } from "@pxl/api/bake/terrain/repository.ts";
+import { fetch_tile } from "@pxl/api/bake/terrain/source.ts";
 
 const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 

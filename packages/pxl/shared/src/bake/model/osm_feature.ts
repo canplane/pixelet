@@ -4,6 +4,7 @@ import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
+import type { CellConfig } from "@pxl/shared/bake/format.ts";
 
 export const enum OSMType {
   NODE = "node",
@@ -92,15 +93,14 @@ export type OSMTags = {
  * This type preserves source geometry before local page projection.
  */
 export type OSMRawFeature = {
-  id: f64;
-  type: OSMType;
+  id: string;
   tags: OSMTags;
   geometry: {
     points: G3857[];
     holes?: G3857[][];
+    is_polygon_source?: boolean;
   };
   center?: G3857;
-  is_polygon_source?: boolean;
 };
 
 /**
@@ -119,6 +119,8 @@ export type OSMExtra = {
   is_institutional: boolean;
   /** Sports-area marker. */
   is_sports: boolean;
+  /** True when the feature is a tunnel and should not be rasterized. */
+  is_tunnel: boolean;
 };
 
 /**
@@ -130,8 +132,8 @@ export type OSMFeature = {
   /** OSM geometry type. */
   type: OSMType;
 
-  /** OSM identifier carried through normalization. */
-  id: f64;
+  /** Source-provider identifier (OSM node/way id, or an Overture GERS id) carried through normalization. */
+  id: string;
   /** Feature center used for labels, POI markers, and camera focus. */
   center: V3;
 
@@ -154,14 +156,14 @@ export type OSMFeature = {
     layer: i32;
   };
 
-  /** Raw source tags kept for metadata and styling decisions. */
-  tags: OSMTags;
-
   /** Final coarse rendering category. */
   category: string;
 
   /** Derived policy flags used by later bake and render stages. */
   extra: OSMExtra;
+
+  /** Target ground channel + cell type, resolved by the source provider's own policy. Null when the feature should not be rasterized. */
+  cell_cfg: CellConfig | null;
 };
 
 // ---- Derived object models ----

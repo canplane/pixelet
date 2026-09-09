@@ -5,15 +5,17 @@
 // gzipped tile objects ready to upload to a static object store (R2) and be
 // served straight to the client with no API server in the loop.
 //
-// Land/ocean classification reuses the exact predicate the live bake path
-// checks (osm_coastline_polygons `&&` + ST_Intersects, see repository.ts's
-// OSM_COAST_SQL), so "has land" here means the same thing it means to
-// ground_baker.ts — a page with zero touching land rows is open ocean and
-// gets served by the client's single shared fallback tile instead.
+// Land/ocean classification is a coarse pre-filter, cheaper and separate
+// from the live bake path's own fine-grained coastline carving (repository.
+// ts's OVERTURE_COAST_SQL, computed from Overture's ocean data). This still
+// checks osm_coastline_polygons directly (`&&` + ST_Intersects) — kept
+// around specifically for this "does the page touch any land at all"
+// existence test, which a cheap bbox-intersects check answers correctly
+// either way; a page with zero touching land rows is open ocean and gets
+// served by the client's single shared fallback tile instead.
 //
-// Tile bytes come from modules/world/terrain/source.ts, the same assembly
-// the live endpoint uses, so a CDN tile and a live-API tile are identical
-// byte for byte.
+// Tile bytes come from ../source.ts, the same assembly the live endpoint
+// uses, so a CDN tile and a live-API tile are identical byte for byte.
 //
 // Usage (from repo root):
 //   deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts [flags]
@@ -39,9 +41,9 @@ import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
 import { bake_terrain } from "@pxl/api/bake/terrain/bake.ts";
 
-import { TerrainRepository } from "@pxl/api/modules/world/terrain/repository.ts";
-import { fetch_tile, source_stats } from "@pxl/api/modules/world/terrain/source.ts";
-import { exists, fmt_bytes, fmt_dur, gzip, read_source_catalogs } from "@pxl/api/bake/bake_util.ts";
+import { TerrainRepository } from "../repository.ts";
+import { fetch_tile, source_stats } from "../source.ts";
+import { exists, fmt_bytes, fmt_dur, get_git_sha, gzip, read_source_catalogs } from "@pxl/api/bake/bake_util.ts";
 import * as env from "@/lib/env/mod.ts";
 
 // Current esa_elevation_raster coverage bbox — confirmed via
@@ -205,8 +207,10 @@ function empty_source(): Bytes {
   const empty = new TreeView().branch(() => {});
   return encoder.encode(new TreeView().branch((__) =>
     __.i16_array(ele)
-      .subtree(empty)
-      .subtree(empty)
+      .subtree(empty) // buildings
+      .subtree(empty) // segments
+      .subtree(empty) // base
+      .subtree(empty) // coasts
   ));
 }
 
@@ -352,6 +356,10 @@ async function main(): Promise<void> {
     const manifest = {
       version: args.out.split("/").filter(Boolean).pop(),
       updated_at: new Date().toISOString(),
+      // the catalog below says which *data* this was baked from; this says
+      // which *code* did the baking (bake_terrain/ground_baker/normalizer
+      // are all pure functions of these two things together).
+      git_sha: await get_git_sha(),
       bbox_4326: { sw: SW, ne: NE },
 
       // the published tile set, measured from disk

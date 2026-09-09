@@ -27,8 +27,8 @@ import type { Bytes } from "@xpute/core/kit/array.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { exists, fmt_bytes, fmt_dur, gzip } from "@pxl/api/bake/bake_util.ts";
 
-import { make_overture_geocode_provider } from "@pxl/api/modules/world/geocode/providers/overture_provider.ts";
-import type { GeocodeProvider } from "@pxl/api/modules/world/geocode/provider.ts";
+import { make_overture_geocode_provider } from "../providers/overture_provider.ts";
+import type { GeocodeProvider } from "../provider.ts";
 import * as env from "@/lib/env/mod.ts";
 
 const EMPTY_SUFFIX = ".empty";
@@ -138,6 +138,23 @@ async function main(): Promise<void> {
     console.log(`[bake/geocode] done in ${fmt_dur(elapsed)}: baked=${baked.toLocaleString()} empty=${empty.toLocaleString()} skipped=${skipped.toLocaleString()} failed=${failed}`);
     console.log(`[bake/geocode] gz=${fmt_bytes(gz_total)}`);
 
+    // overture_catalog (apps/api/src/bake/overture/catalog.ts) tracks
+    // ingest_divisions.ts's own runs, keyed by file_name — queried directly
+    // rather than through bake_util.ts's read_source_catalogs(), which
+    // returns every overture_catalog row (terrain's own tables included),
+    // not just this pipeline's two.
+    const source = await (async () => {
+      const client = await pool.connect();
+      try {
+        const { rows } = await client.queryObject<{ file_name: string; data_date: string; total_count: string }>(
+          "SELECT file_name, data_date, total_count FROM overture_catalog WHERE file_name IN ('overture_divisions', 'overture_division_points')",
+        );
+        return Object.fromEntries(rows.map((r) => [r.file_name, { release: r.data_date, row_count: Number(r.total_count) }]));
+      } finally {
+        client.release();
+      }
+    })();
+
     const manifest = {
       version: args.out.split("/").filter(Boolean).pop(),
       updated_at: new Date().toISOString(),
@@ -145,7 +162,7 @@ async function main(): Promise<void> {
       run: { baked, empty, skipped, failed, gz_bytes: gz_total },
       content_type: "application/json",
       content_encoding: "gzip",
-      source: "overture_divisions + overture_division_points (region, county, locality, neighborhood, microhood, macrohood)",
+      source,
     };
     await Deno.writeTextFile(`${args.out}/../manifest.json`, JSON.stringify(manifest, null, 2));
     console.log(`[bake/geocode] manifest -> ${args.out}/../manifest.json`);

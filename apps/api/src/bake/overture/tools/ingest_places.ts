@@ -45,6 +45,8 @@ import { Pool } from "@db/postgres";
 
 import * as env from "@/lib/env/mod.ts";
 
+import { get_overture_release, record_overture_catalog } from "../catalog.ts";
+
 // Mainland + Jeju + far western islands + Ulleungdo/Dokdo — the same
 // overall coverage rationale infra/geo/README.md's ESA Elevation section
 // already documents for this project's own Korea bbox.
@@ -211,7 +213,12 @@ async function main(): Promise<void> {
       console.log("[bake/overture] ANALYZE...");
       await client.queryArray("ANALYZE overture_places");
       const { rows } = await client.queryObject<{ count: string }>("SELECT count(*) FROM overture_places");
-      console.log(`[bake/overture] done — overture_places now has ${Number(rows[0].count).toLocaleString()} rows`);
+      const total_count = Number(rows[0].count);
+      console.log(`[bake/overture] done — overture_places now has ${total_count.toLocaleString()} rows`);
+
+      const release = await get_overture_release(VENV_OVERTUREMAPS);
+      await record_overture_catalog(client, { file_name: "overture_places", region_code: args.bbox, data_date: release, total_count });
+      console.log(`[bake/overture] catalog: overture_places @ release ${release}`);
     } finally {
       client.release();
     }

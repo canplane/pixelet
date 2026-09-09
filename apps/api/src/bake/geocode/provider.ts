@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/geocode/provider.ts
+// @pxl/api/bake/geocode/provider.ts
 
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 

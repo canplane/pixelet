@@ -6,7 +6,7 @@ import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { GEOCODE_TILE_BASE_URL, HAS_STATIC_GEOCODE } from "@/lib/env/config.ts";
 
 /** One administrative division, mirrors the API's own GeocodePart
- * (modules/world/geocode/provider.ts) — `name` is Overture's local-language
+ * (bake/geocode/provider.ts) — `name` is Overture's local-language
  * `names.primary`, `common` is a language-tag-keyed subset of
  * `names.common` present only when Overture had a translation. */
 export type GeocodePart = { name: string; common?: Record<string, string> };

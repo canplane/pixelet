@@ -1,7 +1,9 @@
 # Geo-Infrastructure Operational Guide
 
 This document describes the infrastructure layout, data pipelines, and operational procedures for pixelet's geographic information system (GIS).
-The infrastructure is organized into independent layers — **Vector (features, coastline)** and **Raster (elevation)** — all managed together within a single PostGIS instance (`db-geo`).
+The infrastructure is organized into independent layers — **Vector (coastline)** and **Raster (elevation)** — all managed together within a single PostGIS instance (`db-geo`).
+
+Terrain's own building/road/land-use features moved off this directory's OSM pipeline entirely (`osm_elements`/`osm_roads`, dropped) onto Overture Maps — see [Overture ingestion](#3a-overture-buildings-transportation-base) below. Coastline's fine-grained shape moved too (Overture's Base `water` theme has an `ocean` subtype — confirmed created from the same OSMCoastline tool osm_coastline_polygons came from, QA'd). This directory's `osm-coastline/` pipeline stays only for the coarse land/ocean page pre-filter (`terrain/tools/bake_tiles.ts`'s own classification step, a cheap bbox-existence check with no real precision requirement) — everything that touches an actual page's coastline pixels reads Overture instead.
 
 ## 1. Database Topology
 
@@ -12,18 +14,20 @@ The infrastructure is organized into independent layers — **Vector (features, 
 
 ## 2. Data Management Rules
 
-Data is managed across three separate pipelines according to its nature. All three pipelines share the same design philosophy (Symmetry).
+This directory manages two pipelines directly — **ESA Elevation (Raster)** and **OSM Coastline (Vector)** — sharing the same design philosophy (Symmetry).
 (Paths below are relative to this document's own location, `infra/geo/`.)
 
-| Feature         | **OSM Features (Vector)**                                        | **ESA Elevation (Raster)**                | **OSM Coastline (Vector)**                |
-| :-------------- | :--------------------------------------------------------------- | :---------------------------------------- | :---------------------------------------- |
-| **Source**      | OpenStreetMap (PBF)                                              | GEDTM30 (Cloud-Optimized GeoTIFF)         | OSM Coastline (Water Polygons)            |
-| **Directory**   | `./osm-features/`                                                | `./esa-elevation/`                        | `./osm-coastline/`                        |
-| **Raw Data**    | `./osm-features/region/[CODE]/raw/*.osm.pbf`                     | `./esa-elevation/region/[CODE]/raw/*.tif` | `./osm-coastline/region/global/raw/*.shp` |
-| **Main Table**  | 1. `osm_elements` **(Primary)**<br>2. `osm_roads` **(Reserved)** | `esa_elevation_raster`                    | `osm_coastline_polygons` **(Primary)**    |
-| **Catalog**     | `osm_features_catalog`                                           | `esa_elevation_catalog`                   | `osm_coastline_catalog`                   |
-| **Schema File** | `01_osm_features_schema.sql`                                     | `01_esa_elevation_schema.sql`             | `01_osm_coastline_schema.sql`             |
-| **SRID**        | EPSG:3857 (Web Mercator)                                         | EPSG:3857 (Web Mercator)                  | EPSG:3857 (Web Mercator)                  |
+| Feature         | **ESA Elevation (Raster)**                | **OSM Coastline (Vector)**                |
+| :-------------- | :---------------------------------------- | :---------------------------------------- |
+| **Source**      | GEDTM30 (Cloud-Optimized GeoTIFF)         | OSM Coastline (Water Polygons)            |
+| **Directory**   | `./esa-elevation/`                        | `./osm-coastline/`                        |
+| **Raw Data**    | `./esa-elevation/region/[CODE]/raw/*.tif` | `./osm-coastline/region/global/raw/*.shp` |
+| **Main Table**  | `esa_elevation_raster`                    | `osm_coastline_polygons` **(Primary)**    |
+| **Catalog**     | `esa_elevation_catalog`                   | `osm_coastline_catalog`                   |
+| **Schema File** | `01_esa_elevation_schema.sql`             | `01_osm_coastline_schema.sql`             |
+| **SRID**        | EPSG:3857 (Web Mercator)                  | EPSG:3857 (Web Mercator)                  |
+
+Buildings/Transportation/Base (the third vector layer terrain reads) live entirely outside this directory now — see the next section.
 
 ## 3. How to Run (Quick Start)
 
@@ -35,19 +39,18 @@ The following tools must be installed in your local Mac environment to build the
 
 ```bash
 # 1. Install the toolchain (gettext is required for envsubst)
-brew install osm2pgsql gdal postgis jq gettext
+brew install gdal postgis jq gettext
 
 # 2. Link the gettext tools (envsubst, etc.) onto the system PATH
 brew link --force gettext
 ```
 
-- **osm2pgsql**: Vector data ingestion engine (PBF processing) — verified against 2.2.0
 - **gdal**: Raster/vector data conversion toolkit (warping, `ogr2ogr`, `raster2pgsql`, etc.)
 - **postgis**: PostgreSQL spatial extension and DB ingestion utilities
 - **jq**: JSON metadata parsing and manipulation
 - **gettext (envsubst)**: Environment variable substitution inside shell scripts
 
-> **Toolchain versions drift, and this pipeline has already been broken by it once.** `default.style` used to declare the `route` column twice; older osm2pgsql tolerated that, 2.2.0 rejects the whole run with `column "route" specified more than once`. If ingestion fails on something that looks like a schema complaint rather than a data problem, suspect the style file against your osm2pgsql version first.
+`osm2pgsql` is no longer part of this toolchain — it only ever backed the OSM Features pipeline (below), which no code reads anymore.
 
 ### Execution Steps
 
@@ -57,7 +60,7 @@ All commands are run from the **project root (`pixelet/`)**.
 
 Brings up the container using the `.env` file at the root.
 
-> **`down -v` destroys the data volume, and on this machine that volume is the only surviving copy of the ingested data.** The raw source files are not in the repository and are no longer on disk either (`region/*/raw/` holds only `.gitkeep`), and the OSM extract they came from is no longer downloadable — see the retention note in the next section. Re-ingesting would produce an equivalent dataset, not the same one. `down -v` belongs in a first build or a deliberate rebuild; to start an already-built database, drop that line.
+> **`down -v` destroys the data volume, and on this machine that volume is the only surviving copy of the ingested data.** The raw source files are not in the repository and are no longer on disk either (`region/*/raw/` holds only `.gitkeep`). Re-ingesting reproduces an equivalent dataset from each source's own current state, not necessarily the same one byte-for-byte. `down -v` belongs in a first build or a deliberate rebuild; to start an already-built database, drop that line.
 
 ```bash
 # 1. Bring up the infrastructure (clean start, dropping any existing data volume)
@@ -80,19 +83,12 @@ echo '✅ DB is ready!'
 
 **None of the raw data is in this repository** — every source file is gitignored (see `infra/geo/.gitignore`), and only `.gitkeep` placeholders mark the directories. The ingestion scripts assume the files are already in place.
 
-Each pipeline's `metadata.json` lists the exact paths, and its `acquisition` block records whether the download is automated and where the file actually comes from. Paths there are relative to that pipeline's own directory (e.g. `infra/geo/osm-features/`).
+Each pipeline's `metadata.json` lists the exact paths, and its `acquisition` block records whether the download is automated and where the file actually comes from. Paths there are relative to that pipeline's own directory (e.g. `infra/geo/esa-elevation/`).
 
-| Layer         | Automated?                               | Source                                                                                                        |
-| :------------ | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
-| OSM Features  | **yes** — the script curls it if missing | [Geofabrik South Korea extract](https://download.geofabrik.de/asia/south-korea-latest.osm.pbf)                |
-| OSM Coastline | no — download and unzip manually         | [`land-polygons-split-3857.zip`](https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip)      |
-| ESA Elevation | **yes** — the script crops it directly   | [OpenGeoHub/OpenLandMap, GEDTM30 v1.2](https://codeberg.org/openlandmap/GEDTM30)                               |
-
-##### OSM Features (automated)
-
-Nothing to do. `setup-osm-features.sh` downloads `south-korea-latest.osm.pbf` if it is absent. Geofabrik publishes an `.md5` sidecar next to it if you want to verify the download.
-
-> **`-latest` is a moving target.** Re-running fetches whatever Geofabrik published today, while `data_date` in `metadata.json` stays pinned — so the catalog will claim a provenance it no longer has. Geofabrik does publish dated snapshots (`south-korea-YYMMDD.osm.pbf`), but retains them only a few months: the 2025-12-26 extract this dataset was originally built from is already gone. **Reproducing that exact dataset is no longer possible.** A current extract gets you an equivalent world, not an identical one — if that matters, pin a dated snapshot now and update `data_date` to match.
+| Layer         | Automated?                             | Source                                                                                                   |
+| :------------ | :------------------------------------- | :------------------------------------------------------------------------------------------------------- |
+| OSM Coastline | no — download and unzip manually       | [`land-polygons-split-3857.zip`](https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip) |
+| ESA Elevation | **yes** — the script crops it directly | [OpenGeoHub/OpenLandMap, GEDTM30 v1.2](https://codeberg.org/openlandmap/GEDTM30)                         |
 
 ##### OSM Coastline (manual)
 
@@ -120,47 +116,43 @@ Coverage is one bbox per region (`metadata.json`'s own `bbox_4326`, not a `cover
 Each script internally loads the environment variables from the root `.env` to handle authentication and connection details.
 
 ```bash
-# [Channel 1] Build OSM Features (roads, buildings, etc.)
-chmod +x infra/geo/osm-features/scripts/setup-osm-features.sh
-./infra/geo/osm-features/scripts/setup-osm-features.sh
-
-# [Channel 2] Build ESA Elevation (elevation data)
+# [Channel 1] Build ESA Elevation (elevation data)
 chmod +x infra/geo/esa-elevation/scripts/setup-esa-elevation.sh
 ./infra/geo/esa-elevation/scripts/setup-esa-elevation.sh
 
-# [Channel 3] Build OSM Coastline (coastline/water surface)
+# [Channel 2] Build OSM Coastline (coastline/water surface)
 chmod +x infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 ./infra/geo/osm-coastline/scripts/setup-osm-coastline.sh
 ```
 
+Buildings/Transportation/Base are a separate step, outside this directory — see [Overture ingestion](#3a-overture-buildings-transportation-base) below.
+
+## 3a. Overture: Buildings, Transportation, Base
+
+Terrain's building/road/land-use features come from three Deno tools under
+`apps/api/src/bake/overture/tools/` — `ingest_buildings.ts`,
+`ingest_transportation.ts`, `ingest_base.ts` — not from this directory's own
+bash+`envsubst`+GDAL convention the two pipelines above use. Each tool's own
+top comment is the source of truth for its mechanics (why `geojsonseq` over
+plain `geojson`, which Overture `--type` values it pulls, why certain
+subtypes are skipped); this section only orients where they sit relative to
+everything else here.
+
+```bash
+deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_buildings.ts
+deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_transportation.ts
+deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_base.ts
+```
+
+- **Toolchain**: the official `overturemaps` Python CLI, auto-installed into a local `.venv` next to the tools on first run (gitignored) — the one dependency here that isn't Deno/TS or GDAL.
+- **Source**: Overture Maps Foundation's public S3 release, no API key or portal step — `overturemaps download --bbox=... --type=<theme>`.
+- **Tables**: `overture_buildings`, `overture_transportation`, `overture_base_land_use`/`overture_base_water`/`overture_base_land`/`overture_base_infrastructure` — each tool's own `DROP TABLE IF EXISTS` + recreate is its own Clean Start, same convention as the two script-driven pipelines.
+- **Catalog**: `overture_catalog` (`apps/api/src/bake/overture/catalog.ts`), one row per table, recording Overture's own release id (`overturemaps releases latest`, e.g. `2026-08-19.0`) as `data_date` — the data's actual as-of snapshot, not the day the ingest happened to run. `bake_util.ts`'s `read_source_catalogs()` picks this up into every baked tile version's `manifest.json`, alongside `esa_elevation_catalog`/`osm_coastline_catalog`.
+- **Region**: `--bbox` flag, defaulting to all of South Korea (`124,33,132,39`) — same box the two directory-native pipelines use.
+
 ## 4. Ingestion Workflow (Deep Dive)
 
-The internal mechanics of each pipeline. Refer to this section for debugging and maintenance. Every layer shares **Clean Start (Drop & Create)** and **catalog-based state tracking** to maintain data integrity.
-
-### Pipeline A: OSM Features (Vector)
-
-#### Step 1: Schema Initialization
-
-- Drops the existing tables (`osm_elements`, `osm_roads`) and catalog (`osm_features_catalog`) to prevent contamination from stale data.
-- Runs `init/01_osm_features_schema.sql` to verify the PostGIS extension and recreate the table definitions and spatial/tag indexes.
-
-#### Step 2: Raw Processing (osm2pgsql)
-
-- Iterates over `metadata.json` and processes the target PBF data.
-- The **`--hstore-all`** option is central here: it preserves **all attribute data losslessly in the `tags` column** with no separate column mapping. This gives the schema flexibility to accept any tag without a migration.
-- The `--multi-geometry` option preserves the source data's geometry without loss.
-
-#### Step 3: Sequential Merge & Optimization
-
-- **Migration**: Generates a temporary SQL file to avoid shell-scripting errors. Moves data from the temporary tables (`planet_osm_point`, etc.) into the main table (`osm_elements`), consolidating the hstore-merged tags and geometry into a single table.
-- **Physical Clustering**: Immediately after migration, runs a **`CLUSTER` command** keyed on the spatial index (`GiST`) to physically optimize the on-disk data layout (maximizes range-query performance).
-- **Generalized Roads (`osm_roads`)**: Keeps a separately-stored, simplified geometry for rendering performance at zoomed-out levels.
-
-#### Step 4: Finalization & Catalog Update
-
-- Drops the temporary tables (`planet_osm_*`), updates `osm_features_catalog`'s status to `COMPLETED`, and records the total number of records processed.
-
----
+The internal mechanics of the two pipelines this directory still owns directly. Refer to this section for debugging and maintenance. Both share **Clean Start (Drop & Create)** and **catalog-based state tracking** to maintain data integrity — see [3a](#3a-overture-buildings-transportation-base) above for Overture's own version of the same idea.
 
 ### Pipeline B: ESA Elevation (Raster)
 
@@ -212,8 +204,13 @@ The internal mechanics of each pipeline. Refer to this section for debugging and
 - **Verification Query**: Use the queries below to verify data was ingested correctly after a run.
 
   ```sql
-  -- Vector Count Check
-  SELECT type, count(*) FROM osm_elements GROUP BY type;
+  -- Vector Count Check (Overture Buildings/Transportation/Base)
+  SELECT 'overture_buildings' AS table_name, count(*) FROM overture_buildings
+  UNION ALL SELECT 'overture_transportation', count(*) FROM overture_transportation
+  UNION ALL SELECT 'overture_base_land_use', count(*) FROM overture_base_land_use
+  UNION ALL SELECT 'overture_base_water', count(*) FROM overture_base_water
+  UNION ALL SELECT 'overture_base_land', count(*) FROM overture_base_land
+  UNION ALL SELECT 'overture_base_infrastructure', count(*) FROM overture_base_infrastructure;
 
   -- Raster Metadata Check
   SELECT r_table_name, r_raster_column, srid, scale_x, scale_y
@@ -230,10 +227,12 @@ The internal mechanics of each pipeline. Refer to this section for debugging and
 
   ```
   infra/geo/
-  ├── osm-features/   # Vector Layer (Roads, Buildings)
   ├── esa-elevation/  # Raster Layer (Height)
   └── osm-coastline/  # Vector Layer (Water Polygons)
   ```
+
+  Buildings/Transportation/Base live at `apps/api/src/bake/overture/tools/`
+  instead — see [3a](#3a-overture-buildings-transportation-base).
 
 - **Network Context**:
   - **Local Access**: `localhost:5433` (when using external tools)
@@ -263,12 +262,14 @@ The internal mechanics of each pipeline. Refer to this section for debugging and
 
 ## 6. Data Licensing & Attribution
 
-Both external data sources this pipeline ingests require a specific attribution notice wherever the baked result is shown to end users — implemented in `apps/web/src/app/settings/sections/attribution_section.tsx`. Neither notice is a style choice; don't shorten, reword, or drop either one without re-checking the source license first.
+Two notices are actually required, shown to end users in `apps/web/src/app/settings/sections/attribution_section.tsx`. Neither is a style choice; don't shorten, reword, or drop one without re-checking the source license first. Nothing else needs its own notice — see the note below the table.
 
-| Source                                                | License                                                                                                                                         | Required notice                                                                                                                                                                                                                                                                                                                                                                        |
-| :---------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenStreetMap (terrain/structure features, coastline) | ODbL                                                                                                                                            | `© OpenStreetMap contributors` — the "historical form" explicitly listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). POI and reverse geocoding no longer come from this pipeline (or from live Nominatim) as of 2026-09-08 — see `apps/api/src/bake/overture/`'s own attribution note instead.                  |
-| GEDTM30 (`esa-elevation/`)                            | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)                                                                                      | Since this pipeline crops+reprojects (`gdalwarp`) the raw DTM — i.e. the data is adapted, not redistributed as-is — CC-BY 4.0 requires noting changes alongside attribution: `Contains modified GEDTM30 data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ 13:e19673.` |
+| Source                     | License                                                   | Required notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| :------------------------- | :-------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenStreetMap              | ODbL                                                      | `© OpenStreetMap contributors` — the "historical form" explicitly listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). Covers every OSM-derived layer this project uses, direct or not — per [Overture's own attribution guidance](https://docs.overturemaps.org/attribution/), Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this same ODbL obligation through, even though they're ingested from Overture's release rather than an OSM file directly. |
+| GEDTM30 (`esa-elevation/`) | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Since this pipeline crops+reprojects (`gdalwarp`) the raw DTM — i.e. the data is adapted, not redistributed as-is — CC-BY 4.0 requires noting changes alongside attribution: `Contains modified GEDTM30 data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ 13:e19673.`                                                                                                                                                 |
+
+Overture Maps Foundation's own name isn't legally required anywhere: Places' CDLA-Permissive-2.0 imposes no attribution condition at all (confirmed directly against the license text — its only notice clause is "share the license text alongside the data," not credit-the-source), and Buildings/Transportation/Base/Divisions carry ODbL only because they're substantially OSM-sourced — that obligation runs to OSM's own contributors, not to Overture as the redistributor. Overture's own [attribution page](https://docs.overturemaps.org/attribution/) does _recommend_ a combined `© OpenStreetMap contributors, Overture Maps Foundation` notice for those themes as its own best practice, but that's a suggestion, not something ODbL or CDLA-Permissive-2.0 actually mandates — this project keeps the notice at the legally-required minimum (OSM + GEDTM30) rather than including it.
 
 ## 7. Security & Sensitive Information
 

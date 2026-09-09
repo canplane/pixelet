@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/geocode/providers/overture_provider.ts
+// @pxl/api/bake/geocode/providers/overture_provider.ts
 
 import type { Pool } from "@db/postgres";
 

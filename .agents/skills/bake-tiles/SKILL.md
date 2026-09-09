@@ -82,7 +82,7 @@ bbox is open sea, and the client turns a 404 into the shared `_ocean` tile.
    doc rather than working around it.
 4. **Spot-check a known tile against the live API.** Static and live tiles are
    supposed to be byte-identical, since both go through
-   `apps/api/src/modules/world/terrain/source.ts`. With the API running:
+   `apps/api/src/bake/terrain/source.ts`. With the API running:
 
    ```bash
    curl -s localhost:3000/api/world/terrain/tiles/<page_idx> --compressed | shasum
