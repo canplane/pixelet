@@ -3,9 +3,9 @@
 /**
  * The reusable half of tier 3 (world-anchored billboards — see
  * discussions/20260907-world-rendering-tiers.md): a canvas-drawn texture
- * rendered as a camera-facing THREE.Sprite, `depthTest={false}` + a high
- * `renderOrder` so it reads as UI floating over the world rather than real
- * occludable geometry. Extracted from chat_bubble.tsx (2026-09-07); POI
+ * rendered as a camera-facing THREE.Sprite, occluded by the world it stands
+ * in (anchor_occlusion.ts) with a high `renderOrder` deciding the rest.
+ * Extracted from chat_bubble.tsx (2026-09-07); POI
  * badges (poi/poi_layer.tsx) are this tier's second real consumer, same day.
  * What stays OUT of this file on purpose: any content-specific
  * canvas drawing (chat_bubble.tsx's notched speech-bubble border/tail is
@@ -26,10 +26,11 @@
  * every-frame updates).
  */
 
-import { forwardRef } from "react";
-import type * as THREE from "three";
+import { forwardRef, useEffect, useMemo } from "react";
+import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import { apply_anchor_occlusion } from "./anchor_occlusion.ts";
 
 export type SpriteBillboardProps = {
   /** Built by use_canvas_texture (this directory) or an equivalent — this
@@ -62,18 +63,33 @@ export type SpriteBillboardProps = {
 
 export const SpriteBillboard = forwardRef<THREE.Sprite, SpriteBillboardProps>(
   function SpriteBillboard({ texture, width, height, position, renderOrder = 10000 }, ref) {
+    // One material per billboard rather than one shared: use_distance_fade
+    // writes `material.opacity` per sprite, so they cannot share an instance.
+    // Built here rather than declared as <spriteMaterial> because the anchor
+    // patch is an onBeforeCompile hook, which R3F has no prop for.
+    const material = useMemo(() => apply_anchor_occlusion(new THREE.SpriteMaterial({ transparent: true, depthTest: true, depthWrite: false })), []);
+    useEffect(() => () => material.dispose(), [material]);
+    material.map = texture;
+
     return (
       <sprite ref={ref} position={position ?? [0, 0, 0]} scale={[width, height, 1]} renderOrder={renderOrder}>
         {
-          // depthTest off + high renderOrder: this tier reads as UI, not as a
-          // real object the terrain/buildings should be able to hide — see
-          // this file's own top doc comment. depthWrite off too — without
-          // it this sprite still wrote real depth values, so a
-          // later-drawn, depth-testing indicator (hover_cursor.tsx's ghost)
-          // could pass its own depth test against them and paint over a
-          // billboard whose renderOrder said it should already be on top.
+          // Two occlusion questions, both in anchor_occlusion.ts. Whether the
+          // labelled point is visible at all is decided once at the anchor,
+          // all-or-nothing. Whether something stands between the camera and
+          // the badge itself is left to the GPU's depth test, which works
+          // here only because the shader writes the depth of an upright twin
+          // of this quad: a Sprite's own depth is the anchor's for every
+          // fragment, and testing that punches a band of terrain through the
+          // middle of a badge instead of hiding it behind a hill.
+          //
+          // depthWrite off too — without it this sprite wrote real depth
+          // values, so a later-drawn, depth-testing indicator
+          // (hover_cursor.tsx's ghost) could pass its own depth test against
+          // them and paint over a billboard whose renderOrder said it should
+          // already be on top.
         }
-        <spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} />
+        <primitive object={material} attach="material" />
       </sprite>
     );
   },

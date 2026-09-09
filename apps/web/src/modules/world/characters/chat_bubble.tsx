@@ -22,7 +22,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { wrap_text } from "../billboard/canvas_text.ts";
 import { FONT_FAMILY, FONT_WEIGHT_BOLD } from "../billboard/canvas_scale.ts";
-import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
+import { Billboard, BILLBOARD_ORDER, type BuiltBillboard } from "../billboard/billboard.tsx";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10
@@ -164,5 +164,5 @@ export function ChatBubble(props: ChatBubbleProps) {
 
   // tip_z is the tail's fixed bottom edge (Billboard's own base_z).
   const tip_z = anchor_z + HEAD_CLEARANCE_U;
-  return <Billboard built={built} base_z={tip_z} />;
+  return <Billboard built={built} base_z={tip_z} render_order={BILLBOARD_ORDER.chat} />;
 }

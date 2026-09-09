@@ -44,7 +44,14 @@ export function use_distance_fade(
 
     const { scale, opacity } = distance_fade_factor(px_per_world_unit, dist);
     sprite.scale.set(width * scale, height * scale, 1);
-    sprite.position.z = base_z + height * scale * (center_frac - 0.5);
+    // Both halves of one fact: how far the sprite's centre sits above its
+    // anchor. The position keeps the anchor pinned at base_z while the
+    // sprite rescales; the uniform lets anchor_occlusion.ts's shader recover
+    // the anchor from the centre it is given.
+    const anchor_drop = height * scale * (center_frac - 0.5);
+    sprite.position.z = base_z + anchor_drop;
+    const drop = (sprite.material as THREE.Material).userData?.anchor_drop as { value: number } | undefined;
+    if (drop) drop.value = anchor_drop;
     (sprite.material as THREE.SpriteMaterial).opacity = opacity;
   });
 }

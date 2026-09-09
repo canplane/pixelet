@@ -4,6 +4,8 @@ import { type JSX, useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Bloom, BrightnessContrast, ChromaticAberration, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, TiltShift2, Vignette } from "@react-three/postprocessing";
+
+import { SceneDepthPass } from "@/render/scene_depth.ts";
 import { BlendFunction, SMAAPreset } from "postprocessing";
 
 import { useCamera } from "@/modules/camera/use_camera.ts";
@@ -57,6 +59,11 @@ export function MapScene() {
   useTileFetcher();
   usePoiFetcher();
   useGroundSnapSync();
+
+  // One instance for the app's life. Passes are stateful (render target,
+  // materials) and the composer adds/removes them by identity, so rebuilding
+  // one per render would leak targets and thrash the chain.
+  const scene_depth_pass = useMemo(() => new SceneDepthPass(), []);
 
   const world_ref = useRef<THREE.Group>(null);
   // Shared with environment.tsx (MapEnvironment writes this mesh's position
@@ -260,6 +267,12 @@ export function MapScene() {
               // not accepting `cond && <X/>`'s `false` branch — build the array
               // and filter falsy entries out instead of inlining the conditionals.
               [
+                // Always present, never a look: render/scene_depth.ts
+                // publishes the world's depth for materials that have to ask
+                // whether a world point is visible. Not folded into N8AO's
+                // depth requirement on purpose — AO is expected to go once
+                // shading is baked into the textures.
+                <primitive key="scene_depth" object={scene_depth_pass} />,
                 show_ao && (
                   <N8AO
                     key="ao"
