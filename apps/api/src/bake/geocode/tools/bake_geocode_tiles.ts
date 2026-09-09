@@ -14,7 +14,7 @@
 //
 // Flags:
 //   --out <dir>          output directory (default ./out/geocode/v1)
-//   --land-cache <path>  terrain's own land_pages.json (default ./out/tiles/land_pages.json)
+//   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
 //   --concurrency <n>    parallel fetches (default 8)
 //   --limit <n>          stop after n land pages (smoke test)
 //   --force              re-fetch pages that already have an object or .empty marker
@@ -36,7 +36,7 @@ const EMPTY_SUFFIX = ".empty";
 type Args = { out: string; land_cache: string; concurrency: u32; limit: number | null; force: boolean };
 
 function parse_args(argv: string[]): Args {
-  const args: Args = { out: "./out/geocode/v1", land_cache: "./out/tiles/land_pages.json", concurrency: 8, limit: null, force: false };
+  const args: Args = { out: "./out/geocode/v1", land_cache: "./out/terrain/land_pages.json", concurrency: 8, limit: null, force: false };
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
       case "--out":

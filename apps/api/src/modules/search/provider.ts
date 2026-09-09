@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/search/provider.ts
+// @pxl/api/modules/search/provider.ts
 
 import type { GeocodePart } from "@pxl/api/bake/geocode/provider.ts";
 

@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/geocode/service.ts
+// @pxl/api/modules/tiles/geocode/service.ts
 
 import type { Hono } from "@hono/hono";
 
@@ -58,7 +58,7 @@ function make_services(provider: GeocodeProvider) {
 export function register(router: Hono, resrc: AppResources): void {
   const service = make_services(make_overture_geocode_provider(resrc.geo_pool));
 
-  router.get("/api/world/geocode/:page_idx", async (c) => {
+  router.get("/api/tiles/geocode/:page_idx", async (c) => {
     const raw_page_idx: string = c.req.param("page_idx");
 
     if (!PAGE_IDX_PATTERN.test(raw_page_idx)) {

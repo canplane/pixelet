@@ -21,7 +21,7 @@
 //   deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts [flags]
 //
 // Flags:
-//   --out <dir>          output directory (default ./out/tiles/v1)
+//   --out <dir>          output directory (default ./out/terrain/v1)
 //   --concurrency <n>    parallel bakes (default 8, match DB_POOL_SIZE)
 //   --limit <n>          stop after n land tiles (smoke test)
 //   --force              re-bake tiles that already exist on disk
@@ -79,7 +79,7 @@ type Args = {
 };
 
 function parse_args(argv: string[]): Args {
-  const args: Args = { out: "./out/tiles/v1", concurrency: 8, limit: null, force: false, reclassify: false };
+  const args: Args = { out: "./out/terrain/v1", concurrency: 8, limit: null, force: false, reclassify: false };
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];

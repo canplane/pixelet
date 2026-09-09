@@ -116,7 +116,7 @@ async function* read_lines(path: string): AsyncGenerator<string> {
   if (buf.length > 0) yield buf;
 }
 
-// pg_trgm powers forward search (modules/world/search/providers/
+// pg_trgm powers forward search (modules/search/providers/
 // overture_provider.ts) — a GIN trigram index needs its own plain-text
 // column rather than reaching into `properties` per query, so `name` is
 // extracted here at ingest time (same names.primary access

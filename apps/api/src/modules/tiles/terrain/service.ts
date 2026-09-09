@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/terrain/service.ts
+// @pxl/api/modules/tiles/terrain/service.ts
 
 import type { Hono } from "@hono/hono";
 
@@ -108,7 +108,7 @@ export function register(router: Hono, resrc: AppResources): void {
   const repo = new TerrainRepository(resrc.geo_pool);
   const service = make_services(repo);
 
-  router.get("/api/world/terrain/tiles/:page_idx", async (c) => {
+  router.get("/api/tiles/terrain/:page_idx", async (c) => {
     const raw_page_idx: string = c.req.param("page_idx");
 
     // page_idx is an L3_IDX (see indexer.ts): an *unsigned* logical key in

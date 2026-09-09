@@ -40,7 +40,7 @@ export async function fetch_search(query: string, opts?: { near?: { lon: number;
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await fetch(`/api/world/search?${params.toString()}`, { signal: opts?.signal });
+  const res = await fetch(`/search?${params.toString()}`, { signal: opts?.signal });
   if (!res.ok) throw new Error(`[search] http ${res.status}`);
   return await res.json() as SearchResult[];
 }
