@@ -50,8 +50,11 @@ function make_node_http_handler(cfg: AppConfig, router: Hono) {
         else headers.set(k, v);
       }
 
-      // node -> web stream (best-effort, 1-liner)
-      const body: any = method === "GET" || method === "HEAD" ? null : ((Readable as any).toWeb?.(req) ?? req);
+      // node -> web stream (best-effort, 1-liner). Request's own BodyInit type
+      // has no overload for a Node Readable/ReadableStream, so this bridge is
+      // untyped on both ends regardless of how the cast is spelled.
+      // deno-lint-ignore no-explicit-any
+      const body: any = method === "GET" || method === "HEAD" ? null : (Readable.toWeb?.(req) ?? req);
 
       const resp = await router.fetch(new Request(url, { method, headers, body }));
 
@@ -63,8 +66,11 @@ function make_node_http_handler(cfg: AppConfig, router: Hono) {
         return;
       }
 
-      // web -> node stream (best-effort, 1-liner + fallback)
-      const node_stream: any = (Readable as any).fromWeb?.(resp.body);
+      // web -> node stream (best-effort, 1-liner + fallback). Node's
+      // stream/web ReadableStream and the DOM ReadableStream Response.body
+      // returns aren't nominally the same type, despite matching at runtime.
+      // deno-lint-ignore no-explicit-any
+      const node_stream: any = Readable.fromWeb?.(resp.body as any);
       if (node_stream) return void node_stream.pipe(res);
       res.end(new Uint8Array(await resp.arrayBuffer()));
     } catch {
@@ -72,7 +78,9 @@ function make_node_http_handler(cfg: AppConfig, router: Hono) {
       try {
         res.statusCode = 500;
         res.end();
-      } catch {}
+      } catch {
+        // last resort — e.g. headers already sent; nothing left to do
+      }
     }
   };
 }
@@ -116,15 +124,24 @@ export async function main(): Promise<void> {
     const listen = make_listen(cfg, server);
     listen();
   } catch (err) {
+    // Startup failed — unwind whatever came up before rethrowing err. Each
+    // step is independent: one failing (e.g. dispose() on a pool that never
+    // finished connecting) must not skip the others.
     try {
       await resrc?.dispose();
-    } catch {}
+    } catch {
+      // dispose() itself failing has no fallback — err below is the real signal
+    }
     try {
       io.close();
-    } catch {}
+    } catch {
+      // io was never listening yet in most failure paths; close() on that is a no-op that can still throw
+    }
     try {
       server.close();
-    } catch {}
+    } catch {
+      // server was never listening yet in most failure paths; close() on that is a no-op that can still throw
+    }
     throw err;
   }
 }

@@ -25,7 +25,6 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
@@ -45,9 +44,6 @@ import {
   LOD_WORK_BUDGET_MS,
 } from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
-import { l2_column_key_of, useDecorL2ColumnRevision, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
-import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/modules/world/render/chunk_material.ts";
-import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
@@ -56,32 +52,13 @@ import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
 import { run_under_budget } from "@/modules/world/sched/frame_budget.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
 import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
-import { NO_LAYER } from "@/render/layer/pipeline/volume.ts";
 import { in_range_chunks } from "@/render/chunk_range.ts";
-import { compositor_cache_stats, with_temporary_composite } from "@/render/layer/pipeline/compositor.ts";
-import {
-  build_chunk_bucket,
-  type BuiltChunkBucket,
-  type BuiltChunkMesh,
-  chunk_bounds,
-  type ChunkBounds,
-  type ChunkLodRole,
-  type ChunkOffsets,
-  mesh_bounds,
-  release_built_mesh,
-  retain_built_mesh,
-} from "@/render/layer/pipeline/chunk_bucket.ts";
-import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
+import { compositor_cache_stats } from "@/render/layer/pipeline/compositor.ts";
+import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { mesh_pool_stat } from "@/render/layer/pipeline/mesh_pool.ts";
-import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view, update_frustum } from "@/render/chunk_lod.ts";
-import {
-  build_decor_instances,
-  type DecorBundleAssets,
-  type DecorKindBundle,
-  type ModelInstanceTransformList,
-  useAllDecorBundleAssets,
-} from "@/modules/world/decor/decor_layer.tsx";
+import { update_frustum } from "@/render/chunk_lod.ts";
+import { type DecorBundleAssets, type DecorKindBundle, useAllDecorBundleAssets } from "@/modules/world/decor/decor_layer.tsx";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;

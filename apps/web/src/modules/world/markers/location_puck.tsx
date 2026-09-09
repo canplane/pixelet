@@ -173,6 +173,10 @@ export function LocationPuck(props: LocationPuckProps) {
   const mat: THREE.ShaderMaterial = useMemo(
     () =>
       new THREE.ShaderMaterial({
+        // `derivatives` isn't in this three version's own ShaderMaterialParameters['extensions']
+        // type (WebGL2 has GL_OES_standard_derivatives as core, so the flag itself is stale) —
+        // kept at runtime rather than removed since dropping it wasn't verified to be a no-op.
+        // deno-lint-ignore no-explicit-any
         extensions: { derivatives: true } as any,
         uniforms: {
           u_color: { value: new THREE.Color(zone_style.COLOR) },

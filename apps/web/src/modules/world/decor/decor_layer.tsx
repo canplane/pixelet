@@ -88,7 +88,7 @@
  * not a separate store.
  */
 
-import { memo, useEffect, useLayoutEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -105,12 +105,9 @@ import { set_rim_intensity } from "@/modules/world/render/lit_gltf_material.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_key, get_objects_in_cell, get_render_object_entries_in_l2_column, l2_column_key_of } from "@/modules/world/objects/store.ts";
 import type { LodStep } from "@/render/lod.ts";
-import type { ChunkLodRole } from "@/render/layer/pipeline/chunk_bucket.ts";
-import { type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
-import { bake_decor_instances, type DecorVariantAsset, type ModelInstanceTransform, useInstancedModelVariants } from "./instanced_model.ts";
-import { register_decor_mesh } from "./decor_hit.ts";
+import { type DecorVariantAsset, type ModelInstanceTransform, useInstancedModelVariants } from "./instanced_model.ts";
 
 // Fixed, arbitrary — the one thing every DecorKind's own placement
 // ultimately derives from (alongside its own DecorKindSeed.tag). Changing

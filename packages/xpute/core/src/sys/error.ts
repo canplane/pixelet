@@ -41,14 +41,22 @@ export class XputeError extends Error {
       } catch {
         try {
           (this as Error & { cause?: unknown }).cause = opts.cause;
-        } catch {}
+        } catch {
+          // runtime refuses even the plain-assignment fallback — give up on cause
+        }
       }
     }
 
-    // V8 nicety (optional, safe)
+    // V8 nicety (optional, safe). `Function` here matches V8's own real
+    // signature (Error.captureStackTrace(target, constructorOpt?: Function))
+    // — constructorOpt is never called, only used to find where to truncate
+    // the trace, so it accepts a genuinely arbitrary constructor.
     try {
+      // deno-lint-ignore ban-types
       (Error as ErrorConstructor & { captureStackTrace?: (target: object, ctor?: Function) => void }).captureStackTrace?.(this, new.target);
-    } catch {}
+    } catch {
+      // non-V8 runtime — captureStackTrace isn't there to begin with, ?. already covers it; catch guards a throwing polyfill
+    }
   }
 }
 

@@ -214,7 +214,12 @@ export class Vector<T extends AnyTypedArray> {
     if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW, `vector: required size exceeds max_cap=${this.max_cap}`);
 
     const new_mem: T = new this.ctor(new_cap);
-    new_mem.set(this.mem as any); // TS cannot express same-family typed-array set() cleanly across number/bigint generics.
+    // AnyTypedArray spans both the number and bigint families — TS can't
+    // express ".set() accepts this same generic T" across that split
+    // (it would need ArrayLike<number> & ArrayLike<bigint>, which nothing
+    // satisfies); this.mem and new_mem are always the same concrete family.
+    // deno-lint-ignore no-explicit-any
+    new_mem.set(this.mem as any);
 
     this.mem = new_mem;
     this._cap = new_cap;
