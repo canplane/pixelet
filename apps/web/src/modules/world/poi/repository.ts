@@ -2,9 +2,9 @@
 
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
-import { PUBLISHED_TILES, POI_TILE_BASE_URL } from "@/lib/env/config.ts";
+import { POI_TILE_BASE_URL, PUBLISHED_TILES } from "@/lib/env/config.ts";
 
 /**
  * POI transport: the pre-baked static set when one is configured

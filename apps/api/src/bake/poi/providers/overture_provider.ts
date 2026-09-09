@@ -8,7 +8,7 @@ import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
 import { OVERTURE_CATEGORY_MAP } from "@pxl/api/bake/overture/model/category_map.ts";
 import type { PoiProvider } from "../provider.ts";
@@ -41,23 +41,18 @@ function category_of(properties: Record<string, unknown>): string {
 }
 
 /**
- * Overture's Places theme (docs.overturemaps.org/guides/places) —
- * POI's baseline switched here from OSM
- * (discussions/20260908-overture-poi-adoption.md): Places is licensed
- * CDLA-Permissive-2.0, sourced from Meta/Microsoft/Foursquare/PinMeTo, has
- * no OpenStreetMap content and none of the display/caching restrictions
- * Google/Naver/Kakao carry. Reads from `overture_places`
- * (bake/overture/tools/ingest_places.ts's own table — a Korea-bbox extract
- * pulled from Overture's public S3 release, refreshed on whatever cadence
- * that tool is re-run at, not a live per-request call).
+ * Overture's Places theme (docs.overturemaps.org/guides/places): licensed
+ * CDLA-Permissive-2.0, sourced from Meta/Microsoft/Foursquare/PinMeTo, none
+ * of the display/caching restrictions Google/Naver/Kakao carry. Reads from
+ * `overture_places` (bake/overture/tools/ingest_places.ts's own table — a
+ * Korea-bbox extract pulled from Overture's public S3 release, refreshed on
+ * whatever cadence that tool is re-run at, not a live per-request call).
  *
- * Deliberately its own table, not merged into osm_elements: Overture's
- * per-place shape is a rich nested JSON object with no flat-tag equivalent
- * in OSM's model, and this pipeline is meant to stay structurally
- * independent of the terrain pipeline POI used to depend on — not layered
- * on top of it (see the discussion doc's own "don't mix in one place" note).
+ * Deliberately its own table, kept structurally independent of the terrain
+ * pipeline: Overture's per-place shape is a rich nested JSON object with no
+ * flat-tag equivalent terrain's own tables use.
  *
- * `rank` has no OSM-style policy-assigned equivalent here — Overture's own
+ * `rank` has no policy-assigned equivalent here — Overture's own
  * `properties.confidence` (a source-conflation quality score, not a
  * notability score) is the closest available signal, scaled to a plain
  * integer. select_nearby_pois (poi_layer.tsx) ranks by distance to

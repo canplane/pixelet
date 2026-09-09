@@ -1,20 +1,17 @@
 // @pxl/api/bake/overture/tools/ingest_base.ts
 //
-// Pulls Overture's Base theme for Korea into four tables — terrain's own
-// Overture-sourced replacement for the land/water/landuse half of
-// osm_elements. Base is fragmented across several `overturemaps --type`
-// values rather than one, unlike Places/Divisions/Buildings/Transportation:
+// Pulls Overture's Base theme for Korea into four tables. Base is
+// fragmented across several `overturemaps --type` values rather than one,
+// unlike Places/Divisions/Buildings/Transportation:
 //
 //   overture_base_land_use  (`land_use`, polygons: residential/park/
 //                            commercial/school/hospital/pitch/... — this
 //                            project's own main land-coloring signal)
 //   overture_base_water     (`water`, polygons: river/lake/stream/canal)
 //   overture_base_land      (`land`, polygons: tree/forest/wood/peninsula —
-//                            Overture's own natural-cover equivalent of
-//                            OSM's natural=wood/forest, still needed
-//                            separately from land_use since a green patch
-//                            with no administrative land_use polygon over
-//                            it is common)
+//                            still needed separately from land_use since a
+//                            green patch with no administrative land_use
+//                            polygon over it is common)
 //   overture_base_infrastructure (`infrastructure`, mixed geometry — kept
 //                            for only parking/helipad classes; confirmed
 //                            live the theme is otherwise almost entirely

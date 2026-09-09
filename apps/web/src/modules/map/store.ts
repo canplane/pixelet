@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 import type { PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
 /** Data loading lifecycle. */
 export const enum MapStatus {

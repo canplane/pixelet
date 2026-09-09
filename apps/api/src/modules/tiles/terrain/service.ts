@@ -64,8 +64,9 @@ function make_lru_cache<K, V>(cap: u32) {
 }
 
 function make_services(repo: TerrainRepository) {
-  // page_idx -> baked bytes is a pure function of static source data (OSM +
-  // DEM don't change underneath a running server), so it's cacheable as-is.
+  // page_idx -> baked bytes is a pure function of static source data
+  // (Overture + DEM don't change underneath a running server), so it's
+  // cacheable as-is.
   const cache_cap = env.must_int("TERRAIN_TILE_CACHE_CAP", { fallback: 500, min: 1 }) as u32;
   const tile_cache = make_lru_cache<IVec, TileCacheEntry>(cache_cap);
   // Coalesces concurrent requests for a still-uncached page_idx into a

@@ -2,9 +2,9 @@
 //
 // Provenance tracking for Overture-sourced tables, shared by every
 // bake/overture/tools/ingest_*.ts — mirrors the region_code/data_date/
-// file_name/status shape infra/geo's own OSM/elevation catalog tables
-// already use (esa_elevation_catalog, osm_coastline_catalog), read by
-// bake_util.ts's read_source_catalogs() into every published tile set's
+// file_name/status shape infra/geo's own elevation catalog table already
+// uses (esa_elevation_catalog), read by bake_util.ts's
+// read_source_catalogs() into every published tile set's
 // manifest.json. Without this, a v1/v2 tile version folder name says
 // nothing about *when* the underlying data is from — this is what answers
 // that, per table, from the DB itself rather than from memory or a commit

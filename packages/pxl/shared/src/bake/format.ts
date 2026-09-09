@@ -21,7 +21,7 @@
  *   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
  *   segments  = [[gers_id, subtype, class, road, geom_wkb], ...]
  *   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
- *   coasts    = [[id, geom_wkb, covers_page], ...]  (still OSM — no Overture coastline equivalent)
+ *   coasts    = [[id, geom_wkb, covers_page], ...]
  *
  * baked wire = [ele, ground]
  *   ground = [land, water, structure, transport]

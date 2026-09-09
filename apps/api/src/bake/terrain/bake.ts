@@ -22,12 +22,12 @@ import {
   SEGMENT_ROW_KEYS,
   type SegmentRow,
 } from "@pxl/shared/bake/format.ts";
-import type { OSMFeature, OSMRawFeature } from "@pxl/shared/bake/model/osm_feature.ts";
-import * as osm_adapter from "@pxl/api/bake/osm/model/osm_adapter.ts";
+import type { CoastRawFeature, Feature } from "@pxl/shared/bake/model/feature.ts";
+import { from_coast_row } from "./pipeline/coast_adapter.ts";
 import * as overture_adapter from "@pxl/api/bake/overture/model/overture_adapter.ts";
 import type { OvertureRawFeature } from "@pxl/api/bake/overture/model/overture_adapter.ts";
 import { normalize, V3_ARENA } from "./pipeline/normalizer.ts";
-import { osm_policy } from "./pipeline/osm_policy.ts";
+import { coast_policy } from "./pipeline/coast_policy.ts";
 import { overture_policy } from "./pipeline/overture_policy.ts";
 import { bake_ground } from "./pipeline/ground_baker.ts";
 
@@ -41,7 +41,7 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
 
   /**
    * Elevation: ELE_PADDED_SPAN*ELE_PADDED_SPAN*i16 LE bytes (currently 68*68)
-   * Overture Buildings/Transportation/Base + OSM Coastline -> raw features -> normalize -> bake context
+   * Overture Buildings/Transportation/Base/Coastline -> raw features -> normalize -> bake context
    */
 
   const [ele, _buildings, _segments, _base, _coasts] = root.get<[
@@ -52,7 +52,7 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
     _coasts: BranchCursor,
   ]>();
 
-  const feats: OSMFeature[] = [];
+  const feats: Feature[] = [];
 
   for (let i = 0; i < _buildings.len; i++) {
     const row: BuildingRow = from_tuple(_buildings.at_branch(i).get(), BUILDING_ROW_KEYS);
@@ -77,16 +77,16 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
   }
   for (let i = 0; i < _coasts.len; i++) {
     const row: CoastRow = from_tuple(_coasts.at_branch(i).get(), COAST_ROW_KEYS);
-    const res: OSMRawFeature[] = osm_adapter.from_coast_row(row);
+    const res: CoastRawFeature[] = from_coast_row(row);
     for (let j = 0; j < res.length; j++) {
-      feats.push(normalize(res[j], page_bbox[0], page_z_scale, osm_policy));
+      feats.push(normalize(res[j], page_bbox[0], page_z_scale, coast_policy));
     }
   }
 
   // whether *any* coastline row touched this page's envelope at all, even
-  // if osm_adapter dropped it (covers_page => full land, see from_coast_row)
-  // — bake_ground needs this to tell "no land data at all (open ocean)"
-  // apart from "land data present but not worth rasterizing (full land)".
+  // if from_coast_row dropped it (covers_page => full land, see that
+  // function) — bake_ground needs this to tell "no land data at all (open
+  // ocean)" apart from "land data present but not worth rasterizing (full land)".
   const has_coast_row: boolean = _coasts.len > 0;
 
   const ground: Ground = bake_ground(feats, has_coast_row);

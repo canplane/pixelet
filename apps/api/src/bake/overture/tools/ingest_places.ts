@@ -8,13 +8,11 @@
 // (same reasoning bake_poi_tiles.ts's own manifest already documents for
 // "this invocation only").
 //
-// Deliberately its own small pipeline, not folded into infra/geo's
-// osm-features/osm-coastline bash+jq+ogr2ogr convention: Overture's
-// per-place payload is a rich nested JSON object (categories/names/
-// addresses/sources/...), a poor fit for ogr2ogr's flat-field mapping
-// (built for OSM's flat tag=value shape and Shapefile's flat attribute
-// tables) — and this pipeline is meant to stay structurally independent of
-// the terrain pipeline POI used to depend on, not layered on top of it (see
+// Deliberately its own small pipeline rather than a generic ogr2ogr-style
+// flat-field mapping: Overture's per-place payload is a rich nested JSON
+// object (categories/names/addresses/sources/...), a poor fit for that —
+// and this pipeline is meant to stay structurally independent of the
+// terrain pipeline, not layered on top of it (see
 // discussions/20260908-overture-poi-adoption.md).
 //
 // Attribution: Places is CDLA-Permissive-2.0, which (unlike OSM's ODbL)

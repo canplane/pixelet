@@ -1,18 +1,15 @@
 // @pxl/api/bake/overture/tools/ingest_buildings.ts
 //
 // Pulls Overture's Buildings theme (`building` type only — `building_part`
-// skipped, see below) for Korea into overture_buildings, terrain's own
-// Overture-sourced replacement for the `building` half of osm_elements.
+// skipped, see below) for Korea into overture_buildings.
 //
 // Confirmed live against a real Gangnam-area sample: only ~14% of Korean
-// building features carry `height`/`num_floors`/`class`/`subtype` at all —
-// this project's own OSM Korea coverage is thin here, same caveat the
-// migration discussion doc already flagged. `height`/`num_floors` are kept
-// in the table regardless (a future consumer's problem), but baking itself
-// never reads them: ground_baker.ts never reads OSMFeature.computed.height
-// (confirmed — nothing in the codebase does; it's dead computation even for
-// the current OSM pipeline), only computed.width for linear features, which
-// buildings never are. A structure cell only ever needs to know it's a
+// building features carry `height`/`num_floors`/`class`/`subtype` at all.
+// `height`/`num_floors` are kept in the table regardless (a future
+// consumer's problem), but baking itself never reads them: ground_baker.ts
+// never reads Feature.computed.height (confirmed — nothing in the codebase
+// does; it's dead computation), only computed.width for linear features,
+// which buildings never are. A structure cell only ever needs to know it's a
 // building AND roughly which kind (for cube_types.structure's own small
 // enum) — not its real height — so `class`/`subtype` absence just means
 // "generic BUILDING", not "unusable row"; `building_part` (sub-footprint

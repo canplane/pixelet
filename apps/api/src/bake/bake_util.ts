@@ -62,12 +62,10 @@ type CatalogRow = { region_code: string; data_date: string; file_name: string; s
  * data. Shared by every bake tool — they all read the same geo DB.
  */
 export async function read_source_catalogs(pool: Pool): Promise<Record<string, CatalogRow[]>> {
-  // osm_features_catalog dropped: osm_elements stopped being read once
-  // Buildings/Transportation/Base moved to Overture (bake.ts). Coastline
-  // stays OSM-sourced (osm_coastline_catalog), elevation is GEDTM30
-  // (esa_elevation_catalog) — overture_catalog covers everything else,
-  // one row per overture_* table (bake/overture/catalog.ts).
-  const tables = ["overture_catalog", "esa_elevation_catalog", "osm_coastline_catalog"];
+  // overture_catalog covers Buildings/Transportation/Base/Places/Divisions/
+  // coastline, one row per overture_* table (bake/overture/catalog.ts);
+  // elevation is GEDTM30 (esa_elevation_catalog).
+  const tables = ["overture_catalog", "esa_elevation_catalog"];
   const out: Record<string, CatalogRow[]> = {};
 
   for (const table of tables) {

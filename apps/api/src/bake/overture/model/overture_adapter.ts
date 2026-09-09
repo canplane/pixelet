@@ -2,22 +2,20 @@
 
 /**
  * Overture ingress adapter for WKB-based terrain source rows — the
- * Buildings/Transportation/Base counterpart to osm_adapter.ts. Reuses that
- * file's WKB decoder as-is (Overture's geometry transport is the same WKB
- * the OSM pipeline already reads, nothing about it is OSM-specific);
- * Overture rows carry structured columns straight from Postgres instead of
- * hstore, so there's no tag-parsing step to mirror.
+ * Buildings/Transportation/Base counterpart to coast_adapter.ts. Reuses
+ * wkb.ts's decoder as-is. Overture rows carry structured columns straight
+ * from Postgres instead of hstore, so there's no tag-parsing step to mirror.
  *
- * Deliberately its own raw-feature shape per theme rather than forcing
- * everything into OSMRawFeature/OSMTags — Overture's subtype/class enums
- * don't map onto OSM's tag vocabulary, so overture_policy.ts (Phase 4) reads
- * these shapes directly instead of through a translation layer.
+ * Deliberately its own raw-feature shape per theme rather than one shared
+ * shape — Overture's subtype/class enums vary per theme, so
+ * overture_policy.ts reads these shapes directly instead of through a
+ * translation layer.
  */
 
 import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import type { BaseRow, BuildingRow, SegmentRow } from "@pxl/shared/bake/format.ts";
 
-import { wkb_to_geometries, type WKBGeometry } from "@pxl/api/bake/osm/model/osm_adapter.ts";
+import { wkb_to_geometries, type WKBGeometry } from "@pxl/api/bake/wkb.ts";
 
 export const enum OvertureTheme {
   BUILDING = "building",

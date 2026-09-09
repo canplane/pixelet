@@ -11,13 +11,10 @@
  * interactive badge; see poi_layer.tsx's own top doc comment for what's
  * still deferred.
  *
- * Keyed off `POI.category` (poi_extractor.ts: `tags.amenity || tags.shop ||
- * tags.tourism || category || "place"`) — real OSM tag values, not the old
- * implementation's own coarser buckets (it grouped by a hand-picked handful
- * of categories it queried for directly; extract_pois surfaces whatever raw
- * amenity/shop/tourism value a feature actually carries), so this table is
- * keyed more granularly and falls back to DEFAULT_THEME for anything not
- * explicitly listed rather than guessing a mapping.
+ * Keyed off `POI.category` (overture_provider.ts's `category_of()`, which
+ * maps Overture's `categories.primary` through OVERTURE_CATEGORY_MAP into
+ * this table's own vocabulary), falling back to DEFAULT_THEME for anything
+ * not explicitly listed rather than guessing a mapping.
  *
  * `icon` is a plain emoji — tried swapping these for tinted Lucide glyphs
  * (2026-09-08) and reverted: at this badge's actual on-screen size a thin

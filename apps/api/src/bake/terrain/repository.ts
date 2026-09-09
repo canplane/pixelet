@@ -97,7 +97,7 @@ const OVERTURE_BASE_SQL = `WITH env AS (
 )
 SELECT gers_id, 'land_use' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
 UNION ALL
--- Some water rows are country-scale (up to 444,626 points); clip like OSM_COAST_SQL did. ST_IsEmpty guards && 's bbox-only false positives.
+-- Some water rows are country-scale (up to 444,626 points); clip to the page envelope first. ST_IsEmpty guards && 's bbox-only false positives.
 SELECT gers_id, 'water' AS source, subtype, class, ST_AsBinary(clipped) AS geom_wkb FROM (
   SELECT gers_id, subtype, class, ST_Intersection(geom, env.e) AS clipped
   FROM overture_base_water, env
@@ -109,22 +109,15 @@ UNION ALL
 SELECT gers_id, 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e`;
 
 // Overture's Base `water` theme's `ocean` subtype (confirmed via
-// docs.overturemaps.org: "created from OpenStreetMap coastlines data
-// (natural=coastline) using a QA'd version of the output from the
-// OSMCoastline tool" — the same tool family osm_coastline_polygons'
-// own land-polygons-split-3857 came from, QA'd for the self-intersection/
-// flipped-land-sea errors that tool is known to produce). Overture's own
-// geometry represents ocean/water, the *inverse* of what osm_coastline_
-// polygons stored (that was land) — so this query inverts it back: union
-// whatever ocean touches the page, then take the page envelope's own
-// difference against that union, giving a LAND polygon in the exact same
-// shape osm_adapter.ts's from_coast_row() already expects (empty result =>
-// row dropped => page treated as pure ocean; a result covering the whole
-// envelope => dropped as "nothing to carve, already all land"; anything
-// else => the real partial coastline geometry to carve BARE out of a
-// SEA-filled base). ground_baker.ts/osm_adapter.ts/osm_policy.ts's own
-// sea-handling logic is untouched by this — only where the input geometry
-// comes from changed.
+// docs.overturemaps.org: QA'd from OpenStreetMap coastline data, self-
+// intersection/flipped-land-sea errors corrected). Its geometry is
+// ocean-shaped, not land-shaped — so this query inverts it: union whatever
+// ocean touches the page, then take the page envelope's own difference
+// against that union, giving a LAND polygon in the shape coast_adapter.ts's
+// from_coast_row() expects (empty result => row dropped => page treated as
+// pure ocean; a result covering the whole envelope => dropped as "nothing
+// to carve, already all land"; anything else => the real partial coastline
+// geometry to carve BARE out of a SEA-filled base).
 const OVERTURE_COAST_SQL = `WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),

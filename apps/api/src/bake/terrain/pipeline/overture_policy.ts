@@ -3,28 +3,24 @@
 /**
  * Policy for interpreting Overture Buildings/Transportation/Base rows into
  * categories, metrics, flags, and terrain cell configuration — the
- * Overture-sourced counterpart to osm_policy.ts (now trimmed to coastline
- * only, see that file's own top comment).
+ * counterpart to coast_policy.ts (coastline only).
  *
- * Mapped value-by-value against each theme's own subtype/class vocabulary
- * rather than ported from OSM's tag branches (Overture's schema is closed
- * and structured, OSM's tags are open text — porting branches would just
- * carry over OSM's own guesswork). Segments/Land_use/Water/Land's class and
- * subtype values below are the ones a real Gangnam-area sample actually
- * produced (this session's own field-population check, 100% populated for
- * all four); Buildings' class enum is not sample-confirmed the same way
- * (only ~14% of Korean buildings carry `class`/`subtype` at all) — mapped
- * against Overture's published buildings schema instead, and it barely
- * matters either way since only the coarse structure category is ever
- * baked (see ingest_buildings.ts's own top comment on `height` being dead
- * weight for rendering).
+ * Mapped value-by-value against each theme's own subtype/class vocabulary.
+ * Segments/Land_use/Water/Land's class and subtype values below are the
+ * ones a real Gangnam-area sample actually produced (this session's own
+ * field-population check, 100% populated for all four); Buildings' class
+ * enum is not sample-confirmed the same way (only ~14% of Korean buildings
+ * carry `class`/`subtype` at all) — mapped against Overture's published
+ * buildings schema instead, and it barely matters either way since only
+ * the coarse structure category is ever baked (see ingest_buildings.ts's
+ * own top comment on `height` being dead weight for rendering).
  */
 
 import type { f64, u32, u8 } from "@xpute/core/kit/word.ts";
 
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { type CellConfig, GroundChannelKey } from "@pxl/shared/bake/format.ts";
-import type { OSMExtra, OSMFeature } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { Feature, FeatureExtra } from "@pxl/shared/bake/model/feature.ts";
 
 import { BaseSource, type OvertureRawFeature, OvertureTheme } from "@pxl/api/bake/overture/model/overture_adapter.ts";
 import type { NormalizePolicy } from "./normalizer.ts";
@@ -103,14 +99,13 @@ function determine_category(feat: OvertureRawFeature): string {
   }
 }
 
-function compute_metrics(feat: OvertureRawFeature, _category: string): OSMFeature["computed"] {
+function compute_metrics(feat: OvertureRawFeature, _category: string): Feature["computed"] {
   let height: f64 = 0;
   let width: f64 = 0;
 
   if (feat.theme === OvertureTheme.BUILDING) {
-    // Real height/num_floors when Overture has them (a genuine improvement
-    // over OSM's building:levels*3.5 guess); missing both falls back to the
-    // same single-level default OSM used for a bare `building=yes` tag.
+    // Real height/num_floors when Overture has them; missing both falls
+    // back to a single-level default.
     if (feat.height != null) height = feat.height;
     else if (feat.num_floors != null) height = feat.num_floors * 3.5;
     else height = 3.5;
@@ -135,7 +130,7 @@ function is_linear(feat: OvertureRawFeature): boolean {
   return feat.theme === OvertureTheme.SEGMENT;
 }
 
-function compute_extra(feat: OvertureRawFeature, category: string): OSMExtra {
+function compute_extra(feat: OvertureRawFeature, category: string): FeatureExtra {
   const building_type = feat.theme === OvertureTheme.BUILDING ? (feat.class ?? feat.subtype ?? "") : "";
   const land_use_class = feat.theme === OvertureTheme.BASE && feat.source === BaseSource.LAND_USE ? (feat.class ?? "") : "";
 
@@ -144,7 +139,7 @@ function compute_extra(feat: OvertureRawFeature, category: string): OSMExtra {
 
   return {
     rank: calculate_rank(feat, category, is_institutional),
-    is_ocean: false, // coastline stays OSM-sourced; Overture never contributes sea fill
+    is_ocean: false, // sea fill is coast_policy.ts's job, never this policy's
     is_parking: category === "parking",
     is_institutional,
     is_sports: SPORTS_CLASSES.has(building_type) || SPORTS_CLASSES.has(land_use_class),
@@ -174,7 +169,7 @@ function calculate_rank(feat: OvertureRawFeature, category: string, is_instituti
   return score;
 }
 
-function determine_cell_cfg(feat: OvertureRawFeature, category: string, extra: OSMExtra): CellConfig | null {
+function determine_cell_cfg(feat: OvertureRawFeature, category: string, extra: FeatureExtra): CellConfig | null {
   if (category === "water" && feat.theme === OvertureTheme.BASE) {
     const cell_type = FLOWING_WATER_SUBTYPES.has(feat.subtype ?? "") ? cube_types.water.RIVER : cube_types.water.LAKE;
     return { cell_type, ch_key: GroundChannelKey.WATER };
@@ -219,7 +214,7 @@ function determine_cell_cfg(feat: OvertureRawFeature, category: string, extra: O
   return null;
 }
 
-function resolve_land(feat: OvertureRawFeature, category: string, extra: OSMExtra): u8 | null {
+function resolve_land(feat: OvertureRawFeature, category: string, extra: FeatureExtra): u8 | null {
   if (category === "forest") return cube_types.land.GREEN_DEEP;
 
   if (feat.theme === OvertureTheme.BASE && feat.source === BaseSource.INFRASTRUCTURE && feat.class === "helipad") {

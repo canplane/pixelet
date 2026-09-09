@@ -1,6 +1,6 @@
 // @pxl/api/bake/terrain/pipeline/normalizer.ts
 // Raw feature normalization and local coordinate projection — provider-agnostic,
-// parameterized by a NormalizePolicy so osm_policy.ts (coastline) and
+// parameterized by a NormalizePolicy so coast_policy.ts (coastline) and
 // overture_policy.ts (Buildings/Transportation/Base) share the same geometry
 // projection and closure-detection code instead of duplicating it.
 
@@ -11,11 +11,11 @@ import { fill3, type V3 } from "@pxl/shared/spec/space/v3.ts";
 import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import { XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
 import type { CellConfig } from "@pxl/shared/bake/format.ts";
-import { type OSMExtra, type OSMFeature, OSMType } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { Feature, FeatureExtra } from "@pxl/shared/bake/model/feature.ts";
 
 export const V3_ARENA = new Arena<V3>(() => fill3(0), { init_cap: 1 << 12 });
 
-/** A raw feature shape any policy can normalize — OSMRawFeature and each Overture*RawFeature all satisfy this. */
+/** A raw feature shape any policy can normalize — CoastRawFeature and each Overture*RawFeature all satisfy this. */
 export type RawFeature = {
   geometry: {
     points: G3857[];
@@ -26,14 +26,14 @@ export type RawFeature = {
 };
 
 export type NormalizePolicy<F extends RawFeature> = {
-  // a provider-neutral id — OSMRawFeature has `id`, Overture*RawFeature has `gers_id`.
+  // a provider-neutral id — CoastRawFeature has `id`, Overture*RawFeature has `gers_id`.
   get_id: (raw: F) => string;
   determine_category: (raw: F) => string;
-  compute_metrics: (raw: F, category: string) => OSMFeature["computed"];
-  compute_extra: (raw: F, category: string) => OSMExtra;
-  determine_cell_cfg: (raw: F, category: string, extra: OSMExtra) => CellConfig | null;
+  compute_metrics: (raw: F, category: string) => Feature["computed"];
+  compute_extra: (raw: F, category: string) => FeatureExtra;
+  determine_cell_cfg: (raw: F, category: string, extra: FeatureExtra) => CellConfig | null;
   should_force_closed: (raw: F) => boolean;
-  /** True for features that must stay linear (never fill-closed) regardless of geometry closure — OSM roads/waterways, Overture segments. */
+  /** True for features that must stay linear (never fill-closed) regardless of geometry closure — coastline, Overture segments. */
   is_linear: (raw: F) => boolean;
 };
 
@@ -50,7 +50,7 @@ export const normalize = <F extends RawFeature>(
   page_min: G3857,
   page_z_scale: f64,
   policy: NormalizePolicy<F>,
-): OSMFeature => {
+): Feature => {
   const { geometry, center } = raw_feat;
   const { points, holes = [], is_polygon_source } = geometry;
   const id = policy.get_id(raw_feat);
@@ -73,16 +73,16 @@ export const normalize = <F extends RawFeature>(
     (policy.should_force_closed(raw_feat) || is_polygon_source || is_geometrically_closed);
 
   // 4. Metric computation
-  const metrics_m: OSMFeature["computed"] = policy.compute_metrics(raw_feat, category);
+  const metrics_m: Feature["computed"] = policy.compute_metrics(raw_feat, category);
 
   // 5. Extra flags
-  const extra: OSMExtra = policy.compute_extra(raw_feat, category);
+  const extra: FeatureExtra = policy.compute_extra(raw_feat, category);
 
   // 6. Cell config (target ground channel + cell type, or null to skip rasterization)
   const cell_cfg: CellConfig | null = policy.determine_cell_cfg(raw_feat, category, extra);
 
   // 7. Meter -> cell scaling
-  const computed: OSMFeature["computed"] = {
+  const computed: Feature["computed"] = {
     height: metrics_m.height * XY_CELL_PER_M * page_z_scale,
     width: metrics_m.width * XY_CELL_PER_M,
     layer: metrics_m.layer,
@@ -122,7 +122,6 @@ export const normalize = <F extends RawFeature>(
 
   // 10. Final construction
   return {
-    type: points.length === 1 ? OSMType.NODE : OSMType.WAY,
     id,
     center: local_center,
     shape: { points: local_points, is_closed, holes: local_holes },

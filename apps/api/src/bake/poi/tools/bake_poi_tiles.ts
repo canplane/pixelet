@@ -40,7 +40,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { Bytes } from "@xpute/core/kit/array.ts";
 
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 import { exists, fmt_bytes, fmt_dur, gzip } from "@pxl/api/bake/bake_util.ts";
 
 import { make_overture_provider } from "../providers/overture_provider.ts";
@@ -198,8 +198,8 @@ async function main(): Promise<void> {
       content_type: "application/json",
       content_encoding: "gzip",
 
-      // Not read_source_catalogs()'s OSM/ESA/coastline tables — POI no
-      // longer depends on those (discussions/20260908-overture-poi-adoption.md).
+      // Not read_source_catalogs()'s overture_catalog/esa_elevation_catalog
+      // — POI doesn't depend on those (discussions/20260908-overture-poi-adoption.md).
       // overture_catalog (apps/api/src/bake/overture/catalog.ts) now tracks
       // ingest_places.ts's own runs, keyed by file_name; queried directly
       // rather than through read_source_catalogs() since that helper
