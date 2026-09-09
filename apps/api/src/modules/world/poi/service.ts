@@ -23,8 +23,9 @@ const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 const PAGE_IDX_PATTERN = /^\d{1,20}$/;
 
 function make_services(provider: PoiProvider) {
-  // POI, like terrain, is a pure function of static OSM source data — same
-  // cacheability reasoning as terrain/service.ts's own tile_cache, a
+  // POI, like terrain, is a pure function of static source data (Overture
+  // Places here, OSM for terrain — different source, same determinism) —
+  // same cacheability reasoning as terrain/service.ts's own tile_cache, a
   // separate cache (own cap/env var) since POI payloads are tiny JSON, not
   // ~256KB binary tiles, and shouldn't compete with that cache's capacity.
   const cache_cap = env.must_int("POI_CACHE_CAP", { fallback: 2000, min: 1 }) as u32;

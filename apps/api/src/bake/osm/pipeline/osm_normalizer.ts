@@ -9,10 +9,12 @@ import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import { XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
 
 import { type OSMExtra, type OSMFeature, type OSMRawFeature, OSMType } from "@pxl/shared/bake/model/osm_feature.ts";
-// osm_policy.ts stays under bake/terrain/ — it's genuinely mixed (POI
-// category rules alongside terrain-cell config), not cleanly splittable
-// without untangling that, unlike this file, poi_extractor.ts, and
-// osm_adapter.ts, which had zero terrain-specific content to begin with.
+// osm_policy.ts stays under bake/terrain/ — its own category/extra flags
+// (is_institutional/is_parking/is_sports/rank) are genuinely mixed,
+// feeding both terrain's own land-use coloring and (formerly) POI
+// extraction, not cleanly splittable without untangling that. This file
+// and osm_adapter.ts had zero such overlap to begin with — pure
+// terrain-only content throughout.
 import { compute_extra, compute_metrics, determine_category, should_force_closed } from "@pxl/api/bake/terrain/pipeline/osm_policy.ts";
 
 export const V3_ARENA = new Arena<V3>(() => fill3(0), { init_cap: 1 << 12 });
