@@ -24,6 +24,7 @@ export type PoiStore = {
 
   get_pois: (page_idx: IVec) => POI[] | undefined;
   set_pois: (page_idx: IVec, pois: POI[]) => void;
+  clear_pois: (page_idx: IVec) => void;
 };
 
 export const usePoiStore = create<PoiStore>()(
@@ -34,6 +35,11 @@ export const usePoiStore = create<PoiStore>()(
     set_pois: (page_idx, pois) => {
       set((state) => {
         state.poi_map.set(TO_XY(page_idx), pois);
+      });
+    },
+    clear_pois: (page_idx) => {
+      set((state) => {
+        state.poi_map.delete(TO_XY(page_idx));
       });
     },
   })),
