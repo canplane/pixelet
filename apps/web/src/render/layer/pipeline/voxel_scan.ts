@@ -7,6 +7,8 @@ import type { Block } from "@xpute/core/ds/pool.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
+import { Vector } from "@xpute/core/ds/arena.ts";
+
 import { MESH_POOL } from "./mesh_pool.ts";
 
 import {
@@ -37,20 +39,8 @@ export type MeshRun = {
   sub_oz: u32;
 };
 
-function push_sub_voxel_run(runs: MeshRun[], entry: SubVoxelEntry): void {
-  runs.push({
-    z0: entry.z,
-    z1: entry.z,
-    r: entry.r,
-    g: entry.g,
-    b: entry.b,
-    layer_idx: entry.layer_idx,
-    material_class: entry.material_class,
-    sub_sz: entry.sub_sz,
-    sub_ox: entry.sub_ox,
-    sub_oy: entry.sub_oy,
-    sub_oz: entry.sub_oz,
-  });
+function push_sub_voxel_run(sink: RunSink, entry: SubVoxelEntry): void {
+  sink.push(entry.z, entry.z, entry.r, entry.g, entry.b, entry.layer_idx, entry.material_class, entry.sub_sz, entry.sub_ox, entry.sub_oy, entry.sub_oz);
 }
 
 /**
@@ -79,21 +69,65 @@ export function index_extra_sub_voxels(bands: readonly VoxelBand[]): SubVoxelInd
   return index;
 }
 
-export function merge_column_runs(
+/**
+ * Where one column's runs go. Two implementations: an array of MeshRun
+ * objects for the raycast path, and the packed spans of a ColumnRunSet for
+ * the mesher's whole-chunk scan.
+ *
+ * `push` returns the index it wrote so `extend` can raise that run's top
+ * afterwards, which is how a run grows without being re-emitted. Emitting at
+ * *open* rather than at close is load-bearing: it keeps a column's runs in
+ * the order the walk finds them, and chunk_mesher.ts's neighbour scans stop
+ * early on the first run that starts above the range they care about. A run
+ * flushed when it closed would land after the sub-voxel runs of every band
+ * it spans, putting a solid run behind a higher one and quietly cutting
+ * those scans short.
+ *
+ * (Sub-voxel runs already break strict ascending order — a band appends its
+ * own after that band's voxel loop — but they are the one thing those scans
+ * skip unconditionally, so they can never be the run a scan stops on.)
+ */
+type RunSink = {
+  push(
+    z0: i32,
+    z1: i32,
+    r: u32,
+    g: u32,
+    b: u32,
+    layer_idx: u32,
+    material_class: MaterialClass,
+    sub_sz: u32,
+    sub_ox: u32,
+    sub_oy: u32,
+    sub_oz: u32,
+  ): u32;
+  extend(index: u32, z1: i32): void;
+};
+
+/**
+ * The band walk itself, shared by both sinks.
+ *
+ * The open run lives in locals rather than in the sink, because the merge
+ * test compares against its material and the sink may have written that
+ * somewhere it cannot cheaply read back.
+ */
+function walk_column_runs(
   volume: ChunkVolume,
   cx: u32,
   cy: u32,
-  only_band_z?: i32,
-  sub_voxel_index?: SubVoxelIndex,
-): MeshRun[] {
-  const runs: MeshRun[] = [];
-  if (volume.bands.length === 0) return runs;
+  only_band_z: i32 | undefined,
+  sub_voxel_index: SubVoxelIndex | undefined,
+  sink: RunSink,
+): void {
+  if (volume.bands.length === 0) return;
 
   const band_x = Math.floor(cx / L2_BAND_CELL_SPAN);
   const band_y = Math.floor(cy / L2_BAND_CELL_SPAN);
   const local_x = cx & L2_BAND_CELL_MASK;
   const local_y = cy & L2_BAND_CELL_MASK;
-  let open: MeshRun | null = null;
+
+  let open = -1;
+  let open_r = 0, open_g = 0, open_b = 0, open_layer = 0, open_class = MaterialClass.LAND;
 
   const ordered = only_band_z === undefined ? ordered_chunk_bands(volume) : (() => {
     const band = get_chunk_band(volume, band_x, band_y, only_band_z);
@@ -104,14 +138,14 @@ export function merge_column_runs(
     const band_z = band.band_z;
     // Empty signed-Z bands break a material run. Adjacent bands do not:
     // buried faces at a cache boundary must not reappear in the mesh.
-    if (previous_band_z !== null && band_z !== previous_band_z + 1) open = null;
+    if (previous_band_z !== null && band_z !== previous_band_z + 1) open = -1;
     previous_band_z = band_z;
 
     for (let local_z = 0; local_z < L2_BAND_CELL_SPAN; local_z++) {
       const idx = band_voxel_idx(local_x, local_y, local_z);
       const packed = band.material[idx];
       if (packed === 0) {
-        open = null;
+        open = -1;
         continue;
       }
 
@@ -123,42 +157,74 @@ export function merge_column_runs(
       const sub_sz = band.sub_cell?.[so + 3] ?? SUB_CELL_NONE;
 
       if (sub_sz !== SUB_CELL_NONE) {
-        runs.push({
-          z0: z,
-          z1: z,
-          r,
-          g,
-          b,
-          layer_idx,
-          material_class,
-          sub_sz,
-          sub_ox: band.sub_cell![so],
-          sub_oy: band.sub_cell![so + 1],
-          sub_oz: band.sub_cell![so + 2],
-        });
-        open = null;
+        sink.push(z, z, r, g, b, layer_idx, material_class, sub_sz, band.sub_cell![so], band.sub_cell![so + 1], band.sub_cell![so + 2]);
+        open = -1;
       } else if (
-        open && material_class !== MaterialClass.OBJECT && open.r === r && open.g === g && open.b === b &&
-        open.layer_idx === layer_idx && open.material_class === material_class
+        open >= 0 && material_class !== MaterialClass.OBJECT && open_r === r && open_g === g && open_b === b &&
+        open_layer === layer_idx && open_class === material_class
       ) {
-        open.z1 = z;
+        sink.extend(open, z);
       } else {
-        open = { z0: z, z1: z, r, g, b, layer_idx, material_class, sub_sz: SUB_CELL_NONE, sub_ox: 0, sub_oy: 0, sub_oz: 0 };
-        runs.push(open);
+        open = sink.push(z, z, r, g, b, layer_idx, material_class, SUB_CELL_NONE, 0, 0, 0);
+        open_r = r;
+        open_g = g;
+        open_b = b;
+        open_layer = layer_idx;
+        open_class = material_class;
       }
     }
 
     if (sub_voxel_index) {
       const entries = sub_voxel_index.get(band)?.get(cy * L2_BAND_CELL_SPAN + cx);
-      if (entries) { for (const entry of entries) push_sub_voxel_run(runs, entry); }
+      if (entries) { for (const entry of entries) push_sub_voxel_run(sink, entry); }
     } else {
       for (const entry of band.extra_sub_voxels) {
         if (entry.cx !== cx || entry.cy !== cy) continue;
-        push_sub_voxel_run(runs, entry);
+        push_sub_voxel_run(sink, entry);
       }
     }
   }
-  return runs;
+}
+
+class ArrayRunSink implements RunSink {
+  readonly runs: MeshRun[] = [];
+
+  push(
+    z0: i32,
+    z1: i32,
+    r: u32,
+    g: u32,
+    b: u32,
+    layer_idx: u32,
+    material_class: MaterialClass,
+    sub_sz: u32,
+    sub_ox: u32,
+    sub_oy: u32,
+    sub_oz: u32,
+  ): u32 {
+    return this.runs.push({ z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz }) - 1;
+  }
+
+  extend(index: u32, z1: i32): void {
+    this.runs[index].z1 = z1;
+  }
+}
+
+/**
+ * One column's runs as objects. Still the raycast's entry point, where it
+ * runs for one column on a hover and the result is read once and dropped —
+ * the whole-chunk scan below writes into typed spans instead.
+ */
+export function merge_column_runs(
+  volume: ChunkVolume,
+  cx: u32,
+  cy: u32,
+  only_band_z?: i32,
+  sub_voxel_index?: SubVoxelIndex,
+): MeshRun[] {
+  const sink = new ArrayRunSink();
+  walk_column_runs(volume, cx, cy, only_band_z, sub_voxel_index, sink);
+  return sink.runs;
 }
 
 export function topmost_voxel(
@@ -260,6 +326,9 @@ export type ColumnRunSet = {
   sub_oz: Uint8Array;
 };
 
+/** The prefix index, filled during the walk and copied into the block. */
+const COLUMN_STARTS = new Uint32Array(COLUMN_CNT + 1);
+
 const RUN_I32_FIELDS: u32 = 2; // z0, z1
 const RUN_U8_FIELDS: u32 = 9; // r g b layer_idx material_class sub_sz sub_ox sub_oy sub_oz
 
@@ -304,33 +373,104 @@ export function release_column_runs(set: ColumnRunSet): void {
 }
 
 /**
+ * Scratch the whole-chunk scan writes into before it knows how many runs
+ * there are.
+ *
+ * The block has to be sized exactly, and the count is only known once the
+ * walk is done, so there is one buffering step either way. What this avoids
+ * is the *other* thing the old shape did: 4096 arrays and an object per run,
+ * roughly a megabyte for a dense chunk, allocated and thrown away on every
+ * scan. These grow to a high-water mark and are reused for the rest of the
+ * session, and the copy out of them is eleven typed-array memcpys rather
+ * than a field-by-field loop over ten thousand objects.
+ */
+const SCRATCH_CAP = { init_cap: 1 << 13 };
+const SC_Z0 = new Vector(Int32Array, SCRATCH_CAP);
+const SC_Z1 = new Vector(Int32Array, SCRATCH_CAP);
+const SC_R = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_G = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_B = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_LAYER = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_CLASS = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_SUB_SZ = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_SUB_OX = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_SUB_OY = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_SUB_OZ = new Vector(Uint8Array, SCRATCH_CAP);
+
+const SPAN_SINK: RunSink = {
+  push(z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz) {
+    const i = SC_Z0.push(z0);
+    SC_Z1.push(z1);
+    SC_R.push(r);
+    SC_G.push(g);
+    SC_B.push(b);
+    SC_LAYER.push(layer_idx);
+    SC_CLASS.push(material_class);
+    SC_SUB_SZ.push(sub_sz);
+    SC_SUB_OX.push(sub_ox);
+    SC_SUB_OY.push(sub_oy);
+    SC_SUB_OZ.push(sub_oz);
+    return i;
+  },
+  extend(index, z1) {
+    SC_Z1.set(index, z1);
+  },
+};
+
+/**
  * Scans a whole chunk once and packs the result.
  *
- * merge_column_runs is left exactly as it is, objects and all: it is also
- * the raycast path's entry point, where it runs for one column on a hover
- * rather than 4096 columns on a rebuild, and its output there is read once
- * and dropped. The objects it makes here die at the end of this function
- * instead of being retained for the chunk's life, which is the difference
- * that mattered — a young-generation collection is not what stalls a frame.
+ * Nothing here allocates per run: the walk writes straight into the scratch
+ * spans above and the block is filled from them by copy. merge_column_runs
+ * keeps its object output for the raycast, which asks for one column at a
+ * time and drops the answer.
  */
 export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
   const sub_voxel_index = index_extra_sub_voxels(volume.bands);
-  const per_column: MeshRun[][] = new Array(COLUMN_CNT);
+  SC_Z0.truncate(0);
+  SC_Z1.truncate(0);
+  SC_R.truncate(0);
+  SC_G.truncate(0);
+  SC_B.truncate(0);
+  SC_LAYER.truncate(0);
+  SC_CLASS.truncate(0);
+  SC_SUB_SZ.truncate(0);
+  SC_SUB_OX.truncate(0);
+  SC_SUB_OY.truncate(0);
+  SC_SUB_OZ.truncate(0);
+
+  const starts = COLUMN_STARTS;
   for (let cy: u32 = 0; cy < L2_BAND_CELL_SPAN; cy++) {
     for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) {
-      per_column[cy * L2_BAND_CELL_SPAN + cx] = merge_column_runs(volume, cx, cy, undefined, sub_voxel_index);
+      starts[cy * L2_BAND_CELL_SPAN + cx] = SC_Z0.len;
+      walk_column_runs(volume, cx, cy, undefined, sub_voxel_index, SPAN_SINK);
     }
   }
+  starts[COLUMN_CNT] = SC_Z0.len;
 
-  return pack_column_runs(per_column);
+  const set = alloc_column_run_set(SC_Z0.len);
+  set.start.set(starts);
+  const n = SC_Z0.len;
+  set.z0.set(SC_Z0.mem.subarray(0, n));
+  set.z1.set(SC_Z1.mem.subarray(0, n));
+  set.r.set(SC_R.mem.subarray(0, n));
+  set.g.set(SC_G.mem.subarray(0, n));
+  set.b.set(SC_B.mem.subarray(0, n));
+  set.layer_idx.set(SC_LAYER.mem.subarray(0, n));
+  set.material_class.set(SC_CLASS.mem.subarray(0, n));
+  set.sub_sz.set(SC_SUB_SZ.mem.subarray(0, n));
+  set.sub_ox.set(SC_SUB_OX.mem.subarray(0, n));
+  set.sub_oy.set(SC_SUB_OY.mem.subarray(0, n));
+  set.sub_oz.set(SC_SUB_OZ.mem.subarray(0, n));
+  return set;
 }
 
 /**
- * Packs one column-per-entry array of runs into a run set.
+ * Packs a column-per-entry array of runs into a run set.
  *
- * Split out of the scan so a test can build a chunk's runs by hand and get
- * the same packed shape the mesher consumes, without going through a
- * ChunkVolume it does not care about.
+ * Not on the scan's own path — that writes into the spans directly — but a
+ * test can build a chunk's runs by hand and get the same packed shape the
+ * mesher consumes, without a ChunkVolume it does not care about.
  */
 export function pack_column_runs(per_column: readonly (readonly MeshRun[])[]): ColumnRunSet {
   let count: u32 = 0;
