@@ -30,11 +30,12 @@ let nextChatLineID = 0;
 // or decor_id — needs the kind alongside the id, not just the id.
 export type RecentPick = { kind: "object"; id: PlaceableCubeId } | { kind: "decor"; id: DecorId };
 
-// 6, not the full 15-color/32-terrain-style/N-decor catalog: comfortably
-// fits mobile's hotbar pill in one glance with zero horizontal scroll (see
-// mode_bar.tsx's own width budget) — the whole point of moving to MRU
-// instead of a static, ever-growing enumeration.
-const MAX_RECENT_PICKS = 6;
+// 8, not the full 15-color/32-terrain-style/N-decor catalog — the whole
+// point of moving to MRU instead of a static, ever-growing enumeration.
+// mode_bar.tsx's own strip already scrolls (overflow-x-auto) once the row
+// overflows a narrow phone's width, so this doesn't need to fit in one
+// glance with zero scroll the way a smaller cap might.
+const MAX_RECENT_PICKS = 8;
 
 function is_same_pick(a: RecentPick, b: RecentPick): boolean {
   return a.kind === b.kind && a.id === b.id;
