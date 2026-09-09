@@ -3,7 +3,7 @@
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { decode_terrain, type Terrain } from "@pxl/shared/bake/format.ts";
 
-import { HAS_STATIC_TILES, TILE_BASE_URL } from "@/lib/env/config.ts";
+import { PUBLISHED_TILES, TILE_BASE_URL } from "@/lib/env/config.ts";
 
 /**
  * Terrain transport: turns a page index into decoded terrain, and nothing
@@ -73,7 +73,7 @@ export async function fetch_terrain(
   const t0 = performance.now();
   const res = await fetch(tile_url(page_idx.toString()), { signal });
 
-  if (res.status === 404 && HAS_STATIC_TILES) return get_ocean_terrain();
+  if (res.status === 404 && PUBLISHED_TILES) return get_ocean_terrain();
   if (!res.ok) throw new Error(`[tile/${ivec.repr(page_idx)}] http ${res.status}`);
 
   const bytes = new Uint8Array(await res.arrayBuffer());

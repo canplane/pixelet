@@ -20,7 +20,7 @@ export type GeocodeResult = { parts: GeocodePart[] };
 /**
  * Reverse-geocode transport — the pre-baked static set when one is
  * configured (apps/api/src/bake/geocode/tools/bake_geocode_tiles.ts), the
- * live API otherwise. Same HAS_STATIC_POI shape poi/repository.ts uses: a
+ * live API otherwise. Same PUBLISHED_TILES shape poi/repository.ts uses: a
  * missing object just means "outside Overture's Divisions coverage for
  * this page", not a genuine failure, so a 404 resolves straight to `null`.
  *

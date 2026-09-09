@@ -12,7 +12,7 @@ section specifically for why POI is wired the way it is here.
 - **`repository.ts`** / **`use_poi_fetcher.ts`** — client transport + demand
   scheduling, mirroring `terrain/tile_repository.ts` / `use_tile_fetcher.ts`'s
   shape: a pre-baked static origin when one is configured
-  (`HAS_STATIC_POI`/`POI_TILE_BASE_URL`, `lib/env/config.ts`), the live API
+  (`PUBLISHED_TILES`/`POI_TILE_BASE_URL`, `lib/env/config.ts`), the live API
   otherwise, and reusing terrain's own `CLEANUP_RADIUS` to evict cached
   pages once they fall out of range (see `use_poi_fetcher.ts`'s own doc
   comment for why this matters now that POI is Overture-sourced). POI still

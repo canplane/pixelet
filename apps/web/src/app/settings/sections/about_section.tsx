@@ -4,15 +4,9 @@ import { Box } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
-import { APP_ENV, BUILD_TIME, HAS_STATIC_POI, HAS_STATIC_TILES, POI_TILE_BASE_URL, TILE_BASE_URL } from "@/lib/env/config.ts";
+import { APP_ENV, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
+import { PUBLISHED_VERSION } from "@/lib/env/routes.ts";
 import { OBJECT_STORAGE_VERSION } from "@/modules/world/objects/store.ts";
-
-function version_from_base_url(base_url: string): string {
-  return (base_url.split("/").filter(Boolean).pop() ?? "").replace(/^v/, "");
-}
-
-const tile_version: string = version_from_base_url(TILE_BASE_URL);
-const poi_version: string = version_from_base_url(POI_TILE_BASE_URL);
 
 const env_label: string = APP_ENV.charAt(0).toUpperCase() + APP_ENV.slice(1);
 
@@ -48,8 +42,8 @@ export function AboutSection() {
         <span className="text-muted-foreground/70">
           {APP_ENV !== "production" && `${env_label} · `}
           {build_label()}
-          {` · ${HAS_STATIC_TILES ? `Terrain v${tile_version}` : "Live terrain"}`}
-          {` · ${HAS_STATIC_POI ? `POI v${poi_version}` : "Live POI"}`}
+          {` · ${PUBLISHED_TILES ? `Terrain ${PUBLISHED_VERSION.terrain}` : "Live terrain"}`}
+          {` · ${PUBLISHED_TILES ? `POI ${PUBLISHED_VERSION.poi}` : "Live POI"}`}
           {` · Object v${OBJECT_STORAGE_VERSION}`}
         </span>
       </div>
