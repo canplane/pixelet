@@ -22,7 +22,7 @@ export type ReverseGeocodeResult = {
 
 /**
  * Neighborhood label for the current map_center, baked per L3 page from
- * Overture's Divisions theme (apps/api/src/modules/world/geocode) — no
+ * Overture's Divisions theme (apps/api/src/modules/tiles/geocode) — no
  * longer a live per-coordinate call to public Nominatim (see
  * discussions/20260908-overture-poi-adoption.md). Page-keyed like POI, so
  * the "have we already resolved this one" check is exact IVec equality,

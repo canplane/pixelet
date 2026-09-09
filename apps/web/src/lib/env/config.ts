@@ -33,48 +33,28 @@ export const APP_ENV: string = __APP_ENV__;
  * shown rather than here, so it reads in the viewer's own timezone. */
 export const BUILD_TIME: string = __BUILD_TIME__;
 
+/** A base is the live API when it starts with this, a published bucket otherwise. */
+const API_PREFIX = "/api/";
+
 /**
- * Origin the pre-baked terrain tiles are served from, version prefix
- * included, with any trailing slashes removed so callers can always join
- * with a single `/`.
- *
- * Empty means no static tile store is configured: the client then requests
- * the live API route through the dev proxy and every page — ocean included —
- * is baked on demand. Accepts an absolute origin
- * (`https://tiles.example.com/v1`) or a same-origin path (`/tiles/v1`); the
- * latter is what avoids CORS entirely when the bucket is bound to a path on
- * the app's own hostname.
+ * The prefix a tile URL is built from — `<base>/<page_idx>`, bucket or live
+ * API. Both forms are in apps/web/.env.example. Trailing slashes are
+ * stripped so callers join with a single one. An absolute origin works as
+ * well as a same-origin path.
  */
 export const TILE_BASE_URL: string = __TILE_BASE_URL__.replace(/\/+$/, "");
 
-/** True when tiles come from a static store rather than the live API. Keyed
- * off separately from any dev flag because the distinction that matters is
- * "is there an API behind this" — most notably whether a 404 means "open
- * ocean, never baked" or a genuine failure. */
-export const HAS_STATIC_TILES: boolean = TILE_BASE_URL.length > 0;
+/** Whether a 404 means "open ocean, never baked" or a genuine failure. */
+export const HAS_STATIC_TILES: boolean = !TILE_BASE_URL.startsWith(API_PREFIX);
 
-/** Same as TILE_BASE_URL, for the pre-baked POI set (apps/api/src/bake/poi/
- * tools/bake_poi_tiles.ts) — a sibling prefix in the same bucket, not part
- * of TILE_BASE_URL's own path (POI was deliberately kept out of terrain's
- * own tile format — see discussions/20260907-world-rendering-tiers.md). */
+/** A sibling prefix in the same bucket, not inside terrain's. */
 export const POI_TILE_BASE_URL: string = __POI_TILE_BASE_URL__.replace(/\/+$/, "");
 
-/** True when POI comes from the static set rather than the live API. Here a
- * 404 means "no POI on this page" rather than "genuine failure" — POI has
- * no shared-fallback-tile concept the way terrain's ocean tile does, since
- * "nothing here" is just an empty list, not a real payload some other
- * page's bytes could stand in for. */
-export const HAS_STATIC_POI: boolean = POI_TILE_BASE_URL.length > 0;
+/** Whether a 404 means "no POI on this page" or a genuine failure. */
+export const HAS_STATIC_POI: boolean = !POI_TILE_BASE_URL.startsWith(API_PREFIX);
 
-/** Same as POI_TILE_BASE_URL, for the pre-baked reverse-geocode label set
- * (apps/api/src/bake/geocode/tools/bake_geocode_tiles.ts). Retired a direct
- * client-side call to public Nominatim (no server, no cache, no bake step
- * at all) in favor of the same static/live PoiProvider-shaped pattern POI
- * already uses — see discussions/20260908-overture-poi-adoption.md. */
 export const GEOCODE_TILE_BASE_URL: string = __GEOCODE_TILE_BASE_URL__.replace(/\/+$/, "");
 
-/** True when the neighborhood label comes from the static set rather than
- * the live API. A 404 means "outside Overture's Divisions coverage for
- * this page" rather than a genuine failure — same no-fallback-object shape
- * POI's own HAS_STATIC_POI documents. */
-export const HAS_STATIC_GEOCODE: boolean = GEOCODE_TILE_BASE_URL.length > 0;
+/** Whether a 404 means "outside Overture's Divisions coverage" or a genuine
+ * failure. */
+export const HAS_STATIC_GEOCODE: boolean = !GEOCODE_TILE_BASE_URL.startsWith(API_PREFIX);

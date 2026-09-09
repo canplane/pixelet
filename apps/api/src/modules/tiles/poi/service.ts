@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/poi/service.ts
+// @pxl/api/modules/tiles/poi/service.ts
 
 import type { Hono } from "@hono/hono";
 
@@ -70,7 +70,7 @@ function make_services(provider: PoiProvider) {
 export function register(router: Hono, resrc: AppResources): void {
   const service = make_services(make_overture_provider(resrc.geo_pool));
 
-  router.get("/api/world/poi/:page_idx", async (c) => {
+  router.get("/api/tiles/poi/:page_idx", async (c) => {
     const raw_page_idx: string = c.req.param("page_idx");
 
     if (!PAGE_IDX_PATTERN.test(raw_page_idx)) {

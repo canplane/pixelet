@@ -21,7 +21,7 @@ import { HAS_STATIC_POI, POI_TILE_BASE_URL } from "@/lib/env/config.ts";
  * own.
  */
 function poi_url(key: string): string {
-  return HAS_STATIC_POI ? `${POI_TILE_BASE_URL}/${key}` : `/api/world/poi/${key}`;
+  return `${POI_TILE_BASE_URL}/${key}`;
 }
 
 export async function fetch_poi(page_idx: IVec): Promise<POI[]> {

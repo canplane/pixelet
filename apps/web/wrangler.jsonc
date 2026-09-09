@@ -53,11 +53,9 @@
     // index.html, or a deep link 404s instead of routing client-side.
     "not_found_handling": "single-page-application",
 
-    // ...but that fallback would also swallow tile/API requests, handing
-    // back index.html for every page_idx or /api/* call. Routing both to
-    // the Worker first keeps every behaviour straight: SPA fallback for the
-    // app, R2 for tiles, a reverse proxy for the live API.
-    "run_worker_first": ["/tiles/*", "/api/*"]
+    // ...but that fallback would also swallow tile/search requests, handing
+    // back index.html for every page_idx or search query.
+    "run_worker_first": ["/tiles/*", "/search"]
   },
 
   "r2_buckets": [

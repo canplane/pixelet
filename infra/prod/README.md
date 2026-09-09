@@ -1,10 +1,9 @@
 # apps/api's production deployment (Hetzner Cloud)
 
-Forward search (`apps/api/src/modules/world/search/`) is the one world/
-feature that needs a live, always-on server — POI/geocode/terrain stay
-static-bake-to-R2 and don't need any of this (see
-discussions/20260908-overture-poi-adoption.md). Everything here exists
-only to make that one feature reachable in production.
+Forward search (`apps/api/src/modules/search/`) is the one feature that
+needs a live, always-on server — POI/geocode/terrain stay static-bake-to-R2
+and don't need any of this (see discussions/20260908-overture-poi-adoption.md).
+Everything here exists only to make that one feature reachable in production.
 
 **Chosen over Fly.io/AWS**: one Hetzner CX22 (2 vCPU / 4 GB / 40 GB, ~€4.50/mo,
 20 TB pooled traffic) running app + both Postgres instances + a Caddy
@@ -96,7 +95,7 @@ startup (`DB_MAIN_URL` is a required env var) — nothing queries it yet.
    finishes its own first-time init — both resolve on their own (Docker's
    `restart: unless-stopped` retries the API container automatically) once
    Postgres is actually ready. See "Data migration" below before expecting
-   `/api/world/search` to return anything real regardless.
+   `/api/search` to return anything real regardless.
 
 ## Data migration (local dev → production, one-time + whenever re-run)
 
@@ -134,12 +133,10 @@ already documents for the source data itself).
 
 ## Cloudflare Worker wiring
 
-`apps/web`'s production Worker reverse-proxies `/api/*` to `API_ORIGIN`
-(`wrangler.jsonc`'s own `vars`, `https://api.plei.me` — see
-`worker/index.ts`) so the client's own relative
-`fetch("/api/world/search?...")` calls (search/repository.ts) work
-unchanged in production, the same way Vite's dev-time proxy
-(`vite.config.ts`'s own `proxy: { "/api": ... }`) already does locally.
+`apps/web`'s production Worker reverse-proxies `/search` to `API_ORIGIN`'s
+`/api/search` (`wrangler.jsonc`'s own `vars`, `https://api.plei.me` — see
+`worker/index.ts`), matching Vite's dev-time proxy
+(`vite.config.ts`'s own `proxy: { "/search": ... }`).
 
 ## Backups
 

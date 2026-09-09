@@ -29,7 +29,7 @@
 //
 // Flags:
 //   --out <dir>          output directory (default ./out/poi/v1)
-//   --land-cache <path>  terrain's own land_pages.json (default ./out/tiles/land_pages.json)
+//   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
 //   --concurrency <n>    parallel fetches (default 8, match DB_POOL_SIZE)
 //   --limit <n>          stop after n land pages (smoke test)
 //   --force              re-fetch pages that already have an object or .empty marker
@@ -64,7 +64,7 @@ type Args = {
 function parse_args(argv: string[]): Args {
   const args: Args = {
     out: "./out/poi/v1",
-    land_cache: "./out/tiles/land_pages.json",
+    land_cache: "./out/terrain/land_pages.json",
     concurrency: 8,
     limit: null,
     force: false,

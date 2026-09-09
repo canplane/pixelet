@@ -33,7 +33,7 @@ of ingested data.
 
 ```bash
 deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts \
-  --out ./out/tiles/v1 --concurrency 8
+  --out ./out/terrain/v1 --concurrency 8
 ```
 
 | Flag                | Meaning                                                         |
@@ -89,8 +89,8 @@ bbox is open sea, and the client turns a 404 into the shared `_ocean` tile.
    `apps/api/src/bake/terrain/source.ts`. With the API running:
 
    ```bash
-   curl -s localhost:3000/api/world/terrain/tiles/<page_idx> --compressed | shasum
-   gunzip -c ./out/tiles/v1/<page_idx> | shasum
+   curl -s localhost:3000/api/tiles/terrain/<page_idx> --compressed | shasum
+   gunzip -c ./out/terrain/v1/<page_idx> | shasum
    ```
 
    A mismatch means the two paths have drifted, which should be impossible by
@@ -105,7 +105,7 @@ edge, browser caches, and any future OPFS cache at once, with no purge call.
 The deployment is one Cloudflare Worker serving both the built app and the
 tiles (`apps/web/wrangler.jsonc`), so tiles live on the app's own hostname
 under `/tiles/`. That is what makes them same-origin: there is no CORS policy
-to configure, and `VITE_TILE_BASE_URL` stays a relative path that survives a
+to configure, and the client's tile path stays relative, surviving a
 domain change.
 
 ### One-time setup
@@ -133,7 +133,7 @@ present; either works, since R2 is S3-compatible. `wrangler r2 object put`
 handles one object per invocation and is not usable at this scale.
 
 ```bash
-aws s3 sync ./out/tiles/v1 s3://<bucket>/v1 \
+aws s3 sync ./out/terrain/v1 s3://<bucket>/terrain/v1 \
   --profile r2 \
   --endpoint-url https://<account_id>.r2.cloudflarestorage.com \
   --content-type application/octet-stream \
@@ -154,21 +154,21 @@ headers that some S3-compatible stores refuse), set
 
 ```bash
 # object count should match the manifest's `objects`
-aws s3 ls s3://<bucket>/v1/ --profile r2 --endpoint-url <endpoint> --recursive | wc -l
+aws s3 ls s3://<bucket>/terrain/v1/ --profile r2 --endpoint-url <endpoint> --recursive | wc -l
 
 # the shared ocean tile must exist
-aws s3api head-object --bucket <bucket> --key v1/_ocean \
+aws s3api head-object --bucket <bucket> --key terrain/v1/_ocean \
   --profile r2 --endpoint-url <endpoint>
 
 # and metadata must have survived: expect ContentEncoding "gzip"
-aws s3api head-object --bucket <bucket> --key v1/<some_page_idx> \
+aws s3api head-object --bucket <bucket> --key terrain/v1/<some_page_idx> \
   --profile r2 --endpoint-url <endpoint>
 ```
 
 ### Deploy
 
 ```bash
-# apps/web/.env -> VITE_TILE_BASE_URL=/tiles/v1
+# apps/web/.env.example -> PUBLISHED_VERSION_TERRAIN=v1
 deno task build:web
 cd apps/web && npx wrangler deploy
 ```
@@ -179,7 +179,7 @@ Then attach the custom domain to the Worker in the dashboard.
 perfectly correct while the serving path is not:
 
 ```bash
-U=https://<host>/tiles/v1/<page_idx>
+U=https://<host>/tiles/terrain/v1/<page_idx>
 curl -s -H "Accept-Encoding: gzip" -D - -o /dev/null "$U"   # expect content-encoding: gzip
 curl -s --compressed "$U" | head -c 2 | xxd -p              # expect 5854 (XT), never 1f8b
 ```

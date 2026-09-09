@@ -3,7 +3,7 @@
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { GEOCODE_TILE_BASE_URL, HAS_STATIC_GEOCODE } from "@/lib/env/config.ts";
+import { GEOCODE_TILE_BASE_URL } from "@/lib/env/config.ts";
 
 /** One administrative division, mirrors the API's own GeocodePart
  * (bake/geocode/provider.ts) — `name` is Overture's local-language
@@ -31,7 +31,7 @@ export type GeocodeResult = { parts: GeocodePart[] };
  * coordinate.
  */
 function geocode_url(key: string): string {
-  return HAS_STATIC_GEOCODE ? `${GEOCODE_TILE_BASE_URL}/${key}` : `/api/world/geocode/${key}`;
+  return `${GEOCODE_TILE_BASE_URL}/${key}`;
 }
 
 export async function fetch_geocode(page_idx: IVec, signal?: AbortSignal): Promise<GeocodeResult | null> {

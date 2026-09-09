@@ -20,7 +20,7 @@ Always drive the repo through its tasks, run from the repo root:
 | ------------------------ | ---------------------------------------------------------- |
 | `deno task dev`          | web + api together                                         |
 | `deno task dev:remote`   | client only, tiles from the published deployment           |
-| `deno task bake:tiles`   | bake every land page into `./out/tiles/<version>`          |
+| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`        |
 | `deno task deploy`       | build the client and publish the Cloudflare Worker         |
 | `deno task check`        | type-check every workspace member                          |
 | `deno task test`         | tests (only `apps/web` and `packages/pxl/shared` have any) |

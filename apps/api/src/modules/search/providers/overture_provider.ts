@@ -1,9 +1,9 @@
-// @pxl/api/modules/world/search/providers/overture_provider.ts
+// @pxl/api/modules/search/providers/overture_provider.ts
 
 import type { Pool } from "@db/postgres";
 
 import { OVERTURE_CATEGORY_MAP } from "@pxl/api/bake/overture/model/category_map.ts";
-import { resolve_broad_context } from "../../geocode/resolve_broad.ts";
+import { resolve_broad_context } from "../../tiles/geocode/resolve_broad.ts";
 import type { SearchProvider, SearchResult } from "../provider.ts";
 
 const DEFAULT_LIMIT = 20;

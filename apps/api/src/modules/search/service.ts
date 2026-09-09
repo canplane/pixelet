@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/search/service.ts
+// @pxl/api/modules/search/service.ts
 //
 // Forward search's own live endpoint — the one world/ feature that can't
 // be pre-baked like terrain/poi/geocode (see provider.ts's own top comment
@@ -34,7 +34,7 @@ function parse_near(raw: string | undefined): { lon: number; lat: number } | und
 export function register(router: Hono, resrc: AppResources): void {
   const provider: SearchProvider = make_overture_search_provider(resrc.geo_pool);
 
-  router.get("/api/world/search", async (c) => {
+  router.get("/api/search", async (c) => {
     const q = (c.req.query("q") ?? "").trim();
     if (q.length < MIN_QUERY_LEN || q.length > MAX_QUERY_LEN) {
       return c.json({ error: "bad query" }, 400);

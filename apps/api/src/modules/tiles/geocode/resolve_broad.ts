@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/geocode/resolve_broad.ts
+// @pxl/api/modules/tiles/geocode/resolve_broad.ts
 //
 // Shared with search/providers/overture_provider.ts: a division search
 // result (e.g. 수내동) is easy to misread without its own broader context —

@@ -6,10 +6,10 @@
  *
  * Static assets are handled by the platform before this script runs (see
  * wrangler.jsonc); the two paths routed here are `/tiles/*` (read straight
- * out of the R2 bucket) and `/api/*` (reverse-proxied to API_ORIGIN, see
- * infra/prod/README.md). Keeping both on the app's own hostname is what
- * makes them same-origin, so no CORS policy exists to configure or get
- * wrong — see discussions/20260816-deployment-hosting.md.
+ * out of the R2 bucket) and `/search` (reverse-proxied to API_ORIGIN's
+ * `/api/search`, see infra/prod/README.md). Keeping both on the app's own
+ * hostname is what makes them same-origin, so no CORS policy exists to
+ * configure or get wrong — see discussions/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
  * deployment, it targets the Workers runtime rather than the browser, and
@@ -53,15 +53,13 @@ export type Env = {
 };
 
 const PREFIX = "/tiles/";
-const API_PREFIX = "/api/";
 
 /**
  * Object keys this Worker is willing to ask R2 for. Three shapes:
  *
- * - `<version>/<page_idx>`, plus the one shared `<version>/_ocean` tile —
- *   terrain, unchanged since this bucket held only terrain. No type prefix
- *   of its own; kept that way rather than retrofitted to `terrain/<version>/…`
- *   so an already-published version keeps resolving with zero migration.
+ * - `terrain/<version>/<page_idx>`, plus the shared `terrain/<version>/_ocean`
+ *   tile. The bare `<version>/…` form without the type segment is also
+ *   accepted, which is what this bucket held when it held only terrain.
  * - `poi/<version>/<page_idx>` — apps/api/src/bake/poi/tools/bake_poi_tiles.ts's
  *   own sibling prefix in the same bucket. No `_ocean`-equivalent: a missing
  *   POI object means "no POI on this page", which poi/repository.ts resolves
@@ -89,28 +87,24 @@ const API_PREFIX = "/api/";
  * It is not rate limiting and does not pretend to be — that needs WAF rules,
  * which need a real zone rather than a workers.dev hostname.
  */
-const KEY_RE = /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20}))$/;
+const KEY_RE =
+  /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20})|[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20}))$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // Plain reverse proxy — same origin from the browser's own point of
-    // view (no CORS to configure), the request forwarded verbatim onto
-    // API_ORIGIN. `host` is overwritten explicitly rather than left as
-    // whatever the incoming request carried (this app's own hostname):
-    // Caddy on the other end (infra/prod/Caddyfile) routes on Host, so a
-    // mismatched header there would 404 or hit the wrong site entirely.
-    if (url.pathname.startsWith(API_PREFIX)) {
-      const target = new URL(url.pathname + url.search, env.API_ORIGIN);
+    // reverse proxy to API_ORIGIN's /api/search, host header rewritten for Caddy
+    if (url.pathname === "/search") {
+      const target = new URL("/api/search" + url.search, env.API_ORIGIN);
       const headers = new Headers(request.headers);
       headers.set("host", target.host);
       return fetch(new Request(target, { method: request.method, headers, body: request.body }));
     }
 
-    // `run_worker_first` should mean this only ever sees /tiles/* (and the
-    // API proxy above), but the guard keeps the Worker correct on its own
-    // rather than relying on routing config staying in sync with it.
+    // `run_worker_first` should mean this only ever sees /tiles/* (and /search
+    // above), but the guard keeps the Worker correct on its own rather than
+    // relying on routing config staying in sync with it.
     if (!url.pathname.startsWith(PREFIX)) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {

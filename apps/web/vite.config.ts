@@ -23,14 +23,6 @@ const apiBaseDefault = "http://127.0.0.1:3000";
 // every request once that route was disabled at the Cloudflare edge —
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
 const tileOriginDefault = "https://plei.me";
-const tileVersionDefault = "v1";
-// v1 was OSM-baked; v2 is the first Overture Places bake
-// (discussions/20260908-overture-poi-adoption.md) — a genuinely different
-// dataset, not a refresh of the same one, so a new immutable prefix rather
-// than overwriting v1 in place (same "never overwrite a published version"
-// rule terrain's own tiles already follow).
-const poiTileVersionDefault = "v2";
-const geocodeTileVersionDefault = "v1";
 
 // anti-HMR
 const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
@@ -93,81 +85,40 @@ export default defineConfig(({ mode }) => {
 
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
-  // Static tile origin for the serverless deployment: the pre-baked tiles
-  // (apps/api/src/bake/terrain/tools/bake_tiles.ts) live in an object store
-  // and are fetched directly, with no API server anywhere in the request
-  // path. Left empty in dev, where the client keeps hitting the live
-  // /api route through the proxy below and tiles are baked on demand.
-  // Where tiles come from during development. One knob rather than two,
-  // because the two settings it drives have to move together — pointing the
-  // client at /tiles without also proxying that path just 404s, and the pair
-  // being manually maintained in .env is exactly the kind of thing that ends
-  // up half-applied. `deno task dev:remote` sets this.
-  //
-  //   local  (default) — the live API bakes on demand. Required for bake work.
-  //   remote           — an already-published deployment, proxied. No Docker,
-  //                      no PostGIS, no API process.
-  //
-  // Proxied rather than fetched cross-origin on purpose: requests stay
-  // same-origin from the browser's point of view, so VITE_TILE_BASE_URL keeps
-  // the relative form it has in production and the Worker needs no CORS
-  // headers. Nothing about the deployed configuration is loosened to make
-  // local development easier.
-  //
-  // A published prefix is frozen, so changes to the baking pipeline never show
-  // up in remote mode. That same property makes it good for render work, where
-  // a fixed input is what you want.
+  // VITE_TILE_SOURCE=remote (deno task dev:remote): tiles from a published deployment instead of the local API.
   const remoteTiles = (env.VITE_TILE_SOURCE || "local") === "remote";
 
-  // Derived rather than required. The deployment serves tiles from its own
-  // origin under /tiles/<version> (see apps/web/worker/index.ts), so a
-  // production build that had to be told this could only ever be told the
-  // same thing — or forgotten, which fails as tiles 404ing against an API
-  // that is not deployed. Remote dev mode resolves to the same path for the
-  // same reason. An explicit value still wins, for a host that differs.
-  const tileVersion = env.VITE_TILE_VERSION || tileVersionDefault;
-  const tileBase = env.VITE_TILE_BASE_URL ||
-    (remoteTiles || mode === "production" ? `/tiles/${tileVersion}` : "");
+  // tile path: /tiles/<TILE_PATH_kind>[/<PUBLISHED_VERSION_kind>]/<page_idx>. Read from .env.example (gitignored .env can't hold reviewable version bumps).
+  const settings = Object.fromEntries(
+    Deno.readTextFileSync(path.resolve(__dirname, ".env.example"))
+      .split("\n")
+      .map((line) => line.match(/^([A-Z_]+)=(.*)$/))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map((m) => [m[1], m[2].trim()]),
+  );
+  const trim = (part: string) => part.replace(/^\/+|\/+$/g, "");
+  const tile_base = (kind: string) => {
+    const version = mode === "production" ? settings[`PUBLISHED_VERSION_${kind}`] : "";
+    const tail = [settings[`TILE_PATH_${kind}`], version].filter(Boolean).map(trim).join("/");
+    return `/${tail}`;
+  };
+  const tileBase = tile_base("TERRAIN");
+  const poiTileBase = tile_base("POI");
+  const geocodeTileBase = tile_base("GEOCODE");
 
-  // Same reasoning as tileBase, one path segment over: apps/api/src/bake/
-  // poi/tools/bake_poi_tiles.ts publishes under /tiles/poi/<version> (a
-  // sibling prefix in the same bucket, not terrain's own <version> root —
-  // see discussions/20260907-world-rendering-tiers.md's own note on why POI
-  // stays off terrain's tile format even as a static artifact). Empty in
-  // dev, where poi/repository.ts keeps hitting the live /api route.
-  const poiTileVersion = env.VITE_POI_TILE_VERSION || poiTileVersionDefault;
-  const poiTileBase = env.VITE_POI_TILE_BASE_URL ||
-    (remoteTiles || mode === "production" ? `/tiles/poi/${poiTileVersion}` : "");
-
-  // Same shape again, one path segment over: apps/api/src/bake/geocode/
-  // tools/bake_geocode_tiles.ts publishes under /tiles/geocode/<version>.
-  // Empty in dev, where geocode/repository.ts keeps hitting the live
-  // /api route instead (see discussions/20260908-overture-poi-adoption.md
-  // for why this replaced a direct client-side call to public Nominatim).
-  const geocodeTileVersion = env.VITE_GEOCODE_TILE_VERSION || geocodeTileVersionDefault;
-  const geocodeTileBase = env.VITE_GEOCODE_TILE_BASE_URL ||
-    (remoteTiles || mode === "production" ? `/tiles/geocode/${geocodeTileVersion}` : "");
-
-  // Where tiles come from during development. One knob rather than two,
-  // because the two settings it drives have to move together — pointing the
-  // client at /tiles without also proxying that path just 404s, and the pair
-  // being manually maintained in .env is exactly the kind of thing that ends
-  // up half-applied. `deno task dev:remote` sets this.
-  //
-  //   local  (default) — the live API bakes on demand. Required for bake work.
-  //   remote           — an already-published deployment, proxied. No Docker,
-  //                      no PostGIS, no API process.
-  //
-  // Proxied rather than fetched cross-origin on purpose: requests stay
-  // same-origin from the browser's point of view, so VITE_TILE_BASE_URL keeps
-  // the relative form it has in production and the Worker needs no CORS
-  // headers. Nothing about the deployed configuration is loosened to make
-  // local development easier.
-  //
-  // A published prefix is frozen, so changes to the baking pipeline never show
-  // up in remote mode. That same property makes it good for render work, where
-  // a fixed input is what you want.
+  //   local  (default) — live API, bakes on demand.
+  //   remote            — an already-published deployment.
   const tileProxyTarget = remoteTiles ? (env.VITE_TILE_PROXY_TARGET || tileOriginDefault) : "";
+
+  for (
+    const [name, base] of [
+      ["TILE_PATH_TERRAIN", tileBase],
+      ["TILE_PATH_POI", poiTileBase],
+      ["TILE_PATH_GEOCODE", geocodeTileBase],
+    ] as const
+  ) {
+    if (base === "/") throw new Error(`${name} is empty — check the tiles section of apps/web/.env.example.`);
+  }
 
   return {
     // root `deno task dev` runs dev:api and dev:web concurrently in one
@@ -221,18 +172,9 @@ export default defineConfig(({ mode }) => {
       // every such path at once instead of allow-listing each package.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
       proxy: {
-        ...(tileProxyTarget
-          ? {
-            "/tiles": {
-              target: tileProxyTarget,
-              changeOrigin: true,
-            },
-          }
-          : {}),
-        "/api": {
-          target: apiBase,
-          changeOrigin: true,
-        },
+        // local: rewrite onto the live API's tile routes. remote: forward as-is.
+        "/tiles": tileProxyTarget ? { target: tileProxyTarget, changeOrigin: true } : { target: apiBase, changeOrigin: true, rewrite: (p: string) => `/api${p}` },
+        "/search": { target: apiBase, changeOrigin: true, rewrite: (p: string) => `/api${p}` },
         "/io": {
           target: apiBase,
           changeOrigin: true,

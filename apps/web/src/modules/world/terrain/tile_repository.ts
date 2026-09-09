@@ -16,7 +16,7 @@ import { HAS_STATIC_TILES, TILE_BASE_URL } from "@/lib/env/config.ts";
 const OCEAN_KEY = "_ocean";
 
 function tile_url(key: string): string {
-  return HAS_STATIC_TILES ? `${TILE_BASE_URL}/${key}` : `/api/world/terrain/tiles/${key}`;
+  return `${TILE_BASE_URL}/${key}`;
 }
 
 /**
