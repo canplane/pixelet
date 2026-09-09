@@ -3,6 +3,14 @@
   "version": "0.0.0",
   "exports": "./src/index.ts",
 
+  // no-window/no-window-prefix assume runtime-portable code (the default
+  // for apps/api and packages/*, which the root config's own rules target);
+  // this workspace member is browser-only, where `window` is the correct
+  // global, not a portability footgun.
+  "lint": {
+    "rules": { "exclude": ["no-window", "no-window-prefix"] }
+  },
+
   "tasks": {
     "dev": "deno run -A --node-modules-dir=auto npm:vite",
     // Tiles from the published deployment instead of a local API + PostGIS.

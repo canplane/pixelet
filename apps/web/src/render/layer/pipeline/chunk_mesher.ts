@@ -632,11 +632,6 @@ const SURVIVING = new Vector(Uint32Array, { init_cap: 6 * (1 << 12) });
  * merged box would claim one crease state for a border where the cells
  * disagreed.
  */
-const MERGE_KEY_BITS = RISES_PX | RISES_NX | RISES_PY | RISES_NY |
-  DIPS_PX | DIPS_NX | DIPS_PY | DIPS_NY |
-  DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN |
-  ALL_CREASES | ALL_FACES;
-
 /** The bits that make one cell's +X border a seam: a face to draw there, or
  * an edge to shade. A merge may not swallow a border carrying any of them. */
 const X_SEAM_BITS = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX;

@@ -140,8 +140,7 @@ export function Toast({
     animateValue(wrapperOpacity, stackOpacity, wrapperTransition);
     // wrapperY/wrapperOpacity are stable MotionValue refs (framer-motion
     // guarantees identity across renders, same as useRef) — deliberately
-    // excluded so eslint doesn't ask for them.
-    // deno-lint-ignore react-hooks/exhaustive-deps
+    // excluded from the deps below.
   }, [stackY, stackOpacity, justEnteredFrontViaDownSwipe, isRemoving]);
 
   const dragStartY = useRef<number | null>(null);

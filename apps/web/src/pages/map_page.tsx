@@ -1,7 +1,5 @@
 // @pxl/web/pages/map_page.tsx
 
-import { useAppContext } from "@/app/providers/app_context.ts";
-
 import { useGeolocation } from "../modules/device/pose/use_geolocation.ts";
 import { useDeviceOrientation } from "../modules/device/pose/use_device_orientation.ts";
 
@@ -9,8 +7,6 @@ import { MapScene } from "../modules/map/scene.tsx";
 
 /** Map page */
 function MapPage() {
-  const { store } = useAppContext();
-
   // start tracking device pose
   useGeolocation();
   useDeviceOrientation();

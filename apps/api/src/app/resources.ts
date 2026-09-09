@@ -54,16 +54,21 @@ export async function make_app_resrcs(): Promise<AppResources> {
     for (let i = disposers.length - 1; i >= 0; i--) {
       try {
         await disposers[i]();
-      } catch {}
+      } catch {
+        // best-effort teardown — one disposer failing must not skip the rest
+      }
     }
-    // best-effort
     try {
       // deno-postgres / postgres libraries usually expose end() or close()
       await main_pool.end?.();
-    } catch {}
+    } catch {
+      // best-effort — process is exiting either way
+    }
     try {
       await geo_pool.end?.();
-    } catch {}
+    } catch {
+      // best-effort — process is exiting either way
+    }
   }
 
   return { main_pool, geo_pool, disposers, dispose };

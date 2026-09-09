@@ -6,6 +6,14 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
 import { DevicePoseStatus, useDeviceOrientationStore } from "./store.ts";
 
+/** iOS Safari's own compass heading, absent from lib.dom.d.ts. */
+type IOSOrientationEvent = DeviceOrientationEvent & { webkitCompassHeading?: number };
+
+/** iOS 13+'s permission gate, absent from lib.dom.d.ts. */
+type IOSOrientationEventCtor = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<"granted" | "denied">;
+};
+
 /** Global count for singleton management — tracks how many components share this sensor hardware resource. */
 let orientation_subscriber_cnt: u32 = 0;
 
@@ -27,7 +35,7 @@ function handle_orientation(e: DeviceOrientationEvent): void {
   const set_orientation = useDeviceOrientationStore.getState().set_orientation;
 
   // prefer iOS's own heading; fall back to alpha-derived otherwise
-  const heading: f64 | null = (e as any).webkitCompassHeading ??
+  const heading: f64 | null = (e as IOSOrientationEvent).webkitCompassHeading ??
     (e.alpha !== null ? (360 - e.alpha) % 360 : null);
 
   set_orientation(heading, e.beta, e.gamma);
@@ -61,11 +69,9 @@ export function useDeviceOrientation() {
 
     set_status(DevicePoseStatus.LOADING);
 
-    if (typeof (DeviceOrientationEvent as any).requestPermission === "function") {
+    if (typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function") {
       try {
-        const permission = await (
-          DeviceOrientationEvent as any
-        ).requestPermission();
+        const permission = await (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
         if (permission === "granted") {
           window.addEventListener("deviceorientation", handle_orientation, true);
           last_orientation_event_at = Date.now();
@@ -92,7 +98,7 @@ export function useDeviceOrientation() {
     orientation_subscriber_cnt++;
 
     const is_iOS: boolean = typeof DeviceOrientationEvent !== "undefined" &&
-      typeof (DeviceOrientationEvent as any).requestPermission === "function";
+      typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
 
     // auto-start on platforms that allow it (Android, desktop, ...)
     if (!useDeviceOrientationStore.getState().is_tracking_orientation && !is_iOS) {
@@ -155,7 +161,7 @@ export function useDeviceOrientation() {
         // manual (the compass button). Every other platform auto-starts
         // with no such restriction, so it's safe to just retry.
         const is_iOS = typeof DeviceOrientationEvent !== "undefined" &&
-          typeof (DeviceOrientationEvent as any).requestPermission === "function";
+          typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
         if (!is_iOS) request_orientation().catch((err) => console.error("[device_orientation] request failed:", err));
         return;
       }

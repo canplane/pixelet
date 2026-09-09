@@ -109,7 +109,6 @@ export function useMinimapAtlas(): MinimapAtlas | null {
     set_atlas({ url: canvas.toDataURL(), origin });
     // map_center is deliberately excluded: it changes every pan tick and is handled
     // by minimap_pan_px() instead — including it here would rebake on every tick.
-    // deno-lint-ignore react-hooks/exhaustive-deps
   }, [tile_map, center_page_idx]);
 
   return atlas;

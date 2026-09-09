@@ -28,4 +28,4 @@ export type ModalController = {
  * This type aggregates all UI-related controllers
  * to provide a single access point for imperative UI actions.
  */
-export type UiController = {} & ModalController;
+export type UiController = ModalController;

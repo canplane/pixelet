@@ -10,7 +10,7 @@ import { useAppContext } from "@/app/providers/app_context.ts";
  * Temporary dialog placeholder.
  * This will be replaced by a real dialog implementation.
  */
-function Dialog(props: {
+function Dialog(_props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -23,8 +23,8 @@ type UpdateFooProps = {
   params: { id: number };
 };
 
-/** EditFooProps */
-export type EditFooProps = UpdateFooProps & {};
+/** EditFooProps — extend inline here (`UpdateFooProps & {...}`) if edit-only fields show up. */
+export type EditFooProps = UpdateFooProps;
 
 /**
  * EditFooModal
@@ -38,7 +38,7 @@ export type EditFooProps = UpdateFooProps & {};
  */
 export function EditFooModal(props: BaseModalProps & EditFooProps) {
   const { open, type, params } = props;
-  const { store, ui } = useAppContext();
+  const { store } = useAppContext();
 
   /**
    * Initializes modal state when the modal opens

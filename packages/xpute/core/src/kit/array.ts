@@ -91,7 +91,7 @@ export const is_ta_sab = <T extends TypedArray>(
  * - plain ArrayLike: copy
  */
 export const as_ta_ab = <T extends TypedArray>(
-  vals: any,
+  vals: ArrayBuffer | TypedArray | ArrayLike<number>,
   ctor: TypedArrayCtor<T>,
 ): T => {
   // exact type over AB
@@ -151,7 +151,7 @@ export type Bytes = U8Array;
 export const is_bytes = (vals: unknown): vals is Bytes => vals instanceof Uint8Array && is_ab(vals.buffer);
 
 /** Thin byte-specialized wrapper over as_ta_ab(Uint8Array). */
-export const as_bytes = (vals: any): Bytes => as_ta_ab(vals, Uint8Array);
+export const as_bytes = (vals: ArrayBuffer | TypedArray | ArrayLike<number>): Bytes => as_ta_ab(vals, Uint8Array);
 
 /**
  * Zero-copy cast of any typed array view into a byte view (U8Array).
@@ -214,7 +214,7 @@ export const is_bta_sab = <T extends BigTypedArray>(
  * - plain ArrayLike: copy
  */
 export const as_bta_ab = <T extends BigTypedArray>(
-  vals: any,
+  vals: ArrayBuffer | BigTypedArray | ArrayLike<bigint>,
   ctor: BigTypedArrayCtor<T>,
 ): T => {
   // exact type over AB
@@ -231,7 +231,7 @@ export const as_bta_ab = <T extends BigTypedArray>(
     // SAB-backed: copy into fresh AB-backed storage
     if (is_sab(buf)) {
       const out = new ctor(vals.length);
-      out.set(vals as any);
+      out.set(vals);
       return out;
     }
   }
@@ -260,7 +260,7 @@ export const copy_bta_view = <T extends BigTypedArray>(
   ctor: BigTypedArrayCtor<T>,
 ): T => {
   const out: T = new ctor(len);
-  out.set(new ctor(buf, off, len) as any);
+  out.set(new ctor(buf, off, len));
   return out;
 };
 

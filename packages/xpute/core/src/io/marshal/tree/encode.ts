@@ -112,7 +112,7 @@ export class TreeEncoder {
     if (NODE_IS_BRANCH(node)) return this._branch(node, st);
     if (NODE_IS_GRAFT(node)) return this._graft(node, st);
     if (NODE_IS_NIL(node)) return;
-    throw new MarshalError(Errno.EBADMSG, `unknown type 0x${(node as any).type} at ${st.base}`);
+    throw new MarshalError(Errno.EBADMSG, `unknown type 0x${(node as { type: number }).type} at ${st.base}`);
   }
 
   // graft semantics:
