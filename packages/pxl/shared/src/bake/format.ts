@@ -30,10 +30,6 @@
 import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
 import { BranchCursor, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 
-// import * as json_codec from "@xpute/core/io/json_codec.ts";
-
-import type { POI } from "./model/osm_feature.ts";
-
 // ---- DB ----
 
 export const FEAT_ROW_KEYS = [
@@ -92,15 +88,14 @@ export type Tile = {
 // ---- DTO ----
 
 // { ele, ground } -> [ele, [land, water, structure, transport]]
-export function encode_terrain(ele: I16Array, ground: Ground, _pois: POI[]): U8Array {
-  /**
-   * Encode baked outputs
-   * - ground: sparse-tree encoded ground channels
-   * - pois: JSON payloads (compression, if any, should be a storage-layer decision)
-   */
-
-  // const pois: U8Array = json_codec.encode(_pois);
-
+//
+// Used to take a third `pois: POI[]` argument and (nominally) encode it
+// into the tile too — dead on arrival even then (the actual encode call
+// was always commented out) and removed outright once POI moved to its
+// own Overture-sourced pipeline (apps/api/src/modules/world/poi/) with no
+// relationship to a terrain tile's own bytes at all. `Tile` (below) never
+// had a `pois` field to match.
+export function encode_terrain(ele: I16Array, ground: Ground): U8Array {
   /**
    * Final baked terrain format:
    * - baked = [ele, [land, water, structure, transport]]

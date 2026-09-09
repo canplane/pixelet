@@ -45,26 +45,35 @@ export type SpriteBillboardProps = {
    * Actor's own group, or an AnchorNode's) — defaults to that transform's
    * own origin. */
   position?: readonly [f64, f64, f64];
-  /** 999 matches chat_bubble.tsx's own original value — high enough to
-   * reliably win against real world geometry once depthTest is off, without
-   * colliding with any other reserved renderOrder in this codebase (the
-   * only other one found, markers/frame_gizmo.tsx's DEBUG_RENDER_ORDER, is
-   * dev-only and uses the same 9999 hover_cursor.tsx's own terrain-case
-   * ghost does — this tier's own convention is a full order of magnitude
-   * below that, not competing with it). */
+  /** 10000 — originally 999 (chat_bubble.tsx's own value before this
+   * extraction), raised once tier 4's own hover_cursor.tsx
+   * terrain-case ghost (renderOrder 9999) and the dev-only
+   * markers/frame_gizmo.tsx debug overlay (also 9999) were both confirmed
+   * live to draw over a billboard sharing its screen position — a lower
+   * renderOrder loses that draw-order race regardless of depthTest, and
+   * tier 3 (informational UI: chat/POI) reading as *more* topmost than
+   * tier 4's one-off spatial indicators is the correct hierarchy anyway.
+   * Kept one order of magnitude above every other reserved renderOrder in
+   * this codebase found at the time, not just barely above it, so a future
+   * indicator doesn't reopen the same race by picking something in
+   * between. */
   renderOrder?: number;
 };
 
 export const SpriteBillboard = forwardRef<THREE.Sprite, SpriteBillboardProps>(
-  function SpriteBillboard({ texture, width, height, position, renderOrder = 999 }, ref) {
+  function SpriteBillboard({ texture, width, height, position, renderOrder = 10000 }, ref) {
     return (
       <sprite ref={ref} position={position ?? [0, 0, 0]} scale={[width, height, 1]} renderOrder={renderOrder}>
         {
           // depthTest off + high renderOrder: this tier reads as UI, not as a
           // real object the terrain/buildings should be able to hide — see
-          // this file's own top doc comment.
+          // this file's own top doc comment. depthWrite off too — without
+          // it this sprite still wrote real depth values, so a
+          // later-drawn, depth-testing indicator (hover_cursor.tsx's ghost)
+          // could pass its own depth test against them and paint over a
+          // billboard whose renderOrder said it should already be on top.
         }
-        <spriteMaterial map={texture} transparent depthTest={false} />
+        <spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} />
       </sprite>
     );
   },

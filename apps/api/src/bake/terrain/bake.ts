@@ -11,11 +11,10 @@ import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 
 import { COAST_ROW_KEYS, type CoastRow, encode_terrain, FEAT_ROW_KEYS, type FeatRow, type Ground } from "@pxl/shared/bake/format.ts";
-import type { OSMFeature, OSMRawFeature, POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { OSMFeature, OSMRawFeature } from "@pxl/shared/bake/model/osm_feature.ts";
 import * as osm_adapter from "@pxl/api/bake/osm/model/osm_adapter.ts";
 import { normalize, V3_ARENA } from "@pxl/api/bake/osm/pipeline/osm_normalizer.ts";
 import { bake_ground } from "./pipeline/ground_baker.ts";
-import { extract_pois } from "@pxl/api/bake/osm/pipeline/poi_extractor.ts";
 
 export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
   using _ = V3_ARENA.scope;
@@ -59,7 +58,6 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
   const has_coast_row: boolean = _coasts.len > 0;
 
   const ground: Ground = bake_ground(feats, has_coast_row);
-  const pois: POI[] = extract_pois(feats);
 
-  return encode_terrain(ele, ground, pois);
+  return encode_terrain(ele, ground);
 }
