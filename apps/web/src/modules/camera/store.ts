@@ -1,6 +1,6 @@
 // @pxl/web/modules/camera/store.ts
 
-import { allowed_step } from "./terrain_gate.ts";
+import { allowed_view } from "./terrain_gate.ts";
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -94,7 +94,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
 
       // As far as the control asked, or as far as terrain allows.
       const from = state.view_state;
-      const reached = allowed_step(next.dist, next.polar, next.azimuth, from.dist, from.polar, from.azimuth);
+      const reached = allowed_view(next, from);
       next.dist = norm_dist(reached.dist);
       next.azimuth = norm_azimuth(reached.azimuth);
       next.polar = norm_polar(reached.polar);
@@ -111,7 +111,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
       const dist: f64 = norm_dist(DEFAULT_DIST);
       if (state.view_state.dist === dist) return state;
       const from = state.view_state;
-      const reached = allowed_step(dist, from.polar, from.azimuth, from.dist, from.polar, from.azimuth);
+      const reached = allowed_view({ ...from, dist }, from);
       const reached_dist = norm_dist(reached.dist);
       return from.dist === reached_dist ? state : { view_state: { ...from, dist: reached_dist } };
     }),
@@ -125,7 +125,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
       const azimuth: f64 = norm_azimuth(DEFAULT_AZIMUTH);
       if (state.view_state.azimuth === azimuth) return state;
       const from = state.view_state;
-      const reached = allowed_step(from.dist, from.polar, azimuth, from.dist, from.polar, from.azimuth);
+      const reached = allowed_view({ ...from, azimuth }, from);
       const reached_azimuth = norm_azimuth(reached.azimuth);
       return from.azimuth === reached_azimuth ? state : { view_state: { ...from, azimuth: reached_azimuth } };
     }),
@@ -137,7 +137,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
         polar: norm_polar(DEFAULT_POLAR),
       };
       const from = state.view_state;
-      const reached = allowed_step(next.dist, next.polar, next.azimuth, from.dist, from.polar, from.azimuth);
+      const reached = allowed_view(next, from);
       return {
         view_state: {
           dist: norm_dist(reached.dist),

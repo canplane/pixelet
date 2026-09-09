@@ -1,18 +1,22 @@
 {
   "settings": {
-    "debug": {
-      "section_title": "Debug",
-      "structures": {
+    "display": {
+      "show_structures": {
         "label": "Render Buildings",
         "description": "Toggles whether buildings are rendered on top of the terrain."
-      },
-      "objects": {
-        "label": "Debug Gizmos",
-        "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
-      },
+      }
+    },
+    "camera": {
       "ground_snap": {
         "label": "Ground Altitude Lock",
         "description": "Constrains the camera focus altitude to the actual terrain height while panning."
+      }
+    },
+    "debug": {
+      "section_title": "Debug",
+      "objects": {
+        "label": "Debug Gizmos",
+        "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
       },
       "dummy_toast": {
         "label": "Test Toast Notifications",

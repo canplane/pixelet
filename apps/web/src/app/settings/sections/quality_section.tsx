@@ -17,10 +17,19 @@ export function QualitySection() {
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle icon={Gauge} caption={t("settings.quality.section_caption")}>{t("settings.quality.section_title")}</SectionTitle>
+      <SettingRow
+        label={t("settings.quality.texture_pack.label")}
+        description={t("settings.quality.texture_pack.description")}
+        active={!low_spec}
+        on_toggle={toggle_low_spec}
+        cost="med"
+      />
       {
         /* Grouped visually (bordered box + radios, not switches) since these
           three are mutually exclusive — one choice, not three independent
-          toggles — unlike texture_pack below, which stands on its own. */
+          toggles — unlike texture_pack above, which stands on its own.
+          Below it because this group reaches "high" while that one is
+          "med": cheapest first down the section. */
       }
       <div className="flex flex-col gap-0.5 -mx-3 rounded-[10px] border border-border p-1">
         <SettingRadioRow
@@ -44,16 +53,6 @@ export function QualitySection() {
           cost="high"
         />
       </div>
-      {__IS_DEV__ && (
-        <SettingRow
-          label={t("settings.quality.texture_pack.label")}
-          description={t("settings.quality.texture_pack.description")}
-          active={!low_spec}
-          on_toggle={toggle_low_spec}
-          cost="med"
-          dev
-        />
-      )}
     </div>
   );
 }

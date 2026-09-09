@@ -1,18 +1,22 @@
 {
   "settings": {
+    "display": {
+      "show_structures": {
+        "label": "건물 표시",
+        "description": "지형 위에 건물을 그릴지 설정합니다."
+      }
+    },
+    "camera": {
+      "ground_snap": {
+        "label": "고도 접지 고정",
+        "description": "지도를 움직이는 동안 카메라 초점의 고도를 실제 지형 높이에 맞춰 고정합니다."
+      }
+    },
     "debug": {
       "section_title": "디버그",
-      "structures": {
-        "label": "건물 표시",
-        "description": "지형 위에 건물을 렌더링할지 설정합니다."
-      },
       "objects": {
         "label": "디버그 기즈모",
         "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
-      },
-      "ground_snap": {
-        "label": "고도 접지 고정",
-        "description": "지도를 이동하는 동안 카메라 초점의 고도를 실제 지형 높이에 맞춰 고정합니다."
       },
       "dummy_toast": {
         "label": "테스트 토스트 알림",

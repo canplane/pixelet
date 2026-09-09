@@ -23,9 +23,11 @@ import { raycast_decor } from "@/modules/world/decor/decor_hit.ts";
 import { ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner, type WorldHit } from "./ray.ts";
 import { CameraStatus, useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
+import { allowed_pan } from "./terrain_gate.ts";
 
 const { FOV } = camera_cfg.projection;
-const { ROT_GAIN_POLAR, ROT_GAIN_REF_HEIGHT, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, AXIS_LOCK_THRESHOLD_PX, TAP_DRAG_THRESHOLD_PX } = camera_cfg.input;
+const { TILT_SWEEP_FRACTION, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, AXIS_LOCK_THRESHOLD_PX, TAP_DRAG_THRESHOLD_PX } = camera_cfg.input;
+const { MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 
 const enum DragMode {
   NONE = "none",
@@ -147,12 +149,18 @@ function handle_tap(hovered: PVF3): void {
   }
 
   if (!is_placement_blocked("object", hovered, object_size, map_origin)) {
-    place(hovered.i, hovered.f, object_size, object_color_id);
+    place(hovered.i, hovered.f, object_size, object_color_id, useSettingsStore.getState().show_structures);
   }
 }
 
 export function CameraInput() {
   const { gl, size, raycaster, camera } = useThree();
+
+  /** Radians of pitch per pixel of vertical drag. Negative because dy grows
+   * downward and dragging up is the natural "tilt toward the horizon". */
+  function tilt_gain(): f64 {
+    return -(MAX_POLAR - MIN_POLAR) / (TILT_SWEEP_FRACTION * size.height);
+  }
 
   const drag_mode = useRef<DragMode>(DragMode.NONE);
   const did_drag = useRef(false);
@@ -271,7 +279,12 @@ export function CameraInput() {
     // ground_snap goes through (see its own doc comment) — the GPS
     // recenter button in tracking_button.tsx uses it too, instead of
     // each call site hand-rolling its own probe.
-    set_map_center(useSettingsStore.getState().ground_snap ? ground_or_raw(next_center) : next_center);
+    const desired = useSettingsStore.getState().ground_snap ? ground_or_raw(next_center) : next_center;
+    // Gated after the snap, not before: the snap moves the target's Z, and
+    // the eye rides on it. Panning is the one control that moves the target,
+    // and until it went through here the terrain gate could be walked
+    // straight through sideways.
+    set_map_center(allowed_pan(view_state, desired));
   }
 
   /** Azimuth tracks the cursor's angle around screen center since drag-start
@@ -318,8 +331,7 @@ export function CameraInput() {
       // change, hence living in the debug menu rather than removing this
       // path outright.
       if (!useSettingsStore.getState().lock_camera_tilt) {
-        const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
-        set_view_state({ polar: view_state.polar + dy * ROT_GAIN_POLAR * norm });
+        set_view_state({ polar: view_state.polar + dy * tilt_gain() });
       }
       return;
     }
@@ -399,9 +411,8 @@ export function CameraInput() {
     const scale: f64 = pinch_start_dist.current / dist;
     const next_dist: f64 = pinch_start_view_dist.current * scale;
 
-    const norm: f64 = ROT_GAIN_REF_HEIGHT / size.height;
     const midpoint_dy: f64 = midpoint_y - pinch_start_midpoint_y.current;
-    const next_polar: f64 = pinch_start_polar.current + midpoint_dy * ROT_GAIN_POLAR * norm;
+    const next_polar: f64 = pinch_start_polar.current + midpoint_dy * tilt_gain();
 
     // twist angle (inter-finger vector direction) is numerically unstable
     // when the fingers are close together — see MIN_TWIST_DIST_PX. Freeze

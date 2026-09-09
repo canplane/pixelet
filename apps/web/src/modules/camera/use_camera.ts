@@ -31,7 +31,7 @@ const DIST_EPS: f64 = 0.001;
 const POLAR_EPS: f64 = 0.0001;
 
 /**
- * How quickly the rendered pitch follows the climb it is asked for.
+ * How quickly the climb's own contribution follows what terrain asks for.
  *
  * Elevation is read per cell, so the answer steps rather than slides.
  * Rising is the faster of the two: late to rise means the eye is briefly
@@ -73,15 +73,16 @@ export function useCamera() {
 
   const dist = useRef<f64>(view_state.dist);
   const polar = useRef<f64>(view_state.polar);
-  /** The pitch actually drawn. Equal to polar unless terrain is climbed
-   * over; view_state.polar is never touched by it. */
-  const view_polar = useRef<f64>(view_state.polar);
+  /** How much steeper than the control the drawn pitch currently is, always
+   * <= 0. Zero unless terrain is being climbed over; view_state.polar is
+   * never touched by it. */
+  const shown_climb = useRef<f64>(0);
 
   useFrame((state, delta) => {
     if (!did_init.current) {
       dist.current = view_state.dist;
       polar.current = view_state.polar;
-      view_polar.current = view_state.polar;
+      shown_climb.current = 0;
       did_init.current = true;
     } else {
       const alpha: f64 = damp_alpha(CAM_DAMP, delta);
@@ -107,15 +108,23 @@ export function useCamera() {
     // `climb` grants the control and answers terrain by pitching the view
     // up instead. dist stays exactly what the scale bar reads; only the
     // angle gives way, and it comes back on its own once the ground does.
-    let want_polar = polar.current;
-    if (useSettingsStore.getState().camera_terrain === "climb") {
-      want_polar = climb_polar(dist.current, polar.current, view_state.azimuth);
-    }
-    const climb_k = want_polar < view_polar.current ? CLIMB_RISE_DAMP : CLIMB_RELAX_DAMP;
-    view_polar.current += (want_polar - view_polar.current) * damp_alpha(climb_k, delta);
-    if (Math.abs(want_polar - view_polar.current) > CLIMB_EPS) state.invalidate();
+    // What is smoothed here is the climb's own contribution, never the pitch
+    // itself. polar is already damped alongside dist just above, and running
+    // the absolute angle through a second lag gave tilt an inertia rotation
+    // does not have — rotation gets one lag, at the same rate, in
+    // use_frame_rotation.ts. Outside climb mode the offset is zero and the
+    // drawn pitch is exactly the damped control.
+    const want_climb: f64 = useSettingsStore.getState().camera_terrain === "climb"
+      ? climb_polar(dist.current, polar.current, view_state.azimuth) - polar.current
+      : 0;
+    const climb_k = want_climb < shown_climb.current ? CLIMB_RISE_DAMP : CLIMB_RELAX_DAMP;
+    shown_climb.current += (want_climb - shown_climb.current) * damp_alpha(climb_k, delta);
+    if (Math.abs(want_climb - shown_climb.current) > CLIMB_EPS) state.invalidate();
 
-    const { horiz_dist, vert_dist } = orbit_local_offset(dist.current, view_polar.current);
+    // The offset lags the control, so a pitch steepening toward vertical can
+    // still be carrying a climb from a shallower one.
+    const view_polar = clamp(polar.current + shown_climb.current, MIN_POLAR, MAX_POLAR);
+    const { horiz_dist, vert_dist } = orbit_local_offset(dist.current, view_polar);
 
     const pos: V3 = [0, -horiz_dist, vert_dist];
 

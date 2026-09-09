@@ -112,7 +112,11 @@ export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [],
   set_show_decor: (show_decor) => set({ show_decor }),
   toggle_show_decor: () => set((state) => ({ show_decor: !state.show_decor })),
 
-  camera_terrain: "stop",
+  // climb, because the one thing a map camera must not do is refuse to
+  // move. stop is the more literal answer to terrain and the worse default:
+  // it hands back a control that did nothing, which reads as the app being
+  // stuck rather than as the ground being in the way.
+  camera_terrain: "climb",
   set_camera_terrain: (camera_terrain) => set({ camera_terrain }),
 
   show_poi: true,

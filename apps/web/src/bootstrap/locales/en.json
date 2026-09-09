@@ -13,15 +13,23 @@
       "korean": "한국어",
       "english": "English"
     },
+    "display": {
+      "section_title": "Display",
+      "section_caption": "What the world shows",
+      "show_poi": {
+        "label": "Show Places",
+        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
+      },
+      "show_decor": {
+        "label": "Scattered decor",
+        "description": "Draws the trees and vehicles scattered procedurally over the terrain. Anything you placed yourself stays either way."
+      }
+    },
     "camera": {
       "section_title": "Camera",
       "lock_tilt": {
         "label": "Camera Tilt Lock",
         "description": "Locks vertical camera rotation while horizontal rotation stays free."
-      },
-      "edge_shade": {
-        "label": "Cube edge shading",
-        "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line."
       },
       "terrain": {
         "through": {
@@ -37,23 +45,24 @@
           "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
         }
       },
+      "section_caption": "How the view moves"
+    },
+    "editing": {
+      "section_title": "Editing",
+      "section_caption": "What the tools may change",
       "terrain_carving": {
         "label": "Terrain Carving",
         "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
-      },
-      "show_poi": {
-        "label": "Show Places",
-        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
-      },
-      "show_decor": {
-        "label": "Scattered decor",
-        "description": "Draws the trees and vehicles scattered procedurally over the terrain. Anything you placed yourself stays either way."
       }
     },
     "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
     "lighting": {
       "section_title": "Lighting & Shadows",
-      "section_caption": "Real-time lighting effects for the Sun and Moon",
+      "section_caption": "Effects that make shape and edges readable",
+      "edge_shade": {
+        "label": "Cube edge shading",
+        "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line."
+      },
       "shadow_map": {
         "label": "Shadows",
         "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."
