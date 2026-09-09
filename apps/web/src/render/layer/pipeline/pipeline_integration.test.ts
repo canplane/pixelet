@@ -31,9 +31,10 @@ function bounds_of(built: BakedChunkMesh): { box: THREE.Box3; sphere: THREE.Sphe
 
 /** Splits one bake_chunk_mesh output back into its terrain-only vs
  * object-only vertex ranges, purely from each vertex's own baked face
- * count (open-bottom terrain boxes bake 20 vertices, full object boxes
- * bake 24) — this test scenario only ever has one box of each, so a single
- * split point (the terrain box's own 20 vertices) is unambiguous. */
+ * count (full object boxes bake 24 vertices, open-bottom terrain boxes bake
+ * 20) — this test scenario only ever has one box of each, so a single split
+ * point is unambiguous. The two halves are named for what they were when
+ * terrain came first; the caller reads them in emission order. */
 function split_terrain_and_object(built: BakedChunkMesh, terrain_vertex_cnt: number): { terrain: BakedChunkMesh; object: BakedChunkMesh } {
   function slice(from: number, to: number): BakedChunkMesh {
     return {
@@ -80,16 +81,17 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
   // itself.
   const column_runs = scan_all_column_runs(volume);
   const built = bake_chunk_mesh(column_runs, 1);
-  // One open-bottom terrain box (20 verts) + one full object box (24 verts,
-  // OBJECT-class runs always keep their bottom face) — both merged into
-  // this one baked mesh, terrain first (its column run is pushed to this
-  // column's own run list before the object's, since it's encountered at a
-  // lower Z during merge_column_runs' own forward scan).
-  assertEquals(built.vertex_cnt, 20 + 24);
-  const split = split_terrain_and_object(built, 20);
+  // One full object box (24 verts — OBJECT-class runs always keep their
+  // bottom face) + one open-bottom terrain box (20 verts), both in this one
+  // baked mesh. The object comes first: the greedy merge emits everything
+  // that cannot merge — sub-cell runs, and any run after a column's first —
+  // before it walks the mergeable plane. Emission order within a chunk is
+  // not otherwise meaningful, it is one draw either way.
+  assertEquals(built.vertex_cnt, 24 + 20);
+  const split = split_terrain_and_object(built, 24);
 
-  const terrain_bounds = bounds_of(split.terrain);
-  const object_bounds = bounds_of(split.object);
+  const object_bounds = bounds_of(split.terrain);
+  const terrain_bounds = bounds_of(split.object);
   assertEquals(terrain_bounds.box.getCenter(new THREE.Vector3()).toArray(), [2.5, 3.5, 0.5]);
   assertEquals(object_bounds.box.getCenter(new THREE.Vector3()).toArray(), [2.5, 3.75, 21]);
   assertEquals(terrain_bounds.box.min.toArray(), [2, 3, -18]);
