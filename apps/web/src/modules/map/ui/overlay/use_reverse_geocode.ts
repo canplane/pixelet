@@ -8,12 +8,19 @@ import type { IVec, PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { fetch_geocode, type GeocodePart } from "@/modules/world/geocode/repository.ts";
 import { assemble_label } from "@/modules/world/geocode/label.ts";
+import { fetch_sync } from "@/modules/world/sched/fetch_scheduler.ts";
 
 // A short debounce still matters even though the real dedup key below is
 // now an exact page_idx (not a rounded lat/lon string): panning fires
 // map_center updates every frame, and most of those land on the same page
 // as the last one — no need to even compute L3_IDX that often.
 const DEBOUNCE_MS = 500;
+
+const CATEGORY = "geocode";
+// Ahead of every streaming category (terrain starts at 0, POI at 1) — this
+// is a label the user is waiting to read, not background prefetch, and
+// there is only ever one of it in flight.
+const PRIORITY = -5;
 
 export type ReverseGeocodeResult = {
   label: string | null;
@@ -44,7 +51,6 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
   useEffect(() => {
     if (map_center === null) return;
 
-    const controller = new AbortController();
     const page_idx: IVec = L3_IDX(map_center.i);
 
     const timer = setTimeout(() => {
@@ -52,24 +58,32 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
       resolved_page_ref.current = page_idx;
 
       set_loading(true);
-
-      (async () => {
-        try {
-          const result = await fetch_geocode(page_idx, controller.signal);
-          if (!controller.signal.aborted) set_parts(result?.parts ?? null);
-        } catch (err) {
-          if ((err as Error)?.name !== "AbortError") {
-            console.error(`[reverse_geocode/${page_idx}] failed:`, err);
+      // A one-item wishlist: submitting a new page supersedes the previous
+      // one, which fetch_scheduler.ts's own yield aborts — the exact
+      // latest-wins behaviour this used to hand-roll with an AbortController,
+      // now sharing one quota (and the ledger) with terrain/POI. Errors are
+      // the scheduler's to log and classify.
+      fetch_sync(CATEGORY, [{
+        key: `${CATEGORY}:${page_idx}`,
+        category: CATEGORY,
+        priority: PRIORITY,
+        run: async (signal) => {
+          try {
+            const result = await fetch_geocode(page_idx, signal);
+            set_parts(result?.parts ?? null);
+          } finally {
+            // clears on success and on a real failure alike, but not when
+            // superseded — the demand that superseded this one already set
+            // it back to true.
+            if (!signal.aborted) set_loading(false);
           }
-        } finally {
-          if (!controller.signal.aborted) set_loading(false);
-        }
-      })();
+        },
+      }]);
     }, DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
-      controller.abort();
+      fetch_sync(CATEGORY, []);
     };
   }, [map_center]);
 

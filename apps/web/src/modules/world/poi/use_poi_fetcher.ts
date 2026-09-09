@@ -9,22 +9,19 @@ import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import type { Demand, Phases } from "@/modules/world/sched/demand.ts";
+import { fetch_sync } from "@/modules/world/sched/fetch_scheduler.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { CLEANUP_RADIUS, LOAD_RADIUS } from "../terrain/config.ts";
 import { fetch_poi } from "./repository.ts";
 import { usePoiStore } from "./store.ts";
 
-// Module-level, mirroring terrain/use_tile_fetcher.ts's own
-// pending_page_demands: tracks pages with a fetch already in flight so a
-// re-run of the effect below (e.g. a neighboring page's own fetch
-// completing and changing map_center by a hair) doesn't re-request one
-// that's still pending. Deliberately NOT storing an empty placeholder in
-// usePoiStore while pending (the alternative) — a failed fetch would then
-// have to explicitly roll that placeholder back to "not yet loaded" to be
-// retried; leaving the store untouched until a real result lands means a
-// failure just falls out of `pending`, and the very next effect run demands
-// it again for free.
-const pending: Set<IVec> = new Set();
+const CATEGORY = "poi";
+
+// POI sits one behind terrain at equal page distance — poi_layer.tsx's
+// poi_anchor grounds each badge against that page's terrain, so fetching POI
+// ahead of the ground it lands on just makes it wait.
+const PRIORITY_BIAS = 1;
 
 /** Evicts cached pages that fall outside CLEANUP_RADIUS, mirroring
  * terrain/use_tile_fetcher.ts's own cleanup_far_tiles — POI has no
@@ -39,24 +36,58 @@ function cleanup_far_pois(center_page_idx: IVec): void {
   }
 }
 
+/** One Demand per uncached page within LOAD_RADIUS — the scheduler dedups
+ * against whatever it's already carrying, so this can be rebuilt in full on
+ * every effect run. */
+function poi_demands(center_page_idx: IVec): Demand[] {
+  const { get_pois, set_pois } = usePoiStore.getState();
+  const demands: Demand[] = [];
+
+  for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+    for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
+      const delta = ivec.gather(BigInt(dx), BigInt(dy), 0n);
+      // center_page_idx is already TO_XY-normalized and delta carries no Z.
+      const page_idx: IVec = ivec.add(center_page_idx, delta);
+      if (get_pois(page_idx) !== undefined) continue;
+
+      demands.push({
+        key: `${CATEGORY}:${page_idx}`,
+        category: CATEGORY,
+        priority: CHEBYSHEV_DIST(delta) * 2 + PRIORITY_BIAS,
+        run: async (signal) => {
+          const phases: Phases = {};
+          set_pois(page_idx, await fetch_poi(page_idx, signal, phases));
+          return phases;
+        },
+      });
+    }
+  }
+  return demands;
+}
+
 /**
  * Demands POI for every page within LOAD_RADIUS of the view center that
- * isn't cached yet — same radius terrain/use_tile_fetcher.ts loads at.
- * Reuses terrain's own CLEANUP_RADIUS to evict pages once they fall out of
- * range: a single dense urban page can hold thousands of records uncapped,
- * so leaving poi_map unbounded for a whole session's panning is a real
- * memory concern.
+ * isn't cached yet — same radius terrain/use_tile_fetcher.ts loads at, via
+ * the shared fetch_scheduler.ts so the two subsystems share one concurrency
+ * quota. Reuses terrain's own CLEANUP_RADIUS to evict pages once they fall
+ * out of range: a single dense urban page can hold thousands of records
+ * uncapped, so leaving poi_map unbounded for a whole session's panning is a
+ * real memory concern.
  *
- * Gated on settings.camera's own show_poi: hidden means no fetch, no cache
- * growth, no eviction scan. Existing cached pages are left as-is so
- * toggling back on feels instant for whatever's still in range.
+ * Gated on settings.camera's own show_poi: hidden means an empty wishlist —
+ * no new fetch, and any POI request still in flight is aborted by the
+ * scheduler's own yield. Cached pages in poi_map are left as-is so toggling
+ * back on feels instant for whatever's still in range.
  */
 export function usePoiFetcher(): void {
   const map_center = useMapStore((state) => state.map_center);
   const show_poi = useSettingsStore((state) => state.show_poi);
 
   useEffect(() => {
-    if (map_center === null || !show_poi) return;
+    if (map_center === null || !show_poi) {
+      fetch_sync(CATEGORY, []);
+      return;
+    }
 
     // TO_XY drops Z (matches store.ts's own page keys) — L3_IDX shifts
     // X/Y/Z together, and CHEBYSHEV_DIST's max would let elevation alone
@@ -64,22 +95,6 @@ export function usePoiFetcher(): void {
     const center_page_idx: IVec = TO_XY(L3_IDX(map_center.i));
 
     cleanup_far_pois(center_page_idx);
-
-    const { get_pois, set_pois } = usePoiStore.getState();
-
-    for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-      for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
-        const page_idx = ivec.add(center_page_idx, ivec.gather(BigInt(dx), BigInt(dy), 0n));
-        if (get_pois(page_idx) !== undefined || pending.has(page_idx)) continue;
-
-        pending.add(page_idx);
-        fetch_poi(page_idx)
-          .then((pois) => set_pois(page_idx, pois))
-          .catch((err) => {
-            console.error(`[poi/${ivec.repr(page_idx)}] failed to fetch:`, err);
-          })
-          .finally(() => pending.delete(page_idx));
-      }
-    }
+    fetch_sync(CATEGORY, poi_demands(center_page_idx));
   }, [map_center, show_poi]);
 }

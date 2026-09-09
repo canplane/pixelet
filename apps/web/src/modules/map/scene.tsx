@@ -25,6 +25,7 @@ import { Overlays } from "./ui/overlay/overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
 
 import { ToastController } from "./ui/toast/toast_controller.tsx";
+import { LedgerOverlay } from "@/modules/world/sched/ledger_overlay.tsx";
 
 const { FOV, NEAR } = camera_cfg.projection;
 const { FAR_CLIP } = render_cfg;
@@ -89,6 +90,7 @@ export function MapScene() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
       <ToastController />
+      <LedgerOverlay />
 
       {/* Theme background layer matched to fog color to hide the 2D/3D seam. */}
       <div

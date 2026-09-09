@@ -24,9 +24,28 @@ function poi_url(key: string): string {
   return `${POI_TILE_BASE_URL}/${key}`;
 }
 
-export async function fetch_poi(page_idx: IVec): Promise<POI[]> {
-  const res = await fetch(poi_url(page_idx.toString()));
+/** `phases`, when given, is filled with this page's network-vs-JSON-parse
+ * split — same reasoning as tile_repository.ts's own, and not academic here:
+ * a dense urban page carries thousands of records, so `res.json()` is real
+ * main-thread work, not a rounding error on the request. */
+export async function fetch_poi(
+  page_idx: IVec,
+  signal?: AbortSignal,
+  phases?: Record<string, number>,
+): Promise<POI[]> {
+  const t0 = performance.now();
+  const res = await fetch(poi_url(page_idx.toString()), { signal });
   if (res.status === 404 && HAS_STATIC_POI) return [];
   if (!res.ok) throw new Error(`[poi/${ivec.repr(page_idx)}] http ${res.status}`);
-  return await res.json() as POI[];
+
+  const text = await res.text();
+  const t1 = performance.now();
+  const pois = JSON.parse(text) as POI[];
+
+  if (phases) {
+    phases.net_ms = t1 - t0;
+    phases.parse_ms = performance.now() - t1;
+    phases.bytes = text.length;
+  }
+  return pois;
 }
