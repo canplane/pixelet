@@ -51,13 +51,39 @@ function get_ocean_terrain(): Promise<Terrain> {
   return ocean_terrain;
 }
 
-/** Fetches and decodes one terrain page. Throws on any failure the caller
- * should see; an unbaked open-ocean page is not one of those. */
-export async function fetch_terrain(page_idx: IVec): Promise<Terrain> {
-  const res = await fetch(tile_url(page_idx.toString()));
+/**
+ * Fetches and decodes one terrain page. Throws on any failure the caller
+ * should see; an unbaked open-ocean page is not one of those. `signal`, when
+ * the scheduler passes one, aborts the page request (not the shared ocean
+ * fallback, which is one cached fetch aliased by every ocean page).
+ *
+ * `phases`, when given, is filled with this page's own network-vs-decode
+ * split — the numbers that decide whether terrain streaming is actually
+ * RTT-bound or memory-bound, which is a different fix in each case (see
+ * world/sched/categories.ts). A plain `Record<string, number>` rather than
+ * sched's own Phases type on purpose: transport shouldn't need to know the
+ * scheduler exists. Left unfilled on the ocean-fallback path, where this
+ * page decoded nothing of its own.
+ */
+export async function fetch_terrain(
+  page_idx: IVec,
+  signal?: AbortSignal,
+  phases?: Record<string, number>,
+): Promise<Terrain> {
+  const t0 = performance.now();
+  const res = await fetch(tile_url(page_idx.toString()), { signal });
 
   if (res.status === 404 && HAS_STATIC_TILES) return get_ocean_terrain();
   if (!res.ok) throw new Error(`[tile/${ivec.repr(page_idx)}] http ${res.status}`);
 
-  return decode_terrain(new Uint8Array(await res.arrayBuffer()));
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const t1 = performance.now();
+  const terrain = decode_terrain(bytes);
+
+  if (phases) {
+    phases.net_ms = t1 - t0;
+    phases.decode_ms = performance.now() - t1;
+    phases.bytes = bytes.byteLength;
+  }
+  return terrain;
 }

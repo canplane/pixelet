@@ -18,6 +18,14 @@
         "label": "Test Toast Notifications",
         "description": "Displays sample toast notifications for UI testing.",
         "message": "Dummy Toast {{index}}"
+      },
+      "ledger_overlay": {
+        "label": "Scheduler Ledger Overlay",
+        "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler."
+      },
+      "ledger_log": {
+        "label": "Scheduler Ledger Console Log",
+        "description": "Streams each settled fetch, missed frame and long animation frame to the browser console as it happens."
       }
     }
   },

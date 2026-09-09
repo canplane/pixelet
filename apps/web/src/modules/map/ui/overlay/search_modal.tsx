@@ -17,12 +17,20 @@ import { register_tile_interest } from "@/modules/world/terrain/store.ts";
 import { resolve_poi_theme } from "@/modules/world/poi/poi_theme.ts";
 import { assemble_label } from "@/modules/world/geocode/label.ts";
 import { fetch_search, type SearchResult } from "@/modules/world/search/repository.ts";
+import { fetch_sync } from "@/modules/world/sched/fetch_scheduler.ts";
 
 // Debounced like use_reverse_geocode.ts's own DEBOUNCE_MS, but shorter:
 // that one waits for panning to *settle* on a new page; this waits for
 // typing to pause, which is a much shorter, more familiar rhythm for a
 // search box.
 const DEBOUNCE_MS = 300;
+
+const CATEGORY = "search";
+// The most latency-sensitive fetch in the app — a typed query with the user
+// staring at an empty result list — so it outranks even geocode (-5) and
+// every streaming category. Single-slot, so it never occupies more than one
+// of fetch_scheduler.ts's quota slots.
+const PRIORITY = -10;
 
 export type SearchModalProps = {
   type: "search";
@@ -98,30 +106,37 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     if (q.length === 0) {
       set_results([]);
       set_loading(false);
+      fetch_sync(CATEGORY, []); // drop whatever the last keystroke left in flight
       return;
     }
 
-    const controller = new AbortController();
     set_loading(true);
 
     const timer = setTimeout(() => {
-      (async () => {
-        try {
-          const map_center = useMapStore.getState().map_center;
-          const near = map_center ? map_center_to_near(map_center) : undefined;
-          const rows = await fetch_search(q, { near, signal: controller.signal });
-          if (!controller.signal.aborted) set_results(rows);
-        } catch (err) {
-          if ((err as Error)?.name !== "AbortError") console.error(`[search/${q}] failed:`, err);
-        } finally {
-          if (!controller.signal.aborted) set_loading(false);
-        }
-      })();
+      // A one-item wishlist: the next keystroke's query supersedes this one
+      // and fetch_scheduler.ts's own yield aborts it — the latest-wins
+      // behaviour this used to hand-roll with an AbortController, now
+      // sharing one quota (and the ledger) with terrain/POI/geocode. Errors
+      // are the scheduler's to log and classify.
+      fetch_sync(CATEGORY, [{
+        key: `${CATEGORY}:${q}`,
+        category: CATEGORY,
+        priority: PRIORITY,
+        run: async (signal) => {
+          try {
+            const map_center = useMapStore.getState().map_center;
+            const near = map_center ? map_center_to_near(map_center) : undefined;
+            set_results(await fetch_search(q, { near, signal }));
+          } finally {
+            if (!signal.aborted) set_loading(false);
+          }
+        },
+      }]);
     }, DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
-      controller.abort();
+      fetch_sync(CATEGORY, []);
     };
   }, [query]);
 

@@ -38,6 +38,12 @@ export function DebugSection() {
   const showDebugObjects = useDebugStore((state) => state.showDebugObjects);
   const toggleDebugObjects = useDebugStore((state) => state.toggleDebugObjects);
 
+  const showLedgerOverlay = useDebugStore((state) => state.showLedgerOverlay);
+  const toggleLedgerOverlay = useDebugStore((state) => state.toggleLedgerOverlay);
+
+  const logLedger = useDebugStore((state) => state.logLedger);
+  const toggleLogLedger = useDebugStore((state) => state.toggleLogLedger);
+
   const dummy_toasts_shown = useSyncExternalStore(subscribeToastEntries, any_dummy_toast_shown);
   function toggle_dummy_toasts() {
     if (dummy_toasts_shown) dismiss_dummy_toasts();
@@ -52,6 +58,18 @@ export function DebugSection() {
         description={t("settings.debug.objects.description")}
         active={showDebugObjects}
         on_toggle={toggleDebugObjects}
+      />
+      <SettingRow
+        label={t("settings.debug.ledger_overlay.label")}
+        description={t("settings.debug.ledger_overlay.description")}
+        active={showLedgerOverlay}
+        on_toggle={toggleLedgerOverlay}
+      />
+      <SettingRow
+        label={t("settings.debug.ledger_log.label")}
+        description={t("settings.debug.ledger_log.description")}
+        active={logLedger}
+        on_toggle={toggleLogLedger}
       />
       <SettingRow
         label={t("settings.debug.dummy_toast.label")}

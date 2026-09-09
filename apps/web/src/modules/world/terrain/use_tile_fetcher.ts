@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo } from "react";
 
-import type { i32, u32 } from "@xpute/core/kit/word.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
 
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import type { Tile } from "@pxl/shared/bake/format.ts";
+import type { Demand, Phases } from "@/modules/world/sched/demand.ts";
+import { fetch_pending_count, fetch_subscribe, fetch_sync } from "@/modules/world/sched/fetch_scheduler.ts";
 import { fetch_terrain } from "./tile_repository.ts";
 import { useTileStore } from "./store.ts";
 import { CLEANUP_RADIUS, LOAD_RADIUS } from "./config.ts";
@@ -16,82 +18,48 @@ import { useMapNavigation } from "@/modules/map/navigation/use_map_navigation.ts
 
 export const CHEBYSHEV_DIST = (v: IVec): u32 => Number(ivec.max_comp(ivec.abs(v)));
 
-const pending_page_demands = new Set<IVec>();
+const CATEGORY = "terrain";
 
-/** Loads a single terrain page and stores the decoded result. Transport lives
- * in tile_repository.ts; this only owns the store write and the demand-set
- * bookkeeping the effect below depends on. */
-async function load_tile(page_idx: IVec): Promise<void> {
-  const set_tile = useTileStore.getState().set_tile;
+// The device's own page, when it's outside the LOAD_RADIUS window, still has
+// to load so the user marker can ground itself — but it's genuinely far, so
+// it queues behind everything near the camera rather than jumping the line.
+const PINNED_PAGE_PRIORITY = 1_000;
 
-  try {
-    const tile: Tile = { terrain: await fetch_terrain(page_idx) };
-    // logs only the id, not the decoded tile itself — that's a full terrain
-    // payload (elevation grid + feature/coastline rows), and this fires on
-    // every tile load, including rapid-fire ones during a pan/zoom gesture;
-    // handing the whole object to console.debug on each one is a real,
-    // avoidable cost (both the reference retention and however the
-    // devtools console chooses to format/inspect it), for a debug line
-    // nothing downstream actually reads.
-    console.debug(`[tile/${ivec.repr(page_idx)}] loaded`);
-    set_tile(page_idx, tile);
-  } catch (err) {
-    console.error(`[tile/${ivec.repr(page_idx)}] failed to fetch tile:`, err);
-  } finally {
-    pending_page_demands.delete(page_idx);
-  }
-}
-
-/**
- * Builds a page demand queue ordered by Chebyshev distance from the center page.
- *
- * `pinned_page_idx` (the device's own page, when it falls outside the normal
- * LOAD_RADIUS window around the view center) is appended unconditionally so
- * the location the user marker grounds itself against is never starved just
- * because the camera has panned away from it — see the doc comment on
- * useTileFetcher for the bug this guards against.
- */
-function schedule_page_demands(center_page_idx: IVec, pinned_page_idx: IVec | null): IVec[] {
+/** Builds the terrain wishlist: one Demand per uncached page within
+ * LOAD_RADIUS, ordered by Chebyshev page distance, plus the device page when
+ * it falls outside that window. The scheduler dedups against what it already
+ * holds, so this is rebuilt in full on every effect run. Both page indices
+ * arrive already TO_XY-normalized (the effect's own useMemos), matching the
+ * keys tile store and scheduler use. */
+function terrain_demands(center_page_idx: IVec, pinned_page_idx: IVec | null): Demand[] {
   const get_tile = useTileStore.getState().get_tile;
+  const demands: Demand[] = [];
 
-  const groups: IVec[][] = Array.from({ length: LOAD_RADIUS + 1 }, () => []); // grouped by distance
+  const add = (page_idx: IVec, priority: number) => {
+    if (get_tile(page_idx)) return;
+    demands.push({
+      key: `${CATEGORY}:${page_idx}`,
+      category: CATEGORY,
+      priority,
+      run: async (signal) => {
+        const phases: Phases = {};
+        const terrain = await fetch_terrain(page_idx, signal, phases);
+        useTileStore.getState().set_tile(page_idx, { terrain });
+        return phases;
+      },
+    });
+  };
 
-  let cnt: u32 = 0;
   for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
     for (let dy = -LOAD_RADIUS; dy <= LOAD_RADIUS; dy++) {
-      const page_idx_delta = ivec.gather(BigInt(dx), BigInt(dy), BigInt(0));
-      const page_idx = ivec.add(center_page_idx, page_idx_delta);
-
-      // skip pages that are already loaded or already queued.
-      if (get_tile(page_idx) || pending_page_demands.has(page_idx)) continue;
-      pending_page_demands.add(page_idx);
-
-      // chebyshev distance over the square page neighborhood.
-      const dist: i32 = CHEBYSHEV_DIST(page_idx_delta);
-      groups[dist].push(page_idx), cnt++;
+      const delta = ivec.gather(BigInt(dx), BigInt(dy), 0n);
+      add(ivec.add(center_page_idx, delta), CHEBYSHEV_DIST(delta) * 2);
     }
   }
 
-  const flatten: IVec[] = new Array(cnt);
+  if (pinned_page_idx !== null) add(pinned_page_idx, PINNED_PAGE_PRIORITY);
 
-  let i: u32 = 0;
-  for (let d = 0; d < groups.length; d++) {
-    const group: IVec[] = groups[d];
-    for (let j = 0; j < group.length; j++) {
-      flatten[i++] = group[j];
-    }
-  }
-
-  if (
-    pinned_page_idx !== null &&
-    !get_tile(pinned_page_idx) &&
-    !pending_page_demands.has(pinned_page_idx)
-  ) {
-    pending_page_demands.add(pinned_page_idx);
-    flatten.push(pinned_page_idx);
-  }
-
-  return flatten;
+  return demands;
 }
 
 /** Evicts cached pages that fall outside the cleanup radius. */
@@ -123,39 +91,35 @@ export function useTileFetcher() {
 
   const center_page_idx: IVec | null = useMemo(() => {
     if (map_center === null) return null;
-    return L3_IDX(map_center.i);
+    return TO_XY(L3_IDX(map_center.i));
   }, [map_center]);
 
   const device_page_idx: IVec | null = useMemo(() => {
     if (device_coord === null) return null;
-    return L3_IDX(device_coord.i);
+    return TO_XY(L3_IDX(device_coord.i));
   }, [device_coord]);
 
-  // main demand/update loop.
+  // map_status follows the terrain queue: LOADING while anything terrain is
+  // queued or in flight, SUCCESS once it drains. Derived from the scheduler
+  // rather than tracked here, so a later pan that supersedes this batch
+  // can't leave a stale SUCCESS behind.
+  useEffect(() => {
+    return fetch_subscribe(() => {
+      const pending = fetch_pending_count(CATEGORY);
+      const { map_status, set_map_status } = useMapStore.getState();
+      if (pending > 0) {
+        if (map_status !== MapStatus.LOADING) set_map_status(MapStatus.LOADING);
+      } else if (map_status === MapStatus.LOADING) {
+        set_map_status(MapStatus.SUCCESS);
+      }
+    });
+  }, []);
+
+  // main demand/eviction loop.
   useEffect(() => {
     if (center_page_idx === null) return;
 
     cleanup_far_tiles(center_page_idx, device_page_idx);
-
-    const demands: IVec[] = schedule_page_demands(center_page_idx, device_page_idx);
-    // nothing new to fetch (already-cached center, or a trivial re-run) —
-    // leave map_status exactly as it is rather than flipping it to SUCCESS
-    // on every effect re-run regardless of whether anything actually
-    // loaded; that would flash the "sync complete" toast on e.g. every
-    // minor pan, not just real load events.
-    if (demands.length === 0) return;
-
-    const set_map_status = useMapStore.getState().set_map_status;
-    set_map_status(MapStatus.LOADING);
-
-    Promise.all(demands.map((page_idx) => load_tile(page_idx))).then(() => {
-      // pending_page_demands is module-level, shared across every call to
-      // this effect — a later pan can kick off a fresh, still-loading batch
-      // before this one's promises settle, and this batch finishing
-      // shouldn't stomp SUCCESS over that newer batch's LOADING.
-      if (pending_page_demands.size === 0) {
-        useMapStore.getState().set_map_status(MapStatus.SUCCESS);
-      }
-    });
+    fetch_sync(CATEGORY, terrain_demands(center_page_idx, device_page_idx));
   }, [center_page_idx, device_page_idx]);
 }

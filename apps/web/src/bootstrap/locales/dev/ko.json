@@ -18,6 +18,14 @@
         "label": "테스트 토스트 알림",
         "description": "UI 테스트용 샘플 토스트 알림을 화면에 출력합니다.",
         "message": "더미 토스트 {{index}}"
+      },
+      "ledger_overlay": {
+        "label": "스케줄러 레저 오버레이",
+        "description": "월드 스케줄러의 프레임 페이싱, GPU 부하, fetch 큐 깊이, 태스크 레이턴시를 보여주는 구석 패널."
+      },
+      "ledger_log": {
+        "label": "스케줄러 레저 콘솔 로그",
+        "description": "완료된 fetch, 예산을 넘긴 프레임, long animation frame을 발생하는 즉시 브라우저 콘솔로 흘려보냅니다."
       }
     }
   },
