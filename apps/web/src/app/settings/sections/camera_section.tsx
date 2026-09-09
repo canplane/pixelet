@@ -4,7 +4,7 @@ import { Move3d } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
-import { SectionTitle, SettingRow } from "@/app/settings/setting_row.tsx";
+import { SectionTitle, SettingRadioRow, SettingRow } from "@/app/settings/setting_row.tsx";
 
 /** Camera/world-interaction controls — the tilt-gesture lock, and whether
  * the eraser tool is allowed to dig into real terrain (enable_terrain_carving,
@@ -25,6 +25,8 @@ export function CameraSection() {
 
   const lock_camera_tilt = useSettingsStore((state) => state.lock_camera_tilt);
   const toggle_lock_camera_tilt = useSettingsStore((state) => state.toggle_lock_camera_tilt);
+  const camera_terrain = useSettingsStore((state) => state.camera_terrain);
+  const set_camera_terrain = useSettingsStore((state) => state.set_camera_terrain);
 
   const ground_snap = useSettingsStore((state) => state.ground_snap);
   const toggle_ground_snap = useSettingsStore((state) => state.toggle_ground_snap);
@@ -47,6 +49,30 @@ export function CameraSection() {
         active={lock_camera_tilt}
         on_toggle={toggle_lock_camera_tilt}
       />
+      {
+        /* Grouped as radios rather than switches: one answer to "what does
+          terrain do to the camera", not three independent behaviours. */
+      }
+      <div className="flex flex-col gap-0.5 -mx-3 rounded-[10px] border border-border p-1">
+        <SettingRadioRow
+          label={t("settings.camera.terrain.through.label")}
+          description={t("settings.camera.terrain.through.description")}
+          selected={camera_terrain === "through"}
+          on_select={() => set_camera_terrain("through")}
+        />
+        <SettingRadioRow
+          label={t("settings.camera.terrain.stop.label")}
+          description={t("settings.camera.terrain.stop.description")}
+          selected={camera_terrain === "stop"}
+          on_select={() => set_camera_terrain("stop")}
+        />
+        <SettingRadioRow
+          label={t("settings.camera.terrain.climb.label")}
+          description={t("settings.camera.terrain.climb.description")}
+          selected={camera_terrain === "climb"}
+          on_select={() => set_camera_terrain("climb")}
+        />
+      </div>
       <SettingRow
         label={t("settings.camera.terrain_carving.label")}
         description={t("settings.camera.terrain_carving.description")}

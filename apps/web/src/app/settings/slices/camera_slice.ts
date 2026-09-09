@@ -2,6 +2,8 @@
 
 import type { StateCreator } from "zustand";
 
+export type CameraTerrainMode = "through" | "stop" | "climb";
+
 /** Fields backing settings/sections/camera_section.tsx. */
 export type CameraSettingsSlice = {
   /**
@@ -46,6 +48,21 @@ export type CameraSettingsSlice = {
   set_enable_terrain_carving: (enable: boolean) => void;
   toggle_terrain_carving: () => void;
 
+  /**
+   * What terrain does to the camera (camera/terrain_gate.ts).
+   *
+   *   through — nothing. The eye goes wherever the controls put it, ground
+   *             included, where the terrain shell has no inward-facing
+   *             geometry and the scene reads inside out.
+   *   stop    — a control goes as far as it asked or as far as it can.
+   *             Nothing moves on its own; a zoom into a hill stops short.
+   *   climb   — dist is always granted and the *view* pitches up instead,
+   *             as far as straight down, so every zoom level stays
+   *             reachable at the cost of an angle nobody asked for.
+   */
+  camera_terrain: CameraTerrainMode;
+  set_camera_terrain: (mode: CameraTerrainMode) => void;
+
   /** Whether poi_layer.tsx's PoiLayer renders anything at all — a plain
    * visibility switch on lightweight billboard overlays, not a rendering-
    * cost tradeoff the way show_structures is (that one gates a baked
@@ -73,6 +90,9 @@ export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [],
   enable_terrain_carving: false,
   set_enable_terrain_carving: (enable_terrain_carving) => set({ enable_terrain_carving }),
   toggle_terrain_carving: () => set((state) => ({ enable_terrain_carving: !state.enable_terrain_carving })),
+
+  camera_terrain: "stop",
+  set_camera_terrain: (camera_terrain) => set({ camera_terrain }),
 
   show_poi: true,
   set_show_poi: (show_poi) => set({ show_poi }),

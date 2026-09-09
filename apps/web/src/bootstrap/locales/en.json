@@ -19,6 +19,20 @@
         "label": "Camera Tilt Lock",
         "description": "Locks vertical camera rotation while horizontal rotation stays free."
       },
+      "terrain": {
+        "through": {
+          "label": "Pass through terrain",
+          "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
+        },
+        "stop": {
+          "label": "Stop at terrain",
+          "description": "Zoom, rotate and tilt go as far as they asked or as far as they can. Nothing moves on its own."
+        },
+        "climb": {
+          "label": "Climb over terrain",
+          "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
+        }
+      },
       "terrain_carving": {
         "label": "Terrain Carving",
         "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
