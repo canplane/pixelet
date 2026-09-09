@@ -21,10 +21,11 @@ not consolidated into one Postgres server — same env var shape, same mental
 model, and two idle Postgres containers cost nothing real on a 4 GB box.
 
 **`db-geo` holds exactly three tables**: `overture_places`,
-`overture_divisions`, `overture_division_points` — never
-`osm_elements`/`esa_elevation_raster`/`osm_coastline_polygons`/`osm_roads`
-(terrain's own ingestion tables, ~4.8 GB combined, baked offline and
-already static on R2 — this server never queries them) and never the
+`overture_divisions`, `overture_division_points` — never terrain's own
+ingestion tables (`overture_buildings`/`overture_transportation`/
+`overture_base_*`/`esa_elevation_raster`/`osm_coastline_polygons`, several
+GB combined, baked offline and already static on R2 — this server never
+queries them) and never the
 `tiger`/`topology` schemas (PostGIS's own bundled US Census geocoder data,
 unrelated to this project, just ships with the `postgis/postgis` image by
 default).
