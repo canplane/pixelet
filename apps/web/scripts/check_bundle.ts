@@ -38,8 +38,12 @@ const DEV_MARKERS = ["dev/test", "development"];
 
 /** Strings that prove the check is looking at a real bundle. Without this a
  * broken glob or an empty dist would pass silently, which is the failure mode
- * a guard like this most easily falls into. */
-const SENTINELS = ["/tiles/"];
+ * a guard like this most easily falls into.
+ *
+ * These have to be literals that survive minification, not paths the app
+ * composes at runtime: `/api/tiles` is built from a template literal that
+ * esbuild leaves unfolded, so it never appears contiguously. */
+const SENTINELS = ['"/api"', '_ocean'];
 
 function leaves(o: unknown, path = ""): [string, string][] {
   if (o !== null && typeof o === "object") {
