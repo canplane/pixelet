@@ -3,8 +3,11 @@
 /** Shared band scan used by rendering and raycasting. */
 
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
+import type { Block } from "@xpute/core/ds/pool.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
+
+import { MESH_POOL } from "./mesh_pool.ts";
 
 import {
   band_voxel_idx,
@@ -214,15 +217,146 @@ function topmost_in_band(
  * retain and reuse `MeshRun[][]` across LOD rebuilds long after that
  * volume has been released back to its pool.
  */
-export function scan_all_column_runs(volume: ChunkVolume): MeshRun[][] {
+/** Columns in one chunk — the same 64x64 the mesher indexes with CHUNK_CELL_SPAN. */
+const COLUMN_CNT: u32 = L2_BAND_CELL_SPAN * L2_BAND_CELL_SPAN;
+
+/**
+ * Every column's runs for one chunk, laid out as parallel arrays over a
+ * single pooled block.
+ *
+ * This was `MeshRun[][]`: 4096 arrays plus an object per run, ~10k objects
+ * and about a megabyte for a dense chunk, *retained* for as long as the
+ * chunk keeps its scan. Measured, it was the largest remaining allocator
+ * once the vertex blocks were pooled — a committing frame moved +1.43MB
+ * with nothing else left to account for it.
+ *
+ * A run is 17 bytes here against roughly a hundred as an object, and one
+ * allocation replaces ten thousand. The fields are split by width rather
+ * than interleaved because that is what makes them typed-array spans at all;
+ * nothing reads a whole run at once anyway.
+ *
+ * `start` is a prefix index: column c's runs are `[start[c], start[c + 1])`,
+ * which is what lets the whole thing be flat — a column's runs are
+ * contiguous because merge_column_runs finishes one column before the next.
+ */
+export type ColumnRunSet = {
+  block: Block;
+  /** Total runs across every column. */
+  count: u32;
+  /** COLUMN_CNT + 1 offsets into the per-run spans below. */
+  start: Uint32Array;
+  z0: Int32Array;
+  z1: Int32Array;
+  r: Uint8Array;
+  g: Uint8Array;
+  b: Uint8Array;
+  /** NO_LAYER (255) when the run carries no texture layer. */
+  layer_idx: Uint8Array;
+  material_class: Uint8Array;
+  /** SUB_CELL_NONE (0) for a full-cell run; otherwise a 0-255 fraction. */
+  sub_sz: Uint8Array;
+  sub_ox: Uint8Array;
+  sub_oy: Uint8Array;
+  sub_oz: Uint8Array;
+};
+
+const RUN_I32_FIELDS: u32 = 2; // z0, z1
+const RUN_U8_FIELDS: u32 = 9; // r g b layer_idx material_class sub_sz sub_ox sub_oy sub_oz
+
+function alloc_column_run_set(count: u32): ColumnRunSet {
+  const block = MESH_POOL.acquire((COLUMN_CNT + 1) * 4 + count * (RUN_I32_FIELDS * 4 + RUN_U8_FIELDS));
+  const buf = block.buf;
+  let off = block.byte_offset;
+  const start = new Uint32Array(buf, off, COLUMN_CNT + 1);
+  off += (COLUMN_CNT + 1) * 4;
+  const i32 = (): Int32Array => {
+    const view = new Int32Array(buf, off, count);
+    off += count * 4;
+    return view;
+  };
+  const z0 = i32(), z1 = i32();
+  const u8 = (): Uint8Array => {
+    const view = new Uint8Array(buf, off, count);
+    off += count;
+    return view;
+  };
+  return {
+    block,
+    count,
+    start,
+    z0,
+    z1,
+    r: u8(),
+    g: u8(),
+    b: u8(),
+    layer_idx: u8(),
+    material_class: u8(),
+    sub_sz: u8(),
+    sub_ox: u8(),
+    sub_oy: u8(),
+    sub_oz: u8(),
+  };
+}
+
+/** Hands the set's block back. Every span above is dead afterwards. */
+export function release_column_runs(set: ColumnRunSet): void {
+  MESH_POOL.release(set.block);
+}
+
+/**
+ * Scans a whole chunk once and packs the result.
+ *
+ * merge_column_runs is left exactly as it is, objects and all: it is also
+ * the raycast path's entry point, where it runs for one column on a hover
+ * rather than 4096 columns on a rebuild, and its output there is read once
+ * and dropped. The objects it makes here die at the end of this function
+ * instead of being retained for the chunk's life, which is the difference
+ * that mattered — a young-generation collection is not what stalls a frame.
+ */
+export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
   const sub_voxel_index = index_extra_sub_voxels(volume.bands);
-  const out: MeshRun[][] = new Array(L2_BAND_CELL_SPAN * L2_BAND_CELL_SPAN);
+  const per_column: MeshRun[][] = new Array(COLUMN_CNT);
   for (let cy: u32 = 0; cy < L2_BAND_CELL_SPAN; cy++) {
     for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) {
-      out[cy * L2_BAND_CELL_SPAN + cx] = merge_column_runs(volume, cx, cy, undefined, sub_voxel_index);
+      per_column[cy * L2_BAND_CELL_SPAN + cx] = merge_column_runs(volume, cx, cy, undefined, sub_voxel_index);
     }
   }
-  return out;
+
+  return pack_column_runs(per_column);
+}
+
+/**
+ * Packs one column-per-entry array of runs into a run set.
+ *
+ * Split out of the scan so a test can build a chunk's runs by hand and get
+ * the same packed shape the mesher consumes, without going through a
+ * ChunkVolume it does not care about.
+ */
+export function pack_column_runs(per_column: readonly (readonly MeshRun[])[]): ColumnRunSet {
+  let count: u32 = 0;
+  for (const runs of per_column) count += runs.length;
+
+  const set = alloc_column_run_set(count);
+  let w: u32 = 0;
+  for (let c: u32 = 0; c < COLUMN_CNT; c++) {
+    set.start[c] = w;
+    for (const run of per_column[c] ?? []) {
+      set.z0[w] = run.z0;
+      set.z1[w] = run.z1;
+      set.r[w] = run.r;
+      set.g[w] = run.g;
+      set.b[w] = run.b;
+      set.layer_idx[w] = run.layer_idx;
+      set.material_class[w] = run.material_class;
+      set.sub_sz[w] = run.sub_sz;
+      set.sub_ox[w] = run.sub_ox;
+      set.sub_oy[w] = run.sub_oy;
+      set.sub_oz[w] = run.sub_oz;
+      w++;
+    }
+  }
+  set.start[COLUMN_CNT] = w;
+  return set;
 }
 
 export type RunBox = { min: V3; max: V3 };

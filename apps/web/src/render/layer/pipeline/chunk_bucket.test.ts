@@ -5,7 +5,8 @@ import * as THREE from "three";
 
 import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, release_chunk_volume } from "./volume.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
-import { build_chunk_bucket, chunk_bounds } from "./chunk_bucket.ts";
+import { build_chunk_bucket, chunk_bounds, release_built_mesh, retain_built_mesh } from "./chunk_bucket.ts";
+import { DETACHED_BLOCK } from "@xpute/core/ds/pool.ts";
 import type { BakedChunkMesh } from "./chunk_mesher.ts";
 
 const LAND = { material_class: MaterialClass.LAND, r: 10, g: 20, b: 30, layer_idx: NO_LAYER } as const;
@@ -78,6 +79,7 @@ Deno.test("chunk bucket - bounds include signed Z and a second (e.g. object) buc
   // never material/kind, so this isolates its own aggregation from
   // bake_chunk_mesh's real geometry.
   const object_mesh: BakedChunkMesh = {
+    block: DETACHED_BLOCK,
     vertex_cnt: 2,
     position: new Float32Array([20, 30, 40, 21, 32, 43]),
     normal: new Float32Array(6),
@@ -87,7 +89,7 @@ Deno.test("chunk bucket - bounds include signed Z and a second (e.g. object) buc
     layer_taps: new Float32Array(8),
     index: new Uint32Array(0),
   };
-  buckets.push({ lod_step: 1, role: "secondary", cubes: { ...object_mesh, visibility: new Float32Array(2).fill(1) } });
+  buckets.push({ lod_step: 1, role: "secondary", cubes: { ...object_mesh, visibility: new Float32Array(2).fill(1), rc: 1 } });
 
   assertEquals(chunk_bounds(buckets), {
     min_x: 4,
@@ -168,4 +170,43 @@ Deno.test("chunk bucket - column_runs survive the volume they were scanned from 
   assertEquals(bucket.cubes.vertex_cnt, 20);
   assertEquals(bucket.role, "primary");
   assertEquals(Array.from(bucket.cubes.visibility), new Array(20).fill(1));
+});
+
+/** Every span of a baked mesh is a view into one pooled block, so a wrong
+ * offset does not fail loudly — it silently makes two attributes alias.
+ * This pins the layout by writing a sentinel through one span and checking
+ * every other one is untouched. */
+Deno.test("chunk bucket - the pooled block's spans do not alias each other", () => {
+  const volume = alloc_chunk_volume();
+  fill_chunk_column(volume, 3, 3, 0, 2, LAND);
+  const column_runs = scan_all_column_runs(volume);
+  const mesh = build_chunk_bucket(column_runs, 1, "primary").cubes;
+
+  const spans = [mesh.position, mesh.normal, mesh.local_pos, mesh.box_scale, mesh.rgb, mesh.layer_taps, mesh.visibility];
+  for (const span of spans) {
+    const others = spans.filter((s) => s !== span).map((s) => Array.from(s));
+    span.fill(-12345);
+    for (const [i, other] of spans.filter((s) => s !== span).entries()) {
+      assertEquals(Array.from(other), others[i]);
+    }
+  }
+  assert(mesh.index.every((v) => v < mesh.vertex_cnt));
+});
+
+/** Refcount semantics, independent of whether the pool is recycling: a
+ * mesh with two owners (the LOD cache and a mounted geometry) must survive
+ * the first release and only give its block back on the second. */
+Deno.test("chunk bucket - a retained mesh survives one release and not two", () => {
+  const volume = alloc_chunk_volume();
+  fill_chunk_column(volume, 5, 5, 0, 3, LAND);
+  const column_runs = scan_all_column_runs(volume);
+
+  const mesh = build_chunk_bucket(column_runs, 1, "primary").cubes;
+  retain_built_mesh(mesh);
+  assertEquals(mesh.rc, 2);
+  release_built_mesh(mesh);
+  assertEquals(mesh.rc, 1);
+  assertEquals(mesh.block.free, false);
+  release_built_mesh(mesh);
+  assertEquals(mesh.rc, 0);
 });

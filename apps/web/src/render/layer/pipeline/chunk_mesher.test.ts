@@ -6,7 +6,7 @@ import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./volume.ts";
-import type { MeshRun } from "./voxel_scan.ts";
+import { type MeshRun, pack_column_runs } from "./voxel_scan.ts";
 import { bake_chunk_mesh, bake_chunk_mesh_coarse, type BakedChunkMesh, coarse_instance_stats, occlusion_stats } from "./chunk_mesher.ts";
 
 function empty_columns(): MeshRun[][] {
@@ -59,7 +59,7 @@ Deno.test("coarse mesher - a fully-covered cell doesn't shrink and blends its co
     columns[idx(cx, cy)] = [run(4, 5, 255, 0, 0)];
   }
 
-  const built = bake_chunk_mesh(columns, 2);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 2);
   assertEquals(box_cnt(built, 5), 1); // coarse boxes are always open-bottom
   assertEquals(box_scale_of(built, 0, 5)[2], 2); // span(2) * cbrt(fill=1) = 2, no shrink
   assert(built.rgb[0] > 0); // red channel present
@@ -76,7 +76,7 @@ Deno.test("coarse mesher - terrain and object columns in the same cell blend int
   columns[idx(0, 1)] = [run(4, 5, 0, 0, 255, MaterialClass.OBJECT)];
   columns[idx(1, 1)] = [run(4, 5, 0, 0, 255, MaterialClass.OBJECT)];
 
-  const built = bake_chunk_mesh(columns, 2);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 2);
   assertEquals(box_cnt(built, 5), 1); // coarse output is always one merged, open-bottom box
   assert(built.rgb[0] > 0); // red contributed
   assert(built.rgb[2] > 0); // blue contributed too — genuinely blended, not one or the other
@@ -89,7 +89,7 @@ Deno.test("coarse mesher - a partially-covered cell shrinks isotropically instea
   // threshold drops it.
   columns[idx(0, 0)] = [run(4, 4, 200, 100, 50)];
 
-  const built = bake_chunk_mesh(columns, 2);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 2);
   assertEquals(box_cnt(built, 5), 1);
   const expected_scale = 2 * Math.cbrt(1 / 8);
   const [sx, sy, sz] = box_scale_of(built, 0, 5);
@@ -101,7 +101,7 @@ Deno.test("coarse mesher - a partially-covered cell shrinks isotropically instea
 Deno.test("coarse mesher - finest LOD still requires per-run meshing", () => {
   let threw = false;
   try {
-    bake_chunk_mesh_coarse(empty_columns(), 1);
+    bake_chunk_mesh_coarse(pack_column_runs(empty_columns()), 1);
   } catch {
     threw = true;
   }
@@ -125,11 +125,14 @@ Deno.test("LOD1 - a terrain run fully boxed in by solid terrain neighbors and co
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
   const culled_before = occlusion_stats.culled;
-  const built = bake_chunk_mesh(columns, 1);
-  // 4 neighbor terrain runs (each topmost in its own column, never culled)
-  // + the center column's own top (STRUCTURE) run + 0 for its buried
-  // bottom (LAND) run — all non-OBJECT, so all open-bottom (5 faces).
-  assertEquals(box_cnt(built, 5), 5);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  // Five runs survive whole-run culling (4 neighbours + the centre's own
+  // STRUCTURE top; its buried LAND run is the one culled), but they no
+  // longer each emit five faces — run_face_mask drops the ones nothing can
+  // see. The STRUCTURE run sits a level above every neighbour, so all four
+  // of its sides are exposed: 5 faces. Each neighbour is flush against the
+  // centre column on exactly one side: 4 faces each.
+  assertEquals(built.vertex_cnt, (5 + 4 * 4) * 4);
   assertEquals(occlusion_stats.culled, culled_before + 1);
 });
 
@@ -151,13 +154,17 @@ Deno.test("LOD1 - an object placed on terrain does not occlusion-cull the terrai
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
   const culled_before = occlusion_stats.culled;
-  const built = bake_chunk_mesh(columns, 1);
-  // 4 neighbor terrain runs + the center's own terrain run (5, open-bottom,
-  // none culled) + the object on top (1, full box — OBJECT keeps its bottom
-  // face). Total vertices = 5*5*4 + 1*6*4 = 124, not evenly divisible by
-  // one single faces_per_box, so assert the two classes directly instead of
-  // reusing box_cnt's single-shape assumption.
-  assertEquals(built.vertex_cnt, 5 * 5 * 4 + 1 * 6 * 4);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  // Nothing is whole-run culled, and the object's presence must not cost the
+  // terrain under it its top face — that is this test's original point and
+  // face culling has to honour it too, which is why the coverage test it
+  // uses skips OBJECT runs.
+  //
+  // The centre's terrain run keeps only that top face: all four neighbours
+  // are flush with it. The object keeps five — every side and its top, but
+  // not its bottom, which the terrain directly beneath really does hide.
+  // Each neighbour keeps four, flush against the centre on one side.
+  assertEquals(built.vertex_cnt, (1 + 5 + 4 * 4) * 4);
   assertEquals(occlusion_stats.culled, culled_before);
 });
 
@@ -171,11 +178,16 @@ Deno.test("LOD1 - a chunk-edge column is never occlusion-culled even if it looks
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
   // (cx-1, cy) doesn't exist — this column is at the chunk's own edge.
 
-  const built = bake_chunk_mesh(columns, 1);
-  // The edge column's own terrain run is never culled: 1 (edge) + 3
-  // (neighbors, each topmost in their own column) = 4 open-bottom terrain
-  // boxes, plus 1 full-box object.
-  assertEquals(built.vertex_cnt, 4 * 5 * 4 + 1 * 6 * 4);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  // Nothing is whole-run culled, and the edge face is kept for the same
+  // reason the run is: the neighbouring chunk's data is not available here,
+  // so its -X side stays even though the other three are flush.
+  //
+  // Edge terrain run: top + the -X edge = 2. Object on it: five, as above.
+  // The three neighbours: four each, flush against the edge column on one
+  // side — including the two that are themselves on the x=0 edge and so
+  // keep their own -X faces.
+  assertEquals(built.vertex_cnt, (2 + 5 + 3 * 4) * 4);
 });
 
 Deno.test("coarse_instance_stats tracks low-fill instances the always-shrink policy would have dropped under a threshold rule", () => {
@@ -184,7 +196,7 @@ Deno.test("coarse_instance_stats tracks low-fill instances the always-shrink pol
 
   const total_before = coarse_instance_stats.total;
   const low_fill_before = coarse_instance_stats.low_fill;
-  bake_chunk_mesh(columns, 2);
+  bake_chunk_mesh(pack_column_runs(columns), 2);
   assertEquals(coarse_instance_stats.total, total_before + 1);
   assertEquals(coarse_instance_stats.low_fill, low_fill_before + 1);
 });
@@ -193,7 +205,30 @@ Deno.test("bake_chunk_mesh - a box's baked position matches its own real-unit ce
   const columns = empty_columns();
   columns[idx(1, 2)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
-  const built = bake_chunk_mesh(columns, 1);
+  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
   assertEquals(box_cnt(built, 5), 1);
   assertEquals(box_center_of(built, 0, 5), [1.5, 2.5, 0.5]);
+});
+
+/** The case face culling exists for, and the one the whole-run test above
+ * cannot catch: a flat plateau culls nothing at run granularity — every
+ * column's run is topmost, so none is buried — while almost every face
+ * between them is hidden. */
+Deno.test("LOD1 - a flat plateau emits its top faces and its rim, not five faces per cell", () => {
+  const columns = empty_columns();
+  const lo: u32 = 4, hi: u32 = 8; // a 5x5 block of columns, clear of the chunk edge
+  for (let cx = lo; cx <= hi; cx++) {
+    for (let cy = lo; cy <= hi; cy++) columns[idx(cx, cy)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
+  }
+
+  const culled_before = occlusion_stats.culled;
+  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+
+  // 25 tops, plus one side face per cell edge that faces open air: the
+  // plateau's rim is 5 cells on each of 4 sides. Everything interior is
+  // gone. Five faces per box would have been 125.
+  assertEquals(built.vertex_cnt, (25 + 4 * 5) * 4);
+  // ...and not one run was occlusion-culled, which is the point: the two
+  // tests are looking at different things.
+  assertEquals(occlusion_stats.culled, culled_before);
 });
