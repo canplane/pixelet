@@ -34,18 +34,40 @@ export type MountedLodMesh =
   | { kind: "decor"; mesh: THREE.Mesh; role: ChunkLodRole };
 
 export type ChunkMeshRegistry = { meshes: Set<MountedLodMesh> };
-export type ChunkVisibilityDecision = { primary: boolean; secondary: boolean };
+
+/**
+ * How much of each role to draw, encoded so one float per vertex carries
+ * both the amount and which side of the dither pattern this mesh takes.
+ *
+ *   0 .. 1   draw a fragment where the pattern is below this value.
+ *            1 is everything, 0 is nothing — the old boolean, unchanged.
+ *   2 .. 3   the same value minus 2, but inverted: draw where the pattern
+ *            is at or above it.
+ *
+ * The inversion is what makes a pair complementary. Both meshes sample the
+ * same pattern, so a fine mesh at 2 + f and a coarse one at f cover every
+ * fragment exactly once between them — no gaps to see through and no
+ * fragment paying for both.
+ */
+export type ChunkVisibilityDecision = { primary: number; secondary: number };
+
+/** What share of its fragments an encoded value actually keeps. */
+export function visibility_coverage(value: number): number {
+  return value > 1.5 ? 1 - (value - 2) : value;
+}
 
 export function apply_visibility(registry: ChunkMeshRegistry, decision: ChunkVisibilityDecision): void {
   for (const mounted of registry.meshes) {
-    const want_visible = mounted.role === "primary" ? decision.primary : decision.secondary;
+    const value = mounted.role === "primary" ? decision.primary : decision.secondary;
     if (mounted.kind === "cube") {
-      const value = want_visible ? 1 : 0;
       if (mounted.built.visibility[0] === value) continue;
       mounted.built.visibility.fill(value);
       mounted.attribute.needsUpdate = true;
     } else {
-      mounted.mesh.visible = want_visible;
+      // Decor is whole meshes, not per-vertex selectors — there is nothing
+      // to dither, so it takes whichever side of the transition it is mostly
+      // on. See decor_layer.tsx for why it never needed the finer grain.
+      mounted.mesh.visible = visibility_coverage(value) > 0.5;
     }
   }
 }

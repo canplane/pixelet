@@ -316,11 +316,34 @@ export type ColumnRunSet = {
   r: Uint8Array;
   g: Uint8Array;
   b: Uint8Array;
-  /** NO_LAYER (255) when the run carries no texture layer. */
-  layer_idx: Uint8Array;
+  /**
+   * Four texture-array layers packed one per byte, which the shader averages
+   * at 25% each.
+   *
+   * Four rather than one because a coarse tier's cell can span several
+   * materials and showing only the first reads as blotchy: the taps are how
+   * a merged cell blends grass into road into roof. A fine run has one
+   * material, so it writes the same layer into all four and the average is
+   * that layer — which is what the finest tier has always done.
+   */
+  layer_taps: Uint32Array;
   material_class: Uint8Array;
-  /** SUB_CELL_NONE (0) for a full-cell run; otherwise a 0-255 fraction. */
+  /**
+   * SUB_CELL_NONE (0) for a full-cell run; otherwise the run's box is inset
+   * inside its cell and `sub_sx`/`sub_sy`/`sub_sz` give its extent per axis.
+   *
+   * `sub_sz` is the discriminator for all three, and it scales the run's
+   * whole z extent rather than one cell — for a sub-voxel object the run is
+   * one cell tall so the two agree, and for a coarse LOD cell it is what
+   * lets the box keep an exact multi-cell height while shrinking in XY.
+   *
+   * Per-axis rather than one isotropic size because sparsity has a
+   * direction: a lone pillar under a coarse cell is narrow in XY and full
+   * height, and a single scale factor can only say one of those two things.
+   */
   sub_sz: Uint8Array;
+  sub_sx: Uint8Array;
+  sub_sy: Uint8Array;
   sub_ox: Uint8Array;
   sub_oy: Uint8Array;
   sub_oz: Uint8Array;
@@ -329,10 +352,10 @@ export type ColumnRunSet = {
 /** The prefix index, filled during the walk and copied into the block. */
 const COLUMN_STARTS = new Uint32Array(COLUMN_CNT + 1);
 
-const RUN_I32_FIELDS: u32 = 2; // z0, z1
-const RUN_U8_FIELDS: u32 = 9; // r g b layer_idx material_class sub_sz sub_ox sub_oy sub_oz
+const RUN_I32_FIELDS: u32 = 3; // z0, z1, layer_taps
+const RUN_U8_FIELDS: u32 = 10; // r g b material_class sub_sz sub_sx sub_sy sub_ox sub_oy sub_oz
 
-function alloc_column_run_set(count: u32): ColumnRunSet {
+export function alloc_column_run_set(count: u32): ColumnRunSet {
   const block = MESH_POOL.acquire((COLUMN_CNT + 1) * 4 + count * (RUN_I32_FIELDS * 4 + RUN_U8_FIELDS));
   const buf = block.buf;
   let off = block.byte_offset;
@@ -344,6 +367,8 @@ function alloc_column_run_set(count: u32): ColumnRunSet {
     return view;
   };
   const z0 = i32(), z1 = i32();
+  const layer_taps = new Uint32Array(buf, off, count);
+  off += count * 4;
   const u8 = (): Uint8Array => {
     const view = new Uint8Array(buf, off, count);
     off += count;
@@ -355,12 +380,14 @@ function alloc_column_run_set(count: u32): ColumnRunSet {
     start,
     z0,
     z1,
+    layer_taps,
     r: u8(),
     g: u8(),
     b: u8(),
-    layer_idx: u8(),
     material_class: u8(),
     sub_sz: u8(),
+    sub_sx: u8(),
+    sub_sy: u8(),
     sub_ox: u8(),
     sub_oy: u8(),
     sub_oz: u8(),
@@ -390,7 +417,7 @@ const SC_Z1 = new Vector(Int32Array, SCRATCH_CAP);
 const SC_R = new Vector(Uint8Array, SCRATCH_CAP);
 const SC_G = new Vector(Uint8Array, SCRATCH_CAP);
 const SC_B = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_LAYER = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_LAYER = new Vector(Uint32Array, SCRATCH_CAP);
 const SC_CLASS = new Vector(Uint8Array, SCRATCH_CAP);
 const SC_SUB_SZ = new Vector(Uint8Array, SCRATCH_CAP);
 const SC_SUB_OX = new Vector(Uint8Array, SCRATCH_CAP);
@@ -404,7 +431,7 @@ const SPAN_SINK: RunSink = {
     SC_R.push(r);
     SC_G.push(g);
     SC_B.push(b);
-    SC_LAYER.push(layer_idx);
+    SC_LAYER.push(layer_idx * 0x01010101);
     SC_CLASS.push(material_class);
     SC_SUB_SZ.push(sub_sz);
     SC_SUB_OX.push(sub_ox);
@@ -456,9 +483,13 @@ export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
   set.r.set(SC_R.mem.subarray(0, n));
   set.g.set(SC_G.mem.subarray(0, n));
   set.b.set(SC_B.mem.subarray(0, n));
-  set.layer_idx.set(SC_LAYER.mem.subarray(0, n));
+  set.layer_taps.set(SC_LAYER.mem.subarray(0, n));
   set.material_class.set(SC_CLASS.mem.subarray(0, n));
+  // A baked sub-voxel object is a cube, so its three extents are one value.
+  // Only the coarse mesher writes them apart.
   set.sub_sz.set(SC_SUB_SZ.mem.subarray(0, n));
+  set.sub_sx.set(SC_SUB_SZ.mem.subarray(0, n));
+  set.sub_sy.set(SC_SUB_SZ.mem.subarray(0, n));
   set.sub_ox.set(SC_SUB_OX.mem.subarray(0, n));
   set.sub_oy.set(SC_SUB_OY.mem.subarray(0, n));
   set.sub_oz.set(SC_SUB_OZ.mem.subarray(0, n));
@@ -486,9 +517,11 @@ export function pack_column_runs(per_column: readonly (readonly MeshRun[])[]): C
       set.r[w] = run.r;
       set.g[w] = run.g;
       set.b[w] = run.b;
-      set.layer_idx[w] = run.layer_idx;
+      set.layer_taps[w] = run.layer_idx * 0x01010101;
       set.material_class[w] = run.material_class;
       set.sub_sz[w] = run.sub_sz;
+      set.sub_sx[w] = run.sub_sz;
+      set.sub_sy[w] = run.sub_sz;
       set.sub_ox[w] = run.sub_ox;
       set.sub_oy[w] = run.sub_oy;
       set.sub_oz[w] = run.sub_oz;

@@ -74,7 +74,6 @@ import {
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { mesh_pool_stat } from "@/render/layer/pipeline/mesh_pool.ts";
-import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
 import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view, update_frustum } from "@/render/chunk_lod.ts";
 import {
   build_decor_instances,

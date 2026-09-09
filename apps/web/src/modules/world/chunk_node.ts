@@ -33,6 +33,7 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
+import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
 import { bake_decor_instances } from "@/modules/world/decor/instanced_model.ts";
@@ -104,6 +105,14 @@ export const OFF_SCREEN_LOD_STEP: LodStep = 64;
 const MAX_CACHED_LOD_TIERS = 4;
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
+
+/** Cached rather than read per chunk: recheck() runs over every live node
+ * on its own interval, and a store read there is a couple of thousand
+ * lookups a tick for a flag that changes when someone clicks a toggle. */
+let pixel_dither = useDebugStore.getState().pixelDither;
+useDebugStore.subscribe((state) => {
+  pixel_dither = state.pixelDither;
+});
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----
 
@@ -809,7 +818,7 @@ export class ChunkNode implements ChunkLodControl {
       this.blend_active = false;
       this.settling = false;
       this.prune_to_default();
-      apply_visibility(this.registry, { primary: true, secondary: false });
+      apply_visibility(this.registry, { primary: 1, secondary: 0 });
       return;
     }
 
@@ -817,24 +826,56 @@ export class ChunkNode implements ChunkLodControl {
     // An unloaded chunk has nothing on screen to transition from: build its
     // correct tier immediately instead of flashing 32 -> 16 -> target merely
     // because the memory-saving empty state uses OFF_SCREEN_LOD_STEP.
-    const primary = this.layout.ready ? step_lod_toward(this.layout.primary, guide.lod_step) : guide.lod_step;
-    this.settling = primary !== guide.lod_step;
-    const secondary = !this.settling && guide.blend_active && guide.blend_finer_step !== null && guide.blend_coarser_step !== null
-      ? (primary === guide.blend_finer_step ? guide.blend_coarser_step : guide.blend_finer_step)
-      : null;
+    const stepped = this.layout.ready ? step_lod_toward(this.layout.primary, guide.lod_step) : guide.lod_step;
+    this.settling = stepped !== guide.lod_step;
+    const blending = !this.settling && guide.blend_active &&
+      guide.blend_finer_step !== null && guide.blend_coarser_step !== null;
+    // Inside a band the finer tier is always primary, whatever guide.lod_step
+    // currently says. It crosses from finer to coarser at the band's
+    // midpoint, and letting that crossing rename the two tiers made the
+    // layout pending exactly halfway through the fade — which abandons the
+    // blend and snaps the chunk to one tier until the rebuild lands.
+    //
+    // That is why zooming out popped while zooming in did not: coarsening
+    // commits at the threshold itself, in the middle of the band, while
+    // refining commits at the band's own inner edge where the fade is over
+    // anyway. Neither direction needs a rebuild for it — the two tiers are
+    // the same two meshes either way, only their labels were swapping.
+    const primary = blending ? guide.blend_finer_step! : stepped;
+    const secondary = blending ? guide.blend_coarser_step! : null;
     this.desired = { primary, secondary };
     this.pending = !this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary;
     this.blend_active = !this.settling && guide.blend_active;
 
     if (this.pending || !this.blend_active || guide.blend_finer_step === null || guide.blend_coarser_step === null) {
-      apply_visibility(this.registry, { primary: true, secondary: false });
+      apply_visibility(this.registry, { primary: 1, secondary: 0 });
       return;
     }
+    // Two ways to spend a blend band. Per chunk: a stable hash decides which
+    // tier this whole chunk shows, so neighbours cross at different moments
+    // and the world does not pop in one frame — cheap, and nothing is ever
+    // drawn twice. Per fragment: both tiers draw, punched with complementary
+    // dither patterns, which is what engines mean by an LOD cross-fade. The
+    // second reads as a real fade and costs the overdraw of drawing a
+    // blending chunk twice; it also wants temporal AA to average the pattern,
+    // which this renderer does not have (SMAA is spatial), so a moving camera
+    // will show the pattern crawling.
     const pair = get_lod_pair_visibility(this.stable_hash, guide.coarse_fraction);
+    // The coarser tier leads and the finer one lags, rather than the two
+    // splitting the band between them. Complementary patterns only tile
+    // without gaps if both tiers fill the same volume, and a coarse box is
+    // shrunk to its cell's occupancy — so where it has pulled away from the
+    // fine geometry, exclusive patterns would dissolve to background instead
+    // of to the other tier. Overlapping them costs the overdraw of a doubly
+    // drawn chunk at mid-band and leaves no hole that isn't the coarse tier's
+    // own.
+    const f = guide.coarse_fraction;
+    const finer = pixel_dither ? 2 + Math.max(0, f * 2 - 1) : (pair.finer ? 1 : 0);
+    const coarser = pixel_dither ? Math.min(1, f * 2) : (pair.coarser ? 1 : 0);
     const primary_is_finer = this.layout.primary === guide.blend_finer_step;
     apply_visibility(this.registry, {
-      primary: primary_is_finer ? pair.finer : pair.coarser,
-      secondary: primary_is_finer ? pair.coarser : pair.finer,
+      primary: primary_is_finer ? finer : coarser,
+      secondary: primary_is_finer ? coarser : finer,
     });
   }
 

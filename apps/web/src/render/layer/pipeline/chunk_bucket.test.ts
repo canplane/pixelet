@@ -1,6 +1,6 @@
 // @pxl/web/render/layer/pipeline/chunk_bucket.test.ts
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import * as THREE from "three";
 
 import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, release_chunk_volume } from "./volume.ts";
@@ -143,22 +143,41 @@ Deno.test("chunk bucket - a fully-covered coarse cell draws one unshrunk box per
   assertEquals(bounds.max_z, 6); // span(2), full coverage -> no isotropic shrink
 });
 
-Deno.test("chunk bucket - a partially-covered coarse cell shrinks isotropically instead of vanishing", () => {
-  // Only 1 of the 4 sub-columns in this lod_step=2 cell is filled: fill =
-  // 1/8, so the box shrinks to cbrt(1/8) = 0.5 of the cell's full span on
-  // every axis (X/Y/Z together) rather than being dropped by a threshold.
+Deno.test("chunk bucket - a sparse coarse cell shrinks about its own centre, equally on every axis", () => {
+  // 1 of this lod_step=4 cell's 64 fine voxels, so fill is 1/64 and the
+  // box's linear scale is its cube root: a 1x1x1 box centred in the cell.
+  // Where in the cell the voxel actually sat does not enter into it — the
+  // cell is the unit at this tier, and it is a cube.
   const volume = alloc_chunk_volume();
   fill_chunk_column(volume, 1, 2, 0, 0, LAND);
   const column_runs = scan_all_column_runs(volume);
 
-  const bucket = build_chunk_bucket(column_runs, 2, "primary");
-  assertEquals(bucket.cubes.vertex_cnt, 20); // one open-bottom coarse box
+  const bucket = build_chunk_bucket(column_runs, 4, "primary");
   const bounds = chunk_bounds([bucket]);
   assert(bounds !== null);
-  const size_x = bounds.max_x - bounds.min_x;
-  const size_z = bounds.max_z - bounds.min_z;
-  assertEquals(size_x, 1); // span(2) * cbrt(1/8)(0.5)
-  assertEquals(size_z, 1); // Z — same factor, isotropic
+  assertEquals([bounds.min_x, bounds.min_y, bounds.min_z], [1.5, 1.5, 1.5]);
+  assertEquals([bounds.max_x, bounds.max_y, bounds.max_z], [2.5, 2.5, 2.5]);
+});
+
+Deno.test("chunk bucket - a half-full coarse cell shrinks in Z exactly as much as in X and Y", () => {
+  // All 4 sub-columns of a lod_step=2 cell, one cell of the two tall: half
+  // full, so every axis scales by cbrt(0.5). Height is not spared — that is
+  // what keeps the operator the same under a rotation.
+  const volume = alloc_chunk_volume();
+  for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) fill_chunk_column(volume, cx, cy, 0, 0, LAND);
+  const column_runs = scan_all_column_runs(volume);
+
+  const bucket = build_chunk_bucket(column_runs, 2, "primary");
+  const bounds = chunk_bounds([bucket]);
+  assert(bounds !== null);
+  const side = 2 * Math.cbrt(0.5);
+  // The scale is stored as a 1/256 fraction, so it lands within one step.
+  const q = 2 / 256;
+  assertAlmostEquals(bounds.max_x - bounds.min_x, side, q);
+  assertAlmostEquals(bounds.max_y - bounds.min_y, side, q);
+  assertAlmostEquals(bounds.max_z - bounds.min_z, side, q);
+  // Whatever that value is, all three axes got exactly it.
+  assertEquals(bounds.max_x - bounds.min_x, bounds.max_z - bounds.min_z);
 });
 
 Deno.test("chunk bucket - column_runs survive the volume they were scanned from being released", () => {

@@ -106,6 +106,40 @@ record:
   null`) is worth designing on its own terms when POI work actually resumes,
   not as a prerequisite for the render-side decision above.
 
+## Follow-up (2026-09-09): tier 3 has no real DOM interaction, and doesn't need one per instance
+
+POI shipped since this document was first written
+([20260908-overture-poi-adoption.md](./20260908-overture-poi-adoption.md)),
+making the question concrete: can a tier-3 billboard support hover-title
+tooltips (POI) or drag-to-select text (ChatBubble)? Checked against the
+actual code (`sprite_billboard.tsx`, `chat_bubble.tsx`) — no. A billboard's
+content is `ctx.fillText()` baked into a `CanvasTexture` on a `THREE.Sprite`;
+there is no DOM text node for the browser to select, and no element for a
+native `title` attribute to hang off. This isn't a bug, it's what tier 3 is
+— see the "if/when POI comes back" note above ruling out a per-marker HTML
+overlay by name, for the exact reason DOM-follows-3D-object markers don't
+scale.
+
+That reasoning still holds; it constrains the answer rather than closing the
+question. Figma solved the same problem at a much larger scale with a
+pattern worth borrowing: the canvas stays the only thing ever drawn, and a
+**single hidden native input, positioned over whatever is currently
+active**, captures real browser behavior (text selection, drag, IME
+composition) exactly when something is actually being interacted with —
+never one gizmo held open per shape. Applied here: one shared tooltip DOM
+node (not one per POI) repositioned to a raycast hit's screen-projected
+point on hover, and for ChatBubble, only the currently-visible bubble's text
+region gets a real (invisible-until-dragged) text overlay — the notched
+bubble shape stays canvas-drawn as it is today. The wiring both would share:
+reuse `hover_cursor.tsx`'s existing raycast-hit-test, project the hit to
+screen space (`camera.project()`), and drive a plain DOM element's
+`style.transform` imperatively — the same ref-mutation-over-`useFrame`
+convention `use_distance_fade.ts` already uses, not React state per frame.
+
+Idea only, nothing built. Worth doing the first time either need is real,
+not before — same premature-abstraction caution as the rest of this
+document.
+
 ## Status
 
 Discussion only — no code changed. Nothing here supersedes an earlier

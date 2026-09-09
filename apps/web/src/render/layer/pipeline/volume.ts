@@ -284,3 +284,18 @@ export function pack_sub_cell_fraction(fraction: f64): u32 {
 export function unpack_sub_cell_fraction(packed: u32): f64 {
   return packed / SUB_CELL_SCALE;
 }
+
+/**
+ * The largest packed value, read as exactly 1 rather than 255/256.
+ *
+ * An offset of 1 is meaningless, so `unpack_sub_cell_fraction` never needs
+ * to express it. A *size* of 1 is not: coarse LOD fits a box to what is
+ * actually inside a cell, and a box that fills one axis while shrinking
+ * another is the ordinary case, not an edge one. Reading the top value as
+ * full costs a comparison and keeps 0 free as SUB_CELL_NONE.
+ */
+export const SUB_CELL_FULL: u32 = SUB_CELL_SCALE - 1;
+
+export function unpack_sub_cell_size(packed: u32): f64 {
+  return packed === SUB_CELL_FULL ? 1 : packed / SUB_CELL_SCALE;
+}
