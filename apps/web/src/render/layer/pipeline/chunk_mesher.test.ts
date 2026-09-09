@@ -71,6 +71,27 @@ const FACE_PX_BIT = 1 << 0;
 const CREASE_PX_BIT = 1 << 18;
 const CREASE_NX_BIT = 1 << 19;
 const CAP_PZ_BIT = 1 << 22;
+const RISES_PY_BIT = 1 << 8;
+
+Deno.test("LOD1 - a merged box does not stamp one column's edge across its whole width", () => {
+  const columns = empty_columns();
+  // Two flat rows, four cells wide, all one run. Then a step up behind the
+  // first column only, so exactly one cell of the far row has a concave
+  // edge on its +Y side and the other three have open air.
+  for (let cx: u32 = 5; cx <= 8; cx++) {
+    columns[idx(cx, 0)] = [run(0, 0, 200, 100, 50)];
+    columns[idx(cx, 1)] = [run(0, 0, 200, 100, 50)];
+  }
+  columns[idx(5, 2)] = [run(0, 1, 200, 100, 50)];
+
+  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  // The cell under the step keeps its edge, and the three beside it do not
+  // inherit it. merged_mask reads a box's +Y border from column 0 of its far
+  // row, so a merge that spanned this row would have given all four the
+  // first one's edge.
+  assert((boxes.get("5.5,1.5,0.5")! & RISES_PY_BIT) !== 0);
+  assertEquals(boxes.get("7.5,1.5,0.5")! & RISES_PY_BIT, 0);
+});
 
 Deno.test("LOD1 - a user cube flush against terrain draws no seam between them", () => {
   const columns = empty_columns();
@@ -275,10 +296,11 @@ Deno.test("LOD1 - a flat plateau emits its top faces and its rim, not five faces
   const culled_before = occlusion_stats.culled;
   const built = bake_chunk_mesh(pack_column_runs(columns), 1);
 
-  // 25 tops, plus one side face per cell edge that faces open air: the
-  // plateau's rim is 5 cells on each of 4 sides. Everything interior is
-  // gone. Five faces per box would have been 125.
-  assertEquals(built.vertex_cnt, (25 + 4 * 5) * 4);
+  // The whole plateau is one box. Every cell holds the same run — same z
+  // span, same material — and no interior border carries a crease, so the
+  // greedy merge takes all 25 into a single 5x5x1 box with a top and four
+  // rim faces. Five faces where an unmerged, unculled bake emitted 125.
+  assertEquals(built.vertex_cnt, 5 * 4);
   // ...and not one run was occlusion-culled, which is the point: the two
   // tests are looking at different things.
   assertEquals(occlusion_stats.culled, culled_before);

@@ -590,17 +590,102 @@ export function bake_chunk_mesh(set: ColumnRunSet, lod_step: LodStep): BakedChun
  * Module-level and rewound by hand: bake_chunk_mesh_fine is synchronous and
  * non-reentrant, so one scratch store serves every chunk.
  */
-const SURVIVING = new Vector(Uint32Array, { init_cap: 4 * (1 << 12) });
+const SURVIVING = new Vector(Uint32Array, { init_cap: 6 * (1 << 12) });
+
+/**
+ * Greedy merge over the surviving runs, in the run domain rather than the
+ * face domain.
+ *
+ * Two adjacent columns holding the same run — identical z span, identical
+ * material — are one box two cells wide, and emit_box already takes a size:
+ * the coarse path has always emitted boxes spanning many cells, and
+ * `a_box_scale` carries the real extent so UV tiling and crease distance
+ * both follow without a shader change. So merging costs no new emit path.
+ *
+ * Face-level greedy meshing would merge more (it can join tops whose runs
+ * sit on different substrate), but it needs a separate quad emitter, its own
+ * per-direction plane, and its own crease bookkeeping. This gets the case
+ * that dominates real terrain — flat ground on a continuous base — for a
+ * fraction of the surface area.
+ *
+ * The merge condition is stricter than "same material" in two ways that both
+ * matter. The shared boundary must not be a crease, which identical z spans
+ * already guarantee (each column covers the other, so both side faces are
+ * culled), and it must be checked rather than assumed because concave and
+ * diagonal bits can be set where no face survives. And the bits on the two
+ * edges *perpendicular* to the merge have to agree across every cell, or the
+ * merged box would claim one crease state for a border where the cells
+ * disagreed.
+ */
+const MERGE_KEY_BITS = RISES_PX | RISES_NX | RISES_PY | RISES_NY |
+  DIPS_PX | DIPS_NX | DIPS_PY | DIPS_NY |
+  DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN |
+  CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY | ALL_FACES;
+
+/** The bits that make one cell's +X border a seam: a face to draw there, or
+ * an edge to shade. A merge may not swallow a border carrying any of them. */
+const X_SEAM_BITS = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX;
+const Y_SEAM_BITS = FACE_PY | CREASE_PY | RISES_PY | DIPS_PY;
+
+/** Bits that describe the +X/-X borders, which a merge along X consumes. */
+const X_BORDER_BITS = FACE_PX | FACE_NX | CREASE_PX | CREASE_NX | RISES_PX | RISES_NX | DIPS_PX | DIPS_NX |
+  DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN;
+/** Same for Y. The diagonals belong to both, so a merge on either axis
+ * requires them equal — a merged box has one diagonal state per corner. */
+const Y_BORDER_BITS = FACE_PY | FACE_NY | CREASE_PY | CREASE_NY | RISES_PY | RISES_NY | DIPS_PY | DIPS_NY |
+  DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN;
+
+/**
+ * The mask a merged rectangle carries.
+ *
+ * Not the near corner's — a merge along X consumes the border at *both*
+ * ends, so the +X bits belong to the far column and only the -X ones are
+ * this cell's. Same for Y, and each diagonal belongs to the corner it names.
+ * Everything the merge did not consume is equal across the rectangle by
+ * construction, so it can come from anywhere.
+ */
+function merged_mask(col: u32, w: u32, h: u32): u32 {
+  const near = MERGE_MASK[col];
+  if (w === 1 && h === 1) return near;
+  const far_x = MERGE_MASK[col + (w - 1)];
+  const far_y = MERGE_MASK[col + (h - 1) * CHUNK_CELL_SPAN];
+  const far_xy = MERGE_MASK[col + (h - 1) * CHUNK_CELL_SPAN + (w - 1)];
+  const from_far = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX | FACE_PY | CREASE_PY | RISES_PY | DIPS_PY |
+    DIAG_PP | DIAG_PN | DIAG_NP;
+  return (near & ~from_far) |
+    (far_x & (FACE_PX | CREASE_PX | RISES_PX | DIPS_PX | DIAG_PN)) |
+    (far_y & (FACE_PY | CREASE_PY | RISES_PY | DIPS_PY | DIAG_NP)) |
+    (far_xy & DIAG_PP);
+}
+
+function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
+  return set.z0[a] === set.z0[b] && set.z1[a] === set.z1[b] &&
+    set.r[a] === set.r[b] && set.g[a] === set.g[b] && set.b[a] === set.b[b] &&
+    set.layer_idx[a] === set.layer_idx[b] && set.material_class[a] === set.material_class[b] &&
+    set.sub_sz[a] === SUB_CELL_NONE && set.sub_sz[b] === SUB_CELL_NONE;
+}
+
+/**
+ * One entry per cell: the surviving run index and its mask, or -1. At most
+ * one run per cell can merge — a column with several runs keeps them all,
+ * they just each stand alone, which is right: stacked runs in one column are
+ * a cliff face, not flat ground.
+ */
+const MERGE_RUN = new Int32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
+const MERGE_MASK = new Int32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
 
 function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
   const base = SURVIVING.len;
   let vertex_total: u32 = 0;
   let index_total: u32 = 0;
+  MERGE_RUN.fill(-1);
 
   for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
     for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
       const col = cy * CHUNK_CELL_SPAN + cx;
       const end = set.start[col + 1];
+      let mergeable = -1;
+      let mergeable_mask = 0;
       for (let i = set.start[col]; i < end; i++) {
         occlusion_stats.total_runs++;
         const mask = run_face_mask(set, cx, cy, i);
@@ -610,33 +695,95 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
           occlusion_stats.culled++;
           continue;
         }
-        SURVIVING.push(cx);
-        SURVIVING.push(cy);
-        SURVIVING.push(i);
-        SURVIVING.push(mask);
-        const faces = face_cnt_of(mask & ALL_FACES);
-        occlusion_stats.faces_kept += faces;
-        vertex_total += faces * 4;
-        index_total += faces * 6;
+        if (set.sub_sz[i] === SUB_CELL_NONE && mergeable < 0) {
+          mergeable = i;
+          mergeable_mask = mask;
+          continue;
+        }
+        // Not a merge candidate: emit it as its own single-cell box.
+        push_box(cx, cy, i, mask, 1, 1);
+      }
+      if (mergeable >= 0) {
+        MERGE_RUN[col] = mergeable;
+        MERGE_MASK[col] = mergeable_mask;
       }
     }
   }
 
+  // Greedy rectangles over the mergeable plane: widen along X while the run
+  // matches and the shared border carries no crease, then deepen along Y
+  // while a whole row matches the first.
+  for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
+    for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
+      const col = cy * CHUNK_CELL_SPAN + cx;
+      const run = MERGE_RUN[col];
+      if (run < 0) continue;
+      const mask = MERGE_MASK[col];
+
+      let w = 1;
+      while (cx + w < CHUNK_CELL_SPAN) {
+        // The border about to be swallowed belongs to the current far cell,
+        // not to the cell this box started at. Testing `mask` instead made
+        // the condition loop-invariant, so it only ever asked about the
+        // first border and let the merge run through every later one.
+        if ((MERGE_MASK[col + w - 1] & X_SEAM_BITS) !== 0) break;
+        const next = col + w;
+        const next_run = MERGE_RUN[next];
+        if (next_run < 0 || !runs_match(set, run, next_run)) break;
+        // Everything the merge does not consume must agree.
+        if ((MERGE_MASK[next] & ~X_BORDER_BITS) !== (mask & ~X_BORDER_BITS)) break;
+        w++;
+      }
+
+      let h = 1;
+      outer: while (cy + h < CHUNK_CELL_SPAN) {
+        const row = col + h * CHUNK_CELL_SPAN;
+        for (let k = 0; k < w; k++) {
+          if ((MERGE_MASK[col + (h - 1) * CHUNK_CELL_SPAN + k] & Y_SEAM_BITS) !== 0) break outer;
+          const cell = row + k;
+          const cell_run = MERGE_RUN[cell];
+          if (cell_run < 0 || !runs_match(set, run, cell_run)) break outer;
+          if ((MERGE_MASK[cell] & ~Y_BORDER_BITS) !== (MERGE_MASK[col + k] & ~Y_BORDER_BITS)) break outer;
+          // merged_mask reads the box's +Y border from column 0 of its far
+          // row, and the comparison above deliberately ignores Y bits, so
+          // without this the whole row has to be asked whether it agrees
+          // with the column that will speak for it. It did not, and a crease
+          // belonging to one column got stamped across the box's full width
+          // — a line running over flat ground, starting and stopping where
+          // the merge happened to.
+          if ((MERGE_MASK[cell] & Y_SEAM_BITS) !== (MERGE_MASK[row] & Y_SEAM_BITS)) break outer;
+        }
+        h++;
+      }
+
+      for (let j = 0; j < h; j++) {
+        for (let k = 0; k < w; k++) MERGE_RUN[col + j * CHUNK_CELL_SPAN + k] = -1;
+      }
+      push_box(cx, cy, run, merged_mask(col, w, h), w, h);
+    }
+  }
+
+  // Totals are only knowable once merging is done, which is why the block
+  // is sized here rather than in the pass above.
+  for (let s_i = base; s_i < SURVIVING.len; s_i += 6) {
+    const faces = face_cnt_of(SURVIVING.get(s_i + 3) & ALL_FACES);
+    occlusion_stats.faces_kept += faces;
+    vertex_total += faces * 4;
+    index_total += faces * 6;
+  }
+
   const builder = alloc_builder(vertex_total, index_total);
-  for (let s_i = base; s_i < SURVIVING.len; s_i += 4) {
+  for (let s_i = base; s_i < SURVIVING.len; s_i += 6) {
     const cx = SURVIVING.get(s_i), cy = SURVIVING.get(s_i + 1), i = SURVIVING.get(s_i + 2);
-    // run_to_box's own math, inlined against the packed spans: it returns a
-    // {min, max} pair of arrays, which is three allocations per surviving
-    // run and the reason this path does not call it. voxel_scan.ts keeps it
-    // for the raycast, where it runs once per hover.
+    const mask = SURVIVING.get(s_i + 3), w = SURVIVING.get(s_i + 4), h = SURVIVING.get(s_i + 5);
     const sub_sz = set.sub_sz[i];
     let min_x: f64, min_y: f64, min_z: f64, size_x: f64, size_y: f64, size_z: f64;
     if (sub_sz === SUB_CELL_NONE) {
       min_x = cx * U_PER_CELL;
       min_y = cy * U_PER_CELL;
       min_z = set.z0[i] * U_PER_CELL;
-      size_x = U_PER_CELL;
-      size_y = U_PER_CELL;
+      size_x = w * U_PER_CELL;
+      size_y = h * U_PER_CELL;
       size_z = (set.z1[i] + 1 - set.z0[i]) * U_PER_CELL;
     } else {
       const sz = unpack_sub_cell_fraction(sub_sz) * U_PER_CELL;
@@ -663,11 +810,22 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
       layer,
       layer,
       layer,
-      SURVIVING.get(s_i + 3),
+      mask,
     );
   }
   SURVIVING.truncate(base);
   return finish_builder(builder);
+}
+
+/** Records one box to emit: cell origin, its run, its mask, and how many
+ * cells it spans. Stride 6 in the same scratch the pre-merge pass used. */
+function push_box(cx: u32, cy: u32, run: u32, mask: u32, w: u32, h: u32): void {
+  SURVIVING.push(cx);
+  SURVIVING.push(cy);
+  SURVIVING.push(run);
+  SURVIVING.push(mask);
+  SURVIVING.push(w);
+  SURVIVING.push(h);
 }
 
 /** tap0..tap3: up to 4 distinct texture-array layers touching this bucket,
