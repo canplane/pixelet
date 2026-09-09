@@ -83,7 +83,28 @@ export type ChunkVolume = {
 export type OrderedVoxelBand = VoxelBand;
 
 /** Two scratch bands cap retained CPU scratch storage at about 2.5 MiB. */
-const MAX_POOLED_BANDS: u32 = 2;
+/**
+ * How many band buffers to keep for reuse.
+ *
+ * A band is `L2_BAND_VOXEL_CNT` of material plus the same again of layer
+ * index — 1.31MB — and a composite produces several. At 2 the pool covered
+ * the first two and every one after that was a fresh pair of typed arrays,
+ * which was fine when compositing was rare and is not now: measured, ~38
+ * chunk scans a second against a heap growing 188MB/s with the chunk layer
+ * itself retaining almost nothing. It was transient, and this was it.
+ *
+ * Only one composite is live at a time (with_temporary_composite is
+ * synchronous) plus whatever the raycast cache holds, so the pool needs
+ * roughly one chunk's worth of bands. `scan_bands_max` in the ledger is the
+ * number to size this against; 16 is ~21MB of standing scratch, which is
+ * nothing next to what it stops churning.
+ */
+const MAX_POOLED_BANDS: u32 = 16;
+
+/** Dev-only: how often a band came from the pool rather than being built.
+ * A low reuse share means MAX_POOLED_BANDS is under a composite's real band
+ * count and the difference is pure garbage. */
+export const band_pool_stats = { allocated: 0, reused: 0 };
 const band_pool: VoxelBand[] = [];
 
 export function alloc_chunk_volume(): ChunkVolume {
@@ -154,7 +175,10 @@ function get_or_create_band(volume: ChunkVolume, band_z: i32): VoxelBand {
   const existing = volume.bands[insert_at];
   if (existing?.band_z === band_z) return existing;
 
-  const band = band_pool.pop() ?? {
+  const pooled = band_pool.pop();
+  if (pooled) band_pool_stats.reused++;
+  else band_pool_stats.allocated++;
+  const band = pooled ?? {
     band_z,
     material: new Uint32Array(L2_BAND_VOXEL_CNT),
     layer_idx: new Uint8Array(L2_BAND_VOXEL_CNT),

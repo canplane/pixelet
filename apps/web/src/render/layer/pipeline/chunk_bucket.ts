@@ -2,10 +2,10 @@
 
 /** One renderer-owned L2 64x64 XY column. */
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { LodStep } from "@/render/lod.ts";
-import type { MeshRun } from "./voxel_scan.ts";
-import { bake_chunk_mesh, type BakedChunkMesh } from "./chunk_mesher.ts";
+import type { ColumnRunSet } from "./voxel_scan.ts";
+import { bake_chunk_mesh, type BakedChunkMesh, carve_visibility, release_chunk_mesh } from "./chunk_mesher.ts";
 
 export type ChunkOffsets = {
   key: string;
@@ -19,6 +19,16 @@ export type ChunkLodRole = "primary" | "secondary";
 export type BuiltChunkMesh = BakedChunkMesh & {
   /** Mutable per-vertex selector; both LODs stay resident only inside a transition band. */
   visibility: Float32Array;
+  /**
+   * How many owners still hold this mesh. Two of them exist and die
+   * independently: chunk_stage.tsx's per-chunk LOD cache, and the mounted
+   * geometry that renders it. A cache eviction while the same tier is still
+   * on screen is the normal case, not an edge one (recheck() prunes on
+   * frustum exit; commit() replaces the layout a frame later), so "the cache
+   * dropped it" cannot mean "the block is free" — hence a count rather than
+   * a single owner. In Rust this is what `Rc<MeshBlock>` would be.
+   */
+  rc: u32;
 };
 
 export type BuiltChunkBucket = {
@@ -83,20 +93,55 @@ export function chunk_bounds(buckets: readonly BuiltChunkBucket[]): ChunkBounds 
 }
 
 function with_visibility(built: BakedChunkMesh, role: ChunkLodRole): BuiltChunkMesh {
-  const visibility = new Float32Array(built.vertex_cnt);
+  const visibility = carve_visibility(built);
+  // Always a full write, never a top-up: the span comes from a recycled
+  // block and arrives holding the previous borrower's selectors.
   visibility.fill(role === "primary" ? 1 : 0);
-  return { ...built, visibility };
+  return { ...built, visibility, rc: 1 };
 }
 
 /**
  * Builds one reusable GPU-ready LOD from `column_runs` — every column's
  * runs, scanned once from the live volume (`voxel_scan.ts#scan_all_column_runs`)
  * and safe to reuse across many calls after that volume is released.
+ *
+ * Returns with one reference already held, for whoever asked. Every further
+ * owner takes its own via retain_built_mesh.
  */
 export function build_chunk_bucket(
-  column_runs: readonly MeshRun[][],
+  column_runs: ColumnRunSet,
   lod_step: LodStep,
   role: ChunkLodRole,
 ): BuiltChunkBucket {
   return { lod_step, role, cubes: with_visibility(bake_chunk_mesh(column_runs, lod_step), role) };
+}
+
+/**
+ * Takes a reference. Retaining a mesh nobody holds is a bug, not a revival:
+ * its block is back in the pool and very likely already handed to another
+ * chunk, so the geometry built from it would render someone else's
+ * vertices. Loud here rather than as a "double release" one step later,
+ * which names the symptom instead of the moment.
+ */
+export function retain_built_mesh(mesh: BuiltChunkMesh): void {
+  if (mesh.rc <= 0) {
+    console.warn(`[chunk_bucket] retain of a released mesh (${mesh.vertex_cnt} verts) — its block is no longer ours`);
+    return;
+  }
+  mesh.rc++;
+}
+
+/**
+ * Drops one reference, returning the mesh's pooled block once the last owner
+ * lets go. Every view into it — including any BufferAttribute still pointing
+ * at one — is dead from that moment: the next chunk to bake gets those exact
+ * bytes.
+ */
+export function release_built_mesh(mesh: BuiltChunkMesh): void {
+  if (mesh.rc <= 0) {
+    console.warn(`[chunk_bucket] release of an already-freed mesh (${mesh.vertex_cnt} verts) ignored`);
+    return;
+  }
+  if (--mesh.rc > 0) return;
+  release_chunk_mesh(mesh);
 }

@@ -27,11 +27,14 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import { Arena, Vector } from "@xpute/core/ds/arena.ts";
+import type { Block } from "@xpute/core/ds/pool.ts";
+import { MESH_POOL } from "./mesh_pool.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import type { LodStep } from "@/render/lod.ts";
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE, unpack_sub_cell_fraction } from "./volume.ts";
-import { type MeshRun, run_to_box } from "./voxel_scan.ts";
+import type { ColumnRunSet } from "./voxel_scan.ts";
 
 /**
  * One baked chunk mesh's raw vertex data — position/normal are the real
@@ -45,6 +48,13 @@ import { type MeshRun, run_to_box } from "./voxel_scan.ts";
  * just sized by vertex_cnt now instead of instance cnt).
  */
 export type BakedChunkMesh = {
+  /**
+   * The one pooled allocation every span below is a view into — including
+   * chunk_bucket.ts's `visibility` (see carve_visibility). Its owner must
+   * hand it back via release_chunk_mesh once no view can still be read; a
+   * view outliving that release reads whatever the next borrower wrote.
+   */
+  block: Block;
   vertex_cnt: u32;
   /** vertex_cnt*3 floats: real chunk-local position. */
   position: Float32Array;
@@ -76,8 +86,17 @@ export type BakedChunkMesh = {
 export const coarse_instance_stats = { total: 0, low_fill: 0 };
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
-/** Dev-only, cumulative since page load: LOD1 runs seen vs. how many were occlusion-culled (see is_run_occluded). */
-export const occlusion_stats = { total_runs: 0, culled: 0 };
+/**
+ * Dev-only, cumulative since page load.
+ *
+ * `total_runs`/`culled` are runs seen and runs with no visible face at all.
+ * `faces_possible`/`faces_kept` are the per-face half (run_face_mask), and
+ * they are the ones that answer "what did face culling actually buy on real
+ * terrain" — the synthetic plateau in the tests says 45 faces where 125 were
+ * emitted, but real chunks are not plateaus and the ratio is the number
+ * worth watching, not the one that was hoped for.
+ */
+export const occlusion_stats = { total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0 };
 
 /** sRGB [0,1] -> linear [0,1]. */
 function srgb_to_linear(c: f64): f64 {
@@ -107,10 +126,75 @@ const FACES: readonly Face[] = [
 const FULL_FACE_CNT: u32 = FACES.length;
 const OPEN_BOTTOM_FACE_CNT: u32 = FACES.length - 1;
 
-/** Growing-by-preallocation vertex/index writer — callers precompute the
- * exact vertex/index totals (every emit_box call's own face count is known
- * ahead of time from include_bottom alone), so this never resizes. */
+// ---- Per-face visibility ----
+//
+// Bit i is FACES[i], so the order is +X, -X, +Y, -Y, +Z, -Z.
+//
+// Every box used to emit all five (or six) of its faces regardless of what
+// sat next to it. On flat ground that is four hidden faces per box: a 64x64
+// chunk of plateau emitted 4096 boxes x 5 faces = 81,920 vertices of which
+// roughly four fifths could never be seen from anywhere, which is most of
+// what made a dense urban chunk measure 780k vertices and 67MB.
+//
+// A run whose mask comes back empty is dropped entirely, which is what the
+// separate whole-run occlusion test used to do — measured over half a
+// million runs of real terrain that test fired zero times, because its
+// condition is strictly narrower than this one.
+const FACE_PX: u32 = 1 << 0;
+const FACE_NX: u32 = 1 << 1;
+const FACE_PY: u32 = 1 << 2;
+const FACE_NY: u32 = 1 << 3;
+const FACE_PZ: u32 = 1 << 4;
+const FACE_NZ: u32 = 1 << 5;
+const ALL_FACES: u32 = (1 << 6) - 1;
+const OPEN_BOTTOM_FACES: u32 = ALL_FACES & ~FACE_NZ;
+
+function face_cnt_of(mask: u32): u32 {
+  let n: u32 = 0;
+  for (let bits = mask; bits !== 0; bits &= bits - 1) n++;
+  return n;
+}
+
+// ---- Pooled block layout ----
+//
+// Every span of a baked mesh lives in one block, in this fixed order. They
+// share a lifetime exactly (the whole mesh dies at once, when its owner
+// does), so splitting them across eight allocations bought nothing and cost
+// eight times the collector pressure — measured: a zoom-out that rebuilds
+// ~2000 chunks moved +344MB in a single frame, 8.4s of it off-thread.
+// `visibility` is reserved here but written by chunk_bucket.ts (see
+// carve_visibility): the mesher owns the layout, never the role policy.
+const F32_PER_VERTEX: u32 = 3 /* position */ + 3 /* normal */ + 3 /* local_pos */ + 3 /* box_scale */ + 3 /* rgb */ + 4 /* layer_taps */;
+const VIS_F32_PER_VERTEX: u32 = 1;
+
+function block_bytes(vertex_total: u32, index_total: u32): u32 {
+  return (vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) + index_total) * 4;
+}
+
+/** Hands one baked mesh's block back. Every view into it is dead afterwards. */
+export function release_chunk_mesh(mesh: BakedChunkMesh): void {
+  MESH_POOL.release(mesh.block);
+}
+
+/**
+ * The per-vertex LOD selector's own span inside an already-baked mesh's
+ * block. Not part of BakedChunkMesh: this module bakes real geometry and
+ * never a per-role default, so the span is reserved here and filled by
+ * chunk_bucket.ts#with_visibility. A recycled block arrives dirty, so the
+ * caller must write every element before the mesh is drawn.
+ */
+export function carve_visibility(mesh: BakedChunkMesh): Float32Array {
+  const block = mesh.block;
+  return new Float32Array(block.buf, block.byte_offset + mesh.vertex_cnt * F32_PER_VERTEX * 4, mesh.vertex_cnt * VIS_F32_PER_VERTEX);
+}
+
+/** Vertex/index writer over one pooled block — callers precompute the exact
+ * vertex/index totals (every emit_box call's own face count is known ahead
+ * of time from include_bottom alone), so this never resizes, and every
+ * element of every span below is written before the mesh is used, which is
+ * what makes a dirty recycled block safe. */
 type MeshBuilder = {
+  block: Block;
   position: Float32Array;
   normal: Float32Array;
   local_pos: Float32Array;
@@ -123,14 +207,26 @@ type MeshBuilder = {
 };
 
 function alloc_builder(vertex_total: u32, index_total: u32): MeshBuilder {
+  const block = MESH_POOL.acquire(block_bytes(vertex_total, index_total));
+  const buf = block.buf;
+  // Every span is measured from the block's own start, never the buffer's:
+  // a region is shared with other live chunks' blocks.
+  let off = block.byte_offset;
+  const span = (floats: u32): Float32Array => {
+    const view = new Float32Array(buf, off, floats);
+    off += floats * 4;
+    return view;
+  };
   return {
-    position: new Float32Array(vertex_total * 3),
-    normal: new Float32Array(vertex_total * 3),
-    local_pos: new Float32Array(vertex_total * 3),
-    box_scale: new Float32Array(vertex_total * 3),
-    rgb: new Float32Array(vertex_total * 3),
-    layer_taps: new Float32Array(vertex_total * 4),
-    index: new Uint32Array(index_total),
+    block,
+    position: span(vertex_total * 3),
+    normal: span(vertex_total * 3),
+    local_pos: span(vertex_total * 3),
+    box_scale: span(vertex_total * 3),
+    rgb: span(vertex_total * 3),
+    layer_taps: span(vertex_total * 4),
+    // visibility's own span sits here, carved on demand by carve_visibility.
+    index: new Uint32Array(buf, block.byte_offset + vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_total),
     v_cnt: 0,
     i_cnt: 0,
   };
@@ -138,6 +234,7 @@ function alloc_builder(vertex_total: u32, index_total: u32): MeshBuilder {
 
 function finish_builder(builder: MeshBuilder): BakedChunkMesh {
   return {
+    block: builder.block,
     vertex_cnt: builder.v_cnt,
     position: builder.position,
     normal: builder.normal,
@@ -149,46 +246,62 @@ function finish_builder(builder: MeshBuilder): BakedChunkMesh {
   };
 }
 
-/** Bakes one box's own real vertices (5 faces, bottom dropped, or all 6) directly into `builder`. */
+/**
+ * Bakes one box's own real vertices (5 faces, bottom dropped, or all 6)
+ * directly into `builder`.
+ *
+ * Scalar parameters rather than the `[f64, f64, f64]` tuples the box/size
+ * naturally come as: this is called once per surviving run, thousands of
+ * times per chunk and ~2000 chunks per zoom-out, so a pair of throwaway
+ * three-element arrays per call is itself a measurable share of the
+ * collector pressure the pooled block above exists to remove.
+ */
 function emit_box(
   builder: MeshBuilder,
-  min: readonly [f64, f64, f64],
-  size: readonly [f64, f64, f64],
+  min_x: f64,
+  min_y: f64,
+  min_z: f64,
+  size_x: f64,
+  size_y: f64,
+  size_z: f64,
   r: f64,
   g: f64,
   b: f64,
-  layer_taps: readonly [f64, f64, f64, f64],
-  include_bottom: boolean,
+  tap0: f64,
+  tap1: f64,
+  tap2: f64,
+  tap3: f64,
+  faces: u32,
 ): void {
-  const face_cnt = include_bottom ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
-  const cx = min[0] + size[0] * 0.5, cy = min[1] + size[1] * 0.5, cz = min[2] + size[2] * 0.5;
+  const cx = min_x + size_x * 0.5, cy = min_y + size_y * 0.5, cz = min_z + size_z * 0.5;
 
-  for (let f: u32 = 0; f < face_cnt; f++) {
+  for (let f: u32 = 0; f < FULL_FACE_CNT; f++) {
+    if ((faces & (1 << f)) === 0) continue;
     const face = FACES[f];
     const base_v = builder.v_cnt;
     for (let c = 0; c < 4; c++) {
       const corner = face.corners[c];
       const vi = builder.v_cnt++;
       const po = vi * 3, lo = vi * 4;
-      builder.position[po] = cx + corner[0] * size[0];
-      builder.position[po + 1] = cy + corner[1] * size[1];
-      builder.position[po + 2] = cz + corner[2] * size[2];
+      builder.position[po] = cx + corner[0] * size_x;
+      builder.position[po + 1] = cy + corner[1] * size_y;
+      builder.position[po + 2] = cz + corner[2] * size_z;
       builder.normal[po] = face.normal[0];
       builder.normal[po + 1] = face.normal[1];
       builder.normal[po + 2] = face.normal[2];
       builder.local_pos[po] = corner[0];
       builder.local_pos[po + 1] = corner[1];
       builder.local_pos[po + 2] = corner[2];
-      builder.box_scale[po] = size[0];
-      builder.box_scale[po + 1] = size[1];
-      builder.box_scale[po + 2] = size[2];
+      builder.box_scale[po] = size_x;
+      builder.box_scale[po + 1] = size_y;
+      builder.box_scale[po + 2] = size_z;
       builder.rgb[po] = r;
       builder.rgb[po + 1] = g;
       builder.rgb[po + 2] = b;
-      builder.layer_taps[lo] = layer_taps[0];
-      builder.layer_taps[lo + 1] = layer_taps[1];
-      builder.layer_taps[lo + 2] = layer_taps[2];
-      builder.layer_taps[lo + 3] = layer_taps[3];
+      builder.layer_taps[lo] = tap0;
+      builder.layer_taps[lo + 1] = tap1;
+      builder.layer_taps[lo + 2] = tap2;
+      builder.layer_taps[lo + 3] = tap3;
     }
     builder.index[builder.i_cnt++] = base_v;
     builder.index[builder.i_cnt++] = base_v + 1;
@@ -199,74 +312,79 @@ function emit_box(
   }
 }
 
-function column_covers_range(runs: readonly MeshRun[], z0: i32, z1: i32): boolean {
-  for (const run of runs) {
-    if (run.sub_sz !== SUB_CELL_NONE) continue;
-    if (run.z0 <= z0 && run.z1 >= z1) return true;
+/**
+ * Whether a column has a run spanning [z0, z1] that would hide a face
+ * against it. An OBJECT-class run never counts as covering — the same
+ * exclusion the retired is_run_occluded made through is_topmost_run, for the
+ * same reason and with the same bug behind it (2026-08-16: placed objects
+ * visibly dug into the terrain beneath them). A standalone placed object
+ * does not seal its neighbour's face the way a continuous layer of terrain
+ * or structure does, because the camera is near-top-down but still oblique,
+ * so a face it "hides" is one you can see past.
+ */
+function column_covers_range_opaque(set: ColumnRunSet, col: u32, z0: i32, z1: i32): boolean {
+  const end = set.start[col + 1];
+  for (let i = set.start[col]; i < end; i++) {
+    // merge_column_runs emits a column ascending, so once a run starts above
+    // the range no later one can contain it. Without this the scan is
+    // O(runs) every time and run_face_mask calls it six times per run —
+    // millions of comparisons on a dense chunk, which showed up directly as
+    // commit_ms p95 going 10.9ms -> 17.9ms when face culling landed.
+    if (set.z0[i] > z0) return false;
+    if (set.sub_sz[i] !== SUB_CELL_NONE || set.material_class[i] === MaterialClass.OBJECT) continue;
+    if (set.z1[i] >= z1) return true;
   }
   return false;
 }
 
-/**
- * OBJECT-class runs never count as "covering" whatever's below them here —
- * a placed object sitting on a terrain cell doesn't form the kind of
- * continuous solid mass this occlusion check is meant to detect (a genuine
- * buried voxel, sealed on every side by more terrain/structure). The
- * camera is a near-top-down but still oblique view, not perfectly
- * vertical, so a small standalone object never actually blocks its
- * terrain cell's top face the way a real overlying layer would — treating
- * it as if it did was culling that terrain instance outright instead of
- * just letting the object visually sit in front of it, showing through as
- * a hole (bug found 2026-08-16: placing objects visibly dug into the
- * terrain beneath them).
- */
-function is_topmost_run(runs: readonly MeshRun[], run: MeshRun): boolean {
-  const top: i32 = run.sub_sz !== SUB_CELL_NONE ? run.z0 : run.z1;
-  for (const other of runs) {
-    if (other.material_class === MaterialClass.OBJECT) continue;
-    const other_top: i32 = other.sub_sz !== SUB_CELL_NONE ? other.z0 : other.z1;
-    if (other_top > top) return false;
-  }
-  return true;
+/* is_run_occluded lived here, with is_topmost_run and column_covers_range
+ * behind it: a run buried on all four sides *and* covered from above was
+ * dropped whole. Measured over half a million runs of real terrain it fired
+ * exactly zero times, while costing four coverage scans on every one of
+ * them, because the condition it tested is strictly narrower than the one
+ * run_face_mask already tests. A run with no visible face is a run whose
+ * mask comes back empty, and that includes cases the whole-run test refused
+ * — it excluded chunk-edge columns, which the mask handles by keeping the
+ * edge face rather than by keeping the whole run.
+ *
+ * occlusion_stats.culled now counts empty masks, which is the same quantity
+ * the name always meant. */
+
+function run_include_bottom(set: ColumnRunSet, i: u32): boolean {
+  return set.material_class[i] === MaterialClass.OBJECT;
 }
 
 /**
- * A run fully surrounded by opaque neighbors — all 4 horizontal neighbor
- * columns solid across its whole z0..z1 span, and something else (never an
- * OBJECT run — see is_topmost_run's own doc comment) in its own column
- * above it — can never show a face, so it costs nothing to bake. Chunk-edge
- * columns (cx/cy at 0 or CHUNK_CELL_SPAN-1) never cull: the neighboring
- * chunk's data isn't available here, and assuming it's solid would be a
- * real correctness risk (a visible hole) for a cosmetic win. Sub-cell
- * (fractional) runs never cull or get culled either — too thin, and exact
- * placement is the whole point of them.
+ * Which of a cube run's own six faces can be seen at all.
+ *
+ * A face is dropped only when a neighbouring column has a solid,
+ * non-sub-cell run spanning this run's *entire* z range — whole-face
+ * granularity, never split. A partially-covered face stays whole, which
+ * wastes a few vertices and can never open a hole; splitting it into the
+ * uncovered sub-intervals is what greedy meshing would do next.
+ *
+ * Chunk-edge columns never cull sideways, same reasoning as
+ * is_run_occluded: the neighbouring chunk's data is not available here and
+ * assuming it solid is a real correctness risk for a cosmetic win.
+ *
+ * A sub-cell run keeps every face: it fills a fraction of its own voxel, so
+ * a neighbour filling all of its own still does not cover this one's face.
  */
-function is_run_occluded(column_runs: readonly MeshRun[][], cx: u32, cy: u32, run: MeshRun): boolean {
-  if (run.sub_sz !== SUB_CELL_NONE) return false;
-  if (cx === 0 || cx === CHUNK_CELL_SPAN - 1 || cy === 0 || cy === CHUNK_CELL_SPAN - 1) return false;
-  const own = column_runs[cy * CHUNK_CELL_SPAN + cx];
-  if (is_topmost_run(own, run)) return false;
-  if (!column_covers_range(column_runs[cy * CHUNK_CELL_SPAN + (cx - 1)], run.z0, run.z1)) return false;
-  if (!column_covers_range(column_runs[cy * CHUNK_CELL_SPAN + (cx + 1)], run.z0, run.z1)) return false;
-  if (!column_covers_range(column_runs[(cy - 1) * CHUNK_CELL_SPAN + cx], run.z0, run.z1)) return false;
-  if (!column_covers_range(column_runs[(cy + 1) * CHUNK_CELL_SPAN + cx], run.z0, run.z1)) return false;
-  return true;
-}
+function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
+  const mask_all = run_include_bottom(set, i) ? ALL_FACES : OPEN_BOTTOM_FACES;
+  if (set.sub_sz[i] !== SUB_CELL_NONE) return mask_all;
 
-/** A cube run's own face count — full box for OBJECT-class runs (placed
- * objects can be viewed from underneath: stacked, on a ledge, camera
- * clipped below), open-bottom for everything else (terrain always sits on
- * more terrain or the chunk's own floor, so its bottom face is never
- * visible from any camera angle a player can reach) — exactly TERRAIN_BOX's
- * vs OBJECT_BOX's old distinction, now a per-run decision instead of a
- * per-mesh one, which is what lets terrain and object cubes bake into one
- * merged mesh instead of staying split into two. */
-function run_include_bottom(run: MeshRun): boolean {
-  return run.material_class === MaterialClass.OBJECT;
-}
+  let mask = mask_all;
+  const col = cy * CHUNK_CELL_SPAN + cx;
+  const z0 = set.z0[i], z1 = set.z1[i];
+  if (column_covers_range_opaque(set, col, z1 + 1, z1 + 1)) mask &= ~FACE_PZ;
+  if ((mask & FACE_NZ) !== 0 && column_covers_range_opaque(set, col, z0 - 1, z0 - 1)) mask &= ~FACE_NZ;
 
-function run_face_cnt(run: MeshRun): u32 {
-  return run_include_bottom(run) ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
+  if (cx + 1 < CHUNK_CELL_SPAN && column_covers_range_opaque(set, col + 1, z0, z1)) mask &= ~FACE_PX;
+  if (cx > 0 && column_covers_range_opaque(set, col - 1, z0, z1)) mask &= ~FACE_NX;
+  if (cy + 1 < CHUNK_CELL_SPAN && column_covers_range_opaque(set, col + CHUNK_CELL_SPAN, z0, z1)) mask &= ~FACE_PY;
+  if (cy > 0 && column_covers_range_opaque(set, col - CHUNK_CELL_SPAN, z0, z1)) mask &= ~FACE_NY;
+  return mask;
 }
 
 /**
@@ -276,26 +394,46 @@ function run_face_cnt(run: MeshRun): u32 {
  * from the live `ChunkVolume` and reusable across every LOD rebuild after
  * that, long after the volume itself is released back to its pool.
  */
-export function bake_chunk_mesh(column_runs: readonly MeshRun[][], lod_step: LodStep): BakedChunkMesh {
-  if (lod_step === 1) return bake_chunk_mesh_fine(column_runs);
-  return bake_chunk_mesh_coarse(column_runs, lod_step);
+export function bake_chunk_mesh(set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
+  if (lod_step === 1) return bake_chunk_mesh_fine(set);
+  return bake_chunk_mesh_coarse(set, lod_step);
 }
 
-function bake_chunk_mesh_fine(column_runs: readonly MeshRun[][]): BakedChunkMesh {
-  const surviving: { cx: u32; cy: u32; run: MeshRun }[] = [];
+/**
+ * Which runs survived occlusion, as (cx, cy, run index, face mask) quads
+ * rather than one object per entry: a dense chunk survives thousands of
+ * runs, and the second pass only needs to find each run again, not to hold
+ * it. The mask is carried rather than recomputed because the counting pass
+ * has to know the visible face count exactly — the block below is sized from
+ * it — and the neighbour lookups that produce it are the expensive part.
+ * Module-level and rewound by hand: bake_chunk_mesh_fine is synchronous and
+ * non-reentrant, so one scratch store serves every chunk.
+ */
+const SURVIVING = new Vector(Uint32Array, { init_cap: 4 * (1 << 12) });
+
+function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
+  const base = SURVIVING.len;
   let vertex_total: u32 = 0;
   let index_total: u32 = 0;
 
   for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
     for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
-      for (const run of column_runs[cy * CHUNK_CELL_SPAN + cx]) {
+      const col = cy * CHUNK_CELL_SPAN + cx;
+      const end = set.start[col + 1];
+      for (let i = set.start[col]; i < end; i++) {
         occlusion_stats.total_runs++;
-        if (is_run_occluded(column_runs, cx, cy, run)) {
+        const mask = run_face_mask(set, cx, cy, i);
+        occlusion_stats.faces_possible += run_include_bottom(set, i) ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
+        if (mask === 0) {
           occlusion_stats.culled++;
           continue;
         }
-        surviving.push({ cx, cy, run });
-        const faces = run_face_cnt(run);
+        SURVIVING.push(cx);
+        SURVIVING.push(cy);
+        SURVIVING.push(i);
+        SURVIVING.push(mask);
+        const faces = face_cnt_of(mask);
+        occlusion_stats.faces_kept += faces;
         vertex_total += faces * 4;
         index_total += faces * 6;
       }
@@ -303,41 +441,101 @@ function bake_chunk_mesh_fine(column_runs: readonly MeshRun[][]): BakedChunkMesh
   }
 
   const builder = alloc_builder(vertex_total, index_total);
-  for (const { cx, cy, run } of surviving) {
-    const box = run_to_box(cx, cy, run);
-    const size: [f64, f64, f64] = [box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]];
+  for (let s_i = base; s_i < SURVIVING.len; s_i += 4) {
+    const cx = SURVIVING.get(s_i), cy = SURVIVING.get(s_i + 1), i = SURVIVING.get(s_i + 2);
+    // run_to_box's own math, inlined against the packed spans: it returns a
+    // {min, max} pair of arrays, which is three allocations per surviving
+    // run and the reason this path does not call it. voxel_scan.ts keeps it
+    // for the raycast, where it runs once per hover.
+    const sub_sz = set.sub_sz[i];
+    let min_x: f64, min_y: f64, min_z: f64, size_x: f64, size_y: f64, size_z: f64;
+    if (sub_sz === SUB_CELL_NONE) {
+      min_x = cx * U_PER_CELL;
+      min_y = cy * U_PER_CELL;
+      min_z = set.z0[i] * U_PER_CELL;
+      size_x = U_PER_CELL;
+      size_y = U_PER_CELL;
+      size_z = (set.z1[i] + 1 - set.z0[i]) * U_PER_CELL;
+    } else {
+      const sz = unpack_sub_cell_fraction(sub_sz) * U_PER_CELL;
+      min_x = (cx + unpack_sub_cell_fraction(set.sub_ox[i])) * U_PER_CELL;
+      min_y = (cy + unpack_sub_cell_fraction(set.sub_oy[i])) * U_PER_CELL;
+      min_z = (set.z0[i] + unpack_sub_cell_fraction(set.sub_oz[i])) * U_PER_CELL;
+      size_x = sz;
+      size_y = sz;
+      size_z = sz;
+    }
+    const layer = set.layer_idx[i];
     emit_box(
       builder,
-      box.min,
-      size,
-      srgb_to_linear(run.r / 255),
-      srgb_to_linear(run.g / 255),
-      srgb_to_linear(run.b / 255),
-      [run.layer_idx, run.layer_idx, run.layer_idx, run.layer_idx],
-      run_include_bottom(run),
+      min_x,
+      min_y,
+      min_z,
+      size_x,
+      size_y,
+      size_z,
+      srgb_to_linear(set.r[i] / 255),
+      srgb_to_linear(set.g[i] / 255),
+      srgb_to_linear(set.b[i] / 255),
+      layer,
+      layer,
+      layer,
+      layer,
+      SURVIVING.get(s_i + 3),
     );
   }
+  SURVIVING.truncate(base);
   return finish_builder(builder);
 }
 
-/** layer_taps: up to 4 distinct texture-array layers touching this bucket,
- * first-encountered order (NO_LAYER — objects, always — never added). */
-type ZBucketAccum = { bz: i32; pr: f64; pg: f64; pb: f64; coverage: f64; layer_taps: u32[] };
+/** tap0..tap3: up to 4 distinct texture-array layers touching this bucket,
+ * first-encountered order (NO_LAYER — objects, always — never added). Four
+ * fields rather than an array because these live in a reused arena slot: a
+ * nested array per accumulator would reintroduce exactly the per-cell
+ * garbage the arena exists to remove, and the cap is a fixed vec4 anyway. */
+type ZBucketAccum = { bz: i32; pr: f64; pg: f64; pb: f64; coverage: f64; tap0: u32; tap1: u32; tap2: u32; tap3: u32; tap_cnt: u32 };
+
+/**
+ * Every coarse cell's Z buckets, bump-allocated and rewound per chunk.
+ * `bake_chunk_mesh_coarse` fills one cell completely before starting the
+ * next, so a cell's buckets are contiguous here and CELL_RANGE below only
+ * has to remember (start, count) — no per-cell container at all, where the
+ * previous shape allocated `res^2` arrays plus an object per bucket on every
+ * single rebuild.
+ */
+const BUCKETS = new Arena<ZBucketAccum>(
+  () => ({ bz: 0, pr: 0, pg: 0, pb: 0, coverage: 0, tap0: NO_LAYER, tap1: NO_LAYER, tap2: NO_LAYER, tap3: NO_LAYER, tap_cnt: 0 }),
+  { init_cap: 1 << 12 },
+);
+const CELL_RANGE = new Vector(Uint32Array, { init_cap: 2 * (1 << 10) });
 
 /**
  * Linear scan, not a Map: a coarse cell's real Z-bucket count is small
- * (bounded by how many bands actually stack under it), and a plain array
- * avoids allocating a hash-table container per cell — `bake_chunk_mesh_coarse`
- * calls this up to `res^2` times per build (1024x for `lod_step=2`), so the
- * per-cell container itself, not just its entries, has to stay cheap.
+ * (bounded by how many bands actually stack under it), and scanning the
+ * cell's own contiguous arena range avoids a hash-table container per cell
+ * — `bake_chunk_mesh_coarse` calls this up to `res^2` times per build
+ * (1024x for `lod_step=2`).
+ *
+ * Returns the arena index. A returned index at or past `start + cnt` is a
+ * freshly appended bucket, which is how the caller knows to widen its count
+ * (append-at-the-end is the only growth, since one cell is filled at a time).
  */
-function find_or_create_bucket(buckets: ZBucketAccum[], bz: i32): ZBucketAccum {
-  for (let i = 0; i < buckets.length; i++) {
-    if (buckets[i].bz === bz) return buckets[i];
+function find_or_create_bucket(start: u32, cnt: u32, bz: i32): u32 {
+  for (let i = start; i < start + cnt; i++) {
+    if (BUCKETS.get(i).bz === bz) return i;
   }
-  const acc: ZBucketAccum = { bz, pr: 0, pg: 0, pb: 0, coverage: 0, layer_taps: [] };
-  buckets.push(acc);
-  return acc;
+  const acc = BUCKETS.alloc();
+  acc.bz = bz;
+  acc.pr = 0;
+  acc.pg = 0;
+  acc.pb = 0;
+  acc.coverage = 0;
+  acc.tap_cnt = 0;
+  return BUCKETS.len - 1;
+}
+
+function tap_at(acc: ZBucketAccum, i: u32): u32 {
+  return i === 0 ? acc.tap0 : i === 1 ? acc.tap1 : i === 2 ? acc.tap2 : acc.tap3;
 }
 
 /** Same small-N linear-scan reasoning as find_or_create_bucket — a bucket
@@ -345,8 +543,15 @@ function find_or_create_bucket(buckets: ZBucketAccum[], bz: i32): ZBucketAccum {
  * hash table. Caps at 4 (matches layer_taps' fixed-size vec4 slot); beyond
  * that, whichever 4 were encountered first win. */
 function collect_layer_tap(acc: ZBucketAccum, layer_idx: u32): void {
-  if (layer_idx === NO_LAYER || acc.layer_taps.length >= 4 || acc.layer_taps.includes(layer_idx)) return;
-  acc.layer_taps.push(layer_idx);
+  if (layer_idx === NO_LAYER || acc.tap_cnt >= 4) return;
+  for (let i: u32 = 0; i < acc.tap_cnt; i++) {
+    if (tap_at(acc, i) === layer_idx) return;
+  }
+  if (acc.tap_cnt === 0) acc.tap0 = layer_idx;
+  else if (acc.tap_cnt === 1) acc.tap1 = layer_idx;
+  else if (acc.tap_cnt === 2) acc.tap2 = layer_idx;
+  else acc.tap3 = layer_idx;
+  acc.tap_cnt++;
 }
 
 /**
@@ -356,35 +561,45 @@ function collect_layer_tap(acc: ZBucketAccum, layer_idx: u32): void {
  * color is whatever's really in it, air included via `coverage` staying
  * below `lod_step^3`). A sub-cell run occupies one fine voxel fractionally;
  * its weight is the volumetric fraction (linear fraction cubed), not 1.
+ *
+ * Takes and returns the cell's own (start, count) range into BUCKETS — a
+ * run can create a bucket the cell did not have yet, and the count is the
+ * only thing that grows.
  */
-function accumulate_run(buckets: ZBucketAccum[], lod_step: LodStep, run: MeshRun): void {
-  if (run.sub_sz !== SUB_CELL_NONE) {
-    const frac = unpack_sub_cell_fraction(run.sub_sz);
+function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunSet, i: u32): u32 {
+  const run_z0 = set.z0[i], run_z1 = set.z1[i];
+  const run_r = set.r[i], run_g = set.g[i], run_b = set.b[i], run_layer = set.layer_idx[i];
+  if (set.sub_sz[i] !== SUB_CELL_NONE) {
+    const frac = unpack_sub_cell_fraction(set.sub_sz[i]);
     const w = frac * frac * frac;
-    if (w <= 0) return;
-    const acc = find_or_create_bucket(buckets, Math.floor(run.z0 / lod_step));
-    acc.pr += run.r * w;
-    acc.pg += run.g * w;
-    acc.pb += run.b * w;
+    if (w <= 0) return cnt;
+    const idx = find_or_create_bucket(start, cnt, Math.floor(run_z0 / lod_step));
+    const acc = BUCKETS.get(idx);
+    acc.pr += run_r * w;
+    acc.pg += run_g * w;
+    acc.pb += run_b * w;
     acc.coverage += w;
-    collect_layer_tap(acc, run.layer_idx);
-    return;
+    collect_layer_tap(acc, run_layer);
+    return Math.max(cnt, idx - start + 1);
   }
 
-  const bz_lo: i32 = Math.floor(run.z0 / lod_step);
-  const bz_hi: i32 = Math.floor(run.z1 / lod_step);
+  const bz_lo: i32 = Math.floor(run_z0 / lod_step);
+  const bz_hi: i32 = Math.floor(run_z1 / lod_step);
   for (let bz = bz_lo; bz <= bz_hi; bz++) {
     const bucket_lo = bz * lod_step;
     const bucket_hi = bucket_lo + lod_step - 1;
-    const overlap = Math.min(run.z1, bucket_hi) - Math.max(run.z0, bucket_lo) + 1;
+    const overlap = Math.min(run_z1, bucket_hi) - Math.max(run_z0, bucket_lo) + 1;
     if (overlap <= 0) continue;
-    const acc = find_or_create_bucket(buckets, bz);
-    acc.pr += run.r * overlap;
-    acc.pg += run.g * overlap;
-    acc.pb += run.b * overlap;
+    const idx = find_or_create_bucket(start, cnt, bz);
+    cnt = Math.max(cnt, idx - start + 1);
+    const acc = BUCKETS.get(idx);
+    acc.pr += run_r * overlap;
+    acc.pg += run_g * overlap;
+    acc.pb += run_b * overlap;
     acc.coverage += overlap;
-    collect_layer_tap(acc, run.layer_idx);
+    collect_layer_tap(acc, run_layer);
   }
+  return cnt;
 }
 
 /**
@@ -410,8 +625,6 @@ function emit_averaged_box(builder: MeshBuilder, bx: u32, by: u32, lod_step: Lod
   const sz: f64 = span * Math.cbrt(fill);
   const cz: f64 = (acc.bz * lod_step + lod_step * 0.5) * U_PER_CELL;
   const half = sz * 0.5;
-  const min: [f64, f64, f64] = [(bx + 0.5) * span - half, (by + 0.5) * span - half, cz - half];
-  const size: [f64, f64, f64] = [sz, sz, sz];
 
   // The shader always averages 4 taps at 25% each — padding unused slots
   // with NO_LAYER (falls back to the flat instance color) dilutes toward
@@ -420,23 +633,26 @@ function emit_averaged_box(builder: MeshBuilder, bx: u32, by: u32, lod_step: Lod
   // Cycling the real taps into every slot instead keeps the blend 100%
   // texture-derived whenever at least one real layer exists, matching what
   // LOD1 already does (all 4 of its taps are the same one real layer_idx).
-  const n = acc.layer_taps.length;
-  const layer_taps: [f64, f64, f64, f64] = [
-    n > 0 ? acc.layer_taps[0 % n] : NO_LAYER,
-    n > 0 ? acc.layer_taps[1 % n] : NO_LAYER,
-    n > 0 ? acc.layer_taps[2 % n] : NO_LAYER,
-    n > 0 ? acc.layer_taps[3 % n] : NO_LAYER,
-  ];
-
+  const n = acc.tap_cnt;
   emit_box(
     builder,
-    min,
-    size,
+    (bx + 0.5) * span - half,
+    (by + 0.5) * span - half,
+    cz - half,
+    sz,
+    sz,
+    sz,
     srgb_to_linear(acc.pr / acc.coverage / 255),
     srgb_to_linear(acc.pg / acc.coverage / 255),
     srgb_to_linear(acc.pb / acc.coverage / 255),
-    layer_taps,
-    false,
+    n > 0 ? tap_at(acc, 0 % n) : NO_LAYER,
+    n > 0 ? tap_at(acc, 1 % n) : NO_LAYER,
+    n > 0 ? tap_at(acc, 2 % n) : NO_LAYER,
+    n > 0 ? tap_at(acc, 3 % n) : NO_LAYER,
+    // No neighbour culling at coarse LOD: emit_averaged_box shrinks a box by
+    // its fill fraction, so adjacent coarse boxes generally do not touch and
+    // a hidden-face test would be both wrong and useless.
+    OPEN_BOTTOM_FACES,
   );
 }
 
@@ -457,41 +673,50 @@ function emit_averaged_box(builder: MeshBuilder, bx: u32, by: u32, lod_step: Lod
  * `lod_step` is box-averaged from the same already-scanned `column_runs`
  * (see `bake_chunk_mesh`'s doc comment) — exhaustively, all `lod_step^2`
  * real columns per coarse cell, no subsampling — since reading an
- * already-computed `MeshRun[]` is cheap array indexing, not a fresh band
+ * already-packed run set is cheap array indexing, not a fresh band
  * walk. The expensive part (`scan_all_column_runs`) is paid once per chunk
  * and reused across every LOD tier and every LOD transition after that, the
  * same amortization the old per-chunk surface cache had, without that
  * surface's single-height-per-column ceiling (see `accumulate_run`).
  */
-export function bake_chunk_mesh_coarse(column_runs: readonly MeshRun[][], lod_step: LodStep): BakedChunkMesh {
+export function bake_chunk_mesh_coarse(set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
   if (lod_step === 1) throw new Error("render: finest LOD requires per-run meshing");
 
   const res: u32 = CHUNK_CELL_SPAN / lod_step;
-  const per_cell: ZBucketAccum[][] = new Array(res * res);
+  const bucket_base = BUCKETS.len;
+  const range_base = CELL_RANGE.len;
   let vertex_total: u32 = 0;
   let index_total: u32 = 0;
 
   for (let by: u32 = 0; by < res; by++) {
     for (let bx: u32 = 0; bx < res; bx++) {
-      const buckets: ZBucketAccum[] = [];
+      const start = BUCKETS.len;
+      let cnt: u32 = 0;
       for (let j: u32 = 0; j < lod_step; j++) {
         const cy = by * lod_step + j;
         for (let k: u32 = 0; k < lod_step; k++) {
           const cx = bx * lod_step + k;
-          for (const run of column_runs[cy * CHUNK_CELL_SPAN + cx]) accumulate_run(buckets, lod_step, run);
+          const col = cy * CHUNK_CELL_SPAN + cx;
+          const end = set.start[col + 1];
+          for (let i = set.start[col]; i < end; i++) cnt = accumulate_run(start, cnt, lod_step, set, i);
         }
       }
-      per_cell[by * res + bx] = buckets;
-      vertex_total += buckets.length * OPEN_BOTTOM_FACE_CNT * 4;
-      index_total += buckets.length * OPEN_BOTTOM_FACE_CNT * 6;
+      CELL_RANGE.push(start);
+      CELL_RANGE.push(cnt);
+      vertex_total += cnt * OPEN_BOTTOM_FACE_CNT * 4;
+      index_total += cnt * OPEN_BOTTOM_FACE_CNT * 6;
     }
   }
 
   const builder = alloc_builder(vertex_total, index_total);
   for (let by: u32 = 0; by < res; by++) {
     for (let bx: u32 = 0; bx < res; bx++) {
-      for (const acc of per_cell[by * res + bx]) emit_averaged_box(builder, bx, by, lod_step, acc);
+      const ri = range_base + (by * res + bx) * 2;
+      const start = CELL_RANGE.get(ri), cnt = CELL_RANGE.get(ri + 1);
+      for (let i: u32 = 0; i < cnt; i++) emit_averaged_box(builder, bx, by, lod_step, BUCKETS.get(start + i));
     }
   }
+  CELL_RANGE.truncate(range_base);
+  BUCKETS.truncate(bucket_base);
   return finish_builder(builder);
 }

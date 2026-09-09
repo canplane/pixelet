@@ -4,6 +4,7 @@ import { assertEquals } from "@std/assert";
 import * as THREE from "three";
 
 import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, MaterialClass, NO_LAYER, set_chunk_voxel } from "./volume.ts";
+import { DETACHED_BLOCK } from "@xpute/core/ds/pool.ts";
 import { bake_chunk_mesh, type BakedChunkMesh } from "./chunk_mesher.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { composite_chunk_layers } from "./compositor.ts";
@@ -36,6 +37,7 @@ function bounds_of(built: BakedChunkMesh): { box: THREE.Box3; sphere: THREE.Sphe
 function split_terrain_and_object(built: BakedChunkMesh, terrain_vertex_cnt: number): { terrain: BakedChunkMesh; object: BakedChunkMesh } {
   function slice(from: number, to: number): BakedChunkMesh {
     return {
+      block: DETACHED_BLOCK,
       vertex_cnt: to - from,
       position: built.position.slice(from * 3, to * 3),
       normal: built.normal.slice(from * 3, to * 3),
