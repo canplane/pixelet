@@ -15,27 +15,35 @@
  * - No two-tier LOD: that version rendered its FULL dataset (10,000+) as a
  *   cheap custom-shader instanced-dot background layer, promoting only the
  *   nearest ~20 to the expensive per-item treatment every 0.2s. This file
- *   instead just picks the nearest MAX_RENDERED globally (see
- *   select_nearby_pois below) and renders exactly those. Fine at today's
- *   scale; revisit if it stops being fine.
+ *   instead picks up to MAX_RENDERED (see select_nearby_pois below — real
+ *   camera-frustum membership first, a stable per-id cut if still over
+ *   budget) and renders exactly those. Fine at today's scale; revisit if it
+ *   stops being fine.
  */
 
 import { useEffect, useMemo, useState } from "react";
+import * as THREE from "three";
+import { useThree } from "@react-three/fiber";
 
-import type { f64 } from "@xpute/core/kit/word.ts";
-import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
+import { useCameraStore } from "@/modules/camera/store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
-import { local_world_to_canonical } from "../frame/coord.ts";
+import { get_local_world_origin, local_world_to_canonical } from "../frame/coord.ts";
+import { useFrameRefs } from "../frame/context.tsx";
 import { with_ele } from "../terrain/elevation.ts";
 import { register_tile_interest } from "../terrain/store.ts";
+import { CHEBYSHEV_DIST } from "../terrain/use_tile_fetcher.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { FAR_END } from "../billboard/distance_fade.ts";
 import { FONT_FAMILY, FONT_WEIGHT_REGULAR } from "../billboard/canvas_scale.ts";
 import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
+import { type BillboardCandidate, select_visible_billboards } from "../billboard/frustum_budget.ts";
 import { resolve_poi_theme } from "./poi_theme.ts";
 import { usePoiStore } from "./store.ts";
 
@@ -168,42 +176,72 @@ function flat_dist2(a: PVF3, b: PVF3): f64 {
   return dx * dx + dy * dy;
 }
 
-/** The MAX_RENDERED POIs closest to map_center, deduped by id — a real
- * feature near a page boundary can come back from more than one page's own
- * bbox query (adjacent pages' queries legitimately overlap at the edges),
- * and without this it would render twice, once per page, at the exact same
- * position (`checkpoint/20260107-float`'s own PoiLayer hit the identical
- * case and solved it the same way — dedupe by id, keep whichever copy is
- * seen first). Ranked by distance rather than poi_extractor.ts's own rank
- * field: rank is "how notable is this in general", not "is this near the
- * camera" — a page-local top-by-rank cut (this file's previous version)
- * could easily fill the whole budget with far-away landmarks while
- * something two blocks from the camera never makes the list. */
+/** Up to MAX_RENDERED POIs, deduped by id — a real feature near a page
+ * boundary can come back from more than one page's own bbox query
+ * (adjacent pages' queries legitimately overlap at the edges), and without
+ * this it would render twice, once per page, at the exact same position
+ * (`checkpoint/20260107-float`'s own PoiLayer hit the identical case and
+ * solved it the same way — dedupe by id, keep whichever copy is seen
+ * first). Distance (FAR_END below) only rules out what's too far to ever
+ * render — final selection is select_visible_billboards' own job (real
+ * camera-frustum membership, then a stable per-id cut if still over
+ * budget), not poi_extractor.ts's own rank field: rank is "how notable is
+ * this in general", not "is this visible right now". */
 const FAR_END_U2 = FAR_END * FAR_END;
+
+// FAR_END=320 is under L3_RANGE=1024, so a page beyond Chebyshev distance 1
+// from the camera's own page can never contain anything within FAR_END.
+const NEARBY_PAGE_RADIUS: u32 = 1;
+
+/** absolute, projected into local_world_frame's own origin (map_origin) —
+ * the frame select_visible_billboards' local_x/y/z expects (see
+ * AnchorNode's own local_pos in frame/coord.ts). */
+function local_pos_from_absolute(absolute: PVF3, map_origin: IVec): [f64, f64, f64] {
+  const local: PVF3 = { i: ivec.sub(absolute.i, map_origin), f: absolute.f };
+  return [pvf3.to_real(pvf3.X(local)), pvf3.to_real(pvf3.Y(local)), pvf3.to_real(pvf3.Z(local))];
+}
 
 function select_nearby_pois(
   poi_map: ReadonlyMap<IVec, readonly POI[]>,
   map_center: PVF3,
+  local_world_frame: THREE.Object3D | null,
+  camera: THREE.Camera,
 ): { poi: POI; page_idx: IVec }[] {
+  // L3_IDX shifts X/Y/Z together; TO_XY drops Z (matches store.ts's own
+  // page keys). Without it, map_center.i.Z (real elevation) can push
+  // CHEBYSHEV_DIST past NEARBY_PAGE_RADIUS regardless of X/Y distance.
+  const center_page_idx: IVec = TO_XY(L3_IDX(map_center.i));
   const seen = new Set<string>();
-  const candidates: { poi: POI; page_idx: IVec; dist2: f64 }[] = [];
+  const candidates: { poi: POI; page_idx: IVec; absolute: PVF3; dist2: f64 }[] = [];
 
   for (const [page_idx, pois] of poi_map) {
+    if (CHEBYSHEV_DIST(ivec.sub(page_idx, center_page_idx)) > NEARBY_PAGE_RADIUS) continue;
     for (const poi of pois) {
       if (seen.has(poi.id)) continue;
       seen.add(poi.id);
-      const dist2 = flat_dist2(poi_flat_pos(poi, page_idx), map_center);
+      const absolute = poi_flat_pos(poi, page_idx);
+      const dist2 = flat_dist2(absolute, map_center);
       // Beyond FAR_END it would render at factor 0 anyway —
       // skip mounting it at all rather than paying for an invisible
       // AnchorNode + sprite + useFrame every one of those would otherwise
       // cost.
       if (dist2 > FAR_END_U2) continue;
-      candidates.push({ poi, page_idx, dist2 });
+      candidates.push({ poi, page_idx, absolute, dist2 });
     }
   }
 
-  candidates.sort((a, b) => a.dist2 - b.dist2);
-  return candidates.slice(0, MAX_RENDERED);
+  // local_world_frame_ref.current starts null until mount.
+  if (!local_world_frame) {
+    candidates.sort((a, b) => a.dist2 - b.dist2);
+    return candidates.slice(0, MAX_RENDERED);
+  }
+
+  const map_origin = get_local_world_origin(map_center);
+  const billboard_candidates: BillboardCandidate<{ poi: POI; page_idx: IVec }>[] = candidates.map((c) => {
+    const [x, y, z] = local_pos_from_absolute(c.absolute, map_origin);
+    return { item: { poi: c.poi, page_idx: c.page_idx }, id: c.poi.id, local_x: x, local_y: y, local_z: z };
+  });
+  return select_visible_billboards(billboard_candidates, local_world_frame, camera, MAX_RENDERED);
 }
 
 /** One POI's own absolute anchor — poi_flat_pos, then grounded to the real
@@ -245,13 +283,18 @@ export function PoiLayer() {
   const poi_map = usePoiStore((state) => state.poi_map);
   const map_center = useMapStore((state) => state.map_center);
   const show_poi = useSettingsStore((state) => state.show_poi);
+  // view_state: a pure rotate/zoom changes what's in frustum without
+  // changing map_center.
+  const view_state = useCameraStore((state) => state.view_state);
+  const { local_world_frame_ref } = useFrameRefs();
+  const { camera } = useThree();
 
-  const selected = useMemo(() => (map_center ? select_nearby_pois(poi_map, map_center) : []), [poi_map, map_center]);
+  const selected = useMemo(() => {
+    if (!map_center || !show_poi) return [];
+    return select_nearby_pois(poi_map, map_center, local_world_frame_ref.current, camera);
+    // local_world_frame_ref/camera: stable identities, not reactive state.
+  }, [poi_map, map_center, show_poi, view_state]);
 
-  // After the hooks above, not instead of calling them — settings.camera's
-  // own show_poi toggle (camera_slice.ts) is a plain visibility switch on
-  // this whole layer, not a rendering-cost tradeoff threaded into geometry
-  // baking the way show_structures is, so an early return here is enough.
   if (!show_poi) return null;
 
   return (

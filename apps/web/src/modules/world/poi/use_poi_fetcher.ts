@@ -2,11 +2,15 @@
 
 import { useEffect } from "react";
 
+import type { u32 } from "@xpute/core/kit/word.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
-import { LOAD_RADIUS } from "../terrain/config.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
+import { CLEANUP_RADIUS, LOAD_RADIUS } from "../terrain/config.ts";
 import { fetch_poi } from "./repository.ts";
 import { usePoiStore } from "./store.ts";
 
@@ -22,26 +26,45 @@ import { usePoiStore } from "./store.ts";
 // it again for free.
 const pending: Set<IVec> = new Set();
 
+/** Evicts cached pages that fall outside CLEANUP_RADIUS, mirroring
+ * terrain/use_tile_fetcher.ts's own cleanup_far_tiles — POI has no
+ * pinned-page exemption to carry over (that exists there only for the
+ * device marker's own grounding, not a concern here). */
+function cleanup_far_pois(center_page_idx: IVec): void {
+  const { poi_map, clear_pois } = usePoiStore.getState();
+
+  for (const [page_idx] of poi_map) {
+    const dist: u32 = CHEBYSHEV_DIST(ivec.sub(page_idx, center_page_idx));
+    if (dist > CLEANUP_RADIUS) clear_pois(page_idx);
+  }
+}
+
 /**
  * Demands POI for every page within LOAD_RADIUS of the view center that
- * isn't cached yet — same radius terrain/use_tile_fetcher.ts loads at, for
- * simplicity (one "how far around the camera do we care" constant, not two
- * independently tuned ones), not because POI's own ideal radius has been
- * measured separately.
+ * isn't cached yet — same radius terrain/use_tile_fetcher.ts loads at.
+ * Reuses terrain's own CLEANUP_RADIUS to evict pages once they fall out of
+ * range: a single dense urban page can hold thousands of records uncapped,
+ * so leaving poi_map unbounded for a whole session's panning is a real
+ * memory concern.
  *
- * Deliberately missing, on purpose, for this first pass: terrain's own
- * CLEANUP_RADIUS eviction and device-pinned-page handling. POI payloads are
- * tiny JSON (a handful of records per page), so an unbounded, never-evicted
- * poi_map isn't a real memory concern at the scale a single session's
- * panning reaches — worth revisiting only if that stops being true.
+ * Gated on settings.camera's own show_poi: hidden means no fetch, no cache
+ * growth, no eviction scan. Existing cached pages are left as-is so
+ * toggling back on feels instant for whatever's still in range.
  */
 export function usePoiFetcher(): void {
   const map_center = useMapStore((state) => state.map_center);
+  const show_poi = useSettingsStore((state) => state.show_poi);
 
   useEffect(() => {
-    if (map_center === null) return;
+    if (map_center === null || !show_poi) return;
 
-    const center_page_idx: IVec = L3_IDX(map_center.i);
+    // TO_XY drops Z (matches store.ts's own page keys) — L3_IDX shifts
+    // X/Y/Z together, and CHEBYSHEV_DIST's max would let elevation alone
+    // defeat eviction/fetch regardless of real X/Y distance.
+    const center_page_idx: IVec = TO_XY(L3_IDX(map_center.i));
+
+    cleanup_far_pois(center_page_idx);
+
     const { get_pois, set_pois } = usePoiStore.getState();
 
     for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
@@ -58,5 +81,5 @@ export function usePoiFetcher(): void {
           .finally(() => pending.delete(page_idx));
       }
     }
-  }, [map_center]);
+  }, [map_center, show_poi]);
 }

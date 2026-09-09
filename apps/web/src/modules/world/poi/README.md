@@ -13,10 +13,13 @@ section specifically for why POI is wired the way it is here.
   scheduling, mirroring `terrain/tile_repository.ts` / `use_tile_fetcher.ts`'s
   shape: a pre-baked static origin when one is configured
   (`HAS_STATIC_POI`/`POI_TILE_BASE_URL`, `lib/env/config.ts`), the live API
-  otherwise. POI still stays off _terrain's own_ tile format — its static
-  set is a sibling prefix in the same bucket (`poi/<version>/…`, not
-  `<version>/…`), so shipping a POI re-bake never touches terrain's own
-  version or requires re-uploading it (see the API side below).
+  otherwise, and reusing terrain's own `CLEANUP_RADIUS` to evict cached
+  pages once they fall out of range (see `use_poi_fetcher.ts`'s own doc
+  comment for why this matters now that POI is Overture-sourced). POI still
+  stays off _terrain's own_ tile format — its static set is a sibling
+  prefix in the same bucket (`poi/<version>/…`, not `<version>/…`), so
+  shipping a POI re-bake never touches terrain's own version or requires
+  re-uploading it (see the API side below).
 - **`poi_layer.tsx`** — the render: one `SpriteBillboard` (`../billboard/`)
   per POI, anchored via `AnchorNode` and grounded to the real terrain
   surface (a POI's own baked `center.z` is always 0 — see `poi_anchor`'s own
@@ -49,7 +52,11 @@ share-alike or Google/Naver/Kakao's display restrictions) and measured
 Overture's own public S3 release, refreshed on a monthly GitHub Actions
 cadence), mapping `categories.primary` through `OVERTURE_CATEGORY_MAP`
 (`apps/api/src/bake/overture/model/category_map.ts`) into `poi_theme.ts`'s
-own vocabulary above.
+own vocabulary above. The per-page query is uncapped on purpose — a dense
+urban page can return thousands of rows, and that's real data, not
+something to silently drop server-side; see `poi_layer.tsx`'s own
+`select_nearby_pois` for where the actual rendering budget is enforced,
+client-side, without discarding anything from the cache itself.
 
 **Static bake**: `apps/api/src/bake/poi/tools/bake_poi_tiles.ts` reuses
 terrain's own `land_pages.json` classification (no separate "does this page
@@ -90,6 +97,3 @@ being enough; it was deliberately not ported this pass (see below).
 - No background "everything else" layer — `MAX_RENDERED` in `poi_layer.tsx`
   is a flat global cap (nearest-first), not the old two-tier LOD described
   above. Fine at today's scale; revisit if it stops being fine.
-- No cache eviction in `store.ts`/`use_poi_fetcher.ts` (terrain's own
-  `CLEANUP_RADIUS`) — POI payloads are tiny JSON, not a real memory concern
-  yet at single-session scale.
