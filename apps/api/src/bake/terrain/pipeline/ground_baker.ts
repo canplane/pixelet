@@ -21,7 +21,6 @@ import { type Ground, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
 import type { OSMFeature } from "@pxl/shared/bake/model/osm_feature.ts";
-import { determine_cell_cfg } from "./osm_policy.ts";
 
 const PAGE_CELL_SPAN2: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
 
@@ -105,13 +104,8 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
 
   // render categorized ground features.
   other_feats.forEach((feat) => {
-    const { shape, category, tags, extra, computed } = feat;
-    if (
-      tags.tunnel === "yes" || tags.man_made === "tunnel" ||
-      tags.waterway === "tunnel"
-    ) return;
-
-    const cell_cfg = determine_cell_cfg(category, tags, extra);
+    const { shape, extra, computed, cell_cfg } = feat;
+    if (extra.is_tunnel) return;
     if (!cell_cfg) return;
 
     const { cell_type, ch_key } = cell_cfg;

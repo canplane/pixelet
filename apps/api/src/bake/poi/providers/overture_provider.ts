@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/poi/providers/overture_provider.ts
+// @pxl/api/bake/poi/providers/overture_provider.ts
 
 import type { Pool } from "@db/postgres";
 

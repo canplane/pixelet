@@ -1,6 +1,6 @@
 // @pxl/api/modules/world/search/provider.ts
 
-import type { GeocodePart } from "../geocode/provider.ts";
+import type { GeocodePart } from "@pxl/api/bake/geocode/provider.ts";
 
 /**
  * One matched place — WGS84 lon/lat, not a page_idx or V3: unlike POI/

@@ -43,8 +43,8 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 import { exists, fmt_bytes, fmt_dur, gzip } from "@pxl/api/bake/bake_util.ts";
 
-import { make_overture_provider } from "@pxl/api/modules/world/poi/providers/overture_provider.ts";
-import type { PoiProvider } from "@pxl/api/modules/world/poi/provider.ts";
+import { make_overture_provider } from "../providers/overture_provider.ts";
+import type { PoiProvider } from "../provider.ts";
 import * as env from "@/lib/env/mod.ts";
 
 const EMPTY_SUFFIX = ".empty";
@@ -200,16 +200,19 @@ async function main(): Promise<void> {
 
       // Not read_source_catalogs()'s OSM/ESA/coastline tables — POI no
       // longer depends on those (discussions/20260908-overture-poi-adoption.md).
-      // overture_places has no catalog table of its own yet (see
-      // ingest_places.ts's own top comment on why this pipeline stays
-      // lighter-weight than infra/geo's OSM ones); this at least records
-      // which table and how many rows this bake actually read.
+      // overture_catalog (apps/api/src/bake/overture/catalog.ts) now tracks
+      // ingest_places.ts's own runs, keyed by file_name; queried directly
+      // rather than through read_source_catalogs() since that helper
+      // returns every overture_catalog row (terrain's own tables included),
+      // not just this pipeline's one.
       source: {
         overture_places: await (async () => {
           const client = await pool.connect();
           try {
-            const { rows } = await client.queryObject<{ count: string }>("SELECT count(*) FROM overture_places");
-            return { row_count: Number(rows[0].count) };
+            const { rows } = await client.queryObject<{ data_date: string; total_count: string }>(
+              "SELECT data_date, total_count FROM overture_catalog WHERE file_name = 'overture_places'",
+            );
+            return rows[0] ? { release: rows[0].data_date, row_count: Number(rows[0].total_count) } : null;
           } finally {
             client.release();
           }

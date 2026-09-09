@@ -1,9 +1,14 @@
 // @pxl/api/bake/osm/model/osm_adapter.ts
 
 /**
- * OSM ingress adapter for WKB-based terrain source rows.
- * Handles the canonical page terrain source payload shape
- * (WKB geometry + hstore text tags).
+ * Coastline ingress adapter for WKB-based terrain source rows. Despite the
+ * filename, `from_coast_row`'s own input is Overture-derived now too —
+ * repository.ts's coast query computes it from overture_base_water's
+ * `ocean` subtype, not osm_coastline_polygons (see that query's own
+ * comment for why/how). Left under bake/osm/ rather than moved: its WKB
+ * decoder (wkb_to_geometries/WKBGeometry) is still shared with
+ * overture_adapter.ts, and a rename here is cosmetic, not a correctness
+ * question — revisit if bake/osm/ ever needs to mean something again.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
@@ -11,10 +16,10 @@ import type { U8Array } from "@xpute/core/kit/array.ts";
 
 import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 
-import type { CoastRow, FeatRow } from "@pxl/shared/bake/format.ts";
-import { type OSMRawFeature, type OSMTags, OSMType } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { CoastRow } from "@pxl/shared/bake/format.ts";
+import type { OSMRawFeature } from "@pxl/shared/bake/model/osm_feature.ts";
 
-type WKBGeometry = {
+export type WKBGeometry = {
   points: G3857[];
   holes: G3857[][];
   is_polygon_source: boolean;
@@ -24,26 +29,6 @@ type WKBGeometry = {
 // WKB ingress for page terrain source rows
 // -----------------------------------------------------------------------------
 
-export function from_feat_row(row: FeatRow): OSMRawFeature[] {
-  const tags: OSMTags = row.tags_hstore ? parse_hstore(row.tags_hstore) : ({} as OSMTags);
-  const geoms: WKBGeometry[] = wkb_to_geometries(row.way_wkb);
-  const center: G3857 = wkb_to_point_or_null(row.center_wkb) ?? (geoms[0]?.points?.[0] ?? [0, 0, 0]);
-
-  const out: OSMRawFeature[] = new Array(geoms.length);
-  for (let i = 0; i < geoms.length; i++) {
-    const g = geoms[i];
-    out[i] = {
-      id: Number(row.osm_id),
-      type: g.points.length === 1 ? OSMType.NODE : OSMType.WAY,
-      tags,
-      geometry: g,
-      center,
-      is_polygon_source: g.is_polygon_source,
-    };
-  }
-  return out;
-}
-
 export function from_coast_row(row: CoastRow): OSMRawFeature[] {
   if (row.covers_page) return []; // clipped full-page coast polygon => bogus sea fill candidate
 
@@ -52,34 +37,16 @@ export function from_coast_row(row: CoastRow): OSMRawFeature[] {
   for (let i = 0; i < geoms.length; i++) {
     const g = geoms[i];
     out[i] = {
-      id: Number(row.id),
-      type: OSMType.WAY,
+      id: row.id,
       tags: {
         natural: "ocean",
-        source: "osm_coastline",
+        source: "overture_ocean",
       },
       geometry: g,
       center: g.points[0] ?? [0, 0, 0],
-      is_polygon_source: true,
     };
   }
   return out;
-}
-
-// -----------------------------------------------------------------------------
-// hstore raw string -> tag dictionary
-// -----------------------------------------------------------------------------
-
-function parse_hstore(hstore_str: string): OSMTags {
-  const result: Record<string, string> = {};
-  const pattern = /"(.+?)"=>"(.*?)"/g;
-  let match;
-  while ((match = pattern.exec(hstore_str)) !== null) {
-    result[match[1]] = match[2];
-  }
-  // hstore guarantees only string key/value pairs.
-  // Later policy/normalization stages interpret the subset relevant to OSMTags.
-  return result as unknown as OSMTags;
 }
 
 // -----------------------------------------------------------------------------
@@ -88,31 +55,7 @@ function parse_hstore(hstore_str: string): OSMTags {
 // Accepts EWKB flags (Z/SRID) and ignores SRID/Z because the pipeline assumes 3857.
 // -----------------------------------------------------------------------------
 
-function wkb_to_point_or_null(wkb: U8Array): G3857 | null {
-  const dv = new DataView(wkb.buffer, wkb.byteOffset, wkb.byteLength);
-  let o: u32 = 0;
-  if (dv.byteLength < 1 + 4) return null;
-  const le = dv.getUint8(o) === 1;
-  o += 1;
-  const t = dv.getUint32(o, le);
-  o += 4;
-
-  const has_srid = (t & 0x20000000) !== 0;
-  const has_z = (t & 0x80000000) !== 0;
-  const base = t & 0xff;
-
-  if (has_srid) o += 4;
-  if (base !== 1) return null;
-  if (dv.byteLength < o + 16) return null;
-  const x = dv.getFloat64(o, le);
-  o += 8;
-  const y = dv.getFloat64(o, le);
-  o += 8;
-  if (has_z && dv.byteLength >= o + 8) o += 8;
-  return [x, y, 0];
-}
-
-function wkb_to_geometries(wkb: U8Array): WKBGeometry[] {
+export function wkb_to_geometries(wkb: U8Array): WKBGeometry[] {
   if (!wkb.byteLength) return [];
   const dv = new DataView(wkb.buffer, wkb.byteOffset, wkb.byteLength);
   const [geoms] = wkb_read_any(dv, 0);

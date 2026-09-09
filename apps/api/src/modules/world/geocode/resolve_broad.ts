@@ -15,7 +15,7 @@
 
 import type { Pool } from "@db/postgres";
 
-import type { GeocodePart } from "./provider.ts";
+import type { GeocodePart } from "@pxl/api/bake/geocode/provider.ts";
 
 const BROAD_SUBTYPE_ORDER: Record<string, number> = { region: 0, county: 1 };
 

@@ -1,7 +1,7 @@
 // @pxl/api/bake/overture/tools/ingest_divisions.ts
 //
 // Pulls Overture's Divisions theme for Korea into two tables — reverse
-// geocoding's own source (apps/api/src/modules/world/geocode/providers/
+// geocoding's own source (apps/api/src/bake/geocode/providers/
 // overture_provider.ts), same shape as ingest_places.ts's own pipeline for
 // POI:
 //
@@ -69,6 +69,8 @@
 import { Pool, type PoolClient } from "@db/postgres";
 
 import * as env from "@/lib/env/mod.ts";
+
+import { get_overture_release, record_overture_catalog } from "../catalog.ts";
 
 const KR_BBOX_DEFAULT = "124,33,132,39";
 const BATCH_SIZE = 200; // polygons/points are heavier payloads than Places'
@@ -281,6 +283,21 @@ async function main(): Promise<void> {
         `[bake/overture] done — overture_divisions has ${Number(area_rows[0].count).toLocaleString()} rows, ` +
           `overture_division_points has ${Number(point_rows[0].count).toLocaleString()} rows`,
       );
+
+      const release = await get_overture_release(VENV_OVERTUREMAPS);
+      await record_overture_catalog(client, {
+        file_name: "overture_divisions",
+        region_code: args.bbox,
+        data_date: release,
+        total_count: Number(area_rows[0].count),
+      });
+      await record_overture_catalog(client, {
+        file_name: "overture_division_points",
+        region_code: args.bbox,
+        data_date: release,
+        total_count: Number(point_rows[0].count),
+      });
+      console.log(`[bake/overture] catalog: divisions @ release ${release}`);
     } finally {
       client.release();
     }

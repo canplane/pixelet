@@ -10,10 +10,25 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 
-import { COAST_ROW_KEYS, type CoastRow, encode_terrain, FEAT_ROW_KEYS, type FeatRow, type Ground } from "@pxl/shared/bake/format.ts";
+import {
+  BASE_ROW_KEYS,
+  type BaseRow,
+  BUILDING_ROW_KEYS,
+  type BuildingRow,
+  COAST_ROW_KEYS,
+  type CoastRow,
+  encode_terrain,
+  type Ground,
+  SEGMENT_ROW_KEYS,
+  type SegmentRow,
+} from "@pxl/shared/bake/format.ts";
 import type { OSMFeature, OSMRawFeature } from "@pxl/shared/bake/model/osm_feature.ts";
 import * as osm_adapter from "@pxl/api/bake/osm/model/osm_adapter.ts";
-import { normalize, V3_ARENA } from "@pxl/api/bake/osm/pipeline/osm_normalizer.ts";
+import * as overture_adapter from "@pxl/api/bake/overture/model/overture_adapter.ts";
+import type { OvertureRawFeature } from "@pxl/api/bake/overture/model/overture_adapter.ts";
+import { normalize, V3_ARENA } from "./pipeline/normalizer.ts";
+import { osm_policy } from "./pipeline/osm_policy.ts";
+import { overture_policy } from "./pipeline/overture_policy.ts";
 import { bake_ground } from "./pipeline/ground_baker.ts";
 
 export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
@@ -26,28 +41,45 @@ export function bake_terrain(page_idx: IVec, pkt: U8Array): U8Array {
 
   /**
    * Elevation: ELE_PADDED_SPAN*ELE_PADDED_SPAN*i16 LE bytes (currently 68*68)
-   * OSM Feature/Coastline -> OSMInput[] -> normalize -> bake context
+   * Overture Buildings/Transportation/Base + OSM Coastline -> raw features -> normalize -> bake context
    */
 
-  const [ele, _feats, _coasts] = root.get<[
+  const [ele, _buildings, _segments, _base, _coasts] = root.get<[
     ele: I16Array,
-    _feats: BranchCursor,
+    _buildings: BranchCursor,
+    _segments: BranchCursor,
+    _base: BranchCursor,
     _coasts: BranchCursor,
   ]>();
 
   const feats: OSMFeature[] = [];
-  for (let i = 0; i < _feats.len; i++) {
-    const row: FeatRow = from_tuple(_feats.at_branch(i).get(), FEAT_ROW_KEYS);
-    const res: OSMRawFeature[] = osm_adapter.from_feat_row(row);
+
+  for (let i = 0; i < _buildings.len; i++) {
+    const row: BuildingRow = from_tuple(_buildings.at_branch(i).get(), BUILDING_ROW_KEYS);
+    const res: OvertureRawFeature[] = overture_adapter.from_building_row(row);
     for (let j = 0; j < res.length; j++) {
-      feats.push(normalize(res[j], page_bbox[0], page_z_scale));
+      feats.push(normalize(res[j], page_bbox[0], page_z_scale, overture_policy));
+    }
+  }
+  for (let i = 0; i < _segments.len; i++) {
+    const row: SegmentRow = from_tuple(_segments.at_branch(i).get(), SEGMENT_ROW_KEYS);
+    const res: OvertureRawFeature[] = overture_adapter.from_segment_row(row);
+    for (let j = 0; j < res.length; j++) {
+      feats.push(normalize(res[j], page_bbox[0], page_z_scale, overture_policy));
+    }
+  }
+  for (let i = 0; i < _base.len; i++) {
+    const row: BaseRow = from_tuple(_base.at_branch(i).get(), BASE_ROW_KEYS);
+    const res: OvertureRawFeature[] = overture_adapter.from_base_row(row);
+    for (let j = 0; j < res.length; j++) {
+      feats.push(normalize(res[j], page_bbox[0], page_z_scale, overture_policy));
     }
   }
   for (let i = 0; i < _coasts.len; i++) {
     const row: CoastRow = from_tuple(_coasts.at_branch(i).get(), COAST_ROW_KEYS);
     const res: OSMRawFeature[] = osm_adapter.from_coast_row(row);
     for (let j = 0; j < res.length; j++) {
-      feats.push(normalize(res[j], page_bbox[0], page_z_scale));
+      feats.push(normalize(res[j], page_bbox[0], page_z_scale, osm_policy));
     }
   }
 

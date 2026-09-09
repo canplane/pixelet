@@ -17,9 +17,11 @@
  *          -> ground
  *          -> ele
  *
- * raw wire   = [ele, feats, coasts]
- *   feats  = [[osm_id, tags_hstore, way_wkb, center_wkb], ...]
- *   coasts = [[id, geom_wkb], ...]
+ * raw wire   = [ele, buildings, segments, base, coasts]
+ *   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
+ *   segments  = [[gers_id, subtype, class, road, geom_wkb], ...]
+ *   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
+ *   coasts    = [[id, geom_wkb, covers_page], ...]  (still OSM — no Overture coastline equivalent)
  *
  * baked wire = [ele, ground]
  *   ground = [land, water, structure, transport]
@@ -27,22 +29,57 @@
  * each ground channel is st.encode(...) => U64Array
  */
 
+import type { u8 } from "@xpute/core/kit/word.ts";
 import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
 import { BranchCursor, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 
 // ---- DB ----
 
-export const FEAT_ROW_KEYS = [
-  "osm_id",
-  "tags_hstore",
-  "way_wkb",
-  "center_wkb",
+export const BUILDING_ROW_KEYS = [
+  "gers_id",
+  "subtype",
+  "class",
+  "height",
+  "num_floors",
+  "geom_wkb",
 ] as const;
-export type FeatRow = {
-  osm_id: string;
-  tags_hstore: string | null;
-  way_wkb: U8Array; // WKB
-  center_wkb: U8Array; // WKB
+export type BuildingRow = {
+  gers_id: string;
+  subtype: string | null;
+  class: string | null;
+  height: number | null;
+  num_floors: number | null;
+  geom_wkb: U8Array; // WKB
+};
+
+export const SEGMENT_ROW_KEYS = [
+  "gers_id",
+  "subtype",
+  "class",
+  "road",
+  "geom_wkb",
+] as const;
+export type SegmentRow = {
+  gers_id: string;
+  subtype: string;
+  class: string | null;
+  road: string | null; // raw JSON text (::text of the road JSONB column)
+  geom_wkb: U8Array; // WKB
+};
+
+export const BASE_ROW_KEYS = [
+  "gers_id",
+  "source",
+  "subtype",
+  "class",
+  "geom_wkb",
+] as const;
+export type BaseRow = {
+  gers_id: string;
+  source: string; // "land_use" | "water" | "land" | "infrastructure"
+  subtype: string | null;
+  class: string | null;
+  geom_wkb: U8Array; // WKB
 };
 
 export const COAST_ROW_KEYS = [
@@ -71,6 +108,12 @@ export const GROUND_CH_KEYS = [
   GroundChannelKey.TRANSPORT,
 ] as const;
 export type Ground = Record<GroundChannelKey, U8Array>;
+
+/** Target ground channel + cell type resolved by a provider's own policy for one normalized feature. */
+export type CellConfig = {
+  cell_type: u8;
+  ch_key: GroundChannelKey;
+};
 
 // ---- Page ----
 

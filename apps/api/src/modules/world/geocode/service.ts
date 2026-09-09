@@ -11,8 +11,8 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
-import type { GeocodeProvider, GeocodeResult } from "./provider.ts";
-import { make_overture_geocode_provider } from "./providers/overture_provider.ts";
+import type { GeocodeProvider, GeocodeResult } from "@pxl/api/bake/geocode/provider.ts";
+import { make_overture_geocode_provider } from "@pxl/api/bake/geocode/providers/overture_provider.ts";
 
 const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 

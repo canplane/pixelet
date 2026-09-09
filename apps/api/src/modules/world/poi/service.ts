@@ -12,8 +12,8 @@ import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
-import { make_overture_provider } from "./providers/overture_provider.ts";
-import type { PoiProvider } from "./provider.ts";
+import { make_overture_provider } from "@pxl/api/bake/poi/providers/overture_provider.ts";
+import type { PoiProvider } from "@pxl/api/bake/poi/provider.ts";
 
 const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
 

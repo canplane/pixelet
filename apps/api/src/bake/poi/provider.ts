@@ -1,4 +1,4 @@
-// @pxl/api/modules/world/poi/provider.ts
+// @pxl/api/bake/poi/provider.ts
 
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
