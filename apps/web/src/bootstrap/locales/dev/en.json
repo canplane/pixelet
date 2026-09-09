@@ -30,6 +30,10 @@
       "edge_shade": {
         "label": "Cube edge shading",
         "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line. Tune with __pxl_edge({ strength, width })."
+      },
+      "pixel_dither": {
+        "label": "LOD cross-fade (per pixel)",
+        "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
       }
     }
   },

@@ -42,6 +42,8 @@ export function DebugSection() {
   const toggleLedgerOverlay = useDebugStore((state) => state.toggleLedgerOverlay);
 
   const logLedger = useDebugStore((state) => state.logLedger);
+  const pixelDither = useDebugStore((state) => state.pixelDither);
+  const togglePixelDither = useDebugStore((state) => state.togglePixelDither);
   const edgeShadeStrength = useDebugStore((state) => state.edgeShadeStrength);
   const setEdgeShade = useDebugStore((state) => state.setEdgeShade);
   const toggleLogLedger = useDebugStore((state) => state.toggleLogLedger);
@@ -72,6 +74,12 @@ export function DebugSection() {
         description={t("settings.debug.ledger_log.description")}
         active={logLedger}
         on_toggle={toggleLogLedger}
+      />
+      <SettingRow
+        label={t("settings.debug.pixel_dither.label")}
+        description={t("settings.debug.pixel_dither.description")}
+        active={pixelDither}
+        on_toggle={togglePixelDither}
       />
       <SettingRow
         label={t("settings.debug.edge_shade.label")}

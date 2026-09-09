@@ -154,20 +154,26 @@ Deno.test("coarse mesher - terrain and object columns in the same cell blend int
   assert(built.rgb[2] > 0); // blue contributed too — genuinely blended, not one or the other
 });
 
-Deno.test("coarse mesher - a partially-covered cell shrinks isotropically instead of vanishing", () => {
-  const columns = empty_columns();
-  // Only 1 of 4 sub-columns filled, one cell tall: fill = 1/8, box shrinks
-  // to cbrt(1/8) = 0.5 of the full span on every axis — no occupancy
-  // threshold drops it.
-  columns[idx(0, 0)] = [run(4, 4, 200, 100, 50)];
+Deno.test("coarse mesher - a sparse cell shrinks isotropically about its cell centre", () => {
+  const sparse = empty_columns();
+  // 1 of this lod_step=4 cell's 64 fine voxels: fill 1/64, so the box is
+  // cbrt(1/64) = a quarter of the cell on every axis, and it sits at the
+  // cell's centre rather than at the voxel's own place. Density is what the
+  // size means here; position within the cell is below this tier.
+  sparse[idx(1, 2)] = [run(4, 4, 200, 100, 50)];
 
-  const built = bake_chunk_mesh(pack_column_runs(columns), 2);
+  const lone = bake_chunk_mesh(pack_column_runs(sparse), 4);
+  assertEquals(box_cnt(lone, 5), 1); // open-bottom, like every coarse box
+  assertEquals(box_scale_of(lone, 0, 5), [1, 1, 1]);
+  assertEquals(box_center_of(lone, 0, 5), [2, 2, 6]);
+
+  const filled = empty_columns();
+  for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) filled[idx(cx, cy)] = [run(4, 5, 200, 100, 50)];
+  const built = bake_chunk_mesh(pack_column_runs(filled), 2);
   assertEquals(box_cnt(built, 5), 1);
-  const expected_scale = 2 * Math.cbrt(1 / 8);
-  const [sx, sy, sz] = box_scale_of(built, 0, 5);
-  assertEquals(sx, expected_scale);
-  assertEquals(sy, expected_scale);
-  assertEquals(sz, expected_scale); // Z — same factor, isotropic
+  // Full cell: no shrink, and it stays a plain full-cell run that can still
+  // merge and cull against its neighbours.
+  assertEquals(box_scale_of(built, 0, 5), [2, 2, 2]);
 });
 
 Deno.test("coarse mesher - finest LOD still requires per-run meshing", () => {
@@ -262,13 +268,18 @@ Deno.test("LOD1 - a chunk-edge column is never occlusion-culled even if it looks
   assertEquals(built.vertex_cnt, (2 + 5 + 3 * 4) * 4);
 });
 
-Deno.test("coarse_instance_stats tracks low-fill instances the always-shrink policy would have dropped under a threshold rule", () => {
+Deno.test("coarse_instance_stats counts cells too diffuse for any single box to represent", () => {
   const columns = empty_columns();
-  columns[idx(2, 2)] = [run(4, 4, 200, 100, 50)]; // fill = 1/8, well under a 25% threshold
+  // Two opposite corners of a lod_step=4 cell, one cell tall: the fitted box
+  // is the full 4x4x1 and holds two voxels, an eighth full. Unlike a lone
+  // block, no box of any size describes this — so it is dropped, and that is
+  // what the counter is for.
+  columns[idx(0, 0)] = [run(4, 4, 200, 100, 50)];
+  columns[idx(3, 3)] = [run(4, 4, 200, 100, 50)];
 
   const total_before = coarse_instance_stats.total;
   const low_fill_before = coarse_instance_stats.low_fill;
-  bake_chunk_mesh(pack_column_runs(columns), 2);
+  bake_chunk_mesh(pack_column_runs(columns), 4);
   assertEquals(coarse_instance_stats.total, total_before + 1);
   assertEquals(coarse_instance_stats.low_fill, low_fill_before + 1);
 });

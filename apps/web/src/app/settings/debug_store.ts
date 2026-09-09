@@ -56,6 +56,20 @@ export type DebugStore = {
    * old bevel's numbers, which were tuned when every edge was.
    * `edgeShadeWidth` is in world units.
    */
+  /**
+   * Cross-fade LOD transitions per fragment instead of per chunk.
+   *
+   * Off: a chunk shows one tier or the other for the whole band, picked by
+   * its own stable hash, so neighbours cross at different moments. On: both
+   * tiers draw with complementary dither patterns and dissolve into each
+   * other, which is what engines call an LOD cross-fade — at the cost of
+   * drawing a blending chunk twice, and of a pattern that crawls when the
+   * camera moves, since averaging it away wants temporal AA and this
+   * renderer only has SMAA.
+   */
+  pixelDither: boolean;
+  togglePixelDither: () => void;
+
   edgeShadeStrength: number;
   edgeShadeWidth: number;
   setEdgeShade: (next: Partial<{ edgeShadeStrength: number; edgeShadeWidth: number }>) => void;
@@ -75,6 +89,9 @@ export const useDebugStore = create<DebugStore>()(persist((set) => ({
   logLedger: false,
   setLogLedger: (logLedger) => set({ logLedger }),
   toggleLogLedger: () => set((state) => ({ logLedger: !state.logLedger })),
+
+  pixelDither: false,
+  togglePixelDither: () => set((state) => ({ pixelDither: !state.pixelDither })),
 
   edgeShadeStrength: 0.3,
   edgeShadeWidth: 0.03,

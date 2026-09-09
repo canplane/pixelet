@@ -165,6 +165,16 @@ function inject_chunk_shader(shader: {
       // rather than a haze. Width is in world units, so at distance it
       // converges to a faint darkening instead of turning a zoomed-out view
       // into a wireframe the way a screen-space outline would.
+      // Interleaved gradient noise (Jimenez): one fract-heavy line, no
+      // texture, and a far less regular pattern than an ordered Bayer matrix
+      // at the same cost. Screen-space on purpose — that is what makes a
+      // cross-fade read as a fade rather than as a texture stuck to the
+      // surface. The price is that without temporal AA to average it, the
+      // pattern is fixed to the screen while the geometry slides under it,
+      // so a moving camera makes it crawl.
+      float dither_threshold() {
+        return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      }
       bool face_bit(float bit_value) {
         return mod(floor(floor(v_faces + 0.5) / bit_value), 2.0) >= 0.5;
       }
@@ -219,7 +229,14 @@ function inject_chunk_shader(shader: {
         return color * mix(1.0, 1.0 - u_edge_strength, edge_factor());
       }`,
     )
-    .replace("void main() {", `void main() { if (v_visible < 0.5) discard;`)
+    .replace(
+      "void main() {",
+      `void main() {
+        bool v_inverted = v_visible > 1.5;
+        float v_amount = v_inverted ? v_visible - 2.0 : v_visible;
+        float v_pattern = dither_threshold();
+        if (v_inverted ? v_pattern < v_amount : v_pattern >= v_amount) discard;`,
+    )
     .replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
       `vec3 base_rgb = v_rgb;

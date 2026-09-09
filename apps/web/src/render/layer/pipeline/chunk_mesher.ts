@@ -33,8 +33,15 @@ import { MESH_POOL } from "./mesh_pool.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import type { LodStep } from "@/render/lod.ts";
-import { MaterialClass, NO_LAYER, SUB_CELL_NONE, unpack_sub_cell_fraction } from "./volume.ts";
-import type { ColumnRunSet } from "./voxel_scan.ts";
+import {
+  MaterialClass,
+  NO_LAYER,
+  pack_sub_cell_fraction,
+  SUB_CELL_NONE,
+  unpack_sub_cell_fraction,
+  unpack_sub_cell_size,
+} from "./volume.ts";
+import { alloc_column_run_set, type ColumnRunSet, release_column_runs } from "./voxel_scan.ts";
 
 /**
  * One baked chunk mesh's raw vertex data — position/normal are the real
@@ -83,13 +90,14 @@ export type BakedChunkMesh = {
 };
 
 /**
- * Dev-only, cumulative since page load: how many coarse-LOD instances this
- * session has written, and how many of those were low-fill enough
- * (`fill < LOW_FILL_THRESHOLD`) that a threshold-cull policy (drop instead
- * of shrink — see chunk_stage.tsx's lod_build_stats sibling) would have
- * skipped them outright. Answers "what does always-shrink-never-drop
- * actually cost" with a real count instead of a guess. Exposed the same
- * no-console way, via chunk_stage.tsx's __PXL_RENDER_STATS__.
+ * Dev-only, cumulative since page load: how many coarse-LOD boxes this
+ * session has written, and how many were dropped for being too diffuse to
+ * draw. Exposed the same no-console way, via chunk_stage.tsx's
+ * __PXL_RENDER_STATS__.
+ *
+ * Nothing is actually dropped: a sparse cell shrinks instead, all the way
+ * down. `low_fill` prices what a threshold-cull policy would have skipped,
+ * so the question stays answerable with a count rather than a guess.
  */
 export const coarse_instance_stats = { total: 0, low_fill: 0 };
 const LOW_FILL_THRESHOLD: f64 = 0.25;
@@ -212,6 +220,7 @@ const CREASE_PX: u32 = 1 << 18;
 const CREASE_NX: u32 = 1 << 19;
 const CREASE_PY: u32 = 1 << 20;
 const CREASE_NY: u32 = 1 << 21;
+const ALL_CREASES: u32 = CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY;
 
 // Whether the cell above / below this run is filled. Not the same question
 // as "did FACE_PZ survive culling", which is what the shader used to read:
@@ -484,6 +493,9 @@ function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 
  * the name always meant. */
 
 function run_include_bottom(set: ColumnRunSet, i: u32): boolean {
+  // A shrunken coarse box floats and so technically has a visible underside,
+  // but the camera looks down at this world and never gets under one. Not
+  // worth a sixth face on every sparse cell in the distance.
   return set.material_class[i] === MaterialClass.OBJECT;
 }
 
@@ -502,13 +514,16 @@ function run_include_bottom(set: ColumnRunSet, i: u32): boolean {
  *
  * A sub-cell run keeps every face: it fills a fraction of its own voxel, so
  * a neighbour filling all of its own still does not cover this one's face.
+ * Every lateral edge of such a box is a silhouette against whatever is
+ * behind it, so it gets all four creases outright rather than by asking
+ * neighbours who cannot answer for a box that does not touch them.
  */
-function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
+function run_face_mask(set: ColumnRunSet, span: u32, cx: u32, cy: u32, i: u32): u32 {
   const mask_all = run_include_bottom(set, i) ? ALL_FACES : OPEN_BOTTOM_FACES;
-  if (set.sub_sz[i] !== SUB_CELL_NONE) return mask_all;
+  if (set.sub_sz[i] !== SUB_CELL_NONE) return mask_all | ALL_CREASES;
 
   let mask = mask_all;
-  const col = cy * CHUNK_CELL_SPAN + cx;
+  const col = cy * span + cx;
   const z0 = set.z0[i], z1 = set.z1[i];
   if (column_covers_range_opaque(set, col, z1 + 1, z1 + 1)) mask &= ~FACE_PZ;
   if ((mask & FACE_NZ) !== 0 && column_covers_range_opaque(set, col, z0 - 1, z0 - 1)) mask &= ~FACE_NZ;
@@ -520,7 +535,7 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
 
   // A chunk-edge column keeps its side face and gets no crease, concave or
   // convex: the neighbouring chunk's columns are not in this scan.
-  if (cx + 1 < CHUNK_CELL_SPAN) {
+  if (cx + 1 < span) {
     const rel = neighbour_relation(set, col + 1, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PX;
     if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_PX;
@@ -534,15 +549,15 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NX;
     if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NX;
   }
-  if (cy + 1 < CHUNK_CELL_SPAN) {
-    const rel = neighbour_relation(set, col + CHUNK_CELL_SPAN, z0, z1);
+  if (cy + 1 < span) {
+    const rel = neighbour_relation(set, col + span, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PY;
     if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_PY;
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PY;
     if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PY;
   }
   if (cy > 0) {
-    const rel = neighbour_relation(set, col - CHUNK_CELL_SPAN, z0, z1);
+    const rel = neighbour_relation(set, col - span, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NY;
     if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_NY;
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NY;
@@ -553,17 +568,17 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
   // one of the two faces meeting there exists while the other's own axis
   // neighbour hides it.
   const wants_diagonal = (a: u32, b: u32) => ((mask & a) !== 0 && (mask & b) === 0) || ((mask & b) !== 0 && (mask & a) === 0);
-  if (cx + 1 < CHUNK_CELL_SPAN && cy + 1 < CHUNK_CELL_SPAN && wants_diagonal(FACE_PX, FACE_PY)) {
-    if (column_fills_range(set, col + CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PP;
+  if (cx + 1 < span && cy + 1 < span && wants_diagonal(FACE_PX, FACE_PY)) {
+    if (column_fills_range(set, col + span + 1, z0, z1)) mask |= DIAG_PP;
   }
-  if (cx + 1 < CHUNK_CELL_SPAN && cy > 0 && wants_diagonal(FACE_PX, FACE_NY)) {
-    if (column_fills_range(set, col - CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PN;
+  if (cx + 1 < span && cy > 0 && wants_diagonal(FACE_PX, FACE_NY)) {
+    if (column_fills_range(set, col - span + 1, z0, z1)) mask |= DIAG_PN;
   }
-  if (cx > 0 && cy + 1 < CHUNK_CELL_SPAN && wants_diagonal(FACE_NX, FACE_PY)) {
-    if (column_fills_range(set, col + CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NP;
+  if (cx > 0 && cy + 1 < span && wants_diagonal(FACE_NX, FACE_PY)) {
+    if (column_fills_range(set, col + span - 1, z0, z1)) mask |= DIAG_NP;
   }
   if (cx > 0 && cy > 0 && wants_diagonal(FACE_NX, FACE_NY)) {
-    if (column_fills_range(set, col - CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NN;
+    if (column_fills_range(set, col - span - 1, z0, z1)) mask |= DIAG_NN;
   }
   return mask;
 }
@@ -576,7 +591,7 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
  * that, long after the volume itself is released back to its pool.
  */
 export function bake_chunk_mesh(set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
-  if (lod_step === 1) return bake_chunk_mesh_fine(set);
+  if (lod_step === 1) return bake_runs(set, CHUNK_CELL_SPAN, 1);
   return bake_chunk_mesh_coarse(set, lod_step);
 }
 
@@ -620,7 +635,7 @@ const SURVIVING = new Vector(Uint32Array, { init_cap: 6 * (1 << 12) });
 const MERGE_KEY_BITS = RISES_PX | RISES_NX | RISES_PY | RISES_NY |
   DIPS_PX | DIPS_NX | DIPS_PY | DIPS_NY |
   DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN |
-  CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY | ALL_FACES;
+  ALL_CREASES | ALL_FACES;
 
 /** The bits that make one cell's +X border a seam: a face to draw there, or
  * an edge to shade. A merge may not swallow a border carrying any of them. */
@@ -644,12 +659,12 @@ const Y_BORDER_BITS = FACE_PY | FACE_NY | CREASE_PY | CREASE_NY | RISES_PY | RIS
  * Everything the merge did not consume is equal across the rectangle by
  * construction, so it can come from anywhere.
  */
-function merged_mask(col: u32, w: u32, h: u32): u32 {
+function merged_mask(span: u32, col: u32, w: u32, h: u32): u32 {
   const near = MERGE_MASK[col];
   if (w === 1 && h === 1) return near;
   const far_x = MERGE_MASK[col + (w - 1)];
-  const far_y = MERGE_MASK[col + (h - 1) * CHUNK_CELL_SPAN];
-  const far_xy = MERGE_MASK[col + (h - 1) * CHUNK_CELL_SPAN + (w - 1)];
+  const far_y = MERGE_MASK[col + (h - 1) * span];
+  const far_xy = MERGE_MASK[col + (h - 1) * span + (w - 1)];
   const from_far = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX | FACE_PY | CREASE_PY | RISES_PY | DIPS_PY |
     DIAG_PP | DIAG_PN | DIAG_NP;
   return (near & ~from_far) |
@@ -661,7 +676,7 @@ function merged_mask(col: u32, w: u32, h: u32): u32 {
 function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
   return set.z0[a] === set.z0[b] && set.z1[a] === set.z1[b] &&
     set.r[a] === set.r[b] && set.g[a] === set.g[b] && set.b[a] === set.b[b] &&
-    set.layer_idx[a] === set.layer_idx[b] && set.material_class[a] === set.material_class[b] &&
+    set.layer_taps[a] === set.layer_taps[b] && set.material_class[a] === set.material_class[b] &&
     set.sub_sz[a] === SUB_CELL_NONE && set.sub_sz[b] === SUB_CELL_NONE;
 }
 
@@ -674,21 +689,33 @@ function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
 const MERGE_RUN = new Int32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
 const MERGE_MASK = new Int32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
 
-function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
+/**
+ * Meshes one run set. Both LOD tiers go through here: `span` is the grid
+ * width in that tier's own cells and `xy_scale` how many fine cells one
+ * covers, so a coarse tier is the same algorithm on a smaller grid with
+ * wider cells rather than a separate averaged-box path.
+ *
+ * Only X and Y scale. A run's z stays in fine cells at every tier, because
+ * quantising height by the tier's own step is what makes distant terrain
+ * read as flat: at lod_step 8 every rise under eight cells collapses into
+ * one level. The old shrunken-box emitter hid that behind boxes of varying
+ * size and the gaps between them; full-size merged boxes show it plainly.
+ */
+function bake_runs(set: ColumnRunSet, span: u32, xy_scale: u32): BakedChunkMesh {
   const base = SURVIVING.len;
   let vertex_total: u32 = 0;
   let index_total: u32 = 0;
   MERGE_RUN.fill(-1);
 
-  for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
-    for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
-      const col = cy * CHUNK_CELL_SPAN + cx;
+  for (let cy: u32 = 0; cy < span; cy++) {
+    for (let cx: u32 = 0; cx < span; cx++) {
+      const col = cy * span + cx;
       const end = set.start[col + 1];
       let mergeable = -1;
       let mergeable_mask = 0;
       for (let i = set.start[col]; i < end; i++) {
         occlusion_stats.total_runs++;
-        const mask = run_face_mask(set, cx, cy, i);
+        const mask = run_face_mask(set, span, cx, cy, i);
         occlusion_stats.faces_possible += run_include_bottom(set, i) ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
         // Concave bits shade an edge but never keep a run alive on their own.
         if ((mask & ALL_FACES) === 0) {
@@ -713,15 +740,15 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
   // Greedy rectangles over the mergeable plane: widen along X while the run
   // matches and the shared border carries no crease, then deepen along Y
   // while a whole row matches the first.
-  for (let cy: u32 = 0; cy < CHUNK_CELL_SPAN; cy++) {
-    for (let cx: u32 = 0; cx < CHUNK_CELL_SPAN; cx++) {
-      const col = cy * CHUNK_CELL_SPAN + cx;
+  for (let cy: u32 = 0; cy < span; cy++) {
+    for (let cx: u32 = 0; cx < span; cx++) {
+      const col = cy * span + cx;
       const run = MERGE_RUN[col];
       if (run < 0) continue;
       const mask = MERGE_MASK[col];
 
       let w = 1;
-      while (cx + w < CHUNK_CELL_SPAN) {
+      while (cx + w < span) {
         // The border about to be swallowed belongs to the current far cell,
         // not to the cell this box started at. Testing `mask` instead made
         // the condition loop-invariant, so it only ever asked about the
@@ -736,10 +763,10 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
       }
 
       let h = 1;
-      outer: while (cy + h < CHUNK_CELL_SPAN) {
-        const row = col + h * CHUNK_CELL_SPAN;
+      outer: while (cy + h < span) {
+        const row = col + h * span;
         for (let k = 0; k < w; k++) {
-          if ((MERGE_MASK[col + (h - 1) * CHUNK_CELL_SPAN + k] & Y_SEAM_BITS) !== 0) break outer;
+          if ((MERGE_MASK[col + (h - 1) * span + k] & Y_SEAM_BITS) !== 0) break outer;
           const cell = row + k;
           const cell_run = MERGE_RUN[cell];
           if (cell_run < 0 || !runs_match(set, run, cell_run)) break outer;
@@ -757,9 +784,9 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
       }
 
       for (let j = 0; j < h; j++) {
-        for (let k = 0; k < w; k++) MERGE_RUN[col + j * CHUNK_CELL_SPAN + k] = -1;
+        for (let k = 0; k < w; k++) MERGE_RUN[col + j * span + k] = -1;
       }
-      push_box(cx, cy, run, merged_mask(col, w, h), w, h);
+      push_box(cx, cy, run, merged_mask(span, col, w, h), w, h);
     }
   }
 
@@ -777,24 +804,34 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
     const cx = SURVIVING.get(s_i), cy = SURVIVING.get(s_i + 1), i = SURVIVING.get(s_i + 2);
     const mask = SURVIVING.get(s_i + 3), w = SURVIVING.get(s_i + 4), h = SURVIVING.get(s_i + 5);
     const sub_sz = set.sub_sz[i];
+    const unit = xy_scale * U_PER_CELL;
+    const depth = (set.z1[i] + 1 - set.z0[i]) * U_PER_CELL;
     let min_x: f64, min_y: f64, min_z: f64, size_x: f64, size_y: f64, size_z: f64;
     if (sub_sz === SUB_CELL_NONE) {
-      min_x = cx * U_PER_CELL;
-      min_y = cy * U_PER_CELL;
+      min_x = cx * unit;
+      min_y = cy * unit;
       min_z = set.z0[i] * U_PER_CELL;
-      size_x = w * U_PER_CELL;
-      size_y = h * U_PER_CELL;
-      size_z = (set.z1[i] + 1 - set.z0[i]) * U_PER_CELL;
+      size_x = w * unit;
+      size_y = h * unit;
+      size_z = depth;
     } else {
-      const sz = unpack_sub_cell_fraction(sub_sz) * U_PER_CELL;
-      min_x = (cx + unpack_sub_cell_fraction(set.sub_ox[i])) * U_PER_CELL;
-      min_y = (cy + unpack_sub_cell_fraction(set.sub_oy[i])) * U_PER_CELL;
-      min_z = (set.z0[i] + unpack_sub_cell_fraction(set.sub_oz[i])) * U_PER_CELL;
-      size_x = sz;
-      size_y = sz;
-      size_z = sz;
+      // Inset inside its own extent, per axis, and never merged — a box that
+      // does not fill its cell has no shared border to merge across, so w and
+      // h are always 1 here.
+      //
+      // Every axis reads the same way: a fraction of the extent that axis
+      // would have had. For X and Y that extent is one cell of this tier, so
+      // they pick up xy_scale exactly like the full-cell branch does; for Z
+      // it is the run, which is one cell for a sub-voxel object and a whole
+      // tier step for a coarse bucket. No axis is privileged.
+      min_x = cx * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
+      min_y = cy * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
+      min_z = set.z0[i] * U_PER_CELL + unpack_sub_cell_fraction(set.sub_oz[i]) * depth;
+      size_x = unpack_sub_cell_size(set.sub_sx[i]) * unit;
+      size_y = unpack_sub_cell_size(set.sub_sy[i]) * unit;
+      size_z = unpack_sub_cell_size(sub_sz) * depth;
     }
-    const layer = set.layer_idx[i];
+    const taps = set.layer_taps[i];
     emit_box(
       builder,
       min_x,
@@ -806,10 +843,10 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
       srgb_to_linear(set.r[i] / 255),
       srgb_to_linear(set.g[i] / 255),
       srgb_to_linear(set.b[i] / 255),
-      layer,
-      layer,
-      layer,
-      layer,
+      taps & 255,
+      (taps >>> 8) & 255,
+      (taps >>> 16) & 255,
+      (taps >>> 24) & 255,
       mask,
     );
   }
@@ -828,12 +865,39 @@ function push_box(cx: u32, cy: u32, run: u32, mask: u32, w: u32, h: u32): void {
   SURVIVING.push(h);
 }
 
-/** tap0..tap3: up to 4 distinct texture-array layers touching this bucket,
- * first-encountered order (NO_LAYER — objects, always — never added). Four
- * fields rather than an array because these live in a reused arena slot: a
- * nested array per accumulator would reintroduce exactly the per-cell
- * garbage the arena exists to remove, and the cap is a fixed vec4 anyway. */
-type ZBucketAccum = { bz: i32; pr: f64; pg: f64; pb: f64; coverage: f64; tap0: u32; tap1: u32; tap2: u32; tap3: u32; tap_cnt: u32 };
+/**
+ * One coarse cell's contents at one `lod_step`-cubed lattice cell.
+ *
+ * `bz` names the cell; its extent is `lod_step` fine cells on every axis,
+ * and `coverage` counts the fine voxels inside it. Occupancy is that count
+ * over `lod_step^3` — one number, no axis singled out — and it shrinks the
+ * emitted box isotropically about the cell's own centre.
+ *
+ * The colour is not volumetric: `sr/sg/sb`
+ * sum only the *topmost* run of each sub-column, because that is the voxel
+ * you can see. Averaging by volume instead makes a cell of grass over twenty
+ * of rock come out almost entirely rock, and distant terrain converge to a
+ * muddy average of everything buried under it.
+ *
+ * `tag`/`tr`/`tg`/`tb` are how that stays O(1) per run: runs arrive
+ * ascending within a sub-column, so a later one supersedes the one before
+ * it, and the sum is corrected by subtracting what that column last
+ * contributed rather than by rescanning.
+ */
+type ZBucketAccum = {
+  bz: i32;
+  coverage: f64;
+  sr: f64;
+  sg: f64;
+  sb: f64;
+  surfaces: u32;
+  tag: u32;
+  tr: f64;
+  tg: f64;
+  tb: f64;
+  taps: u32;
+  tap_cnt: u32;
+};
 
 /**
  * Every coarse cell's Z buckets, bump-allocated and rewound per chunk.
@@ -844,7 +908,20 @@ type ZBucketAccum = { bz: i32; pr: f64; pg: f64; pb: f64; coverage: f64; tap0: u
  * single rebuild.
  */
 const BUCKETS = new Arena<ZBucketAccum>(
-  () => ({ bz: 0, pr: 0, pg: 0, pb: 0, coverage: 0, tap0: NO_LAYER, tap1: NO_LAYER, tap2: NO_LAYER, tap3: NO_LAYER, tap_cnt: 0 }),
+  () => ({
+    bz: 0,
+    coverage: 0,
+    sr: 0,
+    sg: 0,
+    sb: 0,
+    surfaces: 0,
+    tag: 0,
+    tr: 0,
+    tg: 0,
+    tb: 0,
+    taps: 0,
+    tap_cnt: 0,
+  }),
   { init_cap: 1 << 12 },
 );
 const CELL_RANGE = new Vector(Uint32Array, { init_cap: 2 * (1 << 10) });
@@ -866,32 +943,64 @@ function find_or_create_bucket(start: u32, cnt: u32, bz: i32): u32 {
   }
   const acc = BUCKETS.alloc();
   acc.bz = bz;
-  acc.pr = 0;
-  acc.pg = 0;
-  acc.pb = 0;
+  acc.sr = 0;
+  acc.sg = 0;
+  acc.sb = 0;
+  acc.surfaces = 0;
+  acc.tag = 0;
   acc.coverage = 0;
+  acc.taps = 0;
   acc.tap_cnt = 0;
   return BUCKETS.len - 1;
 }
 
-function tap_at(acc: ZBucketAccum, i: u32): u32 {
-  return i === 0 ? acc.tap0 : i === 1 ? acc.tap1 : i === 2 ? acc.tap2 : acc.tap3;
+/** Folds one sub-column's contribution to this bucket's visible surface,
+ * superseding whatever that same column contributed lower down. */
+function collect_surface(acc: ZBucketAccum, tag: u32, r: f64, g: f64, b: f64): void {
+  if (acc.tag === tag) {
+    acc.sr += r - acc.tr;
+    acc.sg += g - acc.tg;
+    acc.sb += b - acc.tb;
+  } else {
+    acc.sr += r;
+    acc.sg += g;
+    acc.sb += b;
+    acc.surfaces++;
+    acc.tag = tag;
+  }
+  acc.tr = r;
+  acc.tg = g;
+  acc.tb = b;
 }
 
-/** Same small-N linear-scan reasoning as find_or_create_bucket — a bucket
- * realistically sees a handful of distinct layers, not enough to justify a
- * hash table. Caps at 4 (matches layer_taps' fixed-size vec4 slot); beyond
- * that, whichever 4 were encountered first win. */
+/**
+ * Up to four distinct texture layers touching this bucket, packed one per
+ * byte in first-encountered order. The shader averages the four at 25% each,
+ * so a coarse cell spanning grass, road and roof blends them rather than
+ * showing whichever it met first. Beyond four, the first four win.
+ *
+ * Small-N linear scan against the bytes already packed: a bucket sees a
+ * handful of materials, nowhere near enough to justify anything else.
+ */
 function collect_layer_tap(acc: ZBucketAccum, layer_idx: u32): void {
   if (layer_idx === NO_LAYER || acc.tap_cnt >= 4) return;
   for (let i: u32 = 0; i < acc.tap_cnt; i++) {
-    if (tap_at(acc, i) === layer_idx) return;
+    if (((acc.taps >>> (i * 8)) & 255) === layer_idx) return;
   }
-  if (acc.tap_cnt === 0) acc.tap0 = layer_idx;
-  else if (acc.tap_cnt === 1) acc.tap1 = layer_idx;
-  else if (acc.tap_cnt === 2) acc.tap2 = layer_idx;
-  else acc.tap3 = layer_idx;
+  acc.taps |= layer_idx << (acc.tap_cnt * 8);
   acc.tap_cnt++;
+}
+
+/** The packed vec4 of taps, cycling the real ones into every slot. Padding
+ * unused slots with NO_LAYER would dilute toward flat colour whenever fewer
+ * than four materials touched a bucket, which is the common case. */
+function bucket_taps(acc: ZBucketAccum): u32 {
+  if (acc.tap_cnt === 0) return NO_LAYER * 0x01010101;
+  let packed = 0;
+  for (let i: u32 = 0; i < 4; i++) {
+    packed |= ((acc.taps >>> ((i % acc.tap_cnt) * 8)) & 255) << (i * 8);
+  }
+  return packed >>> 0;
 }
 
 /**
@@ -906,19 +1015,18 @@ function collect_layer_tap(acc: ZBucketAccum, layer_idx: u32): void {
  * run can create a bucket the cell did not have yet, and the count is the
  * only thing that grows.
  */
-function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunSet, i: u32): u32 {
+function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunSet, i: u32, tag: u32): u32 {
   const run_z0 = set.z0[i], run_z1 = set.z1[i];
-  const run_r = set.r[i], run_g = set.g[i], run_b = set.b[i], run_layer = set.layer_idx[i];
+  // A fine run packs one layer into all four taps, so any byte is it.
+  const run_r = set.r[i], run_g = set.g[i], run_b = set.b[i], run_layer = set.layer_taps[i] & 255;
   if (set.sub_sz[i] !== SUB_CELL_NONE) {
-    const frac = unpack_sub_cell_fraction(set.sub_sz[i]);
+    const frac = unpack_sub_cell_size(set.sub_sz[i]);
     const w = frac * frac * frac;
     if (w <= 0) return cnt;
     const idx = find_or_create_bucket(start, cnt, Math.floor(run_z0 / lod_step));
     const acc = BUCKETS.get(idx);
-    acc.pr += run_r * w;
-    acc.pg += run_g * w;
-    acc.pb += run_b * w;
     acc.coverage += w;
+    collect_surface(acc, tag, run_r, run_g, run_b);
     collect_layer_tap(acc, run_layer);
     return Math.max(cnt, idx - start + 1);
   }
@@ -933,81 +1041,157 @@ function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunS
     const idx = find_or_create_bucket(start, cnt, bz);
     cnt = Math.max(cnt, idx - start + 1);
     const acc = BUCKETS.get(idx);
-    acc.pr += run_r * overlap;
-    acc.pg += run_g * overlap;
-    acc.pb += run_b * overlap;
     acc.coverage += overlap;
+    collect_surface(acc, tag, run_r, run_g, run_b);
     collect_layer_tap(acc, run_layer);
   }
   return cnt;
 }
 
-/**
- * Bakes one averaged coarse-cell box. Fill fraction (`coverage /
- * lod_step^3`, in (0,1]) shrinks the box isotropically — X/Y/Z scale
- * together by the same cube-root factor — rather than rendering real alpha:
- * an opaque smaller box is visually "fades out" without transparency's
- * blend/sort cost. `acc.layer_taps` (up to 4 distinct layers, first
- * encountered, padded with NO_LAYER) become this box's texture taps, so the
- * texture-pack setting still shows *something* at coarse LOD instead of
- * always falling back to the flat averaged color. Always open-bottom (5
- * faces): a coarse box is always classified as merged "terrain" regardless
- * of how much OBJECT material contributed to its average color — same
- * behavior the old build_chunk_instances_coarse had (its own output always
- * rendered through TERRAIN_BOX, never OBJECT_BOX).
- */
-function emit_averaged_box(builder: MeshBuilder, bx: u32, by: u32, lod_step: LodStep, acc: ZBucketAccum): void {
-  const max_coverage: f64 = lod_step * lod_step * lod_step;
-  const fill: f64 = Math.min(1, acc.coverage / max_coverage);
-  coarse_instance_stats.total++;
-  if (fill < LOW_FILL_THRESHOLD) coarse_instance_stats.low_fill++;
-  const span: f64 = lod_step * U_PER_CELL;
-  const sz: f64 = span * Math.cbrt(fill);
-  const cz: f64 = (acc.bz * lod_step + lod_step * 0.5) * U_PER_CELL;
-  const half = sz * 0.5;
+/** One coarse run, before it is packed into an exactly-sized set. Same
+ * scratch-then-copy shape voxel_scan.ts uses, for the same reason: the run
+ * count is only known once the walk is done. */
+const CO_Z0 = new Vector(Int32Array, { init_cap: 1 << 11 });
+const CO_Z1 = new Vector(Int32Array, { init_cap: 1 << 11 });
+const CO_RGB = new Vector(Uint32Array, { init_cap: 1 << 11 });
+const CO_LAYER = new Vector(Uint32Array, { init_cap: 1 << 11 });
+/** The run's isotropic inset, packed `offset | scale<<8`, or 0 for a box
+ * that fills its cell — which is SUB_CELL_NONE in both bytes, so zero is
+ * unambiguous. */
+const CO_SUB = new Vector(Uint32Array, { init_cap: 1 << 11 });
+const CO_START = new Uint32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN + 1);
 
-  // The shader always averages 4 taps at 25% each — padding unused slots
-  // with NO_LAYER (falls back to the flat instance color) dilutes toward
-  // flat color whenever fewer than 4 distinct layers touched this bucket,
-  // which is the common case (most buckets are one material, not four).
-  // Cycling the real taps into every slot instead keeps the blend 100%
-  // texture-derived whenever at least one real layer exists, matching what
-  // LOD1 already does (all 4 of its taps are the same one real layer_idx).
-  const n = acc.tap_cnt;
-  emit_box(
-    builder,
-    (bx + 0.5) * span - half,
-    (by + 0.5) * span - half,
-    cz - half,
-    sz,
-    sz,
-    sz,
-    srgb_to_linear(acc.pr / acc.coverage / 255),
-    srgb_to_linear(acc.pg / acc.coverage / 255),
-    srgb_to_linear(acc.pb / acc.coverage / 255),
-    n > 0 ? tap_at(acc, 0 % n) : NO_LAYER,
-    n > 0 ? tap_at(acc, 1 % n) : NO_LAYER,
-    n > 0 ? tap_at(acc, 2 % n) : NO_LAYER,
-    n > 0 ? tap_at(acc, 3 % n) : NO_LAYER,
-    // No neighbour culling at coarse LOD: emit_averaged_box shrinks a box by
-    // its fill fraction, so adjacent coarse boxes generally do not touch and
-    // a hidden-face test would be both wrong and useless.
-    OPEN_BOTTOM_FACES,
-  );
+function to_u8(v: f64): u32 {
+  return Math.max(0, Math.min(255, Math.round(v)));
 }
 
 /**
- * Coarse LOD box-averages every fine column under each `lod_step`-wide XY
- * cell (isotropic — X/Y/Z all scale by the same `lod_step`, never Z alone),
- * binned into `lod_step`-tall Z buckets, terrain and objects summed into
- * one blended color per bucket. This is the mipmap/voxel-cone-tracing
- * screen-footprint-filtering idea, not nearest-neighbor: color mixing
- * across material boundaries is intentional here, and a cell that's partly
- * air renders as a proportionally smaller opaque box (see
- * emit_averaged_box) instead of popping to nothing at a hard occupancy
- * threshold. An object straddling a fixed cell boundary still splits across
- * two smaller boxes rather than one full one — an accepted side effect of a
- * fixed grid, not the old hard-threshold disappearing bug.
+ * Appends one coarse cell's Z buckets to the scratch above, ascending.
+ *
+ * Buckets are created in the order runs are encountered across lod_step^2
+ * fine columns, so they are not sorted by height, and a run set has to be:
+ * chunk_mesher's own neighbour scans stop on the first run starting above
+ * the range they care about. Hence the selection walk rather than a sort —
+ * a cell holds a handful of buckets, bounded by how many bands actually
+ * stack under it.
+ *
+ * Vertically adjacent buckets of the same quantised colour *and the same XY
+ * box* become one run, which is what lets a coarse cliff be one tall box
+ * rather than a stack of one-deep ones. The box has to match too now that it
+ * varies per bucket: stacking two different footprints into one run would
+ * draw whichever one the lower bucket happened to have.
+ */
+function pack_coarse_cell(start: u32, cnt: u32, lod_step: LodStep): void {
+  let open = -1;
+  let last_top = 0;
+  let previous_bz = -0x7fffffff;
+
+  for (let seen = 0; seen < cnt; seen++) {
+    let pick = -1;
+    let pick_bz = 0;
+    for (let i = start; i < start + cnt; i++) {
+      const bz = BUCKETS.get(i).bz;
+      if (bz <= previous_bz) continue;
+      if (pick < 0 || bz < pick_bz) {
+        pick = i;
+        pick_bz = bz;
+      }
+    }
+    if (pick < 0) break;
+    previous_bz = pick_bz;
+
+    const acc = BUCKETS.get(pick);
+    const bucket_lo = pick_bz * lod_step;
+    const bucket_hi = bucket_lo + lod_step - 1;
+    const fill: f64 = Math.min(1, acc.coverage / (lod_step * lod_step * lod_step));
+    coarse_instance_stats.total++;
+    if (fill < LOW_FILL_THRESHOLD) coarse_instance_stats.low_fill++;
+
+    // Cube root, so the box's volume is the fill fraction of the cell's.
+    const linear = Math.cbrt(fill);
+    const sub = linear >= 1 ? 0 : pack_inset(linear);
+    const n = Math.max(1, acc.surfaces);
+    const rgb = (to_u8(acc.sr / n) << 16) | (to_u8(acc.sg / n) << 8) | to_u8(acc.sb / n);
+    const taps = bucket_taps(acc);
+
+    // Only full cells stack. Two shrunken boxes are two boxes with air
+    // between them, which is the whole point of shrinking them.
+    if (
+      sub === 0 && open >= 0 && bucket_lo === last_top + 1 &&
+      CO_RGB.get(open) === rgb && CO_LAYER.get(open) === taps && CO_SUB.get(open) === 0
+    ) {
+      CO_Z1.set(open, bucket_hi);
+      last_top = bucket_hi;
+      continue;
+    }
+    open = CO_Z0.push(bucket_lo);
+    CO_Z1.push(bucket_hi);
+    CO_RGB.push(rgb);
+    CO_LAYER.push(taps);
+    CO_SUB.push(sub);
+    last_top = bucket_hi;
+  }
+}
+
+/**
+ * One isotropic scale and the centring offset that goes with it, packed
+ * `o | s<<8` and used for all three axes.
+ *
+ * Both are fractions of the extent the box would otherwise have had, which
+ * is what makes one packed value serve X, Y and Z: the cell is a cube in
+ * cells, so the same pair centres the box on every axis.
+ */
+function pack_inset(linear: f64): u32 {
+  return (pack_sub_cell_fraction((1 - linear) * 0.5) | (pack_sub_cell_fraction(linear) << 8)) >>> 0;
+}
+
+/**
+ * Coarse LOD, and the whole of what a merged cell is allowed to say.
+ *
+ * A coarse cell is `lod_step^3` fine voxels collapsed into one box, which
+ * throws away everything except three numbers. Those three are the model,
+ * and every question about this tier resolves to which one is being asked:
+ *
+ *   **How much is there → the box's volume.** Occupancy is `coverage /
+ *   lod_step^3`, one scalar, and the box's side is its *cube root*, so the
+ *   box's volume is that fraction of the cell's. Size rather than alpha
+ *   because alpha in a voxel renderer buys a sorting problem to express
+ *   something that is not actually translucent — a quarter-full cell is a
+ *   small solid thing, not a see-through big one.
+ *
+ *   **What it looks like → the average of the surfaces you can see.** Only
+ *   the topmost run of each sub-column contributes (see ZBucketAccum): a
+ *   cell of grass over twenty of rock is grass, because grass is all that
+ *   is visible from above. Worth knowing the limit — "visible" here means
+ *   visible *downward*, so a cliff's side voxels never colour anything.
+ *
+ *   **What it is made of → up to four texture layers, blended.** A separate
+ *   channel from the average colour, and not redundant with it: without it
+ *   a cell spanning grass, road and roof shows whichever it met first.
+ *
+ * Then: **the box is centred in its cell on all three axes.** The lattice
+ * is a cube and the filter is isotropic — X, Y and Z all decimate by
+ * `lod_step` — so the operator commutes with a rotation that swaps two
+ * axes. Mesh a chunk on its side and you get the same chunk on its side.
+ *
+ * Nothing else is expressed and nothing is discarded. There is no occupancy
+ * threshold: a cell keeps shrinking however sparse it gets, so seven VOID
+ * and one red block is one quarter-size red cube, with no alpha, no cull
+ * and no dilation. `LOW_FILL_THRESHOLD` only counts.
+ *
+ * The isotropy costs something real and it is worth knowing what. A surface
+ * has low volumetric fill in every cell it crosses, so flat ground shrinks
+ * too and distant terrain reads as separated cubes rather than a continuous
+ * sheet. That look is the point: a rule that stopped applying to the axis
+ * the data happens to vary least in would not be carrying density any more,
+ * just height — and which axis that is, is a fact about today's camera, not
+ * about voxels.
+ *
+ * Mechanically this is the mipmap/voxel-cone-tracing screen-footprint
+ * filter, not nearest-neighbour: colour mixing across material boundaries
+ * is intentional. An object straddling a fixed cell boundary still splits
+ * across two smaller boxes rather than one full one — an accepted side
+ * effect of a fixed grid, not the old hard-threshold disappearing bug.
  *
  * No per-level pyramid is stored, but no rescanning happens either: every
  * `lod_step` is box-averaged from the same already-scanned `column_runs`
@@ -1025,8 +1209,6 @@ export function bake_chunk_mesh_coarse(set: ColumnRunSet, lod_step: LodStep): Ba
   const res: u32 = CHUNK_CELL_SPAN / lod_step;
   const bucket_base = BUCKETS.len;
   const range_base = CELL_RANGE.len;
-  let vertex_total: u32 = 0;
-  let index_total: u32 = 0;
 
   for (let by: u32 = 0; by < res; by++) {
     for (let bx: u32 = 0; bx < res; bx++) {
@@ -1038,25 +1220,59 @@ export function bake_chunk_mesh_coarse(set: ColumnRunSet, lod_step: LodStep): Ba
           const cx = bx * lod_step + k;
           const col = cy * CHUNK_CELL_SPAN + cx;
           const end = set.start[col + 1];
-          for (let i = set.start[col]; i < end; i++) cnt = accumulate_run(start, cnt, lod_step, set, i);
+          // col + 1 so no sub-column ever carries tag 0, which is what a
+          // freshly allocated bucket holds.
+          for (let i = set.start[col]; i < end; i++) cnt = accumulate_run(start, cnt, lod_step, set, i, col + 1);
         }
       }
       CELL_RANGE.push(start);
       CELL_RANGE.push(cnt);
-      vertex_total += cnt * OPEN_BOTTOM_FACE_CNT * 4;
-      index_total += cnt * OPEN_BOTTOM_FACE_CNT * 6;
     }
   }
 
-  const builder = alloc_builder(vertex_total, index_total);
-  for (let by: u32 = 0; by < res; by++) {
-    for (let bx: u32 = 0; bx < res; bx++) {
-      const ri = range_base + (by * res + bx) * 2;
-      const start = CELL_RANGE.get(ri), cnt = CELL_RANGE.get(ri + 1);
-      for (let i: u32 = 0; i < cnt; i++) emit_averaged_box(builder, bx, by, lod_step, BUCKETS.get(start + i));
-    }
+  // The averaged buckets become a run set of their own, on a res x res grid
+  // whose cells are lod_step fine cells wide, and then go through the same
+  // mesher the finest tier uses. Coarse geometry gets neighbour face culling
+  // and greedy merging for free that way, and distant terrain ends up
+  // speaking the same visual language as near terrain — merged flat surfaces
+  // with silhouette shading — rather than a field of separate boxes.
+  CO_Z0.truncate(0);
+  CO_Z1.truncate(0);
+  CO_RGB.truncate(0);
+  CO_LAYER.truncate(0);
+  CO_SUB.truncate(0);
+  for (let c: u32 = 0; c < res * res; c++) {
+    CO_START[c] = CO_Z0.len;
+    const ri = range_base + c * 2;
+    pack_coarse_cell(CELL_RANGE.get(ri), CELL_RANGE.get(ri + 1), lod_step);
   }
+  CO_START[res * res] = CO_Z0.len;
+
+  const coarse = alloc_column_run_set(CO_Z0.len);
+  coarse.start.set(CO_START.subarray(0, res * res + 1));
+  for (let i: u32 = 0; i < CO_Z0.len; i++) {
+    const rgb = CO_RGB.get(i);
+    coarse.z0[i] = CO_Z0.get(i);
+    coarse.z1[i] = CO_Z1.get(i);
+    coarse.r[i] = (rgb >>> 16) & 255;
+    coarse.g[i] = (rgb >>> 8) & 255;
+    coarse.b[i] = rgb & 255;
+    coarse.layer_taps[i] = CO_LAYER.get(i);
+    coarse.material_class[i] = MaterialClass.LAND;
+    const sub = CO_SUB.get(i);
+    const inset = sub & 255, scale = (sub >>> 8) & 255;
+    coarse.sub_sz[i] = sub === 0 ? SUB_CELL_NONE : scale;
+    coarse.sub_sx[i] = scale;
+    coarse.sub_sy[i] = scale;
+    coarse.sub_ox[i] = inset;
+    coarse.sub_oy[i] = inset;
+    coarse.sub_oz[i] = inset;
+  }
+
   CELL_RANGE.truncate(range_base);
   BUCKETS.truncate(bucket_base);
-  return finish_builder(builder);
+
+  const baked = bake_runs(coarse, res, lod_step);
+  release_column_runs(coarse);
+  return baked;
 }
