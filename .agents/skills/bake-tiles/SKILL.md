@@ -1,6 +1,6 @@
 ---
 name: bake-tiles
-description: Pre-bake terrain tiles from the geo DB into gzipped static objects, verify them, and publish a new version to the tile bucket. Use when the terrain bake pipeline changed, the OSM/DEM source data changed, or the demo needs its tile set (re)built for deployment.
+description: Pre-bake terrain tiles from the geo DB into gzipped static objects, verify them, and publish a new version to the tile bucket. Use when the terrain bake pipeline changed, the Overture/DEM source data changed, or the demo needs its tile set (re)built for deployment.
 ---
 
 # Baking and publishing terrain tiles
@@ -20,10 +20,14 @@ The bake reads the geo database directly, so it must be up and populated:
 docker compose -f infra/docker-compose.yml --env-file .env up -d
 ```
 
-`pixelet-db-geo` must hold `osm_elements`, `osm_coastline_polygons`, and
-`esa_elevation_raster`. If it doesn't, that's an ingestion job, not a bake job —
-see [infra/geo/README.md](../../../infra/geo/README.md). Never `down -v` to "reset"
-it; the volume is several gigabytes of ingested data.
+`pixelet-db-geo` must hold `overture_buildings`, `overture_transportation`,
+`overture_base_land_use`/`overture_base_water`/`overture_base_land`/
+`overture_base_infrastructure`, `osm_coastline_polygons` (still OSM — the
+coarse land/ocean page pre-filter only, see
+[infra/geo/README.md](../../../infra/geo/README.md)), and `esa_elevation_raster`
+(GEDTM30). If it doesn't, that's an ingestion job, not a bake job — see that
+same README. Never `down -v` to "reset" it; the volume is several gigabytes
+of ingested data.
 
 ## Baking
 

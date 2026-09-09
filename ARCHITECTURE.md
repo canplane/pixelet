@@ -66,7 +66,7 @@ Terrain today is Tile-shaped data addressed at Page granularity; objects are Vol
 
 L3 pages are the primary terrain streaming unit, storing terrain's Tile-shaped data. The client requests pages around the current center and keeps terrain in its source-appropriate 2.5D form: dense categorical ground rasters plus a padded elevation raster reconstructed with bicubic sampling.
 
-Each page carries four ground channels rasterized from OSM geometry:
+Each page carries four ground channels rasterized from Overture/OSM geometry (Buildings/Transportation/Base from Overture Maps, coastline from Overture's Base `water` theme via the same OSM-coastline-tool lineage its own coarse land/ocean pre-filter still reads OSM for):
 
 | Channel     | Contents                                            |
 | ----------- | --------------------------------------------------- |
@@ -80,10 +80,10 @@ Sea cells use `SEA_FLAG = 0x80` to distinguish sea from ordinary land while reta
 ## Bake Pipeline
 
 ```text
-OSM/PostGIS rows
+Overture/OSM PostGIS rows
   → XTP decode
-  → osm_adapter (row → feature)
-  → osm_normalizer (classify, rank, assign tags)
+  → overture_adapter / osm_adapter (row → feature)
+  → normalizer (classify, rank, assign tags — policy-parameterized: overture_policy / osm_policy)
   → ground_baker (rasterize geometry into ground channels)
   → encode_terrain (elevation + ground → XTP)
   → compressed HTTP page response
