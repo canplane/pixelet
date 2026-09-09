@@ -1,5 +1,6 @@
 // @pxl/web/modules/camera/store.ts
 
+import { allowed_step } from "./terrain_gate.ts";
 import { create } from "zustand";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -91,6 +92,13 @@ export const useCameraStore = create<CameraStore>((set) => ({
       next.azimuth = norm_azimuth(next.azimuth);
       next.polar = norm_polar(next.polar);
 
+      // As far as the control asked, or as far as terrain allows.
+      const from = state.view_state;
+      const reached = allowed_step(next.dist, next.polar, next.azimuth, from.dist, from.polar, from.azimuth);
+      next.dist = norm_dist(reached.dist);
+      next.azimuth = norm_azimuth(reached.azimuth);
+      next.polar = norm_polar(reached.polar);
+
       const same: boolean = state.view_state.dist === next.dist &&
         state.view_state.azimuth === next.azimuth &&
         state.view_state.polar === next.polar;
@@ -101,7 +109,11 @@ export const useCameraStore = create<CameraStore>((set) => ({
   reset_dist: () =>
     set((state) => {
       const dist: f64 = norm_dist(DEFAULT_DIST);
-      return state.view_state.dist === dist ? state : { view_state: { ...state.view_state, dist } };
+      if (state.view_state.dist === dist) return state;
+      const from = state.view_state;
+      const reached = allowed_step(dist, from.polar, from.azimuth, from.dist, from.polar, from.azimuth);
+      const reached_dist = norm_dist(reached.dist);
+      return from.dist === reached_dist ? state : { view_state: { ...from, dist: reached_dist } };
     }),
   // azimuth-only: "align north" is what both the dedicated compass button
   // and the follow-mode-off action actually mean — resetting
@@ -111,15 +123,28 @@ export const useCameraStore = create<CameraStore>((set) => ({
   reset_azimuth: () =>
     set((state) => {
       const azimuth: f64 = norm_azimuth(DEFAULT_AZIMUTH);
-      return state.view_state.azimuth === azimuth ? state : { view_state: { ...state.view_state, azimuth } };
+      if (state.view_state.azimuth === azimuth) return state;
+      const from = state.view_state;
+      const reached = allowed_step(from.dist, from.polar, azimuth, from.dist, from.polar, from.azimuth);
+      const reached_azimuth = norm_azimuth(reached.azimuth);
+      return from.azimuth === reached_azimuth ? state : { view_state: { ...from, azimuth: reached_azimuth } };
     }),
   reset_view: () =>
-    set({
-      view_state: {
+    set((state) => {
+      const next: ViewState = {
         dist: norm_dist(DEFAULT_DIST),
         azimuth: norm_azimuth(DEFAULT_AZIMUTH),
         polar: norm_polar(DEFAULT_POLAR),
-      },
+      };
+      const from = state.view_state;
+      const reached = allowed_step(next.dist, next.polar, next.azimuth, from.dist, from.polar, from.azimuth);
+      return {
+        view_state: {
+          dist: norm_dist(reached.dist),
+          azimuth: norm_azimuth(reached.azimuth),
+          polar: norm_polar(reached.polar),
+        },
+      };
     }),
 
   is_follow_mode: false,
