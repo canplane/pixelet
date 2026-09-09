@@ -9,6 +9,8 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@
 import { Separator } from "@/shared/ui/shadcn/separator.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
 import { CameraSection } from "./sections/camera_section.tsx";
+import { DisplaySection } from "./sections/display_section.tsx";
+import { EditingSection } from "./sections/editing_section.tsx";
 import { LanguageSection } from "./sections/language_section.tsx";
 import { LightingSection } from "./sections/lighting_section.tsx";
 import { PostFxSection } from "./sections/post_fx_section.tsx";
@@ -32,7 +34,6 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
         side="left"
         hideClose
         className="sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground"
-        overlayClassName="bg-transparent"
         overlayStyle={{ pointerEvents: "none" }}
       >
         <div className="shrink-0 border-b border-border/60" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
@@ -67,9 +68,11 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             <TabsContent value="effects">
               <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
               <Separator />
+              <DisplaySection />
               <CameraSection />
-              <QualitySection />
+              <EditingSection />
               <LightingSection />
+              <QualitySection />
               <PostFxSection />
               {__IS_DEV__ && (
                 <>

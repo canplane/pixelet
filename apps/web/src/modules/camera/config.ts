@@ -47,16 +47,19 @@ export const camera_cfg = {
   },
 
   input: {
-    // ROT_GAIN_POLAR is tuned per-pixel at ROT_GAIN_REF_HEIGHT; input.tsx
-    // normalizes by the current viewport height, so a drag relative to the
-    // screen tilts the same amount on any screen size (a fixed px/degree
-    // rate would feel weaker on a small/mobile viewport). Azimuth has no
-    // fixed gain — it tracks cursor angle around screen center 1:1
-    // (arcball, see do_rotate() in input.tsx). Negative because dy is
-    // positive moving down-screen, and dragging up (dy negative) is the
-    // natural "tilt toward horizon" gesture.
-    ROT_GAIN_POLAR: -0.012,
-    ROT_GAIN_REF_HEIGHT: 1080,
+    // How much of the viewport a vertical drag has to cover to sweep the
+    // whole tilt range. Stated against the screen rather than as a rad/px
+    // rate, because that is the only form comparable to azimuth: azimuth
+    // has no gain at all, it tracks the cursor's angle around screen centre
+    // 1:1 (arcball, see do_rotate() in input.tsx).
+    //
+    // They were far apart. The old fixed rate (-0.012 rad/px at a 1080px
+    // reference) put the entire 90-degree range inside about a tenth of a
+    // screen height — roughly six times azimuth's angular speed for the
+    // same finger travel. Both damp toward their target at the same rate,
+    // so polar's settle after release covered six times the distance and
+    // read as the gesture still being held.
+    TILT_SWEEP_FRACTION: 0.5,
 
     DOLLY_GAIN: 0.0022,
 
