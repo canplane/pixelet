@@ -1,7 +1,7 @@
 // @pxl/api/bake/terrain/pipeline/ground_baker.ts
 
 /**
- * Rasterize normalized OSM features into the four ground channels of the current tile.
+ * Rasterize normalized features into the four ground channels of the current tile.
  *
  * Architectural notes:
  * - input features are interpreted relative to the current L3 page base
@@ -20,7 +20,7 @@ import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { type Ground, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
-import type { OSMFeature } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { Feature } from "@pxl/shared/bake/model/feature.ts";
 
 const PAGE_CELL_SPAN2: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
 
@@ -58,9 +58,9 @@ const SNAP_PX = (x: f64): i32 => Math.floor(x + PX_CENTER);
 
 const CELL_IDX = (x: u32, y: u32): u32 => y * PAGE_CELL_SPAN + x;
 
-const IS_SEA = (f: OSMFeature): boolean => f.extra.is_ocean;
+const IS_SEA = (f: Feature): boolean => f.extra.is_ocean;
 
-export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Ground {
+export function bake_ground(elements: Feature[], has_coast_row: boolean): Ground {
   const ground: Ground = {
     land: new Uint8Array(PAGE_CELL_SPAN2),
     water: new Uint8Array(PAGE_CELL_SPAN2),
@@ -68,8 +68,8 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
     transport: new Uint8Array(PAGE_CELL_SPAN2),
   } as const;
 
-  const sea_feats: OSMFeature[] = elements.filter(IS_SEA);
-  const other_feats: OSMFeature[] = elements.filter((f) => !IS_SEA(f)).sort((a, b) => a.extra.rank - b.extra.rank);
+  const sea_feats: Feature[] = elements.filter(IS_SEA);
+  const other_feats: Feature[] = elements.filter((f) => !IS_SEA(f)).sort((a, b) => a.extra.rank - b.extra.rank);
   const has_sea: boolean = sea_feats.length > 0;
 
   // Inverse sea pass: initialize the land channel with the sea/land base first.
@@ -88,7 +88,7 @@ export function bake_ground(elements: OSMFeature[], has_coast_row: boolean): Gro
       }
     });
   } else if (has_coast_row) {
-    // no sea_feats reached here, but osm_adapter's from_coast_row() did see a
+    // no sea_feats reached here, but coast_adapter.ts's from_coast_row() did see a
     // coastline row for this page (and dropped it — see its covers_page
     // comment): a single land polygon covers the page's full envelope, so
     // painting BARE directly is equivalent to carving it via render_polygon,

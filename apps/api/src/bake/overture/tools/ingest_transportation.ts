@@ -3,14 +3,12 @@
 // Pulls Overture's Transportation theme (`segment` type only — `connector`,
 // pure routing-topology points, skipped: this pipeline only ever rasterizes
 // real geometry, never routes anything) for Korea into
-// overture_transportation, terrain's own Overture-sourced replacement for
-// the road/rail half of osm_elements.
+// overture_transportation.
 //
 // Confirmed live against a real Gangnam-area sample: unlike Buildings,
 // `subtype`/`class` are 100% populated here (subtype: road/rail; class:
 // residential/service/footway/primary/secondary/steps/tertiary/path/
-// subway/cycleway/standard_gauge/...) — this theme's own Korea coverage is
-// solid, no thin-data caveat needed the way Buildings has one. `road`
+// subway/cycleway/standard_gauge/...). `road`
 // (structured lane/width data, when present) is kept as JSONB rather than
 // flattened — overture_policy.ts (terrain/pipeline/) decides how much of it
 // to use; a raw passthrough here means that mapping can change without a

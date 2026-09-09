@@ -7,12 +7,10 @@
 //
 // Land/ocean classification is a coarse pre-filter, cheaper and separate
 // from the live bake path's own fine-grained coastline carving (repository.
-// ts's OVERTURE_COAST_SQL, computed from Overture's ocean data). This still
-// checks osm_coastline_polygons directly (`&&` + ST_Intersects) — kept
-// around specifically for this "does the page touch any land at all"
-// existence test, which a cheap bbox-intersects check answers correctly
-// either way; a page with zero touching land rows is open ocean and gets
-// served by the client's single shared fallback tile instead.
+// ts's OVERTURE_COAST_SQL). Checks overture_base_land directly
+// (`&&` + ST_Intersects) for existence, not the full carve; a page with
+// zero touching land rows is open ocean and gets served by the client's
+// single shared fallback tile instead.
 //
 // Tile bytes come from ../source.ts, the same assembly the live endpoint
 // uses, so a CDN tile and a live-API tile are identical byte for byte.
@@ -58,7 +56,7 @@ const OCEAN_KEY = "_ocean";
 
 const HAS_LAND_SQL = `
   SELECT t.ord, EXISTS (
-    SELECT 1 FROM osm_coastline_polygons c
+    SELECT 1 FROM overture_base_land c
     WHERE c.geom && ST_MakeEnvelope(t.minx, t.miny, t.maxx, t.maxy, 3857)
       AND ST_Intersects(c.geom, ST_MakeEnvelope(t.minx, t.miny, t.maxx, t.maxy, 3857))
   ) AS has_land
@@ -198,7 +196,7 @@ async function classify_land_pages(pool: Pool, candidates: Candidate[]): Promise
 
 /**
  * The source packet an open-ocean page would produce: a flat zero elevation
- * grid, no OSM features, no coastline rows. Synthesised rather than read
+ * grid, no terrain features, no coastline rows. Synthesised rather than read
  * from the DB so the fallback tile is exactly "nothing here but water",
  * independent of whichever far-offshore page happened to get sampled.
  */

@@ -3,14 +3,10 @@
 /**
  * Overture's Places taxonomy (docs.overturemaps.org/schema/reference/places/)
  * has thousands of `categories.primary` values — this maps the common ones
- * to the same category vocabulary poi_theme.ts already keys off (originally
- * OSM's own amenity/shop/tourism values), so the client-side theme table
- * doesn't need to know which provider is behind a given POI. Same
- * "keyed granularly, fall back to a default for anything unlisted rather
- * than guessing" philosophy poi_theme.ts's own top comment already states —
- * an Overture category with no entry here passes through unmapped and
- * resolves to poi_theme.ts's DEFAULT_THEME, exactly like an unrecognized
- * OSM tag value already does.
+ * to the vocabulary poi_theme.ts keys off, so the client-side theme table
+ * doesn't need to know which provider is behind a given POI. An Overture
+ * category with no entry here passes through unmapped and resolves to
+ * poi_theme.ts's DEFAULT_THEME.
  *
  * Deliberately a starting set (the categories this session's own Gangnam/
  * Suwon spot-checks actually turned up plus the obvious common ones), not

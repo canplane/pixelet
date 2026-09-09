@@ -27,10 +27,10 @@ export type CameraSettingsSlice = {
 
   /**
    * Whether the terrain shader paints the STRUCTURE ground channel, i.e.
-   * whether OSM buildings are drawn. The bake writes that channel either way
-   * (see osm_policy.ts's determine_cell_cfg), so this is purely a render
-   * decision. Still false by default; whether that is the right default is
-   * a separate question from where the switch lives.
+   * whether buildings are drawn. The bake writes that channel either way
+   * (see overture_policy.ts's determine_cell_cfg), so this is purely a
+   * render decision. Still false by default; whether that is the right
+   * default is a separate question from where the switch lives.
    */
   show_structures: boolean;
   set_show_structures: (show: boolean) => void;
@@ -40,7 +40,7 @@ export type CameraSettingsSlice = {
    * Whether the eraser tool's "nothing placed here" case (camera/input.tsx's
    * handle_tap) digs into the terrain's own real surface (place_air) instead
    * of no-op'ing the way it always did before this flag existed. Off by
-   * default: the terrain here is real, baked map data (OSM-derived), not a
+   * default: the terrain here is real, baked map data (Overture-derived), not a
    * user's own scratch canvas the way placed objects are — carving into it
    * is a deliberate, opt-in mode, not eraser's default behavior.
    */

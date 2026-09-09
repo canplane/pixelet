@@ -17,7 +17,7 @@ import { immer } from "zustand/middleware/immer";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
 export type PoiStore = {
   poi_map: Map<IVec, POI[]>;

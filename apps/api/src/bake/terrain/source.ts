@@ -30,8 +30,8 @@ export const source_stats = { invalid_ele_shape: 0 };
 
 /**
  * Assembles one page's raw DB source (elevation raster + Overture Buildings/
- * Transportation/Base rows + OSM coastline rows) into the packed tree the
- * bake step consumes.
+ * Transportation/Base/coastline rows) into the packed tree the bake step
+ * consumes.
  *
  * Lives here rather than inside service.ts's closure because the offline
  * pre-bake tool (bake/terrain/tools/bake_tiles.ts) has to produce *byte
@@ -100,7 +100,7 @@ export async function fetch_terrain_source(repo: TerrainRepository, page_idx: IV
 }
 
 /**
- * Raw Overture/OSM/elevation source, baked into client-ready ground channels.
+ * Raw Overture/elevation source, baked into client-ready ground channels.
  */
 export async function fetch_tile(repo: TerrainRepository, page_idx: IVec): Promise<Bytes> {
   const raw: Bytes = await fetch_terrain_source(repo, page_idx);

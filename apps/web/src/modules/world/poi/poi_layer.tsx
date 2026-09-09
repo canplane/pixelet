@@ -29,7 +29,7 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
@@ -170,7 +170,7 @@ function build_poi_badge_canvas(poi: POI): BuiltBillboard {
   return { canvas, logical_w, logical_h, center_y: dot_cy };
 }
 
-/** center.xy (page-local real units, poi_extractor.ts/osm_normalizer.ts)
+/** center.xy (page-local real units, overture_provider.ts)
  * resolved against the page's own global corner — no elevation grounding,
  * unlike poi_anchor below. Used only for the distance ranking in
  * select_nearby_pois: cheap (no per-candidate terrain/tile lookup) since it
@@ -279,10 +279,10 @@ function select_nearby_pois(
 
 /** One POI's own absolute anchor — poi_flat_pos, then grounded to the real
  * terrain surface: center.z is always 0 coming from the bake
- * (osm_normalizer.ts's project_to_local_cell zeroes it deliberately, since a
- * POI's real height was never the bake's concern), so without this a badge
- * would sit at the page's own Z origin instead of floating above wherever
- * the ground actually is. */
+ * (overture_provider.ts zeroes it deliberately, since a POI's real height
+ * was never the bake's concern), so without this a badge would sit at the
+ * page's own Z origin instead of floating above wherever the ground
+ * actually is. */
 function poi_anchor(poi: POI, page_idx: IVec): PVF3 | null {
   const flat = poi_flat_pos(poi, page_idx);
   return with_ele(flat, flat.i, flat.f);

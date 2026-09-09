@@ -11,7 +11,7 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
-import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
+import type { POI } from "@pxl/shared/bake/model/feature.ts";
 import { make_overture_provider } from "@pxl/api/bake/poi/providers/overture_provider.ts";
 import type { PoiProvider } from "@pxl/api/bake/poi/provider.ts";
 
@@ -24,7 +24,8 @@ const PAGE_IDX_PATTERN = /^\d{1,20}$/;
 
 function make_services(provider: PoiProvider) {
   // POI, like terrain, is a pure function of static source data (Overture
-  // Places here, OSM for terrain — different source, same determinism) —
+  // Places here, Overture terrain features there — different tables, same
+  // determinism) —
   // same cacheability reasoning as terrain/service.ts's own tile_cache, a
   // separate cache (own cap/env var) since POI payloads are tiny JSON, not
   // ~256KB binary tiles, and shouldn't compete with that cache's capacity.
