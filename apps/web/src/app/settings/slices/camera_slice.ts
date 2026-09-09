@@ -48,6 +48,19 @@ export type CameraSettingsSlice = {
   set_enable_terrain_carving: (enable: boolean) => void;
   toggle_terrain_carving: () => void;
 
+  /** Whether cube edges bordering open air are darkened, so flat ground
+   * stays seamless and height changes read as a line
+   * (world/render/chunk_material.ts). Strength and width stay dev knobs. */
+  show_edge_shade: boolean;
+  set_show_edge_shade: (show: boolean) => void;
+  toggle_edge_shade: () => void;
+
+  /** Whether procedurally scattered decor is drawn. User-placed decor is
+   * unaffected — that is the player's own content, like a placed cube. */
+  show_decor: boolean;
+  set_show_decor: (show: boolean) => void;
+  toggle_show_decor: () => void;
+
   /**
    * What terrain does to the camera (camera/terrain_gate.ts).
    *
@@ -90,6 +103,14 @@ export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [],
   enable_terrain_carving: false,
   set_enable_terrain_carving: (enable_terrain_carving) => set({ enable_terrain_carving }),
   toggle_terrain_carving: () => set((state) => ({ enable_terrain_carving: !state.enable_terrain_carving })),
+
+  show_edge_shade: true,
+  set_show_edge_shade: (show_edge_shade) => set({ show_edge_shade }),
+  toggle_edge_shade: () => set((state) => ({ show_edge_shade: !state.show_edge_shade })),
+
+  show_decor: true,
+  set_show_decor: (show_decor) => set({ show_decor }),
+  toggle_show_decor: () => set((state) => ({ show_decor: !state.show_decor })),
 
   camera_terrain: "stop",
   set_camera_terrain: (camera_terrain) => set({ camera_terrain }),

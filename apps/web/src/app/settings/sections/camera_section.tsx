@@ -25,6 +25,10 @@ export function CameraSection() {
 
   const lock_camera_tilt = useSettingsStore((state) => state.lock_camera_tilt);
   const toggle_lock_camera_tilt = useSettingsStore((state) => state.toggle_lock_camera_tilt);
+  const show_edge_shade = useSettingsStore((state) => state.show_edge_shade);
+  const toggle_edge_shade = useSettingsStore((state) => state.toggle_edge_shade);
+  const show_decor = useSettingsStore((state) => state.show_decor);
+  const toggle_show_decor = useSettingsStore((state) => state.toggle_show_decor);
   const camera_terrain = useSettingsStore((state) => state.camera_terrain);
   const set_camera_terrain = useSettingsStore((state) => state.set_camera_terrain);
 
@@ -48,6 +52,12 @@ export function CameraSection() {
         description={t("settings.camera.lock_tilt.description")}
         active={lock_camera_tilt}
         on_toggle={toggle_lock_camera_tilt}
+      />
+      <SettingRow
+        label={t("settings.camera.edge_shade.label")}
+        description={t("settings.camera.edge_shade.description")}
+        active={show_edge_shade}
+        on_toggle={toggle_edge_shade}
       />
       {
         /* Grouped as radios rather than switches: one answer to "what does
@@ -84,6 +94,12 @@ export function CameraSection() {
         description={t("settings.camera.show_poi.description")}
         active={show_poi}
         on_toggle={toggle_show_poi}
+      />
+      <SettingRow
+        label={t("settings.camera.show_decor.label")}
+        description={t("settings.camera.show_decor.description")}
+        active={show_decor}
+        on_toggle={toggle_show_decor}
       />
       {__IS_DEV__ && (
         <SettingRow
