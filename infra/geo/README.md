@@ -17,7 +17,7 @@ Data is managed across three separate pipelines according to its nature. All thr
 
 | Feature         | **OSM Features (Vector)**                                        | **ESA Elevation (Raster)**                | **OSM Coastline (Vector)**                |
 | :-------------- | :--------------------------------------------------------------- | :---------------------------------------- | :---------------------------------------- |
-| **Source**      | OpenStreetMap (PBF)                                              | Copernicus GLO-30 (GeoTIFF)               | OSM Coastline (Water Polygons)            |
+| **Source**      | OpenStreetMap (PBF)                                              | GEDTM30 (Cloud-Optimized GeoTIFF)         | OSM Coastline (Water Polygons)            |
 | **Directory**   | `./osm-features/`                                                | `./esa-elevation/`                        | `./osm-coastline/`                        |
 | **Raw Data**    | `./osm-features/region/[CODE]/raw/*.osm.pbf`                     | `./esa-elevation/region/[CODE]/raw/*.tif` | `./osm-coastline/region/global/raw/*.shp` |
 | **Main Table**  | 1. `osm_elements` **(Primary)**<br>2. `osm_roads` **(Reserved)** | `esa_elevation_raster`                    | `osm_coastline_polygons` **(Primary)**    |
@@ -86,7 +86,7 @@ Each pipeline's `metadata.json` lists the exact paths, and its `acquisition` blo
 | :------------ | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
 | OSM Features  | **yes** — the script curls it if missing | [Geofabrik South Korea extract](https://download.geofabrik.de/asia/south-korea-latest.osm.pbf)                |
 | OSM Coastline | no — download and unzip manually         | [`land-polygons-split-3857.zip`](https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip)      |
-| ESA Elevation | no — request each tile manually          | [OpenTopography, Copernicus GLO-30](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3) |
+| ESA Elevation | **yes** — the script crops it directly   | [OpenGeoHub/OpenLandMap, GEDTM30 v1.2](https://codeberg.org/openlandmap/GEDTM30)                               |
 
 ##### OSM Features (automated)
 
@@ -107,24 +107,13 @@ The result must be `region/global/raw/land-polygons-split-3857/land_polygons.shp
 
 This is the **split** version (large polygons pre-split), not the plain one — it is what the coastline/land classification is tuned for.
 
-##### ESA Elevation (manual, and the fiddly one)
+##### ESA Elevation (automated)
 
-`provider.url` is an interactive portal page, not a file. Do **not** rely on the script's curl fallback here: it would happily save that HTML page under a `.tif` name, exit 0, and fail confusingly later inside GDAL — and since all four entries share one URL, you would get four identical HTML files with four different GeoTIFF names.
+Nothing to do. `provider.url` in `metadata.json` is a real, directly fetchable Cloud-Optimized GeoTIFF (GEDTM30 v1.2's own single global file, not per-region tiles and not an interactive portal page like the GLO-30 source this replaced) — `setup-esa-elevation.sh` crops each region's own `bbox_4326` straight out of it over HTTP range requests (`gdalwarp -te ... /vsicurl/<url>`), with no raw-file staging step.
 
-Request four separate rasters from the OpenTopography portal, selecting **Copernicus GLO-30** and entering each bounding box. `metadata.json`'s `coverage[]` block gives the exact boxes and what each one is for:
+GEDTM30 is a bare-earth model (fuses GLO-30 + ALOS World 3D with real ICESat-2/GEDI laser-altimetry returns via ML), unlike GLO-30's own surface model — building/canopy height no longer bakes into the ground elevation raster. Confirmed live: sampling this table at Lotte World Tower's own coordinates (a 555 m building) returns ~19.6 m, Seoul's real ground elevation, not the tower's rooftop height.
 
-| Save as                              | Bounding box (EPSG:4326) | Covers               |
-| :----------------------------------- | :----------------------- | :------------------- |
-| `GLO30_KOR_W125E130_S34N39_4326.tif` | W125 E130 S34 N39        | mainland South Korea |
-| `GLO30_KOR_W126E127_S33N34_4326.tif` | W126 E127 S33 N34        | Jeju                 |
-| `GLO30_KOR_W124E125_S37N39_4326.tif` | W124 E125 S37 N39        | far western islands  |
-| `GLO30_KOR_W130E132_S37N38_4326.tif` | W130 E132 S37 N38        | Ulleungdo, Dokdo     |
-
-Save each into `region/KR/raw/` under exactly the name above — the script derives the warped filename by substituting `4326` with `3857`, so it depends on that naming.
-
-OpenTopography also exposes a direct API (`portal.opentopography.org/API/globaldem?demtype=COP30&south=&north=&west=&east=&outputFormat=GTiff`) which would automate this, but it requires a free API key and currently returns `401` without one. If you register for a key, that is the route to automate.
-
-> **What this coverage actually means.** These four boxes do not tile the full 124–132°E / 33–39°N rectangle, but the ingestion pipeline builds a VRT spanning their union bounding box, so the mosaic _appears_ to cover the whole rectangle — the gaps are filled with zeros that are indistinguishable from real sea-level data downstream. Real elevation exists only over the four boxes. Anywhere else inside the bbox (Japan, most of North Korea, China) bakes as flat terrain. That is fine for a South Korea demo and is why the boxes were chosen this way, but it is not a property the data announces about itself.
+Coverage is one bbox per region (`metadata.json`'s own `bbox_4326`, not a `coverage[]` list of separate tiles the way GLO-30 needed) — real elevation exists only inside that rectangle; nothing outside `region_code: KR`'s own bbox is populated.
 
 #### 3. Ingest each layer (order doesn't matter)
 
@@ -180,16 +169,14 @@ The internal mechanics of each pipeline. Refer to this section for debugging and
 - Drops the existing `esa_elevation_raster` and `esa_elevation_catalog`.
 - Injects `init/01_esa_elevation_schema.sql` to create the catalog structure. (The raster table itself is managed automatically by the `raster2pgsql` ingestion tool.)
 
-#### Step 2: Reprojection (GDAL Warp)
+#### Step 2: Crop + Reprojection (GDAL Warp)
 
-- Runs `gdalwarp` inside the Docker container (`/data`) environment.
-- Reprojects the raw GeoTIFF (EPSG:4326) into the system standard, **EPSG:3857**, applying `DEFLATE` compression for efficient storage.
+- Runs `gdalwarp` inside the Docker container (`/data`) environment, reading directly from the remote COG (`/vsicurl/<provider.url>`) — no local raw-file download.
+- Crops to each region's own `bbox_4326` (`-te`, source CRS) while reprojecting into the system standard, **EPSG:3857**, applying `DEFLATE` compression.
 
-#### Step 3: Indexing & Ingestion (Hybrid Workflow)
+#### Step 3: Ingestion
 
-- **Path Mapping**: Runs `gdalbuildvrt` with a path substitution list for the Docker container (`/data`) to build a virtual raster index.
-- **Path Symmetry**: Rewrites (via `sed`) the virtual paths inside the generated VRT back to **local host paths**, so local tools can locate the actual files.
-- **Stream Ingestion**: Pipes the local `raster2pgsql` directly into Docker's `psql` for ingestion.
+- Pipes the local `raster2pgsql` directly into Docker's `psql` for ingestion, over every region's own warped file at once (one row per file — no VRT mosaic needed, each region's crop is already one continuous raster).
   - `-t 256x256`: matches the page size required for the 3D voxel grid computation to be optimal.
 
 #### Step 4: Finalization & Catalog Update
@@ -281,7 +268,7 @@ Both external data sources this pipeline ingests require a specific attribution 
 | Source                                                | License                                                                                                                                         | Required notice                                                                                                                                                                                                                                                                                                                                                                        |
 | :---------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | OpenStreetMap (terrain/structure features, coastline) | ODbL                                                                                                                                            | `© OpenStreetMap contributors` — the "historical form" explicitly listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). POI and reverse geocoding no longer come from this pipeline (or from live Nominatim) as of 2026-09-08 — see `apps/api/src/bake/overture/`'s own attribution note instead.                  |
-| Copernicus WorldDEM-30 (`esa-elevation/`)             | [License-COPDEM-30](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Data/DEM/resources/license/License-COPDEM-30.pdf), Article 6 | Since this pipeline reprojects (`gdalwarp`) and bakes the raw DEM — i.e. the data is adapted/modified, not redistributed as-is — Article 6(b)'s modified-data notice applies, quoted verbatim: `produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved` |
+| GEDTM30 (`esa-elevation/`)                            | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)                                                                                      | Since this pipeline crops+reprojects (`gdalwarp`) the raw DTM — i.e. the data is adapted, not redistributed as-is — CC-BY 4.0 requires noting changes alongside attribution: `Contains modified GEDTM30 data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ 13:e19673.` |
 
 ## 7. Security & Sensitive Information
 

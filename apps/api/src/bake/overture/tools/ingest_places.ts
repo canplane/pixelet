@@ -14,7 +14,7 @@
 // addresses/sources/...), a poor fit for ogr2ogr's flat-field mapping
 // (built for OSM's flat tag=value shape and Shapefile's flat attribute
 // tables) — and this pipeline is meant to stay structurally independent of
-// the OSM/GLO-30 one POI used to depend on, not layered on top of it (see
+// the terrain pipeline POI used to depend on, not layered on top of it (see
 // discussions/20260908-overture-poi-adoption.md).
 //
 // Attribution: Places is CDLA-Permissive-2.0, which (unlike OSM's ODbL)

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 
-// OSM/Copernicus/Overture attribution text — hardcoded rather than run through t(): required (OSM, Copernicus) or shown as a courtesy (Overture's Places theme, CDLA-Permissive-2.0 imposes no attribution requirement) verbatim regardless of UI language.
+// OSM/GEDTM30/Overture attribution text — hardcoded rather than run through t(): required (OSM, GEDTM30's CC-BY 4.0) or shown as a courtesy (Overture's Places theme, CDLA-Permissive-2.0 imposes no attribution requirement) verbatim regardless of UI language.
 export function AttributionSection() {
   const { t } = useTranslation();
   return (
@@ -24,16 +24,17 @@ export function AttributionSection() {
           contributors
         </span>
         <span>
-          produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under{" "}
+          Contains modified{" "}
           <a
-            href="https://www.copernicus.eu/en"
+            href="https://doi.org/10.5281/zenodo.15689805"
             target="_blank"
             rel="noreferrer"
             className="underline hover:text-foreground"
           >
-            COPERNICUS
+            GEDTM30
           </a>{" "}
-          by the European Union and ESA; all rights reserved
+          data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ
+          13:e19673, CC-BY 4.0
         </span>
         <span>
           Places data ©{" "}

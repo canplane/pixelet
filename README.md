@@ -6,7 +6,7 @@
 
 _Started on December 15, 2025._
 
-**pixelet** is a location-based spatial world built over real-world geodata ([OpenStreetMap](https://www.openstreetmap.org/) + [Copernicus GLO-30](https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
+**pixelet** is a location-based spatial world built over real-world geodata ([OpenStreetMap](https://www.openstreetmap.org/) + [GEDTM30](https://doi.org/10.5281/zenodo.15689805) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
 
 <img alt="Voxel objects built on real-world terrain" src=".github/assets/screenshot.png" height="480">
 
@@ -55,7 +55,7 @@ The web app uses Vite as its bundling/build entry; the api runs directly under D
 | API                 | Hono                                                |
 | 3D Rendering        | Three.js + React Three Fiber                        |
 | Database            | PostgreSQL (main + geographic/PostGIS)              |
-| Geodata             | OpenStreetMap (OSM) + Copernicus GLO-30 (elevation) |
+| Geodata             | OpenStreetMap (OSM) + GEDTM30 (elevation)           |
 
 Two more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3) and a typed-array wire protocol (XTP) for terrain transport. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
 
