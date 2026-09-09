@@ -49,7 +49,7 @@ export type Env = {
 const PREFIX = "/tiles/";
 
 /**
- * Object keys this Worker is willing to ask R2 for. Two shapes:
+ * Object keys this Worker is willing to ask R2 for. Three shapes:
  *
  * - `<version>/<page_idx>`, plus the one shared `<version>/_ocean` tile —
  *   terrain, unchanged since this bucket held only terrain. No type prefix
@@ -60,16 +60,20 @@ const PREFIX = "/tiles/";
  *   POI object means "no POI on this page", which poi/repository.ts resolves
  *   to `[]` directly, not a shared fallback object this Worker would need to
  *   know about.
+ * - `geocode/<version>/<page_idx>` — apps/api/src/bake/geocode/tools/
+ *   bake_geocode_tiles.ts's own sibling prefix, same no-fallback shape as
+ *   POI (a missing object means "outside Overture's Divisions coverage",
+ *   geocode/repository.ts resolves that to `null` directly).
  *
  * page_idx is an L3 index printed as a decimal BigInt (see tile_repository.ts/
- * poi/repository.ts), so it can be negative; the version segment is whatever
- * the bake wrote as its output directory's last path component (`v1` by
- * default), kept permissive enough to survive a rename. `poi` itself is a
- * literal, not a permissive segment — unlike the version, an unknown type
- * prefix isn't a rename to allow for, it's a new bake target this Worker
- * needs its own line for (this stayed a plain literal rather than growing
- * into `(?:poi|elevation|…)` for the one type there's actually a bake tool
- * for; add to the alternation when a second one ships, not before).
+ * poi/repository.ts/geocode/repository.ts), so it can be negative; the
+ * version segment is whatever the bake wrote as its output directory's last
+ * path component (`v1` by default), kept permissive enough to survive a
+ * rename. `poi`/`geocode` themselves are literals, not a permissive segment —
+ * unlike the version, an unknown type prefix isn't a rename to allow for,
+ * it's a new bake target this Worker needs its own line for (this stayed a
+ * plain alternation rather than a generic segment for the two types there
+ * are actually bake tools for; add to it when a third one ships, not before).
  *
  * This exists for cost, not correctness. A miss is still a billed R2 class-B
  * operation, so without it anyone can walk `/tiles/<anything>` and charge
@@ -78,7 +82,7 @@ const PREFIX = "/tiles/";
  * It is not rate limiting and does not pretend to be — that needs WAF rules,
  * which need a real zone rather than a workers.dev hostname.
  */
-const KEY_RE = /^(?:poi\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20}))$/;
+const KEY_RE = /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20}))$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

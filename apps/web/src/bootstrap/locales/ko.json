@@ -22,6 +22,10 @@
       "terrain_carving": {
         "label": "지형 파내기",
         "description": "아무것도 놓여있지 않은 곳에서 지우개로 실제 지형을 한 칸씩 파낼 수 있게 합니다."
+      },
+      "show_poi": {
+        "label": "장소 표시",
+        "description": "지도 위에 주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
       }
     },
     "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍이 발생하면 HIGH 항목부터 해제해 주세요.",
@@ -88,7 +92,7 @@
       "demo_notice": "본 서비스는 데모로, 예고 없이 데이터가 사라지거나 제공이 중단될 수 있습니다.",
       "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
       "storage_notice": "배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
-      "location_notice": "지역명은 OSM Nominatim을 통해 조회하며, 사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
+      "location_notice": "지역명은 외부 서비스 조회 없이 미리 구워둔 로컬 데이터(Overture Maps)에서 가져오며, 사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
       "character_notice": "캐릭터 커스터마이징은 실험적 기능입니다. CC0 라이선스의 <kenney>Kenney</kenney> 에셋 팩이 적용됩니다."
     },
     "attribution": {
@@ -266,6 +270,15 @@
     },
     "sensors": {
       "enable": "위치·방향 센서 권한 요청"
+    },
+    "search": {
+      "trigger_aria_label": "장소 검색",
+      "placeholder": "장소 검색...",
+      "clear_aria_label": "검색어 지우기",
+      "loading": "검색 중...",
+      "no_results": "검색 결과 없음",
+      "section_areas": "지역",
+      "section_places": "장소"
     }
   }
 }

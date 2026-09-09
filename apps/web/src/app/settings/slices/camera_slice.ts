@@ -45,6 +45,16 @@ export type CameraSettingsSlice = {
   enable_terrain_carving: boolean;
   set_enable_terrain_carving: (enable: boolean) => void;
   toggle_terrain_carving: () => void;
+
+  /** Whether poi_layer.tsx's PoiLayer renders anything at all — a plain
+   * visibility switch on lightweight billboard overlays, not a rendering-
+   * cost tradeoff the way show_structures is (that one gates a baked
+   * mesh channel), so it needs no deeper wiring than an early return.
+   * Defaults to true: POI badges are core to reading the map, not an
+   * opt-in extra. */
+  show_poi: boolean;
+  set_show_poi: (show: boolean) => void;
+  toggle_show_poi: () => void;
 };
 
 export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [], [], CameraSettingsSlice> = (set) => ({
@@ -63,4 +73,8 @@ export const create_camera_settings_slice: StateCreator<CameraSettingsSlice, [],
   enable_terrain_carving: false,
   set_enable_terrain_carving: (enable_terrain_carving) => set({ enable_terrain_carving }),
   toggle_terrain_carving: () => set((state) => ({ enable_terrain_carving: !state.enable_terrain_carving })),
+
+  show_poi: true,
+  set_show_poi: (show_poi) => set({ show_poi }),
+  toggle_show_poi: () => set((state) => ({ show_poi: !state.show_poi })),
 });

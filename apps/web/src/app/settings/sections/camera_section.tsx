@@ -35,6 +35,9 @@ export function CameraSection() {
   const enable_terrain_carving = useSettingsStore((state) => state.enable_terrain_carving);
   const toggle_terrain_carving = useSettingsStore((state) => state.toggle_terrain_carving);
 
+  const show_poi = useSettingsStore((state) => state.show_poi);
+  const toggle_show_poi = useSettingsStore((state) => state.toggle_show_poi);
+
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle icon={Move3d}>{t("settings.camera.section_title")}</SectionTitle>
@@ -49,6 +52,12 @@ export function CameraSection() {
         description={t("settings.camera.terrain_carving.description")}
         active={enable_terrain_carving}
         on_toggle={toggle_terrain_carving}
+      />
+      <SettingRow
+        label={t("settings.camera.show_poi.label")}
+        description={t("settings.camera.show_poi.description")}
+        active={show_poi}
+        on_toggle={toggle_show_poi}
       />
       {__IS_DEV__ && (
         <SettingRow

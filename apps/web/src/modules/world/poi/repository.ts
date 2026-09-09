@@ -15,9 +15,10 @@ import { HAS_STATIC_POI, POI_TILE_BASE_URL } from "@/lib/env/config.ts";
  * so a 404 (static) resolves straight to `[]` with no extra round trip.
  *
  * Static and live are supposed to agree byte-for-semantics (both go through
- * providers/osm_provider.ts's own PoiProvider — see provider.ts), so which
- * one serves a given request is purely a deployment concern, not something
- * either the client or the bake tool needs to reconcile on its own.
+ * providers/overture_provider.ts's own PoiProvider — see provider.ts), so
+ * which one serves a given request is purely a deployment concern, not
+ * something either the client or the bake tool needs to reconcile on its
+ * own.
  */
 function poi_url(key: string): string {
   return HAS_STATIC_POI ? `${POI_TILE_BASE_URL}/${key}` : `/api/world/poi/${key}`;

@@ -23,8 +23,10 @@ declare global {
    * /api route. */
   const __POI_TILE_BASE_URL__: string;
 
-  /** Reverse-geocoding origin, e.g. "https://nominatim.openstreetmap.org". */
-  const __GEOCODE_BASE_URL__: string;
+  /** Same as __POI_TILE_BASE_URL__, for the pre-baked reverse-geocode
+   * label set — a sibling prefix (e.g. ".../tiles/geocode/v1"). Empty
+   * string => fall back to the live /api route. */
+  const __GEOCODE_TILE_BASE_URL__: string;
 
   /** Build timestamp, ISO-8601 UTC. Changes every build by construction. */
   const __BUILD_TIME__: string;
