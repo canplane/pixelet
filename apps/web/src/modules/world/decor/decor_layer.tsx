@@ -325,86 +325,13 @@ export function build_decor_instances(
   return by_variant;
 }
 
-export type DecorVariantMeshProps = {
-  geometry: THREE.BufferGeometry;
-  material: THREE.MeshStandardMaterial;
-  instances: ModelInstanceTransformList;
-  /** Which half of chunk_stage.tsx's own primary/secondary LOD blend pair
-   * this mesh is (2026-09-06) — "secondary" starts invisible and only shows
-   * once the shared registry below says so; see this file's own
-   * DECOR_DENSITY_BY_LOD_STEP doc comment for why decor never needed
-   * per-vertex blend granularity the way cube content's own a_visible does. */
-  role: ChunkLodRole;
-  /** Same registry chunk_stage.tsx's own ChunkMesh registers into — one
-   * shared decision (render/lod_visibility.ts's apply_visibility, driven by
-   * chunk_stage.tsx's own recheck()) flips both a chunk's cube content and
-   * its decor between LOD tiers together, not two independently-timed
-   * transitions. */
-  registry: ChunkMeshRegistry;
-};
-
-/** One real, non-instanced THREE.Mesh per (chunk, variant) pair with at
- * least one instance — every instance's own real, separately-transformed
- * geometry baked directly into one merged buffer (instanced_model.ts's own
- * bake_decor_instances), replaced wholesale on every change rather than
- * mutated in place, same reasoning chunk_stage.tsx's own ChunkMesh replaces
- * its geometry outright on rebuild: this chunk's own instance count for a
- * variant can grow or shrink between renders (a placed/removed object
- * flipping candidates back in or out), and a merged buffer's size is fixed
- * at creation. Baking real vertex data instead of InstancedMesh's shared
- * geometry is what lets this variant's own tree model bake into the exact
- * same "one merged per-chunk buffer" model chunk_mesher.ts's own cube bake
- * uses — see this file's own top doc comment. */
-export const DecorVariantMesh = memo(({ geometry, material, instances, role, registry }: DecorVariantMeshProps) => {
-  const mesh = useMemo(() => {
-    const merged = bake_decor_instances(geometry, instances);
-    const m = new THREE.Mesh(merged ?? new THREE.BufferGeometry(), material);
-    // Never set before now — decor didn't cast or receive shadows at all
-    // regardless of show_shadow_map, unlike chunk_stage.tsx's own terrain/
-    // objects mesh which has always set both.
-    m.castShadow = true;
-    m.receiveShadow = true;
-    return m;
-  }, [geometry, material, instances]);
-
-  useEffect(() => {
-    return () => mesh.geometry.dispose();
-  }, [mesh]);
-
-  // decor_hit.ts's own registry, not this mesh's own React lifecycle alone:
-  // camera/input.tsx's update_hover() needs to raycast against every
-  // currently-mounted decor mesh from outside the render tree. Re-registers
-  // (fresh mesh+instances) on every rebuild, matching mesh's own dependency
-  // list above — a stale entry would map a real hit's faceIndex against an
-  // instances array that no longer corresponds to the live geometry.
-  // decor_hit.ts's own raycast_decor skips a registered-but-invisible mesh
-  // itself (THREE.Raycaster doesn't honor `.visible` on its own), so a
-  // hidden half of a blend pair registering here is harmless.
-  useEffect(() => {
-    return register_decor_mesh(mesh, instances);
-  }, [mesh, instances]);
-
-  // render/lod_visibility.ts's shared registry: sets this mesh's own default
-  // visibility (primary starts shown, secondary starts hidden — the sane
-  // guess before chunk_stage.tsx's own recheck() runs its first real
-  // decision) and lets that shared decision flip `mesh.visible` directly,
-  // same mechanism ChunkMesh uses for cube content, just via a plain
-  // Object3D flag instead of a per-vertex attribute (see lod_visibility.ts's
-  // own top doc comment for why that's the right level of granularity here).
-  // useLayoutEffect, not useEffect, for the same reason ChunkMesh's own
-  // mount effect needs it: without it, a freshly created secondary mesh
-  // would render at its THREE.Mesh default (visible = true) for one frame
-  // before this corrects it.
-  useLayoutEffect(() => {
-    mesh.visible = role === "primary";
-    const mounted: MountedLodMesh = { kind: "decor", mesh, role };
-    registry.meshes.add(mounted);
-    return () => void registry.meshes.delete(mounted);
-  }, [mesh, role, registry]);
-
-  return <primitive object={mesh} />;
-});
-DecorVariantMesh.displayName = "DecorVariantMesh";
+/* DecorVariantMesh lived here — one React component per (chunk, bundle,
+ * variant, role), thousands live, whose whole body was a useMemo owning a
+ * THREE.Mesh and a <primitive> rendering it. chunk_node.ts attaches those
+ * meshes directly now (attach_decor), for the same reason the cube meshes
+ * moved: a component that only owns a scene object buys nothing and costs a
+ * deferred mount. bake_decor_instances and register_decor_mesh, the two
+ * things it actually called, are unchanged and now called from there. */
 
 export type DecorBundleAssets = {
   bundle: DecorKindBundle;

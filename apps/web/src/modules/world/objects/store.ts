@@ -449,6 +449,28 @@ export function get_placed_object(id: string): OccupiedEntry | null {
   return objects_by_cell.get(parsed.key)?.find((o) => o.id === id) ?? null;
 }
 
+/**
+ * The same two revisions as the hooks below, for a caller that is not a
+ * React component — chunk_node.ts owns its chunk imperatively and needs to
+ * react to a placement without a render to hang a subscription on. Same
+ * listener sets, so a hook and a node watching the same column stay in step.
+ */
+export function object_l2_column_revision(l2_key: string): number {
+  return l2_column_revisions.get(l2_key) ?? 0;
+}
+
+export function subscribe_object_l2_column(l2_key: string, on_change: () => void): () => void {
+  return subscribe(l2_column_listeners, l2_key, on_change);
+}
+
+export function decor_l2_column_revision(l2_key: string): number {
+  return decor_l2_column_revisions.get(l2_key) ?? 0;
+}
+
+export function subscribe_decor_l2_column(l2_key: string, on_change: () => void): () => void {
+  return subscribe(decor_l2_column_listeners, l2_key, on_change);
+}
+
 /** One renderer L2 column subscribes to one primitive revision — cube
  * content only (see l2_column_revisions's own doc comment). A decor-only
  * change never bumps this. */
