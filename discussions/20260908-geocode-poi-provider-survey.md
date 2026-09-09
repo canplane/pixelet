@@ -103,14 +103,16 @@ Discussion only — no code changed. Numbers here are a starting point for a
 real decision, not something to build against without re-confirming the
 flagged rows.
 
-**Superseded (same day) for POI specifically** by
+**Superseded (same day)** by
 [20260908-overture-poi-adoption.md](./20260908-overture-poi-adoption.md):
 Overture Maps turned up mid-thread as a fifth option this survey didn't
-originally cover, and measured out ahead of every provider above for POI —
-its Places theme is licensed clean (no Google/Naver/Kakao-style display or
+originally cover, and measured out ahead of every provider above — its
+Places theme is licensed clean (no Google/Naver/Kakao-style display or
 storage restrictions) and came back ~5x denser than OSM in two different
-real Korean bboxes. The reverse-geocoding recommendation above (bake from
-OSM, same as terrain) and the Google/Naver/Kakao/government findings
-themselves are unaffected and still stand — only "what backs POI" changed.
+real Korean bboxes, for POI. That same document also moved reverse
+geocoding onto Overture's Divisions theme, not the "bake from OSM, same as
+terrain" recommendation this survey made below — that recommendation does
+NOT still stand. The Google/Naver/Kakao/government pricing/policy findings
+themselves are unaffected.
 
 Sources: [Google Geocoding API usage & billing](https://developers.google.com/maps/documentation/geocoding/usage-and-billing) · [Google Places API policies](https://developers.google.com/maps/documentation/places/web-service/policies) · [Google Maps Platform pricing](https://mapsplatform.google.com/pricing/) · [NAVER Cloud Platform Maps](https://www.ncloud.com/product/applicationService/maps) · [Kakao Local API dev guide](https://developers.kakao.com/docs/latest/ko/local/dev-guide) · [Kakao DevTalk — local API storage policy threads](https://devtalk.kakao.com/t/api/150800) · [VWorld Geocoder API 2.0 reference](https://www.vworld.kr/dev/v4dv_geocoderguide2_s001.do) · [공공데이터포털 — 국토교통부 지오코더 API](https://www.data.go.kr/data/15101106/openapi.do) · [주소기반산업지원서비스 (juso.go.kr)](https://www.juso.go.kr/addrlink/main.do)

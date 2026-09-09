@@ -34,8 +34,7 @@ function parse_near(raw: string | undefined): { lon: number; lat: number } | und
 export function register(router: Hono, resrc: AppResources): void {
   const provider: SearchProvider = make_overture_search_provider(resrc.geo_pool);
 
-  // Under /api because that is the one prefix the relays forward — see
-  // infra/prod/README.md. A bare path is unreachable in production.
+  // Under /api: the one prefix the relays forward (infra/README.md).
   router.get("/api/search", async (c) => {
     const q = (c.req.query("q") ?? "").trim();
     if (q.length < MIN_QUERY_LEN || q.length > MAX_QUERY_LEN) {

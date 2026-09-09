@@ -19,7 +19,7 @@
 //   deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts [flags]
 //
 // Flags:
-//   --out <dir>          output directory (default ./out/terrain/v1)
+//   --out <dir>          output directory (default ./out/terrain/<published version>)
 //   --concurrency <n>    parallel bakes (default 8, match DB_POOL_SIZE)
 //   --limit <n>          stop after n land tiles (smoke test)
 //   --force              re-bake tiles that already exist on disk
@@ -43,9 +43,10 @@ import { TerrainRepository } from "../repository.ts";
 import { fetch_tile, source_stats } from "../source.ts";
 import { exists, fmt_bytes, fmt_dur, get_git_sha, gzip, read_source_catalogs } from "@pxl/api/bake/bake_util.ts";
 import * as env from "@/lib/env/mod.ts";
+import { PUBLISHED_VERSION } from "@pxl/shared/bake/published.ts";
 
-// Current esa_elevation_raster coverage bbox — confirmed via
-// `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM esa_elevation_raster`.
+// Current elevation_raster coverage bbox — confirmed via
+// `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM elevation_raster`.
 const SW: [lng: number, lat: number] = [123.9998611, 33.000244913560735];
 const NE: [lng: number, lat: number] = [131.9997935265517, 39.000138899999996];
 
@@ -77,7 +78,7 @@ type Args = {
 };
 
 function parse_args(argv: string[]): Args {
-  const args: Args = { out: "./out/terrain/v1", concurrency: 8, limit: null, force: false, reclassify: false };
+  const args: Args = { out: `./out/terrain/${PUBLISHED_VERSION.terrain}`, concurrency: 8, limit: null, force: false, reclassify: false };
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];

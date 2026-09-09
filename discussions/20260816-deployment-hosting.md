@@ -3,6 +3,12 @@
 **2026-08-16** — how the demo gets deployed without a server, what it costs, and
 which parts of the current architecture had to change to make that true.
 
+> Mechanical details below (table names, route paths, env vars like
+> `VITE_TILE_BASE_URL`) reflect this doc's own date and have since moved —
+> `apps/web/src/lib/env/routes.ts` and `infra/README.md` are current. The
+> reasoning (pre-baked tiles, object storage, one-Worker-one-origin) still
+> holds; this note exists so the paths below aren't mistaken for current.
+
 ---
 
 ## The problem this started from
@@ -439,6 +445,12 @@ practical route, setting `content-encoding: gzip`,
 the whole prefix.
 
 ## Deliberately not addressed
+
+> **Superseded by [20260908-overture-poi-adoption.md](./20260908-overture-poi-adoption.md).**
+> Reverse geocoding no longer calls Nominatim or any third party at request
+> time — it's baked per L3 page from Overture's Divisions theme. The
+> live-call risk and `VITE_GEOCODE_BASE_URL` escape hatch described below no
+> longer apply; kept as the reasoning that was live at the time.
 
 **Reverse geocoding still calls a third party from the browser — accepted, and
 now disclosed.** `use_reverse_geocode.ts` hits `nominatim.openstreetmap.org`

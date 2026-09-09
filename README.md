@@ -69,7 +69,7 @@ Two more pieces of the stack are built for this project rather than adopted: a p
 .
 ├── apps/
 │   ├── web/                        # Web client (Deno + Vite + React 19 + R3F)
-│   └── api/                        # API server (Deno + Hono), Overture/OSM bake pipeline
+│   └── api/                        # API server (Deno + Hono), Overture bake pipeline
 │
 └── packages/
     ├── xpute/
@@ -90,14 +90,14 @@ The engine is split into a pixelet-specific domain layer (`@pxl/shared`) and a p
 Storage, network transfer, and rendering deliberately use different scales. See [ARCHITECTURE.md](./ARCHITECTURE.md#spatial-hierarchy) for the full L0–L5 hierarchy and the layer/space/shape terminology it's built from — in short:
 
 - **L1 Block** (`1u` per axis): the canonical cell — a **Voxel** once it carries a material payload.
-- **L2 Chunk** (`64` blocks per axis): the renderer's render/LOD/raycasting unit. The renderer composes it into a `64³` **Volume** per occupied **Band** (one signed-Z slice), grouping all occupied L2 bands at one XY address into one column component.
+- **L2 Chunk** (`64` blocks per axis): the renderer's render/LOD/raycasting unit. The renderer composes it into a `64³` **Volume** per occupied **Band** (one signed-Z slice), grouping all occupied L2 bands at one XY address into one chunk node.
 - **L3 Page** (`1024` blocks per axis): terrain's streaming/storage unit — terrain stores a `1024²` **Tile** there, X/Y only.
 - **L4 Anchor** (`4096` blocks per axis): the floating-origin frame. `get_local_world_origin` snaps the camera's map center down to its L4 base; `AnchorRegistry` keeps one ref-counted `THREE.Group` per live L4 index and re-bases every group's local position when that snapped origin shifts. Carries no Tile/Volume payload of its own — a pure addressing/reparenting mechanism.
 - **L5 Shard** (`65536` blocks per axis): reserved for a future global sharding domain — not implemented (`L5_SHAMT` stays commented out in `indexer.ts`). Once active, its Z lane collapses (Z is only 16 bits, narrower than `L5_SHAMT`), so L5 can only ever address X/Y.
 
 Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) stay sparse octrees in source storage. Object leaf byte `0` is `OBJECT_UNDEF` (sparse absence/fallback); `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`). At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
 
-Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact surface data and GPU-ready instance buffers instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. Most of this pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary.
+Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. Most of this pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary.
 
 ---
 

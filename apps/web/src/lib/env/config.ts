@@ -26,13 +26,10 @@ export const APP_ENV: string = __APP_ENV__;
 export const BUILD_TIME: string = __BUILD_TIME__;
 
 /**
- * Whether tiles come from a published bake rather than a live API.
- *
- * One question, asked once. It decides three things that used to derive it
- * separately and could disagree: whether a version token is in the path,
- * where the dev proxy forwards, and whether a 404 means "never baked" —
- * open ocean, an empty POI page, ground outside Overture's Divisions
- * coverage — or a genuine failure.
+ * Whether tiles come from a published bake rather than a live API. Decides
+ * whether a version token is in the path, where the dev proxy forwards, and
+ * whether a 404 means "never baked" — open ocean, an empty POI page, ground
+ * outside Overture's Divisions coverage — or a genuine failure.
  */
 export const PUBLISHED_TILES: boolean = __PUBLISHED_TILES__;
 

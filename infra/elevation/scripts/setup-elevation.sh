@@ -63,9 +63,9 @@ docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
 "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
 
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
-"DROP TABLE IF EXISTS public.esa_elevation_raster, public.esa_elevation_catalog CASCADE;"
+"DROP TABLE IF EXISTS public.elevation_raster, public.elevation_catalog CASCADE;"
 
-SCHEMA_FILE="$ELEV_ROOT/init/01_esa_elevation_schema.sql"
+SCHEMA_FILE="$ELEV_ROOT/init/01_elevation_schema.sql"
 if [ -f "$SCHEMA_FILE" ]; then
     docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" < "$SCHEMA_FILE"
 else
@@ -109,7 +109,7 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
 
     # Register status
     docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
-    "INSERT INTO esa_elevation_catalog (region_code, data_date, file_name, status)
+    "INSERT INTO elevation_catalog (region_code, data_date, file_name, status)
      VALUES ('$REGION_CODE', '$DATA_DATE', '$WARPED_FILENAME', 'PROCESSING')
      ON CONFLICT (file_name) DO UPDATE SET status = 'PROCESSING', updated_at = CURRENT_TIMESTAMP;"
 
@@ -131,7 +131,7 @@ if [ ${#WARPED_FILES[@]} -eq 0 ]; then
 fi
 
 echo "📥 Ingesting raster(s)..."
-raster2pgsql -d -s 3857 -I -C -M -t 256x256 "${WARPED_FILES[@]}" public.esa_elevation_raster \
+raster2pgsql -d -s 3857 -I -C -M -t 256x256 "${WARPED_FILES[@]}" public.elevation_raster \
     | docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE"
 
 # ---------------------------------------------------------
@@ -139,10 +139,10 @@ raster2pgsql -d -s 3857 -I -C -M -t 256x256 "${WARPED_FILES[@]}" public.esa_elev
 # ---------------------------------------------------------
 echo "🚀 Finalizing..."
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" <<EOF
-ANALYZE public.esa_elevation_raster;
-UPDATE esa_elevation_catalog
+ANALYZE public.elevation_raster;
+UPDATE elevation_catalog
 SET status = 'COMPLETED',
-    total_count = (SELECT count(*) FROM public.esa_elevation_raster),
+    total_count = (SELECT count(*) FROM public.elevation_raster),
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'PROCESSING';
 EOF

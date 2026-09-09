@@ -28,7 +28,7 @@
 //   deno run -A --env=.env apps/api/src/bake/poi/tools/bake_poi_tiles.ts [flags]
 //
 // Flags:
-//   --out <dir>          output directory (default ./out/poi/v1)
+//   --out <dir>          output directory (default ./out/poi/<published version>)
 //   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
 //   --concurrency <n>    parallel fetches (default 8, match DB_POOL_SIZE)
 //   --limit <n>          stop after n land pages (smoke test)
@@ -46,6 +46,7 @@ import { exists, fmt_bytes, fmt_dur, gzip } from "@pxl/api/bake/bake_util.ts";
 import { make_overture_provider } from "../providers/overture_provider.ts";
 import type { PoiProvider } from "../provider.ts";
 import * as env from "@/lib/env/mod.ts";
+import { PUBLISHED_VERSION } from "@pxl/shared/bake/published.ts";
 
 const EMPTY_SUFFIX = ".empty";
 
@@ -63,7 +64,7 @@ type Args = {
 
 function parse_args(argv: string[]): Args {
   const args: Args = {
-    out: "./out/poi/v1",
+    out: `./out/poi/${PUBLISHED_VERSION.poi}`,
     land_cache: "./out/terrain/land_pages.json",
     concurrency: 8,
     limit: null,
@@ -198,7 +199,7 @@ async function main(): Promise<void> {
       content_type: "application/json",
       content_encoding: "gzip",
 
-      // Not read_source_catalogs()'s overture_catalog/esa_elevation_catalog
+      // Not read_source_catalogs()'s overture_catalog/elevation_catalog
       // — POI doesn't depend on those (discussions/20260908-overture-poi-adoption.md).
       // overture_catalog (apps/api/src/bake/overture/catalog.ts) now tracks
       // ingest_places.ts's own runs, keyed by file_name; queried directly

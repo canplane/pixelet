@@ -35,7 +35,7 @@
   "workers_dev": false,
   "compatibility_date": "2026-08-16",
 
-  // The live API's own origin (infra/prod/README.md) — a plain reverse
+  // The live API's own origin (infra/README.md) — a plain reverse
   // proxy through this same Worker keeps /api/* same-origin with the app,
   // same "no CORS policy exists to configure or get wrong" reasoning this
   // file's own top comment already gives for the bucket half. An env var, not a
@@ -54,13 +54,8 @@
     "not_found_handling": "single-page-application",
 
     // ...but that fallback would also swallow every request meant for the
-    // server, handing back index.html for a page_idx or a query — which
-    // fails far from here, as a decode error on a body that turned out to
-    // be HTML.
-    //
-    // One entry, and it stays one: everything the server answers is under
-    // this root, so neither a new live route nor a new bake target is a
-    // change to this file.
+    // server, answering a page_idx or a query with index.html. Everything
+    // the server answers is under this one root.
     "run_worker_first": ["/api/*"]
   },
 

@@ -5,13 +5,11 @@
 # convention: POI/geocode staleness is cheap, a monthly redeploy to bump a
 # version prefix every time would not be).
 #
-# Deliberately needs no OSM/terrain infrastructure in CI: the only thing
-# this reuses from that pipeline is land_pages.json (which page_idx values
-# are land, not ocean) — a classification that never changes unless
-# terrain/coastline data itself does, so it's fetched from a stable R2
-# object (_meta/land_pages.json) instead of re-ingesting all of OSM into a
-# fresh database every month just to regenerate it. Re-upload that object
-# by hand (see infra/geo's own bake-tiles procedure) if terrain's own land/
+# Deliberately needs no terrain infrastructure in CI: the only thing this
+# reuses from that pipeline is land_pages.json (which page_idx values are
+# land, not ocean), fetched from a stable R2 object (_meta/land_pages.json)
+# rather than rebuilding the classification here. Re-upload that object by
+# hand (see infra/README.md's own bake-tiles procedure) if terrain's own land/
 # ocean classification is ever rebuilt.
 name: Overture monthly refresh
 

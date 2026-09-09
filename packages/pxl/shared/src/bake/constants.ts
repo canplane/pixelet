@@ -73,7 +73,7 @@ export const CHUNK_CELL_SPAN: u32 = 1 << (L2_SHAMT - CELL_SHAMT);
  *     2^(L3_SHAMT) * M_PER_U  [m]
  * - With the current mapping, M_PER_U is approximately 2.388 m/u,
  *   so one L3 page is approximately 2^(L3_SHAMT + 1) meters wide.
- * - ESA elevation source resolution is approximately 30 meters.
+ * - Elevation source resolution is approximately 30 meters.
  * - We approximate that as 32 meters = 2^5 meters for power-of-two alignment.
  *
  * So the per-page inner sample span is approximated as:

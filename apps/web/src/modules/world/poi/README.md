@@ -15,8 +15,7 @@ section specifically for why POI is wired the way it is here.
   (`PUBLISHED_TILES`/`POI_TILE_BASE_URL`, `lib/env/config.ts`), the live API
   otherwise, and reusing terrain's own `CLEANUP_RADIUS` to evict cached
   pages once they fall out of range (see `use_poi_fetcher.ts`'s own doc
-  comment for why this matters now that POI is Overture-sourced). POI still
-  stays off _terrain's own_ tile format — its static set is a sibling
+  comment). POI stays off _terrain's own_ tile format — its static set is a sibling
   prefix in the same bucket (`poi/<version>/…`, not `<version>/…`), so
   shipping a POI re-bake never touches terrain's own version or requires
   re-uploading it (see the API side below).
@@ -33,20 +32,16 @@ section specifically for why POI is wired the way it is here.
   `map_center` cut is a separate, deliberately different distance from the
   camera-distance fade — see that function's own comment.
 - **`poi_theme.ts`** — category -> icon/color, drawn as the badge's icon
-  circle. Keys are still OSM-tag-shaped strings (`amenity`/`shop`/`tourism`
-  vocabulary) even though POI's own data source is Overture Places now —
-  `OVERTURE_CATEGORY_MAP` (server side, below) translates Overture's own
-  `categories.primary` values into this same vocabulary, so this table
-  didn't need to change shape when the source underneath it did.
+  circle. `OVERTURE_CATEGORY_MAP` (server side, below) translates Overture's
+  own `categories.primary` values into this table's own vocabulary.
 
-**Server side**: `apps/api/src/modules/world/poi/{provider.ts,providers/overture_provider.ts,service.ts}`,
-registered in `apps/api/src/modules/world/mod.ts`. `provider.ts`'s
-`PoiProvider` interface (2026-09-07) is the seam behind which POI's data
-source can be swapped — this replaced the original `osm_provider.ts`
-(2026-09-08, see discussions/20260908-overture-poi-adoption.md): Overture
-Places is CDLA-Permissive-2.0 (not OSM-derived, none of OSM's ODbL
-share-alike or Google/Naver/Kakao's display restrictions) and measured
-~5x denser than OSM in real Korean bboxes.
+**Server side**: `apps/api/src/bake/poi/{provider.ts,providers/overture_provider.ts}`,
+plus `apps/api/src/modules/tiles/poi/service.ts` (the dev-only live endpoint,
+registered from `apps/api/src/modules/tiles/mod.ts`, gated behind
+`__IS_DEV__` — see that file's own top comment). `provider.ts`'s
+`PoiProvider` interface is the seam behind which POI's data source can be
+swapped: Overture Places is CDLA-Permissive-2.0, none of Google/Naver/Kakao's
+display restrictions.
 `providers/overture_provider.ts` reads `overture_places` (a table
 `apps/api/src/bake/overture/tools/ingest_places.ts` populates from
 Overture's own public S3 release, refreshed on a monthly GitHub Actions
@@ -65,11 +60,9 @@ the same `PoiProvider` the live endpoint does, and skips writing an object
 for a page with none (a local-only `.empty` marker instead, so a resume
 doesn't re-query it — never uploaded). No shared "everything's the same"
 fallback object exists the way terrain's `_ocean` tile does: a missing POI
-key just means `[]`, directly. Published to R2 (`poi/v2/*`) and live in
-production (`vite.config.ts`'s own `mode === "production"` fallback
-resolves `poiTileBase` to `/tiles/poi/v2` without needing
-`VITE_POI_TILE_BASE_URL` set at all), refreshed on a monthly GitHub
-Actions cadence (`.github/workflows/overture-monthly-refresh.yml`).
+key just means `[]`, directly. Published to R2 (`poi/v2/*`, served under
+`/api/tiles/poi/v2` — see `lib/env/routes.ts`'s `tile_base()`), refreshed on
+a monthly GitHub Actions cadence (`.github/workflows/overture-monthly-refresh.yml`).
 
 ## Design reference
 
