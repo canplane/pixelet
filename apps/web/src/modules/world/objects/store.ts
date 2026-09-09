@@ -30,6 +30,7 @@ import { pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/core/kit/encoding.ts";
 
 import { OBJECT_LAYOUT, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { shown_ground } from "@pxl/shared/bake/ground.ts";
 import {
   cube_types,
   decor_id_from_num,
@@ -100,7 +101,7 @@ function floor_div(a: bigint, b: bigint): bigint {
 
 /** Exported for callers that need to probe exact-cell occupancy directly
  * (get_objects_in_cell) instead of get_objects_near's ±1-cell neighborhood —
- * e.g. decor/decor_layer.tsx, which must tell "no object in this exact
+ * e.g. decor/decor_layer.ts, which must tell "no object in this exact
  * ground cell" apart from "an object one cell over" to decide whether a
  * scattered decoration (a tree, say) should render there. */
 export function cell_index(coord: PVF3): [bigint, bigint, bigint] {
@@ -318,6 +319,13 @@ let virtual_hide_id: string | null = null;
  * discussions/20260903-terrain-decor-render-unification.md for the fuller
  * account.
  */
+/** Which entry set_virtual_hide is currently suppressing, for the one
+ * consumer that has to keep drawing it in some form — decor, whose hit
+ * testing runs against the very mesh the hide would remove. */
+export function virtual_hidden_id(): string | null {
+  return virtual_hide_id;
+}
+
 export function set_virtual_hide(id: string | null): void {
   const previous = virtual_hide_id;
   if (previous === id) return;
@@ -662,12 +670,32 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
  * writes only: a sub-cell pick paints a fraction of the cell, never fully
  * standing in for what the terrain layer shows across the whole thing, so
  * it can never be redundant by this same reasoning.
+ *
+ * Two things have to hold, and each was wrong on its own.
+ *
+ * The pick must match what the terrain actually *shows*, not merely a
+ * channel it happens to carry — bake/ground.ts's shown_ground, the same
+ * precedence the shader resolves a texture layer with. A road over bare
+ * ground reads land=BARE and renders as road, so comparing the pick's own
+ * channel alone cancelled a bare-ground cube into a road.
+ *
+ * And the cell must already hold an explicit AIR leaf, so the placement is
+ * undoing a carve rather than adding a voxel terrain does not have. A
+ * ground type is a per-column (2.5D) fact while a placement lands in the
+ * empty cell above the surface, so without this every cube stacked on
+ * matching ground read as redundant and was silently dropped.
  */
-function place_value_is_redundant(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId): boolean {
+function place_value_is_redundant(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId, show_structures: boolean): boolean {
   if (size < U_PER_CELL) return false;
   if (!is_terrain_style_cube(color_id)) return false;
+
   const { channel, terrain_num_id } = terrain_style_cube_source(color_id);
-  return get_ground_type(i, f, channel) === terrain_num_id;
+  const shown = shown_ground((ch) => get_ground_type(i, f, ch) ?? 0, show_structures);
+  if (shown.channel !== channel || shown.type_id !== terrain_num_id) return false;
+
+  const coord: PVF3 = { i, f };
+  const tree = cells.get(cell_key(...cell_index(coord)));
+  return tree !== undefined && object_value_is_air(sparse_tree.read(tree, coord));
 }
 
 /**
@@ -681,8 +709,8 @@ function place_value_is_redundant(i: IVec, f: FVec, size: f64, color_id: Placeab
  * a terrain-styled pick that doesn't match the real ground) still writes
  * normally.
  */
-export function place(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId): void {
-  const val = place_value_is_redundant(i, f, size, color_id) ? cube_types.common.VOID : placeable_cube_num_id(color_id);
+export function place(i: IVec, f: FVec, size: f64, color_id: PlaceableCubeId, show_structures: boolean = false): void {
+  const val = place_value_is_redundant(i, f, size, color_id, show_structures) ? cube_types.common.VOID : placeable_cube_num_id(color_id);
   write_object_value(i, f, size, val);
 }
 

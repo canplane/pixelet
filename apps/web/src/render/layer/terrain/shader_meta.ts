@@ -5,6 +5,7 @@ import type { U8Array } from "@xpute/core/kit/array.ts";
 
 import { cube_colors, cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
+import { LAND_BASE_TYPE } from "@pxl/shared/bake/ground.ts";
 
 export const KEYS = <T extends object>(v: T): Array<keyof T> => Object.keys(v) as Array<keyof T>;
 
@@ -160,75 +161,6 @@ function build_flat_color_lookup(lookup: GroundColorLookup): FlatGroundColorLook
 
 export const GROUND_COLOR_LOOKUP_FLAT: FlatGroundColorLookup = build_flat_color_lookup(GROUND_COLOR_LOOKUP);
 
-/**
- * Decodes the raw per-channel category-code rasters (grass=3, road=7, ...)
- * into one flat RGBA buffer, one real color per texel — the necessary step
- * before three.js can build a real mipmap chain over the result (see
- * tex.ts's create_ground_color_texture). Order matters: these are discrete
- * category ids, not a continuous quantity like elevation, so averaging the
- * raw ids (what mipmap generation would do if it ran directly on the
- * category-code rasters) lands on a meaningless id that maps to no real
- * type. Resolving every texel to its real color *first* means the mipmap
- * pyramid three.js builds afterward is averaging actual colors, which is
- * always meaningful — same fix shape as elevation's hand-rolled 4-tap
- * average, just moved to tile-load time and done exactly instead of via 4
- * sparse taps, since color (unlike elevation) doesn't need to stay in an
- * exact-integer format the GPU can't filter.
- *
- * This is what gives shader.ts's low-spec render mode real cross-category
- * color blending at coarse LOD (a hardware mip pyramid built over real
- * per-cell colors naturally averages neighboring different-colored cells
- * together) — the texture-pack mode's per-fragment single-layer resolve
- * (shader_meta.ts's build_ground_layer_resolver) can't reproduce that,
- * since picking one winning category per sample point is inherent to
- * showing a real tileable image rather than a flat blended color. Low-spec
- * keeps this older per-chunk bake specifically because it's still the
- * cheaper, smoother-looking path for flat-fill content; texture-pack trades
- * the smoothness away deliberately, for the ability to show real texture
- * detail at all.
- *
- * show_structures, not a fixed key list: STRUCTURE joins the same LAND ->
- * WATER -> STRUCTURE -> TRANSPORT override priority
- * build_ground_layer_resolver's GLSL version uses (GROUND_CH_KEYS' own
- * order) whenever the debug toggle has it on, instead of always being
- * excluded — chunk.tsx now includes it in this useMemo's own dependency
- * array, so toggling that (rare, dev-only) button re-bakes the handful of
- * currently-loaded chunks' textures instead of needing two textures kept
- * around per chunk just to flip one dev button.
- */
-export const decode_ground_rgba = (
-  ground: Record<GroundChannelKey, U8Array>,
-  row_stride: u32,
-  show_structures: boolean = false,
-  lookup: FlatGroundColorLookup = GROUND_COLOR_LOOKUP_FLAT,
-): Uint8Array => {
-  const base: u8 = cube_types.land.BARE;
-  const base_flat = lookup[GroundChannelKey.LAND];
-  const base_rgb: [number, number, number] = base_flat?.has[base] ? [base_flat.rgb[base * 3], base_flat.rgb[base * 3 + 1], base_flat.rgb[base * 3 + 2]] : [0, 0, 0];
-  const n = row_stride * row_stride;
-  const out = new Uint8Array(n * 4);
-
-  for (let i = 0; i < n; i++) {
-    let r = base_rgb[0], g = base_rgb[1], b = base_rgb[2];
-    for (const ch_key of GROUND_CH_KEYS) {
-      if (ch_key === GroundChannelKey.STRUCTURE && !show_structures) continue;
-      const type_id = ground[ch_key][i];
-      if (type_id === 0) continue;
-      const flat = lookup[ch_key];
-      if (flat && flat.has[type_id]) {
-        const off = type_id * 3;
-        r = flat.rgb[off];
-        g = flat.rgb[off + 1];
-        b = flat.rgb[off + 2];
-      }
-    }
-    out[i * 4] = r;
-    out[i * 4 + 1] = g;
-    out[i * 4 + 2] = b;
-    out[i * 4 + 3] = 255;
-  }
-  return out;
-};
 
 // ---- texture-array ground layers (low-spec / texture-pack shared source) ----
 //
@@ -312,14 +244,22 @@ const build_layer_mapping_funcs = (meta: TerrainLayerMeta[]): string => {
  * Included verbatim in both create_vert and create_frag (see shader.ts).
  */
 export const build_ground_layer_resolver = (meta: TerrainLayerMeta[]): string => {
-  const land_base_type: u8 = cube_types.land.BARE;
+  // The override chain is generated from GROUND_CH_KEYS rather than spelled
+  // out, so the shader and bake/ground.ts's shown_ground cannot drift into
+  // disagreeing about which channel a cell shows. LAND leads and carries the
+  // bare-ground fallback; STRUCTURE stays behind the dev toggle.
+  const overrides = GROUND_CH_KEYS
+    .filter((ch_key) => ch_key !== GroundChannelKey.LAND)
+    .map((ch_key) => {
+      const guard = ch_key === GroundChannelKey.STRUCTURE ? "show_structures && " : "";
+      return `    if (${guard}ch_${ch_key} > 0.5) layer = ${gen.FUNC_LAYER(ch_key)}(ch_${ch_key});`;
+    })
+    .join("\n");
   return `
   ${build_layer_mapping_funcs(meta)}
   float resolve_ground_layer(float ch_land, float ch_water, float ch_structure, float ch_transport, bool show_structures) {
-    float layer = ${gen.FUNC_LAYER(GroundChannelKey.LAND)}(ch_land > 0.5 ? ch_land : ${land_base_type}.0);
-    if (ch_water > 0.5) layer = ${gen.FUNC_LAYER(GroundChannelKey.WATER)}(ch_water);
-    if (show_structures && ch_structure > 0.5) layer = ${gen.FUNC_LAYER(GroundChannelKey.STRUCTURE)}(ch_structure);
-    if (ch_transport > 0.5) layer = ${gen.FUNC_LAYER(GroundChannelKey.TRANSPORT)}(ch_transport);
+    float layer = ${gen.FUNC_LAYER(GroundChannelKey.LAND)}(ch_land > 0.5 ? ch_land : ${LAND_BASE_TYPE}.0);
+${overrides}
     return layer;
   }
   `;

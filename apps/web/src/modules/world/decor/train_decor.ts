@@ -4,7 +4,7 @@
 // tree_decor.ts's own doc comment for why assets live in a separate file.
 
 import { TRAIN_MODEL_URLS, TRAIN_SKIN_URL } from "@pxl/shared/assets/decor/trains.ts";
-import type { DecorKindBundle } from "./decor_layer.tsx";
+import type { DecorKindBundle } from "./decor_layer.ts";
 import { is_train_eligible, TRAIN_KIND } from "./train_kind.ts";
 
 const TRAIN_VARIANTS = TRAIN_MODEL_URLS.map((model_url) => ({ model_url, skin_url: TRAIN_SKIN_URL }));

@@ -124,6 +124,34 @@ Deno.test("LOD1 - a wall capped by a user cube is not shaded as a silhouette", (
   assertEquals(boxes.get("5.5,5.5,1.5")! & CAP_PZ_BIT, 0);
 });
 
+Deno.test("LOD1 - a carved-and-refilled cell draws no outline in the flat ground around it", () => {
+  const columns = empty_columns();
+  // Flat plateau, one run per column, then one cell carved and refilled
+  // with another material: that column becomes terrain below plus an
+  // object on top, at the same height as everything around it. Nothing
+  // about that join is a silhouette, so no neighbour may claim a crease —
+  // and a neighbour's side is covered by those two runs together even
+  // though no single one spans it.
+  for (let cx: u32 = 3; cx <= 9; cx++) {
+    for (let cy: u32 = 3; cy <= 9; cy++) columns[idx(cx, cy)] = [run(0, 2, 200, 100, 50)];
+  }
+  columns[idx(6, 6)] = [
+    run(0, 1, 200, 100, 50),
+    run(2, 2, 50, 100, 200, MaterialClass.OBJECT),
+  ];
+
+  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  // Merged boxes, so these are the real centres — asserted present first,
+  // since `undefined & bit` is 0 and would pass every check below silently.
+  for (const [key, inward] of [["4.5,6.5,1.5", CREASE_PX_BIT], ["8.5,6.5,1.5", CREASE_NX_BIT]] as const) {
+    assert(boxes.has(key), `expected a box at ${key}`);
+    assertEquals(boxes.get(key)! & inward, 0);
+  }
+  // The refilled cube is flush on every side too.
+  assert(boxes.has("6.5,6.5,2.5"));
+  assertEquals(boxes.get("6.5,6.5,2.5")! & (CREASE_PX_BIT | CREASE_NX_BIT), 0);
+});
+
 Deno.test("coarse mesher - a fully-covered cell doesn't shrink and blends its columns' colors", () => {
   const columns = empty_columns();
   // lod_step=2: all 4 sub-columns of the one coarse cell, same color/z.
@@ -315,4 +343,132 @@ Deno.test("LOD1 - a flat plateau emits its top faces and its rim, not five faces
   // ...and not one run was occlusion-culled, which is the point: the two
   // tests are looking at different things.
   assertEquals(occlusion_stats.culled, culled_before);
+});
+
+// ---- Edge-mask symmetry ----
+//
+// The lateral half of the face mask is four parallel groups, each ordered
+// +X, -X, +Y, -Y, plus four diagonals named by their X then Y sign. Nothing
+// in the rule that fills them may prefer an axis or a direction, so
+// reflecting or transposing a scene has to reflect or transpose its masks
+// and change nothing else. Asserted as an identity over a whole generated
+// scene rather than sampled at a few cells: a rule that leans one way
+// usually does it in one configuration, which is what a stray single line
+// on flat ground looks like from the outside.
+
+const LATERAL_BASES = [FACE_PX_BIT, 1 << 6, 1 << 10, CREASE_PX_BIT] as const;
+const DIAG_PP_BIT = 1 << 14, DIAG_PN_BIT = 1 << 15, DIAG_NP_BIT = 1 << 16, DIAG_NN_BIT = 1 << 17;
+
+/** Rewrites a mask's lateral bits under a permutation of (+X,-X,+Y,-Y),
+ * given as destination slots for slots 0..3, plus one for the diagonals. */
+function remap_mask(mask: number, lateral: readonly [number, number, number, number], diag: readonly [number, number, number, number]): number {
+  let out = mask;
+  for (const base of LATERAL_BASES) {
+    out &= ~(base * 15);
+    for (let slot = 0; slot < 4; slot++) if ((mask & (base << slot)) !== 0) out |= base << lateral[slot];
+  }
+  const diag_bits = [DIAG_PP_BIT, DIAG_PN_BIT, DIAG_NP_BIT, DIAG_NN_BIT];
+  out &= ~(DIAG_PP_BIT | DIAG_PN_BIT | DIAG_NP_BIT | DIAG_NN_BIT);
+  for (let slot = 0; slot < 4; slot++) if ((mask & diag_bits[slot]) !== 0) out |= diag_bits[diag[slot]];
+  return out;
+}
+
+/** Deterministic mixed scene: varied heights, terrain and object columns
+ * interleaved, some columns split into two runs the way a carve-and-refill
+ * leaves them. Confined to 8..24 on both axes so mirroring about 32 and
+ * transposing both land back inside it, keeping chunk-edge exemptions out
+ * of the comparison. */
+function mixed_scene(place: (cx: u32, cy: u32) => [u32, u32]): MeshRun[][] {
+  const columns = empty_columns();
+  for (let x: u32 = 8; x <= 24; x++) {
+    for (let y: u32 = 8; y <= 24; y++) {
+      const h = (x * 7 + y * 13) % 4;
+      const kind = (x * 3 + y * 5) % 4;
+      const [px, py] = place(x, y);
+      if (kind === 0) columns[idx(px, py)] = [run(0, h, 200, 100, 50)];
+      else if (kind === 1) columns[idx(px, py)] = [run(0, h, 60, 160, 90, MaterialClass.OBJECT)];
+      else if (kind === 2) {
+        columns[idx(px, py)] = h === 0
+          ? [run(0, 0, 60, 160, 90, MaterialClass.OBJECT)]
+          : [run(0, h - 1, 200, 100, 50), run(h, h, 60, 160, 90, MaterialClass.OBJECT)];
+      } else columns[idx(px, py)] = [run(0, h, 120, 120, 200)];
+    }
+  }
+  return columns;
+}
+
+function masks_by_centre(columns: MeshRun[][]): Map<string, number> {
+  return boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+}
+
+Deno.test("edge mask - mirroring X mirrors the mask and changes nothing else", () => {
+  const direct = masks_by_centre(mixed_scene((x, y) => [x, y]));
+  const mirrored = masks_by_centre(mixed_scene((x, y) => [32 - x, y]));
+  assert(direct.size > 100, "scene should produce a real number of boxes");
+  assertEquals(direct.size, mirrored.size);
+  for (const [key, mask] of direct) {
+    const [cx, cy, cz] = key.split(",").map(Number);
+    const image = `${33 - cx},${cy},${cz}`;
+    assert(mirrored.has(image), `mirrored box missing at ${image}`);
+    assertEquals(mirrored.get(image), remap_mask(mask, [1, 0, 2, 3], [2, 3, 0, 1]), `at ${key}`);
+  }
+});
+
+Deno.test("edge mask - transposing X and Y transposes the mask and changes nothing else", () => {
+  const direct = masks_by_centre(mixed_scene((x, y) => [x, y]));
+  const transposed = masks_by_centre(mixed_scene((x, y) => [y, x]));
+  assertEquals(direct.size, transposed.size);
+  for (const [key, mask] of direct) {
+    const [cx, cy, cz] = key.split(",").map(Number);
+    const image = `${cy},${cx},${cz}`;
+    assert(transposed.has(image), `transposed box missing at ${image}`);
+    assertEquals(transposed.get(image), remap_mask(mask, [2, 3, 0, 1], [0, 2, 1, 3]), `at ${key}`);
+  }
+});
+
+/** Centre, per-axis extent and mask for every baked box — the rim test
+ * needs the extent, since a merged box's centre says nothing about whether
+ * it reaches the edge of the scene. */
+function boxes_with_extent(columns: MeshRun[][]): { c: number[]; s: number[]; mask: number }[] {
+  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const out = new Map<string, { c: number[]; s: number[]; mask: number }>();
+  for (let v = 0; v < built.vertex_cnt; v++) {
+    const o = v * 3;
+    const c = [0, 1, 2].map((i) => built.position[o + i] - built.local_pos[o + i] * built.box_scale[o + i]);
+    const s = [0, 1, 2].map((i) => built.box_scale[o + i]);
+    out.set(c.join(","), { c, s, mask: built.faces[v] });
+  }
+  return [...out.values()];
+}
+
+Deno.test("edge mask - a flat surface carries no crease except at its rim", () => {
+  // Every column the same height, materials mixed freely, some split into
+  // two runs the way a carve-and-refill leaves them. A continuous surface
+  // has no silhouette anywhere inside it, so the only lateral creases
+  // allowed belong to boxes that actually reach the outer ring.
+  const columns = empty_columns();
+  const LO: u32 = 8, HI: u32 = 24;
+  let kinds = 0;
+  for (let x = LO; x <= HI; x++) {
+    for (let y = LO; y <= HI; y++) {
+      const kind = (x * 5 + y * 7) % 3;
+      kinds |= 1 << kind;
+      columns[idx(x, y)] = kind === 0
+        ? [run(0, 2, 200, 100, 50)]
+        : kind === 1
+        ? [run(0, 2, 60, 160, 90, MaterialClass.OBJECT)]
+        : [run(0, 1, 200, 100, 50), run(2, 2, 60, 160, 90, MaterialClass.OBJECT)];
+    }
+  }
+  assertEquals(kinds, 0b111, "the scene must actually mix all three column shapes");
+
+  const any_crease = CREASE_PX_BIT | CREASE_NX_BIT | (1 << 20) | (1 << 21);
+  const boxes = boxes_with_extent(columns);
+  assert(boxes.length > 0);
+  for (const { c, s, mask } of boxes) {
+    if ((mask & any_crease) === 0) continue;
+    const reaches_rim = c[0] - s[0] / 2 <= LO || c[0] + s[0] / 2 >= HI + 1 ||
+      c[1] - s[1] / 2 <= LO || c[1] + s[1] / 2 >= HI + 1;
+    assert(reaches_rim, `crease inside a flat surface at ${c.join(",")} (extent ${s.join("x")}, mask ${mask})`);
+  }
 });

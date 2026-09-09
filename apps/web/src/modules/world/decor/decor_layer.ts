@@ -1,4 +1,4 @@
-// @pxl/web/modules/world/decor/decor_layer.tsx
+// @pxl/web/modules/world/decor/decor_layer.ts
 
 /**
  * Decor's own pure build logic and rendering primitive — bakes real GLB
@@ -88,8 +88,6 @@
  * not a separate store.
  */
 
-import { useEffect, useMemo } from "react";
-import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import type { Tile } from "@pxl/shared/bake/format.ts";
@@ -100,14 +98,12 @@ import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
 import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
-import { rim_cfg } from "@/modules/world/environment/config.ts";
-import { set_rim_intensity } from "@/modules/world/render/lit_gltf_material.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
-import { cell_index, cell_key, get_objects_in_cell, get_render_object_entries_in_l2_column, l2_column_key_of } from "@/modules/world/objects/store.ts";
+import { cell_index, cell_key, get_objects_in_cell, get_object_entries_in_l2_column, l2_column_key_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
 import type { LodStep } from "@/render/lod.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
-import { type DecorVariantAsset, type ModelInstanceTransform, useInstancedModelVariants } from "./instanced_model.ts";
+import type { DecorVariantAsset, ModelInstanceTransform } from "./instanced_model.ts";
 
 // Fixed, arbitrary — the one thing every DecorKind's own placement
 // ultimately derives from (alongside its own DecorKindSeed.tag). Changing
@@ -205,7 +201,8 @@ function collect_user_decor_instances(
   if (!bundle.decor_id) return;
   const page_off = ivec.gather(BigInt(base_x), BigInt(base_y), 0n);
   const l2_key = l2_column_key_of(page_idx, page_off);
-  for (const entry of get_render_object_entries_in_l2_column(l2_key)) {
+  const hidden_id = virtual_hidden_id();
+  for (const entry of get_object_entries_in_l2_column(l2_key)) {
     if (entry.kind !== "decor" || entry.decor_id !== bundle.decor_id) continue;
     const local = ivec.sub(entry.i, page_base);
     const x: f64 = ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(entry.f));
@@ -227,7 +224,7 @@ function collect_user_decor_instances(
     // possible moment, rather than earlier (everything upstream — the
     // entry's own absolute i/f, page_base — stays in its own natural frame;
     // only the final stored position changes convention).
-    by_variant[variant].push({ position: [x - base_x * U_PER_CELL + hcenter, y - base_y * U_PER_CELL + hcenter, z], rotation_z: rotation, scale: 1, id: entry.id });
+    by_variant[variant].push({ position: [x - base_x * U_PER_CELL + hcenter, y - base_y * U_PER_CELL + hcenter, z], rotation_z: rotation, scale: 1, id: entry.id, hidden: entry.id === hidden_id });
   }
 }
 
@@ -331,54 +328,3 @@ export function build_decor_instances(
  * deferred mount. bake_decor_instances and register_decor_mesh, the two
  * things it actually called, are unchanged and now called from there. */
 
-export type DecorBundleAssets = {
-  bundle: DecorKindBundle;
-  geometries: readonly (THREE.BufferGeometry | null)[];
-  materials: readonly (THREE.MeshStandardMaterial | null)[];
-};
-
-/**
- * Loads every decor kind's own GLB geometry/skin in exactly one
- * useInstancedModelVariants call, regardless of how many bundles there are.
- * chunk_stage.tsx's own ChunkStage can't call that hook once per bundle in a
- * .map() — React's rules of hooks forbid a variable number of hook calls
- * per component — so this flattens every bundle's own variants into one
- * combined list first, then re-slices the single call's own results back
- * into per-bundle groups using each bundle's own variants.length as the
- * boundary: the same load, just grouped back the way callers actually need
- * it. `bundles` should be a stable (module-level constant) reference — see
- * world.tsx's own DECOR_BUNDLES — so this never needlessly re-slices.
- */
-export function useAllDecorBundleAssets(bundles: readonly DecorKindBundle[]): readonly DecorBundleAssets[] {
-  const all_variants = useMemo(() => bundles.flatMap((bundle) => bundle.variants), [bundles]);
-  const { geometries, materials } = useInstancedModelVariants(all_variants);
-
-  // instanced_model.ts's own material deliberately doesn't know the live
-  // show_rim_light setting (importing app/settings/settings_store.ts there
-  // would drag deno test into a module graph it can't load — see that
-  // file's own top doc comment) — this is the one real (non-test) consumer
-  // that needs it live, so it owns the subscription instead, updating every
-  // currently-loaded material's own compiled shader uniform directly.
-  // Cheaper than each of the (potentially many, one per chunk)
-  // DecorVariantMesh consumers subscribing individually, and correct
-  // regardless of how many chunks currently render a given variant: the
-  // material object itself is the same one shared across all of them
-  // (bundle_assets is computed once here, at ChunkStage level).
-  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
-  useEffect(() => {
-    for (const material of materials) {
-      if (material) set_rim_intensity(material, show_rim_light ? rim_cfg.INTENSITY : 0);
-    }
-  }, [materials, show_rim_light]);
-
-  return useMemo(() => {
-    const out: DecorBundleAssets[] = [];
-    let offset = 0;
-    for (const bundle of bundles) {
-      const count = bundle.variants.length;
-      out.push({ bundle, geometries: geometries.slice(offset, offset + count), materials: materials.slice(offset, offset + count) });
-      offset += count;
-    }
-    return out;
-  }, [bundles, geometries, materials]);
-}

@@ -19,7 +19,7 @@ export type CharacterModel = {
    * is textured from a single flat skin regardless of how many mesh nodes
    * the glTF itself splits it into) — exposed so a caller can drive its
    * live show_rim_light state via lit_gltf_material.ts's own
-   * set_rim_intensity, the same way decor_layer.tsx already does for
+   * set_rim_intensity, the same way decor_layer.ts already does for
    * decor's own materials. Null exactly when `root` is. */
   material: THREE.MeshStandardMaterial | null;
   actions: ReturnType<typeof useAnimations>["actions"];

@@ -94,7 +94,7 @@ export class ObjectWorldLayer implements WorldLayer {
 
     for (const obj of objects) {
       // Decor (a user-placed tree, say) never paints a voxel of its own —
-      // it renders as decor_layer.tsx's own separate instanced GLB geometry,
+      // it renders as decor_layer.ts's own separate instanced GLB geometry,
       // not a chunk_mesher.ts box, and has no color_id to paint with anyway.
       if (obj.kind === "decor") continue;
 

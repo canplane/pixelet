@@ -36,9 +36,10 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
-import { bake_decor_instances } from "@/modules/world/decor/instanced_model.ts";
+import { bake_decor_instances, type ModelInstanceTransform } from "@/modules/world/decor/instanced_model.ts";
 import { register_decor_mesh } from "@/modules/world/decor/decor_hit.ts";
-import { build_decor_instances, type DecorBundleAssets, type ModelInstanceTransformList } from "@/modules/world/decor/decor_layer.tsx";
+import { build_decor_instances, type DecorKindBundle, type ModelInstanceTransformList } from "@/modules/world/decor/decor_layer.ts";
+import { type DecorBundleAssets, decor_bundle_assets, subscribe_decor_assets } from "@/modules/world/decor/asset_store.ts";
 import {
   decor_l2_column_revision,
   l2_column_key_of,
@@ -296,14 +297,14 @@ type AttachedCubes = {
 type AttachedDecor = {
   mesh: THREE.Mesh;
   unregister: () => void;
-  mounted: MountedLodMesh;
+  /** Null for a hit-only mesh, which the LOD registry must never see. */
+  mounted: MountedLodMesh | null;
 };
 
 export type ChunkNodeDeps = {
   page_idx: IVec;
   offset: ChunkOffsets;
   stack: WorldLayerStack;
-  bundle_assets: readonly DecorBundleAssets[];
   camera: THREE.Camera;
   anchor_registry: AnchorRegistry;
 };
@@ -347,6 +348,8 @@ export class ChunkNode implements ChunkLodControl {
   private show_structures: boolean;
   private objects_revision: number;
   private decor_revision: number;
+  private show_decor: boolean;
+  private bundle_assets: readonly DecorBundleAssets[];
 
   private attached_cubes: AttachedCubes[] = [];
   private attached_decor: AttachedDecor[] = [];
@@ -395,15 +398,21 @@ export class ChunkNode implements ChunkLodControl {
     this.show_structures = useSettingsStore.getState().show_structures;
     this.objects_revision = object_l2_column_revision(this.object_key);
     this.decor_revision = decor_l2_column_revision(this.object_key);
+    this.show_decor = useSettingsStore.getState().show_decor;
+    this.bundle_assets = decor_bundle_assets();
 
     // Direct store subscriptions rather than hooks: a node is not a
     // component, and a placement should not have to travel through a render
     // to reach the chunk it changed.
     this.unsubscribes.push(
       useTileStore.subscribe(() => this.on_source_change()),
-      useSettingsStore.subscribe(() => this.on_source_change()),
+      useSettingsStore.subscribe(() => {
+        this.on_source_change();
+        this.on_decor_change();
+      }),
       subscribe_object_l2_column(this.object_key, () => this.on_source_change()),
       subscribe_decor_l2_column(this.object_key, () => this.on_decor_change()),
+      subscribe_decor_assets(() => this.on_decor_assets()),
     );
 
     lod_scheduler.controls.add(this);
@@ -526,6 +535,23 @@ export class ChunkNode implements ChunkLodControl {
   }
 
   /**
+   * Decor models finish loading well after the first chunks are built, and
+   * a node that never heard about it drew no decor for the rest of its
+   * life — which is why decor showed or did not depending on whether the
+   * browser cache beat the first chunk build. Decor meshes only: a model
+   * arriving says nothing about cube content.
+   */
+  private on_decor_assets(): void {
+    if (this.disposed) return;
+    const assets = decor_bundle_assets();
+    if (this.bundle_assets === assets) return;
+    this.bundle_assets = assets;
+    this.decor_cache.clear();
+    if (!this.layout.ready) return;
+    this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
+  }
+
+  /**
    * Decor's own revision-only rebuild. It must never touch bucket_cache or
    * column_runs: that would reintroduce the needless cube rescan/rebake —
    * visible as a flicker — this split exists to avoid.
@@ -533,8 +559,14 @@ export class ChunkNode implements ChunkLodControl {
   private on_decor_change(): void {
     if (this.disposed) return;
     const revision = decor_l2_column_revision(this.object_key);
-    if (revision === this.decor_revision) return;
+    // show_decor sits here rather than in on_source_change for the reason
+    // this split exists at all: hiding scattered decor changes no cube, and
+    // rebuilding them would flicker. It is the decor half's own
+    // show_structures.
+    const show_decor = useSettingsStore.getState().show_decor;
+    if (revision === this.decor_revision && show_decor === this.show_decor) return;
     this.decor_revision = revision;
+    this.show_decor = show_decor;
     this.decor_cache.clear();
     if (!this.layout.ready) return;
     this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
@@ -635,7 +667,7 @@ export class ChunkNode implements ChunkLodControl {
   private build_decor_step(step: LodStep): ModelInstanceTransformList[][] {
     const cached = this.decor_cache.get(step);
     if (cached) return cached;
-    const built = this.deps.bundle_assets.map(({ bundle }) =>
+    const built = this.bundle_assets.map(({ bundle }) =>
       build_decor_instances(this.tile as never, step, this.deps.page_idx, this.deps.offset.base_x, this.deps.offset.base_y, bundle)
     );
     this.decor_cache.set(step, built);
@@ -733,7 +765,7 @@ export class ChunkNode implements ChunkLodControl {
    * size is fixed at creation.
    */
   private attach_decor(layout: LodLayout): void {
-    this.deps.bundle_assets.forEach(({ bundle, geometries, materials }, bi) => {
+    this.bundle_assets.forEach(({ bundle, geometries, materials }, bi) => {
       const pairs: [ModelInstanceTransformList[] | undefined, ChunkLodRole][] = [
         [layout.decor.primary[bi], "primary"],
         [layout.decor.secondary?.[bi], "secondary"],
@@ -744,24 +776,47 @@ export class ChunkNode implements ChunkLodControl {
           const material = materials[variant];
           const instances = variants[variant];
           if (!geometry || !material || !instances || instances.length === 0) return;
-          const merged = bake_decor_instances(geometry, instances);
-          if (!merged) return;
-          const mesh = new THREE.Mesh(merged, material);
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.name = `chunk-decor/${bundle.seed.tag.toString()}/${role}/${variant}`;
-          // The sane default before the first real LOD decision; recheck()
-          // flips it from there via the shared registry.
-          mesh.visible = role === "primary";
-          const mounted: MountedLodMesh = { kind: "decor", mesh, role };
-          this.registry.meshes.add(mounted);
-          this.group.add(mesh);
-          // decor_hit.ts's own registry, not the scene graph: camera hover
-          // raycasts against every mounted decor mesh from outside it.
-          this.attached_decor.push({ mesh, unregister: register_decor_mesh(mesh, instances), mounted });
+          // An entry the eraser is hovering is suppressed from the drawn
+          // mesh but still needs to be hit-testable, so it gets a mesh of
+          // its own that is never shown. three's Raycaster does not consult
+          // `visible`, which is what makes that work — and what keeps the
+          // hover from losing the very thing whose hover caused the hide.
+          const drawn = instances.filter((instance) => !instance.hidden);
+          const suppressed = instances.filter((instance) => instance.hidden);
+          this.attach_decor_mesh(bundle, geometry, material, drawn, role, variant, true);
+          this.attach_decor_mesh(bundle, geometry, material, suppressed, role, variant, false);
         });
       }
     });
+  }
+
+  /** `shown` false means the mesh exists only so decor_hit.ts can raycast
+   * it; it never joins the LOD registry, which would flip it back on. */
+  private attach_decor_mesh(
+    bundle: DecorKindBundle,
+    geometry: THREE.BufferGeometry,
+    material: THREE.MeshStandardMaterial,
+    instances: readonly ModelInstanceTransform[],
+    role: ChunkLodRole,
+    variant: number,
+    shown: boolean,
+  ): void {
+    if (instances.length === 0) return;
+    const merged = bake_decor_instances(geometry, instances);
+    if (!merged) return;
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.castShadow = shown;
+    mesh.receiveShadow = shown;
+    mesh.name = `chunk-decor/${bundle.seed.tag.toString()}/${role}/${variant}${shown ? "" : "/hidden"}`;
+    // The sane default before the first real LOD decision; recheck() flips
+    // it from there via the shared registry.
+    mesh.visible = shown && role === "primary";
+    const mounted: MountedLodMesh | null = shown ? { kind: "decor", mesh, role } : null;
+    if (mounted) this.registry.meshes.add(mounted);
+    this.group.add(mesh);
+    // decor_hit.ts's own registry, not the scene graph: camera hover
+    // raycasts against every mounted decor mesh from outside it.
+    this.attached_decor.push({ mesh, unregister: register_decor_mesh(mesh, instances, !shown), mounted });
   }
 
   private detach_all(): void {
@@ -775,7 +830,7 @@ export class ChunkNode implements ChunkLodControl {
     }
     this.attached_cubes = [];
     for (const entry of this.attached_decor) {
-      this.registry.meshes.delete(entry.mounted);
+      if (entry.mounted) this.registry.meshes.delete(entry.mounted);
       entry.unregister();
       this.group.remove(entry.mesh);
       entry.mesh.geometry.dispose();

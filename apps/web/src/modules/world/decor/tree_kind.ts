@@ -3,7 +3,7 @@
 /**
  * The first concrete DecorKind's placement rules — trees on green/forest
  * terrain. Everything kind-specific (which cells count as eligible, how
- * dense) lives here; decor_layer.tsx and scatter.ts stay generic so a later
+ * dense) lives here; decor_layer.ts and scatter.ts stay generic so a later
  * kind (a fence along a road edge, a candle inside a structure, ...) is
  * just another file shaped like this one, not a change to either of those.
  *

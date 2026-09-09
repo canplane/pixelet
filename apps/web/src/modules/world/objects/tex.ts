@@ -3,8 +3,9 @@
 import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
-import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { is_terrain_style_cube, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
+import terrain_wire from "@pxl/shared/assets/cell/textures/terrain/wire.ts";
 
 /**
  * Configured THREE.Texture from a URL — same create_* shape as
@@ -52,25 +53,49 @@ function create_object_texture(url: string): THREE.Texture {
 // module load, since objects.ts's catalog can grow far larger (200+
 // planned) than terrain's own channel/type count and most colors may
 // never actually get placed in a given session.
-const cache = new Map<PlaceableCubeId, THREE.Texture>();
+const cache = new Map<string, THREE.Texture>();
+
+/** Which of a box's images this is. The split is the renderer's own:
+ * chunk_material.ts calls a face lateral at `abs(normal.z) < 0.5`, so a
+ * bottom face wears the top image just as the top face does. */
+export type CubeFace = "top" | "side";
 
 /**
- * `null` for a terrain-styled id (cell/mod.ts's own TERRAIN_STYLE_SOURCE,
- * 2026-09-06) — those have no entry of their own in object_wire (they're
- * not a separate texture-array layer at all, see tex_array.ts's own
- * TERRAIN_STYLE_SOURCE-skip), so there's no per-color wire image to load
- * here. hover_cursor.tsx's own ghost preview already degrades gracefully
- * to a flat color swatch when this returns null; a real placed cube of
- * this kind still renders with its own real terrain texture regardless,
- * through chunk_stage.tsx's own shader — this only affects the
- * pre-placement preview's fidelity, not the real render.
+ * The real image a cube of this kind renders with on this face, flat colour
+ * or terrain-styled alike. A terrain-styled pick is `"<channel>.<KEY>"` and
+ * that is exactly how both wires are keyed, so the two catalogs differ only
+ * in which one holds the entry.
+ *
+ * This used to return null for every terrain-styled id, on the grounds that
+ * object_wire has no entry for one — true, and terrain_wire does. The ghost
+ * preview then fell back to a flat colour swatch, which is what made the
+ * eraser tint a terrain-styled cube with the generic action colour instead
+ * of showing the thing it was about to remove.
  */
-export function get_object_texture(id: PlaceableCubeId): THREE.Texture | null {
-  let tex = cache.get(id) ?? null;
-  if (tex) return tex;
-  const wire = object_wire.top.block[id as keyof typeof object_wire.top.block] as { url: string } | undefined;
+export function get_object_texture(id: PlaceableCubeId, face: CubeFace = "top"): THREE.Texture | null {
+  const wire = wire_entry(id, face);
   if (!wire) return null;
+  // Keyed by URL, not by id+face: a side that falls back to its own top
+  // image has to resolve to the one THREE.Texture that image already has,
+  // or a ghost would upload the same picture twice and draw its sides from
+  // a second copy.
+  let tex = cache.get(wire.url) ?? null;
+  if (tex) return tex;
   tex = create_object_texture(wire.url);
-  cache.set(id, tex);
+  cache.set(wire.url, tex);
   return tex;
+}
+
+type WireEntry = { url: string } | undefined;
+
+/** Side falls back to top when a kind declares no side of its own — the
+ * same rule render/tex_array.ts's build_side_image_map bakes into the layer
+ * array the real chunks sample. Only the land channel overrides it today;
+ * object blocks never do. */
+type FaceMap = Record<string, Record<string, WireEntry> | undefined>;
+
+function wire_entry(id: PlaceableCubeId, face: CubeFace): WireEntry {
+  const wire = (is_terrain_style_cube(id) ? terrain_wire : object_wire) as Record<CubeFace, FaceMap>;
+  const [channel, key] = is_terrain_style_cube(id) ? id.split(".") : ["block", id];
+  return wire[face][channel]?.[key] ?? wire.top[channel]?.[key];
 }

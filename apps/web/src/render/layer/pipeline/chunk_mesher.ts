@@ -8,7 +8,7 @@
  * meshes): every surviving run contributes its own box's actual vertices
  * into one growing set of typed arrays, the same "each block bakes its own
  * geometry into one shared per-chunk buffer" model Minecraft itself uses,
- * chosen specifically because it's geometry-agnostic — decor_layer.tsx's own
+ * chosen specifically because it's geometry-agnostic — decor_layer.ts's own
  * arbitrary GLB geometry can bake into this exact same shape of output
  * (position/normal + a handful of per-vertex material attributes), which a
  * shared-box-instanced pipeline could never support. See
@@ -463,15 +463,25 @@ function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 
   const below = z0 - 1;
   const all = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | EXTENDS_BELOW;
   let rel: u32 = 0;
+  // Shading asks whether the neighbour covers this run's side at all, so
+  // consecutive runs count together: carving a cell and refilling it with
+  // another material splits that column into terrain below and an object on
+  // top, and no single run then spans a taller neighbour's range. Testing
+  // one run at a time reported flat ground beside such a cell as a
+  // silhouette and drew an outline around it.
+  let covered_to = z0 - 1;
   const end = set.start[col + 1];
   for (let i = set.start[col]; i < end; i++) {
     const r_z0 = set.z0[i];
     if (r_z0 > above) break;
     if (set.sub_sz[i] !== SUB_CELL_NONE) continue;
     const r_z1 = set.z1[i];
-    const spans = r_z0 <= z0 && r_z1 >= z1;
-    if (spans) rel |= ABUTS_SIDE;
-    if (spans && set.material_class[i] !== MaterialClass.OBJECT) rel |= HIDES_SIDE;
+    if (r_z0 <= covered_to + 1 && r_z1 > covered_to) covered_to = r_z1;
+    if (covered_to >= z1) rel |= ABUTS_SIDE;
+    // Culling stays single-run: it may be conservative, since a face kept
+    // that could have gone costs vertices while one dropped that should
+    // have stayed opens a hole.
+    if (r_z0 <= z0 && r_z1 >= z1 && set.material_class[i] !== MaterialClass.OBJECT) rel |= HIDES_SIDE;
     if (r_z0 <= above && r_z1 >= above) rel |= RISES_ABOVE;
     if (r_z0 <= below && r_z1 >= below) rel |= EXTENDS_BELOW;
     if (rel === all) break;

@@ -25,7 +25,7 @@ const HALF_CELL_FP = pvf3.from_real(U_PER_CELL / 2);
  * block model. object_center below is the placed-cube counterpart: the exact
  * same shape, since a cube's anchor is a true min corner too.
  *
- * decor/decor_layer.tsx centers user-placed decor the same way on X/Y but
+ * decor/decor_layer.ts centers user-placed decor the same way on X/Y but
  * keeps Z on the slot (a decor model's origin sits at its base, not its
  * middle) — the X/Y half of this, not the whole thing.
  */

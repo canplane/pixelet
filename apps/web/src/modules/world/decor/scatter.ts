@@ -7,7 +7,7 @@
  * later reuse this same function with their own DecorKindSeed +
  * eligibility predicate, never their own bespoke RNG). Rendering, terrain
  * access, and the "is a user object already standing here" check are all
- * decor_layer.tsx's concern instead — this file only ever sees plain
+ * decor_layer.ts's concern instead — this file only ever sees plain
  * ground-channel arrays and a seed, so it can be tested head-on with
  * synthetic ground data, no tile store or Three.js involved.
  */
@@ -113,7 +113,7 @@ function transport_aligned_rotation(transport: Uint8Array, cell_x: u32, cell_y: 
  * every eligible cell's placement, keyed off a seed derived from
  * (page_seed, kind.tag, cell_x, cell_y) alone. Pure and fully deterministic:
  * the same five inputs always produce the same candidates, regardless of
- * when, how often, or in what order this runs — decor_layer.tsx depends on
+ * when, how often, or in what order this runs — decor_layer.ts depends on
  * that determinism to let a placed user object's cell "win" over a
  * scattered decoration by simply filtering candidates afterward, rather
  * than persisting which cells got suppressed.
@@ -127,7 +127,7 @@ export function scatter_decor_candidates(
   kind: DecorKindSeed,
   is_eligible: DecorEligibility,
   /** Multiplies kind.density before the per-cell roll — the caller's own
-   * distance-based falloff (e.g. decor_layer.tsx thinning candidates past a
+   * distance-based falloff (e.g. decor_layer.ts thinning candidates past a
    * given LOD tier), kept as a plain scalar here so this function stays
    * free of any renderer/LOD concept of its own. 1 (every candidate rolled
    * at the kind's own density) unless a caller passes otherwise. */
