@@ -30,14 +30,33 @@ export type BuiltBillboard = {
   center_y: f64;
 };
 
+/**
+ * Draw order within tier 3, for the case two billboards land on the same
+ * pixels at the same depth. Depth testing settles everything else; this only
+ * settles ties, and the tie is between a badge that labels a fixed place and
+ * a bubble somebody is saying right now. The bubble wins — it is transient
+ * and the badge will still be there afterwards.
+ *
+ * Both sit at sprite_billboard.tsx's own reserved decade, an order of
+ * magnitude above every other renderOrder in the codebase, so a future
+ * indicator cannot slot in between them.
+ */
+export const BILLBOARD_ORDER = {
+  poi: 10000,
+  chat: 10001,
+} as const;
+
 export type BillboardProps = {
   built: BuiltBillboard | null;
   /** Where `built.center_y` sits, in the parent transform's local Z — see
    * use_distance_fade's own `base_z` doc comment. */
   base_z: f64;
+  /** One of BILLBOARD_ORDER. Every consumer names its own, so the hierarchy
+   * reads at the call sites rather than living in a default here. */
+  render_order: f64;
 };
 
-export function Billboard({ built, base_z }: BillboardProps) {
+export function Billboard({ built, base_z, render_order }: BillboardProps) {
   const texture = use_canvas_texture(built?.canvas ?? null);
   const sprite_ref = useRef<THREE.Sprite>(null);
   const width = (built?.logical_w ?? 0) * WORLD_UNITS_PER_PX;
@@ -46,5 +65,14 @@ export function Billboard({ built, base_z }: BillboardProps) {
   use_distance_fade(sprite_ref, width, height, base_z, center_frac);
 
   if (!built || !texture) return null;
-  return <SpriteBillboard ref={sprite_ref} texture={texture} width={width} height={height} position={[0, 0, base_z]} />;
+  return (
+    <SpriteBillboard
+      ref={sprite_ref}
+      texture={texture}
+      width={width}
+      height={height}
+      position={[0, 0, base_z]}
+      renderOrder={render_order}
+    />
+  );
 }

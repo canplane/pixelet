@@ -42,7 +42,7 @@ import { CHEBYSHEV_DIST } from "../terrain/use_tile_fetcher.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { FAR_END } from "../billboard/distance_fade.ts";
 import { FONT_FAMILY, FONT_WEIGHT_REGULAR } from "../billboard/canvas_scale.ts";
-import { Billboard, type BuiltBillboard } from "../billboard/billboard.tsx";
+import { Billboard, BILLBOARD_ORDER, type BuiltBillboard } from "../billboard/billboard.tsx";
 import { type BillboardCandidate, select_visible_billboards } from "../billboard/frustum_budget.ts";
 import { resolve_poi_theme } from "./poi_theme.ts";
 import { usePoiStore } from "./store.ts";
@@ -77,9 +77,24 @@ const DOT_DIAM = 6;
 const DOT_GAP = 4;
 const DOT_BORDER = 1;
 
-// Air gap above the terrain surface the anchor dot's own center is grounded
-// to (see build_poi_badge_canvas's own `center_y`).
-const GROUND_CLEARANCE_U: f64 = 0.3;
+/**
+ * Where the anchor dot sits, above the elevation with_ele grounds to.
+ *
+ * Exactly half a cell, and nothing else added on top. `ele` is the top
+ * *face* of the topmost terrain cell — the mesh fills up to `ele - 1`
+ * (terrain/adapter.ts) — so half a cell above it is the centre of the cell
+ * the dot marks. Terrain cells are centred and a POI is a point on one.
+ *
+ * This is also the point billboard/anchor_occlusion.ts measures from, which
+ * is why it is one number rather than a ground height plus a separate air
+ * gap: the place the dot claims and the place visibility is judged from
+ * have to be the same place, or the tolerance is being applied to a
+ * position nothing else agrees with.
+ *
+ * X and Y are untouched by any of this. A point marker has to land exactly
+ * where the place is; only Z is aligned to terrain, and terrain is cells.
+ */
+const ANCHOR_Z_U: f64 = 0.5;
 
 /** A single-line pill (colored icon circle + name) with an anchor dot
  * centered below it — the shape `checkpoint/20260107-float`'s own HTML
@@ -220,23 +235,41 @@ function select_nearby_pois(
       if (seen.has(poi.id)) continue;
       seen.add(poi.id);
       const absolute = poi_flat_pos(poi, page_idx);
-      const dist2 = flat_dist2(absolute, map_center);
-      // Beyond FAR_END it would render at factor 0 anyway —
-      // skip mounting it at all rather than paying for an invisible
-      // AnchorNode + sprite + useFrame every one of those would otherwise
-      // cost.
-      if (dist2 > FAR_END_U2) continue;
-      candidates.push({ poi, page_idx, absolute, dist2 });
+      // Flat distance from map_center, and only as a coarse reach limit —
+      // never as the ranking. It is the wrong measure for ranking twice
+      // over: it is measured from the look-at target rather than from the
+      // eye, and it is a projection onto the ground rather than a distance
+      // in space. At an oblique polar the camera sits well off to the
+      // target's -Y side (camera/orbit.ts), so the POIs nearest the *eye*
+      // are the ones furthest from the *target* on that side, and ranking
+      // this way drops exactly the badges filling the bottom of the screen
+      // while keeping ones near the horizon. Looking straight down the two
+      // measures agree, which is why the artifact vanishes there.
+      if (flat_dist2(absolute, map_center) > FAR_END_U2) continue;
+      candidates.push({ poi, page_idx, absolute, dist2: 0 });
     }
   }
 
-  // local_world_frame_ref.current starts null until mount.
+  const map_origin = get_local_world_origin(map_center);
+  // Grounded, not the flat z=0 poi_flat_pos gives: the frustum test and the
+  // ranking both have to use the position the badge is actually at. A POI on
+  // a hill tested at z=0 sits far below where it is drawn, and at an oblique
+  // angle that vertical error moves it across the screen — which is the same
+  // reason this only ever misbehaved away from straight-down.
+  for (const c of candidates) {
+    const grounded = with_ele({ i: 0n, f: 0n }, c.absolute.i, c.absolute.f);
+    if (grounded) c.absolute = grounded;
+  }
+
+  // local_world_frame_ref.current starts null until mount. Falls back to the
+  // flat measure, which is all that is available without a frame to resolve
+  // world positions against.
   if (!local_world_frame) {
+    for (const c of candidates) c.dist2 = flat_dist2(c.absolute, map_center);
     candidates.sort((a, b) => a.dist2 - b.dist2);
     return candidates.slice(0, MAX_RENDERED);
   }
 
-  const map_origin = get_local_world_origin(map_center);
   const billboard_candidates: BillboardCandidate<{ poi: POI; page_idx: IVec }>[] = candidates.map((c) => {
     const [x, y, z] = local_pos_from_absolute(c.absolute, map_origin);
     return { item: { poi: c.poi, page_idx: c.page_idx }, id: c.poi.id, local_x: x, local_y: y, local_z: z };
@@ -274,7 +307,7 @@ function PoiBadge({ poi, page_idx }: { poi: POI; page_idx: IVec }) {
 
   return (
     <AnchorNode i={anchor.i} f={anchor.f}>
-      <Billboard built={built} base_z={GROUND_CLEARANCE_U} />
+      <Billboard built={built} base_z={ANCHOR_Z_U} render_order={BILLBOARD_ORDER.poi} />
     </AnchorNode>
   );
 }
