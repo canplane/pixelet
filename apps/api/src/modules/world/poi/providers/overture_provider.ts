@@ -54,8 +54,8 @@ function category_of(properties: Record<string, unknown>): string {
  * Deliberately its own table, not merged into osm_elements: Overture's
  * per-place shape is a rich nested JSON object with no flat-tag equivalent
  * in OSM's model, and this pipeline is meant to stay structurally
- * independent of the OSM/GLO-30 one POI used to depend on — not layered on
- * top of it (see the discussion doc's own "don't mix in one place" note).
+ * independent of the terrain pipeline POI used to depend on — not layered
+ * on top of it (see the discussion doc's own "don't mix in one place" note).
  *
  * `rank` has no OSM-style policy-assigned equivalent here — Overture's own
  * `properties.confidence` (a source-conflation quality score, not a

@@ -75,128 +75,74 @@ fi
 # ---------------------------------------------------------
 # Step 3: Loop Processing
 # ---------------------------------------------------------
-IS_FIRST_RUN=true
+# GEDTM30 ships as one global Cloud-Optimized GeoTIFF, not per-region tiles
+# like GLO-30 was — each entry's own bbox_4326 is warped directly out of the
+# remote COG via HTTP range requests (/vsicurl/), so there's no raw-file
+# staging step and no portal-page refusal case. Still one raster2pgsql call
+# for every region's warped file together at the end (Step 4), same as the
+# old VRT-mosaic call did — raster2pgsql accepts multiple input files
+# directly (one row per file), so skipping the VRT step here doesn't need a
+# per-region -d/-a split.
+WARPED_FILES=()
 
 for ((i=0; i<ENTRY_COUNT; i++)); do
     ENTRY=$(jq -r ".[$i]" "$METADATA_FILE")
     REGION_CODE=$(echo "$ENTRY" | jq -r '.region_code')
-    DOWNLOAD_URL=$(echo "$ENTRY" | jq -r '.provider.url // empty')
+    DOWNLOAD_URL=$(echo "$ENTRY" | jq -r '.provider.url')
     DATA_DATE=$(echo "$ENTRY" | jq -r '.data_date // empty')
-    
     if [ -z "$DATA_DATE" ]; then DATA_DATE=$(date +%Y-%m-%d); fi
-    
-    FILES=()
-    while IFS= read -r line; do
-        FILES+=("$line")
-    done < <(echo "$ENTRY" | jq -r '.files[]')
+
+    WEST=$(echo "$ENTRY" | jq -r '.bbox_4326.west')
+    SOUTH=$(echo "$ENTRY" | jq -r '.bbox_4326.south')
+    EAST=$(echo "$ENTRY" | jq -r '.bbox_4326.east')
+    NORTH=$(echo "$ENTRY" | jq -r '.bbox_4326.north')
 
     echo "==================================================="
     echo "📍 Processing Region: $REGION_CODE"
     echo "==================================================="
 
-    for REL_FILE in "${FILES[@]}"; do
-        RAW_FILE="$ELEV_ROOT/$REL_FILE"
-        FILENAME=$(basename "$RAW_FILE")
-        
-        WARPED_DIR="$(dirname "$RAW_FILE")/../warped"
-        
-        # Derive the warped filename (4326 -> 3857)
-        if [[ "$FILENAME" == *"4326"* ]]; then
-            WARPED_FILENAME="${FILENAME//4326/3857}"
-        else
-            WARPED_FILENAME="${FILENAME%.*}_3857.tif"
-        fi
-        WARPED_FILE="$WARPED_DIR/$WARPED_FILENAME"
-        
-        echo "📂 Processing File: $FILENAME"
-        mkdir -p "$(dirname "$RAW_FILE")"
-        mkdir -p "$WARPED_DIR"
+    REGION_LOWER=$(echo "$REGION_CODE" | tr '[:upper:]' '[:lower:]')
+    WARPED_DIR="$ELEV_ROOT/region/$REGION_CODE/warped"
+    WARPED_FILENAME="gedtm30_${REGION_LOWER}_3857.tif"
+    WARPED_FILE="$WARPED_DIR/$WARPED_FILENAME"
+    mkdir -p "$WARPED_DIR"
 
-        # Auto-download only when the metadata URL actually points at a file.
-        # provider.url here is OpenTopography's interactive portal page, and an
-        # unguarded curl saves that HTML under the .tif name and exits 0 — the
-        # failure then surfaces much later as GDAL's opaque "not recognized as
-        # being in a supported file format", and because the bogus file now
-        # exists, every re-run skips the download and fails identically forever.
-        # Refuse up front and say where the file has to come from instead.
-        if [ ! -f "$RAW_FILE" ]; then
-            case "$DOWNLOAD_URL" in
-                *.tif | *.tiff | *.zip)
-                    echo "⬇️  Downloading from $DOWNLOAD_URL..."
-                    curl -fL -o "$RAW_FILE" "$DOWNLOAD_URL"
-                    ;;
-                *)
-                    echo "❌ Missing raw file: $RAW_FILE"
-                    echo "   This source has no direct download URL — provider.url is a portal page,"
-                    echo "   not a file, so it cannot be fetched automatically."
-                    echo "   See infra/geo/README.md > 'Obtaining the raw data' for the exact"
-                    echo "   bounding box to request for this file, and the filename to save it as."
-                    exit 1
-                    ;;
-            esac
-        fi
+    # Register status
+    docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
+    "INSERT INTO esa_elevation_catalog (region_code, data_date, file_name, status)
+     VALUES ('$REGION_CODE', '$DATA_DATE', '$WARPED_FILENAME', 'PROCESSING')
+     ON CONFLICT (file_name) DO UPDATE SET status = 'PROCESSING', updated_at = CURRENT_TIMESTAMP;"
 
-        # Register status
-        docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -c \
-        "INSERT INTO esa_elevation_catalog (region_code, data_date, file_name, status) 
-         VALUES ('$REGION_CODE', '$DATA_DATE', '$FILENAME', 'PROCESSING')
-         ON CONFLICT (file_name) DO UPDATE SET status = 'PROCESSING', updated_at = CURRENT_TIMESTAMP;"
+    # Crop + reproject straight from the remote COG — te is in the SOURCE crs
+    # (EPSG:4326, -te_srs), so the region's own lon/lat bbox needs no manual
+    # conversion; -t_srs 3857 matches this project's own working CRS.
+    echo "🔄 Cropping + re-projecting to 3857 (Warping)..."
+    docker run --rm -v "$ELEV_ROOT":/data "$GDAL_IMAGE" \
+        gdalwarp -te "$WEST" "$SOUTH" "$EAST" "$NORTH" -te_srs EPSG:4326 \
+        -t_srs EPSG:3857 -overwrite -r bilinear -of GTiff -co COMPRESS=DEFLATE \
+        "/vsicurl/$DOWNLOAD_URL" "/data/region/$REGION_CODE/warped/$WARPED_FILENAME"
 
-        # Warp, inside the container
-        echo "🔄 Re-projecting to 3857 (Warping)..."
-        docker run --rm -v "$ELEV_ROOT":/data "$GDAL_IMAGE" \
-            gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 \
-            -overwrite -r bilinear -of GTiff -co COMPRESS=DEFLATE \
-            "/data/$REL_FILE" "/data/${REL_FILE%/*}/../warped/$WARPED_FILENAME"
-        
-        IS_FIRST_RUN=false
-    done
+    WARPED_FILES+=("$WARPED_FILE")
 done
 
-# ---------------------------------------------------------
-# Step 4: VRT & Ingestion
-# ---------------------------------------------------------
-if [ "$IS_FIRST_RUN" = true ]; then
-    echo "⚠️  No files were processed. Exiting."
+if [ ${#WARPED_FILES[@]} -eq 0 ]; then
+    echo "⚠️  No regions were processed. Exiting."
     exit 0
 fi
 
-echo "📦 Building global VRT index..."
-
-# 1. Build the list of warped files, as host paths
-find "$ELEV_ROOT" -type f -path "*/warped/*_3857.tif" > "$ELEV_ROOT/warped_file_list.txt"
-
-# 2. Rewrite those paths for the container (host -> container)
-sed "s|$ELEV_ROOT|/data|g" "$ELEV_ROOT/warped_file_list.txt" > "$ELEV_ROOT/warped_file_list_docker.txt"
-
-# 3. Build the VRT in the container, which records only /data paths
-docker run --rm -v "$ELEV_ROOT":/data "$GDAL_IMAGE" \
-    gdalbuildvrt -input_file_list /data/warped_file_list_docker.txt /data/index.vrt
-
-# 4. Rewrite the paths inside the VRT back to host paths (container -> host),
-#    so raster2pgsql running on the host can find the actual files
-sed "s|/data|$ELEV_ROOT|g" "$ELEV_ROOT/index.vrt" > "$ELEV_ROOT/index_local.vrt"
-
-echo "📥 Ingesting raster VRT..."
-# 5. Ingest using the host-side tool
-raster2pgsql -d -s 3857 -I -C -M -t 256x256 "$ELEV_ROOT/index_local.vrt" public.esa_elevation_raster \
+echo "📥 Ingesting raster(s)..."
+raster2pgsql -d -s 3857 -I -C -M -t 256x256 "${WARPED_FILES[@]}" public.esa_elevation_raster \
     | docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE"
 
-# 6. Clean up temporary artifacts
-rm -f "$ELEV_ROOT/warped_file_list.txt" \
-      "$ELEV_ROOT/warped_file_list_docker.txt" \
-      "$ELEV_ROOT/index.vrt" \
-      "$ELEV_ROOT/index_local.vrt"
-
 # ---------------------------------------------------------
-# Step 5: Finalization
+# Step 4: Finalization
 # ---------------------------------------------------------
 echo "🚀 Finalizing..."
 docker exec -i "$DB_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" <<EOF
 ANALYZE public.esa_elevation_raster;
-UPDATE esa_elevation_catalog 
-SET status = 'COMPLETED', 
-    total_count = (SELECT count(*) FROM public.esa_elevation_raster), 
+UPDATE esa_elevation_catalog
+SET status = 'COMPLETED',
+    total_count = (SELECT count(*) FROM public.esa_elevation_raster),
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'PROCESSING';
 EOF

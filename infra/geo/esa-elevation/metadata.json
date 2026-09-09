@@ -1,46 +1,19 @@
 [
   {
     "region_code": "KR",
-    "data_date": "2025-12-29",
+    "data_date": "2025-06-11",
     "provider": {
-      "name": "OpenTopography",
-      "url": "https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3"
+      "name": "OpenGeoHub / OpenLandMap (GEDTM30 v1.2)",
+      "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2.tif",
+      "doi": "https://zenodo.org/records/15689805"
     },
     "coordinate_system": "EPSG:4326",
-    "description": "Copernicus GLO-30 raw GeoTIFF, four tiles covering South Korea",
+    "vertical_datum": "EGM2008 (EPSG:3855)",
+    "description": "GEDTM30 v1.2 (CC-BY 4.0) — global ensemble bare-earth DTM (ICESat-2/GEDI-fused, strips the building/canopy noise GLO-30's surface model bakes into ground elevation). Distributed as one global Cloud-Optimized GeoTIFF; cropped to South Korea's coverage bbox directly from the remote file via gdalwarp -te over HTTP range requests (/vsicurl/), no manual per-tile portal download the way GLO-30 needed.",
     "acquisition": {
-      "automated": false,
-      "reason": "provider.url is an interactive portal page, not a file. The setup script's curl fallback would save that HTML page under the .tif name; download these manually instead. OpenTopography's direct API (portal.opentopography.org/API/globaldem?demtype=COP30&...) needs a free API key.",
-      "instructions": "see infra/geo/README.md, 'Obtaining the raw data'",
-      "note": "coverage[] below gives the exact bbox to request for each file. Save each download under its listed path — the ingestion script does not rename."
+      "automated": true,
+      "note": "provider.url is a real, directly fetchable COG (unlike GLO-30's OpenTopography source, an interactive portal page) — the setup script warps straight from it, no local raw-file staging step."
     },
-    "coverage": [
-      {
-        "path": "region/KR/raw/GLO30_KOR_W125E130_S34N39_4326.tif",
-        "bbox_4326": { "west": 125, "east": 130, "south": 34, "north": 39 },
-        "covers": "mainland South Korea"
-      },
-      {
-        "path": "region/KR/raw/GLO30_KOR_W126E127_S33N34_4326.tif",
-        "bbox_4326": { "west": 126, "east": 127, "south": 33, "north": 34 },
-        "covers": "Jeju"
-      },
-      {
-        "path": "region/KR/raw/GLO30_KOR_W124E125_S37N39_4326.tif",
-        "bbox_4326": { "west": 124, "east": 125, "south": 37, "north": 39 },
-        "covers": "far western islands (Baengnyeongdo and neighbours)"
-      },
-      {
-        "path": "region/KR/raw/GLO30_KOR_W130E132_S37N38_4326.tif",
-        "bbox_4326": { "west": 130, "east": 132, "south": 37, "north": 38 },
-        "covers": "Ulleungdo and Dokdo"
-      }
-    ],
-    "files": [
-      "region/KR/raw/GLO30_KOR_W125E130_S34N39_4326.tif",
-      "region/KR/raw/GLO30_KOR_W126E127_S33N34_4326.tif",
-      "region/KR/raw/GLO30_KOR_W124E125_S37N39_4326.tif",
-      "region/KR/raw/GLO30_KOR_W130E132_S37N38_4326.tif"
-    ]
+    "bbox_4326": { "west": 123.9998611, "east": 131.9997935265517, "south": 33.000244913560735, "north": 39.000138899999996 }
   }
 ]
