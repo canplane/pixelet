@@ -1,4 +1,4 @@
-// @xpute/core/ds/pool.ts
+// @xpute/core/ds/buddy.ts
 
 /**
  * Buddy allocator for buffers whose deaths are unordered.
@@ -52,7 +52,7 @@ import type { u32 } from "../kit/word.ts";
 import { MarshalError } from "@xpute/core/sys/error.ts";
 import { Errno } from "@xpute/core/sys/errno.ts";
 
-export type PoolOptions = {
+export type BuddyOptions = {
   /** Smallest allocation, and the alignment every block satisfies. */
   min_block_bytes?: u32;
   /** One region's size. A request larger than this spills to its own ArrayBuffer. */
@@ -99,7 +99,7 @@ export type Block = {
   free: boolean;
 };
 
-export type PoolStat = {
+export type BuddyStat = {
   /** Bytes in blocks currently borrowed (as requested, before rounding up). */
   live_bytes: u32;
   /** Region bytes not currently carved into a live block. */
@@ -206,12 +206,12 @@ class Region {
   }
 }
 
-export class Pool {
+export class BuddyAllocator {
   readonly min_block_bytes: u32;
   readonly region_bytes: u32;
   readonly max_idle_regions: u32;
 
-  readonly stat: PoolStat = {
+  readonly stat: BuddyStat = {
     live_bytes: 0,
     idle_bytes: 0,
     reserved_bytes: 0,
@@ -232,7 +232,7 @@ export class Pool {
   private readonly _poison: boolean;
   private readonly _bypass: boolean;
 
-  constructor(opts: PoolOptions = {}) {
+  constructor(opts: BuddyOptions = {}) {
     const {
       min_block_bytes = 1 << 12,
       region_bytes = 1 << 26,

@@ -11,7 +11,7 @@
  * sizes that live in the same region.
  */
 
-import { Pool } from "@xpute/core/ds/pool.ts";
+import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 
 /**
  * A chunk mesh's whole block, recycled across rebuilds.
@@ -34,7 +34,7 @@ import { Pool } from "@xpute/core/ds/pool.ts";
  * (the one failure mode pooling introduces): the stale reader then sees NaN
  * geometry instead of a plausible neighbouring chunk.
  */
-export const MESH_POOL = new Pool({
+export const MESH_POOL = new BuddyAllocator({
   min_block_bytes: 1 << 12,
   region_bytes: 1 << 26,
   max_idle_regions: 1,
