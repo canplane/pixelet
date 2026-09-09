@@ -11,7 +11,7 @@ FROM denoland/deno:2.7.11
 WORKDIR /app
 
 # No npm-style two-phase "install deps, then copy source" cache split —
-# `deno cache` walks the real local import graph (packages/pxl/shared,
+# the vite build below walks the real local import graph (packages/pxl/shared,
 # packages/xpute/core, apps/api/src/**) to know which third-party
 # jsr/npm specifiers it even needs, so the source has to be present
 # before it can run at all. apps/web's own deno.json (not its src/) is
@@ -21,8 +21,8 @@ COPY apps/web/deno.json ./apps/web/deno.json
 COPY packages ./packages
 COPY apps/api ./apps/api
 
-RUN deno cache apps/api/src/index.ts
+RUN deno task --cwd apps/api build
 
 EXPOSE 3000
 
-CMD ["deno", "run", "-A", "apps/api/src/index.ts"]
+CMD ["deno", "run", "-A", "apps/api/dist/main/server.js"]

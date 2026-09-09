@@ -4,9 +4,18 @@
   "exports": "./src/index.ts",
 
   "tasks": {
-    "dev": "deno run -A --watch --env=../.env src/index.ts",
+    "dev": "deno task build:dev && (deno task watch:dev & deno task serve:dev)",
+
+    "build:dev": "deno run -A --node-modules-dir=auto npm:vite build --mode development",
+    "watch:dev": "deno run -A --node-modules-dir=auto npm:vite build --watch --mode development",
+    "serve:dev": "deno run -A --watch=dist/main/server.js --env=../.env dist/main/server.js",
+
+    "build": "deno run -A --node-modules-dir=auto npm:vite build",
+
     "check": "deno check src/index.ts"
   },
+
+  "compilerOptions": { "types": ["./@types/index.d.ts"] },
 
   "imports": {
     "@/": "./src/",
