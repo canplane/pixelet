@@ -52,6 +52,57 @@ function box_center_of(built: BakedChunkMesh, box_index: number, faces_per_box: 
   return [0, 1, 2].map((k) => built.position[vi + k] - built.local_pos[vi + k] * built.box_scale[vi + k]) as [number, number, number];
 }
 
+/** Every box in the bake, keyed by its own centre, with the face/shading
+ * mask its vertices carry. Walks vertices rather than indexing by a stride,
+ * because a chunk holding both terrain (open-bottom) and objects (six
+ * faces) has no single stride to index by. */
+function boxes_of(built: BakedChunkMesh): Map<string, number> {
+  const out = new Map<string, number>();
+  for (let v = 0; v < built.vertex_cnt; v++) {
+    const o = v * 3;
+    const c = [0, 1, 2].map((k) => built.position[o + k] - built.local_pos[o + k] * built.box_scale[o + k]);
+    out.set(c.join(","), built.faces[v]);
+  }
+  return out;
+}
+
+// Bit values from chunk_mesher.ts's own mask layout.
+const FACE_PX_BIT = 1 << 0;
+const CREASE_PX_BIT = 1 << 18;
+const CREASE_NX_BIT = 1 << 19;
+const CAP_PZ_BIT = 1 << 22;
+
+Deno.test("LOD1 - a user cube flush against terrain draws no seam between them", () => {
+  const columns = empty_columns();
+  // Same height, side by side, one LAND and one OBJECT. Nothing about that
+  // join is a silhouette, so neither side may claim a convex crease — a
+  // placed cube set into flat ground has to read as flat ground.
+  columns[idx(5, 5)] = [run(0, 0, 200, 100, 50, MaterialClass.LAND)];
+  columns[idx(6, 5)] = [run(0, 0, 50, 100, 200, MaterialClass.OBJECT)];
+
+  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  const land = boxes.get("5.5,5.5,0.5")!;
+  const cube = boxes.get("6.5,5.5,0.5")!;
+  assertEquals(land & CREASE_PX_BIT, 0);
+  assertEquals(cube & CREASE_NX_BIT, 0);
+  // The face itself still survives: an object stays exempt from culling so
+  // it can never open a hole under or beside itself.
+  assert((land & FACE_PX_BIT) !== 0);
+});
+
+Deno.test("LOD1 - a wall capped by a user cube is not shaded as a silhouette", () => {
+  const columns = empty_columns();
+  // Terrain with a placed cube sitting on it. The terrain's +Z face is kept
+  // (objects never cull), but its side walls are capped all the same, so
+  // their top edges are not open air.
+  columns[idx(5, 5)] = [run(0, 0, 200, 100, 50, MaterialClass.LAND), run(1, 1, 50, 100, 200, MaterialClass.OBJECT)];
+
+  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  assert((boxes.get("5.5,5.5,0.5")! & CAP_PZ_BIT) !== 0);
+  // Nothing above the cube itself, so it stays uncapped.
+  assertEquals(boxes.get("5.5,5.5,1.5")! & CAP_PZ_BIT, 0);
+});
+
 Deno.test("coarse mesher - a fully-covered cell doesn't shrink and blends its columns' colors", () => {
   const columns = empty_columns();
   // lod_step=2: all 4 sub-columns of the one coarse cell, same color/z.

@@ -174,6 +174,9 @@ function inject_chunk_shader(shader: {
       // CREASE per lateral: 262144.. — a lateral edge is convex by this and
       // not by its face bit, because a chunk-edge face is emitted without
       // its neighbour ever having been looked at.
+      // CAP: 4194304 = above   8388608 = below. Also not the face bit: a
+      // placed object is exempt from culling but is still solid, so a wall
+      // capped by a user cube keeps its +Z face and is not a silhouette.
       float lateral_bit(bool x_axis, bool positive, float base) {
         return base * (x_axis ? (positive ? 1.0 : 2.0) : (positive ? 4.0 : 8.0));
       }
@@ -202,7 +205,7 @@ function inject_chunk_shader(shader: {
           // side. Its horizontal edge is the vertical seam, where (d + n) is
           // a diagonal in the XY plane.
           float own = lateral_bit(x_dom, n_positive, 1.0);
-          d = min(d, crease_dist(dist_to_edge.z, face_bit(pz ? 16.0 : 32.0), face_bit(own * (pz ? 64.0 : 1024.0))));
+          d = min(d, crease_dist(dist_to_edge.z, !face_bit(pz ? 4194304.0 : 8388608.0), face_bit(own * (pz ? 64.0 : 1024.0))));
           bool sx = x_dom ? n_positive : px;
           bool sy = x_dom ? py : n_positive;
           float diag = sx ? (sy ? 16384.0 : 32768.0) : (sy ? 65536.0 : 131072.0);
