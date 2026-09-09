@@ -17,6 +17,7 @@
 import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
+import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { glsl_float, inject_rim_light_shader } from "@/modules/world/render/rim_light_shader.ts";
@@ -34,6 +35,7 @@ const LAYER_TAPS_ATTR = "a_layer_taps";
 export const VISIBLE_ATTR = "a_visible";
 const LOCAL_POS_ATTR = "a_local_pos";
 const BOX_SCALE_ATTR = "a_box_scale";
+const FACES_ATTR = "a_faces";
 
 /**
  * Injected once per baked chunk-mesh material. Every vertex here is a real,
@@ -57,6 +59,8 @@ function inject_chunk_shader(shader: {
   shader.uniforms.u_ground_layers_top = { value: GROUND_LAYERS_TOP };
   shader.uniforms.u_ground_layers_side = { value: GROUND_LAYERS_SIDE };
   shader.uniforms.u_low_spec = { value: true };
+  shader.uniforms.u_edge_strength = { value: 0.3 };
+  shader.uniforms.u_edge_width = { value: 0.03 };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
@@ -66,14 +70,17 @@ function inject_chunk_shader(shader: {
       attribute float ${VISIBLE_ATTR};
       attribute vec3 ${LOCAL_POS_ATTR};
       attribute vec3 ${BOX_SCALE_ATTR};
+      attribute float ${FACES_ATTR};
       varying vec3 v_rgb;
       varying vec4 v_layer_taps;
       varying float v_visible;
       varying vec2 v_box_uv;
       varying float v_is_side;
       varying float v_side_x_dominant;
+      varying float v_side_sign;
       varying vec3 v_local_pos;
-      varying vec3 v_box_scale;`,
+      varying vec3 v_box_scale;
+      varying float v_faces;`,
     )
     .replace(
       "void main() {",
@@ -84,6 +91,9 @@ function inject_chunk_shader(shader: {
         v_is_side = (abs(normal.z) < 0.5) ? 1.0 : 0.0;
         v_local_pos = ${LOCAL_POS_ATTR};
         v_side_x_dominant = (abs(normal.x) > 0.5) ? 1.0 : 0.0;
+        // Which way this side face points, for the diagonal lookup below —
+        // vNormal is transformed by the time the fragment stage sees it.
+        v_side_sign = (abs(normal.x) > 0.5) ? sign(normal.x) : sign(normal.y);
         // Real-size tile UV, not the box's own raw 0..1 face UV: chunk_mesher.ts
         // bakes each box's own real cell-unit size straight into a_box_scale, so a
         // box spanning many cells — any coarse-LOD box, or same-material cells merged
@@ -102,6 +112,7 @@ function inject_chunk_shader(shader: {
         // of its bottom (e.g. side_bare.png's grass cap rendering at a cliff's foot instead
         // of its crest). RepeatWrapping (tex_array.ts) turns >1 straight into tiling.
         v_box_scale = ${BOX_SCALE_ATTR};
+        v_faces = ${FACES_ATTR};
         v_box_uv = v_is_side > 0.5
           ? (abs(normal.x) > 0.5
             ? vec2((${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z)
@@ -118,8 +129,12 @@ function inject_chunk_shader(shader: {
       varying vec2 v_box_uv;
       varying float v_is_side;
       varying float v_side_x_dominant;
+      varying float v_side_sign;
       varying vec3 v_local_pos;
       varying vec3 v_box_scale;
+      varying float v_faces;
+      uniform float u_edge_strength;
+      uniform float u_edge_width;
       uniform sampler2DArray u_ground_layers_top;
       uniform sampler2DArray u_ground_layers_side;
       uniform bool u_low_spec;
@@ -129,21 +144,76 @@ function inject_chunk_shader(shader: {
           ? texture(u_ground_layers_side, vec3(v_box_uv, layer_idx)).rgb
           : texture(u_ground_layers_top, vec3(v_box_uv, layer_idx)).rgb;
       }
-      // Per-cell edge crease — a static darken only, view-independent (no Fresnel/sheen
-      // term), so it reads the same regardless of camera angle. Narrow width with a
-      // hard-ish falloff (pow, not a wide smoothstep) keeps it a crisp seam rather than a
-      // soft/hazy gradient.
-      const float BEVEL_WORLD_WIDTH = 0.025;
-      const float BEVEL_DARKEN = 0.78;
+      // Edge shading, from one rule.
+      //
+      // For a face with outward normal n, its edge toward an in-plane
+      // direction d is a crease when either the face toward d also
+      // exists — nothing out that way, so the edge is a silhouette — or the
+      // cell at (d + n) is solid, so the surface turns inward there. Convex
+      // and concave, and every edge of every face is one, the other, both,
+      // or neither.
+      //
+      // The bits come from chunk_mesher.ts, which answers the first half
+      // already to decide whether to emit a face at all. Flat ground has no
+      // creases and stays seamless, which is the whole point: the fake bevel
+      // this replaced shaded all four edges of every cell and drew a grid
+      // across a continuous surface.
+      //
+      // A static darken only, view-independent (no Fresnel/sheen term), so
+      // it reads the same at any camera angle, and a narrow width with a
+      // hard-ish falloff (pow, not a wide smoothstep) keeps it a crisp seam
+      // rather than a haze. Width is in world units, so at distance it
+      // converges to a faint darkening instead of turning a zoomed-out view
+      // into a wireframe the way a screen-space outline would.
+      bool face_bit(float bit_value) {
+        return mod(floor(floor(v_faces + 0.5) / bit_value), 2.0) >= 0.5;
+      }
+      // FACE_P/N per axis: 1,2 = +-X   4,8 = +-Y   16,32 = +-Z
+      // RISES/DIPS per lateral: 64.. = rises   1024.. = dips
+      // DIAG: 16384 = ++   32768 = +-   65536 = -+   131072 = --
+      // CREASE per lateral: 262144.. — a lateral edge is convex by this and
+      // not by its face bit, because a chunk-edge face is emitted without
+      // its neighbour ever having been looked at.
+      float lateral_bit(bool x_axis, bool positive, float base) {
+        return base * (x_axis ? (positive ? 1.0 : 2.0) : (positive ? 4.0 : 8.0));
+      }
+      float crease_dist(float d, bool convex, bool concave) {
+        return (convex || concave) ? d : 1e9;
+      }
       float edge_factor() {
+        if (u_edge_strength <= 0.0) return 0.0;
+        bool is_side = v_is_side > 0.5;
         vec3 dist_to_edge = (0.5 - abs(v_local_pos)) * v_box_scale;
-        float d = v_is_side > 0.5
-          ? (v_side_x_dominant > 0.5 ? min(dist_to_edge.y, dist_to_edge.z) : min(dist_to_edge.x, dist_to_edge.z))
-          : min(dist_to_edge.x, dist_to_edge.y);
-        return pow(1.0 - smoothstep(0.0, BEVEL_WORLD_WIDTH, d), 2.0);
+        bool px = v_local_pos.x > 0.0, py = v_local_pos.y > 0.0, pz = v_local_pos.z > 0.0;
+        bool x_dom = v_side_x_dominant > 0.5;
+        bool n_positive = v_side_sign > 0.0;
+        float d = 1e9;
+
+        if (!is_side) {
+          // Top or bottom face: both in-plane axes are lateral, and (d + n)
+          // is that lateral neighbour one cell up (top) or down (bottom).
+          float rise_or_dip = pz ? 64.0 : 1024.0;
+          d = min(d, crease_dist(dist_to_edge.x, face_bit(lateral_bit(true, px, 262144.0)), face_bit(lateral_bit(true, px, rise_or_dip))));
+          d = min(d, crease_dist(dist_to_edge.y, face_bit(lateral_bit(false, py, 262144.0)), face_bit(lateral_bit(false, py, rise_or_dip))));
+        } else {
+          // Side face. Its vertical edges are the wall's own top and bottom,
+          // where (d + n) is this face's lateral neighbour one cell up or
+          // down — the same bits the top face uses, read from the other
+          // side. Its horizontal edge is the vertical seam, where (d + n) is
+          // a diagonal in the XY plane.
+          float own = lateral_bit(x_dom, n_positive, 1.0);
+          d = min(d, crease_dist(dist_to_edge.z, face_bit(pz ? 16.0 : 32.0), face_bit(own * (pz ? 64.0 : 1024.0))));
+          bool sx = x_dom ? n_positive : px;
+          bool sy = x_dom ? py : n_positive;
+          float diag = sx ? (sy ? 16384.0 : 32768.0) : (sy ? 65536.0 : 131072.0);
+          float horiz = x_dom ? dist_to_edge.y : dist_to_edge.x;
+          bool horiz_convex = x_dom ? face_bit(lateral_bit(false, py, 262144.0)) : face_bit(lateral_bit(true, px, 262144.0));
+          d = min(d, crease_dist(horiz, horiz_convex, face_bit(diag)));
+        }
+        return pow(1.0 - smoothstep(0.0, u_edge_width, d), 2.0);
       }
       vec3 apply_fake_bevel(vec3 color) {
-        return color * mix(1.0, BEVEL_DARKEN, edge_factor());
+        return color * mix(1.0, 1.0 - u_edge_strength, edge_factor());
       }`,
     )
     .replace("void main() {", `void main() { if (v_visible < 0.5) discard;`)
@@ -176,6 +246,7 @@ export function create_geometry(built: BuiltChunkMesh): THREE.BufferGeometry {
   geo.setAttribute(VISIBLE_ATTR, new THREE.BufferAttribute(built.visibility, 1));
   geo.setAttribute(LOCAL_POS_ATTR, new THREE.BufferAttribute(built.local_pos, 3));
   geo.setAttribute(BOX_SCALE_ATTR, new THREE.BufferAttribute(built.box_scale, 3));
+  geo.setAttribute(FACES_ATTR, new THREE.BufferAttribute(built.faces, 1));
   geo.setIndex(new THREE.BufferAttribute(built.index, 1));
   return geo;
 }
@@ -199,6 +270,7 @@ function create_material(): THREE.MeshStandardMaterial {
     inject_chunk_shader(shader);
     shader.uniforms.u_low_spec.value = useSettingsStore.getState().low_spec;
     shader.uniforms.u_rim_intensity.value = useSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
+    push_edge_uniforms(shader);
     material.userData.shader = shader;
   };
   return material;
@@ -210,16 +282,49 @@ function create_material(): THREE.MeshStandardMaterial {
  * per-mesh effect; `invalidate` wakes the demand loop, which a React state
  * change used to do implicitly by re-rendering.
  */
+type ShaderUniforms = { uniforms: Record<string, THREE.IUniform> };
+
+function push_edge_uniforms(shader: ShaderUniforms): void {
+  const debug = useDebugStore.getState();
+  shader.uniforms.u_edge_strength.value = debug.edgeShadeStrength;
+  shader.uniforms.u_edge_width.value = debug.edgeShadeWidth;
+}
+
 let shared_material: THREE.MeshStandardMaterial | null = null;
+
+/**
+ * Console handle for the two continuous knobs, in dev.
+ *
+ * The binary judgements — is edge shading on at all, does it touch vertical
+ * faces — are toggles in the debug section, because they are the ones with
+ * an obvious right answer once seen. Strength and width are not: they were
+ * tuned when every cube edge was shaded and there is no reason the same
+ * numbers read correctly now that a small fraction of edges are. Typing
+ * `__pxl_edge({ strength: 0.35 })` and looking is faster than any slider.
+ */
+type EdgeGlobals = typeof globalThis & { __pxl_edge?: (next: { strength?: number; width?: number }) => void };
 
 export function chunk_material(): THREE.MeshStandardMaterial {
   if (shared_material) return shared_material;
   shared_material = create_material();
   useSettingsStore.subscribe((state) => {
-    const shader = shared_material?.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
+    const shader = shared_material?.userData.shader as ShaderUniforms | undefined;
     if (!shader) return;
     shader.uniforms.u_low_spec.value = state.low_spec;
     shader.uniforms.u_rim_intensity.value = state.show_rim_light ? rim_cfg.INTENSITY : 0;
+    invalidate();
+  });
+  if (import.meta.env.DEV) {
+    (globalThis as EdgeGlobals).__pxl_edge = ({ strength, width }) =>
+      useDebugStore.getState().setEdgeShade({
+        ...(strength === undefined ? {} : { edgeShadeStrength: strength }),
+        ...(width === undefined ? {} : { edgeShadeWidth: width }),
+      });
+  }
+  useDebugStore.subscribe(() => {
+    const shader = shared_material?.userData.shader as ShaderUniforms | undefined;
+    if (!shader) return;
+    push_edge_uniforms(shader);
     invalidate();
   });
   return shared_material;

@@ -68,6 +68,14 @@ export type BakedChunkMesh = {
   rgb: Float32Array;
   /** vertex_cnt*4 floats, one terrain texture layer per supersample tap. */
   layer_taps: Float32Array;
+  /**
+   * vertex_cnt floats: this vertex's own box's face mask, the same six bits
+   * run_face_mask produced. The shader reads it to shade only the edges that
+   * border open air — an edge of the top face is a silhouette exactly when
+   * the side face in that direction survived culling, so the question face
+   * culling already answers is the same one edge shading needs.
+   */
+  faces: Float32Array;
   /** Triangle index buffer (Uint32 — a dense chunk can comfortably exceed
    * Uint16's 65535-vertex ceiling once every box bakes 20-24 real vertices
    * instead of costing one shared 24-vertex buffer regardless of count). */
@@ -149,6 +157,62 @@ const FACE_NZ: u32 = 1 << 5;
 const ALL_FACES: u32 = (1 << 6) - 1;
 const OPEN_BOTTOM_FACES: u32 = ALL_FACES & ~FACE_NZ;
 
+// ---- Edge shading bits ----
+//
+// One rule covers every edge of every face. For a face with outward normal
+// `n`, its edge toward an in-plane direction `d` is a crease when either:
+//
+//   convex   the face toward `d` also exists — nothing is out that way, so
+//            the edge is a silhouette. Already answered by the six bits
+//            above, for free.
+//   concave  the cell at `d + n` is solid — the surface turns inward there.
+//
+// Everything below exists to answer that second question for all twelve
+// (face, edge) pairs. `d + n` is always one of three shapes: a lateral
+// neighbour one cell up, one cell down, or a diagonal in the XY plane.
+//
+// The six face bits cannot substitute for any of it. A neighbour level with
+// this run and one above it both hide the same side face, so flat ground and
+// the foot of a riser clear the same bit; and a wall that runs straight on
+// and a wall that turns inward both have their perpendicular bit cleared by
+// the cell they share.
+const RISES_PX: u32 = 1 << 6;
+const RISES_NX: u32 = 1 << 7;
+const RISES_PY: u32 = 1 << 8;
+const RISES_NY: u32 = 1 << 9;
+const DIPS_PX: u32 = 1 << 10;
+const DIPS_NX: u32 = 1 << 11;
+const DIPS_PY: u32 = 1 << 12;
+const DIPS_NY: u32 = 1 << 13;
+
+// The XY diagonals, for the vertical seam where a wall turns. Gated: a
+// diagonal is only scanned where a wall could actually turn — one of the two
+// faces meeting there exists while the other's axis neighbour hides it. Flat
+// ground has no side faces and pays nothing.
+const DIAG_PP: u32 = 1 << 14;
+const DIAG_PN: u32 = 1 << 15;
+const DIAG_NP: u32 = 1 << 16;
+const DIAG_NN: u32 = 1 << 17;
+
+// Whether a lateral edge is a convex crease, which is *not* the same as
+// whether its face exists.
+//
+// The two answers diverge at a chunk's own boundary, where the neighbouring
+// chunk's columns are not in this scan. Emitting the face there is the
+// conservative choice and has to stay — culling one that should be visible
+// is a hole. Shading its edge is the opposite: the conservative choice is to
+// leave it alone, because a wrong line is drawn on every flat seam in the
+// world, once every CHUNK_CELL_SPAN cells, while a wrong omission costs an
+// outline only where a crease happens to run along a chunk edge.
+//
+// So the face bits keep deciding emission and these decide shading. The
+// vertical edges need no equivalent: their neighbour is this column's own
+// run list, which is always known.
+const CREASE_PX: u32 = 1 << 18;
+const CREASE_NX: u32 = 1 << 19;
+const CREASE_PY: u32 = 1 << 20;
+const CREASE_NY: u32 = 1 << 21;
+
 function face_cnt_of(mask: u32): u32 {
   let n: u32 = 0;
   for (let bits = mask; bits !== 0; bits &= bits - 1) n++;
@@ -164,7 +228,7 @@ function face_cnt_of(mask: u32): u32 {
 // ~2000 chunks moved +344MB in a single frame, 8.4s of it off-thread.
 // `visibility` is reserved here but written by chunk_bucket.ts (see
 // carve_visibility): the mesher owns the layout, never the role policy.
-const F32_PER_VERTEX: u32 = 3 /* position */ + 3 /* normal */ + 3 /* local_pos */ + 3 /* box_scale */ + 3 /* rgb */ + 4 /* layer_taps */;
+const F32_PER_VERTEX: u32 = 3 /* position */ + 3 /* normal */ + 3 /* local_pos */ + 3 /* box_scale */ + 3 /* rgb */ + 4 /* layer_taps */ + 1 /* faces */;
 const VIS_F32_PER_VERTEX: u32 = 1;
 
 function block_bytes(vertex_total: u32, index_total: u32): u32 {
@@ -201,6 +265,7 @@ type MeshBuilder = {
   box_scale: Float32Array;
   rgb: Float32Array;
   layer_taps: Float32Array;
+  faces: Float32Array;
   index: Uint32Array;
   v_cnt: u32;
   i_cnt: u32;
@@ -225,6 +290,7 @@ function alloc_builder(vertex_total: u32, index_total: u32): MeshBuilder {
     box_scale: span(vertex_total * 3),
     rgb: span(vertex_total * 3),
     layer_taps: span(vertex_total * 4),
+    faces: span(vertex_total),
     // visibility's own span sits here, carved on demand by carve_visibility.
     index: new Uint32Array(buf, block.byte_offset + vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_total),
     v_cnt: 0,
@@ -242,6 +308,7 @@ function finish_builder(builder: MeshBuilder): BakedChunkMesh {
     box_scale: builder.box_scale,
     rgb: builder.rgb,
     layer_taps: builder.layer_taps,
+    faces: builder.faces,
     index: builder.index,
   };
 }
@@ -302,6 +369,7 @@ function emit_box(
       builder.layer_taps[lo + 1] = tap1;
       builder.layer_taps[lo + 2] = tap2;
       builder.layer_taps[lo + 3] = tap3;
+      builder.faces[vi] = faces;
     }
     builder.index[builder.i_cnt++] = base_v;
     builder.index[builder.i_cnt++] = base_v + 1;
@@ -335,6 +403,38 @@ function column_covers_range_opaque(set: ColumnRunSet, col: u32, z0: i32, z1: i3
     if (set.z1[i] >= z1) return true;
   }
   return false;
+}
+
+const HIDES_SIDE: u32 = 1;
+const RISES_ABOVE: u32 = 2;
+const EXTENDS_BELOW: u32 = 4;
+
+/**
+ * Both questions a neighbour column can answer about one run, in one pass.
+ *
+ * Whether it hides my side face (spans my whole range), whether it occupies
+ * the cell over my top, and whether it occupies the cell under my bottom are
+ * three separate facts that one ascending walk settles together. Asking them
+ * as three calls would triple the neighbour scans, and run_face_mask already
+ * makes four.
+ */
+function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 {
+  const above = z1 + 1;
+  const below = z0 - 1;
+  const all = HIDES_SIDE | RISES_ABOVE | EXTENDS_BELOW;
+  let rel: u32 = 0;
+  const end = set.start[col + 1];
+  for (let i = set.start[col]; i < end; i++) {
+    const r_z0 = set.z0[i];
+    if (r_z0 > above) break;
+    if (set.sub_sz[i] !== SUB_CELL_NONE || set.material_class[i] === MaterialClass.OBJECT) continue;
+    const r_z1 = set.z1[i];
+    if (r_z0 <= z0 && r_z1 >= z1) rel |= HIDES_SIDE;
+    if (r_z0 <= above && r_z1 >= above) rel |= RISES_ABOVE;
+    if (r_z0 <= below && r_z1 >= below) rel |= EXTENDS_BELOW;
+    if (rel === all) break;
+  }
+  return rel;
 }
 
 /* is_run_occluded lived here, with is_topmost_run and column_covers_range
@@ -380,10 +480,53 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
   if (column_covers_range_opaque(set, col, z1 + 1, z1 + 1)) mask &= ~FACE_PZ;
   if ((mask & FACE_NZ) !== 0 && column_covers_range_opaque(set, col, z0 - 1, z0 - 1)) mask &= ~FACE_NZ;
 
-  if (cx + 1 < CHUNK_CELL_SPAN && column_covers_range_opaque(set, col + 1, z0, z1)) mask &= ~FACE_PX;
-  if (cx > 0 && column_covers_range_opaque(set, col - 1, z0, z1)) mask &= ~FACE_NX;
-  if (cy + 1 < CHUNK_CELL_SPAN && column_covers_range_opaque(set, col + CHUNK_CELL_SPAN, z0, z1)) mask &= ~FACE_PY;
-  if (cy > 0 && column_covers_range_opaque(set, col - CHUNK_CELL_SPAN, z0, z1)) mask &= ~FACE_NY;
+  // A chunk-edge column keeps its side face and gets no crease, concave or
+  // convex: the neighbouring chunk's columns are not in this scan.
+  if (cx + 1 < CHUNK_CELL_SPAN) {
+    const rel = neighbour_relation(set, col + 1, z0, z1);
+    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PX;
+    else mask |= CREASE_PX;
+    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PX;
+    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PX;
+  }
+  if (cx > 0) {
+    const rel = neighbour_relation(set, col - 1, z0, z1);
+    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NX;
+    else mask |= CREASE_NX;
+    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NX;
+    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NX;
+  }
+  if (cy + 1 < CHUNK_CELL_SPAN) {
+    const rel = neighbour_relation(set, col + CHUNK_CELL_SPAN, z0, z1);
+    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PY;
+    else mask |= CREASE_PY;
+    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PY;
+    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PY;
+  }
+  if (cy > 0) {
+    const rel = neighbour_relation(set, col - CHUNK_CELL_SPAN, z0, z1);
+    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NY;
+    else mask |= CREASE_NY;
+    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NY;
+    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NY;
+  }
+
+  // One diagonal per quadrant, and only where a wall could actually turn:
+  // one of the two faces meeting there exists while the other's own axis
+  // neighbour hides it.
+  const wants_diagonal = (a: u32, b: u32) => ((mask & a) !== 0 && (mask & b) === 0) || ((mask & b) !== 0 && (mask & a) === 0);
+  if (cx + 1 < CHUNK_CELL_SPAN && cy + 1 < CHUNK_CELL_SPAN && wants_diagonal(FACE_PX, FACE_PY)) {
+    if (column_covers_range_opaque(set, col + CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PP;
+  }
+  if (cx + 1 < CHUNK_CELL_SPAN && cy > 0 && wants_diagonal(FACE_PX, FACE_NY)) {
+    if (column_covers_range_opaque(set, col - CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PN;
+  }
+  if (cx > 0 && cy + 1 < CHUNK_CELL_SPAN && wants_diagonal(FACE_NX, FACE_PY)) {
+    if (column_covers_range_opaque(set, col + CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NP;
+  }
+  if (cx > 0 && cy > 0 && wants_diagonal(FACE_NX, FACE_NY)) {
+    if (column_covers_range_opaque(set, col - CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NN;
+  }
   return mask;
 }
 
@@ -424,7 +567,8 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
         occlusion_stats.total_runs++;
         const mask = run_face_mask(set, cx, cy, i);
         occlusion_stats.faces_possible += run_include_bottom(set, i) ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
-        if (mask === 0) {
+        // Concave bits shade an edge but never keep a run alive on their own.
+        if ((mask & ALL_FACES) === 0) {
           occlusion_stats.culled++;
           continue;
         }
@@ -432,7 +576,7 @@ function bake_chunk_mesh_fine(set: ColumnRunSet): BakedChunkMesh {
         SURVIVING.push(cy);
         SURVIVING.push(i);
         SURVIVING.push(mask);
-        const faces = face_cnt_of(mask);
+        const faces = face_cnt_of(mask & ALL_FACES);
         occlusion_stats.faces_kept += faces;
         vertex_total += faces * 4;
         index_total += faces * 6;

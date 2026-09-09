@@ -87,6 +87,7 @@ Deno.test("chunk bucket - bounds include signed Z and a second (e.g. object) buc
     box_scale: new Float32Array(6),
     rgb: new Float32Array(6),
     layer_taps: new Float32Array(8),
+    faces: new Float32Array(2),
     index: new Uint32Array(0),
   };
   buckets.push({ lod_step: 1, role: "secondary", cubes: { ...object_mesh, visibility: new Float32Array(2).fill(1), rc: 1 } });
@@ -182,7 +183,7 @@ Deno.test("chunk bucket - the pooled block's spans do not alias each other", () 
   const column_runs = scan_all_column_runs(volume);
   const mesh = build_chunk_bucket(column_runs, 1, "primary").cubes;
 
-  const spans = [mesh.position, mesh.normal, mesh.local_pos, mesh.box_scale, mesh.rgb, mesh.layer_taps, mesh.visibility];
+  const spans = [mesh.position, mesh.normal, mesh.local_pos, mesh.box_scale, mesh.rgb, mesh.layer_taps, mesh.faces, mesh.visibility];
   for (const span of spans) {
     const others = spans.filter((s) => s !== span).map((s) => Array.from(s));
     span.fill(-12345);

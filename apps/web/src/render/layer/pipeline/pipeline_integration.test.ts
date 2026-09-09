@@ -45,6 +45,7 @@ function split_terrain_and_object(built: BakedChunkMesh, terrain_vertex_cnt: num
       box_scale: built.box_scale.slice(from * 3, to * 3),
       rgb: built.rgb.slice(from * 3, to * 3),
       layer_taps: built.layer_taps.slice(from * 4, to * 4),
+      faces: built.faces.slice(from, to),
       index: new Uint32Array(0),
     };
   }
