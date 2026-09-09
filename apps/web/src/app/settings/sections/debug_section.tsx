@@ -44,8 +44,6 @@ export function DebugSection() {
   const logLedger = useDebugStore((state) => state.logLedger);
   const pixelDither = useDebugStore((state) => state.pixelDither);
   const togglePixelDither = useDebugStore((state) => state.togglePixelDither);
-  const edgeShadeStrength = useDebugStore((state) => state.edgeShadeStrength);
-  const setEdgeShade = useDebugStore((state) => state.setEdgeShade);
   const toggleLogLedger = useDebugStore((state) => state.toggleLogLedger);
 
   const dummy_toasts_shown = useSyncExternalStore(subscribeToastEntries, any_dummy_toast_shown);
@@ -80,12 +78,6 @@ export function DebugSection() {
         description={t("settings.debug.pixel_dither.description")}
         active={pixelDither}
         on_toggle={togglePixelDither}
-      />
-      <SettingRow
-        label={t("settings.debug.edge_shade.label")}
-        description={t("settings.debug.edge_shade.description")}
-        active={edgeShadeStrength > 0}
-        on_toggle={() => setEdgeShade({ edgeShadeStrength: edgeShadeStrength > 0 ? 0 : 0.3 })}
       />
       <SettingRow
         label={t("settings.debug.dummy_toast.label")}

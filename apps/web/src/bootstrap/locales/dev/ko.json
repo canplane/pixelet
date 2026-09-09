@@ -27,10 +27,6 @@
         "label": "스케줄러 레저 콘솔 로그",
         "description": "완료된 fetch, 예산을 넘긴 프레임, long animation frame을 발생하는 즉시 브라우저 콘솔로 흘려보냅니다."
       },
-      "edge_shade": {
-        "label": "큐브 모서리 음영",
-        "description": "허공과 맞닿은 모서리만 어둡게 한다. 평지는 이음매 없이, 높낮이 변화만 선으로 읽힌다. __pxl_edge({ strength, width })로 조정."
-      },
       "pixel_dither": {
         "label": "LOD 크로스페이드 (픽셀 단위)",
         "description": "청크를 통째로 전환하는 대신, 두 LOD를 겹치는 디더 패턴으로 녹아들게 한다. 가장 가까운 세 경계(192/384/768)에서만 동작한다. 전환 중인 청크를 두 번 그리고, TAA가 없어 카메라가 움직이면 패턴이 기어다닌다."

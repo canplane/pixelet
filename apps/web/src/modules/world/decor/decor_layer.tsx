@@ -251,6 +251,7 @@ function collect_procedural_decor_instances(
   base_x: number,
   base_y: number,
 ): void {
+  if (!useSettingsStore.getState().show_decor) return;
   const density_scale = DECOR_DENSITY_BY_LOD_STEP[lod_step];
   // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
   // density instead of running it only to have every candidate rejected by

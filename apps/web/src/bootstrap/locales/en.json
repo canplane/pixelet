@@ -19,6 +19,10 @@
         "label": "Camera Tilt Lock",
         "description": "Locks vertical camera rotation while horizontal rotation stays free."
       },
+      "edge_shade": {
+        "label": "Cube edge shading",
+        "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line."
+      },
       "terrain": {
         "through": {
           "label": "Pass through terrain",
@@ -40,6 +44,10 @@
       "show_poi": {
         "label": "Show Places",
         "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
+      },
+      "show_decor": {
+        "label": "Scattered decor",
+        "description": "Draws the trees and vehicles scattered procedurally over the terrain. Anything you placed yourself stays either way."
       }
     },
     "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",

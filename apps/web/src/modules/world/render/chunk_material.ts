@@ -313,7 +313,7 @@ type ShaderUniforms = { uniforms: Record<string, THREE.IUniform> };
 
 function push_edge_uniforms(shader: ShaderUniforms): void {
   const debug = useDebugStore.getState();
-  shader.uniforms.u_edge_strength.value = debug.edgeShadeStrength;
+  shader.uniforms.u_edge_strength.value = useSettingsStore.getState().show_edge_shade ? debug.edgeShadeStrength : 0;
   shader.uniforms.u_edge_width.value = debug.edgeShadeWidth;
 }
 
@@ -339,6 +339,7 @@ export function chunk_material(): THREE.MeshStandardMaterial {
     if (!shader) return;
     shader.uniforms.u_low_spec.value = state.low_spec;
     shader.uniforms.u_rim_intensity.value = state.show_rim_light ? rim_cfg.INTENSITY : 0;
+    push_edge_uniforms(shader);
     invalidate();
   });
   if (import.meta.env.DEV) {
