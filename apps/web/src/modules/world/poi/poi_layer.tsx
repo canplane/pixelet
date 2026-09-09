@@ -28,6 +28,7 @@ import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mo
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { local_world_to_canonical } from "../frame/coord.ts";
 import { with_ele } from "../terrain/elevation.ts";
 import { register_tile_interest } from "../terrain/store.ts";
@@ -243,8 +244,15 @@ function PoiBadge({ poi, page_idx }: { poi: POI; page_idx: IVec }) {
 export function PoiLayer() {
   const poi_map = usePoiStore((state) => state.poi_map);
   const map_center = useMapStore((state) => state.map_center);
+  const show_poi = useSettingsStore((state) => state.show_poi);
 
   const selected = useMemo(() => (map_center ? select_nearby_pois(poi_map, map_center) : []), [poi_map, map_center]);
+
+  // After the hooks above, not instead of calling them — settings.camera's
+  // own show_poi toggle (camera_slice.ts) is a plain visibility switch on
+  // this whole layer, not a rendering-cost tradeoff threaded into geometry
+  // baking the way show_structures is, so an early return here is enough.
+  if (!show_poi) return null;
 
   return (
     <>

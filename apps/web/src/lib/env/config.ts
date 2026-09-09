@@ -66,13 +66,15 @@ export const POI_TILE_BASE_URL: string = __POI_TILE_BASE_URL__.replace(/\/+$/, "
  * page's bytes could stand in for. */
 export const HAS_STATIC_POI: boolean = POI_TILE_BASE_URL.length > 0;
 
-/**
- * Base URL for reverse geocoding, trailing slashes removed.
- *
- * Defaults to OSM's shared public Nominatim. That instance's usage policy
- * expects an identifying User-Agent, which a browser cannot set — only a
- * Referer goes out — so public demo traffic can be throttled or blocked.
- * Pointing this at a self-hosted instance or a proxy is the way out, which
- * is why it is configuration rather than a constant.
- */
-export const GEOCODE_BASE_URL: string = __GEOCODE_BASE_URL__.replace(/\/+$/, "");
+/** Same as POI_TILE_BASE_URL, for the pre-baked reverse-geocode label set
+ * (apps/api/src/bake/geocode/tools/bake_geocode_tiles.ts). Retired a direct
+ * client-side call to public Nominatim (no server, no cache, no bake step
+ * at all) in favor of the same static/live PoiProvider-shaped pattern POI
+ * already uses — see discussions/20260908-overture-poi-adoption.md. */
+export const GEOCODE_TILE_BASE_URL: string = __GEOCODE_TILE_BASE_URL__.replace(/\/+$/, "");
+
+/** True when the neighborhood label comes from the static set rather than
+ * the live API. A 404 means "outside Overture's Divisions coverage for
+ * this page" rather than a genuine failure — same no-fallback-object shape
+ * POI's own HAS_STATIC_POI documents. */
+export const HAS_STATIC_GEOCODE: boolean = GEOCODE_TILE_BASE_URL.length > 0;

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/settings/setting_row.tsx";
 
-// OSM/Copernicus attribution text — hardcoded rather than run through t(): required verbatim regardless of UI language.
+// OSM/Copernicus/Overture attribution text — hardcoded rather than run through t(): required (OSM, Copernicus) or shown as a courtesy (Overture's Places theme, CDLA-Permissive-2.0 imposes no attribution requirement) verbatim regardless of UI language.
 export function AttributionSection() {
   const { t } = useTranslation();
   return (
@@ -34,6 +34,18 @@ export function AttributionSection() {
             COPERNICUS
           </a>{" "}
           by the European Union and ESA; all rights reserved
+        </span>
+        <span>
+          Places data ©{" "}
+          <a
+            href="https://overturemaps.org/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-foreground"
+          >
+            Overture Maps Foundation
+          </a>{" "}
+          and contributors
         </span>
       </div>
     </div>

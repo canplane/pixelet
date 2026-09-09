@@ -13,7 +13,9 @@ import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
  * (Naver/Kakao Local Search, say) would have a completely different
  * freshness model — live queries, no re-bake at all — so that decision
  * belongs behind this seam, not hardcoded into either consumer.
- * providers/osm_provider.ts is the only implementation today.
+ * providers/overture_provider.ts is the current implementation (Overture's
+ * Places theme, see discussions/20260908-overture-poi-adoption.md for why
+ * this replaced the original providers/osm_provider.ts).
  */
 export type PoiProvider = {
   fetch_pois(page_idx: IVec): Promise<POI[]>;

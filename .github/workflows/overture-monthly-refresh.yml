@@ -1,0 +1,93 @@
+# Monthly refresh of the Overture-baked POI and reverse-geocode static
+# sets — see discussions/20260908-overture-poi-adoption.md for why this
+# exists and how it's designed (short-cache-control stable prefixes,
+# overwritten in place, rather than terrain's own immutable-versioned
+# convention: POI/geocode staleness is cheap, a monthly redeploy to bump a
+# version prefix every time would not be).
+#
+# Deliberately needs no OSM/terrain infrastructure in CI: the only thing
+# this reuses from that pipeline is land_pages.json (which page_idx values
+# are land, not ocean) — a classification that never changes unless
+# terrain/coastline data itself does, so it's fetched from a stable R2
+# object (_meta/land_pages.json) instead of re-ingesting all of OSM into a
+# fresh database every month just to regenerate it. Re-upload that object
+# by hand (see infra/geo's own bake-tiles procedure) if terrain's own land/
+# ocean classification is ever rebuilt.
+name: Overture monthly refresh
+
+on:
+  schedule:
+    # 03:00 UTC on the 1st of each month — Overture's own releases land on
+    # no fixed schedule, so this is "check monthly", not "the day a new one
+    # ships".
+    - cron: "0 3 1 * *"
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: pixelet_geo
+          POSTGRES_PASSWORD: pixelet_geo
+          POSTGRES_DB: pixelet_geo
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_GEO_URL: postgres://pixelet_geo:pixelet_geo@localhost:5433/pixelet_geo
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure R2 credentials
+        run: |
+          aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}" --profile r2
+          aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}" --profile r2
+          aws configure set region auto --profile r2
+
+      - name: Fetch land_pages.json (terrain's own land/ocean classification, not regenerated here)
+        run: |
+          mkdir -p out/tiles
+          aws s3 cp "s3://pixelet-tiles/_meta/land_pages.json" out/tiles/land_pages.json \
+            --profile r2 --endpoint-url "$R2_ENDPOINT"
+
+      - name: Ingest Overture Places + Divisions (Korea)
+        run: |
+          deno run -A apps/api/src/bake/overture/tools/ingest_places.ts
+          deno run -A apps/api/src/bake/overture/tools/ingest_divisions.ts
+
+      - name: Bake POI
+        run: deno run -A apps/api/src/bake/poi/tools/bake_poi_tiles.ts --out ./out/poi/v1 --force
+
+      - name: Bake reverse geocode
+        run: deno run -A apps/api/src/bake/geocode/tools/bake_geocode_tiles.ts --out ./out/geocode/v1 --force
+
+      - name: Publish to R2
+        run: |
+          aws s3 sync ./out/poi/v1 s3://pixelet-tiles/poi/v2 \
+            --profile r2 --endpoint-url "$R2_ENDPOINT" \
+            --exclude "*.empty" --exclude "*.part" \
+            --content-type application/json --content-encoding gzip \
+            --cache-control "public, max-age=86400" --delete
+
+          aws s3 sync ./out/geocode/v1 s3://pixelet-tiles/geocode/v1 \
+            --profile r2 --endpoint-url "$R2_ENDPOINT" \
+            --exclude "*.empty" --exclude "*.part" \
+            --content-type application/json --content-encoding gzip \
+            --cache-control "public, max-age=86400" --delete

@@ -3,7 +3,7 @@
 // Offline pre-bake pass: reads terrain's own land-page classification
 // (terrain/tools/bake_tiles.ts's own land_pages.json — no separate POI
 // classification pass, see below) and, for each one, asks the current
-// PoiProvider (providers/osm_provider.ts today) for that page's POIs. A
+// PoiProvider (providers/overture_provider.ts today) for that page's POIs. A
 // page with none writes a local `.empty` marker instead of an object, so a
 // resumed run can skip it without re-querying the DB — that marker is
 // never uploaded (see "Publishing" below).
@@ -41,10 +41,9 @@ import type { Bytes } from "@xpute/core/kit/array.ts";
 
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/shared/bake/model/osm_feature.ts";
-import { exists, fmt_bytes, fmt_dur, gzip, read_source_catalogs } from "@pxl/api/bake/bake_util.ts";
+import { exists, fmt_bytes, fmt_dur, gzip } from "@pxl/api/bake/bake_util.ts";
 
-import { TerrainRepository } from "@pxl/api/modules/world/terrain/repository.ts";
-import { make_osm_provider } from "@pxl/api/modules/world/poi/providers/osm_provider.ts";
+import { make_overture_provider } from "@pxl/api/modules/world/poi/providers/overture_provider.ts";
 import type { PoiProvider } from "@pxl/api/modules/world/poi/provider.ts";
 import * as env from "@/lib/env/mod.ts";
 
@@ -118,8 +117,7 @@ async function main(): Promise<void> {
 
   const geo_url = env.must("DB_GEO_URL");
   const pool = new Pool(geo_url, args.concurrency + 2, true);
-  const repo = new TerrainRepository(pool);
-  const provider: PoiProvider = make_osm_provider(repo);
+  const provider: PoiProvider = make_overture_provider(pool);
 
   try {
     const targets = args.limit === null ? land : land.slice(0, args.limit);
@@ -200,7 +198,23 @@ async function main(): Promise<void> {
       content_type: "application/json",
       content_encoding: "gzip",
 
-      source: await read_source_catalogs(pool),
+      // Not read_source_catalogs()'s OSM/ESA/coastline tables — POI no
+      // longer depends on those (discussions/20260908-overture-poi-adoption.md).
+      // overture_places has no catalog table of its own yet (see
+      // ingest_places.ts's own top comment on why this pipeline stays
+      // lighter-weight than infra/geo's OSM ones); this at least records
+      // which table and how many rows this bake actually read.
+      source: {
+        overture_places: await (async () => {
+          const client = await pool.connect();
+          try {
+            const { rows } = await client.queryObject<{ count: string }>("SELECT count(*) FROM overture_places");
+            return { row_count: Number(rows[0].count) };
+          } finally {
+            client.release();
+          }
+        })(),
+      },
     };
     await Deno.writeTextFile(`${args.out}/../manifest.json`, JSON.stringify(manifest, null, 2));
     console.log(`[bake/poi] manifest -> ${args.out}/../manifest.json`);

@@ -184,3 +184,7 @@ vite.config.ts.timestamp-*
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
+
+# Overture ingestion scratch (venv + downloaded extracts)
+apps/api/src/bake/overture/tools/.venv/
+out/overture/

@@ -24,7 +24,13 @@ const apiBaseDefault = "http://127.0.0.1:3000";
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
 const tileOriginDefault = "https://plei.me";
 const tileVersionDefault = "v1";
-const poiTileVersionDefault = "v1";
+// v1 was OSM-baked; v2 is the first Overture Places bake
+// (discussions/20260908-overture-poi-adoption.md) — a genuinely different
+// dataset, not a refresh of the same one, so a new immutable prefix rather
+// than overwriting v1 in place (same "never overwrite a published version"
+// rule terrain's own tiles already follow).
+const poiTileVersionDefault = "v2";
+const geocodeTileVersionDefault = "v1";
 
 // anti-HMR
 const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
@@ -133,9 +139,14 @@ export default defineConfig(({ mode }) => {
   const poiTileBase = env.VITE_POI_TILE_BASE_URL ||
     (remoteTiles || mode === "production" ? `/tiles/poi/${poiTileVersion}` : "");
 
-  // Reverse geocoding origin. Defaults to OSM's shared public Nominatim;
-  // see lib/env/config.ts for why this is configurable at all.
-  const geocodeBase = env.VITE_GEOCODE_BASE_URL || "https://nominatim.openstreetmap.org";
+  // Same shape again, one path segment over: apps/api/src/bake/geocode/
+  // tools/bake_geocode_tiles.ts publishes under /tiles/geocode/<version>.
+  // Empty in dev, where geocode/repository.ts keeps hitting the live
+  // /api route instead (see discussions/20260908-overture-poi-adoption.md
+  // for why this replaced a direct client-side call to public Nominatim).
+  const geocodeTileVersion = env.VITE_GEOCODE_TILE_VERSION || geocodeTileVersionDefault;
+  const geocodeTileBase = env.VITE_GEOCODE_TILE_BASE_URL ||
+    (remoteTiles || mode === "production" ? `/tiles/geocode/${geocodeTileVersion}` : "");
 
   // Where tiles come from during development. One knob rather than two,
   // because the two settings it drives have to move together — pointing the
@@ -237,7 +248,7 @@ export default defineConfig(({ mode }) => {
 
       __TILE_BASE_URL__: JSON.stringify(tileBase),
       __POI_TILE_BASE_URL__: JSON.stringify(poiTileBase),
-      __GEOCODE_BASE_URL__: JSON.stringify(geocodeBase),
+      __GEOCODE_TILE_BASE_URL__: JSON.stringify(geocodeTileBase),
 
       /** When this bundle was built, ISO-8601 in UTC. Evaluated here, so it
        * updates itself on every build with nothing to remember — which is
