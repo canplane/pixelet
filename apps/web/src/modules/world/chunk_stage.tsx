@@ -20,7 +20,7 @@
  * (and its own same-day follow-up) for the fuller account.
  */
 
-import { createContext, memo, type ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -31,19 +31,34 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
-import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
+import {
+  ChunkNode,
+  commit_step_stats,
+  lod_build_stats,
+  lod_scheduler,
+  mesh_mount_stats,
+  mesh_unmount_stats,
+  record_timing,
+  take_node_counts,
+  type TimingStats,
+  LOD_WORK_BUDGET_MS,
+} from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { l2_column_key_of, useDecorL2ColumnRevision, useObjectL2ColumnRevision } from "@/modules/world/objects/store.ts";
-import { glsl_float, inject_rim_light_shader } from "@/modules/world/render/rim_light_shader.ts";
+import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/modules/world/render/chunk_material.ts";
 import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
+import { usePoiStore } from "@/modules/world/poi/store.ts";
+import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
+import { run_under_budget } from "@/modules/world/sched/frame_budget.ts";
+import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
+import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
 import { NO_LAYER } from "@/render/layer/pipeline/volume.ts";
 import { in_range_chunks } from "@/render/chunk_range.ts";
 import { compositor_cache_stats, with_temporary_composite } from "@/render/layer/pipeline/compositor.ts";
-import { GROUND_LAYERS_SIDE, GROUND_LAYERS_TOP } from "@/render/tex_array.ts";
 import {
   build_chunk_bucket,
   type BuiltChunkBucket,
@@ -53,121 +68,43 @@ import {
   type ChunkLodRole,
   type ChunkOffsets,
   mesh_bounds,
+  release_built_mesh,
+  retain_built_mesh,
 } from "@/render/layer/pipeline/chunk_bucket.ts";
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { type MeshRun, scan_all_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
+import { mesh_pool_stat } from "@/render/layer/pipeline/mesh_pool.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
 import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view, update_frustum } from "@/render/chunk_lod.ts";
 import {
   build_decor_instances,
   type DecorBundleAssets,
   type DecorKindBundle,
-  DecorVariantMesh,
   type ModelInstanceTransformList,
   useAllDecorBundleAssets,
 } from "@/modules/world/decor/decor_layer.tsx";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
-const LOD_WORK_BUDGET_MS: f64 = 4;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
-
-// Shared shape/update for every dev-only "how long did this recurring thing
-// take, worst case" counter below (mesh_mount_stats, mesh_unmount_stats,
-// render_call_stats) — three independently-named objects used to each
-// inline their own identical three-line total/count/max update.
-type TimingStats = { total_ms: number; count: number; max_ms: number };
-function record_timing(stats: TimingStats, ms: number): void {
-  stats.total_ms += ms;
-  stats.count++;
-  stats.max_ms = Math.max(stats.max_ms, ms);
-}
-
 /**
- * ChunkMesh's useLayoutEffect — geometry creation + GPU buffer upload
- * (BufferAttribute) + bounds — runs in React's own render/commit phase,
- * outside chunk_stage.tsx's useFrame entirely. A commit()
- * only calls set_layout(); it doesn't force this work to happen inside the
- * useFrame timing window that scheduler_peak_stats covers, so a storm of
- * simultaneous LOD-transition mounts (many chunks blend_active at once)
- * could be expensive here without showing up in that measurement at all.
+ * Ceiling on either LOD pass, applied even when the pass has committed
+ * nothing — one frame's worth, so a pass can never itself be the stutter.
+ *
+ * Measured before this existed: a zoom-out leaves ~2000 chunks pending, most
+ * `commit()` calls scan (up to ~15ms) and then defer, and a deferral returns
+ * false. Since LOD_WORK_BUDGET_MS was waived until something actually
+ * committed, thousands of expensive deferrals armed nothing and produced a
+ * single 4711ms frame — while no individual step exceeded 42ms. Draining
+ * across frames is the correct behaviour; freezing for 4.7s is not.
  */
-const mesh_mount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
-// geometry.dispose()/material.dispose() on unmount — a zoom-out flipping
-// many chunks out of frustum at once disposes many meshes in one React
-// commit, same shape of risk as the mount side above, never measured.
-const mesh_unmount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
+const LOD_HARD_BUDGET_MS: f64 = 16;
 
-/**
- * Cumulative (since page load) LOD build timing, dev-only — no console.log
- * anywhere near this (a hot console during a build storm would itself skew
- * the measurement); just plain object writes each call, exposed read-only
- * via ChunkStage's existing __PXL_RENDER_STATS__ dev global. Inspect
- * from the console with e.g. `window.__PXL_RENDER_STATS__.lod_build`.
- */
-const lod_build_stats = {
-  scan_ms: 0,
-  scan_count: 0,
-  scan_max_ms: 0,
-  scan_bands: 0,
-  scan_bands_max: 0,
-  build_ms: 0,
-  build_count: 0,
-  build_max_ms: 0,
-  build_runs: 0,
-  build_runs_max: 0,
-  scan_deferred: 0,
-  build_deferred: 0,
-};
-
-/**
- * A scan's cost tracks how many signed-Z bands the chunk actually has
- * (`volume.bands.length`, free right after compositing — no extra pass),
- * far more than it varies with anything else — profiled: a 41ms outlier
- * against a ~2ms mean, on a chunk with unusually many bands. Once this
- * session has scanned enough chunks to have a real mean cost-per-band, a
- * chunk whose estimated cost clears `LOD_WORK_BUDGET_MS *
- * SCAN_DEFER_FACTOR` gets deferred once (see scan_deferred_ref below) —
- * cooperative scheduling, not a worker: give some *other* pending chunk
- * (hopefully cheaper) a shot at this frame's single guaranteed slot
- * instead of unconditionally burning it on whichever chunk happened to
- * sort first.
- */
-const SCAN_DEFER_FACTOR: f64 = 2;
-
-/**
- * Session-peak (not cumulative-average) scheduler load, dev-only. A manual
- * `window.__PXL_RENDER_STATS__` read during a live stutter usually
- * lands a frame or two after the storm already passed (settling_lod/
- * pending_lod are back to 0 by the time you finish typing) — these track
- * the worst single frame actually seen instead, so the peak survives long
- * enough to read.
- */
-const scheduler_peak_stats = {
-  recheck_ms_max: 0,
-  commit_ms_max: 0,
-  frame_ms_max: 0,
-  settling_lod_max: 0,
-  blend_active_max: 0,
-  pending_lod_total_max: 0,
-  in_frustum_max: 0,
-};
-
-/**
- * Splits one commit() call's cost three ways, dev-only — commit_ms_max
- * (scheduler_peak_stats) hit 243ms with nothing else measured this session
- * (scan/build/mesh_mount) anywhere near that, so the remaining candidates
- * inside commit() itself — build_ref.current() (already covered above, but
- * cross-checked here too), chunk_bounds()'s plain-JS instance scan, and the
- * set_layout() call itself (React state update — normally just schedules
- * work, but if that scheduling isn't actually deferred here, this call is
- * where a synchronous re-render would show up) — need their own numbers.
- */
-const commit_step_stats = {
-  build_ms_max: 0,
-  bounds_ms_max: 0,
-  set_layout_ms_max: 0,
-};
+/* Session-peak scheduler load used to live here as its own object. It now
+ * comes from sched/ledger.ts's ledger_frame_peak(): this loop reports each
+ * frame's raw numbers and the ledger keeps both the ~4s ring and the session
+ * peak, instead of two places tracking the same maxima. The reason the peak
+ * exists at all is unchanged — a manual __PXL_RENDER_STATS__ read during a
+ * live stutter lands a frame or two after the storm has passed. */
 
 /**
  * The actual `gl.render(scene, camera)` call — three.js walking the scene
@@ -181,871 +118,104 @@ const commit_step_stats = {
  * trustworthy way left to see this number.
  */
 const render_call_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
+// Last single gl.render() duration, for sched/ledger.ts's per-frame CPU
+// breakdown — the cumulative render_call_stats can't give one frame's number.
+let last_render_ms = 0;
+/** Previous frame's whole-rAF-task duration; see FrameSample.task_ms. */
+let last_task_ms = 0;
 
-const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
+/* Draw counts are read with `gl.info.autoReset` turned off and reset once
+ * per frame instead (see LodSchedulerProvider's effect). three.js otherwise
+ * clears info at the start of every `render()`, and the post-processing
+ * composer issues several per frame — the last being a fullscreen quad — so
+ * reading `gl.info.render` from useFrame reported that quad (`draws 1,
+ * tris 1`) while the scene was drawing hundreds. It read plausibly enough to
+ * survive this whole session until it was checked against a screenshot.
+ * Resetting per frame accumulates every pass, which is the number actually
+ * wanted: what this frame costs in draw calls, post stack included. */
 
-function set_three_box(box: THREE.Box3, bounds: ChunkBounds): THREE.Box3 {
-  box.min.set(bounds.min_x, bounds.min_y, bounds.min_z);
-  box.max.set(bounds.max_x, bounds.max_y, bounds.max_z);
-  return box;
-}
+const MB = 1_048_576;
 
-// Per-vertex attribute names for the baked chunk mesh (chunk_mesher.ts) —
-// replaces what used to be per-INSTANCE attributes read through
-// instanceMatrix; every vertex now already carries its own real
-// position/normal, so these are the only extra material/shading inputs the
-// shader needs (see inject_chunk_shader's own doc comment).
-const RGB_ATTR = "a_rgb";
-const LAYER_TAPS_ATTR = "a_layer_taps";
-const VISIBLE_ATTR = "a_visible";
-const LOCAL_POS_ATTR = "a_local_pos";
-const BOX_SCALE_ATTR = "a_box_scale";
+const last_work = { scans: 0, bakes: 0, runs: 0 };
 
-/**
- * Injected once per baked chunk-mesh material. Every vertex here is a real,
- * final position (chunk_mesher.ts bakes it directly — no instanceMatrix to
- * decompose), so this shader is actually SIMPLER than the instanced version
- * it replaced: `a_local_pos`/`a_box_scale` are baked per-vertex copies of
- * exactly what the old vertex shader used to reconstruct from `position` +
- * `instanceMatrix`'s diagonal, so the UV-tiling and bevel formulas below are
- * otherwise unchanged from before.
- */
-function inject_chunk_shader(shader: {
-  vertexShader: string;
-  fragmentShader: string;
-  uniforms: Record<string, THREE.IUniform>;
-}): void {
-  // Composes with the rest of this function regardless of call order (see
-  // rim_light_shader.ts's own doc comment) — called first here purely by
-  // convention, not because it has to run before the terrain-specific
-  // replacements below.
-  inject_rim_light_shader(shader);
-  shader.uniforms.u_ground_layers_top = { value: GROUND_LAYERS_TOP };
-  shader.uniforms.u_ground_layers_side = { value: GROUND_LAYERS_SIDE };
-  shader.uniforms.u_low_spec = { value: true };
-  shader.vertexShader = shader.vertexShader
-    .replace(
-      "#include <common>",
-      `#include <common>
-      attribute vec3 ${RGB_ATTR};
-      attribute vec4 ${LAYER_TAPS_ATTR};
-      attribute float ${VISIBLE_ATTR};
-      attribute vec3 ${LOCAL_POS_ATTR};
-      attribute vec3 ${BOX_SCALE_ATTR};
-      varying vec3 v_rgb;
-      varying vec4 v_layer_taps;
-      varying float v_visible;
-      varying vec2 v_box_uv;
-      varying float v_is_side;
-      varying float v_side_x_dominant;
-      varying vec3 v_local_pos;
-      varying vec3 v_box_scale;`,
-    )
-    .replace(
-      "void main() {",
-      `void main() {
-        v_rgb = ${RGB_ATTR};
-        v_layer_taps = ${LAYER_TAPS_ATTR};
-        v_visible = ${VISIBLE_ATTR};
-        v_is_side = (abs(normal.z) < 0.5) ? 1.0 : 0.0;
-        v_local_pos = ${LOCAL_POS_ATTR};
-        v_side_x_dominant = (abs(normal.x) > 0.5) ? 1.0 : 0.0;
-        // Real-size tile UV, not the box's own raw 0..1 face UV: chunk_mesher.ts
-        // bakes each box's own real cell-unit size straight into a_box_scale, so a
-        // box spanning many cells — any coarse-LOD box, or same-material cells merged
-        // at any LOD — was one whole texture tile stretched across the entire face instead
-        // of repeating once per real cell. Most visible on patterned side art (assets/cell/
-        // textures/terrain/side_*.png): its layered-strata look read as a flat smear
-        // once stretched that far. a_local_pos is the box's own canonical [-0.5,0.5]
-        // corner, so (a_local_pos.axis + 0.5) * a_box_scale.axis reconstructs a per-face
-        // 0..N coordinate directly from it — sidesteps ever needing a per-face UV axis
-        // convention. Side faces always put z (height) in the second component so
-        // the strata art's up/down orientation stays consistent on all four side faces,
-        // not flipped on two of them. GROUND_LAYERS_SIDE (tex_array.ts) is an untransformed
-        // DataArrayTexture (flipY defaults false), so v=0 samples the source PNG's own top row
-        // — (0.5 - a_local_pos.z), not (a_local_pos.z + 0.5), so the box's physical top
-        // (a_local_pos.z = +0.5) lands on v=0 and actually gets the image's top edge instead
-        // of its bottom (e.g. side_bare.png's grass cap rendering at a cliff's foot instead
-        // of its crest). RepeatWrapping (tex_array.ts) turns >1 straight into tiling.
-        v_box_scale = ${BOX_SCALE_ATTR};
-        v_box_uv = v_is_side > 0.5
-          ? (abs(normal.x) > 0.5
-            ? vec2((${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z)
-            : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (0.5 - ${LOCAL_POS_ATTR}.z) * ${BOX_SCALE_ATTR}.z))
-          : vec2((${LOCAL_POS_ATTR}.x + 0.5) * ${BOX_SCALE_ATTR}.x, (${LOCAL_POS_ATTR}.y + 0.5) * ${BOX_SCALE_ATTR}.y);`,
-    );
-  shader.fragmentShader = shader.fragmentShader
-    .replace(
-      "#include <common>",
-      `#include <common>
-      varying vec3 v_rgb;
-      varying vec4 v_layer_taps;
-      varying float v_visible;
-      varying vec2 v_box_uv;
-      varying float v_is_side;
-      varying float v_side_x_dominant;
-      varying vec3 v_local_pos;
-      varying vec3 v_box_scale;
-      uniform sampler2DArray u_ground_layers_top;
-      uniform sampler2DArray u_ground_layers_side;
-      uniform bool u_low_spec;
-      vec3 sample_layer_tap(float layer_idx, vec3 fallback_rgb) {
-        if (layer_idx > ${NO_LAYER}.0 - 0.5) return fallback_rgb;
-        return v_is_side > 0.5
-          ? texture(u_ground_layers_side, vec3(v_box_uv, layer_idx)).rgb
-          : texture(u_ground_layers_top, vec3(v_box_uv, layer_idx)).rgb;
-      }
-      // Per-cell edge crease — a static darken only, view-independent (no Fresnel/sheen
-      // term), so it reads the same regardless of camera angle. Narrow width with a
-      // hard-ish falloff (pow, not a wide smoothstep) keeps it a crisp seam rather than a
-      // soft/hazy gradient.
-      const float BEVEL_WORLD_WIDTH = 0.025;
-      const float BEVEL_DARKEN = 0.78;
-      float edge_factor() {
-        vec3 dist_to_edge = (0.5 - abs(v_local_pos)) * v_box_scale;
-        float d = v_is_side > 0.5
-          ? (v_side_x_dominant > 0.5 ? min(dist_to_edge.y, dist_to_edge.z) : min(dist_to_edge.x, dist_to_edge.z))
-          : min(dist_to_edge.x, dist_to_edge.y);
-        return pow(1.0 - smoothstep(0.0, BEVEL_WORLD_WIDTH, d), 2.0);
-      }
-      vec3 apply_fake_bevel(vec3 color) {
-        return color * mix(1.0, BEVEL_DARKEN, edge_factor());
-      }`,
-    )
-    .replace("void main() {", `void main() { if (v_visible < 0.5) discard;`)
-    .replace(
-      "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `vec3 base_rgb = v_rgb;
-      if (!u_low_spec) {
-        base_rgb = (
-          sample_layer_tap(v_layer_taps.x, base_rgb) +
-          sample_layer_tap(v_layer_taps.y, base_rgb) +
-          sample_layer_tap(v_layer_taps.z, base_rgb) +
-          sample_layer_tap(v_layer_taps.w, base_rgb)
-        ) * 0.25;
-      }
-      base_rgb = apply_fake_bevel(base_rgb);
-      vec4 diffuseColor = vec4(diffuse * base_rgb, opacity);`,
-    )
-    .replace("vec3 totalEmissiveRadiance = emissive;", `vec3 totalEmissiveRadiance = base_rgb * ${glsl_float(light_cfg.FLOOR)};`);
-}
-
-/** Builds a fresh, real (non-cloned-from-a-shared-base) BufferGeometry
- * directly from one chunk's own baked vertex/index arrays — there's no
- * shared base to clone anymore, every chunk's geometry is entirely its own. */
-function create_geometry(built: BuiltChunkMesh): THREE.BufferGeometry {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(built.position, 3));
-  geo.setAttribute("normal", new THREE.BufferAttribute(built.normal, 3));
-  geo.setAttribute(RGB_ATTR, new THREE.BufferAttribute(built.rgb, 3));
-  geo.setAttribute(LAYER_TAPS_ATTR, new THREE.BufferAttribute(built.layer_taps, 4));
-  geo.setAttribute(VISIBLE_ATTR, new THREE.BufferAttribute(built.visibility, 1));
-  geo.setAttribute(LOCAL_POS_ATTR, new THREE.BufferAttribute(built.local_pos, 3));
-  geo.setAttribute(BOX_SCALE_ATTR, new THREE.BufferAttribute(built.box_scale, 3));
-  geo.setIndex(new THREE.BufferAttribute(built.index, 1));
-  return geo;
-}
-
-function create_material(): THREE.MeshStandardMaterial {
-  const material = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
-  // Shadow map records back-face depth instead of front-face — the receiver
-  // then tests against the far side of the caster instead of its own lit
-  // surface, so normalBias no longer has to fight self-shadow acne and can
-  // shrink toward zero without the shadow visibly detaching from its own
-  // caster (environment/config.ts's BIAS_TEXELS).
-  material.shadowSide = THREE.BackSide;
-  // Material.customProgramCacheKey() defaults to "" — WebGLPrograms' cache
-  // key is built only from the defines/parameters three.js itself tracks,
-  // never from onBeforeCompile's own identity or its string output. Terrain
-  // and object cubes now bake into one merged mesh and compile the exact
-  // same injected shader, so sharing one cached WebGLProgram across every
-  // chunk mesh is correct.
-  material.customProgramCacheKey = () => "chunk-mesh";
-  material.onBeforeCompile = (shader) => {
-    inject_chunk_shader(shader);
-    shader.uniforms.u_low_spec.value = useSettingsStore.getState().low_spec;
-    shader.uniforms.u_rim_intensity.value = useSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
-    material.userData.shader = shader;
+function work_sample(): { scans: number; bakes: number; runs: number } {
+  const sample = {
+    scans: lod_build_stats.scan_count - last_work.scans,
+    bakes: lod_build_stats.build_count - last_work.bakes,
+    runs: lod_build_stats.build_runs - last_work.runs,
   };
-  return material;
+  last_work.scans = lod_build_stats.scan_count;
+  last_work.bakes = lod_build_stats.build_count;
+  last_work.runs = lod_build_stats.build_runs;
+  return sample;
 }
 
-type ChunkMeshProps = {
-  built: BuiltChunkMesh;
-  role: ChunkLodRole;
-  low_spec: boolean;
-  show_rim_light: boolean;
-  registry: ChunkMeshRegistry;
-};
-
-/** One real, non-instanced THREE.Mesh per chunk per LOD role — every cube
- * (terrain and solid objects alike) baked directly into its own geometry
- * (chunk_mesher.ts), not a shared box restyled per instance. */
-const ChunkMesh = memo(({ built, role, low_spec, show_rim_light, registry }: ChunkMeshProps) => {
-  const material = useMemo(() => create_material(), []);
-  const mesh = useMemo(() => {
-    const m = new THREE.Mesh(new THREE.BufferGeometry(), material);
-    // Unconditional: real cost is gated at the renderer level by Canvas's
-    // own `shadows` prop (scene.tsx, driven by app/settings/settings_store.ts's
-    // show_shadow_map) — three.js doesn't compile any shadow-map shader
-    // code, on a caster or a receiver, while gl.shadowMap.enabled is false,
-    // so this flag alone costs nothing when the setting is off.
-    m.castShadow = true;
-    m.receiveShadow = true;
-    return m;
-  }, [material]);
-
-  useEffect(() => () => {
-    const t0 = import.meta.env.DEV ? performance.now() : 0;
-    mesh.geometry.dispose();
-    material.dispose();
-    if (import.meta.env.DEV) record_timing(mesh_unmount_stats, performance.now() - t0);
-  }, [material, mesh]);
-  useEffect(() => {
-    const shader = material.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
-    if (shader) shader.uniforms.u_low_spec.value = low_spec;
-  }, [material, low_spec]);
-  useEffect(() => {
-    const shader = material.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
-    if (shader) shader.uniforms.u_rim_intensity.value = show_rim_light ? rim_cfg.INTENSITY : 0;
-  }, [material, show_rim_light]);
-
-  useLayoutEffect(() => {
-    const mount_t0 = import.meta.env.DEV ? performance.now() : 0;
-    const previous_geometry = mesh.geometry;
-    const geometry = create_geometry(built);
-    mesh.geometry = geometry;
-    previous_geometry.dispose();
-    mesh.visible = built.vertex_cnt > 0;
-    built.visibility.fill(role === "primary" ? 1 : 0);
-    // Not geometry.computeBoundingBox()/computeBoundingSphere(): those walk
-    // every vertex through three.js's own generic accumulation, real cost on
-    // a chunk rebuild storm (profiled, back when this walked per-instance —
-    // still true per-vertex). mesh_bounds's direct min/max scan over the
-    // already-baked real positions is exact and far cheaper — same math
-    // chunk_bounds already uses for the whole layout, just per mesh here.
-    // A plain (non-Instanced) Mesh has no bounding fields of its own — those
-    // live on the geometry, unlike InstancedMesh's own instance-level ones.
-    const bounds = mesh_bounds(built);
-    if (bounds) {
-      geometry.boundingBox = new THREE.Box3(
-        new THREE.Vector3(bounds.min_x, bounds.min_y, bounds.min_z),
-        new THREE.Vector3(bounds.max_x, bounds.max_y, bounds.max_z),
-      );
-      const center = geometry.boundingBox.getCenter(new THREE.Vector3());
-      geometry.boundingSphere = new THREE.Sphere(center, center.distanceTo(geometry.boundingBox.max));
-    } else {
-      geometry.boundingBox = new THREE.Box3();
-      geometry.boundingSphere = new THREE.Sphere();
-    }
-    const attribute = geometry.getAttribute(VISIBLE_ATTR);
-    if (import.meta.env.DEV) record_timing(mesh_mount_stats, performance.now() - mount_t0);
-    if (!(attribute instanceof THREE.BufferAttribute)) return;
-    attribute.needsUpdate = true;
-    const mounted: MountedLodMesh = { kind: "cube", built, role, attribute };
-    registry.meshes.add(mounted);
-    return () => void registry.meshes.delete(mounted);
-  }, [built, mesh, registry, role]);
-
-  return <primitive object={mesh} />;
-});
-ChunkMesh.displayName = "ChunkMesh";
-
-// One entry per bundle (matching bundle_assets' own order), each itself one
-// entry per that bundle's own variant — build_decor_instances' own return
-// shape, once per density level. `secondary` mirrors `LodLayout.secondary`
-// exactly (null outside a blend band) rather than decor tracking its own
-// independent blend state: decor_build_ref's own per-LodStep cache below
-// means a second density level costs one more cache lookup, not a second
-// concept, so there's no reason for decor's own blend window to differ from
-// cube content's.
-type DecorLayoutPair = {
-  primary: ModelInstanceTransformList[][];
-  secondary: ModelInstanceTransformList[][] | null;
-};
-const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: [], secondary: null };
-
-type LodLayout = {
-  primary: LodStep;
-  secondary: LodStep | null;
-  buckets: BuiltChunkBucket[];
-  // Populated by decor_build_ref below, entirely independently of `buckets`
-  // — see that ref's own doc comment for why the two builds don't share a
-  // cache or a rebuild trigger.
-  decor: DecorLayoutPair;
-  bounds: ChunkBounds | null;
-  ready: boolean;
-};
-
-// Exported for reference, though Chunk is the only implementation now —
-// decor_layer.tsx's own ChunkDecor (a separate, independently-scheduled
-// registrant) was retired 2026-09-05 once Chunk absorbed decor's own build
-// into its own commit() (see this file's own LodSchedulerProvider doc
-// comment and decor_layer.tsx's top doc comment for the fuller account).
-export type ChunkLodControl = {
-  blend_active: boolean;
-  settling: boolean;
-  in_frustum: boolean;
-  distance2: f64;
-  pending: boolean;
-  recheck(camera: THREE.Camera, frustum: THREE.Frustum): void;
-  commit(): boolean;
-};
-
-export type LodSchedulerRegistry = { controls: Set<ChunkLodControl> };
-const LodSchedulerContext = createContext<LodSchedulerRegistry | null>(null);
-
-export function use_lod_scheduler(): LodSchedulerRegistry {
-  const scheduler = useContext(LodSchedulerContext);
-  if (!scheduler) throw new Error("Chunk must be mounted under LodSchedulerProvider");
-  return scheduler;
-}
-
-function blend_hash(key: string): f64 {
-  let hash = 2166136261;
-  for (let i = 0; i < key.length; i++) {
-    hash ^= key.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 0x1_0000_0000;
-}
-
-// The coarsest LOD_STEP_BY_LEVEL tier (render/lod.ts) doubles as the
-// memory-saving "nothing built" state for a chunk that's off-screen or
-// hasn't measured its own real target yet — one real box's worth of
-// geometry per chunk instead of zero, so a later re-entry always has
-// *something* to transition from rather than popping in from a true void.
-const OFF_SCREEN_LOD_STEP: LodStep = 64;
-
-/** Drops every cached step except OFF_SCREEN_LOD_STEP's own — used when a
- * chunk leaves the frustum: recheck() still wants this chunk to keep
- * *something* cheap resident (so a later re-entry has a real tier to
- * transition from, not a void), just not every tier it happened to have
- * built while it was in view. */
-function prune_cache_except_default<T>(cache: Map<LodStep, T>): void {
-  for (const step of cache.keys()) {
-    if (step !== OFF_SCREEN_LOD_STEP) cache.delete(step);
-  }
-}
-
-type ChunkProps = { page_idx: IVec; offset: ChunkOffsets; stack: WorldLayerStack; bundle_assets: readonly DecorBundleAssets[] };
-
-const Chunk = memo(({ page_idx, offset, stack, bundle_assets }: ChunkProps) => {
-  const low_spec = useSettingsStore((state) => state.low_spec);
-  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
-  const show_structures = useSettingsStore((state) => state.show_structures);
-  const tile = useTileStore((state) => state.get_tile(page_idx));
-  const camera = useThree((state) => state.camera);
-  const anchor_registry = useAnchorRegistry();
-  const scheduler = use_lod_scheduler();
-  const group_ref = useRef<THREE.Group>(null);
-  const registry = useMemo<ChunkMeshRegistry>(() => ({ meshes: new Set() }), []);
-  const page_off = useMemo(
-    () => ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n),
-    [offset.base_x, offset.base_y],
-  );
-  const key = useMemo<ChunkKey>(() => ({ page_idx, page_off }), [page_idx, page_off]);
-  const object_key = useMemo(() => l2_column_key_of(page_idx, page_off), [page_idx, page_off]);
-  const objects_revision = useObjectL2ColumnRevision(object_key);
-  const decor_revision = useDecorL2ColumnRevision(object_key);
-
-  const bucket_cache_ref = useRef(new Map<LodStep, BuiltChunkBucket>());
-  // Every column's runs, scanned once from the live volume and reused
-  // across every LOD tier and every LOD transition after that (cleared
-  // alongside bucket_cache_ref below) — the composited dense bands still
-  // live only for one synchronous pass, but this copy of their *results*
-  // (plain MeshRun objects, not views into the volume) survives it.
-  const column_runs_ref = useRef<MeshRun[][] | null>(null);
-  // Set true the one time this chunk's scan gets deferred (see
-  // SCAN_DEFER_FACTOR's doc comment) — cleared the moment it actually
-  // scans, so a chunk can be deferred at most once, never starved forever
-  // waiting for a calm frame that never comes.
-  const scan_deferred_ref = useRef(false);
-  // Same one-shot defer, for the accumulate/build step instead of the scan
-  // — profiled: build_ref.current() itself (not just its scan half) spiked
-  // to 39-243ms with scan_max_ms nowhere near that, most likely a LOD1
-  // build (every run gets its own instance, no bucketing) landing near the
-  // camera during a fast zoom. Separate from scan_deferred_ref: a chunk's
-  // scan and build costs vary independently (scan tracks band count, build
-  // tracks total run count).
-  const build_deferred_ref = useRef(false);
-  // Decor's own build result per LOD step — its own cache, independent of
-  // bucket_cache_ref (see decor_build_ref's own doc comment for why the two
-  // builds don't share a cache or a rebuild trigger anymore). Keyed by
-  // lod_step alone, not by role: 2026-09-06's own blend support (mirroring
-  // cube content's primary/secondary pair — see DecorLayoutPair above) needs
-  // both steps of a pair built when one is active, and keying by the step
-  // itself rather than by which role it currently holds means asking for
-  // both is just two lookups against the one cache below, not a second
-  // cache or a second build path.
-  const decor_cache_ref = useRef(new Map<LodStep, ModelInstanceTransformList[][]>());
-
-  // Both build caches AND the scan they were built from — the two moments
-  // that actually need a hard reset (a source revision changed, or this
-  // chunk just left the frustum for commit() to act on) always want every
-  // one of these three gone together, never a subset. recheck()'s own
-  // out-of-frustum branch wants the softer prune_cache_except_default
-  // instead (keep something cheap resident, not nothing) — a different
-  // policy, not just a different moment, so it stays separate rather than
-  // folding in here.
-  function reset_all_caches(): void {
-    bucket_cache_ref.current.clear();
-    decor_cache_ref.current.clear();
-    column_runs_ref.current = null;
-  }
-
-  // Cube content only (terrain + solid objects, chunk_mesher.ts's baked
-  // mesh) — null return means "a needed scan was just deferred, not built
-  // yet", distinct from an empty result (built, genuinely nothing to draw).
-  // Decor used to build right alongside this (2026-09-05's "one build step"
-  // fix for the terrain/decor ready-state desync), but that meant ANY
-  // decor-only change — including set_virtual_hide's hover-driven churn —
-  // forced this whole function to re-run, rescanning/rebaking cube content
-  // that never actually changed (see objects/store.ts's
-  // decor_l2_column_revisions doc comment for the flicker this caused).
-  // decor_build_ref below is the split-out replacement; the two still run
-  // together whenever cube content itself rebuilds (every call site below
-  // calls both), so the original desync fix still holds — decor is never
-  // committed without the cube content it sits on having already been built
-  // for the exact same step — it's specifically a decor-only change that no
-  // longer touches this function at all.
-  const build_ref = useRef<(primary: LodStep, secondary: LodStep | null) => BuiltChunkBucket[] | null>(() => []);
-  build_ref.current = (primary, secondary) => {
-    const steps = secondary === null || secondary === primary ? [primary] : [primary, secondary];
-    const missing = steps.filter((step) => !bucket_cache_ref.current.has(step));
-
-    if (missing.length > 0) {
-      if (!column_runs_ref.current) {
-        let deferred = false;
-        const scan_t0 = performance.now();
-        const compose_result = with_temporary_composite(stack, key, (volume) => {
-          const band_count = volume.bands.length;
-          const avg_bands = lod_build_stats.scan_count > 0 ? lod_build_stats.scan_bands / lod_build_stats.scan_count : 0;
-          const avg_ms = lod_build_stats.scan_count > 0 ? lod_build_stats.scan_ms / lod_build_stats.scan_count : 0;
-          const estimated_ms = avg_bands > 0 ? avg_ms * (band_count / avg_bands) : 0;
-          if (!scan_deferred_ref.current && estimated_ms > LOD_WORK_BUDGET_MS * SCAN_DEFER_FACTOR) {
-            scan_deferred_ref.current = true;
-            deferred = true;
-            lod_build_stats.scan_deferred++;
-            return;
-          }
-          scan_deferred_ref.current = false;
-          column_runs_ref.current = scan_all_column_runs(volume);
-          lod_build_stats.scan_bands += band_count;
-          lod_build_stats.scan_bands_max = Math.max(lod_build_stats.scan_bands_max, band_count);
-        });
-        if (deferred) return null;
-        // with_temporary_composite itself returns null (its own callback
-        // never runs at all) when composite_chunk_layers finds nothing
-        // painted by any layer for this exact key — a real, if rare,
-        // transient case (a batch of chunks racing their very first build
-        // around the same moment can all momentarily read a layer as empty)
-        // — NOT the same as "genuinely nothing here, done forever". Falling
-        // through to the empty-bucket-list return below would make
-        // commit() treat this as a fully successful build (ready: true,
-        // pending: false, buckets: []) with no way to ever retry — a
-        // permanent black hole exactly where this one-off race happened,
-        // and since a whole neighboring batch can hit it at once, a
-        // contiguous shape (a hole, a ring) rather than one stray chunk.
-        // Returning null here instead — same as a deferred scan — keeps
-        // this chunk pending so the scheduler just tries it again.
-        if (compose_result === null) return null;
-        const scan_ms = performance.now() - scan_t0;
-        lod_build_stats.scan_ms += scan_ms;
-        lod_build_stats.scan_count++;
-        lod_build_stats.scan_max_ms = Math.max(lod_build_stats.scan_max_ms, scan_ms);
-      }
-      const column_runs = column_runs_ref.current;
-      if (column_runs) {
-        let total_runs = 0;
-        for (const list of column_runs) total_runs += list.length;
-        const avg_runs = lod_build_stats.build_count > 0 ? lod_build_stats.build_runs / lod_build_stats.build_count : 0;
-        const avg_build_ms = lod_build_stats.build_count > 0 ? lod_build_stats.build_ms / lod_build_stats.build_count : 0;
-        const estimated_ms = avg_runs > 0 ? avg_build_ms * (total_runs / avg_runs) * missing.length : 0;
-        if (!build_deferred_ref.current && estimated_ms > LOD_WORK_BUDGET_MS * SCAN_DEFER_FACTOR) {
-          build_deferred_ref.current = true;
-          lod_build_stats.build_deferred++;
-          return null;
-        }
-        build_deferred_ref.current = false;
-
-        const build_t0 = performance.now();
-        for (const step of missing) {
-          bucket_cache_ref.current.set(step, build_chunk_bucket(column_runs, step, "primary"));
-        }
-        const build_ms = performance.now() - build_t0;
-        lod_build_stats.build_ms += build_ms;
-        lod_build_stats.build_count++;
-        lod_build_stats.build_max_ms = Math.max(lod_build_stats.build_max_ms, build_ms);
-        lod_build_stats.build_runs += total_runs;
-        lod_build_stats.build_runs_max = Math.max(lod_build_stats.build_runs_max, total_runs);
-      }
-    }
-
-    // Built buckets for LOD tiers outside the current primary/secondary are
-    // kept, not evicted here — profiled: a chunk build storm during a pan
-    // repeatedly revisits the same tier (LOD hunting back and forth around
-    // a threshold), and rebuilding one from column_runs isn't free (a full
-    // res^2 * lod_step^2 accumulate_run sweep even with runs pre-scanned).
-    // bucket_cache_ref is only actually cleared on frustum-exit or a source
-    // revision change (below), at most LOD_STEP_BY_LEVEL.length (7) small
-    // entries retained per chunk — cheap next to column_runs_ref.
-    return steps
-      .map((step) => bucket_cache_ref.current.get(step))
-      .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
-      .map((bucket) => ({
-        ...bucket,
-        role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole,
-      }))
-      .sort((a, b) => a.lod_step - b.lod_step);
+function pool_sample(): { live_mb: number; idle_mb: number; hit_pct: number } {
+  const stat = mesh_pool_stat();
+  const acquires = stat.hits + stat.misses;
+  return {
+    live_mb: Math.round(stat.live_bytes / MB),
+    idle_mb: Math.round(stat.idle_bytes / MB),
+    hit_pct: acquires > 0 ? Math.round((stat.hits / acquires) * 100) : 0,
   };
-
-  // Decor's own build — a plain per-bundle build_decor_instances call, no
-  // volume scan, no dependency on bucket_cache_ref/column_runs_ref at all
-  // (ObjectWorldLayer.paint() never paints a voxel for a decor entry, so
-  // decor's own output can never depend on anything build_ref above
-  // computes). Takes a single LodStep, not a primary/secondary pair — one
-  // call per step needed, same as bucket_cache_ref's own per-step entries;
-  // build_decor_pair below is what turns "the pair currently active" into
-  // "the right one or two calls here". Deliberately NOT keyed off build_ref's
-  // own `missing` list: that would re-tie decor's own staleness to cube
-  // content's cache, exactly the coupling this split exists to remove (see
-  // build_ref's own doc comment).
-  const decor_build_ref = useRef<(step: LodStep) => ModelInstanceTransformList[][]>(() => []);
-  decor_build_ref.current = (step) => {
-    if (!decor_cache_ref.current.has(step)) {
-      decor_cache_ref.current.set(step, bundle_assets.map(({ bundle }) => build_decor_instances(tile, step, page_idx, offset.base_x, offset.base_y, bundle)));
-    }
-    return decor_cache_ref.current.get(step)!;
-  };
-
-  // The one place that turns "primary/secondary LodStep pair" into "decor's
-  // own built instances for that pair" — every LodLayout.decor assignment
-  // below goes through this rather than repeating the null-check/dedup
-  // logic build_ref's own `steps` line already established for cube content.
-  function build_decor_pair(primary: LodStep, secondary: LodStep | null): DecorLayoutPair {
-    return {
-      primary: decor_build_ref.current(primary),
-      secondary: secondary !== null && secondary !== primary ? decor_build_ref.current(secondary) : null,
-    };
-  }
-
-  // The shared "given a (primary, secondary) pair, what would this chunk's
-  // whole layout actually contain" computation — the initial useState below
-  // and the source-revision effect after it both need exactly this (build
-  // cube content, bail on a deferred scan, else build decor's own pair and
-  // measure bounds), differing only in what they do with a null result.
-  // commit() keeps its own inline copy rather than calling this: it already
-  // measures build_ref/chunk_bounds as two separate DEV timings
-  // (commit_step_stats), which this single call would collapse into one.
-  function build_layout_content(
-    primary: LodStep,
-    secondary: LodStep | null,
-  ): { buckets: BuiltChunkBucket[]; decor: DecorLayoutPair; bounds: ChunkBounds | null } | null {
-    const buckets = build_ref.current(primary, secondary);
-    if (buckets === null) return null;
-    return { buckets, decor: build_decor_pair(primary, secondary), bounds: chunk_bounds(buckets) };
-  }
-
-  const initial_view = useMemo(
-    () => estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, ivec.add(FROM_L3_IDX(page_idx), page_off)),
-    [anchor_registry, camera, page_idx, page_off],
-  );
-
-  const [layout, set_layout] = useState<LodLayout>(() => {
-    if (!initial_view.in_frustum) {
-      return { primary: OFF_SCREEN_LOD_STEP, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
-    }
-    const content = build_layout_content(initial_view.lod_step, null);
-    if (content === null) {
-      // Scan deferred on the very first build — start not-ready (same
-      // shape as an out-of-frustum chunk) so the first recheck() sets
-      // pending and retries, instead of rendering nothing forever.
-      return { primary: initial_view.lod_step, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, bounds: null, ready: false };
-    }
-    return { primary: initial_view.lod_step, secondary: null, ...content, ready: true };
-  });
-  const layout_ref = useRef(layout);
-  layout_ref.current = layout;
-  const desired_ref = useRef<{ primary: LodStep; secondary: LodStep | null }>({
-    primary: initial_view.lod_step,
-    secondary: null,
-  });
-  const source_ref = useRef({ tile, objects_revision, show_structures });
-
-  // A source revision rebuilds the currently displayed LOD, not the entire
-  // visible world. Comparing the actual source tuple also prevents React
-  // StrictMode's development-only effect replay from rebuilding every chunk.
-  // objects_revision here is the SOLID-only revision (see
-  // useObjectL2ColumnRevision's own doc comment) — a decor-only change
-  // (place/remove/virtual-hide of a tree, say) never touches it, so it never
-  // lands here. A solid change still clears/rebuilds decor_cache_ref too,
-  // though: a newly placed solid cube can occlude a procedurally-scattered
-  // decor candidate that used to render there, which only decor's own build
-  // (via get_objects_in_cell) knows how to react to.
-  useEffect(() => {
-    const previous = source_ref.current;
-    if (
-      Object.is(previous.tile, tile) && previous.objects_revision === objects_revision &&
-      previous.show_structures === show_structures
-    ) return;
-    source_ref.current = { tile, objects_revision, show_structures };
-    const current = layout_ref.current;
-    reset_all_caches();
-    if (!current.ready) {
-      if (current.bounds !== null) {
-        const invalidated = { ...current, bounds: null };
-        layout_ref.current = invalidated;
-        set_layout(invalidated);
-      }
-      return;
-    }
-    const content = build_layout_content(current.primary, current.secondary);
-    if (content === null) {
-      // Deferred — keep whatever's currently showing, just mark not-ready
-      // so the next recheck() sets pending and retries. current.ready is
-      // always true here (the check above already returned otherwise), so
-      // this needs no guard of its own.
-      const invalidated = { ...current, ready: false };
-      layout_ref.current = invalidated;
-      set_layout(invalidated);
-      return;
-    }
-    const next = { ...current, ...content, ready: true };
-    layout_ref.current = next;
-    set_layout(next);
-  }, [tile, objects_revision, show_structures]);
-
-  const decor_source_ref = useRef(decor_revision);
-
-  // decor's own revision-only rebuild — see objects/store.ts's
-  // decor_l2_column_revisions doc comment for why this has to be a separate
-  // effect from the one above: it must NEVER touch bucket_cache_ref/
-  // column_runs_ref (that would reintroduce the exact needless cube
-  // rescan/rebake — visible as a flicker — that this split exists to avoid).
-  // A decor-only change updates layout.decor alone; buckets/bounds/ready are
-  // carried over from whatever the cube-content effect above last set.
-  useEffect(() => {
-    if (decor_source_ref.current === decor_revision) return;
-    decor_source_ref.current = decor_revision;
-    const current = layout_ref.current;
-    decor_cache_ref.current.clear();
-    // Not ready yet (a scan/build is still pending) — the cube-content
-    // effect/commit() will populate decor once it actually builds; nothing
-    // for this effect to do until then.
-    if (!current.ready) return;
-    const next = { ...current, decor: build_decor_pair(current.primary, current.secondary) };
-    layout_ref.current = next;
-    set_layout(next);
-  }, [decor_revision]);
-
-  const control = useMemo<ChunkLodControl>(() => {
-    const center = new THREE.Vector3();
-    const local_box = new THREE.Box3();
-    const world_box = new THREE.Box3();
-    const sphere = new THREE.Sphere(center, APPROXIMATE_CHUNK_RADIUS);
-    const stable_hash = blend_hash(`${page_idx.toString()}:${offset.key}`);
-    return {
-      blend_active: true,
-      settling: false,
-      in_frustum: initial_view.in_frustum,
-      // Seeded from the same one-shot camera-relative estimate in_frustum
-      // above already used, not a true (Infinity) sentinel — see
-      // estimate_initial_chunk_view's own doc comment for why a real,
-      // if approximate, distance matters here: the scheduler's recheck loop
-      // ranks a same-frame batch of freshly mounted controls by this field,
-      // and every one of them starts blend_active with no group mounted yet
-      // to measure exactly, so Infinity would make that ranking degrade to
-      // registration order for the whole batch.
-      distance2: initial_view.distance2,
-      pending: false,
-      recheck(camera, frustum) {
-        const group = group_ref.current;
-        if (!group) return;
-        const current = layout_ref.current;
-        const bounds = current.bounds;
-        if (bounds === null) {
-          chunk_distance_to_camera(group, CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0, camera, center);
-        } else {
-          set_three_box(local_box, bounds);
-          local_box.getCenter(center).applyMatrix4(group.matrixWorld);
-        }
-        this.distance2 = center.distanceToSquared(camera.position);
-        if (bounds === null) {
-          const camera_projection_inside = Math.abs(camera.position.x - center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
-            Math.abs(camera.position.y - center.y) <= CHUNK_WORLD_SPAN * 0.5;
-          this.in_frustum = camera_projection_inside || frustum.intersectsSphere(sphere);
-        } else {
-          world_box.copy(local_box).applyMatrix4(group.matrixWorld);
-          const camera_projection_inside = camera.position.x >= world_box.min.x && camera.position.x <= world_box.max.x &&
-            camera.position.y >= world_box.min.y && camera.position.y <= world_box.max.y;
-          this.in_frustum = camera_projection_inside || frustum.intersectsBox(world_box);
-        }
-        group.visible = this.in_frustum;
-
-        if (!this.in_frustum) {
-          // Do not let GPU buffers or derived surfaces accumulate as the
-          // camera visits the world. An off-screen component keeps only its
-          // source key and rebuilds if it re-enters the frustum.
-          desired_ref.current = { primary: OFF_SCREEN_LOD_STEP, secondary: null };
-          this.pending = current.ready;
-          this.blend_active = false;
-          this.settling = false;
-          prune_cache_except_default(bucket_cache_ref.current);
-          prune_cache_except_default(decor_cache_ref.current);
-          apply_visibility(registry, { primary: true, secondary: false });
-          return;
-        }
-        const guide = get_lod_guide(Math.sqrt(this.distance2), current.primary);
-        // An unloaded chunk has nothing on screen to transition from. Build
-        // its correct tier immediately instead of flashing 32 -> 16 -> target
-        // merely because the memory-saving empty state uses OFF_SCREEN_LOD_STEP.
-        const primary = current.ready ? step_lod_toward(current.primary, guide.lod_step) : guide.lod_step;
-        this.settling = primary !== guide.lod_step;
-        const secondary = !this.settling && guide.blend_active && guide.blend_finer_step !== null && guide.blend_coarser_step !== null
-          ? (primary === guide.blend_finer_step ? guide.blend_coarser_step : guide.blend_finer_step)
-          : null;
-        desired_ref.current = { primary, secondary };
-        this.pending = !current.ready || current.primary !== primary || current.secondary !== secondary;
-        this.blend_active = !this.settling && guide.blend_active;
-
-        if (this.pending || !this.blend_active || guide.blend_finer_step === null || guide.blend_coarser_step === null) {
-          apply_visibility(registry, { primary: true, secondary: false });
-          return;
-        }
-        const pair = get_lod_pair_visibility(stable_hash, guide.coarse_fraction);
-        const primary_is_finer = current.primary === guide.blend_finer_step;
-        apply_visibility(registry, {
-          primary: primary_is_finer ? pair.finer : pair.coarser,
-          secondary: primary_is_finer ? pair.coarser : pair.finer,
-        });
-      },
-      commit() {
-        if (!this.pending) return false;
-        if (!this.in_frustum) {
-          reset_all_caches();
-          // Keep the tiny measured AABB after releasing GPU/surface data so a
-          // later polar change can re-enter using real geometry, not z=0.
-          const empty: LodLayout = {
-            primary: OFF_SCREEN_LOD_STEP,
-            secondary: null,
-            buckets: [],
-            decor: EMPTY_DECOR_PAIR,
-            bounds: layout_ref.current.bounds,
-            ready: false,
-          };
-          layout_ref.current = empty;
-          set_layout(empty);
-          this.pending = false;
-          return true;
-        }
-        const desired = desired_ref.current;
-        const build_t0 = import.meta.env.DEV ? performance.now() : 0;
-        const buckets = build_ref.current(desired.primary, desired.secondary);
-        if (import.meta.env.DEV) {
-          commit_step_stats.build_ms_max = Math.max(commit_step_stats.build_ms_max, performance.now() - build_t0);
-        }
-        if (buckets === null) {
-          // A needed scan was deferred to a calmer frame — stay pending
-          // (retried next tick) and leave whatever's currently on screen
-          // alone rather than popping it to empty.
-          return false;
-        }
-        const bounds_t0 = import.meta.env.DEV ? performance.now() : 0;
-        const bounds = chunk_bounds(buckets);
-        if (import.meta.env.DEV) {
-          commit_step_stats.bounds_ms_max = Math.max(commit_step_stats.bounds_ms_max, performance.now() - bounds_t0);
-        }
-        const next: LodLayout = {
-          primary: desired.primary,
-          secondary: desired.secondary,
-          buckets,
-          decor: build_decor_pair(desired.primary, desired.secondary),
-          bounds,
-          ready: true,
-        };
-        layout_ref.current = next;
-        const set_layout_t0 = import.meta.env.DEV ? performance.now() : 0;
-        set_layout(next);
-        if (import.meta.env.DEV) {
-          commit_step_stats.set_layout_ms_max = Math.max(commit_step_stats.set_layout_ms_max, performance.now() - set_layout_t0);
-        }
-        this.pending = false;
-        return true;
-      },
-    };
-  }, [offset.key, initial_view.in_frustum, page_idx, registry]);
-
-  useEffect(() => {
-    scheduler.controls.add(control);
-    return () => void scheduler.controls.delete(control);
-  }, [scheduler, control]);
-
-  return (
-    <group
-      ref={group_ref}
-      position={[offset.base_x * U_PER_CELL, offset.base_y * U_PER_CELL, 0]}
-      name={`chunk/${offset.key}`}
-    >
-      {layout.buckets.map((bucket) => (
-        <group key={bucket.role} name={`${bucket.role}/lod/${bucket.lod_step}`}>
-          {bucket.cubes.vertex_cnt > 0 && <ChunkMesh built={bucket.cubes} role={bucket.role} low_spec={low_spec} show_rim_light={show_rim_light} registry={registry} />}
-        </group>
-      ))}
-      {
-        /* One coordinate convention for everything this chunk renders now:
-        build_decor_instances (decor_layer.tsx) returns chunk-local
-        positions, matching chunk_mesher.ts's own baked cube positions
-        exactly, so decor nests inside this same offset group instead of
-        needing its own separate, unoffset one. */
-      }
-      {bundle_assets.map(({ bundle, geometries, materials }, bi) => {
-        const primary_variants = layout.decor.primary[bi];
-        const secondary_variants = layout.decor.secondary?.[bi] ?? null;
-        if (!primary_variants) return null;
-        return (
-          <group key={bundle.seed.tag.toString()} name={`chunk-decor/${offset.key}/${bundle.seed.tag.toString()}`}>
-            <group name="primary">
-              {geometries.map((geometry, variant) => {
-                const material = materials[variant];
-                const instances = primary_variants[variant];
-                return geometry && material && instances && instances.length > 0
-                  ? <DecorVariantMesh key={variant} geometry={geometry} material={material} instances={instances} role="primary" registry={registry} />
-                  : null;
-              })}
-            </group>
-            {secondary_variants && (
-              <group name="secondary">
-                {geometries.map((geometry, variant) => {
-                  const material = materials[variant];
-                  const instances = secondary_variants[variant];
-                  return geometry && material && instances && instances.length > 0
-                    ? <DecorVariantMesh key={variant} geometry={geometry} material={material} instances={instances} role="secondary" registry={registry} />
-                    : null;
-                })}
-              </group>
-            )}
-          </group>
-        );
-      })}
-    </group>
-  );
-});
-Chunk.displayName = "Chunk";
+}
 
 type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec; bundle_assets: readonly DecorBundleAssets[] };
 
+/**
+ * One page's worth of chunks, created and destroyed imperatively.
+ *
+ * This is where React stops. A page is a handful of components; its ~256
+ * chunks are ChunkNodes (chunk_node.ts), plain objects hung off one group.
+ * The rendered tree used to reach all the way down — a component per chunk,
+ * per LOD role, and per decor variant, thousands of them re-reconciled
+ * whenever a layout changed — which bought nothing (a chunk is described by
+ * no props and reads no other chunk's state) and cost the deferral that made
+ * chunk memory unsafe to reason about.
+ *
+ * `offsets` changes only when the page or the range anchor does, so the diff
+ * below is normally empty; when it does change it is a set difference by
+ * chunk key, not a reconciliation.
+ */
 const PageChunks = memo(({ page_idx, stack, range_anchor, bundle_assets }: PageChunksProps) => {
   const page_base = FROM_L3_IDX(page_idx);
-  const offsets = useMemo(
-    () => in_range_chunks(page_base, range_anchor),
-    [page_base, range_anchor],
-  );
+  const camera = useThree((state) => state.camera);
+  const anchor_registry = useAnchorRegistry();
+  const group = useMemo(() => {
+    const g = new THREE.Group();
+    g.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
+    return g;
+  }, [page_idx]);
+  const nodes = useRef(new Map<string, ChunkNode>());
+  const offsets = useMemo(() => in_range_chunks(page_base, range_anchor), [page_base, range_anchor]);
+
+  useLayoutEffect(() => {
+    const live = nodes.current;
+    const wanted = new Map(offsets.map((offset) => [offset.key, offset]));
+    for (const [key, node] of live) {
+      if (wanted.has(key)) continue;
+      node.dispose();
+      live.delete(key);
+    }
+    for (const [key, offset] of wanted) {
+      if (live.has(key)) continue;
+      const node = new ChunkNode({ page_idx, offset, stack, bundle_assets, camera, anchor_registry });
+      group.add(node.group);
+      live.set(key, node);
+    }
+  }, [offsets, page_idx, stack, bundle_assets, camera, anchor_registry, group]);
+
+  useEffect(() => {
+    const live = nodes.current;
+    return () => {
+      for (const node of live.values()) node.dispose();
+      live.clear();
+    };
+  }, []);
+
   return (
     <AnchorNode i={page_base}>
-      <group name={`chunk-stage-page/${ivec.repr(page_idx)}`}>
-        {offsets.map((offset) => <Chunk key={offset.key} page_idx={page_idx} offset={offset} stack={stack} bundle_assets={bundle_assets} />)}
-      </group>
+      <primitive object={group} />
     </AnchorNode>
   );
 });
@@ -1067,7 +237,7 @@ PageChunks.displayName = "PageChunks";
  * exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const scheduler = useMemo<LodSchedulerRegistry>(() => ({ controls: new Set() }), []);
+  const scheduler = lod_scheduler;
   const lod_elapsed = useRef(LOD_RECHECK_INTERVAL);
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const { gl } = useThree();
@@ -1078,16 +248,35 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     gl.render = (scene, camera) => {
       const t0 = performance.now();
       original_render(scene, camera);
-      record_timing(render_call_stats, performance.now() - t0);
+      last_render_ms = performance.now() - t0;
+      record_timing(render_call_stats, last_render_ms);
     };
     return () => {
       gl.render = original_render;
+    };
+  }, [gl]);
+
+  // GPU timing needs the live context; harmless when the extension is absent.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const ctx = gl.getContext();
+    if (ctx instanceof WebGL2RenderingContext) gpu_timer_attach(ctx);
+  }, [gl]);
+
+  // Accumulate renderer.info across every pass of a frame rather than letting
+  // each render() clear it — see the note above frame draw counts.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    gl.info.autoReset = false;
+    return () => {
+      gl.info.autoReset = true;
     };
   }, [gl]);
   const projection = useMemo(() => new THREE.Matrix4(), []);
 
   useFrame((state, delta) => {
     const frame_t0 = import.meta.env.DEV ? performance.now() : 0;
+    if (import.meta.env.DEV) gpu_timer_begin();
     const controls = Array.from(scheduler.controls);
     if (controls.length === 0) return;
     lod_elapsed.current += delta;
@@ -1144,34 +333,36 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // frame, for a subset most of which was about to be skipped anyway.
     const eligible = controls.filter((control) => full_recheck || control.blend_active || control.settling);
     eligible.sort((a, b) => Number(b.in_frustum) - Number(a.in_frustum) || a.distance2 - b.distance2);
-    const recheck_deadline = performance.now() + LOD_WORK_BUDGET_MS;
+    run_under_budget(eligible, (control) => {
+      control.recheck(state.camera, frustum);
+      return true;
+    }, { budget_ms: LOD_WORK_BUDGET_MS, hard_budget_ms: LOD_HARD_BUDGET_MS });
+
+    // Every blend_active-true control is by construction included in
+    // eligible above (it's one of the three needs_recheck conditions), so
+    // this OR over just the eligible subset still sees every one of them —
+    // equivalent to scanning all of controls for this specific flag, just
+    // without paying to visit the ones that couldn't have it. Deliberately
+    // a full scan, not folded into the budgeted pass above: a control whose
+    // recheck got deferred still carries last frame's flag and still needs a
+    // repaint scheduled for it, so this must see the ones the budget skipped.
     let blend_active = false;
-    let rechecked: u32 = 0;
-    for (const control of eligible) {
-      if (rechecked === 0 || performance.now() < recheck_deadline) {
-        control.recheck(state.camera, frustum);
-        rechecked++;
-      }
-      // Every blend_active-true control is by construction included in
-      // eligible above (it's one of the three needs_recheck conditions),
-      // so this OR over just the eligible subset still sees every one of
-      // them — equivalent to scanning all of controls for this specific
-      // flag, just without paying to visit the ones that couldn't have it.
-      blend_active ||= control.blend_active;
-    }
+    for (const control of eligible) blend_active ||= control.blend_active;
     const recheck_ms = import.meta.env.DEV ? performance.now() - recheck_t0 : 0;
 
     const pending_total = controls.filter((control) => control.pending);
     // Visible builds/refinements win. Pending work outside the frustum only
     // drops a formerly visible chunk's derived surface and GPU buffers.
     const pending = pending_total.sort((a, b) => Number(b.in_frustum) - Number(a.in_frustum) || a.distance2 - b.distance2);
-    const deadline = performance.now() + LOD_WORK_BUDGET_MS;
     const commit_t0 = import.meta.env.DEV ? performance.now() : 0;
-    let committed: u32 = 0;
-    for (const control of pending) {
-      if (committed >= LOD_MAX_CHUNKS_PER_FRAME || (committed > 0 && performance.now() >= deadline)) break;
-      if (control.commit()) committed++;
-    }
+    // commit() returning false means "nothing to do after all" — it neither
+    // counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the deadline, which is
+    // what run_under_budget's own falsy-step rule preserves.
+    const committed: u32 = run_under_budget(pending, (control) => control.commit(), {
+      budget_ms: LOD_WORK_BUDGET_MS,
+      hard_budget_ms: LOD_HARD_BUDGET_MS,
+      max_steps: LOD_MAX_CHUNKS_PER_FRAME,
+    }).ran;
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
     if (import.meta.env.DEV) {
       const settling_lod = controls.filter((control) => control.settling).length;
@@ -1179,13 +370,57 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       const in_frustum_cnt = controls.filter((control) => control.in_frustum).length;
       const pending_lod_total_cnt = pending_total.length - committed;
       const frame_ms = performance.now() - frame_t0;
-      scheduler_peak_stats.recheck_ms_max = Math.max(scheduler_peak_stats.recheck_ms_max, recheck_ms);
-      scheduler_peak_stats.commit_ms_max = Math.max(scheduler_peak_stats.commit_ms_max, commit_ms);
-      scheduler_peak_stats.frame_ms_max = Math.max(scheduler_peak_stats.frame_ms_max, frame_ms);
-      scheduler_peak_stats.settling_lod_max = Math.max(scheduler_peak_stats.settling_lod_max, settling_lod);
-      scheduler_peak_stats.blend_active_max = Math.max(scheduler_peak_stats.blend_active_max, blend_active_cnt);
-      scheduler_peak_stats.pending_lod_total_max = Math.max(scheduler_peak_stats.pending_lod_total_max, pending_lod_total_cnt);
-      scheduler_peak_stats.in_frustum_max = Math.max(scheduler_peak_stats.in_frustum_max, in_frustum_cnt);
+
+      // Report this frame to sched/ledger.ts BEFORE reading the peak below —
+      // the ledger owns both views now (a ~4s ring for the shape of a
+      // stutter, a session peak for one you noticed too late to catch in the
+      // ring), so this loop only has to hand over raw numbers.
+      const perf_memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+      const poi_map = usePoiStore.getState().poi_map;
+      let poi_count = 0;
+      for (const pois of poi_map.values()) poi_count += pois.length;
+      const fx = useSettingsStore.getState();
+      const fx_passes = 1 + // color-grade + vignette, always on (fused)
+        (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_tilt_shift ? 1 : 0) +
+        (fx.show_chromatic_aberration ? 1 : 0) + (fx.show_god_rays ? 1 : 0) +
+        (fx.aa_mode === "smaa" ? 1 : 0) + (fx.show_shadow_map ? 1 : 0);
+      // Reads and clears in one step, so the next frame starts from zero
+      // without a separate reset pass to forget.
+      const node_work = take_node_counts();
+      ledger_record_frame({
+        t: performance.now(),
+        dt_ms: delta * 1000,
+        sched_ms: frame_ms,
+        cpu: { recheck_ms, commit_ms, render_ms: last_render_ms },
+        // Filled by the microtask below, which runs once the rAF task's JS
+        // stack empties — i.e. after every other useFrame subscriber and after
+        // the composer's render. Carries the previous frame's value here and
+        // is corrected in place a moment later.
+        task_ms: last_task_ms,
+        gpu_ms: gpu_timer_last_ms(),
+        draw_calls: state.gl.info.render.calls,
+        triangles: state.gl.info.render.triangles,
+        geometries: state.gl.info.memory.geometries,
+        textures: state.gl.info.memory.textures,
+        px: state.gl.domElement.width * state.gl.domElement.height,
+        fx_passes,
+        mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
+        lod: {
+          chunks: controls.length,
+          in_frustum: in_frustum_cnt,
+          pending: pending_lod_total_cnt,
+          settling: settling_lod,
+          blend_active: blend_active_cnt,
+        },
+        heap_mb: perf_memory ? Math.round(perf_memory.usedJSHeapSize / 1_048_576) : 0,
+        tile_pages: useTileStore.getState().tile_map.size,
+        poi_count,
+        pool: pool_sample(),
+        work: work_sample(),
+        q_terrain: fetch_pending_count("terrain"),
+        q_poi: fetch_pending_count("poi"),
+      });
+      const peak = ledger_frame_peak();
 
       const debug_stats = {
         chunks: controls.length,
@@ -1202,7 +437,18 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         lod_build: { ...lod_build_stats },
         coarse_instances: { ...coarse_instance_stats },
         occlusion: { ...occlusion_stats },
-        scheduler_peak: { ...scheduler_peak_stats },
+        // Derived from the ledger's session peak rather than a second set of
+        // counters maintained here. Key names kept as they were — this blob
+        // is read from the console and scraped off the canvas dataset.
+        scheduler_peak: {
+          recheck_ms_max: peak.recheck_ms,
+          commit_ms_max: peak.commit_ms,
+          frame_ms_max: peak.sched_ms,
+          settling_lod_max: peak.settling,
+          blend_active_max: peak.blend_active,
+          pending_lod_total_max: peak.pending,
+          in_frustum_max: peak.in_frustum,
+        },
         mesh_mount: { ...mesh_mount_stats },
         mesh_unmount: { ...mesh_unmount_stats },
         commit_step: { ...commit_step_stats },
@@ -1210,11 +456,24 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       };
       (globalThis as typeof globalThis & { __PXL_RENDER_STATS__?: unknown }).__PXL_RENDER_STATS__ = debug_stats;
       state.gl.domElement.dataset.pixeletRenderStats = JSON.stringify(debug_stats);
+      // Start the next frame's draw-count accumulation (autoReset is off).
+      state.gl.info.reset();
+
+      // Close the GPU query and measure the whole rAF task once the stack
+      // empties. A microtask is the only vantage point that sees the render:
+      // the post-processing composer renders through its own useFrame, so the
+      // gl.render wrapper above never fires and render_ms reads 0.
+      const sample = ledger_last_frame();
+      queueMicrotask(() => {
+        gpu_timer_end();
+        last_task_ms = performance.now() - frame_t0;
+        if (sample) sample.task_ms = last_task_ms;
+      });
     }
     if (committed > 0 || pending.length > committed || blend_active) state.invalidate();
   });
 
-  return <LodSchedulerContext.Provider value={scheduler}>{children}</LodSchedulerContext.Provider>;
+  return <>{children}</>;
 }
 
 export type ChunkStageProps = { stack: WorldLayerStack; decor_bundles: readonly DecorKindBundle[] };
