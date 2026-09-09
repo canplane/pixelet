@@ -213,6 +213,15 @@ const CREASE_NX: u32 = 1 << 19;
 const CREASE_PY: u32 = 1 << 20;
 const CREASE_NY: u32 = 1 << 21;
 
+// Whether the cell above / below this run is filled. Not the same question
+// as "did FACE_PZ survive culling", which is what the shader used to read:
+// a placed object is exempt from culling (it must not open a hole under
+// itself — 2026-08-16) but it is still solid matter sitting there, so a
+// wall capped by one is not a silhouette. Shading has to ask what is
+// actually present; culling gets to be conservative about it.
+const CAP_PZ: u32 = 1 << 22;
+const CAP_NZ: u32 = 1 << 23;
+
 function face_cnt_of(mask: u32): u32 {
   let n: u32 = 0;
   for (let bits = mask; bits !== 0; bits &= bits - 1) n++;
@@ -390,7 +399,7 @@ function emit_box(
  * or structure does, because the camera is near-top-down but still oblique,
  * so a face it "hides" is one you can see past.
  */
-function column_covers_range_opaque(set: ColumnRunSet, col: u32, z0: i32, z1: i32): boolean {
+function column_spans_range(set: ColumnRunSet, col: u32, z0: i32, z1: i32, skip_objects: boolean): boolean {
   const end = set.start[col + 1];
   for (let i = set.start[col]; i < end; i++) {
     // merge_column_runs emits a column ascending, so once a run starts above
@@ -399,37 +408,61 @@ function column_covers_range_opaque(set: ColumnRunSet, col: u32, z0: i32, z1: i3
     // millions of comparisons on a dense chunk, which showed up directly as
     // commit_ms p95 going 10.9ms -> 17.9ms when face culling landed.
     if (set.z0[i] > z0) return false;
-    if (set.sub_sz[i] !== SUB_CELL_NONE || set.material_class[i] === MaterialClass.OBJECT) continue;
+    if (set.sub_sz[i] !== SUB_CELL_NONE) continue;
+    if (skip_objects && set.material_class[i] === MaterialClass.OBJECT) continue;
     if (set.z1[i] >= z1) return true;
   }
   return false;
 }
 
+/** Enough to drop a face: a placed object does not count, per this
+ * function's own doc comment above. */
+function column_covers_range_opaque(set: ColumnRunSet, col: u32, z0: i32, z1: i32): boolean {
+  return column_spans_range(set, col, z0, z1, true);
+}
+
+/** Enough to stop an edge being a silhouette: anything solid counts,
+ * including a placed object. Nothing is culled off this answer, so the
+ * caution that keeps objects out of the one above does not apply. */
+function column_fills_range(set: ColumnRunSet, col: u32, z0: i32, z1: i32): boolean {
+  return column_spans_range(set, col, z0, z1, false);
+}
+
 const HIDES_SIDE: u32 = 1;
 const RISES_ABOVE: u32 = 2;
 const EXTENDS_BELOW: u32 = 4;
+/** Same span as HIDES_SIDE, but counting placed objects too. The face still
+ * survives beside one; the edge just stops being a silhouette. */
+const ABUTS_SIDE: u32 = 8;
 
 /**
  * Both questions a neighbour column can answer about one run, in one pass.
  *
- * Whether it hides my side face (spans my whole range), whether it occupies
- * the cell over my top, and whether it occupies the cell under my bottom are
- * three separate facts that one ascending walk settles together. Asking them
- * as three calls would triple the neighbour scans, and run_face_mask already
- * makes four.
+ * Whether it hides my side face (spans my whole range), whether anything is
+ * flush against that side at all, whether it occupies the cell over my top,
+ * and whether it occupies the cell under my bottom are four separate facts
+ * that one ascending walk settles together. Asking them as four calls would
+ * quadruple the neighbour scans, and run_face_mask already makes four.
+ *
+ * Only HIDES_SIDE excludes placed objects, because only HIDES_SIDE drops a
+ * face. The other three feed edge shading, where treating an object as
+ * absent is what draws a bevel down the join between a user cube and the
+ * terrain it sits flush against.
  */
 function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 {
   const above = z1 + 1;
   const below = z0 - 1;
-  const all = HIDES_SIDE | RISES_ABOVE | EXTENDS_BELOW;
+  const all = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | EXTENDS_BELOW;
   let rel: u32 = 0;
   const end = set.start[col + 1];
   for (let i = set.start[col]; i < end; i++) {
     const r_z0 = set.z0[i];
     if (r_z0 > above) break;
-    if (set.sub_sz[i] !== SUB_CELL_NONE || set.material_class[i] === MaterialClass.OBJECT) continue;
+    if (set.sub_sz[i] !== SUB_CELL_NONE) continue;
     const r_z1 = set.z1[i];
-    if (r_z0 <= z0 && r_z1 >= z1) rel |= HIDES_SIDE;
+    const spans = r_z0 <= z0 && r_z1 >= z1;
+    if (spans) rel |= ABUTS_SIDE;
+    if (spans && set.material_class[i] !== MaterialClass.OBJECT) rel |= HIDES_SIDE;
     if (r_z0 <= above && r_z1 >= above) rel |= RISES_ABOVE;
     if (r_z0 <= below && r_z1 >= below) rel |= EXTENDS_BELOW;
     if (rel === all) break;
@@ -479,34 +512,39 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
   const z0 = set.z0[i], z1 = set.z1[i];
   if (column_covers_range_opaque(set, col, z1 + 1, z1 + 1)) mask &= ~FACE_PZ;
   if ((mask & FACE_NZ) !== 0 && column_covers_range_opaque(set, col, z0 - 1, z0 - 1)) mask &= ~FACE_NZ;
+  // Asked of everything solid, not only of what would have culled the face:
+  // a wall capped by a user cube is capped, whether or not the cube was
+  // allowed to drop the face under it.
+  if (column_fills_range(set, col, z1 + 1, z1 + 1)) mask |= CAP_PZ;
+  if (column_fills_range(set, col, z0 - 1, z0 - 1)) mask |= CAP_NZ;
 
   // A chunk-edge column keeps its side face and gets no crease, concave or
   // convex: the neighbouring chunk's columns are not in this scan.
   if (cx + 1 < CHUNK_CELL_SPAN) {
     const rel = neighbour_relation(set, col + 1, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PX;
-    else mask |= CREASE_PX;
+    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_PX;
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PX;
     if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PX;
   }
   if (cx > 0) {
     const rel = neighbour_relation(set, col - 1, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NX;
-    else mask |= CREASE_NX;
+    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_NX;
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NX;
     if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NX;
   }
   if (cy + 1 < CHUNK_CELL_SPAN) {
     const rel = neighbour_relation(set, col + CHUNK_CELL_SPAN, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PY;
-    else mask |= CREASE_PY;
+    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_PY;
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PY;
     if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PY;
   }
   if (cy > 0) {
     const rel = neighbour_relation(set, col - CHUNK_CELL_SPAN, z0, z1);
     if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NY;
-    else mask |= CREASE_NY;
+    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_NY;
     if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NY;
     if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NY;
   }
@@ -516,16 +554,16 @@ function run_face_mask(set: ColumnRunSet, cx: u32, cy: u32, i: u32): u32 {
   // neighbour hides it.
   const wants_diagonal = (a: u32, b: u32) => ((mask & a) !== 0 && (mask & b) === 0) || ((mask & b) !== 0 && (mask & a) === 0);
   if (cx + 1 < CHUNK_CELL_SPAN && cy + 1 < CHUNK_CELL_SPAN && wants_diagonal(FACE_PX, FACE_PY)) {
-    if (column_covers_range_opaque(set, col + CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PP;
+    if (column_fills_range(set, col + CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PP;
   }
   if (cx + 1 < CHUNK_CELL_SPAN && cy > 0 && wants_diagonal(FACE_PX, FACE_NY)) {
-    if (column_covers_range_opaque(set, col - CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PN;
+    if (column_fills_range(set, col - CHUNK_CELL_SPAN + 1, z0, z1)) mask |= DIAG_PN;
   }
   if (cx > 0 && cy + 1 < CHUNK_CELL_SPAN && wants_diagonal(FACE_NX, FACE_PY)) {
-    if (column_covers_range_opaque(set, col + CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NP;
+    if (column_fills_range(set, col + CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NP;
   }
   if (cx > 0 && cy > 0 && wants_diagonal(FACE_NX, FACE_NY)) {
-    if (column_covers_range_opaque(set, col - CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NN;
+    if (column_fills_range(set, col - CHUNK_CELL_SPAN - 1, z0, z1)) mask |= DIAG_NN;
   }
   return mask;
 }
