@@ -17,7 +17,7 @@
 
 import { TREE_MODEL_URLS, TREE_SKIN_URL } from "@pxl/shared/assets/decor/trees.ts";
 import { PINE_MODEL_URLS, PINE_SKIN_URL } from "@pxl/shared/assets/decor/graveyard_trees.ts";
-import type { DecorKindBundle } from "./decor_layer.tsx";
+import type { DecorKindBundle } from "./decor_layer.ts";
 import { is_tree_eligible, TREE_KIND } from "./tree_kind.ts";
 
 const TREE_VARIANTS = [

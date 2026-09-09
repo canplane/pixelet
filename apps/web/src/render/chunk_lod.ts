@@ -2,7 +2,7 @@
 
 /**
  * The one real distance-to-camera measurement any chunk-shaped content uses
- * to pick a LOD tier. chunk_stage.tsx's terrain chunks and decor_layer.tsx's
+ * to pick a LOD tier. chunk_stage.tsx's terrain chunks and decor_layer.ts's
  * decor chunks are equal callers of this, not producer/consumer — both
  * mount a group under the same AnchorSpace, at a position ultimately owned
  * by world.tsx's own frame system (rotation + a continuously-translating

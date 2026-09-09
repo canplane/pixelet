@@ -23,7 +23,16 @@ import * as THREE from "three";
 
 import type { ModelInstanceTransform } from "./instanced_model.ts";
 
-type DecorMeshEntry = { mesh: THREE.Mesh; instances: readonly ModelInstanceTransform[] };
+type DecorMeshEntry = {
+  mesh: THREE.Mesh;
+  instances: readonly ModelInstanceTransform[];
+  /** Invisible on purpose and still the real target: chunk_node.ts bakes the
+   * entry the eraser is hovering into its own undrawn mesh so the hide
+   * cannot take it out of hit testing. Distinguished from the other reason a
+   * registered mesh is invisible — the LOD blend's off-tier half, which must
+   * NOT be hit — because only a flag can tell the two apart. */
+  suppressed: boolean;
+};
 const registry = new Set<DecorMeshEntry>();
 
 // A decor mesh sitting on the ground it also intersects (any tree's own
@@ -49,14 +58,14 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
 
 /**
  * Registers one currently-mounted, currently-baked decor mesh
- * (decor_layer.tsx's own DecorVariantMesh) — call again (a fresh entry) on
+ * (decor_layer.ts's own DecorVariantMesh) — call again (a fresh entry) on
  * every rebuild, since a rebuild changes both the mesh's own geometry
  * (bake_decor_instances) and the faceIndex -> instance mapping this module
  * depends on; the old entry must not linger once its own mesh/instances go
  * stale. Returns the unregister function.
  */
-export function register_decor_mesh(mesh: THREE.Mesh, instances: readonly ModelInstanceTransform[]): () => void {
-  const entry: DecorMeshEntry = { mesh, instances };
+export function register_decor_mesh(mesh: THREE.Mesh, instances: readonly ModelInstanceTransform[], suppressed = false): () => void {
+  const entry: DecorMeshEntry = { mesh, instances, suppressed };
   registry.add(entry);
   return () => void registry.delete(entry);
 }
@@ -73,7 +82,7 @@ export function register_decor_mesh(mesh: THREE.Mesh, instances: readonly ModelI
  *
  * faceIndex -> instance resolution relies on every instance sharing one
  * merged mesh's own single source geometry (bake_decor_instances is always
- * called once per (chunk, variant) — see decor_layer.tsx's own
+ * called once per (chunk, variant) — see decor_layer.ts's own
  * DecorVariantMesh), so that mesh's own total face count divides evenly by
  * its own instance count into a constant faces-per-instance stride.
  *
@@ -94,7 +103,12 @@ export function raycast_decor(raycaster: THREE.Raycaster, max_dist: f64): string
   // band). Without this filter, hovering could resolve a hit against
   // whichever of the two blend-pair meshes happens to be nearer along the
   // ray, regardless of which one is actually on screen.
-  const entries = Array.from(registry).filter((entry) => entry.mesh.visible);
+  //
+  // A suppressed mesh is the exception and has to survive that filter: it is
+  // invisible precisely because this hover asked for it to be, and dropping
+  // it here is what made the hover lose its own target every other frame —
+  // hide, miss, release, re-acquire, hide.
+  const entries = Array.from(registry).filter((entry) => entry.suppressed || entry.mesh.visible);
   if (entries.length === 0) return null;
   const hits = raycaster.intersectObjects(entries.map((entry) => entry.mesh), false);
 

@@ -21,8 +21,8 @@
 // has no loader for, and this module (like instanced_model.ts) is meant to
 // stay importable from test files without dragging that chain in. Callers
 // that need the live show_rim_light setting own that subscription
-// themselves (decor_layer.tsx's useAllDecorBundleAssets today; a
-// characters/ equivalent is this file's own reason for existing).
+// themselves (decor/asset_store.ts for decor; a characters/ equivalent is
+// this file's own reason for existing).
 
 import * as THREE from "three";
 
@@ -69,7 +69,7 @@ export function make_lit_gltf_material(texture: THREE.Texture, program_cache_key
  * make_lit_gltf_material — a no-op before that material's shader has
  * actually compiled once (userData.shader isn't populated until
  * onBeforeCompile fires), same "the first render or two just doesn't have
- * rim light yet" gap decor_layer.tsx's own effect already accepts. */
+ * rim light yet" gap decor_layer.ts's own effect already accepts. */
 export function set_rim_intensity(material: THREE.MeshStandardMaterial, intensity: number): void {
   const shader = material.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
   if (shader) shader.uniforms.u_rim_intensity.value = intensity;

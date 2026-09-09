@@ -48,7 +48,6 @@ import { PoiLayer } from "./poi/poi_layer.tsx";
 // instead of a second, possibly-drifting registration.
 import { ChunkStage, LodSchedulerProvider } from "./chunk_stage.tsx";
 import { CHUNK_STAGE_LAYERS } from "./stack.ts";
-import { DECOR_BUNDLES } from "./decor/decor_registry.ts";
 
 // Dynamic rather than a plain top-level import so the character/pet model
 // code (GLTFLoader, skinning, animation mixer — otherwise unused anywhere
@@ -236,7 +235,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
             <AnchorSpace registry={registry}>
               <LodSchedulerProvider>
-                <ChunkStage stack={CHUNK_STAGE_LAYERS} decor_bundles={DECOR_BUNDLES} />
+                <ChunkStage stack={CHUNK_STAGE_LAYERS} />
               </LodSchedulerProvider>
 
               <HoverCursor />

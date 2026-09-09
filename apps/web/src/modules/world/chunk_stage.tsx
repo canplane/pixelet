@@ -11,11 +11,11 @@
  * 36 KiB top-surface summary for coarse LOD rebuilds, never the dense bands.
  *
  * Decor used to be a fully separate, independently-scheduled component tree
- * (decor_layer.tsx's own ChunkDecor/PageDecor/DecorLayer, one registrant per
+ * (decor_layer.ts's own ChunkDecor/PageDecor/DecorLayer, one registrant per
  * (chunk, decor kind) in the shared LodSchedulerRegistry below) — retired
  * once Chunk absorbed decor's own build into its own commit(), the fix for
  * the documented terrain/decor ready-state desync (decor could render a
- * frame before its own co-located terrain). See decor_layer.tsx's own top
+ * frame before its own co-located terrain). See decor_layer.ts's own top
  * doc comment and discussions/20260905-tier1-geometry-baking-implemented.md
  * (and its own same-day follow-up) for the fuller account.
  */
@@ -58,7 +58,6 @@ import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { mesh_pool_stat } from "@/render/layer/pipeline/mesh_pool.ts";
 import { update_frustum } from "@/render/chunk_lod.ts";
-import { type DecorBundleAssets, type DecorKindBundle, useAllDecorBundleAssets } from "@/modules/world/decor/decor_layer.tsx";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
@@ -136,7 +135,7 @@ function pool_sample(): { live_mb: number; idle_mb: number; hit_pct: number } {
   };
 }
 
-type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec; bundle_assets: readonly DecorBundleAssets[] };
+type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec };
 
 /**
  * One page's worth of chunks, created and destroyed imperatively.
@@ -153,7 +152,7 @@ type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: I
  * below is normally empty; when it does change it is a set difference by
  * chunk key, not a reconciliation.
  */
-const PageChunks = memo(({ page_idx, stack, range_anchor, bundle_assets }: PageChunksProps) => {
+const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => {
   const page_base = FROM_L3_IDX(page_idx);
   const camera = useThree((state) => state.camera);
   const anchor_registry = useAnchorRegistry();
@@ -175,11 +174,11 @@ const PageChunks = memo(({ page_idx, stack, range_anchor, bundle_assets }: PageC
     }
     for (const [key, offset] of wanted) {
       if (live.has(key)) continue;
-      const node = new ChunkNode({ page_idx, offset, stack, bundle_assets, camera, anchor_registry });
+      const node = new ChunkNode({ page_idx, offset, stack, camera, anchor_registry });
       group.add(node.group);
       live.set(key, node);
     }
-  }, [offsets, page_idx, stack, bundle_assets, camera, anchor_registry, group]);
+  }, [offsets, page_idx, stack, camera, anchor_registry, group]);
 
   useEffect(() => {
     const live = nodes.current;
@@ -204,7 +203,7 @@ PageChunks.displayName = "PageChunks";
  * ChunkDecor per (chunk, decor kind) here too, competing for this same
  * budget as an independent component with its own `ready` state; as of
  * 2026-09-05 Chunk builds decor alongside its own cube content in one
- * commit() instead (see decor_layer.tsx's own top doc comment), so this
+ * commit() instead (see decor_layer.ts's own top doc comment), so this
  * registry now only ever holds one control per chunk position, not up to
  * five. Everything here — the registry, the frustum, the recheck/commit
  * loop, the dev stats — used to live inside ChunkStage itself, back when it
@@ -452,18 +451,16 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export type ChunkStageProps = { stack: WorldLayerStack; decor_bundles: readonly DecorKindBundle[] };
+export type ChunkStageProps = { stack: WorldLayerStack };
 
 /** Renders terrain/objects AND every decor kind together — see this file's
- * own top doc comment and decor_layer.tsx's for why decor no longer has its
- * own top-level component (DecorLayer, retired 2026-09-05). `decor_bundles`
- * should be a stable (module-level) reference — see world.tsx's own
- * DECOR_BUNDLES — useAllDecorBundleAssets relies on that to avoid
- * needlessly re-slicing its own already-loaded assets every render. */
-export const ChunkStage = memo(({ stack, decor_bundles }: ChunkStageProps) => {
+ * own top doc comment and decor_layer.ts's for why decor no longer has its
+ * own top-level component (DecorLayer, retired 2026-09-05). Decor models are
+ * not passed in either: decor/asset_store.ts owns them and every ChunkNode
+ * subscribes to it directly. */
+export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
   const map_center = useMapStore((state) => state.map_center);
   const tile_map = useTileStore((state) => state.tile_map);
-  const bundle_assets = useAllDecorBundleAssets(decor_bundles);
 
   const center_page_idx = map_center === null ? null : L3_IDX(map_center.i);
   const center_page_key = center_page_idx?.toString() ?? null;
@@ -489,7 +486,7 @@ export const ChunkStage = memo(({ stack, decor_bundles }: ChunkStageProps) => {
   return (
     <group name="chunk-stage">
       {visible_pages.map((page_idx) => (
-        <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} bundle_assets={bundle_assets} />
+        <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />
       ))}
     </group>
   );

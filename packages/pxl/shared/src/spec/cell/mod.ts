@@ -185,6 +185,16 @@ export function terrain_style_cube_source(id: TerrainStyleCubeId): { channel: Gr
   return source;
 }
 
+/** The terrain-styled id standing for a real baked (channel, type) pair —
+ * the inverse of terrain_style_cube_source, for callers that hold what the
+ * terrain shows and want the cube that looks like it. */
+export function terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: number): TerrainStyleCubeId | null {
+  for (const [id, source] of TERRAIN_STYLE_SOURCE) {
+    if (source.channel === channel && source.terrain_num_id === terrain_num_id) return id;
+  }
+  return null;
+}
+
 export function placeable_cube_hex(id: PlaceableCubeId): string | null {
   return is_terrain_style_cube(id) ? TERRAIN_STYLE_HEX.get(id) ?? null : cube_hex(id);
 }

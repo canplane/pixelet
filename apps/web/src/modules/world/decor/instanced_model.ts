@@ -34,18 +34,14 @@
  * loader for that specifier, and this file is imported directly by
  * decor_hit.test.ts/instanced_model.test.ts. Pulling that whole chain into a
  * module those tests import would break `deno task test` outright, not just
- * slow it down. decor_layer.tsx's own useAllDecorBundleAssets — the only
- * real (non-test) consumer that needs live updates — owns that
- * subscription instead, one level up from here.
+ * slow it down. asset_store.ts, which no test imports, owns the loading
+ * and that subscription instead.
  */
 
-import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { mergeBufferGeometries } from "three-stdlib";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { load_gltf, load_texture } from "@/modules/world/gltf_cache.ts";
-import { make_lit_gltf_material } from "@/modules/world/render/lit_gltf_material.ts";
 
 /**
  * Merges every mesh found in a loaded glTF scene into one static
@@ -59,7 +55,7 @@ import { make_lit_gltf_material } from "@/modules/world/render/lit_gltf_material
  * or not, fitting the same "one geometry, one InstancedMesh" shape the
  * rest of this file assumes.
  */
-function merge_scene_geometry(root: THREE.Object3D): THREE.BufferGeometry | null {
+export function merge_scene_geometry(root: THREE.Object3D): THREE.BufferGeometry | null {
   root.updateMatrixWorld(true);
   const parts: THREE.BufferGeometry[] = [];
   root.traverse((node) => {
@@ -81,98 +77,6 @@ export type DecorVariantAsset = {
   skin_url: string;
 };
 
-export type LoadedModelVariants = {
-  /** One entry per variants input, in the same order; null until that
-   * variant's own load resolves. Geometry is never mutated after load, so
-   * it's safe to feed straight into an InstancedMesh with no cloning —
-   * unlike character models, there's no skeleton/skinning here to rebind
-   * per instance. */
-  geometries: (THREE.BufferGeometry | null)[];
-  /** One material per variant, null until that variant's own skin texture
-   * has loaded. */
-  materials: (THREE.MeshStandardMaterial | null)[];
-};
-
-/**
- * Loads every variant's model+skin (each independently cached by URL — see
- * gltf_cache.ts) and exposes ready-to-use InstancedMesh inputs. A glTF's
- * own material is never used: GLTFLoader tries (and fails) to resolve the
- * packed colormap's own relative "Textures/colormap.png" reference once
- * Vite content-hashes the .glb's filename — same failure
- * use_character_model.ts's own doc comment documents for character skins,
- * fixed the same way here (override the material after load instead of
- * trusting the glTF's own).
- */
-export function useInstancedModelVariants(variants: readonly DecorVariantAsset[]): LoadedModelVariants {
-  const [geometries, set_geometries] = useState<(THREE.BufferGeometry | null)[]>(() => variants.map(() => null));
-  const [materials, set_materials] = useState<(THREE.MeshStandardMaterial | null)[]>(() => variants.map(() => null));
-
-  // variants is expected to be a stable module-level constant (every
-  // current DecorKind's own list — see tree_decor.ts) — joined into one key
-  // so this effect only re-fires if the actual variant set changes, not on
-  // every render of a caller that inlines a fresh array literal.
-  const variants_key = variants.map((v) => `${v.model_url}:${v.skin_url}`).join("|");
-
-  useEffect(() => {
-    let cancelled = false;
-    set_geometries(variants.map(() => null));
-    variants.forEach((variant, i) => {
-      load_gltf(variant.model_url).then((gltf) => {
-        if (cancelled) return;
-        const geometry = merge_scene_geometry(gltf.scene);
-        set_geometries((current) => {
-          const next = current.slice();
-          next[i] = geometry;
-          return next;
-        });
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // variants_key (not variants) is the real dependency — variants itself
-    // is a fresh array identity each render even when its contents match.
-    // deno-lint-ignore-next-line
-  }, [variants_key]);
-
-  useEffect(() => {
-    let cancelled = false;
-    set_materials(variants.map(() => null));
-    variants.forEach((variant, i) => {
-      load_texture(variant.skin_url).then((texture) => {
-        if (cancelled) return;
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.flipY = false;
-        // Distinct per-variant skin textures mean distinct materials
-        // regardless (map/emissiveMap differ), but the compiled WebGLProgram
-        // itself is identical for every one of them — same reasoning
-        // chunk_stage.tsx's own create_material() gives for "chunk-mesh",
-        // hence the shared cache key (decor's own geometry never has
-        // skinning attributes, unlike characters/use_character_model.ts's
-        // own call into this same helper — see lit_gltf_material.ts's own
-        // doc comment on why that one doesn't pass one).
-        const material = make_lit_gltf_material(texture, "decor-mesh");
-        // this file doesn't know the live show_rim_light setting (see this
-        // file's own top doc comment for why) — the real value gets set
-        // from outside, by whichever caller actually needs it live
-        // (decor_layer.tsx's own useAllDecorBundleAssets, via
-        // lit_gltf_material.ts's own set_rim_intensity).
-        set_materials((current) => {
-          const next = current.slice();
-          next[i] = material;
-          return next;
-        });
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // deno-lint-ignore-next-line
-  }, [variants_key]);
-
-  return useMemo(() => ({ geometries, materials }), [geometries, materials]);
-}
-
 export type ModelInstanceTransform = {
   position: readonly [f64, f64, f64];
   /** Radians, applied about world Z after the model's own Y-up -> Z-up fix
@@ -181,6 +85,13 @@ export type ModelInstanceTransform = {
    * every glTF asset here is Y-up by spec. */
   rotation_z: f64;
   scale: f64;
+  /** Present in the built set but not drawn: set_virtual_hide is
+   * suppressing it while the eraser hovers it. It stays in the list because
+   * decor_hit.ts raycasts the baked mesh itself, so dropping it here would
+   * take the entry out of hit testing too — and a hover that cannot find
+   * what it is hovering releases the hide, which brings the entry back,
+   * which lets the hover find it again. */
+  hidden?: boolean;
   /** This instance's own objects/store.ts leaf id, or null for a procedural
    * (scatter.ts-derived, never-stored) placement — decor_hit.ts's own
    * raycast_decor uses this to resolve a real mesh hit's own faceIndex back
