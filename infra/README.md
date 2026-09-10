@@ -314,22 +314,27 @@ a route the Worker should have claimed.
 
 ## 7. Licensing and attribution
 
-Two notices are required, shown in
+The notices below are required, shown in
 `apps/web/src/app/settings/sections/attribution_section.tsx`. Check the
-source license before shortening, rewording or dropping either.
+source license before shortening, rewording or dropping any of them.
 
-| Source        | License                                                   | Notice                                                                                                                                                                                                                                                                                                                |
-| :------------ | :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenStreetMap | ODbL                                                      | `© OpenStreetMap contributors` — the historical form listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). Overture's Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this obligation through.                    |
-| GEDTM30       | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) | The pipeline crops and reprojects the raw DTM, so CC-BY requires noting the change: `Contains modified GEDTM30 data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ 13:e19673.` |
+| Source              | License                                                                                                  | Notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| :------------------ | :------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenStreetMap       | [ODbL](https://opendatacommons.org/licenses/odbl/)                                                       | `© OpenStreetMap contributors, available under the Open Database License` — the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines) require the credit to make clear the data is under ODbL, so the licence is named rather than left to the link alone. Overture's Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this obligation through.                                                                                                                                                                               |
+| GEDTM30             | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)                                                | Creator, title, licence link and an indication of change — the pipeline crops and reprojects, so it changed: `Elevation: modified GEDTM30 by OpenGeoHub, licensed under CC BY 4.0.` The author list and journal reference that used to sit here are an academic courtesy, not part of what CC BY asks, and were long enough to crowd out the Copernicus row below, which is not optional. Link the [DOI this pipeline consumes](https://doi.org/10.5281/zenodo.15689805) (`elevation/metadata.json`), which is what the app's own notice and README link too — one source, not three mirrors of it. |
+| Copernicus WorldDEM | [Copernicus DEM licence](https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model) | Compulsory, and the wording is dictated. GEDTM30 is a fusion whose inputs include Copernicus WorldDEM, and the licence binds anyone communicating adapted data to its "produced using" form, verbatim: `produced using Copernicus WorldDEM © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved`.                                                                                                                                                                                                        |
 
 Overture Maps Foundation itself needs no notice. Places is
 CDLA-Permissive-2.0, whose only condition is shipping the license text with
 the data, and the ODbL obligation on the other themes runs to OSM's
 contributors rather than to Overture as redistributor. Overture's
-[attribution page](https://docs.overturemaps.org/attribution/) recommends a
-combined notice as best practice; this project keeps the legally required
-minimum.
+[attribution page](https://docs.overturemaps.org/attribution/) offers a
+citation a user "may choose to add" — its own wording, and the reason this is
+a choice rather than an obligation. This project keeps the required minimum.
+
+Still open: GEDTM30 also fuses JAXA's ALOS World 3D-30m. JAXA's terms page was
+not readable when this was written, so no claim is made here about its exact
+required wording rather than inventing one.
 
 ## 8. Secrets
 

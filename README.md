@@ -6,7 +6,7 @@
 
 _Started on December 15, 2025._
 
-**pixelet** is a location-based spatial world built over real-world geodata ([Overture Maps](https://overturemaps.org/) + [GEDTM30](https://portal.opentopography.org/datasetMetadata?otCollectionID=OT.082025.4326.1) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
+**pixelet** is a location-based spatial world built over real-world geodata ([Overture Maps](https://overturemaps.org/) + [GEDTM30](https://doi.org/10.5281/zenodo.15689805) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
 
 <img alt="Voxel objects built on real-world terrain" src=".github/assets/screenshot.png" height="480">
 
