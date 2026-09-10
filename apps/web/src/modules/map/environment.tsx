@@ -736,7 +736,31 @@ export function MapEnvironment(props: MapEnvironmentProps) {
   return (
     <>
       <group ref={sky_frame_ref}>
-        <mesh scale={SKY_DOME_SCALE} frustumCulled={false}>
+        {/*
+          renderOrder is what makes this the background rather than a
+          foreground object that happens to be far away.
+
+          It writes colour with depthTest off and depthWrite off, so it paints
+          over whatever has already been drawn and leaves the depth buffer
+          alone. Without a renderOrder it takes its place in three's opaque
+          list by `material.id` (WebGLRenderLists' painterSortStable, which
+          compares groupOrder, then renderOrder, then material.id, and only
+          then distance) — a global counter incremented at material
+          construction. Every material built before this one therefore draws
+          before the sky and is erased by it, while its depth survives, so
+          whatever stands behind it is then depth-rejected. The result is that
+          object's exact silhouette filled with sky.
+
+          Which materials lose is a race, because construction order is not
+          render order: decor's materials are built when their skin PNGs
+          resolve (decor/asset_store.ts), which with a warm browser cache can
+          land before this component has mounted at all. That is the whole of
+          the "decor draws as a hole through to the sky" bug — clouds and all,
+          night sky at night — and of the same thing happening to the location
+          puck's beacon perhaps once in a couple of hundred loads, while the
+          zone box beside it, which carries renderOrder 5, never did.
+        */}
+        <mesh scale={SKY_DOME_SCALE} frustumCulled={false} renderOrder={-1}>
           <sphereGeometry args={[1, 32, 32]} />
           <shaderMaterial
             ref={sky_material_ref}
