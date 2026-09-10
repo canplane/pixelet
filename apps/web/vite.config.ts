@@ -17,14 +17,14 @@ const __dirname = path.dirname(__filename);
 const apiBaseDefault = "http://127.0.0.1:3000";
 
 // Where `deno task dev:remote` points when nothing overrides it: the project's
-// own published tile deployment. Override with VITE_TILE_PROXY_TARGET — which
+// own published deployment. Override with VITE_REMOTE_ORIGIN — which
 // .env.example now pre-fills with this exact value, so updating that file
 // alone (no source edit) is enough going forward; this constant only exists
 // so dev:remote still works before anyone has copied .env.example to .env.
 // (Previously pointed at the workers.dev subdomain, which silently 404'd on
 // every request once that route was disabled at the Cloudflare edge —
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
-const tileOriginDefault = "https://plei.me";
+const remoteOriginDefault = "https://plei.me";
 
 // anti-HMR
 const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
@@ -87,16 +87,16 @@ export default defineConfig(({ mode }) => {
 
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
-  // VITE_TILE_SOURCE=remote (deno task dev:remote): tiles from a published deployment instead of the local API.
-  const remoteTiles = (env.VITE_TILE_SOURCE || "local") === "remote";
+  //   local  (default) — the live API, baking on demand.
+  //   remote            — an already-published deployment, so no local API,
+  //                       database or Docker. `deno task dev:remote`.
+  const remote = (env.VITE_DEV_SOURCE || "local") === "remote";
 
   // Injected as __PUBLISHED_TILES__: routes.ts builds every tile path from
   // it, config.ts reads it for what a 404 means.
-  const published = mode === "production" || remoteTiles;
+  const published = mode === "production" || remote;
 
-  //   local  (default) — live API, bakes on demand.
-  //   remote            — an already-published deployment.
-  const tileProxyTarget = remoteTiles ? (env.VITE_TILE_PROXY_TARGET || tileOriginDefault) : "";
+  const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
 
   return {
     // root `deno task dev` runs dev:api and dev:web concurrently in one
@@ -152,8 +152,8 @@ export default defineConfig(({ mode }) => {
       // Each prefix forwarded whole and unrewritten.
       proxy: Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
         route.path,
-        route.origin === "published" && tileProxyTarget
-          ? { target: tileProxyTarget, changeOrigin: true }
+        remoteOrigin && !route.local_only
+          ? { target: remoteOrigin, changeOrigin: true }
           : { target: apiBase, changeOrigin: true, ws: route.ws },
       ])),
     },

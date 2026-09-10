@@ -25,13 +25,13 @@ The original coarse tier shrank the box isotropically by the cube root of its
 fill fraction, centred in its own cell. Over the day that was replaced twice
 and then restored:
 
-| | model | why it was tried | why it was dropped |
-| --- | --- | --- | --- |
-| original | `cbrt(fill)` shrink, centred | density is size; needs no alpha and no sort | thought incompatible with a dither cross-fade |
-| B | full-size box, colour dimmed by fill, cull below 25% | a dissolve needs both tiers in the same volume | dilates a lone block 8x or erases it |
-| B′ | as B, but Z kept at fine resolution | distant terrain read flat | made XY the privileged axis |
-| C | box fitted per axis to the voxels present | fixes both, and is symmetric *within* a cell | still decimates XY only |
-| final | back to `cbrt(fill)`, centred | no axis is special | — |
+|          | model                                                | why it was tried                               | why it was dropped                            |
+| -------- | ---------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- |
+| original | `cbrt(fill)` shrink, centred                         | density is size; needs no alpha and no sort    | thought incompatible with a dither cross-fade |
+| B        | full-size box, colour dimmed by fill, cull below 25% | a dissolve needs both tiers in the same volume | dilates a lone block 8x or erases it          |
+| B′       | as B, but Z kept at fine resolution                  | distant terrain read flat                      | made XY the privileged axis                   |
+| C        | box fitted per axis to the voxels present            | fixes both, and is symmetric _within_ a cell   | still decimates XY only                       |
+| final    | back to `cbrt(fill)`, centred                        | no axis is special                             | —                                             |
 
 The measurable defect that killed B′ is worth keeping: its fill number mixed
 resolutions, a coarse XY footprint over a fine Z height. At `lod_step` 8,
@@ -43,7 +43,7 @@ whether geometry existed, not mass.
 
 There is a real argument for XY-only decimation. Terrain is a surface, and a
 surface's volumetric density in a coarse cell goes to zero as the cell grows
-— area scales as L², volume as L³. So an isotropic occupancy rule *must*
+— area scales as L², volume as L³. So an isotropic occupancy rule _must_
 erode surfaces at every level. This is the same reason mipmapping an
 occupancy grid thins geometry, and why voxel cone tracing stores directional
 opacity rather than one scalar. Decimating XY while keeping height exact is a
@@ -145,7 +145,7 @@ Judged in-session as not bad enough to act on.
 
 Edge shading draws a line where a cube edge is a silhouette. Getting that
 right turned out to be three separate mistakes, all the same shape — a bit
-that answered a *culling* question being read as a *shading* one.
+that answered a _culling_ question being read as a _shading_ one.
 
 1. **Chunk boundaries.** A face at a chunk edge is emitted without ever
    looking at the neighbour, so its face bit says "exists" while the world
@@ -185,9 +185,9 @@ the point where it isn't.
 **A `THREE.Sprite` is depth-tested as a point, not as a surface.** Its vertex
 shader offsets the quad's corners in view-space XY and leaves view Z at the
 sprite centre's, so every fragment carries the anchor's depth. The depth
-*test* is still per fragment. So a badge is not compared against the world as
+_test_ is still per fragment. So a badge is not compared against the world as
 a thing occupying space — each of its pixels is asked "is the terrain behind
-*you* nearer than my anchor?", and different pixels get different answers.
+_you_ nearer than my anchor?", and different pixels get different answers.
 
 What that looks like in practice is not a badge disappearing behind a hill.
 It is a horizontal band of grass punched through the middle of the badge,

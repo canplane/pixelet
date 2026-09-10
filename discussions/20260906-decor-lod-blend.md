@@ -38,7 +38,7 @@ fixed.
   itself exactly.
 - **New shared `render/lod_visibility.ts`**, holding `apply_visibility` and
   its registry types — factored out of `chunk_stage.tsx` so decor_layer.tsx
-  can register into the *same* registry `ChunkMesh` (cube content) already
+  can register into the _same_ registry `ChunkMesh` (cube content) already
   uses, without decor_layer.tsx importing anything from chunk_stage.tsx
   itself (that reverse direction was removed as a circular import back on
   2026-09-05 — see decor_layer.tsx's own top doc comment). One registry, one
@@ -48,7 +48,7 @@ fixed.
   independently-timed transitions.
 - **Decor toggles via a plain `THREE.Object3D.visible` flip**, not cube
   content's per-vertex `a_visible` attribute + fragment-shader discard.
-  Cube's own mechanism exists because one built mesh gets *reused* across
+  Cube's own mechanism exists because one built mesh gets _reused_ across
   LOD transitions and needs a way to hide/show without touching geometry;
   decor's per-step build cache already hands back a distinct, already-baked
   mesh per density level, so there's nothing to reuse — an entire mesh is

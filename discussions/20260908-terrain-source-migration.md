@@ -14,17 +14,17 @@ and a sequencing proposal.
 POI and reverse-geocode already refresh themselves. Terrain doesn't, and
 can't, as long as it's on OSM.
 
-|                    | Terrain (`tiles/v1`)                                        | POI / geocode (`poi/v2`, `geocode/v1`)                      |
-| ------------------ | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Source ingest      | `osm2pgsql --slim --hstore-all` + split land-polygons shapefile + `CLUSTER` — multi-GB, stateful, local | `overturemaps` CLI pull for a bbox — runs in a throwaway CI postgis container |
-| Refresh            | Manual, `bake-tiles` skill procedure                       | `.github/workflows/overture-monthly-refresh.yml`, cron `0 3 1 * *` |
-| Publish            | Immutable: new `tiles/vN` prefix, app redeployed with new `VITE_TILE_BASE_URL` | Mutable: `aws s3 sync --delete` over the same prefix, `max-age=86400` |
+|               | Terrain (`tiles/v1`)                                                                                    | POI / geocode (`poi/v2`, `geocode/v1`)                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Source ingest | `osm2pgsql --slim --hstore-all` + split land-polygons shapefile + `CLUSTER` — multi-GB, stateful, local | `overturemaps` CLI pull for a bbox — runs in a throwaway CI postgis container |
+| Refresh       | Manual, `bake-tiles` skill procedure                                                                    | `.github/workflows/overture-monthly-refresh.yml`, cron `0 3 1 * *`            |
+| Publish       | Immutable: new `tiles/vN` prefix, app redeployed with new `VITE_TILE_BASE_URL`                          | Mutable: `aws s3 sync --delete` over the same prefix, `max-age=86400`         |
 
 The monthly workflow's own comment spells out why terrain is excluded:
 
-> *Deliberately needs no OSM/terrain infrastructure in CI ... instead of
+> _Deliberately needs no OSM/terrain infrastructure in CI ... instead of
 > re-ingesting all of OSM into a fresh database every month just to
-> regenerate it.*
+> regenerate it._
 
 `osm2pgsql` of a country PBF plus a global land-polygons shapefile is not
 something to run monthly in CI. `overturemaps` for a bbox already is —
@@ -60,16 +60,16 @@ The bake's OSM coupling is in three layers; the rasterizer, the tile
 format, the `cube_types` output vocabulary, and the R2 serving path are all
 untouched.
 
-| Piece                                              | Change                                                                                                 | Difficulty |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------- |
-| `shared/bake/format.ts` row types                  | `FeatRow`/`CoastRow`/`OSMTags` reshaped to the new SQL result                                          | Low        |
-| Elevation path                                     | none (data reload only)                                                                               | —          |
-| Ingestion tools                                    | new `overture_buildings` / `overture_transportation` / `overture_base_*` tables; `ingest_places.ts` is the template | Low–Med    |
-| `terrain/repository.ts` SQL                        | one `osm_elements` query → per-theme queries (Buildings has `height`/`num_floors`/`class`; segments have `subtype`/`class` + `road`; Base has `subtype`/`class`) | Medium     |
-| `bake/osm/model/osm_adapter.ts`                    | drop the hstore parser; keep WKB decode; structured columns instead                                    | Low–Med    |
-| `bake/terrain/pipeline/osm_policy.ts` (464 lines)  | near-total rewrite: every branch keys off OSM vocab (`natural=`, `building:levels`, `waterway`, `aeroway`, open-ended tags) → Overture's constrained `class`/`subtype` enums | **Med–High** |
-| Coastline / land-vs-ocean mask                     | OSM `land-polygons-split-3857` has no Overture equivalent — see below                                  | Medium     |
-| Module/file naming                                 | `bake/osm/` → `bake/overture/` (or neutral `bake/features/`)                                           | Cosmetic   |
+| Piece                                             | Change                                                                                                                                                                       | Difficulty   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `shared/bake/format.ts` row types                 | `FeatRow`/`CoastRow`/`OSMTags` reshaped to the new SQL result                                                                                                                | Low          |
+| Elevation path                                    | none (data reload only)                                                                                                                                                      | —            |
+| Ingestion tools                                   | new `overture_buildings` / `overture_transportation` / `overture_base_*` tables; `ingest_places.ts` is the template                                                          | Low–Med      |
+| `terrain/repository.ts` SQL                       | one `osm_elements` query → per-theme queries (Buildings has `height`/`num_floors`/`class`; segments have `subtype`/`class` + `road`; Base has `subtype`/`class`)             | Medium       |
+| `bake/osm/model/osm_adapter.ts`                   | drop the hstore parser; keep WKB decode; structured columns instead                                                                                                          | Low–Med      |
+| `bake/terrain/pipeline/osm_policy.ts` (464 lines) | near-total rewrite: every branch keys off OSM vocab (`natural=`, `building:levels`, `waterway`, `aeroway`, open-ended tags) → Overture's constrained `class`/`subtype` enums | **Med–High** |
+| Coastline / land-vs-ocean mask                    | OSM `land-polygons-split-3857` has no Overture equivalent — see below                                                                                                        | Medium       |
+| Module/file naming                                | `bake/osm/` → `bake/overture/` (or neutral `bake/features/`)                                                                                                                 | Cosmetic     |
 
 Two things that make the policy rewrite less bad than the line count
 suggests:
@@ -77,7 +77,7 @@ suggests:
 - **Terrain POI output is already disabled** — `encode_terrain` has the
   `pois` field commented out; POI comes entirely from Overture Places now.
   So `osm_policy.ts`'s `category === "poi"` / `amenity`/`shop`/`tourism`
-  handling is *deleted*, not ported.
+  handling is _deleted_, not ported.
 - **Overture's schema is genuinely better for this use**: `height` in
   meters directly instead of `building:levels * 3.5` guesswork; structured
   `road` lanes/width instead of `DEFAULT_LANES_BY_HIGHWAY` fallback tables;
@@ -115,7 +115,7 @@ Overture has no equivalent product. Land/water lives in the Base theme
 
 Once terrain runs in the monthly workflow, this classification gets
 regenerated there every month instead of being a manual re-upload — which
-is cleaner *if* the Overture-derived mask works. Higher stakes than before
+is cleaner _if_ the Overture-derived mask works. Higher stakes than before
 because it's now in the automated path.
 
 ## Two blockers the data swap alone doesn't solve
@@ -123,7 +123,7 @@ because it's now in the automated path.
 **1. Tile publishing convention — immutable-versioned vs mutable-in-place.**
 Terrain tiles are `max-age=31536000, immutable`, published to a new
 `tiles/vN` prefix each time with the app redeployed to point at it; the
-`bake-tiles` skill is emphatic that a version is *never* overwritten in
+`bake-tiles` skill is emphatic that a version is _never_ overwritten in
 place (one write invalidates CDN edge + browser cache + any future OPFS
 cache with no purge call). A monthly terrain refresh can't `sync --delete`
 over `tiles/v2` the way POI does. Either:

@@ -41,8 +41,8 @@ with no feedback and a legitimate level that can never be reached.
 
 ## What survived
 
-Terrain gets exactly one question — *would this view state put the eye
-inside it* — and `camera/terrain_gate.ts` answers that and only that.
+Terrain gets exactly one question — _would this view state put the eye
+inside it_ — and `camera/terrain_gate.ts` answers that and only that.
 
 **It is a pure function of `dist`, `polar`, `azimuth`,** not of the live
 scene graph, so any input path can ask before anything is adopted.
@@ -87,7 +87,7 @@ Whether terrain should constrain the camera at all is a taste question, so
 
 `climb` is the one thing here that does move an angle, and it is opt-in for
 that reason. It grants every control and answers terrain at render time by
-raising the *drawn* pitch toward straight down until the eye clears;
+raising the _drawn_ pitch toward straight down until the eye clears;
 `view_state.polar` is never written, so the pitch relaxes on its own once
 the ground does and `dist` stays exactly what the scale bar reads. The trade
 is explicit: every zoom level stays reachable — which `stop` cannot promise,

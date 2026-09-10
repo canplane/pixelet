@@ -26,7 +26,7 @@ The earliest design was already trying to solve four distinct problems at once:
 The first three produced durable mechanisms. The fourth expanded into a
 "spatial OS" metaphor that outran the browser and the product.
 
-The important distinction in hindsight is therefore not *old vs new*. It is
+The important distinction in hindsight is therefore not _old vs new_. It is
 **domain invariants that survived contact with the implementation** versus
 **runtime machinery invented in advance of a demonstrated requirement**.
 
@@ -125,7 +125,7 @@ January assumed the page, IPC and eventually GPU path should remain a flat
 binary buffer end-to-end. That produced useful instincts — typed arrays,
 relative addressing, avoiding gratuitous object graphs — and eventually XTP.
 
-What did *not* survive is the rule that every payload must use that format.
+What did _not_ survive is the rule that every payload must use that format.
 Terrain currently justifies XTP well; small semantic records such as POI do not
 need to adopt it merely for symmetry. If WASM/worker/SAB boundaries later make a
 shared relocatable representation valuable, XTP can be re-evaluated from the

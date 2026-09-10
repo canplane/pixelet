@@ -25,7 +25,7 @@
     // prefix is frozen. See apps/web/vite.config.ts.
     "dev:remote": "deno task --cwd apps/web dev:remote",
 
-    // Bakes every land page in the geo DB's coverage into ./out/tiles/<version>.
+    // Bakes every land page in the geo DB's coverage into ./out/terrain/<version>.
     // Needs the geo DB up; resumable. Full procedure, verification and upload
     // steps are in .agents/skills/bake-tiles/SKILL.md.
     "bake:tiles": "deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts",

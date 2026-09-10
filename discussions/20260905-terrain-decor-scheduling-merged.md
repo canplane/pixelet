@@ -120,6 +120,7 @@ isolated tree confirmed the raycast and removal still resolve correctly
 under the new coordinate convention.
 
 ## Addendum, same day: the merge's own regression — a decor-only hover was
+
 ## rebuilding cube content too
 
 Reported live: hovering the eraser over a placed tree (right after
@@ -129,7 +130,7 @@ visibly flickering along with the decor ghost. Root cause was this merge's
 own doing, not the silhouette ghost: `hover_cursor.tsx`'s
 `set_virtual_hide(id)` bumps the object store's per-L2-column revision
 (`objects/store.ts`) regardless of the target's kind, and `Chunk`'s single
-`objects_revision`-keyed `useEffect` (added by this merge) reacts to *any*
+`objects_revision`-keyed `useEffect` (added by this merge) reacts to _any_
 bump by clearing `bucket_cache_ref`/`column_runs_ref` and fully rescanning/
 rebaking cube content — even though `ObjectWorldLayer.paint()` never paints
 a voxel for a decor entry in the first place (adapter.ts's own "decor never
@@ -151,7 +152,7 @@ not a correctness gap). `chunk_stage.tsx`'s `Chunk` correspondingly splits
 from a new `decor_build_ref` (decor only, a plain `build_decor_instances`
 call per bundle, no scan, no shared cache with cube content), and the
 single structural `useEffect` splits into two: the original (still keyed
-on the cube-only `objects_revision`, still clears+rebuilds *both* caches,
+on the cube-only `objects_revision`, still clears+rebuilds _both_ caches,
 since a solid placement can occlude a procedural decor candidate) plus a
 new decor-only effect keyed on `decor_revision` that touches only
 `decor_cache_ref`/`layout.decor` — never `bucket_cache_ref`,
@@ -174,12 +175,13 @@ rendered and updated correctly. `deno task check`/`lint`/`test` all green
 (138 tests, unchanged).
 
 ## Addendum, same day: a second, unrelated flicker — the raycast boundary
+
 ## itself was unstable, independent of the rebuild bug above
 
 After the fix above, live testing still showed a tree's hover ghost
 alternating with its own normal (non-ghosted) render while the cursor sat
 still — not the same symptom as the cube-rebuild flicker (that one showed
-terrain content flickering alongside a *correctly* rendering ghost; this one
+terrain content flickering alongside a _correctly_ rendering ghost; this one
 is the ghost/normal state of the tree itself flipping). Root cause is in
 `decor_hit.ts`'s `raycast_decor`, unrelated to `objects/store.ts` or
 `chunk_stage.tsx` entirely: the function rejects a decor hit with a strict
