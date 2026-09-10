@@ -5,7 +5,7 @@
     "provider": {
       "name": "OpenGeoHub / OpenLandMap (GEDTM30 v1.2)",
       "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2.tif",
-      "doi": "https://zenodo.org/records/15689805"
+      "doi": "https://doi.org/10.5281/zenodo.15689805"
     },
     "coordinate_system": "EPSG:4326",
     "vertical_datum": "EGM2008 (EPSG:3855)",

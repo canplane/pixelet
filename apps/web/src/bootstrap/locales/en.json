@@ -123,7 +123,7 @@
       "demo_notice": "This service is a demo, and data may disappear or it may be discontinued without notice.",
       "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
       "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
-      "location_notice": "Location names are resolved from a pre-baked local dataset (Overture Maps), not an external query service, and your location data is neither collected nor saved.",
+      "location_notice": "Your location data is neither collected nor saved.",
       "character_notice": "Character customization is an experimental feature. The CC0-licensed <kenney>Kenney</kenney> asset pack is applied."
     },
     "attribution": {
