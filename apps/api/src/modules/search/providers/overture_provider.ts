@@ -33,16 +33,26 @@ WHERE name <> '' AND name ILIKE '%' || $1 || '%'
 ORDER BY similarity(name, $1) DESC, name
 LIMIT $2`;
 
-// Same query, but ties in name-similarity (the common case for a chain
-// name — every "스타벅스" row scores identically) break by distance to
-// `near` instead of an arbitrary alphabetical fallback, so a same-named
-// nearby result outranks a same-named one across the country.
+// Same query, but ranked against `near` — the version that answers "which
+// 강남역" and "which 스타벅스", which is what a map search is usually being
+// asked.
+//
+// Similarity is rounded to two decimals before it is ordered on, and that
+// rounding is the whole point. Ordering on the raw score made distance a
+// tiebreaker for exactly-equal names and nothing else, so "스타벅스 강남대로"
+// at 0.61 sorted ahead of every "스타벅스" at 0.60 no matter which continent
+// each was on — a difference of one trigram outranking a difference of a
+// thousand kilometres. A band collapses scores that are indistinguishable as
+// answers into one tie, and distance then decides inside the band. Two
+// decimals is roughly "the same name, modulo a word": it does not let a
+// genuinely worse match win on proximity, since those differ by far more
+// than 0.01.
 const SEARCH_NEAR_SQL = `SELECT gers_id, name, properties,
   ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
 FROM overture_places
 WHERE name <> '' AND name ILIKE '%' || $1 || '%'
-ORDER BY similarity(name, $1) DESC,
+ORDER BY round(similarity(name, $1)::numeric, 2) DESC,
   geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC
 LIMIT $2`;
 

@@ -736,7 +736,8 @@ export function MapEnvironment(props: MapEnvironmentProps) {
   return (
     <>
       <group ref={sky_frame_ref}>
-        {/*
+        {
+          /*
           renderOrder is what makes this the background rather than a
           foreground object that happens to be far away.
 
@@ -759,7 +760,8 @@ export function MapEnvironment(props: MapEnvironmentProps) {
           night sky at night — and of the same thing happening to the location
           puck's beacon perhaps once in a couple of hundred loads, while the
           zone box beside it, which carries renderOrder 5, never did.
-        */}
+        */
+        }
         <mesh scale={SKY_DOME_SCALE} frustumCulled={false} renderOrder={-1}>
           <sphereGeometry args={[1, 32, 32]} />
           <shaderMaterial

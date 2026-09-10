@@ -26,7 +26,7 @@
 
 import * as THREE from "three";
 
-import { light_cfg } from "@/modules/world/environment/config.ts";
+import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { inject_rim_light_shader } from "./rim_light_shader.ts";
 
 export function make_lit_gltf_material(texture: THREE.Texture, program_cache_key?: string): THREE.MeshStandardMaterial {
@@ -57,25 +57,49 @@ export function make_lit_gltf_material(texture: THREE.Texture, program_cache_key
   // without being told to.
   if (program_cache_key) material.customProgramCacheKey = () => program_cache_key;
 
-  // u_rim_intensity starts at 0 (inject_rim_light_shader's own default) —
-  // this module doesn't know the live show_rim_light setting (see this
-  // file's own top comment for why); the real value gets set from outside
-  // via set_rim_intensity, using the shader reference stashed in
-  // userData.shader below.
+  // This module doesn't know the live show_rim_light setting (see this file's
+  // own top comment for why), so the value arrives from outside via
+  // set_rim_intensity — and is replayed here, because a caller has no way to
+  // know when this runs. onBeforeCompile fires at the material's first draw,
+  // which is long after the caller has finished building it.
   material.onBeforeCompile = (shader) => {
     inject_rim_light_shader(shader);
+    shader.uniforms.u_rim_intensity.value = rim_intensity_of(material);
     material.userData.shader = shader;
   };
 
   return material;
 }
 
-/** Pushes a live show_rim_light value onto a material built by
- * make_lit_gltf_material — a no-op before that material's shader has
- * actually compiled once (userData.shader isn't populated until
- * onBeforeCompile fires), same "the first render or two just doesn't have
- * rim light yet" gap decor_layer.ts's own effect already accepts. */
+const RIM_INTENSITY_KEY = "rim_intensity";
+
+/** Falls back to the configured intensity, not to zero — settings default to
+ * on, so a caller that never learned the setting should look like the setting
+ * is on rather than silently render without the term. */
+function rim_intensity_of(material: THREE.MeshStandardMaterial): number {
+  return (material.userData[RIM_INTENSITY_KEY] as number | undefined) ?? rim_cfg.INTENSITY;
+}
+
+/**
+ * Pushes a show_rim_light value onto a material built by
+ * make_lit_gltf_material, whenever the caller happens to know it.
+ *
+ * The value is *remembered on the material* and only then written to the
+ * shader, because the shader may not exist yet: `userData.shader` is
+ * populated by onBeforeCompile, which three fires at the material's first
+ * draw. Every caller sets this while building the material, which is always
+ * before that.
+ *
+ * This used to be a bare write that silently did nothing in that window, on
+ * the recorded assumption that it was a gap of "the first render or two".
+ * It was not a window, it was the only time anyone called: decor set it once
+ * at load and never again, so decor shipped with no rim light at all —
+ * `u_rim_intensity` measured 0 on all five of its materials against 0.1 on
+ * terrain — while its shader inspected as correctly patched. Toggling the
+ * setting was the only thing that ever turned it on.
+ */
 export function set_rim_intensity(material: THREE.MeshStandardMaterial, intensity: number): void {
+  material.userData[RIM_INTENSITY_KEY] = intensity;
   const shader = material.userData.shader as { uniforms: Record<string, THREE.IUniform> } | undefined;
   if (shader) shader.uniforms.u_rim_intensity.value = intensity;
 }

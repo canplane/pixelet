@@ -25,11 +25,15 @@ const KEY = variant_key(0, 0);
  * would. Origin zero on both sides, so the field's group stays at the
  * identity these rays are cast in. */
 function contribute(instances: ModelInstanceTransform[], base: IVec = 0n, chunk = "test-chunk"): void {
-  decor_field.set_chunk(chunk, base, new Map([[KEY, {
-    geometry: new THREE.BoxGeometry(1, 1, 1),
-    material: new THREE.MeshBasicMaterial(),
-    instances,
-  }]]));
+  decor_field.set_chunk(
+    chunk,
+    base,
+    new Map([[KEY, {
+      geometry: new THREE.BoxGeometry(1, 1, 1),
+      material: new THREE.MeshBasicMaterial(),
+      instances,
+    }]]),
+  );
   decor_field.update(0n);
 }
 
