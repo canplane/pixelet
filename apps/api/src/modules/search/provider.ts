@@ -28,16 +28,6 @@ export type SearchResult = {
   kind: "poi" | "division";
   name: string;
   category: string;
-  /** Overture's own `addresses[0]` (locality + freeform street), shown
-   * exactly as Overture wrote it — no reformatting/cleanup, since it's
-   * genuinely freeform per-source text (see providers/overture_provider.ts's
-   * own address_of() doc comment: different upstream contributors format
-   * this completely differently, confirmed live, and there's no principled
-   * way to normalize it without actually parsing addresses). `null` when
-   * Overture had no address data for this place, and always null for a
-   * "division" result (it has no address of its own, `common` is its
-   * multilingual data instead). */
-  address: string | null;
   /** A language-tag-keyed name map — populated for `kind: "division"`
    * (Overture's Divisions theme has genuinely rich per-language names,
    * unlike Places — see ingest_divisions.ts's own top comment), always
@@ -47,12 +37,22 @@ export type SearchResult = {
    * client can reuse the same "pick a language against i18n.language, fall
    * back to `name`" logic use_reverse_geocode.ts already has. */
   common: Record<string, string> | null;
-  /** The broader divisions (region/county) containing this result's own
-   * point — geocode/resolve_broad.ts's own doc comment on why: a division
-   * result like "수내동" is easy to misread without knowing which
-   * 성남시/분당구 it's actually in, the same way a POI's `address` answers
-   * "which 스타벅스". Always `[]` for `kind: "poi"` (a POI's `address`
-   * already covers this, no need to compute it twice two different ways). */
+  /** The divisions containing this result's own point, broad to fine —
+   * region, county, and one locality-level name where there is one.
+   *
+   * It answers "which of these is this one", for both kinds. A division
+   * result like 수내동 is easy to misread without knowing which 성남시 or
+   * 분당구 it sits in; a POI result named 강남역 is worse, because there is
+   * more than one and their names are identical.
+   *
+   * Resolved from the coordinates rather than from any text on the row.
+   * This replaced a raw Overture address field, for two reasons and the
+   * second is the larger: that field can name a different city than the
+   * geometry it sits beside (there is a 강남역 addressed 서울특별시 강남구
+   * whose point is in 용인), and it arrives in whatever shape a contributor
+   * chose — Korean, English, with a floor number, or as the bare word
+   * "Seoul". A resolved point reads the same way every time, in the
+   * reader's own language. */
   context: GeocodePart[];
   lon: number;
   lat: number;

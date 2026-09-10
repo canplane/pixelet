@@ -46,7 +46,11 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
   const [parts, set_parts] = useState<GeocodePart[] | null>(null);
   const [loading, set_loading] = useState(false);
 
-  const resolved_page_ref = useRef<IVec | null>(null);
+  /** The page a request has been submitted for, not the page a label was
+   * received for. It exists to stop the same page being asked about twice,
+   * so it has to be released again the moment an attempt stops being one —
+   * see the abort handling below. */
+  const submitted_page_ref = useRef<IVec | null>(null);
 
   useEffect(() => {
     if (map_center === null) return;
@@ -54,8 +58,8 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
     const page_idx: IVec = L3_IDX(map_center.i);
 
     const timer = setTimeout(() => {
-      if (page_idx === resolved_page_ref.current) return;
-      resolved_page_ref.current = page_idx;
+      if (page_idx === submitted_page_ref.current) return;
+      submitted_page_ref.current = page_idx;
 
       set_loading(true);
       // A one-item wishlist: submitting a new page supersedes the previous
@@ -71,7 +75,18 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
           try {
             const result = await fetch_geocode(page_idx, signal);
             set_parts(result?.parts ?? null);
+          } catch (e) {
+            // A failed attempt is not an answer, so the page goes back to
+            // being unasked. Without this the guard above treats it as
+            // handled and the label never gets another chance.
+            if (submitted_page_ref.current === page_idx) submitted_page_ref.current = null;
+            throw e;
           } finally {
+            // Aborted is the same: superseded by a *different* page has
+            // already moved the ref on, so this only fires when the request
+            // for this very page was cancelled — which is exactly the case
+            // that has to be retryable.
+            if (signal.aborted && submitted_page_ref.current === page_idx) submitted_page_ref.current = null;
             // clears on success and on a real failure alike, but not when
             // superseded — the demand that superseded this one already set
             // it back to true.
@@ -81,11 +96,17 @@ export function useReverseGeocode(map_center: PVF3 | null): ReverseGeocodeResult
       }]);
     }, DEBOUNCE_MS);
 
-    return () => {
-      clearTimeout(timer);
-      fetch_sync(CATEGORY, []);
-    };
+    return () => clearTimeout(timer);
   }, [map_center]);
+
+  // Only on unmount. Clearing the wishlist on every map_center change
+  // cancelled a request that was still the right one to be making: a search
+  // jump sets the centre twice — once on the jump and again when the target
+  // page's tile arrives and it re-grounds — so the second one aborted the
+  // first one's geocode. Submitting a new wishlist already supersedes the
+  // old, which is what the comment above describes, so there was never a
+  // reason to clear in between.
+  useEffect(() => () => fetch_sync(CATEGORY, []), []);
 
   const label = parts ? assemble_label(parts, i18n.language) : null;
   return { label, loading };
