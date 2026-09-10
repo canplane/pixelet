@@ -64,7 +64,7 @@ uses greedy meshing for both terrain and its own decorative/prop content
 ("figures"/"sprites"). Greedy meshing merges same-material adjacent faces
 into larger quads to cut vertex/triangle count — a different axis entirely
 from "does decor share a buffer with terrain": it's about how efficiently
-*one* buffer is triangulated, not about which content shares that buffer.
+_one_ buffer is triangulated, not about which content shares that buffer.
 pixelet's own `chunk_mesher.ts` bakes one box per run rather than greedy-
 merging runs together. Search results (and
 [a maintained implementation](https://github.com/cgerikj/binary-greedy-meshing))
@@ -77,13 +77,14 @@ uninvestigated axis.
 
 ## Bottom line
 
-| Axis | pixelet today | Industry observation |
-| --- | --- | --- |
-| decor vs. terrain mesh | separate instancing, procedural/persistent split | Matches Godot Voxel Tools' `VoxelInstancer` closely |
-| full rescan on a voxel edit | yes, whole chunk, every time | The documented default; incremental per-voxel patching is a known but nontrivial next step, not a gap |
-| greedy meshing | not used (per-run box baking) | Used by some (Veloren), but a debated, orthogonal optimization with real implementation cost |
+| Axis                        | pixelet today                                    | Industry observation                                                                                  |
+| --------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| decor vs. terrain mesh      | separate instancing, procedural/persistent split | Matches Godot Voxel Tools' `VoxelInstancer` closely                                                   |
+| full rescan on a voxel edit | yes, whole chunk, every time                     | The documented default; incremental per-voxel patching is a known but nontrivial next step, not a gap |
+| greedy meshing              | not used (per-run box baking)                    | Used by some (Veloren), but a debated, orthogonal optimization with real implementation cost          |
 
 **Sources:**
+
 - [Voxel Tools documentation – Instancing](https://voxel-tools.readthedocs.io/en/latest/instancing/)
 - [Meshing in a Minecraft Game (Part 2) – 0 FPS](https://0fps.net/2012/07/07/meshing-minecraft-part-2/)
 - [This Week In Veloren 81](https://veloren.net/devblog-81/)

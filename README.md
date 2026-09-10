@@ -6,7 +6,7 @@
 
 _Started on December 15, 2025._
 
-**pixelet** is a location-based spatial world built over real-world geodata ([Overture Maps](https://overturemaps.org/) + [GEDTM30](https://doi.org/10.5281/zenodo.15689805) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
+**pixelet** is a location-based spatial world built over real-world geodata ([Overture Maps](https://overturemaps.org/) + [GEDTM30](https://portal.opentopography.org/datasetMetadata?otCollectionID=OT.082025.4326.1) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
 
 <img alt="Voxel objects built on real-world terrain" src=".github/assets/screenshot.png" height="480">
 
@@ -28,17 +28,39 @@ docker compose --env-file .env -f infra/docker-compose.yml up -d
 deno task dev
 ```
 
-| Task                  | Description                  |
-| --------------------- | ---------------------------- |
-| `deno task dev`       | Start web + api concurrently |
-| `deno task dev:web`   | Frontend only                |
-| `deno task dev:api`   | Backend only                 |
-| `deno task build:web` | Build frontend               |
-| `deno task build:api` | Build backend                |
-| `deno task check`     | Type-check all packages      |
-| `deno task test`      | Run all tests                |
-| `deno task lint`      | Lint                         |
-| `deno task fmt`       | Format                       |
+| Task                   | Description                                        |
+| ---------------------- | -------------------------------------------------- |
+| `deno task dev`        | Start web + api concurrently                       |
+| `deno task dev:web`    | Frontend only                                      |
+| `deno task dev:api`    | Backend only                                       |
+| `deno task dev:remote` | Frontend only, served by the live deployment       |
+| `deno task build:web`  | Build frontend                                     |
+| `deno task build:api`  | Build backend                                      |
+| `deno task bake:tiles` | Bake terrain into `./out/terrain/<version>`        |
+| `deno task deploy`     | Build the client and publish the Cloudflare Worker |
+| `deno task check`      | Type-check all packages                            |
+| `deno task test`       | Run all tests                                      |
+| `deno task lint`       | Lint                                               |
+| `deno task fmt`        | Format                                             |
+
+`dev:remote` needs no Docker, no database and no API process: every server
+route is proxied to the published deployment. It is the quickest way in, and
+the wrong way to work on a bake, since a published tile prefix is frozen.
+
+---
+
+## Deployment
+
+One Cloudflare Worker serves the built client, the terrain tiles out of R2,
+and a reverse proxy to the API — so everything the server answers is
+same-origin under `/api`, and `deno task deploy` publishes all three.
+
+The API itself, forward search's only real dependency, runs on a single
+Hetzner VM alongside its two Postgres instances and Caddy. Everything else
+is baked offline.
+
+[infra/README.md](./infra/README.md) has both procedures, the routing
+contract between them, and what to verify after each.
 
 ---
 

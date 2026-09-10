@@ -2,9 +2,9 @@
 
 **2026-09-06** — closes one of the two gaps left open by
 [20260905-terrain-decor-scheduling-merged.md](./20260905-terrain-decor-scheduling-merged.md)
-and its own tier-1 predecessor: those two passes unified *how* terrain,
-objects, and decor bake into geometry and *when* they build (one step, one
-`ready` flag), but never touched *what shader renders the result* — decor
+and its own tier-1 predecessor: those two passes unified _how_ terrain,
+objects, and decor bake into geometry and _when_ they build (one step, one
+`ready` flag), but never touched _what shader renders the result_ — decor
 stayed on a plain unlit `MeshBasicMaterial` while terrain/objects got
 `chunk_stage.tsx`'s own lit material with its fresnel rim highlight and
 `light_cfg.FLOOR` night-floor treatment. `environment/config.ts`'s own

@@ -13,9 +13,9 @@
 
   "tasks": {
     "dev": "deno run -A --node-modules-dir=auto npm:vite",
-    // Tiles from the published deployment instead of a local API + PostGIS.
-    // See vite.config.ts's VITE_TILE_SOURCE comment for what this trades away.
-    "dev:remote": "VITE_TILE_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite",
+    // Server routes answered by the published deployment instead of a local
+    // API + PostGIS. See vite.config.ts's VITE_DEV_SOURCE comment.
+    "dev:remote": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite",
 
     "build": "deno run -A --node-modules-dir=auto npm:vite build",
     "preview": "deno run -A --node-modules-dir=auto npm:vite preview",

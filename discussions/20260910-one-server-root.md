@@ -48,11 +48,11 @@ this; it just moves the marker.
 
 So someone gets a reserved prefix. There were three candidates:
 
-| | what it costs |
-| :-- | :-- |
-| **enumerate at the edge** | no prefix anywhere, but every new live route is another entry in `run_worker_first` and another literal in the Worker |
-| **`/api/*` for the server** | one prefix, invisible to users, relays never learn what is under it |
-| **`/app/*` for the client** | server paths stay bare, but the prefix appears in every URL a user sees |
+|                             | what it costs                                                                                                         |
+| :-------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
+| **enumerate at the edge**   | no prefix anywhere, but every new live route is another entry in `run_worker_first` and another literal in the Worker |
+| **`/api/*` for the server** | one prefix, invisible to users, relays never learn what is under it                                                   |
+| **`/app/*` for the client** | server paths stay bare, but the prefix appears in every URL a user sees                                               |
 
 The reservation lands on the server's side because that is the one that
 never reaches an address bar.

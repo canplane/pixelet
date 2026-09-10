@@ -214,13 +214,13 @@ built the same way:
 
 What's measurable, by availability:
 
-| tier | signal | note |
-| --- | --- | --- |
-| always, cheap | `renderer.info` — draw calls, triangles, textures, programs | what the GPU is being asked to do; the CPU-side queue-depth analogue |
-| always, cheap | rAF frame interval + a demand/continuous flag | under `frameloop="demand"` with near-zero per-frame CPU, the interval ≈ GPU + compositor |
-| always, cheap | pixel load = `drawingBufferWidth·Height` × active post-fx pass count | `dpr` and every effect toggle live in `render_settings_store`; estimates B with no GPU timing at all |
-| always | LoAF `PerformanceObserver` — long frame with a script/render split | makes CPU-vs-GPU attribution possible |
-| dev-only, absent on the iOS target | `EXT_disjoint_timer_query_webgl2` — real GPU-ns | Chrome desktop only, coarse; WKWebView does not expose it, so the shipped monitor must not depend on it |
+| tier                               | signal                                                               | note                                                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| always, cheap                      | `renderer.info` — draw calls, triangles, textures, programs          | what the GPU is being asked to do; the CPU-side queue-depth analogue                                    |
+| always, cheap                      | rAF frame interval + a demand/continuous flag                        | under `frameloop="demand"` with near-zero per-frame CPU, the interval ≈ GPU + compositor                |
+| always, cheap                      | pixel load = `drawingBufferWidth·Height` × active post-fx pass count | `dpr` and every effect toggle live in `render_settings_store`; estimates B with no GPU timing at all    |
+| always                             | LoAF `PerformanceObserver` — long frame with a script/render split   | makes CPU-vs-GPU attribution possible                                                                   |
+| dev-only, absent on the iOS target | `EXT_disjoint_timer_query_webgl2` — real GPU-ns                      | Chrome desktop only, coarse; WKWebView does not expose it, so the shipped monitor must not depend on it |
 
 **Decision rule:** optimize GPU when frame interval > budget (16.7 ms) **and**
 no matching CPU / LoAF-script span **and** pixel load or draw count is high —
@@ -242,37 +242,37 @@ which optimization to reach for. Grouped:
 
 **Time & scheduling** (all live)
 
-| factor | signal | what it tells you |
-| --- | --- | --- |
-| main-thread time | `performance.now()` spans, per task / per category / per frame | the base "what's expensive" number |
-| latency (enqueue→usable) | timestamps in the task record | slow to *start* vs slow to *run* — prefetch/reprioritize vs cheapen |
-| queue depth / contention | per-category depth sampled each frame, over time | "the scheduler is the bottleneck, not any one task" — only a timeline shows it |
-| budget occupancy | `used_ms / budget_ms` per frame | budget full → cheapen the work; budget idle but frames still drop → the stall is upstream (I/O), not here |
+| factor                   | signal                                                         | what it tells you                                                                                         |
+| ------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| main-thread time         | `performance.now()` spans, per task / per category / per frame | the base "what's expensive" number                                                                        |
+| latency (enqueue→usable) | timestamps in the task record                                  | slow to _start_ vs slow to _run_ — prefetch/reprioritize vs cheapen                                       |
+| queue depth / contention | per-category depth sampled each frame, over time               | "the scheduler is the bottleneck, not any one task" — only a timeline shows it                            |
+| budget occupancy         | `used_ms / budget_ms` per frame                                | budget full → cheapen the work; budget idle but frames still drop → the stall is upstream (I/O), not here |
 
 **Memory**
 
-| factor | signal | what it tells you |
-| --- | --- | --- |
-| footprint | summed decoded bytes held (`tile_map`, `poi_map`, geometry, textures) vs a device ceiling | **the crash factor, not a slowdown factor** — `terrain/config.ts` already records r=3 ≈ 197 MB decoded, r=3 crashed an iPhone 13 mini |
-| GC / allocation churn | `performance.memory.usedJSHeapSize` delta per frame (Chrome only), LoAF attribution | a burst of typed-array allocs → GC pause → dropped frame; best-effort |
+| factor                | signal                                                                                    | what it tells you                                                                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| footprint             | summed decoded bytes held (`tile_map`, `poi_map`, geometry, textures) vs a device ceiling | **the crash factor, not a slowdown factor** — `terrain/config.ts` already records r=3 ≈ 197 MB decoded, r=3 crashed an iPhone 13 mini |
+| GC / allocation churn | `performance.memory.usedJSHeapSize` delta per frame (Chrome only), LoAF attribution       | a burst of typed-array allocs → GC pause → dropped frame; best-effort                                                                 |
 
 **Bandwidth**
 
-| factor | signal | what it tells you |
-| --- | --- | --- |
-| network | response bytes/s; TTFB vs total download | often *the* cold-load bottleneck on cellular; latency-bound (RTT) vs throughput-bound (pipe) needs different fixes |
-| decode | bytes in+out / wall-time of the decode step → effective MB/s vs a rough platform memcpy ceiling | memory-bound (WASM won't help) vs compute-bound (WASM/SIMD pays) |
-| CPU→GPU upload | count × size of new `DataTexture` / geometry buffers per frame | a pan hitch distinct from both CPU meshing and GPU rendering |
-| GPU fill | `drawingBuffer² × dpr² × post-fx passes`, `renderer.info` counts | bottleneck B ("shrink the window → smooth") |
+| factor         | signal                                                                                          | what it tells you                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| network        | response bytes/s; TTFB vs total download                                                        | often _the_ cold-load bottleneck on cellular; latency-bound (RTT) vs throughput-bound (pipe) needs different fixes |
+| decode         | bytes in+out / wall-time of the decode step → effective MB/s vs a rough platform memcpy ceiling | memory-bound (WASM won't help) vs compute-bound (WASM/SIMD pays)                                                   |
+| CPU→GPU upload | count × size of new `DataTexture` / geometry buffers per frame                                  | a pan hitch distinct from both CPU meshing and GPU rendering                                                       |
+| GPU fill       | `drawingBuffer² × dpr² × post-fx passes`, `renderer.info` counts                                | bottleneck B ("shrink the window → smooth")                                                                        |
 
 **Classification / shape** (mostly static labels, set once from profiling)
 
-| factor | form | what it tells you |
-| --- | --- | --- |
-| arithmetic intensity / bound-class | static label per category: `memory` \| `compute` \| `network` \| `gpu-fill` | which lever: touch less data / overlap · WASM+SIMD · prefetch+prioritize · fewer passes / lower dpr |
-| batching efficiency | static label + live units-per-batch count | fixed per-unit cost (React commit, future FFI crossing) vs marginal per-byte — mobile-perf's "batch per page, never per chunk or per texel" |
-| burst vs sustained | rolling-window percentiles vs session peak | a one-time cold burst is acceptable; a sustained overrun is mobile-SoC throttling territory (`scheduler_peak_stats` only records the peak, not the shape) |
-| idle ratio (power proxy) | fraction of wall-clock the `frameloop="demand"` loop actually runs | watts are unmeasurable on web; a never-idle scene drains battery even fully at-budget |
+| factor                             | form                                                                        | what it tells you                                                                                                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| arithmetic intensity / bound-class | static label per category: `memory` \| `compute` \| `network` \| `gpu-fill` | which lever: touch less data / overlap · WASM+SIMD · prefetch+prioritize · fewer passes / lower dpr                                                       |
+| batching efficiency                | static label + live units-per-batch count                                   | fixed per-unit cost (React commit, future FFI crossing) vs marginal per-byte — mobile-perf's "batch per page, never per chunk or per texel"               |
+| burst vs sustained                 | rolling-window percentiles vs session peak                                  | a one-time cold burst is acceptable; a sustained overrun is mobile-SoC throttling territory (`scheduler_peak_stats` only records the peak, not the shape) |
+| idle ratio (power proxy)           | fraction of wall-clock the `frameloop="demand"` loop actually runs          | watts are unmeasurable on web; a never-idle scene drains battery even fully at-budget                                                                     |
 
 The `FrameSample` record the frame ring stores carries the live fields; the
 static labels live next to each task category's registration.
@@ -289,7 +289,7 @@ static labels live next to each task category's registration.
    `scheduler_peak_stats` folds in as a degenerate case (it records only the
    maxes). Zero behavior change. ~1–2 days.
 
-   *Done, including the fold-in:* chunk_stage no longer keeps its own peak
+   _Done, including the fold-in:_ chunk_stage no longer keeps its own peak
    object. It reports each frame's raw numbers (LOD counts included) and the
    ledger keeps **both** views — the ~4s ring for the shape of a stutter, and
    `ledger_frame_peak()` for one noticed too late to still be in the ring,
@@ -327,7 +327,7 @@ static labels live next to each task category's registration.
      allowance, and move the `set_tile` commit cascade onto it. A real
      behaviour change; needs a render to tune and verify against.
 
-   (Tile *decode* was on this list until it was measured at 0.6 ms; see the
+   (Tile _decode_ was on this list until it was measured at 0.6 ms; see the
    second finding below.)
 
 5. **Trace export.** Ring buffer → Chrome-tracing JSON, openable in Perfetto.
@@ -399,7 +399,7 @@ priority **2** ran with essentially no wait. Priority was inverted in practice.
 **Cause.** `fetch_sync` pumped synchronously. `MapScene` calls
 `useTileFetcher()` before `usePoiFetcher()`, so terrain's nine demands were
 admitted and filled all six quota slots before POI had submitted anything at
-all. Priority can only order the *queue*; it cannot preempt a request already
+all. Priority can only order the _queue_; it cannot preempt a request already
 in flight. So submission order silently beat it — and nothing about the
 priority numbers was wrong.
 
@@ -480,12 +480,12 @@ decoder). Every number below is observed, not reasoned about — which matters,
 because **four hypotheses formed by reading the code were wrong**, and the
 ledger refuted each one:
 
-| hypothesis (from reading code) | measured |
-| --- | --- |
-| `decode_terrain` is expensive | **0.1 ms** on a 4.2 MB page |
+| hypothesis (from reading code)               | measured                            |
+| -------------------------------------------- | ----------------------------------- |
+| `decode_terrain` is expensive                | **0.1 ms** on a 4.2 MB page         |
 | AnchorNode's double render is the bottleneck | removing it left `dt max` unchanged |
-| zoom-out mounts chunks in bulk | `mount +0/-0` throughout |
-| `set_layout` re-renders drive the stall | `rerender 0` on every stalled frame |
+| zoom-out mounts chunks in bulk               | `mount +0/-0` throughout            |
+| `set_layout` re-renders drive the stall      | `rerender 0` on every stalled frame |
 
 Three distinct problems remain, with distinct signatures and distinct fixes.
 
@@ -497,8 +497,8 @@ dt 966.5  sched 21.5 (cmt 17.4)  draws 5  geom 2  mount +2524/-1262 rerender 252
 
 `PageChunks` renders every one of a page's ~256 chunks in one reconciliation,
 and nothing budgets it. This is what a user hits as "tiles render and the map
-stops moving", and it is mobile-perf bottleneck A's trigger — *tile response
-batch completing*, not zoom-out. Fix: bound the mount (a reveal budget), then
+stops moving", and it is mobile-perf bottleneck A's trigger — _tile response
+batch completing_, not zoom-out. Fix: bound the mount (a reveal budget), then
 stop making a React component per chunk at all. The LOD controls are already
 imperative, so only the R3F wrapper has to go — and the WASM roadmap wants
 imperative regardless.
@@ -555,7 +555,7 @@ still the right move, but the honest accounting is:
 - it fixes **1** outright — the mount storm is React, and nothing else is.
 - it does not by itself fix **2**. GC pressure comes from the allocation, not
   from React.
-- it is nonetheless the *prerequisite* for fixing 2: geometry is currently
+- it is nonetheless the _prerequisite_ for fixing 2: geometry is currently
   created inside `ChunkMesh`'s `useLayoutEffect`, so its lifetime is React's.
   Owning that lifetime imperatively is what makes buffer reuse possible at
   all, and reuse — not a faster rebuild — is what removes the garbage.
@@ -597,7 +597,7 @@ ceiling above which a released block goes back to the collector instead of
 being retained. All eight spans of a mesh are views into **one** block, since
 they share a lifetime exactly — eight allocations bought nothing.
 
-**Why not a buddy allocator.** A buddy allocator is a size-class pool *plus*
+**Why not a buddy allocator.** A buddy allocator is a size-class pool _plus_
 migration of bytes between classes. The migration buys bounded residency when
 the class mix shifts; it does not lower churn, and churn is what the 8.4s was.
 The ceiling bounds residency without it. The contract is deliberately
@@ -652,7 +652,7 @@ is strictly worse than either alternative.
 
 **Pooling was unsafe while React owned mesh lifetime.** A chunk mesh had
 three owners — the LOD cache, the layout naming it, and the mounted geometry
-— and React decides *later* when a layout mounts, so all three lifetimes were
+— and React decides _later_ when a layout mounts, so all three lifetimes were
 deferred by an unknown amount. Three reference-counting bugs came out of the
 windows between them: a build during render (StrictMode's setup/cleanup/setup
 replay dropped the last reference to meshes the pending mount then retained),
@@ -666,23 +666,23 @@ both mutated synchronously, no window.
 
 Then recycling went back on. Measured, same zoom-out:
 
-| | before | after |
-|---|---|---|
-| dt max | 8419ms | **85.7ms** |
-| offthread p50 / max | 4.2 / 4981ms | **1.4 / 63.0ms** |
-| pool hit rate | 13-36% | **99%** |
-| Δheap on a committing frame | +4.28MB | **+1.43MB** |
-| Δheap on a quiet frame | +0.18MB | **+0.03MB** |
+|                             | before       | after            |
+| --------------------------- | ------------ | ---------------- |
+| dt max                      | 8419ms       | **85.7ms**       |
+| offthread p50 / max         | 4.2 / 4981ms | **1.4 / 63.0ms** |
+| pool hit rate               | 13-36%       | **99%**          |
+| Δheap on a committing frame | +4.28MB      | **+1.43MB**      |
+| Δheap on a quiet frame      | +0.18MB      | **+0.03MB**      |
 
 The multi-second stalls are gone. What was bought with churn is residency:
 the pool now holds ~1.8GB steadily (439MB live, ~1.4GB idle) because buddy
-regions are only reclaimed when *fully* empty, and one live block strands a
+regions are only reclaimed when _fully_ empty, and one live block strands a
 256MB region. That is the standard pooling trade and the right side of it,
 but it is a number to keep in view.
 
 **Method note.** Three of these rounds cost a measure/report cycle each
 because the fix was landed and measured one step at a time. That was the
-wrong instinct: the instrument's job is to say *where* to look, and it had
+wrong instinct: the instrument's job is to say _where_ to look, and it had
 already said so. The rule for next time is the one that finally worked —
 land the whole change, then measure once — and the corollary that a
 measurement of a mechanism that was never actually enabled (the bypassed
@@ -724,15 +724,15 @@ them — decor, the "likely culprit", was three orders of magnitude too
 small. `MAX_POOLED_BANDS` was **2**. A band is 1.31MB and a composite makes
 several, so the first two came from the pool and every one after was a
 fresh pair of typed arrays. Correct when compositing was rare; at ~80 chunk
-scans a second it *was* the allocation.
+scans a second it _was_ the allocation.
 
-| | start of the day | now |
-|---|---|---|
-| dt max | 8419ms | **85.1ms** |
-| resting heap | 1.4-4.3GB, collections over 300MB | **730MB, +555MB/15s** |
-| frames over budget | — | **6%** |
-| pool hit / idle | n/a | **98% / 34MB** |
-| faces emitted | all of them | **23%** |
+|                    | start of the day                  | now                   |
+| ------------------ | --------------------------------- | --------------------- |
+| dt max             | 8419ms                            | **85.1ms**            |
+| resting heap       | 1.4-4.3GB, collections over 300MB | **730MB, +555MB/15s** |
+| frames over budget | —                                 | **6%**                |
+| pool hit / idle    | n/a                               | **98% / 34MB**        |
+| faces emitted      | all of them                       | **23%**               |
 
 **What the instrument actually did.** It never measured "GC" or "React". It
 measured one thing — `dt - task_ms`, whether a frame's time was inside the
@@ -745,8 +745,8 @@ so was the last guess in this list. The lesson is not "instrument GC" but
 "find a cheap axis that is exclusive, and let it delete half the space".
 
 The counters that earned their keep have a shape in common: they are
-*normalised* (faces kept as a ratio, cost per bake, cost per thousand runs)
-or they *name a specific owner* (what the pool holds, what a chunk retains,
+_normalised_ (faces kept as a ratio, cost per bake, cost per thousand runs)
+or they _name a specific owner_ (what the pool holds, what a chunk retains,
 how often a band was reused). Absolute per-window totals were the ones that
 kept failing to settle arguments, because they mix how much work a window
 happened to contain with what one unit of it costs.

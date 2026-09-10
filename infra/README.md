@@ -13,10 +13,10 @@ infra/
 
 ## 1. Databases
 
-| Service     | Port (ext:int) | Holds                       | Image          |
-| :---------- | :------------- | :-------------------------- | :------------- |
-| **db-main** | 5432:5432      | nothing yet                 | PostgreSQL 16  |
-| **db-geo**  | 5433:5432      | every table in §2           | PostGIS 16-3.4 |
+| Service     | Port (ext:int) | Holds             | Image          |
+| :---------- | :------------- | :---------------- | :------------- |
+| **db-main** | 5432:5432      | nothing yet       | PostgreSQL 16  |
+| **db-geo**  | 5433:5432      | every table in §2 | PostGIS 16-3.4 |
 
 `apps/api/src/app/resources.ts` probes db-main at startup, so `DB_MAIN_URL`
 is required even though no query reads it.
@@ -32,11 +32,11 @@ Twelve tables from two sources. Terrain, POI and geocode are baked from
 these offline and published to R2; only forward search queries them at
 request time.
 
-| Source                                                  | Tables                                                                                                | Catalog             | Ingest                                                                                                                |
-| :------------------------------------------------------ | :---------------------------------------------------------------------------------------------------- | :------------------ | :-------------------------------------------------------------------------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `apps/api/src/bake/overture/tools/ingest_{buildings,transportation,base}.ts`                                          |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search        | `overture_places`, `overture_divisions`, `overture_division_points`                                     | `overture_catalog`  | `apps/api/src/bake/overture/tools/ingest_{places,divisions}.ts`                                                        |
-| **GEDTM30**<br>ground elevation                          | `elevation_raster`                                                                                     | `elevation_catalog` | `./elevation/scripts/setup-elevation.sh`                                                                              |
+| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                                                       |
+| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :--------------------------------------------------------------------------- |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `apps/api/src/bake/overture/tools/ingest_{buildings,transportation,base}.ts` |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `apps/api/src/bake/overture/tools/ingest_{places,divisions}.ts`              |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `./elevation/scripts/setup-elevation.sh`                                     |
 
 Coastline is not its own table: `OVERTURE_COAST_SQL`
 (`apps/api/src/bake/terrain/repository.ts`) carves it at bake time from
@@ -139,13 +139,13 @@ downtime is acceptable) reclaims what drop-and-recreate leaves behind.
 The one pipeline this directory runs directly, in bash + `envsubst` + GDAL.
 `./elevation/`:
 
-| | |
-| :-------------- | :------------------------------------ |
-| **Source**      | GEDTM30 v1.2, Cloud-Optimized GeoTIFF |
-| **Raw data**    | `./elevation/region/[CODE]/raw/*.tif` |
-| **Table**       | `elevation_raster`                    |
-| **Catalog**     | `elevation_catalog`                   |
-| **Schema**      | `01_elevation_schema.sql`             |
+|              |                                       |
+| :----------- | :------------------------------------ |
+| **Source**   | GEDTM30 v1.2, Cloud-Optimized GeoTIFF |
+| **Raw data** | `./elevation/region/[CODE]/raw/*.tif` |
+| **Table**    | `elevation_raster`                    |
+| **Catalog**  | `elevation_catalog`                   |
+| **Schema**   | `01_elevation_schema.sql`             |
 
 1. **Schema** — drops `elevation_raster`/`elevation_catalog`, runs
    `init/01_elevation_schema.sql`. The raster table itself is created by
@@ -253,7 +253,9 @@ git pull
 docker compose up -d --build
 ```
 
-## 6. Cloudflare Worker wiring
+## 6. Cloudflare (the client, the tiles, and the API relay)
+
+### Wiring
 
 Everything the server answers is under `/api`. The Worker claims
 `/api/tiles/*` and reads it out of R2; everything else under that root is
@@ -271,16 +273,55 @@ The root is reserved on the server's side because the app routes on paths
 of its own; giving the app the prefix instead would put one in every URL a
 user sees.
 
+### Deploying the client
+
+One Worker serves the built app, the R2 tiles, and the relay to the API, so
+publishing all three is one command from the repo root:
+
+```sh
+deno task deploy
+```
+
+It builds, then runs `check:bundle`, then publishes. The middle step is the
+point: a dev-only surface can be gated correctly in source and still leave
+its strings in the artifact, and this fails the deploy rather than letting
+it be noticed on the live site. Run it through the task rather than calling
+wrangler directly, which skips that check — and which needs a Node newer
+than the system may have, where Deno's compat layer satisfies it.
+
+`wrangler login` once, per machine.
+
+Static assets are content-hashed, so a deploy uploads only what changed and
+the R2 tiles are untouched by it. Uploading tiles is a separate procedure
+with its own verification, in
+[.agents/skills/bake-tiles/SKILL.md](../.agents/skills/bake-tiles/SKILL.md).
+
+Afterwards, the five routes that between them cover every path the app
+takes:
+
+```sh
+for p in / \
+  /api/tiles/terrain/v2/6359575375314944 \
+  /api/tiles/terrain/v2/_ocean \
+  /api/tiles/poi/v2/6359575375314944 \
+  '/api/search?q=%EB%B6%84%EB%8B%B9'
+do curl -s -o /dev/null -w "$p %{http_code}\n" "https://plei.me$p"; done
+```
+
+A tile's first two bytes must be `5854` (`XT`); `1f8b` means it is reaching
+the client still gzipped, and HTML means the static-asset fallback answered
+a route the Worker should have claimed.
+
 ## 7. Licensing and attribution
 
 Two notices are required, shown in
 `apps/web/src/app/settings/sections/attribution_section.tsx`. Check the
 source license before shortening, rewording or dropping either.
 
-| Source     | License                                                   | Notice                                                                                                                                                                                                                                                                    |
-| :--------- | :-------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| OpenStreetMap | ODbL                                                    | `© OpenStreetMap contributors` — the historical form listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). Overture's Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this obligation through. |
-| GEDTM30    | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) | The pipeline crops and reprojects the raw DTM, so CC-BY requires noting the change: `Contains modified GEDTM30 data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ 13:e19673.` |
+| Source        | License                                                   | Notice                                                                                                                                                                                                                                                                                                                |
+| :------------ | :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenStreetMap | ODbL                                                      | `© OpenStreetMap contributors` — the historical form listed as acceptable by the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines). Overture's Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this obligation through.                    |
+| GEDTM30       | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) | The pipeline crops and reprojects the raw DTM, so CC-BY requires noting the change: `Contains modified GEDTM30 data. Ho Y, Grohmann CH, Lindsay J, Reuter HI, Parente L, Witjes M, Hengl T (2025). GEDTM30: global ensemble digital terrain model at 30 m and derived multiscale terrain variables. PeerJ 13:e19673.` |
 
 Overture Maps Foundation itself needs no notice. Places is
 CDLA-Permissive-2.0, whose only condition is shipping the license text with

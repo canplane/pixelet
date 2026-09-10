@@ -14,10 +14,10 @@ Everything mutated through a zustand setter today goes straight to
 `localStorage` (via `persist`) or nowhere (in-memory only). That flat
 treatment hides a real split:
 
-| Kind                          | Examples today                                                                                            | Does another player need to see it? |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| Personal / local-only preference | `ui_store.ts`'s `recent_picks`/`object_color_id`/`decor_id` (hotbar), `settings_store.ts` (graphics/camera/companion picks) | No — never, even with a server        |
-| World-shared state              | `objects/store.ts`'s placed cubes/decor (`place()`, already its own `localStorage` key, `pxl:object:v5`), and eventually chat, POI edits, character position | Yes — this is what multiplayer means  |
+| Kind                             | Examples today                                                                                                                                               | Does another player need to see it?  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| Personal / local-only preference | `ui_store.ts`'s `recent_picks`/`object_color_id`/`decor_id` (hotbar), `settings_store.ts` (graphics/camera/companion picks)                                  | No — never, even with a server       |
+| World-shared state               | `objects/store.ts`'s placed cubes/decor (`place()`, already its own `localStorage` key, `pxl:object:v5`), and eventually chat, POI edits, character position | Yes — this is what multiplayer means |
 
 The first kind should stay exactly what it is forever, server or no server —
 nobody else needs to know which color you last painted with. The second kind
@@ -30,7 +30,7 @@ Rather than two parallel systems (a `localStorage` write path for solo play,
 a server round-trip added on top later), route every world-shared mutation
 through one command-dispatch call from the start — `place_cube(...)`,
 `erase(...)`, `send_chat(...)`, whatever the eventual set turns out to be —
-and let *that one function* decide where the command actually goes:
+and let _that one function_ decide where the command actually goes:
 
 - No session / no server reachable: apply it to local state directly (today's
   behavior, unchanged).
@@ -46,7 +46,7 @@ state.
 
 **Corollary worth stating explicitly, since it wasn't obvious until said out
 loud:** if this is built right, single-player and multiplayer stop being two
-different *structures* — single-player is just "the dispatch backend is
+different _structures_ — single-player is just "the dispatch backend is
 local-only, zero peers," not a separate code path that multiplayer support
 gets bolted onto later. That symmetry is the actual payoff of doing this now
 rather than after a server exists: it removes an entire axis of divergence
@@ -60,8 +60,8 @@ command" — peer-to-peer, Byzantine-fault-tolerant, no trusted server at all �
 and that collapsed for reasons unrelated to this idea (NAT traversal doesn't
 close on the web, BFT consensus cost). This is a conventional
 client-to-server model: a real server is the trusted arbiter the moment one
-exists. What's being proposed here is narrower and purely about *where the
-branch point lives* — one interface with a swappable backend, instead of
+exists. What's being proposed here is narrower and purely about _where the
+branch point lives_ — one interface with a swappable backend, instead of
 local-only code that later grows an if-online-do-this-instead branch
 throughout the codebase. It doesn't need trust, consensus, or P2P to be
 worth doing.
@@ -74,7 +74,7 @@ tree, already serializable, already closer to "apply this operation" than to
 "here's my whole new state." Turning that into a real command is mostly
 giving it an envelope and a transport, not redesigning the operation shape.
 
-`ui_store.ts`/`settings_store.ts` are correctly *outside* this system — see
+`ui_store.ts`/`settings_store.ts` are correctly _outside_ this system — see
 the table above — and should keep talking to `localStorage` directly through
 `persist`, same as today.
 

@@ -26,19 +26,21 @@ export function tile_base(kind: TileKind, published: boolean): string {
 export const SEARCH_URL = `${API_ROOT}/search`;
 
 /**
- * Prefixes a dev server forwards, and which origin each comes from. Paths
- * rather than URLs: a deployment serves all of them itself.
+ * Prefixes a dev server forwards. Paths rather than URLs: a deployment
+ * serves all of them itself, and nothing is rewritten in transit.
  *
- * Order matters — the tile prefix sits inside the API root and has to be
- * tested first. Nothing is rewritten in transit.
+ * The API root needs no tile entry beside it — tiles are a branch under it
+ * and forward with it, whichever origin it points at.
+ *
+ * `local_only` marks what a published deployment cannot answer, so those
+ * routes stay on the local API even in remote mode.
  */
 export const DEV_PROXY_ROUTES = [
-  { path: TILE_ROOT, origin: "published" },
-  { path: API_ROOT, origin: "live" },
-  { path: IO_PATH, origin: "live", ws: true },
+  { path: API_ROOT },
+  { path: IO_PATH, local_only: true, ws: true },
 ] as const satisfies readonly {
   path: string;
-  origin: "published" | "live";
+  local_only?: boolean;
   ws?: boolean;
 }[];
 
