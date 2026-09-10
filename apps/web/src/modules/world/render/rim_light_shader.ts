@@ -14,14 +14,14 @@
  * yet (see discussions/20260906-decor-lit-shading.md).
  *
  * Needs nothing beyond what MeshStandardMaterial's own meshphysical shader
- * chunks already provide (`position`, `vNormal`, `modelViewMatrix`) plus the
- * two uniforms this installs — safe to call from any MeshStandardMaterial's
- * onBeforeCompile, baked chunk mesh or plain glTF mesh alike. Composes with a
+ * chunks already provide (`mvPosition`, `vNormal`) plus the two uniforms this
+ * installs — safe to call from any MeshStandardMaterial's onBeforeCompile,
+ * baked chunk mesh, instanced decor or plain glTF mesh alike. Composes with a
  * caller's own further shader.vertexShader/fragmentShader edits regardless of
  * call order: every replace target here keeps its own marker text
- * (`#include <common>`, `void main() {`) present in the substituted string,
- * the same chaining pattern chunk_stage.tsx's own remaining terrain-specific
- * replacements already rely on for themselves.
+ * (`#include <common>`, `#include <project_vertex>`) present in the
+ * substituted string, the same chaining pattern chunk_material.ts's own
+ * remaining terrain-specific replacements already rely on for themselves.
  */
 
 import * as THREE from "three";
@@ -55,7 +55,15 @@ export function inject_rim_light_shader(shader: {
   shader.uniforms.u_rim_intensity = { value: 0 };
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", `#include <common>\nvarying vec3 v_rim_view_pos;`)
-    .replace("void main() {", `void main() {\n  v_rim_view_pos = -(modelViewMatrix * vec4(position, 1.0)).xyz;`);
+    // Read off `mvPosition` rather than recomputing `modelViewMatrix *
+    // position`. They are the same thing for a plain mesh and not for an
+    // instanced one: three applies `instanceMatrix` inside this chunk, so a
+    // hand-rolled version places every instance at the mesh's own origin and
+    // the rim reads as if the whole field were one object. Decor became
+    // instanced (decor/field.ts) and this is where that would have gone
+    // silently wrong. Skinning and morphing are folded into `transformed`
+    // by the same route, for free.
+    .replace("#include <project_vertex>", `#include <project_vertex>\n  v_rim_view_pos = -mvPosition.xyz;`);
   // vViewPosition (a standard-sounding name) is NOT available here: it only
   // exists in the Lambert/Phong/Toon shader chunks, never in meshphysical's
   // own lights_physical_pars_fragment.glsl.js, which MeshStandardMaterial/

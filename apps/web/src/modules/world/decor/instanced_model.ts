@@ -87,17 +87,18 @@ export type ModelInstanceTransform = {
   scale: f64;
   /** Present in the built set but not drawn: set_virtual_hide is
    * suppressing it while the eraser hovers it. It stays in the list because
-   * decor_hit.ts raycasts the baked mesh itself, so dropping it here would
-   * take the entry out of hit testing too — and a hover that cannot find
-   * what it is hovering releases the hide, which brings the entry back,
-   * which lets the hover find it again. */
+   * hit testing runs against real geometry, so dropping it here would take
+   * the entry out of hit testing too — and a hover that cannot find what it
+   * is hovering releases the hide, which brings the entry back, which lets
+   * the hover find it again. field.ts puts these in a second, never-rendered
+   * instanced mesh for exactly that reason. */
   hidden?: boolean;
   /** This instance's own objects/store.ts leaf id, or null for a procedural
    * (scatter.ts-derived, never-stored) placement — decor_hit.ts's own
-   * raycast_decor uses this to resolve a real mesh hit's own faceIndex back
-   * to a selectable/erasable entry, and to tell a procedural placement
-   * apart from one (it has no id, so it stays transparent to hit-testing,
-   * exactly as it always has been). */
+   * raycast_decor uses this to resolve a hit's own instanceId back to a
+   * selectable/erasable entry, and to tell a procedural placement apart from
+   * one (it has no id, so it stays transparent to hit-testing, exactly as it
+   * always has been). */
   id: string | null;
 };
 
@@ -120,36 +121,12 @@ export function compose_instance_matrix(out: THREE.Matrix4, transform: ModelInst
   return out.compose(_position, _quaternion, _scale);
 }
 
-/**
- * Bakes every one of `instances`' own real, separately-transformed copies
- * of `geometry` into one merged BufferGeometry — the same "each block
- * contributes its own real geometry into one merged per-chunk buffer"
- * baking model chunk_mesher.ts's own cube bake uses, not a shared primitive
- * restyled per instance (what an InstancedMesh would do instead). Returns
- * null for zero instances — callers already gate mounting on a nonempty
- * instance list (chunk_stage.tsx's own Chunk, in its bundle_assets.map()
- * JSX), so this is a defensive fallback, not an expected path.
- *
- * `BufferGeometry.applyMatrix4` (not chunk_mesher.ts's own hand-rolled
- * position math) does the real transform work here: unlike that module's
- * own boxes, whose normals are always axis-aligned under a diagonal-only
- * scale (so direction survives untouched — see that module's own doc
- * comment), an arbitrary GLB's normals have no such guarantee, and
- * three.js's own applyMatrix4 already applies the correct inverse-transpose
- * normal-matrix correction for a general transform.
- */
-export function bake_decor_instances(geometry: THREE.BufferGeometry, instances: readonly ModelInstanceTransform[]): THREE.BufferGeometry | null {
-  if (instances.length === 0) return null;
-  const scratch = new THREE.Matrix4();
-  const clones: THREE.BufferGeometry[] = [];
-  for (const instance of instances) {
-    compose_instance_matrix(scratch, instance);
-    const clone = geometry.clone();
-    clone.applyMatrix4(scratch);
-    clones.push(clone);
-  }
-  const merged = clones.length === 1 ? clones[0] : mergeBufferGeometries(clones, false);
-  if (clones.length > 1) { for (const clone of clones) clone.dispose(); }
-  merged?.computeBoundingSphere();
-  return merged;
-}
+/* bake_decor_instances lived here — every instance's own transformed copy of
+ * the source geometry merged into one buffer per (chunk, variant), the same
+ * baking model chunk_mesher.ts uses for cube content. It is gone with the
+ * meshes it built: decor/field.ts draws one InstancedMesh per variant for the
+ * whole world, so an instance is a matrix in a buffer rather than a vertex
+ * copy, and a placement change rewrites one matrix instead of remerging every
+ * copy in the chunk. Baking was the right shape while a chunk owned its own
+ * decor mesh and the alternative was a mesh per variant per chunk; it stopped
+ * being right when the mesh stopped belonging to the chunk. */

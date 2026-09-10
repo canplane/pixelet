@@ -44,6 +44,7 @@ import {
   type TimingStats,
 } from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
+import { decor_field } from "@/modules/world/decor/field.ts";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
@@ -216,6 +217,17 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   const lod_elapsed = useRef(LOD_RECHECK_INTERVAL);
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const { gl } = useThree();
+  const anchor_registry = useAnchorRegistry();
+
+  // Decor hangs off the anchor root rather than off any one chunk or page:
+  // it is one field for the whole world (decor/field.ts), and the root is the
+  // node whose frame every anchor group is already expressed in.
+  useLayoutEffect(() => {
+    anchor_registry.root.add(decor_field.group);
+    return () => {
+      anchor_registry.root.remove(decor_field.group);
+    };
+  }, [anchor_registry]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -338,6 +350,10 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       hard_budget_ms: LOD_HARD_BUDGET_MS,
       max_steps: LOD_MAX_CHUNKS_PER_FRAME,
     }).ran;
+    // After the commits, so a chunk's terrain and its decor reach the screen
+    // in the same frame — the ready-state desync the 2026-09-05 unification
+    // fixed, kept fixed now that decor is contributed rather than mounted.
+    decor_field.update(anchor_registry.cur_map_origin);
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
     if (import.meta.env.DEV) {
       const settling_lod = controls.filter((control) => control.settling).length;

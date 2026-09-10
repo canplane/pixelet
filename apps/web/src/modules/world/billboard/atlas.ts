@@ -281,6 +281,14 @@ export class BillboardAtlas {
 
     const live = [...this.entries];
     this.size *= 2;
+    // A new canvas, not a resize of the live one. three allocates immutable
+    // storage for a texture once (texStorage2D, WebGL2) and every later
+    // upload is a texSubImage2D into it, so a canvas that grows under a
+    // texture that has already uploaded overflows what was allocated —
+    // GL_INVALID_VALUE from glCopySubTextureCHROMIUM, silent on the page and
+    // fatal to the sheet. Replacing the element means no texture ever sees
+    // its own image change size.
+    this.canvas = document.createElement("canvas");
     this.canvas.width = this.size;
     this.canvas.height = this.size;
     this.ctx = this.canvas.getContext("2d")!;
