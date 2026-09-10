@@ -3,7 +3,7 @@
 import type { Pool } from "@db/postgres";
 
 import { OVERTURE_CATEGORY_MAP } from "@pxl/api/bake/overture/model/category_map.ts";
-import { resolve_broad_context } from "../../tiles/geocode/resolve_broad.ts";
+import { resolve_broad_context, resolve_point_context_batch } from "../../tiles/geocode/resolve_context.ts";
 import type { SearchProvider, SearchResult } from "../provider.ts";
 
 const DEFAULT_LIMIT = 20;
@@ -26,6 +26,7 @@ const DIVISION_LIMIT = 5;
 // needs a genuinely different expression when a bias point exists, not
 // just a NULL-able argument to the same one.
 const SEARCH_SQL = `SELECT gers_id, name, properties,
+  ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
 FROM overture_places
 WHERE name <> '' AND name ILIKE '%' || $1 || '%'
@@ -37,6 +38,7 @@ LIMIT $2`;
 // `near` instead of an arbitrary alphabetical fallback, so a same-named
 // nearby result outranks a same-named one across the country.
 const SEARCH_NEAR_SQL = `SELECT gers_id, name, properties,
+  ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
 FROM overture_places
 WHERE name <> '' AND name ILIKE '%' || $1 || '%'
@@ -87,7 +89,7 @@ LIMIT $2`;
 // lon/lat typed as the strings @db/postgres actually decodes `double
 // precision` results into (see the Number() cast below) — not a lie about
 // what the driver hands back, unlike leaving these as `number` would be.
-type PlaceRow = { gers_id: string; name: string; properties: Record<string, unknown>; lon: string; lat: string };
+type PlaceRow = { gers_id: string; name: string; properties: Record<string, unknown>; x3857: string; y3857: string; lon: string; lat: string };
 type DivisionRow = {
   gers_id: string;
   name: string;
@@ -109,29 +111,6 @@ function category_of(properties: Record<string, unknown>): string {
 }
 
 type OvertureAddress = { region?: string | null; locality?: string | null; freeform?: string | null };
-
-// Overture's own per-place `addresses[0]` (confirmed live: ~91% of named
-// Korean places have `freeform`, ~89% have `locality`) — not a database
-// lookup at all, just reading a field this query already selects, so this
-// costs nothing extra per result. Distinguishes "which 스타벅스" the way a
-// coarse region/county reverse-geocode label couldn't (this is genuinely
-// street-level, that's neighborhood-level at best).
-//
-// `freeform` sometimes already leads with the same district name
-// `locality` holds (e.g. locality "북구" + freeform "북구 서암대로 93") —
-// prepending locality unconditionally would show it twice, so it's
-// skipped when freeform already starts with it.
-function address_of(properties: Record<string, unknown>): string | null {
-  const addr = (properties.addresses as OvertureAddress[] | undefined)?.[0];
-  if (!addr) return null;
-
-  const locality = addr.locality?.trim() || null;
-  const freeform = addr.freeform?.trim() || null;
-
-  if (locality && freeform) return freeform.startsWith(locality) ? freeform : `${locality} ${freeform}`;
-  return freeform ?? locality;
-}
-
 // The same area/point name can legitimately show up twice (a `locality`
 // polygon and a `division` point both named "종로구", say) — keeping the
 // first occurrence is enough since DIVISION_SEARCH_SQL already orders area
@@ -181,7 +160,7 @@ export function make_overture_search_provider(pool: Pool): SearchProvider {
       }
 
       // One extra query per division result (capped at DIVISION_LIMIT, so
-      // at most a handful) — see resolve_broad.ts's own doc comment for
+      // at most a handful) — see resolve_context.ts's own doc comment for
       // why this needs its own point-in-polygon lookup rather than
       // reusing anything already fetched above.
       const contexts = await Promise.all(
@@ -204,14 +183,34 @@ export function make_overture_search_provider(pool: Pool): SearchProvider {
         lon: Number(r.lon),
         lat: Number(r.lat),
       }));
-      const poi_results: SearchResult[] = place_rows.map((r) => ({
+      // Where the point actually is, rather than what a text field on the
+      // row says about it.
+      //
+      // Overture's `addresses[0]` is contributor-entered and the geometry is
+      // not. There is a row named 강남역 carrying the address "Seoul
+      // 서울특별시 강남구" whose coordinates are in 용인, so the list said
+      // Seoul and picking it moved the camera to 용인. That is not fixable
+      // in the address string.
+      //
+      // Nor is the inconsistency, which is the larger half: the same field
+      // arrives as "서울 서초동 1319-13", as "Seoul Seocho-daero 398
+      // Seocho-gu, Seoul, Korea", as "Seoul", and as null, because each is
+      // however a different contributor chose to write it. Resolving the
+      // point instead gives every result the same shape in the reader's own
+      // language, which is what made the address field's remaining job
+      // disappear rather than move.
+      const poi_context = await resolve_point_context_batch(
+        pool,
+        place_rows.map((r) => Number(r.x3857)),
+        place_rows.map((r) => Number(r.y3857)),
+      );
+      const poi_results: SearchResult[] = place_rows.map((r, i) => ({
         gers_id: r.gers_id,
         kind: "poi",
         name: r.name,
         category: category_of(r.properties),
-        address: address_of(r.properties),
         common: null,
-        context: [],
+        context: poi_context[i],
         lon: Number(r.lon),
         lat: Number(r.lat),
       }));

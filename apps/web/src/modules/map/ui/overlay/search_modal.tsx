@@ -46,8 +46,10 @@ function map_center_to_near(map_center: PVF3): { lon: number; lat: number } {
 // GeocodePart — SearchResult's `common` is the identical shape for exactly
 // the same reason (division results share the same multilingual source).
 // Never touches `name` itself for a "poi" result (always null there) or
-// `address` (Overture's own freeform text, shown exactly as given —
-// there's no per-language variant of a single street address string).
+// The subtitle is the same for both kinds: where the point actually is,
+// resolved from its coordinates. It replaced Overture's own address text,
+// which arrived in a different shape from every contributor and could name
+// a different city than the geometry beside it.
 function display_name(result: SearchResult, lang: string): string {
   return result.common?.[lang] ?? result.name;
 }
@@ -294,7 +296,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
                 </span>
                 <div className="flex flex-col gap-0.5 min-w-0 pt-0.5">
                   <span className="text-sm truncate">{display_name(r, lang)}</span>
-                  {r.address && <span className="text-xs text-muted-foreground truncate">{r.address}</span>}
+                  {r.context.length > 0 && <span className="text-xs text-muted-foreground truncate">{assemble_label(r.context, lang)}</span>}
                 </div>
               </button>
             );

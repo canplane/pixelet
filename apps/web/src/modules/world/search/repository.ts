@@ -12,18 +12,14 @@ export type SearchResult = {
   kind: "poi" | "division";
   name: string;
   category: string;
-  /** Overture's own street-level address (locality + freeform), shown
-   * exactly as given — see the API's own SearchResult doc comment on why
-   * this is never reformatted. `null` when Overture had no address data
-   * for this place, and always null for a "division" result. */
-  address: string | null;
   /** Mirrors GeocodePart's own `common` (world/geocode/repository.ts) —
    * populated for `kind: "division"`, always `null` for `kind: "poi"`. */
   common: Record<string, string> | null;
   /** The broader divisions (region/county) containing this result's own
    * point — assemble via world/geocode/label.ts's own assemble_label(),
-   * same as the current-address overlay. Always `[]` for `kind: "poi"`
-   * (its own `address` already covers this). */
+   * same as the current-address overlay. Populated for both kinds: it is
+   * what tells two same-named results apart, and it replaced a raw address
+   * field that could name a different city than its own coordinates. */
   context: GeocodePart[];
   lon: number;
   lat: number;
