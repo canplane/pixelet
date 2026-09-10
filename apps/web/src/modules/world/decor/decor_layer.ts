@@ -88,7 +88,6 @@
  * not a separate store.
  */
 
-
 import type { f64 } from "@xpute/core/kit/word.ts";
 import type { Tile } from "@pxl/shared/bake/format.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
@@ -99,7 +98,7 @@ import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
-import { cell_index, cell_key, get_objects_in_cell, get_object_entries_in_l2_column, l2_column_key_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
+import { cell_index, cell_key, get_object_entries_in_l2_column, get_objects_in_cell, l2_column_key_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
 import type { LodStep } from "@/render/lod.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
@@ -327,4 +326,3 @@ export function build_decor_instances(
  * moved: a component that only owns a scene object buys nothing and costs a
  * deferred mount. bake_decor_instances and register_decor_mesh, the two
  * things it actually called, are unchanged and now called from there. */
-

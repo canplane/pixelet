@@ -347,8 +347,7 @@ export function HoverCursor() {
   // declares side images today, so everything else resolves to the same
   // texture on every face and pays nothing for asking.
   const textures = useMemo(
-    () =>
-      BOX_FACE_TEXTURES.map((face) => (color_id && !low_spec ? get_object_texture(color_id, face) : null)),
+    () => BOX_FACE_TEXTURES.map((face) => (color_id && !low_spec ? get_object_texture(color_id, face) : null)),
     [color_id, low_spec],
   );
   const map = textures[TOP_FACE];

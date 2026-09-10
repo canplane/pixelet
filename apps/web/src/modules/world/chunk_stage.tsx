@@ -36,12 +36,12 @@ import {
   commit_step_stats,
   lod_build_stats,
   lod_scheduler,
+  LOD_WORK_BUDGET_MS,
   mesh_mount_stats,
   mesh_unmount_stats,
   record_timing,
   take_node_counts,
   type TimingStats,
-  LOD_WORK_BUDGET_MS,
 } from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
@@ -485,9 +485,7 @@ export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
   if (range_anchor === null) return null;
   return (
     <group name="chunk-stage">
-      {visible_pages.map((page_idx) => (
-        <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />
-      ))}
+      {visible_pages.map((page_idx) => <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />)}
     </group>
   );
 });

@@ -388,9 +388,7 @@ function mixed_scene(place: (cx: u32, cy: u32) => [u32, u32]): MeshRun[][] {
       if (kind === 0) columns[idx(px, py)] = [run(0, h, 200, 100, 50)];
       else if (kind === 1) columns[idx(px, py)] = [run(0, h, 60, 160, 90, MaterialClass.OBJECT)];
       else if (kind === 2) {
-        columns[idx(px, py)] = h === 0
-          ? [run(0, 0, 60, 160, 90, MaterialClass.OBJECT)]
-          : [run(0, h - 1, 200, 100, 50), run(h, h, 60, 160, 90, MaterialClass.OBJECT)];
+        columns[idx(px, py)] = h === 0 ? [run(0, 0, 60, 160, 90, MaterialClass.OBJECT)] : [run(0, h - 1, 200, 100, 50), run(h, h, 60, 160, 90, MaterialClass.OBJECT)];
       } else columns[idx(px, py)] = [run(0, h, 120, 120, 200)];
     }
   }

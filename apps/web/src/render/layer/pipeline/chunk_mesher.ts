@@ -33,14 +33,7 @@ import { MESH_POOL } from "./mesh_pool.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import type { LodStep } from "@/render/lod.ts";
-import {
-  MaterialClass,
-  NO_LAYER,
-  pack_sub_cell_fraction,
-  SUB_CELL_NONE,
-  unpack_sub_cell_fraction,
-  unpack_sub_cell_size,
-} from "./volume.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "./volume.ts";
 import { alloc_column_run_set, type ColumnRunSet, release_column_runs } from "./voxel_scan.ts";
 
 /**

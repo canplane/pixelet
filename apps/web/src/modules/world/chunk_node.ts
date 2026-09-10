@@ -39,14 +39,8 @@ import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
 import { bake_decor_instances, type ModelInstanceTransform } from "@/modules/world/decor/instanced_model.ts";
 import { register_decor_mesh } from "@/modules/world/decor/decor_hit.ts";
 import { build_decor_instances, type DecorKindBundle, type ModelInstanceTransformList } from "@/modules/world/decor/decor_layer.ts";
-import { type DecorBundleAssets, decor_bundle_assets, subscribe_decor_assets } from "@/modules/world/decor/asset_store.ts";
-import {
-  decor_l2_column_revision,
-  l2_column_key_of,
-  object_l2_column_revision,
-  subscribe_decor_l2_column,
-  subscribe_object_l2_column,
-} from "@/modules/world/objects/store.ts";
+import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/modules/world/decor/asset_store.ts";
+import { decor_l2_column_revision, l2_column_key_of, object_l2_column_revision, subscribe_decor_l2_column, subscribe_object_l2_column } from "@/modules/world/objects/store.ts";
 import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/modules/world/render/chunk_material.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
@@ -667,9 +661,7 @@ export class ChunkNode implements ChunkLodControl {
   private build_decor_step(step: LodStep): ModelInstanceTransformList[][] {
     const cached = this.decor_cache.get(step);
     if (cached) return cached;
-    const built = this.bundle_assets.map(({ bundle }) =>
-      build_decor_instances(this.tile as never, step, this.deps.page_idx, this.deps.offset.base_x, this.deps.offset.base_y, bundle)
-    );
+    const built = this.bundle_assets.map(({ bundle }) => build_decor_instances(this.tile as never, step, this.deps.page_idx, this.deps.offset.base_x, this.deps.offset.base_y, bundle));
     this.decor_cache.set(step, built);
     return built;
   }

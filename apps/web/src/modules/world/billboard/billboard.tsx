@@ -15,12 +15,25 @@ import type * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { WORLD_UNITS_PER_PX } from "./canvas_scale.ts";
-import { use_canvas_texture } from "./use_canvas_texture.ts";
 import { use_distance_fade } from "./use_distance_fade.ts";
 import { SpriteBillboard } from "./sprite_billboard.tsx";
 
 export type BuiltBillboard = {
   canvas: HTMLCanvasElement;
+  /** The canvas as a GPU resource, built with the canvas and kept with it.
+   *
+   * It lives here rather than in whatever draws the badge because that is
+   * the only place it can be cached. A texture created where a sprite is
+   * mounted is created and destroyed every time the sprite is, and a
+   * CanvasTexture is a real allocation on the GPU side — caching the bitmap
+   * while rebuilding the upload was most of the cost and none of the
+   * saving.
+   *
+   * Consumers that draw through the atlas do not use this: they hand a
+   * drawing closure to atlas.ts and get a rectangle in the shared sheet
+   * back. Two badges with different textures cannot share a draw call, so a
+   * per-badge texture is a per-badge draw call. */
+  texture: THREE.Texture;
   logical_w: f64;
   logical_h: f64;
   /** Canvas-space Y (0 = top, `logical_h` = bottom) of this billboard's own
@@ -28,6 +41,16 @@ export type BuiltBillboard = {
    * scale. A chat bubble's tail tip is its own bottom (`logical_h`); a POI
    * badge's anchor dot is its own center, partway up from the bottom. */
   center_y: f64;
+  /** Canvas-space Y below which overlapping is acceptable, defaulting to the
+   * whole sprite.
+   *
+   * Not every drawn pixel is worth defending. A POI badge is a pill with a
+   * small anchor dot hanging under it, and two dots crossing reads as two
+   * places close together while two pills crossing reads as broken text —
+   * so the pill is the part a collision pass must protect and the dot and
+   * its gap are not. Mapbox splits the same way, which is why icon and text
+   * carry separate padding there. */
+  collide_h: f64;
 };
 
 /**
@@ -57,7 +80,10 @@ export type BillboardProps = {
 };
 
 export function Billboard({ built, base_z, render_order }: BillboardProps) {
-  const texture = use_canvas_texture(built?.canvas ?? null);
+  // The builder's, not one of its own: a BuiltBillboard carries its
+  // texture, and making a second from the same canvas uploaded the bitmap
+  // twice.
+  const texture = built?.texture ?? null;
   const sprite_ref = useRef<THREE.Sprite>(null);
   const width = (built?.logical_w ?? 0) * WORLD_UNITS_PER_PX;
   const height = (built?.logical_h ?? 0) * WORLD_UNITS_PER_PX;

@@ -25,6 +25,8 @@ import { useEffect, useState } from "react";
 
 import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
+import { poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
+import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
 import { category_info } from "./categories.ts";
 import {
   type FrameSample,
@@ -82,7 +84,7 @@ function summarize_tasks(tasks: readonly TaskRecord[]) {
   const by = new Map<string, { lat: number[]; ok: number; aborted: number; error: number }>();
   for (const rec of tasks) {
     let g = by.get(rec.category);
-    if (!g) by.set(rec.category, (g = { lat: [], ok: 0, aborted: 0, error: 0 }));
+    if (!g) by.set(rec.category, g = { lat: [], ok: 0, aborted: 0, error: 0 });
     if (rec.outcome === "ok") g.ok++;
     else if (rec.outcome === "aborted") g.aborted++;
     else g.error++;
@@ -203,9 +205,17 @@ export function LedgerOverlay() {
           />
           <Row
             k="faces kept"
-            v={`${
-              occlusion_stats.faces_possible > 0 ? Math.round(occlusion_stats.faces_kept / occlusion_stats.faces_possible * 100) : 0
-            }%`}
+            v={`${occlusion_stats.faces_possible > 0 ? Math.round(occlusion_stats.faces_kept / occlusion_stats.faces_possible * 100) : 0}%`}
+          />
+          <Row
+            k="poi place ms"
+            v={`${r1(poi_place_stats.ms)} max${r1(poi_place_stats.max_ms)} hit${poi_place_stats.hits}`}
+            warn={poi_place_stats.ms > 8}
+          />
+          <Row
+            k="  cand/kept idx"
+            v={`${poi_place_stats.candidates}/${poi_place_stats.kept} ${poi_index_stats().indexed}${poi_index_stats().dropped > 0 ? ` -${poi_index_stats().dropped}` : ""}`}
+            warn={poi_index_stats().dropped > 0}
           />
           <Row k="scan/bake" v={`${f.last.work.scans}/${f.last.work.bakes}`} warn={f.last.work.scans > 0} />
           <Row k="queue t/p" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />
@@ -243,11 +253,13 @@ export function LedgerOverlay() {
         warn={rec.recording || rec.truncated}
       />
 
-      {/* start and stop are both always present rather than one toggle.
+      {
+        /* start and stop are both always present rather than one toggle.
           Recording auto-begins at load so a cold-load stall is never missed,
           which means a toggle would only ever show "stop" until you had
           already stopped once — and then "start" is the button you cannot
-          find when you want to begin a clean window. */}
+          find when you want to begin a clean window. */
+      }
       <div className="mt-1.5 flex gap-1">
         <button
           type="button"
@@ -257,9 +269,7 @@ export function LedgerOverlay() {
           }}
           title="clear everything and begin a fresh window"
           className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
-            rec.recording
-              ? "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90"
-              : "border-emerald-400/40 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
+            rec.recording ? "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90" : "border-emerald-400/40 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
           }`}
         >
           start
@@ -273,9 +283,7 @@ export function LedgerOverlay() {
           disabled={!rec.recording}
           title="freeze the window so exports are stable while you read them"
           className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
-            rec.recording
-              ? "border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
-              : "border-white/10 bg-white/5 text-white/25"
+            rec.recording ? "border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20" : "border-white/10 bg-white/5 text-white/25"
           }`}
         >
           stop

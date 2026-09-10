@@ -43,7 +43,7 @@ const DEV_MARKERS = ["dev/test", "development"];
  * These have to be literals that survive minification, not paths the app
  * composes at runtime: `/api/tiles` is built from a template literal that
  * esbuild leaves unfolded, so it never appears contiguously. */
-const SENTINELS = ['"/api"', '_ocean'];
+const SENTINELS = ['"/api"', "_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
   if (o !== null && typeof o === "object") {

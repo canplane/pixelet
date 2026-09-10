@@ -23,6 +23,7 @@ import { useUiStore } from "@/app/store/ui_store.ts";
 import { wrap_text } from "../billboard/canvas_text.ts";
 import { FONT_FAMILY, FONT_WEIGHT_BOLD } from "../billboard/canvas_scale.ts";
 import { Billboard, BILLBOARD_ORDER, type BuiltBillboard } from "../billboard/billboard.tsx";
+import { make_canvas_texture } from "../billboard/canvas_texture.ts";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10
@@ -42,17 +43,21 @@ const TAIL_H = 10;
 // arbitrarily wide.
 const MAX_TEXT_WIDTH_PX = 220;
 
-// The canvas below is built at this many real pixels per logical unit —
-// independent of the renderer's own aa_mode/supersampling setting (that
-// only affects the main WebGL canvas's render target, never a texture an
-// app draws itself). Without this, the canvas was sized directly off
-// FONT's own px metrics — maybe 150x50 real pixels — then stretched onto a
-// sprite that can occupy several hundred *screen* pixels once the camera
-// is close, magnifying every already-anti-aliased glyph edge into a
-// blurry blob. Rendering at more real pixels up front is the actual fix;
-// NearestFilter alone (kept below, for the border's chunky corners) can
-// only ever preserve source detail, not add any.
-const RENDER_SCALE = 3;
+// The canvas below is built at this many real pixels per logical unit, and
+// it should equal the renderer's own device pixel ratio.
+//
+// scene.tsx caps that at 2 (`dpr={aa_mode === "supersample" ? [1, 2] : [1, 1]}`)
+// and distance_fade_far returns at most 1, so a billboard's drawn size never
+// exceeds its logical size in CSS pixels — the fade only ever shrinks it, so
+// two is the exact requirement rather than a guess.
+//
+// It was 3, chosen against the worry that a sprite close to the camera
+// occupies many more screen pixels than the canvas has. It does not: the
+// fade holds the sprite at a constant *screen* size, which is what the
+// world size grows to preserve. Three was 2.25x the pixels for nothing, and
+// arguably worse — magFilter is Nearest for the up-close pixel read, and
+// drawing at 3 to display at 2 is a minification through the mipmap chain.
+const RENDER_SCALE = 2;
 
 // Air gap between the character model's own top (ChatBubbleProps.anchor_z
 // — its configured height_u) and the bubble's tail tip. Previously the
@@ -119,7 +124,9 @@ function build_bubble_canvas(text: string): BuiltBillboard {
     ctx.fillText(line, box_w / 2, PADDING_Y + LINE_H * (i + 0.5));
   });
 
-  return { canvas, logical_w: box_w, logical_h, center_y: logical_h };
+  // The whole bubble: unlike a POI badge's anchor dot, every part of this
+  // is message rather than marker.
+  return { canvas, texture: make_canvas_texture(canvas), logical_w: box_w, logical_h, center_y: logical_h, collide_h: logical_h };
 }
 
 export type ChatBubbleProps = {
@@ -161,6 +168,10 @@ export function ChatBubble(props: ChatBubbleProps) {
   }, [last]);
 
   const built = useMemo(() => (visible_line ? build_bubble_canvas(visible_line.text) : null), [visible_line]);
+  // A bubble's canvas is rebuilt per distinct message rather than cached, so
+  // its texture is this component's to release — unlike a POI badge, which
+  // is held by id and disposed when the badge is evicted.
+  useEffect(() => () => built?.texture.dispose(), [built]);
 
   // tip_z is the tail's fixed bottom edge (Billboard's own base_z).
   const tip_z = anchor_z + HEAD_CLEARANCE_U;
