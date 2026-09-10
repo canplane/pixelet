@@ -148,7 +148,7 @@ merges `lod_step³` voxels into one box, and says three things about them.
   own centre, so its volume is the fill fraction of the cell's. There is no
   occupancy threshold: seven VOID and one red block is one quarter-size red
   cube, never a dropped one.
-- **What it looks like.** Colour is a *surface* average: only the topmost run
+- **What it looks like.** Colour is a _surface_ average: only the topmost run
   of each sub-column contributes, because that is the voxel visible from
   above. Runs arrive ascending, so a later one supersedes the one before it
   by subtracting what that column last contributed, keeping the pass O(1)
@@ -214,7 +214,7 @@ drawn camera disagreeing.
 
 `Settings > Camera` picks what the answer does: `through` ignores terrain,
 `stop` takes a control as far as it asked or as far as it can, and `climb`
-grants every control and raises the *drawn* pitch instead, leaving
+grants every control and raises the _drawn_ pitch instead, leaving
 `view_state` untouched so the pitch relaxes back on its own.
 
 ## Billboards

@@ -26,16 +26,25 @@ export type DistanceFadeResult = {
 
 /** `px_per_world_unit`: CSS pixels per world unit [u] at `dist`, for the
  * live camera — the caller's own job to compute. */
+/**
+ * The distance half of the fade, on its own.
+ *
+ * It is also the entire screen-size story, which is not obvious and is worth
+ * having in one place: a billboard's drawn width is
+ * `logical_w * WORLD_UNITS_PER_PX * scale * px_per_world_unit`, and `fit`
+ * below is the reciprocal of the first and last of those — so it all
+ * collapses to `logical_w * far`. That is what `fit` is *for*, and it means
+ * anything reasoning about screen boxes needs this and not a projection.
+ */
+export function distance_fade_far(dist: f64): f64 {
+  if (dist <= FAR_START) return 1;
+  if (dist >= FAR_END) return 0;
+  const t = (dist - FAR_START) / (FAR_END - FAR_START);
+  return 1 - t * t * (3 - 2 * t); // smoothstep
+}
+
 export function distance_fade_factor(px_per_world_unit: f64, dist: f64): DistanceFadeResult {
   const fit = px_per_world_unit > 0 ? 1 / (WORLD_UNITS_PER_PX * px_per_world_unit) : 1;
-
-  let far: f64;
-  if (dist <= FAR_START) far = 1;
-  else if (dist >= FAR_END) far = 0;
-  else {
-    const t = (dist - FAR_START) / (FAR_END - FAR_START);
-    far = 1 - t * t * (3 - 2 * t); // smoothstep
-  }
-
+  const far = distance_fade_far(dist);
   return { scale: fit * far, opacity: far };
 }

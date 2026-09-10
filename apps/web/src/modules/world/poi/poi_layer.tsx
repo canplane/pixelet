@@ -21,14 +21,13 @@
  *   stops being fine.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { useThree } from "@react-three/fiber";
+import { invalidate, useFrame, useThree } from "@react-three/fiber";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { FROM_L3_IDX, SPAN_CENTER } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
@@ -36,177 +35,108 @@ import { useCameraStore } from "@/modules/camera/store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_local_world_origin, local_world_to_canonical } from "../frame/coord.ts";
 import { useFrameRefs } from "../frame/context.tsx";
-import { with_ele } from "../terrain/elevation.ts";
 import { register_tile_interest } from "../terrain/store.ts";
-import { CHEBYSHEV_DIST } from "../terrain/use_tile_fetcher.ts";
-import { AnchorNode } from "../anchor/node.tsx";
 import { FAR_END } from "../billboard/distance_fade.ts";
-import { FONT_FAMILY, FONT_WEIGHT_REGULAR } from "../billboard/canvas_scale.ts";
-import { Billboard, BILLBOARD_ORDER, type BuiltBillboard } from "../billboard/billboard.tsx";
-import { type BillboardCandidate, select_visible_billboards } from "../billboard/frustum_budget.ts";
-import { resolve_poi_theme } from "./poi_theme.ts";
+import { BILLBOARD_ORDER } from "../billboard/billboard.tsx";
+import { select_visible_billboards } from "../billboard/frustum_budget.ts";
+import { BillboardBatch } from "../billboard/batch.ts";
+import { CellNodes } from "../billboard/cell_nodes.ts";
+import { BillboardField } from "../billboard/field.ts";
+import { invalidate_poi_index, poi_at, poi_cell_x, poi_cell_y, poi_cell_z, poi_grounded, poi_tiebreak, poi_x, poi_y, poi_z, query_poi_index, sync_poi_index } from "./poi_index.ts";
+import { badge_atlas, cluster_badge, cluster_badge_metrics, poi_badge, poi_badge_metrics } from "./poi_badge.ts";
 import { usePoiStore } from "./store.ts";
 
-// Global cap across every loaded page, not per-page — see this file's own
-// top doc comment on why this isn't the old implementation's own two-tier
-// LOD. Picked well above the old MAX_HTML_POIS (20) since a single flat
-// badge here is far cheaper than that version's DOM+occlusion-raycast Html
-// element was.
-const MAX_RENDERED = 80;
-
-const FONT = `${FONT_WEIGHT_REGULAR} 12px ${FONT_FAMILY}`;
-const ICON_FONT = "14px sans-serif";
-const NAME_MAX_CHARS = 12;
-const ICON_SIZE = 20;
-// Icon-to-text gap and text's own right-edge margin — kept equal
-// deliberately (the actual ask: not "pad both ends of the pill the same,"
-// the icon end has no padding of its own at all, it sits flush against the
-// pill's own rounded left cap — just "the text's own left and right
-// breathing room should match each other").
-const GAP = 8;
-const PAD_Y = 7;
-// Same supersampling reasoning as chat_bubble.tsx's own RENDER_SCALE — a
-// canvas sized directly off FONT's own px metrics blurs once magnified onto
-// a sprite occupying many more screen pixels close to the camera.
-const RENDER_SCALE = 3;
-
-// checkpoint/20260107-float's own "Anchor Dot" (poi-item.tsx) — a small dot
-// under the pill marking the actual ground point, since the pill itself
-// floats above and offset from it.
-const DOT_DIAM = 6;
-const DOT_GAP = 4;
-const DOT_BORDER = 1;
+/**
+ * A rail, not the mechanism.
+ *
+ * What decides how many badges are drawn is how many fit: a candidate that
+ * lands on pixels another badge has taken is folded into that badge's count
+ * (frustum_budget.ts), so density answers itself and the number left standing
+ * is whatever the screen has room for. This only bounds the sprite and
+ * draw-call count if something goes wrong, and it is set high enough that a
+ * full screen of non-overlapping badges never reaches it.
+ *
+ * It used to be 80, and it used to be the whole answer — four POI in one
+ * building meant one drawn and three deleted, with nothing recording that
+ * they had ever been there. Aggregation is what a budget should buy; deletion
+ * is what it bought.
+ */
+const MAX_RENDERED = 512;
 
 /**
- * Where the anchor dot sits, above the elevation with_ele grounds to.
+ * How wide a badge is, in CSS pixels, for picking the tier below.
  *
- * Exactly half a cell, and nothing else added on top. `ele` is the top
- * *face* of the topmost terrain cell — the mesh fills up to `ele - 1`
- * (terrain/adapter.ts) — so half a cell above it is the centre of the cell
- * the dot marks. Terrain cells are centred and a POI is a point on one.
- *
- * This is also the point billboard/anchor_occlusion.ts measures from, which
- * is why it is one number rather than a ground height plus a separate air
- * gap: the place the dot claims and the place visibility is judged from
- * have to be the same place, or the tolerance is being applied to a
- * position nothing else agrees with.
- *
- * X and Y are untouched by any of this. A point marker has to land exactly
- * where the place is; only Z is aligned to terrain, and terrain is cells.
+ * The pill is about this across at full strength (poi_badge.ts), and a cell
+ * about a badge wide is the size at which "one badge per cell" and "badges
+ * do not sit on each other" are the same statement.
  */
-const ANCHOR_Z_U: f64 = 0.5;
+const BADGE_PX: f64 = 100;
 
-/** A single-line pill (colored icon circle + name) with an anchor dot
- * centered below it — the shape `checkpoint/20260107-float`'s own HTML
- * badge used (`poi-item.tsx`), redrawn as one flat canvas texture instead
- * of a DOM element (see this file's own top doc comment on why hover/
- * hover-lift/day-night from that version aren't reproduced here). Truncates
- * by character count rather than wrap_text's own word-wrap — a map badge
- * reads as one short line, not a multi-line chat message. */
-function build_poi_badge_canvas(poi: POI): BuiltBillboard {
-  const theme = resolve_poi_theme(poi.category);
-  const name = poi.name.length > NAME_MAX_CHARS ? `${poi.name.slice(0, NAME_MAX_CHARS - 1)}…` : poi.name;
+/** The finest and coarsest cell a badge is allowed to snap to, as shifts of
+ * the canonical unit. 0 is 1u, the terrain cell itself; 6 is 64u, which is
+ * an L2 chunk and the top of the ladder terrain and decor already climb
+ * (render/lod.ts's 1/2/4/.../64). Beyond that the tier belongs to the page,
+ * not to the badge. */
+const MIN_SHAMT: u32 = 0;
+const MAX_SHAMT: u32 = 6;
 
-  const measure_ctx = document.createElement("canvas").getContext("2d")!;
-  measure_ctx.font = FONT;
-  const text_w = Math.ceil(measure_ctx.measureText(name).width);
-
-  const pill_h = ICON_SIZE + PAD_Y;
-  const r = pill_h / 2;
-  const text_x = r + ICON_SIZE / 2 + GAP;
-  const logical_w = text_x + text_w + GAP;
-  const logical_h = pill_h + DOT_GAP + DOT_DIAM;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = logical_w * RENDER_SCALE;
-  canvas.height = logical_h * RENDER_SCALE;
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.scale(RENDER_SCALE, RENDER_SCALE);
-
-  // Pill background — a rect with fully-rounded ends (radius = half height).
-  ctx.fillStyle = "rgba(20,20,26,0.72)";
-  ctx.beginPath();
-  ctx.roundRect(0, 0, logical_w, pill_h, r);
-  ctx.fill();
-
-  // Icon circle is concentric with the pill's own rounded left cap (same
-  // center `r`, smaller radius) rather than padded off it — no separate
-  // left-margin constant, `GAP` is the one deliberate breathing-room value
-  // in this layout: icon-to-text and text-to-right-tip, equal on purpose.
-  const icon_cx = r;
-  const icon_cy = pill_h / 2;
-  ctx.fillStyle = theme.color;
-  ctx.beginPath();
-  ctx.arc(icon_cx, icon_cy, ICON_SIZE / 2, 0, Math.PI * 2);
-  ctx.fill();
-  // Tried pixel-scanning each glyph's actual rendered ink to correct for
-  // per-emoji font-metric quirks (2026-09-08) — still came out wrong for at
-  // least one glyph, and font-substitution behavior for color emoji isn't
-  // worth chasing further than this: plain center/middle, one hand nudge.
-  ctx.font = ICON_FONT;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(theme.icon, icon_cx, icon_cy + 1);
-
-  // Name, left-aligned right after the icon circle.
-  ctx.font = FONT;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#fff";
-  ctx.fillText(name, text_x, pill_h / 2 + 1);
-
-  // Anchor dot, centered under the whole pill.
-  const dot_cx = logical_w / 2;
-  const dot_cy = pill_h + DOT_GAP + DOT_DIAM / 2;
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.beginPath();
-  ctx.arc(dot_cx, dot_cy, DOT_DIAM / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
-  ctx.lineWidth = DOT_BORDER;
-  ctx.stroke();
-
-  return { canvas, logical_w, logical_h, center_y: dot_cy };
+/**
+ * Which lattice tier badges snap to at this zoom.
+ *
+ * `px_per_u` is what use_distance_fade computes to hold a billboard at a
+ * constant screen size, so this asks how much world a badge covers right
+ * now and takes the cell nearest to it. Zooming in walks the tier down and
+ * the badges spread; zooming out walks it up and they gather. It is the same
+ * ladder terrain climbs, by the same argument, which is why it needs no
+ * quantisation of its own.
+ */
+function tier_shamt(px_k: f64, dist: f64): u32 {
+  // px_k is the projection with the distance divided out — CSS pixels per
+  // world unit *times* distance — so one measurement serves every candidate
+  // and each pays a divide rather than a trig call.
+  const want_u = BADGE_PX * Math.max(1e-3, dist) / px_k;
+  const shamt = Math.round(Math.log2(Math.max(1, want_u)));
+  return Math.max(MIN_SHAMT, Math.min(MAX_SHAMT, shamt)) as u32;
 }
 
-/** center.xy (page-local real units, overture_provider.ts)
- * resolved against the page's own global corner — no elevation grounding,
- * unlike poi_anchor below. Used only for the distance ranking in
- * select_nearby_pois: cheap (no per-candidate terrain/tile lookup) since it
- * runs over every loaded POI, not just the ones that end up rendered. */
-function poi_flat_pos(poi: POI, page_idx: IVec): PVF3 {
-  return local_world_to_canonical({ i: 0n, f: 0n }, poi.center, FROM_L3_IDX(page_idx));
+/** center.xyz (page-local real units, overture_provider.ts) resolved against
+ * the page's own global corner, untouched. The index grounds it and then
+ * snaps it to a cell centre, so nothing here adds a half of its own — that
+ * used to be a lone `+ 0.5` on Z, which is the right number at exactly one
+ * tier and on exactly one axis.
+ *
+ * Handed to the index as a callback rather than imported there, so the index
+ * does not have to know how a POI is addressed. */
+function poi_flat_pos(out: PVF3, poi: POI, page_idx: IVec): PVF3 {
+  return local_world_to_canonical(out, poi.center, FROM_L3_IDX(page_idx));
 }
 
-/** Squared XY distance between two absolute PVF3 positions, in real [u]
- * units — a ranking distance, not a precise one: `b`'s own fractional (`f`)
- * offset is ignored (only `a.f` is kept), which is at most ~1u of error,
- * irrelevant for sorting hundreds of candidates that are typically tens to
- * hundreds of u apart. */
-function flat_dist2(a: PVF3, b: PVF3): f64 {
-  const local: PVF3 = { i: ivec.sub(a.i, b.i), f: a.f };
-  const dx = pvf3.to_real(pvf3.X(local));
-  const dy = pvf3.to_real(pvf3.Y(local));
-  return dx * dx + dy * dy;
-}
-
-/** Up to MAX_RENDERED POIs, deduped by id — a real feature near a page
- * boundary can come back from more than one page's own bbox query
- * (adjacent pages' queries legitimately overlap at the edges), and without
- * this it would render twice, once per page, at the exact same position
- * (`checkpoint/20260107-float`'s own PoiLayer hit the identical case and
- * solved it the same way — dedupe by id, keep whichever copy is seen
- * first). Distance (FAR_END below) only rules out what's too far to ever
- * render — final selection is select_visible_billboards' own job (real
- * camera-frustum membership, then a stable per-id cut if still over
- * budget), not poi_extractor.ts's own rank field: rank is "how notable is
+/** The reach, squared. It only rules out what is too far to ever draw —
+ * which of the survivors actually draws is select_visible_billboards' job
+ * (frustum membership, then nearest-first greedy placement against the
+ * screen), and never poi_extractor.ts's rank field: rank is "how notable is
  * this in general", not "is this visible right now". */
 const FAR_END_U2 = FAR_END * FAR_END;
 
-// FAR_END=320 is under L3_RANGE=1024, so a page beyond Chebyshev distance 1
-// from the camera's own page can never contain anything within FAR_END.
-const NEARBY_PAGE_RADIUS: u32 = 1;
+/**
+ * Everything a tick works in, allocated once.
+ *
+ * `$hits` is sized for the query's *box*, not its circle. The index cell is
+ * FAR_END, so a radius-FAR_END query touches three cells on each axis and
+ * reports a 960u box before this file narrows it back to the circle. The
+ * densest page in the bake is 12544 POI in one 1024u page, which puts that
+ * box at ~11k, so this is the next power of two above it — a query that
+ * filled the buffer would truncate in cell order, which is unrelated to
+ * distance, and drop near badges to keep far ones.
+ *
+ * The batch grows instead, since what survives the circle is a quarter of
+ * that and a frame's candidates are not a residency set (batch.ts).
+ */
+const $hits = new Uint32Array(16384);
+const $batch = new BillboardBatch();
+const $nodes = new CellNodes(4096);
+const $field = new BillboardField(BILLBOARD_ORDER.poi);
+const $kept = new Uint32Array(MAX_RENDERED);
 
 /** absolute, projected into local_world_frame's own origin (map_origin) —
  * the frame select_visible_billboards' local_x/y/z expects (see
@@ -216,100 +146,257 @@ function local_pos_from_absolute(absolute: PVF3, map_origin: IVec): [f64, f64, f
   return [pvf3.to_real(pvf3.X(local)), pvf3.to_real(pvf3.Y(local)), pvf3.to_real(pvf3.Z(local))];
 }
 
+/**
+ * What the last placement run cost and how much it threw away, for the dev
+ * ledger. Not DEV-gated: two `performance.now()` calls at the placement rate
+ * are free, and instrumentation that only exists in dev is instrumentation
+ * that cannot answer a question about production.
+ *
+ * `hits` is what the spatial query returned, `candidates` what survived the
+ * reach circle and got grounded, `kept` what is mounted. The gap between the
+ * middle two is the per-candidate terrain work, which is what clustering
+ * would be for.
+ */
+export const poi_place_stats = { ms: 0, max_ms: 0, sync_ms: 0, max_sync_ms: 0, runs: 0, hits: 0, max_hits: 0, candidates: 0, kept: 0, absorbed: 0, biggest: 0 };
+
+/** What the layer hands React. The anchor comes from the index rather than
+ * being resolved again per badge: it is already grounded there, and one
+ * rebuild replaces what used to be MAX_RENDERED separate terrain
+ * subscriptions. */
+type PoiPick = {
+  /** The anchor in the render frame, which is what the field writes into a
+   * slot. The absolute address is still resolved above it, because that is
+   * where the lattice lives and where the identity comes from — this is the
+   * one conversion, done once per drawn badge. */
+  local_x: f64;
+  local_y: f64;
+  local_z: f64;
+  /** The lattice node this badge is, as tier and *absolute* address. It is
+   * the badge's identity: stable while the cell is populated at that tier,
+   * and unmoved by the camera, by which member happens to be nearest, or by
+   * the frame origin. Keying on a POI instead meant a new sprite, material
+   * and CanvasTexture every time the nearest one changed, which is a
+   * browser-owned object created and destroyed per camera nudge. */
+  key: string;
+  poi: POI;
+  anchor_i: IVec;
+  anchor_f: bigint;
+  /** How many places this badge stands for, itself included. Above one it is
+   * drawn as a count rather than as any of them: nothing here is a
+   * representative, and `poi` survives only to key the list. */
+  members: u32;
+};
+
 function select_nearby_pois(
   poi_map: ReadonlyMap<IVec, readonly POI[]>,
   map_center: PVF3,
   local_world_frame: THREE.Object3D | null,
   camera: THREE.Camera,
-): { poi: POI; page_idx: IVec }[] {
-  // L3_IDX shifts X/Y/Z together; TO_XY drops Z (matches store.ts's own
-  // page keys). Without it, map_center.i.Z (real elevation) can push
-  // CHEBYSHEV_DIST past NEARBY_PAGE_RADIUS regardless of X/Y distance.
-  const center_page_idx: IVec = TO_XY(L3_IDX(map_center.i));
-  const seen = new Set<string>();
-  const candidates: { poi: POI; page_idx: IVec; absolute: PVF3; dist2: f64 }[] = [];
-
-  for (const [page_idx, pois] of poi_map) {
-    if (CHEBYSHEV_DIST(ivec.sub(page_idx, center_page_idx)) > NEARBY_PAGE_RADIUS) continue;
-    for (const poi of pois) {
-      if (seen.has(poi.id)) continue;
-      seen.add(poi.id);
-      const absolute = poi_flat_pos(poi, page_idx);
-      // Flat distance from map_center, and only as a coarse reach limit —
-      // never as the ranking. It is the wrong measure for ranking twice
-      // over: it is measured from the look-at target rather than from the
-      // eye, and it is a projection onto the ground rather than a distance
-      // in space. At an oblique polar the camera sits well off to the
-      // target's -Y side (camera/orbit.ts), so the POIs nearest the *eye*
-      // are the ones furthest from the *target* on that side, and ranking
-      // this way drops exactly the badges filling the bottom of the screen
-      // while keeping ones near the horizon. Looking straight down the two
-      // measures agree, which is why the artifact vanishes there.
-      if (flat_dist2(absolute, map_center) > FAR_END_U2) continue;
-      candidates.push({ poi, page_idx, absolute, dist2: 0 });
-    }
-  }
-
+  viewport_w: f64,
+  viewport_h: f64,
+): PoiPick[] {
+  const t0 = performance.now();
   const map_origin = get_local_world_origin(map_center);
-  // Grounded, not the flat z=0 poi_flat_pos gives: the frustum test and the
-  // ranking both have to use the position the badge is actually at. A POI on
-  // a hill tested at z=0 sits far below where it is drawn, and at an oblique
-  // angle that vertical error moves it across the screen — which is the same
-  // reason this only ever misbehaved away from straight-down.
-  for (const c of candidates) {
-    const grounded = with_ele({ i: 0n, f: 0n }, c.absolute.i, c.absolute.f);
-    if (grounded) c.absolute = grounded;
+
+  // Rebuilt when a page arrives or leaves, when the frame origin crosses an
+  // L4 boundary, or when the camera leaves the disc the last build covers.
+  // Everything below works on what a radius query returns rather than on
+  // everything loaded — see poi_index.ts.
+  // Pixels per world unit, times distance — the distance-free half of the
+  // projection, so each candidate below resolves its own tier with a divide.
+  const persp = camera as THREE.PerspectiveCamera;
+  const px_k = viewport_h / (2 * Math.tan((persp.fov * Math.PI) / 360));
+  sync_poi_index(poi_map, map_center, map_origin, local_pos_from_absolute, poi_flat_pos);
+  const t_sync = performance.now();
+  const [cx, cy, cz] = local_pos_from_absolute(map_center, map_origin);
+  const hits = query_poi_index(cx, cy, cz, FAR_END, $hits);
+
+  $batch.reset();
+  // Two passes, and they are different questions. The first files every
+  // candidate under the lattice node it belongs to at its own tier; the
+  // second offers those nodes, not the candidates, to the screen. Nothing
+  // between them is a POI — a node is an address and a count.
+  $nodes.begin();
+  for (let h = 0; h < hits; h++) {
+    const i = $hits[h];
+
+    // The exact reach, isotropic, on the frame-local lanes the index already
+    // holds — plain float arithmetic with no PVF3 and no BigInt in the loop.
+    // Both sides carry a real z: entries are grounded at build time
+    // (poi_index.ts) and map_center sits on the terrain surface, so a POI in
+    // a valley below the camera is correctly further away than one at eye
+    // level the same distance across.
+    const dx = poi_x(i) - cx, dy = poi_y(i) - cy, dz = poi_z(i) - cz;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > FAR_END_U2) continue;
+
+    // Indexed before its tile arrived, so its z is the bake's flat zero and
+    // drawing it would put the badge underground. It stays in the index —
+    // a rebuild on tile arrival is what grounds it.
+    if (!poi_grounded(i)) continue;
+
+    // Its own tier, from its own distance. Not one tier for the frame: a
+    // perspective view holds near and far at once, and a single tier is
+    // wrong at whichever end it was not chosen for.
+    $nodes.add(poi_cell_x(i), poi_cell_y(i), poi_cell_z(i), tier_shamt(px_k, Math.sqrt(d2)), i, d2);
   }
 
-  // local_world_frame_ref.current starts null until mount. Falls back to the
-  // flat measure, which is all that is available without a frame to resolve
-  // world positions against.
+  $batch.reset();
+  for (let n = 0; n < $nodes.count; n++) {
+    const shamt = $nodes.shamt[n];
+    const members = $nodes.members[n];
+    const rep = $nodes.first[n];
+
+    // The badge stands at the centre of the cell, on all three axes, with
+    // the half following the tier. Integers plus a power-of-two half, so it
+    // is exact — and every member of the cell resolves to it, which is what
+    // stops the badge moving when the camera does.
+    const nx = $nodes.centre($nodes.key_x[n], shamt);
+    const ny = $nodes.centre($nodes.key_y[n], shamt);
+    const nz = $nodes.centre($nodes.key_z[n], shamt);
+
+    const m = members > 1 ? cluster_badge_metrics(members) : poi_badge_metrics(poi_at(rep));
+    $batch.push(n, nx, ny, nz, m.logical_w, m.collide_h, m.center_y, poi_tiebreak(rep));
+  }
+
+  // local_world_frame_ref.current starts null until mount. Without a frame
+  // there is no world position to resolve, so this falls back to the flat
+  // measure and the near ones — which is all that is available.
   if (!local_world_frame) {
-    for (const c of candidates) c.dist2 = flat_dist2(c.absolute, map_center);
-    candidates.sort((a, b) => a.dist2 - b.dist2);
-    return candidates.slice(0, MAX_RENDERED);
+    const out: PoiPick[] = [];
+    for (let i = 0; i < $batch.count && out.length < MAX_RENDERED; i++) out.push(pick_of($batch.src[i], 0, map_origin));
+    record_place(t0, t_sync, hits, out.length);
+    return out;
   }
 
-  const billboard_candidates: BillboardCandidate<{ poi: POI; page_idx: IVec }>[] = candidates.map((c) => {
-    const [x, y, z] = local_pos_from_absolute(c.absolute, map_origin);
-    return { item: { poi: c.poi, page_idx: c.page_idx }, id: c.poi.id, local_x: x, local_y: y, local_z: z };
-  });
-  return select_visible_billboards(billboard_candidates, local_world_frame, camera, MAX_RENDERED);
+  const kept = select_visible_billboards($batch, local_world_frame, camera, MAX_RENDERED, viewport_w, viewport_h, $kept);
+
+  // The one place a record is built, and it is built for React rather than
+  // for this pipeline: everything above is an index.
+  const out: PoiPick[] = [];
+  let absorbed = 0, biggest = 0;
+  for (let k = 0; k < kept; k++) {
+    const i = $kept[k];
+    // Two counts, added rather than either replacing the other: what the
+    // lattice already gathered, and what the screen gathered on top of it.
+    // Only the last stage has to be lossless, so an earlier one may change
+    // how something is represented but never how many it stands for.
+    const pick = pick_of($batch.src[i], $batch.absorbed[i], map_origin);
+    absorbed += pick.members - 1;
+    if (pick.members > biggest) biggest = pick.members;
+    out.push(pick);
+  }
+  poi_place_stats.absorbed = absorbed;
+  poi_place_stats.biggest = biggest;
+  record_place(t0, t_sync, hits, kept);
+  return out;
 }
 
-/** One POI's own absolute anchor — poi_flat_pos, then grounded to the real
- * terrain surface: center.z is always 0 coming from the bake
- * (overture_provider.ts zeroes it deliberately, since a POI's real height
- * was never the bake's concern), so without this a badge would sit at the
- * page's own Z origin instead of floating above wherever the ground
- * actually is. */
-function poi_anchor(poi: POI, page_idx: IVec): PVF3 | null {
-  const flat = poi_flat_pos(poi, page_idx);
-  return with_ele(flat, flat.i, flat.f);
-}
+const $node_addr: PVF3 = { i: 0n, f: 0n };
 
-function PoiBadge({ poi, page_idx }: { poi: POI; page_idx: IVec }) {
-  // poi_anchor can come back null on first evaluation if this page's terrain
-  // hasn't loaded yet — a real race against use_poi_fetcher.ts's own
-  // independent fetch, most likely to land badly on a cold cache. Without
-  // this, nothing ever re-renders this badge once terrain does arrive (this
-  // component keeps its identity across PoiLayer's own re-selections as long
-  // as it stays in the top MAX_RENDERED, so a plain useMemo would stay stuck
-  // at its first, terrain-less null forever). Same fix markers/location_puck.tsx
-  // already applies for the same class of race.
-  const [ground_tick, set_ground_tick] = useState(0);
-  useEffect(() => register_tile_interest((p) => p === page_idx, () => set_ground_tick((t) => t + 1)), [page_idx]);
-
-  const anchor = useMemo(() => poi_anchor(poi, page_idx), [poi, page_idx, ground_tick]);
-  const built = useMemo(() => build_poi_badge_canvas(poi), [poi]);
-
-  if (!anchor) return null;
-
-  return (
-    <AnchorNode i={anchor.i} f={anchor.f}>
-      <Billboard built={built} base_z={ANCHOR_Z_U} render_order={BILLBOARD_ORDER.poi} />
-    </AnchorNode>
+/**
+ * One node turned into the record React mounts — the only object this file
+ * builds, and it builds as many as are drawn rather than one per candidate.
+ *
+ * The anchor is resolved here and nowhere else: a lattice address plus the
+ * half its tier is worth. One BigInt per drawn badge, against the thousands
+ * per tick the old chain converted.
+ */
+function pick_of(node: u32, absorbed_extra: u32, map_origin: IVec): PoiPick {
+  const shamt = $nodes.shamt[node];
+  const base: IVec = ivec.add(
+    map_origin,
+    ivec.gather(BigInt($nodes.key_x[node] << shamt), BigInt($nodes.key_y[node] << shamt), BigInt($nodes.key_z[node] << shamt)),
   );
+  const anchor = SPAN_CENTER($node_addr, base, shamt);
+  const [lx, ly, lz] = local_pos_from_absolute(anchor, map_origin);
+  return {
+    local_x: lx,
+    local_y: ly,
+    local_z: lz,
+    // From the absolute address, never from the node's own coordinates.
+    // Those are relative to the frame origin, which jumps 4096u on an L4
+    // crossing — so the same physical cell would take a new identity every
+    // time the origin moved, and every badge on screen would remount at
+    // once. The anchor does not move, only the name for it would have.
+    key: `${shamt}:${anchor.i}`,
+    poi: poi_at($nodes.first[node]),
+    anchor_i: anchor.i,
+    anchor_f: anchor.f,
+    members: $nodes.members[node] + absorbed_extra,
+  };
+}
+
+function record_place(t0: f64, t_sync: f64, hits: u32, kept: u32): void {
+  const ms = performance.now() - t0;
+  const sync_ms = t_sync - t0;
+  poi_place_stats.sync_ms = sync_ms;
+  if (sync_ms > poi_place_stats.max_sync_ms) poi_place_stats.max_sync_ms = sync_ms;
+  poi_place_stats.ms = ms;
+  // A worst case, not a percentile. Placement runs a handful of times a
+  // second, so a window would hold too few samples to say anything a max
+  // does not — and the question this answers is whether one run can ever
+  // cost a frame, which is a max question.
+  if (ms > poi_place_stats.max_ms) poi_place_stats.max_ms = ms;
+  if (hits > poi_place_stats.max_hits) poi_place_stats.max_hits = hits;
+  poi_place_stats.runs++;
+  poi_place_stats.hits = hits;
+  poi_place_stats.candidates = $batch.count;
+  poi_place_stats.kept = kept;
+}
+
+/**
+ * How long placement is allowed to lag the camera.
+ *
+ * Placement does not have to run every frame — Mapbox GL's own conclusion,
+ * and the implementation this file replaced reached it independently: it
+ * promoted the nearest few to the expensive treatment every 0.2s (see this
+ * file's own header). What the interval buys here is the whole per-candidate
+ * pass, which in the densest part of the bake is thousands of terrain
+ * lookups; at 60fps this is an 12x reduction in how often that runs.
+ *
+ * A badge is a text label rather than a cursor, so it arriving a frame or
+ * two after the camera settles reads as nothing at all. Note also that the
+ * anchors themselves never lag: a mounted badge is positioned by AnchorNode
+ * every frame regardless. What waits is only the decision about which set is
+ * mounted.
+ */
+const PLACEMENT_MS = 200;
+
+/**
+ * A counter that advances at most every PLACEMENT_MS while its inputs keep
+ * changing, and once more after they stop.
+ *
+ * Throttle rather than debounce, and the difference is the point: a debounce
+ * re-arms on every camera tick, so a camera that never comes to rest would
+ * never place at all. The trailing run is what makes the final state right
+ * regardless of when the movement ended.
+ */
+function use_placement_epoch(...inputs: unknown[]): u32 {
+  const [epoch, set_epoch] = useState<u32>(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const last_ms = useRef<f64>(0);
+
+  useEffect(() => {
+    if (timer.current !== null) return;
+    const wait = Math.max(0, PLACEMENT_MS - (performance.now() - last_ms.current));
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      last_ms.current = performance.now();
+      set_epoch((e) => e + 1);
+    }, wait);
+  }, inputs);
+
+  // Clearing the handle is not enough — the ref has to be released too, or a
+  // StrictMode remount finds a timer that is already cancelled, takes the
+  // early return above, and never schedules another.
+  useEffect(() => () => {
+    if (timer.current === null) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+
+  return epoch;
 }
 
 export function PoiLayer() {
@@ -320,19 +407,71 @@ export function PoiLayer() {
   // changing map_center.
   const view_state = useCameraStore((state) => state.view_state);
   const { local_world_frame_ref } = useFrameRefs();
-  const { camera } = useThree();
+  const { camera, size } = useThree();
 
+  const epoch = use_placement_epoch(view_state, map_center);
+
+  // One subscription for the whole layer, not one per mounted badge. Terrain
+  // arriving is what grounds an entry indexed before its tile did, and the
+  // index is where grounding happens now — so the response is to rebuild it
+  // and re-place, rather than to have each badge re-probe for itself.
+  const [ground_tick, set_ground_tick] = useState<u32>(0);
+  useEffect(
+    () =>
+      register_tile_interest(() => true, () => {
+        invalidate_poi_index();
+        set_ground_tick((t) => t + 1);
+      }),
+    [],
+  );
+
+  // Deliberately not keyed on view_state or map_center: the epoch above is,
+  // and it is what decides when the camera has moved enough to be worth
+  // re-placing. Everything that is still keyed directly is a change no
+  // amount of waiting improves — a page arriving, the layer being switched
+  // on, a resize.
   const selected = useMemo(() => {
     if (!map_center || !show_poi) return [];
-    return select_nearby_pois(poi_map, map_center, local_world_frame_ref.current, camera);
+    return select_nearby_pois(poi_map, map_center, local_world_frame_ref.current, camera, size.width, size.height);
     // local_world_frame_ref/camera: stable identities, not reactive state.
-  }, [poi_map, map_center, show_poi, view_state]);
+  }, [poi_map, show_poi, size.width, size.height, epoch, ground_tick]);
 
-  if (!show_poi) return null;
+  // The badges themselves are written, not declared. `selected` changing is
+  // a list of slots to fill, so this is where the imperative half is driven
+  // from — and the only React work a placement causes is this effect, not a
+  // subtree per badge.
+  useEffect(() => {
+    $field.begin();
+    for (const pick of selected) {
+      const built = pick.members > 1 ? cluster_badge(pick.members) : poi_badge(pick.poi);
+      // Null when the atlas is full. Nothing is drawn for it this pass,
+      // which is the honest answer — the alternative is a rectangle
+      // belonging to some other badge.
+      if (!built) continue;
+      $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas.texture, built.uv, built.logical_w, built.logical_h, built.center_y);
+    }
+    $field.end();
+    // frameloop="demand": placement can finish on a tick where nothing else
+    // asked for a frame — the trailing run after the camera has already come
+    // to rest — so what it changes has to ask for one itself.
+    invalidate();
+  }, [selected]);
 
-  return (
-    <>
-      {selected.map(({ poi, page_idx }) => <PoiBadge key={poi.id} poi={poi} page_idx={page_idx} />)}
-    </>
-  );
+  // One loop for every badge, where there used to be one useFrame per badge.
+  useFrame(({ camera, size }) => $field.update(camera, size.height));
+
+  // Attached to the frame the batch's coordinates are relative to, rather
+  // than to an anchor of its own: every badge is within FAR_END of the
+  // camera, so they all share the L4 cell the frame is aligned to, and a
+  // per-badge AnchorNode was resolving the same anchor a few hundred times.
+  useLayoutEffect(() => {
+    const frame = local_world_frame_ref.current;
+    if (!frame) return;
+    frame.add($field.group);
+    return () => {
+      frame.remove($field.group);
+    };
+  }, [local_world_frame_ref.current]);
+
+  return null;
 }

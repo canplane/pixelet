@@ -30,8 +30,7 @@ const CATEGORIES: Record<string, CategoryInfo> = {
   },
   poi: {
     bound: "network",
-    note:
-      "Measured 2026-09-09: mean net 269.3ms vs JSON.parse 2.2ms on ~114KB pages (295KB worst). Latency-bound; lever is priority order, not parallelism.",
+    note: "Measured 2026-09-09: mean net 269.3ms vs JSON.parse 2.2ms on ~114KB pages (295KB worst). Latency-bound; lever is priority order, not parallelism.",
   },
   geocode: {
     bound: "network",
@@ -39,8 +38,7 @@ const CATEGORIES: Record<string, CategoryInfo> = {
   },
   search: {
     bound: "network",
-    note:
-      "the one feature with no static bake — always a live API round trip, and the user is watching. Runs ahead of every streaming category on purpose.",
+    note: "the one feature with no static bake — always a live API round trip, and the user is watching. Runs ahead of every streaming category on purpose.",
   },
 };
 

@@ -62,7 +62,7 @@
  */
 
 import { BIT64, FIELD_MASK64, type u32, type u64 } from "@xpute/core/kit/word.ts";
-import { type IVec, ivec } from "../space/pvf3/mod.ts";
+import { type IVec, ivec, type PVF3, pvf3 } from "../space/pvf3/mod.ts";
 
 const { add, fill } = ivec;
 
@@ -121,6 +121,30 @@ export const L2_CENTER = (addr: IVec): IVec => L2_BASE(addr) | (fill(L2_RANGE) >
 export const L3_CENTER = (addr: IVec): IVec => L3_BASE(addr) | (fill(L3_RANGE) >> 1n);
 export const L4_CENTER = (addr: IVec): IVec => L4_BASE(addr) | (fill(L4_RANGE) >> 1n);
 // export const L5_CENTER = (addr: IVec): IVec => L5_BASE(addr) | (fill(L5_RANGE) >> 1n);
+
+/**
+ * The centre of the cell that contains `addr`, for a span of `1 << shamt`
+ * canonical units — the parameterised form of the three CENTER helpers
+ * above, for a span resolved at runtime (a render tier, say) rather than
+ * named at compile time.
+ *
+ * PVF3 rather than IVec, because the half is sub-integer at the base level:
+ * a 1u cell's centre is 0.5u and lives in the fractional lane. L2/L3/L4 can
+ * OR their half into the integer lane only because their spans are 64u and
+ * up; this is the same expression written where it also holds at shamt 0.
+ *
+ * All three axes, symmetric. A cell is a cube and its centre is its centre —
+ * X/Y quantised while Z is left raw (or the reverse) is two coordinate
+ * systems in one point, and everything that marks a cell here already avoids
+ * it: objects/geometry.ts's anchor_center adds the half on every axis, and
+ * hover, placed cubes and the location puck all read a cell the same way.
+ */
+export function SPAN_CENTER(out: PVF3, addr: IVec, shamt: u32): PVF3 {
+  out.i = shamt === 0 ? addr : addr & ~fill(FIELD_MASK64(shamt));
+  out.f = 0n;
+  const half = pvf3.from_real(Number(BIT64(shamt)) / 2);
+  return pvf3.gather(out, pvf3.X(out) + half, pvf3.Y(out) + half, pvf3.Z(out) + half);
+}
 
 export const L2_LIMIT = (addr: IVec): IVec => add(L2_BASE(addr), fill(L2_RANGE));
 export const L3_LIMIT = (addr: IVec): IVec => add(L3_BASE(addr), fill(L3_RANGE));

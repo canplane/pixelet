@@ -17,6 +17,10 @@
  */
 
 import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
+import { poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
+import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
+import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/modules/world/poi/poi_badge.ts";
+import { billboard_dropped } from "@/modules/world/billboard/frustum_budget.ts";
 import { mesh_pool_stat } from "@/render/layer/pipeline/mesh_pool.ts";
 import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
 import { chunk_retention, lod_build_stats } from "@/modules/world/chunk_node.ts";
@@ -64,9 +68,7 @@ function task_line(rec: TaskRecord): string {
   const queued = rec.start_ms !== null ? rec.start_ms - rec.enqueue_ms : null;
   const ran = rec.start_ms !== null ? rec.end_ms - rec.start_ms : null;
   const timing = queued === null ? "" : ` q${n1(queued)} r${n1(ran!)}`;
-  return `[${lpad(n1(rec.enqueue_ms), 9)}] ${pad(rec.key, 34)} ${pad(rec.outcome, 7)} ${lpad(n1(total), 8)}ms${timing} p${rec.priority}${
-    phases_text(rec.phases)
-  }`;
+  return `[${lpad(n1(rec.enqueue_ms), 9)}] ${pad(rec.key, 34)} ${pad(rec.outcome, 7)} ${lpad(n1(total), 8)}ms${timing} p${rec.priority}${phases_text(rec.phases)}`;
 }
 
 function signed(n: number): string {
@@ -78,11 +80,7 @@ function signed(n: number): string {
  * with no mounts and a small scheduler pass has to be spending the time on
  * something it *created*, and this is where that shows up. */
 function frame_line(s: FrameSample, prev?: FrameSample): string {
-  const d = prev
-    ? `  Δgeom ${signed(s.geometries - prev.geometries)} Δtex ${signed(s.textures - prev.textures)} Δheap ${
-      signed(s.heap_mb - prev.heap_mb)
-    }MB`
-    : "";
+  const d = prev ? `  Δgeom ${signed(s.geometries - prev.geometries)} Δtex ${signed(s.textures - prev.textures)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB` : "";
   return `[${lpad(n1(s.t), 9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(Math.max(0, s.dt_ms - s.task_ms))}` +
     `  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)} ` +
     `(rck ${n1(s.cpu.recheck_ms)} cmt ${n1(s.cpu.commit_ms)})  ` +
@@ -146,39 +144,47 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `frames n=${frames.length}  over ${n1(seconds)}s`,
     `  dt      p50 ${n1(pct(dt, 0.5))}  p95 ${n1(pct(dt, 0.95))}  max ${n1(dt[dt.length - 1])} ms   over-budget ${over} (${Math.round(over / frames.length * 100)}%)`,
     `  task    p50 ${n1(pct(sorted((f) => f.task_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.task_ms), 0.95))} ms   (main thread's own rAF task)`,
-    `  offthd  p50 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.5))}  p95 ${
-      n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.95))
-    } ms   (vsync/compositor/GPU/GC)`,
-    `  gpu     p50 ${n1(pct(sorted((f) => f.gpu_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.gpu_ms), 0.95))} ms${
-      last.gpu_ms === 0 ? "   (timer unsupported or unresolved)" : ""
-    }`,
+    `  offthd  p50 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.5))}  p95 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.95))} ms   (vsync/compositor/GPU/GC)`,
+    `  gpu     p50 ${n1(pct(sorted((f) => f.gpu_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.gpu_ms), 0.95))} ms${last.gpu_ms === 0 ? "   (timer unsupported or unresolved)" : ""}`,
     `  sched   p95 ${n1(pct(sched, 0.95))}  max ${n1(sched[sched.length - 1])} ms`,
     `  cpu     rck p95 ${n1(pct(rck, 0.95))}  cmt p95 ${n1(pct(cmt, 0.95))}  rnd p95 ${n1(pct(rnd, 0.95))} ms`,
     `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  tex ${last.textures}  fill ${(last.px / 1e6).toFixed(1)}Mpx x${last.fx_passes}`,
     `  mem     heap ${last.heap_mb}MB (${heap_delta >= 0 ? "+" : ""}${heap_delta})  tiles ${last.tile_pages} (~${last.tile_pages * TILE_DECODED_MB}MB)  poi ${last.poi_count}`,
+    `  place   poi ${n1(poi_place_stats.ms)} max ${
+      n1(poi_place_stats.max_ms)
+    } ms over ${poi_place_stats.runs} runs   hit ${poi_place_stats.hits} (max ${poi_place_stats.max_hits}) -> cand ${poi_place_stats.candidates} -> kept ${poi_place_stats.kept} (+${poi_place_stats.absorbed} absorbed, biggest ${poi_place_stats.biggest}${
+      billboard_dropped() > 0 ? `, DROPPED ${billboard_dropped()}` : ""
+    })`,
+    `  split   sync ${n1(poi_place_stats.sync_ms)} max ${n1(poi_place_stats.max_sync_ms)} ms   badge ${poi_badge_build_stats.metrics} measured / ${poi_badge_build_stats.builds} built ${
+      n1(poi_badge_build_stats.ms)
+    }ms total, ${poi_badge_count()} cached`,
+    `  atlas   ${badge_atlas.stats().size}px  ${badge_atlas.stats().entries} entries  ${badge_atlas.stats().shelves} shelves  ${
+      Math.round(badge_atlas.stats().used_px / (badge_atlas.stats().size * badge_atlas.stats().size) * 100)
+    }% used  ${badge_atlas.stats().repacks} repacks`,
     `  faces   kept ${occlusion_stats.faces_kept} / ${occlusion_stats.faces_possible} (${
       occlusion_stats.faces_possible > 0 ? Math.round(occlusion_stats.faces_kept / occlusion_stats.faces_possible * 100) : 0
     }%)  runs culled ${occlusion_stats.culled}/${occlusion_stats.total_runs}`,
+    `  index   poi ${poi_index_stats().indexed} resident  ${poi_index_stats().rebuilds} rebuilds${poi_index_stats().dropped > 0 ? `  DROPPED ${poi_index_stats().dropped}` : ""}`,
     `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  hit ${last.pool.hit_pct}%  biggest ${Math.round(mesh_pool_stat().max_block_bytes / 1048576)}MB   window scans ${
       frames.reduce((a, f) => a + f.work.scans, 0)
     } bakes ${frames.reduce((a, f) => a + f.work.bakes, 0)} runs ${frames.reduce((a, f) => a + f.work.runs, 0)}`,
-    `  per     commit/bake ${per(commit_total, bakes)}ms  build/krun ${
-      per(lod_build_stats.build_ms, lod_build_stats.build_runs / 1000)
-    }ms  scan/chunk ${per(lod_build_stats.scan_ms, lod_build_stats.scan_count)}ms   (workload-normalised; comparable across sessions)`,
+    `  per     commit/bake ${per(commit_total, bakes)}ms  build/krun ${per(lod_build_stats.build_ms, lod_build_stats.build_runs / 1000)}ms  scan/chunk ${
+      per(lod_build_stats.scan_ms, lod_build_stats.scan_count)
+    }ms   (workload-normalised; comparable across sessions)`,
     `  rate    ${n1(bakes / seconds)} bakes/s  ${n1(scans / seconds)} scans/s  ${Math.round(runs / seconds / 1000)}k runs/s`,
     `  bands   reused ${band_pool_stats.reused} / ${band_pool_stats.reused + band_pool_stats.allocated} (${
-      band_pool_stats.reused + band_pool_stats.allocated > 0
-        ? Math.round(band_pool_stats.reused / (band_pool_stats.reused + band_pool_stats.allocated) * 100)
-        : 0
+      band_pool_stats.reused + band_pool_stats.allocated > 0 ? Math.round(band_pool_stats.reused / (band_pool_stats.reused + band_pool_stats.allocated) * 100) : 0
     }%)  ~1.31MB each; a miss is that much garbage`,
-    `  retain  ${(() => {
-      const r = chunk_retention();
-      return `nodes ${r.nodes}  runsets ${r.run_sets} (${r.run_set_mb}MB)  tiers ${r.tiers}  decor ${r.decor_steps} steps / ${r.decor_instances} instances`;
-    })()}`,
+    `  retain  ${
+      (() => {
+        const r = chunk_retention();
+        return `nodes ${r.nodes}  runsets ${r.run_sets} (${r.run_set_mb}MB)  tiers ${r.tiers}  decor ${r.decor_steps} steps / ${r.decor_instances} instances`;
+      })()
+    }`,
     `  lod     chunks ${last.lod.chunks}  in-frustum ${last.lod.in_frustum}  pending ${last.lod.pending}  settling ${last.lod.settling}  blending ${last.lod.blend_active}`,
-    `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} rerender ${last.mounts.rendered}   window total +${
-      frames.reduce((a, f) => a + f.mounts.added, 0)
-    }/-${frames.reduce((a, f) => a + f.mounts.removed, 0)}`,
+    `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} rerender ${last.mounts.rendered}   window total +${frames.reduce((a, f) => a + f.mounts.added, 0)}/-${
+      frames.reduce((a, f) => a + f.mounts.removed, 0)
+    }`,
     `  queue   terrain ${last.q_terrain}  poi ${last.q_poi}`,
   ];
 }
@@ -210,7 +216,7 @@ function tasks_section(tasks: readonly TaskRecord[]): string[] {
   const by = new Map<string, Group>();
   for (const rec of tasks) {
     let g = by.get(rec.category);
-    if (!g) by.set(rec.category, (g = { lat: [], ok: 0, aborted: 0, error: 0, phase_sum: new Map(), phase_n: 0 }));
+    if (!g) by.set(rec.category, g = { lat: [], ok: 0, aborted: 0, error: 0, phase_sum: new Map(), phase_n: 0 });
     if (rec.outcome === "ok") {
       g.ok++;
       g.lat.push(rec.end_ms - rec.enqueue_ms);

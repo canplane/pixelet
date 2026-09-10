@@ -161,7 +161,6 @@ function build_flat_color_lookup(lookup: GroundColorLookup): FlatGroundColorLook
 
 export const GROUND_COLOR_LOOKUP_FLAT: FlatGroundColorLookup = build_flat_color_lookup(GROUND_COLOR_LOOKUP);
 
-
 // ---- texture-array ground layers (low-spec / texture-pack shared source) ----
 //
 // Replaces decode_ground_rgba/GROUND_COLOR_LOOKUP's single pre-baked mip

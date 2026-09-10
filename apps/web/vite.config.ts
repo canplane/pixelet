@@ -41,11 +41,43 @@ function fullReloadOnCoreChange() {
   return {
     name: "full-reload-core",
     enforce: "pre" as const,
+
+    // Vite's watcher covers `root`, which here is apps/web — so nothing under
+    // packages/ was ever watched, handleHotUpdate below never ran for a core
+    // file, and the server went on serving the transform it had cached at
+    // first import. Editing a core file appeared to do nothing at all, and a
+    // browser reload did not help because the staleness was on the server.
+    // Confirmed rather than guessed: a core edit produced no line in the dev
+    // log, while an apps/web edit in the same second produced two.
+    configureServer(server) {
+      for (const pat of corePathIncludes) {
+        server.watcher.add(path.resolve(__dirname, "..", "..", pat.replace(/^\/|\/$/g, "")));
+      }
+    },
+
     handleHotUpdate(ctx: HmrContext) {
       const file = ctx.file;
 
       if (isCoreFile(file)) {
+        // Invalidate by hand, because Vite cannot make the connection
+        // itself. The deno plugin resolves a core import to a virtual id —
+        // `\0deno::TypeScript::@pxl/shared/...::/abs/path.ts` — and the
+        // module graph is keyed by resolved id while onFileChange looks up
+        // by file path, so a changed core file leaves its transform cached
+        // under a name nothing matched. The full-reload below then fetched
+        // the same stale module again, which is why editing a core file
+        // looked like editing nothing at all and a browser reload did not
+        // help. The absolute path is inside the virtual id, so matching on
+        // it is enough to find them.
+        for (const mod of ctx.server.moduleGraph.idToModuleMap.values()) {
+          if (mod.id?.includes(file)) ctx.server.moduleGraph.invalidateModule(mod);
+        }
         ctx.server.ws.send({ type: "full-reload" });
+        // Vite prints "page reload" for the ones it decides itself and says
+        // nothing about this one, so without a line here a core edit looks
+        // exactly like a core edit that was never noticed — which is what it
+        // was, before configureServer above put packages/ under the watcher.
+        ctx.server.config.logger.info(`core reload ${path.relative(path.resolve(__dirname, "..", ".."), file)}`, { timestamp: true });
         return [];
       }
       // Returning [] here (even though it's "empty") tells Vite "no
@@ -152,9 +184,7 @@ export default defineConfig(({ mode }) => {
       // Each prefix forwarded whole and unrewritten.
       proxy: Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
         route.path,
-        remoteOrigin && !route.local_only
-          ? { target: remoteOrigin, changeOrigin: true }
-          : { target: apiBase, changeOrigin: true, ws: route.ws },
+        remoteOrigin && !route.local_only ? { target: remoteOrigin, changeOrigin: true } : { target: apiBase, changeOrigin: true, ws: route.ws },
       ])),
     },
 

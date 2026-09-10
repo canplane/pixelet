@@ -108,9 +108,7 @@ export class ObjectWorldLayer implements WorldLayer {
       const sz_cells = Math.max(1, Math.round(obj.size / U_PER_CELL));
       const cx1 = Math.min(CHUNK_CELL_SPAN, cx0 + sz_cells);
       const cy1 = Math.min(CHUNK_CELL_SPAN, cy0 + sz_cells);
-      const material: VoxelMaterial = obj.kind === "air"
-        ? { material_class: MaterialClass.AIR, r: 0, g: 0, b: 0, layer_idx: NO_LAYER }
-        : resolve_solid_material(obj.color_id);
+      const material: VoxelMaterial = obj.kind === "air" ? { material_class: MaterialClass.AIR, r: 0, g: 0, b: 0, layer_idx: NO_LAYER } : resolve_solid_material(obj.color_id);
 
       const sub_sz = is_sub_cell ? pack_sub_cell_fraction(obj.size / U_PER_CELL) : SUB_CELL_NONE;
       const sub_ox = is_sub_cell ? pack_sub_cell_fraction((local_x - cx0 * U_PER_CELL) / U_PER_CELL) : 0;
