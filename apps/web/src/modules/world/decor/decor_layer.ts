@@ -1,11 +1,10 @@
 // @pxl/web/modules/world/decor/decor_layer.ts
 
 /**
- * Decor's own pure build logic and rendering primitive — bakes real GLB
- * geometry across every visible chunk, the same "each block contributes its
- * own real geometry into one merged per-chunk buffer" model chunk_mesher.ts
- * uses for cube content (instanced_model.ts's own bake_decor_instances,
- * TIER-1 UNIFICATION below).
+ * Decor's own pure build logic — what real GLB models stand where, across
+ * every visible chunk, at the tier that chunk is showing. Drawing them is
+ * field.ts's (one instanced mesh per variant for the whole world); this file
+ * decides only what exists.
  *
  * As of 2026-09-05's second pass (see the merged-scheduling paragraph
  * below), decor no longer owns its own scheduled component tree: this file
@@ -54,11 +53,11 @@
  * decor still never blends an instance's own scale/opacity with distance
  * (see DECOR_DENSITY_BY_LOD_STEP below) — it only smears WHERE the
  * population-level thinning happens across space, the same thing cube
- * content's own blend does for its tier pop. Toggled via a plain
- * `THREE.Object3D.visible` flip (render/lod_visibility.ts), not a per-vertex
- * attribute the way cube content's own a_visible works: decor's blend is
- * always whole-mesh (an entire density level's own built set, on or off),
- * so there was never a need for cube's finer per-vertex granularity here.
+ * content's own blend does for its tier pop. Which of the two a chunk shows
+ * is which one it contributes to field.ts, not a flag on a mesh holding the
+ * other: decor's blend is whole-set (an entire density level, on or off), so
+ * it never wanted cube content's per-vertex granularity, and once the mesh
+ * stopped belonging to the chunk there was nothing left to flag.
  *
  * TIER-1 UNIFICATION — DONE (2026-09-05), Minecraft's own block model as the
  * literal reference, not just an inspiration. It's a 3-tier split, not 2 —
@@ -321,8 +320,10 @@ export function build_decor_instances(
 
 /* DecorVariantMesh lived here — one React component per (chunk, bundle,
  * variant, role), thousands live, whose whole body was a useMemo owning a
- * THREE.Mesh and a <primitive> rendering it. chunk_node.ts attaches those
- * meshes directly now (attach_decor), for the same reason the cube meshes
- * moved: a component that only owns a scene object buys nothing and costs a
- * deferred mount. bake_decor_instances and register_decor_mesh, the two
- * things it actually called, are unchanged and now called from there. */
+ * THREE.Mesh and a <primitive> rendering it. It moved into chunk_node.ts for
+ * the same reason the cube meshes did (a component that only owns a scene
+ * object buys nothing and costs a deferred mount), and then stopped being a
+ * mesh at all: field.ts owns one instanced mesh per variant for the whole
+ * world, and a chunk hands it the instances it should draw. What is left here
+ * is what was always the real content of this file — the pure "what would
+ * this chunk look like at this tier" build. */

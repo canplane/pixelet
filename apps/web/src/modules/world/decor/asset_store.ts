@@ -83,11 +83,24 @@ function load_variant(variant: DecorVariantAsset): void {
     load_texture(variant.skin_url).then((texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.flipY = false;
-      // A per-variant skin means a distinct material, but the compiled
-      // program is identical for all of them, hence one shared cache key.
-      // Decor geometry never carries skinning attributes, unlike a
-      // character's — see lit_gltf_material.ts.
-      const material = make_lit_gltf_material(texture, "decor-mesh");
+      // Per skin rather than one key for every decor material.
+      //
+      // The shared key was there because the compiled program is identical
+      // for all of them, which is true of the shader source and not of what
+      // three.js does with it: a material that finds a program already
+      // cached under the key never compiles, so its onBeforeCompile never
+      // runs and — the part that matters — it inherits whatever defines the
+      // first material to compile had. make_lit_gltf_material sets
+      // `emissive: 0xffffff` with an emissiveMap to modulate it, so a
+      // program without USE_EMISSIVEMAP renders that white literally, which
+      // is exactly what a white model is.
+      //
+      // Confirmed by the symptom stopping. The cost is one compiled program
+      // per skin rather than one in total, which at five skins is nothing —
+      // and the sharing it gave up was mostly illusory, since three.js keys
+      // programs by the standard parameters too and these materials would
+      // have shared one anyway.
+      const material = make_lit_gltf_material(texture, `decor-mesh:${variant.skin_url}`);
       set_rim_intensity(material, rim_intensity());
       material_by_url.set(variant.skin_url, material);
       publish();

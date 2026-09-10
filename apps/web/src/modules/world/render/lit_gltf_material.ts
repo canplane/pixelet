@@ -43,13 +43,18 @@ export function make_lit_gltf_material(texture: THREE.Texture, program_cache_key
     emissiveIntensity: light_cfg.FLOOR,
   });
 
-  // Optional: instanced_model.ts's own reason for setting this on decor's
-  // material ("distinct per-variant skin textures mean distinct materials
-  // regardless, but the compiled WebGLProgram itself is identical for
-  // every one of them") doesn't automatically hold for every caller — a
-  // skinned mesh (characters) compiles real additional shader code
-  // (USE_SKINNING) a static one (decor) doesn't, so forcing one shared key
-  // across both kinds would be wrong. Left to the caller to decide.
+  // Optional, and a key shared across materials is a trap rather than an
+  // optimisation. A material that finds a program already cached under the
+  // key never compiles: its onBeforeCompile never runs, and it draws with
+  // whatever defines the first material to compile had. This recipe sets
+  // `emissive: 0xffffff` and depends on the emissiveMap below to modulate
+  // it, so inheriting a program without USE_EMISSIVEMAP renders that white
+  // literally — which is what white decor models turned out to be.
+  //
+  // Give distinct materials distinct keys. Whatever sharing that gives up
+  // is mostly illusory, since three.js keys programs by the standard
+  // parameters as well, and materials that genuinely match will share one
+  // without being told to.
   if (program_cache_key) material.customProgramCacheKey = () => program_cache_key;
 
   // u_rim_intensity starts at 0 (inject_rim_light_shader's own default) —
