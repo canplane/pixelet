@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/utils/cn.ts";
+import { TextField } from "@/shared/ui/text_field.tsx";
 import { useAppContext } from "@/app/providers/app_context.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { type DecorId, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
@@ -328,34 +329,45 @@ export function ModeBar() {
               <MessageCircle className="w-5 h-5" strokeWidth={2} />
             </motion.button>
 
+            {
+              /*
+              mode="popLayout" takes the exiting child out of flow so the
+              pill can shrink around it — without it the pill never shrinks
+              on collapse at all (measured).
+
+              The entering child must NOT also carry `layout`. It has no
+              previous box on the frame it mounts, so it joins the projection
+              tree as a fresh lead and suppresses the pill's own layout
+              animation. That reads as: the pill springs open the first time
+              and snaps open every time after, because the state only
+              persists once a popLayout exit has happened. Collapse keeps
+              working throughout, which is what makes it look intermittent
+              rather than broken. Measured: 48 -> 436 in one frame on every
+              expand after the first.
+
+              The child is the thing whose mount *causes* the size change.
+              Its own transition is the opacity/x fade; the box belongs to
+              the pill.
+            */
+            }
             <AnimatePresence mode="popLayout">
               {message_expanded && (
                 <motion.div
-                  layout
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   transition={SPRING}
                   className="flex items-center gap-2 min-w-0 pr-2"
                 >
-                  <input
+                  <TextField
                     ref={input_ref}
                     value={message_text}
                     onChange={(e) => set_message_text(e.target.value)}
-                    // isComposing guards against a Korean/IME composition's
-                    // own Enter (confirming a candidate syllable) also
-                    // triggering send.
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.nativeEvent.isComposing) send_message();
-                    }}
+                    onSubmit={send_message}
                     placeholder={t("map.mode_bar.message_placeholder")}
                     autoFocus
                     className={cn(
-                      // text-base on mobile, not text-sm: iOS auto-zooms
-                      // the page when a focused input's font-size is under
-                      // 16px, with no way to opt out that doesn't also
-                      // disable pinch-zoom entirely.
-                      "bg-transparent text-base md:text-sm text-black placeholder:text-black/40 outline-none w-96 max-w-full min-w-0 transition-opacity duration-200",
+                      "bg-transparent text-black placeholder:text-black/40 outline-none w-96 max-w-full min-w-0 transition-opacity duration-200",
                       is_sending && "opacity-0",
                     )}
                   />
@@ -436,10 +448,30 @@ export function ModeBar() {
             </AnimatePresence>
             {!palette_expanded && <div className="w-12 h-full shrink-0" aria-hidden="true" />}
 
+            {
+              /*
+              mode="popLayout" takes the exiting child out of flow so the
+              pill can shrink around it — without it the pill never shrinks
+              on collapse at all (measured).
+
+              The entering child must NOT also carry `layout`. It has no
+              previous box on the frame it mounts, so it joins the projection
+              tree as a fresh lead and suppresses the pill's own layout
+              animation. That reads as: the pill springs open the first time
+              and snaps open every time after, because the state only
+              persists once a popLayout exit has happened. Collapse keeps
+              working throughout, which is what makes it look intermittent
+              rather than broken. Measured: 48 -> 436 in one frame on every
+              expand after the first.
+
+              The child is the thing whose mount *causes* the size change.
+              Its own transition is the opacity/x fade; the box belongs to
+              the pill.
+            */
+            }
             <AnimatePresence mode="popLayout">
               {palette_expanded && (
                 <motion.div
-                  layout
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}

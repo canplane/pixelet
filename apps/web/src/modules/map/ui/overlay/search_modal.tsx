@@ -10,6 +10,7 @@ import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
 import type { BaseModalProps } from "@/app/types/ui.types.ts";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
+import { TextField } from "@/shared/ui/text_field.tsx";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { ground_or_raw } from "@/modules/world/terrain/elevation.ts";
@@ -36,9 +37,39 @@ export type SearchModalProps = {
   type: "search";
 };
 
-function map_center_to_near(map_center: PVF3): { lon: number; lat: number } {
+type LonLat = { lon: number; lat: number };
+
+function map_center_to_near(map_center: PVF3): LonLat {
   const g = epsg4326.unproject([0, 0], map_center.i, map_center.f);
   return { lon: g[0], lat: g[1] };
+}
+
+const EARTH_RADIUS_M = 6378137;
+const DEG_TO_RAD = Math.PI / 180;
+
+/**
+ * Great-circle metres between two WGS84 points.
+ *
+ * Not the world-unit distance scaled by epsg3857's own M_PER_U, which would
+ * be cheaper and is already at hand: world units are a Mercator plane, where
+ * a metre is stretched by 1/cos(latitude) — 1.26x at Seoul's — and that is
+ * not a rounding error on a label whose whole job is to say how far away
+ * something is.
+ */
+function ground_distance_m(a: LonLat, b: LonLat): number {
+  const lat1 = a.lat * DEG_TO_RAD, lat2 = b.lat * DEG_TO_RAD;
+  const dlat = lat2 - lat1;
+  const dlon = (b.lon - a.lon) * DEG_TO_RAD;
+  const h = Math.sin(dlat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Whole metres under a kilometre, then one decimal, then whole kilometres —
+ * the precision a reader can actually act on at each scale. */
+function format_distance(m: number): string {
+  if (m < 1000) return `${Math.round(m)}m`;
+  if (m < 10000) return `${(m / 1000).toFixed(1)}km`;
+  return `${Math.round(m / 1000).toLocaleString()}km`;
 }
 
 // Same "pick a language against i18n.language, fall back to the given
@@ -52,6 +83,19 @@ function map_center_to_near(map_center: PVF3): { lon: number; lat: number } {
 // a different city than the geometry beside it.
 function display_name(result: SearchResult, lang: string): string {
   return result.common?.[lang] ?? result.name;
+}
+
+/** The row under a result's name: where it is on the left, how far away on
+ * the right. Rendered whenever either half has something to say, so a result
+ * with no resolved context still gets its distance. */
+function SubtitleRow(props: { label: string; distance: string | null }) {
+  if (props.label === "" && props.distance === null) return null;
+  return (
+    <span className="flex items-baseline gap-2 text-xs text-muted-foreground">
+      <span className="truncate">{props.label}</span>
+      {props.distance !== null && <span className="ml-auto shrink-0 tabular-nums">{props.distance}</span>}
+    </span>
+  );
 }
 
 function SectionHeader(props: { label: string }) {
@@ -78,6 +122,12 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
 
   const [query, set_query] = useState("");
   const [results, set_results] = useState<SearchResult[]>([]);
+  // Where the distances on the rows are measured from, frozen at the moment
+  // the query ran rather than read live. It is the same point the API ranked
+  // against, so the numbers shown always agree with the order they are shown
+  // in — and a camera still drifting behind the open sheet cannot renumber a
+  // list the reader is looking at.
+  const [origin, set_origin] = useState<LonLat | null>(null);
   const [loading, set_loading] = useState(false);
 
   const input_ref = useRef<HTMLInputElement>(null);
@@ -99,6 +149,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     if (!open) {
       set_query("");
       set_results([]);
+      set_origin(null);
       set_loading(false);
     }
   }, [open]);
@@ -128,7 +179,9 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
           try {
             const map_center = useMapStore.getState().map_center;
             const near = map_center ? map_center_to_near(map_center) : undefined;
-            set_results(await fetch_search(q, { near, signal }));
+            const found = await fetch_search(q, { near, signal });
+            set_origin(near ?? null);
+            set_results(found);
           } finally {
             if (!signal.aborted) set_loading(false);
           }
@@ -184,6 +237,10 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     onOpenChange(false);
   }
 
+  function distance_of(result: SearchResult): string | null {
+    return origin === null ? null : format_distance(ground_distance_m(origin, { lon: result.lon, lat: result.lat }));
+  }
+
   const division_results = results.filter((r) => r.kind === "division");
   const poi_results = results.filter((r) => r.kind === "poi");
 
@@ -210,12 +267,12 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
               <ChevronLeft className="size-5" />
             </button>
             <SheetTitle asChild>
-              <input
+              <TextField
                 ref={input_ref}
                 value={query}
                 onChange={(e) => set_query(e.target.value)}
                 placeholder={t("map.search.placeholder")}
-                className="flex-1 min-w-0 bg-transparent outline-none text-sm"
+                className="flex-1 min-w-0 bg-transparent outline-none"
               />
             </SheetTitle>
             <SheetDescription className="sr-only">{t("map.search.placeholder")}</SheetDescription>
@@ -271,7 +328,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
                 and the section header already says what these are. */
               }
               <span className="text-sm truncate">{display_name(r, lang)}</span>
-              {r.context.length > 0 && <span className="text-xs text-muted-foreground truncate">{assemble_label(r.context, lang)}</span>}
+              <SubtitleRow label={r.context.length > 0 ? assemble_label(r.context, lang) : ""} distance={distance_of(r)} />
             </button>
           ))}
 
@@ -286,7 +343,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
                 key={r.gers_id}
                 type="button"
                 onClick={() => select(r)}
-                className="w-full text-left px-4 py-3 hover:bg-accent flex items-start gap-2.5 border-b border-border/40"
+                className="w-full text-left px-4 py-3 hover:bg-accent flex items-center gap-2.5 border-b border-border/40"
               >
                 <span
                   className="w-6 h-6 rounded-full flex items-center justify-center text-[13px] shrink-0"
@@ -294,9 +351,14 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
                 >
                   {theme.icon}
                 </span>
-                <div className="flex flex-col gap-0.5 min-w-0 pt-0.5">
+                {
+                  /* flex-1, or the column sizes to its own text and SubtitleRow's
+                    ml-auto has nothing to push against — the distance ends up
+                    beside the address instead of at the row's right edge. */
+                }
+                <div className="flex flex-1 flex-col gap-0.5 min-w-0">
                   <span className="text-sm truncate">{display_name(r, lang)}</span>
-                  {r.context.length > 0 && <span className="text-xs text-muted-foreground truncate">{assemble_label(r.context, lang)}</span>}
+                  <SubtitleRow label={r.context.length > 0 ? assemble_label(r.context, lang) : ""} distance={distance_of(r)} />
                 </div>
               </button>
             );

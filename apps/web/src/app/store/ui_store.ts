@@ -109,12 +109,20 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   // (a plain color, and one of each terrain-styled channel) rather than
   // just the color catalog's own first few entries, which only ever showed
   // colors. Each id is that channel's own first-declared key (cube.ts).
+  //
+  // Filled to MAX_RECENT_PICKS rather than left short: the strip's own
+  // width is the eight slots either way, so the empty tail read as missing
+  // rather than as room. The two that fill it are plain saturated colors,
+  // which is what the genre row above is least able to hint at — white
+  // alone does not say "there are colors in here".
   recent_picks: [
     { kind: "object", id: "white" },
     { kind: "object", id: "land.BARE" },
     { kind: "object", id: "water.RIVER" },
     { kind: "object", id: "structure.BUILDING" },
     { kind: "object", id: "transport.ROAD_DEFAULT" },
+    { kind: "object", id: "red" },
+    { kind: "object", id: "blue" },
     { kind: "decor", id: decor_ids[0] },
   ],
   select_cube: (id) =>
@@ -151,11 +159,20 @@ export const useUiStore = create<UiState>()(persist((set) => ({
     const p = persisted as Partial<{ object_color_id: PlaceableCubeId; decor_id: DecorId; recent_picks: RecentPick[] }> | null;
     if (!p) return current;
     const recent_picks = Array.isArray(p.recent_picks) ? p.recent_picks.filter(is_known_pick) : [];
+    // A short list is padded from the seed rather than left short. The strip
+    // is eight slots wide whether or not they hold anything, so a missing
+    // tail reads as broken rather than as room — and the padding is the
+    // first thing to fall off the end once a real pick arrives, since
+    // touch_recent prepends and slices.
+    for (const seed of current.recent_picks) {
+      if (recent_picks.length >= MAX_RECENT_PICKS) break;
+      if (!recent_picks.some((pick) => is_same_pick(pick, seed))) recent_picks.push(seed);
+    }
     return {
       ...current,
       object_color_id: p.object_color_id && is_known_pick({ kind: "object", id: p.object_color_id }) ? p.object_color_id : current.object_color_id,
       decor_id: p.decor_id && is_known_pick({ kind: "decor", id: p.decor_id }) ? p.decor_id : current.decor_id,
-      recent_picks: recent_picks.length > 0 ? recent_picks : current.recent_picks,
+      recent_picks,
     };
   },
 }));

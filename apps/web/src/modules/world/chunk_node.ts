@@ -36,7 +36,7 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
-import { type DecorContribution, decor_field, type DecorVariantContribution, variant_key } from "@/modules/world/decor/field.ts";
+import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/modules/world/decor/field.ts";
 import { build_decor_instances, type ModelInstanceTransformList } from "@/modules/world/decor/decor_layer.ts";
 import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/modules/world/decor/asset_store.ts";
 import { decor_l2_column_revision, l2_column_key_of, object_l2_column_revision, subscribe_decor_l2_column, subscribe_object_l2_column } from "@/modules/world/objects/store.ts";
