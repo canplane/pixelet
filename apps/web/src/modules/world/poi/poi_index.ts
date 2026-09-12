@@ -43,6 +43,7 @@ import type { POI } from "@pxl/shared/bake/model/feature.ts";
 import { with_ele } from "../terrain/elevation.ts";
 import { FAR_END } from "../billboard/distance_fade.ts";
 import { evict_poi_badges } from "./poi_badge.ts";
+import { poi_pages } from "./store.ts";
 import { stable_hash } from "../billboard/batch.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
@@ -68,7 +69,7 @@ const REBUILD_MARGIN2: f64 = (RESIDENCY - FAR_END) * (RESIDENCY - FAR_END);
  * (L3_RANGE, 1024u), so a point inside the centre page cannot reach past an
  * immediate neighbour — this is exact rather than a heuristic.
  *
- * It is also not optional. `poi_map` holds the nearest RESIDENT_PAGES
+ * It is also not optional. `poi_pages` holds the nearest RESIDENT_PAGES
  * (terrain/config.ts), 32 of them, and sweeping all of them would put the
  * whole resident world through a structure whose capacity is meant to be
  * constant.
@@ -177,11 +178,12 @@ function make_lanes(): Lanes {
 let live: Lanes = make_lanes();
 let back: Lanes = make_lanes();
 
-/** What `live` was built from. Identity is enough for the first two: the
- * POI store replaces the map rather than mutating it, and the frame origin
- * is a BigInt that only moves on an L4 crossing. The centre is a position,
- * so it needs a distance instead — see REBUILD_MARGIN2. */
-let built_from: ReadonlyMap<IVec, readonly POI[]> | null = null;
+/** What `live` was built from. A number is enough for the first two: the
+ * page table's revision moves on every page set or cleared, and the frame
+ * origin is a BigInt that only moves on an L4 crossing. The centre is a
+ * position, so it needs a distance instead — see REBUILD_MARGIN2. -1 before
+ * any build, and again when the index is invalidated. */
+let built_from: i32 = -1;
 let built_origin: IVec | null = null;
 let built_x: f64 = 0;
 let built_y: f64 = 0;
@@ -192,7 +194,8 @@ let built_y: f64 = 0;
  * one not yet done.
  */
 type Job = {
-  poi_map: ReadonlyMap<IVec, readonly POI[]>;
+  /** poi_pages.revision the sweep reads at. */
+  pages_revision: u32;
   map_origin: IVec;
   cx: f64;
   cy: f64;
@@ -234,7 +237,6 @@ const $ground: PVF3 = { i: 0n, f: 0n };
  * behind, which the disc was sized to absorb.
  */
 export function sync_poi_index(
-  poi_map: ReadonlyMap<IVec, readonly POI[]>,
   map_center: PVF3,
   map_origin: IVec,
   to_local: (absolute: PVF3, origin: IVec) => readonly [f64, f64, f64],
@@ -249,10 +251,11 @@ export function sync_poi_index(
 
   const moved_x = cx - built_x, moved_y = cy - built_y;
   const same_place = moved_x * moved_x + moved_y * moved_y <= REBUILD_MARGIN2;
-  const pages_changed = poi_map !== built_from;
+  const pages_revision = poi_pages.revision;
+  const pages_changed = pages_revision !== built_from;
   if (!pages_changed && map_origin === built_origin && same_place) return true;
 
-  if (job && job.poi_map === poi_map && job.map_origin === map_origin) return false;
+  if (job && job.pages_revision === pages_revision && job.map_origin === map_origin) return false;
 
   const pages: Job["pages"] = [];
   for (let dy = -PAGE_RADIUS; dy <= PAGE_RADIUS; dy++) {
@@ -272,7 +275,7 @@ export function sync_poi_index(
     return gx * gx + gy * gy;
   };
   pages.sort((a, b) => page_gap2(a) - page_gap2(b));
-  job = { poi_map, map_origin, cx, cy, pages, next: 0, pages_changed, to_local, flat_pos };
+  job = { pages_revision, map_origin, cx, cy, pages, next: 0, pages_changed, to_local, flat_pos };
 
   // The same id can arrive in two pages, since a place near a boundary is
   // baked into both. Deduping once per rebuild rather than per tick is the
@@ -286,7 +289,7 @@ export function sync_poi_index(
 
 /** One page of the sweep, into `back`. */
 function sweep_page(j: Job, page: Job["pages"][number]): void {
-  const pois = j.poi_map.get(page.page_idx);
+  const pois = poi_pages.get(page.page_idx);
   if (pois === undefined) return;
   const lanes = back;
 
@@ -374,7 +377,7 @@ export function poi_index_sweep(budget: FrameBudget): boolean {
   const finished = back;
   back = live;
   live = finished;
-  built_from = j.poi_map;
+  built_from = j.pages_revision;
   built_origin = j.map_origin;
   built_x = j.cx;
   built_y = j.cy;
@@ -450,7 +453,7 @@ export function poi_grounded(i: u32): boolean {
  * z and is held back from drawing until a rebuild grounds it.
  */
 export function invalidate_poi_index(): void {
-  built_from = null;
+  built_from = -1;
 }
 
 export function poi_index_stats(): PoiIndexStats {

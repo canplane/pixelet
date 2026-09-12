@@ -3,6 +3,11 @@
 /** Ordered WorldLayer composition with scratch rendering and a tiny ray LRU. */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
+import { Vector } from "@xpute/core/ds/arena.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
+import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { CORE_ALLOC } from "./core_pool.ts";
 
 import { alloc_chunk_volume, type ChunkVolume, release_chunk_volume, seal_chunk_volume } from "./volume.ts";
 import type { ChunkKey, WorldLayerRevision, WorldLayerStack } from "./contract.ts";
@@ -69,13 +74,21 @@ export function with_temporary_composite<T>(
   }
 }
 
-type CacheEntry = {
-  stack: WorldLayerStack;
-  revisions: readonly WorldLayerRevision[];
-  volume: ChunkVolume | null;
-};
-
-const ray_cache = new Map<string, CacheEntry>();
+/**
+ * The raycast composites kept between hovers, as a small table: the chunk's
+ * absolute base in an IndexedMap in the core memory, when each was last
+ * used and how many bands it holds as lanes, and the three things that are
+ * references — the stack it was built from, the layer revisions it is valid
+ * for, the pooled volume — as handles at the position. Least recently used
+ * is evicted first.
+ */
+const ray_index = new IndexedMap(I64_KEYS, 16, CORE_ALLOC);
+const ray_used = new Vector(Uint32Array, { init_cap: 16, alloc: CORE_ALLOC });
+const ray_bands = new Vector(Uint32Array, { init_cap: 16, alloc: CORE_ALLOC });
+const ray_stack: WorldLayerStack[] = [];
+const ray_revisions: (readonly WorldLayerRevision[])[] = [];
+const ray_volume: (ChunkVolume | null)[] = [];
+let ray_tick: u32 = 0;
 /** A hover ray crosses at most a few 64-wide batches at the current range. */
 const MAX_RAY_ENTRIES = 4;
 /** Hard CPU budget: at 1.25 MiB each, eight direct bands are about 10 MiB. */
@@ -83,56 +96,69 @@ const MAX_RAY_BANDS = 8;
 let ray_cache_bands = 0;
 
 export function compositor_cache_stats(): Readonly<typeof stats> & { entries: u32; bands: u32 } {
-  return { ...stats, entries: ray_cache.size, bands: ray_cache_bands };
+  return { ...stats, entries: ray_index.size, bands: ray_cache_bands };
+}
+
+function ray_remove(pos: u32): void {
+  const volume = ray_volume[pos];
+  if (volume) {
+    ray_cache_bands -= volume.bands.length;
+    release_chunk_volume(volume);
+  }
+  const from = ray_index.remove_at(pos);
+  if (from !== pos) {
+    ray_used.mem[pos] = ray_used.mem[from];
+    ray_bands.mem[pos] = ray_bands.mem[from];
+    ray_stack[pos] = ray_stack[from];
+    ray_revisions[pos] = ray_revisions[from];
+    ray_volume[pos] = ray_volume[from];
+  }
+  ray_used.truncate(from);
+  ray_bands.truncate(from);
+  ray_stack.length = from;
+  ray_revisions.length = from;
+  ray_volume.length = from;
 }
 
 export function clear_compositor_cache(): void {
-  for (const entry of ray_cache.values()) {
-    if (entry.volume) release_chunk_volume(entry.volume);
-  }
-  ray_cache.clear();
+  while (ray_index.size > 0) ray_remove(ray_index.size - 1);
   ray_cache_bands = 0;
 }
 
-function chunk_key_str(key: ChunkKey): string {
-  return `${key.page_idx.toString()}:${key.page_off.toString()}`;
+function chunk_base(key: ChunkKey): bigint {
+  return ivec.add(FROM_L3_IDX(key.page_idx), key.page_off);
 }
 
 type AcquiredComposite = { volume: ChunkVolume | null; temporary: boolean };
 
 function acquire_raycast_composite(stack: WorldLayerStack, key: ChunkKey): AcquiredComposite {
   const revisions = stack.map((layer) => layer.revision(key));
-  const cache_key = chunk_key_str(key);
-  const hit = ray_cache.get(cache_key);
+  const base = chunk_base(key);
+  let pos = ray_index.find(base);
 
-  if (hit && hit.stack === stack && same_layer_revisions(hit.revisions, revisions)) {
+  if (pos >= 0 && ray_stack[pos] === stack && same_layer_revisions(ray_revisions[pos], revisions)) {
     stats.hit++;
-    ray_cache.delete(cache_key);
-    ray_cache.set(cache_key, hit);
-    return { volume: hit.volume, temporary: false };
+    ray_used.mem[pos] = ++ray_tick;
+    return { volume: ray_volume[pos], temporary: false };
   }
 
   stats.miss++;
-  if (hit?.volume) {
-    ray_cache_bands -= hit.volume.bands.length;
-    release_chunk_volume(hit.volume);
-  }
-  ray_cache.delete(cache_key);
+  if (pos >= 0) ray_remove(pos);
   const volume = composite_chunk_layers(stack, key, { for_raycast: true });
   const new_bands = volume?.bands.length ?? 0;
   if (new_bands > MAX_RAY_BANDS) return { volume, temporary: true };
-  ray_cache.set(cache_key, { stack, revisions, volume });
+  pos = ray_index.insert(base);
+  ray_used.set(pos, ++ray_tick);
+  ray_bands.set(pos, new_bands);
+  ray_stack[pos] = stack;
+  ray_revisions[pos] = revisions;
+  ray_volume[pos] = volume;
   ray_cache_bands += new_bands;
 
-  while (ray_cache.size > MAX_RAY_ENTRIES || ray_cache_bands > MAX_RAY_BANDS) {
-    const oldest_key = ray_cache.keys().next().value;
-    if (oldest_key === undefined) break;
-    const oldest = ray_cache.get(oldest_key);
-    if (oldest?.volume) {
-      ray_cache_bands -= oldest.volume.bands.length;
-      release_chunk_volume(oldest.volume);
-    }
-    ray_cache.delete(oldest_key);
+  while (ray_index.size > MAX_RAY_ENTRIES || ray_cache_bands > MAX_RAY_BANDS) {
+    let oldest = 0;
+    for (let i = 1; i < ray_index.size; i++) if (ray_used.mem[i] < ray_used.mem[oldest]) oldest = i;
+    ray_remove(oldest);
     stats.eviction++;
   }
   return { volume, temporary: false };

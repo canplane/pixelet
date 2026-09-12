@@ -1,4 +1,4 @@
-// @xpute/core/ds/indexed_map.ts
+// @xpute/core/ds/map.ts
 
 /**
  * A dense array of keys with an index into it: insert appends, delete moves
@@ -120,6 +120,12 @@ export class IndexedMap<K extends number | bigint> {
       this.keys[pos] = moved as never;
     }
     return last;
+  }
+
+  /** Forgets every entry; the capacity stays. */
+  clear(): void {
+    this.table.fill(0);
+    this._size = 0;
   }
 
   /**

@@ -12,7 +12,7 @@
  * rendering primitive), and chunk_stage.tsx's own Chunk calls/renders them
  * directly, alongside its own cube build, as part of ONE build step. What
  * used to live here — ChunkDecor/PageDecor/DecorLayer, each with their own
- * ChunkLodControl and independently-computed distance/LOD-tier guess — is
+ * scheduler slot and independently-computed distance/LOD-tier guess — is
  * gone; Chunk already has everything build_decor_instances needs (tile,
  * page_idx, base_x/base_y, objects_revision, and now its own resolved LOD
  * tier) in scope from building its own cube content, so folding the call in
@@ -101,7 +101,8 @@ import { cell_index, cell_is_occupied, each_column_entry, object_column_of, virt
 import type { LodStep } from "@/render/lod.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
-import type { DecorVariantAsset, ModelInstanceTransform } from "./instanced_model.ts";
+import type { DecorVariantAsset } from "./instanced_model.ts";
+import { type DecorInstances, HIDDEN_FLAG, instances_push, instances_reset, instances_take, NO_ENTRY } from "./instances.ts";
 
 // Fixed, arbitrary — the one thing every DecorKind's own placement
 // ultimately derives from (alongside its own DecorKindSeed.tag). Changing
@@ -185,7 +186,9 @@ export function user_decor_pick(i: IVec, variant_count: number): { variant: numb
   return { variant, rotation };
 }
 
-export type ModelInstanceTransformList = ModelInstanceTransform[];
+/** A chunk's instances at one step, one lane set per variant (null where a
+ * variant has none). */
+export type DecorInstancesByVariant = (DecorInstances | null)[];
 
 // User-placed instances of this bundle's own decor kind (a tree a player
 // planted via mode_bar.tsx's decor button) — merged in unconditionally,
@@ -201,7 +204,7 @@ export type ModelInstanceTransformList = ModelInstanceTransform[];
 // source" the way WorldLayerStack iterates world layers, so there's no
 // shared interface for a class split to actually buy anything.
 function collect_user_decor_instances(
-  by_variant: ModelInstanceTransformList[],
+  variant_wanted: number,
   bundle: DecorKindBundle,
   page_idx: IVec,
   base_x: number,
@@ -213,6 +216,7 @@ function collect_user_decor_instances(
   each_column_entry(object_column_of(page_idx, page_off), (entry) => {
     if (!object_value_is_decor(entry.state) || decor_id_from_num(entry.state) !== bundle.decor_id) return;
     const { variant, rotation } = user_decor_pick(entry.corner().i, bundle.variants.length);
+    if (variant !== variant_wanted) return;
     // +size/2 on X/Y: the entry is a cell's min corner, but a free-standing
     // model plants itself at the middle of its footprint — the same centre a
     // scattered tree gets below (`+ U_PER_CELL / 2`). Z stays on the slot: a
@@ -220,10 +224,12 @@ function collect_user_decor_instances(
     // whole cell) in practice; written as size/2 so a sub-cell decor tier
     // still centres in its own footprint.
     const hcenter = entry.size / 2;
-    const id = entry.id();
+    // Only the hidden check needs the string id, and only while something is
+    // hidden at all.
+    const hidden = hidden_id !== null && entry.id() === hidden_id;
     // The cursor's corner is already chunk-local — the same frame chunk
     // content is built in (build_decor_instances' own doc comment).
-    by_variant[variant].push({ position: [entry.lx + hcenter, entry.ly + hcenter, entry.lz], rotation_z: rotation, scale: 1, id, hidden: id === hidden_id });
+    instances_push(entry.lx + hcenter, entry.ly + hcenter, entry.lz, rotation, 1, hidden ? HIDDEN_FLAG : 0, entry.band_of, entry.pos_of);
   });
 }
 
@@ -235,7 +241,7 @@ function collect_user_decor_instances(
 // file's own top doc comment and the 2026-09-06 industry-comparison
 // discussion for the fuller account of that symmetry.
 function collect_procedural_decor_instances(
-  by_variant: ModelInstanceTransformList[],
+  variant_wanted: number,
   bundle: DecorKindBundle,
   tile: Tile | undefined,
   lod_step: LodStep,
@@ -265,6 +271,7 @@ function collect_procedural_decor_instances(
   );
 
   for (const candidate of candidates) {
+    if (candidate.variant !== variant_wanted) continue;
     const x: f64 = candidate.cell_x * U_PER_CELL + U_PER_CELL / 2;
     const y: f64 = candidate.cell_y * U_PER_CELL + U_PER_CELL / 2;
     const ele = get_ele_at_local(page_idx, x, y);
@@ -274,18 +281,13 @@ function collect_procedural_decor_instances(
     const [ix, iy, iz] = cell_index({ i: cell_ivec, f: 0n });
     if (cell_is_occupied(ix, iy, iz)) continue;
 
-    // id: null — procedural placements are never stored (this file's own
+    // NO_ENTRY — procedural placements are never stored (this file's own
     // top doc comment), so there's nothing for decor_hit.ts's raycast_decor
     // to resolve a hit back to; they stay transparent to hit-testing.
     // Chunk-local position (see build_decor_instances' own doc comment) —
     // x/y above stay page-relative for the elevation lookup right above
     // this, shifted only in the value actually stored.
-    by_variant[candidate.variant].push({
-      position: [x - base_x * U_PER_CELL, y - base_y * U_PER_CELL, ele],
-      rotation_z: candidate.rotation,
-      scale: candidate.scale,
-      id: null,
-    });
+    instances_push(x - base_x * U_PER_CELL, y - base_y * U_PER_CELL, ele, candidate.rotation, candidate.scale, 0, NO_ENTRY, 0);
   }
 }
 
@@ -311,12 +313,17 @@ export function build_decor_instances(
   base_x: number,
   base_y: number,
   bundle: DecorKindBundle,
-): ModelInstanceTransformList[] {
-  const by_variant: ModelInstanceTransformList[] = bundle.variants.map(() => []);
+): DecorInstancesByVariant {
+  // One variant at a time through the shared scratch: the scatter is
+  // re-run per variant, which costs a candidate walk per variant instead of
+  // a per-instance object, and a bundle has a handful of variants.
   const page_base = FROM_L3_IDX(page_idx);
-  collect_user_decor_instances(by_variant, bundle, page_idx, base_x, base_y);
-  collect_procedural_decor_instances(by_variant, bundle, tile, lod_step, page_idx, page_base, base_x, base_y);
-  return by_variant;
+  return bundle.variants.map((_v, variant) => {
+    instances_reset();
+    collect_user_decor_instances(variant, bundle, page_idx, base_x, base_y);
+    collect_procedural_decor_instances(variant, bundle, tile, lod_step, page_idx, page_base, base_x, base_y);
+    return instances_take();
+  });
 }
 
 /* DecorVariantMesh lived here — one React component per (chunk, bundle,

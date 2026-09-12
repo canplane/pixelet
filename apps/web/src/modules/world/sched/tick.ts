@@ -160,7 +160,7 @@ export class FrameBudget {
     return Math.max(0, this.t0 + this.total_ms - performance.now());
   }
 
-  run<T>(items: readonly T[], step: (item: T) => boolean, opts: Pick<BudgetOpts, "max_steps"> = {}): PassStats {
+  run<T>(items: Iterable<T>, step: (item: T) => boolean, opts: Pick<BudgetOpts, "max_steps"> = {}): PassStats {
     const remaining = this.remaining();
     return run_under_budget(items, step, {
       budget_ms: remaining,

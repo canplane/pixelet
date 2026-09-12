@@ -21,12 +21,14 @@
  * its distance from the camera as drawn, because that is what is on screen.
  *
  * Distance is aged by how long an item has waited, within one class of work
- * — see Prioritised and AGE_HALF_MS.
+ * — see AGE_HALF_MS.
  */
 
 import type * as THREE from "three";
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
+
+import { EMPTY, HOLDS_SLOT, IN_FRUSTUM, type PriorityLanes } from "./chunk_table.ts";
 
 /**
  * The camera position the view is heading to, in world space.
@@ -58,29 +60,14 @@ export function lead_point(
 }
 
 /**
- * What an item is waiting for, which decides what it competes against. Four
+ * What an item is waiting for decides what it competes against. Four
  * classes, not one key with terms added to it: a chunk with nothing on screen
  * and a chunk that would merely like to be sharper are not making the same
  * request, and letting a wait trade one against the other is how the middle
  * of the screen ended up behind the far ring during a zoom-out
- * (discussions/20260912-what-to-render-when.md).
+ * (discussions/20260912-what-to-render-when.md). The classes are bits of the
+ * table's flag lane (chunk_table.ts): HOLDS_SLOT, IN_FRUSTUM, EMPTY.
  */
-export type Prioritised = {
-  in_frustum: boolean;
-  /** Squared distance from `lead_point`. */
-  lead_distance2: f64;
-  /** Holding a slot every other item is waiting on — goes first, whatever
-   * else is true of it. */
-  holds_slot?: boolean;
-  /** Nothing of this item is on screen yet. Breaks ties at equal distance:
-   * appearing beats sharpening, but only against an equally near chunk. */
-  empty?: boolean;
-  /** When the work now pending was asked for, in ms (performance.now); -1 or
-   * absent while nothing is pending. Restarted when the request changes, so a
-   * release that waited does not hand its wait to the build that replaces
-   * it. */
-  pending_since?: f64;
-};
 
 /**
  * Ageing, the textbook cure for starvation under a static priority.
@@ -107,16 +94,16 @@ export type Prioritised = {
  */
 export const AGE_HALF_MS: f64 = 4000;
 
-function sort_key(p: Prioritised, now: f64): f64 {
-  const since = p.pending_since ?? -1;
-  if (since < 0) return p.lead_distance2;
-  return p.lead_distance2 * 2 ** (-2 * (now - since) / AGE_HALF_MS);
+function sort_key(lanes: PriorityLanes, i: u32, now: f64): f64 {
+  const since = lanes.pending_since[i];
+  if (since < 0) return lanes.lead_distance2[i];
+  return lanes.lead_distance2[i] * 2 ** (-2 * (now - since) / AGE_HALF_MS);
 }
 
 /**
- * The ordering at `now`: slot holders, then what is on screen, then nearest
- * the place the view is heading, and only at equal distance does a chunk with
- * nothing drawn go before one that is merely coarse.
+ * The ordering of slots at `now`: slot holders, then what is on screen, then
+ * nearest the place the view is heading, and only at equal distance does a
+ * chunk with nothing drawn go before one that is merely coarse.
  *
  * Off screen, the order reverses: farthest first. Off-screen work is a
  * release, and a release exists to give memory back, so it should take it
@@ -138,10 +125,17 @@ function sort_key(p: Prioritised, now: f64): f64 {
  * the comparator inconsistent. Ageing still cannot lift anything out of the
  * frustum class, so a release can never pass a build.
  */
-export function priority_order(now: f64): (a: Prioritised, b: Prioritised) => number {
-  return (a, b) =>
-    Number(b.holds_slot ?? false) - Number(a.holds_slot ?? false) ||
-    Number(b.in_frustum) - Number(a.in_frustum) ||
-    (a.in_frustum ? sort_key(a, now) - sort_key(b, now) : sort_key(b, now) - sort_key(a, now)) ||
-    Number(b.empty ?? false) - Number(a.empty ?? false);
+export function priority_order(lanes: PriorityLanes, now: f64): (a: u32, b: u32) => number {
+  const flags = lanes.flags;
+  return (a, b) => {
+    const fa = flags[a];
+    const fb = flags[b];
+    const holds = (fb & HOLDS_SLOT) - (fa & HOLDS_SLOT);
+    if (holds !== 0) return holds;
+    const on = (fb & IN_FRUSTUM) - (fa & IN_FRUSTUM);
+    if (on !== 0) return on;
+    const near = (fa & IN_FRUSTUM) !== 0 ? sort_key(lanes, a, now) - sort_key(lanes, b, now) : sort_key(lanes, b, now) - sort_key(lanes, a, now);
+    if (near !== 0) return near;
+    return (fb & EMPTY) - (fa & EMPTY);
+  };
 }

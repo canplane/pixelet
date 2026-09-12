@@ -11,7 +11,7 @@ import { useRangeAnchor } from "@/modules/world/frame/use_range_anchor.ts";
 import { FETCH_HYSTERESIS, page_priority, pages_to_hold } from "@/render/chunk_range.ts";
 import { KEEP_DIST, RESIDENT_PAGES } from "../terrain/config.ts";
 import { fetch_poi } from "./repository.ts";
-import { usePoiStore } from "./store.ts";
+import { poi_pages, usePoiStore } from "./store.ts";
 
 const CATEGORY = "poi";
 
@@ -25,12 +25,12 @@ const PRIORITY_BIAS = 1;
  * pinned-page exemption to carry over (that exists there only for the
  * device marker's own grounding, not a concern here). */
 function cleanup_far_pois(anchor: IVec): void {
-  const { poi_map, clear_pois } = usePoiStore.getState();
+  const { clear_pois } = usePoiStore.getState();
 
   const held = new Set(pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES).map(({ page_idx }) => page_idx));
-  for (const page_idx of poi_map.keys()) {
-    if (!held.has(page_idx)) clear_pois(page_idx);
-  }
+  // Collected first: clearing moves the table's last page into the hole.
+  const evict = Array.from(poi_pages.keys()).filter((page_idx) => !held.has(page_idx));
+  for (const page_idx of evict) clear_pois(page_idx);
 }
 
 /** One Demand per uncached page within the fetch range — the scheduler dedups
@@ -69,12 +69,12 @@ function poi_demands(anchor: IVec): Demand[] {
  * render distance, via the shared fetch_scheduler.ts so the two subsystems
  * share one concurrency quota. Evicts on terrain's own held set once pages
  * fall out of it: a single dense urban page can hold thousands of records
- * uncapped, so leaving poi_map unbounded for a whole session's panning is a
+ * uncapped, so leaving poi_pages unbounded for a whole session's panning is a
  * real memory concern.
  *
  * Gated on settings.camera's own show_poi: hidden means an empty wishlist —
  * no new fetch, and any POI request still in flight is aborted by the
- * scheduler's own yield. Cached pages in poi_map are left as-is so toggling
+ * scheduler's own yield. Cached pages in poi_pages are left as-is so toggling
  * back on feels instant for whatever's still in range.
  */
 export function usePoiFetcher(): void {

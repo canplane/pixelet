@@ -2,7 +2,18 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, pack_sub_cell_fraction, release_chunk_volume, set_chunk_voxel } from "./volume.ts";
+import {
+  alloc_chunk_volume,
+  append_chunk_sub_voxel,
+  fill_chunk_column,
+  MaterialClass,
+  NO_LAYER,
+  pack_sub_cell,
+  pack_sub_cell_fraction,
+  release_chunk_volume,
+  seal_chunk_volume,
+  set_chunk_voxel,
+} from "./volume.ts";
 import {
   abort_column_scan,
   begin_column_scan,
@@ -137,4 +148,40 @@ Deno.test("column scan - each step keeps a run that spans bands whole", () => {
   assertEquals(set.z0[set.start[column]], -10);
   assertEquals(set.z1[set.start[column]], 10);
   release_column_runs(set);
+});
+
+Deno.test("voxel scan - overflow sub-voxels sharing a base voxel come out as height-one runs in their own column", () => {
+  const volume = alloc_chunk_volume();
+  const sub = (ox: number, oy: number, oz: number, sz: number) => pack_sub_cell(ox, oy, oz, sz);
+  set_chunk_voxel(volume, 5, 6, 10, OBJECT, [0, 0, 0, pack_sub_cell_fraction(0.5)]);
+  // Appended out of column order, so the seal has to sort them.
+  append_chunk_sub_voxel(volume, 9, 9, 3, LAND, sub(1, 2, 3, 4));
+  append_chunk_sub_voxel(volume, 5, 6, 10, LAND, sub(128, 0, 0, 128));
+  append_chunk_sub_voxel(volume, 5, 6, 11, OBJECT, sub(0, 128, 0, 128));
+  append_chunk_sub_voxel(volume, 1, 1, 7, LAND, sub(5, 6, 7, 8));
+  seal_chunk_volume(volume);
+
+  const runs = merge_column_runs(volume, 5, 6);
+  // The base voxel's own run, then the two overflow entries.
+  assertEquals(runs.length, 3);
+  assertEquals(runs.slice(1).map((r) => [r.z0, r.z1, r.material_class, r.sub_ox, r.sub_oy, r.sub_sz]), [
+    [10, 10, MaterialClass.LAND, 128, 0, 128],
+    [11, 11, MaterialClass.OBJECT, 0, 128, 128],
+  ]);
+  const other = merge_column_runs(volume, 9, 9);
+  assertEquals(other.map((r) => [r.z0, r.sub_ox, r.sub_oy, r.sub_oz, r.sub_sz]), [[3, 1, 2, 3, 4]]);
+  assertEquals(merge_column_runs(volume, 2, 2).length, 0);
+  release_chunk_volume(volume);
+});
+
+Deno.test("voxel scan - a later layer replacing the base voxel takes its overflow with it", () => {
+  const volume = alloc_chunk_volume();
+  set_chunk_voxel(volume, 5, 6, 10, OBJECT, [0, 0, 0, pack_sub_cell_fraction(0.5)]);
+  append_chunk_sub_voxel(volume, 5, 6, 10, LAND, pack_sub_cell(128, 0, 0, 128));
+  append_chunk_sub_voxel(volume, 5, 6, 12, LAND, pack_sub_cell(128, 0, 0, 128));
+  set_chunk_voxel(volume, 5, 6, 10, LAND);
+  seal_chunk_volume(volume);
+  const runs = merge_column_runs(volume, 5, 6);
+  assertEquals(runs.map((r) => [r.z0, r.z1]), [[10, 10], [12, 12]]);
+  release_chunk_volume(volume);
 });

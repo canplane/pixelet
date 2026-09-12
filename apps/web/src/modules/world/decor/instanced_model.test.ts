@@ -3,7 +3,7 @@
 import { assertAlmostEquals } from "@std/assert";
 import * as THREE from "three";
 
-import { compose_instance_matrix, type ModelInstanceTransform } from "./instanced_model.ts";
+import { compose_instance_matrix } from "./instanced_model.ts";
 
 /* These used to test bake_decor_instances, which merged every instance into
  * one buffer per (chunk, variant). decor/field.ts writes the same transform
@@ -11,12 +11,14 @@ import { compose_instance_matrix, type ModelInstanceTransform } from "./instance
  * now the whole of what a placement means — and the only place the Y-up ->
  * Z-up fix, the world-Z spin and the scale meet. */
 
-function transform(over: Partial<ModelInstanceTransform> = {}): ModelInstanceTransform {
-  return { position: [0, 0, 0], rotation_z: 0, scale: 1, id: null, ...over };
+type Transform = { position: readonly [number, number, number]; rotation_z: number; scale: number };
+
+function transform(over: Partial<Transform> = {}): Transform {
+  return { position: [0, 0, 0], rotation_z: 0, scale: 1, ...over };
 }
 
-function corner(t: ModelInstanceTransform, local: THREE.Vector3): THREE.Vector3 {
-  return local.clone().applyMatrix4(compose_instance_matrix(new THREE.Matrix4(), t));
+function corner(t: Transform, local: THREE.Vector3): THREE.Vector3 {
+  return local.clone().applyMatrix4(compose_instance_matrix(new THREE.Matrix4(), t.position[0], t.position[1], t.position[2], t.rotation_z, t.scale));
 }
 
 Deno.test("compose_instance_matrix - a model's own Y-up becomes world Z", () => {

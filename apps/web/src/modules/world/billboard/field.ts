@@ -29,13 +29,17 @@
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import { Vector } from "@xpute/core/ds/arena.ts";
 
-import type { AtlasUV } from "./atlas.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+
+import type { BillboardAtlas } from "./atlas.ts";
 import { apply_anchor_occlusion } from "./anchor_occlusion.ts";
 import { distance_fade_factor } from "./distance_fade.ts";
 import { WORLD_UNITS_PER_PX } from "./canvas_scale.ts";
 
 const $world = new THREE.Vector3();
+const LANE = { init_cap: 256, alloc: CORE_ALLOC } as const;
 
 export class BillboardField {
   readonly group = new THREE.Group();
@@ -46,21 +50,22 @@ export class BillboardField {
   private readonly sprites: THREE.Sprite[] = [];
   private readonly materials: THREE.SpriteMaterial[] = [];
 
-  /** One window per atlas rectangle, keyed by the rectangle itself — the UV
-   * object is stable for as long as the badge is cached. */
-  private readonly views = new Map<AtlasUV, THREE.Texture>();
+  /** One window per atlas slot, at the slot's index. The window's rectangle
+   * is rewritten on every push, so a slot the atlas reuses for another
+   * badge is right the moment it is pushed. */
+  private readonly views: (THREE.Texture | undefined)[] = [];
   private sheet: THREE.Texture | null = null;
 
   /** Local position of each slot's anchor, in `group`'s own frame. */
-  private readonly x: f64[] = [];
-  private readonly y: f64[] = [];
-  private readonly z: f64[] = [];
+  private readonly x = new Vector(Float64Array, LANE);
+  private readonly y = new Vector(Float64Array, LANE);
+  private readonly z = new Vector(Float64Array, LANE);
   /** Full-strength drawn size in world units, and where the anchor falls
    * inside the sprite (0 top, 1 bottom) — see use_distance_fade's own
    * `center_frac`, which this replaces for the pooled case. */
-  private readonly w: f64[] = [];
-  private readonly h: f64[] = [];
-  private readonly anchor_frac: f64[] = [];
+  private readonly w = new Vector(Float64Array, LANE);
+  private readonly h = new Vector(Float64Array, LANE);
+  private readonly anchor_frac = new Vector(Float64Array, LANE);
 
   constructor(private readonly render_order: f64) {
     this.group.name = "billboard-field";
@@ -79,24 +84,24 @@ export class BillboardField {
    * Writes one badge into the next slot, growing the pool if this is the
    * most that have ever been live at once.
    *
-   * `texture` is the caller's to own and cache. Assigning the same one to a
-   * slot that already had it is free; assigning a different one is a map
-   * swap, not a program recompile, since a slot always has some map from
+   * The badge is `atlas_slot` of `atlas`. Assigning a slot's window to a
+   * sprite that already had it is free; assigning a different one is a map
+   * swap, not a program recompile, since a sprite always has some map from
    * the moment it is first used.
    */
-  push(x: f64, y: f64, z: f64, sheet: THREE.Texture, uv: AtlasUV, logical_w: f64, logical_h: f64, center_y: f64): void {
+  push(x: f64, y: f64, z: f64, atlas: BillboardAtlas, atlas_slot: u32, logical_w: f64, logical_h: f64, center_y: f64): void {
     const i = this.count++;
     if (i >= this.sprites.length) this.grow();
 
-    this.x[i] = x;
-    this.y[i] = y;
-    this.z[i] = z;
-    this.w[i] = logical_w * WORLD_UNITS_PER_PX;
-    this.h[i] = logical_h * WORLD_UNITS_PER_PX;
-    this.anchor_frac[i] = logical_h > 0 ? center_y / logical_h : 1;
+    this.x.set(i, x);
+    this.y.set(i, y);
+    this.z.set(i, z);
+    this.w.set(i, logical_w * WORLD_UNITS_PER_PX);
+    this.h.set(i, logical_h * WORLD_UNITS_PER_PX);
+    this.anchor_frac.set(i, logical_h > 0 ? center_y / logical_h : 1);
 
     const material = this.materials[i];
-    const view = this.sheet_view(sheet, uv);
+    const view = this.sheet_view(atlas, atlas_slot);
     if (material.map !== view) material.map = view;
   }
 
@@ -111,29 +116,31 @@ export class BillboardField {
    * attribute collapses those. This is the half that removes the memory and
    * the upload churn, ahead of the half that removes the draw calls.
    */
-  private sheet_view(sheet: THREE.Texture, uv: AtlasUV): THREE.Texture {
+  private sheet_view(atlas: BillboardAtlas, slot: u32): THREE.Texture {
+    const sheet = atlas.texture;
     // A grown sheet is a different texture object over a different image, so
     // every window onto the old one is stale.
     if (sheet !== this.sheet) {
-      this.views.clear();
+      for (const view of this.views) view?.dispose();
+      this.views.length = 0;
       this.sheet = sheet;
     }
-    let view = this.views.get(uv);
+    let view = this.views[slot];
     if (!view) {
       view = sheet.clone();
-      this.views.set(uv, view);
+      this.views[slot] = view;
     }
-    // The rectangle itself moves when the sheet repacks, and the UV object
-    // is mutated in place for exactly that reason (atlas.ts), so this is
-    // read every frame rather than once.
+    // The rectangle itself moves when the sheet repacks and the slot stays
+    // (atlas.ts), so this is read every push rather than once.
     //
     // V is inverted here and nowhere else. A sprite's own v runs up from its
     // bottom edge while the sheet's runs down from the canvas's top, so the
     // offset is the entry's *lower* edge and the repeat is negative. The
     // sheet is uploaded unflipped precisely so this is one legible line
     // rather than an invisible transform applied to the whole image.
-    view.offset.set(uv.u0, uv.v1);
-    view.repeat.set(uv.u1 - uv.u0, uv.v0 - uv.v1);
+    const u0 = atlas.u0(slot), v0 = atlas.v0(slot), u1 = atlas.u1(slot), v1 = atlas.v1(slot);
+    view.offset.set(u0, v1);
+    view.repeat.set(u1 - u0, v0 - v1);
     return view;
   }
 
@@ -164,18 +171,18 @@ export class BillboardField {
       const sprite = this.sprites[i];
       sprite.visible = true;
 
-      $world.set(this.x[i], this.y[i], this.z[i]).applyMatrix4(this.group.matrixWorld);
+      $world.set(this.x.mem[i], this.y.mem[i], this.z.mem[i]).applyMatrix4(this.group.matrixWorld);
       const dist = $world.distanceTo(camera.position);
       const { scale, opacity } = distance_fade_factor(px_k / Math.max(1e-3, dist), dist);
 
-      const h = this.h[i] * scale;
-      sprite.scale.set(this.w[i] * scale, h, 1);
+      const h = this.h.mem[i] * scale;
+      sprite.scale.set(this.w.mem[i] * scale, h, 1);
       // Both halves of one fact: how far the sprite's centre sits above its
       // anchor. The position keeps the anchor where it belongs while the
       // sprite rescales; the uniform lets anchor_occlusion.ts's shader
       // recover the anchor from the centre it is given.
-      const drop = h * (this.anchor_frac[i] - 0.5);
-      sprite.position.set(this.x[i], this.y[i], this.z[i] + drop);
+      const drop = h * (this.anchor_frac.mem[i] - 0.5);
+      sprite.position.set(this.x.mem[i], this.y.mem[i], this.z.mem[i] + drop);
 
       const material = this.materials[i];
       material.opacity = opacity;
@@ -186,8 +193,8 @@ export class BillboardField {
 
   /** Releases every GPU resource this owns. Textures are the caller's. */
   dispose(): void {
-    for (const view of this.views.values()) view.dispose();
-    this.views.clear();
+    for (const view of this.views) view?.dispose();
+    this.views.length = 0;
     for (const material of this.materials) material.dispose();
     this.materials.length = 0;
     this.sprites.length = 0;

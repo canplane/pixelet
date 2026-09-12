@@ -26,7 +26,7 @@ import { useSyncExternalStore } from "react";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import type { TypedArrayCtor, U16Array, U8Array } from "@xpute/core/kit/array.ts";
-import { I64_KEYS, IndexedMap } from "@xpute/core/ds/indexed_map.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import type { FVec, IVec, PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { fvec, ivec, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -438,6 +438,7 @@ export class EntryCursor {
   private cx0 = 0n;
   private cy0 = 0n;
   private band = 0;
+  private pos = 0;
   private x = 0;
   private y = 0;
   private z = 0;
@@ -454,6 +455,7 @@ export class EntryCursor {
   load(band: number, pos: number, state: number): void {
     this.fixed = null;
     this.band = band;
+    this.pos = pos;
     this.x = pos & POS_MASK;
     this.y = (pos >>> POS_BITS) & POS_MASK;
     this.z = (pos >>> (2 * POS_BITS)) & POS_MASK;
@@ -494,6 +496,16 @@ export class EntryCursor {
   id(): string {
     if (this.fixed) return this.fixed.id;
     return leaf_id(cell_key(...this.cell()), this.x, this.y, this.z, this.level);
+  }
+
+  /** The entry as the store's own two numbers, for a consumer that keeps
+   * instances as lanes (decor/instances.ts) and rebuilds the id on demand
+   * with entry_id_of. A fixed entry has no lane form and reports NO_ENTRY. */
+  get band_of(): number {
+    return this.fixed ? 0xffffffff : this.band;
+  }
+  get pos_of(): number {
+    return this.fixed ? 0 : this.pos;
   }
 
   /** The entry as an object, for the few callers that keep one. */
@@ -593,8 +605,8 @@ const cell_count = new Vector(Uint32Array, LANE);
  * an erase-marker rather than a thing (OccupiedEntry). */
 const cell_solid = new Vector(Uint32Array, LANE);
 
-/** Cells whose entries changed since the last notification. */
-const touched_cells = new Set<string>();
+/** Cells whose entries changed since the last notification, by corner. */
+const touched_cells = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
 
 /** Removes a chunk's cells from the index, reading its entry lanes as they
  * were before the change that is being reindexed. */
@@ -611,8 +623,9 @@ function unindex_cells(cpos: number): void {
     const key = cell_key(...cell);
     if (key === last) continue;
     last = key;
-    touched_cells.add(key);
-    const p = cell_map.find(cell_corner(...cell).i);
+    const corner = cell_corner(...cell).i;
+    touched_cells.insert(corner);
+    const p = cell_map.find(corner);
     if (p < 0) continue;
     const from = cell_map.remove_at(p);
     if (from !== p) { for (const lane of [cell_start, cell_count, cell_solid]) lane.set(p, lane.get(from)); }
@@ -633,8 +646,9 @@ function index_cells(cpos: number): void {
     const key = cell_key(...cell);
     if (key !== last) {
       last = key;
-      touched_cells.add(key);
-      p = cell_map.insert(cell_corner(...cell).i);
+      const corner = cell_corner(...cell).i;
+      touched_cells.insert(corner);
+      p = cell_map.insert(corner);
       cell_start.set(p, k);
       cell_count.set(p, 0);
       cell_solid.set(p, 0);
@@ -658,40 +672,54 @@ const rev_map = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
 const rev_objects = new Vector(Uint32Array, LANE);
 const rev_decor = new Vector(Uint32Array, LANE);
 
-/** Listeners stay callbacks, by column and by cell. A consumer subscribed to
- * one key is woken only when that key changed. */
-const column_listeners = new Map<bigint, Set<() => void>>();
-const decor_column_listeners = new Map<bigint, Set<() => void>>();
-const cell_listeners = new Map<string, Set<() => void>>();
+/**
+ * Listeners stay callbacks, by column and by cell. A consumer subscribed to
+ * one key is woken only when that key changed. The keys — a column base, a
+ * cell corner — are an IndexedMap in the core memory; the callbacks are the
+ * handles at each position, the one part of this that is a function.
+ */
+class ListenerTable {
+  private readonly index = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
+  private readonly lists: (() => void)[][] = [];
 
-function subscribe<K>(registry: Map<K, Set<() => void>>, key: K, listener: () => void): () => void {
-  let set = registry.get(key);
-  if (!set) {
-    set = new Set();
-    registry.set(key, set);
+  subscribe(key: IVec, listener: () => void): () => void {
+    const pos = this.index.insert(key);
+    (this.lists[pos] ??= []).push(listener);
+    return () => {
+      const p = this.index.find(key);
+      if (p < 0) return;
+      const list = this.lists[p];
+      const at = list.indexOf(listener);
+      if (at >= 0) list.splice(at, 1);
+      if (list.length > 0) return;
+      const from = this.index.remove_at(p);
+      if (from !== p) this.lists[p] = this.lists[from];
+      this.lists.length = from;
+    };
   }
-  set.add(listener);
-  return () => {
-    set!.delete(listener);
-    if (set!.size === 0) registry.delete(key);
-  };
+
+  notify(key: IVec): void {
+    const pos = this.index.find(key);
+    if (pos < 0) return;
+    // A listener may unsubscribe as it runs; walk what was there when the
+    // notification began.
+    for (const listener of this.lists[pos].slice()) listener();
+  }
 }
 
-function notify<K>(registry: Map<K, Set<() => void>>, key: K): void {
-  const set = registry.get(key);
-  if (!set) return;
-  for (const listener of set) listener();
-}
+const column_listeners = new ListenerTable();
+const decor_column_listeners = new ListenerTable();
+const cell_listeners = new ListenerTable();
 
 function bump_column(base: IVec, objects: boolean, decor: boolean): void {
   const p = rev_map.insert(base);
   if (objects) {
     rev_objects.set(p, ++revision_seq);
-    notify(column_listeners, base);
+    column_listeners.notify(base);
   }
   if (decor) {
     rev_decor.set(p, ++revision_seq);
-    notify(decor_column_listeners, base);
+    decor_column_listeners.notify(base);
   }
 }
 
@@ -709,8 +737,10 @@ function reindex_chunk(base: IVec): void {
     index_cells(cpos);
   }
   bump_column(base, true, true);
-  for (const id of placed_snapshots.keys()) if (touched_cells.has(entry_cell_key(id))) placed_snapshots.delete(id);
-  for (const key of touched_cells) notify(cell_listeners, key);
+  for (const id of placed_snapshots.keys()) {
+    if (touched_cells.find(cell_corner(...parse_cell_key(entry_cell_key(id))).i) >= 0) placed_snapshots.delete(id);
+  }
+  for (let t = 0; t < touched_cells.size; t++) cell_listeners.notify(BigInt.asUintN(64, touched_cells.key_at(t)));
   touched_cells.clear();
 }
 
@@ -721,6 +751,19 @@ function reindex_chunk(base: IVec): void {
  * set_virtual_hide). A visit must not walk this store again: the cursor is
  * shared.
  */
+/**
+ * The string id of the entry `(band, pos)` under column `base` — what a
+ * consumer that kept an instance as lanes (decor/instances.ts) asks for
+ * when a hit on that instance has to resolve to a selectable entry. The
+ * same numbers the store's own lanes hold, through the same cursor packing.
+ */
+export function entry_id_of(base: IVec, band: number, pos: number): string {
+  const [cx0, cy0] = cell_index({ i: base, f: 0n });
+  $cell_cursor.at_chunk(cx0, cy0);
+  $cell_cursor.load(band, pos, 0);
+  return $cell_cursor.id();
+}
+
 /** Whether any entry — including the carve preview — is filed under a
  * column. One map lookup; what a coarse build asks before skipping the scan. */
 export function column_has_entries(base: IVec): boolean {
@@ -898,11 +941,11 @@ export function decor_column_revision(base: IVec): number {
 }
 
 export function subscribe_object_column(base: IVec, on_change: () => void): () => void {
-  return subscribe(column_listeners, base, on_change);
+  return column_listeners.subscribe(base, on_change);
 }
 
 export function subscribe_decor_column(base: IVec, on_change: () => void): () => void {
-  return subscribe(decor_column_listeners, base, on_change);
+  return decor_column_listeners.subscribe(base, on_change);
 }
 
 /** React hook: one hovered object, re-rendering only when its own cell
@@ -910,7 +953,7 @@ export function subscribe_decor_column(base: IVec, on_change: () => void): () =>
 export function usePlacedObject(id: string | null): OccupiedEntry | null {
   const parsed = id ? parse_leaf_id(id) : null;
   return useSyncExternalStore(
-    (on_change) => parsed ? subscribe(cell_listeners, parsed.key, on_change) : () => {},
+    (on_change) => parsed ? cell_listeners.subscribe(cell_corner(...parse_cell_key(parsed.key)).i, on_change) : () => {},
     () => {
       if (!id) return null;
       if (!placed_snapshots.has(id)) placed_snapshots.set(id, get_placed_object(id));

@@ -11,15 +11,21 @@
  * - page idx derivation
  * - fine-grained merge
  * - render / stream scheduling
+ *
+ * The pages live in `tile_pages` (page_table.ts): the key index in the core
+ * memory, the page's typed views as handles. The zustand store carries the
+ * table's revision for React, and the three calls every non-React reader
+ * already used.
  */
 
 import { create } from "zustand";
-import { immer } from "zustand/middleware/immer";
 
+import type { u32 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
 import type { Tile } from "@pxl/shared/bake/format.ts";
+
+import { PageTable } from "@/modules/world/page_table.ts";
 
 type TileInterest = {
   matches: (page_idx: IVec) => boolean;
@@ -51,30 +57,31 @@ function notify_interests(page_idx: IVec): void {
   }
 }
 
+/** Every resident terrain page. Walk it or look a page up here; change it
+ * through the store so React and the interests hear. */
+export const tile_pages = new PageTable<Tile>();
+
 export type TileStore = {
-  tile_map: Map<IVec, Tile>;
+  /** tile_pages.revision, mirrored so a selector sees a page come and go. */
+  revision: u32;
 
   get_tile: (page_idx: IVec) => Tile | undefined;
   set_tile: (page_idx: IVec, tile: Tile) => void;
   clear_tile: (page_idx: IVec) => void;
 };
 
-export const useTileStore = create<TileStore>()(
-  immer((set, get) => ({
-    tile_map: new Map<IVec, Tile>(),
+export const useTileStore = create<TileStore>()((set) => ({
+  revision: 0,
 
-    get_tile: (page_idx) => get().tile_map.get(TO_XY(page_idx)),
-    set_tile: (page_idx, tile) => {
-      set((state) => {
-        state.tile_map.set(TO_XY(page_idx), tile);
-      });
-      notify_interests(page_idx);
-    },
-    clear_tile: (page_idx) => {
-      set((state) => {
-        state.tile_map.delete(TO_XY(page_idx));
-      });
-      notify_interests(page_idx);
-    },
-  })),
-);
+  get_tile: (page_idx) => tile_pages.get(page_idx),
+  set_tile: (page_idx, tile) => {
+    tile_pages.set(page_idx, tile);
+    set({ revision: tile_pages.revision });
+    notify_interests(page_idx);
+  },
+  clear_tile: (page_idx) => {
+    if (tile_pages.clear(page_idx) === undefined) return;
+    set({ revision: tile_pages.revision });
+    notify_interests(page_idx);
+  },
+}));

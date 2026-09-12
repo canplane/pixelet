@@ -58,7 +58,8 @@ import {
   query_poi_index,
   sync_poi_index,
 } from "./poi_index.ts";
-import { badge_atlas, cluster_badge, cluster_badge_metrics, poi_badge, poi_badge_metrics } from "./poi_badge.ts";
+import { badge_atlas, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H, cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot } from "./poi_badge.ts";
+import { NO_SLOT } from "../billboard/atlas.ts";
 import { usePoiStore } from "./store.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
@@ -205,7 +206,6 @@ type PoiPick = {
 };
 
 function select_nearby_pois(
-  poi_map: ReadonlyMap<IVec, readonly POI[]>,
   map_center: PVF3,
   local_world_frame: THREE.Object3D | null,
   camera: THREE.Camera,
@@ -223,7 +223,7 @@ function select_nearby_pois(
   // projection, so each candidate below resolves its own tier with a divide.
   const persp = camera as THREE.PerspectiveCamera;
   const px_k = viewport_h / (2 * Math.tan((persp.fov * Math.PI) / 360));
-  sync_poi_index(poi_map, map_center, map_origin, local_pos_from_absolute, poi_flat_pos);
+  sync_poi_index(map_center, map_origin, local_pos_from_absolute, poi_flat_pos);
   const t_sync = performance.now();
   const [cx, cy, cz] = local_pos_from_absolute(map_center, map_origin);
   const hits = query_poi_index(cx, cy, cz, FAR_END, $hits);
@@ -272,8 +272,8 @@ function select_nearby_pois(
     const ny = $nodes.centre($nodes.key_y[n], shamt);
     const nz = $nodes.centre($nodes.key_z[n], shamt);
 
-    const m = members > 1 ? cluster_badge_metrics(members) : poi_badge_metrics(poi_at(rep));
-    $batch.push(n, nx, ny, nz, m.logical_w, m.collide_h, m.center_y, poi_tiebreak(rep));
+    const logical_w = members > 1 ? cluster_badge_logical_w(members) : poi_badge_logical_w(poi_at(rep));
+    $batch.push(n, nx, ny, nz, logical_w, BADGE_COLLIDE_H, BADGE_CENTER_Y, poi_tiebreak(rep));
   }
 
   // local_world_frame_ref.current starts null until mount. Without a frame
@@ -417,7 +417,7 @@ function use_placement_epoch(...inputs: unknown[]): u32 {
 }
 
 export function PoiLayer() {
-  const poi_map = usePoiStore((state) => state.poi_map);
+  const poi_revision = usePoiStore((state) => state.revision);
   const map_center = useMapStore((state) => state.map_center);
   const show_poi = useSettingsStore((state) => state.show_poi);
   // view_state: a pure rotate/zoom changes what's in frustum without
@@ -460,9 +460,10 @@ export function PoiLayer() {
   // on, a resize.
   const selected = useMemo(() => {
     if (!map_center || !show_poi) return [];
-    return select_nearby_pois(poi_map, map_center, local_world_frame_ref.current, camera, size.width, size.height);
+    return select_nearby_pois(map_center, local_world_frame_ref.current, camera, size.width, size.height);
     // local_world_frame_ref/camera: stable identities, not reactive state.
-  }, [poi_map, show_poi, size.width, size.height, epoch, ground_tick, index_tick]);
+    // poi_revision: the pages the index reads live in poi_pages, not here.
+  }, [poi_revision, show_poi, size.width, size.height, epoch, ground_tick, index_tick]);
 
   // The badges themselves are written, not declared. `selected` changing is
   // a list of slots to fill, so this is where the imperative half is driven
@@ -471,12 +472,14 @@ export function PoiLayer() {
   useEffect(() => {
     $field.begin();
     for (const pick of selected) {
-      const built = pick.members > 1 ? cluster_badge(pick.members) : poi_badge(pick.poi);
-      // Null when the atlas is full. Nothing is drawn for it this pass,
+      const cluster = pick.members > 1;
+      const slot = cluster ? cluster_badge_slot(pick.members) : poi_badge_slot(pick.poi);
+      // NO_SLOT when the atlas is full. Nothing is drawn for it this pass,
       // which is the honest answer — the alternative is a rectangle
       // belonging to some other badge.
-      if (!built) continue;
-      $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas.texture, built.uv, built.logical_w, built.logical_h, built.center_y);
+      if (slot === NO_SLOT) continue;
+      const logical_w = cluster ? cluster_badge_logical_w(pick.members) : poi_badge_logical_w(pick.poi);
+      $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas, slot, logical_w, BADGE_LOGICAL_H, BADGE_CENTER_Y);
     }
     $field.end();
     // frameloop="demand": placement can finish on a tick where nothing else

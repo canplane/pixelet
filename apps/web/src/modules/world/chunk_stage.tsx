@@ -12,7 +12,7 @@
  *
  * Decor used to be a fully separate, independently-scheduled component tree
  * (decor_layer.ts's own ChunkDecor/PageDecor/DecorLayer, one registrant per
- * (chunk, decor kind) in the shared LodSchedulerRegistry below) — retired
+ * (chunk, decor kind) in the shared scheduler below) — retired
  * once Chunk absorbed decor's own build into its own commit(), the fix for
  * the documented terrain/decor ready-state desync (decor could render a
  * frame before its own co-located terrain). See decor_layer.ts's own top
@@ -25,15 +25,17 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { U32Array } from "@xpute/core/kit/array.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
+import { Vector } from "@xpute/core/ds/arena.ts";
+
 import {
   chunk_retained_bytes,
-  type ChunkLodControl,
   ChunkNode,
   commit_step_stats,
   lod_build_stats,
@@ -45,14 +47,15 @@ import {
 } from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { decor_field } from "@/modules/world/decor/field.ts";
-import { useTileStore } from "@/modules/world/terrain/store.ts";
-import { usePoiStore } from "@/modules/world/poi/store.ts";
+import { tile_pages, useTileStore } from "@/modules/world/terrain/store.ts";
+import { poi_pages } from "@/modules/world/poi/store.ts";
 import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
 import { draw_census_install, draw_census_take } from "@/modules/world/sched/draw_census.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
 import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
 import { lead_point, priority_order } from "@/modules/world/sched/priority.ts";
+import { BLEND_ACTIVE, IN_FRUSTUM, PENDING, SETTLING, VISIBILITY_CHANGED } from "@/modules/world/sched/chunk_table.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { useRangeAnchor } from "@/modules/world/frame/use_range_anchor.ts";
 import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
@@ -61,7 +64,7 @@ import { set_lod_projection } from "@/render/lod.ts";
 import { compositor_cache_stats } from "@/render/layer/pipeline/compositor.ts";
 import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC, core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
@@ -133,15 +136,16 @@ function pool_sample(): { live_mb: number; idle_mb: number; hits: number; misses
 /** Who is waiting, and for how long — the progress rule guarantees a step a
  * frame, not which one, so this is what shows whether something is being
  * passed over indefinitely. */
-function starvation(controls: readonly ChunkLodControl[]): { offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
+function starvation(): { offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
   const now = performance.now();
+  const { flags, pending_since } = lod_scheduler;
   let offscreen_pending: u32 = 0;
   let oldest_release_ms: f64 = 0;
   let oldest_visible_ms: f64 = 0;
-  for (const control of controls) {
-    if (!control.pending || control.pending_since < 0) continue;
-    const waited = now - control.pending_since;
-    if (control.in_frustum) {
+  for (let i = 0; i < lod_scheduler.len; i++) {
+    if ((flags[i] & PENDING) === 0 || pending_since[i] < 0) continue;
+    const waited = now - pending_since[i];
+    if (flags[i] & IN_FRUSTUM) {
       if (waited > oldest_visible_ms) oldest_visible_ms = waited;
     } else {
       offscreen_pending++;
@@ -149,6 +153,23 @@ function starvation(controls: readonly ChunkLodControl[]): { offscreen_pending: 
     }
   }
   return { offscreen_pending, oldest_release_ms, oldest_visible_ms };
+}
+
+/** Slot lists a frame sorts and walks: what to recheck, what to commit on
+ * each side of the frustum, what to reclaim. Scratch, so a pass over
+ * thousands of chunks allocates nothing. */
+const SLOTS = { init_cap: 4096, alloc: CORE_ALLOC } as const;
+const s_eligible = new Vector(Uint32Array, SLOTS);
+const s_visible = new Vector(Uint32Array, SLOTS);
+const s_offscreen = new Vector(Uint32Array, SLOTS);
+/** The frustum as six planes of (nx, ny, nz, constant), the form
+ * ChunkTable.refresh tests spheres against. */
+const s_planes = new Float64Array(24);
+
+function sorted(slots: Vector<U32Array>, order: (a: u32, b: u32) => number): U32Array {
+  const view = slots.mem.subarray(0, slots.len);
+  view.sort(order);
+  return view;
 }
 
 type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec };
@@ -236,19 +257,16 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
 PageChunks.displayName = "PageChunks";
 
 /**
- * Owns the one LodSchedulerRegistry chunk_stage.tsx's own Chunk registers
- * into as a ChunkLodControl — mounted once above ChunkStage (world.tsx).
- * Chunk is the only registrant now: decor used to register its own separate
- * ChunkDecor per (chunk, decor kind) here too, competing for this same
- * budget as an independent component with its own `ready` state; as of
- * 2026-09-05 Chunk builds decor alongside its own cube content in one
- * commit() instead (see decor_layer.ts's own top doc comment), so this
- * registry now only ever holds one control per chunk position, not up to
- * five. Everything here — the registry, the frustum, the recheck/commit
- * loop, the dev stats — used to live inside ChunkStage itself, back when it
- * was the only registrant; none of it is terrain-specific, so it moved out
- * rather than ChunkStage keeping ownership of something it no longer
- * exclusively uses.
+ * Runs the scheduler's passes over lod_scheduler's lanes — mounted once
+ * above ChunkStage (world.tsx). A ChunkNode is the only kind of slot now:
+ * decor used to register its own ChunkDecor per (chunk, decor kind) here
+ * too, competing for this same budget as an independent component with its
+ * own `ready` state; as of 2026-09-05 a node builds decor alongside its own
+ * cube content in one commit() instead (see decor_layer.ts's own top doc
+ * comment). Everything here — the passes, the frustum, the dev stats — used
+ * to live inside ChunkStage itself; none of it is terrain-specific, so it
+ * moved out rather than ChunkStage keeping ownership of something it no
+ * longer exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   const scheduler = lod_scheduler;
@@ -296,8 +314,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   // ref rather than state: it is written and read inside one tick.
   const visible_pass = useRef<
     {
-      controls: ChunkLodControl[];
-      pending_total: ChunkLodControl[];
+      pending_total: u32;
       committed: u32;
       recheck_ms: number;
       commit_ms: number;
@@ -306,13 +323,20 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
   useTick("visible", ({ state, delta, budget }) => {
     if (import.meta.env.DEV) gpu_timer_begin();
-    const controls = Array.from(scheduler.controls);
+    const table = scheduler;
     visible_pass.current = null;
-    if (controls.length === 0) return;
+    if (table.len === 0) return;
     lod_elapsed.current += delta;
     const full_recheck = lod_elapsed.current >= LOD_RECHECK_INTERVAL;
     if (full_recheck) lod_elapsed.current = 0;
     update_frustum(frustum, state.camera, projection);
+    for (let p = 0; p < 6; p++) {
+      const plane = frustum.planes[p];
+      s_planes[p * 4] = plane.normal.x;
+      s_planes[p * 4 + 1] = plane.normal.y;
+      s_planes[p * 4 + 2] = plane.normal.z;
+      s_planes[p * 4 + 3] = plane.constant;
+    }
     // The tier criterion is a screen-space one (render/lod.ts), so it needs
     // the projection it measures against. Cheap, and a no-op while the
     // viewport and the field of view hold still.
@@ -323,8 +347,9 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // drawn.
     const target = useMapStore.getState().map_center;
     const local_frame = local_world_frame_ref.current;
+    const origin = anchor_registry.cur_map_origin;
     if (target && local_frame) {
-      const local = ivec.sub(target.i, anchor_registry.cur_map_origin);
+      const local = ivec.sub(target.i, origin);
       lead_point(
         lead,
         state.camera.position,
@@ -337,123 +362,121 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       lead.copy(state.camera.position);
     }
 
-    // Every control, every frame, before anything is sorted: this is only
-    // measurement (ChunkNode.refresh), and it is what the orders below read.
-    // The decision pass under it is rationed, so sorting on what that pass
-    // last wrote meant sorting on numbers up to LOD_RECHECK_INTERVAL old —
-    // during a zoom-out, the difference between "the middle of the screen
-    // matters" and "it did not exist yet".
-    for (const control of controls) control.refresh(state.camera, frustum, lead);
+    // Every chunk, every frame, before anything is sorted: this is only
+    // measurement, and it is what the orders below read. The decision pass
+    // under it is rationed, so sorting on what that pass last wrote meant
+    // sorting on numbers up to LOD_RECHECK_INTERVAL old — during a zoom-out,
+    // the difference between "the middle of the screen matters" and "it did
+    // not exist yet". One matrix for every chunk: the anchor root's, which
+    // is the frame every chunk group is a pure translation inside.
+    const cam = state.camera.position;
+    table.refresh(
+      anchor_registry.root.matrixWorld.elements,
+      ivec.to_real(ivec.X(origin)),
+      ivec.to_real(ivec.Y(origin)),
+      ivec.to_real(ivec.Z(origin)),
+      s_planes,
+      cam.x,
+      cam.y,
+      cam.z,
+      lead.x,
+      lead.y,
+      lead.z,
+    );
     // One ordering for both passes of this frame, and one `now` for both:
     // ageing keys that moved mid-sort would make the comparator inconsistent.
-    const order = priority_order(performance.now());
+    const order = priority_order(table, performance.now());
+
+    // The lists this frame walks, in one pass over the flag lane: the scene
+    // nodes whose visibility moved, the chunks to recheck, and the pending
+    // work on each side of the frustum.
+    const flags = table.flags;
+    const handles = table.handles;
+    s_eligible.truncate(0);
+    s_visible.truncate(0);
+    s_offscreen.truncate(0);
+    let pending_total: u32 = 0;
+    for (let i = 0; i < table.len; i++) {
+      const f = flags[i];
+      if (f & VISIBILITY_CHANGED) {
+        handles[i].group.visible = (f & IN_FRUSTUM) !== 0;
+        flags[i] = f & ~VISIBILITY_CHANGED;
+      }
+      if (full_recheck || (f & (BLEND_ACTIVE | SETTLING)) !== 0) s_eligible.push(i);
+      if (f & PENDING) {
+        pending_total++;
+        if (f & IN_FRUSTUM) s_visible.push(i);
+        else s_offscreen.push(i);
+      }
+    }
 
     const recheck_t0 = import.meta.env.DEV ? performance.now() : 0;
     // Same cooperative shape as the commit loop below: the first eligible
-    // control this frame always runs (forward progress guaranteed even on
-    // a slow frame), the rest are time-boxed. Profiled: during a fast zoom,
-    // settling_lod/blend_active can both spike into the dozens at once, and
-    // recheck()-ing every one of them every single frame (previously
-    // unconditional) cost up to ~23ms by itself — a stale blend/settling
-    // flag for one skipped frame is a much smaller visual cost than that.
+    // chunk this frame always runs (forward progress guaranteed even on a
+    // slow frame), the rest are time-boxed. Profiled: during a fast zoom,
+    // settling/blend_active can both spike into the dozens at once, and
+    // rechecking every one of them every single frame cost up to ~23ms by
+    // itself — a stale blend/settling flag for one skipped frame is a much
+    // smaller visual cost than that.
     //
-    // Sorted, not left in whatever order controls happened to register into
-    // the Set — plain registration order has no relationship to real 3D
-    // distance from the camera, so under real budget pressure (a big
-    // pan/zoom mounting many chunks in one frame) it could let a handful of
-    // far chunks resolve first purely because they mounted first, while much
-    // closer chunks queued behind them for a frame or more — the opposite
-    // of the "resolves outward from the camera" this whole scheduler exists
-    // for. Same priority_order key (sched/priority.ts) the commit loop below
-    // sorts pending by — one shared notion of priority, not two.
-    //
-    // distance2 is always a real, if sometimes approximate, camera-relative
-    // value now (every control seeds it from estimate_initial_chunk_view at
-    // construction — see that control's own distance2 field comment — never
-    // a true Infinity sentinel), so this alone is enough: a brand new
-    // control mounted this very frame competes fairly on real distance
-    // against an older still-pending one instead of needing a separate
-    // "urgent" tier. An earlier version of this sort DID give blend_active/
-    // settling controls a whole tier ahead of distance — that seemed right
-    // (their own first-ever recheck matters most) but backfires under
-    // sustained camera movement: a continuously panning camera keeps
-    // minting brand-new blend_active chunks at its leading edge, an
-    // unbounded stream that could occupy the "urgent" tier forever and
-    // starve an older, still-pending, genuinely-closer chunk that merely
-    // isn't blend_active/settling anymore — exactly "far keeps cutting in
-    // line over near" during continuous motion, not just a one-off frame.
-    // Distance alone doesn't have that failure mode: a far new chunk sorts
-    // behind a near old one no matter how continuously the camera moves.
-    //
-    // Filtered to this frame's actually-eligible controls BEFORE sorting,
-    // not sorted-then-filtered — controls can number in the thousands
-    // (every terrain chunk across every mounted page, times
-    // every decor kind on top), and on all but a full_recheck frame only
-    // the blend_active/settling subset (usually far smaller) needs
-    // anything done at all. Sorting the full set every single frame
-    // regardless of eligibility would size this copy+sort to the total
-    // registrant count instead of the actual per-frame workload — real,
-    // needless GC pressure and comparisons on the common (non-full_recheck)
-    // frame, for a subset most of which was about to be skipped anyway.
-    const eligible = controls.filter((control) => full_recheck || control.blend_active || control.settling);
-    eligible.sort(order);
-    budget.run(eligible, (control) => {
-      control.recheck(state.camera, frustum, lead);
+    // Sorted by the same priority_order the commit loop below sorts pending
+    // by — one shared notion of priority, not two — and filtered to this
+    // frame's eligible chunks before sorting: on all but a full_recheck
+    // frame only the blend_active/settling subset needs anything done.
+    // Distance alone orders it; an "urgent" tier for fresh chunks backfired
+    // under sustained camera movement, where the leading edge mints new
+    // chunks without end and an older, nearer, still-pending one starves.
+    budget.run(sorted(s_eligible, order), (slot) => {
+      handles[slot].recheck();
       return true;
     });
 
-    // Every blend_active-true control is by construction included in
-    // eligible above (it's one of the three needs_recheck conditions), so
-    // this OR over just the eligible subset still sees every one of them —
-    // equivalent to scanning all of controls for this specific flag, just
-    // without paying to visit the ones that couldn't have it. Deliberately
-    // a full scan, not folded into the budgeted pass above: a control whose
-    // recheck got deferred still carries last frame's flag and still needs a
-    // repaint scheduled for it, so this must see the ones the budget skipped.
-    let blend_active = false;
-    for (const control of eligible) blend_active ||= control.blend_active;
+    // A chunk whose recheck the budget skipped still carries last frame's
+    // flag and still needs a repaint scheduled for it, so this is read off
+    // the lane, not off what ran.
+    const blend_active = table.count(BLEND_ACTIVE) > 0;
     const recheck_ms = import.meta.env.DEV ? performance.now() - recheck_t0 : 0;
 
-    const pending_total = controls.filter((control) => control.pending);
-    // Visible builds/refinements win. Pending work outside the frustum only
-    // drops a formerly visible chunk's derived surface and GPU buffers.
-    // The slot holder first, whatever its distance — see ChunkLodControl.holds_slot.
-    const pending = pending_total.sort(order);
     const commit_t0 = import.meta.env.DEV ? performance.now() : 0;
-    // commit() returning false means "nothing to do after all" — it neither
-    // counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the deadline, which is
-    // what run_under_budget's own falsy-step rule preserves.
-    // The commit pass gets what the recheck pass left, not a budget of its
-    // own — the two used to carry independent allowances, so a frame could
-    // legally spend both in full before anything else ran.
-    // Visible work takes the frame's steps; releases get their own small
-    // guaranteed share out of what is left. run_under_budget always lets the
-    // first item of a pass do work, so a release lands every frame even on a
-    // frame the visible pass filled — which is the whole point of a
-    // guaranteed share.
-    const step = (control: ChunkLodControl) => control.commit(budget);
-    const committed: u32 = budget.run(pending.filter((control) => control.in_frustum), step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
-      budget.run(pending.filter((control) => !control.in_frustum), step, { max_steps: RELEASE_MAX_PER_FRAME }).ran;
+    // Visible builds/refinements win; pending work outside the frustum only
+    // drops a formerly visible chunk's derived surface and GPU buffers. The
+    // slot holder goes first whatever its distance (chunk_table.ts's
+    // HOLDS_SLOT). commit() returning false means "nothing to do after all"
+    // — it neither counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the
+    // deadline, which is what run_under_budget's own falsy-step rule
+    // preserves. The commit pass gets what the recheck pass left, not a
+    // budget of its own. Visible work takes the frame's steps; releases get
+    // their own small guaranteed share out of what is left. run_under_budget
+    // always lets the first item of a pass do work, so a release lands every
+    // frame even on a frame the visible pass filled — which is the whole
+    // point of a guaranteed share.
+    const step = (slot: u32) => handles[slot].commit(budget);
+    const committed: u32 = budget.run(sorted(s_visible, order), step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
+      budget.run(sorted(s_offscreen, order), step, { max_steps: RELEASE_MAX_PER_FRAME }).ran;
     // The memory budget: built work is kept off screen until what off-screen
     // chunks hold is over RETAIN_BUDGET_BYTES, then reclaimed farthest first —
-    // `order` already sorts off-screen controls that way. Bounded per frame
+    // `order` already sorts off-screen chunks that way. Bounded per frame
     // like everything else, and a no-op while under.
     if (chunk_retained_bytes().off > RETAIN_BUDGET_BYTES) {
-      const off = controls.filter((control) => !control.in_frustum && control.retained > 0).sort(order);
+      s_offscreen.truncate(0);
+      const retained = table.retained;
+      for (let i = 0; i < table.len; i++) {
+        if ((flags[i] & IN_FRUSTUM) === 0 && retained[i] > 0) s_offscreen.push(i);
+      }
       let freed = 0;
-      for (const control of off) {
+      for (const slot of sorted(s_offscreen, order)) {
         if (chunk_retained_bytes().off <= RETAIN_BUDGET_BYTES || freed >= RECLAIM_MAX_PER_FRAME) break;
-        control.reclaim();
+        handles[slot].reclaim();
         freed++;
       }
     }
     // After the commits, so a chunk's terrain and its decor reach the screen
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
-    decor_field.update(anchor_registry.cur_map_origin);
+    decor_field.update(origin);
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
-    if (committed > 0 || pending.length > committed || blend_active) state.invalidate();
-    if (import.meta.env.DEV) visible_pass.current = { controls, pending_total, committed, recheck_ms, commit_ms };
+    if (committed > 0 || pending_total > committed || blend_active) state.invalidate();
+    if (import.meta.env.DEV) visible_pass.current = { pending_total, committed, recheck_ms, commit_ms };
   });
 
   // The ledger, after every other phase has run, so `sched_ms` is the whole
@@ -472,12 +495,12 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       queueMicrotask(gpu_timer_end);
       return;
     }
-    const { controls, pending_total, committed, recheck_ms, commit_ms } = pass;
+    const { pending_total, committed, recheck_ms, commit_ms } = pass;
     {
-      const settling_lod = controls.filter((control) => control.settling).length;
-      const blend_active_cnt = controls.filter((control) => control.blend_active).length;
-      const in_frustum_cnt = controls.filter((control) => control.in_frustum).length;
-      const pending_lod_total_cnt = pending_total.length - committed;
+      const settling_lod = scheduler.count(SETTLING);
+      const blend_active_cnt = scheduler.count(BLEND_ACTIVE);
+      const in_frustum_cnt = scheduler.count(IN_FRUSTUM);
+      const pending_lod_total_cnt = pending_total - committed;
       const frame_t0 = budget.t0;
       const frame_ms = performance.now() - frame_t0;
 
@@ -485,9 +508,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       // the ledger owns both views now (the ring and the window peak), so
       // this loop only has to hand over raw numbers.
       const perf_memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
-      const poi_map = usePoiStore.getState().poi_map;
       let poi_count = 0;
-      for (const pois of poi_map.values()) poi_count += pois.length;
+      for (const pois of poi_pages.handles) poi_count += pois.length;
       const fx = useSettingsStore.getState();
       const fx_passes = 1 + // color-grade + vignette, always on (fused)
         (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_tilt_shift ? 1 : 0) +
@@ -520,15 +542,15 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         fx_passes,
         mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
         lod: {
-          chunks: controls.length,
+          chunks: scheduler.len,
           in_frustum: in_frustum_cnt,
           pending: pending_lod_total_cnt,
           settling: settling_lod,
           blend_active: blend_active_cnt,
-          ...starvation(controls),
+          ...starvation(),
         },
         heap_mb: perf_memory ? Math.round(perf_memory.usedJSHeapSize / 1_048_576) : 0,
-        tile_pages: useTileStore.getState().tile_map.size,
+        tile_pages: tile_pages.size,
         poi_count,
         pool: pool_sample(),
         work: work_sample(),
@@ -538,9 +560,9 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       const peak = ledger_frame_peak();
 
       const debug_stats = {
-        chunks: controls.length,
+        chunks: scheduler.len,
         in_frustum: in_frustum_cnt,
-        pending_lod: pending_total.length - committed,
+        pending_lod: pending_total - committed,
         pending_lod_total: pending_lod_total_cnt,
         blend_active: blend_active_cnt,
         settling_lod,
@@ -596,9 +618,10 @@ export type ChunkStageProps = { stack: WorldLayerStack };
  * not passed in either: decor/asset_store.ts owns them and every ChunkNode
  * subscribes to it directly. */
 export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
-  const tile_map = useTileStore((state) => state.tile_map);
+  const tile_revision = useTileStore((state) => state.revision);
 
-  const tiles = useMemo(() => Array.from(tile_map.keys()), [tile_map]);
+  // tile_revision: the keys live in tile_pages; the revision is what moves.
+  const tiles = useMemo(() => Array.from(tile_pages.keys()), [tile_revision]);
   const range_anchor = useRangeAnchor();
   // Every page the render range reaches, nearest first, that has a tile to
   // draw from. A page whose tile has not arrived contributes nothing and is

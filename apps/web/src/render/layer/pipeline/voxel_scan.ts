@@ -20,7 +20,8 @@ import {
   MaterialClass,
   ordered_chunk_bands,
   SUB_CELL_NONE,
-  type SubVoxelEntry,
+  sub_voxel_range,
+  type SubVoxels,
   unpack_sub_cell_fraction,
   type VoxelBand,
   type VoxelMaterial,
@@ -40,34 +41,16 @@ export type MeshRun = {
   sub_oz: u32;
 };
 
-function push_sub_voxel_run(sink: RunSink, entry: SubVoxelEntry): void {
-  sink.push(entry.z, entry.z, entry.r, entry.g, entry.b, entry.layer_idx, entry.material_class, entry.sub_sz, entry.sub_ox, entry.sub_oy, entry.sub_oz);
-}
-
-/**
- * Per-(band, column) buckets of `extra_sub_voxels`, built once and reused
- * across every column `merge_column_runs` visits for the same chunk
- * (`scan_all_column_runs` below) — filtering a band's `extra_sub_voxels` by
- * `cx`/`cy` fresh on every one of those 4096 calls would be an O(4096 * N)
- * re-scan of the same array, dominating cost on a chunk with many placed
- * sub-cell objects (large N).
- */
-export type SubVoxelIndex = ReadonlyMap<VoxelBand, ReadonlyMap<u32, readonly SubVoxelEntry[]>>;
-
-export function index_extra_sub_voxels(bands: readonly VoxelBand[]): SubVoxelIndex {
-  const index = new Map<VoxelBand, Map<u32, SubVoxelEntry[]>>();
-  for (const band of bands) {
-    if (band.extra_sub_voxels.length === 0) continue;
-    const per_column = new Map<u32, SubVoxelEntry[]>();
-    for (const entry of band.extra_sub_voxels) {
-      const key = entry.cy * L2_BAND_CELL_SPAN + entry.cx;
-      let list = per_column.get(key);
-      if (!list) per_column.set(key, list = []);
-      list.push(entry);
-    }
-    index.set(band, per_column);
+/** One band's overflow sub-voxels in a column, pushed as runs of height
+ * one — the lanes volume.ts sorted by column when the volume was sealed. */
+function push_sub_voxel_runs(sink: RunSink, extra: SubVoxels, col: u32): void {
+  const [lo, hi] = sub_voxel_range(extra, col);
+  for (let i = lo; i < hi; i++) {
+    const z = extra.z.mem[i];
+    const m = extra.material.mem[i];
+    const sub = extra.sub.mem[i];
+    sink.push(z, z, (m >>> 16) & 255, (m >>> 8) & 255, m & 255, extra.layer_idx.mem[i], (m >>> 24) as MaterialClass, sub >>> 24, sub & 255, (sub >>> 8) & 255, (sub >>> 16) & 255);
   }
-  return index;
 }
 
 /**
@@ -117,7 +100,6 @@ function walk_column_runs(
   cx: u32,
   cy: u32,
   only_band_z: i32 | undefined,
-  sub_voxel_index: SubVoxelIndex | undefined,
   sink: RunSink,
 ): void {
   if (volume.bands.length === 0) return;
@@ -175,15 +157,7 @@ function walk_column_runs(
       }
     }
 
-    if (sub_voxel_index) {
-      const entries = sub_voxel_index.get(band)?.get(cy * L2_BAND_CELL_SPAN + cx);
-      if (entries) { for (const entry of entries) push_sub_voxel_run(sink, entry); }
-    } else {
-      for (const entry of band.extra_sub_voxels) {
-        if (entry.cx !== cx || entry.cy !== cy) continue;
-        push_sub_voxel_run(sink, entry);
-      }
-    }
+    if (band.extra.col.len > 0) push_sub_voxel_runs(sink, band.extra, local_y * L2_BAND_CELL_SPAN + local_x);
   }
 }
 
@@ -221,10 +195,9 @@ export function merge_column_runs(
   cx: u32,
   cy: u32,
   only_band_z?: i32,
-  sub_voxel_index?: SubVoxelIndex,
 ): MeshRun[] {
   const sink = new ArrayRunSink();
-  walk_column_runs(volume, cx, cy, only_band_z, sub_voxel_index, sink);
+  walk_column_runs(volume, cx, cy, only_band_z, sink);
   return sink.runs;
 }
 
@@ -484,7 +457,6 @@ export type ColumnScan = {
    * A one-chunk scan is a chunk-row of one.
    */
   row_volumes: (ChunkVolume | null)[];
-  row_indices: (SubVoxelIndex | null)[];
   /** Which chunk-row `row_volumes` holds, 0..span / L2_BAND_CELL_SPAN. */
   chunk_row: u32;
   /** Next row within the chunk-row to walk, 0..L2_BAND_CELL_SPAN. */
@@ -534,7 +506,6 @@ export function begin_column_scan(first_row: ChunkVolume | readonly (ChunkVolume
   open_scan = {
     span,
     row_volumes: [...row],
-    row_indices: row.map((v) => (v ? index_extra_sub_voxels(v.bands) : null)),
     chunk_row: 0,
     next_row: 0,
     row_fed: true,
@@ -557,7 +528,6 @@ export function scan_next_row(scan: ColumnScan, row: readonly (ChunkVolume | nul
   if (!scan_wants_row(scan)) throw new Error("render: scan_next_row before the current chunk-row is walked");
   if (row.length !== scan_unit_chunks(scan)) throw new Error(`render: a chunk-row holds ${scan_unit_chunks(scan)} chunks, not ${row.length}`);
   scan.row_volumes = [...row];
-  scan.row_indices = row.map((v) => (v ? index_extra_sub_voxels(v.bands) : null));
   scan.chunk_row++;
   scan.next_row = 0;
   scan.row_fed = true;
@@ -584,7 +554,7 @@ export function scan_complete(scan: ColumnScan): boolean {
 export function scan_column_rows(scan: ColumnScan, rows: u32 = SCAN_ROWS_PER_STEP): boolean {
   if (!scan.row_fed) return scan_complete(scan);
   const starts = COLUMN_STARTS;
-  const { span, row_volumes, row_indices } = scan;
+  const { span, row_volumes } = scan;
   const n = scan_unit_chunks(scan);
   const cy0 = scan.chunk_row * L2_BAND_CELL_SPAN;
   const end = Math.min(L2_BAND_CELL_SPAN, scan.next_row + rows);
@@ -600,7 +570,7 @@ export function scan_column_rows(scan: ColumnScan, rows: u32 = SCAN_ROWS_PER_STE
       }
       for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) {
         starts[row_base + cx] = SC_Z0.len;
-        walk_column_runs(volume, cx, cy, undefined, row_indices[ux]!, SPAN_SINK);
+        walk_column_runs(volume, cx, cy, undefined, SPAN_SINK);
       }
     }
   }
@@ -608,7 +578,6 @@ export function scan_column_rows(scan: ColumnScan, rows: u32 = SCAN_ROWS_PER_STE
   if (end >= L2_BAND_CELL_SPAN) {
     scan.row_fed = false;
     scan.row_volumes = [];
-    scan.row_indices = [];
   }
   return scan_complete(scan);
 }
