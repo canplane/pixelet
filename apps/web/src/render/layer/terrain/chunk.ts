@@ -16,13 +16,12 @@ import { L2_SHAMT, L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
 import { type Ground, type Terrain } from "@pxl/shared/bake/format.ts";
 import { CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 import { dense_ele_region } from "./elevation.ts";
 
 const PAGE_CHUNK_SPAN: u32 = 1 << (L3_SHAMT - L2_SHAMT);
 
-function slice_ground_ch(ch: U8Array, tx0: u32, ty0: u32, span: u32): U8Array {
-  const out = new Uint8Array(span * span);
-
+function slice_ground_ch(ch: U8Array, tx0: u32, ty0: u32, span: u32, out: U8Array): U8Array {
   let dst_off: u32 = 0;
   for (let dy: u32 = 0; dy < span; dy++) {
     const src_off: u32 = (ty0 + dy) * PAGE_CELL_SPAN + tx0;
@@ -65,23 +64,42 @@ export function chunk_offsets(): readonly IVec[] {
   return CHUNK_OFFSETS;
 }
 
-/** Real per-chunk cost — ground channel slicing + elevation bicubic resampling (elevation.ts's dense_ele_region), confirmed live via profiling to dominate main-thread time when done for a whole page's worth of chunks synchronously. Callers should only call this for chunks they've already decided are worth building. */
+/**
+ * One chunk of a page's terrain, as the adapter reads it: the four ground
+ * channels and the dense elevation, chunk-local.
+ *
+ * Written into one set of scratch lanes and handed back as views over them,
+ * so the result is valid until the next call and must be consumed before
+ * it — which both callers do, in the same synchronous pass. It used to be
+ * five fresh arrays, 24 KB of heap per call, and the call is made once per
+ * composite and once per direct build: a zoom-out that rebuilds two
+ * thousand chunks moved fifty megabytes through the collector for data
+ * that is read once and dropped.
+ *
+ * The elevation half is the real cost — a bicubic sample per cell
+ * (elevation.ts) — and is what makes this worth calling only for chunks
+ * already decided on.
+ */
+const SLICE_CELLS = CHUNK_CELL_SPAN * CHUNK_CELL_SPAN;
+const SLICE_GROUND: Ground = {
+  land: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
+  water: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
+  structure: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
+  transport: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
+};
+const SLICE_ELE = CORE_ALLOC.take(Int16Array, SLICE_CELLS);
+const SLICE: Terrain = { ground: SLICE_GROUND, ele: SLICE_ELE };
+
 export function slice_chunk(page_ground: Ground, page_ele: I16Array, page_off: IVec): Terrain {
   const tx0: u32 = Number(ivec.X(page_off)) << -CELL_SHAMT;
   const ty0: u32 = Number(ivec.Y(page_off)) << -CELL_SHAMT;
   const span = CHUNK_CELL_SPAN;
-  const ground: Ground = {
-    land: slice_ground_ch(page_ground.land, tx0, ty0, span),
-    water: slice_ground_ch(page_ground.water, tx0, ty0, span),
-    structure: slice_ground_ch(page_ground.structure, tx0, ty0, span),
-    transport: slice_ground_ch(page_ground.transport, tx0, ty0, span),
-  };
-  return {
-    ground,
-    // ground passed through so water-family cells get their real elevation
-    // recess applied here (see elevation.ts's WATER_RECESS_CELLS) — ground
-    // is already sliced to this exact tx0/ty0/span region, matching what
-    // dense_ele_region indexes internally.
-    ele: dense_ele_region(page_ele, tx0, ty0, span, ground),
-  };
+  slice_ground_ch(page_ground.land, tx0, ty0, span, SLICE_GROUND.land);
+  slice_ground_ch(page_ground.water, tx0, ty0, span, SLICE_GROUND.water);
+  slice_ground_ch(page_ground.structure, tx0, ty0, span, SLICE_GROUND.structure);
+  slice_ground_ch(page_ground.transport, tx0, ty0, span, SLICE_GROUND.transport);
+  // ground first: water-family cells get their elevation recess applied
+  // here (elevation.ts's WATER_RECESS_CELLS), read off the slice just made.
+  dense_ele_region(page_ele, tx0, ty0, span, SLICE_GROUND, SLICE_ELE);
+  return SLICE;
 }

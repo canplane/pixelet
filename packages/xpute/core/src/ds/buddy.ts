@@ -152,14 +152,28 @@ function shift_of(bytes: u32): u32 {
 /**
  * One buddy-carved ArrayBuffer.
  *
- * `free[k]` holds the offsets of every free block of order k, and `is_free`
- * answers "is the block of order k at this offset free" in O(1) — the buddy
- * test on release needs exactly that question, and a linear scan of `free[k]`
- * would make release O(free blocks) instead of O(orders).
+ * The free blocks of each order are a doubly linked list threaded through
+ * the free blocks themselves — the first two words of a free block hold the
+ * offsets of the next and previous free block of its order — which is the
+ * classic shape and the one that costs nothing: no container per order, no
+ * iterator to take the head, no allocation anywhere in the allocator. A
+ * block is only written to while it is free, and a borrower gets its bytes
+ * dirty in any case. `is_free` answers "is the block of order k at this
+ * offset free" in O(1) — the buddy test on release needs exactly that
+ * question, and it cannot be read off the list without walking it.
+ *
+ * Offsets on the lists are region-relative and word-aligned by
+ * construction (the minimum order is at least eight bytes); NIL marks a
+ * list's end and a block's missing neighbour.
  */
+const NIL = 0xffffffff;
+
 class Region {
   readonly buf: ArrayBuffer;
-  readonly free: Set<u32>[];
+  /** The region's bytes as words, for the list links inside free blocks. */
+  private readonly words: Uint32Array;
+  /** Offset of the first free block of each order, or NIL. */
+  private readonly head: Uint32Array;
   private readonly is_free: Uint8Array[];
   /** Bytes carved into live blocks; a region with 0 is fully reclaimable. */
   used_bytes: u32 = 0;
@@ -172,23 +186,34 @@ class Region {
    * absolute, so it can index `buf` directly.
    */
   constructor(readonly min_shift: u32, readonly max_order: u32, backing: ArrayBuffer | null = null, readonly base: u32 = 0) {
-    this.buf = backing ?? new ArrayBuffer(1 << (min_shift + max_order));
-    this.free = [];
+    const bytes = 1 << (min_shift + max_order);
+    this.buf = backing ?? new ArrayBuffer(bytes);
+    this.words = new Uint32Array(this.buf, base, bytes >>> 2);
+    this.head = new Uint32Array(max_order + 1).fill(NIL);
     this.is_free = [];
-    for (let k = 0; k <= max_order; k++) {
-      this.free.push(new Set());
-      this.is_free.push(new Uint8Array(1 << (max_order - k)));
-    }
+    for (let k = 0; k <= max_order; k++) this.is_free.push(new Uint8Array(1 << (max_order - k)));
     this.mark_free(max_order, 0);
   }
 
   private mark_free(order: u32, offset: u32): void {
-    this.free[order].add(offset);
+    const words = this.words;
+    const w = offset >>> 2;
+    const next = this.head[order];
+    words[w] = next;
+    words[w + 1] = NIL;
+    if (next !== NIL) words[(next >>> 2) + 1] = offset;
+    this.head[order] = offset;
     this.is_free[order][offset >>> (this.min_shift + order)] = 1;
   }
 
   private mark_used(order: u32, offset: u32): void {
-    this.free[order].delete(offset);
+    const words = this.words;
+    const w = offset >>> 2;
+    const next = words[w];
+    const prev = words[w + 1];
+    if (prev === NIL) this.head[order] = next;
+    else words[prev >>> 2] = next;
+    if (next !== NIL) words[(next >>> 2) + 1] = prev;
     this.is_free[order][offset >>> (this.min_shift + order)] = 0;
   }
 
@@ -197,10 +222,10 @@ class Region {
    * `counts`, which the pool folds into its own stats. */
   alloc(order: u32, counts: { splits: u32 }): number {
     let k = order;
-    while (k <= this.max_order && this.free[k].size === 0) k++;
+    while (k <= this.max_order && this.head[k] === NIL) k++;
     if (k > this.max_order) return -1;
 
-    const offset = this.free[k].values().next().value as u32;
+    const offset = this.head[k];
     this.mark_used(k, offset);
     while (k > order) {
       k--;

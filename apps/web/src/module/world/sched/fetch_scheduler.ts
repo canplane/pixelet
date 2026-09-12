@@ -27,6 +27,7 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
+import { Lanes } from "@xpute/core/ds/lanes.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
@@ -58,11 +59,7 @@ const RUNNING = 2;
 
 const LANE = { init_cap: 64, alloc: CORE_ALLOC } as const;
 const index = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
-const state = new Vector(Uint8Array, LANE);
-const category_id = new Vector(Uint8Array, LANE);
-const priority = new Vector(Float64Array, LANE);
-const enqueue_ms = new Vector(Float64Array, LANE);
-const start_ms = new Vector(Float64Array, LANE);
+const rows = new Lanes({ state: Uint8Array, category_id: Uint8Array, priority: Float64Array, enqueue_ms: Float64Array, start_ms: Float64Array }, LANE);
 const demands: Demand[] = [];
 const controllers: (AbortController | null)[] = [];
 
@@ -87,11 +84,13 @@ function find(key: string): number {
 
 function add(demand: Demand): u32 {
   const pos = index.insert(key_hash(demand.key));
-  state.set(pos, QUEUED);
-  category_id.set(pos, category_of(demand.category));
-  priority.set(pos, demand.priority);
-  enqueue_ms.set(pos, performance.now());
-  start_ms.set(pos, -1);
+  if (pos === rows.len) rows.push();
+  const m = rows.mem;
+  m.state[pos] = QUEUED;
+  m.category_id[pos] = category_of(demand.category);
+  m.priority[pos] = demand.priority;
+  m.enqueue_ms[pos] = performance.now();
+  m.start_ms[pos] = -1;
   demands[pos] = demand;
   controllers[pos] = null;
   return pos;
@@ -99,27 +98,18 @@ function add(demand: Demand): u32 {
 
 function remove(pos: u32): void {
   const from = index.remove_at(pos);
+  rows.swap_remove(pos);
   if (from !== pos) {
-    state.mem[pos] = state.mem[from];
-    category_id.mem[pos] = category_id.mem[from];
-    priority.mem[pos] = priority.mem[from];
-    enqueue_ms.mem[pos] = enqueue_ms.mem[from];
-    start_ms.mem[pos] = start_ms.mem[from];
     demands[pos] = demands[from];
     controllers[pos] = controllers[from];
   }
-  state.truncate(from);
-  category_id.truncate(from);
-  priority.truncate(from);
-  enqueue_ms.truncate(from);
-  start_ms.truncate(from);
   demands.length = from;
   controllers.length = from;
 }
 
 function count(which: u32): u32 {
   let n = 0;
-  for (let pos = 0; pos < index.size; pos++) if (state.mem[pos] === which) n++;
+  for (let pos = 0; pos < index.size; pos++) if (rows.mem.state[pos] === which) n++;
   return n;
 }
 
@@ -147,7 +137,7 @@ export function fetch_pending_count(category: string): number {
   const id = category_names.indexOf(category);
   if (id < 0) return 0;
   let n = 0;
-  for (let pos = 0; pos < index.size; pos++) if (category_id.mem[pos] === id) n++;
+  for (let pos = 0; pos < index.size; pos++) if (rows.mem.category_id[pos] === id) n++;
   return n;
 }
 
@@ -222,9 +212,9 @@ function pump(): void {
   // Small N (tens of pages at most) — a sort per pump is cheaper to read
   // than maintaining a heap, and pump runs once per tick, not per frame.
   s_order.truncate(0);
-  for (let pos = 0; pos < index.size; pos++) if (state.mem[pos] === QUEUED) s_order.push(pos);
+  for (let pos = 0; pos < index.size; pos++) if (rows.mem.state[pos] === QUEUED) s_order.push(pos);
   const by_priority = s_order.mem.subarray(0, s_order.len);
-  by_priority.sort((a, b) => priority.mem[a] - priority.mem[b]);
+  by_priority.sort((a, b) => rows.mem.priority[a] - rows.mem.priority[b]);
 
   for (const pos of by_priority) {
     if (inflight >= MAX_INFLIGHT) break;
@@ -233,11 +223,11 @@ function pump(): void {
     const demand = demands[pos];
     const key = demand.key;
     const controller = new AbortController();
-    state.mem[pos] = RUNNING;
+    rows.mem.state[pos] = RUNNING;
     controllers[pos] = controller;
     const started = performance.now();
-    start_ms.mem[pos] = started;
-    const enqueued = enqueue_ms.mem[pos];
+    rows.mem.start_ms[pos] = started;
+    const enqueued = rows.mem.enqueue_ms[pos];
 
     demand
       .run(controller.signal)
@@ -263,8 +253,8 @@ export function fetch_sync(category: string, wanted: readonly Demand[]): void {
   // yield: shed this category's demands that are no longer wanted. Backwards,
   // since a removal moves the last slot into the hole.
   for (let pos = index.size - 1; pos >= 0; pos--) {
-    if (category_id.mem[pos] !== id || keep.has(demands[pos].key)) continue;
-    if (state.mem[pos] === QUEUED) remove(pos);
+    if (rows.mem.category_id[pos] !== id || keep.has(demands[pos].key)) continue;
+    if (rows.mem.state[pos] === QUEUED) remove(pos);
     else controllers[pos]?.abort();
   }
 
@@ -275,9 +265,9 @@ export function fetch_sync(category: string, wanted: readonly Demand[]): void {
       add(demand);
       continue;
     }
-    if (state.mem[pos] === QUEUED) {
+    if (rows.mem.state[pos] === QUEUED) {
       demands[pos] = demand;
-      priority.mem[pos] = demand.priority;
+      rows.mem.priority[pos] = demand.priority;
     }
   }
 
@@ -290,7 +280,7 @@ export function fetch_sync(category: string, wanted: readonly Demand[]): void {
  * for (see terrain/use_tile_fetcher.ts's in-flight hysteresis). */
 export function fetch_running(key: string): boolean {
   const pos = find(key);
-  return pos >= 0 && state.mem[pos] === RUNNING;
+  return pos >= 0 && rows.mem.state[pos] === RUNNING;
 }
 
 /** Test-only: abort everything in flight and forget the queue, so each test
@@ -299,11 +289,7 @@ export function fetch_running(key: string): boolean {
 export function fetch_scheduler_reset(): void {
   for (let pos = 0; pos < index.size; pos++) controllers[pos]?.abort();
   index.clear();
-  state.truncate(0);
-  category_id.truncate(0);
-  priority.truncate(0);
-  enqueue_ms.truncate(0);
-  start_ms.truncate(0);
+  rows.clear();
   demands.length = 0;
   controllers.length = 0;
 }

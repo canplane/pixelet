@@ -28,13 +28,15 @@
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Arena, Vector } from "@xpute/core/ds/arena.ts";
+import { Lanes } from "@xpute/core/ds/lanes.ts";
+import { carver } from "@xpute/core/ds/typed_alloc.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 
 import type { LodStep } from "@/render/lod.ts";
 import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "./volume.ts";
-import { alloc_column_run_set, type ColumnRunSet, MAX_UNIT_CHUNKS, release_column_runs } from "./voxel_scan.ts";
+import { alloc_column_run_set, type ColumnRunSet, release_column_runs } from "./voxel_scan.ts";
 
 /**
  * One baked chunk mesh's raw vertex data — position/normal are the real
@@ -107,9 +109,12 @@ const LOW_FILL_THRESHOLD: f64 = 0.25;
  */
 export const occlusion_stats = { total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0 };
 
-/** sRGB [0,1] -> linear [0,1]. */
-function srgb_to_linear(c: f64): f64 {
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+/** sRGB byte -> linear [0,1], by table: three powers per box, thousands of
+ * boxes per chunk, for 256 possible inputs. */
+const SRGB_TO_LINEAR = new Float64Array(256);
+for (let i = 0; i < 256; i++) {
+  const c = i / 255;
+  SRGB_TO_LINEAR[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
 // ---- Canonical unit-box face table ----
@@ -284,26 +289,20 @@ type MeshBuilder = {
 
 function alloc_builder(vertex_total: u32, index_total: u32): MeshBuilder {
   const block = CORE_POOL.acquire(block_bytes(vertex_total, index_total));
-  const buf = block.buf;
   // Every span is measured from the block's own start, never the buffer's:
   // a region is shared with other live chunks' blocks.
-  let off = block.byte_offset;
-  const span = (floats: u32): Float32Array => {
-    const view = new Float32Array(buf, off, floats);
-    off += floats * 4;
-    return view;
-  };
+  const cut = carver(block.buf, block.byte_offset);
   return {
     block,
-    position: span(vertex_total * 3),
-    normal: span(vertex_total * 3),
-    local_pos: span(vertex_total * 3),
-    box_scale: span(vertex_total * 3),
-    rgb: span(vertex_total * 3),
-    layer_taps: span(vertex_total * 4),
-    faces: span(vertex_total),
+    position: cut(Float32Array, vertex_total * 3),
+    normal: cut(Float32Array, vertex_total * 3),
+    local_pos: cut(Float32Array, vertex_total * 3),
+    box_scale: cut(Float32Array, vertex_total * 3),
+    rgb: cut(Float32Array, vertex_total * 3),
+    layer_taps: cut(Float32Array, vertex_total * 4),
+    faces: cut(Float32Array, vertex_total),
     // visibility's own span sits here, carved on demand by carve_visibility.
-    index: new Uint32Array(buf, block.byte_offset + vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_total),
+    index: new Uint32Array(block.buf, block.byte_offset + vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_total),
     v_cnt: 0,
     i_cnt: 0,
   };
@@ -502,6 +501,17 @@ function run_include_bottom(set: ColumnRunSet, i: u32): boolean {
   return set.material_class[i] === MaterialClass.OBJECT;
 }
 
+/** What one side's neighbour relation does to the mask: hides the face,
+ * or leaves its edge a silhouette; rises past the top or dips under the
+ * bottom. The same four rules on each of the four sides. */
+function side_bits(mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips: u32): u32 {
+  if ((rel & HIDES_SIDE) !== 0) mask &= ~face;
+  if ((rel & ABUTS_SIDE) === 0) mask |= crease;
+  if ((rel & RISES_ABOVE) !== 0) mask |= rises;
+  if ((rel & EXTENDS_BELOW) !== 0) mask |= dips;
+  return mask;
+}
+
 /**
  * Which of a cube run's own six faces can be seen at all.
  *
@@ -538,34 +548,10 @@ function run_face_mask(set: ColumnRunSet, span: u32, cx: u32, cy: u32, i: u32): 
 
   // A chunk-edge column keeps its side face and gets no crease, concave or
   // convex: the neighbouring chunk's columns are not in this scan.
-  if (cx + 1 < span) {
-    const rel = neighbour_relation(set, col + 1, z0, z1);
-    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PX;
-    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_PX;
-    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PX;
-    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PX;
-  }
-  if (cx > 0) {
-    const rel = neighbour_relation(set, col - 1, z0, z1);
-    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NX;
-    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_NX;
-    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NX;
-    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NX;
-  }
-  if (cy + 1 < span) {
-    const rel = neighbour_relation(set, col + span, z0, z1);
-    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_PY;
-    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_PY;
-    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_PY;
-    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_PY;
-  }
-  if (cy > 0) {
-    const rel = neighbour_relation(set, col - span, z0, z1);
-    if ((rel & HIDES_SIDE) !== 0) mask &= ~FACE_NY;
-    if ((rel & ABUTS_SIDE) === 0) mask |= CREASE_NY;
-    if ((rel & RISES_ABOVE) !== 0) mask |= RISES_NY;
-    if ((rel & EXTENDS_BELOW) !== 0) mask |= DIPS_NY;
-  }
+  if (cx + 1 < span) mask = side_bits(mask, neighbour_relation(set, col + 1, z0, z1), FACE_PX, CREASE_PX, RISES_PX, DIPS_PX);
+  if (cx > 0) mask = side_bits(mask, neighbour_relation(set, col - 1, z0, z1), FACE_NX, CREASE_NX, RISES_NX, DIPS_NX);
+  if (cy + 1 < span) mask = side_bits(mask, neighbour_relation(set, col + span, z0, z1), FACE_PY, CREASE_PY, RISES_PY, DIPS_PY);
+  if (cy > 0) mask = side_bits(mask, neighbour_relation(set, col - span, z0, z1), FACE_NY, CREASE_NY, RISES_NY, DIPS_NY);
 
   // One diagonal per quadrant, and only where a wall could actually turn:
   // one of the two faces meeting there exists while the other's own axis
@@ -752,9 +738,9 @@ function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
  * they just each stand alone, which is right: stacked runs in one column are
  * a cliff face, not flat ground.
  */
-// Sized for the widest unit a scan can produce (voxel_scan.ts's
-// MAX_UNIT_CHUNKS); a bake over one chunk uses the top-left corner.
-const MAX_BAKE_SPAN = CHUNK_CELL_SPAN * MAX_UNIT_CHUNKS;
+// A coarse tier's grid is smaller than a chunk's and uses the top-left
+// corner.
+const MAX_BAKE_SPAN = CHUNK_CELL_SPAN;
 const MERGE_RUN = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
 const MERGE_MASK = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
 
@@ -784,7 +770,9 @@ type FineBake = {
 };
 
 function begin_fine(set: ColumnRunSet, span: u32, xy_scale: u32): FineBake {
-  MERGE_RUN.fill(-1);
+  // Only the cells this grid uses: the merge reads `col = cy * span + cx`,
+  // so a coarse grid occupies the first span² entries, not a square corner.
+  MERGE_RUN.fill(-1, 0, span * span);
   return { set, span, xy_scale, base: SURVIVING.len, phase: 0, row: 0, builder: null, emit_at: 0 };
 }
 
@@ -946,9 +934,9 @@ function step_fine(b: FineBake): boolean {
       size_x,
       size_y,
       size_z,
-      srgb_to_linear(set.r[i] / 255),
-      srgb_to_linear(set.g[i] / 255),
-      srgb_to_linear(set.b[i] / 255),
+      SRGB_TO_LINEAR[set.r[i]],
+      SRGB_TO_LINEAR[set.g[i]],
+      SRGB_TO_LINEAR[set.b[i]],
       taps & 255,
       (taps >>> 8) & 255,
       (taps >>> 16) & 255,
@@ -1167,14 +1155,10 @@ function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunS
 /** One coarse run, before it is packed into an exactly-sized set. Same
  * scratch-then-copy shape voxel_scan.ts uses, for the same reason: the run
  * count is only known once the walk is done. */
-const CO_Z0 = new Vector(Int32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
-const CO_Z1 = new Vector(Int32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
-const CO_RGB = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
-const CO_LAYER = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
-/** The run's isotropic inset, packed `offset | scale<<8`, or 0 for a box
- * that fills its cell — which is SUB_CELL_NONE in both bytes, so zero is
- * unambiguous. */
-const CO_SUB = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
+/** `sub` is the run's isotropic inset, packed `offset | scale<<8`, or 0 for
+ * a box that fills its cell — which is SUB_CELL_NONE in both bytes, so zero
+ * is unambiguous. */
+const CO = new Lanes({ z0: Int32Array, z1: Int32Array, rgb: Uint32Array, layer: Uint32Array, sub: Uint32Array }, { init_cap: 1 << 11, alloc: CORE_ALLOC });
 const CO_START = CORE_ALLOC.take(Uint32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1);
 
 function to_u8(v: f64): u32 {
@@ -1232,19 +1216,19 @@ function pack_coarse_cell(start: u32, cnt: u32, lod_step: LodStep): void {
 
     // Only full cells stack. Two shrunken boxes are two boxes with air
     // between them, which is the whole point of shrinking them.
-    if (
-      sub === 0 && open >= 0 && bucket_lo === last_top + 1 &&
-      CO_RGB.get(open) === rgb && CO_LAYER.get(open) === taps && CO_SUB.get(open) === 0
-    ) {
-      CO_Z1.set(open, bucket_hi);
+    const co = CO.mem;
+    if (sub === 0 && open >= 0 && bucket_lo === last_top + 1 && co.rgb[open] === rgb && co.layer[open] === taps && co.sub[open] === 0) {
+      co.z1[open] = bucket_hi;
       last_top = bucket_hi;
       continue;
     }
-    open = CO_Z0.push(bucket_lo);
-    CO_Z1.push(bucket_hi);
-    CO_RGB.push(rgb);
-    CO_LAYER.push(taps);
-    CO_SUB.push(sub);
+    open = CO.push();
+    const m = CO.mem;
+    m.z0[open] = bucket_lo;
+    m.z1[open] = bucket_hi;
+    m.rgb[open] = rgb;
+    m.layer[open] = taps;
+    m.sub[open] = sub;
     last_top = bucket_hi;
   }
 }
@@ -1387,11 +1371,7 @@ function step_coarse(b: CoarseBake): boolean {
     if (row_end >= res) {
       b.phase = 1;
       b.row = 0;
-      CO_Z0.truncate(0);
-      CO_Z1.truncate(0);
-      CO_RGB.truncate(0);
-      CO_LAYER.truncate(0);
-      CO_SUB.truncate(0);
+      CO.clear();
     }
     return false;
   }
@@ -1406,26 +1386,27 @@ function step_coarse(b: CoarseBake): boolean {
     // boxes.
     const row_end = Math.min(res, b.row + coarse_rows_per_step(lod_step));
     for (let c: u32 = b.row * res; c < row_end * res; c++) {
-      CO_START[c] = CO_Z0.len;
+      CO_START[c] = CO.len;
       const ri = b.range_base + c * 2;
       pack_coarse_cell(CELL_RANGE.get(ri), CELL_RANGE.get(ri + 1), lod_step);
     }
     b.row = row_end;
     if (row_end < res) return false;
 
-    CO_START[res * res] = CO_Z0.len;
-    const coarse = alloc_column_run_set(CO_Z0.len);
+    CO_START[res * res] = CO.len;
+    const coarse = alloc_column_run_set(CO.len);
     coarse.start.set(CO_START.subarray(0, res * res + 1));
-    for (let i: u32 = 0; i < CO_Z0.len; i++) {
-      const rgb = CO_RGB.get(i);
-      coarse.z0[i] = CO_Z0.get(i);
-      coarse.z1[i] = CO_Z1.get(i);
+    const co = CO.mem;
+    for (let i: u32 = 0; i < CO.len; i++) {
+      const rgb = co.rgb[i];
+      coarse.z0[i] = co.z0[i];
+      coarse.z1[i] = co.z1[i];
       coarse.r[i] = (rgb >>> 16) & 255;
       coarse.g[i] = (rgb >>> 8) & 255;
       coarse.b[i] = rgb & 255;
-      coarse.layer_taps[i] = CO_LAYER.get(i);
+      coarse.layer_taps[i] = co.layer[i];
       coarse.material_class[i] = MaterialClass.LAND;
-      const sub = CO_SUB.get(i);
+      const sub = co.sub[i];
       const inset = sub & 255, scale = (sub >>> 8) & 255;
       coarse.sub_sz[i] = sub === 0 ? SUB_CELL_NONE : scale;
       coarse.sub_sx[i] = scale;

@@ -53,7 +53,7 @@ last section is the authority when the two disagree.
 | 20260912-what-to-render-when                            | **built** · both "left open" items closed since                                                                                    |
 | 20260912-linear-memory-what-is-left                     | **built** (checklist A–C) · layout buckets parked                                                                                  |
 | 20260912-coarse-tiers-what-the-field-does               | **built** (heightmap direct path)                                                                                                  |
-| 20260912-coarse-tiers-need-a-larger-unit                | **not taken** · block kept unwired                                                                                                 |
+| 20260912-coarse-tiers-need-a-larger-unit                | **not taken** · block archived on a branch                                                                                         |
 | 20260911-taa-tried-and-closed                           | **closed** · cross-fade kept; MSAA's memory to be revisited on desktop first                                                       |
 | 20260911-single-thread-core-and-when-to-spawn-a-worker  | **decided** · bake worker next; reservation measured                                                                               |
 | 20260911-decor-identity-orientation-and-one-cell-format | **built** (extent criterion) · impostor tier decided, culling deferred                                                             |

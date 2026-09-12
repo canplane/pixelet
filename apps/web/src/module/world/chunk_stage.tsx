@@ -121,26 +121,32 @@ function pool_sample(): { live_mb: number; idle_mb: number; hits: number; misses
   return { live_mb: Math.round(stat.live_bytes / MB), idle_mb: Math.round(stat.idle_bytes / MB), hits: stat.hits, misses: stat.misses };
 }
 
-/** Who is waiting, and for how long — the progress rule guarantees a step a
- * frame, not which one, so this is what shows whether something is being
- * passed over indefinitely. */
-function starvation(): { offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
+/** The flag lane's census for the ledger, in one pass: how many are on
+ * screen, settling, blending, and who is waiting and for how long — the
+ * progress rule guarantees a step a frame, not which one, so the waits are
+ * what show whether something is being passed over indefinitely. */
+function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
   const now = performance.now();
   const { flags, pending_since } = lod_scheduler;
+  let in_frustum: u32 = 0, settling: u32 = 0, blend_active: u32 = 0;
   let offscreen_pending: u32 = 0;
   let oldest_release_ms: f64 = 0;
   let oldest_visible_ms: f64 = 0;
   for (let i = 0; i < lod_scheduler.len; i++) {
-    if ((flags[i] & PENDING) === 0 || pending_since[i] < 0) continue;
+    const f = flags[i];
+    if (f & IN_FRUSTUM) in_frustum++;
+    if (f & SETTLING) settling++;
+    if (f & BLEND_ACTIVE) blend_active++;
+    if ((f & PENDING) === 0 || pending_since[i] < 0) continue;
     const waited = now - pending_since[i];
-    if (flags[i] & IN_FRUSTUM) {
+    if (f & IN_FRUSTUM) {
       if (waited > oldest_visible_ms) oldest_visible_ms = waited;
     } else {
       offscreen_pending++;
       if (waited > oldest_release_ms) oldest_release_ms = waited;
     }
   }
-  return { offscreen_pending, oldest_release_ms, oldest_visible_ms };
+  return { in_frustum, settling, blend_active, offscreen_pending, oldest_release_ms, oldest_visible_ms };
 }
 
 /** Slot lists a frame sorts and walks: what to recheck, what to commit on
@@ -496,9 +502,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     }
     const { pending_total, committed, recheck_ms, commit_ms } = pass;
     {
-      const settling_lod = scheduler.count(SETTLING);
-      const blend_active_cnt = scheduler.count(BLEND_ACTIVE);
-      const in_frustum_cnt = scheduler.count(IN_FRUSTUM);
       const pending_lod_total_cnt = pending_total - committed;
       const frame_t0 = budget.t0;
       const frame_ms = performance.now() - frame_t0;
@@ -542,11 +545,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
         lod: {
           chunks: scheduler.len,
-          in_frustum: in_frustum_cnt,
           pending: pending_lod_total_cnt,
-          settling: settling_lod,
-          blend_active: blend_active_cnt,
-          ...starvation(),
+          ...lod_census(),
         },
         heap_mb: perf_memory ? Math.round(perf_memory.usedJSHeapSize / 1_048_576) : 0,
         tile_pages: tile_pages.size,

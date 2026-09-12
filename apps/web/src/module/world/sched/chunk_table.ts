@@ -25,6 +25,7 @@
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
+import { Lanes } from "@xpute/core/ds/lanes.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
@@ -63,38 +64,40 @@ export type PriorityLanes = {
 
 const LANE = { init_cap: 4096, alloc: CORE_ALLOC } as const;
 
-export class ChunkTable<T extends { slot: u32 }> {
-  private _len: u32 = 0;
+/** One row per chunk: absolute lattice origin (the packed word and its two
+ * axes in units), the bounding sphere in the chunk's own space (measured box
+ * centre and half diagonal, or the nominal ones until a build measures),
+ * the world-space centre `refresh` writes, the two squared distances (from
+ * the camera, which picks the tier; from where the camera is heading, which
+ * orders the work), when the pending work was asked for (-1 while not
+ * pending), which request it is (chunk_node.ts's codes), and the bytes of
+ * built work the chunk keeps. */
+const SLOT_LANES = {
+  flags: Uint8Array,
+  base: BigUint64Array,
+  base_x: Float64Array,
+  base_y: Float64Array,
+  bc_x: Float64Array,
+  bc_y: Float64Array,
+  bc_z: Float64Array,
+  radius: Float64Array,
+  cx: Float64Array,
+  cy: Float64Array,
+  cz: Float64Array,
+  distance2: Float64Array,
+  lead_distance2: Float64Array,
+  pending_since: Float64Array,
+  request: Int32Array,
+  retained: Float64Array,
+} as const;
 
+export class ChunkTable<T extends { slot: u32 }> {
   /** Slot by chunk base, for whoever asks whether a chunk is live. */
   private readonly by_base = new IndexedMap(I64_KEYS, 4096, CORE_ALLOC);
+  /** Which slot the base at each index position names. */
+  private readonly by_base_slot = new Vector(Uint32Array, LANE);
 
-  private readonly _flags = new Vector(Uint8Array, LANE);
-  /** Absolute lattice origin: the packed word, and in units per axis. */
-  private readonly _base = new Vector(BigUint64Array, LANE);
-  private readonly _base_x = new Vector(Float64Array, LANE);
-  private readonly _base_y = new Vector(Float64Array, LANE);
-  /** Bounding sphere in the chunk's own space: the centre of its measured
-   * box and half its diagonal, or the nominal centre and the approximate
-   * radius until a build has measured one. */
-  private readonly _bc_x = new Vector(Float64Array, LANE);
-  private readonly _bc_y = new Vector(Float64Array, LANE);
-  private readonly _bc_z = new Vector(Float64Array, LANE);
-  private readonly _radius = new Vector(Float64Array, LANE);
-  /** World-space centre, written by `refresh`. */
-  private readonly _cx = new Vector(Float64Array, LANE);
-  private readonly _cy = new Vector(Float64Array, LANE);
-  private readonly _cz = new Vector(Float64Array, LANE);
-  /** Squared distance from the camera; picks the tier. */
-  private readonly _distance2 = new Vector(Float64Array, LANE);
-  /** Squared distance from where the camera is heading; orders the work. */
-  private readonly _lead_distance2 = new Vector(Float64Array, LANE);
-  /** When the work now pending was asked for, in ms; -1 while not pending. */
-  private readonly _pending_since = new Vector(Float64Array, LANE);
-  /** The request the pending work is for (chunk_node.ts's request codes). */
-  private readonly _request = new Vector(Int32Array, LANE);
-  /** Bytes of built work the chunk keeps, on or off screen. */
-  private readonly _retained = new Vector(Float64Array, LANE);
+  private readonly slots = new Lanes(SLOT_LANES, LANE);
 
   /** The node behind each slot. */
   readonly handles: T[] = [];
@@ -108,26 +111,26 @@ export class ChunkTable<T extends { slot: u32 }> {
   retained_off: f64 = 0;
 
   get len(): u32 {
-    return this._len;
+    return this.slots.len;
   }
 
   get flags(): Uint8Array {
-    return this._flags.mem;
+    return this.slots.mem.flags;
   }
   get distance2(): Float64Array {
-    return this._distance2.mem;
+    return this.slots.mem.distance2;
   }
   get lead_distance2(): Float64Array {
-    return this._lead_distance2.mem;
+    return this.slots.mem.lead_distance2;
   }
   get pending_since(): Float64Array {
-    return this._pending_since.mem;
+    return this.slots.mem.pending_since;
   }
   get request(): Int32Array {
-    return this._request.mem;
+    return this.slots.mem.request;
   }
   get retained(): Float64Array {
-    return this._retained.mem;
+    return this.slots.mem.retained;
   }
 
   // ---- slots ----
@@ -135,91 +138,60 @@ export class ChunkTable<T extends { slot: u32 }> {
   /** The slot of the chunk whose absolute base is `base`, or -1. */
   find(base: IVec): i32 {
     const pos = this.by_base.find(base);
-    return pos < 0 ? -1 : this._by_base_slot.mem[pos];
+    return pos < 0 ? -1 : this.by_base_slot.mem[pos];
   }
-  private readonly _by_base_slot = new Vector(Uint32Array, LANE);
 
   /** Registers a chunk by its absolute lattice base. */
   add(handle: T, base: IVec): u32 {
-    const slot = this._len++;
+    const slot = this.slots.push();
+    const m = this.slots.mem;
     handle.slot = slot;
     this.handles[slot] = handle;
-    this._by_base_slot.set(this.by_base.insert(base), slot);
-    this._base.set(slot, base);
-    this._flags.set(slot, 0);
-    this._base_x.set(slot, ivec.to_real(ivec.X(base)));
-    this._base_y.set(slot, ivec.to_real(ivec.Y(base)));
-    this._bc_x.set(slot, CHUNK_WORLD_SPAN * 0.5);
-    this._bc_y.set(slot, CHUNK_WORLD_SPAN * 0.5);
-    this._bc_z.set(slot, 0);
-    this._radius.set(slot, APPROXIMATE_CHUNK_RADIUS);
-    this._cx.set(slot, 0);
-    this._cy.set(slot, 0);
-    this._cz.set(slot, 0);
-    this._distance2.set(slot, Infinity);
-    this._lead_distance2.set(slot, Infinity);
-    this._pending_since.set(slot, -1);
-    this._request.set(slot, 0);
-    this._retained.set(slot, 0);
+    this.by_base_slot.set(this.by_base.insert(base), slot);
+    m.base[slot] = base;
+    m.flags[slot] = 0;
+    m.base_x[slot] = ivec.to_real(ivec.X(base));
+    m.base_y[slot] = ivec.to_real(ivec.Y(base));
+    m.bc_x[slot] = CHUNK_WORLD_SPAN * 0.5;
+    m.bc_y[slot] = CHUNK_WORLD_SPAN * 0.5;
+    m.bc_z[slot] = 0;
+    m.radius[slot] = APPROXIMATE_CHUNK_RADIUS;
+    m.cx[slot] = 0;
+    m.cy[slot] = 0;
+    m.cz[slot] = 0;
+    m.distance2[slot] = Infinity;
+    m.lead_distance2[slot] = Infinity;
+    m.pending_since[slot] = -1;
+    m.request[slot] = 0;
+    m.retained[slot] = 0;
     return slot;
   }
 
   /** Frees a slot; the last slot moves into it and its handle learns so. */
   remove(slot: u32): void {
     this.account(slot, -this.retained[slot]);
-    const last = --this._len;
     // The base index: drop this chunk's entry, and point the moved chunk's
     // entry at its new slot.
     {
       const pos = this.by_base.find(this.base_of(slot));
       const from = this.by_base.remove_at(pos);
-      if (from !== pos) this._by_base_slot.mem[pos] = this._by_base_slot.mem[from];
-      this._by_base_slot.truncate(from);
+      if (from !== pos) this.by_base_slot.mem[pos] = this.by_base_slot.mem[from];
+      this.by_base_slot.truncate(from);
     }
+    const last = this.slots.len - 1;
     if (slot !== last) {
       const moved = this.handles[last];
       moved.slot = slot;
       this.handles[slot] = moved;
-      this._by_base_slot.mem[this.by_base.find(this.base_of(last))] = slot;
-      this.flags[slot] = this.flags[last];
-      this._base.mem[slot] = this._base.mem[last];
-      this._base_x.mem[slot] = this._base_x.mem[last];
-      this._base_y.mem[slot] = this._base_y.mem[last];
-      this._bc_x.mem[slot] = this._bc_x.mem[last];
-      this._bc_y.mem[slot] = this._bc_y.mem[last];
-      this._bc_z.mem[slot] = this._bc_z.mem[last];
-      this._radius.mem[slot] = this._radius.mem[last];
-      this._cx.mem[slot] = this._cx.mem[last];
-      this._cy.mem[slot] = this._cy.mem[last];
-      this._cz.mem[slot] = this._cz.mem[last];
-      this.distance2[slot] = this.distance2[last];
-      this.lead_distance2[slot] = this.lead_distance2[last];
-      this.pending_since[slot] = this.pending_since[last];
-      this.request[slot] = this.request[last];
-      this.retained[slot] = this.retained[last];
+      this.by_base_slot.mem[this.by_base.find(this.base_of(last))] = slot;
     }
+    this.slots.swap_remove(slot);
     this.handles.length = last;
-    this._flags.truncate(last);
-    this._base.truncate(last);
-    this._base_x.truncate(last);
-    this._base_y.truncate(last);
-    this._bc_x.truncate(last);
-    this._bc_y.truncate(last);
-    this._bc_z.truncate(last);
-    this._radius.truncate(last);
-    this._cx.truncate(last);
-    this._cy.truncate(last);
-    this._cz.truncate(last);
-    this._distance2.truncate(last);
-    this._lead_distance2.truncate(last);
-    this._pending_since.truncate(last);
-    this._request.truncate(last);
-    this._retained.truncate(last);
   }
 
   /** The absolute base a slot was registered with. */
   base_of(slot: u32): IVec {
-    return this._base.mem[slot];
+    return this.slots.mem.base[slot];
   }
 
   // ---- per-slot writes ----
@@ -235,10 +207,11 @@ export class ChunkTable<T extends { slot: u32 }> {
 
   /** The chunk's bounding sphere in its own space, from a measured box. */
   set_bounds(slot: u32, cx: f64, cy: f64, cz: f64, radius: f64): void {
-    this._bc_x.mem[slot] = cx;
-    this._bc_y.mem[slot] = cy;
-    this._bc_z.mem[slot] = cz;
-    this._radius.mem[slot] = radius;
+    const m = this.slots.mem;
+    m.bc_x[slot] = cx;
+    m.bc_y[slot] = cy;
+    m.bc_z[slot] = cz;
+    m.radius[slot] = radius;
   }
 
   /**
@@ -294,20 +267,8 @@ export class ChunkTable<T extends { slot: u32 }> {
     lead_y: f64,
     lead_z: f64,
   ): void {
-    const n = this._len;
-    const flags = this.flags;
-    const base_x = this._base_x.mem;
-    const base_y = this._base_y.mem;
-    const bc_x = this._bc_x.mem;
-    const bc_y = this._bc_y.mem;
-    const bc_z = this._bc_z.mem;
-    const radius = this._radius.mem;
-    const cx = this._cx.mem;
-    const cy = this._cy.mem;
-    const cz = this._cz.mem;
-    const distance2 = this.distance2;
-    const lead_distance2 = this.lead_distance2;
-    const retained = this.retained;
+    const n = this.slots.len;
+    const { flags, base_x, base_y, bc_x, bc_y, bc_z, radius, cx, cy, cz, distance2, lead_distance2, retained } = this.slots.mem;
     const half = CHUNK_WORLD_SPAN * 0.5;
     const m0 = m[0], m1 = m[1], m2 = m[2], m4 = m[4], m5 = m[5], m6 = m[6], m8 = m[8], m9 = m[9], m10 = m[10], m12 = m[12], m13 = m[13], m14 = m[14];
 
@@ -356,7 +317,7 @@ export class ChunkTable<T extends { slot: u32 }> {
   count(flag: u32): u32 {
     const flags = this.flags;
     let n = 0;
-    for (let i = 0; i < this._len; i++) if ((flags[i] & flag) === flag) n++;
+    for (let i = 0; i < this.slots.len; i++) if ((flags[i] & flag) === flag) n++;
     return n;
   }
 }

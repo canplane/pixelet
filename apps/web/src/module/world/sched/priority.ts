@@ -28,6 +28,8 @@ import type * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+
 import { EMPTY, HOLDS_SLOT, IN_FRUSTUM, type PriorityLanes } from "./chunk_table.ts";
 
 /**
@@ -94,10 +96,27 @@ export function lead_point(
  */
 export const AGE_HALF_MS: f64 = 4000;
 
-function sort_key(lanes: PriorityLanes, i: u32, now: f64): f64 {
-  const since = lanes.pending_since[i];
-  if (since < 0) return lanes.lead_distance2[i];
-  return lanes.lead_distance2[i] * 2 ** (-2 * (now - since) / AGE_HALF_MS);
+/**
+ * The aged distance of every slot at `now`, computed once per sort rather
+ * than inside the comparator: a comparison sort asks the key n·log n times,
+ * and each ask was a power, so a full-recheck frame over two and a half
+ * thousand chunks spent fifty thousand `2 ** x` on ordering alone. Sized
+ * to the flag lane, which is the table's capacity.
+ */
+let keys = CORE_ALLOC.take(Float64Array, 4096);
+
+function fill_keys(lanes: PriorityLanes, now: f64): Float64Array {
+  const n = lanes.flags.length;
+  if (keys.length < n) {
+    CORE_ALLOC.give(keys);
+    keys = CORE_ALLOC.take(Float64Array, n);
+  }
+  const { lead_distance2, pending_since } = lanes;
+  for (let i = 0; i < n; i++) {
+    const since = pending_since[i];
+    keys[i] = since < 0 ? lead_distance2[i] : lead_distance2[i] * 2 ** (-2 * (now - since) / AGE_HALF_MS);
+  }
+  return keys;
 }
 
 /**
@@ -121,12 +140,14 @@ function sort_key(lanes: PriorityLanes, i: u32, now: f64): f64 {
  * the nearest thing to improve next, whether improving means appearing or
  * sharpening.
  *
- * `now` is taken once per sort — keys that moved while a sort ran would make
- * the comparator inconsistent. Ageing still cannot lift anything out of the
- * frustum class, so a release can never pass a build.
+ * `now` is taken once per sort, and the keys with it — keys that moved
+ * while a sort ran would make the comparator inconsistent. Ageing still
+ * cannot lift anything out of the frustum class, so a release can never
+ * pass a build.
  */
 export function priority_order(lanes: PriorityLanes, now: f64): (a: u32, b: u32) => number {
   const flags = lanes.flags;
+  const key = fill_keys(lanes, now);
   return (a, b) => {
     const fa = flags[a];
     const fb = flags[b];
@@ -134,7 +155,7 @@ export function priority_order(lanes: PriorityLanes, now: f64): (a: u32, b: u32)
     if (holds !== 0) return holds;
     const on = (fb & IN_FRUSTUM) - (fa & IN_FRUSTUM);
     if (on !== 0) return on;
-    const near = (fa & IN_FRUSTUM) !== 0 ? sort_key(lanes, a, now) - sort_key(lanes, b, now) : sort_key(lanes, b, now) - sort_key(lanes, a, now);
+    const near = (fa & IN_FRUSTUM) !== 0 ? key[a] - key[b] : key[b] - key[a];
     if (near !== 0) return near;
     return (fb & EMPTY) - (fa & EMPTY);
   };
