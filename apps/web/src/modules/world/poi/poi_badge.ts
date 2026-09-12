@@ -30,7 +30,7 @@ import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "@xpute/core/ds/map.ts";
 
-import type { POI } from "@pxl/shared/bake/model/feature.ts";
+import type { PoiPage } from "@pxl/shared/bake/format.ts";
 
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
@@ -97,10 +97,8 @@ export const BADGE_COLLIDE_H: f64 = PILL_H;
 /**
  * What is known about each badge: its measured width, and the atlas slot it
  * is drawn in once it has been (NO_SLOT until then). Keyed in the core
- * memory — a place by the 64-bit hash of its id, a cluster by its count.
- * A place's id string is kept as the handle at its position, for the
- * collision check on every hit and for eviction, which is asked in ids;
- * the string is the POI record's until that record has a lane form.
+ * memory — a place by its id hash, the page's own lane (format.ts), a
+ * cluster by its count.
  *
  * Measuring is cheap and building is not: three thousand candidates asking
  * for their size used to build three thousand canvases and textures to draw
@@ -112,7 +110,6 @@ class BadgeTable<K extends number | bigint> {
   readonly index: IndexedMap<K>;
   readonly logical_w = new Vector(Float64Array, { init_cap: 256, alloc: CORE_ALLOC });
   readonly slot = new Vector(Int32Array, { init_cap: 256, alloc: CORE_ALLOC });
-  readonly ids: string[] = [];
   /** Badges drawn in the sheet. */
   built: u32 = 0;
 
@@ -120,11 +117,10 @@ class BadgeTable<K extends number | bigint> {
     this.index = new IndexedMap<K>(traits, 256, CORE_ALLOC);
   }
 
-  insert(key: K, id: string, logical_w: f64): u32 {
+  insert(key: K, logical_w: f64): u32 {
     const pos = this.index.insert(key);
     this.logical_w.set(pos, logical_w);
     this.slot.set(pos, NO_SLOT);
-    this.ids[pos] = id;
     return pos;
   }
 
@@ -137,36 +133,14 @@ class BadgeTable<K extends number | bigint> {
     if (from !== pos) {
       this.logical_w.mem[pos] = this.logical_w.mem[from];
       this.slot.mem[pos] = this.slot.mem[from];
-      this.ids[pos] = this.ids[from];
     }
     this.logical_w.truncate(from);
     this.slot.truncate(from);
-    this.ids.length = from;
   }
-}
-
-/** FNV-1a over the UTF-16 code units, 64 bits wide. */
-function id_hash(id: string): bigint {
-  let h = 0xcbf29ce484222325n;
-  for (let i = 0; i < id.length; i++) {
-    h ^= BigInt(id.charCodeAt(i));
-    h = BigInt.asUintN(64, h * 0x100000001b3n);
-  }
-  return h;
 }
 
 const places = new BadgeTable<bigint>(I64_KEYS);
 const clusters = new BadgeTable<number>(U32_KEYS);
-
-/** The place's position in the table, or -1. */
-function find_place(id: string): i32 {
-  const pos = places.index.find(id_hash(id));
-  if (pos >= 0 && places.ids[pos] !== id) {
-    console.warn(`[poi_badge] id hash collision: "${id}" vs "${places.ids[pos]}"`);
-    return -1;
-  }
-  return pos;
-}
 
 /** One context for every measurement there will ever be. Creating a canvas
  * per call was itself part of the cost being removed here. */
@@ -181,8 +155,9 @@ function measure_ctx(): CanvasRenderingContext2D {
 
 /** Truncated by character count rather than wrap_text's own word-wrap — a map
  * badge reads as one short line, not a multi-line chat message. */
-function display_name(poi: POI): string {
-  return poi.name.length > NAME_MAX_CHARS ? `${poi.name.slice(0, NAME_MAX_CHARS - 1)}…` : poi.name;
+function display_name(page: PoiPage, rec: u32): string {
+  const name = page.name_of(rec);
+  return name.length > NAME_MAX_CHARS ? `${name.slice(0, NAME_MAX_CHARS - 1)}…` : name;
 }
 
 /** Cache misses and what they cost, cumulative. `metrics` is a text
@@ -192,12 +167,12 @@ function display_name(poi: POI): string {
 export const poi_badge_build_stats = { metrics: 0, builds: 0, ms: 0 };
 
 /** The badge's width in logical pixels, measured once per place. */
-export function poi_badge_logical_w(poi: POI): f64 {
-  const pos = find_place(poi.id);
+export function poi_badge_logical_w(page: PoiPage, rec: u32): f64 {
+  const pos = places.index.find(page.id_hash[rec]);
   if (pos >= 0) return places.logical_w.mem[pos];
-  const text_w = Math.ceil(measure_ctx().measureText(display_name(poi)).width);
+  const text_w = Math.ceil(measure_ctx().measureText(display_name(page, rec)).width);
   poi_badge_build_stats.metrics++;
-  return places.logical_w.mem[places.insert(id_hash(poi.id), poi.id, TEXT_X + text_w + GAP)];
+  return places.logical_w.mem[places.insert(page.id_hash[rec], TEXT_X + text_w + GAP)];
 }
 
 /** The pill every badge in this layer stands on: a rect with fully-rounded
@@ -227,9 +202,9 @@ function draw_anchor_dot(ctx: CanvasRenderingContext2D, logical_w: f64): void {
  * badge used (`poi-item.tsx`), redrawn as one flat canvas texture instead
  * of a DOM element (see this file's own top doc comment on why hover/
  * hover-lift/day-night from that version aren't reproduced here). */
-function build_poi_badge(poi: POI, logical_w: f64): i32 {
-  const theme = resolve_poi_theme(poi.category);
-  const name = display_name(poi);
+function build_poi_badge(page: PoiPage, rec: u32, logical_w: f64): i32 {
+  const theme = resolve_poi_theme(page.category_of(rec));
+  const name = display_name(page, rec);
 
   return badge_atlas.add(logical_w * RENDER_SCALE, LOGICAL_H * RENDER_SCALE, (ctx) => {
     ctx.imageSmoothingEnabled = false;
@@ -271,13 +246,13 @@ function build_poi_badge(poi: POI, logical_w: f64): i32 {
  * Only ask for one that is going to be drawn — poi_badge_logical_w answers
  * everything the selection pass needs without it. NO_SLOT when the sheet is
  * full, which the caller shows as nothing rather than as a wrong rectangle. */
-export function poi_badge_slot(poi: POI): i32 {
-  const logical_w = poi_badge_logical_w(poi);
-  const pos = find_place(poi.id);
+export function poi_badge_slot(page: PoiPage, rec: u32): i32 {
+  const logical_w = poi_badge_logical_w(page, rec);
+  const pos = places.index.find(page.id_hash[rec]);
   if (places.slot.mem[pos] !== NO_SLOT) return places.slot.mem[pos];
 
   const t0 = performance.now();
-  const slot = build_poi_badge(poi, logical_w);
+  const slot = build_poi_badge(page, rec, logical_w);
   poi_badge_build_stats.builds++;
   poi_badge_build_stats.ms += performance.now() - t0;
 
@@ -331,7 +306,7 @@ export function cluster_badge_logical_w(count: u32): f64 {
   const pos = clusters.index.find(count);
   if (pos >= 0) return clusters.logical_w.mem[pos];
   const text_w = Math.ceil(measure_ctx().measureText(cluster_label(count)).width);
-  return clusters.logical_w.mem[clusters.insert(count, "", Math.max(PILL_H, text_w + CLUSTER_PAD_X * 2))];
+  return clusters.logical_w.mem[clusters.insert(count, Math.max(PILL_H, text_w + CLUSTER_PAD_X * 2))];
 }
 
 export function cluster_badge_slot(count: u32): i32 {
@@ -371,14 +346,14 @@ export function cluster_badge_slot(count: u32): i32 {
  * bitmap, and what it prevents is a session-long map that grows with every
  * page ever visited.
  */
-export function evict_poi_badges(live: ReadonlySet<string>): u32 {
+export function evict_poi_badges(live: IndexedMap<bigint>): u32 {
   let dropped: u32 = 0;
   // Backwards, since a removal moves the last position into the hole. A
   // badge's rectangle goes back to the sheet's free pool and nothing is
   // disposed — there is one texture and it outlives every badge in it. The
   // measured width goes with it: a stale size is a wrong collision box.
   for (let pos = places.index.size - 1; pos >= 0; pos--) {
-    if (live.has(places.ids[pos])) continue;
+    if (live.find(places.index.key_at(pos)) >= 0) continue;
     if (places.slot.mem[pos] !== NO_SLOT) dropped++;
     places.remove(pos);
   }

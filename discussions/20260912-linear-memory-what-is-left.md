@@ -21,6 +21,10 @@ stays only where the design is not yet settled — characters and whatever
 else has no decided record format — and a deferral is recorded here as a
 deferral, not as a decision that the heap was fine.
 
+Why the destination is WASM at all, and why three.js leaves with it:
+[20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md).
+This checklist assumes that destination rather than arguing it.
+
 Where the line runs, settled 2026-09-12 over the POI question: **a resource
 the canvas reads every frame is linear memory, and a page our API emits
 comes in that form (XTP) whoever the provider was** — the provider is
@@ -92,13 +96,18 @@ Ordered as agreed: A, then B, then C.
       on the band sorted by column at seal, read by binary search; the
       objects layer's claimed-voxel Set of strings is an `IndexedMap`
       scratch over packed addresses. Commit 01ecf42.
-- [ ] Layout buckets. **Open question, not started.** The vertex data is
-      already a pool block; a `BuiltChunkBucket` is the typed views over it
-      plus a refcount, and three.js's `BufferAttribute` takes exactly those
-      views — which makes the handle the glue boundary itself. What could
-      still move is each node's two small `Map<LodStep, …>` caches (tiers,
-      decor steps) into a fixed (slot × tier) handle table. Little heap in
-      it; decide, do not drift into it.
+- [ ] Layout buckets — **deferred 2026-09-12**, in BACKLOG.md under
+      parked. The vertex data is already a pool block; a `BuiltChunkBucket`
+      is the typed views over it plus a refcount, and three.js's
+      `BufferAttribute` takes exactly those views, which makes the handle
+      the glue boundary itself.
+- [x] The POI page (2026-09-12). The API's page is an XTP packet: x, y, z,
+      category, rank and the id hash as lanes, the strings as `str` leaves
+      read one at a time. The client copies it into the core memory and the
+      index sweeps the lanes; a badge is keyed by the hash lane. The first
+      record of "everything is a file". Commit 3dd631c.
+- [x] `PageChunks`' node map (2026-09-12). The chunk table indexes slots by
+      base, and a page's mount diff asks it. Commit 992fe7d.
 
 ### B — the world's per-page and per-column registries
 
@@ -149,9 +158,10 @@ Ordered as agreed: A, then B, then C.
 
 ### Left as glue, by the rule
 
-- `PageChunks`' node map (`Map<offset key, ChunkNode>` per page): React's
-  own mount/unmount diff over the handles it created. The scheduler table
-  is the linear side of the same nodes.
+- `placed_snapshots` in the object store: the identity-stable object
+  `useSyncExternalStore` requires for the hovered entry — React's contract,
+  not three.js's. The scene-side glue (`hover_cursor`, `location_puck`) is
+  glue for the other reason: it is the `Mesh` and `Group` three.js draws.
 - The dev instrumentation — the ledger's records, the draw census, the
   trace — is measurement of the client, not its state.
 
@@ -159,10 +169,7 @@ Ordered as agreed: A, then B, then C.
 
 - Characters and anything else without a decided record format. Not
   before the format exists.
-- ~~The POI record~~ — taken up as P0 in [BACKLOG.md](../BACKLOG.md)
-  (2026-09-12): the API's POI page as an XTP packet with coordinate and
-  category lanes and lazily read strings, the first record of "everything
-  is a file". The page table's handle becomes the packet.
+- ~~The POI record~~ — done 2026-09-12, see the checklist above.
 
 ## After this: everything is a file
 

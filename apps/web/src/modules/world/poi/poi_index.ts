@@ -38,13 +38,13 @@ import type { FrameBudget } from "@/modules/world/sched/tick.ts";
 import { type IVec, ivec, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { FROM_L3_IDX, L3_IDX, L3_RANGE } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
-import type { POI } from "@pxl/shared/bake/model/feature.ts";
+import type { PoiPage } from "@pxl/shared/bake/format.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
 import { with_ele } from "../terrain/elevation.ts";
 import { FAR_END } from "../billboard/distance_fade.ts";
 import { evict_poi_badges } from "./poi_badge.ts";
 import { poi_pages } from "./store.ts";
-import { stable_hash } from "../billboard/batch.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /**
@@ -111,14 +111,15 @@ const CELL: f64 = FAR_END;
  *
  * Entry `i` is the same `i` across every lane and is the id the spatial
  * index was given, so a query answers in indices and nothing between the
- * store and the renderer is ever an object. The two reference lanes are the
- * exception and cannot be otherwise: a POI carries strings, and a page index
- * is a BigInt. Everything a hot loop touches is numeric.
+ * store and the renderer is ever an object. A record is named by its page
+ * and its index in that page's lanes; the page handle is the one reference
+ * lane, since a page is a packet. Everything a hot loop touches is numeric.
  */
 type Lanes = {
   index: SpatialHash;
-  poi_ref: (POI | null)[];
-  page_ref: (IVec | null)[];
+  page_ref: (PoiPage | null)[];
+  page_idx: BigUint64Array;
+  rec: Uint32Array;
   /** Flat anchor, absolute, split into its two BigInt lanes. */
   abs_i: BigInt64Array;
   abs_f: BigInt64Array;
@@ -158,8 +159,9 @@ type Lanes = {
 function make_lanes(): Lanes {
   return {
     index: new SpatialHash(CAPACITY, BUCKETS, CELL, CORE_ALLOC),
-    poi_ref: new Array(CAPACITY).fill(null),
     page_ref: new Array(CAPACITY).fill(null),
+    page_idx: CORE_ALLOC.take(BigUint64Array, CAPACITY),
+    rec: CORE_ALLOC.take(Uint32Array, CAPACITY),
     abs_i: CORE_ALLOC.take(BigInt64Array, CAPACITY),
     abs_f: CORE_ALLOC.take(BigInt64Array, CAPACITY),
     pos_x: CORE_ALLOC.take(Float64Array, CAPACITY),
@@ -203,7 +205,7 @@ type Job = {
   next: u32;
   pages_changed: boolean;
   to_local: (absolute: PVF3, origin: IVec) => readonly [f64, f64, f64];
-  flat_pos: (out: PVF3, poi: POI, page_idx: IVec) => PVF3;
+  flat_pos: (out: PVF3, page: PoiPage, rec: u32, page_idx: IVec) => PVF3;
 };
 let job: Job | null = null;
 
@@ -217,7 +219,9 @@ export type PoiIndexStats = {
 
 let rebuilds: u32 = 0;
 
-const $seen = new Set<string>();
+/** The ids seen this rebuild, by their 64-bit hash — a place near a page
+ * boundary is baked into both pages. What eviction asks against, too. */
+const $seen = new IndexedMap(I64_KEYS, 1 << 12, CORE_ALLOC);
 const $flat: PVF3 = { i: 0n, f: 0n };
 const $ground: PVF3 = { i: 0n, f: 0n };
 
@@ -240,7 +244,7 @@ export function sync_poi_index(
   map_center: PVF3,
   map_origin: IVec,
   to_local: (absolute: PVF3, origin: IVec) => readonly [f64, f64, f64],
-  flat_pos: (out: PVF3, poi: POI, page_idx: IVec) => PVF3,
+  flat_pos: (out: PVF3, page: PoiPage, rec: u32, page_idx: IVec) => PVF3,
 ): boolean {
   // The centre page, and where the camera sits inside it. Everything works
   // in these page-local real units rather than in PVF3: a page's own POI
@@ -289,24 +293,26 @@ export function sync_poi_index(
 
 /** One page of the sweep, into `back`. */
 function sweep_page(j: Job, page: Job["pages"][number]): void {
-  const pois = poi_pages.get(page.page_idx);
-  if (pois === undefined) return;
+  const resident = poi_pages.get(page.page_idx);
+  if (resident === undefined) return;
+  const pois = resident.page;
   const lanes = back;
 
   // The camera, expressed in this page's own local frame.
   const px = j.cx - page.dx * PAGE_U, py = j.cy - page.dy * PAGE_U;
 
-  for (const poi of pois) {
+  for (let r = 0; r < pois.len; r++) {
     // Horizontal only, and deliberately: this runs before grounding, so the
     // only z available is the bake's flat zero while the camera's is a real
     // elevation. A cylinder contains the sphere the exact test uses, so
     // admitting a few extra costs a terrain lookup each and rejects nothing
     // that should have been kept. The exact, isotropic test is the caller's,
     // on positions that have a real z by then.
-    const ox = poi.center[0] - px, oy = poi.center[1] - py;
+    const ox = pois.x[r] - px, oy = pois.y[r] - py;
     if (ox * ox + oy * oy > RESIDENCY2) continue;
-    if ($seen.has(poi.id)) continue;
-    $seen.add(poi.id);
+    const id_hash = pois.id_hash[r];
+    if ($seen.find(id_hash) >= 0) continue;
+    $seen.insert(id_hash);
     if (lanes.count >= CAPACITY) {
       lanes.dropped++;
       continue;
@@ -322,7 +328,7 @@ function sweep_page(j: Job, page: Job["pages"][number]): void {
     // it (use_ground_snap_sync.ts) — so indexing at the bake's flat z put
     // every POI a full elevation away from the point being asked about, and
     // above CELL the z cells stopped overlapping at all.
-    const flat = j.flat_pos($flat, poi, page.page_idx);
+    const flat = j.flat_pos($flat, pois, r, page.page_idx);
     const grounded = with_ele($ground, flat.i, flat.f);
 
     // Not snapped here. Which cell a badge stands in depends on its tier and
@@ -336,8 +342,9 @@ function sweep_page(j: Job, page: Job["pages"][number]): void {
     }
 
     const i = lanes.count++;
-    lanes.poi_ref[i] = poi;
-    lanes.page_ref[i] = page.page_idx;
+    lanes.page_ref[i] = pois;
+    lanes.page_idx[i] = page.page_idx;
+    lanes.rec[i] = r;
     lanes.abs_i[i] = absolute.i;
     lanes.abs_f[i] = absolute.f;
     lanes.pos_x[i] = x;
@@ -349,7 +356,8 @@ function sweep_page(j: Job, page: Job["pages"][number]): void {
     lanes.cell_y[i] = Number(ivec.Y(absolute.i) - ivec.Y(j.map_origin));
     lanes.cell_z[i] = Number(ivec.Z(absolute.i) - ivec.Z(j.map_origin));
     lanes.grounded_ok[i] = grounded === null ? 0 : 1;
-    lanes.tiebreak[i] = stable_hash(poi.id);
+    // The hash's low 32 bits as a fraction: a stable, even tie-break.
+    lanes.tiebreak[i] = Number(id_hash & 0xffffffffn) / 0x1_0000_0000;
   }
 }
 
@@ -407,12 +415,16 @@ export function query_poi_index(x: f64, y: f64, z: f64, radius: f64, out: Uint32
 
 /* Lane accessors. Deliberately plain functions rather than a returned object:
  * a caller that wanted `{poi, x, y}` back would put the allocation this file
- * exists to remove straight back in. */
-export function poi_at(i: u32): POI {
-  return live.poi_ref[i]!;
+ * exists to remove straight back in. A record is its page and its index
+ * there; the page's own lanes and strings are read through those. */
+export function poi_page(i: u32): PoiPage {
+  return live.page_ref[i]!;
+}
+export function poi_rec(i: u32): u32 {
+  return live.rec[i];
 }
 export function poi_page_at(i: u32): IVec {
-  return live.page_ref[i]!;
+  return live.page_idx[i];
 }
 export function poi_abs_i(i: u32): bigint {
   return live.abs_i[i];

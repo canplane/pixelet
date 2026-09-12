@@ -4,10 +4,12 @@ import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import * as THREE from "three";
 
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { ChunkTable, EMPTY, IN_FRUSTUM, PENDING, VISIBILITY_CHANGED } from "./chunk_table.ts";
 
 const SPAN = CHUNK_CELL_SPAN * U_PER_CELL;
+const base = (x: number, y: number) => ivec.gather(BigInt(x), BigInt(y), 0n);
 
 type Handle = { slot: number; name: string };
 
@@ -44,7 +46,7 @@ Deno.test("chunk_table - refresh measures what a mounted group's sphere test wou
   for (let gx = -12; gx <= 12; gx += 3) {
     for (let gy = -12; gy <= 12; gy += 3) {
       const h = { slot: 0, name: `${gx},${gy}` };
-      table.add(h, origin.x + gx * SPAN, origin.y + gy * SPAN);
+      table.add(h, base(origin.x + gx * SPAN, origin.y + gy * SPAN));
       handles.push(h);
     }
   }
@@ -69,7 +71,7 @@ Deno.test("chunk_table - a measured box replaces the nominal sphere", () => {
   const { camera, frustum, planes, root } = scene();
   const table = new ChunkTable<Handle>();
   const h = { slot: 0, name: "tall" };
-  table.add(h, 0, 0);
+  table.add(h, base(0, 0));
   table.set_bounds(h.slot, 10, 20, 300, 350);
   table.refresh(root.elements, 0, 0, 0, planes, camera.position.x, camera.position.y, camera.position.z, 0, 0, 0);
   const center = new THREE.Vector3(10, 20, 300).applyMatrix4(root);
@@ -82,8 +84,8 @@ Deno.test("chunk_table - a visibility flip is flagged once and moves the retaine
   const table = new ChunkTable<Handle>();
   const near = { slot: 0, name: "near" };
   const far = { slot: 0, name: "far" };
-  table.add(near, 0, 0);
-  table.add(far, 50 * SPAN, 50 * SPAN);
+  table.add(near, base(0, 0));
+  table.add(far, base(50 * SPAN, 50 * SPAN));
   table.account(near.slot, 1000);
   table.account(far.slot, 10);
   assertEquals([table.retained_on, table.retained_off], [0, 1010]);
@@ -110,9 +112,9 @@ Deno.test("chunk_table - removing a slot moves the last one into it and tells it
   const a = { slot: 0, name: "a" };
   const b = { slot: 0, name: "b" };
   const c = { slot: 0, name: "c" };
-  table.add(a, 1, 1);
-  table.add(b, 2, 2);
-  table.add(c, 3, 3);
+  table.add(a, base(1, 1));
+  table.add(b, base(2, 2));
+  table.add(c, base(3, 3));
   table.set_flag(c.slot, EMPTY, true);
   table.set_pending(c.slot, true, 77, 1234);
   table.account(b.slot, 40);
@@ -122,6 +124,9 @@ Deno.test("chunk_table - removing a slot moves the last one into it and tells it
   assertEquals(table.len, 2);
   assertEquals(c.slot, 1);
   assertEquals(table.handles[1], c);
+  assertEquals(table.find(base(3, 3)), 1);
+  assertEquals(table.find(base(2, 2)), -1);
+  assertEquals(table.base_of(1), base(3, 3));
   assert(table.has(1, EMPTY));
   assert(table.has(1, PENDING));
   assertEquals(table.request[1], 77);
@@ -133,7 +138,7 @@ Deno.test("chunk_table - removing a slot moves the last one into it and tells it
 Deno.test("chunk_table - the pending clock restarts when the request changes, not when the flag repeats", () => {
   const table = new ChunkTable<Handle>();
   const h = { slot: 0, name: "h" };
-  table.add(h, 0, 0);
+  table.add(h, base(0, 0));
   table.set_pending(h.slot, true, 1, 100);
   table.set_pending(h.slot, true, 1, 500);
   assertEquals(table.pending_since[h.slot], 100);
