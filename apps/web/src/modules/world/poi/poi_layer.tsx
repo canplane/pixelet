@@ -23,7 +23,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { invalidate, useFrame, useThree } from "@react-three/fiber";
+import { invalidate, useThree } from "@react-three/fiber";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { FROM_L3_IDX, SPAN_CENTER } from "@pxl/shared/spec/space/indexer.ts";
@@ -42,9 +42,25 @@ import { select_visible_billboards } from "../billboard/frustum_budget.ts";
 import { BillboardBatch } from "../billboard/batch.ts";
 import { CellNodes } from "../billboard/cell_nodes.ts";
 import { BillboardField } from "../billboard/field.ts";
-import { invalidate_poi_index, poi_at, poi_cell_x, poi_cell_y, poi_cell_z, poi_grounded, poi_tiebreak, poi_x, poi_y, poi_z, query_poi_index, sync_poi_index } from "./poi_index.ts";
+import {
+  invalidate_poi_index,
+  poi_at,
+  poi_cell_x,
+  poi_cell_y,
+  poi_cell_z,
+  poi_grounded,
+  poi_index_stats,
+  poi_index_sweep,
+  poi_tiebreak,
+  poi_x,
+  poi_y,
+  poi_z,
+  query_poi_index,
+  sync_poi_index,
+} from "./poi_index.ts";
 import { badge_atlas, cluster_badge, cluster_badge_metrics, poi_badge, poi_badge_metrics } from "./poi_badge.ts";
 import { usePoiStore } from "./store.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 /**
  * A rail, not the mechanism.
@@ -425,6 +441,17 @@ export function PoiLayer() {
     [],
   );
 
+  // The index is rebuilt a page per step in the frame's content phase, and
+  // while that runs the previous build keeps answering — so a placement can
+  // land against an index a few pages behind. The step that finishes a
+  // rebuild is the moment to place again, and the tick must keep coming
+  // until it does: under frameloop="demand" nothing else may be asking.
+  const [index_tick, set_index_tick] = useState<u32>(0);
+  useTick("content", ({ state, budget }) => {
+    if (poi_index_sweep(budget)) set_index_tick((t) => t + 1);
+    else if (poi_index_stats().sweeping > 0) state.invalidate();
+  });
+
   // Deliberately not keyed on view_state or map_center: the epoch above is,
   // and it is what decides when the camera has moved enough to be worth
   // re-placing. Everything that is still keyed directly is a change no
@@ -434,7 +461,7 @@ export function PoiLayer() {
     if (!map_center || !show_poi) return [];
     return select_nearby_pois(poi_map, map_center, local_world_frame_ref.current, camera, size.width, size.height);
     // local_world_frame_ref/camera: stable identities, not reactive state.
-  }, [poi_map, show_poi, size.width, size.height, epoch, ground_tick]);
+  }, [poi_map, show_poi, size.width, size.height, epoch, ground_tick, index_tick]);
 
   // The badges themselves are written, not declared. `selected` changing is
   // a list of slots to fill, so this is where the imperative half is driven
@@ -458,7 +485,7 @@ export function PoiLayer() {
   }, [selected]);
 
   // One loop for every badge, where there used to be one useFrame per badge.
-  useFrame(({ camera, size }) => $field.update(camera, size.height));
+  useTick("cosmetic", ({ state }) => $field.update(state.camera, state.size.height));
 
   // Attached to the frame the batch's coordinates are relative to, rather
   // than to an anchor of its own: every badge is within FAR_END of the

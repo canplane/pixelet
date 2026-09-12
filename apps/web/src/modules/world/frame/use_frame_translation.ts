@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { invalidate, useFrame } from "@react-three/fiber";
+import { invalidate } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
@@ -10,6 +10,7 @@ import { fvec, type IVec, ivec, type PVF3 } from "@pxl/shared/spec/space/pvf3/mo
 
 import { camera_cfg } from "@/modules/camera/config.ts";
 import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 const { POS_DAMP } = camera_cfg.smooth;
 
@@ -44,7 +45,7 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
     invalidate();
   }, [map_center, map_origin]);
 
-  useFrame((state, delta) => {
+  useTick("interaction", ({ state, delta }) => {
     const frame = frame_ref.current;
     if (!frame || map_center === null) return;
 

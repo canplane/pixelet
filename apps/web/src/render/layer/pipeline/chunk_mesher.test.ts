@@ -7,7 +7,19 @@ import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./volume.ts";
 import { type MeshRun, pack_column_runs } from "./voxel_scan.ts";
-import { bake_chunk_mesh, bake_chunk_mesh_coarse, type BakedChunkMesh, coarse_instance_stats, occlusion_stats } from "./chunk_mesher.ts";
+import {
+  abort_bake,
+  bake_chunk_mesh,
+  bake_chunk_mesh_coarse,
+  bake_open,
+  type BakedChunkMesh,
+  begin_bake,
+  coarse_instance_stats,
+  finish_bake,
+  occlusion_stats,
+  release_chunk_mesh,
+  step_bake,
+} from "./chunk_mesher.ts";
 
 function empty_columns(): MeshRun[][] {
   return Array.from({ length: CHUNK_CELL_SPAN * CHUNK_CELL_SPAN }, () => []);
@@ -469,4 +481,73 @@ Deno.test("edge mask - a flat surface carries no crease except at its rim", () =
       c[1] - s[1] / 2 <= LO || c[1] + s[1] / 2 >= HI + 1;
     assert(reaches_rim, `crease inside a flat surface at ${c.join(",")} (extent ${s.join("x")}, mask ${mask})`);
   }
+});
+
+/** Terrain with a different height in almost every column, and a floating
+ * cube every few cells: enough variety that both the merge and the coarse
+ * accumulation have real decisions at every step boundary. */
+function busy_columns(): MeshRun[][] {
+  const columns = empty_columns();
+  for (let cy = 0; cy < CHUNK_CELL_SPAN; cy++) {
+    for (let cx = 0; cx < CHUNK_CELL_SPAN; cx++) {
+      const h = (cx * 7 + cy * 13) % 5;
+      columns[idx(cx, cy)].push(run(-3, h, 40 + cx, 80, 40 + cy));
+      if ((cx + cy) % 11 === 0) columns[idx(cx, cy)].push(run(h + 2, h + 2, 200, 10, 10));
+    }
+  }
+  return columns;
+}
+
+function same_mesh(a: BakedChunkMesh, b: BakedChunkMesh): void {
+  assertEquals(a.vertex_cnt, b.vertex_cnt);
+  assertEquals(Array.from(a.position), Array.from(b.position));
+  assertEquals(Array.from(a.rgb), Array.from(b.rgb));
+  assertEquals(Array.from(a.faces), Array.from(b.faces));
+  assertEquals(Array.from(a.index), Array.from(b.index));
+}
+
+Deno.test("stepped bake - stepping bakes exactly what the whole bake bakes, at every tier", () => {
+  for (const step of [1, 2, 4, 8] as const) {
+    const whole = bake_chunk_mesh(pack_column_runs(busy_columns()), step);
+
+    const cursor = begin_bake(pack_column_runs(busy_columns()), step);
+    assert(cursor !== null);
+    let steps = 0;
+    while (!step_bake(cursor)) steps++;
+    const stepped = finish_bake(cursor);
+
+    assert(steps > 2, `tier ${step} took only ${steps} steps`);
+    same_mesh(stepped, whole);
+    release_chunk_mesh(whole);
+    release_chunk_mesh(stepped);
+  }
+});
+
+Deno.test("stepped bake - only one may be open, and an abort leaves the scratch as it found it", () => {
+  const set = pack_column_runs(busy_columns());
+  const before_fine = bake_chunk_mesh(set, 1);
+  const before_coarse = bake_chunk_mesh(set, 4);
+
+  // Abort a fine bake deep enough that it holds a builder block.
+  const fine = begin_bake(set, 1);
+  assert(fine !== null);
+  assertEquals(begin_bake(set, 2), null);
+  assertEquals(bake_open(), true);
+  for (let i = 0; i < 17; i++) step_bake(fine);
+  abort_bake(fine);
+  assertEquals(bake_open(), false);
+
+  // And a coarse one part-way through accumulating.
+  const coarse = begin_bake(set, 4);
+  assert(coarse !== null);
+  step_bake(coarse);
+  abort_bake(coarse);
+  assertEquals(bake_open(), false);
+
+  // Nothing the aborted bakes left behind changes what the next ones build.
+  const after_fine = bake_chunk_mesh(set, 1);
+  const after_coarse = bake_chunk_mesh(set, 4);
+  same_mesh(after_fine, before_fine);
+  same_mesh(after_coarse, before_coarse);
+  for (const m of [before_fine, before_coarse, after_fine, after_coarse]) release_chunk_mesh(m);
 });

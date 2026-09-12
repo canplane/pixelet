@@ -44,7 +44,7 @@ import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/modules/world/r
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
 import {
-  build_chunk_bucket,
+  bucket_from_baked,
   type BuiltChunkBucket,
   chunk_bounds,
   type ChunkBounds,
@@ -55,28 +55,30 @@ import {
   retain_built_mesh,
 } from "@/render/layer/pipeline/chunk_bucket.ts";
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
-import { with_temporary_composite } from "@/render/layer/pipeline/compositor.ts";
-import { type ColumnRunSet, release_column_runs, scan_all_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
+import { composite_chunk_layers } from "@/render/layer/pipeline/compositor.ts";
+import { abort_bake, bake_open, type BakeCursor, begin_bake, finish_bake, step_bake } from "@/render/layer/pipeline/chunk_mesher.ts";
+import {
+  abort_column_scan,
+  begin_column_scan,
+  column_scan_open,
+  type ColumnRunSet,
+  type ColumnScan,
+  finish_column_scan,
+  release_column_runs,
+  scan_column_rows,
+} from "@/render/layer/pipeline/voxel_scan.ts";
+import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
+import type { FrameBudget } from "@/modules/world/sched/tick.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
 import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision, type MountedLodMesh, visibility_coverage } from "@/render/lod_visibility.ts";
 
 // ---- Budgets and tiers ----
 
-export const LOD_WORK_BUDGET_MS: f64 = 4;
-
-/**
- * A scan's cost tracks how many signed-Z bands the chunk actually has
- * (`volume.bands.length`, free right after compositing — no extra pass),
- * far more than it varies with anything else — profiled: a 41ms outlier
- * against a ~2ms mean, on a chunk with unusually many bands. Once this
- * session has scanned enough chunks to have a real mean cost-per-band, a
- * chunk whose estimated cost clears `LOD_WORK_BUDGET_MS * SCAN_DEFER_FACTOR`
- * gets deferred once — cooperative scheduling, not a worker: give some
- * *other* pending chunk (hopefully cheaper) a shot at this frame's single
- * guaranteed slot instead of unconditionally burning it on whichever chunk
- * happened to sort first.
- */
-const SCAN_DEFER_FACTOR: f64 = 2;
+/* Nothing here is deferred any more. Both the scan and the bake step a few
+ * rows at a time under the frame's shared budget (voxel_scan.ts,
+ * chunk_mesher.ts), so an expensive chunk costs more frames rather than a
+ * longer one — which is what the per-chunk defer-once heuristics that used to
+ * sit here were approximating from a cost estimate. */
 
 /**
  * The coarsest LOD_STEP_BY_LEVEL tier (render/lod.ts) doubles as the
@@ -140,8 +142,6 @@ export const lod_build_stats = {
   build_max_ms: 0,
   build_runs: 0,
   build_runs_max: 0,
-  scan_deferred: 0,
-  build_deferred: 0,
 };
 
 /** Splits one commit() call's cost, dev-only. `attach_ms_max` replaces what
@@ -223,9 +223,17 @@ export type ChunkLodControl = {
   settling: boolean;
   in_frustum: boolean;
   distance2: f64;
+  /** Squared distance from where the camera is heading (sched/priority.ts).
+   * Orders the work; `distance2` still picks the tier. */
+  lead_distance2: f64;
   pending: boolean;
-  recheck(camera: THREE.Camera, frustum: THREE.Frustum): void;
-  commit(): boolean;
+  /** Holding the scan slot (voxel_scan.ts) or the bake slot
+   * (chunk_mesher.ts). The commit loop puts this control first: nothing else
+   * can use that slot until it finishes, and a step cap reached on nearer
+   * chunks would otherwise starve it — and with it everything waiting. */
+  holds_slot: boolean;
+  recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void;
+  commit(budget: FrameBudget): boolean;
 };
 
 /**
@@ -303,6 +311,7 @@ export class ChunkNode implements ChunkLodControl {
   settling = false;
   in_frustum: boolean;
   distance2: f64;
+  lead_distance2: f64;
   pending = false;
 
   private readonly page_off: IVec;
@@ -327,10 +336,19 @@ export class ChunkNode implements ChunkLodControl {
    * back the same way — see clear_column_runs.
    */
   private column_runs: ColumnRunSet | null = null;
-  /** Each set true the one time that step is deferred, so a chunk can be
-   * deferred at most once and never starves waiting for a calm frame. */
-  private scan_deferred = false;
-  private build_deferred = false;
+  /** A bake in progress, held across frames like the scan and bounded the
+   * same way: one chunk at a time. `step` is the tier it is baking. */
+  private bake: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null = null;
+  /** The tiers the current build_buckets call is after. */
+  private wanted: readonly LodStep[] = [];
+  /**
+   * A scan in progress, held across frames: the composite it reads and the
+   * row it is up to. Pooled bands stay checked out for as long as this is
+   * set, which voxel_scan.ts bounds to one chunk at a time — so a node that
+   * stops needing its scan (disposed, source changed, left the frustum) has
+   * to abort it rather than drop it. See abort_scan.
+   */
+  private scan: { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null = null;
 
   private layout: LodLayout;
   private desired: { primary: LodStep; secondary: LodStep | null };
@@ -361,6 +379,10 @@ export class ChunkNode implements ChunkLodControl {
 
   private disposed = false;
 
+  get holds_slot(): boolean {
+    return this.scan !== null || this.bake !== null;
+  }
+
   constructor(private readonly deps: ChunkNodeDeps) {
     const { page_idx, offset, anchor_registry, camera } = deps;
     this.page_off = ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n);
@@ -383,6 +405,7 @@ export class ChunkNode implements ChunkLodControl {
     // registration order for the whole batch.
     this.in_frustum = view.in_frustum;
     this.distance2 = view.distance2;
+    this.lead_distance2 = view.distance2;
     this.desired = { primary: view.in_frustum ? view.lod_step : OFF_SCREEN_LOD_STEP, secondary: null };
     this.layout = {
       primary: this.desired.primary,
@@ -425,6 +448,7 @@ export class ChunkNode implements ChunkLodControl {
     lod_scheduler.controls.delete(this);
     LIVE_NODES.delete(this);
     for (const off of this.unsubscribes) off();
+    this.abort_work();
     decor_field.clear_chunk(this.decor_key);
     this.detach_all();
     for (const bucket of this.layout.buckets) release_built_mesh(bucket.cubes);
@@ -464,6 +488,7 @@ export class ChunkNode implements ChunkLodControl {
    * below instead: keep something cheap resident, not nothing.
    */
   private reset_all_caches(): void {
+    this.abort_work();
     this.release_bucket_cache();
     this.decor_cache.clear();
     this.clear_column_runs();
@@ -585,69 +610,18 @@ export class ChunkNode implements ChunkLodControl {
    * two still run together whenever cube content itself rebuilds, so decor
    * is never committed without the cube content it sits on.
    */
-  private build_buckets(primary: LodStep, secondary: LodStep | null): BuiltChunkBucket[] | null {
+  private build_buckets(primary: LodStep, secondary: LodStep | null, budget: FrameBudget | null): BuiltChunkBucket[] | null {
     const steps = secondary === null || secondary === primary ? [primary] : [primary, secondary];
     const missing = steps.filter((step) => !this.bucket_cache.has(step));
+    this.wanted = steps;
 
     if (missing.length > 0) {
       if (!this.column_runs) {
-        let deferred = false;
-        const scan_t0 = performance.now();
-        const compose_result = with_temporary_composite(this.deps.stack, this.key, (volume) => {
-          const band_count = volume.bands.length;
-          const avg_bands = lod_build_stats.scan_count > 0 ? lod_build_stats.scan_bands / lod_build_stats.scan_count : 0;
-          const avg_ms = lod_build_stats.scan_count > 0 ? lod_build_stats.scan_ms / lod_build_stats.scan_count : 0;
-          const estimated_ms = avg_bands > 0 ? avg_ms * (band_count / avg_bands) : 0;
-          if (!this.scan_deferred && estimated_ms > LOD_WORK_BUDGET_MS * SCAN_DEFER_FACTOR) {
-            this.scan_deferred = true;
-            deferred = true;
-            lod_build_stats.scan_deferred++;
-            return;
-          }
-          this.scan_deferred = false;
-          this.column_runs = scan_all_column_runs(volume);
-          lod_build_stats.scan_bands += band_count;
-          lod_build_stats.scan_bands_max = Math.max(lod_build_stats.scan_bands_max, band_count);
-        });
-        if (deferred) return null;
-        // with_temporary_composite returns null — its callback never runs at
-        // all — when no layer has painted anything for this exact key. That
-        // is a real if rare transient (a batch of chunks racing their first
-        // build can all momentarily read a layer as empty), NOT "nothing
-        // here, done forever". Falling through to an empty bucket list would
-        // make commit() treat it as fully successful with no way to retry: a
-        // permanent hole, and a contiguous one since a whole neighbouring
-        // batch hits it at once. Returning null keeps the chunk pending.
-        if (compose_result === null) return null;
-        const scan_ms = performance.now() - scan_t0;
-        lod_build_stats.scan_ms += scan_ms;
-        lod_build_stats.scan_count++;
-        lod_build_stats.scan_max_ms = Math.max(lod_build_stats.scan_max_ms, scan_ms);
+        const state = this.advance_scan(budget);
+        if (state !== "done") return null;
       }
       const column_runs = this.column_runs;
-      if (column_runs) {
-        const total_runs = column_runs.count;
-        const avg_runs = lod_build_stats.build_count > 0 ? lod_build_stats.build_runs / lod_build_stats.build_count : 0;
-        const avg_build_ms = lod_build_stats.build_count > 0 ? lod_build_stats.build_ms / lod_build_stats.build_count : 0;
-        const estimated_ms = avg_runs > 0 ? avg_build_ms * (total_runs / avg_runs) * missing.length : 0;
-        if (!this.build_deferred && estimated_ms > LOD_WORK_BUDGET_MS * SCAN_DEFER_FACTOR) {
-          this.build_deferred = true;
-          lod_build_stats.build_deferred++;
-          return null;
-        }
-        this.build_deferred = false;
-
-        const build_t0 = performance.now();
-        for (const step of missing) {
-          this.bucket_cache.set(step, build_chunk_bucket(column_runs, step, "primary"));
-        }
-        const build_ms = performance.now() - build_t0;
-        lod_build_stats.build_ms += build_ms;
-        lod_build_stats.build_count++;
-        lod_build_stats.build_max_ms = Math.max(lod_build_stats.build_max_ms, build_ms);
-        lod_build_stats.build_runs += total_runs;
-        lod_build_stats.build_runs_max = Math.max(lod_build_stats.build_runs_max, total_runs);
-      }
+      if (column_runs && this.advance_bake(column_runs, budget) !== "done") return null;
     }
 
     // Tiers outside the current pair are kept rather than evicted, because a
@@ -660,6 +634,128 @@ export class ChunkNode implements ChunkLodControl {
       .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
       .map((bucket) => ({ ...bucket, role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole }))
       .sort((a, b) => a.lod_step - b.lod_step);
+  }
+
+  /**
+   * Moves the scan along, and says where it got to.
+   *
+   * "done" — column_runs is filled and the bake can proceed.
+   * "busy" — rows were scanned, more remain; the chunk stays pending and the
+   *          caller reports real work done, since it was.
+   * "blocked" — nothing scanned: another chunk holds the one scan slot, or no
+   *          layer had painted this key yet (a real if rare transient a batch
+   *          of chunks racing their first build can hit — NOT "nothing here,
+   *          done forever", which is why it keeps the chunk pending rather
+   *          than falling through to an empty bucket list and a permanent
+   *          hole).
+   *
+   * With no budget (a source-change rebuild outside the tick) the scan runs
+   * to completion in one call, as it always did.
+   */
+  private advance_scan(budget: FrameBudget | null): "done" | "busy" | "blocked" {
+    const step_t0 = performance.now();
+    if (!this.scan) {
+      // Cheap check before the expensive compose: composing and then finding
+      // the slot taken would spend a couple of milliseconds per pending chunk
+      // for nothing, every frame the slot is busy.
+      if (column_scan_open()) return "blocked";
+      const volume = composite_chunk_layers(this.deps.stack, this.key);
+      if (volume === null) return "blocked";
+      const cursor = begin_column_scan(volume);
+      if (cursor === null) {
+        release_chunk_volume(volume);
+        return "blocked";
+      }
+      this.scan = { volume, cursor, spent_ms: 0 };
+      lod_build_stats.scan_bands += volume.bands.length;
+      lod_build_stats.scan_bands_max = Math.max(lod_build_stats.scan_bands_max, volume.bands.length);
+    }
+
+    // At least one step, whatever the budget says — forward progress is the
+    // invariant — then as many more as the budget still has room for. A step
+    // is a few rows, around a millisecond on a band-heavy chunk.
+    let done: boolean;
+    do {
+      done = scan_column_rows(this.scan.cursor);
+    } while (!done && (budget === null || budget.remaining() > 0));
+    // Time actually spent scanning, summed across the frames it took — not
+    // the wall time from first step to last, which would count the frames
+    // in between as cost.
+    this.scan.spent_ms += performance.now() - step_t0;
+    if (!done) return "busy";
+
+    this.column_runs = finish_column_scan(this.scan.cursor);
+    release_chunk_volume(this.scan.volume);
+    const scan_ms = this.scan.spent_ms;
+    this.scan = null;
+    lod_build_stats.scan_ms += scan_ms;
+    lod_build_stats.scan_count++;
+    lod_build_stats.scan_max_ms = Math.max(lod_build_stats.scan_max_ms, scan_ms);
+    return "done";
+  }
+
+  /**
+   * Bakes whatever tier `wanted` still lacks, stepping under the budget, and
+   * says where it got to — the same three answers advance_scan gives.
+   *
+   * A bake already open is carried to completion even if its tier is no
+   * longer wanted: it is a bounded amount of work, the result is cached
+   * rather than wasted, and restarting on every change of mind is how a
+   * camera hunting across a threshold would keep a chunk from ever finishing.
+   */
+  private advance_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
+    for (;;) {
+      if (!this.bake) {
+        const step = this.wanted.find((s) => !this.bucket_cache.has(s));
+        if (step === undefined) return "done";
+        if (bake_open()) return "blocked";
+        const cursor = begin_bake(column_runs, step);
+        if (cursor === null) return "blocked";
+        this.bake = { step, cursor, spent_ms: 0 };
+      }
+
+      const t0 = performance.now();
+      let done: boolean;
+      do {
+        done = step_bake(this.bake.cursor);
+      } while (!done && (budget === null || budget.remaining() > 0));
+      this.bake.spent_ms += performance.now() - t0;
+      if (!done) return "busy";
+
+      const { step, cursor, spent_ms } = this.bake;
+      this.bake = null;
+      this.bucket_cache.set(step, bucket_from_baked(finish_bake(cursor), step, "primary"));
+      lod_build_stats.build_ms += spent_ms;
+      lod_build_stats.build_count++;
+      lod_build_stats.build_max_ms = Math.max(lod_build_stats.build_max_ms, spent_ms);
+      lod_build_stats.build_runs += column_runs.count;
+      lod_build_stats.build_runs_max = Math.max(lod_build_stats.build_runs_max, column_runs.count);
+
+      // A second wanted tier starts in this same call only if the budget
+      // still has room; otherwise it waits for the next commit.
+      if (budget !== null && budget.remaining() <= 0) {
+        return this.wanted.some((s) => !this.bucket_cache.has(s)) ? "busy" : "done";
+      }
+    }
+  }
+
+  /** Drops any scan or bake in progress and returns what it holds. Called
+   * wherever this chunk stops needing them — which must include every place
+   * `pending` goes false, or the slot stays taken and nothing else builds. */
+  private abort_work(): void {
+    this.abort_scan();
+    if (this.bake) {
+      abort_bake(this.bake.cursor);
+      this.bake = null;
+    }
+  }
+
+  /** Drops a scan in progress and returns its composite to the pool. */
+  private abort_scan(): void {
+    if (!this.scan) return;
+    abort_column_scan(this.scan.cursor);
+    release_chunk_volume(this.scan.volume);
+    this.scan = null;
   }
 
   /** Decor's own build — no volume scan, no dependency on the cube caches
@@ -683,7 +779,7 @@ export class ChunkNode implements ChunkLodControl {
     primary: LodStep,
     secondary: LodStep | null,
   ): { buckets: BuiltChunkBucket[]; decor: DecorLayoutPair; bounds: ChunkBounds | null } | null {
-    const buckets = this.build_buckets(primary, secondary);
+    const buckets = this.build_buckets(primary, secondary, null);
     if (buckets === null) return null;
     return { buckets, decor: this.build_decor_pair(primary, secondary), bounds: chunk_bounds(buckets) };
   }
@@ -822,7 +918,7 @@ export class ChunkNode implements ChunkLodControl {
 
   // ---- ChunkLodControl ----
 
-  recheck(camera: THREE.Camera, frustum: THREE.Frustum): void {
+  recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void {
     if (this.disposed) return;
     const bounds = this.layout.bounds;
     if (bounds === null) {
@@ -832,6 +928,7 @@ export class ChunkNode implements ChunkLodControl {
       this.local_box.getCenter(this.center).applyMatrix4(this.group.matrixWorld);
     }
     this.distance2 = this.center.distanceToSquared(camera.position);
+    this.lead_distance2 = this.center.distanceToSquared(lead);
     if (bounds === null) {
       const inside = Math.abs(camera.position.x - this.center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
         Math.abs(camera.position.y - this.center.y) <= CHUNK_WORLD_SPAN * 0.5;
@@ -850,6 +947,11 @@ export class ChunkNode implements ChunkLodControl {
       // rebuilds if it re-enters.
       this.desired = { primary: OFF_SCREEN_LOD_STEP, secondary: null };
       this.pending = this.layout.ready;
+      // A scan only means anything while this chunk is going to commit. Left
+      // open here it would hold the one scan slot for as long as the chunk
+      // stayed off-screen, and every other chunk in the world would report
+      // "blocked" — which read as: move somewhere new and nothing builds.
+      if (!this.pending) this.abort_work();
       this.blend_active = false;
       this.settling = false;
       this.prune_to_default();
@@ -880,6 +982,9 @@ export class ChunkNode implements ChunkLodControl {
     const secondary = blending ? guide.blend_coarser_step! : null;
     this.desired = { primary, secondary };
     this.pending = !this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary;
+    // Same rule as the off-screen branch: a tier that was being scanned for
+    // and is no longer wanted must give the slot back now, not never.
+    if (!this.pending) this.abort_work();
     this.blend_active = !this.settling && guide.blend_active;
 
     if (this.pending || !this.blend_active || guide.blend_finer_step === null || guide.blend_coarser_step === null) {
@@ -914,7 +1019,7 @@ export class ChunkNode implements ChunkLodControl {
     });
   }
 
-  commit(): boolean {
+  commit(budget: FrameBudget): boolean {
     if (this.disposed || !this.pending) return false;
     if (!this.in_frustum) {
       this.reset_all_caches();
@@ -934,11 +1039,15 @@ export class ChunkNode implements ChunkLodControl {
 
     const desired = this.desired;
     const build_t0 = import.meta.env.DEV ? performance.now() : 0;
-    const buckets = this.build_buckets(desired.primary, desired.secondary);
+    const buckets = this.build_buckets(desired.primary, desired.secondary, budget);
     if (import.meta.env.DEV) commit_step_stats.build_ms_max = Math.max(commit_step_stats.build_ms_max, performance.now() - build_t0);
-    // A needed scan was deferred to a calmer frame — stay pending and leave
-    // whatever is on screen alone rather than popping it to empty.
-    if (buckets === null) return false;
+    // Not built this frame: the scan is mid-way, or blocked behind another
+    // chunk's, or the bake was deferred to a calmer frame. Stay pending and
+    // leave whatever is on screen alone rather than popping it to empty. A
+    // scan that advanced is real work and is reported as such, so the
+    // budget loop counts it — the alternative reads as "nothing happened"
+    // and lets the loop walk on to start scans it cannot start.
+    if (buckets === null) return this.holds_slot;
 
     const bounds_t0 = import.meta.env.DEV ? performance.now() : 0;
     const bounds = chunk_bounds(buckets);

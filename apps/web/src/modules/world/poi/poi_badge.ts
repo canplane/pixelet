@@ -143,6 +143,28 @@ export function poi_badge_metrics(poi: POI): BadgeMetrics {
   return m;
 }
 
+/** The pill every badge in this layer stands on: a rect with fully-rounded
+ * ends (radius = half height). One function so a place and a cluster cannot
+ * drift into two designs. */
+function draw_pill(ctx: CanvasRenderingContext2D, logical_w: f64): void {
+  ctx.fillStyle = "rgba(20,20,26,0.72)";
+  ctx.beginPath();
+  ctx.roundRect(0, 0, logical_w, PILL_H, PILL_R);
+  ctx.fill();
+}
+
+/** The anchor dot, centred under the pill, marking the ground point the
+ * pill floats above. */
+function draw_anchor_dot(ctx: CanvasRenderingContext2D, logical_w: f64): void {
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.beginPath();
+  ctx.arc(logical_w / 2, DOT_CY, DOT_DIAM / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = DOT_BORDER;
+  ctx.stroke();
+}
+
 /** A single-line pill (colored icon circle + name) with an anchor dot
  * centered below it — the shape `checkpoint/20260107-float`'s own HTML
  * badge used (`poi-item.tsx`), redrawn as one flat canvas texture instead
@@ -158,11 +180,7 @@ function build_poi_badge(poi: POI): BuiltBadge | null {
     ctx.imageSmoothingEnabled = false;
     ctx.scale(RENDER_SCALE, RENDER_SCALE);
 
-    // Pill background — a rect with fully-rounded ends (radius = half height).
-    ctx.fillStyle = "rgba(20,20,26,0.72)";
-    ctx.beginPath();
-    ctx.roundRect(0, 0, logical_w, PILL_H, PILL_R);
-    ctx.fill();
+    draw_pill(ctx, logical_w);
 
     // Icon circle is concentric with the pill's own rounded left cap (same
     // center `r`, smaller radius) rather than padded off it — no separate
@@ -190,14 +208,7 @@ function build_poi_badge(poi: POI): BuiltBadge | null {
     ctx.fillStyle = "#fff";
     ctx.fillText(name, TEXT_X, PILL_H / 2 + 1);
 
-    // Anchor dot, centered under the whole pill.
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.beginPath();
-    ctx.arc(logical_w / 2, DOT_CY, DOT_DIAM / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-    ctx.lineWidth = DOT_BORDER;
-    ctx.stroke();
+    draw_anchor_dot(ctx, logical_w);
   });
   return uv ? { ...m, uv } : null;
 }
@@ -234,9 +245,13 @@ export function poi_badge(poi: POI): BuiltBadge | null {
 
 // ---- cluster badge ----
 //
-// A circle carrying a count, which is supercluster's own representation and
-// the one a board of user posts wants: there is no single member worth
-// naming, and the number *is* the information.
+// A count where a name would be. It is the same pill a place gets, at the
+// same height, with the same dot under it marking the lattice cell the
+// count stands over — one design for the layer, so a badge that gathers
+// its neighbours reads as a badge and not as a different kind of thing.
+// There is no icon: a cluster has no category, and the number is the
+// information (supercluster's own representation, and the one a board of
+// user posts wants).
 //
 // Keyed by the count rather than by an id, which is the whole reason this is
 // cheap. Every cluster of twelve looks alike, so the cache holds a few dozen
@@ -244,19 +259,14 @@ export function poi_badge(poi: POI): BuiltBadge | null {
 // cluster, unlike a POI, has no stable identity to key on anyway: it exists
 // for one zoom level and dissolves at the next.
 
-const CLUSTER_MIN_D = 30;
-/** Added per decade of members, so a hundred reads as visibly bigger than
- * ten without a thousand becoming a disc. Area would be the honest encoding
- * and is unreadable at these sizes. */
-const CLUSTER_D_PER_DECADE = 7;
-const CLUSTER_FONT_PX = 12;
+/** Horizontal breathing room either side of the count. Chosen so a single
+ * digit fills exactly a circle of the pill's height, and anything longer
+ * stretches it into a pill — the count's own length carries its magnitude,
+ * which is why the diameter no longer grows per decade. */
+const CLUSTER_PAD_X = 10;
 
 const cluster_cache = new Map<u32, BuiltBadge>();
 const cluster_metrics_cache = new Map<u32, BadgeMetrics>();
-
-function cluster_diameter(count: u32): f64 {
-  return CLUSTER_MIN_D + CLUSTER_D_PER_DECADE * Math.log10(Math.max(1, count));
-}
 
 /** Capped, because four digits does not fit and the difference between 1200
  * and 1400 is not a difference anyone acts on. */
@@ -267,11 +277,8 @@ function cluster_label(count: u32): string {
 export function cluster_badge_metrics(count: u32): BadgeMetrics {
   let m = cluster_metrics_cache.get(count);
   if (!m) {
-    const d = cluster_diameter(count);
-    // The anchor is the circle's own centre, not its bottom edge: a cluster
-    // marks a region rather than standing on a point, and the count should
-    // sit over the place it counts.
-    m = { logical_w: d, logical_h: d, center_y: d / 2, collide_h: d };
+    const text_w = Math.ceil(measure_ctx().measureText(cluster_label(count)).width);
+    m = { logical_w: Math.max(PILL_H, text_w + CLUSTER_PAD_X * 2), logical_h: LOGICAL_H, center_y: DOT_CY, collide_h: PILL_H };
     cluster_metrics_cache.set(count, m);
   }
   return m;
@@ -283,24 +290,21 @@ export function cluster_badge(count: u32): BuiltBadge | null {
 
   const t0 = performance.now();
   const m = cluster_badge_metrics(count);
-  const d = m.logical_w;
-  const r = d / 2;
+  const { logical_w } = m;
 
-  const uv = badge_atlas.add(d * RENDER_SCALE, d * RENDER_SCALE, (ctx) => {
+  const uv = badge_atlas.add(logical_w * RENDER_SCALE, LOGICAL_H * RENDER_SCALE, (ctx) => {
+    ctx.imageSmoothingEnabled = false;
     ctx.scale(RENDER_SCALE, RENDER_SCALE);
-    ctx.fillStyle = "rgba(20,20,26,0.72)";
-    ctx.beginPath();
-    ctx.arc(r, r, r - 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
 
-    ctx.font = `${FONT_WEIGHT_REGULAR} ${CLUSTER_FONT_PX}px ${FONT_FAMILY}`;
+    draw_pill(ctx, logical_w);
+
+    ctx.font = FONT;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#fff";
-    ctx.fillText(cluster_label(count), r, r + 1);
+    ctx.fillText(cluster_label(count), logical_w / 2, PILL_H / 2 + 1);
+
+    draw_anchor_dot(ctx, logical_w);
   });
   poi_badge_build_stats.builds++;
   poi_badge_build_stats.ms += performance.now() - t0;

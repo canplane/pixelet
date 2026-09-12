@@ -146,7 +146,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  task    p50 ${n1(pct(sorted((f) => f.task_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.task_ms), 0.95))} ms   (main thread's own rAF task)`,
     `  offthd  p50 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.5))}  p95 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.95))} ms   (vsync/compositor/GPU/GC)`,
     `  gpu     p50 ${n1(pct(sorted((f) => f.gpu_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.gpu_ms), 0.95))} ms${last.gpu_ms === 0 ? "   (timer unsupported or unresolved)" : ""}`,
-    `  sched   p95 ${n1(pct(sched, 0.95))}  max ${n1(sched[sched.length - 1])} ms`,
+    `  sched   p95 ${n1(pct(sched, 0.95))}  max ${n1(sched[sched.length - 1])} ms   budget ${n1(last.budget_ms)}   phases ${Object.entries(last.phases).map(([k, v]) => `${k} ${n1(v)}`).join("  ")}`,
     `  cpu     rck p95 ${n1(pct(rck, 0.95))}  cmt p95 ${n1(pct(cmt, 0.95))}  rnd p95 ${n1(pct(rnd, 0.95))} ms`,
     `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  tex ${last.textures}  fill ${(last.px / 1e6).toFixed(1)}Mpx x${last.fx_passes}`,
     `  mem     heap ${last.heap_mb}MB (${heap_delta >= 0 ? "+" : ""}${heap_delta})  tiles ${last.tile_pages} (~${last.tile_pages * TILE_DECODED_MB}MB)  poi ${last.poi_count}`,
@@ -164,7 +164,9 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  faces   kept ${occlusion_stats.faces_kept} / ${occlusion_stats.faces_possible} (${
       occlusion_stats.faces_possible > 0 ? Math.round(occlusion_stats.faces_kept / occlusion_stats.faces_possible * 100) : 0
     }%)  runs culled ${occlusion_stats.culled}/${occlusion_stats.total_runs}`,
-    `  index   poi ${poi_index_stats().indexed} resident  ${poi_index_stats().rebuilds} rebuilds${poi_index_stats().dropped > 0 ? `  DROPPED ${poi_index_stats().dropped}` : ""}`,
+    `  index   poi ${poi_index_stats().indexed} resident  ${poi_index_stats().rebuilds} rebuilds${poi_index_stats().sweeping > 0 ? `  sweeping ${poi_index_stats().sweeping} pages` : ""}${
+      poi_index_stats().dropped > 0 ? `  DROPPED ${poi_index_stats().dropped}` : ""
+    }`,
     `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  hit ${last.pool.hit_pct}%  biggest ${Math.round(mesh_pool_stat().max_block_bytes / 1048576)}MB   window scans ${
       frames.reduce((a, f) => a + f.work.scans, 0)
     } bakes ${frames.reduce((a, f) => a + f.work.bakes, 0)} runs ${frames.reduce((a, f) => a + f.work.runs, 0)}`,

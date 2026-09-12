@@ -445,15 +445,39 @@ const SPAN_SINK: RunSink = {
 };
 
 /**
- * Scans a whole chunk once and packs the result.
+ * A chunk scan in progress: the composite it reads, and the next row of
+ * columns to walk.
  *
- * Nothing here allocates per run: the walk writes straight into the scratch
- * spans above and the block is filled from them by copy. merge_column_runs
- * keeps its object output for the raycast, which asks for one column at a
- * time and drops the answer.
+ * The scan is column-major and a run can span bands, so the unit that can be
+ * interrupted is a row of columns rather than a band — a row keeps every run
+ * whole and appends to the scratch spans in exactly the order the packed set
+ * wants, so finishing is a copy and nothing has to be stitched.
+ *
+ * One at a time. The scratch spans are module-level and there is one set of
+ * them, so `begin_column_scan` refuses a second scan while one is open, and
+ * the holder is expected to finish or abort it. That is also what bounds
+ * how many composites are held alive across frames: one.
  */
-export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
-  const sub_voxel_index = index_extra_sub_voxels(volume.bands);
+export type ColumnScan = {
+  volume: ChunkVolume;
+  sub_voxel_index: SubVoxelIndex;
+  next_row: u32;
+};
+
+let open_scan: ColumnScan | null = null;
+
+/** Whether a scan is open — so a would-be holder can skip composing. */
+export function column_scan_open(): boolean {
+  return open_scan !== null;
+}
+
+/** Rows a step walks. Sized so a step on a band-heavy chunk stays around a
+ * millisecond: the whole 64-row scan was measured at up to 15 ms. */
+export const SCAN_ROWS_PER_STEP: u32 = 8;
+
+/** Opens a scan over `volume`, or returns null while another is open. */
+export function begin_column_scan(volume: ChunkVolume): ColumnScan | null {
+  if (open_scan !== null) return null;
   SC_Z0.truncate(0);
   SC_Z1.truncate(0);
   SC_R.truncate(0);
@@ -465,14 +489,31 @@ export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
   SC_SUB_OX.truncate(0);
   SC_SUB_OY.truncate(0);
   SC_SUB_OZ.truncate(0);
+  open_scan = { volume, sub_voxel_index: index_extra_sub_voxels(volume.bands), next_row: 0 };
+  return open_scan;
+}
 
+/** Walks up to `rows` more rows of columns. Returns true once every row is
+ * done, at which point `finish_column_scan` packs the result. */
+export function scan_column_rows(scan: ColumnScan, rows: u32 = SCAN_ROWS_PER_STEP): boolean {
   const starts = COLUMN_STARTS;
-  for (let cy: u32 = 0; cy < L2_BAND_CELL_SPAN; cy++) {
+  const end = Math.min(L2_BAND_CELL_SPAN, scan.next_row + rows);
+  for (let cy: u32 = scan.next_row; cy < end; cy++) {
     for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) {
       starts[cy * L2_BAND_CELL_SPAN + cx] = SC_Z0.len;
-      walk_column_runs(volume, cx, cy, undefined, sub_voxel_index, SPAN_SINK);
+      walk_column_runs(scan.volume, cx, cy, undefined, scan.sub_voxel_index, SPAN_SINK);
     }
   }
+  scan.next_row = end;
+  return end >= L2_BAND_CELL_SPAN;
+}
+
+/** Packs a finished scan into an exactly-sized set and closes it. */
+export function finish_column_scan(scan: ColumnScan): ColumnRunSet {
+  if (scan !== open_scan || scan.next_row < L2_BAND_CELL_SPAN) {
+    throw new Error("render: finish_column_scan on a scan that is not the open, complete one");
+  }
+  const starts = COLUMN_STARTS;
   starts[COLUMN_CNT] = SC_Z0.len;
 
   const set = alloc_column_run_set(SC_Z0.len);
@@ -493,7 +534,31 @@ export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
   set.sub_ox.set(SC_SUB_OX.mem.subarray(0, n));
   set.sub_oy.set(SC_SUB_OY.mem.subarray(0, n));
   set.sub_oz.set(SC_SUB_OZ.mem.subarray(0, n));
+  open_scan = null;
   return set;
+}
+
+/** Drops a scan without packing it — the holder went away, or its source
+ * changed under it. The scratch is simply reused by the next `begin`. */
+export function abort_column_scan(scan: ColumnScan): void {
+  if (scan === open_scan) open_scan = null;
+}
+
+/**
+ * Scans a whole chunk in one call and packs the result — the three steps
+ * above, run to completion. What the tests and the raycast-free callers
+ * want; the LOD commit path steps through them across frames instead.
+ *
+ * Nothing here allocates per run: the walk writes straight into the scratch
+ * spans above and the block is filled from them by copy. merge_column_runs
+ * keeps its object output for the raycast, which asks for one column at a
+ * time and drops the answer.
+ */
+export function scan_all_column_runs(volume: ChunkVolume): ColumnRunSet {
+  const scan = begin_column_scan(volume);
+  if (!scan) throw new Error("render: scan_all_column_runs while a stepped scan is open");
+  scan_column_rows(scan, L2_BAND_CELL_SPAN);
+  return finish_column_scan(scan);
 }
 
 /**
