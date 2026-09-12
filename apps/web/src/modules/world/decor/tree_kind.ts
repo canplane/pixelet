@@ -26,11 +26,10 @@ const TREE_KIND_TAG = 0x7ee5eed7eec0de1n;
 // cell is only 1u wide).
 const TREE_DENSITY = 0.04;
 
-// Matches tree_decor.ts's combined variant list length (5 fantasy-town-kit
-// + 4 graveyard-kit pines) — kept as a plain literal rather than importing
-// those assets just to read .length, so this file (and everything that
-// tests against it, e.g. scatter.test.ts) never pulls in a Vite-only `?url`
-// asset import. tree_decor.ts asserts this stays in sync at import time.
+// The palette's model rows for "tree" (5 fantasy-town-kit + 4
+// graveyard-kit pines) — kept as a plain literal rather than read off the
+// palette, so the scatter's pick is a fact of this file and
+// tree_decor.ts's bind_palette asserts the two agree at import time.
 const TREE_VARIANT_COUNT = 9;
 
 export const TREE_KIND: DecorKindSeed = {

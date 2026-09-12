@@ -60,11 +60,10 @@ const API_PREFIX = "/api/";
 const PREFIX = "/api/tiles/";
 
 /**
- * Object keys this Worker is willing to ask R2 for. Three shapes:
+ * Object keys this Worker is willing to ask R2 for. Four shapes:
  *
  * - `terrain/<version>/<page_idx>`, plus the shared `terrain/<version>/_ocean`
- *   tile. The bare `<version>/…` form without the type segment is also
- *   accepted, which is what this bucket held when it held only terrain.
+ *   tile.
  * - `poi/<version>/<page_idx>` — apps/api/src/bake/poi/tools/bake_poi_tiles.ts's
  *   own sibling prefix in the same bucket. No `_ocean`-equivalent: a missing
  *   POI object means "no POI on this page", which poi/repository.ts resolves
@@ -74,6 +73,10 @@ const PREFIX = "/api/tiles/";
  *   bake_geocode_tiles.ts's own sibling prefix, same no-fallback shape as
  *   POI (a missing object means "outside Overture's Divisions coverage",
  *   geocode/repository.ts resolves that to `null` directly).
+ * - `asset/<sha256>` — a model or an image, named by its content;
+ *   apps/api/src/bake/asset/tools/ingest_asset.ts writes them and the
+ *   shipped palette names them. No version segment: a changed file is a
+ *   new key, which is what makes `immutable` true of it.
  *
  * page_idx is an L3 index printed as a decimal BigInt (see tile_repository.ts/
  * poi/repository.ts/geocode/repository.ts), so it can be negative; the
@@ -92,8 +95,7 @@ const PREFIX = "/api/tiles/";
  * It is not rate limiting and does not pretend to be — that needs WAF rules,
  * which need a real zone rather than a workers.dev hostname.
  */
-const KEY_RE =
-  /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20})|[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20}))$/;
+const KEY_RE = /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20})|asset\/[0-9a-f]{64})$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

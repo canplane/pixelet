@@ -4,12 +4,14 @@
  * The palette: one global record naming every kind of thing a placement
  * can be. A placement's `value` is a row here.
  *
- * A row for a cube is a colour; a row for a decor kind points at its model
- * by content — the glb's sha256 names the object in the bucket, so the
- * palette row is the directory entry and the model never changes under
- * it. `extent` is measured at ingest and is what the range criterion
- * reads; `license` and `author` are what attribution shows. A
- * user-uploaded kind is a row from USER_ID_BASE up
+ * A row for a cube is a colour; a row for a decor kind or an actor points
+ * at its model by content — the glb's sha256 names the object in the
+ * bucket, so the palette row is the directory entry and the model never
+ * changes under it. A model whose texture is a separate image (the Kenney
+ * packs share one colormap per pack) names that too, by the same rule;
+ * a self-contained glb leaves it empty. `extent` is measured at ingest and
+ * is what the range criterion reads; `license` and `author` are what
+ * attribution shows. A user-uploaded kind is a row from USER_ID_BASE up
  * (discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md).
  */
 
@@ -20,16 +22,16 @@ import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { encode_table, type RecordSource, str_at, Table } from "./table.ts";
 
 export const PALETTE_KIND = "palette";
-export const PALETTE_VERSION: u32 = 1;
+export const PALETTE_VERSION: u32 = 2;
 
 /** What a row is, as the enum column stores it. */
-export const PALETTE_KINDS = ["cube", "ground", "decor"] as const;
+export const PALETTE_KINDS = ["cube", "ground", "decor", "actor"] as const;
 export type PaletteKind = (typeof PALETTE_KINDS)[number];
 
 /** Rows issued for user uploads start here; below is the shipped set. */
 export const USER_ID_BASE: u32 = 1 << 20;
 
-export const PALETTE_KEYS = ["id", "kind", "name", "model_hash", "model_key", "extent", "size", "license", "author", "color", "group"] as const;
+export const PALETTE_KEYS = ["id", "kind", "name", "model_hash", "model_key", "skin_key", "extent", "size", "license", "author", "color", "group"] as const;
 
 export type PaletteEntry = {
   id: u32;
@@ -37,8 +39,11 @@ export type PaletteEntry = {
   name: string;
   /** FNV-1a of the model's content hash; 0 for a kind with no model. */
   model_hash: bigint;
-  /** The bucket key, `models/<sha256>.glb`; empty for a kind with no model. */
+  /** The bucket key, `asset/<sha256>`; empty for a kind with no model. */
   model_key: string;
+  /** The bucket key of the model's texture when it is a separate image;
+   * empty for a self-contained glb or a kind with no model. */
+  skin_key?: string;
   /** The model's bounds in world units (x, y, z), measured at ingest. */
   extent: readonly [f32, f32, f32];
   /** The footprint's side in world units, a power of two. */
@@ -69,6 +74,7 @@ export function encode_palette(rows: readonly PaletteEntry[]): U8Array {
     { key: "name", value: rows.map((r) => r.name), required: true },
     { key: "model_hash", value: model_hash, required: true },
     { key: "model_key", value: rows.map((r) => r.model_key), required: true },
+    { key: "skin_key", value: rows.map((r) => r.skin_key ?? ""), required: false },
     { key: "extent", value: extent, required: true, stride: 3 },
     { key: "size", value: size, required: true },
     { key: "license", value: rows.map((r) => r.license), required: false },
@@ -89,6 +95,7 @@ export class PaletteTable {
   readonly size: F32Array;
   private readonly name: BranchCursor;
   private readonly model_key: BranchCursor;
+  private readonly skin_key: BranchCursor | null;
   private readonly license: BranchCursor | null;
   private readonly author: BranchCursor | null;
   private readonly color: BranchCursor | null;
@@ -106,6 +113,7 @@ export class PaletteTable {
     this.size = t.lanes<F32Array>("size");
     this.name = t.strings("name")!;
     this.model_key = t.strings("model_key")!;
+    this.skin_key = t.strings("skin_key");
     this.license = t.strings("license");
     this.author = t.strings("author");
     this.color = t.strings("color");
@@ -134,6 +142,9 @@ export class PaletteTable {
   model_key_of(i: u32): string {
     return str_at(this.model_key, i);
   }
+  skin_key_of(i: u32): string {
+    return this.skin_key ? str_at(this.skin_key, i) : "";
+  }
   license_of(i: u32): string {
     return this.license ? str_at(this.license, i) : "";
   }
@@ -158,6 +169,7 @@ export class PaletteTable {
       name: this.name_of(i),
       model_hash: this.model_hash[i],
       model_key: this.model_key_of(i),
+      skin_key: this.skin_key_of(i) || undefined,
       extent: [this.extent[i * 3], this.extent[i * 3 + 1], this.extent[i * 3 + 2]],
       size: this.size[i],
       license: this.license_of(i),

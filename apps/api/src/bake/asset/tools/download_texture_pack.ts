@@ -1,12 +1,14 @@
-// @pxl/shared/assets/cell/textures/tools/download_texture_pack.ts
+// @pxl/api/bake/asset/tools/download_texture_pack.ts
 //
 // Re-runnable, one-off tool — not part of the app build. For every entry in
-// manifest.json: fetches the URL only if ../originals/ doesn't already have
-// a valid copy from that same URL (the cached original is the resize
-// source, so a re-run never re-fetches just to re-normalize), then always
-// (re)normalizes to a TILE_SIZExTILE_SIZE RGBA PNG under ../{terrain,objects}/.
+// asset/cube/manifest.json: fetches the URL only if asset/cube/original/
+// doesn't already have a valid copy from that same URL (the cached original
+// is the resize source, so a re-run never re-fetches just to re-normalize),
+// then always (re)normalizes to a TILE_SIZExTILE_SIZE RGBA PNG under
+// asset/cube/{terrain,block}/. The client fetches those by content hash
+// from the bucket, so a changed image is followed by ingest_asset.ts.
 // Run with:
-//   deno run -A packages/pxl/shared/src/assets/cell/textures/tools/download_texture_pack.ts
+//   deno run -A apps/api/src/bake/asset/tools/download_texture_pack.ts
 //
 // - a failed URL is retried a few times, then reported by name
 // - a source whose aspect ratio isn't square is rejected as a possible
@@ -21,7 +23,7 @@ import { PNG } from "npm:pngjs@7";
 import sharp from "npm:sharp@0.33";
 import { Buffer } from "node:buffer";
 
-import { fetch_with_retry, flatten_manifest, load_manifest, run_pool, type WorkItem } from "./manifest.ts";
+import { CUBE_ASSET_DIR, fetch_with_retry, flatten_manifest, load_manifest, run_pool, type WorkItem } from "./manifest.ts";
 
 const RETRY_ATTEMPTS = 3;
 const CONCURRENCY = 6;
@@ -123,7 +125,7 @@ function looks_like_sprite_sheet(w: number, h: number): boolean {
 type SourceState = Record<string, string>;
 
 function state_path(): URL {
-  return new URL(".download_state.json", import.meta.url);
+  return new URL(".download_state.json", CUBE_ASSET_DIR);
 }
 
 async function load_state(): Promise<SourceState> {

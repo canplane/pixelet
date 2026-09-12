@@ -1,24 +1,13 @@
 // @pxl/web/modules/map/ui/overlay/cube_swatch.ts
 
 import type { CSSProperties } from "react";
-import { is_terrain_style_cube, placeable_cube_hex, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import type { ChannelMap } from "@pxl/shared/spec/cell/type.ts";
-import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
-import terrain_wire from "@pxl/shared/assets/cell/textures/terrain/wire.ts";
+import { placeable_cube_hex, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { asset_url } from "@/lib/env/routes.ts";
+import { texture_key } from "@/modules/world/objects/tex.ts";
 
-// object_wire/terrain_wire import real .png files (Vite-resolved URLs) —
-// fine here (apps/web is Vite-built), but cell/mod.ts (packages/pxl/shared)
-// is also loaded by plain `deno test`, which has no such transform and
-// fails to import a .png as a module. This lookup stays in apps/web for
-// that reason, mirroring objects/tex.ts's own get_object_texture (which
-// only ever handles the flat-color/block half of it, for a THREE.Texture
-// rather than a CSS url).
 function placeable_cube_texture_url(id: PlaceableCubeId): string | null {
-  if (is_terrain_style_cube(id)) {
-    const [channel, local_key] = id.split(".") as [string, string];
-    return (terrain_wire.top as ChannelMap)[channel]?.[local_key]?.url ?? null;
-  }
-  return (object_wire.top.block as Record<string, { url: string }>)[id]?.url ?? null;
+  const key = texture_key(id, "top");
+  return key ? asset_url(key) : null;
 }
 
 /** Style for a cube swatch — the real texture-pack top image when one

@@ -16,10 +16,10 @@
 // cube's own bespoke pipeline was never that.
 //
 // Deliberately does NOT import app/settings/settings_store.ts, matching
-// instanced_model.ts's own reason for avoiding it: that store composes in
-// a slice reaching a `*.glb?url` asset import Vite handles but `deno test`
-// has no loader for, and this module (like instanced_model.ts) is meant to
-// stay importable from test files without dragging that chain in. Callers
+// instanced_model.ts's own reason for avoiding it: a material builder is
+// renderer-side geometry and shader work, and the settings store is the
+// UI's; this module (like instanced_model.ts) stays importable from test
+// files without dragging the app's state in. Callers
 // that need the live show_rim_light setting own that subscription
 // themselves (decor/asset_store.ts for decor; a characters/ equivalent is
 // this file's own reason for existing).

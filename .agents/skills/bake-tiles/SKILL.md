@@ -208,6 +208,39 @@ client would try to decode the HTML as terrain.
 
 Old version prefixes simply stop being requested; delete them whenever.
 
+## Assets: the models and the texture pack
+
+The same bucket holds every model, skin and texture-pack image the client
+draws, under `asset/<sha256>` — the content, not a version. They are
+ingested from the top-level `asset/` tree, not baked:
+
+```bash
+deno task ingest:asset     # -> ./out/asset/{glb,png}/<sha256>, and regenerates
+                           #    packages/pxl/shared/src/record/ingested.ts
+```
+
+Commit the regenerated table with the asset change; the shipped palette
+reads it, and a key it names that is not in the bucket is a 404 on the
+live site. Upload before deploying, one sync per type so the content-type
+is stored with the object (the key has no extension):
+
+```bash
+aws s3 sync ./out/asset/glb s3://<bucket>/asset --profile r2 --endpoint-url <endpoint> \
+  --content-type model/gltf-binary --cache-control "public, max-age=31536000, immutable"
+aws s3 sync ./out/asset/png s3://<bucket>/asset --profile r2 --endpoint-url <endpoint> \
+  --content-type image/png --cache-control "public, max-age=31536000, immutable"
+aws s3 sync ./out/asset/webp s3://<bucket>/asset --profile r2 --endpoint-url <endpoint> \
+  --content-type image/webp --cache-control "public, max-age=31536000, immutable"
+```
+
+The `webp` directory holds the texture pack as one sheet, which the
+ingest composes from the individual images; the client's layer array
+loads that one object and the individual images serve the swatches and
+the hover ghost. Not gzipped — glb, png and webp are already compressed
+— so no `Content-Encoding`. A re-run uploads only new hashes; an old object nothing
+names any more can be deleted whenever. `deno task deploy`'s bundle check
+fails if a model or image byte is back in the bundle.
+
 ## When the bake logic changes
 
 A change to `bake_terrain` or anything under `apps/api/src/bake/terrain/`

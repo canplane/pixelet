@@ -45,8 +45,13 @@ Nothing queued.
   - **The scatter emits `Placement`** when something reads it — the
     worker is the first consumer; until then the instance lanes are the
     same columns and a packet would be a copy nobody opens.
-  - **The bucket path and the ingest**: models by content hash, the
-    palette row written by the server, `model_hash` filled.
+  - **The ingest route** (`POST /api/models`): validate, hash, measure,
+    store, insert a palette row from `USER_ID_BASE`. The bucket path it
+    stands on is done (2026-09-13, evening): every shipped model, skin
+    and texture is `asset/<sha256>` in the bucket, ingested from the
+    top-level `asset/` tree by `deno task ingest:asset`, and the shipped
+    palette's `model_key`/`skin_key`/`model_hash` are filled from the
+    generated table.
 - **The phone, at the end of 2026-09-13.** Same spot, same procedure,
   after POI went under the tick, the badges became one instanced quad,
   the companion stopped probing, placement was cut into units and decor

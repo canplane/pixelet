@@ -23,6 +23,14 @@ export function tile_base(kind: TileKind, published: boolean): string {
   return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}` : `${TILE_ROOT}/${kind}`;
 }
 
+/** A content-addressed asset — a model, a texture — by its bucket key
+ * (`asset/<sha256>`, the shipped palette's `model_key`/`skin_key`). No
+ * version: the key is the content. Same path published or not, since the
+ * dev API serves the ingest's output under it. */
+export function asset_url(key: string): string {
+  return `${TILE_ROOT}/${key}`;
+}
+
 export const SEARCH_URL = `${API_ROOT}/search`;
 
 /**

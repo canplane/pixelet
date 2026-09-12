@@ -28,25 +28,12 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import * as THREE from "three";
 
 import { GROUND_LAYER_META, hex_to_rgb255 } from "./layer/terrain/shader_meta.ts";
-import terrain_wire from "@pxl/shared/assets/cell/textures/terrain/wire.ts";
 import { cube_hex, cube_ids, type CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
-import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
-import type { ChannelMap, ImageEntry } from "@pxl/shared/spec/cell/type.ts";
+import { type CubeFace, SHIPPED_SHEET, shipped_texture_tile } from "@pxl/shared/record/texture.ts";
+import { asset_url } from "@/lib/env/routes.ts";
 
-// Must match TILE_SIZE in cell/tools/download_texture_pack.ts.
+// Must match TILE_SIZE in apps/api/src/bake/asset/tools/download_texture_pack.ts.
 const LAYER_TEX_SZ = 256;
-
-function build_side_image_map(top: ChannelMap, overrides: Partial<ChannelMap>): ChannelMap {
-  const out: ChannelMap = {};
-  Object.keys(top).forEach((ch_key) => {
-    const ch_out: Record<string, ImageEntry> = {};
-    Object.keys(top[ch_key]).forEach((type_key) => {
-      ch_out[type_key] = overrides[ch_key]?.[type_key] ?? top[ch_key][type_key];
-    });
-    out[ch_key] = ch_out;
-  });
-  return out;
-}
 
 type LayerMetaLike = { ch_key: string; type_key: string; layer_index: u32 };
 
@@ -124,48 +111,40 @@ function fill_layer(data: Uint8Array, layer_index: u32, sz: u32, r: u32, g: u32,
 }
 
 /**
- * Progressively replaces a layer array tex's flat-fill layers with real
- * decoded image pixels, once each mapped file finishes loading. No
- * PNG-decoding dependency: images load exactly the way any <img> on a
- * normal web page would, decoded by the browser itself, then read back via
- * a 2D canvas.
+ * Replaces a layer array tex's flat-fill layers with the pack's real pixels
+ * once the sheet arrives — one image holding every tile, one download, one
+ * decode (record/texture.ts's SHIPPED_SHEET), read back tile by tile through
+ * a 2D canvas. A side with no tile of its own wears the top's — the rule
+ * the shader assumes when it samples the side array. Each layer is marked
+ * for upload on its own and the texture updated once at the end: with sixty
+ * separate images this re-uploaded the whole array per arrival.
  */
-function load_real_layer_images(
-  tex: THREE.DataArrayTexture,
-  layer_meta: readonly LayerMetaLike[],
-  image_map: Record<string, Record<string, ImageEntry>>,
-  sz: u32,
-): void {
+function load_sheet_layers(tex: THREE.DataArrayTexture, layer_meta: readonly LayerMetaLike[], face: CubeFace, sz: u32): void {
   const canvas = document.createElement("canvas");
   canvas.width = sz;
   canvas.height = sz;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return;
 
-  layer_meta.forEach((m) => {
-    const entry = image_map[m.ch_key]?.[m.type_key];
-    if (!entry) return;
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const cell = SHIPPED_SHEET.cell;
+    for (const m of layer_meta) {
+      const tile = shipped_texture_tile(m.ch_key, m.type_key, face) ?? shipped_texture_tile(m.ch_key, m.type_key, "top");
+      if (!tile) continue;
       ctx.clearRect(0, 0, sz, sz);
-      // Only the first frame_height-tall slice for animated sprite sheets
-      // (frames stacked vertically) — this pipeline has no concept of
-      // animation, so "first frame" is the only sensible still image.
-      const src_h = entry.frame_height ?? img.naturalHeight;
-      ctx.drawImage(img, 0, 0, img.naturalWidth, src_h, 0, 0, sz, sz);
+      ctx.drawImage(img, tile.x, tile.y, cell, cell, 0, 0, sz, sz);
       const { data } = ctx.getImageData(0, 0, sz, sz);
-
-      const layer_off = m.layer_index * sz * sz * 4;
-      (tex.image.data as Uint8Array).set(data, layer_off);
-      tex.needsUpdate = true;
-    };
-    img.onerror = () => {
-      console.warn(`[tex_array] failed to load real tex for ${m.ch_key}.${m.type_key} — keeping flat-fill placeholder`);
-    };
-    img.src = entry.url;
-  });
+      (tex.image.data as Uint8Array).set(data, m.layer_index * sz * sz * 4);
+      tex.addLayerUpdate(m.layer_index);
+    }
+    tex.needsUpdate = true;
+  };
+  img.onerror = () => {
+    console.warn(`[tex_array] failed to load the texture sheet — keeping flat-fill placeholders`);
+  };
+  img.src = asset_url(SHIPPED_SHEET.key);
 }
 
 const placeholder_top = build_placeholder_data(LAYER_TEX_SZ);
@@ -174,8 +153,5 @@ const placeholder_side = placeholder_top.slice();
 export const GROUND_LAYERS_TOP: THREE.DataArrayTexture = create_layer_array_tex(placeholder_top, LAYER_TEX_SZ, LAYER_TEX_SZ, LAYER_CNT);
 export const GROUND_LAYERS_SIDE: THREE.DataArrayTexture = create_layer_array_tex(placeholder_side, LAYER_TEX_SZ, LAYER_TEX_SZ, LAYER_CNT);
 
-load_real_layer_images(GROUND_LAYERS_TOP, COMBINED_META, { ...terrain_wire.top, ...object_wire.top }, LAYER_TEX_SZ);
-load_real_layer_images(GROUND_LAYERS_SIDE, COMBINED_META, {
-  ...build_side_image_map(terrain_wire.top, terrain_wire.side),
-  ...build_side_image_map(object_wire.top, object_wire.side),
-}, LAYER_TEX_SZ);
+load_sheet_layers(GROUND_LAYERS_TOP, COMBINED_META, "top", LAYER_TEX_SZ);
+load_sheet_layers(GROUND_LAYERS_SIDE, COMBINED_META, "side", LAYER_TEX_SZ);

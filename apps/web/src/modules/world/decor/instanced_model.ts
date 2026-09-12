@@ -28,11 +28,10 @@
  *
  * Deliberately does NOT import app/settings/settings_store.ts here (unlike
  * chunk_stage.tsx's own create_material()) even though u_rim_intensity needs
- * to track its show_rim_light setting: that store composes in
- * settings/schema.ts, which reaches characters/variants.ts's
- * own `*.glb?url` asset imports — fine for Vite, but `deno test` has no
- * loader for that specifier, and this file is imported directly by
- * decor_hit.test.ts/instanced_model.test.ts. Pulling that whole chain into a
+ * to track its show_rim_light setting: that store is the UI's, composed
+ * from settings/schema.ts and the character catalog, and this file is
+ * geometry imported directly by decor_hit.test.ts/instanced_model.test.ts.
+ * Pulling that whole chain into a
  * module those tests import would break `deno task test` outright, not just
  * slow it down. asset_store.ts, which no test imports, owns the loading
  * and that subscription instead.

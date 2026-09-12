@@ -35,6 +35,11 @@
     // see .agents/skills/bake-tiles/SKILL.md.
     "deploy": "deno task --cwd apps/web deploy",
 
+    // Copies every file under asset/ to ./out/asset/{glb,png}/<sha256> and
+    // regenerates the table the shipped palette reads. Uploading is separate
+    // — see .agents/skills/bake-tiles/SKILL.md.
+    "ingest:asset": "deno run -A apps/api/src/bake/asset/tools/ingest_asset.ts",
+
     "build:api": "deno task --cwd apps/api build",
     "build:web": "deno task --cwd apps/web build",
 
@@ -44,11 +49,9 @@
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
 
-    // Only covers workspace members that currently have *.test.ts files —
-    // deno test errors out on a target with zero matching test modules, so
-    // apps/api isn't wired in here until it has tests of its own.
-    "test": "deno task test:web && deno task test:shared && deno task test:xpute",
+    "test": "deno task test:web && deno task test:api && deno task test:shared && deno task test:xpute",
     "test:web": "deno task --cwd apps/web test",
+    "test:api": "deno test -A apps/api/src",
     "test:shared": "deno test -A packages/pxl/shared/src",
     "test:xpute": "deno test -A packages/xpute/core/src",
 

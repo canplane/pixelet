@@ -18,9 +18,8 @@
  * and to the object store. Nothing has to be told twice.
  *
  * Kept out of instanced_model.ts on purpose: this module reaches
- * decor_registry.ts and settings_store.ts, whose `*.glb?url` imports
- * `deno test` has no loader for, and instanced_model.ts is imported
- * directly by tests.
+ * decor_registry.ts and settings_store.ts — the app's state — and
+ * instanced_model.ts is geometry imported directly by tests.
  */
 
 import { useSyncExternalStore } from "react";

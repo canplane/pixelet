@@ -14,7 +14,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { useCharacterModel } from "./use_character_model.ts";
-import type { CharacterVariant } from "@pxl/shared/assets/characters/variants.ts";
+import type { CharacterVariant } from "@/modules/world/characters/variants.ts";
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 const IDLE_CLIP = "idle";

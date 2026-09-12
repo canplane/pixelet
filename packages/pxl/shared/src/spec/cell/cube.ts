@@ -36,7 +36,7 @@ import { build_colors_from_json } from "./type.ts";
 // .ts export, not a real .json file imported via `with { type: "json" }`:
 // see that module's own top comment for why (a real, reproduced
 // @deno/vite-plugin limitation, not a style preference).
-import cube_palette_json from "@pxl/shared/assets/cell/palette/cube.ts";
+import cube_palette_json from "./color.ts";
 
 export const cube_types = {
   common: {
@@ -185,7 +185,7 @@ export const cube_types = {
 } as const satisfies Record<string, Record<string, number>>;
 
 // ============================================================================
-// Color Definitions — loaded from JSON (see ../../assets/cell/palette/)
+// Color Definitions — the palette's colour column (see ./color.ts)
 // ============================================================================
 
 /** VOID/UNKNOWN's own shared colors, seeded into every raster channel below

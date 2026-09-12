@@ -18,7 +18,7 @@
  * nor its name.
  */
 
-import { DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY } from "@pxl/shared/assets/characters/variants.ts";
+import { DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY } from "@/modules/world/characters/variants.ts";
 
 /** Rough per-frame cost, shown as a badge on the row. */
 export type SettingCost = "low" | "med" | "high";

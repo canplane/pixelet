@@ -97,6 +97,7 @@ import { decor_id_from_num, type DecorId, object_value_is_decor } from "@pxl/sha
 
 import { shipped_palette } from "@pxl/shared/record/mod.ts";
 
+import { asset_url } from "@/lib/env/routes.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_is_occupied, each_column_entry, object_column_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
@@ -157,7 +158,8 @@ export type DecorKindBundle = {
   kind: string;
   seed: DecorKindSeed;
   is_eligible: DecorEligibility;
-  /** One entry per variant_count — see instanced_model.ts's own doc comment
+  /** One entry per variant_count, filled by `bind_palette` from the
+   * palette's rows for this kind — see instanced_model.ts's own doc comment
    * on why each variant carries its own skin rather than the whole kind
    * sharing one: a kind's variants can (and for trees, do) span more than
    * one Kenney pack, each with its own colormap atlas. */
@@ -171,26 +173,28 @@ export type DecorKindBundle = {
    * today — scattered-only, no mode_bar button of their own). */
   decor_id?: DecorId;
   /** The palette rows of this kind's variants, in variant order — the
-   * shipped palette's `group` of the kind's name. Filled by
-   * `bind_palette`, which also checks the count against `variants`. */
+   * shipped palette's `group` of the kind's name. Filled by `bind_palette`
+   * alongside `variants`. */
   palette_rows?: readonly u32[];
 };
 
 /**
- * Binds a bundle to the palette: its variants' rows, and the extent the
- * range criterion reads — the largest dimension over every variant, since
- * the criterion asks how large the kind is to the eye and a kind is drawn
- * as any of its variants. The asset list and the palette are two files
- * listing the same models in the same order; the count is checked at
- * import so they cannot drift apart silently.
+ * Binds a bundle to the palette: its variants — the palette's model rows
+ * for this kind, in row order, each a model and a skin fetched by content
+ * key — and the extent the range criterion reads, the largest dimension
+ * over every variant, since the criterion asks how large the kind is to
+ * the eye and a kind is drawn as any of its variants. The seed's
+ * variant_count is checked against the palette at import so the scatter's
+ * pick and the palette's list cannot drift apart silently.
  */
-export function bind_palette(bundle: DecorKindBundle): DecorKindBundle {
-  const rows = shipped_palette().rows_of_group(bundle.kind).filter((row) => shipped_palette().model_key_of(row) !== "");
-  if (rows.length !== bundle.variants.length) {
-    throw new Error(`decor: palette lists ${rows.length} models for ${bundle.kind}, the bundle ${bundle.variants.length}`);
+export function bind_palette(bundle: Omit<DecorKindBundle, "variants" | "palette_rows">): DecorKindBundle {
+  const palette = shipped_palette();
+  const rows = palette.rows_of_group(bundle.kind).filter((row) => palette.model_key_of(row) !== "");
+  if (rows.length !== bundle.seed.variant_count) {
+    throw new Error(`decor: palette lists ${rows.length} models for ${bundle.kind}, ${bundle.kind}_kind.ts's variant_count is ${bundle.seed.variant_count}`);
   }
-  bundle.palette_rows = rows;
-  return bundle;
+  const variants = rows.map((row) => ({ model_url: asset_url(palette.model_key_of(row)), skin_url: asset_url(palette.skin_key_of(row)) }));
+  return { ...bundle, variants, palette_rows: rows };
 }
 
 function kind_extent(bundle: DecorKindBundle): f64 {

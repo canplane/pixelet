@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { CharacterPreview } from "@/modules/world/characters/character_preview.tsx";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
-import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@pxl/shared/assets/characters/variants.ts";
+import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/modules/world/characters/variants.ts";
 
 // Moved out of app/settings/sections/ (2026-09-07): person/pet variant is a
 // companion *appearance* pick, not a setting you configure once and forget —
