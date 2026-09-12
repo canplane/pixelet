@@ -139,9 +139,10 @@ export default {
     }
 
     // Edge cache in front of R2. Sound without any invalidation story because
-    // tiles are immutable and versioned by URL — a re-bake publishes a new
-    // prefix rather than replacing bytes, so a cached entry can never go
-    // stale. This is also the only real cost control available: R2 has no
+    // terrain and assets are immutable and versioned by URL — a re-bake
+    // publishes a new prefix rather than replacing bytes — and the POI and
+    // geocode prefixes, which are rewritten in place monthly, carry a one-day
+    // max-age the cache honours. This is also the only real cost control: R2 has no
     // spend limit, and class-B reads are the one meter that scales with
     // traffic, so every edge hit is a read that never happens.
     const cache = caches.default;
