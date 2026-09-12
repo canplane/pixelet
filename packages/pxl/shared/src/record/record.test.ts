@@ -9,6 +9,7 @@ import { encode_table, Table } from "./table.ts";
 import { encode_placements, type Placement, PlacementTable } from "./placement.ts";
 import { encode_palette, type PaletteEntry, PaletteTable, USER_ID_BASE } from "./palette.ts";
 import { CHANNEL_ID_BASE, shipped_palette } from "./shipped.ts";
+import { SHIPPED_SHEET, shipped_texture_key, shipped_texture_tile } from "./texture.ts";
 import { cube_colors, cube_types, decor_types } from "../spec/cell/mod.ts";
 
 Deno.test("table - a record names its kind, its columns and its count, and a reader finds columns by key", () => {
@@ -85,7 +86,7 @@ Deno.test("palette - rows round-trip and are found by id", () => {
       kind: "decor",
       name: "pine",
       model_hash: fnv1a64_str("sha256:abc"),
-      model_key: "models/abc.glb",
+      model_key: "asset/abc",
       extent: [1.18, 1.33, 2.3],
       size: 1,
       license: "CC0",
@@ -98,7 +99,7 @@ Deno.test("palette - rows round-trip and are found by id", () => {
   assertEquals(p.row_of(99), -1);
   assertEquals(p.kind_of(1), "decor");
   assertEquals(p.name_of(1), "pine");
-  assertEquals(p.model_key_of(1), "models/abc.glb");
+  assertEquals(p.model_key_of(1), "asset/abc");
   assert(Math.abs(p.extent_max(1) - 2.3) < 1e-6);
   assertEquals(p.license_of(1), "CC0");
   assertEquals(p.entry(0).kind, "cube");
@@ -119,4 +120,29 @@ Deno.test("shipped palette - ids are unique, placeable values keep their numbers
   assertEquals(trees.length, 1 + 9);
   for (const row of trees) assert(p.extent_max(row) > 2);
   assertEquals(p.rows_of_group("car").length, 5);
+  // Every model row names its bytes and its skin by content, and the key
+  // is what the client fetches.
+  for (const row of [...trees, ...p.rows_of_group("person"), ...p.rows_of_group("pet")]) {
+    if (p.model_key_of(row) === "") continue;
+    assert(/^asset\/[0-9a-f]{64}$/.test(p.model_key_of(row)), p.model_key_of(row));
+    assert(/^asset\/[0-9a-f]{64}$/.test(p.skin_key_of(row)), p.skin_key_of(row));
+    assert(p.model_hash[row] !== 0n);
+  }
+  assertEquals(p.rows_of_group("person").length, 12);
+  assertEquals(p.rows_of_group("pet").length, 24);
+  assertEquals(p.kind_of(p.rows_of_group("pet")[0]), "actor");
+});
+
+Deno.test("shipped textures - a land top and side, a block top, and no block side", () => {
+  assert(shipped_texture_key("land", "BARE", "top")?.startsWith("asset/"));
+  assert(shipped_texture_key("land", "BARE", "side")?.startsWith("asset/"));
+  assert(shipped_texture_key("block", "white", "top")?.startsWith("asset/"));
+  assertEquals(shipped_texture_key("block", "white", "side"), null);
+  assertEquals(shipped_texture_key("water", "RIVER", "side"), null);
+  // The sheet holds every tile the keys name, each at a cell-aligned origin.
+  assert(SHIPPED_SHEET.key.startsWith("asset/"));
+  const tile = shipped_texture_tile("land", "BARE", "top")!;
+  assertEquals(tile.x % SHIPPED_SHEET.cell, 0);
+  assertEquals(tile.y % SHIPPED_SHEET.cell, 0);
+  assertEquals(shipped_texture_tile("block", "white", "side"), null);
 });

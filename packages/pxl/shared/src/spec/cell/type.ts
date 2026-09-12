@@ -1,13 +1,5 @@
 // @pxl/shared/spec/cell/type.ts
 
-export type ImageEntry = {
-  url: string;
-  // Sprite-sheet sources only: crops to the top frame_height-tall slice.
-  frame_height?: number;
-};
-
-export type ChannelMap = Record<string, Record<string, ImageEntry>>;
-
 type ColorJsonEntry = { hex: string; note?: string };
 type ColorJsonMeta = { description?: string; source?: string };
 type ColorJsonFile = { _meta?: ColorJsonMeta; [ch_key: string]: ColorJsonMeta | Record<string, ColorJsonEntry> | undefined };

@@ -211,3 +211,49 @@ boundary in the one form they now have. Its case is made from the
 phone's numbers in
 [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md),
 "The worker's case".
+
+## Done 2026-09-13, later: the bucket, and what changed on the way
+
+The bucket path is in, and three things came out differently from the
+sketch above.
+
+**The key is `asset/<sha256>`, not `models/<sha256>.glb`.** One prefix for
+every content-addressed byte object — a glb, a colormap, a texture-pack
+image — because the client asks for all of them the same way and the
+Worker admits them by one shape (`asset/` over 64 hex characters). No
+extension: the type is stored with the object at upload, and a name that
+carries the content's hash has nothing left to say. The Worker route is
+`/api/tiles/asset/<sha256>`, beside the pages; the dev API serves the
+same key from `./out/asset`, so `deno task dev` and a deployment draw
+from one address.
+
+**A model names its skin.** The Kenney packs keep their colormap outside
+the glb and share it across the pack, so a palette row carries
+`skin_key` beside `model_key` — empty for a self-contained glb, which is
+what a user upload will be. The loader answers a glb's own relative
+texture uri with a blank pixel rather than a request, since the material
+is replaced with the skin anyway.
+
+**The texture pack is on the same path.** Sixty images that were `?url`
+imports are objects now, and one table (`record/texture.ts`) says which
+image a cube type wears on which face, derived from the file names. The
+cube's _colour_ did not move: it is the palette row's `color`, kept with
+the type numbering in `spec/cell/color.ts`, because the minimap, the
+coarse tiers and the texture-pack-off path read it and a pack only
+decorates it.
+
+The files themselves left `packages/pxl/shared/src/assets` for a top-level
+`asset/` — `cube/`, `decor/`, `actor/`, by rendering tier — that no code
+imports: it is the input of `deno task ingest:asset`
+(`apps/api/src/bake/asset/tools/ingest_asset.ts`), which hashes every file
+into `./out/asset/{glb,png}/<sha256>`, measures each glb's bounds, and
+regenerates `record/ingested.ts`, the table the shipped palette reads. So
+the hand-typed extents are gone; the characters are palette rows too
+(kind `actor`, groups `person` and `pet`); the bundle carries no model or
+texture bytes (13 MB less, and `check_bundle` fails the deploy if one
+comes back); and `deno test` no longer has to route around Vite-only
+imports.
+
+What is left of this document's list: the scatter emitting `Placement`
+(waits for the worker), and the ingest route (`POST /api/models`), which
+now stands on a path that exists.

@@ -17,7 +17,7 @@ const BOAT_KIND_TAG = 0xb0a7_5eed_0002_dec0n;
 // water, not scattered on it.
 const BOAT_DENSITY = 0.002;
 
-// Matches boat_decor.ts's BOAT_MODEL_URLS length.
+// The palette's model rows for "boat"; boat_decor.ts asserts the two agree.
 const BOAT_VARIANT_COUNT = 4;
 
 export const BOAT_KIND: DecorKindSeed = {

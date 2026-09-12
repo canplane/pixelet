@@ -43,10 +43,10 @@
  * the frustum withdraws rather than being hidden.
  *
  * **The geometry and material ride along with the instances** instead of
- * being looked up here. Partly so this module stays importable by
- * `deno test` — asset_store.ts reaches settings_store.ts and its `*.glb?url`
- * imports, which is the same wall instanced_model.ts's own header describes —
- * and partly because it removes the second arrival path: a chunk already
+ * being looked up here. Partly so this module stays free of the app's
+ * state — asset_store.ts reaches settings_store.ts, the same line
+ * instanced_model.ts's own header draws — and partly because it removes
+ * the second arrival path: a chunk already
  * rebuilds when an asset lands, so an asset that has not arrived is simply a
  * variant nobody contributes, not a state this has to poll for.
  *

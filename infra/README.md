@@ -258,7 +258,9 @@ docker compose up -d --build
 ### Wiring
 
 Everything the server answers is under `/api`. The Worker claims
-`/api/tiles/*` and reads it out of R2; everything else under that root is
+`/api/tiles/*` and reads it out of R2 — the baked pages by version, and
+every model and texture by content under `asset/<sha256>`; everything
+else under that root is
 reverse-proxied whole to `API_ORIGIN` (`apps/web/wrangler.jsonc`'s `vars`,
 `https://api.plei.me`), path unchanged. Vite's dev proxy splits the same
 root the same way, both from `apps/web/src/lib/env/routes.ts`. Nothing is
@@ -296,22 +298,25 @@ the R2 tiles are untouched by it. Uploading tiles is a separate procedure
 with its own verification, in
 [.agents/skills/bake-tiles/SKILL.md](../.agents/skills/bake-tiles/SKILL.md).
 
-Afterwards, the five routes that between them cover every path the app
-takes (the versions are `PUBLISHED_VERSION` in
-`packages/pxl/shared/src/bake/published.ts`; geocode's `v1` is the sixth):
+Afterwards, the routes that between them cover every path the app takes
+(the versions are `PUBLISHED_VERSION` in
+`packages/pxl/shared/src/bake/published.ts`; the asset key is any
+`model_key` in `record/ingested.ts`):
 
 ```sh
 for p in / \
   /api/tiles/terrain/v2/6359575375314944 \
   /api/tiles/terrain/v2/_ocean \
   /api/tiles/poi/v3/6359575375314944 \
+  /api/tiles/asset/e8d81b97297de62699b92559cee7b247da84b1815df2515e42fd5a318a30b8d7 \
   '/api/search?q=%EB%B6%84%EB%8B%B9'
 do curl -s -o /dev/null -w "$p %{http_code}\n" "https://plei.me$p"; done
 ```
 
 A tile's first two bytes must be `5854` (`XT`); `1f8b` means it is reaching
 the client still gzipped, and HTML means the static-asset fallback answered
-a route the Worker should have claimed.
+a route the Worker should have claimed. An asset answers `model/gltf-binary`
+or `image/png` with no `content-encoding`.
 
 ## 7. Licensing and attribution
 

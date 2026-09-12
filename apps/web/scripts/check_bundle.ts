@@ -112,3 +112,20 @@ if (leaked.length > 0) {
 }
 
 console.log(`[check_bundle] ok — ${forbidden.length} development-only string(s), none present`);
+
+// A model or a texture in the bundle is a file the deploy is carrying that
+// the bucket should — every one the client draws is named by the shipped
+// palette and fetched by content key. A `?url` import of a
+// .glb or .png would put it back here silently, so the artifact is checked
+// rather than the source.
+const carried: string[] = [];
+for await (const entry of Deno.readDir(`${DIST}/assets`)) {
+  if (entry.isFile && /\.(glb|gltf|png|jpe?g|webp)$/.test(entry.name)) carried.push(entry.name);
+}
+if (carried.length > 0) {
+  console.error(`[check_bundle] ${carried.length} asset file(s) in the production bundle that belong in the bucket:`);
+  for (const name of carried) console.error(`  ${name}`);
+  console.error("\nModels and textures are ingested (deno task ingest:asset) and named by the palette, not imported.");
+  Deno.exit(1);
+}
+console.log("[check_bundle] ok — no model or texture bytes in the bundle");

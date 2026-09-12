@@ -88,3 +88,25 @@ comes with a velocity buffer, and with the list above as the checklist.
 - Salvi, "An Excursion in Temporal Supersampling", GDC 2016.
 - Tardif, "Temporal Antialiasing Starter Pack", alextardif.com/TAA.html.
 - Yang et al., "A Survey of Temporal Antialiasing Techniques", CGF 2020.
+
+## Status 2026-09-13: closed, with two things held open on purpose
+
+TAA is closed; two questions it touched are not, and are recorded here so
+"closed" is not read as "settled".
+
+- **The cross-fade is wanted.** The complementary stochastic handoff
+  between adjacent LOD tiers was tangled with the TAA attempt, because
+  the temporal filter was one way to hide its noise. Dropping TAA does not
+  drop the cross-fade: it is the right handoff and stays, and whatever
+  anti-aliasing is in place has to be judged with it on.
+- **MSAA is a cost that will be revisited.** It came in for one reason —
+  distant terrain shimmering — and the TAA attempt was the reach for a
+  cheaper answer to that same shimmer, which it did not give. So today's
+  MSAA is a solution to the jitter that pays in memory (the phone
+  measurements in
+  [20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md)),
+  not a decision that the memory is worth it forever. A method that takes
+  both the shimmer and the memory — and there are cheaper shapes than a
+  full temporal filter — is to be tried on the desktop web first, where
+  it can be seen, and only then judged as a replacement. Not on the
+  mobile path until it has earned it on the desktop one.

@@ -18,15 +18,16 @@ noticed.
 install from, and `node_modules/` exists only because Deno materializes it.
 Always drive the repo through its tasks, run from the repo root:
 
-| Task                     | Purpose                                                          |
-| ------------------------ | ---------------------------------------------------------------- |
-| `deno task dev`          | web + api together                                               |
-| `deno task dev:remote`   | client only, server routes from the published deployment         |
-| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`              |
-| `deno task deploy`       | build the client and publish the Cloudflare Worker               |
-| `deno task check`        | type-check every workspace member                                |
-| `deno task test`         | tests (`apps/web`, `packages/pxl/shared`, `packages/xpute/core`) |
-| `deno task fmt` / `lint` | format / lint                                                    |
+| Task                     | Purpose                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `deno task dev`          | web + api together                                                                |
+| `deno task dev:remote`   | client only, server routes from the published deployment                          |
+| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`                               |
+| `deno task ingest:asset` | hash every file under `asset/` into `./out/asset`, regenerate the palette's table |
+| `deno task deploy`       | build the client and publish the Cloudflare Worker                                |
+| `deno task check`        | type-check every workspace member                                                 |
+| `deno task test`         | tests, every workspace member                                                     |
+| `deno task fmt` / `lint` | format / lint                                                                     |
 
 `deno task check` is the gate. Do not report work as done without it passing.
 
@@ -39,6 +40,7 @@ follow that rather than improvising SQL against the raw tables.
 ## Repository layers
 
 ```
+asset                   the shipped models and texture pack; data, not code — nothing imports it
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
 apps/api                Hono server + the Overture/DEM bake pipeline

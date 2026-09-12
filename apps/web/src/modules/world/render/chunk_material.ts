@@ -111,8 +111,8 @@ function inject_chunk_shader(shader: {
         // bakes each box's own real cell-unit size straight into a_box_scale, so a
         // box spanning many cells — any coarse-LOD box, or same-material cells merged
         // at any LOD — was one whole texture tile stretched across the entire face instead
-        // of repeating once per real cell. Most visible on patterned side art (assets/cell/
-        // textures/terrain/side_*.png): its layered-strata look read as a flat smear
+        // of repeating once per real cell. Most visible on patterned side art (asset/cube/
+        // terrain/side_*.png): its layered-strata look read as a flat smear
         // once stretched that far. a_local_pos is the box's own canonical [-0.5,0.5]
         // corner, so (a_local_pos.axis + 0.5) * a_box_scale.axis reconstructs a per-face
         // 0..N coordinate directly from it — sidesteps ever needing a per-face UV axis

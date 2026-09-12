@@ -19,7 +19,7 @@ const TRAIN_KIND_TAG = 0x7ba1_5eed_0004_dec0n;
 // as a train sitting on every visible stretch of track.
 const TRAIN_DENSITY = 0.004;
 
-// Matches train_decor.ts's TRAIN_MODEL_URLS length.
+// The palette's model rows for "train"; train_decor.ts asserts the two agree.
 const TRAIN_VARIANT_COUNT = 4;
 
 export const TRAIN_KIND: DecorKindSeed = {

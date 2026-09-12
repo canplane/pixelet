@@ -91,7 +91,12 @@ Three more pieces of the stack are built for this project rather than adopted: a
 .
 ├── apps/
 │   ├── web/                        # Web client (Deno + Vite + React 19 + R3F)
-│   └── api/                        # API server (Deno + Hono), Overture bake pipeline
+│   └── api/                        # API server (Deno + Hono), Overture bake pipeline,
+│                                    # the asset ingest
+├── asset/                          # The shipped models and texture pack, by rendering tier
+│   ├── cube/                       # (cube, decor, actor) — no code imports these: they are
+│   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each
+│   └── actor/                      # into the bucket and the table the palette reads
 │
 └── packages/
     ├── xpute/

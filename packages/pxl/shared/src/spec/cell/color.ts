@@ -1,16 +1,18 @@
-// @pxl/shared/assets/cell/palette/cube.ts
+// @pxl/shared/spec/cell/color.ts
 //
-// Raw hex swatches for spec/cell/cube.ts's own channels — a plain TS module,
-// not a real .json file imported via `with { type: "json" }` (2026-09-06):
+// The colour of every cube type: what a cube *is* to the eye when no
+// texture is drawn over it — the minimap, the coarse tiers and the
+// texture-pack-off path all read this, and the shipped palette carries it
+// as each row's `color`. A texture pack decorates these; it does not
+// replace them, which is why this table lives with the type numbering in
+// spec/cell rather than beside the pack's images.
+//
+// A plain TS module rather than a .json import:
 // @deno/vite-plugin@1.0.6's own resolver (resolver.js's resolveDeno) only
 // handles `deno info`'s "esm"/"npm"/"external" module kinds and throws
 // `Unsupported: { kind: "asserted", ... }` for any JSON-import-assertion
 // module living outside apps/web's own vite root — real, reproduced in this
-// project's dev server, not a theoretical concern. A plain .ts export is the
-// same shape download_texture_pack.ts's own manifest.ts/wire.ts already use
-// for static data in this same assets/ tree, and sidesteps the whole
-// import-assertion module kind, since Deno never needs to special-case a
-// plain JS object literal the way it does a JSON module.
+// project's dev server, not a theoretical concern.
 export default {
   _meta: { source: "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked" },
   land: {

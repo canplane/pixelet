@@ -4,8 +4,8 @@ import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
 import { is_terrain_style_cube, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import object_wire from "@pxl/shared/assets/cell/textures/objects/wire.ts";
-import terrain_wire from "@pxl/shared/assets/cell/textures/terrain/wire.ts";
+import { type CubeFace, shipped_texture_key } from "@pxl/shared/record/texture.ts";
+import { asset_url } from "@/lib/env/routes.ts";
 
 /**
  * Configured THREE.Texture from a URL — same create_* shape as
@@ -55,16 +55,13 @@ function create_object_texture(url: string): THREE.Texture {
 // never actually get placed in a given session.
 const cache = new Map<string, THREE.Texture>();
 
-/** Which of a box's images this is. The split is the renderer's own:
- * chunk_material.ts calls a face lateral at `abs(normal.z) < 0.5`, so a
- * bottom face wears the top image just as the top face does. */
-export type CubeFace = "top" | "side";
+export type { CubeFace };
 
 /**
  * The real image a cube of this kind renders with on this face, flat colour
  * or terrain-styled alike. A terrain-styled pick is `"<channel>.<KEY>"` and
- * that is exactly how both wires are keyed, so the two catalogs differ only
- * in which one holds the entry.
+ * a flat colour is a `block` type, which is how the shipped texture table
+ * is keyed, so the two catalogs differ only in the channel.
  *
  * This used to return null for every terrain-styled id, on the grounds that
  * object_wire has no entry for one — true, and terrain_wire does. The ghost
@@ -73,29 +70,23 @@ export type CubeFace = "top" | "side";
  * of showing the thing it was about to remove.
  */
 export function get_object_texture(id: PlaceableCubeId, face: CubeFace = "top"): THREE.Texture | null {
-  const wire = wire_entry(id, face);
-  if (!wire) return null;
-  // Keyed by URL, not by id+face: a side that falls back to its own top
-  // image has to resolve to the one THREE.Texture that image already has,
-  // or a ghost would upload the same picture twice and draw its sides from
-  // a second copy.
-  let tex = cache.get(wire.url) ?? null;
+  const key = texture_key(id, face);
+  if (!key) return null;
+  // Keyed by the image, not by id+face: a side that falls back to its own
+  // top image has to resolve to the one THREE.Texture that image already
+  // has, or a ghost would upload the same picture twice and draw its sides
+  // from a second copy.
+  let tex = cache.get(key) ?? null;
   if (tex) return tex;
-  tex = create_object_texture(wire.url);
-  cache.set(wire.url, tex);
+  tex = create_object_texture(asset_url(key));
+  cache.set(key, tex);
   return tex;
 }
 
-type WireEntry = { url: string } | undefined;
-
-/** Side falls back to top when a kind declares no side of its own — the
- * same rule render/tex_array.ts's build_side_image_map bakes into the layer
- * array the real chunks sample. Only the land channel overrides it today;
- * object blocks never do. */
-type FaceMap = Record<string, Record<string, WireEntry> | undefined>;
-
-function wire_entry(id: PlaceableCubeId, face: CubeFace): WireEntry {
-  const wire = (is_terrain_style_cube(id) ? terrain_wire : object_wire) as Record<CubeFace, FaceMap>;
-  const [channel, key] = is_terrain_style_cube(id) ? id.split(".") : ["block", id];
-  return wire[face][channel]?.[key] ?? wire.top[channel]?.[key];
+/** Side falls back to top when a kind has no side of its own — the same
+ * rule render/tex_array.ts bakes into the layer array the real chunks
+ * sample. Only the land channel has sides today; object blocks never do. */
+export function texture_key(id: PlaceableCubeId, face: CubeFace): string | null {
+  const [channel, type] = is_terrain_style_cube(id) ? id.split(".") : ["block", id];
+  return shipped_texture_key(channel, type, face) ?? shipped_texture_key(channel, type, "top");
 }

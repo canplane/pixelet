@@ -49,7 +49,7 @@ import { camera_cfg } from "@/modules/camera/config.ts";
 import { damp_alpha } from "@/modules/camera/orbit.ts";
 import { useCompanionLoadStore } from "./store.ts";
 import { ChatBubble } from "./chat_bubble.tsx";
-import { type CharacterVariant, find_person_variant, find_pet_variant } from "@pxl/shared/assets/characters/variants.ts";
+import { type CharacterVariant, find_person_variant, find_pet_variant } from "@/modules/world/characters/variants.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
 
 // A little to the side of the person, so the two don't occupy the same

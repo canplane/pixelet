@@ -23,7 +23,7 @@ const CAR_KIND_TAG = 0xca5_eed0_0003_dec0n;
 // cells would read as gridlock, not ambient traffic.
 const CAR_DENSITY = 0.004;
 
-// Matches car_decor.ts's CAR_MODEL_URLS length.
+// The palette's model rows for "car"; car_decor.ts asserts the two agree.
 const CAR_VARIANT_COUNT = 5;
 
 export const CAR_KIND: DecorKindSeed = {

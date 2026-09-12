@@ -1,6 +1,6 @@
-// @pxl/shared/assets/cell/textures/tools/manifest.ts
+// @pxl/api/bake/asset/tools/manifest.ts
 //
-// manifest.json (sibling to this file) loading/flattening, shared between
+// asset/cube/manifest.json loading/flattening, shared between
 // download_texture_pack.ts and manifest.test.ts so both agree on what an
 // "entry" is.
 
@@ -49,8 +49,12 @@ export type WorkItem = {
   style: ManifestImageStyle;
 };
 
+/** The texture pack's home: the manifest, the normalized images the client
+ * draws (`terrain/`, `block/`), and the native-resolution originals. */
+export const CUBE_ASSET_DIR = new URL("../../../../../../asset/cube/", import.meta.url);
+
 export async function load_manifest(): Promise<Manifest> {
-  const manifest_url = new URL("manifest.json", import.meta.url);
+  const manifest_url = new URL("manifest.json", CUBE_ASSET_DIR);
   return JSON.parse(await Deno.readTextFile(manifest_url));
 }
 
@@ -86,8 +90,8 @@ export async function run_pool<T, R>(items: T[], concurrency: number, fn: (item:
 }
 
 export function flatten_manifest(manifest: Manifest): WorkItem[] {
-  const textures_dir = new URL("../", import.meta.url);
-  const originals_dir = new URL("../originals/", import.meta.url);
+  const textures_dir = CUBE_ASSET_DIR;
+  const originals_dir = new URL("original/", CUBE_ASSET_DIR);
   const items: WorkItem[] = [];
 
   const push = (label: string, entry: ManifestImageEntry) => {

@@ -366,7 +366,7 @@
       "white": {
         "sourceCreationId": "3d09245c-44b0-4e28-aee4-e486ca502373",
         "url": "https://image-assets.jianhua.art/public/1788315172961_9vlmc0.png",
-        "file": "objects/block_white.png",
+        "file": "block/block_white.png",
         "paletteHex": "#F7F7F7",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -374,7 +374,7 @@
       "grey": {
         "sourceCreationId": "9fca7c3f-06c5-48ac-ae3d-41864559da0e",
         "url": "https://image-assets.jianhua.art/public/1788315269172_djslb9.png",
-        "file": "objects/block_grey.png",
+        "file": "block/block_grey.png",
         "paletteHex": "#8D8D8D",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -382,7 +382,7 @@
       "dark_grey": {
         "sourceCreationId": "b69889bb-a4f0-47b2-ba3a-b14878ab3d87",
         "url": "https://image-assets.jianhua.art/public/1788315261438_7t0ont.png",
-        "file": "objects/block_dark_grey.png",
+        "file": "block/block_dark_grey.png",
         "paletteHex": "#3F3F3F",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -390,7 +390,7 @@
       "black": {
         "sourceCreationId": "f70cd657-ac8e-46e5-b410-0f51a64fd036",
         "url": "https://image-assets.jianhua.art/public/1788315263138_89p6kz.png",
-        "file": "objects/block_black.png",
+        "file": "block/block_black.png",
         "paletteHex": "#191919",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -398,7 +398,7 @@
       "red": {
         "sourceCreationId": "1e6afa59-0844-4229-9ccf-97901f311fd5",
         "url": "https://image-assets.jianhua.art/public/1788315170220_v1eec5.png",
-        "file": "objects/block_red.png",
+        "file": "block/block_red.png",
         "paletteHex": "#B01313",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -406,7 +406,7 @@
       "pink": {
         "sourceCreationId": "c3ec2969-7bca-4859-b164-69e1bcd2a4eb",
         "url": "https://image-assets.jianhua.art/public/1788315260133_qfhnz0.png",
-        "file": "objects/block_pink.png",
+        "file": "block/block_pink.png",
         "paletteHex": "#FF8787",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -414,7 +414,7 @@
       "brown": {
         "sourceCreationId": "cba0d230-c167-4840-bec7-49a2fa9136c2",
         "url": "https://image-assets.jianhua.art/public/1788315261073_6zmq29.png",
-        "file": "objects/block_brown.png",
+        "file": "block/block_brown.png",
         "paletteHex": "#572B00",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -422,7 +422,7 @@
       "orange": {
         "sourceCreationId": "db2c73b0-cf2f-4a3e-905b-7643c3d831ab",
         "url": "https://image-assets.jianhua.art/public/1788315266431_jhpb9n.png",
-        "file": "objects/block_orange.png",
+        "file": "block/block_orange.png",
         "paletteHex": "#D44E14",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -430,7 +430,7 @@
       "yellow": {
         "sourceCreationId": "f18e4a30-33ef-4715-9e2e-8f39b5f357e5",
         "url": "https://image-assets.jianhua.art/public/1788315259054_7il26e.png",
-        "file": "objects/block_yellow.png",
+        "file": "block/block_yellow.png",
         "paletteHex": "#FFE611",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -438,7 +438,7 @@
       "green": {
         "sourceCreationId": "6384c139-3357-411f-bc86-08b2be5c2652",
         "url": "https://image-assets.jianhua.art/public/1788315259272_sbdvbc.png",
-        "file": "objects/block_green.png",
+        "file": "block/block_green.png",
         "paletteHex": "#60DC1E",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -446,7 +446,7 @@
       "dark_green": {
         "sourceCreationId": "54538df5-8b96-4cb8-a885-f4609daf6b4a",
         "url": "https://image-assets.jianhua.art/public/1788315265190_yojiv3.png",
-        "file": "objects/block_dark_green.png",
+        "file": "block/block_dark_green.png",
         "paletteHex": "#206700",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -454,7 +454,7 @@
       "cyan": {
         "sourceCreationId": "5ebdff86-4f80-4637-8367-6cda140f3d11",
         "url": "https://image-assets.jianhua.art/public/1788315263432_jolcy2.png",
-        "file": "objects/block_cyan.png",
+        "file": "block/block_cyan.png",
         "paletteHex": "#008C94",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -462,7 +462,7 @@
       "blue": {
         "sourceCreationId": "c040ea65-bdd8-4b5a-92af-abf51d0e3a8a",
         "url": "https://image-assets.jianhua.art/public/1788315306087_xh2umr.png",
-        "file": "objects/block_blue.png",
+        "file": "block/block_blue.png",
         "paletteHex": "#004791",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -470,7 +470,7 @@
       "violet": {
         "sourceCreationId": "d9a5592c-8488-4ebe-9365-8ae894fa2608",
         "url": "https://image-assets.jianhua.art/public/1788315305638_x5znqn.png",
-        "file": "objects/block_violet.png",
+        "file": "block/block_violet.png",
         "paletteHex": "#57039F",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
@@ -478,7 +478,7 @@
       "magenta": {
         "sourceCreationId": "6dcb92ea-a98d-4556-a517-fba5587347a3",
         "url": "https://image-assets.jianhua.art/public/1788315308387_rozdg7.png",
-        "file": "objects/block_magenta.png",
+        "file": "block/block_magenta.png",
         "paletteHex": "#C9036D",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
