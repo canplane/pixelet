@@ -721,6 +721,14 @@ function reindex_chunk(base: IVec): void {
  * set_virtual_hide). A visit must not walk this store again: the cursor is
  * shared.
  */
+/** Whether any entry — including the carve preview — is filed under a
+ * column. One map lookup; what a coarse build asks before skipping the scan. */
+export function column_has_entries(base: IVec): boolean {
+  const cpos = chunk_map.find(base);
+  if (cpos >= 0 && c_e_count.get(cpos) > 0) return true;
+  return virtual_carve_preview !== null && virtual_carve_preview.column === base;
+}
+
 export function each_column_entry(base: IVec, visit: (entry: EntryCursor) => void, render: boolean = false): void {
   const cpos = chunk_map.find(base);
   const n = cpos < 0 ? 0 : c_e_count.get(cpos);

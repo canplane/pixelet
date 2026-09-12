@@ -34,7 +34,7 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import type { LodStep } from "@/render/lod.ts";
 import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "./volume.ts";
-import { alloc_column_run_set, type ColumnRunSet, release_column_runs } from "./voxel_scan.ts";
+import { alloc_column_run_set, type ColumnRunSet, MAX_UNIT_CHUNKS, release_column_runs } from "./voxel_scan.ts";
 
 /**
  * One baked chunk mesh's raw vertex data — position/normal are the real
@@ -638,7 +638,7 @@ export function bake_open(): boolean {
 /** Opens a bake of `set` at `lod_step`, or returns null while another is open. */
 export function begin_bake(set: ColumnRunSet, lod_step: LodStep): BakeCursor | null {
   if (open_bake !== null) return null;
-  open_bake = lod_step === 1 ? { fine: begin_fine(set, CHUNK_CELL_SPAN, 1), coarse: null, done: false } : { fine: null, coarse: begin_coarse(set, lod_step), done: false };
+  open_bake = lod_step === 1 ? { fine: begin_fine(set, set.span, 1), coarse: null, done: false } : { fine: null, coarse: begin_coarse(set, lod_step), done: false };
   return open_bake;
 }
 
@@ -752,8 +752,11 @@ function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
  * they just each stand alone, which is right: stacked runs in one column are
  * a cliff face, not flat ground.
  */
-const MERGE_RUN = CORE_ALLOC.take(Int32Array, CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
-const MERGE_MASK = CORE_ALLOC.take(Int32Array, CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
+// Sized for the widest unit a scan can produce (voxel_scan.ts's
+// MAX_UNIT_CHUNKS); a bake over one chunk uses the top-left corner.
+const MAX_BAKE_SPAN = CHUNK_CELL_SPAN * MAX_UNIT_CHUNKS;
+const MERGE_RUN = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
+const MERGE_MASK = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
 
 /**
  * Meshes one run set. Both LOD tiers go through here: `span` is the grid
@@ -1172,7 +1175,7 @@ const CO_LAYER = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC 
  * that fills its cell — which is SUB_CELL_NONE in both bytes, so zero is
  * unambiguous. */
 const CO_SUB = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
-const CO_START = CORE_ALLOC.take(Uint32Array, CHUNK_CELL_SPAN * CHUNK_CELL_SPAN + 1);
+const CO_START = CORE_ALLOC.take(Uint32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1);
 
 function to_u8(v: f64): u32 {
   return Math.max(0, Math.min(255, Math.round(v)));
@@ -1340,7 +1343,7 @@ function begin_coarse(set: ColumnRunSet, lod_step: LodStep): CoarseBake {
   return {
     set,
     lod_step,
-    res: CHUNK_CELL_SPAN / lod_step,
+    res: set.span / lod_step,
     bucket_base: BUCKETS.len,
     range_base: CELL_RANGE.len,
     phase: 0,
@@ -1369,7 +1372,7 @@ function step_coarse(b: CoarseBake): boolean {
           const cy = by * lod_step + j;
           for (let k: u32 = 0; k < lod_step; k++) {
             const cx = bx * lod_step + k;
-            const col = cy * CHUNK_CELL_SPAN + cx;
+            const col = cy * set.span + cx;
             const end = set.start[col + 1];
             // col + 1 so no sub-column ever carries tag 0, which is what a
             // freshly allocated bucket holds.
