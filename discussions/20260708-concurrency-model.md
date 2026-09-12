@@ -126,3 +126,15 @@ that the most design energy went into the layer that needed generalization least
 Figma's rendering architecture, looked at directly in 2026-08, is covered in
 [20260816-csr-vs-ssr.md](./20260816-csr-vs-ssr.md#prior-art-figma) — it confirms
 the cooperative-multitasking reading that broke the premise here.
+
+## Status 2026-09-13
+
+The restart trigger arrived in a different form than expected. The WASM
+direction is decided again
+([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
+— without SAB or preemptive threads, on one cooperative thread, which is
+what "what a restart should look like" above asked for. The "start from a
+blank project" caution does not carry: the state is being moved into the
+shape the core wants inside this repository, one lane set at a time, so
+the port begins from a client whose memory is already linear rather than
+from a checkpoint.

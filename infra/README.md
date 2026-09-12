@@ -297,13 +297,14 @@ with its own verification, in
 [.agents/skills/bake-tiles/SKILL.md](../.agents/skills/bake-tiles/SKILL.md).
 
 Afterwards, the five routes that between them cover every path the app
-takes:
+takes (the versions are `PUBLISHED_VERSION` in
+`packages/pxl/shared/src/bake/published.ts`; geocode's `v1` is the sixth):
 
 ```sh
 for p in / \
   /api/tiles/terrain/v2/6359575375314944 \
   /api/tiles/terrain/v2/_ocean \
-  /api/tiles/poi/v2/6359575375314944 \
+  /api/tiles/poi/v3/6359575375314944 \
   '/api/search?q=%EB%B6%84%EB%8B%B9'
 do curl -s -o /dev/null -w "$p %{http_code}\n" "https://plei.me$p"; done
 ```

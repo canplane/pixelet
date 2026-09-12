@@ -44,10 +44,9 @@
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
 
-    // Only covers workspace members that currently have *.test.ts files
-    // (apps/web, packages/pxl/shared) — deno test errors out on a target
-    // with zero matching test modules, so apps/api and packages/xpute/core
-    // aren't wired in here until they actually have tests of their own.
+    // Only covers workspace members that currently have *.test.ts files —
+    // deno test errors out on a target with zero matching test modules, so
+    // apps/api isn't wired in here until it has tests of its own.
     "test": "deno task test:web && deno task test:shared && deno task test:xpute",
     "test:web": "deno task --cwd apps/web test",
     "test:shared": "deno test -A packages/pxl/shared/src",

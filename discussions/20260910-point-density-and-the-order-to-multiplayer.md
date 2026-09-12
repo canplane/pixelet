@@ -183,3 +183,12 @@ project's own invention for the places where pixelet is genuinely unlike
 them. That is also the reading of the January and April salvages —
 what survived was the domain invariants, and what did not was the machinery
 built ahead of the constraint that would have shaped it.
+
+## Status 2026-09-13
+
+Steps 1 and 2 of the order are paid for: the storage model is one row over
+volumes and points
+([20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md)),
+and resource identity is the palette's `model_hash`/`model_key`. Step 3 is
+decided and not built (the bucket and the ingest route); 4 and 5 stay
+unstarted, and the dependency still runs one way.

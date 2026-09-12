@@ -128,3 +128,17 @@ asset it draws.
   the above.
 - Storage-model unification, billboards included, is open and blocks
   nothing here.
+
+## Status 2026-09-13
+
+Superseded by
+[20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md).
+Both triggers named above for model B fired at once: the palette is one
+global record whose ids are the wire contract, and user-supplied models
+are decided (a bucket keyed by content hash, an ingest route). The
+`Palette` record _is_ the runtime catalog — id to model by hash and
+bucket key — so the question of what identifies an asset is answered
+there, and the four storage shapes listed here are now one row
+(`Placement`) over containers that stay as they were. What this document
+still holds: why C was wrong _for deploy artifacts_, which is unchanged —
+the bucket is for what a deploy cannot carry, not for what it can.

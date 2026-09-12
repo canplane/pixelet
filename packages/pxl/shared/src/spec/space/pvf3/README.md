@@ -12,7 +12,7 @@ Because the lanes are adjacent fields in one packed word, the obvious question
 was whether `gather()`'s per-lane unpack/mask/repack could be skipped for
 `add`/`sub`, doing one raw `(v + w) & WORD_MASK` on the whole packed word
 instead. The current format deliberately has no guard bits: every bit in the
-24/24/16 integer lanes and 10/10/10 fractional lanes belongs to data.
+24/24/16 integer lanes and 8/8/8 fractional lanes (`FRAC_W`) belongs to data.
 
 ## What was tried, and why each attempt failed
 

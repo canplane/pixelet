@@ -18,15 +18,15 @@ noticed.
 install from, and `node_modules/` exists only because Deno materializes it.
 Always drive the repo through its tasks, run from the repo root:
 
-| Task                     | Purpose                                                    |
-| ------------------------ | ---------------------------------------------------------- |
-| `deno task dev`          | web + api together                                         |
-| `deno task dev:remote`   | client only, server routes from the published deployment   |
-| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`        |
-| `deno task deploy`       | build the client and publish the Cloudflare Worker         |
-| `deno task check`        | type-check every workspace member                          |
-| `deno task test`         | tests (only `apps/web` and `packages/pxl/shared` have any) |
-| `deno task fmt` / `lint` | format / lint                                              |
+| Task                     | Purpose                                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| `deno task dev`          | web + api together                                               |
+| `deno task dev:remote`   | client only, server routes from the published deployment         |
+| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`              |
+| `deno task deploy`       | build the client and publish the Cloudflare Worker               |
+| `deno task check`        | type-check every workspace member                                |
+| `deno task test`         | tests (`apps/web`, `packages/pxl/shared`, `packages/xpute/core`) |
+| `deno task fmt` / `lint` | format / lint                                                    |
 
 `deno task check` is the gate. Do not report work as done without it passing.
 
@@ -65,8 +65,7 @@ meant to show the concept works, not to carry real traffic.
 **Explicitly out of MVP scope:** P2P networking, traffic/scale optimization (AOI
 filtering, decay systems, sync protocols), and reporting/moderation. These are
 deferred, not rejected — they get re-evaluated when the project leaves the MVP
-milestone, alongside the parked WASM/WebGPU direction. Don't propose them as
-missing pieces.
+milestone. Don't propose them as missing pieces.
 
 **The engine and the product surface are at very different stages, and grading
 them on one axis produces nonsense.** The substrate — coordinate system,
@@ -76,15 +75,20 @@ and working (place, erase, stack, raycast, persist). The chat/social half is a U
 shell wired to nothing. UI polish here does not imply feature completeness; check
 current code before characterizing any part of the product surface.
 
-**Don't volunteer the Rust/WASM port.** It's parked deliberately (see
-[discussions/](./discussions/)); finishing the MVP in TypeScript with Three.js
-used directly, unwrapped, is the current direction.
+**Don't start the WASM/WebGPU move unprompted.** The destination is decided
+and on file — a WASM core drawing through WebGPU, three.js gone, iOS 26 and
+iPhone 11 as the floor
+([discussions/20260912-why-the-destination-is-wasm.md](./discussions/20260912-why-the-destination-is-wasm.md))
+— and not started. Until it is, the client is TypeScript with Three.js used
+directly, unwrapped, and the state is already in the shape the move wants:
+lanes in one linear memory, one tick, records. Build the next thing in that
+shape; don't open the port itself, and don't propose keeping a WebGL path or
+supporting pre-WebGPU devices — that question is closed.
 
-**That doesn't license implementation-shaped architecture.** The MVP is
-expected to eventually be rewritten regardless — by whoever ends up doing
-it, on whatever timeline — so building in TypeScript/Three.js now is a
-language/runtime choice, not licence to let a Three.js or React quirk decide
-a core design. Pick the structurally correct shape for the problem (matching
+**That doesn't license implementation-shaped architecture.** The client is
+going to be rewritten — by whoever ends up doing it, on whatever timeline —
+so building in TypeScript/Three.js now is a language/runtime choice, not
+licence to let a Three.js or React quirk decide a core design. Pick the structurally correct shape for the problem (matching
 real prior art where one exists, e.g. Minecraft's own chunk model for
 grid-content rendering) even in TS, so a later rewrite carries the design
 over rather than rediscovering it. Two failure modes to avoid, both hit in

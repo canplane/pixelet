@@ -100,3 +100,13 @@ camera to hold chunk distances in the 1097–1536 band and watching whether
 
 Neither has been implemented. Nothing in `render/lod.ts` or
 `chunk_stage.tsx` has changed as a result of this investigation.
+
+## Status 2026-09-13
+
+Superseded. Neither option was taken; the per-threshold list they were
+options over is gone. Tiers are now chosen by one screen-space-error
+criterion over one range
+([20260912-what-to-render-when.md](./20260912-what-to-render-when.md)),
+and the handoff between adjacent tiers is a complementary stochastic
+visibility rather than a dither band with its own eligibility list
+([20260909-lod-look-and-seams.md](./20260909-lod-look-and-seams.md)).

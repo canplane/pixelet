@@ -714,3 +714,17 @@ That cannot be settled before the real query radii are counted. Step 1 takes
 - [Figma — Building a professional design tool on the web](https://www.figma.com/blog/building-a-professional-design-tool-on-the-web/),
   [Figma is powered by WebAssembly](https://www.figma.com/blog/webassembly-cut-figmas-load-time-by-3x/),
   [How Figma's multiplayer technology works](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/)
+
+## Status 2026-09-13
+
+Steps 1–3 are built: `poi_index.ts` is the Teschner hash over lanes,
+rebuilt a range per unit; the declutter is the greedy screen-grid
+placement in `poi_layer.tsx`, in distance order with absorbed badges
+becoming counts; the per-tier buffers are one instanced quad over one
+slot atlas uploaded by rectangle
+([20260912-linear-memory-what-is-left.md](./20260912-linear-memory-what-is-left.md),
+[20260913 POI under the tick](../ARCHITECTURE.md#billboards-and-poi)).
+Step 4, baked clustering, was not taken: the runtime absorb-into-count is
+enough at current densities, and the order-independence condition above
+is the price still on record. The `cell_shift` question resolved itself
+to one index with one radius, since the only consumer is the badge query.

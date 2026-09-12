@@ -249,3 +249,11 @@ vs `.poi` 10000). A bubble is something a person is saying right now and it
 expires; a badge labels a fixed place and will still be there afterwards.
 Named at both call sites rather than defaulted, so the hierarchy is visible
 where it is chosen.
+
+## Status 2026-09-13
+
+"TAA, and why not yet" became "tried and closed"
+([20260911-taa-tried-and-closed.md](./20260911-taa-tried-and-closed.md));
+the shimmer it was for is handled by MSAA, and by SMAA under DPR 2. The
+rest — density as size, the stochastic handoff, the crease rules — is what
+ARCHITECTURE.md now describes.

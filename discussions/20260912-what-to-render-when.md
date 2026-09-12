@@ -449,3 +449,12 @@ GPU p95 was 24.1 ms with 2.26 M triangles of decor in the last frame, which is
 what made 15% of moving frames miss a vsync. That belongs to the parked decor
 LOD work
 ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md)).
+
+## Status 2026-09-13
+
+Both items under "Left open" are closed: the coarse scan by the heightmap
+direct path
+([20260912-coarse-tiers-what-the-field-does.md](./20260912-coarse-tiers-what-the-field-does.md)),
+and decor by the extent criterion
+([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
+"Closed 2026-09-13").
