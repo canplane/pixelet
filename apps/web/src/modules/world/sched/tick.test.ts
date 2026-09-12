@@ -128,17 +128,91 @@ Deno.test("tick - a storm of steps that cost time and report none stays within t
 });
 
 Deno.test("tick - the budget follows the display's measured frame, not an assumed 60 Hz", () => {
+  // Only a moving view is sized from the frame; a still one gets the
+  // settled budget whatever the display.
+  const off = on_tick("interaction", ({ view_moving }) => view_moving());
   // 64 frames fill the whole measurement window, so each run starts clean.
   const at = (delta_s: number) => {
     let r = run_tick(state, delta_s);
     for (let i = 1; i < 64; i++) r = run_tick(state, delta_s);
     return r.budget_ms;
   };
-  const at_60 = at(1 / 60);
-  const at_165 = at(1 / 165);
-  assert(at_165 < at_60, `165 Hz got ${at_165} ms, 60 Hz got ${at_60} ms`);
-  // An idle gap under frameloop="demand" is not a frame and moves nothing.
-  const idle = run_tick(state, 3).budget_ms;
-  assertEquals(idle, at_165);
-  at(1 / 60); // leave the window as the other tests expect it
+  try {
+    const at_60 = at(1 / 60);
+    const at_165 = at(1 / 165);
+    assert(at_165 < at_60, `165 Hz got ${at_165} ms, 60 Hz got ${at_60} ms`);
+    // An idle gap under frameloop="demand" is not a frame and moves nothing.
+    const idle = run_tick(state, 3).budget_ms;
+    assertEquals(idle, at_165);
+    at(1 / 60); // leave the window as the other tests expect it
+  } finally {
+    off();
+  }
+});
+
+Deno.test("tick - a view that has held still gets the larger budget, and loses it the frame it moves", async () => {
+  let moving = true;
+  const off = on_tick("interaction", ({ view_moving }) => {
+    if (moving) view_moving();
+  });
+  try {
+    const while_moving = run_tick(state, 1 / 60);
+    assert(!while_moving.settled);
+    moving = false;
+    // Held still, but not yet for long enough: a pause inside a drag.
+    assert(!run_tick(state, 1 / 60).settled);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const still = run_tick(state, 1 / 60);
+    assert(still.settled);
+    assert(still.budget_ms > while_moving.budget_ms, `still ${still.budget_ms} vs moving ${while_moving.budget_ms}`);
+    // The frame the view moves again is sized for motion: the budget is
+    // decided after the interaction phase, not before it.
+    moving = true;
+    const again = run_tick(state, 1 / 60);
+    assert(!again.settled);
+    assertEquals(again.budget_ms, while_moving.budget_ms);
+  } finally {
+    off();
+  }
+});
+
+Deno.test("tick - what the interaction phase spends comes off the budget", () => {
+  const seen = { remaining: -1, total: -1 };
+  const offs = [
+    on_tick("interaction", ({ view_moving }) => {
+      view_moving();
+      burn(1.5);
+    }),
+    on_tick("visible", ({ budget }) => {
+      seen.remaining = budget.remaining();
+      seen.total = budget.total_ms;
+    }),
+  ];
+  try {
+    run_tick(state, 1 / 60);
+    assert(seen.remaining <= seen.total - 1.5, `visible saw ${seen.remaining} of ${seen.total}`);
+  } finally {
+    offs.forEach((off) => off());
+  }
+});
+
+Deno.test("tick - a still view's frame gaps do not teach the tick a faster display", async () => {
+  let moving = true;
+  const off = on_tick("interaction", ({ view_moving }) => {
+    if (moving) view_moving();
+  });
+  try {
+    let moving_report = run_tick(state, 1 / 165);
+    for (let i = 1; i < 64; i++) moving_report = run_tick(state, 1 / 165);
+    moving = false;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    // The browser catching up after a long still frame: gaps far shorter
+    // than any real refresh interval.
+    let still_report = run_tick(state, 0.002);
+    for (let i = 1; i < 64; i++) still_report = run_tick(state, 0.002);
+    assert(still_report.settled);
+    assertEquals(still_report.frame_ms, moving_report.frame_ms);
+  } finally {
+    off();
+  }
 });

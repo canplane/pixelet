@@ -1,20 +1,22 @@
-// @pxl/web/render/layer/pipeline/mesh_pool.ts
+// @pxl/web/render/layer/pipeline/core_pool.ts
 
 /**
- * The one buddy pool every per-chunk buffer comes from.
+ * The one buddy pool the core's data lives in, carved out of the core
+ * memory below.
  *
- * Its own module because two producers share it and neither can import the
- * other: chunk_mesher.ts bakes the vertex block, voxel_scan.ts packs the
- * column-run set, and the mesher already imports the scanner. Sharing one
- * pool rather than one each is deliberate — both are per-chunk, both are
- * freed when a chunk's tier changes, and buddy can only move bytes between
- * sizes that live in the same region.
+ * It was the mesh pool, and is renamed for what it has become: chunk
+ * meshes (chunk_mesher.ts), column-run sets (voxel_scan.ts) and resident
+ * terrain pages (world/terrain/resident.ts) all borrow from it. One pool
+ * rather than one per producer is deliberate — buddy can only move bytes
+ * between sizes that live in the same region, and one memory is the point:
+ * discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md.
  */
 
 import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
+import { buddy_alloc, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
 /**
- * A chunk mesh's whole block, recycled across rebuilds.
+ * Region sizing.
  *
  * Region size is a balance between the largest real block and how much a
  * single live block can strand. A region is only reclaimed once it is
@@ -46,30 +48,34 @@ import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
  * committed lazily — untouched pages cost address space, not memory — so it
  * is sized for the pool's peak rather than to the byte.
  *
- * Four regions: the ledger's pool has peaked at roughly 110 MB live with a
- * region's worth idle, and a region is 64 MB. Past the reservation the pool
- * allocates plain regions exactly as it always has.
+ * Eight regions, 512 MB. Four were sized for meshes alone and the ledger
+ * already read 384 MB reserved at a load peak; terrain pages add about 4 MB
+ * each, up to the 49 the cleanup radius keeps (terrain/config.ts). Past the
+ * reservation the pool allocates plain regions exactly as it always has.
  *
- * Null where the reservation fails. A device that refuses a 256 MB
- * reservation is exactly a device that should not have one, and the pool
- * then behaves as it did before this existed.
+ * Tried at half the size when the full one is refused, and null when that
+ * fails too: a device that refuses both is exactly a device that should not
+ * have one, and the pool then behaves as it did before this existed.
  */
-const CORE_REGIONS = 4;
+const CORE_REGIONS = 8;
 const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
 
 function reserve_core_memory(): WebAssembly.Memory | null {
-  const pages = (CORE_REGIONS * REGION_BYTES) / WASM_PAGE;
-  try {
-    return new WebAssembly.Memory({ initial: pages, maximum: pages });
-  } catch {
-    return null;
+  for (const regions of [CORE_REGIONS, CORE_REGIONS / 2]) {
+    const pages = (regions * REGION_BYTES) / WASM_PAGE;
+    try {
+      return new WebAssembly.Memory({ initial: pages, maximum: pages });
+    } catch {
+      // too large for this device; try the smaller reservation
+    }
   }
+  return null;
 }
 
 export const CORE_MEMORY: WebAssembly.Memory | null = reserve_core_memory();
 
-export const MESH_POOL = new BuddyAllocator({
+export const CORE_POOL = new BuddyAllocator({
   min_block_bytes: 1 << 12,
   region_bytes: REGION_BYTES,
   backing: CORE_MEMORY?.buffer,
@@ -89,6 +95,10 @@ export const MESH_POOL = new BuddyAllocator({
   bypass: false,
 });
 
-export function mesh_pool_stat(): Readonly<typeof MESH_POOL.stat> {
-  return MESH_POOL.stat;
+/** Typed lanes carved from the core pool — what a structure is handed so its
+ * columns live in the core memory rather than on the heap. */
+export const CORE_ALLOC: TypedAlloc = buddy_alloc(CORE_POOL);
+
+export function core_pool_stat(): Readonly<typeof CORE_POOL.stat> {
+  return CORE_POOL.stat;
 }

@@ -11,8 +11,11 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import type { Block } from "@xpute/core/ds/buddy.ts";
 
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+
+import { CORE_POOL } from "./core_pool.ts";
 
 export const L2_BAND_SHAMT: u32 = 6;
 export const L2_BAND_CELL_SPAN: u32 = CHUNK_CELL_SPAN;
@@ -70,6 +73,9 @@ export type VoxelBand = {
   sub_cell: Uint8Array | null;
   /** Rare overflow when multiple non-overlapping SVOs share one base voxel. */
   extra_sub_voxels: SubVoxelEntry[];
+  /** The core pool blocks behind the three arrays above — see
+   * release_chunk_volume for when each goes back. */
+  blocks: { material: Block; layer_idx: Block; sub_cell: Block | null };
 };
 
 export type ChunkVolume = {
@@ -82,7 +88,6 @@ export type ChunkVolume = {
 
 export type OrderedVoxelBand = VoxelBand;
 
-/** Two scratch bands cap retained CPU scratch storage at about 2.5 MiB. */
 /**
  * How many band buffers to keep for reuse.
  *
@@ -98,8 +103,38 @@ export type OrderedVoxelBand = VoxelBand;
  * roughly one chunk's worth of bands. `scan_bands_max` in the ledger is the
  * number to size this against; 16 is ~21MB of standing scratch, which is
  * nothing next to what it stops churning.
+ *
+ * The arrays are core pool blocks (core_pool.ts) rather than typed arrays of
+ * their own: `material` is exactly one 1 MiB block and `layer_idx` one
+ * 256 KiB block. A band past this cap, and every band's `sub_cell`, hands
+ * its blocks back to the pool instead of becoming garbage — which is what
+ * the 1 MiB `sub_cell` did on every reuse before.
  */
 const MAX_POOLED_BANDS: u32 = 16;
+
+function borrow<T>(make: (buf: ArrayBuffer, offset: number, length: number) => T, length: u32, bytes_per: u32): { block: Block; view: T } {
+  const block = CORE_POOL.acquire(length * bytes_per);
+  return { block, view: make(block.buf, block.byte_offset, length) };
+}
+
+function new_band(band_z: i32): VoxelBand {
+  const material = borrow((b, o, n) => new Uint32Array(b, o, n), L2_BAND_VOXEL_CNT, 4);
+  const layer_idx = borrow((b, o, n) => new Uint8Array(b, o, n), L2_BAND_VOXEL_CNT, 1);
+  return {
+    band_z,
+    material: material.view,
+    layer_idx: layer_idx.view,
+    sub_cell: null,
+    extra_sub_voxels: [],
+    blocks: { material: material.block, layer_idx: layer_idx.block, sub_cell: null },
+  };
+}
+
+function drop_sub_cell(band: VoxelBand): void {
+  if (band.blocks.sub_cell) CORE_POOL.release(band.blocks.sub_cell);
+  band.blocks.sub_cell = null;
+  band.sub_cell = null;
+}
 
 /** Dev-only: how often a band came from the pool rather than being built.
  * A low reuse share means MAX_POOLED_BANDS is under a composite's real band
@@ -111,14 +146,19 @@ export function alloc_chunk_volume(): ChunkVolume {
   return { bands: [], min_band_z: Infinity, max_band_z: -Infinity, sealed: false };
 }
 
-/** Returns a consumed temporary composition to the tiny renderer scratch pool. */
+/** Returns a consumed temporary composition: bands to the scratch pool up
+ * to its cap, and everything else to the core pool. */
 export function release_chunk_volume(volume: ChunkVolume): void {
   for (const band of volume.bands) {
-    if (band_pool.length >= MAX_POOLED_BANDS) break;
     band.extra_sub_voxels.length = 0;
     // A rare 1 MiB SVO payload must not become permanent scratch overhead.
-    band.sub_cell = null;
-    band_pool.push(band);
+    drop_sub_cell(band);
+    if (band_pool.length < MAX_POOLED_BANDS) {
+      band_pool.push(band);
+      continue;
+    }
+    CORE_POOL.release(band.blocks.material);
+    CORE_POOL.release(band.blocks.layer_idx);
   }
   volume.bands = [];
   volume.sealed = true;
@@ -178,17 +218,13 @@ function get_or_create_band(volume: ChunkVolume, band_z: i32): VoxelBand {
   const pooled = band_pool.pop();
   if (pooled) band_pool_stats.reused++;
   else band_pool_stats.allocated++;
-  const band = pooled ?? {
-    band_z,
-    material: new Uint32Array(L2_BAND_VOXEL_CNT),
-    layer_idx: new Uint8Array(L2_BAND_VOXEL_CNT),
-    sub_cell: null,
-    extra_sub_voxels: [],
-  };
+  // Filled below either way: a pool block keeps whatever its last borrower
+  // wrote (core_pool.ts's quick-format contract).
+  const band = pooled ?? new_band(band_z);
   band.band_z = band_z;
   band.material.fill(0);
   band.layer_idx.fill(NO_LAYER);
-  band.sub_cell = null;
+  drop_sub_cell(band);
   band.extra_sub_voxels.length = 0;
   volume.bands.splice(insert_at, 0, band);
   volume.min_band_z = Math.min(volume.min_band_z, band_z);
@@ -225,7 +261,13 @@ export function set_chunk_voxel(
   }
 
   if (sub_cell) {
-    band.sub_cell ??= new Uint8Array(L2_BAND_VOXEL_CNT * 4);
+    if (!band.sub_cell) {
+      const lazy = borrow((b, o, n) => new Uint8Array(b, o, n), L2_BAND_VOXEL_CNT * 4, 1);
+      band.blocks.sub_cell = lazy.block;
+      // Zeroed by hand: a typed array of its own started zeroed, a pool
+      // block does not, and zero is SUB_CELL_NONE.
+      band.sub_cell = lazy.view.fill(0);
+    }
     const off = loc.idx * 4;
     band.sub_cell[off] = sub_cell[0];
     band.sub_cell[off + 1] = sub_cell[1];

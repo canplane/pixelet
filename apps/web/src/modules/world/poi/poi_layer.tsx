@@ -61,6 +61,7 @@ import {
 import { badge_atlas, cluster_badge, cluster_badge_metrics, poi_badge, poi_badge_metrics } from "./poi_badge.ts";
 import { usePoiStore } from "./store.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /**
  * A rail, not the mechanism.
@@ -148,11 +149,11 @@ const FAR_END_U2 = FAR_END * FAR_END;
  * The batch grows instead, since what survives the circle is a quarter of
  * that and a frame's candidates are not a residency set (batch.ts).
  */
-const $hits = new Uint32Array(16384);
+const $hits = CORE_ALLOC.take(Uint32Array, 16384);
 const $batch = new BillboardBatch();
-const $nodes = new CellNodes(4096);
+const $nodes = new CellNodes(4096, CORE_ALLOC);
 const $field = new BillboardField(BILLBOARD_ORDER.poi);
-const $kept = new Uint32Array(MAX_RENDERED);
+const $kept = CORE_ALLOC.take(Uint32Array, MAX_RENDERED);
 
 /** absolute, projected into local_world_frame's own origin (map_origin) —
  * the frame select_visible_billboards' local_x/y/z expects (see

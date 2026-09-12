@@ -4,6 +4,7 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { decode_terrain, type Terrain } from "@pxl/shared/bake/format.ts";
 
 import { PUBLISHED_TILES, TILE_BASE_URL } from "@/lib/env/config.ts";
+import { into_core } from "./resident.ts";
 
 /**
  * Terrain transport: turns a page index into decoded terrain, and nothing
@@ -39,7 +40,9 @@ function get_ocean_terrain(): Promise<Terrain> {
     ocean_terrain = fetch(tile_url(OCEAN_KEY))
       .then(async (res) => {
         if (!res.ok) throw new Error(`[tile/${OCEAN_KEY}] http ${res.status}`);
-        return decode_terrain(new Uint8Array(await res.arrayBuffer()));
+        // Copied into the core once and never released: every ocean page
+        // aliases it, so no one page owns it.
+        return into_core(decode_terrain(new Uint8Array(await res.arrayBuffer())), false);
       })
       .catch((err) => {
         // don't cache the failure: a transient network error here would
@@ -78,11 +81,16 @@ export async function fetch_terrain(
 
   const bytes = new Uint8Array(await res.arrayBuffer());
   const t1 = performance.now();
-  const terrain = decode_terrain(bytes);
+  const decoded = decode_terrain(bytes);
+  const t2 = performance.now();
+  // The decode is views over the response; this is the one copy that moves
+  // the page into the core pool and lets the response go — resident.ts.
+  const terrain = into_core(decoded);
 
   if (phases) {
     phases.net_ms = t1 - t0;
-    phases.decode_ms = performance.now() - t1;
+    phases.decode_ms = t2 - t1;
+    phases.adopt_ms = performance.now() - t2;
     phases.bytes = bytes.byteLength;
   }
   return terrain;

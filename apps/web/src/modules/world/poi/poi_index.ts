@@ -44,6 +44,7 @@ import { with_ele } from "../terrain/elevation.ts";
 import { FAR_END } from "../billboard/distance_fade.ts";
 import { evict_poi_badges } from "./poi_badge.ts";
 import { stable_hash } from "../billboard/batch.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /**
  * How far out this keeps POI, as a multiple of the query reach.
@@ -154,19 +155,19 @@ type Lanes = {
 
 function make_lanes(): Lanes {
   return {
-    index: new SpatialHash(CAPACITY, BUCKETS, CELL),
+    index: new SpatialHash(CAPACITY, BUCKETS, CELL, CORE_ALLOC),
     poi_ref: new Array(CAPACITY).fill(null),
     page_ref: new Array(CAPACITY).fill(null),
-    abs_i: new BigInt64Array(CAPACITY),
-    abs_f: new BigInt64Array(CAPACITY),
-    pos_x: new Float64Array(CAPACITY),
-    pos_y: new Float64Array(CAPACITY),
-    pos_z: new Float64Array(CAPACITY),
-    grounded_ok: new Uint8Array(CAPACITY),
-    cell_x: new Int32Array(CAPACITY),
-    cell_y: new Int32Array(CAPACITY),
-    cell_z: new Int32Array(CAPACITY),
-    tiebreak: new Float64Array(CAPACITY),
+    abs_i: CORE_ALLOC.take(BigInt64Array, CAPACITY),
+    abs_f: CORE_ALLOC.take(BigInt64Array, CAPACITY),
+    pos_x: CORE_ALLOC.take(Float64Array, CAPACITY),
+    pos_y: CORE_ALLOC.take(Float64Array, CAPACITY),
+    pos_z: CORE_ALLOC.take(Float64Array, CAPACITY),
+    grounded_ok: CORE_ALLOC.take(Uint8Array, CAPACITY),
+    cell_x: CORE_ALLOC.take(Int32Array, CAPACITY),
+    cell_y: CORE_ALLOC.take(Int32Array, CAPACITY),
+    cell_z: CORE_ALLOC.take(Int32Array, CAPACITY),
+    tiebreak: CORE_ALLOC.take(Float64Array, CAPACITY),
     count: 0,
     dropped: 0,
   };

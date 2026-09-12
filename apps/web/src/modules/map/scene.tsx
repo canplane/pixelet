@@ -2,6 +2,7 @@
 
 import { type JSX, useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
+import type { Pass } from "postprocessing";
 import * as THREE from "three";
 import { Bloom, BrightnessContrast, ChromaticAberration, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, TiltShift2, Vignette } from "@react-three/postprocessing";
 
@@ -52,6 +53,20 @@ function DevRenderToggleInvalidator(props: { deps: readonly unknown[] }) {
   useEffect(() => {
     invalidate();
   }, [invalidate, ...props.deps]);
+  return null;
+}
+
+/**
+ * Hands the R3F camera to passes that read `mainCamera`. The composer's
+ * setMainCamera is what would, and @react-three/postprocessing never calls
+ * it, so SceneDepthPass never learned its camera and never marked its depth
+ * ready — billboards behind terrain were never occluded.
+ */
+function MainCameraLink({ passes }: { passes: readonly Pass[] }) {
+  const camera = useThree((state) => state.camera);
+  useEffect(() => {
+    for (const pass of passes) pass.mainCamera = camera;
+  }, [camera, passes]);
   return null;
 }
 
@@ -212,6 +227,7 @@ export function MapScene() {
             {/* World layers in the floating-origin local frame */}
             <World ref={world_ref} />
           </FrameProvider>
+          <MainCameraLink passes={[scene_depth_pass]} />
 
           {
             /*
@@ -257,18 +273,18 @@ export function MapScene() {
           }
           {
             /*
-            multisampling left at its default (0, off): the Canvas's dpr
-            prop above already does real supersampling (the whole canvas
-            renders at up to 2x linear resolution and gets box-downsampled
-            by the browser) — MSAA only resolves per-sample coverage/depth
-            for triangle edges, never re-running the fragment shader per
-            sample, so it could not touch the shading-domain flicker this
-            terrain's thousands of small flat-shaded boxes produce once
-            they minify below a pixel. Independent of SMAA (above) being on
-            or off — this is about the Canvas's own `multisampling` prop.
+            multisampling={4}: 4x MSAA on the composer's input buffer, over
+            the dpr [1, 2] supersampling above. MSAA is the conventional
+            anti-aliasing for a forward renderer, and the distant boxes that
+            shrink below a pixel are a coverage problem, which is what it
+            resolves. It had been running at 8 — @react-three/postprocessing
+            3's default, while this comment said 0 — which put GPU p95 at
+            17 ms against 8 ms with none. 4 is the common count; without any,
+            the far terrain shimmered. A camera-reprojection TAA was tried in
+            its place and closed: discussions/20260911-taa-tried-and-closed.md.
           */
           }
-          <EffectComposer>
+          <EffectComposer multisampling={4}>
             {
               // EffectComposerProps types children as JSX.Element | JSX.Element[],
               // not accepting `cond && <X/>`'s `false` branch — build the array

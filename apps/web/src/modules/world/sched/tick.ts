@@ -36,10 +36,18 @@
  * header says it does not have. It is clamped: never so little that nothing
  * makes progress, never so much that a GC pause has no room.
  *
- * What this does not do: preempt. A step still runs to completion, and a
- * step that can take 15 ms still takes 15 ms. That is the next thing to fix
- * and it is fixed by making steps small by construction, not by anything
- * here — see the discussion this comes from.
+ * **A still view gets a bigger budget.** The budget exists to keep motion
+ * smooth, and when nothing on screen is moving there is no motion to keep
+ * smooth: a frame that takes two vsyncs instead of one shows the same image
+ * twice. So once the view has held still for SETTLE_MS, the tick is sized
+ * for throughput instead, and the backlog a pan left behind drains several
+ * times faster. The view steps in the interaction phase say when they moved
+ * (`view_moving`), and the budget is decided after that phase, so the frame
+ * a gesture starts on is already back on the small budget.
+ *
+ * What this does not do: preempt. A step still runs to completion. Steps are
+ * small by construction instead — the scan and the bake advance a few rows
+ * or a few hundred boxes per call (voxel_scan.ts, chunk_mesher.ts).
  */
 
 import { useLayoutEffect, useRef } from "react";
@@ -54,7 +62,14 @@ export const PHASES: readonly Phase[] = ["interaction", "visible", "content", "c
 export type TickContext = {
   state: RootState;
   delta: number;
+  /** Decided after the interaction phase; steps there must not read it. */
   budget: FrameBudget;
+  /** Called by an interaction step whose view is still moving — the camera
+   * damping toward its target, the frame rotating or translating. */
+  view_moving: () => void;
+  /** Why the budget is the size it is — both set with it, for the ledger. */
+  frame_ms: number;
+  settled: boolean;
   /** Wall time each phase has taken so far this tick, filled in as phases
    * complete — so the report phase can read everything before it. */
   phase_ms: Record<Phase, number>;
@@ -75,6 +90,12 @@ export type TickStep = (ctx: TickContext) => void;
  * of it, and the smallest common one is it. Gaps past MAX_FRAME_GAP_MS are
  * not frames at all — under frameloop="demand" an idle canvas draws nothing,
  * and the gap before the next frame can be seconds.
+ *
+ * Only gaps between two moving frames count, and the percentile is the
+ * 25th rather than the 10th. A still frame runs long on purpose, and the
+ * browser answers a late frame by firing the next one almost at once — the
+ * ledger read a "2.1 ms display" on a 170 Hz screen from those catch-up gaps,
+ * which pinned every moving frame to the budget floor.
  */
 const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;
@@ -92,7 +113,7 @@ function observe_frame_gap(delta_s: number): void {
 function frame_ms(): number {
   $gaps.set(frame_gaps);
   $gaps.sort();
-  return $gaps[Math.floor(FRAME_WINDOW * 0.1)];
+  return $gaps[Math.floor(FRAME_WINDOW * 0.25)];
 }
 /** Left unspent on purpose, for the collector and for the frames the
  * estimate below is wrong about — a share of the frame rather than a
@@ -103,11 +124,18 @@ const MARGIN_SHARE = 0.15;
  * of a frame and leaving nothing for a spike. */
 const MIN_BUDGET_MS = 2;
 const MAX_BUDGET_MS = 8;
+/** How long the view must hold still before the tick stops guarding
+ * smoothness. Long enough that a pause inside one drag does not count. */
+const SETTLE_MS = 150;
+/** The still-view budget. Past a 60 Hz frame on purpose: at 170 Hz this is
+ * two or three vsyncs of an unchanging image, and at 60 Hz one frame plus
+ * render — either way nothing the eye can follow is waiting on it. */
+const SETTLED_BUDGET_MS = 12;
 /** How far a pass may run past its share, so a step that costs real time and
  * reports nothing done cannot walk the whole list — frame_budget.ts's own
  * hard ceiling, expressed as slack over the pool rather than as a second
  * constant per pass. */
-const HARD_SLACK_MS = 4;
+export const HARD_SLACK_MS = 4;
 /** Smoothing on the render estimate. One frame is noise; ten is a trend. */
 const RENDER_EMA = 0.1;
 
@@ -121,8 +149,10 @@ export class FrameBudget {
   readonly t0: number;
   readonly total_ms: number;
 
-  constructor(total_ms: number) {
-    this.t0 = performance.now();
+  /** `t0` is the tick's start, not this call's: the interaction phase runs
+   * before the budget is sized, and what it spent comes off the budget. */
+  constructor(total_ms: number, t0: number = performance.now()) {
+    this.t0 = t0;
     this.total_ms = total_ms;
   }
 
@@ -166,6 +196,10 @@ export function useTick(phase: Phase, step: TickStep): void {
 
 export type TickReport = {
   budget_ms: number;
+  /** The display's measured frame interval when the budget was sized. */
+  frame_ms: number;
+  /** The view had held still for SETTLE_MS — the budget is the large one. */
+  settled: boolean;
   /** Wall time each phase took this frame. */
   phase_ms: Record<Phase, number>;
   /** The whole tick, interaction through report. */
@@ -173,7 +207,15 @@ export type TickReport = {
 };
 
 let render_ema_ms = 4;
-let last_report: TickReport = { budget_ms: 0, phase_ms: { interaction: 0, visible: 0, content: 0, cosmetic: 0, report: 0 }, total_ms: 0 };
+let moved_at = -Infinity;
+let prev_settled = true;
+let last_report: TickReport = {
+  budget_ms: 0,
+  frame_ms: 0,
+  settled: false,
+  phase_ms: { interaction: 0, visible: 0, content: 0, cosmetic: 0, report: 0 },
+  total_ms: 0,
+};
 
 /** What the previous tick spent, per phase. For the ledger. */
 export function tick_last(): TickReport {
@@ -189,30 +231,46 @@ function observe_render_cost(): void {
   render_ema_ms += (outside - render_ema_ms) * RENDER_EMA;
 }
 
-function derive_budget_ms(): number {
-  const frame = frame_ms();
+function derive_budget_ms(frame: number, settled: boolean): number {
+  if (settled) return SETTLED_BUDGET_MS;
   return Math.min(MAX_BUDGET_MS, Math.max(MIN_BUDGET_MS, frame - frame * MARGIN_SHARE - render_ema_ms));
 }
 
-export function run_tick(state: RootState, delta: number): TickReport {
-  observe_frame_gap(delta);
-  observe_render_cost();
-  const budget = new FrameBudget(derive_budget_ms());
-  const phase_ms: Record<Phase, number> = { interaction: 0, visible: 0, content: 0, cosmetic: 0, report: 0 };
-  const ctx: TickContext = { state, delta, budget, phase_ms };
-
-  for (const phase of PHASES) {
-    const t0 = performance.now();
-    // Index loop rather than for-of: a step may unregister itself or a
-    // sibling, and a snapshot would run something that just asked not to be.
-    for (let i = 0; i < registry.length; i++) {
-      const entry = registry[i];
-      if (entry.phase === phase) entry.step(ctx);
-    }
-    phase_ms[phase] = performance.now() - t0;
+function run_phase(phase: Phase, ctx: TickContext): void {
+  const t0 = performance.now();
+  // Index loop rather than for-of: a step may unregister itself or a
+  // sibling, and a snapshot would run something that just asked not to be.
+  for (let i = 0; i < registry.length; i++) {
+    const entry = registry[i];
+    if (entry.phase === phase) entry.step(ctx);
   }
+  ctx.phase_ms[phase] = performance.now() - t0;
+}
 
-  last_report = { budget_ms: budget.total_ms, phase_ms, total_ms: performance.now() - budget.t0 };
+export function run_tick(state: RootState, delta: number): TickReport {
+  const t0 = performance.now();
+  observe_render_cost();
+  const phase_ms: Record<Phase, number> = { interaction: 0, visible: 0, content: 0, cosmetic: 0, report: 0 };
+  // Sized properly once the interaction phase has said whether the view moved.
+  const ctx: TickContext = {
+    state,
+    delta,
+    budget: new FrameBudget(0, t0),
+    phase_ms,
+    view_moving: () => (moved_at = t0),
+    frame_ms: 0,
+    settled: false,
+  };
+
+  run_phase("interaction", ctx);
+  ctx.settled = t0 - moved_at >= SETTLE_MS;
+  if (!ctx.settled && !prev_settled) observe_frame_gap(delta);
+  prev_settled = ctx.settled;
+  ctx.frame_ms = frame_ms();
+  ctx.budget = new FrameBudget(derive_budget_ms(ctx.frame_ms, ctx.settled), t0);
+  for (const phase of PHASES) if (phase !== "interaction") run_phase(phase, ctx);
+
+  last_report = { budget_ms: ctx.budget.total_ms, frame_ms: ctx.frame_ms, settled: ctx.settled, phase_ms, total_ms: performance.now() - t0 };
   return last_report;
 }
 

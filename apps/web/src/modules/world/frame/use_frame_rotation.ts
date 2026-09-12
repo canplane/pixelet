@@ -33,7 +33,7 @@ export function useFrameRotation(props: UseFrameRotationProps) {
     invalidate();
   }, [azimuth]);
 
-  useTick("interaction", ({ state, delta }) => {
+  useTick("interaction", ({ state, delta, view_moving }) => {
     const frame = frame_ref.current;
     if (!frame) return;
 
@@ -49,6 +49,9 @@ export function useFrameRotation(props: UseFrameRotationProps) {
     frame.rotation.z += err * alpha;
     frame.updateMatrix();
 
-    if (Math.abs(err * (1 - alpha)) > AZIMUTH_EPS) state.invalidate();
+    if (Math.abs(err * (1 - alpha)) > AZIMUTH_EPS) {
+      state.invalidate();
+      view_moving();
+    }
   });
 }

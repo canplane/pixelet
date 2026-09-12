@@ -123,7 +123,7 @@ const DECOR_MASTER_SEED = 0xd0c0d0c0_dec0_5eed_0001n;
 // sparse forest", clearly present, not "basically gone". Cut to 0 at step8
 // rather than continuing to halve — 0.125 was still a visible handful per
 // once-dense cluster, not actually gone.
-const DECOR_DENSITY_BY_LOD_STEP: Record<LodStep, f64> = {
+export const DECOR_DENSITY_BY_LOD_STEP: Record<LodStep, f64> = {
   1: 1,
   2: 0.5,
   4: 0.25,
@@ -134,6 +134,8 @@ const DECOR_DENSITY_BY_LOD_STEP: Record<LodStep, f64> = {
 };
 
 export type DecorKindBundle = {
+  /** The kind's name — the bank key's prefix, and so the draw census's tag. */
+  kind: string;
   seed: DecorKindSeed;
   is_eligible: DecorEligibility;
   /** One entry per variant_count — see instanced_model.ts's own doc comment
@@ -149,7 +151,17 @@ export type DecorKindBundle = {
    * for a kind with no user-placeable equivalent yet (boats/cars/trains
    * today — scattered-only, no mode_bar button of their own). */
   decor_id?: DecorId;
+  /** This kind's own ladder in place of DECOR_DENSITY_BY_LOD_STEP. Interim:
+   * a car is ten trees' worth of triangles, and the shared ladder drew it
+   * out to LOD4 — see
+   * discussions/20260911-decor-identity-orientation-and-one-cell-format.md,
+   * where per-kind policy is meant to move into the decor manifest. */
+  density_by_lod_step?: Record<LodStep, f64>;
 };
+
+/** Only the nearest tier. For kinds whose models cost thousands of
+ * triangles each and read as a few pixels past it. */
+export const NEAREST_TIER_ONLY: Record<LodStep, f64> = { 1: 1, 2: 0, 4: 0, 8: 0, 16: 0, 32: 0, 64: 0 };
 
 // Seeded purely by the placed object's own absolute position — unlike
 // scatter_decor_candidates' own per-cell RNG (page_seed + cell_x/cell_y),
@@ -244,7 +256,7 @@ function collect_procedural_decor_instances(
   base_y: number,
 ): void {
   if (!useSettingsStore.getState().show_decor) return;
-  const density_scale = DECOR_DENSITY_BY_LOD_STEP[lod_step];
+  const density_scale = (bundle.density_by_lod_step ?? DECOR_DENSITY_BY_LOD_STEP)[lod_step];
   // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
   // density instead of running it only to have every candidate rejected by
   // its own probability check below — density_scale=0 means "nothing here",

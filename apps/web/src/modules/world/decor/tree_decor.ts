@@ -32,6 +32,7 @@ if (TREE_VARIANTS.length !== TREE_KIND.variant_count) {
 }
 
 export const TREE_DECOR_BUNDLE: DecorKindBundle = {
+  kind: "tree",
   seed: TREE_KIND,
   is_eligible: is_tree_eligible,
   variants: TREE_VARIANTS,

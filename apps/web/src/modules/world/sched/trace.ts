@@ -8,8 +8,8 @@
  * p95 says a category is slow, the timeline shows it's slow *because* it's
  * contending with a fetch burst that the same pan kicked off.
  *
- * Dev instrument. Bounded by the ring caps (a few hundred events), so it's
- * safe to build and clipboard-copy inline.
+ * Dev instrument. Recording covers the whole window (ledger.ts), so a trace
+ * is routinely tens of MB — saved as a file, see ledger_trace_download.
  */
 
 import { ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames } from "./ledger.ts";
@@ -70,6 +70,7 @@ export function ledger_trace_json(): string {
         queued_ms: rec.start_ms !== null ? +(rec.start_ms - rec.enqueue_ms).toFixed(1) : null,
         ran_ms: rec.start_ms !== null ? +(end - rec.start_ms).toFixed(1) : null,
         transport_ms: rec.transport_ms,
+        error: rec.error,
         ...rec.phases,
       },
     });
@@ -95,10 +96,14 @@ export function ledger_trace_json(): string {
           offthread_ms: +Math.max(0, f.dt_ms - f.task_ms).toFixed(2),
           gpu_ms: +f.gpu_ms.toFixed(2),
           sched_ms: +f.sched_ms.toFixed(2),
+          budget_ms: +f.budget_ms.toFixed(2),
+          frame_ms: +f.frame_ms.toFixed(2),
+          settled: f.settled ? 1 : 0,
+          ...Object.fromEntries(Object.entries(f.phases).map(([k, v]) => [`phase_${k}_ms`, +v.toFixed(2)])),
           recheck_ms: +f.cpu.recheck_ms.toFixed(2),
           commit_ms: +f.cpu.commit_ms.toFixed(2),
-          render_ms: +f.cpu.render_ms.toFixed(2),
           triangles: f.triangles,
+          ...Object.fromEntries(Object.entries(f.census).map(([tag, [, tris]]) => [`tris_${tag}`, tris])),
           geometries: f.geometries,
           textures: f.textures,
           mounted: f.mounts.added,
@@ -114,6 +119,9 @@ export function ledger_trace_json(): string {
           poi_count: f.poi_count,
           lod_pending: f.lod.pending,
           lod_in_frustum: f.lod.in_frustum,
+          lod_offscreen_pending: f.lod.offscreen_pending,
+          lod_oldest_release_ms: Math.round(f.lod.oldest_release_ms),
+          lod_oldest_visible_ms: Math.round(f.lod.oldest_visible_ms),
           draw_calls: f.draw_calls,
           fill_mpx: +((f.px * f.fx_passes) / 1e6).toFixed(2),
           q_terrain: f.q_terrain,
@@ -134,14 +142,13 @@ export function ledger_trace_json(): string {
     }
   }
 
-  // ---- session-worst frames ----
-  // The ring above only reaches back so far; these are kept whole for the
-  // whole session precisely so an export pulled after the fact still contains
-  // the stall. Emitted as spans at their real timestamps, so they line up with
-  // whatever else the trace holds.
+  // ---- worst frames of the window ----
+  // Already on the counter track above; repeated as labelled spans so a
+  // stall can be found without scrubbing, at its real timestamp so it lines
+  // up with whatever else the trace holds.
   const worst = ledger_worst_frames();
   if (worst.length > 0) {
-    events.push(thread_name(TID_WORST, "worst frames (session)"));
+    events.push(thread_name(TID_WORST, "worst frames"));
     for (const { sample: f, prev } of worst) {
       events.push({
         name: `stall ${f.dt_ms.toFixed(0)}ms`,
@@ -157,6 +164,8 @@ export function ledger_trace_json(): string {
           offthread_ms: +Math.max(0, f.dt_ms - f.task_ms).toFixed(2),
           gpu_ms: +f.gpu_ms.toFixed(2),
           sched_ms: +f.sched_ms.toFixed(2),
+          budget_ms: +f.budget_ms.toFixed(2),
+          settled: f.settled,
           recheck_ms: +f.cpu.recheck_ms.toFixed(2),
           commit_ms: +f.cpu.commit_ms.toFixed(2),
           mounted: f.mounts.added,

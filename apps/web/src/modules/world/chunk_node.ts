@@ -614,7 +614,8 @@ export class ChunkNode implements ChunkLodControl {
 
   /**
    * Cube content only (terrain + solid objects, chunk_mesher.ts's baked
-   * mesh). A null return means "a needed scan was just deferred", distinct
+   * mesh). A null return means "not finished this frame" — the scan or the
+   * bake is part-way, or waiting on the slot another chunk holds — distinct
    * from an empty result (built, genuinely nothing to draw).
    *
    * Decor is deliberately not built here: any decor-only change would
@@ -889,7 +890,7 @@ export class ChunkNode implements ChunkLodControl {
 
     const source = role === "secondary" ? this.layout.decor.secondary! : this.layout.decor.primary;
     const contribution: Map<string, DecorVariantContribution> = new Map();
-    this.bundle_assets.forEach(({ geometries, materials }, bi) => {
+    this.bundle_assets.forEach(({ bundle, geometries, materials }, bi) => {
       const variants: ModelInstanceTransformList[] | undefined = source[bi];
       if (!variants) return;
       geometries.forEach((geometry, variant) => {
@@ -899,7 +900,7 @@ export class ChunkNode implements ChunkLodControl {
         // nothing; the arrival rebuilds this chunk's decor and lands here
         // again with both halves in hand.
         if (!geometry || !material || !instances || instances.length === 0) return;
-        contribution.set(variant_key(bi, variant), { geometry, material, instances });
+        contribution.set(variant_key(bundle.kind, variant), { geometry, material, instances });
       });
     });
     decor_field.set_chunk(this.decor_key, this.base_i, contribution as DecorContribution);
@@ -1054,8 +1055,8 @@ export class ChunkNode implements ChunkLodControl {
     const build_t0 = import.meta.env.DEV ? performance.now() : 0;
     const buckets = this.build_buckets(desired.primary, desired.secondary, budget);
     if (import.meta.env.DEV) commit_step_stats.build_ms_max = Math.max(commit_step_stats.build_ms_max, performance.now() - build_t0);
-    // Not built this frame: the scan is mid-way, or blocked behind another
-    // chunk's, or the bake was deferred to a calmer frame. Stay pending and
+    // Not built this frame: the scan or the bake is part-way, or waiting on
+    // the slot another chunk holds. Stay pending and
     // leave whatever is on screen alone rather than popping it to empty. A
     // scan that advanced is real work and is reported as such, so the
     // budget loop counts it — the alternative reads as "nothing happened"

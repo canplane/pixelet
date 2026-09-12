@@ -4,7 +4,7 @@
 // tree_decor.ts's own doc comment for why assets live in a separate file.
 
 import { TRAIN_MODEL_URLS, TRAIN_SKIN_URL } from "@pxl/shared/assets/decor/trains.ts";
-import type { DecorKindBundle } from "./decor_layer.ts";
+import { type DecorKindBundle, NEAREST_TIER_ONLY } from "./decor_layer.ts";
 import { is_train_eligible, TRAIN_KIND } from "./train_kind.ts";
 
 const TRAIN_VARIANTS = TRAIN_MODEL_URLS.map((model_url) => ({ model_url, skin_url: TRAIN_SKIN_URL }));
@@ -16,7 +16,9 @@ if (TRAIN_VARIANTS.length !== TRAIN_KIND.variant_count) {
 }
 
 export const TRAIN_DECOR_BUNDLE: DecorKindBundle = {
+  kind: "train",
   seed: TRAIN_KIND,
   is_eligible: is_train_eligible,
   variants: TRAIN_VARIANTS,
+  density_by_lod_step: NEAREST_TIER_ONLY,
 };

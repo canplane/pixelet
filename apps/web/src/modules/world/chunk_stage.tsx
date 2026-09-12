@@ -31,18 +31,7 @@ import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
-import {
-  type ChunkLodControl,
-  ChunkNode,
-  commit_step_stats,
-  lod_build_stats,
-  lod_scheduler,
-  mesh_mount_stats,
-  mesh_unmount_stats,
-  record_timing,
-  take_node_counts,
-  type TimingStats,
-} from "@/modules/world/chunk_node.ts";
+import { type ChunkLodControl, ChunkNode, commit_step_stats, lod_build_stats, lod_scheduler, mesh_mount_stats, mesh_unmount_stats, take_node_counts } from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { decor_field } from "@/modules/world/decor/field.ts";
 import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
@@ -50,6 +39,7 @@ import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { usePoiStore } from "@/modules/world/poi/store.ts";
 import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
+import { draw_census_install, draw_census_take } from "@/modules/world/sched/draw_census.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
 import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
@@ -59,7 +49,7 @@ import { in_range_chunks } from "@/render/chunk_range.ts";
 import { compositor_cache_stats } from "@/render/layer/pipeline/compositor.ts";
 import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { mesh_pool_stat } from "@/render/layer/pipeline/mesh_pool.ts";
+import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
@@ -73,26 +63,14 @@ const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
 
 /* Session-peak scheduler load used to live here as its own object. It now
  * comes from sched/ledger.ts's ledger_frame_peak(): this loop reports each
- * frame's raw numbers and the ledger keeps both the ~4s ring and the session
+ * frame's raw numbers and the ledger keeps both the ring and the window
  * peak, instead of two places tracking the same maxima. The reason the peak
  * exists at all is unchanged — a manual __PXL_RENDER_STATS__ read during a
  * live stutter lands a frame or two after the storm has passed. */
 
-/**
- * The actual `gl.render(scene, camera)` call — three.js walking the scene
- * graph and issuing WebGL draw calls — happens in R3F's own frame loop,
- * *after* every useFrame callback above returns. Nothing in
- * scheduler_peak_stats/commit_step_stats covers it. Measured by wrapping
- * gl.render itself (see ChunkStage's effect below), not by tracing — every
- * DevTools Performance capture this session was dominated 80-90%+ by the
- * recording's own async-task-tracking overhead even in the single busiest
- * window, not real work, so a plain performance.now() wrapper is the only
- * trustworthy way left to see this number.
- */
-const render_call_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
-// Last single gl.render() duration, for sched/ledger.ts's per-frame CPU
-// breakdown — the cumulative render_call_stats can't give one frame's number.
-let last_render_ms = 0;
+/* The render itself is not timed by wrapping gl.render: the post-processing
+ * composer is always on and renders past the wrapper, which read 0. The
+ * whole rAF task, measured from a microtask below, is what covers it. */
 /** Previous frame's whole-rAF-task duration; see FrameSample.task_ms. */
 let last_task_ms = 0;
 
@@ -123,7 +101,7 @@ function work_sample(): { scans: number; bakes: number; runs: number } {
 }
 
 function pool_sample(): { live_mb: number; idle_mb: number; hit_pct: number } {
-  const stat = mesh_pool_stat();
+  const stat = core_pool_stat();
   const acquires = stat.hits + stat.misses;
   return {
     live_mb: Math.round(stat.live_bytes / MB),
@@ -250,16 +228,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    const original_render = gl.render.bind(gl);
-    gl.render = (scene, camera) => {
-      const t0 = performance.now();
-      original_render(scene, camera);
-      last_render_ms = performance.now() - t0;
-      record_timing(render_call_stats, last_render_ms);
-    };
-    return () => {
-      gl.render = original_render;
-    };
+    return draw_census_install(gl);
   }, [gl]);
 
   // GPU timing needs the live context; harmless when the extension is absent.
@@ -411,10 +380,20 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
   // The ledger, after every other phase has run, so `sched_ms` is the whole
   // tick and not this component's share of it.
-  useTick("report", ({ state, delta, budget, phase_ms }) => {
+  useTick("report", ({ state, delta, budget, phase_ms, frame_ms: display_ms, settled }) => {
     if (!import.meta.env.DEV) return;
     const pass = visible_pass.current;
-    if (!pass) return;
+    if (!pass) {
+      // No chunks this frame — a search jump empties the stage for a moment.
+      // What the visible phase opened still has to be closed: skipping the
+      // reset let draw counts pile up across every such frame and land on
+      // the next one (a 152M-triangle "frame" in the ledger), and skipping
+      // the query end left the GPU timer open into the next begin.
+      state.gl.info.reset();
+      draw_census_take();
+      queueMicrotask(gpu_timer_end);
+      return;
+    }
     const { controls, pending_total, committed, recheck_ms, commit_ms } = pass;
     {
       const settling_lod = controls.filter((control) => control.settling).length;
@@ -425,9 +404,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       const frame_ms = performance.now() - frame_t0;
 
       // Report this frame to sched/ledger.ts BEFORE reading the peak below —
-      // the ledger owns both views now (a ~4s ring for the shape of a
-      // stutter, a session peak for one you noticed too late to catch in the
-      // ring), so this loop only has to hand over raw numbers.
+      // the ledger owns both views now (the ring and the window peak), so
+      // this loop only has to hand over raw numbers.
       const perf_memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
       const poi_map = usePoiStore.getState().poi_map;
       let poi_count = 0;
@@ -443,10 +421,12 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       ledger_record_frame({
         t: performance.now(),
         dt_ms: delta * 1000,
+        frame_ms: display_ms,
+        settled,
         sched_ms: frame_ms,
         budget_ms: budget.total_ms,
         phases: { ...phase_ms },
-        cpu: { recheck_ms, commit_ms, render_ms: last_render_ms },
+        cpu: { recheck_ms, commit_ms },
         // Filled by the microtask below, which runs once the rAF task's JS
         // stack empties — i.e. after every other useFrame subscriber and after
         // the composer's render. Carries the previous frame's value here and
@@ -457,6 +437,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         triangles: state.gl.info.render.triangles,
         geometries: state.gl.info.memory.geometries,
         textures: state.gl.info.memory.textures,
+        census: draw_census_take(),
         px: state.gl.domElement.width * state.gl.domElement.height,
         fx_passes,
         mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
@@ -508,7 +489,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         mesh_mount: { ...mesh_mount_stats },
         mesh_unmount: { ...mesh_unmount_stats },
         commit_step: { ...commit_step_stats },
-        render_call: { ...render_call_stats },
       };
       (globalThis as typeof globalThis & { __PXL_RENDER_STATS__?: unknown }).__PXL_RENDER_STATS__ = debug_stats;
       state.gl.domElement.dataset.pixeletRenderStats = JSON.stringify(debug_stats);
@@ -517,8 +497,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
       // Close the GPU query and measure the whole rAF task once the stack
       // empties. A microtask is the only vantage point that sees the render:
-      // the post-processing composer renders through its own useFrame, so the
-      // gl.render wrapper above never fires and render_ms reads 0.
+      // the post-processing composer renders through its own useFrame.
       const sample = ledger_last_frame();
       queueMicrotask(() => {
         gpu_timer_end();

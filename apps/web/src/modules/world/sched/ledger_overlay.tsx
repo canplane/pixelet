@@ -13,11 +13,12 @@
  * `__pxl_ledger_log` on `window`, both regardless of whether the panel
  * itself is showing.
  *
- * Deliberately not the whole step-1 overlay: no stacked flame strip, no
- * per-frame CPU-*category* rollup (the ledger carries chunk_stage's three
- * phases, not per-task-category time). What's here is the decision-grade
- * minimum — frame pacing vs the 16.7ms line, the CPU split behind it, the
- * GPU ask, retained footprint, queue pressure, task latency, and the LoAF
+ * What the report has and this does not is detail, not kind: per-unit
+ * costs, retention counts, band reuse, mounts and the window peak stay in
+ * the report. Everything here is read through summary.ts, the same numbers
+ * the report prints — pacing against the display's measured frame, the tick
+ * and its budget, throughput, LOD waits, the GPU ask, retained footprint,
+ * queue pressure, task latency with its commonest failure, and the LoAF
  * CPU-vs-render split.
  */
 
@@ -27,10 +28,11 @@ import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
 import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
+import { badge_atlas } from "@/modules/world/poi/poi_badge.ts";
+import { CORE_MEMORY, core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { category_info } from "./categories.ts";
 import {
-  type FrameSample,
-  ledger_frames_snapshot,
+  ledger_frames_since,
   ledger_install_longtask_observer,
   ledger_install_observers,
   ledger_long_frames_snapshot,
@@ -38,65 +40,26 @@ import {
   ledger_recording_state,
   ledger_recording_stop,
   ledger_snapshot,
-  type TaskRecord,
 } from "./ledger.ts";
-import { ledger_report_to_console, ledger_set_logging, pct } from "./log.ts";
+import { ledger_report_to_console, ledger_set_logging } from "./log.ts";
+import { summarize_frames, summarize_tasks, TILE_DECODED_MB, tris_text } from "./summary.ts";
 import { ledger_trace_download } from "./trace.ts";
 
-const FRAME_BUDGET_MS = 1000 / 60;
 const POLL_MS = 500;
-// one decoded terrain page, measured live (terrain/config.ts: ~4.03MB) — the
-// multiplier on tile_pages, same idea as px × fx_passes.
-const TILE_DECODED_MB = 4;
+/** Tags listed under the triangle total — the heaviest few carry the cost. */
+const CENSUS_ROWS = 5;
+/** The panel reads the recent past, not the whole recording. Reducing every
+ * frame since load on each repaint grew into a 60 ms task every half second
+ * two minutes in — the panel was the stall it was showing. The report still
+ * covers the whole window. */
+const LIVE_WINDOW_MS = 10_000;
+/** Share of moving frames allowed to miss a vsync before the row warns. */
+const MISSED_WARN_SHARE = 0.1;
+/** LoAF's own threshold for a long frame. */
+const LONG_FRAME_MS = 50;
 
 function r1(n: number): string {
   return n.toFixed(1);
-}
-
-function summarize_frames(frames: readonly FrameSample[]) {
-  if (frames.length === 0) return null;
-  const dt = frames.map((f) => f.dt_ms).sort((a, b) => a - b);
-  const sched = frames.map((f) => f.sched_ms).sort((a, b) => a - b);
-  const over = frames.filter((f) => f.dt_ms > FRAME_BUDGET_MS + 1).length;
-  const last = frames[frames.length - 1];
-  const heap_delta = last.heap_mb - frames[0].heap_mb;
-  const p95 = (pick: (f: FrameSample) => number) => pct(frames.map(pick).sort((a, b) => a - b), 0.95);
-  return {
-    n: frames.length,
-    dt_p50: pct(dt, 0.5),
-    dt_p95: pct(dt, 0.95),
-    dt_max: dt[dt.length - 1],
-    over,
-    sched_p95: pct(sched, 0.95),
-    sched_max: sched[sched.length - 1],
-    task_p95: p95((f) => f.task_ms),
-    offthread_p95: p95((f) => Math.max(0, f.dt_ms - f.task_ms)),
-    gpu_p95: p95((f) => f.gpu_ms),
-    recheck_p95: p95((f) => f.cpu.recheck_ms),
-    commit_p95: p95((f) => f.cpu.commit_ms),
-    render_p95: p95((f) => f.cpu.render_ms),
-    /** Per tick phase — see sched/tick.ts. Frames recorded before phases
-     * existed read 0 rather than breaking the percentile. */
-    phase_p95: Object.fromEntries(Object.keys(last.phases ?? {}).map((k) => [k, p95((f) => f.phases?.[k] ?? 0)])) as Record<string, number>,
-    last,
-    heap_delta,
-  };
-}
-
-function summarize_tasks(tasks: readonly TaskRecord[]) {
-  const by = new Map<string, { lat: number[]; ok: number; aborted: number; error: number }>();
-  for (const rec of tasks) {
-    let g = by.get(rec.category);
-    if (!g) by.set(rec.category, g = { lat: [], ok: 0, aborted: 0, error: 0 });
-    if (rec.outcome === "ok") g.ok++;
-    else if (rec.outcome === "aborted") g.aborted++;
-    else g.error++;
-    if (rec.outcome === "ok") g.lat.push(rec.end_ms - rec.enqueue_ms);
-  }
-  return [...by.entries()].map(([cat, g]) => {
-    const lat = g.lat.sort((a, b) => a - b);
-    return { cat, n: g.ok + g.aborted + g.error, p50: pct(lat, 0.5), p95: pct(lat, 0.95), ok: g.ok, aborted: g.aborted, error: g.error };
-  });
 }
 
 /** A pending chunk waiting longer than this is being passed over rather than
@@ -108,6 +71,11 @@ const STARVED_MS = 2000;
  * frame, puck, companion. Past this, it is eating the budget the phases after
  * it receive. */
 const INTERACTION_WARN_MS = 2;
+
+/** A sheet larger than it starts, and this sparse, is one compaction should
+ * already have halved — billboard/atlas.ts's `compact`. */
+const ATLAS_INITIAL = 1024;
+const ATLAS_SPARSE_PCT = 25;
 
 function Row(props: { k: string; v: string; warn?: boolean }) {
   return (
@@ -160,7 +128,10 @@ export function LedgerOverlay() {
 
   if (!import.meta.env.DEV || !show) return null;
 
-  const f = summarize_frames(ledger_frames_snapshot());
+  const f = summarize_frames(ledger_frames_since(performance.now() - LIVE_WINDOW_MS));
+  const atlas = badge_atlas.stats();
+  const atlas_pct = Math.round((atlas.used_px / (atlas.size * atlas.size)) * 100);
+  const index = poi_index_stats();
   const tasks = summarize_tasks(ledger_snapshot());
   const longs = ledger_long_frames_snapshot();
   const rec = ledger_recording_state();
@@ -170,31 +141,32 @@ export function LedgerOverlay() {
 
   return (
     <div className="pointer-events-none fixed left-2 top-[84px] z-50 w-[228px] rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
-      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger</div>
+      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger, last {LIVE_WINDOW_MS / 1000}s</div>
 
       {!f && <div className="text-white/45">no frames sampled yet</div>}
       {f && (
         <>
-          <Row k="dt p50/p95" v={`${r1(f.dt_p50)}/${r1(f.dt_p95)}ms`} warn={f.dt_p95 > FRAME_BUDGET_MS + 1} />
-          <Row k="dt max" v={`${r1(f.dt_max)}ms`} warn={f.dt_max > FRAME_BUDGET_MS * 2} />
-          <Row k="over budget" v={`${f.over}/${f.n}`} warn={f.over > f.n * 0.1} />
+          <Row k="dt p50/p95 moving" v={`${r1(f.dt.p50)}/${r1(f.dt.p95)}ms`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
+          <Row k="dt max" v={`${r1(f.dt.max)}ms`} warn={f.dt.max > LONG_FRAME_MS} />
+          <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
           <Row
             k="task/offthd p95"
-            v={`${r1(f.task_p95)}/${r1(f.offthread_p95)}ms`}
-            warn={f.offthread_p95 > FRAME_BUDGET_MS}
+            v={`${r1(f.task.p95)}/${r1(f.offthread.p95)}ms`}
+            warn={f.offthread.p95 > f.last.frame_ms}
           />
-          <Row k="gpu p95" v={f.gpu_p95 > 0 ? `${r1(f.gpu_p95)}ms` : "n/a"} warn={f.gpu_p95 > FRAME_BUDGET_MS} />
-          <Row k="sched p95/max" v={`${r1(f.sched_p95)}/${r1(f.sched_max)}ms`} warn={f.sched_max > FRAME_BUDGET_MS} />
+          <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${r1(f.gpu.p95)}ms` : "n/a"} warn={f.gpu.p95 > f.last.frame_ms} />
+          <Row k="sched p95/max" v={`${r1(f.sched.p95)}/${r1(f.sched.max)}ms`} warn={f.overran > 0} />
           <Row
-            k="rck/cmt/rnd p95"
-            v={`${r1(f.recheck_p95)}/${r1(f.commit_p95)}/${r1(f.render_p95)}`}
-            warn={Math.max(f.recheck_p95, f.commit_p95, f.render_p95) > FRAME_BUDGET_MS}
+            k="budget/frame"
+            v={`${r1(f.last.budget_ms)}/${r1(f.last.frame_ms)}ms${f.last.settled ? " still" : ""}`}
           />
+          <Row k="rck/cmt p95" v={`${r1(f.recheck.p95)}/${r1(f.commit.p95)}`} />
           <Row
             k="phase p95 i/v/c/s"
-            v={`${r1(f.phase_p95.interaction ?? 0)}/${r1(f.phase_p95.visible ?? 0)}/${r1(f.phase_p95.content ?? 0)}/${r1(f.phase_p95.cosmetic ?? 0)}`}
-            warn={(f.phase_p95.interaction ?? 0) > INTERACTION_WARN_MS}
+            v={`${r1(f.phases.interaction.p95)}/${r1(f.phases.visible.p95)}/${r1(f.phases.content.p95)}/${r1(f.phases.cosmetic.p95)}`}
+            warn={f.phases.interaction.p95 > INTERACTION_WARN_MS}
           />
+          <Row k="bake/scan per s busy" v={`${Math.round(f.backlog_per_s.bakes)}/${Math.round(f.backlog_per_s.scans)}`} />
           <div className="my-1 border-t border-white/10" />
           <Row
             k="lod c/f/p"
@@ -209,6 +181,7 @@ export function LedgerOverlay() {
           <div className="my-1 border-t border-white/10" />
           <Row k="draws" v={String(f.last.draw_calls)} />
           <Row k="tris" v={`${(f.last.triangles / 1000).toFixed(0)}k`} />
+          {f.census.slice(0, CENSUS_ROWS).map(([tag, d, t]) => <Row key={tag} k={`  ${tag} d/tris`} v={`${Math.round(d)}/${tris_text(t)}`} />)}
           <Row k="textures" v={String(f.last.textures)} />
           <Row
             k="fill Mpx×n"
@@ -227,6 +200,11 @@ export function LedgerOverlay() {
             warn={f.last.pool.hit_pct < 80}
           />
           <Row
+            k="  reserved/core"
+            v={`${Math.round(core_pool_stat().reserved_bytes / 1048576)}/${Math.round((CORE_MEMORY?.buffer.byteLength ?? 0) / 1048576)}MB`}
+            warn={core_pool_stat().reserved_bytes > (CORE_MEMORY?.buffer.byteLength ?? 0)}
+          />
+          <Row
             k="faces kept"
             v={`${occlusion_stats.faces_possible > 0 ? Math.round(occlusion_stats.faces_kept / occlusion_stats.faces_possible * 100) : 0}%`}
           />
@@ -237,10 +215,14 @@ export function LedgerOverlay() {
           />
           <Row
             k="  cand/kept idx"
-            v={`${poi_place_stats.candidates}/${poi_place_stats.kept} ${poi_index_stats().indexed}${poi_index_stats().dropped > 0 ? ` -${poi_index_stats().dropped}` : ""}`}
-            warn={poi_index_stats().dropped > 0}
+            v={`${poi_place_stats.candidates}/${poi_place_stats.kept} ${index.indexed}${index.dropped > 0 ? ` -${index.dropped}` : ""}`}
+            warn={index.dropped > 0}
           />
-          <Row k="scan/bake" v={`${f.last.work.scans}/${f.last.work.bakes}`} warn={f.last.work.scans > 0} />
+          <Row
+            k="atlas"
+            v={`${atlas.size}px ${atlas.entries} ${atlas_pct}%`}
+            warn={atlas.size > ATLAS_INITIAL && atlas_pct < ATLAS_SPARSE_PCT}
+          />
           <Row k="queue t/p" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />
         </>
       )}
@@ -252,9 +234,10 @@ export function LedgerOverlay() {
           <div key={t.cat}>
             <Row
               k={`${t.cat}${bound ? ` (${bound})` : ""} p50/p95`}
-              v={`${r1(t.p50)}/${r1(t.p95)}ms`}
+              v={`${r1(t.lat.p50)}/${r1(t.lat.p95)}ms`}
             />
             <Row k="  ok/ab/err" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
+            {t.reasons.length > 0 && <Row k="  top err" v={`${t.reasons[0][0]} x${t.reasons[0][1]}`} warn />}
           </div>
         );
       })}

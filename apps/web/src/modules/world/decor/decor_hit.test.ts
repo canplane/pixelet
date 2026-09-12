@@ -19,7 +19,7 @@ function downward_raycaster(x: number): THREE.Raycaster {
   return new THREE.Raycaster(new THREE.Vector3(x, 0, 10), new THREE.Vector3(0, 0, -1));
 }
 
-const KEY = variant_key(0, 0);
+const KEY = variant_key("tree", 0);
 
 /** Publishes one chunk's worth of instances and writes them, the way a frame
  * would. Origin zero on both sides, so the field's group stays at the

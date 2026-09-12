@@ -30,6 +30,7 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
 /** Marks a slot as never written in this generation. */
 const EMPTY: i32 = -1;
@@ -76,20 +77,20 @@ export class CellNodes {
 
   /** `cap` is nodes; the table is the next power of two above twice that, so
    * the load factor stays under a half and probes stay short. */
-  constructor(cap: u32) {
+  constructor(cap: u32, alloc: TypedAlloc = HEAP_ALLOC) {
     this.cap = cap;
-    this.key_x = new Int32Array(cap);
-    this.key_y = new Int32Array(cap);
-    this.key_z = new Int32Array(cap);
-    this.shamt = new Uint8Array(cap);
-    this.members = new Uint32Array(cap);
-    this.first = new Uint32Array(cap);
-    this.first_d2 = new Float64Array(cap);
+    this.key_x = alloc.take(Int32Array, cap);
+    this.key_y = alloc.take(Int32Array, cap);
+    this.key_z = alloc.take(Int32Array, cap);
+    this.shamt = alloc.take(Uint8Array, cap);
+    this.members = alloc.take(Uint32Array, cap);
+    this.first = alloc.take(Uint32Array, cap);
+    this.first_d2 = alloc.take(Float64Array, cap);
 
     let size = 1;
     while (size < cap * 2) size <<= 1;
-    this.slots = new Int32Array(size);
-    this.stamps = new Uint32Array(size);
+    this.slots = alloc.take(Int32Array, size);
+    this.stamps = alloc.take(Uint32Array, size);
     this.mask = size - 1;
   }
 

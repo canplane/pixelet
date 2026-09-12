@@ -16,6 +16,7 @@ if (BOAT_VARIANTS.length !== BOAT_KIND.variant_count) {
 }
 
 export const BOAT_DECOR_BUNDLE: DecorKindBundle = {
+  kind: "boat",
   seed: BOAT_KIND,
   is_eligible: is_boat_eligible,
   variants: BOAT_VARIANTS,
