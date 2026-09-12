@@ -12,7 +12,7 @@
  * arbitrary GLB geometry can bake into this exact same shape of output
  * (position/normal + a handful of per-vertex material attributes), which a
  * shared-box-instanced pipeline could never support. See
- * discussions/20260903-terrain-decor-render-unification.md for the fuller
+ * issue/20260903-terrain-decor-render-unification.md for the fuller
  * account of why this replaced the previous instanced-box approach.
  *
  * Every box here is still axis-aligned scale+translation only, exactly like
@@ -30,7 +30,7 @@ import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Arena, Vector } from "@xpute/core/ds/arena.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 
 import type { LodStep } from "@/render/lod.ts";
 import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "./volume.ts";

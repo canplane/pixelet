@@ -9,7 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { Readable } from "node:stream";
 import { Server as SocketIoServer } from "socket.io";
 
-import { type AppResources, make_app_resrcs } from "@/app/resources.ts";
+import { type AppResources, make_app_resrcs } from "@/app/resource.ts";
 import { mount_app } from "@/app/mount.ts";
 import { type AppConfig, make_cfg } from "@/app/config.ts";
 import { admin_auth } from "@/lib/admin_auth.ts";

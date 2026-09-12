@@ -41,14 +41,14 @@ export type GeocodeResult = { parts: GeocodePart[] };
  * Reverse geocoding's own PoiProvider-shaped seam (provider.ts's own doc
  * comment for the POI case explains the reasoning; same one applies here) —
  * one page_idx in, that page's neighborhood label out. service.ts (the live
- * endpoint) and bake/geocode/tools/bake_geocode_tiles.ts (the offline
+ * endpoint) and bake/geocode/tool/bake_geocode_tiles.ts (the offline
  * static bake) both depend on this, not on any one implementation.
  *
- * providers/overture_provider.ts (Overture's Divisions theme) is the
+ * provider/overture_provider.ts (Overture's Divisions theme) is the
  * current and, as of 2026-09-08, only implementation — this replaced a
  * direct client-side call to public Nominatim (use_reverse_geocode.ts,
  * now retired) that had no server, no cache, and no bake step at all. See
- * discussions/20260908-overture-poi-adoption.md.
+ * issue/20260908-overture-poi-adoption.md.
  */
 export type GeocodeProvider = {
   reverse(page_idx: IVec): Promise<GeocodeResult | null>;

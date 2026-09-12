@@ -9,7 +9,7 @@
  * terrain pages (world/terrain/resident.ts) all borrow from it. One pool
  * rather than one per producer is deliberate — buddy can only move bytes
  * between sizes that live in the same region, and one memory is the point:
- * discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md.
+ * issue/20260911-single-thread-core-and-when-to-spawn-a-worker.md.
  */
 
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
@@ -42,7 +42,7 @@ import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts"
  * and never grown, that the pool carves its first regions out of.
  *
  * Fixed-length rather than resizable, and never grown, for three measured
- * reasons (discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md):
+ * reasons (issue/20260911-single-thread-core-and-when-to-spawn-a-worker.md):
  * a view into a grown memory is detached, and every mesh span and run lane
  * is such a view; views into a resizable buffer read two and a half times
  * slower in V8; and WebGL and WebGPU reject them outright. A reservation is

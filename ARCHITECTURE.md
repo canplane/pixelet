@@ -4,7 +4,7 @@ A spatial engine for turning real-world geographic data and player-built objects
 
 The engine is split into a pixelet-specific domain layer (**`@pxl/shared`**: coordinate system, cell/terrain model, spatial hierarchy, bake wire format, the record layer) and a project-agnostic utility layer (**`@xpute/core`**: collections, allocators, codecs, and the binary tree protocol those formats use) — see [Repository Structure](./README.md#repository-structure).
 
-Three things run through every section below, and are the shape the client has had since September 2026: the world's state lives in **one linear memory** ([Memory](#memory)), the frame's work runs as **one cooperative tick** with one budget ([Scheduling](#scheduling)), and what the client measures about itself is a **read-only ledger** that never feeds back ([Scheduling](#scheduling)). The destination those were built for — a WASM core drawing through WebGPU, with three.js gone — is decided and not yet started; see [discussions/20260912-why-the-destination-is-wasm.md](./discussions/20260912-why-the-destination-is-wasm.md).
+Three things run through every section below, and are the shape the client has had since September 2026: the world's state lives in **one linear memory** ([Memory](#memory)), the frame's work runs as **one cooperative tick** with one budget ([Scheduling](#scheduling)), and what the client measures about itself is a **read-only ledger** that never feeds back ([Scheduling](#scheduling)). The destination those were built for — a WASM core drawing through WebGPU, with three.js gone — is decided and not yet started; see [issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md).
 
 > Earlier iterations explored a decentralized P2P/WebRTC runtime (`xpute` as a peer-symmetric IPC substrate) and a Rust/WebGPU rewrite of the spatial/bake stack. Both were parked in favor of a plain client-server MVP; the WASM/WebGPU direction is decided again as of 2026-09-12 (above), to be built on the MVP's state model rather than resumed from the April checkpoint. Their last states are preserved on `checkpoint/20260107-float`, `checkpoint/20260405-xpute`, and `checkpoint/20260409-wasm-aborted`.
 
@@ -43,9 +43,9 @@ Extent is a linear range on one packed lane (`RANGE` in `indexer.ts`), not an in
 
 L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `indexer.ts`). Once implemented, its Z lane collapses — Z is only 16 bits wide, narrower than `L5_SHAMT` — so L5 can only ever address X/Y, regardless of what any layer does with it.
 
-Objects have no server persistence yet — the store is client-local. It keeps a palette per L2 chunk and one sparse tree per occupied `64³` band whose leaves are palette indices, all as lanes in the core memory (`modules/world/objects/store.ts`), with a derived cell index for occupancy and hit tests. It persists as one `Placement` record per L3 page ([Records](#records)), which is the form a server would receive too.
+Objects have no server persistence yet — the store is client-local. It keeps a palette per L2 chunk and one sparse tree per occupied `64³` band whose leaves are palette indices, all as lanes in the core memory (`module/world/object/store.ts`), with a derived cell index for occupancy and hit tests. It persists as one `Placement` record per L3 page ([Records](#records)), which is the form a server would receive too.
 
-One chunk node (`modules/world/chunk_node.ts`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
+One chunk node (`module/world/chunk_node.ts`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
 
 ### Layer, space, and shape
 
@@ -68,7 +68,7 @@ Terrain today is Tile-shaped data addressed at Page granularity; objects are Vol
 
 The client's state is one fixed `WebAssembly.Memory` — 512 MB on the desktop, 256 on a phone, `initial == maximum`, never grown, since growing would detach every view and a resizable buffer is slower to read and refused by WebGL — carved by a buddy allocator (`render/layer/pipeline/core_pool.ts`, `@xpute/core/ds/buddy.ts`) into blocks that typed-array views are taken over. Everything the canvas reads each frame lives there as **lanes** (structure-of-arrays typed views): terrain pages, voxel bands, column run sets, baked meshes, the chunk table, decor instance matrices, the POI index, the badge atlas's slots, the object store's records and its derived index, and every registry that used to be a `Map` or a `Set` of objects (`IndexedMap`, `PageTable`). What stays in the JS heap is glue — the `Mesh`, `BufferAttribute` and `Group` three.js requires, React, and the handles that name a slot — measured at 30–40 MB of objects on a loaded page.
 
-The rules that came out of that move ([discussions/20260912-linear-memory-what-is-left.md](./discussions/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past the reservation the pool hands out plain regions the collector can reclaim. Beside the big memory sits the **little memory** (`modules/world/sched/slabs.ts`): fixed-size transferable slabs, made on demand and released when idle, for work that will leave the thread — a `WebAssembly.Memory` cannot be transferred, so a worker job travels in a slab and comes back the same way.
+The rules that came out of that move ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past the reservation the pool hands out plain regions the collector can reclaim. Beside the big memory sits the **little memory** (`module/world/sched/slab.ts`): fixed-size transferable slabs, made on demand and released when idle, for work that will leave the thread — a `WebAssembly.Memory` cannot be transferred, so a worker job travels in a slab and comes back the same way.
 
 ## Terrain Data and Streaming
 
@@ -138,9 +138,9 @@ Raycasting needs exact composed voxels but only near the pointer ray, so it uses
 
 ## Rendering and LOD
 
-The calculation side — layer composition, column scanning, meshing, bounds, and voxel ray tests — returns plain typed-array data and is renderer-independent. Three.js / React Three Fiber begins at the submission boundary, where it owns meshes, materials, texture arrays, camera/frustum math, scene lifecycle, and GPU resources. In the repo: `apps/web/src/render/` (including `render/layer/pipeline/`) stays Three.js-free; the R3F-owning consumers (`ChunkStage`, `Cube`, the anchor/frame components, ...) live under `apps/web/src/modules/world/` instead. Chunk ownership itself is imperative: `chunk_node.ts` drives meshes and buckets directly rather than through a component tree, since one component per chunk per tier made React's reconciler the thing deciding when GPU buffers live and die.
+The calculation side — layer composition, column scanning, meshing, bounds, and voxel ray tests — returns plain typed-array data and is renderer-independent. Three.js / React Three Fiber begins at the submission boundary, where it owns meshes, materials, texture arrays, camera/frustum math, scene lifecycle, and GPU resources. In the repo: `apps/web/src/render/` (including `render/layer/pipeline/`) stays Three.js-free; the R3F-owning consumers (`ChunkStage`, `Cube`, the anchor/frame components, ...) live under `apps/web/src/module/world/` instead. Chunk ownership itself is imperative: `chunk_node.ts` drives meshes and buckets directly rather than through a component tree, since one component per chunk per tier made React's reconciler the thing deciding when GPU buffers live and die.
 
-LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. A tier hands off to the next when one of its cells would project to about six pixels — screen-space error, derived from the viewport height and field of view (`render/lod.ts`), which at the reference viewport puts the handoffs at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. Everything that keeps step with the tiers — the POI badge lattice, the badge fade, decor's range — is a multiple of that first handoff. Decor is drawn by the same criterion applied to a kind's extent: a thing that would cover fewer pixels than two of the tier's cells is not drawn, at full density up to that tier and not past it (`modules/world/decor/decor_layer.ts`).
+LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. A tier hands off to the next when one of its cells would project to about six pixels — screen-space error, derived from the viewport height and field of view (`render/lod.ts`), which at the reference viewport puts the handoffs at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. Everything that keeps step with the tiers — the POI badge lattice, the badge fade, decor's range — is a multiple of that first handoff. Decor is drawn by the same criterion applied to a kind's extent: a thing that would cover fewer pixels than two of the tier's cells is not drawn, at full density up to that tier and not past it (`module/world/decor/decor_layer.ts`).
 
 The visible handoffs use complementary stochastic visibility between adjacent LOD meshes rather than alpha-overlapping them. LOD work is frame-budgeted, while a newly visible chunk starts from its distance-derived tier instead of always flashing through the coarsest proxy.
 
@@ -195,7 +195,7 @@ the border it is about to swallow rather than the one the box started at.
 ### Scheduling
 
 Every per-frame subscriber in the world is a named step of **one tick**
-(`modules/world/sched/tick.ts`), the single `useFrame` in the canvas. The
+(`module/world/sched/tick.ts`), the single `useFrame` in the canvas. The
 tick runs its phases in priority order — `interaction` (camera, frame,
 puck, companion: unbudgeted and O(1) by contract), `visible` (the chunks on
 screen: LOD recheck, scan, bake, commit), `content` (what fills the world
@@ -222,19 +222,19 @@ The one unit that cannot be cut is a chunk bake — one mesher call, 14–21
 ms on a phone against an 8 ms budget — and moving that unit whole to a
 worker is decided and next (BACKLOG); the little memory above is its
 transport, and the job stays a Demand with a priority, a budget and an
-abort. `modules/world/sched/` also holds the fetch scheduler (a priority
+abort. `module/world/sched/` also holds the fetch scheduler (a priority
 queue over a concurrency ceiling, aborting what falls out of a category's
 wishlist) and the **ledger**: a read-only ring of frames and tasks with a
 step table, per-job waits, a draw census and a GPU timer where one exists,
 printed as a report and exported as a Chrome trace. The ledger observes; it
 never feeds back into the schedulers' own decisions
-([discussions/20260909-cooperative-scheduler-and-task-ledger.md](./discussions/20260909-cooperative-scheduler-and-task-ledger.md)).
+([issue/20260909-cooperative-scheduler-and-task-ledger.md](./issue/20260909-cooperative-scheduler-and-task-ledger.md)).
 
 ## Camera
 
 The orbit camera is driven by three controls — `dist`, `polar`, `azimuth` —
 and nothing else writes them. Terrain is allowed one question, in
-`modules/camera/terrain_gate.ts`: would this view state put the eye inside
+`module/camera/terrain_gate.ts`: would this view state put the eye inside
 it. The gate is a pure function of the three controls rather than of the
 live scene graph, and it sits in `set_view_state`, the one funnel every
 input path goes through, so a refused move never leaves the controls and the
@@ -245,7 +245,7 @@ drawn camera disagreeing.
 grants every control and raises the _drawn_ pitch instead, leaving
 `view_state` untouched so the pitch relaxes back on its own.
 
-Every setting is one entry of one schema (`app/settings/schema.ts`): its
+Every setting is one entry of one schema (`app/setting/schema.ts`): its
 default, its kind and its section. The store reads the defaults with the
 user's overrides on top and stores only the overrides, and the settings
 sheet renders its rows from the schema. Dev-only settings — the debug
@@ -256,12 +256,12 @@ gizmos, the ledger panel, a render-path bisect — are entries marked `dev`.
 A POI page is an XTP record the API emits — positions, category, rank and
 id hash as lanes, the strings as leaves read one at a time — copied into
 the core memory on arrival. A spatial index over the resident disc
-(`modules/world/poi/poi_index.ts`) is rebuilt a range of records per unit
+(`module/world/poi/poi_index.ts`) is rebuilt a range of records per unit
 in the content phase while the previous build keeps answering; placement
 (`poi_layer.tsx`) is a job of the same phase — query, file the hits into an
 implicit lattice by tier, offer them with estimated widths, greedy
 placement on a screen grid in distance order, build the badges — committed
-whole. Badges are drawn from one atlas (`modules/world/billboard/atlas.ts`,
+whole. Badges are drawn from one atlas (`module/world/billboard/atlas.ts`,
 shelf-packed, uploaded by rectangle) as **one instanced quad**
 (`billboard/field.ts`): anchor, size and sheet rectangle are per-instance
 attributes, and the fit to screen pixels, the distance fade and the anchor
@@ -290,7 +290,7 @@ TLV is used separately for flat, self-delimiting stream arguments. XTP lives in 
 
 ## Records
 
-On top of the tree packet, `@pxl/shared/record` defines the **column layer**: a record is `[kind, version, keys, required flags, count, columns...]`, so a reader finds a column by name, skips one it does not know and refuses one marked required — glTF's `extensionsRequired` and PNG's critical bit under one rule. Two records are shared by everything ([discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md](./discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md)):
+On top of the tree packet, `@pxl/shared/record` defines the **column layer**: a record is `[kind, version, keys, required flags, count, columns...]`, so a reader finds a column by name, skips one it does not know and refuses one marked required — glTF's `extensionsRequired` and PNG's critical bit under one rule. Two records are shared by everything ([issue/20260913-everything-is-a-file-the-placement-and-the-palette.md](./issue/20260913-everything-is-a-file-the-placement-and-the-palette.md)):
 
 - **`Placement`** — one row per placed thing, whatever it is: a `u64` id, a page-local `f32` position, the footprint's side in world units, an ENU heading (radians about up, counter-clockwise from +x), and a palette id; ancillary scale, rotation and tags. A tree, a placed cube and a bare ground cell are the same row; what differs is the palette entry.
 - **`Palette`** — one global record naming every kind of thing: id, kind (`cube`, `ground`, `decor`, `actor`), name, model and skin by bucket key (`asset/<sha256>`, the content), extent measured at ingest, size, licence, author, colour. The palette this build ships is built from the cell constants plus a row per decor model and per character, over `record/ingested.ts` — the table `deno task ingest:asset` generates from the top-level `asset/` tree, which hashes every model, skin and texture into the bucket and measures each glb's bounds. Nothing imports a model or an image: the client fetches a key, the same key from the dev API's `./out/asset` and from R2. The texture pack is one more table over the palette (`record/texture.ts`, which image a cube type wears on which face); a cube's colour is the palette row's own (`spec/cell/color.ts`), what the minimap and the coarse tiers draw, and a pack decorates it.

@@ -137,7 +137,7 @@ export type Tile = {
 // Used to take a third `pois: POI[]` argument and (nominally) encode it
 // into the tile too — dead on arrival even then (the actual encode call
 // was always commented out) and removed outright once POI moved to its
-// own Overture-sourced pipeline (apps/api/src/modules/world/poi/) with no
+// own Overture-sourced pipeline (apps/api/src/module/world/poi/) with no
 // relationship to a terrain tile's own bytes at all. `Tile` (below) never
 // had a `pois` field to match.
 export function encode_terrain(ele: I16Array, ground: Ground): U8Array {
@@ -200,7 +200,7 @@ export function decode_terrain(pkt: U8Array): Terrain {
 // record every rebuild, and they are typed-array leaves the client views
 // without a copy. The rest are read one record at a time — a badge's name
 // when it is drawn, a record's tags when it is opened — and never all at
-// once. This is the line discussions/20260912-linear-memory-what-is-left.md
+// once. This is the line issue/20260912-linear-memory-what-is-left.md
 // draws: the lanes are the canvas's, the strings are read on demand.
 
 export function encode_poi_page(pois: readonly POI[]): U8Array {

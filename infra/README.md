@@ -18,7 +18,7 @@ infra/
 | **db-main** | 5432:5432      | nothing yet       | PostgreSQL 16  |
 | **db-geo**  | 5433:5432      | every table in §2 | PostGIS 16-3.4 |
 
-`apps/api/src/app/resources.ts` probes db-main at startup, so `DB_MAIN_URL`
+`apps/api/src/app/resource.ts` probes db-main at startup, so `DB_MAIN_URL`
 is required even though no query reads it.
 
 - Local access: `localhost:5433`
@@ -32,16 +32,16 @@ Twelve tables from two sources. Terrain, POI and geocode are baked from
 these offline and published to R2; only forward search queries them at
 request time.
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                                                       |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :--------------------------------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `apps/api/src/bake/overture/tools/ingest_{buildings,transportation,base}.ts` |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `apps/api/src/bake/overture/tools/ingest_{places,divisions}.ts`              |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `./elevation/scripts/setup-elevation.sh`                                     |
+| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                                                      |
+| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :-------------------------------------------------------------------------- |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `apps/api/src/bake/overture/tool/ingest_{buildings,transportation,base}.ts` |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `apps/api/src/bake/overture/tool/ingest_{places,divisions}.ts`              |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `./elevation/script/setup-elevation.sh`                                     |
 
 Coastline is not its own table: `OVERTURE_COAST_SQL`
 (`apps/api/src/bake/terrain/repository.ts`) carves it at bake time from
 `overture_base_water`'s `ocean` subtype, and `HAS_LAND_SQL`
-(`bake/terrain/tools/bake_tiles.ts`) classifies a page as open ocean when
+(`bake/terrain/tool/bake_tiles.ts`) classifies a page as open ocean when
 no `overture_base_land` row touches its bbox.
 
 Both catalogs record one row per table with the source's own as-of date.
@@ -101,14 +101,14 @@ until docker exec "$DB_GEO_CONTAINER" pg_isready -U postgres; do sleep 2; done
 Order does not matter. Each reads the root `.env` itself.
 
 ```sh
-deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_buildings.ts
-deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_transportation.ts
-deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_base.ts
-deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_places.ts
-deno run -A --env=.env apps/api/src/bake/overture/tools/ingest_divisions.ts
+deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_buildings.ts
+deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_transportation.ts
+deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_base.ts
+deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_places.ts
+deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_divisions.ts
 
-chmod +x infra/elevation/scripts/setup-elevation.sh
-./infra/elevation/scripts/setup-elevation.sh
+chmod +x infra/elevation/script/setup-elevation.sh
+./infra/elevation/script/setup-elevation.sh
 ```
 
 Each Overture tool's own top comment is the source of truth for its
@@ -263,7 +263,7 @@ every model and texture by content under `asset/<sha256>`; everything
 else under that root is
 reverse-proxied whole to `API_ORIGIN` (`apps/web/wrangler.jsonc`'s `vars`,
 `https://api.plei.me`), path unchanged. Vite's dev proxy splits the same
-root the same way, both from `apps/web/src/lib/env/routes.ts`. Nothing is
+root the same way, both from `apps/web/src/lib/env/route.ts`. Nothing is
 rewritten in transit: client, relay and origin use identical paths.
 
 Neither relay reads past the root, so a new live route is a change to
@@ -321,7 +321,7 @@ or `image/png` with no `content-encoding`.
 ## 7. Licensing and attribution
 
 The notices below are required, shown in
-`apps/web/src/app/settings/sections/attribution_section.tsx`. Check the
+`apps/web/src/app/setting/section/attribution_section.tsx`. Check the
 source license before shortening, rewording or dropping any of them.
 
 | Source              | License                                                                                                  | Notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

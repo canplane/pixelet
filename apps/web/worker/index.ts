@@ -10,7 +10,7 @@
  * to API_ORIGIN as-is, see infra/README.md). Keeping it on the app's
  * own hostname is what
  * makes them same-origin, so no CORS policy exists to configure or get
- * wrong — see discussions/20260816-deployment-hosting.md.
+ * wrong — see issue/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
  * deployment, it targets the Workers runtime rather than the browser, and
@@ -53,7 +53,7 @@ export type Env = {
   API_ORIGIN: string;
 };
 
-/** Mirrors src/lib/env/routes.ts's EDGE_* prefixes, as literals: this file
+/** Mirrors src/lib/env/route.ts's EDGE_* prefixes, as literals: this file
  * is bundled for the Workers runtime rather than from src/. Neither branch
  * reads past its prefix. */
 const API_PREFIX = "/api/";
@@ -64,17 +64,17 @@ const PREFIX = "/api/tiles/";
  *
  * - `terrain/<version>/<page_idx>`, plus the shared `terrain/<version>/_ocean`
  *   tile.
- * - `poi/<version>/<page_idx>` — apps/api/src/bake/poi/tools/bake_poi_tiles.ts's
+ * - `poi/<version>/<page_idx>` — apps/api/src/bake/poi/tool/bake_poi_tiles.ts's
  *   own sibling prefix in the same bucket. No `_ocean`-equivalent: a missing
  *   POI object means "no POI on this page", which poi/repository.ts resolves
  *   to `[]` directly, not a shared fallback object this Worker would need to
  *   know about.
- * - `geocode/<version>/<page_idx>` — apps/api/src/bake/geocode/tools/
+ * - `geocode/<version>/<page_idx>` — apps/api/src/bake/geocode/tool/
  *   bake_geocode_tiles.ts's own sibling prefix, same no-fallback shape as
  *   POI (a missing object means "outside Overture's Divisions coverage",
  *   geocode/repository.ts resolves that to `null` directly).
  * - `asset/<sha256>` — a model or an image, named by its content;
- *   apps/api/src/bake/asset/tools/ingest_asset.ts writes them and the
+ *   apps/api/src/bake/asset/tool/ingest_asset.ts writes them and the
  *   shipped palette names them. No version segment: a changed file is a
  *   new key, which is what makes `immutable` true of it.
  *
@@ -89,7 +89,7 @@ const PREFIX = "/api/tiles/";
  * are actually bake tools for; add to it when a third one ships, not before).
  *
  * This exists for cost, not correctness. A miss is still a billed R2 class-B
- * operation, so without it anyone can walk `/tiles/<anything>` and charge
+ * operation, so without it anyone can walk `/tile/<anything>` and charge
  * this account one read per request while every single one 404s. Matching
  * the shape first means a scraper's garbage never reaches the bucket at all.
  * It is not rate limiting and does not pretend to be — that needs WAF rules,

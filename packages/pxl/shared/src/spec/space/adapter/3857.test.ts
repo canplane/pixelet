@@ -117,7 +117,7 @@ Deno.test("epsg3857 Z_SCALE - grows away from the equator (Mercator's characteri
 
 Deno.test("epsg3857 Z_SCALE - constant within one L3 page (the documented coarse-scale contract, not a bug)", () => {
   // Z_SCALE deliberately snaps to the *page base* before evaluating scale
-  // (see its doc comment in 3857.ts) so terrain/objects/baking never drift
+  // (see its doc comment in 3857.ts) so terrain/object/baking never drift
   // from each other by mixing slightly different per-point scales — two
   // points a few meters apart, comfortably inside the same page, must
   // return bit-identical scale, not just approximately equal.

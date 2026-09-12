@@ -3,7 +3,7 @@
 import { assert, assertEquals } from "@std/assert";
 
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
-import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./volume.ts";
 import { type MeshRun, pack_column_runs } from "./voxel_scan.ts";

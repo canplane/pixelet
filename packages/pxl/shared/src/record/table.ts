@@ -17,7 +17,7 @@
  * care noticing, and a record says what it is. What it does not add is a
  * schema system — a record kind's module says which keys mean what and
  * what type each is
- * (discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md).
+ * (issue/20260913-everything-is-a-file-the-placement-and-the-palette.md).
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";

@@ -1,7 +1,7 @@
 // @pxl/api/bake/overture/catalog.ts
 //
 // Provenance tracking for Overture-sourced tables, shared by every
-// bake/overture/tools/ingest_*.ts — mirrors the region_code/data_date/
+// bake/overture/tool/ingest_*.ts — mirrors the region_code/data_date/
 // file_name/status shape infra/README.md's own elevation catalog table already
 // uses (elevation_catalog), read by bake_util.ts's
 // read_source_catalogs() into every published tile set's

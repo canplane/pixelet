@@ -14,7 +14,7 @@
  * `__IS_DEV__ === false`.
  */
 
-import { tile_base } from "@/lib/env/routes.ts";
+import { tile_base } from "@/lib/env/route.ts";
 
 /** Application environment name, from VITE_APP_ENV (falling back to Vite's
  * mode). Shown in settings so it is possible to tell which build is on screen

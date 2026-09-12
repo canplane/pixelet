@@ -6,7 +6,7 @@ import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { render_cfg } from "@/modules/world/environment/config.ts";
+import { render_cfg } from "@/module/world/environment/config.ts";
 import { page_dist2, page_priority, pages_in_radius, pages_to_hold, range_anchor_of } from "./chunk_range.ts";
 
 const at = (x: number, y: number) => ivec.gather(BigInt(x), BigInt(y), 0n);
@@ -63,7 +63,7 @@ Deno.test("pages_in_radius - crossing a page boundary never drops a page still i
 Deno.test("pages_in_radius - the configured range stays inside its measured page budget", () => {
   // Read off the range itself rather than a copy of it, so moving the range
   // has to face this number: 21 pages worst case over every anchor position,
-  // ~85MB decoded — see discussions/20260912-what-to-render-when.md.
+  // ~85MB decoded — see issue/20260912-what-to-render-when.md.
   let worst = 0;
   for (let y = 0; y < 1024; y += 64) {
     for (let x = 0; x < 1024; x += 64) {

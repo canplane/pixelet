@@ -8,13 +8,13 @@ description: Pre-bake terrain tiles from the geo DB into gzipped static objects,
 The deployed API answers search only; the tile routes are dev-only, and
 terrain and POI come from static objects in a bucket. This is how the
 terrain half of that bucket gets built and republished. POI has a sibling
-tool with the same shape — `apps/api/src/bake/poi/tools/bake_poi_tiles.ts`,
+tool with the same shape — `apps/api/src/bake/poi/tool/bake_poi_tiles.ts`,
 published under `poi/<PUBLISHED_VERSION.poi>` and refreshed monthly by
 `.github/workflows/overture-monthly-refresh.yml` — and the publishing and
 verifying steps below apply to it unchanged.
 
 Background and the reasoning behind this design are in
-[discussions/20260816-deployment-hosting.md](../../../discussions/20260816-deployment-hosting.md).
+[issue/20260816-deployment-hosting.md](../../../issue/20260816-deployment-hosting.md).
 Read it before changing the pipeline's shape; this file is the procedure only.
 
 ## Before starting
@@ -35,7 +35,7 @@ doesn't, that's an ingestion job, not a bake job — see
 ## Baking
 
 ```bash
-deno run -A --env=.env apps/api/src/bake/terrain/tools/bake_tiles.ts \
+deno run -A --env=.env apps/api/src/bake/terrain/tool/bake_tiles.ts \
   --out ./out/terrain/<version> --concurrency 8
 ```
 

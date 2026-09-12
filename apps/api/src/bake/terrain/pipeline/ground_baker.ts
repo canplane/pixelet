@@ -18,7 +18,7 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { type Ground, GroundChannelKey } from "@pxl/shared/bake/format.ts";
-import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import type { Feature } from "@pxl/shared/bake/model/feature.ts";
 

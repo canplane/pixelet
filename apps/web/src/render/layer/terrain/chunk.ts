@@ -15,7 +15,7 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L2_SHAMT, L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
 import { type Ground, type Terrain } from "@pxl/shared/bake/format.ts";
-import { CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { dense_ele_region } from "./elevation.ts";
 
 const PAGE_CHUNK_SPAN: u32 = 1 << (L3_SHAMT - L2_SHAMT);

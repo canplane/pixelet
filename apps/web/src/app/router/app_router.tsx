@@ -3,10 +3,10 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 
-import { ScrollToTop } from "./helpers/scroll_to_top.tsx";
-import { devRoutes } from "../dev/dev_routes.tsx";
+import { ScrollToTop } from "./helper/scroll_to_top.tsx";
+import { devRoutes } from "../dev/dev_route.tsx";
 import { AppLayout } from "../ui/app_layout.tsx";
-import MapPage from "@/pages/map_page.tsx";
+import MapPage from "@/page/map_page.tsx";
 
 /** Main Router Configuration */
 const routes: RouteObject[] = [

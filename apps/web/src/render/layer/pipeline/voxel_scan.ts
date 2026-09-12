@@ -4,7 +4,7 @@
 
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
-import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { Vector } from "@xpute/core/ds/arena.ts";
@@ -261,7 +261,7 @@ function topmost_in_band(
  * The widest unit a scan can produce, in chunks on a side. A coarse tier
  * works on a block of chunks rather than one — step 16 on 4×4 — so that the
  * cost per unit stays flat across tiers rather than growing sixteenfold at
- * the tier that draws least (discussions/20260912-coarse-tiers-need-a-larger-unit.md).
+ * the tier that draws least (issue/20260912-coarse-tiers-need-a-larger-unit.md).
  * The scratch below is sized for this; a scan may be narrower.
  */
 export const MAX_UNIT_CHUNKS: u32 = 4;

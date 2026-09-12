@@ -2,7 +2,7 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 
 /** XY sampling stride in L1 blocks inside one 64x64 chunk. */
 export const LOD_STEP_BY_LEVEL = [1, 2, 4, 8, 16, 32, 64] as const;
@@ -110,7 +110,7 @@ recompute_thresholds(projection_h, projection_fov);
  * Viewport height in CSS pixels, not device pixels: at dpr 2 the same cell
  * covers twice the device pixels, and following that would double the
  * geometry a retina screen builds. Supersampling is what dpr is spent on
- * here (discussions/20260911-taa-tried-and-closed.md), while which tier to
+ * here (issue/20260911-taa-tried-and-closed.md), while which tier to
  * show is a question about how large a cell looks.
  */
 export function set_lod_projection(viewport_h: f64, fov_deg: f64): void {

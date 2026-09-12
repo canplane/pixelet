@@ -9,7 +9,7 @@
  * numbering GROUND_LAYER_INDEX_LOOKUP_FLAT (shader_meta.ts) already uses,
  * unchanged — and object colors are appended right after, at
  * [GROUND_LAYER_META.length, total), looked up via OBJECT_LAYER_IDX
- * below (objects/adapter.ts's own consumer).
+ * below (object/adapter.ts's own consumer).
  *
  * Two arrays, TOP and SIDE, same layer numbering — a real ground type often
  * wants a different image on its side faces (grass-top/dirt-side) than its
@@ -30,15 +30,15 @@ import * as THREE from "three";
 import { GROUND_LAYER_META, hex_to_rgb255 } from "./layer/terrain/shader_meta.ts";
 import { cube_hex, cube_ids, type CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
 import { type CubeFace, SHIPPED_SHEET, shipped_texture_tile } from "@pxl/shared/record/texture.ts";
-import { asset_url } from "@/lib/env/routes.ts";
+import { asset_url } from "@/lib/env/route.ts";
 
-// Must match TILE_SIZE in apps/api/src/bake/asset/tools/download_texture_pack.ts.
+// Must match TILE_SIZE in apps/api/src/bake/asset/tool/download_texture_pack.ts.
 const LAYER_TEX_SZ = 256;
 
 type LayerMetaLike = { ch_key: string; type_key: string; layer_index: u32 };
 
 /** Object colors, numbered starting right after every ground layer — see
- * this file's own doc comment. objects/adapter.ts reads this to resolve
+ * this file's own doc comment. object/adapter.ts reads this to resolve
  * VoxelMaterial.layer_idx the same way terrain/adapter.ts reads
  * GROUND_LAYER_INDEX_LOOKUP_FLAT.
  *
@@ -47,7 +47,7 @@ type LayerMetaLike = { ch_key: string; type_key: string; layer_index: u32 };
  * cube_types' own land/water/structure/transport channels) is a completely
  * separate numbering, deliberately never mixed into this one: those ids are
  * meant to look identical to an existing ground layer, not get a new one of
- * their own — objects/adapter.ts's own resolve_solid_material reads
+ * their own — object/adapter.ts's own resolve_solid_material reads
  * GROUND_LAYER_INDEX_LOOKUP_FLAT directly for them instead of this table, so
  * cube_ids never needs filtering here. */
 export const OBJECT_LAYER_IDX: Partial<Record<CubeColorId, u32>> = {};

@@ -8,14 +8,14 @@ import type { I16Array } from "@xpute/core/kit/array.ts";
 import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
-import { useSettingsStore } from "@/app/settings/settings_store.ts";
-import { useTileStore } from "@/modules/world/terrain/store.ts";
+import { useSettingsStore } from "@/app/setting/store.ts";
+import { useTileStore } from "@/module/world/terrain/store.ts";
 import { slice_chunk } from "./chunk.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT } from "./shader_meta.ts";
 
 import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN, MaterialClass, NO_LAYER, type VoxelMaterial } from "../pipeline/volume.ts";
 import type { ColumnRunWriter } from "../pipeline/voxel_scan.ts";
-import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
 
 const CHUNK_CELL_SPAN2 = CHUNK_CELL_SPAN * CHUNK_CELL_SPAN;

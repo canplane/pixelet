@@ -136,7 +136,7 @@ export const L4_CENTER = (addr: IVec): IVec => L4_BASE(addr) | (fill(L4_RANGE) >
  * All three axes, symmetric. A cell is a cube and its centre is its centre —
  * X/Y quantised while Z is left raw (or the reverse) is two coordinate
  * systems in one point, and everything that marks a cell here already avoids
- * it: objects/geometry.ts's anchor_center adds the half on every axis, and
+ * it: object/geometry.ts's anchor_center adds the half on every axis, and
  * hover, placed cubes and the location puck all read a cell the same way.
  */
 export function SPAN_CENTER(out: PVF3, addr: IVec, shamt: u32): PVF3 {

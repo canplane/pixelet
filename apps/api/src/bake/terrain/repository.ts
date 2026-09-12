@@ -5,7 +5,7 @@ import { Pool, type PoolClient } from "@db/postgres";
 import type { f64, i16 } from "@xpute/core/kit/word.ts";
 
 import type { BaseRow, BuildingRow, CoastRow, SegmentRow } from "@pxl/shared/bake/format.ts";
-import { ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
+import { ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M } from "@pxl/shared/bake/constant.ts";
 import type { BBox3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
 
 const ELEVATION_SQL = `WITH cfg AS (

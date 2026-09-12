@@ -186,5 +186,5 @@ vite.config.ts.timestamp-*
 **/*.rs.bk
 
 # Overture ingestion scratch (venv + downloaded extracts)
-apps/api/src/bake/overture/tools/.venv/
+apps/api/src/bake/overture/tool/.venv/
 out/overture/

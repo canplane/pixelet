@@ -7,7 +7,7 @@
 # own idle footprint is small enough that two containers costs nothing
 # real on a 4GB box). db-geo only ever holds overture_places/
 # overture_divisions/overture_division_points — see
-# discussions/20260908-overture-poi-adoption.md and the geocode/search
+# issue/20260908-overture-poi-adoption.md and the geocode/search
 # provider files for why terrain's own ingestion tables (overture_buildings/
 # overture_transportation/overture_base_*/elevation_raster) never
 # belong here at all (terrain is baked offline, already static on R2 —

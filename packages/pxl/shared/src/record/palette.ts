@@ -12,7 +12,7 @@
  * a self-contained glb leaves it empty. `extent` is measured at ingest and
  * is what the range criterion reads; `license` and `author` are what
  * attribution shows. A user-uploaded kind is a row from USER_ID_BASE up
- * (discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md).
+ * (issue/20260913-everything-is-a-file-the-placement-and-the-palette.md).
  */
 
 import type { f32, u32 } from "@xpute/core/kit/word.ts";

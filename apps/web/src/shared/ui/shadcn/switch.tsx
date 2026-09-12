@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 
-import { cn } from "@/shared/lib/utils/cn.ts";
+import { cn } from "@/shared/lib/util/cn.ts";
 
 // Track 20x36 with a 16 thumb. The three numbers are not independent: the
 // thumb is inset 2px all round,

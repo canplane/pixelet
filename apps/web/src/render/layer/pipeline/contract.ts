@@ -43,9 +43,9 @@ export interface WorldLayer {
    * `opts.for_raycast` tells a layer this composite is for hit-testing
    * (compositor.ts's own with_raycast_composite), not the real GPU-mesh
    * build (with_temporary_composite) — see ObjectWorldLayer's own use of it
-   * in render/layer/objects/adapter.ts. A layer that paints a cosmetic,
+   * in render/layer/object/adapter.ts. A layer that paints a cosmetic,
    * render-only exclusion (an object hover-hidden for the eraser tool's
-   * preview, objects/store.ts's set_virtual_hide) must still paint the real
+   * preview, object/store.ts's set_virtual_hide) must still paint the real
    * thing for a raycast pass, or the raycaster can no longer hit what the
    * user is pointing at — hover clears, the exclusion lifts, the raycaster
    * hits it again, hover sets, the exclusion reapplies — an infinite loop
@@ -61,7 +61,7 @@ export interface WorldLayer {
    *
    * This is how every established terrain LOD builds its coarse levels —
    * from the source at the level's own sampling, never by folding the fine
-   * level (discussions/20260912-coarse-tiers-what-the-field-does.md). The
+   * level (issue/20260912-coarse-tiers-what-the-field-does.md). The
    * terrain page is a heightmap, so its runs are one per column and cost a
    * few array reads; painting the same heightmap into a 64³ volume and
    * scanning it back into runs cost ~3 ms per chunk for the same result.
