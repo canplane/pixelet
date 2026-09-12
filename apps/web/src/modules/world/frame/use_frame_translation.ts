@@ -93,5 +93,5 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
       state.invalidate();
       view_moving();
     }
-  });
+  }, "frame_translation");
 }

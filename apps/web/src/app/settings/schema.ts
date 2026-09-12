@@ -40,11 +40,17 @@ const toggle = (section: SettingSection, dflt: boolean, extra: Omit<Common, "sec
   section,
   ...extra,
 });
-const choice = <const T extends string>(section: SettingSection, options: readonly T[], dflt: NoInfer<T>): ChoiceSetting<T> => ({
+const choice = <const T extends string>(
+  section: SettingSection,
+  options: readonly T[],
+  dflt: NoInfer<T>,
+  extra: Omit<Common, "section"> = {},
+): ChoiceSetting<T> => ({
   kind: "choice",
   default: dflt,
   options,
   section,
+  ...extra,
 });
 const text = (section: SettingSection, dflt: string): TextSetting => ({ kind: "text", default: dflt, section });
 
@@ -62,6 +68,9 @@ const text = (section: SettingSection, dflt: string): TextSetting => ({ kind: "t
  */
 export const CAMERA_TERRAIN_MODES = ["through", "stop", "climb"] as const;
 export type CameraTerrainMode = (typeof CAMERA_TERRAIN_MODES)[number];
+
+export const RENDER_PATHS = ["full", "no_msaa", "no_post"] as const;
+export type RenderPath = (typeof RENDER_PATHS)[number];
 
 export const SETTINGS = {
   // ---- display: what the world shows. Turning one off removes information
@@ -125,6 +134,12 @@ export const SETTINGS = {
    * complementary dither and dissolve, at the cost of drawing a blending
    * chunk twice and a pattern that crawls without temporal AA. */
   pixel_dither: toggle("debug", false, { dev: true }),
+  /** Bisects the pixel pipeline on a device with no GPU timer (scene.tsx):
+   * the full stack, the stack without its 4x MSAA, or no composer at all —
+   * the scene drawn straight to the canvas, with no grade, no vignette and
+   * no depth pass (badges then draw through terrain). A measurement knob;
+   * `full` is the only path the app ships. */
+  render_path: choice("debug", RENDER_PATHS, "full", { dev: true }),
 
   // ---- character: picked in the drawer, not the sheet.
   person_variant_key: text("character", DEFAULT_PERSON_VARIANT_KEY),

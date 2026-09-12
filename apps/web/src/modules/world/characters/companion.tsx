@@ -323,7 +323,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
     // internal mixer keep animating, so this component must ask for the
     // next frame itself for as long as it's mounted.
     state.invalidate();
-  });
+  }, "companion");
 
   return character_root
     ? (

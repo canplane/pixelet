@@ -474,7 +474,7 @@ export function PoiLayer() {
   useTick("content", ({ state, budget }) => {
     if (poi_index_sweep(budget)) set_index_tick((t) => t + 1);
     else if (poi_index_stats().sweeping > 0) state.invalidate();
-  });
+  }, "poi_index");
 
   // Deliberately not keyed on view_state or map_center: the epoch above is,
   // and it is what decides when the camera has moved enough to be worth
@@ -512,7 +512,7 @@ export function PoiLayer() {
   }, [selected]);
 
   // One loop for every badge, where there used to be one useFrame per badge.
-  useTick("cosmetic", ({ state }) => $field.update(state.camera, state.size.height));
+  useTick("cosmetic", ({ state }) => $field.update(state.camera, state.size.height), "poi_field");
 
   // Attached to the frame the batch's coordinates are relative to, rather
   // than to an anchor of its own: every badge is within FAR_END of the

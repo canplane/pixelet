@@ -6,7 +6,7 @@ import type { Pass } from "postprocessing";
 import * as THREE from "three";
 import { Bloom, BrightnessContrast, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 
-import { SceneDepthPass } from "@/render/scene_depth.ts";
+import { SCENE_DEPTH, SceneDepthPass } from "@/render/scene_depth.ts";
 import { BlendFunction, SMAAPreset } from "postprocessing";
 
 import { useCamera } from "@/modules/camera/use_camera.ts";
@@ -120,6 +120,19 @@ export function MapScene() {
   const show_bloom = useSettingsStore((state) => state.show_bloom);
   const show_god_rays = useSettingsStore((state) => state.show_god_rays);
   const show_shadow_map = useSettingsStore((state) => state.show_shadow_map);
+  // Dev bisect of the pixel pipeline (schema.ts's render_path). `no_post`
+  // leaves the composer out entirely, so r3f draws the scene straight to
+  // the canvas; the scene depth pass goes with it, and MainCameraLink has
+  // nothing to link.
+  const render_path = useSettingsStore((state) => state.render_path);
+  const with_post = render_path !== "no_post";
+  // Leaving the composer removes the depth pass without disposing it, so
+  // its last copy would stay marked ready and badges would occlude against
+  // a frame that is no longer being drawn. The pass marks it ready again
+  // on its next render.
+  useEffect(() => {
+    if (!with_post) SCENE_DEPTH.ready.value = 0;
+  }, [with_post]);
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
@@ -217,7 +230,7 @@ export function MapScene() {
           // queues drain.
           frameloop="demand"
         >
-          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_god_rays, show_shadow_map]} />
+          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_god_rays, show_shadow_map, render_path]} />
           {
             /* The one useFrame in this Canvas. Every per-frame subscriber in
               the world registers a step into a phase of this tick instead
@@ -233,7 +246,7 @@ export function MapScene() {
             {/* World layers in the floating-origin local frame */}
             <World ref={world_ref} />
           </FrameProvider>
-          <MainCameraLink passes={[scene_depth_pass]} />
+          {with_post && <MainCameraLink passes={[scene_depth_pass]} />}
 
           {
             /*
@@ -274,72 +287,74 @@ export function MapScene() {
             its place and closed: discussions/20260911-taa-tried-and-closed.md.
           */
           }
-          <EffectComposer multisampling={4}>
-            {
-              // EffectComposerProps types children as JSX.Element | JSX.Element[],
-              // not accepting `cond && <X/>`'s `false` branch — build the array
-              // and filter falsy entries out instead of inlining the conditionals.
-              [
-                // Always present, never a look: render/scene_depth.ts
-                // publishes the world's depth for materials that have to ask
-                // whether a world point is visible. Not folded into N8AO's
-                // depth requirement on purpose — AO is expected to go once
-                // shading is baked into the textures.
-                <primitive key="scene_depth" object={scene_depth_pass} />,
-                show_ao && (
-                  <N8AO
-                    key="ao"
-                    quality={post_cfg.AO.QUALITY}
-                    halfRes={post_cfg.AO.HALF_RES}
-                    aoRadius={post_cfg.AO.RADIUS}
-                    intensity={post_cfg.AO.INTENSITY}
-                    distanceFalloff={post_cfg.AO.DISTANCE_FALLOFF}
-                    color={post_cfg.AO.COLOR}
-                  />
-                ),
-                show_bloom && (
-                  <Bloom
-                    key="bloom"
-                    intensity={post_cfg.BLOOM.INTENSITY}
-                    luminanceThreshold={post_cfg.BLOOM.LUMINANCE_THRESHOLD}
-                    luminanceSmoothing={post_cfg.BLOOM.LUMINANCE_SMOOTHING}
-                    mipmapBlur={post_cfg.BLOOM.MIPMAP_BLUR}
-                  />
-                ),
-                // sun_proxy_ref.current is only non-null once environment.tsx
-                // actually mounts the light-source mesh, which it only does
-                // while show_god_rays is on (same condition) — so this can't
-                // construct GodRaysEffect with a null sun the one frame
-                // between the setting flipping and the mesh's own ref
-                // attaching.
-                show_god_rays && sun_proxy_ref.current && (
-                  <GodRays
-                    key="god-rays"
-                    sun={sun_proxy_ref.current}
-                    samples={post_cfg.GOD_RAYS.SAMPLES}
-                    density={post_cfg.GOD_RAYS.DENSITY}
-                    decay={post_cfg.GOD_RAYS.DECAY}
-                    weight={post_cfg.GOD_RAYS.WEIGHT}
-                    exposure={post_cfg.GOD_RAYS.EXPOSURE}
-                    clampMax={post_cfg.GOD_RAYS.CLAMP_MAX}
-                    blendFunction={BlendFunction.SCREEN}
-                  />
-                ),
-                <BrightnessContrast key="grade-bc" brightness={post_cfg.GRADE.BRIGHTNESS} contrast={post_cfg.GRADE.CONTRAST} />,
-                <HueSaturation key="grade-hs" saturation={post_cfg.GRADE.SATURATION} />,
-                <Vignette
-                  key="vignette"
-                  blendFunction={BlendFunction.NORMAL}
-                  darkness={post_cfg.VIGNETTE.DARKNESS}
-                  offset={post_cfg.VIGNETTE.OFFSET}
-                />,
-                // Last, so it cleans up after every other pass. A component,
-                // not an effect: it renders an SMAA effect or nothing, and
-                // the composer collects whichever it finds in the tree.
-                <AutoSmaa key="smaa" />,
-              ].filter((effect): effect is JSX.Element => Boolean(effect))
-            }
-          </EffectComposer>
+          {with_post && (
+            <EffectComposer multisampling={render_path === "no_msaa" ? 0 : 4}>
+              {
+                // EffectComposerProps types children as JSX.Element | JSX.Element[],
+                // not accepting `cond && <X/>`'s `false` branch — build the array
+                // and filter falsy entries out instead of inlining the conditionals.
+                [
+                  // Always present, never a look: render/scene_depth.ts
+                  // publishes the world's depth for materials that have to ask
+                  // whether a world point is visible. Not folded into N8AO's
+                  // depth requirement on purpose — AO is expected to go once
+                  // shading is baked into the textures.
+                  <primitive key="scene_depth" object={scene_depth_pass} />,
+                  show_ao && (
+                    <N8AO
+                      key="ao"
+                      quality={post_cfg.AO.QUALITY}
+                      halfRes={post_cfg.AO.HALF_RES}
+                      aoRadius={post_cfg.AO.RADIUS}
+                      intensity={post_cfg.AO.INTENSITY}
+                      distanceFalloff={post_cfg.AO.DISTANCE_FALLOFF}
+                      color={post_cfg.AO.COLOR}
+                    />
+                  ),
+                  show_bloom && (
+                    <Bloom
+                      key="bloom"
+                      intensity={post_cfg.BLOOM.INTENSITY}
+                      luminanceThreshold={post_cfg.BLOOM.LUMINANCE_THRESHOLD}
+                      luminanceSmoothing={post_cfg.BLOOM.LUMINANCE_SMOOTHING}
+                      mipmapBlur={post_cfg.BLOOM.MIPMAP_BLUR}
+                    />
+                  ),
+                  // sun_proxy_ref.current is only non-null once environment.tsx
+                  // actually mounts the light-source mesh, which it only does
+                  // while show_god_rays is on (same condition) — so this can't
+                  // construct GodRaysEffect with a null sun the one frame
+                  // between the setting flipping and the mesh's own ref
+                  // attaching.
+                  show_god_rays && sun_proxy_ref.current && (
+                    <GodRays
+                      key="god-rays"
+                      sun={sun_proxy_ref.current}
+                      samples={post_cfg.GOD_RAYS.SAMPLES}
+                      density={post_cfg.GOD_RAYS.DENSITY}
+                      decay={post_cfg.GOD_RAYS.DECAY}
+                      weight={post_cfg.GOD_RAYS.WEIGHT}
+                      exposure={post_cfg.GOD_RAYS.EXPOSURE}
+                      clampMax={post_cfg.GOD_RAYS.CLAMP_MAX}
+                      blendFunction={BlendFunction.SCREEN}
+                    />
+                  ),
+                  <BrightnessContrast key="grade-bc" brightness={post_cfg.GRADE.BRIGHTNESS} contrast={post_cfg.GRADE.CONTRAST} />,
+                  <HueSaturation key="grade-hs" saturation={post_cfg.GRADE.SATURATION} />,
+                  <Vignette
+                    key="vignette"
+                    blendFunction={BlendFunction.NORMAL}
+                    darkness={post_cfg.VIGNETTE.DARKNESS}
+                    offset={post_cfg.VIGNETTE.OFFSET}
+                  />,
+                  // Last, so it cleans up after every other pass. A component,
+                  // not an effect: it renders an SMAA effect or nothing, and
+                  // the composer collects whichever it finds in the tree.
+                  <AutoSmaa key="smaa" />,
+                ].filter((effect): effect is JSX.Element => Boolean(effect))
+              }
+            </EffectComposer>
+          )}
         </Canvas>
       </div>
 

@@ -476,7 +476,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
     if (committed > 0 || pending_total > committed || blend_active) state.invalidate();
     if (import.meta.env.DEV) visible_pass.current = { pending_total, committed, recheck_ms, commit_ms };
-  });
+  }, "chunks");
 
   // The ledger, after every other phase has run, so `sched_ms` is the whole
   // tick and not this component's share of it.
@@ -510,7 +510,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       let poi_count = 0;
       for (const resident of poi_pages.handles) poi_count += resident.page.len;
       const fx = useSettingsStore.getState();
-      const fx_passes = 1 + // color-grade + vignette, always on (fused)
+      // 0 on the dev `no_post` path: nothing but the scene itself.
+      const fx_passes = fx.render_path === "no_post" ? 0 : 1 + // color-grade + vignette, always on (fused)
         (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_god_rays ? 1 : 0) + (fx.show_shadow_map ? 1 : 0) +
         (state.viewport.dpr < post_cfg.SMAA_BELOW_DPR ? 1 : 0); // scene.tsx's AutoSmaa
       // Reads and clears in one step, so the next frame starts from zero
@@ -568,7 +569,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         if (sample) sample.task_ms = last_task_ms;
       });
     }
-  });
+  }, "ledger");
 
   return <>{children}</>;
 }

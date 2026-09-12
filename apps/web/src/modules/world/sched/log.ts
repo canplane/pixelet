@@ -20,6 +20,7 @@
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { poi_field_stats, poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
 import { little_slabs } from "@/modules/world/sched/slabs.ts";
+import { tick_step_stats, tick_step_stats_reset } from "@/modules/world/sched/tick.ts";
 import { fetch_counts, MAX_INFLIGHT } from "@/modules/world/sched/fetch_scheduler.ts";
 import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/modules/world/poi/poi_badge.ts";
@@ -132,10 +133,18 @@ export function window_counters(): Counters {
 /** Clears the ledger and opens a fresh window, side counters included. */
 export function ledger_window_start(): void {
   ledger_recording_start();
+  tick_step_stats_reset();
   baseline = counters();
 }
 
 const starved = (ms: number) => (ms > STARVED_MS ? " STARVED" : "");
+
+/** Every registered step by mean ms per run, heaviest first. */
+function steps_text(): string {
+  const rows = tick_step_stats().filter((s) => s.count > 0).sort((a, b) => b.ms / b.count - a.ms / a.count);
+  if (rows.length === 0) return "none";
+  return rows.map((s) => `${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
+}
 
 let logging = false;
 
@@ -184,6 +193,10 @@ function frames_section(frames: readonly FrameSample[]): string[] {
       Object.entries(f.phases).map(([k, v]) => `${k} ${n1(v.p95)}`).join("  ")
     }`,
     `  cpu     rck p95 ${n1(f.recheck.p95)}  cmt p95 ${n1(f.commit.p95)} ms`,
+    // Per step, so a phase that costs more than its steps should does not
+    // hide which step is not yielding: a cooperative scheduler is only as
+    // cooperative as its longest step.
+    `  steps   ${steps_text()}   (ms per frame, max)`,
     `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  tex ${last.textures}  fill ${(last.px / 1e6).toFixed(1)}Mpx x${last.fx_passes}`,
     `  by tag  mean ${census_text(f.census)}   (draws/tris per frame)`,
     `          last ${census_text(census_rows(last.census))}`,

@@ -810,6 +810,36 @@ own. It is a button on the overlay, beside report and trace, since a
 stream is something one turns on while looking at the panel, and the
 one `show_ledger` setting is what opens the panel.
 
+## Update 2026-09-13: the axis has a precondition, and a phone showed it
+
+Four ledger reports from an iPhone (dpr 2, no GPU timer, no LoAF, no
+longtask) were read in a row, and the first reading was wrong in the way
+this document warns about: `task 7 + offthread 279` on a still frame was
+called GPU, then GC. The A/B settled it — decor off cut triangles 58% and
+moved nothing; POI off took dt p95 from 222 to 54 ms. The 250 ms was
+main-thread work that the tick never sees: POI's placement (a React
+effect on an epoch), its badge canvases, and the atlas upload three does
+at render. `dt − task` excludes half the space only when every piece of
+main-thread work is inside the task; work outside it is indistinguishable
+from the GPU and the collector, and on iOS there is no second instrument
+to tell them apart. The category-A contract already said this work belongs
+under the budget — "billboard canvas building" is on the list by name —
+so the finding is not a new rule but the old one unmet, and the fix is the
+one planned: POI under the tick (BACKLOG, P1).
+
+The tick's steps are named now and the report prints each one's mean and
+max (`steps` line). Its first reading named a step that runs under the
+budget and does not yield: `content/poi_index` at a mean of 1.5 ms and a
+max of 45, because its unit of work is a page and forward progress runs
+the first unit whole. A budgeted phase is only as cooperative as the
+granularity of its steps; the phase total could not show that, and the
+step table can. Monitor-side only — the scheduler still knows one number.
+
+The steady state, once loading is done, is fine on that phone: dt p50 15
+ms on a 13 ms display, the tick 5 ms, the interaction phase 3. What the
+phone exposed is where the instrument was blind, not where the scheduler
+was slow.
+
 ## Guardrail
 
 [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md)

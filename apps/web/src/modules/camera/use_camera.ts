@@ -134,5 +134,5 @@ export function useCamera() {
     camera.position.set(pos[0], pos[1], pos[2]);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld();
-  });
+  }, "camera");
 }

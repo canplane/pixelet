@@ -322,7 +322,7 @@ void main() {
     // it must keep requesting a next frame itself for as long as it stays visible —
     // unlike the damped camera/frame hooks, there's no settling point to stop at.
     state.invalidate();
-  });
+  }, "puck");
 
   if (!has_ground) return null;
 
