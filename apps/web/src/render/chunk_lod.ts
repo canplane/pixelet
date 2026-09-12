@@ -16,7 +16,7 @@
 import { Frustum, Matrix4, Sphere, Vector3 } from "three";
 import type { Camera } from "three";
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { get_lod_guide, type LodStep } from "@/render/lod.ts";
 

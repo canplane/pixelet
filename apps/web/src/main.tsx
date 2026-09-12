@@ -6,7 +6,7 @@ import { bootstrap_app } from "@/bootstrap/app.ts";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import "@/app/styles/index.css";
+import "@/app/style/index.css";
 import { App } from "@/app/app.tsx";
 
 enableMapSet(); // enables Immer's Map/Set support plugin

@@ -10,7 +10,7 @@ import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { BASE_ROW_KEYS, BUILDING_ROW_KEYS, COAST_ROW_KEYS, SEGMENT_ROW_KEYS } from "@pxl/shared/bake/format.ts";
-import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
+import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constant.ts";
 import { bake_terrain } from "./bake.ts";
 import type { PageSource, TerrainRepository } from "./repository.ts";
 
@@ -24,7 +24,7 @@ const ELE_PADDED_SPAN2: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN;
  * such page is a warning line nobody reads; several hundred is a visible
  * property of the dataset, and an offline bake over tens of thousands of pages
  * has no other way to notice. The offline tool reports this in its summary —
- * see bake/terrain/tools/bake_tiles.ts.
+ * see bake/terrain/tool/bake_tiles.ts.
  */
 export const source_stats = { invalid_ele_shape: 0 };
 
@@ -34,7 +34,7 @@ export const source_stats = { invalid_ele_shape: 0 };
  * consumes.
  *
  * Lives here rather than inside service.ts's closure because the offline
- * pre-bake tool (bake/terrain/tools/bake_tiles.ts) has to produce *byte
+ * pre-bake tool (bake/terrain/tool/bake_tiles.ts) has to produce *byte
  * identical* tiles to what the live endpoint serves — the CDN copy and the
  * live copy are supposed to be interchangeable, so they can't be allowed to
  * drift by way of two independent assembly paths.

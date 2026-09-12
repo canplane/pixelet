@@ -3,13 +3,13 @@
 /** What a view needs: which L3 pages, and which 64x64 chunks inside one. */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { render_cfg } from "@/modules/world/environment/config.ts";
+import { render_cfg } from "@/module/world/environment/config.ts";
 import type { ChunkOffsets } from "./layer/pipeline/chunk_bucket.ts";
 
 const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
@@ -25,7 +25,7 @@ export const PAGE_SPAN: f64 = PAGE_CELL_SPAN * U_PER_CELL;
  * with every chunk in it, and panning 16u back rebuilt all of them from the
  * scan up: measured 2026-09-12, and it reads on screen as the side you are
  * moving away from being cut off and redrawn
- * (discussions/20260912-what-to-render-when.md).
+ * (issue/20260912-what-to-render-when.md).
  *
  * Four chunks, which is far more than a frame of panning can cross.
  */
@@ -50,7 +50,7 @@ function rect_dist2(x0: f64, y0: f64, x1: f64, y1: f64): f64 {
  * Chunk-aligned and not page-aligned, which is the whole point. Keyed on the
  * page the centre happened to be in, every range stepped by a whole page as a
  * boundary was crossed, and a page's worth of terrain entered or left in one
- * frame (discussions/20260912-what-to-render-when.md). Snapped rather than
+ * frame (issue/20260912-what-to-render-when.md). Snapped rather than
  * exact so that moving within one chunk re-derives nothing.
  */
 export function range_anchor_of(center: IVec): IVec {
@@ -104,7 +104,7 @@ export function pages_in_radius(anchor: IVec, radius: f64): { page_idx: IVec; di
  * therefore cancelled its own tiles before they arrived, the page stayed
  * unmounted because a page with no tile is not mounted at all, and the view
  * lost a square of terrain on whichever side it was moving away from
- * (discussions/20260912-what-to-render-when.md).
+ * (issue/20260912-what-to-render-when.md).
  *
  * Because membership now changes only when a page crosses the nearest-`count`
  * ranking, a page being fetched is by construction one worth keeping.

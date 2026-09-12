@@ -3,7 +3,7 @@
 /** Pure raycast against one already-composited 64-wide chunk. */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { type ChunkVolume, MaterialClass } from "./volume.ts";

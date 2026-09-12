@@ -9,7 +9,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
-import { DEV_PROXY_ROUTES } from "./src/lib/env/routes.ts";
+import { DEV_PROXY_ROUTES } from "./src/lib/env/route.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,7 +124,7 @@ export default defineConfig(({ mode }) => {
   //                       database or Docker. `deno task dev:remote`.
   const remote = (env.VITE_DEV_SOURCE || "local") === "remote";
 
-  // Injected as __PUBLISHED_TILES__: routes.ts builds every tile path from
+  // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
   // it, config.ts reads it for what a 404 means.
   const published = mode === "production" || remote;
 

@@ -15,7 +15,7 @@ import type { Block } from "@xpute/core/ds/buddy.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import type { I32Array, U32Array, U8Array } from "@xpute/core/kit/array.ts";
 
-import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
 

@@ -8,7 +8,7 @@ _Started on December 15, 2025._
 
 **pixelet** is a location-based spatial world built over real-world geodata ([Overture Maps](https://overturemaps.org/) + [GEDTM30](https://doi.org/10.5281/zenodo.15689805) elevation) — terrain rendered as voxels, with a separate voxel-object layer for building on top of it.
 
-<img alt="Voxel objects built on real-world terrain" src=".github/assets/screenshot.png" height="480">
+<img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
 
 ---
 
@@ -131,7 +131,7 @@ Dense `64³` Volumes exist only while composing and meshing. Long-lived state ke
 
 ## Learn More
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the coordinate system, spatial hierarchy, unified world-layer pipeline, and wire format work under the hood. See [discussions/](./discussions/) for the reasoning behind those design decisions.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the coordinate system, spatial hierarchy, unified world-layer pipeline, and wire format work under the hood. See [issue/](./issue/) for the reasoning behind those design decisions.
 
 ---
 

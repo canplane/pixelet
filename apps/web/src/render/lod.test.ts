@@ -2,7 +2,7 @@
 
 import { assertAlmostEquals, assertEquals } from "@std/assert";
 
-import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { get_instance_cnt, get_lod_guide, get_lod_pair_visibility, set_lod_projection } from "./lod.ts";
 

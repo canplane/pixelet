@@ -6,8 +6,8 @@ through a symlink), so nothing here should assume a particular assistant.
 
 For what the system is, see [README.md](./README.md) and
 [ARCHITECTURE.md](./ARCHITECTURE.md). For why past decisions went the way they
-did, see [discussions/](./discussions/). For what is queued and in what order,
-see [BACKLOG.md](./BACKLOG.md) — work follows the list, not what was last
+did, see [issue/](./issue/). For what is queued and in what order,
+see [issue/BACKLOG.md](./issue/BACKLOG.md) — work follows the list, not what was last
 noticed.
 
 ---
@@ -80,7 +80,7 @@ current code before characterizing any part of the product surface.
 **Don't start the WASM/WebGPU move unprompted.** The destination is decided
 and on file — a WASM core drawing through WebGPU, three.js gone, iOS 26 and
 iPhone 11 as the floor
-([discussions/20260912-why-the-destination-is-wasm.md](./discussions/20260912-why-the-destination-is-wasm.md))
+([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
 — and not started. Until it is, the client is TypeScript with Three.js used
 directly, unwrapped, and the state is already in the shape the move wants:
 lanes in one linear memory, one tick, records. Build the next thing in that
@@ -145,7 +145,7 @@ alone on purpose. Re-flagging them as fresh discoveries wastes everyone's time;
   or attaching a custom domain to the **bucket** (as opposed to the Worker,
   which is what `plei.me` is). Do not propose any of the three as an
   improvement without saying what it costs; see
-  [discussions/20260816-deployment-hosting.md](./discussions/20260816-deployment-hosting.md).
+  [issue/20260816-deployment-hosting.md](./issue/20260816-deployment-hosting.md).
 
 ## Overlay CSS over the canvas
 
@@ -198,7 +198,7 @@ Two rules that came out of doing it:
   is later in the DOM. Where the visible thing is smaller than that (the colour
   swatches), the button is a transparent box at full pitch with the visible
   shape centred inside — costs nothing, roughly doubles the target.
-- **The named radius steps are theme tokens in this repo.** `app/styles/index.css`
+- **The named radius steps are theme tokens in this repo.** `app/style/index.css`
   derives `--radius-*` from `--radius`, which themes redefine as far as 2.5rem,
   so `rounded-md` is not 6px and is not even a fixed number. Spell literals out
   (`rounded-[6px]`) when a specific radius is meant.
@@ -208,7 +208,7 @@ Two rules that came out of doing it:
 **Every source file opens with a comment naming its own logical path:**
 
 ```ts
-// @pxl/web/modules/world/terrain/use_tile_fetcher.ts
+// @pxl/web/module/world/terrain/use_tile_fetcher.ts
 ```
 
 This is the import-map path, not the filesystem path — extension included, so
@@ -220,7 +220,22 @@ than inconsistently so. Don't mass-add headers there, and don't read its
 absence as licence to drop them anywhere else.
 
 **Naming:** `snake_case` for files, functions, and locals; `PascalCase` for types;
-`SCREAMING_SNAKE_CASE` for module constants. React hooks, stores, and components
+`SCREAMING_SNAKE_CASE` for module constants. **Directories are singular**:
+a directory is named for the concept it holds — `object/`, `marker/`,
+`tool/`, `issue/` — not for how many files are in it, which is
+always several and never the point. A plural would have to answer whether
+the directory is one thing or a collection of things, and for most
+directories that has no clear answer (is `object/` the object layer or
+the objects?), so nothing here asks it. The exceptions are names the
+ecosystem fixes and tooling reads: `apps/`, `packages/`, `node_modules/`,
+`@types/`, `.github/workflows/`, `.agents/skills/`. The same holds for a
+module: `constant.ts`, `route.ts`, `slab.ts` — and a file inside a
+directory that already names the concept does not repeat it
+(`setting/store.ts`, not `setting/settings_store.ts`). Two things are not
+concept names and keep their plurals: a tool script, which is a command
+(`bake_tiles.ts` bakes the tiles; `ingest_buildings.ts` ingests Overture's
+Buildings theme), and code ported from elsewhere, which keeps its own
+names (`shadcn/tabs.tsx`). React hooks, stores, and components
 keep their ecosystem's `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`) —
 that is not an inconsistency to fix.
 

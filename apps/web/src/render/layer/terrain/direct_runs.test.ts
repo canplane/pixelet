@@ -4,7 +4,7 @@
  * The direct path for coarse tiers, against the scan path it replaces: the
  * same heightmap, through both, must bake to the same coarse mesh — and the
  * direct path must be the cheaper one by a wide margin, which is the whole
- * reason it exists (discussions/20260912-coarse-tiers-what-the-field-does.md).
+ * reason it exists (issue/20260912-coarse-tiers-what-the-field-does.md).
  */
 
 import { assertEquals } from "@std/assert";

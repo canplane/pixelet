@@ -8,7 +8,7 @@ declare global {
   // they mark a compile-time constant whose branches vanish from the bundle.
   // Deployment *values* are read through lib/env/config.ts instead — see
   // that file for why the two differ. Route paths are not injected at all:
-  // they are source, in lib/env/routes.ts.
+  // they are source, in lib/env/route.ts.
   const __ENV__: "deno" | "node" | "browser";
   const __APP_ENV__: string;
   const __IS_DEV__: boolean;

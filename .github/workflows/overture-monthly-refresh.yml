@@ -1,5 +1,5 @@
 # Monthly refresh of the Overture-baked POI and reverse-geocode static
-# sets — see discussions/20260908-overture-poi-adoption.md for why this
+# sets — see issue/20260908-overture-poi-adoption.md for why this
 # exists and how it's designed (short-cache-control stable prefixes,
 # overwritten in place, rather than terrain's own immutable-versioned
 # convention: POI/geocode staleness is cheap, a monthly redeploy to bump a
@@ -67,17 +67,17 @@ jobs:
 
       - name: Ingest Overture Places + Divisions (Korea)
         run: |
-          deno run -A apps/api/src/bake/overture/tools/ingest_places.ts
-          deno run -A apps/api/src/bake/overture/tools/ingest_divisions.ts
+          deno run -A apps/api/src/bake/overture/tool/ingest_places.ts
+          deno run -A apps/api/src/bake/overture/tool/ingest_divisions.ts
 
       # The POI page is an XTP packet (packages/pxl/shared/src/bake/format.ts,
       # encode_poi_page) since v3; the version here must match
       # PUBLISHED_VERSION.poi in packages/pxl/shared/src/bake/published.ts.
       - name: Bake POI
-        run: deno run -A apps/api/src/bake/poi/tools/bake_poi_tiles.ts --out ./out/poi/v3 --force
+        run: deno run -A apps/api/src/bake/poi/tool/bake_poi_tiles.ts --out ./out/poi/v3 --force
 
       - name: Bake reverse geocode
-        run: deno run -A apps/api/src/bake/geocode/tools/bake_geocode_tiles.ts --out ./out/geocode/v1 --force
+        run: deno run -A apps/api/src/bake/geocode/tool/bake_geocode_tiles.ts --out ./out/geocode/v1 --force
 
       - name: Publish to R2
         run: |

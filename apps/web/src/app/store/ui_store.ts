@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { decor_ids, type DecorId, placeable_cube_ids, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import { DEFAULT_OBJECT_SIZE } from "@/modules/world/objects/size.ts";
+import { DEFAULT_OBJECT_SIZE } from "@/module/world/object/size.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 
@@ -89,7 +89,7 @@ type UiState = {
 };
 
 // Persisted (localStorage): object_color_id/decor_id/recent_picks — real
-// picks worth remembering across a reload, mirroring settings_store.ts's
+// picks worth remembering across a reload, mirroring store.ts's
 // own reasoning. activeTool and chatLines are deliberately left out
 // (partialize below): a fresh load should always start at the neutral
 // pointer tool, and chatLines is dev-only dummy data, not user state.
@@ -151,7 +151,7 @@ export const useUiStore = create<UiState>()(persist((set) => ({
     recent_picks: state.recent_picks,
   }),
   // Default merge is a blind `{...current, ...persisted}` — fine for
-  // settings_store.ts's own always-valid fields, not here: a persisted id
+  // store.ts's own always-valid fields, not here: a persisted id
   // might no longer exist (is_known_pick above), and an empty persisted
   // recent_picks (every entry filtered out) should fall back to the fresh
   // default seeded above rather than leaving the hotbar empty.

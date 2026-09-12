@@ -4,7 +4,7 @@
  * The invariant the render range rests on.
  *
  * Ranges are measured from the view centre on the ground (one anchor, chunk
- * aligned — see modules/world/frame/use_range_anchor.ts), while the camera
+ * aligned — see module/world/frame/use_range_anchor.ts), while the camera
  * itself can stand up to MAX_DIST away from that centre. That is only safe
  * because the camera always looks at the centre, which keeps everything it
  * can see near it. This measures that claim directly: cast the frustum at the
@@ -20,8 +20,8 @@
 
 import { assertEquals } from "@std/assert";
 
-import { camera_cfg } from "@/modules/camera/config.ts";
-import { render_cfg } from "@/modules/world/environment/config.ts";
+import { camera_cfg } from "@/module/camera/config.ts";
+import { render_cfg } from "@/module/world/environment/config.ts";
 
 const { FOV } = camera_cfg.projection;
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
@@ -46,7 +46,7 @@ function farthest_visible_ground(aspect: number, pivot_height: number, steps = 1
     for (let pi = 0; pi <= steps; pi++) {
       const polar = MIN_POLAR + ((MAX_POLAR - MIN_POLAR) * pi) / steps;
       // The camera orbits the centre: horizontally behind it, vertically above
-      // it, always looking straight at it (modules/camera/orbit.ts).
+      // it, always looking straight at it (module/camera/orbit.ts).
       const horiz = dist * Math.sin(polar);
       const height = pivot_height + dist * Math.cos(polar);
       // Forward is the unit vector from the camera to the centre; right is +X

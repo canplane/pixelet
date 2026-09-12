@@ -9,7 +9,7 @@ import { Arena } from "@xpute/core/ds/arena.ts";
 
 import { fill3, type V3 } from "@pxl/shared/spec/space/v3.ts";
 import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
-import { XY_CELL_PER_M } from "@pxl/shared/bake/constants.ts";
+import { XY_CELL_PER_M } from "@pxl/shared/bake/constant.ts";
 import type { CellConfig } from "@pxl/shared/bake/format.ts";
 import type { Feature, FeatureExtra } from "@pxl/shared/bake/model/feature.ts";
 

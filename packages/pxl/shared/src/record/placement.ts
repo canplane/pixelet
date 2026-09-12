@@ -6,7 +6,7 @@
  * A tree, a placed cube, a car, a bare ground cell — every thing drawn at
  * a place is a row of this table, and what differs between them is the
  * palette entry `value` names, not the row
- * (discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md).
+ * (issue/20260913-everything-is-a-file-the-placement-and-the-palette.md).
  *
  * Positions are page-local world units, as the POI page's are; `heading`
  * is radians about the up axis, counter-clockwise from +x, in the ENU

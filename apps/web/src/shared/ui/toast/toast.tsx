@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { animate as animateValue, AnimatePresence, LayoutGroup, motion, useMotionValue } from "framer-motion";
-import { cn } from "@/shared/lib/utils/cn.ts";
+import { cn } from "@/shared/lib/util/cn.ts";
 import { getToastStackRotation, resetToastStackRotation, rotateToastStack, setToastDragActive, subscribeToastStackRotation } from "./store.ts";
 
 export const TOAST_STACK_PEEK_PX = 6;

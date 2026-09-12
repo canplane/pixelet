@@ -28,7 +28,7 @@
     // correctly and still leave its strings in the bundle. Runs between build
     // and publish so a leak stops the deploy rather than being noticed on the
     // live site.
-    "check:bundle": "deno run -A scripts/check_bundle.ts",
+    "check:bundle": "deno run -A script/check_bundle.ts",
     "deploy": "deno task build && deno task check:bundle && deno run -A --node-modules-dir=auto npm:wrangler deploy",
 
     "check": "deno check src/index.ts",

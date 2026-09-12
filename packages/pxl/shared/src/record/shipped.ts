@@ -13,7 +13,7 @@
  * character is a row from ACTOR_ID_BASE, grouped "person" or "pet".
  *
  * What a model *is* — its bytes, its bounds — comes from ingested.ts, the
- * table apps/api/src/bake/asset/tools/ingest_asset.ts generates from the
+ * table apps/api/src/bake/asset/tool/ingest_asset.ts generates from the
  * files under asset/: the bucket key is the sha256 of the glb and the
  * extent is measured from it. This file only says which models there are,
  * in what order, under which kind, and with which colormap.

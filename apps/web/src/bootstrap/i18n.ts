@@ -4,10 +4,10 @@ import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 
-import en from "./locales/en.json" with { type: "json" };
-import ko from "./locales/ko.json" with { type: "json" };
-import en_dev from "./locales/dev/en.json" with { type: "json" };
-import ko_dev from "./locales/dev/ko.json" with { type: "json" };
+import en from "./locale/en.json" with { type: "json" };
+import ko from "./locale/ko.json" with { type: "json" };
+import en_dev from "./locale/dev/en.json" with { type: "json" };
+import ko_dev from "./locale/dev/ko.json" with { type: "json" };
 
 /**
  * Copy for development-only surfaces lives in its own catalogue, folded in

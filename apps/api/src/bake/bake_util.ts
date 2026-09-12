@@ -1,7 +1,7 @@
 // @pxl/api/bake/bake_util.ts
 //
-// Small generic helpers shared by every offline bake tool (terrain/tools/
-// bake_tiles.ts, poi/tools/bake_poi_tiles.ts) — none of this has any
+// Small generic helpers shared by every offline bake tool (terrain/tool/
+// bake_tiles.ts, poi/tool/bake_poi_tiles.ts) — none of this has any
 // terrain- or POI-specific content, extracted here rather than duplicated
 // per tool.
 

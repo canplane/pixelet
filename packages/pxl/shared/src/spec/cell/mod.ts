@@ -36,7 +36,7 @@ export const cell_colors = {
 // =============================================================================
 // Object-layer codec — cube.ts/decor.ts are pure data (their own top doc
 // comments); the actual encode/decode logic for their shared sparse-tree
-// storage (objects/store.ts, apps/web) lives here instead, the one place
+// storage (object/store.ts, apps/web) lives here instead, the one place
 // that already aggregates every cell-definition module together.
 // =============================================================================
 
@@ -112,7 +112,7 @@ export const decor_ids: readonly DecorId[] = NUM_ID_TO_DECOR.filter(() => true);
 // Terrain-styled cube catalog — user-placeable references into cube_types'
 // own land/water/structure/transport channels, derived generically (no
 // hand-typed per-type catalog to keep in sync — 2026-09-06, see
-// discussions/20260906-unified-block-palette.md). A terrain-styled id is
+// issue/20260906-unified-block-palette.md). A terrain-styled id is
 // just `"<channel>.<local key>"`, e.g. "land.GREEN_DEEP" — its own local
 // value (cube_types.land.GREEN_DEEP) is whatever the bake pipeline already
 // uses; the *global* sparse-tree byte a placed cube of this kind actually
@@ -134,7 +134,7 @@ const TERRAIN_CHANNELS = (Object.keys(cube_types) as (keyof typeof cube_types)[]
 
 /**
  * Which cube_types channel+local-value each terrain-styled id stands in
- * for. The one thing every real consumer needs: render/layer/objects/
+ * for. The one thing every real consumer needs: render/layer/object/
  * adapter.ts reads this to resolve a placed cube's own real color/layer_idx
  * from render/layer/terrain/shader_meta.ts's own lookup tables (the same
  * ones terrain rendering itself uses).
@@ -178,7 +178,7 @@ export function is_terrain_style_cube(id: PlaceableCubeId): id is TerrainStyleCu
   return TERRAIN_STYLE_TO_NUM.has(id as TerrainStyleCubeId);
 }
 
-/** channel/terrain_num_id a terrain-styled placeable id resolves to — render/layer/objects/adapter.ts's own material resolver. */
+/** channel/terrain_num_id a terrain-styled placeable id resolves to — render/layer/object/adapter.ts's own material resolver. */
 export function terrain_style_cube_source(id: TerrainStyleCubeId): { channel: GroundChannelKey; terrain_num_id: number } {
   const source = TERRAIN_STYLE_SOURCE.get(id);
   if (!source) throw new Error(`no terrain-style source registered for "${id}"`);

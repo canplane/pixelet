@@ -101,7 +101,7 @@ export const build_color_mappings = (meta: TerrainColorMeta[]): {
 // three read the same cube_colors/cube_types tables and must agree.
 
 // Exported so render/layer/'s WorldLayer adapters (terrain/adapter.ts,
-// objects/adapter.ts) can resolve a hex color to bytes the same way this
+// object/adapter.ts) can resolve a hex color to bytes the same way this
 // file's own decode_ground_rgba/build_layer_texture_data already do,
 // instead of a second hand-rolled copy of the same parse.
 export const hex_to_rgb255 = (hex: string): [number, number, number] => {

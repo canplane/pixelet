@@ -4,7 +4,7 @@ import { assertEquals } from "@std/assert";
 
 import type { I16Array } from "@xpute/core/kit/array.ts";
 import type { Ground } from "@pxl/shared/bake/format.ts";
-import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constants.ts";
+import { ELE_PADDED_SPAN } from "@pxl/shared/bake/constant.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { dense_ele_region, is_water_family_at, WATER_RECESS_CELLS } from "./elevation.ts";
