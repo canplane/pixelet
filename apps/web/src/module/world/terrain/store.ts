@@ -29,7 +29,7 @@ import { PageTable } from "@/module/world/page_table.ts";
 
 type TileInterest = {
   matches: (page_idx: IVec) => boolean;
-  notify: () => void;
+  notify: (page_idx: IVec) => void;
 };
 
 /**
@@ -45,7 +45,7 @@ const interests = new Set<TileInterest>();
  * of every consumer waking on every page load anywhere in the loaded world
  * and re-deriving relevance itself. Returns an unregister function.
  */
-export function register_tile_interest(matches: (page_idx: IVec) => boolean, notify: () => void): () => void {
+export function register_tile_interest(matches: (page_idx: IVec) => boolean, notify: (page_idx: IVec) => void): () => void {
   const interest: TileInterest = { matches, notify };
   interests.add(interest);
   return () => interests.delete(interest);
@@ -53,7 +53,7 @@ export function register_tile_interest(matches: (page_idx: IVec) => boolean, not
 
 function notify_interests(page_idx: IVec): void {
   for (const interest of interests) {
-    if (interest.matches(page_idx)) interest.notify();
+    if (interest.matches(page_idx)) interest.notify(page_idx);
   }
 }
 

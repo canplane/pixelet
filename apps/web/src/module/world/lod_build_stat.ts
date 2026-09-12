@@ -21,3 +21,20 @@ export const lod_build_stats = {
   build_runs: 0,
   build_runs_max: 0,
 };
+
+/** One scan or one build done: its time into the sum, the count, and the
+ * worst seen — the three that always move together. */
+export function record_scan(ms: number): void {
+  const s = lod_build_stats;
+  s.scan_ms += ms;
+  s.scan_count++;
+  if (ms > s.scan_max_ms) s.scan_max_ms = ms;
+}
+export function record_build(ms: number, runs: number): void {
+  const s = lod_build_stats;
+  s.build_ms += ms;
+  s.build_count++;
+  if (ms > s.build_max_ms) s.build_max_ms = ms;
+  s.build_runs += runs;
+  if (runs > s.build_runs_max) s.build_runs_max = runs;
+}

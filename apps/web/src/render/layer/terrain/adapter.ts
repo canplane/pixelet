@@ -30,15 +30,26 @@ const CH_TO_CLASS: Record<GroundChannelKey, MaterialClass> = {
 
 type RenderGround = ReturnType<typeof slice_chunk>["ground"];
 
+/** The one material object every column's answer is written into: the two
+ * callers below consume it before asking for the next column, so nothing
+ * is kept and nothing is allocated — this was one object per column, four
+ * thousand per chunk. The bare-ground base it starts from is fixed. */
+const BASE_TYPE = cube_types.land.BARE;
+const BASE_FLAT = GROUND_COLOR_LOOKUP_FLAT[GroundChannelKey.LAND];
+const BASE_LAYER = GROUND_LAYER_INDEX_LOOKUP_FLAT[GroundChannelKey.LAND];
+const BASE_R = BASE_FLAT?.has[BASE_TYPE] ? BASE_FLAT.rgb[BASE_TYPE * 3] : 0;
+const BASE_G = BASE_FLAT?.has[BASE_TYPE] ? BASE_FLAT.rgb[BASE_TYPE * 3 + 1] : 0;
+const BASE_B = BASE_FLAT?.has[BASE_TYPE] ? BASE_FLAT.rgb[BASE_TYPE * 3 + 2] : 0;
+const BASE_LAYER_IDX: u32 = BASE_LAYER?.has[BASE_TYPE] ? BASE_LAYER.index[BASE_TYPE] : NO_LAYER;
+const MATERIAL: VoxelMaterial = { material_class: MaterialClass.LAND, r: 0, g: 0, b: 0, layer_idx: NO_LAYER };
+
 function ground_material_at(ground: RenderGround, idx: u32, show_structures: boolean): VoxelMaterial {
-  const base_type = cube_types.land.BARE;
-  const base_flat = GROUND_COLOR_LOOKUP_FLAT[GroundChannelKey.LAND];
-  let r = base_flat?.has[base_type] ? base_flat.rgb[base_type * 3] : 0;
-  let g = base_flat?.has[base_type] ? base_flat.rgb[base_type * 3 + 1] : 0;
-  let b = base_flat?.has[base_type] ? base_flat.rgb[base_type * 3 + 2] : 0;
-  let material_class = MaterialClass.LAND;
-  const base_layer_idx = GROUND_LAYER_INDEX_LOOKUP_FLAT[GroundChannelKey.LAND];
-  let layer_idx: u32 = base_layer_idx?.has[base_type] ? base_layer_idx.index[base_type] : NO_LAYER;
+  const m = MATERIAL;
+  m.r = BASE_R;
+  m.g = BASE_G;
+  m.b = BASE_B;
+  m.material_class = MaterialClass.LAND;
+  m.layer_idx = BASE_LAYER_IDX;
 
   for (const ch_key of GROUND_CH_KEYS) {
     if (ch_key === GroundChannelKey.STRUCTURE && !show_structures) continue;
@@ -48,14 +59,14 @@ function ground_material_at(ground: RenderGround, idx: u32, show_structures: boo
     if (!flat?.has[type_id]) continue;
 
     const off = type_id * 3;
-    r = flat.rgb[off];
-    g = flat.rgb[off + 1];
-    b = flat.rgb[off + 2];
-    material_class = CH_TO_CLASS[ch_key];
+    m.r = flat.rgb[off];
+    m.g = flat.rgb[off + 1];
+    m.b = flat.rgb[off + 2];
+    m.material_class = CH_TO_CLASS[ch_key];
     const layer_flat = GROUND_LAYER_INDEX_LOOKUP_FLAT[ch_key];
-    layer_idx = layer_flat?.has[type_id] ? layer_flat.index[type_id] : NO_LAYER;
+    m.layer_idx = layer_flat?.has[type_id] ? layer_flat.index[type_id] : NO_LAYER;
   }
-  return { material_class, r, g, b, layer_idx };
+  return m;
 }
 
 /**

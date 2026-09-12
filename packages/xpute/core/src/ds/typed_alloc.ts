@@ -77,3 +77,19 @@ export function buddy_alloc(pool: BuddyAllocator): AddressedAlloc {
     },
   };
 }
+
+/**
+ * Consecutive typed views over one block, cut in call order from
+ * `byte_offset` on — the shape every "several spans, one allocation"
+ * structure carves by hand. Views are laid where the previous one ended,
+ * so a caller orders them widest element first (i32 before u8) to keep
+ * each aligned to its element; the block's own start is 8-aligned.
+ */
+export function carver(buf: ArrayBuffer, byte_offset: u32): <T extends AnyTypedArray>(ctor: AnyTypedArrayCtor<T>, length: u32) => T {
+  let off = byte_offset;
+  return (ctor, length) => {
+    const view = new ctor(buf, off, length);
+    off += length * ctor.BYTES_PER_ELEMENT;
+    return view;
+  };
+}

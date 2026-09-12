@@ -41,7 +41,7 @@ import { instances_release, instances_retain } from "@/module/world/decor/instan
 import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/module/world/decor/asset_store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
 import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/module/world/render/chunk_material.ts";
-import { useTileStore } from "@/module/world/terrain/store.ts";
+import { register_tile_interest, useTileStore } from "@/module/world/terrain/store.ts";
 import { estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
 import {
   bucket_from_baked,
@@ -70,7 +70,7 @@ import {
 } from "@/render/layer/pipeline/voxel_scan.ts";
 import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
 import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
-import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
+import { lod_build_stats, record_build, record_scan } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
 import type { FrameBudget } from "@/module/world/sched/tick.ts";
 import { BLEND_ACTIVE, ChunkTable, EMPTY, HOLDS_SLOT, IN_FRUSTUM, PENDING, SETTLING } from "@/module/world/sched/chunk_table.ts";
@@ -154,9 +154,6 @@ const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
  * on its own interval, and a store read there is a couple of thousand
  * lookups a tick for a flag that changes when someone clicks a toggle. */
 let pixel_dither = useSettingsStore.getState().pixel_dither;
-useSettingsStore.subscribe((state) => {
-  pixel_dither = state.pixel_dither;
-});
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----
 
@@ -223,6 +220,30 @@ export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; re
  * read a provider from, and there was only ever one.
  */
 export const lod_scheduler = new ChunkTable<ChunkNode>();
+
+/**
+ * The world-wide sources, subscribed once for every node rather than once
+ * per node. A tile arrival reaches the nodes of its page and no others; a
+ * settings change and a decor asset arrival reach every node, since either
+ * can change what any of them shows. Each node used to hold three
+ * subscriptions of its own, so a tile landing during a pan ran two and a
+ * half thousand closures to find the two hundred it concerned, and a
+ * toggle ran five thousand. The per-column subscriptions stay per node:
+ * the store already routes those to the chunk they touch.
+ */
+useSettingsStore.subscribe((state) => {
+  pixel_dither = state.pixel_dither;
+  for (const node of lod_scheduler.handles) {
+    node.on_source_change();
+    node.on_decor_change();
+  }
+});
+register_tile_interest(() => true, (page_idx) => {
+  for (const node of lod_scheduler.handles) if (node.page_idx === page_idx) node.on_source_change();
+});
+subscribe_decor_assets(() => {
+  for (const node of lod_scheduler.handles) node.on_decor_assets();
+});
 
 // ---- Layout ----
 
@@ -452,16 +473,11 @@ export class ChunkNode {
 
     // Direct store subscriptions rather than hooks: a node is not a
     // component, and a placement should not have to travel through a render
-    // to reach the chunk it changed.
+    // to reach the chunk it changed. The world-wide sources are subscribed
+    // once at module level (above) and dispatched to the nodes concerned.
     this.unsubscribes.push(
-      useTileStore.subscribe(() => this.on_source_change()),
-      useSettingsStore.subscribe(() => {
-        this.on_source_change();
-        this.on_decor_change();
-      }),
       subscribe_object_column(this.object_key, () => this.on_source_change()),
       subscribe_decor_column(this.object_key, () => this.on_decor_change()),
-      subscribe_decor_assets(() => this.on_decor_assets()),
     );
 
     if (import.meta.env.DEV) node_counts.added++;
@@ -578,7 +594,7 @@ export class ChunkNode {
    * cache too, because a newly placed cube can occlude a procedurally
    * scattered decor candidate that used to render there.
    */
-  private on_source_change(): void {
+  on_source_change(): void {
     if (this.disposed) return;
     const tile = useTileStore.getState().get_tile(this.deps.page_idx);
     const show_structures = useSettingsStore.getState().show_structures;
@@ -610,7 +626,7 @@ export class ChunkNode {
    * browser cache beat the first chunk build. Decor meshes only: a model
    * arriving says nothing about cube content.
    */
-  private on_decor_assets(): void {
+  on_decor_assets(): void {
     if (this.disposed) return;
     const assets = decor_bundle_assets();
     if (this.bundle_assets === assets) return;
@@ -625,7 +641,7 @@ export class ChunkNode {
    * column_runs: that would reintroduce the needless cube rescan/rebake —
    * visible as a flicker — this split exists to avoid.
    */
-  private on_decor_change(): void {
+  on_decor_change(): void {
     if (this.disposed) return;
     const revision = decor_column_revision(this.object_key);
     // show_decor sits here rather than in on_source_change for the reason
@@ -733,10 +749,7 @@ export class ChunkNode {
       }
       this.column_runs = set;
       this.account(this.column_runs.block.bytes);
-      const direct_ms = performance.now() - step_t0;
-      lod_build_stats.scan_ms += direct_ms;
-      lod_build_stats.scan_count++;
-      lod_build_stats.scan_max_ms = Math.max(lod_build_stats.scan_max_ms, direct_ms);
+      record_scan(performance.now() - step_t0);
       lod_build_stats.direct_count++;
       return "done";
     }
@@ -773,11 +786,8 @@ export class ChunkNode {
     this.column_runs = finish_column_scan(this.scan.cursor);
     this.account(this.column_runs.block.bytes);
     release_chunk_volume(this.scan.volume);
-    const scan_ms = this.scan.spent_ms;
+    record_scan(this.scan.spent_ms);
     this.scan = null;
-    lod_build_stats.scan_ms += scan_ms;
-    lod_build_stats.scan_count++;
-    lod_build_stats.scan_max_ms = Math.max(lod_build_stats.scan_max_ms, scan_ms);
     return "done";
   }
 
@@ -822,11 +832,7 @@ export class ChunkNode {
       const bucket = bucket_from_baked(finish_bake(cursor), step, "primary");
       this.bucket_cache.set(step, bucket);
       this.account(bucket.cubes.block.bytes);
-      lod_build_stats.build_ms += spent_ms;
-      lod_build_stats.build_count++;
-      lod_build_stats.build_max_ms = Math.max(lod_build_stats.build_max_ms, spent_ms);
-      lod_build_stats.build_runs += column_runs.count;
-      lod_build_stats.build_runs_max = Math.max(lod_build_stats.build_runs_max, column_runs.count);
+      record_build(spent_ms, column_runs.count);
 
       // A second wanted tier starts in this same call only if the budget
       // still has room; otherwise it waits for the next commit.

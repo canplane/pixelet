@@ -181,9 +181,7 @@ export function dense_ele(page_ele: I16Array, tx0: u32, ty0: u32, ground?: Groun
  * given, must already be sliced/aligned to this same tx0/ty0/span region
  * (see chunk.ts's slice_chunk) — every water-family cell in it gets
  * WATER_RECESS_CELLS subtracted from its sampled height. */
-export function dense_ele_region(page_ele: I16Array, tx0: u32, ty0: u32, span: u32, ground?: Ground): I16Array {
-  const out = new Int16Array(span * span);
-
+export function dense_ele_region(page_ele: I16Array, tx0: u32, ty0: u32, span: u32, ground?: Ground, out: I16Array = new Int16Array(span * span)): I16Array {
   let idx: u32 = 0;
   for (let dy: u32 = 0; dy < span; dy++) {
     const ty: u32 = ty0 + dy;

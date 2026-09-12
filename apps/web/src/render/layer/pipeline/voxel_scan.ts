@@ -7,7 +7,8 @@ import type { Block } from "@xpute/core/ds/buddy.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { Vector } from "@xpute/core/ds/arena.ts";
+import { Lanes } from "@xpute/core/ds/lanes.ts";
+import { carver } from "@xpute/core/ds/typed_alloc.ts";
 
 import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
 
@@ -258,17 +259,6 @@ function topmost_in_band(
  * volume has been released back to its pool.
  */
 /**
- * The widest unit a scan can produce, in chunks on a side. A coarse tier
- * works on a block of chunks rather than one — step 16 on 4×4 — so that the
- * cost per unit stays flat across tiers rather than growing sixteenfold at
- * the tier that draws least (issue/20260912-coarse-tiers-need-a-larger-unit.md).
- * The scratch below is sized for this; a scan may be narrower.
- */
-export const MAX_UNIT_CHUNKS: u32 = 4;
-const MAX_SPAN: u32 = L2_BAND_CELL_SPAN * MAX_UNIT_CHUNKS;
-const MAX_COLUMN_CNT: u32 = MAX_SPAN * MAX_SPAN;
-
-/**
  * Every column's runs for one chunk, laid out as parallel arrays over a
  * single pooled block.
  *
@@ -291,8 +281,8 @@ export type ColumnRunSet = {
   block: Block;
   /** Total runs across every column. */
   count: u32;
-  /** Columns on a side: 64 for one chunk, 256 for a 4×4 block. Column
-   * `(cx, cy)` is `cy * span + cx`, which is how the mesher reads it. */
+  /** Columns on a side: 64 for a chunk, fewer for a coarse tier's own grid.
+   * Column `(cx, cy)` is `cy * span + cx`, which is how the mesher reads it. */
   span: u32;
   /** span² + 1 offsets into the per-run spans below. */
   start: Uint32Array;
@@ -335,7 +325,8 @@ export type ColumnRunSet = {
 };
 
 /** The prefix index, filled during the walk and copied into the block. */
-const COLUMN_STARTS = CORE_ALLOC.take(Uint32Array, MAX_COLUMN_CNT + 1);
+const COLUMN_CNT: u32 = L2_BAND_CELL_SPAN * L2_BAND_CELL_SPAN;
+const COLUMN_STARTS = CORE_ALLOC.take(Uint32Array, COLUMN_CNT + 1);
 
 const RUN_I32_FIELDS: u32 = 3; // z0, z1, layer_taps
 const RUN_U8_FIELDS: u32 = 10; // r g b material_class sub_sz sub_sx sub_sy sub_ox sub_oy sub_oz
@@ -343,41 +334,25 @@ const RUN_U8_FIELDS: u32 = 10; // r g b material_class sub_sz sub_sx sub_sy sub_
 export function alloc_column_run_set(count: u32, span: u32 = L2_BAND_CELL_SPAN): ColumnRunSet {
   const column_cnt = span * span;
   const block = CORE_POOL.acquire((column_cnt + 1) * 4 + count * (RUN_I32_FIELDS * 4 + RUN_U8_FIELDS));
-  const buf = block.buf;
-  let off = block.byte_offset;
-  const start = new Uint32Array(buf, off, column_cnt + 1);
-  off += (column_cnt + 1) * 4;
-  const i32 = (): Int32Array => {
-    const view = new Int32Array(buf, off, count);
-    off += count * 4;
-    return view;
-  };
-  const z0 = i32(), z1 = i32();
-  const layer_taps = new Uint32Array(buf, off, count);
-  off += count * 4;
-  const u8 = (): Uint8Array => {
-    const view = new Uint8Array(buf, off, count);
-    off += count;
-    return view;
-  };
+  const cut = carver(block.buf, block.byte_offset);
   return {
     block,
     count,
     span,
-    start,
-    z0,
-    z1,
-    layer_taps,
-    r: u8(),
-    g: u8(),
-    b: u8(),
-    material_class: u8(),
-    sub_sz: u8(),
-    sub_sx: u8(),
-    sub_sy: u8(),
-    sub_ox: u8(),
-    sub_oy: u8(),
-    sub_oz: u8(),
+    start: cut(Uint32Array, column_cnt + 1),
+    z0: cut(Int32Array, count),
+    z1: cut(Int32Array, count),
+    layer_taps: cut(Uint32Array, count),
+    r: cut(Uint8Array, count),
+    g: cut(Uint8Array, count),
+    b: cut(Uint8Array, count),
+    material_class: cut(Uint8Array, count),
+    sub_sz: cut(Uint8Array, count),
+    sub_sx: cut(Uint8Array, count),
+    sub_sy: cut(Uint8Array, count),
+    sub_ox: cut(Uint8Array, count),
+    sub_oy: cut(Uint8Array, count),
+    sub_oz: cut(Uint8Array, count),
   };
 }
 
@@ -398,36 +373,39 @@ export function release_column_runs(set: ColumnRunSet): void {
  * session, and the copy out of them is eleven typed-array memcpys rather
  * than a field-by-field loop over ten thousand objects.
  */
-const SCRATCH_CAP = { init_cap: 1 << 13 };
-const SC_Z0 = new Vector(Int32Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_Z1 = new Vector(Int32Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_R = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_G = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_B = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_LAYER = new Vector(Uint32Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_CLASS = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_SUB_SZ = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_SUB_OX = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_SUB_OY = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
-const SC_SUB_OZ = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC = new Lanes({
+  z0: Int32Array,
+  z1: Int32Array,
+  r: Uint8Array,
+  g: Uint8Array,
+  b: Uint8Array,
+  layer: Uint32Array,
+  cls: Uint8Array,
+  sub_sz: Uint8Array,
+  sub_ox: Uint8Array,
+  sub_oy: Uint8Array,
+  sub_oz: Uint8Array,
+}, { init_cap: 1 << 13, alloc: CORE_ALLOC });
 
 const SPAN_SINK: RunSink = {
   push(z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz) {
-    const i = SC_Z0.push(z0);
-    SC_Z1.push(z1);
-    SC_R.push(r);
-    SC_G.push(g);
-    SC_B.push(b);
-    SC_LAYER.push(layer_idx * 0x01010101);
-    SC_CLASS.push(material_class);
-    SC_SUB_SZ.push(sub_sz);
-    SC_SUB_OX.push(sub_ox);
-    SC_SUB_OY.push(sub_oy);
-    SC_SUB_OZ.push(sub_oz);
+    const i = SC.push();
+    const m = SC.mem;
+    m.z0[i] = z0;
+    m.z1[i] = z1;
+    m.r[i] = r;
+    m.g[i] = g;
+    m.b[i] = b;
+    m.layer[i] = layer_idx * 0x01010101;
+    m.cls[i] = material_class;
+    m.sub_sz[i] = sub_sz;
+    m.sub_ox[i] = sub_ox;
+    m.sub_oy[i] = sub_oy;
+    m.sub_oz[i] = sub_oz;
     return i;
   },
   extend(index, z1) {
-    SC_Z1.set(index, z1);
+    SC.mem.z1[index] = z1;
   },
 };
 
@@ -446,23 +424,9 @@ const SPAN_SINK: RunSink = {
  * how many composites are held alive across frames: one.
  */
 export type ColumnScan = {
-  /** Columns on a side of the whole unit. */
-  span: u32;
-  /**
-   * The chunk-row being walked: one composite per chunk across the unit,
-   * null where a chunk has nothing to draw. The prefix index is over the
-   * unit's columns in row-major order, and a unit row crosses every chunk of
-   * the chunk-row, so a row cannot be walked until all of them are here —
-   * which is why the unit is fed a chunk-row at a time rather than a chunk.
-   * A one-chunk scan is a chunk-row of one.
-   */
-  row_volumes: (ChunkVolume | null)[];
-  /** Which chunk-row `row_volumes` holds, 0..span / L2_BAND_CELL_SPAN. */
-  chunk_row: u32;
-  /** Next row within the chunk-row to walk, 0..L2_BAND_CELL_SPAN. */
+  volume: ChunkVolume;
+  /** Next row to walk, 0..L2_BAND_CELL_SPAN. */
   next_row: u32;
-  /** Whether `row_volumes` has been handed over for the current chunk-row. */
-  row_fed: boolean;
 };
 
 let open_scan: ColumnScan | null = null;
@@ -476,109 +440,35 @@ export function column_scan_open(): boolean {
  * millisecond: the whole 64-row scan was measured at up to 15 ms. */
 export const SCAN_ROWS_PER_STEP: u32 = 8;
 
-/**
- * Opens a scan of a `span`-wide unit, or returns null while another is open.
- *
- * A unit wider than a chunk is not composited whole — a 4×4 block would be
- * sixteen 64³ bands per Z band, 21 MB — but a chunk-row at a time: the
- * composites of one row of chunks are walked together, unit row by unit row,
- * into the unit's run set, so the run set is `span`-wide while at most one
- * chunk-row of volumes is alive. `first_row` is the first chunk-row, one
- * composite per chunk left to right, null for a chunk with nothing to draw;
- * a block scan feeds the remaining chunk-rows through `scan_next_row`.
- */
-export function begin_column_scan(first_row: ChunkVolume | readonly (ChunkVolume | null)[], span: u32 = L2_BAND_CELL_SPAN): ColumnScan | null {
+/** Opens a scan of `volume`, or returns null while another is open. */
+export function begin_column_scan(volume: ChunkVolume): ColumnScan | null {
   if (open_scan !== null) return null;
-  if (span % L2_BAND_CELL_SPAN !== 0 || span > MAX_SPAN) throw new Error(`render: a scan unit is a whole number of chunks up to ${MAX_UNIT_CHUNKS} on a side, not ${span}`);
-  const row = Array.isArray(first_row) ? first_row as readonly (ChunkVolume | null)[] : [first_row as ChunkVolume];
-  if (row.length !== span / L2_BAND_CELL_SPAN) throw new Error(`render: a chunk-row of a ${span}-wide unit holds ${span / L2_BAND_CELL_SPAN} chunks, not ${row.length}`);
-  SC_Z0.truncate(0);
-  SC_Z1.truncate(0);
-  SC_R.truncate(0);
-  SC_G.truncate(0);
-  SC_B.truncate(0);
-  SC_LAYER.truncate(0);
-  SC_CLASS.truncate(0);
-  SC_SUB_SZ.truncate(0);
-  SC_SUB_OX.truncate(0);
-  SC_SUB_OY.truncate(0);
-  SC_SUB_OZ.truncate(0);
-  open_scan = {
-    span,
-    row_volumes: [...row],
-    chunk_row: 0,
-    next_row: 0,
-    row_fed: true,
-  };
+  SC.clear();
+  open_scan = { volume, next_row: 0 };
   return open_scan;
 }
 
-/** Chunks on a side of the unit this scan covers. */
-export function scan_unit_chunks(scan: ColumnScan): u32 {
-  return scan.span / L2_BAND_CELL_SPAN;
-}
-
-/**
- * Hands a block scan its next chunk-row of composites, once the previous
- * chunk-row is fully walked. The previous composites are the caller's to
- * release; the scan keeps no reference to them past this call.
- */
-export function scan_next_row(scan: ColumnScan, row: readonly (ChunkVolume | null)[]): void {
-  if (scan !== open_scan) throw new Error("render: scan_next_row on a scan that is not the open one");
-  if (!scan_wants_row(scan)) throw new Error("render: scan_next_row before the current chunk-row is walked");
-  if (row.length !== scan_unit_chunks(scan)) throw new Error(`render: a chunk-row holds ${scan_unit_chunks(scan)} chunks, not ${row.length}`);
-  scan.row_volumes = [...row];
-  scan.chunk_row++;
-  scan.next_row = 0;
-  scan.row_fed = true;
-}
-
-/** Whether the scan is waiting for its next chunk-row, as opposed to
- * mid-row or complete. */
-export function scan_wants_row(scan: ColumnScan): boolean {
-  return !scan.row_fed && scan.chunk_row + 1 < scan_unit_chunks(scan);
-}
-
-/** Whether every chunk-row has been walked. */
+/** Whether every row has been walked. */
 export function scan_complete(scan: ColumnScan): boolean {
-  return !scan.row_fed && scan.chunk_row + 1 >= scan_unit_chunks(scan);
+  return scan.next_row >= L2_BAND_CELL_SPAN;
 }
 
 /**
- * Walks up to `rows` more unit rows of the current chunk-row. Returns true
- * once the whole unit is walked — every chunk-row fed and every row of it —
- * at which point `finish_column_scan` packs the result. For a block, a true
- * return from `scan_wants_row` afterwards means "this chunk-row is done,
- * feed the next".
+ * Walks up to `rows` more rows. Returns true once the whole chunk is walked,
+ * at which point `finish_column_scan` packs the result.
  */
 export function scan_column_rows(scan: ColumnScan, rows: u32 = SCAN_ROWS_PER_STEP): boolean {
-  if (!scan.row_fed) return scan_complete(scan);
   const starts = COLUMN_STARTS;
-  const { span, row_volumes } = scan;
-  const n = scan_unit_chunks(scan);
-  const cy0 = scan.chunk_row * L2_BAND_CELL_SPAN;
-  const end = Math.min(L2_BAND_CELL_SPAN, scan.next_row + rows);
+  const span = L2_BAND_CELL_SPAN;
+  const end = Math.min(span, scan.next_row + rows);
   for (let cy: u32 = scan.next_row; cy < end; cy++) {
-    for (let ux: u32 = 0; ux < n; ux++) {
-      const volume = row_volumes[ux];
-      const cx0 = ux * L2_BAND_CELL_SPAN;
-      const row_base = (cy0 + cy) * span + cx0;
-      if (volume === null) {
-        // Nothing to draw here: the prefix still has to advance over it.
-        for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) starts[row_base + cx] = SC_Z0.len;
-        continue;
-      }
-      for (let cx: u32 = 0; cx < L2_BAND_CELL_SPAN; cx++) {
-        starts[row_base + cx] = SC_Z0.len;
-        walk_column_runs(volume, cx, cy, undefined, SPAN_SINK);
-      }
+    const row_base = cy * span;
+    for (let cx: u32 = 0; cx < span; cx++) {
+      starts[row_base + cx] = SC.len;
+      walk_column_runs(scan.volume, cx, cy, undefined, SPAN_SINK);
     }
   }
   scan.next_row = end;
-  if (end >= L2_BAND_CELL_SPAN) {
-    scan.row_fed = false;
-    scan.row_volumes = [];
-  }
   return scan_complete(scan);
 }
 
@@ -587,12 +477,11 @@ export function finish_column_scan(scan: ColumnScan): ColumnRunSet {
   if (scan !== open_scan || !scan_complete(scan)) {
     throw new Error("render: finish_column_scan on a scan that is not the open, complete one");
   }
-  const column_cnt = scan.span * scan.span;
-  COLUMN_STARTS[column_cnt] = SC_Z0.len;
+  COLUMN_STARTS[COLUMN_CNT] = SC.len;
   // A baked sub-voxel object is a cube, so its three extents are one value;
   // only the coarse mesher writes them apart. pack_scratch copies sub_sz into
   // all three.
-  const set = pack_scratch(scan.span);
+  const set = pack_scratch(L2_BAND_CELL_SPAN);
   open_scan = null;
   return set;
 }
@@ -641,17 +530,7 @@ export type ColumnRunWriter = {
  */
 export function fill_column_runs(span: u32, fill: (w: ColumnRunWriter) => void): ColumnRunSet {
   if (open_scan !== null) throw new Error("render: fill_column_runs while a stepped scan is open");
-  SC_Z0.truncate(0);
-  SC_Z1.truncate(0);
-  SC_R.truncate(0);
-  SC_G.truncate(0);
-  SC_B.truncate(0);
-  SC_LAYER.truncate(0);
-  SC_CLASS.truncate(0);
-  SC_SUB_SZ.truncate(0);
-  SC_SUB_OX.truncate(0);
-  SC_SUB_OY.truncate(0);
-  SC_SUB_OZ.truncate(0);
+  SC.clear();
   const starts = COLUMN_STARTS;
   const column_cnt = span * span;
   let next: u32 = 0;
@@ -659,13 +538,13 @@ export function fill_column_runs(span: u32, fill: (w: ColumnRunWriter) => void):
     column(col) {
       // Columns skipped between the last and this one are empty: their
       // prefix entries all point at the current run count.
-      for (; next <= col; next++) starts[next] = SC_Z0.len;
+      for (; next <= col; next++) starts[next] = SC.len;
     },
     run(z0, z1, m) {
       SPAN_SINK.push(z0, z1, m.r, m.g, m.b, m.layer_idx, m.material_class, SUB_CELL_NONE, 0, 0, 0);
     },
   });
-  for (; next <= column_cnt; next++) starts[next] = SC_Z0.len;
+  for (; next <= column_cnt; next++) starts[next] = SC.len;
   return pack_scratch(span);
 }
 
@@ -673,22 +552,23 @@ export function fill_column_runs(span: u32, fill: (w: ColumnRunWriter) => void):
 function pack_scratch(span: u32): ColumnRunSet {
   const starts = COLUMN_STARTS;
   const column_cnt = span * span;
-  const set = alloc_column_run_set(SC_Z0.len, span);
+  const set = alloc_column_run_set(SC.len, span);
   set.start.set(starts.subarray(0, column_cnt + 1));
-  const n = SC_Z0.len;
-  set.z0.set(SC_Z0.mem.subarray(0, n));
-  set.z1.set(SC_Z1.mem.subarray(0, n));
-  set.r.set(SC_R.mem.subarray(0, n));
-  set.g.set(SC_G.mem.subarray(0, n));
-  set.b.set(SC_B.mem.subarray(0, n));
-  set.layer_taps.set(SC_LAYER.mem.subarray(0, n));
-  set.material_class.set(SC_CLASS.mem.subarray(0, n));
-  set.sub_sz.set(SC_SUB_SZ.mem.subarray(0, n));
-  set.sub_sx.set(SC_SUB_SZ.mem.subarray(0, n));
-  set.sub_sy.set(SC_SUB_SZ.mem.subarray(0, n));
-  set.sub_ox.set(SC_SUB_OX.mem.subarray(0, n));
-  set.sub_oy.set(SC_SUB_OY.mem.subarray(0, n));
-  set.sub_oz.set(SC_SUB_OZ.mem.subarray(0, n));
+  const n = SC.len;
+  const m = SC.mem;
+  set.z0.set(m.z0.subarray(0, n));
+  set.z1.set(m.z1.subarray(0, n));
+  set.r.set(m.r.subarray(0, n));
+  set.g.set(m.g.subarray(0, n));
+  set.b.set(m.b.subarray(0, n));
+  set.layer_taps.set(m.layer.subarray(0, n));
+  set.material_class.set(m.cls.subarray(0, n));
+  set.sub_sz.set(m.sub_sz.subarray(0, n));
+  set.sub_sx.set(m.sub_sz.subarray(0, n));
+  set.sub_sy.set(m.sub_sz.subarray(0, n));
+  set.sub_ox.set(m.sub_ox.subarray(0, n));
+  set.sub_oy.set(m.sub_oy.subarray(0, n));
+  set.sub_oz.set(m.sub_oz.subarray(0, n));
   return set;
 }
 
