@@ -791,6 +791,25 @@ each repaint, the cost the frame rows had already been cut from; all three
 now read its last ten seconds. The trace builds a frame's args once for both
 the counter track and the worst-frame spans.
 
+## Update 2026-09-13: the stats blob is gone
+
+`__PXL_RENDER_STATS__` and the canvas `dataset` copy were removed. Nothing
+read them once the report existed: the overlay and `__pxl_ledger_log` print
+the same numbers with a window around them, and a blob rewritten every
+frame — a JSON stringify of a dozen sub-objects — was itself a per-frame
+cost paid for a reading nobody took. What only fed the blob went with it:
+`mesh_mount_stats`, `mesh_unmount_stats`, `commit_step_stats` and their
+`performance.now()` pairs in the attach and commit paths. The counters the
+report does print stay (`lod_build_stats`, `occlusion_stats`, the band
+pool, the badge pipeline), and `coarse_instance_stats`, which had only the
+blob, is now a line of the report. `ledger_frame_peak()` stays: the report
+prints it.
+
+The console stream (`ledger_set_logging`) is no longer a setting of its
+own. It is a button on the overlay, beside report and trace, since a
+stream is something one turns on while looking at the panel, and the
+one `show_ledger` setting is what opens the panel.
+
 ## Guardrail
 
 [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md)

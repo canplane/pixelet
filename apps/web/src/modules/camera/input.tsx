@@ -113,7 +113,7 @@ function handle_tap(hovered: PVF3): void {
     } else if (useSettingsStore.getState().enable_terrain_carving) {
       // Nothing placed here — dig into the terrain's own real surface
       // instead of no-op'ing, but only once the user has actually opted
-      // into that (settings/slices/camera_slice.ts's enable_terrain_carving
+      // into that (settings/schema.ts's enable_terrain_carving
       // — off by default, this is real baked map data, not a scratch
       // canvas). AIR, not VOID: unlike an ordinary placed object, real
       // terrain has no object-layer leaf of its own to delete, so an
@@ -652,7 +652,7 @@ export function CameraInput() {
       // baked-elevation "flush on top" slot below — see world_struck_corner's
       // own doc comment for why those two disagree and eraser needs the
       // former to actually reach the terrain itself. Gated on
-      // enable_terrain_carving (settings/slices/camera_slice.ts) the same as
+      // enable_terrain_carving (settings/schema.ts) the same as
       // handle_tap's own write — with it off, eraser falls through to the
       // exact same bare-terrain branch pointer already uses, just below.
       set_hovered_coord(world_struck_corner(hit, object_size, map_origin));

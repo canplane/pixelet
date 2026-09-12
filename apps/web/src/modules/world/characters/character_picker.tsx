@@ -109,9 +109,8 @@ function PetPicker(props: PetPickerProps) {
  * is the expected flow, not "equip once then go place it." */
 export function CharacterPicker() {
   const person_variant_key = useSettingsStore((state) => state.person_variant_key);
-  const set_person_variant_key = useSettingsStore((state) => state.set_person_variant_key);
   const pet_variant_key = useSettingsStore((state) => state.pet_variant_key);
-  const set_pet_variant_key = useSettingsStore((state) => state.set_pet_variant_key);
+  const set_setting = useSettingsStore((state) => state.set_setting);
 
   // Opens on whichever gender the current selection already belongs to,
   // not always "female" — so a male variant picked earlier doesn't look
@@ -122,8 +121,8 @@ export function CharacterPicker() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PersonPicker gender={gender} on_gender_change={set_gender} selected_key={person_variant_key} on_select={set_person_variant_key} />
-      <PetPicker selected_key={pet_variant_key} on_select={set_pet_variant_key} />
+      <PersonPicker gender={gender} on_gender_change={set_gender} selected_key={person_variant_key} on_select={(key) => set_setting("person_variant_key", key)} />
+      <PetPicker selected_key={pet_variant_key} on_select={(key) => set_setting("pet_variant_key", key)} />
     </div>
   );
 }

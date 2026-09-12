@@ -4,7 +4,7 @@ import { type JSX, useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import type { Pass } from "postprocessing";
 import * as THREE from "three";
-import { Bloom, BrightnessContrast, ChromaticAberration, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, TiltShift2, Vignette } from "@react-three/postprocessing";
+import { Bloom, BrightnessContrast, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 
 import { SceneDepthPass } from "@/render/scene_depth.ts";
 import { BlendFunction, SMAAPreset } from "postprocessing";
@@ -70,6 +70,31 @@ function MainCameraLink({ passes }: { passes: readonly Pass[] }) {
   return null;
 }
 
+/**
+ * Edge anti-aliasing for displays that do not get it from resolution.
+ *
+ * At dpr 2 the canvas has four samples per CSS pixel and the browser's
+ * downscale averages them; edges are clean and a post AA pass would find
+ * nothing to fix, so it is not paid for. At dpr 1 — a desktop monitor, a
+ * cheap laptop — there is one sample per pixel and MSAA (the composer's
+ * multisampling) only resolves coverage, not the shading of the flat-shaded
+ * boxes that minify below a pixel; SMAA's edge search picks up what MSAA
+ * leaves, at the cost of one fullscreen pass on a display that has the
+ * pixel budget to spare. Phones are dpr 3 capped to 2 and take the first
+ * path; this is for the desktop that would otherwise draw the jaggiest
+ * picture of all. Read from r3f's own viewport.dpr, the ratio the canvas
+ * was actually given, rather than window.devicePixelRatio and a second
+ * clamp. Not user-facing: the choice follows the display, as the dpr does.
+ * Untested on a dpr-1 device as of 2026-09-13; revisit with one in hand.
+ */
+function AutoSmaa() {
+  const dpr = useThree((state) => state.viewport.dpr);
+  if (dpr >= post_cfg.SMAA_BELOW_DPR) return null;
+  // MEDIUM is the library default; HIGH searches longer edges, a moderate
+  // step up rather than ULTRA.
+  return <SMAA preset={SMAAPreset.HIGH} />;
+}
+
 export function MapScene() {
   useMapBootstrap();
   useTileFetcher();
@@ -93,22 +118,8 @@ export function MapScene() {
 
   const show_ao = useSettingsStore((state) => state.show_ao);
   const show_bloom = useSettingsStore((state) => state.show_bloom);
-  const show_tilt_shift = useSettingsStore((state) => state.show_tilt_shift);
-  const show_chromatic_aberration = useSettingsStore((state) => state.show_chromatic_aberration);
   const show_god_rays = useSettingsStore((state) => state.show_god_rays);
-  const aa_mode = useSettingsStore((state) => state.aa_mode);
   const show_shadow_map = useSettingsStore((state) => state.show_shadow_map);
-
-  // ChromaticAberrationEffect's offset setter expects a real THREE.Vector2
-  // (it copies .x/.y off the argument) — unlike TiltShift2's own props,
-  // this component is the library's generic wrapEffect() wrapper, which
-  // passes props straight through to the constructor with no array
-  // coercion, so a plain [x, y] tuple would silently produce {x: undefined,
-  // y: undefined}.
-  const chromatic_aberration_offset = useMemo(
-    () => new THREE.Vector2(...post_cfg.CHROMATIC_ABERRATION.OFFSET),
-    [],
-  );
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
@@ -123,34 +134,29 @@ export function MapScene() {
         }}
       >
         <Canvas
-          // dpr [1,2] when aa_mode is "supersample" (settings_store.ts,
-          // default): real spatial supersampling, not just edge AA. MSAA
-          // (tried below, previously multisampling={4}) only resolves
-          // per-sample *coverage/depth* — the fragment shader itself still
-          // runs once per output pixel, so it never re-evaluates shading at
-          // sub-pixel positions. That's fine for a triangle's silhouette
-          // edge, but this terrain is thousands of independently flat-shaded
-          // boxes that minify well below one pixel at any real distance (see
-          // the EffectComposer comment below) — the visible artifact there
-          // is shading-value flicker between neighboring facets sharing a
-          // pixel, which MSAA structurally cannot fix. Rendering the whole
-          // canvas (WebGL draw + the full post stack) at up to 2x linear
-          // resolution and letting the browser's own canvas-to-CSS
-          // downscale do a real per-pixel color average fixes both classes
-          // of aliasing at once — but costs roughly 4x the fragment-shading
-          // work of the whole pipeline (post stack included), since dpr=2 on
-          // a Retina/high-DPI display means 4x the pixels; separate from
-          // chunk-count/frustum-culling effects, which don't depend on
-          // pixel count at all. Confirmed the single biggest post-stack cost
-          // on real devices, but the app now ships with a real art pack
-          // behind it and defaults to this anyway — aa_mode's other two
-          // options ("none", "smaa") are the Quality section's opt-out for
-          // low-end/non-Retina devices, where this [1,2] clamp is a no-op
-          // in the first place (clamp(1, 1, 2) = 1) and SMAA is the only
-          // one of the two that does anything.
-          // The [1,2] cap keeps it from ever exceeding 2x even on a
-          // 3x/4x-DPR phone once it is.
-          dpr={aa_mode === "supersample" ? [1, 2] : [1, 1]}
+          // The device's own pixel ratio, capped at 2. This is not a cost
+          // the user is asked about, because it is not an extra cost: [1, 2]
+          // is r3f's clamp(window.devicePixelRatio, 1, 2), so a dpr-1 laptop
+          // draws at 1x and a Retina display at 2x — the resolution every
+          // other layer of the page is already drawn at on that device, and
+          // the pixel count the device was built to fill. Rendering the
+          // canvas at 1x on a 2x display would be the odd one out, blurred
+          // by the browser's upscale, for a saving the rest of the page does
+          // not make. The cap is where the real saving is: a 3x/4x phone
+          // would otherwise pay nine or sixteen times the fragment work of
+          // 1x for a difference the eye does not see at that density, and
+          // the mobile GPU is the one that cannot afford it — everything
+          // here has to run on a phone, and 2x is what a phone gets.
+          // What native resolution buys over MSAA (the composer's
+          // multisampling below) is shading at sub-pixel positions: MSAA
+          // resolves coverage and depth per sample but shades once per
+          // pixel, so the thousands of flat-shaded boxes that minify below a
+          // pixel still flicker between neighbouring facets; more pixels is
+          // the only thing that averages that away. Where there are no more
+          // pixels — dpr 1 — AutoSmaa below adds an edge pass instead. A
+          // user-facing choice between these was offered until 2026-09-13
+          // and removed: the right answer is the device's, not the user's.
+          dpr={post_cfg.DPR}
           gl={{
             antialias: false,
             powerPreference: "high-performance",
@@ -211,7 +217,7 @@ export function MapScene() {
           // queues drain.
           frameloop="demand"
         >
-          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_tilt_shift, show_chromatic_aberration, show_god_rays, aa_mode, show_shadow_map]} />
+          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_god_rays, show_shadow_map]} />
           {
             /* The one useFrame in this Canvas. Every per-frame subscriber in
               the world registers a step into a phase of this tick instead
@@ -231,23 +237,16 @@ export function MapScene() {
 
           {
             /*
-            "Miniature diorama" post stack — N8AO/Bloom/TiltShift2/
-            ChromaticAberration/SMAA all default OFF, but not all for the
-            same reason. The umbrella reason is mobile: none of these are
-            things a Minecraft-default-options level would even offer as a
-            toggle (SSAO/bloom/tilt-shift/lens fringing/post-AA are
-            shader-pack territory, not vanilla settings). N8AO/Bloom/
-            TiltShift2/SMAA additionally have a confirmed real cost from
-            live profiling of the terrain pipeline (WebGLRenderer.
-            renderBufferDirect/setProgram time scaling with the post
-            stack) — ChromaticAberration wasn't part of that profiling run,
-            it's off purely on the mobile-default-options principle above.
-            All are user-reachable via the settings modal's Lighting/PostFx
-            sections (app/settings/settings_store.ts's show_ao/show_bloom/
-            show_tilt_shift/show_chromatic_aberration) rather than on by
-            default — SMAA moved out to the Quality section's aa_mode radio
-            (grouped with supersampling, not toggled independently here; see
-            aa_mode's own doc comment for why). Order matters when these are on:
+            The post stack. N8AO, Bloom and GodRays default OFF: each is a
+            real pass with a confirmed cost from live profiling of the
+            terrain pipeline (WebGLRenderer.renderBufferDirect/setProgram
+            time scaling with the stack), and none is something a vanilla
+            options screen would offer. They are settings (app/settings/
+            schema.ts's show_ao, and the dev-only show_bloom/show_god_rays)
+            rather than on by default. The "miniature diorama" passes that
+            used to sit here — TiltShift2 and ChromaticAberration — were
+            removed 2026-09-13: neither had earned a place, and a setting
+            nobody turns on is a pass nobody maintains. Order when on:
             1. N8AO — real screen-space contact/crevice AO. See git history
                (this comment block, pre-2026-08-13) for the normal-pass/
                radius-tuning notes from when it was built.
@@ -257,24 +256,15 @@ export function MapScene() {
             3. Color grade (contrast/saturation) — the flat/raw output reads
                washed out next to the punchy reference stills; this is cheap
                and global, stays active unconditionally below.
-            4. TiltShift2 — screen-space blur band, the actual "macro lens"
-               illusion that sold the miniature look. Worked because this
-               camera holds a fixed top-down-ish angle, so screen-Y already
-               correlates with depth the way a real tilt-shift lens exploits.
-            5. Vignette — subtle framing; cheap, stays active unconditionally
+            4. Vignette — subtle framing; cheap, stays active unconditionally
                below.
-            6. ChromaticAberration — small radial RG/B channel split, a lens-
-               fringing cue toward the frame edge. Placed after Vignette/
-               TiltShift2 (so it displaces already-graded/blurred color) and
-               before SMAA (so AA smooths the fringe edges it introduces,
-               same reasoning as running SMAA last overall).
-            7. SMAA last — edge cleanup after every other pass ran.
+            5. SMAA, on dpr-1 displays only — AutoSmaa above.
           */
           }
           {
             /*
             multisampling={4}: 4x MSAA on the composer's input buffer, over
-            the dpr [1, 2] supersampling above. MSAA is the conventional
+            the native dpr above. MSAA is the conventional
             anti-aliasing for a forward renderer, and the distant boxes that
             shrink below a pixel are a coverage problem, which is what it
             resolves. It had been running at 8 — @react-three/postprocessing
@@ -337,39 +327,16 @@ export function MapScene() {
                 ),
                 <BrightnessContrast key="grade-bc" brightness={post_cfg.GRADE.BRIGHTNESS} contrast={post_cfg.GRADE.CONTRAST} />,
                 <HueSaturation key="grade-hs" saturation={post_cfg.GRADE.SATURATION} />,
-                show_tilt_shift && (
-                  <TiltShift2
-                    key="tilt-shift"
-                    blur={post_cfg.TILT_SHIFT.BLUR}
-                    taper={post_cfg.TILT_SHIFT.TAPER}
-                    start={post_cfg.TILT_SHIFT.START}
-                    end={post_cfg.TILT_SHIFT.END}
-                    direction={post_cfg.TILT_SHIFT.DIRECTION}
-                    samples={post_cfg.TILT_SHIFT.SAMPLES}
-                  />
-                ),
                 <Vignette
                   key="vignette"
                   blendFunction={BlendFunction.NORMAL}
                   darkness={post_cfg.VIGNETTE.DARKNESS}
                   offset={post_cfg.VIGNETTE.OFFSET}
                 />,
-                show_chromatic_aberration && (
-                  <ChromaticAberration
-                    key="chromatic-aberration"
-                    offset={chromatic_aberration_offset}
-                    radialModulation={post_cfg.CHROMATIC_ABERRATION.RADIAL_MODULATION}
-                    modulationOffset={post_cfg.CHROMATIC_ABERRATION.MODULATION_OFFSET}
-                  />
-                ),
-                // preset defaults to SMAAPreset.MEDIUM if unset — bumped to
-                // HIGH for more edge-detection sensitivity (catches more/
-                // subtler edges), a moderate step up rather than ULTRA.
-                // aa_mode === "smaa", not a standalone show_smaa boolean:
-                // mutually exclusive with supersampling (dpr [1,2] above) —
-                // see aa_mode's own doc comment for why running both wastes
-                // GPU budget for essentially no extra sharpness.
-                aa_mode === "smaa" && <SMAA key="smaa" preset={SMAAPreset.HIGH} />,
+                // Last, so it cleans up after every other pass. A component,
+                // not an effect: it renders an SMAA effect or nothing, and
+                // the composer collects whichever it finds in the tree.
+                <AutoSmaa key="smaa" />,
               ].filter((effect): effect is JSX.Element => Boolean(effect))
             }
           </EffectComposer>

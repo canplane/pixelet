@@ -85,8 +85,8 @@ export type BakedChunkMesh = {
 /**
  * Dev-only, cumulative since page load: how many coarse-LOD boxes this
  * session has written, and how many were dropped for being too diffuse to
- * draw. Exposed the same no-console way, via chunk_stage.tsx's
- * __PXL_RENDER_STATS__.
+ * draw. Exposed the same no-console way, as a line of the ledger report
+ * (sched/log.ts).
  *
  * Nothing is actually dropped: a sparse cell shrinks instead, all the way
  * down. `low_fill` prices what a threshold-cull policy would have skipped,

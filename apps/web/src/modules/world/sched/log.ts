@@ -17,7 +17,7 @@
  * summary.ts's `missed` and `overran`, the same tests the report counts.
  */
 
-import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
+import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { poi_field_stats, poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
 import { little_slabs } from "@/modules/world/sched/slabs.ts";
 import { fetch_counts, MAX_INFLIGHT } from "@/modules/world/sched/fetch_scheduler.ts";
@@ -101,6 +101,8 @@ function counters() {
     faces_possible: occlusion_stats.faces_possible,
     runs_culled: occlusion_stats.culled,
     runs_total: occlusion_stats.total_runs,
+    coarse_boxes: coarse_instance_stats.total,
+    coarse_low_fill: coarse_instance_stats.low_fill,
     bands_reused: band_pool_stats.reused,
     bands_allocated: band_pool_stats.allocated,
     build_ms: lod_build_stats.build_ms,
@@ -136,6 +138,10 @@ export function ledger_window_start(): void {
 const starved = (ms: number) => (ms > STARVED_MS ? " STARVED" : "");
 
 let logging = false;
+
+export function ledger_logging(): boolean {
+  return logging;
+}
 
 /** Turns the live console stream on/off by installing (or clearing) the
  * ledger's single sink. */
@@ -198,6 +204,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     }ms total, ${poi_badge_count()} cached`,
     `  atlas   ${atlas.size}px  ${atlas.entries} entries  ${atlas.shelves} shelves  ${share(atlas.used_px, atlas.size * atlas.size)}% used  ${c.atlas_repacks} repacks`,
     `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${share(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
+    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${share(c.coarse_low_fill, c.coarse_boxes)}%; a threshold cull would have skipped these)`,
     `  index   poi ${index.indexed} resident  ${c.index_rebuilds} rebuilds${index.sweeping > 0 ? `  sweeping ${index.sweeping} pages` : ""}${index.dropped > 0 ? `  DROPPED ${index.dropped}` : ""}`,
     // Idle inside the core reservation is the working budget, kept on purpose
     // (core_pool.ts); only what is reserved past it is ever handed back.

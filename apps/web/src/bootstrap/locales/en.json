@@ -13,6 +13,7 @@
       "korean": "한국어",
       "english": "English"
     },
+    "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
     "display": {
       "section_title": "Display",
       "section_caption": "What the world shows",
@@ -27,11 +28,12 @@
     },
     "camera": {
       "section_title": "Camera",
-      "lock_tilt": {
+      "section_caption": "How the view moves",
+      "lock_camera_tilt": {
         "label": "Camera Tilt Lock",
         "description": "Locks vertical camera rotation while horizontal rotation stays free."
       },
-      "terrain": {
+      "camera_terrain": {
         "through": {
           "label": "Pass through terrain",
           "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
@@ -44,79 +46,51 @@
           "label": "Climb over terrain",
           "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
         }
-      },
-      "section_caption": "How the view moves"
+      }
     },
     "editing": {
       "section_title": "Editing",
       "section_caption": "What the tools may change",
-      "terrain_carving": {
+      "enable_terrain_carving": {
         "label": "Terrain Carving",
         "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
       }
     },
-    "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
     "lighting": {
       "section_title": "Lighting & Shadows",
       "section_caption": "Effects that make shape and edges readable",
-      "edge_shade": {
+      "show_edge_shade": {
         "label": "Cube edge shading",
         "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line."
       },
-      "shadow_map": {
-        "label": "Shadows",
-        "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."
-      },
-      "rim_light": {
+      "show_rim_light": {
         "label": "Rim Light",
         "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
       },
-      "god_rays": {
-        "label": "God Rays",
-        "description": "Realistic sun shafts streaming through gaps in terrain and objects."
-      }
-    },
-    "post_fx": {
-      "section_title": "Post-Processing",
-      "section_caption": "Visual effects applied across the entire screen",
-      "ao": {
+      "show_ao": {
         "label": "Ambient Occlusion (AO)",
         "description": "Enhances depth by adding detailed contact shadows in crevices and corners."
       },
-      "bloom": {
+      "show_bloom": {
         "label": "Bloom",
         "description": "Adds a soft glow to the brightest things in the scene — the sun, the moon, and the night location beacon."
       },
-      "tilt_shift": {
-        "label": "Tilt-Shift",
-        "description": "Blurs the top and bottom of the screen to create a miniature diorama effect."
+      "show_god_rays": {
+        "label": "God Rays",
+        "description": "Realistic sun shafts streaming through gaps in terrain and objects."
       },
-      "chromatic_aberration": {
-        "label": "Chromatic Aberration",
-        "description": "Fringes light slightly at the edges of the screen to simulate camera lens distortion."
+      "show_shadow_map": {
+        "label": "Shadows",
+        "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."
       }
     },
     "quality": {
       "section_title": "Graphics Quality",
-      "aa_mode": {
-        "none": {
-          "label": "Basic",
-          "description": "Renders without any anti-aliasing."
-        },
-        "smaa": {
-          "label": "SMAA",
-          "description": "Smooths jagged object edges for a cleaner, crisper display."
-        },
-        "supersample": {
-          "label": "High-Resolution Rendering",
-          "description": "Renders the screen at up to 2x resolution for a sharper image."
-        }
-      },
+      "section_caption": "Adjust screen clarity and detail settings",
       "texture_pack": {
         "label": "Textures",
         "description": "Applies detailed pixel-art textures to block and object surfaces instead of flat colors."
-      },
-      "section_caption": "Adjust screen clarity and detail settings"
+      }
     },
     "disclaimer": {
       "section_title": "Disclaimer",

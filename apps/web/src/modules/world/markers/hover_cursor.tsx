@@ -167,7 +167,7 @@ export function HoverCursor() {
   // feature existed (see `blocked` below).
   const digging_terrain = activeTool === "eraser" && !hovered_object && enable_terrain_carving;
   const show_structures = useSettingsStore((state) => state.show_structures);
-  const low_spec = useSettingsStore((state) => state.low_spec);
+  const texture_pack = useSettingsStore((state) => state.texture_pack);
 
   const use_object_style = activeTool === "object" || activeTool === "decor" || activeTool === "eraser" || hovered_object !== null;
 
@@ -347,8 +347,8 @@ export function HoverCursor() {
   // declares side images today, so everything else resolves to the same
   // texture on every face and pays nothing for asking.
   const textures = useMemo(
-    () => BOX_FACE_TEXTURES.map((face) => (color_id && !low_spec ? get_object_texture(color_id, face) : null)),
-    [color_id, low_spec],
+    () => BOX_FACE_TEXTURES.map((face) => (color_id && texture_pack ? get_object_texture(color_id, face) : null)),
+    [color_id, texture_pack],
   );
   const map = textures[TOP_FACE];
 

@@ -191,13 +191,19 @@ export const shadow_cfg = {
 } as const;
 
 /**
- * Post-processing tuning for the "miniature diorama" look: a screen-space
- * contact-AO pass to ground blocky cells/buildings against each other, a
- * tilt-shift band that fakes a macro lens' shallow depth of field, and a
- * punchier color grade than the flat/raw scene output. All numbers here are
- * cosmetic dials — tune freely, nothing downstream depends on these values.
+ * Post-processing tuning: a screen-space contact-AO pass to ground blocky
+ * cells/buildings against each other, bloom and god rays off the sun, and
+ * a punchier color grade than the flat/raw scene output. All numbers here
+ * are cosmetic dials — tune freely, nothing downstream depends on these
+ * values.
  */
 export const post_cfg = {
+  /** The canvas draws at the device's pixel ratio clamped to this
+   * (scene.tsx's dpr comment on why the cap, and why it is not a cost). */
+  DPR: [1, 2] as [number, number],
+  /** SMAA runs on a display whose dpr is under this; at the cap the
+   * resolution does the job (scene.tsx's AutoSmaa). */
+  SMAA_BELOW_DPR: 2,
   AO: {
     // halfRes + "performance" quality keeps this cheap enough to not add to
     // the existing close-zoom frame cost — see the LOD/chunk-density note in
@@ -223,30 +229,6 @@ export const post_cfg = {
     LUMINANCE_SMOOTHING: 0.2,
     MIPMAP_BLUR: true,
   },
-  TILT_SHIFT: {
-    // start/end are the two endpoints of a single line, not a band's edges —
-    // blur ramps with each pixel's perpendicular distance from that line.
-    // [0,0.5]->[1,0.5] is horizontal at mid-height, so the ramp direction is
-    // vertical (sharp middle row, blur top/bottom). A near-vertical line (the
-    // original, by accident) made the ramp near-horizontal, reading as the
-    // whole frame out of focus since the sharp strip sat off-screen.
-    START: [0, 0.5] as [number, number],
-    END: [1, 0.5] as [number, number],
-    // must point along the start/end line's perpendicular (vertical here) or
-    // blur samples smear diagonally instead of matching the ramp direction
-    DIRECTION: [0, 1] as [number, number],
-    // The shader's blur radius is an ease-in curve (smoothstep), not linear,
-    // so it's near-zero right at the sharp line before accelerating — TAPER
-    // stretches/shrinks that ease-in region (bigger = wider sharp band),
-    // BLUR scales the ceiling. Shrinking TAPER alongside raising BLUR keeps
-    // the sharp middle band from also growing, so the emphasis reads as
-    // "blurrier edges" rather than "sharp region got bigger too" — tuned to
-    // keep a normal framing (street level, not a wide shot) legible, just
-    // noticeably softer top/bottom, without washing the whole frame out.
-    BLUR: 0.16,
-    TAPER: 0.42,
-    SAMPLES: 6,
-  },
   GRADE: {
     SATURATION: 0.18,
     CONTRAST: 0.08,
@@ -255,17 +237,6 @@ export const post_cfg = {
   VIGNETTE: {
     DARKNESS: 0.45,
     OFFSET: 0.3,
-  },
-  CHROMATIC_ABERRATION: {
-    // A few texels' worth of channel split — a subtle lens-fringing offset,
-    // not a heavy glitch-art displacement, kept edge-only via
-    // RADIAL_MODULATION below rather than applied uniformly across the frame.
-    OFFSET: [0.0018, 0.0018] as [number, number],
-    // radial (edge-only) rather than uniform: a real lens' fringing grows
-    // toward the frame edge and stays ~0 at center, which also keeps the
-    // effect from muddying the sharp middle band tilt-shift leaves in focus.
-    RADIAL_MODULATION: true,
-    MODULATION_OFFSET: 0.15,
   },
   GOD_RAYS: {
     SAMPLES: 60,

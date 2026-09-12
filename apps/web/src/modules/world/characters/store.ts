@@ -12,7 +12,7 @@ import { create } from "zustand";
  * (variant switch remounts it, key={variant.key}) always starts unloaded.
  *
  * Which variant is selected at all (person_variant_key/pet_variant_key)
- * lives in app/settings/slices/character_slice.ts instead — a real
+ * lives in app/settings/schema.ts instead — a real
  * persisted preference, unlike this purely session-scoped loading flag.
  */
 export type CompanionLoadStore = {

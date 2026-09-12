@@ -4,8 +4,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/shared/lib/utils/cn.ts";
 import { Switch } from "@/shared/ui/shadcn/switch.tsx";
-
-export type SettingCost = "low" | "med" | "high";
+import type { SettingCost } from "./schema.ts";
 
 const COST_CLASS: Record<SettingCost, string> = {
   low: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
@@ -72,7 +71,7 @@ type SettingRadioRowProps = {
 /** One option in a mutually-exclusive settings group — same label/
  * description/cost-badge layout as SettingRow, a radio instead of a Switch
  * since selecting one option here deselects the others (see e.g.
- * settings_store.ts's aa_mode). No -mx-3 bleed like SettingRow: this is
+ * schema.ts's camera_terrain). No -mx-3 bleed like SettingRow: this is
  * meant to sit inside a small background-grouped wrapper (its own padding,
  * not the tab content's px-5), not directly against the tab content edge. */
 export function SettingRadioRow(props: SettingRadioRowProps) {

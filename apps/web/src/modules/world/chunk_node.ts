@@ -33,7 +33,6 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
 import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/modules/world/decor/field.ts";
@@ -154,34 +153,12 @@ const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 /** Cached rather than read per chunk: recheck() runs over every live node
  * on its own interval, and a store read there is a couple of thousand
  * lookups a tick for a flag that changes when someone clicks a toggle. */
-let pixel_dither = useDebugStore.getState().pixelDither;
-useDebugStore.subscribe((state) => {
-  pixel_dither = state.pixelDither;
+let pixel_dither = useSettingsStore.getState().pixel_dither;
+useSettingsStore.subscribe((state) => {
+  pixel_dither = state.pixel_dither;
 });
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----
-
-export type TimingStats = { total_ms: number; count: number; max_ms: number };
-
-export function record_timing(stats: TimingStats, ms: number): void {
-  stats.total_ms += ms;
-  stats.count++;
-  stats.max_ms = Math.max(stats.max_ms, ms);
-}
-
-/** Geometry creation + GPU buffer upload + bounds, per attached mesh. */
-export const mesh_mount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
-/** geometry.dispose() on detach — a zoom-out flips many chunks at once. */
-export const mesh_unmount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
-
-/** Splits one commit() call's cost, dev-only. `attach_ms_max` replaces what
- * used to be `set_layout_ms_max`: the same moment, but now it is the real
- * scene mutation rather than a React state update that only scheduled one. */
-export const commit_step_stats = {
-  build_ms_max: 0,
-  bounds_ms_max: 0,
-  attach_ms_max: 0,
-};
 
 /**
  * Chunks that appeared / disappeared since the last frame sample, dev-only.
@@ -931,14 +908,12 @@ export class ChunkNode {
   }
 
   private attach(layout: LodLayout): void {
-    const t0 = import.meta.env.DEV ? performance.now() : 0;
     this.detach_all();
     for (const bucket of layout.buckets) {
       if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket);
     }
     this.decor_dirty = true;
     this.sync_decor();
-    if (import.meta.env.DEV) record_timing(mesh_mount_stats, performance.now() - t0);
   }
 
   private attach_cubes(bucket: BuiltChunkBucket): void {
@@ -1031,7 +1006,6 @@ export class ChunkNode {
 
   private detach_all(): void {
     if (this.attached_cubes.length === 0) return;
-    const t0 = import.meta.env.DEV ? performance.now() : 0;
     for (const entry of this.attached_cubes) {
       if (entry.mounted) this.registry.meshes.delete(entry.mounted);
       this.group.remove(entry.mesh);
@@ -1039,7 +1013,6 @@ export class ChunkNode {
       entry.mesh.geometry = EMPTY_GEOMETRY;
     }
     this.attached_cubes = [];
-    if (import.meta.env.DEV) record_timing(mesh_unmount_stats, performance.now() - t0);
   }
 
   // ---- the scheduler's calls ----
@@ -1140,7 +1113,7 @@ export class ChunkNode {
     // dither patterns, which is what engines mean by an LOD cross-fade. The
     // second reads as a real fade and costs the overdraw of drawing a
     // blending chunk twice; it also wants temporal AA to average the pattern,
-    // which this renderer does not have (SMAA is spatial), so a moving camera
+    // which this renderer does not have (MSAA is spatial), so a moving camera
     // will show the pattern crawling.
     const pair = get_lod_pair_visibility(this.stable_hash, guide.coarse_fraction);
     // The coarser tier leads and the finer one lags, rather than the two
@@ -1204,9 +1177,7 @@ export class ChunkNode {
     }
 
     const desired = this.desired;
-    const build_t0 = import.meta.env.DEV ? performance.now() : 0;
     const buckets = this.build_buckets(desired.primary, desired.secondary, budget);
-    if (import.meta.env.DEV) commit_step_stats.build_ms_max = Math.max(commit_step_stats.build_ms_max, performance.now() - build_t0);
     // Not built this frame: the scan or the bake is part-way, or waiting on
     // the slot another chunk holds. Stay pending and
     // leave whatever is on screen alone rather than popping it to empty. A
@@ -1215,11 +1186,7 @@ export class ChunkNode {
     // and lets the loop walk on to start scans it cannot start.
     if (buckets === null) return this.holds_slot;
 
-    const bounds_t0 = import.meta.env.DEV ? performance.now() : 0;
     const bounds = chunk_bounds(buckets);
-    if (import.meta.env.DEV) commit_step_stats.bounds_ms_max = Math.max(commit_step_stats.bounds_ms_max, performance.now() - bounds_t0);
-
-    const attach_t0 = import.meta.env.DEV ? performance.now() : 0;
     this.apply_layout({
       primary: desired.primary,
       secondary: desired.secondary,
@@ -1228,7 +1195,6 @@ export class ChunkNode {
       bounds,
       ready: true,
     });
-    if (import.meta.env.DEV) commit_step_stats.attach_ms_max = Math.max(commit_step_stats.attach_ms_max, performance.now() - attach_t0);
     this.set_pending(false, RELEASE_REQUEST);
     return true;
   }

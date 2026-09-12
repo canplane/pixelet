@@ -4,11 +4,13 @@
  * Dev overlay for sched/ledger.ts — the gauge half of the instrument in
  * discussions/20260909-cooperative-scheduler-and-task-ledger.md. Polls the
  * ledger rings on a timer and paints a corner panel; never feeds anything
- * back into scheduling. Gated by `import.meta.env.DEV` and debug_store's
- * showLedgerOverlay — off by default. The text half (live console stream,
- * pasteable report) is log.ts, toggled independently.
+ * back into scheduling. Gated by `import.meta.env.DEV` and the `show_ledger`
+ * setting — off by default. The text half is log.ts: the pasteable report
+ * and the live console stream are both buttons on the panel, the stream a
+ * toggle that outlives the panel (it is the ledger's sink, not the panel's
+ * state), so closing the panel does not silence a stream being watched.
  *
- * This component also owns the dev-only lifecycle the two surfaces share:
+ * This component also owns the dev-only lifecycle the surfaces share:
  * installing the LoAF observer and hanging `__pxl_ledger_trace` /
  * `__pxl_ledger_log` on `window`, both regardless of whether the panel
  * itself is showing.
@@ -24,7 +26,7 @@
 
 import { useEffect, useState } from "react";
 
-import { useDebugStore } from "@/app/settings/debug_store.ts";
+import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
 import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
 import { badge_atlas } from "@/modules/world/poi/poi_badge.ts";
@@ -39,7 +41,7 @@ import {
   ledger_recording_stop,
   ledger_tasks_since,
 } from "./ledger.ts";
-import { ledger_report_to_console, ledger_set_logging, ledger_window_start, window_counters } from "./log.ts";
+import { ledger_logging, ledger_report_to_console, ledger_set_logging, ledger_window_start, window_counters } from "./log.ts";
 import { STARVED_MS, summarize_frames, summarize_tasks, TILE_DECODED_MB, tris_text } from "./summary.ts";
 import { ledger_trace_download } from "./trace.ts";
 
@@ -87,8 +89,7 @@ type LedgerGlobals = typeof globalThis & {
 };
 
 export function LedgerOverlay() {
-  const show = useDebugStore((s) => s.showLedgerOverlay);
-  const log = useDebugStore((s) => s.logLedger);
+  const show = useSettingsStore((s) => s.show_ledger);
   const [, force] = useState(0);
 
   // Shared dev lifecycle — runs whether or not the panel is showing, so the
@@ -106,13 +107,6 @@ export function LedgerOverlay() {
       delete w.__pxl_ledger_log;
     };
   }, []);
-
-  // Live console stream, independent of the panel.
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    ledger_set_logging(log);
-    return () => ledger_set_logging(false);
-  }, [log]);
 
   // Panel repaint only while the panel is up.
   useEffect(() => {
@@ -132,6 +126,7 @@ export function LedgerOverlay() {
   const tasks = summarize_tasks(ledger_tasks_since(since));
   const longs = ledger_long_frames_since(since);
   const rec = ledger_recording_state();
+  const logging = ledger_logging();
   const worst_long = longs.reduce<(typeof longs)[number] | null>((w, l) => (!w || l.duration_ms > w.duration_ms ? l : w), null);
   const loaf_supported = typeof PerformanceObserver !== "undefined" &&
     !!PerformanceObserver.supportedEntryTypes?.includes("long-animation-frames");
@@ -308,6 +303,19 @@ export function LedgerOverlay() {
           className="pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90"
         >
           trace
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            ledger_set_logging(!logging);
+            force((n) => n + 1);
+          }}
+          title="stream each settled task, missed frame and long frame to the console"
+          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
+            logging ? "border-sky-400/40 bg-sky-400/10 text-sky-300 hover:bg-sky-400/20" : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90"
+          }`}
+        >
+          log
         </button>
       </div>
     </div>

@@ -8,13 +8,8 @@ import { Info, Sparkles, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Separator } from "@/shared/ui/shadcn/separator.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
-import { CameraSection } from "./sections/camera_section.tsx";
-import { DisplaySection } from "./sections/display_section.tsx";
-import { EditingSection } from "./sections/editing_section.tsx";
+import { SettingsSection } from "./settings_sections.tsx";
 import { LanguageSection } from "./sections/language_section.tsx";
-import { LightingSection } from "./sections/lighting_section.tsx";
-import { PostFxSection } from "./sections/post_fx_section.tsx";
-import { QualitySection } from "./sections/quality_section.tsx";
 import { DebugSection } from "./sections/debug_section.tsx";
 import { DisclaimerSection } from "./sections/disclaimer_section.tsx";
 import { AboutSection } from "./sections/about_section.tsx";
@@ -68,12 +63,11 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             <TabsContent value="effects">
               <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
               <Separator />
-              <DisplaySection />
-              <CameraSection />
-              <EditingSection />
-              <LightingSection />
-              <QualitySection />
-              <PostFxSection />
+              <SettingsSection section="display" />
+              <SettingsSection section="camera" />
+              <SettingsSection section="editing" />
+              <SettingsSection section="lighting" />
+              <SettingsSection section="quality" />
               {__IS_DEV__ && (
                 <>
                   <Separator />
