@@ -53,5 +53,5 @@ export function useFrameRotation(props: UseFrameRotationProps) {
       state.invalidate();
       view_moving();
     }
-  });
+  }, "frame_rotation");
 }

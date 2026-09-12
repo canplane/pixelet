@@ -44,6 +44,7 @@ import {
 import { ledger_logging, ledger_report_to_console, ledger_set_logging, ledger_window_start, window_counters } from "./log.ts";
 import { STARVED_MS, summarize_frames, summarize_tasks, TILE_DECODED_MB, tris_text } from "./summary.ts";
 import { ledger_trace_download } from "./trace.ts";
+import { alloc_probe_install, alloc_probe_report, alloc_probe_reset } from "./alloc_probe.ts";
 
 const POLL_MS = 500;
 /** Tags listed under the triangle total — the heaviest few carry the cost. */
@@ -86,6 +87,8 @@ function Row(props: { k: string; v: string; warn?: boolean }) {
 type LedgerGlobals = typeof globalThis & {
   __pxl_ledger_trace?: () => string;
   __pxl_ledger_log?: () => Promise<string>;
+  __pxl_alloc_report?: () => string;
+  __pxl_alloc_reset?: () => void;
 };
 
 export function LedgerOverlay() {
@@ -102,9 +105,14 @@ export function LedgerOverlay() {
     const w = globalThis as LedgerGlobals;
     w.__pxl_ledger_trace = ledger_trace_download;
     w.__pxl_ledger_log = ledger_report_to_console;
+    alloc_probe_install();
+    w.__pxl_alloc_report = alloc_probe_report;
+    w.__pxl_alloc_reset = alloc_probe_reset;
     return () => {
       delete w.__pxl_ledger_trace;
       delete w.__pxl_ledger_log;
+      delete w.__pxl_alloc_report;
+      delete w.__pxl_alloc_reset;
     };
   }, []);
 

@@ -53,5 +53,5 @@ export function use_distance_fade(
     const drop = (sprite.material as THREE.Material).userData?.anchor_drop as { value: number } | undefined;
     if (drop) drop.value = anchor_drop;
     (sprite.material as THREE.SpriteMaterial).opacity = opacity;
-  });
+  }, "distance_fade");
 }

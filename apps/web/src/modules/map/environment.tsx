@@ -732,7 +732,7 @@ export function MapEnvironment(props: MapEnvironmentProps) {
       hemi_ref.current.groundColor.lerp(hemi_ground_color, lerp_factor);
       hemi_ref.current.intensity = THREE.MathUtils.lerp(hemi_ref.current.intensity, theme.lighting.hemisphere.intensity, lerp_factor);
     }
-  });
+  }, "environment");
 
   return (
     <>

@@ -170,12 +170,32 @@ export class FrameBudget {
   }
 }
 
-type Registered = { phase: Phase; step: TickStep };
+type Registered = { phase: Phase; step: TickStep; name: string };
 const registry: Registered[] = [];
 
-/** Registers a step into a phase. Returns the unregister. */
-export function on_tick(phase: Phase, step: TickStep): () => void {
-  const entry: Registered = { phase, step };
+/**
+ * Per-step wall time, dev only, keyed `phase/name`, cumulative since the
+ * ledger window began (log.ts resets it). The phase totals said the
+ * interaction phase cost a phone 7 ms a frame and could not say which of
+ * its five steps did; this can. Two registrations under one name (the two
+ * companion walkers) add into one row.
+ */
+export type StepStats = { name: string; ms: number; count: number; max_ms: number };
+// Tested under deno, where import.meta.env does not exist.
+const STEP_TIMING: boolean = import.meta.env?.DEV ?? false;
+const step_stats = new Map<string, StepStats>();
+
+export function tick_step_stats(): StepStats[] {
+  return [...step_stats.values()];
+}
+export function tick_step_stats_reset(): void {
+  step_stats.clear();
+}
+
+/** Registers a step into a phase. Returns the unregister. `name` is what
+ * the ledger reports the step's time under. */
+export function on_tick(phase: Phase, step: TickStep, name = "step"): () => void {
+  const entry: Registered = { phase, step, name };
   registry.push(entry);
   return () => {
     const i = registry.indexOf(entry);
@@ -188,10 +208,10 @@ export function on_tick(phase: Phase, step: TickStep): () => void {
  * registration happens in a layout effect so it lands in mount order — the
  * same order `useFrame` used to subscribe in.
  */
-export function useTick(phase: Phase, step: TickStep): void {
+export function useTick(phase: Phase, step: TickStep, name = "step"): void {
   const latest = useRef(step);
   latest.current = step;
-  useLayoutEffect(() => on_tick(phase, (ctx) => latest.current(ctx)), [phase]);
+  useLayoutEffect(() => on_tick(phase, (ctx) => latest.current(ctx), name), [phase, name]);
 }
 
 export type TickReport = {
@@ -242,7 +262,20 @@ function run_phase(phase: Phase, ctx: TickContext): void {
   // sibling, and a snapshot would run something that just asked not to be.
   for (let i = 0; i < registry.length; i++) {
     const entry = registry[i];
-    if (entry.phase === phase) entry.step(ctx);
+    if (entry.phase !== phase) continue;
+    if (!STEP_TIMING) {
+      entry.step(ctx);
+      continue;
+    }
+    const s0 = performance.now();
+    entry.step(ctx);
+    const ms = performance.now() - s0;
+    const key = `${phase}/${entry.name}`;
+    let stat = step_stats.get(key);
+    if (!stat) step_stats.set(key, stat = { name: key, ms: 0, count: 0, max_ms: 0 });
+    stat.ms += ms;
+    stat.count++;
+    if (ms > stat.max_ms) stat.max_ms = ms;
   }
   ctx.phase_ms[phase] = performance.now() - t0;
 }

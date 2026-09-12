@@ -27,6 +27,20 @@
         "label": "LOD cross-fade (per pixel)",
         "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
       },
+      "render_path": {
+        "full": {
+          "label": "Render path: full",
+          "description": "The shipped pipeline: 4x MSAA, the post stack, the depth pass for badges."
+        },
+        "no_msaa": {
+          "label": "Render path: no MSAA",
+          "description": "The same stack with multisampling off. Isolates the per-frame resolve on a tile-based GPU."
+        },
+        "no_post": {
+          "label": "Render path: no post",
+          "description": "The scene drawn straight to the canvas. No grade, no vignette, no depth pass, so badges show through terrain. A measurement, not a look."
+        }
+      },
       "dummy_toast": {
         "label": "Test Toast Notifications",
         "description": "Displays sample toast notifications for UI testing.",
