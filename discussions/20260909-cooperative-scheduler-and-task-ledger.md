@@ -866,6 +866,45 @@ the content steps, which is what showed a placement taking forty frames
 under a load and justified the share. The scheduler still knows one
 number.
 
+## The worker's case, 2026-09-13
+
+A cooperative scheduler and a worker are not alternatives. The scheduler
+interleaves work that can yield — every unit smaller than the budget, so
+several kinds of work share a frame without a stall; POI was that, and
+cutting it into units solved it without a thread. A worker takes work
+that cannot yield. The chunk bake is one mesher call, and on the phone
+that call is 14–21 ms against an 8 ms budget (`commit/bake 21.6 ms`,
+`scan/chunk 9.3 ms`); forward progress runs the unit whole, so the frame
+is lost by construction. The choices are to make the mesher resumable —
+invasive — or to move the unit whole.
+
+What the numbers say about the value. In the steady state, once loading
+is done, the bake barely runs: `visible/chunks` 0.7–2.9 ms a frame, the
+task 2 ms, the frame at the display rate; a worker changes nothing there.
+While terrain is filling in — first load, a zoom out, a new area — the
+step averages 8.7 ms with maxima of 64–112, 252 of 740 frames overran,
+and dt p50 was 29 ms; most of the phone's missed frames are in that
+window, and it is the window a user sees most. With the scan and the bake
+off the thread, what remains in the visible phase is the recheck (2 ms)
+and the attach (commit p95 9–14 ms), so the task's p95 in that window
+should fall from 33–48 ms to about 10. The desktop does not need it: the
+same unit is 3 ms there.
+
+What it costs: a copy in (the run set, ~100 KB a chunk; the terrain page
+once, kept in the worker) and a copy out (the mesh, ~1 MB), memcpy-scale
+and off the thread; and a frame or two of latency on each chunk, which
+changes when a chunk appears, not how many frames it takes. The phone's
+cores are there.
+
+What does not change: the model. The main thread stays the scheduler; the
+bake job stays a Demand with a priority, a budget and an abort; `run`
+borrows a slab, fills it, posts it, and copies the result back — the
+"executor swap under a fixed model" this document reserved, with the
+little memory (`sched/slabs.ts`) already holding the ownership record.
+Not everything moves: only what cannot yield and is heavy, which today is
+the bake. Placement and sweep stay cooperative. The same worker hosts the
+WASM bake when it comes.
+
 ## Guardrail
 
 [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md)
