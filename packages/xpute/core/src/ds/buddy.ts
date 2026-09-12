@@ -210,6 +210,11 @@ class Region {
     return offset;
   }
 
+  /** Whether the block of `order` at `offset` is itself on a free list. */
+  is_block_free(order: u32, offset: u32): boolean {
+    return this.is_free[order][offset >>> (this.min_shift + order)] === 1;
+  }
+
   /** Returns a block and merges it upward as far as its buddies allow. */
   release(order: u32, offset: u32, counts: { merges: u32 }): void {
     let k = order;
@@ -256,6 +261,14 @@ export class BuddyAllocator {
   private _backing_used: u32 = 0;
   /** Indices of regions carved from the backing — never reclaimed. */
   private readonly _backed = new Set<number>();
+  /** Region index by where it starts in the backing, and by its own buffer —
+   * how an address (a buffer and a byte offset) finds its region. */
+  private readonly _backed_at = new Map<number, number>();
+  private readonly _plain_at = new Map<ArrayBuffer, number>();
+  /** Buffers handed out whole — a spill is released by address too. */
+  private readonly _spills = new WeakSet<ArrayBuffer>();
+  /** Bits a handle spends on the order. */
+  private readonly _order_bits: u32;
 
   constructor(opts: BuddyOptions = {}) {
     const {
@@ -277,6 +290,7 @@ export class BuddyAllocator {
     this._poison = poison;
     this._bypass = bypass;
     this._backing = backing;
+    this._order_bits = shift_of(this._max_order + 2);
   }
 
   /**
@@ -295,7 +309,9 @@ export class BuddyAllocator {
       this.stat.spills++;
       this.stat.live_blocks++;
       this.stat.live_bytes += bytes;
-      return { buf: new ArrayBuffer(bytes), byte_offset: 0, bytes, order: -1, region: -1, free: false };
+      const buf = new ArrayBuffer(bytes);
+      this._spills.add(buf);
+      return { buf, byte_offset: 0, bytes, order: -1, region: -1, free: false };
     }
 
     const order = Math.max(shift_of(bytes), this._min_shift) - this._min_shift;
@@ -325,7 +341,12 @@ export class BuddyAllocator {
     const index = this._regions.indexOf(null);
     const i = index >= 0 ? index : this._regions.length;
     this._regions[i] = region;
-    if (backed) this._backed.add(i);
+    if (backed) {
+      this._backed.add(i);
+      this._backed_at.set(region.base, i);
+    } else {
+      this._plain_at.set(region.buf, i);
+    }
     this.stat.regions++;
     this.stat.reserved_bytes += this.region_bytes;
     this.stat.idle_bytes += this.region_bytes;
@@ -376,6 +397,7 @@ export class BuddyAllocator {
       const region = this._regions[i];
       if (!region || region.used_bytes > 0 || this._backed.has(i)) continue;
       if (++empty <= this.max_idle_regions) continue;
+      this._plain_at.delete(region.buf);
       this._regions[i] = null;
       this.stat.regions--;
       this.stat.reserved_bytes -= this.region_bytes;
@@ -389,10 +411,80 @@ export class BuddyAllocator {
     for (let i = 0; i < this._regions.length; i++) {
       const region = this._regions[i];
       if (!region || region.used_bytes > 0 || this._backed.has(i)) continue;
+      this._plain_at.delete(region.buf);
       this._regions[i] = null;
       this.stat.regions--;
       this.stat.reserved_bytes -= this.region_bytes;
       this.stat.idle_bytes -= this.region_bytes;
     }
+  }
+
+  // ---- By address ----
+  //
+  // A block can also be named without its Block object: by the buffer and
+  // byte offset its bytes sit at, with the size it was requested at — which
+  // is all a typed view over it carries — or by a handle, one u32 packing
+  // the region, the order and the page within the region. A handle is what a
+  // lane holds in place of a view: numbers only, and for a region carved
+  // from the backing, one step from the byte address a WASM side would use.
+
+  /** The region an address falls in, or -1 when it is in none. */
+  private _locate(buf: ArrayBuffer, byte_offset: u32): number {
+    if (buf === this._backing) return this._backed_at.get(byte_offset - (byte_offset % this.region_bytes)) ?? -1;
+    return this._plain_at.get(buf) ?? -1;
+  }
+
+  private _order_of(bytes: u32): u32 {
+    return Math.max(shift_of(bytes), this._min_shift) - this._min_shift;
+  }
+
+  /** Returns the block of `bytes` at this address — what `release` does for
+   * a Block, for a caller holding only a view. */
+  release_at(buf: ArrayBuffer, byte_offset: u32, bytes: u32): void {
+    if (bytes <= 0) return;
+    const i = this._locate(buf, byte_offset);
+    if (i < 0) {
+      if (!this._spills.has(buf)) {
+        console.warn(`[pool] release of ${bytes}B from a buffer this pool never lent ignored`);
+        return;
+      }
+      this._spills.delete(buf);
+      this.stat.live_blocks--;
+      this.stat.live_bytes -= bytes;
+      return;
+    }
+    const region = this._regions[i]!;
+    const order = this._order_of(bytes);
+    const offset = byte_offset - region.base;
+    if (region.is_block_free(order, offset)) {
+      console.warn(`[pool] double release of a ${bytes}B block ignored`);
+      return;
+    }
+    this.stat.live_blocks--;
+    this.stat.live_bytes -= bytes;
+    const block_bytes = 1 << (this._min_shift + order);
+    if (this._poison) new Float64Array(buf, byte_offset, block_bytes / 8).fill(NaN);
+    region.release(order, offset, this.stat);
+    region.used_bytes -= block_bytes;
+    this.stat.idle_bytes += block_bytes;
+    if (region.used_bytes === 0) this._reclaim_empty();
+  }
+
+  /** The handle for the block of `bytes` at this address. A spill has none:
+   * it is not in a region. */
+  handle_at(buf: ArrayBuffer, byte_offset: u32, bytes: u32): u32 {
+    const i = this._locate(buf, byte_offset);
+    if (i < 0) throw new MarshalError(Errno.EINVAL, `pool: a ${bytes}B block outside every region has no handle`);
+    if (i >= 1 << (32 - this._order_bits - this._max_order)) throw new MarshalError(Errno.EOVERFLOW, `pool: region ${i} does not fit a handle`);
+    const page = (byte_offset - this._regions[i]!.base) >>> this._min_shift;
+    return ((i << (this._order_bits + this._max_order)) | (this._order_of(bytes) << this._max_order) | page) >>> 0;
+  }
+
+  /** Where the block a handle names starts. */
+  handle_base(handle: u32): { buf: ArrayBuffer; byte_offset: u32 } {
+    const i = handle >>> (this._order_bits + this._max_order);
+    const region = this._regions[i]!;
+    const page = handle & ((1 << this._max_order) - 1);
+    return { buf: region.buf, byte_offset: region.base + (page << this._min_shift) };
   }
 }

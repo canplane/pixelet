@@ -9,13 +9,13 @@ import { DECOR_SIZE } from "./size.ts";
 import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { cell_index, cell_key, get_object_entries_in_l2_column, get_objects_in_cell, get_placed_object, l2_column_key_of, place, place_decor, remove } from "./store.ts";
+import { cell_index, cell_is_occupied, cell_key, each_column_entry, get_objects_in_cell, get_placed_object, object_column_of, object_store_stats, place, place_decor, remove } from "./store.ts";
 
 // Distinct, far-apart corners per test so leftover module-level state from
 // one test never collides with another (this file has no localStorage under
 // `deno test` — see store.ts's own `typeof localStorage === "undefined"`
 // guard — so nothing persists between test files, but tests within this one
-// file still share the same module-level `cells` map).
+// file still share the same module-level chunk storage).
 let next_cell_x = 0n;
 function fresh_corner(): { i: ReturnType<typeof ivec.gather>; f: 0n } {
   const i = ivec.gather(next_cell_x, 0n, 0n);
@@ -89,12 +89,70 @@ Deno.test("objects/store column key - an object above one L2 span still belongs 
   place(high.i, high.f, DECOR_SIZE, "blue");
 
   const column = TO_XY(ground.i);
-  const key = l2_column_key_of(L3_IDX(column), L2_IDX_IN_L3(column));
-  const entries = get_object_entries_in_l2_column(key);
-  assertEquals(entries.length, 2);
-  assertEquals(entries.map((e) => ivec.Z(e.i)).sort((a, b) => Number(a - b)), [10n, 200n]);
+  const key = object_column_of(L3_IDX(column), L2_IDX_IN_L3(column));
+  const zs: bigint[] = [];
+  each_column_entry(key, (entry) => zs.push(ivec.Z(entry.corner().i)));
+  assertEquals(zs.sort((a, b) => Number(a - b)), [10n, 200n]);
 
   // And the renderer's own way of spelling the same key — a page offset it
   // builds with z = 0 — resolves to the same column.
-  assertEquals(l2_column_key_of(L3_IDX(column), ivec.gather(0n, 0n, 0n) | L2_IDX_IN_L3(column)), key);
+  assertEquals(object_column_of(L3_IDX(column), ivec.gather(0n, 0n, 0n) | L2_IDX_IN_L3(column)), key);
+});
+
+Deno.test("objects/store band tree - a 2×2×2 block of one colour reads back as eight cells", () => {
+  // A band tree merges a uniform block of whole cells into one larger leaf
+  // when it compacts; everything downstream assumes an entry is one cell.
+  const x0 = 4096n * 7n;
+  const corners: { i: ReturnType<typeof ivec.gather>; f: 0n }[] = [];
+  for (let dz = 0n; dz < 2n; dz++) for (let dy = 0n; dy < 2n; dy++) for (let dx = 0n; dx < 2n; dx++) corners.push({ i: ivec.gather(x0 + dx, dy, dz), f: 0n });
+  for (const c of corners) place(c.i, c.f, DECOR_SIZE, "red");
+
+  for (const c of corners) {
+    const found = get_objects_in_cell(cell_key(...cell_index(c)));
+    assertEquals(found.length, 1);
+    assertEquals(found[0].size, 1);
+  }
+  const [first] = get_objects_in_cell(cell_key(...cell_index(corners[0])));
+  remove(first.id);
+  assertEquals(get_objects_in_cell(cell_key(...cell_index(corners[0]))).length, 0);
+  assertEquals(get_objects_in_cell(cell_key(...cell_index(corners[7]))).length, 1);
+});
+
+Deno.test("objects/store band tree - clearing a chunk's last object frees the chunk", () => {
+  const c = { i: ivec.gather(4096n * 9n, 4096n * 2n, 3n), f: 0n as const };
+  const before = object_store_stats().chunks;
+  place(c.i, c.f, DECOR_SIZE, "blue");
+  assertEquals(object_store_stats().chunks, before + 1);
+  const [entry] = get_objects_in_cell(cell_key(...cell_index(c)));
+  remove(entry.id);
+  assertEquals(object_store_stats().chunks, before);
+});
+
+Deno.test("objects/store entries - a column walk's chunk-local corner agrees with the absolute one", () => {
+  const x0 = 4096n * 11n + 70n; // not on a chunk boundary
+  const c = { i: ivec.gather(x0, 4096n * 4n + 5n, 130n), f: 0n as const };
+  place(c.i, c.f, DECOR_SIZE, "red");
+  const column = TO_XY(c.i);
+  const base = object_column_of(L3_IDX(column), L2_IDX_IN_L3(column));
+  let seen = 0;
+  each_column_entry(base, (entry) => {
+    seen++;
+    const { i } = entry.corner();
+    assertEquals(ivec.Z(i), 130n);
+    assertEquals(entry.lx, Number(x0 % 64n));
+    assertEquals(entry.ly, 5);
+    assertEquals(entry.lz, 130);
+  });
+  assertEquals(seen, 1);
+});
+
+Deno.test("objects/store cells - occupancy follows placement and removal, and air does not occupy", () => {
+  const c = { i: ivec.gather(4096n * 13n, 0n, 2n), f: 0n as const };
+  const [ix, iy, iz] = cell_index(c);
+  assertEquals(cell_is_occupied(ix, iy, iz), false);
+  place(c.i, c.f, DECOR_SIZE, "red");
+  assertEquals(cell_is_occupied(ix, iy, iz), true);
+  const [entry] = get_objects_in_cell(cell_key(ix, iy, iz));
+  remove(entry.id);
+  assertEquals(cell_is_occupied(ix, iy, iz), false);
 });

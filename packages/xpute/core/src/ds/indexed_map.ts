@@ -1,106 +1,198 @@
 // @xpute/core/ds/indexed_map.ts
-// Array + Map index. O(1) insert/delete, fast iteration, seeded permutation iterator.
 
-export type Key = string | number | bigint;
+/**
+ * A dense array of keys with an index into it: insert appends, delete moves
+ * the last entry into the hole, and a walk over every entry is a walk over
+ * contiguous memory.
+ *
+ * Laid out as lanes. The keys are one typed array in position order, and the
+ * index from key to position is an open-addressing table of positions —
+ * linear probing, deletion by backward shift, so no tombstones pile up. There
+ * is no object per entry. An earlier version kept `[K, V]` tuples and a JS
+ * Map: dense in order, boxed in every other respect, and neither half could
+ * have followed the data into linear memory.
+ *
+ * Values are not stored. A position is the value: `insert` returns it,
+ * `find` looks it up, and `remove_at` says which entry moved into a freed
+ * position — a caller keeps what it stores per entry in its own lanes at the
+ * same position and moves them along.
+ *
+ * Keys are integers of one width, chosen by KeyTraits: I64_KEYS for 64-bit
+ * keys (a packed IVec, say), U32_KEYS for 32-bit ones. The two cannot share
+ * one lane type — typed arrays split into a number family and a BigInt family
+ * (kit/array.ts) — so the traits carry the lane, the hash and the canonical
+ * form, the same way sparse_tree takes its key operations as PVecTraits.
+ */
 
-export class IndexedMap<K extends Key, V> implements Iterable<[K, V]> {
-  private readonly entries: Array<[K, V]> = [];
-  private readonly index: Map<K, number> = new Map();
+import type { i32, u32 } from "../kit/word.ts";
+import type { AnyTypedArrayCtor, I64Array, U32Array } from "../kit/array.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "./typed_alloc.ts";
 
-  get size(): number {
-    return this.entries.length;
+type KeyLane = I64Array | U32Array;
+
+export type KeyTraits<K extends number | bigint> = {
+  readonly ctor: BigInt64ArrayConstructor | Uint32ArrayConstructor;
+  /** The form a key is stored and compared in. */
+  norm(key: K): K;
+  /** A 32-bit mix whose high bits are well spread; the table takes a slot
+   * from the top bits. */
+  hash(key: K): u32;
+};
+
+/** 64-bit keys, compared as signed: a key past 2^63 — an unsigned packed
+ * word — folds with asIntN on the way in, so the same number always finds
+ * the same entry. `key_at` returns the folded form. */
+export const I64_KEYS: KeyTraits<bigint> = {
+  ctor: BigInt64Array,
+  norm: (k) => BigInt.asIntN(64, k),
+  // Fibonacci hashing: the high half of k · 2^64/φ.
+  hash: (k) => Number(BigInt.asUintN(64, k * 0x9e3779b97f4a7c15n) >> 32n),
+};
+
+export const U32_KEYS: KeyTraits<number> = {
+  ctor: Uint32Array,
+  norm: (k) => k >>> 0,
+  hash: (k) => Math.imul(k, 0x9e3779b1) >>> 0,
+};
+
+export class IndexedMap<K extends number | bigint> {
+  private keys: KeyLane;
+  /** Per slot, position + 1; 0 is an empty slot. */
+  private table: Uint32Array;
+  /** 32 − log2(table size): a hash's top bits pick the home slot. */
+  private shift: u32;
+  private mask: u32;
+  private _size: u32 = 0;
+
+  constructor(private readonly traits: KeyTraits<K>, cap: u32 = 16, private readonly alloc: TypedAlloc = HEAP_ALLOC) {
+    let size = 2;
+    while (size < cap * 2) size <<= 1;
+    this.table = alloc.take(Uint32Array, size);
+    this.keys = this.take_keys(size >>> 1);
+    this.mask = size - 1;
+    this.shift = 32 - Math.log2(size);
   }
 
-  has(k: K): boolean {
-    return this.index.has(k);
+  get size(): u32 {
+    return this._size;
   }
 
-  get(k: K): V | undefined {
-    const i = this.index.get(k);
-    return i === undefined ? undefined : this.entries[i][1];
+  /** The key at a position, in its stored form. */
+  key_at(pos: u32): K {
+    return this.keys[pos] as K;
   }
 
-  // O(1) insert; returns false if exists
-  insert(k: K, v: V): boolean {
-    if (this.index.has(k)) return false;
-    this.index.set(k, this.entries.length);
-    this.entries.push([k, v]);
-    return true;
-  }
-
-  // O(1) upsert
-  upsert(k: K, v: V): void {
-    const i = this.index.get(k);
-    if (i === undefined) {
-      this.index.set(k, this.entries.length);
-      this.entries.push([k, v]);
-    } else {
-      this.entries[i][1] = v;
+  /** The key's position, or -1. */
+  find(key: K): i32 {
+    const k = this.traits.norm(key);
+    let s = this.home(k);
+    for (;;) {
+      const e = this.table[s];
+      if (e === 0) return -1;
+      if (this.keys[e - 1] === k) return e - 1;
+      s = (s + 1) & this.mask;
     }
   }
 
-  // O(1) delete via swap-with-last
-  delete(k: K): boolean {
-    const i = this.index.get(k);
-    if (i === undefined) return false;
+  /** The key's position, appending it at the end if it is new. */
+  insert(key: K): u32 {
+    const found = this.find(key);
+    if (found >= 0) return found;
+    if ((this._size + 1) * 2 > this.table.length) this.grow();
+    const k = this.traits.norm(key);
+    const pos = this._size++;
+    this.keys[pos] = k as never;
+    this.place(k, pos);
+    return pos;
+  }
 
-    const last = this.entries.length - 1;
-    if (i !== last) {
-      const lastEntry = this.entries[last];
-      this.entries[i] = lastEntry;
-      this.index.set(lastEntry[0], i);
+  /**
+   * Removes the entry at `pos` by moving the last entry into it. Returns the
+   * position that entry came from — move your own lanes from there to `pos` —
+   * or `pos` itself when the removed entry was the last.
+   */
+  remove_at(pos: u32): u32 {
+    this.unplace(this.slot_of(this.keys[pos] as K));
+    const last = --this._size;
+    if (pos !== last) {
+      const moved = this.keys[last] as K;
+      this.table[this.slot_of(moved)] = pos + 1;
+      this.keys[pos] = moved as never;
     }
-    this.entries.pop();
-    this.index.delete(k);
-    return true;
+    return last;
   }
 
-  clear(): void {
-    this.entries.length = 0;
-    this.index.clear();
-  }
-
-  // Default iteration: array order (fast)
-  *[Symbol.iterator](): IterableIterator<[K, V]> {
-    for (let i = 0; i < this.entries.length; i++) yield this.entries[i];
-  }
-
-  *keys(): IterableIterator<K> {
-    for (let i = 0; i < this.entries.length; i++) yield this.entries[i][0];
-  }
-
-  *values(): IterableIterator<V> {
-    for (let i = 0; i < this.entries.length; i++) yield this.entries[i][1];
-  }
-
-  // Seeded full permutation iterator in O(1) memory.
-  // NOTE: snapshot semantics: if you mutate during iteration, behavior is undefined.
-  *iterSeeded(seed: bigint): IterableIterator<[K, V]> {
-    const n = this.entries.length;
+  /**
+   * Every position once, in an order fixed by `seed`, in O(1) memory: a
+   * start and a step coprime to the size walk the positions as a cycle. For
+   * spreading work or routing without favouring insertion order. Mutating
+   * during the walk is undefined.
+   */
+  *positions_seeded(seed: bigint): IterableIterator<u32> {
+    const n = this._size;
     if (n === 0) return;
-
     const s = splitmix64(seed);
-    const start = Number(s % BigInt(n));
-    const step = makeCoprimeStep(n, splitmix64(s ^ 0x9e3779b97f4a7c15n));
-
-    let idx = start;
+    let pos = Number(s % BigInt(n));
+    const step = coprime_step(n, splitmix64(s ^ 0x9e3779b97f4a7c15n));
     for (let t = 0; t < n; t++) {
-      yield this.entries[idx];
-      idx += step;
-      idx %= n;
+      yield pos;
+      pos = (pos + step) % n;
     }
   }
 
-  *keysSeeded(seed: bigint): IterableIterator<K> {
-    for (const [k] of this.iterSeeded(seed)) yield k;
+  private take_keys(n: u32): KeyLane {
+    return this.alloc.take(this.traits.ctor as unknown as AnyTypedArrayCtor<KeyLane>, n);
   }
 
-  *valuesSeeded(seed: bigint): IterableIterator<V> {
-    for (const [, v] of this.iterSeeded(seed)) yield v;
+  private home(k: K): u32 {
+    return this.traits.hash(k) >>> this.shift;
+  }
+
+  private place(k: K, pos: u32): void {
+    let s = this.home(k);
+    while (this.table[s] !== 0) s = (s + 1) & this.mask;
+    this.table[s] = pos + 1;
+  }
+
+  private slot_of(k: K): u32 {
+    let s = this.home(k);
+    while (this.keys[this.table[s] - 1] !== k) s = (s + 1) & this.mask;
+    return s;
+  }
+
+  /** Backward-shift deletion: pull later entries of the probe run into the
+   * hole unless their own home lies cyclically between the hole and them. */
+  private unplace(hole: u32): void {
+    let i = hole;
+    let j = hole;
+    this.table[i] = 0;
+    for (;;) {
+      j = (j + 1) & this.mask;
+      const e = this.table[j];
+      if (e === 0) return;
+      const h = this.home(this.keys[e - 1] as K);
+      const stays = i <= j ? h > i && h <= j : h > i || h <= j;
+      if (!stays) {
+        this.table[i] = e;
+        this.table[j] = 0;
+        i = j;
+      }
+    }
+  }
+
+  private grow(): void {
+    const size = this.table.length * 2;
+    const keys = this.take_keys(size >>> 1);
+    keys.set(this.keys.subarray(0, this._size) as never);
+    this.alloc.give(this.keys);
+    this.alloc.give(this.table);
+    this.keys = keys;
+    this.table = this.alloc.take(Uint32Array, size);
+    this.mask = size - 1;
+    this.shift = 32 - Math.log2(size);
+    for (let pos = 0; pos < this._size; pos++) this.place(keys[pos] as K, pos);
   }
 }
-
-/** -------- helpers -------- */
 
 function gcd(a: number, b: number): number {
   while (b !== 0) {
@@ -111,7 +203,7 @@ function gcd(a: number, b: number): number {
   return Math.abs(a);
 }
 
-function makeCoprimeStep(n: number, seed: bigint): number {
+function coprime_step(n: number, seed: bigint): number {
   if (n === 1) return 1;
   let step = Number(seed % BigInt(n));
   if (step === 0) step = 1;
@@ -124,7 +216,7 @@ function makeCoprimeStep(n: number, seed: bigint): number {
   return step;
 }
 
-// SplitMix64 PRNG (BigInt). Good enough for routing randomization.
+/** SplitMix64 (BigInt). */
 function splitmix64(x: bigint): bigint {
   x = (x + 0x9e3779b97f4a7c15n) & 0xffffffffffffffffn;
   let z = x;

@@ -13,7 +13,7 @@
  */
 
 import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
-import { buddy_alloc, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
+import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 
 /**
  * Region sizing.
@@ -97,7 +97,7 @@ export const CORE_POOL = new BuddyAllocator({
 
 /** Typed lanes carved from the core pool — what a structure is handed so its
  * columns live in the core memory rather than on the heap. */
-export const CORE_ALLOC: TypedAlloc = buddy_alloc(CORE_POOL);
+export const CORE_ALLOC: AddressedAlloc = buddy_alloc(CORE_POOL);
 
 export function core_pool_stat(): Readonly<typeof CORE_POOL.stat> {
   return CORE_POOL.stat;

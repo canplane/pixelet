@@ -91,13 +91,13 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import type { Tile } from "@pxl/shared/bake/format.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
-import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_id_from_num, type DecorId, object_value_is_decor } from "@pxl/shared/spec/cell/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
-import { cell_index, cell_key, get_object_entries_in_l2_column, get_objects_in_cell, l2_column_key_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
+import { cell_index, cell_is_occupied, each_column_entry, object_column_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
 import type { LodStep } from "@/render/lod.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
@@ -204,38 +204,27 @@ function collect_user_decor_instances(
   by_variant: ModelInstanceTransformList[],
   bundle: DecorKindBundle,
   page_idx: IVec,
-  page_base: IVec,
   base_x: number,
   base_y: number,
 ): void {
   if (!bundle.decor_id) return;
   const page_off = ivec.gather(BigInt(base_x), BigInt(base_y), 0n);
-  const l2_key = l2_column_key_of(page_idx, page_off);
   const hidden_id = virtual_hidden_id();
-  for (const entry of get_object_entries_in_l2_column(l2_key)) {
-    if (entry.kind !== "decor" || entry.decor_id !== bundle.decor_id) continue;
-    const local = ivec.sub(entry.i, page_base);
-    const x: f64 = ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(entry.f));
-    const y: f64 = ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(entry.f));
-    const z: f64 = ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(entry.f));
-    const { variant, rotation } = user_decor_pick(entry.i, bundle.variants.length);
-    // +size/2 on X/Y: the entry stores a cell's min corner (objects/store.ts),
-    // but a free-standing model plants itself at the middle of that footprint
-    // — the same center collect_procedural_decor_instances below places a
-    // scattered tree at (`+ U_PER_CELL / 2`), and the X/Y half of what
-    // objects/geometry.ts's anchor_center does for the pointer tap (Z stays
-    // on the slot here — a decor model's origin is at its base, not its
-    // middle). entry.size is DECOR_SIZE (one whole cell) in practice, so this
-    // is U_PER_CELL / 2; written as size/2 so a future sub-cell decor tier
-    // still centers in its own footprint rather than a whole cell's.
+  each_column_entry(object_column_of(page_idx, page_off), (entry) => {
+    if (!object_value_is_decor(entry.state) || decor_id_from_num(entry.state) !== bundle.decor_id) return;
+    const { variant, rotation } = user_decor_pick(entry.corner().i, bundle.variants.length);
+    // +size/2 on X/Y: the entry is a cell's min corner, but a free-standing
+    // model plants itself at the middle of its footprint — the same centre a
+    // scattered tree gets below (`+ U_PER_CELL / 2`). Z stays on the slot: a
+    // decor model's origin is at its base. entry.size is DECOR_SIZE (one
+    // whole cell) in practice; written as size/2 so a sub-cell decor tier
+    // still centres in its own footprint.
     const hcenter = entry.size / 2;
-    // Chunk-local: see build_decor_instances' own doc comment on why the
-    // page-relative x/y computed above gets shifted here, at the last
-    // possible moment, rather than earlier (everything upstream — the
-    // entry's own absolute i/f, page_base — stays in its own natural frame;
-    // only the final stored position changes convention).
-    by_variant[variant].push({ position: [x - base_x * U_PER_CELL + hcenter, y - base_y * U_PER_CELL + hcenter, z], rotation_z: rotation, scale: 1, id: entry.id, hidden: entry.id === hidden_id });
-  }
+    const id = entry.id();
+    // The cursor's corner is already chunk-local — the same frame chunk
+    // content is built in (build_decor_instances' own doc comment).
+    by_variant[variant].push({ position: [entry.lx + hcenter, entry.ly + hcenter, entry.lz], rotation_z: rotation, scale: 1, id, hidden: id === hidden_id });
+  });
 }
 
 // The "system/procedural" half — scatter_decor_candidates' own output,
@@ -283,7 +272,7 @@ function collect_procedural_decor_instances(
 
     const cell_ivec = ivec.add(page_base, ivec.gather(BigInt(candidate.cell_x), BigInt(candidate.cell_y), BigInt(Math.floor(ele))));
     const [ix, iy, iz] = cell_index({ i: cell_ivec, f: 0n });
-    if (get_objects_in_cell(cell_key(ix, iy, iz)).length > 0) continue;
+    if (cell_is_occupied(ix, iy, iz)) continue;
 
     // id: null — procedural placements are never stored (this file's own
     // top doc comment), so there's nothing for decor_hit.ts's raycast_decor
@@ -325,7 +314,7 @@ export function build_decor_instances(
 ): ModelInstanceTransformList[] {
   const by_variant: ModelInstanceTransformList[] = bundle.variants.map(() => []);
   const page_base = FROM_L3_IDX(page_idx);
-  collect_user_decor_instances(by_variant, bundle, page_idx, page_base, base_x, base_y);
+  collect_user_decor_instances(by_variant, bundle, page_idx, base_x, base_y);
   collect_procedural_decor_instances(by_variant, bundle, tile, lod_step, page_idx, page_base, base_x, base_y);
   return by_variant;
 }
