@@ -18,6 +18,7 @@ import { useThemeKey } from "@/modules/world/environment/theme_clock.ts";
 import { FrameProvider } from "@/modules/world/frame/context.tsx";
 
 import { MapEnvironment } from "./environment.tsx";
+import { TickDriver } from "@/modules/world/sched/tick.ts";
 import { World } from "@/modules/world/world.tsx";
 import { useMapBootstrap } from "./navigation/use_map_bootstrap.ts";
 import { useTileFetcher } from "@/modules/world/terrain/use_tile_fetcher.ts";
@@ -196,6 +197,12 @@ export function MapScene() {
           frameloop="demand"
         >
           <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_tilt_shift, show_chromatic_aberration, show_god_rays, aa_mode, show_shadow_map]} />
+          {
+            /* The one useFrame in this Canvas. Every per-frame subscriber in
+              the world registers a step into a phase of this tick instead
+              (sched/tick.ts) — one order, one budget. */
+          }
+          <TickDriver />
           <FrameProvider>
             <CameraRig />
 

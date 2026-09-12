@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { invalidate, useFrame } from "@react-three/fiber";
+import { invalidate } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { wrap } from "@xpute/core/kit/math.ts";
@@ -10,6 +10,7 @@ import { wrap } from "@xpute/core/kit/math.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
 import { damp_alpha } from "@/modules/camera/orbit.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 const { ROT_DAMP } = camera_cfg.smooth;
 
@@ -32,7 +33,7 @@ export function useFrameRotation(props: UseFrameRotationProps) {
     invalidate();
   }, [azimuth]);
 
-  useFrame((state, delta) => {
+  useTick("interaction", ({ state, delta }) => {
     const frame = frame_ref.current;
     if (!frame) return;
 

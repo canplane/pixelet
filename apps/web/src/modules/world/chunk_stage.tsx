@@ -21,22 +21,22 @@
  */
 
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
 import {
+  type ChunkLodControl,
   ChunkNode,
   commit_step_stats,
   lod_build_stats,
   lod_scheduler,
-  LOD_WORK_BUDGET_MS,
   mesh_mount_stats,
   mesh_unmount_stats,
   record_timing,
@@ -50,9 +50,11 @@ import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { usePoiStore } from "@/modules/world/poi/store.ts";
 import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
-import { run_under_budget } from "@/modules/world/sched/frame_budget.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
 import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
+import { by_priority, lead_point } from "@/modules/world/sched/priority.ts";
+import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { in_range_chunks } from "@/render/chunk_range.ts";
 import { compositor_cache_stats } from "@/render/layer/pipeline/compositor.ts";
 import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
@@ -62,18 +64,12 @@ import { update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
-/**
- * Ceiling on either LOD pass, applied even when the pass has committed
- * nothing — one frame's worth, so a pass can never itself be the stutter.
- *
- * Measured before this existed: a zoom-out leaves ~2000 chunks pending, most
- * `commit()` calls scan (up to ~15ms) and then defer, and a deferral returns
- * false. Since LOD_WORK_BUDGET_MS was waived until something actually
- * committed, thousands of expensive deferrals armed nothing and produced a
- * single 4711ms frame — while no individual step exceeded 42ms. Draining
- * across frames is the correct behaviour; freezing for 4.7s is not.
- */
-const LOD_HARD_BUDGET_MS: f64 = 16;
+/* The per-pass budgets that used to sit here — a soft allowance per pass and
+ * a 16ms hard ceiling each — are gone. Both passes now draw on the one
+ * FrameBudget the tick hands every phase (sched/tick.ts), so the frame's
+ * allowance is shared rather than granted twice, and the ceiling is slack
+ * over that pool rather than a second constant. The 4711ms frame the hard
+ * ceiling was measured against is recorded in frame_budget.ts. */
 
 /* Session-peak scheduler load used to live here as its own object. It now
  * comes from sched/ledger.ts's ledger_frame_peak(): this loop reports each
@@ -218,6 +214,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const { gl } = useThree();
   const anchor_registry = useAnchorRegistry();
+  const { local_world_frame_ref } = useFrameRefs();
+  const lead = useMemo(() => new THREE.Vector3(), []);
 
   // Decor hangs off the anchor root rather than off any one chunk or page:
   // it is one field for the whole world (decor/field.ts), and the root is the
@@ -261,15 +259,46 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   }, [gl]);
   const projection = useMemo(() => new THREE.Matrix4(), []);
 
-  useFrame((state, delta) => {
-    const frame_t0 = import.meta.env.DEV ? performance.now() : 0;
+  // What the visible phase measured, handed to the report phase below. A
+  // ref rather than state: it is written and read inside one tick.
+  const visible_pass = useRef<
+    {
+      controls: ChunkLodControl[];
+      pending_total: ChunkLodControl[];
+      committed: u32;
+      recheck_ms: number;
+      commit_ms: number;
+    } | null
+  >(null);
+
+  useTick("visible", ({ state, delta, budget }) => {
     if (import.meta.env.DEV) gpu_timer_begin();
     const controls = Array.from(scheduler.controls);
+    visible_pass.current = null;
     if (controls.length === 0) return;
     lod_elapsed.current += delta;
     const full_recheck = lod_elapsed.current >= LOD_RECHECK_INTERVAL;
     if (full_recheck) lod_elapsed.current = 0;
     update_frustum(frustum, state.camera, projection);
+
+    // Where the camera is heading — see sched/priority.ts. Both passes below
+    // order by it; the tier each chunk picks still comes from the camera as
+    // drawn.
+    const target = useMapStore.getState().map_center;
+    const local_frame = local_world_frame_ref.current;
+    if (target && local_frame) {
+      const local = ivec.sub(target.i, anchor_registry.cur_map_origin);
+      lead_point(
+        lead,
+        state.camera.position,
+        ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(target.f)),
+        ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(target.f)),
+        ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(target.f)),
+        local_frame.matrixWorld,
+      );
+    } else {
+      lead.copy(state.camera.position);
+    }
 
     const recheck_t0 = import.meta.env.DEV ? performance.now() : 0;
     // Same cooperative shape as the commit loop below: the first eligible
@@ -287,7 +316,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // far chunks resolve first purely because they mounted first, while much
     // closer chunks queued behind them for a frame or more — the opposite
     // of the "resolves outward from the camera" this whole scheduler exists
-    // for. Same (in_frustum desc, distance2 asc) key the commit loop below
+    // for. Same by_priority key (sched/priority.ts) the commit loop below
     // sorts pending by — one shared notion of priority, not two.
     //
     // distance2 is always a real, if sometimes approximate, camera-relative
@@ -319,11 +348,11 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // needless GC pressure and comparisons on the common (non-full_recheck)
     // frame, for a subset most of which was about to be skipped anyway.
     const eligible = controls.filter((control) => full_recheck || control.blend_active || control.settling);
-    eligible.sort((a, b) => Number(b.in_frustum) - Number(a.in_frustum) || a.distance2 - b.distance2);
-    run_under_budget(eligible, (control) => {
-      control.recheck(state.camera, frustum);
+    eligible.sort(by_priority);
+    budget.run(eligible, (control) => {
+      control.recheck(state.camera, frustum, lead);
       return true;
-    }, { budget_ms: LOD_WORK_BUDGET_MS, hard_budget_ms: LOD_HARD_BUDGET_MS });
+    });
 
     // Every blend_active-true control is by construction included in
     // eligible above (it's one of the three needs_recheck conditions), so
@@ -340,26 +369,38 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     const pending_total = controls.filter((control) => control.pending);
     // Visible builds/refinements win. Pending work outside the frustum only
     // drops a formerly visible chunk's derived surface and GPU buffers.
-    const pending = pending_total.sort((a, b) => Number(b.in_frustum) - Number(a.in_frustum) || a.distance2 - b.distance2);
+    // The slot holder first, whatever its distance — see ChunkLodControl.holds_slot.
+    const pending = pending_total.sort(by_priority);
     const commit_t0 = import.meta.env.DEV ? performance.now() : 0;
     // commit() returning false means "nothing to do after all" — it neither
     // counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the deadline, which is
     // what run_under_budget's own falsy-step rule preserves.
-    const committed: u32 = run_under_budget(pending, (control) => control.commit(), {
-      budget_ms: LOD_WORK_BUDGET_MS,
-      hard_budget_ms: LOD_HARD_BUDGET_MS,
-      max_steps: LOD_MAX_CHUNKS_PER_FRAME,
-    }).ran;
+    // The commit pass gets what the recheck pass left, not a budget of its
+    // own — the two used to carry independent allowances, so a frame could
+    // legally spend both in full before anything else ran.
+    const committed: u32 = budget.run(pending, (control) => control.commit(budget), { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran;
     // After the commits, so a chunk's terrain and its decor reach the screen
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
     decor_field.update(anchor_registry.cur_map_origin);
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
-    if (import.meta.env.DEV) {
+    if (committed > 0 || pending.length > committed || blend_active) state.invalidate();
+    if (import.meta.env.DEV) visible_pass.current = { controls, pending_total, committed, recheck_ms, commit_ms };
+  });
+
+  // The ledger, after every other phase has run, so `sched_ms` is the whole
+  // tick and not this component's share of it.
+  useTick("report", ({ state, delta, budget, phase_ms }) => {
+    if (!import.meta.env.DEV) return;
+    const pass = visible_pass.current;
+    if (!pass) return;
+    const { controls, pending_total, committed, recheck_ms, commit_ms } = pass;
+    {
       const settling_lod = controls.filter((control) => control.settling).length;
       const blend_active_cnt = controls.filter((control) => control.blend_active).length;
       const in_frustum_cnt = controls.filter((control) => control.in_frustum).length;
       const pending_lod_total_cnt = pending_total.length - committed;
+      const frame_t0 = budget.t0;
       const frame_ms = performance.now() - frame_t0;
 
       // Report this frame to sched/ledger.ts BEFORE reading the peak below —
@@ -382,6 +423,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         t: performance.now(),
         dt_ms: delta * 1000,
         sched_ms: frame_ms,
+        budget_ms: budget.total_ms,
+        phases: { ...phase_ms },
         cpu: { recheck_ms, commit_ms, render_ms: last_render_ms },
         // Filled by the microtask below, which runs once the rAF task's JS
         // stack empties — i.e. after every other useFrame subscriber and after
@@ -416,7 +459,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       const debug_stats = {
         chunks: controls.length,
         in_frustum: in_frustum_cnt,
-        pending_lod: pending.length - committed,
+        pending_lod: pending_total.length - committed,
         pending_lod_total: pending_lod_total_cnt,
         blend_active: blend_active_cnt,
         settling_lod,
@@ -461,7 +504,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         if (sample) sample.task_ms = last_task_ms;
       });
     }
-    if (committed > 0 || pending.length > committed || blend_active) state.invalidate();
   });
 
   return <>{children}</>;

@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { invalidate, useFrame, useThree } from "@react-three/fiber";
+import { invalidate, useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
@@ -22,6 +22,7 @@ import { L4_BASE } from "@pxl/shared/spec/space/indexer.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 const { FOG_NEAR, FOG_FAR, FAR_CLIP } = render_cfg;
 const { MAX_DIST } = camera_cfg.view;
@@ -466,7 +467,7 @@ export function MapEnvironment(props: MapEnvironmentProps) {
     return () => clearTimeout(timer);
   }, []);
 
-  useFrame((state, delta) => {
+  useTick("cosmetic", ({ state, delta }) => {
     if (!scene) return;
 
     // clamped: delta can spike well past a normal frame time (first frame

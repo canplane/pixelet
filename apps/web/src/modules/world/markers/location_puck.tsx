@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { useFrame } from "@react-three/fiber";
 
 import { BOOL, type f64, type i32, type u32 } from "@xpute/core/kit/word.ts";
 
@@ -19,6 +18,7 @@ import { AnchorNode } from "../anchor/node.tsx";
 import { WorldThemeKey } from "../environment/themes.ts";
 import { useThemeKey } from "../environment/theme_clock.ts";
 import { marker_colors } from "./style.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 const { FOG_FAR } = render_cfg;
 
@@ -284,7 +284,7 @@ void main() {
     prev_center.current = [center_pos[0], center_pos[1], center_pos[2]];
   }, [center_pos]);
 
-  useFrame((state, delta) => {
+  useTick("interaction", ({ state, delta }) => {
     if (!beacon_ref.current) return;
 
     beacon_ref.current.getWorldPosition($beacon_pos.current);

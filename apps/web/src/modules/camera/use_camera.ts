@@ -1,7 +1,7 @@
 // @pxl/web/modules/camera/use_camera.ts
 
 import { useEffect, useRef } from "react";
-import { invalidate, useFrame, useThree } from "@react-three/fiber";
+import { invalidate, useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
@@ -14,6 +14,7 @@ import { render_cfg } from "@/modules/world/environment/config.ts";
 import { damp_alpha, orbit_local_offset } from "./orbit.ts";
 import { climb_polar } from "./terrain_gate.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
@@ -78,7 +79,7 @@ export function useCamera() {
    * never touched by it. */
   const shown_climb = useRef<f64>(0);
 
-  useFrame((state, delta) => {
+  useTick("interaction", ({ state, delta }) => {
     if (!did_init.current) {
       dist.current = view_state.dist;
       polar.current = view_state.polar;

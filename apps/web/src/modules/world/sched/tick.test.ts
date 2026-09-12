@@ -1,0 +1,128 @@
+// @pxl/web/modules/world/sched/tick.test.ts
+
+import { assert, assertEquals } from "@std/assert";
+import type { RootState } from "@react-three/fiber";
+
+import { FrameBudget, on_tick, PHASES, run_tick } from "./tick.ts";
+
+const state = {} as RootState;
+
+function burn(ms: number): void {
+  const end = performance.now() + ms;
+  while (performance.now() < end) { /* spin */ }
+}
+
+Deno.test("tick - phases run in their fixed order, whatever order they registered in", () => {
+  const seen: string[] = [];
+  const offs = [...PHASES].reverse().map((phase) => on_tick(phase, () => seen.push(phase)));
+  try {
+    run_tick(state, 0.016);
+    assertEquals(seen, [...PHASES]);
+  } finally {
+    offs.forEach((off) => off());
+  }
+});
+
+Deno.test("tick - within a phase, steps run in registration order", () => {
+  const seen: number[] = [];
+  const offs = [1, 2, 3].map((n) => on_tick("visible", () => seen.push(n)));
+  try {
+    run_tick(state, 0.016);
+    assertEquals(seen, [1, 2, 3]);
+  } finally {
+    offs.forEach((off) => off());
+  }
+});
+
+Deno.test("tick - one budget is shared: what an earlier phase spends, a later one does not get", () => {
+  const seen = { content_remaining: -1 };
+  const offs = [
+    on_tick("visible", ({ budget }) => burn(budget.total_ms * 0.75)),
+    on_tick("content", ({ budget }) => {
+      seen.content_remaining = budget.remaining();
+    }),
+  ];
+  try {
+    const report = run_tick(state, 0.016);
+    assert(seen.content_remaining >= 0);
+    assert(seen.content_remaining <= report.budget_ms * 0.3, `content saw ${seen.content_remaining} of ${report.budget_ms}`);
+  } finally {
+    offs.forEach((off) => off());
+  }
+});
+
+Deno.test("tick - a step that unregisters itself mid-tick is not run again", () => {
+  let runs = 0;
+  const off = on_tick("cosmetic", () => {
+    runs++;
+    off();
+  });
+  run_tick(state, 0.016);
+  run_tick(state, 0.016);
+  assertEquals(runs, 1);
+});
+
+Deno.test("tick - the report phase sees every phase before it", () => {
+  const seen: { phases: Record<string, number> | null } = { phases: null };
+  const offs = [
+    on_tick("visible", () => burn(2)),
+    on_tick("report", ({ phase_ms }) => {
+      seen.phases = { ...phase_ms };
+    }),
+  ];
+  try {
+    run_tick(state, 0.016);
+    assert(seen.phases !== null);
+    assert(seen.phases.visible >= 2, `visible ${seen.phases.visible}`);
+    assertEquals(seen.phases.report, 0);
+  } finally {
+    offs.forEach((off) => off());
+  }
+});
+
+Deno.test("FrameBudget.run - forward progress survives an exhausted pool", () => {
+  const budget = new FrameBudget(0);
+  burn(1);
+  const stats = budget.run([1, 2, 3], () => true);
+  assertEquals(stats.ran, 1);
+  assertEquals(stats.stopped_early, true);
+});
+
+Deno.test("tick - a storm of steps that report work stays within the budget plus one step", () => {
+  // Two thousand pending items at a third of a millisecond each would be
+  // most of a second if nothing stopped them. The soft deadline must stop
+  // them one step past the budget.
+  const COST = 0.3;
+  const items = Array.from({ length: 2000 }, (_, i) => i);
+  let ran = 0;
+  const off = on_tick("visible", ({ budget }) => {
+    ran = budget.run(items, () => (burn(COST), true)).ran;
+  });
+  try {
+    const report = run_tick(state, 0.016);
+    assert(ran >= 1, "forward progress");
+    assert(ran < items.length, "the storm was cut short");
+    assert(report.phase_ms.visible <= report.budget_ms + COST + 1, `visible ${report.phase_ms.visible} over budget ${report.budget_ms}`);
+  } finally {
+    off();
+  }
+});
+
+Deno.test("tick - a storm of steps that cost time and report none stays within the hard ceiling", () => {
+  // The case the hard ceiling exists for: steps that spend real time and
+  // report nothing done, so the soft deadline — waived until something
+  // completes — never arms. frame_budget.ts records the 4.7 s frame this
+  // produced before there was a ceiling.
+  const COST = 0.3;
+  const items = Array.from({ length: 2000 }, (_, i) => i);
+  const off = on_tick("visible", ({ budget }) => {
+    budget.run(items, () => (burn(COST), false));
+  });
+  try {
+    const report = run_tick(state, 0.016);
+    // HARD_SLACK_MS is 4 over the pool.
+    assert(report.phase_ms.visible <= report.budget_ms + 4 + COST + 1, `visible ${report.phase_ms.visible} over budget ${report.budget_ms}`);
+  } finally {
+    off();
+  }
+});

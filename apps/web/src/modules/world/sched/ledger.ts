@@ -52,9 +52,13 @@ export type FrameSample = {
   t: number;
   /** rAF interval in ms — pacing against the 16.7ms budget. */
   dt_ms: number;
-  /** the per-frame work scheduler's own pass (chunk_stage's frame_ms); does
-   * not include the gl.render call that runs after it. */
+  /** The whole tick (sched/tick.ts), every phase; does not include the
+   * gl.render call that runs after it. */
   sched_ms: number;
+  /** What the tick was allowed this frame — derived, so it moves. */
+  budget_ms: number;
+  /** sched_ms broken down by phase, in the tick's own order. */
+  phases: Record<string, number>;
   /** chunk_stage's own sub-timings for this frame — the CPU breakdown behind
    * sched_ms, plus the wrapped gl.render call. `render_ms` lags by one frame
    * (r3f renders after every useFrame returns, so this holds the previous

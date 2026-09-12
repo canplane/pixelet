@@ -113,7 +113,13 @@ export function build_chunk_bucket(
   lod_step: LodStep,
   role: ChunkLodRole,
 ): BuiltChunkBucket {
-  return { lod_step, role, cubes: with_visibility(bake_chunk_mesh(column_runs, lod_step), role) };
+  return bucket_from_baked(bake_chunk_mesh(column_runs, lod_step), lod_step, role);
+}
+
+/** Wraps a mesh baked elsewhere — the stepped bake chunk_node.ts runs across
+ * frames — exactly the way build_chunk_bucket wraps the one it bakes itself. */
+export function bucket_from_baked(baked: BakedChunkMesh, lod_step: LodStep, role: ChunkLodRole): BuiltChunkBucket {
+  return { lod_step, role, cubes: with_visibility(baked, role) };
 }
 
 /**

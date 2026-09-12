@@ -32,7 +32,6 @@
 
 import { memo, type MutableRefObject, useEffect, useLayoutEffect, useRef } from "react";
 import * as THREE from "three";
-import { useFrame } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -49,6 +48,7 @@ import { damp_alpha } from "@/modules/camera/orbit.ts";
 import { useCompanionLoadStore } from "./store.ts";
 import { ChatBubble } from "./chat_bubble.tsx";
 import { type CharacterVariant, find_person_variant, find_pet_variant } from "@pxl/shared/assets/characters/variants.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 // A little to the side of the person, so the two don't occupy the same
 // footprint — arbitrary companion-following offset, not derived from
@@ -197,7 +197,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
   // FOLLOW_WALK_LINGER_S.
   const follow_walk_until_ref = useRef<f64>(0);
 
-  useFrame((state, delta) => {
+  useTick("interaction", ({ state, delta }) => {
     if (!character_root) return;
 
     const now: f64 = state.clock.getElapsedTime();

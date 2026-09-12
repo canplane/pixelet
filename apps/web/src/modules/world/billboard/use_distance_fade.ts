@@ -1,10 +1,10 @@
 // @pxl/web/modules/world/billboard/use_distance_fade.ts
 
-import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { distance_fade_factor } from "./distance_fade.ts";
+import { useTick } from "@/modules/world/sched/tick.ts";
 
 // Scratch, reused across every consumer's own useFrame call each frame —
 // same reasoning camera/input.tsx's own $ray/$pointer module-level scratch
@@ -33,7 +33,7 @@ export function use_distance_fade(
   base_z: f64,
   center_frac: f64,
 ): void {
-  useFrame((state) => {
+  useTick("cosmetic", ({ state }) => {
     const sprite = sprite_ref.current;
     if (!sprite) return;
     sprite.getWorldPosition($world_pos);

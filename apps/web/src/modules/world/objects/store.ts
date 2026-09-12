@@ -48,6 +48,7 @@ import {
 import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
 
 type ObjectEntryBase = { id: string; i: IVec; f: FVec; size: f64 };
@@ -126,17 +127,29 @@ function cell_corner(ix: bigint, iy: bigint, iz: bigint): PVF3 {
   return pvf3.gather({ i: 0n, f: 0n }, ix * CELL_SIZE_FP, iy * CELL_SIZE_FP, iz * CELL_SIZE_FP);
 }
 
-/** Which renderer-owned 64-wide L2 XY column contains this cell. */
+/**
+ * Which renderer-owned 64-wide L2 XY column contains this cell.
+ *
+ * A column, so Z is dropped before either half of the key is derived. The
+ * index and the mask are both three-dimensional, and the renderer keys its
+ * columns off a page index the tile side has already TO_XY-normalised and a
+ * page offset it builds with z = 0 — so a cell whose corner carried its real
+ * Z landed under a key with a Z lane the renderer never asks for. Every
+ * object above absolute z = 64u (about 120 m, one L2 span) was stored,
+ * indexed, hit-tested and never drawn: the placement ghost showed, the tap
+ * committed, and the chunk rebuilt without it. Where the terrain already
+ * stands at 50 m that is a ceiling of a few dozen blocks.
+ */
 function l2_column_key_of_cell(ix: bigint, iy: bigint, iz: bigint): string {
-  const corner = cell_corner(ix, iy, iz);
-  const page_idx = L3_IDX(corner.i);
-  const page_off = L2_IDX_IN_L3(corner.i);
-  return `${page_idx.toString()}:${page_off.toString()}`;
+  const column = TO_XY(cell_corner(ix, iy, iz).i);
+  return l2_column_key_of(L3_IDX(column), L2_IDX_IN_L3(column));
 }
 
-/** Same renderer L2-column key shape l2_column_key_of_cell produces. */
+/** Same renderer L2-column key shape l2_column_key_of_cell produces. Both
+ * arguments are normalised to XY here as well, so a caller cannot reopen the
+ * gap above by handing in a page offset that still carries Z. */
 export function l2_column_key_of(page_idx: IVec, page_off: IVec): string {
-  return `${page_idx.toString()}:${L2_IDX_IN_L3(page_off).toString()}`;
+  return `${TO_XY(page_idx).toString()}:${L2_IDX_IN_L3(TO_XY(page_off)).toString()}`;
 }
 
 function new_tree(): ObjectTree {
