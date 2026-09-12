@@ -7,7 +7,7 @@ import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useTileStore } from "./store.ts";
-import { with_ele } from "./elevation.ts";
+import { ground_pivot } from "./elevation.ts";
 
 /**
  * Re-samples terrain elevation under the current map_center and snaps it in, if
@@ -22,7 +22,7 @@ export function reground_map_center(): void {
   if (!map_center) return;
 
   const probe: PVF3 = pvf3.gather({ i: 0n, f: 0n }, pvf3.X(map_center), pvf3.Y(map_center), 0n);
-  const grounded: PVF3 | null = with_ele(probe, probe.i, probe.f);
+  const grounded: PVF3 | null = ground_pivot(probe, probe.i, probe.f);
   if (!grounded) return;
 
   if (grounded.i !== map_center.i || grounded.f !== map_center.f) {

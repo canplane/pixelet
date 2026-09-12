@@ -10,12 +10,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **Publish the v3 POI bake.** The client now requests `poi/v3` and holds
-  the page as an XTP packet (commit 3dd631c); the repacked bake is at
-  `out/poi/v3` (22,259 pages, 60 MB gzipped, `manifest.json` inside),
-  re-encoded from the local v1 bake, which matches the published v2 page
-  for page. Upload it before deploying the client — a v3 miss is an empty
-  page, so a client deployed ahead of the upload shows no places.
+Nothing queued.
 
 ## P1
 
@@ -39,17 +34,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   only. With the above, not on its own.
 
 ## P2
-
-- **POI: two things seen 2026-09-12, both minor, both unexplained.**
-  (a) On a fresh load the badges sometimes do not appear until the first
-  pan, zoom or rotate — not reproduced in a session where nothing was
-  touched and they appeared after a few seconds, so it is timing: a tile
-  arriving after the index built it, or the placement effect not asking
-  for a frame under `frameloop="demand"`. (b) Badges fight the terrain in
-  depth: the occlusion shader's upright twin writes depth
-  (billboard/anchor_occlusion.ts), and at the anchor dot it sits on the
-  surface it tests against. Both are rendering, closed by rule; recorded so
-  they are fixed together, with a repro, not chased on sight.
 
 - **Terrain page blocks with the page.** `resident.ts` keeps the pool
   blocks a page owns in a `WeakMap<Terrain, Block[]>`; they belong in the

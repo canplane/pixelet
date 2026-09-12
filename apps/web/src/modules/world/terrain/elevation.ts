@@ -105,10 +105,35 @@ export function with_ele(out: PVF3, i: IVec, f: FVec): PVF3 | null {
   return out;
 }
 
+/** Half a cell, in the fixed-point Z a PVF3 carries. */
+const HALF_CELL_FP = pvf3.from_real(U_PER_CELL / 2);
+
 /**
- * Grounds a coordinate's X/Y to the real, baked terrain elevation there,
- * discarding its original Z — falls back to the ungrounded coordinate if no
- * elevation data is loaded yet (matches with_ele's own null contract).
+ * Where the camera's pivot sits on the ground at a coordinate's X/Y: the
+ * centre of the cube standing on the ground there — the cell the character
+ * occupies, the cell a placement's ghost fills — its original Z discarded.
+ * Null when no elevation is loaded yet, like with_ele.
+ *
+ * A centre, not the top face, because everything the camera pivots on is a
+ * cube: a tap on an object pivots on that cube's centre
+ * (objects/geometry.ts's object_center), and a tap on the ground on the
+ * centre of the cube above it (camera/input.tsx). A pivot that merely sits
+ * on the ground has to agree with those, or the first pan after a tap
+ * moves the camera by the half cell between the two. with_ele itself
+ * answers the top face, which is what standing things (the puck, decor, a
+ * place) are grounded to; this is the one place the camera's own
+ * convention is applied.
+ */
+export function ground_pivot(out: PVF3, i: IVec, f: FVec): PVF3 | null {
+  const grounded = with_ele(out, i, f);
+  if (grounded === null) return null;
+  pvf3.gather(out, pvf3.X(out), pvf3.Y(out), pvf3.Z(out) + HALF_CELL_FP);
+  return out;
+}
+
+/**
+ * ground_pivot for a coordinate, falling back to the coordinate itself when
+ * no elevation is loaded yet.
  *
  * The single shared "follow the actual ground" step any map_center-setting
  * interaction should use, instead of each call site hand-rolling its own
@@ -121,5 +146,5 @@ export function with_ele(out: PVF3, i: IVec, f: FVec): PVF3 | null {
 export function ground_or_raw(coord: PVF3): PVF3 {
   const probe: PVF3 = { i: 0n, f: 0n };
   pvf3.gather(probe, pvf3.X(coord), pvf3.Y(coord), 0n);
-  return with_ele(probe, probe.i, probe.f) ?? coord;
+  return ground_pivot(probe, probe.i, probe.f) ?? coord;
 }
