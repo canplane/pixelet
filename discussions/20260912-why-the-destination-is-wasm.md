@@ -169,3 +169,72 @@ argued on performance: the linear-memory document's own framing applies
 here unchanged — the state is linear because the design says so, and the
 core moves because the design says the core owns its memory. A benchmark is
 not the case for it and a disappointing one is not the case against it.
+
+## Update 2026-09-13: what a phone's memory said, for the renderer that replaces this one
+
+A Safari memory timeline and heap snapshots, on an iPhone 13 mini and on
+the desktop, were read at the end of a day of phone work. What they said
+is recorded here rather than acted on: the numbers belong to the three.js
+build, which this document says is leaving, and a ceiling set on it now
+would be thrown away with it. The facts carry.
+
+- **The page's budget on the phone is a gigabyte and change.** The mini
+  took memory-pressure events at a reported 1.6–2.1 GB and reloaded the
+  tab. GPU memory counts against the same budget: unified memory, and
+  WebKit's GPU process is charged to the page.
+- **Where the memory actually is**, from the snapshots (the live heap
+  after a collection, not the timeline's counter): the core reservation's
+  touched pages (~300 MB), the pool's spill past it on the desktop (256
+  MB in plain regions), the badge sheet's canvas (16–64 MB), the JS glue
+  (30–40 MB of objects — three's, React's, ours), and on the GPU side the
+  chunk meshes, textures and the composer's targets.
+- **A multisampled target is pixels × samples × (colour + depth bytes).**
+  At 3.2 Mpx, four samples and half-float that is 150 MB, and it cost a
+  millisecond of frame time — the composer's defaults set it, not a
+  decision. The renderer that replaces this one creates that target
+  itself, with this formula and the phone's budget in hand.
+- **A large canvas handed to the browser is read whole.** Draw small,
+  upload small; a glyph sheet is drawn per rectangle into a scratch and
+  uploaded from there.
+- **Safari's "JavaScript" memory is a GC counter, not a footprint.** WebKit
+  charges GPU uploads and canvas backing to it and recounts at
+  collection, so a bake storm reads as gigabytes of sawtooth over a live
+  heap of a third the size. A heap snapshot is the number to read; the
+  timeline is the number to ignore.
+- **What the glue hides.** Every one of the day's blind spots sat at the
+  three.js boundary: whole-canvas texture uploads, a `clone()` that
+  re-uploaded the sheet, a composer default that sized the largest
+  allocation on the page, buffer lifetimes we trust rather than count.
+  None was visible to the ledger; each was found by measuring around the
+  glue. This is the control argument for the destination, with cases.
+- **It is not the engine.** The same page's heap snapshot in Chrome read
+  628 MB (542 of it ArrayBuffer, 40 of objects) against Safari's 1.2–1.4
+  GB, and the difference was the scene, not the runtime: the Safari
+  session was zoomed out with the pool spilled past the core (`reserved
+  768 MB`, a value Chrome's own ledger report had also shown at that
+  zoom). Chrome's JS heap over twenty seconds was flat at 74–102 MB.
+  Neither engine leaks; both hold the same working set, and the phone
+  dies because that working set exceeds its budget.
+- **Steady-state CPU is 2 ms a frame; the bake is 14–21 ms a unit on the
+  phone.** WASM has nothing to buy in the steady state. It buys the load
+  — the bake, off the thread — and, with WebGPU, the glue.
+
+## Decided 2026-09-13, late: one graphics path, and a floor
+
+**WebGPU only.** No WebGL path survives the rewrite. The floor is what
+runs WebGPU on a phone: iOS 26 (iPhone 11 and later) and Chrome on
+Android since 2024; every desktop browser has it. A device older than
+that cannot carry this game's memory and GPU load whatever the API, so
+the fallback would be a path nobody could use.
+
+**What that closes.** Safari's WebGL path balloons its reported memory to
+four gigabytes during a bake storm and freezes for seconds at the
+collection that follows, on a fresh page with no allocation of ours
+behind it; Chrome shows nothing of the kind. The mechanism is on WebKit's
+side of the WebGL boundary — the likeliest candidate is the CPU copy
+WebKit keeps of every element-array upload until its wrapper is
+collected, with JavaScriptCore deferring that collection in proportion
+to a live heap it cannot shrink — and it was left unconfirmed on purpose:
+a ten-minute experiment would name it, and the name would be worth
+having only if a WebGL path were going to stay. It is not. Recorded so
+the next reader does not spend a day on it.

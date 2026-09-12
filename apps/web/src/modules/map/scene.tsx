@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { Bloom, BrightnessContrast, EffectComposer, GodRays, HueSaturation, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 
 import { SCENE_DEPTH, SceneDepthPass } from "@/render/scene_depth.ts";
+import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { BlendFunction, SMAAPreset } from "postprocessing";
 
 import { useCamera } from "@/modules/camera/use_camera.ts";
@@ -71,6 +72,18 @@ function MainCameraLink({ passes }: { passes: readonly Pass[] }) {
 }
 
 /**
+ * The composer's multisample count. Four is the conventional count for a
+ * forward renderer and what the desktop was tuned at
+ * (discussions/20260911-taa-tried-and-closed.md). A phone gets two: at its
+ * native dpr the difference is not visible, and the multisampled buffer is
+ * the largest single allocation the page makes — colour and depth per
+ * sample over three megapixels, a hundred and fifty megabytes at four
+ * samples and half-float, on a device whose tab reloads past about a
+ * gigabyte and a half.
+ */
+const MSAA_SAMPLES = HANDHELD ? 2 : 4;
+
+/**
  * Edge anti-aliasing for displays that do not get it from resolution.
  *
  * At dpr 2 the canvas has four samples per CSS pixel and the browser's
@@ -126,6 +139,11 @@ export function MapScene() {
   // nothing to link.
   const render_path = useSettingsStore((state) => state.render_path);
   const with_post = render_path !== "no_post";
+  // Half-float only when a pass needs values past one. The composer's
+  // default is half-float always, which doubles every target it owns — the
+  // multisampled buffer above all — and nothing in the shipped stack
+  // writes outside [0, 1].
+  const frame_buffer_type = show_bloom || show_god_rays ? THREE.HalfFloatType : THREE.UnsignedByteType;
   // Leaving the composer removes the depth pass without disposing it, so
   // its last copy would stay marked ready and badges would occlude against
   // a frame that is no longer being drawn. The pass marks it ready again
@@ -288,7 +306,7 @@ export function MapScene() {
           */
           }
           {with_post && (
-            <EffectComposer multisampling={render_path === "no_msaa" ? 0 : 4}>
+            <EffectComposer multisampling={render_path === "no_msaa" ? 0 : MSAA_SAMPLES} frameBufferType={frame_buffer_type}>
               {
                 // EffectComposerProps types children as JSX.Element | JSX.Element[],
                 // not accepting `cond && <X/>`'s `false` branch — build the array
