@@ -60,10 +60,13 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { compose_instance_matrix, type ModelInstanceTransform } from "./instanced_model.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
-/** Identifies one variant across every bundle. */
+/** Identifies one variant across every bundle. Named by kind rather than
+ * the bundle's position in the registry, so the mesh name — `decor/<key>` —
+ * says what it draws (sched/draw_census.ts reads it). */
 export type VariantKey = string;
-export const variant_key = (bundle: u32, variant: u32): VariantKey => `${bundle}:${variant}`;
+export const variant_key = (kind: string, variant: u32): VariantKey => `${kind}:${variant}`;
 
 export type DecorVariantContribution = {
   geometry: THREE.BufferGeometry;
@@ -223,6 +226,7 @@ export class DecorField {
   dispose(): void {
     for (const bank of this.banks.values()) {
       this.group.remove(bank.mesh);
+      CORE_ALLOC.give(bank.mesh.instanceMatrix.array);
       bank.mesh.dispose();
     }
     this.banks.clear();
@@ -408,6 +412,10 @@ export class DecorField {
     mesh.castShadow = bank.drawn;
     mesh.receiveShadow = bank.drawn;
     mesh.visible = bank.drawn;
+    // The matrices live in the core memory like every other lane — three
+    // uploads from any ArrayBuffer view. InstancedMesh's constructor made a
+    // heap buffer of its own, dropped here once per bank or growth.
+    mesh.instanceMatrix = new THREE.InstancedBufferAttribute(CORE_ALLOC.take(Float32Array, capacity * 16), 16);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     // Never culled and never recomputed. The only thing three uses this for
     // here is the early-out in InstancedMesh.raycast, and a sphere covering
@@ -429,6 +437,7 @@ export class DecorField {
     mesh.instanceMatrix.needsUpdate = true;
 
     this.group.remove(bank.mesh);
+    CORE_ALLOC.give(bank.mesh.instanceMatrix.array);
     bank.mesh.dispose();
     bank.mesh = mesh;
     bank.capacity = capacity;

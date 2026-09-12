@@ -79,7 +79,7 @@ export function useCamera() {
    * never touched by it. */
   const shown_climb = useRef<f64>(0);
 
-  useTick("interaction", ({ state, delta }) => {
+  useTick("interaction", ({ state, delta, view_moving }) => {
     if (!did_init.current) {
       dist.current = view_state.dist;
       polar.current = view_state.polar;
@@ -97,6 +97,7 @@ export function useCamera() {
     // still settling — ask for one more frame. See DIST_EPS/POLAR_EPS above.
     if (Math.abs(view_state.dist - dist.current) > DIST_EPS || Math.abs(view_state.polar - polar.current) > POLAR_EPS) {
       state.invalidate();
+      view_moving();
     }
 
     // Ground collision used to be a clamp here that corrected `polar` from a
@@ -118,7 +119,10 @@ export function useCamera() {
     const want_climb: f64 = useSettingsStore.getState().camera_terrain === "climb" ? climb_polar(dist.current, polar.current, view_state.azimuth) - polar.current : 0;
     const climb_k = want_climb < shown_climb.current ? CLIMB_RISE_DAMP : CLIMB_RELAX_DAMP;
     shown_climb.current += (want_climb - shown_climb.current) * damp_alpha(climb_k, delta);
-    if (Math.abs(want_climb - shown_climb.current) > CLIMB_EPS) state.invalidate();
+    if (Math.abs(want_climb - shown_climb.current) > CLIMB_EPS) {
+      state.invalidate();
+      view_moving();
+    }
 
     // The offset lags the control, so a pitch steepening toward vertical can
     // still be carrying a climb from a shallower one.

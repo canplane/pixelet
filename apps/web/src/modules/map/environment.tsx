@@ -763,7 +763,7 @@ export function MapEnvironment(props: MapEnvironmentProps) {
           zone box beside it, which carries renderOrder 5, never did.
         */
         }
-        <mesh scale={SKY_DOME_SCALE} frustumCulled={false} renderOrder={-1}>
+        <mesh name="sky" scale={SKY_DOME_SCALE} frustumCulled={false} renderOrder={-1}>
           <sphereGeometry args={[1, 32, 32]} />
           <shaderMaterial
             ref={sky_material_ref}

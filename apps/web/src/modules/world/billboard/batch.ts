@@ -30,6 +30,7 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /**
  * A frame's worth of candidates is not a residency set, so it grows to what
@@ -51,42 +52,42 @@ export class BillboardBatch {
 
   /** Position relative to local_world_frame's own origin — see AnchorNode's
    * own local-offset math (frame/coord.ts). */
-  private readonly _local_x = new Vector(Float64Array, { init_cap: INIT_CAP });
-  private readonly _local_y = new Vector(Float64Array, { init_cap: INIT_CAP });
-  private readonly _local_z = new Vector(Float64Array, { init_cap: INIT_CAP });
+  private readonly _local_x = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
+  private readonly _local_y = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
+  private readonly _local_z = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
 
   /** Full-strength drawn width in CSS pixels, before the distance fade. */
-  private readonly _w_px = new Vector(Float32Array, { init_cap: INIT_CAP });
+  private readonly _w_px = new Vector(Float32Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   /** Height that must not be overlapped, which is not the drawn height —
    * see BuiltBillboard.collide_h. */
-  private readonly _collide_px = new Vector(Float32Array, { init_cap: INIT_CAP });
+  private readonly _collide_px = new Vector(Float32Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   /** Canvas-space Y of the anchor, in the same units as `collide_px`. */
-  private readonly _anchor_px = new Vector(Float32Array, { init_cap: INIT_CAP });
+  private readonly _anchor_px = new Vector(Float32Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
 
   /** Stable per candidate, used only to keep two at equal distance from
    * swapping places between frames. */
-  private readonly _tiebreak = new Vector(Float64Array, { init_cap: INIT_CAP });
+  private readonly _tiebreak = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
 
   /** The caller's own index for this candidate. */
-  private readonly _src = new Vector(Uint32Array, { init_cap: INIT_CAP });
+  private readonly _src = new Vector(Uint32Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
 
   /* Filled by the selector rather than the producer. They live here so the
    * whole pass has one capacity and one allocation site instead of a second
    * set of scratch arrays that has to be kept the same size. */
 
   /** World position, resolved once from the local one. */
-  private readonly _world_x = new Vector(Float64Array, { init_cap: INIT_CAP });
-  private readonly _world_y = new Vector(Float64Array, { init_cap: INIT_CAP });
-  private readonly _world_z = new Vector(Float64Array, { init_cap: INIT_CAP });
+  private readonly _world_x = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
+  private readonly _world_y = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
+  private readonly _world_z = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   /** Squared distance to the eye. Squared because only the order is used. */
-  private readonly _d2 = new Vector(Float64Array, { init_cap: INIT_CAP });
+  private readonly _d2 = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   /** Candidate indices that passed the frustum, in the order they will be
    * offered to the placement pass. */
-  private readonly _order = new Vector(Uint32Array, { init_cap: INIT_CAP });
+  private readonly _order = new Vector(Uint32Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   /** How many candidates were folded into this one because they wanted the
    * pixels it took. Meaningful only for the ones the selector kept, and zero
    * there means it stands alone. */
-  private readonly _absorbed = new Vector(Uint32Array, { init_cap: INIT_CAP });
+  private readonly _absorbed = new Vector(Uint32Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
 
   /* Growth replaces the backing store (arena.ts's own `_grow`), so a lane is
    * read through the batch and only ever hoisted for the length of a loop

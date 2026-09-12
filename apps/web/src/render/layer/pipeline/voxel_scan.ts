@@ -9,7 +9,7 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { Vector } from "@xpute/core/ds/arena.ts";
 
-import { MESH_POOL } from "./mesh_pool.ts";
+import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
 
 import {
   band_voxel_idx,
@@ -350,13 +350,13 @@ export type ColumnRunSet = {
 };
 
 /** The prefix index, filled during the walk and copied into the block. */
-const COLUMN_STARTS = new Uint32Array(COLUMN_CNT + 1);
+const COLUMN_STARTS = CORE_ALLOC.take(Uint32Array, COLUMN_CNT + 1);
 
 const RUN_I32_FIELDS: u32 = 3; // z0, z1, layer_taps
 const RUN_U8_FIELDS: u32 = 10; // r g b material_class sub_sz sub_sx sub_sy sub_ox sub_oy sub_oz
 
 export function alloc_column_run_set(count: u32): ColumnRunSet {
-  const block = MESH_POOL.acquire((COLUMN_CNT + 1) * 4 + count * (RUN_I32_FIELDS * 4 + RUN_U8_FIELDS));
+  const block = CORE_POOL.acquire((COLUMN_CNT + 1) * 4 + count * (RUN_I32_FIELDS * 4 + RUN_U8_FIELDS));
   const buf = block.buf;
   let off = block.byte_offset;
   const start = new Uint32Array(buf, off, COLUMN_CNT + 1);
@@ -396,7 +396,7 @@ export function alloc_column_run_set(count: u32): ColumnRunSet {
 
 /** Hands the set's block back. Every span above is dead afterwards. */
 export function release_column_runs(set: ColumnRunSet): void {
-  MESH_POOL.release(set.block);
+  CORE_POOL.release(set.block);
 }
 
 /**
@@ -412,17 +412,17 @@ export function release_column_runs(set: ColumnRunSet): void {
  * than a field-by-field loop over ten thousand objects.
  */
 const SCRATCH_CAP = { init_cap: 1 << 13 };
-const SC_Z0 = new Vector(Int32Array, SCRATCH_CAP);
-const SC_Z1 = new Vector(Int32Array, SCRATCH_CAP);
-const SC_R = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_G = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_B = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_LAYER = new Vector(Uint32Array, SCRATCH_CAP);
-const SC_CLASS = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_SUB_SZ = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_SUB_OX = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_SUB_OY = new Vector(Uint8Array, SCRATCH_CAP);
-const SC_SUB_OZ = new Vector(Uint8Array, SCRATCH_CAP);
+const SC_Z0 = new Vector(Int32Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_Z1 = new Vector(Int32Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_R = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_G = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_B = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_LAYER = new Vector(Uint32Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_CLASS = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_SUB_SZ = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_SUB_OX = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_SUB_OY = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
+const SC_SUB_OZ = new Vector(Uint8Array, { ...SCRATCH_CAP, alloc: CORE_ALLOC });
 
 const SPAN_SINK: RunSink = {
   push(z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz) {

@@ -11,6 +11,7 @@ import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import type { Demand, Phases } from "@/modules/world/sched/demand.ts";
 import { fetch_pending_count, fetch_subscribe, fetch_sync } from "@/modules/world/sched/fetch_scheduler.ts";
 import { fetch_terrain } from "./tile_repository.ts";
+import { release_terrain } from "./resident.ts";
 import { useTileStore } from "./store.ts";
 import { CLEANUP_RADIUS, LOAD_RADIUS } from "./config.ts";
 import { MapStatus, useMapStore } from "@/modules/map/store.ts";
@@ -69,11 +70,12 @@ function cleanup_far_tiles(center_page_idx: IVec, pinned_page_idx: IVec | null):
   // scan the current cache and evict pages beyond the hysteresis radius.
   // the pinned (device-own) page is exempt: it's kept warm regardless of
   // camera distance so the user marker can always ground itself.
-  for (const [page_idx] of tile_map) {
+  for (const [page_idx, tile] of tile_map) {
     if (pinned_page_idx !== null && page_idx === pinned_page_idx) continue;
 
     const dist: u32 = CHEBYSHEV_DIST(ivec.sub(page_idx, center_page_idx));
     if (dist > CLEANUP_RADIUS) {
+      release_terrain(tile.terrain);
       clear_tile(page_idx);
     }
   }

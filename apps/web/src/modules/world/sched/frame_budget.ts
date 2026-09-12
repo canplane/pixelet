@@ -24,10 +24,8 @@
  * replaces. It does **not** mean the step was free — see `hard_budget_ms`,
  * which exists because assuming otherwise cost a 4.7-second frame.
  *
- * Shares nothing across calls yet — each pass carries its own budget, the
- * same way chunk_stage's recheck and commit passes each carried their own.
- * Pooling them into one frame-wide allowance is the next step, and is a
- * behaviour change that needs a render to verify against.
+ * Shares nothing across calls itself. The frame-wide pool is sched/tick.ts's
+ * FrameBudget, which calls this with whatever the frame has left.
  */
 
 export type BudgetOpts = {
@@ -39,11 +37,11 @@ export type BudgetOpts = {
    *
    * `budget_ms` alone is not enough, and this is the measured reason: a step
    * may cost real time and still report `false`. chunk_stage's `commit()`
-   * can scan for ~15 ms and then defer, and a deferral is a *deliberate*
-   * hand-off — the pass has to keep walking so a cheaper chunk gets the
-   * frame's slot. With the soft budget waived until something succeeds, a
-   * run of expensive deferrals armed nothing: ~2000 pending chunks produced
-   * a single 4711 ms frame while every individual step stayed under 42 ms.
+   * once scanned for ~15 ms and then deferred, a deliberate hand-off so a
+   * cheaper chunk got the frame's slot. With the soft budget waived until
+   * something succeeds, a run of expensive deferrals armed nothing: ~2000
+   * pending chunks produced a single 4711 ms frame while every individual
+   * step stayed under 42 ms.
    *
    * So the soft budget keeps the guarantee (something always runs) and this
    * bounds what the guarantee is allowed to cost. Omit for no ceiling.

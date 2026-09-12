@@ -10,10 +10,13 @@ import type { u32 } from "../kit/word.ts";
 import type { AnyElementOf, AnyTypedArray, AnyTypedArrayCtor } from "../kit/array.ts";
 import { MarshalError } from "@xpute/core/sys/error.ts";
 import { Errno } from "@xpute/core/sys/errno.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "./typed_alloc.ts";
 
 export type ArenaOptions = {
   init_cap?: u32; // soft initial size hint
   max_cap?: u32; // hard size limit
+  /** Vector only: where its storage comes from (typed_alloc.ts). */
+  alloc?: TypedAlloc;
 };
 
 // ============ Arena ============
@@ -135,15 +138,17 @@ export class Vector<T extends AnyTypedArray> {
   mem: T;
 
   readonly max_cap: u32;
+  private readonly _alloc: TypedAlloc;
   private _cap: u32;
   private _len: u32 = 0;
 
   constructor(readonly ctor: AnyTypedArrayCtor<T>, opts: ArenaOptions = {}) {
-    const { init_cap: _init_cap = 1 << 10, max_cap = 1 << 24 } = opts;
+    const { init_cap: _init_cap = 1 << 10, max_cap = 1 << 24, alloc = HEAP_ALLOC } = opts;
     this.max_cap = max_cap;
+    this._alloc = alloc;
     this._cap = Math.min(_init_cap, max_cap);
 
-    this.mem = new ctor(this._cap);
+    this.mem = alloc.take(ctor, this._cap);
   }
 
   get cap(): u32 {
@@ -213,7 +218,7 @@ export class Vector<T extends AnyTypedArray> {
     if (new_cap <= this._cap) return;
     if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW, `vector: required size exceeds max_cap=${this.max_cap}`);
 
-    const new_mem: T = new this.ctor(new_cap);
+    const new_mem: T = this._alloc.take(this.ctor, new_cap);
     // AnyTypedArray spans both the number and bigint families — TS can't
     // express ".set() accepts this same generic T" across that split
     // (it would need ArrayLike<number> & ArrayLike<bigint>, which nothing
@@ -221,6 +226,7 @@ export class Vector<T extends AnyTypedArray> {
     // deno-lint-ignore no-explicit-any
     new_mem.set(this.mem as any);
 
+    this._alloc.give(this.mem);
     this.mem = new_mem;
     this._cap = new_cap;
   }

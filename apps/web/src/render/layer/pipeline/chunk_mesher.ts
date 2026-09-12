@@ -29,7 +29,7 @@
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Arena, Vector } from "@xpute/core/ds/arena.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
-import { MESH_POOL } from "./mesh_pool.ts";
+import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import type { LodStep } from "@/render/lod.ts";
@@ -248,7 +248,7 @@ function block_bytes(vertex_total: u32, index_total: u32): u32 {
 
 /** Hands one baked mesh's block back. Every view into it is dead afterwards. */
 export function release_chunk_mesh(mesh: BakedChunkMesh): void {
-  MESH_POOL.release(mesh.block);
+  CORE_POOL.release(mesh.block);
 }
 
 /**
@@ -283,7 +283,7 @@ type MeshBuilder = {
 };
 
 function alloc_builder(vertex_total: u32, index_total: u32): MeshBuilder {
-  const block = MESH_POOL.acquire(block_bytes(vertex_total, index_total));
+  const block = CORE_POOL.acquire(block_bytes(vertex_total, index_total));
   const buf = block.buf;
   // Every span is measured from the block's own start, never the buffer's:
   // a region is shared with other live chunks' blocks.
@@ -676,7 +676,7 @@ export function abort_bake(cursor: BakeCursor): void {
  * Module-level and rewound by hand: bake_chunk_mesh_fine is synchronous and
  * non-reentrant, so one scratch store serves every chunk.
  */
-const SURVIVING = new Vector(Uint32Array, { init_cap: 6 * (1 << 12) });
+const SURVIVING = new Vector(Uint32Array, { init_cap: 6 * (1 << 12), alloc: CORE_ALLOC });
 
 /**
  * Greedy merge over the surviving runs, in the run domain rather than the
@@ -752,8 +752,8 @@ function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
  * they just each stand alone, which is right: stacked runs in one column are
  * a cliff face, not flat ground.
  */
-const MERGE_RUN = new Int32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
-const MERGE_MASK = new Int32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
+const MERGE_RUN = CORE_ALLOC.take(Int32Array, CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
+const MERGE_MASK = CORE_ALLOC.take(Int32Array, CHUNK_CELL_SPAN * CHUNK_CELL_SPAN);
 
 /**
  * Meshes one run set. Both LOD tiers go through here: `span` is the grid
@@ -963,7 +963,7 @@ function finish_fine(b: FineBake): BakedChunkMesh {
 }
 
 function abort_fine(b: FineBake): void {
-  if (b.builder) MESH_POOL.release(b.builder.block);
+  if (b.builder) CORE_POOL.release(b.builder.block);
   SURVIVING.truncate(b.base);
 }
 
@@ -1037,7 +1037,7 @@ const BUCKETS = new Arena<ZBucketAccum>(
   }),
   { init_cap: 1 << 12 },
 );
-const CELL_RANGE = new Vector(Uint32Array, { init_cap: 2 * (1 << 10) });
+const CELL_RANGE = new Vector(Uint32Array, { init_cap: 2 * (1 << 10), alloc: CORE_ALLOC });
 
 /**
  * Linear scan, not a Map: a coarse cell's real Z-bucket count is small
@@ -1164,15 +1164,15 @@ function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunS
 /** One coarse run, before it is packed into an exactly-sized set. Same
  * scratch-then-copy shape voxel_scan.ts uses, for the same reason: the run
  * count is only known once the walk is done. */
-const CO_Z0 = new Vector(Int32Array, { init_cap: 1 << 11 });
-const CO_Z1 = new Vector(Int32Array, { init_cap: 1 << 11 });
-const CO_RGB = new Vector(Uint32Array, { init_cap: 1 << 11 });
-const CO_LAYER = new Vector(Uint32Array, { init_cap: 1 << 11 });
+const CO_Z0 = new Vector(Int32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
+const CO_Z1 = new Vector(Int32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
+const CO_RGB = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
+const CO_LAYER = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
 /** The run's isotropic inset, packed `offset | scale<<8`, or 0 for a box
  * that fills its cell — which is SUB_CELL_NONE in both bytes, so zero is
  * unambiguous. */
-const CO_SUB = new Vector(Uint32Array, { init_cap: 1 << 11 });
-const CO_START = new Uint32Array(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN + 1);
+const CO_SUB = new Vector(Uint32Array, { init_cap: 1 << 11, alloc: CORE_ALLOC });
+const CO_START = CORE_ALLOC.take(Uint32Array, CHUNK_CELL_SPAN * CHUNK_CELL_SPAN + 1);
 
 function to_u8(v: f64): u32 {
   return Math.max(0, Math.min(255, Math.round(v)));

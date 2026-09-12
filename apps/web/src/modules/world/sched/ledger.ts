@@ -16,15 +16,15 @@
  *   queue pressure). Only accrues while frames actually render
  *   (`frameloop="demand"`), which is correct: idle means nothing to sample.
  *
- * Still short of the full step-1 ledger in the discussion doc: the per-frame
- * breakdown is chunk_stage's three phases (recheck/commit/render), not a
- * per-task-category rollup (that needs the category-A scheduler to exist),
- * and scheduler_peak_stats / commit_step_stats still live in chunk_stage as
- * their own session-peak globals. LoAF, the dev overlay (ledger_overlay.tsx),
- * the retained-footprint counts and Chrome-trace export (trace.ts) are here.
+ * The per-frame CPU breakdown is the tick's phases (sched/tick.ts) plus
+ * chunk_stage's recheck/commit split inside the visible phase; there is no
+ * per-task-category CPU rollup. Readers: the overlay (ledger_overlay.tsx) and
+ * the text report (log.ts), both through summary.ts, and the Chrome-trace
+ * export (trace.ts).
  */
 
 import type { Phases } from "./demand.ts";
+import type { DrawCensus } from "./draw_census.ts";
 
 export type Outcome = "ok" | "aborted" | "error";
 
@@ -55,8 +55,16 @@ export type TaskRecord = {
 export type FrameSample = {
   /** monotonic ms (performance.now) at record time. */
   t: number;
-  /** rAF interval in ms — pacing against the 16.7ms budget. */
+  /** rAF interval in ms — pacing, read against `frame_ms`. */
   dt_ms: number;
+  /** The display's measured frame interval when this frame was scheduled
+   * (sched/tick.ts) — what `dt_ms` has to beat, and not 16.7 on a fast
+   * display. */
+  frame_ms: number;
+  /** The view had held still long enough that the tick took the large,
+   * throughput budget rather than the smooth one. A long dt on such a frame
+   * was chosen, not suffered. */
+  settled: boolean;
   /** The whole tick (sched/tick.ts), every phase; does not include the
    * gl.render call that runs after it. */
   sched_ms: number;
@@ -64,13 +72,11 @@ export type FrameSample = {
   budget_ms: number;
   /** sched_ms broken down by phase, in the tick's own order. */
   phases: Record<string, number>;
-  /** chunk_stage's own sub-timings for this frame — the CPU breakdown behind
-   * sched_ms, plus the wrapped gl.render call. `render_ms` lags by one frame
-   * (r3f renders after every useFrame returns, so this holds the previous
-   * frame's number), and reads 0 whenever the post-processing composer takes
-   * over rendering and the wrapper never fires — which is most of the time,
-   * so prefer `task_ms` below. */
-  cpu: { recheck_ms: number; commit_ms: number; render_ms: number };
+  /** chunk_stage's recheck and commit passes, inside the visible phase. The
+   * render is not here: the post-processing composer (always on — color
+   * grade is fused into it) renders past any gl.render wrapper, so a render
+   * timer read 0. `task_ms` below is what covers it. */
+  cpu: { recheck_ms: number; commit_ms: number };
   /**
    * The whole rAF task: from the scheduler pass starting to the JS stack
    * emptying, so it covers every other useFrame subscriber *and* the render
@@ -91,6 +97,10 @@ export type FrameSample = {
   triangles: number;
   geometries: number;
   textures: number;
+  /** draw_calls and triangles split by what was drawn — draw_census.ts.
+   * Lags a frame like the totals: it is the render that ran after the
+   * previous tick. */
+  census: DrawCensus;
   /** drawingBuffer width*height — the raw fill-rate primitive. Multiply by
    * fx_passes for effective per-frame shaded pixels. */
   px: number;
@@ -253,6 +263,7 @@ export function ledger_recording_start(): void {
   frame_ring.length = 0;
   long_frame_ring.length = 0;
   worst_frames.length = 0;
+  for (const k of Object.keys(frame_peak) as (keyof FramePeak)[]) frame_peak[k] = 0;
   truncated = false;
   started_at = performance.now();
   stopped_at = null;
@@ -274,22 +285,16 @@ export function ledger_record(rec: TaskRecord): void {
 }
 
 /**
- * Session-wide worst-seen values, kept alongside the ring rather than by each
- * work loop separately.
- *
- * The ring is ~4s deep, which is the right window for reading the *shape* of
- * a stutter but not for finding one you noticed thirty seconds ago — the
- * reason chunk_stage grew its own session-peak object in the first place
- * ("a manual read during a live stutter usually lands a frame or two after
- * the storm already passed"). Both views are wanted; keeping the peak here
- * means one place does the bookkeeping and the work loops just report frames.
+ * The window's worst-seen values, kept as frames land so a live read
+ * (chunk_stage's __PXL_RENDER_STATS__) never scans the ring for them. Reset
+ * with the window, like everything else here, so a peak and the frames it
+ * came from always describe the same stretch of time.
  */
 export type FramePeak = {
   dt_ms: number;
   sched_ms: number;
   recheck_ms: number;
   commit_ms: number;
-  render_ms: number;
   draw_calls: number;
   triangles: number;
   heap_mb: number;
@@ -310,7 +315,6 @@ const frame_peak: FramePeak = {
   sched_ms: 0,
   recheck_ms: 0,
   commit_ms: 0,
-  render_ms: 0,
   draw_calls: 0,
   triangles: 0,
   heap_mb: 0,
@@ -326,18 +330,15 @@ const frame_peak: FramePeak = {
   blend_active: 0,
 };
 
-/** Copy of the session's worst-seen frame values. */
+/** Copy of the window's worst-seen frame values. */
 export function ledger_frame_peak(): FramePeak {
   return { ...frame_peak };
 }
 
 /**
- * The session's worst frames by dt, kept whole rather than reduced to a peak.
- *
- * The ring above is ~4s deep, which turned out to be too short to investigate
- * with: a zoom-out stall would be gone from it by the time a report was
- * pulled, leaving only a peak number and no way to ask *what else* that frame
- * was doing. Each entry keeps the frame and the one before it, because
+ * The window's worst frames by dt, kept whole rather than reduced to a peak,
+ * so the report can ask *what else* a stall frame was doing without sorting
+ * the whole ring. Each entry keeps the frame and the one before it, because
  * geometry/texture/heap only mean anything as deltas.
  */
 export type WorstFrame = { sample: FrameSample; prev: FrameSample | null };
@@ -345,7 +346,7 @@ export type WorstFrame = { sample: FrameSample; prev: FrameSample | null };
 const WORST_CAP = 12;
 const worst_frames: WorstFrame[] = [];
 
-/** Session worst frames, slowest first. */
+/** Window worst frames, slowest first. */
 export function ledger_worst_frames(): readonly WorstFrame[] {
   return worst_frames.slice();
 }
@@ -367,7 +368,6 @@ export function ledger_record_frame(s: FrameSample): void {
   if (s.sched_ms > p.sched_ms) p.sched_ms = s.sched_ms;
   if (s.cpu.recheck_ms > p.recheck_ms) p.recheck_ms = s.cpu.recheck_ms;
   if (s.cpu.commit_ms > p.commit_ms) p.commit_ms = s.cpu.commit_ms;
-  if (s.cpu.render_ms > p.render_ms) p.render_ms = s.cpu.render_ms;
   if (s.draw_calls > p.draw_calls) p.draw_calls = s.draw_calls;
   if (s.triangles > p.triangles) p.triangles = s.triangles;
   if (s.heap_mb > p.heap_mb) p.heap_mb = s.heap_mb;
@@ -385,7 +385,7 @@ export function ledger_record_frame(s: FrameSample): void {
   sink?.frame?.(s);
 }
 
-/** Copy of the task buffer, newest last — for a future dev overlay / trace dump. */
+/** Copy of the task buffer, newest last. */
 export function ledger_snapshot(): readonly TaskRecord[] {
   return task_ring.slice();
 }
@@ -395,6 +395,19 @@ export function ledger_snapshot(): readonly TaskRecord[] {
  * the frame it belongs to instead of being attributed to the next one. */
 export function ledger_last_frame(): FrameSample | null {
   return frame_ring.length > 0 ? frame_ring[frame_ring.length - 1] : null;
+}
+
+/** Frames recorded at or after `t`, newest last — a live reader's window,
+ * so it costs the tail it reads and not the whole recording. */
+export function ledger_frames_since(t: number): readonly FrameSample[] {
+  let lo = 0;
+  let hi = frame_ring.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (frame_ring[mid].t < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return frame_ring.slice(lo);
 }
 
 /** Copy of the frame buffer, newest last. */

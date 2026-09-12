@@ -45,7 +45,7 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
     invalidate();
   }, [map_center, map_origin]);
 
-  useTick("interaction", ({ state, delta }) => {
+  useTick("interaction", ({ state, delta, view_moving }) => {
     const frame = frame_ref.current;
     if (!frame || map_center === null) return;
 
@@ -66,6 +66,7 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
       did_init.current = true;
       frame.position.set(tx, ty, tz);
       frame.updateMatrix();
+      view_moving();
       return;
     }
 
@@ -81,6 +82,7 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
       Math.abs(tz - frame.position.z) > POS_EPS
     ) {
       state.invalidate();
+      view_moving();
     }
   });
 }

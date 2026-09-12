@@ -64,6 +64,7 @@
  */
 
 import type { f64, i32, u32 } from "../kit/word.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "./typed_alloc.ts";
 
 /**
  * Teschner's three large primes. Their only job is to decorrelate the axes
@@ -141,27 +142,27 @@ export class SpatialHash {
    *                      the cost of overshooting is memory rather than time
    * @param cell_size     the query radius this index will be asked about
    */
-  constructor(capacity: u32, bucket_count: u32, cell_size: f64) {
+  constructor(capacity: u32, bucket_count: u32, cell_size: f64, alloc: TypedAlloc = HEAP_ALLOC) {
     this.capacity = capacity;
     this.bucket_count = bucket_count;
     this.inv_cell = 1 / cell_size;
 
-    this.counts = new Uint32Array(bucket_count);
-    this.starts = new Uint32Array(bucket_count);
-    this.stamps = new Uint32Array(bucket_count);
-    this.cursors = new Uint32Array(bucket_count);
+    this.counts = alloc.take(Uint32Array, bucket_count);
+    this.starts = alloc.take(Uint32Array, bucket_count);
+    this.stamps = alloc.take(Uint32Array, bucket_count);
+    this.cursors = alloc.take(Uint32Array, bucket_count);
 
-    this.touched = new Uint32Array(bucket_count);
-    this.cells = new Uint32Array(capacity);
-    this.ids = new Uint32Array(capacity);
-    this.ins_cx = new Int32Array(capacity);
-    this.ins_cy = new Int32Array(capacity);
-    this.ins_cz = new Int32Array(capacity);
+    this.touched = alloc.take(Uint32Array, bucket_count);
+    this.cells = alloc.take(Uint32Array, capacity);
+    this.ids = alloc.take(Uint32Array, capacity);
+    this.ins_cx = alloc.take(Int32Array, capacity);
+    this.ins_cy = alloc.take(Int32Array, capacity);
+    this.ins_cz = alloc.take(Int32Array, capacity);
 
-    this.items = new Uint32Array(capacity);
-    this.item_cx = new Int32Array(capacity);
-    this.item_cy = new Int32Array(capacity);
-    this.item_cz = new Int32Array(capacity);
+    this.items = alloc.take(Uint32Array, capacity);
+    this.item_cx = alloc.take(Int32Array, capacity);
+    this.item_cy = alloc.take(Int32Array, capacity);
+    this.item_cz = alloc.take(Int32Array, capacity);
   }
 
   /** Cell coordinate of a world coordinate on one axis. */
