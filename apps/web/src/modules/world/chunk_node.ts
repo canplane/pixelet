@@ -39,7 +39,7 @@ import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
 import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/modules/world/decor/field.ts";
 import { build_decor_instances, type ModelInstanceTransformList } from "@/modules/world/decor/decor_layer.ts";
 import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/modules/world/decor/asset_store.ts";
-import { decor_l2_column_revision, l2_column_key_of, object_l2_column_revision, subscribe_decor_l2_column, subscribe_object_l2_column } from "@/modules/world/objects/store.ts";
+import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/modules/world/objects/store.ts";
 import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/modules/world/render/chunk_material.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
 import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
@@ -321,7 +321,7 @@ export class ChunkNode implements ChunkLodControl {
 
   private readonly page_off: IVec;
   private readonly key: ChunkKey;
-  private readonly object_key: string;
+  private readonly object_key: IVec;
   /** This chunk's own absolute lattice origin, and its identity in
    * decor/field.ts — decor lives in one world-wide field now, so it needs
    * both a stable name and the offset to place chunk-local instances at. */
@@ -400,7 +400,7 @@ export class ChunkNode implements ChunkLodControl {
     const { page_idx, offset, anchor_registry, camera } = deps;
     this.page_off = ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n);
     this.key = { page_idx, page_off: this.page_off };
-    this.object_key = l2_column_key_of(page_idx, this.page_off);
+    this.object_key = object_column_of(page_idx, this.page_off);
     this.base_i = ivec.add(FROM_L3_IDX(page_idx), this.page_off);
     this.decor_key = `${page_idx.toString()}:${offset.key}`;
     this.stable_hash = blend_hash(this.decor_key);
@@ -431,8 +431,8 @@ export class ChunkNode implements ChunkLodControl {
 
     this.tile = useTileStore.getState().get_tile(page_idx);
     this.show_structures = useSettingsStore.getState().show_structures;
-    this.objects_revision = object_l2_column_revision(this.object_key);
-    this.decor_revision = decor_l2_column_revision(this.object_key);
+    this.objects_revision = object_column_revision(this.object_key);
+    this.decor_revision = decor_column_revision(this.object_key);
     this.show_decor = useSettingsStore.getState().show_decor;
     this.bundle_assets = decor_bundle_assets();
 
@@ -445,8 +445,8 @@ export class ChunkNode implements ChunkLodControl {
         this.on_source_change();
         this.on_decor_change();
       }),
-      subscribe_object_l2_column(this.object_key, () => this.on_source_change()),
-      subscribe_decor_l2_column(this.object_key, () => this.on_decor_change()),
+      subscribe_object_column(this.object_key, () => this.on_source_change()),
+      subscribe_decor_column(this.object_key, () => this.on_decor_change()),
       subscribe_decor_assets(() => this.on_decor_assets()),
     );
 
@@ -551,7 +551,7 @@ export class ChunkNode implements ChunkLodControl {
     if (this.disposed) return;
     const tile = useTileStore.getState().get_tile(this.deps.page_idx);
     const show_structures = useSettingsStore.getState().show_structures;
-    const objects_revision = object_l2_column_revision(this.object_key);
+    const objects_revision = object_column_revision(this.object_key);
     if (Object.is(this.tile, tile) && this.show_structures === show_structures && this.objects_revision === objects_revision) return;
     this.tile = tile;
     this.show_structures = show_structures;
@@ -596,7 +596,7 @@ export class ChunkNode implements ChunkLodControl {
    */
   private on_decor_change(): void {
     if (this.disposed) return;
-    const revision = decor_l2_column_revision(this.object_key);
+    const revision = decor_column_revision(this.object_key);
     // show_decor sits here rather than in on_source_change for the reason
     // this split exists at all: hiding scattered decor changes no cube, and
     // rebuilding them would flicker. It is the decor half's own

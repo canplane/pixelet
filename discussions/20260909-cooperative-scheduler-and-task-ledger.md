@@ -751,6 +751,22 @@ how often a band was reused). Absolute per-window totals were the ones that
 kept failing to settle arguments, because they mix how much work a window
 happened to contain with what one unit of it costs.
 
+## Open, 2026-09-11: one on-screen chunk can wait sixteen seconds
+
+Recorded to take up later, not yet looked into. In a zoomed-out session with
+500–590 chunks in the frustum and the view moving almost the whole time,
+the ledger's `oldest_visible_ms` rose by exactly 1000 ms per second from
+t = 3 s to the end, reaching 15 994 ms: one pending chunk on screen was
+passed over for the entire session while the pending count stayed between
+230 and 760 and bakes ran at 119/s during the backlog. An earlier session's
+window peak read 17 180 ms, so it predates the core-memory work that session
+tested. The rate says the scheduler is working; the monotonic wait says its
+order can starve one chunk indefinitely — the unified priority
+(`holds_slot`, `in_frustum`, `lead_distance2`) has no ageing term, so a chunk
+that is always slightly farther from the lead point than whatever keeps
+arriving never reaches the front while the view keeps moving. Trace:
+pxl-ledger-2026-09-11T14-35-25-187Z.json.
+
 ## Guardrail
 
 [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md)
