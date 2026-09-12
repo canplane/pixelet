@@ -4,6 +4,23 @@ import { type u16, U32, type u32, U8, type u8 } from "./word.ts";
 import type { Bytes } from "./array.ts";
 import { bytes_to_hex, te } from "./encoding.ts";
 
+// ============ FNV-1a 64-bit, as one word ============
+
+const FNV64_OFFSET = 0xcbf29ce484222325n;
+const FNV64_PRIME = 0x100000001b3n;
+
+/** FNV-1a over a string's UTF-16 code units, 64 bits wide, as the unsigned
+ * word a 64-bit key lane holds — what a string keys a map by once the map
+ * is lanes (ds/map.ts). */
+export function fnv1a64_str(s: string): bigint {
+  let h = FNV64_OFFSET;
+  for (let i = 0; i < s.length; i++) {
+    h ^= BigInt(s.charCodeAt(i));
+    h = BigInt.asUintN(64, h * FNV64_PRIME);
+  }
+  return h;
+}
+
 // ============ FNV-1a 64-bit (8 bytes output) ============
 
 type FNVState = { h1: u32; h2: u32; p: u32 };

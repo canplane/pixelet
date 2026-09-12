@@ -174,6 +174,17 @@ function sorted(slots: Vector<U32Array>, order: (a: u32, b: u32) => number): U32
 
 type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec };
 
+/** A chunk's absolute base from its page and its page-local offset — the
+ * same value ChunkNode registers itself under. */
+function chunk_base(page_base: IVec, offset: { base_x: number; base_y: number }): IVec {
+  return ivec.add(page_base, ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n));
+}
+
+/** The live nodes of one page, copied out: disposing removes slots. */
+function this_page_nodes(page_idx: IVec): ChunkNode[] {
+  return lod_scheduler.handles.filter((node) => node.page_idx === page_idx);
+}
+
 /**
  * One page's worth of chunks, created and destroyed imperatively.
  *
@@ -198,31 +209,29 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
     g.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
     return g;
   }, [page_idx]);
-  const nodes = useRef(new Map<string, ChunkNode>());
   // Two sets, not one: what to build, and what to keep once built. A chunk
   // that merely drifted past the range is left alone until it is well past
-  // it — see RANGE_HYSTERESIS.
+  // it — see RANGE_HYSTERESIS. Both are chunk bases: a chunk's identity in
+  // the scheduler table, which is where this diff asks what is live.
   const offsets = useMemo(() => in_range_chunks(page_base, range_anchor), [page_base, range_anchor]);
   const keep = useMemo(
-    () => new Set(in_range_chunks(page_base, range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS).map((offset) => offset.key)),
+    () =>
+      new Set(
+        in_range_chunks(page_base, range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS).map((offset) => chunk_base(page_base, offset)),
+      ),
     [page_base, range_anchor],
   );
 
   useLayoutEffect(() => {
-    const live = nodes.current;
-    const wanted = new Map(offsets.map((offset) => [offset.key, offset]));
-    for (const [key, node] of live) {
-      if (keep.has(key)) continue;
-      node.dispose();
-      live.delete(key);
+    for (const node of this_page_nodes(page_idx)) {
+      if (!keep.has(lod_scheduler.base_of(node.slot))) node.dispose();
     }
-    for (const [key, offset] of wanted) {
-      if (live.has(key)) continue;
+    for (const offset of offsets) {
+      if (lod_scheduler.find(chunk_base(page_base, offset)) >= 0) continue;
       const node = new ChunkNode({ page_idx, offset, stack, camera, anchor_registry });
       group.add(node.group);
-      live.set(key, node);
     }
-  }, [offsets, keep, page_idx, stack, camera, anchor_registry, group]);
+  }, [offsets, keep, page_idx, page_base, stack, camera, anchor_registry, group]);
 
   // Destruction on unmount is deferred by one microtask, and a mount that
   // arrives in that window cancels it. StrictMode replays every mount as
@@ -237,16 +246,14 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
   const teardown = useRef<Promise<void> | null>(null);
   useEffect(() => {
     teardown.current = null;
-    const live = nodes.current;
     return () => {
       const pending = Promise.resolve().then(() => {
         if (teardown.current !== pending) return;
-        for (const node of live.values()) node.dispose();
-        live.clear();
+        for (const node of this_page_nodes(page_idx)) node.dispose();
       });
       teardown.current = pending;
     };
-  }, []);
+  }, [page_idx]);
 
   return (
     <AnchorNode i={page_base}>
@@ -509,7 +516,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       // this loop only has to hand over raw numbers.
       const perf_memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
       let poi_count = 0;
-      for (const pois of poi_pages.handles) poi_count += pois.length;
+      for (const resident of poi_pages.handles) poi_count += resident.page.len;
       const fx = useSettingsStore.getState();
       const fx_passes = 1 + // color-grade + vignette, always on (fused)
         (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_tilt_shift ? 1 : 0) +

@@ -11,11 +11,15 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { IVEC_WORD_MASK } from "@pxl/shared/spec/space/pvf3/core.ts";
 import { L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
-import type { POI } from "@pxl/shared/bake/model/feature.ts";
+import type { U8Array } from "@xpute/core/kit/array.ts";
+import { encode_poi_page } from "@pxl/shared/bake/format.ts";
 import { make_overture_provider } from "@pxl/api/bake/poi/providers/overture_provider.ts";
 import type { PoiProvider } from "@pxl/api/bake/poi/provider.ts";
 
 const MAX_L3_IDX = IVEC_WORD_MASK >> BigInt(L3_SHAMT);
+
+/** One page's packet, and its gzip once a request has asked for one. */
+type PageEntry = { raw: U8Array; gz: U8Array | null };
 
 // Same page_idx validation terrain/service.ts uses — see that file's own
 // doc comment on PAGE_IDX_PATTERN for why this is stricter than "parses as
@@ -27,24 +31,26 @@ function make_services(provider: PoiProvider) {
   // Places here, Overture terrain features there — different tables, same
   // determinism) —
   // same cacheability reasoning as terrain/service.ts's own tile_cache, a
-  // separate cache (own cap/env var) since POI payloads are tiny JSON, not
-  // ~256KB binary tiles, and shouldn't compete with that cache's capacity.
+  // separate cache (own cap/env var) since POI pages are small packets, not
+  // ~256KB terrain tiles, and shouldn't compete with that cache's capacity.
+  // What is cached is the encoded page (format.ts's encode_poi_page): the
+  // provider normalises, and from here on the page is bytes.
   const cache_cap = env.must_int("POI_CACHE_CAP", { fallback: 2000, min: 1 }) as u32;
-  const poi_cache = new Map<IVec, POI[]>();
-  const in_flight = new Map<IVec, Promise<POI[]>>();
+  const poi_cache = new Map<IVec, PageEntry>();
+  const in_flight = new Map<IVec, Promise<PageEntry>>();
 
-  const get_poi_cached = async (page_idx: IVec): Promise<POI[]> => {
+  const get_poi_cached = async (page_idx: IVec): Promise<PageEntry> => {
     const cached = poi_cache.get(page_idx);
     if (cached) return cached;
 
     let pending = in_flight.get(page_idx);
     if (!pending) {
-      pending = provider.fetch_pois(page_idx);
+      pending = provider.fetch_pois(page_idx).then((pois) => ({ raw: encode_poi_page(pois), gz: null }));
       in_flight.set(page_idx, pending);
       pending.finally(() => in_flight.delete(page_idx));
     }
 
-    const pois = await pending;
+    const entry = await pending;
     // Insertion-order eviction, same shape as terrain/service.ts's LRU —
     // POI's own request pattern (a handful of visible pages, panning slowly
     // re-touches recent ones) doesn't need true recency reordering to stay
@@ -56,8 +62,8 @@ function make_services(provider: PoiProvider) {
       const oldest = poi_cache.keys().next().value as IVec;
       poi_cache.delete(oldest);
     }
-    poi_cache.set(page_idx, pois);
-    return pois;
+    poi_cache.set(page_idx, entry);
+    return entry;
   };
 
   const invalidate = (page_idx?: IVec): void => {
@@ -83,12 +89,18 @@ export function register(router: Hono, resrc: AppResources): void {
       return c.text("bad page_idx", 400);
     }
 
-    const pois = await service.get_poi_cached(page_idx);
-    // POI's own V3 center tuples and plain-object tags serialize as JSON
-    // directly, no bespoke binary encoding needed the way terrain's dense
-    // per-cell channel bytes (format.ts's encode_terrain) benefit from —
-    // main.ts's compress() middleware still gzips this transparently.
-    return c.json(pois);
+    const entry = await service.get_poi_cached(page_idx);
+    // The same arrangement as terrain/service.ts: hono's compress() skips
+    // application/octet-stream, so the packet is gzipped here once per
+    // page and stashed on the cached entry.
+    if ((c.req.header("accept-encoding") ?? "").includes("gzip")) {
+      if (!entry.gz) {
+        const gzip_body = new Response(entry.raw).body!.pipeThrough(new CompressionStream("gzip"));
+        entry.gz = new Uint8Array(await new Response(gzip_body).arrayBuffer());
+      }
+      return c.body(entry.gz, 200, { "content-type": "application/octet-stream", "content-encoding": "gzip" });
+    }
+    return c.body(entry.raw, 200, { "content-type": "application/octet-stream" });
   });
 
   // gated by admin_auth on the /api/internal/* prefix (see main.ts)

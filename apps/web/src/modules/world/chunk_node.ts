@@ -328,6 +328,8 @@ export class ChunkNode {
 
   /** This node's slot in lod_scheduler's lanes; the table moves it. */
   slot: u32 = 0;
+  /** The page this chunk belongs to, for the page's own mount diff. */
+  readonly page_idx: IVec;
 
   private readonly page_off: IVec;
   private readonly key: ChunkKey;
@@ -435,6 +437,7 @@ export class ChunkNode {
 
   constructor(private readonly deps: ChunkNodeDeps) {
     const { page_idx, offset, anchor_registry, camera } = deps;
+    this.page_idx = page_idx;
     this.page_off = ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n);
     this.key = { page_idx, page_off: this.page_off };
     this.object_key = object_column_of(page_idx, this.page_off);
@@ -449,7 +452,7 @@ export class ChunkNode {
     // here seeds a distance; the one-shot estimate only picks the tier the
     // first recheck's hysteresis starts from. Off screen until the table's
     // first pass says otherwise.
-    lod_scheduler.add(this, ivec.to_real(ivec.X(this.base_i)), ivec.to_real(ivec.Y(this.base_i)));
+    lod_scheduler.add(this, this.base_i);
     lod_scheduler.set_flag(this.slot, EMPTY, true);
     this.group.visible = false;
     const view = estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, this.base_i);

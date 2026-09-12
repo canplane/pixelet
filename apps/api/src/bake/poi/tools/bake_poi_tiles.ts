@@ -41,6 +41,7 @@ import type { Bytes } from "@xpute/core/kit/array.ts";
 
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { POI } from "@pxl/shared/bake/model/feature.ts";
+import { encode_poi_page } from "@pxl/shared/bake/format.ts";
 import { exists, fmt_bytes, fmt_dur, gzip } from "@pxl/api/bake/bake_util.ts";
 
 import { make_overture_provider } from "../providers/overture_provider.ts";
@@ -151,8 +152,10 @@ async function main(): Promise<void> {
             await Deno.writeTextFile(`${path}${EMPTY_SUFFIX}`, "");
             empty++;
           } else {
-            const raw_json: Bytes = new TextEncoder().encode(JSON.stringify(pois));
-            const gz = await gzip(raw_json);
+            // The page as format.ts's packet — lanes the client views in
+            // place, strings it reads one at a time — gzipped like terrain.
+            const raw: Bytes = encode_poi_page(pois);
+            const gz = await gzip(raw);
             // write to a temp name then rename: a crash mid-write would
             // otherwise leave a truncated file the resume path (exists() ->
             // skip) treats as finished forever after.
@@ -196,8 +199,9 @@ async function main(): Promise<void> {
       // documents — a resumed run only reports what it re-did.
       run: { baked, empty, skipped, failed, poi_total, gz_bytes: gz_total },
 
-      content_type: "application/json",
+      content_type: "application/octet-stream",
       content_encoding: "gzip",
+      format: "xtp poi page (format.ts encode_poi_page)",
 
       // Not read_source_catalogs()'s overture_catalog/elevation_catalog
       // — POI doesn't depend on those (discussions/20260908-overture-poi-adoption.md).

@@ -27,6 +27,7 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
+import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
@@ -73,15 +74,7 @@ function category_of(name: string): u32 {
   return id;
 }
 
-/** FNV-1a over the UTF-16 code units, 64 bits wide. */
-function key_hash(key: string): bigint {
-  let h = 0xcbf29ce484222325n;
-  for (let i = 0; i < key.length; i++) {
-    h ^= BigInt(key.charCodeAt(i));
-    h = BigInt.asUintN(64, h * 0x100000001b3n);
-  }
-  return h;
-}
+const key_hash = fnv1a64_str;
 
 function find(key: string): number {
   const pos = index.find(key_hash(key));

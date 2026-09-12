@@ -23,8 +23,10 @@
  * once, instead of each node reading its own group's composed matrix.
  */
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
+import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
@@ -64,8 +66,12 @@ const LANE = { init_cap: 4096, alloc: CORE_ALLOC } as const;
 export class ChunkTable<T extends { slot: u32 }> {
   private _len: u32 = 0;
 
+  /** Slot by chunk base, for whoever asks whether a chunk is live. */
+  private readonly by_base = new IndexedMap(I64_KEYS, 4096, CORE_ALLOC);
+
   private readonly _flags = new Vector(Uint8Array, LANE);
-  /** Absolute lattice origin, in units, per axis. */
+  /** Absolute lattice origin: the packed word, and in units per axis. */
+  private readonly _base = new Vector(BigUint64Array, LANE);
   private readonly _base_x = new Vector(Float64Array, LANE);
   private readonly _base_y = new Vector(Float64Array, LANE);
   /** Bounding sphere in the chunk's own space: the centre of its measured
@@ -126,13 +132,23 @@ export class ChunkTable<T extends { slot: u32 }> {
 
   // ---- slots ----
 
-  add(handle: T, base_x: f64, base_y: f64): u32 {
+  /** The slot of the chunk whose absolute base is `base`, or -1. */
+  find(base: IVec): i32 {
+    const pos = this.by_base.find(base);
+    return pos < 0 ? -1 : this._by_base_slot.mem[pos];
+  }
+  private readonly _by_base_slot = new Vector(Uint32Array, LANE);
+
+  /** Registers a chunk by its absolute lattice base. */
+  add(handle: T, base: IVec): u32 {
     const slot = this._len++;
     handle.slot = slot;
     this.handles[slot] = handle;
+    this._by_base_slot.set(this.by_base.insert(base), slot);
+    this._base.set(slot, base);
     this._flags.set(slot, 0);
-    this._base_x.set(slot, base_x);
-    this._base_y.set(slot, base_y);
+    this._base_x.set(slot, ivec.to_real(ivec.X(base)));
+    this._base_y.set(slot, ivec.to_real(ivec.Y(base)));
     this._bc_x.set(slot, CHUNK_WORLD_SPAN * 0.5);
     this._bc_y.set(slot, CHUNK_WORLD_SPAN * 0.5);
     this._bc_z.set(slot, 0);
@@ -152,11 +168,21 @@ export class ChunkTable<T extends { slot: u32 }> {
   remove(slot: u32): void {
     this.account(slot, -this.retained[slot]);
     const last = --this._len;
+    // The base index: drop this chunk's entry, and point the moved chunk's
+    // entry at its new slot.
+    {
+      const pos = this.by_base.find(this.base_of(slot));
+      const from = this.by_base.remove_at(pos);
+      if (from !== pos) this._by_base_slot.mem[pos] = this._by_base_slot.mem[from];
+      this._by_base_slot.truncate(from);
+    }
     if (slot !== last) {
       const moved = this.handles[last];
       moved.slot = slot;
       this.handles[slot] = moved;
+      this._by_base_slot.mem[this.by_base.find(this.base_of(last))] = slot;
       this.flags[slot] = this.flags[last];
+      this._base.mem[slot] = this._base.mem[last];
       this._base_x.mem[slot] = this._base_x.mem[last];
       this._base_y.mem[slot] = this._base_y.mem[last];
       this._bc_x.mem[slot] = this._bc_x.mem[last];
@@ -174,6 +200,7 @@ export class ChunkTable<T extends { slot: u32 }> {
     }
     this.handles.length = last;
     this._flags.truncate(last);
+    this._base.truncate(last);
     this._base_x.truncate(last);
     this._base_y.truncate(last);
     this._bc_x.truncate(last);
@@ -188,6 +215,11 @@ export class ChunkTable<T extends { slot: u32 }> {
     this._pending_since.truncate(last);
     this._request.truncate(last);
     this._retained.truncate(last);
+  }
+
+  /** The absolute base a slot was registered with. */
+  base_of(slot: u32): IVec {
+    return this._base.mem[slot];
   }
 
   // ---- per-slot writes ----

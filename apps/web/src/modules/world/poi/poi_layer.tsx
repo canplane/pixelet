@@ -28,7 +28,7 @@ import { invalidate, useThree } from "@react-three/fiber";
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { FROM_L3_IDX, SPAN_CENTER } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import type { POI } from "@pxl/shared/bake/model/feature.ts";
+import type { PoiPage } from "@pxl/shared/bake/format.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
 import { useCameraStore } from "@/modules/camera/store.ts";
@@ -44,13 +44,14 @@ import { CellNodes } from "../billboard/cell_nodes.ts";
 import { BillboardField } from "../billboard/field.ts";
 import {
   invalidate_poi_index,
-  poi_at,
   poi_cell_x,
   poi_cell_y,
   poi_cell_z,
   poi_grounded,
   poi_index_stats,
   poi_index_sweep,
+  poi_page,
+  poi_rec,
   poi_tiebreak,
   poi_x,
   poi_y,
@@ -125,9 +126,13 @@ function tier_shamt(px_k: f64, dist: f64): u32 {
  *
  * Handed to the index as a callback rather than imported there, so the index
  * does not have to know how a POI is addressed. */
-function poi_flat_pos(out: PVF3, poi: POI, page_idx: IVec): PVF3 {
-  return local_world_to_canonical(out, poi.center, FROM_L3_IDX(page_idx));
+function poi_flat_pos(out: PVF3, page: PoiPage, rec: u32, page_idx: IVec): PVF3 {
+  $center[0] = page.x[rec];
+  $center[1] = page.y[rec];
+  $center[2] = page.z[rec];
+  return local_world_to_canonical(out, $center, FROM_L3_IDX(page_idx));
 }
+const $center: [f64, f64, f64] = [0, 0, 0];
 
 /** The reach, squared. It only rules out what is too far to ever draw —
  * which of the survivors actually draws is select_visible_billboards' job
@@ -196,7 +201,9 @@ type PoiPick = {
    * and CanvasTexture every time the nearest one changed, which is a
    * browser-owned object created and destroyed per camera nudge. */
   key: string;
-  poi: POI;
+  /** The place the badge names: its page and its record there. */
+  page: PoiPage;
+  rec: u32;
   anchor_i: IVec;
   anchor_f: bigint;
   /** How many places this badge stands for, itself included. Above one it is
@@ -272,7 +279,7 @@ function select_nearby_pois(
     const ny = $nodes.centre($nodes.key_y[n], shamt);
     const nz = $nodes.centre($nodes.key_z[n], shamt);
 
-    const logical_w = members > 1 ? cluster_badge_logical_w(members) : poi_badge_logical_w(poi_at(rep));
+    const logical_w = members > 1 ? cluster_badge_logical_w(members) : poi_badge_logical_w(poi_page(rep), poi_rec(rep));
     $batch.push(n, nx, ny, nz, logical_w, BADGE_COLLIDE_H, BADGE_CENTER_Y, poi_tiebreak(rep));
   }
 
@@ -337,7 +344,8 @@ function pick_of(node: u32, absorbed_extra: u32, map_origin: IVec): PoiPick {
     // time the origin moved, and every badge on screen would remount at
     // once. The anchor does not move, only the name for it would have.
     key: `${shamt}:${anchor.i}`,
-    poi: poi_at($nodes.first[node]),
+    page: poi_page($nodes.first[node]),
+    rec: poi_rec($nodes.first[node]),
     anchor_i: anchor.i,
     anchor_f: anchor.f,
     members: $nodes.members[node] + absorbed_extra,
@@ -473,12 +481,12 @@ export function PoiLayer() {
     $field.begin();
     for (const pick of selected) {
       const cluster = pick.members > 1;
-      const slot = cluster ? cluster_badge_slot(pick.members) : poi_badge_slot(pick.poi);
+      const slot = cluster ? cluster_badge_slot(pick.members) : poi_badge_slot(pick.page, pick.rec);
       // NO_SLOT when the atlas is full. Nothing is drawn for it this pass,
       // which is the honest answer — the alternative is a rectangle
       // belonging to some other badge.
       if (slot === NO_SLOT) continue;
-      const logical_w = cluster ? cluster_badge_logical_w(pick.members) : poi_badge_logical_w(pick.poi);
+      const logical_w = cluster ? cluster_badge_logical_w(pick.members) : poi_badge_logical_w(pick.page, pick.rec);
       $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas, slot, logical_w, BADGE_LOGICAL_H, BADGE_CENTER_Y);
     }
     $field.end();
