@@ -840,6 +840,32 @@ ms on a 13 ms display, the tick 5 ms, the interaction phase 3. What the
 phone exposed is where the instrument was blind, not where the scheduler
 was slow.
 
+## Update 2026-09-13, evening: what the phone reads now
+
+Seven reports later, same phone, same spot: dt p50 17 ms on a 16 ms
+display, the frame's task 2 ms, offthread 15 — which at that task length
+is the vsync wait, not work. Missed moving frames 39% to 13%. The
+render-path bisect (a dev setting that leaves out the composer's MSAA or
+the composer itself) moved p50 by a millisecond and the missed share by
+five points; the pixel pipeline stays.
+
+What did it, each measured by the step table or the census before and
+after: POI's placement, index sweep and badge uploads brought under the
+tick as bounded units with a content share of the budget they cannot be
+denied; the badges as one instanced quad (draws 120–212 to 35); the
+companion's surface probe replaced by one column scan and cached; the
+placement's greedy pass cut into ranges; a candidate's width estimated
+rather than measured. None of it was found by reading code. Each was the
+largest number in a report, and each report was taken after the previous
+fix landed whole.
+
+The instrument grew two things on the way, both monitor-side: named
+steps with their own mean and max, which is what turned "the content
+phase is slow" into "the sweep's unit is a page", and per-job waits for
+the content steps, which is what showed a placement taking forty frames
+under a load and justified the share. The scheduler still knows one
+number.
+
 ## Guardrail
 
 [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md)

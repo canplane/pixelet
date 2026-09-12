@@ -48,6 +48,16 @@ Two consequences that came up in practice and are now rules:
   swaps the last one into its place; the handle (a `ChunkNode`, say) gets
   its new index. Nothing keeps a slot index across a frame that could remove
   slots.
+- **A browser call that takes a large canvas or image is an allocation**
+  (2026-09-13). The rule above bounds what this code allocates; it says
+  nothing about what a browser API allocates under a call. A Safari heap
+  timeline read the page's JavaScript memory climbing from 1.3 to 3.8 GB
+  while the live heap held 700 MB, of which 30 MB was objects — the rest
+  was ArrayBuffer garbage WebKit made reading a 64 MB badge sheet back on
+  every `drawImage` from it (and, before that, on every `texImage2D` of
+  it). None of it was visible to the ledger, and none of it was in any
+  line of ours. A canvas handed to the GPU or to another canvas is read
+  whole; draw small, upload small.
 
 ## Done
 

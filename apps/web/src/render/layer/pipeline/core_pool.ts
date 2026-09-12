@@ -12,6 +12,7 @@
  * discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md.
  */
 
+import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 
@@ -46,7 +47,10 @@ import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts"
  * is such a view; views into a resizable buffer read two and a half times
  * slower in V8; and WebGL and WebGPU reject them outright. A reservation is
  * committed lazily — untouched pages cost address space, not memory — so it
- * is sized for the pool's peak rather than to the byte.
+ * is sized for the pool's peak rather than to the byte. JavaScriptCore
+ * nonetheless reports the whole reservation as the page's JavaScript
+ * memory (a Safari heap timeline read it as one 512 MB ArrayBuffer), which
+ * is why a phone gets half of it below.
  *
  * Eight regions, 512 MB. Four were sized for meshes alone and the ledger
  * already read 384 MB reserved at a load peak; terrain pages add about 4 MB
@@ -58,11 +62,17 @@ import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts"
  * have one, and the pool then behaves as it did before this existed.
  */
 const CORE_REGIONS = 8;
+/** Half on a phone. Whatever the OS commits, JavaScriptCore reports the
+ * whole reservation against the page, and the page's budget there is a
+ * fraction of the desktop's; past it the pool hands out plain regions the
+ * collector can take back. */
+const HANDHELD_REGIONS = CORE_REGIONS / 2;
 const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
 
 function reserve_core_memory(): WebAssembly.Memory | null {
-  for (const regions of [CORE_REGIONS, CORE_REGIONS / 2]) {
+  const first = HANDHELD ? HANDHELD_REGIONS : CORE_REGIONS;
+  for (const regions of [first, first / 2]) {
     const pages = (regions * REGION_BYTES) / WASM_PAGE;
     try {
       return new WebAssembly.Memory({ initial: pages, maximum: pages });

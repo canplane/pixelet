@@ -70,6 +70,14 @@
  * once, not per badge. The scratch texture is never rendered with: three
  * takes an unseen source texture's image as the pixels to upload, and a
  * seen one as a GPU texture to blit from.
+ *
+ * The scratch is drawn by the entry's own closure, not copied from the
+ * sheet. Reading a rectangle out of a large accelerated canvas has WebKit
+ * read the whole canvas back into a pixel buffer — 64 MB of ArrayBuffer at
+ * 4096 px, once per flush — and a Safari heap timeline showed that garbage
+ * climbing at a quarter of a gigabyte a second while badges were being
+ * built, three gigabytes before a collection (2026-09-13). Drawing the
+ * badge twice costs a fraction of a millisecond and reads nothing.
  */
 
 import * as THREE from "three";
@@ -80,6 +88,7 @@ import { Vector } from "@xpute/core/ds/arena.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 import { make_canvas_texture } from "./canvas_texture.ts";
+import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 
 /**
  * An entry is a slot, named by its index, and a consumer keeps that index
@@ -121,7 +130,9 @@ const WIDTH_BUCKET = 16;
 const HEIGHT_BUCKET = 16;
 
 const INITIAL_SIZE = 1024;
-const MAX_SIZE = 4096;
+/** Where growth gives up. A phone stops one step earlier: the canvas alone
+ * is 64 MB at 4096, and the GPU copy and its mipmaps as much again. */
+const MAX_SIZE = HANDHELD ? 2048 : 4096;
 /** One device pixel of transparent margin, so a linear sample at the edge of
  * one entry cannot reach into its neighbour. Mipmaps make the reach wider
  * than a texel at distance, which is exactly when badges are small and their
@@ -326,7 +337,7 @@ export class BillboardAtlas {
           scratch.height = Math.max(scratch.height, h);
         }
         ctx.clearRect(0, 0, w, h);
-        ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+        this.paint_into(ctx, slot, 0, 0);
         this.$region.min.set(0, 0);
         this.$region.max.set(w, h);
         this.$position.set(x, y);
@@ -408,8 +419,14 @@ export class BillboardAtlas {
   }
 
   private paint(slot: u32): void {
-    const ctx = this.ctx;
-    const x = this.x.mem[slot], y = this.y.mem[slot], w = this.w.mem[slot], h = this.h.mem[slot];
+    this.paint_into(this.ctx, slot, this.x.mem[slot], this.y.mem[slot]);
+  }
+
+  /** Draws an entry with its slot's top-left at (x, y) of `ctx`, clipped to
+   * the slot less its padding. The sheet and the upload scratch both draw
+   * through this, so they cannot differ. */
+  private paint_into(ctx: CanvasRenderingContext2D, slot: u32, x: u32, y: u32): void {
+    const w = this.w.mem[slot], h = this.h.mem[slot];
     ctx.save();
     ctx.clearRect(x, y, w, h);
     ctx.beginPath();
