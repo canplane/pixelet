@@ -37,6 +37,8 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { get_surface_z_at_local } from "../surface_height.ts";
+import { objects_revision } from "../objects/store.ts";
+import { register_tile_interest } from "../terrain/store.ts";
 import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
 import { useCharacterModel } from "./use_character_model.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
@@ -197,6 +199,12 @@ const Walker = memo(function Walker(props: WalkerProps) {
   // FOLLOW_WALK_LINGER_S.
   const follow_walk_until_ref = useRef<f64>(0);
 
+  // The last surface answer and what it was asked with (see below).
+  const surface_ref = useRef({ x: NaN, y: NaN, hint: NaN, origin: null as IVec | null, revision: -1, tiles: -1, z: null as f64 | null });
+  // Terrain arriving changes the answer without any object moving.
+  const tile_revision_ref = useRef(0);
+  useEffect(() => register_tile_interest(() => true, () => tile_revision_ref.current++), []);
+
   useTick("interaction", ({ state, delta }) => {
     if (!character_root) return;
 
@@ -304,11 +312,22 @@ const Walker = memo(function Walker(props: WalkerProps) {
     was_follow_mode_ref.current = is_follow_mode;
 
     // Z always aligns to the surface under the walker's (possibly just-
-    // updated) x/y, independent of whether it moved this frame at all —
-    // terrain, or the top of a placed object standing on it, whichever is
-    // higher (get_surface_z_at_local's own doc comment).
-    const surface_z: f64 | null = get_surface_z_at_local(origin_page_idx_xy, map_origin_ref.current, px, py, target_z_ref.current);
-    character_root.position.set(px, py, surface_z ?? character_root.position.z);
+    // updated) x/y — terrain, or the top of a placed object standing on it,
+    // whichever is higher (get_surface_z_at_local's own doc comment). Asked
+    // again only when something it depends on moved: the walker, the hint,
+    // the frame origin, or the object store. A standing walker asks nothing.
+    const s = surface_ref.current;
+    const revision = objects_revision();
+    if (s.x !== px || s.y !== py || s.hint !== target_z_ref.current || s.origin !== map_origin_ref.current || s.revision !== revision || s.tiles !== tile_revision_ref.current) {
+      s.x = px;
+      s.y = py;
+      s.hint = target_z_ref.current;
+      s.origin = map_origin_ref.current;
+      s.revision = revision;
+      s.tiles = tile_revision_ref.current;
+      s.z = get_surface_z_at_local(origin_page_idx_xy, map_origin_ref.current, px, py, target_z_ref.current);
+    }
+    character_root.position.set(px, py, s.z ?? character_root.position.z);
 
     // Crossfade only on an actual state change, not every frame.
     const desired_clip = is_walking ? variant.move_clip : IDLE_CLIP;

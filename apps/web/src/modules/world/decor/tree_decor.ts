@@ -36,5 +36,6 @@ export const TREE_DECOR_BUNDLE: DecorKindBundle = {
   seed: TREE_KIND,
   is_eligible: is_tree_eligible,
   variants: TREE_VARIANTS,
+  extent_u: 3.0,
   decor_id: "tree",
 };

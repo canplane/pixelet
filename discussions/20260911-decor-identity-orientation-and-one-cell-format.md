@@ -349,3 +349,48 @@ calibration of the threshold and not a table per kind. How those clients
 represent the building meshes themselves at each range — what a low-poly
 building is, when it becomes a footprint, when it is gone — is the
 reference to read when the low-poly tier is built.
+
+## Closed 2026-09-13: the criterion is in, and the two tiers are decided
+
+The projected-size criterion is code (`decor_layer.ts`'s `decor_density`):
+a kind brings `extent_u`, the largest dimension of its models measured
+from the GLBs (trees 3.0, cars 2.9, trains 2.6, boats 3.9), and is drawn
+on every tier where that extent projects to at least `DECOR_GONE_PX` at
+the band's far edge — twice the tier cell, twelve pixels at the reference
+viewport — and on none past it. No density fade: a thing is drawn or not,
+the way the map clients drop a building rather than thin a district, and
+the blend across a band boundary staggers the change across chunks. The
+hand-written ladders and the per-kind "nearest tier only" are gone. With
+today's models every kind is on the nearest tier only; a ten-unit building
+would reach the fourth.
+
+**Where the number came from, honestly.** The mechanism is Google Earth's
+— 3D Tiles refine on screen-space error, which is this criterion applied
+per tile — and the altitude rule in the follow-up above is that formula
+solved for distance. Google Maps' vector buildings are not this: they
+switch on at a zoom level regardless of a building's size, z15 to z16,
+which at Seoul's latitude is 5 to 10 pixels for a twenty-metre building.
+Twelve was chosen against six by eye and by the phone: it draws less, and
+the phone is the target. It was not measured from Earth, where a building
+does not vanish but coarsens with its tile. One constant, to move if it
+reads wrong.
+
+**The low-poly tier is an impostor.** Decided, not built: each variant
+rendered once to a sprite, far instances drawn as a camera-facing quad —
+two triangles for a model of thousands, the standard for far trees, and
+content-independent, since the sprite comes from the model itself. The
+atlas and billboard field already exist. It is the tier that would let
+decor be drawn past the nearest ring cheaply; not a fix for the phone,
+which is why it waits for a reason (BACKLOG, P2).
+
+**Culling waits for a measurement.** Decor is drawn for the whole loaded
+world, but with the threshold above it only exists in the nearest ring, so
+what culling would save is the half behind the camera. Re-measured on the
+phone after the threshold; if it is still the cost, the shape is one
+instanced mesh per page and variant, culled by page bounds.
+
+**What the phone said before this.** At a zoom with 1.26M triangles on
+screen, 87% of them decor, off-thread p50 went from 11 ms (363k) to 17 ms.
+The near-zoom A/B had cleared decor of the stalls, not of this. The
+threshold is the first answer; the impostor is the second if the first is
+not enough.

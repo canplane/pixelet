@@ -20,4 +20,5 @@ export const BOAT_DECOR_BUNDLE: DecorKindBundle = {
   seed: BOAT_KIND,
   is_eligible: is_boat_eligible,
   variants: BOAT_VARIANTS,
+  extent_u: 3.9,
 };

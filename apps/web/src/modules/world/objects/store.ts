@@ -668,6 +668,13 @@ function index_cells(cpos: number): void {
  * never rebuilds decor for nothing.
  */
 let revision_seq = 0;
+
+/** The last revision handed out — moves on every write to any column, so
+ * a reader that cached a derived answer can tell whether the store has
+ * changed under it at all. */
+export function objects_revision(): number {
+  return revision_seq;
+}
 const rev_map = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
 const rev_objects = new Vector(Uint32Array, LANE);
 const rev_decor = new Vector(Uint32Array, LANE);
