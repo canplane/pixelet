@@ -31,7 +31,7 @@ Always drive the repo through its tasks, run from the repo root:
 
 `deno task check` is the gate. Do not report work as done without it passing.
 
-The two Postgres containers come from `infra/docker-compose.yml`, and the geo one
+The two Postgres containers come from `infra/local/docker-compose.yml`, and the geo one
 (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset that is expensive to
 rebuild. **Never `down -v` it casually** — the volume is the data. Ingestion and
 operational procedures are documented in [infra/README.md](./infra/README.md);

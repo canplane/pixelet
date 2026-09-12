@@ -7,8 +7,14 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELEV_ROOT="$(dirname "$SCRIPT_DIR")"
 
+REPO_ROOT="$(cd "$ELEV_ROOT/../../../../.." && pwd)"
+# The warped rasters: gigabytes, under the repository's one gitignored
+# working directory (out/, which the Docker build context also ignores),
+# never under the source tree this script lives in.
+DATA_ROOT="$REPO_ROOT/out/elevation"
+
 # Load .env
-DOTENV_PATH="$(cd "$ELEV_ROOT/../../../" && pwd)/.env"
+DOTENV_PATH="$REPO_ROOT/.env"
 
 if [ -f "$DOTENV_PATH" ]; then
     echo "✅ Loading environment variables from $DOTENV_PATH"
@@ -102,7 +108,7 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
     echo "==================================================="
 
     REGION_LOWER=$(echo "$REGION_CODE" | tr '[:upper:]' '[:lower:]')
-    WARPED_DIR="$ELEV_ROOT/region/$REGION_CODE/warped"
+    WARPED_DIR="$DATA_ROOT/region/$REGION_CODE/warped"
     WARPED_FILENAME="gedtm30_${REGION_LOWER}_3857.tif"
     WARPED_FILE="$WARPED_DIR/$WARPED_FILENAME"
     mkdir -p "$WARPED_DIR"
@@ -117,7 +123,7 @@ for ((i=0; i<ENTRY_COUNT; i++)); do
     # (EPSG:4326, -te_srs), so the region's own lon/lat bbox needs no manual
     # conversion; -t_srs 3857 matches this project's own working CRS.
     echo "🔄 Cropping + re-projecting to 3857 (Warping)..."
-    docker run --rm -v "$ELEV_ROOT":/data "$GDAL_IMAGE" \
+    docker run --rm -v "$DATA_ROOT":/data "$GDAL_IMAGE" \
         gdalwarp -te "$WEST" "$SOUTH" "$EAST" "$NORTH" -te_srs EPSG:4326 \
         -t_srs EPSG:3857 -overwrite -r bilinear -of GTiff -co COMPRESS=DEFLATE \
         "/vsicurl/$DOWNLOAD_URL" "/data/region/$REGION_CODE/warped/$WARPED_FILENAME"

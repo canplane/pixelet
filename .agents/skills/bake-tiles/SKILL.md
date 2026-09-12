@@ -22,7 +22,7 @@ Read it before changing the pipeline's shape; this file is the procedure only.
 The bake reads the geo database directly, so it must be up and populated:
 
 ```bash
-docker compose -f infra/docker-compose.yml --env-file .env up -d
+docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 ```
 
 `pixelet-db-geo` must hold `overture_buildings`, `overture_transportation`,
