@@ -438,8 +438,11 @@ cheaper one — and the chunk still needs the full scan when it later refines.
 The standard shape is to grow the unit with the tier rather than thin the
 scan: at step 16, scan and bake a 4x4 block of chunks as one mesh. Sixteen
 times fewer scans for the same picture, and the mesh count falls with it.
-That is a change to what a "chunk" is at coarse tiers, so it gets its own
-record before it gets code.
+That is a change to what a "chunk" is at coarse tiers, and it has its own
+record: [20260912-coarse-tiers-need-a-larger-unit.md](./20260912-coarse-tiers-need-a-larger-unit.md).
+The same measurement that motivates it — 1,079 chunks on screen, 474 MB
+live against a 512 MB reservation — is also why the core pool spills at a
+wide zoom; the unit is the lever for both.
 
 **Decor is the frame-time bottleneck, not the scheduler.** In the same capture
 GPU p95 was 24.1 ms with 2.26 M triangles of decor in the last frame, which is

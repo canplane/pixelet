@@ -9,7 +9,7 @@ import { cube_hex, is_terrain_style_cube, object_value_is_air, object_value_is_d
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { each_column_entry, object_column_of, object_column_revision } from "@/modules/world/objects/store.ts";
+import { column_has_entries, each_column_entry, object_column_of, object_column_revision } from "@/modules/world/objects/store.ts";
 import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255 } from "../terrain/shader_meta.ts";
 
@@ -61,6 +61,13 @@ export class ObjectWorldLayer implements WorldLayer {
 
   revision(key: ChunkKey): WorldLayerRevision {
     return [object_column_revision(object_column_of(key.page_idx, key.page_off))];
+  }
+
+  /** Placed objects carve, stack and sit off the cell grid, none of which a
+   * plain column run expresses; a column that holds any keeps the scan path
+   * (WorldLayer.runs). */
+  present(key: ChunkKey): boolean {
+    return column_has_entries(object_column_of(key.page_idx, key.page_off));
   }
 
   paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean {

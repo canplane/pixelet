@@ -63,12 +63,15 @@ import {
   column_scan_open,
   type ColumnRunSet,
   type ColumnScan,
+  fill_column_runs,
   finish_column_scan,
   release_column_runs,
   scan_column_rows,
 } from "@/render/layer/pipeline/voxel_scan.ts";
 import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
 import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
+import { lod_build_stats } from "@/modules/world/lod_build_stats.ts";
+export { lod_build_stats };
 import type { FrameBudget } from "@/modules/world/sched/tick.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep } from "@/render/lod.ts";
 import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision, type MountedLodMesh, visibility_coverage } from "@/render/lod_visibility.ts";
@@ -89,6 +92,11 @@ import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision,
  * *something* to transition from rather than popping in from a true void.
  */
 export const OFF_SCREEN_LOD_STEP: LodStep = 64;
+
+/** The first tier whose cells fold enough columns that the volume and the
+ * scan buy nothing visible: from here up a chunk's runs come straight from
+ * the layers' sources (ChunkNode.direct_runs_allowed). */
+const DIRECT_RUNS_MIN_STEP: LodStep = 8;
 
 /** What the pending work is, so that a change of request restarts its wait
  * (ChunkLodControl.pending_since). Releasing a chunk and building one are
@@ -166,25 +174,6 @@ export function record_timing(stats: TimingStats, ms: number): void {
 export const mesh_mount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
 /** geometry.dispose() on detach — a zoom-out flips many chunks at once. */
 export const mesh_unmount_stats: TimingStats = { total_ms: 0, count: 0, max_ms: 0 };
-
-/**
- * Cumulative (since page load) LOD build timing, dev-only — no console.log
- * anywhere near this (a hot console during a build storm would itself skew
- * the measurement); just plain object writes each call, exposed read-only
- * via ChunkStage's __PXL_RENDER_STATS__ dev global.
- */
-export const lod_build_stats = {
-  scan_ms: 0,
-  scan_count: 0,
-  scan_max_ms: 0,
-  scan_bands: 0,
-  scan_bands_max: 0,
-  build_ms: 0,
-  build_count: 0,
-  build_max_ms: 0,
-  build_runs: 0,
-  build_runs_max: 0,
-};
 
 /** Splits one commit() call's cost, dev-only. `attach_ms_max` replaces what
  * used to be `set_layout_ms_max`: the same moment, but now it is the real
@@ -773,8 +762,49 @@ export class ChunkNode implements ChunkLodControl {
    * With no budget (a source-change rebuild outside the tick) the scan runs
    * to completion in one call, as it always did.
    */
+  /**
+   * Whether this chunk's runs can come straight from the layers' sources:
+   * every wanted tier is coarse, and every layer either offers runs or has
+   * nothing here. Coarse tiers fold columns into cells, so the exactness
+   * the volume and the scan buy — placed cubes carving terrain, sub-cell
+   * objects — is not visible at them anyway; the finest tiers keep the scan.
+   */
+  private direct_runs_allowed(): boolean {
+    if (this.wanted.some((step) => step < DIRECT_RUNS_MIN_STEP)) return false;
+    for (const layer of this.deps.stack) {
+      if (layer.runs) continue;
+      if (layer.present === undefined || layer.present(this.key)) return false;
+    }
+    return true;
+  }
+
   private advance_scan(budget: FrameBudget | null): "done" | "busy" | "blocked" {
     const step_t0 = performance.now();
+    if (!this.scan && this.direct_runs_allowed()) {
+      // The direct path: one run per column read from each layer's own
+      // source, packed straight into a run set. No volume, no scan slot, no
+      // stepping — it is a few thousand array reads, three orders of
+      // magnitude under the scan it replaces
+      // (discussions/20260912-coarse-tiers-what-the-field-does.md).
+      // The scratch is the scan's, so a stepped scan in flight means wait.
+      if (column_scan_open()) return "blocked";
+      let any = false;
+      const set = fill_column_runs(CHUNK_CELL_SPAN, (w) => {
+        for (const layer of this.deps.stack) if (layer.runs && layer.runs(this.key, w)) any = true;
+      });
+      if (!any) {
+        release_column_runs(set);
+        return "blocked";
+      }
+      this.column_runs = set;
+      this.account(this.column_runs.block.bytes);
+      const direct_ms = performance.now() - step_t0;
+      lod_build_stats.scan_ms += direct_ms;
+      lod_build_stats.scan_count++;
+      lod_build_stats.scan_max_ms = Math.max(lod_build_stats.scan_max_ms, direct_ms);
+      lod_build_stats.direct_count++;
+      return "done";
+    }
     if (!this.scan) {
       // Cheap check before the expensive compose: composing and then finding
       // the slot taken would spend a couple of milliseconds per pending chunk
@@ -1183,7 +1213,17 @@ export class ChunkNode implements ChunkLodControl {
     // committing that would bake OFF_SCREEN_LOD_STEP as a real mesh: one
     // 64u box per chunk, in the middle of the view (2026-09-12). Wait for the
     // next recheck to ask for what this side actually wants.
-    if ((this.request === RELEASE_REQUEST) === this.in_frustum) return false;
+    if ((this.request === RELEASE_REQUEST) === this.in_frustum) {
+      // The request is for the other side of the frustum, and only recheck
+      // can replace it — but recheck is rationed, and at boot with a hundred
+      // chunks pending it may not reach this one for a while. Work in flight
+      // must not wait on that: a bake left open here held the one bake slot
+      // for the whole world, and nothing built for seventy seconds after
+      // load (2026-09-12). A slot is given back the moment its holder cannot
+      // use it, never at the next rationed pass.
+      this.abort_work();
+      return false;
+    }
     if (!this.in_frustum) {
       // A release detaches what the scene draws and nothing else. The run
       // set and the cached tiers stay, under RETAIN_BUDGET_BYTES, so a chunk

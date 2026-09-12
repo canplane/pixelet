@@ -14,6 +14,7 @@ import { slice_chunk } from "./chunk.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT } from "./shader_meta.ts";
 
 import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN, MaterialClass, NO_LAYER, type VoxelMaterial } from "../pipeline/volume.ts";
+import type { ColumnRunWriter } from "../pipeline/voxel_scan.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
 
@@ -73,6 +74,28 @@ export class TerrainWorldLayer implements WorldLayer {
 
   revision(key: ChunkKey): WorldLayerRevision {
     return [useTileStore.getState().get_tile(key.page_idx), useSettingsStore.getState().show_structures];
+  }
+
+  /**
+   * One run per column, floor to elevation, in the column's own material —
+   * the same columns paint() fills into the volume, without the volume. See
+   * WorldLayer.runs.
+   */
+  runs(key: ChunkKey, w: ColumnRunWriter): boolean {
+    const tile = useTileStore.getState().get_tile(key.page_idx);
+    if (!tile) return false;
+
+    const { ground, ele } = slice_chunk(tile.terrain.ground, tile.terrain.ele, key.page_off);
+    const show_structures = useSettingsStore.getState().show_structures;
+    const terrain_floor = terrain_floor_of(ele);
+
+    for (let i: u32 = 0; i < CHUNK_CELL_SPAN2; i++) {
+      w.column(i);
+      const top = ele[i] - 1;
+      if (top < terrain_floor) continue;
+      w.run(terrain_floor, top, ground_material_at(ground, i, show_structures));
+    }
+    return true;
   }
 
   paint(key: ChunkKey, target: ChunkVolume): boolean {
