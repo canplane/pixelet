@@ -54,6 +54,22 @@
  * upload happening once per glyph ever seen. The 0.09 ms per badge that
  * made entering a dense area expensive is mostly rasterisation, and this is
  * where it goes.
+ *
+ * ---
+ *
+ * **Uploads are rectangles, not the sheet.** Marking the canvas texture
+ * `needsUpdate` had three re-upload the whole canvas at the next render —
+ * 64 MB at 4096 px — once for every frame a badge was drawn in, and a phone
+ * paid it as a hundred-millisecond task each time (the 2026-09-13 reports in
+ * discussions/20260909-cooperative-scheduler-and-task-ledger.md). An entry
+ * is now recorded as dirty and `flush` uploads its rectangle alone, through
+ * a scratch canvas the size of one badge and
+ * `renderer.copyTextureToTexture`, which is a `texSubImage2D` of that
+ * region. The whole sheet still goes up once, when the texture is first
+ * bound, and once more per repack, which replaces the texture — both are
+ * once, not per badge. The scratch texture is never rendered with: three
+ * takes an unseen source texture's image as the pixels to upload, and a
+ * seen one as a GPU texture to blit from.
  */
 
 import * as THREE from "three";
@@ -92,6 +108,8 @@ export type AtlasStats = {
   shelves: u32;
   used_px: u32;
   repacks: u32;
+  /** Rectangles sent to the GPU by `flush`, since load. */
+  uploads: u32;
 };
 
 /** Freed slots are reused by size class rather than by exact fit, so a name
@@ -193,6 +211,17 @@ export class BillboardAtlas {
   private live: u32 = 0;
   private used_px: u32 = 0;
   private repacks: u32 = 0;
+  private uploads: u32 = 0;
+
+  /** Slots drawn since the last flush, and a flag per slot so one is
+   * listed once however many times it was drawn. */
+  private readonly dirty: u32[] = [];
+  private readonly is_dirty = new Vector(Uint8Array, LANE);
+  private scratch: HTMLCanvasElement | null = null;
+  private scratch_ctx: CanvasRenderingContext2D | null = null;
+  private scratch_texture: THREE.Texture | null = null;
+  private readonly $region = new THREE.Box2();
+  private readonly $position = new THREE.Vector2();
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -250,8 +279,66 @@ export class BillboardAtlas {
     this.state.mem[slot] = LIVE;
     this.live++;
     this.paint(slot);
-    this.texture.needsUpdate = true;
+    this.mark_dirty(slot);
     return slot;
+  }
+
+  private mark_dirty(slot: u32): void {
+    while (this.is_dirty.len <= slot) this.is_dirty.push(0);
+    if (this.is_dirty.mem[slot]) return;
+    this.is_dirty.mem[slot] = 1;
+    this.dirty.push(slot);
+  }
+
+  /**
+   * Uploads every rectangle drawn since the last call. Called from a tick
+   * step with the renderer in hand, once a frame; costs one small upload
+   * per dirty entry and one mipmap pass for the lot.
+   *
+   * The first call binds the sheet through `initTexture`, which uploads the
+   * whole canvas if no window onto it has yet — dirty entries included, so
+   * there is nothing to patch that time.
+   */
+  flush(renderer: THREE.WebGLRenderer): u32 {
+    const n = this.dirty.length;
+    if (n === 0) return 0;
+    const bound = (renderer.properties.get(this.texture) as { __webglTexture?: unknown }).__webglTexture !== undefined;
+    if (!bound) {
+      renderer.initTexture(this.texture);
+    } else {
+      if (!this.scratch) {
+        this.scratch = document.createElement("canvas");
+        this.scratch_ctx = this.scratch.getContext("2d")!;
+        this.scratch_texture = new THREE.Texture(this.scratch);
+        this.scratch_texture.flipY = false;
+      }
+      const scratch = this.scratch, ctx = this.scratch_ctx!, src = this.scratch_texture!;
+      // Mipmaps once, after the last rectangle, rather than per copy. The
+      // flag is part of three's texture cache key, but the key is only
+      // re-read on an upload, and a copy into a bound texture is not one.
+      const mipmaps = this.texture.generateMipmaps;
+      this.texture.generateMipmaps = false;
+      for (let d = 0; d < n; d++) {
+        const slot = this.dirty[d];
+        const x = this.x.mem[slot], y = this.y.mem[slot], w = this.w.mem[slot], h = this.h.mem[slot];
+        if (scratch.width < w || scratch.height < h) {
+          scratch.width = Math.max(scratch.width, w);
+          scratch.height = Math.max(scratch.height, h);
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+        this.$region.min.set(0, 0);
+        this.$region.max.set(w, h);
+        this.$position.set(x, y);
+        if (d === n - 1) this.texture.generateMipmaps = mipmaps;
+        renderer.copyTextureToTexture(src, this.texture, this.$region, this.$position);
+        this.uploads++;
+      }
+      this.texture.generateMipmaps = mipmaps;
+    }
+    for (const slot of this.dirty) this.is_dirty.mem[slot] = 0;
+    this.dirty.length = 0;
+    return n;
   }
 
   /** Returns a slot's space to the pool. The pixels are left alone: the
@@ -264,7 +351,7 @@ export class BillboardAtlas {
   }
 
   stats(): AtlasStats {
-    return { size: this.size, entries: this.live, shelves: this.shelf_h.len, used_px: this.used_px, repacks: this.repacks };
+    return { size: this.size, entries: this.live, shelves: this.shelf_h.len, used_px: this.used_px, repacks: this.repacks, uploads: this.uploads };
   }
 
   /** A released slot of this size class, taken back. */
@@ -432,8 +519,11 @@ export class BillboardAtlas {
       this.paint(slot);
     }
 
-    // A resized canvas is a different image as far as the GPU is concerned.
+    // A resized canvas is a different image as far as the GPU is concerned,
+    // and the new texture's first bind uploads all of it.
     this.texture.dispose();
     this.texture = this.make_sheet_texture();
+    for (const slot of this.dirty) this.is_dirty.mem[slot] = 0;
+    this.dirty.length = 0;
   }
 }

@@ -115,6 +115,7 @@ function counters() {
     badge_ms: poi_badge_build_stats.ms,
     place_runs: poi_place_stats.runs,
     atlas_repacks: badge_atlas.stats().repacks,
+    atlas_uploads: badge_atlas.stats().uploads,
     index_rebuilds: poi_index_stats().rebuilds,
   };
 }
@@ -206,6 +207,13 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     } ms over ${c.place_runs} runs   hit ${poi_place_stats.hits} -> cand ${poi_place_stats.candidates} -> kept ${poi_place_stats.kept} (+${poi_place_stats.absorbed} absorbed, biggest ${poi_place_stats.biggest}${
       billboard_dropped() > 0 ? `, DROPPED ${billboard_dropped()}` : ""
     })   max since load ${n1(poi_place_stats.max_ms)} ms, hit ${poi_place_stats.max_hits}`,
+    // Ask-to-commit and frames spanned: a placement is a job of the content
+    // step now, so this is its latency under the budget, and the max is the
+    // starvation question — a content step that waits out every visible
+    // build would show here first.
+    `  wait    place ${n1(poi_place_stats.wait_ms)} ms over ${poi_place_stats.frames} frames (max ${n1(poi_place_stats.max_wait_ms)} ms, ${poi_place_stats.max_frames} frames)   index ${
+      n1(index.wait_ms)
+    } ms over ${index.frames} frames (max ${n1(index.max_wait_ms)} ms, ${index.max_frames} frames)`,
     `  field   ${
       (() => {
         const f = poi_field_stats();
@@ -215,10 +223,12 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  split   sync ${n1(poi_place_stats.sync_ms)} ms (max since load ${n1(poi_place_stats.max_sync_ms)})   badge ${c.badge_metrics} measured / ${c.badge_builds} built ${
       n1(c.badge_ms)
     }ms total, ${poi_badge_count()} cached`,
-    `  atlas   ${atlas.size}px  ${atlas.entries} entries  ${atlas.shelves} shelves  ${share(atlas.used_px, atlas.size * atlas.size)}% used  ${c.atlas_repacks} repacks`,
+    `  atlas   ${atlas.size}px  ${atlas.entries} entries  ${atlas.shelves} shelves  ${
+      share(atlas.used_px, atlas.size * atlas.size)
+    }% used  ${c.atlas_repacks} repacks  ${c.atlas_uploads} rect uploads`,
     `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${share(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
     `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${share(c.coarse_low_fill, c.coarse_boxes)}%; a threshold cull would have skipped these)`,
-    `  index   poi ${index.indexed} resident  ${c.index_rebuilds} rebuilds${index.sweeping > 0 ? `  sweeping ${index.sweeping} pages` : ""}${index.dropped > 0 ? `  DROPPED ${index.dropped}` : ""}`,
+    `  index   poi ${index.indexed} resident  ${c.index_rebuilds} rebuilds${index.sweeping > 0 ? `  sweeping ${index.sweeping} units` : ""}${index.dropped > 0 ? `  DROPPED ${index.dropped}` : ""}`,
     // Idle inside the core reservation is the working budget, kept on purpose
     // (core_pool.ts); only what is reserved past it is ever handed back.
     `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  reserved ${Math.round(core_pool_stat().reserved_bytes / 1048576)}MB (core ${

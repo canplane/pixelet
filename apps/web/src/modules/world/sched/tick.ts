@@ -138,6 +138,16 @@ const SETTLED_BUDGET_MS = 12;
 export const HARD_SLACK_MS = 4;
 /** Smoothing on the render estimate. One frame is noise; ten is a trend. */
 const RENDER_EMA = 0.1;
+/**
+ * The share of the budget the visible phase may not take: what content gets
+ * even in a storm. Phases run in priority order on one budget, and without
+ * this content got only the forward-progress floor — one unit a frame —
+ * while a load kept the visible phase busy. A placement of a few dozen
+ * units then took 25 frames and 3.3 s on a phone, and an index rebuild 49
+ * frames (2026-09-13). A fixed share, not a feedback loop: the scheduler
+ * still knows one number.
+ */
+const CONTENT_SHARE = 0.2;
 
 /**
  * One frame's allowance, shared by every phase.
@@ -148,6 +158,9 @@ const RENDER_EMA = 0.1;
 export class FrameBudget {
   readonly t0: number;
   readonly total_ms: number;
+  /** Held back from whoever asks now, for the phases after it. The tick
+   * sets it before the visible phase and clears it before content. */
+  reserve_ms = 0;
 
   /** `t0` is the tick's start, not this call's: the interaction phase runs
    * before the budget is sized, and what it spent comes off the budget. */
@@ -157,7 +170,7 @@ export class FrameBudget {
   }
 
   remaining(): number {
-    return Math.max(0, this.t0 + this.total_ms - performance.now());
+    return Math.max(0, this.t0 + this.total_ms - this.reserve_ms - performance.now());
   }
 
   run<T>(items: Iterable<T>, step: (item: T) => boolean, opts: Pick<BudgetOpts, "max_steps"> = {}): PassStats {
@@ -301,7 +314,10 @@ export function run_tick(state: RootState, delta: number): TickReport {
   prev_settled = ctx.settled;
   ctx.frame_ms = frame_ms();
   ctx.budget = new FrameBudget(derive_budget_ms(ctx.frame_ms, ctx.settled), t0);
-  for (const phase of PHASES) if (phase !== "interaction") run_phase(phase, ctx);
+  ctx.budget.reserve_ms = ctx.budget.total_ms * CONTENT_SHARE;
+  run_phase("visible", ctx);
+  ctx.budget.reserve_ms = 0;
+  for (const phase of PHASES) if (phase !== "interaction" && phase !== "visible") run_phase(phase, ctx);
 
   last_report = { budget_ms: ctx.budget.total_ms, frame_ms: ctx.frame_ms, settled: ctx.settled, phase_ms, total_ms: performance.now() - t0 };
   return last_report;
