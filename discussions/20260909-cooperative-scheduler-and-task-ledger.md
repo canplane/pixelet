@@ -751,9 +751,9 @@ how often a band was reused). Absolute per-window totals were the ones that
 kept failing to settle arguments, because they mix how much work a window
 happened to contain with what one unit of it costs.
 
-## Open, 2026-09-11: one on-screen chunk can wait sixteen seconds
+## Resolved 2026-09-12: one on-screen chunk could wait sixteen seconds
 
-Recorded to take up later, not yet looked into. In a zoomed-out session with
+In a zoomed-out session with
 500–590 chunks in the frustum and the view moving almost the whole time,
 the ledger's `oldest_visible_ms` rose by exactly 1000 ms per second from
 t = 3 s to the end, reaching 15 994 ms: one pending chunk on screen was
@@ -766,6 +766,30 @@ order can starve one chunk indefinitely — the unified priority
 that is always slightly farther from the lead point than whatever keeps
 arriving never reaches the front while the view keeps moving. Trace:
 pxl-ledger-2026-09-11T14-35-25-187Z.json.
+
+Fixed with ageing (`sched/priority.ts`'s `AGE_HALF_MS`), the textbook cure
+for starvation under a static priority: every 500 ms a pending item waits
+halves its effective distance from the lead point, so one k times farther
+than a fresh arrival overtakes it after log2(k) half-lives — two seconds at
+sixteen times, the overlay's `STARVED_MS`. Items that began waiting together
+age alike, so a jump or a load still fills nearest-first. Ageing reorders
+within a tier and never across one: slot holders still go first and an
+off-screen release still cannot pass a visible build, so releases can in
+principle still wait out an endless stream of on-screen work — accepted, as
+before, since what they cost is memory the pool can spare. The comparator
+takes `now` once per sort, so its keys hold still while a sort runs.
+
+Reviewed alongside, the ledger's three readers: the overlay and the report
+reduced frames through `summary.ts` already, but the side counters the report
+prints (faces, bands, build and scan cost, badge builds, placement runs,
+atlas repacks, index rebuilds) counted from load, so after a restart they
+carried every earlier window beside frames that did not; they are now read
+as differences from the window's start (`log.ts`'s `window_counters`). The
+pool's hit share was likewise since load and is now a difference over the
+window's frames. The overlay reduced the whole task and long-frame rings on
+each repaint, the cost the frame rows had already been cut from; all three
+now read its last ten seconds. The trace builds a frame's args once for both
+the counter track and the worst-frame spans.
 
 ## Guardrail
 

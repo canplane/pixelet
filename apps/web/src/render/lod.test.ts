@@ -4,7 +4,7 @@ import { assertAlmostEquals, assertEquals } from "@std/assert";
 
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
-import { get_instance_cnt, get_lod_guide, get_lod_pair_visibility, step_lod_toward } from "./lod.ts";
+import { get_instance_cnt, get_lod_guide, get_lod_pair_visibility, set_lod_projection } from "./lod.ts";
 
 // These are explicit world-space thresholds. They must not move when L2's
 // ownership/remesh size changes.
@@ -30,11 +30,16 @@ Deno.test("get_instance_cnt - coarsest step 64 collapses one chunk to one proxy"
   assertEquals(get_instance_cnt(64), 1);
 });
 
-Deno.test("step_lod_toward - sudden distance changes advance by one adjacent tier", () => {
-  assertEquals(step_lod_toward(64, 1), 32);
-  assertEquals(step_lod_toward(32, 1), 16);
-  assertEquals(step_lod_toward(1, 64), 2);
-  assertEquals(step_lod_toward(4, 4), 4);
+Deno.test("get_lod_guide - the ladder follows the projection: twice the viewport height, twice the handoff distance", () => {
+  // The default is the reference projection, where the first handoff is 192u.
+  assertEquals(get_lod_guide(300, 1).lod_step, 2);
+  try {
+    set_lod_projection(2 * 1080, 50);
+    assertEquals(get_lod_guide(300, 1).lod_step, 1);
+  } finally {
+    set_lod_projection(1080, 50);
+  }
+  assertEquals(get_lod_guide(300, 1).lod_step, 2);
 });
 
 Deno.test("get_lod_guide - close to the camera and far from any threshold band stays at the finest step, unblended", () => {

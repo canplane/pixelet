@@ -68,9 +68,10 @@ const REBUILD_MARGIN2: f64 = (RESIDENCY - FAR_END) * (RESIDENCY - FAR_END);
  * (L3_RANGE, 1024u), so a point inside the centre page cannot reach past an
  * immediate neighbour — this is exact rather than a heuristic.
  *
- * It is also not optional. `poi_map` is evicted at CLEANUP_RADIUS, so it
- * holds up to 7x7 = 49 pages, and sweeping all of them would put the whole
- * resident world through a structure whose capacity is meant to be constant.
+ * It is also not optional. `poi_map` holds the nearest RESIDENT_PAGES
+ * (terrain/config.ts), 32 of them, and sweeping all of them would put the
+ * whole resident world through a structure whose capacity is meant to be
+ * constant.
  */
 const PAGE_RADIUS = 1;
 const PAGE_U: f64 = Number(L3_RANGE);

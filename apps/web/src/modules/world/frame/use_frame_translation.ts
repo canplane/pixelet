@@ -66,6 +66,15 @@ export function useFrameTranslation(props: UseFrameTranslationProps) {
       did_init.current = true;
       frame.position.set(tx, ty, tz);
       frame.updateMatrix();
+      // The origin just moved by a whole L4 (4096u) and every anchor group
+      // moved with it, but only local matrices have been written: three
+      // recomputes matrixWorld during render, which is after this tick. The
+      // visible phase reads chunk world matrices to decide what is on screen,
+      // so without this every chunk would measure 4096u from where it really
+      // is for one frame — off screen, and an off-screen chunk gives its mesh
+      // back, which empties the world and then rebuilds it. One extra matrix
+      // walk, only on the rare frame the origin actually moves.
+      state.scene.updateMatrixWorld(true);
       view_moving();
       return;
     }

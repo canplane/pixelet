@@ -13,7 +13,7 @@ section specifically for why POI is wired the way it is here.
   scheduling, mirroring `terrain/tile_repository.ts` / `use_tile_fetcher.ts`'s
   shape: a pre-baked static origin when one is configured
   (`PUBLISHED_TILES`/`POI_TILE_BASE_URL`, `lib/env/config.ts`), the live API
-  otherwise, and reusing terrain's own `CLEANUP_RADIUS` to evict cached
+  otherwise, and reusing terrain's own held set to evict cached
   pages once they fall out of range (see `use_poi_fetcher.ts`'s own doc
   comment). POI stays off _terrain's own_ tile format — its static set is a sibling
   prefix in the same bucket (`poi/<version>/…`, not `<version>/…`), so

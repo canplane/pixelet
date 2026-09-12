@@ -25,7 +25,6 @@
 import { useEffect, useState } from "react";
 
 import { useDebugStore } from "@/app/settings/debug_store.ts";
-import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
 import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
 import { badge_atlas } from "@/modules/world/poi/poi_badge.ts";
@@ -35,23 +34,24 @@ import {
   ledger_frames_since,
   ledger_install_longtask_observer,
   ledger_install_observers,
-  ledger_long_frames_snapshot,
-  ledger_recording_start,
+  ledger_long_frames_since,
   ledger_recording_state,
   ledger_recording_stop,
-  ledger_snapshot,
+  ledger_tasks_since,
 } from "./ledger.ts";
-import { ledger_report_to_console, ledger_set_logging } from "./log.ts";
-import { summarize_frames, summarize_tasks, TILE_DECODED_MB, tris_text } from "./summary.ts";
+import { ledger_report_to_console, ledger_set_logging, ledger_window_start, window_counters } from "./log.ts";
+import { STARVED_MS, summarize_frames, summarize_tasks, TILE_DECODED_MB, tris_text } from "./summary.ts";
 import { ledger_trace_download } from "./trace.ts";
 
 const POLL_MS = 500;
 /** Tags listed under the triangle total — the heaviest few carry the cost. */
 const CENSUS_ROWS = 5;
-/** The panel reads the recent past, not the whole recording. Reducing every
- * frame since load on each repaint grew into a 60 ms task every half second
- * two minutes in — the panel was the stall it was showing. The report still
- * covers the whole window. */
+/** The panel reads the recent past, not the whole recording — frames, tasks
+ * and long frames alike. Reducing every frame since load on each repaint
+ * grew into a 60 ms task every half second two minutes in — the panel was
+ * the stall it was showing — and the task and long-frame rows kept doing
+ * the same after the frame rows stopped. The report still covers the whole
+ * window. */
 const LIVE_WINDOW_MS = 10_000;
 /** Share of moving frames allowed to miss a vsync before the row warns. */
 const MISSED_WARN_SHARE = 0.1;
@@ -61,11 +61,6 @@ const LONG_FRAME_MS = 50;
 function r1(n: number): string {
   return n.toFixed(1);
 }
-
-/** A pending chunk waiting longer than this is being passed over rather than
- * queued — see the `wait` line in log.ts. Two seconds is a dozen recheck
- * intervals: long enough that ordinary queueing during a pan clears it. */
-const STARVED_MS = 2000;
 
 /** The interaction phase runs unbudgeted and is meant to be O(1) — camera,
  * frame, puck, companion. Past this, it is eating the budget the phases after
@@ -128,12 +123,14 @@ export function LedgerOverlay() {
 
   if (!import.meta.env.DEV || !show) return null;
 
-  const f = summarize_frames(ledger_frames_since(performance.now() - LIVE_WINDOW_MS));
+  const since = performance.now() - LIVE_WINDOW_MS;
+  const f = summarize_frames(ledger_frames_since(since));
+  const c = window_counters();
   const atlas = badge_atlas.stats();
   const atlas_pct = Math.round((atlas.used_px / (atlas.size * atlas.size)) * 100);
   const index = poi_index_stats();
-  const tasks = summarize_tasks(ledger_snapshot());
-  const longs = ledger_long_frames_snapshot();
+  const tasks = summarize_tasks(ledger_tasks_since(since));
+  const longs = ledger_long_frames_since(since);
   const rec = ledger_recording_state();
   const worst_long = longs.reduce<(typeof longs)[number] | null>((w, l) => (!w || l.duration_ms > w.duration_ms ? l : w), null);
   const loaf_supported = typeof PerformanceObserver !== "undefined" &&
@@ -196,8 +193,8 @@ export function LedgerOverlay() {
           />
           <Row
             k="pool live/idle hit"
-            v={`${f.last.pool.live_mb}/${f.last.pool.idle_mb}MB ${f.last.pool.hit_pct}%`}
-            warn={f.last.pool.hit_pct < 80}
+            v={`${f.last.pool.live_mb}/${f.last.pool.idle_mb}MB ${f.pool_hit_pct ?? "-"}%`}
+            warn={f.pool_hit_pct !== null && f.pool_hit_pct < 80}
           />
           <Row
             k="  reserved/core"
@@ -206,7 +203,7 @@ export function LedgerOverlay() {
           />
           <Row
             k="faces kept"
-            v={`${occlusion_stats.faces_possible > 0 ? Math.round(occlusion_stats.faces_kept / occlusion_stats.faces_possible * 100) : 0}%`}
+            v={`${c.faces_possible > 0 ? Math.round(c.faces_kept / c.faces_possible * 100) : 0}%`}
           />
           <Row
             k="poi place ms"
@@ -270,7 +267,7 @@ export function LedgerOverlay() {
         <button
           type="button"
           onClick={() => {
-            ledger_recording_start();
+            ledger_window_start();
             force((n) => n + 1);
           }}
           title="clear everything and begin a fresh window"

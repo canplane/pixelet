@@ -68,8 +68,9 @@ import {
   scan_column_rows,
 } from "@/render/layer/pipeline/voxel_scan.ts";
 import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
+import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
 import type { FrameBudget } from "@/modules/world/sched/tick.ts";
-import { get_lod_guide, get_lod_pair_visibility, type LodStep, step_lod_toward } from "@/render/lod.ts";
+import { get_lod_guide, get_lod_pair_visibility, type LodStep } from "@/render/lod.ts";
 import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision, type MountedLodMesh, visibility_coverage } from "@/render/lod_visibility.ts";
 
 // ---- Budgets and tiers ----
@@ -89,6 +90,15 @@ import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision,
  */
 export const OFF_SCREEN_LOD_STEP: LodStep = 64;
 
+/** What the pending work is, so that a change of request restarts its wait
+ * (ChunkLodControl.pending_since). Releasing a chunk and building one are
+ * different jobs. */
+const RELEASE_REQUEST = -1;
+
+function build_request(primary: LodStep, secondary: LodStep | null): number {
+  return (primary << 8) | (secondary ?? 0);
+}
+
 /**
  * How many built LOD tiers one chunk may keep. Three is the floor — the
  * active primary, its secondary during a blend, and OFF_SCREEN's own
@@ -99,6 +109,38 @@ export const OFF_SCREEN_LOD_STEP: LodStep = 64;
  * cache filling in every tier a chunk had ever been asked for.
  */
 const MAX_CACHED_LOD_TIERS = 4;
+
+/**
+ * How much built work chunks may keep *while off screen*: run sets and
+ * cached tiers, both in the core pool and sized in bytes.
+ *
+ * Leaving the frustum used to drop all of it on the first release, whatever
+ * memory looked like, and a rotation or a zoom in and out — seconds off
+ * screen — rebuilt every chunk from the scan up. Now a release only detaches
+ * the scene mesh, and this decides when built work is actually reclaimed:
+ * when what off-screen chunks hold is over it, the stage takes from them
+ * farthest first (discussions/20260912-what-to-render-when.md).
+ *
+ * It budgets only the optional part. On-screen chunks hold their run set and
+ * tiers because that is the layout, and at a wide zoom that alone is ~170MB
+ * (602 chunks, 2026-09-12); a budget over the whole would either be unmeetable
+ * there or so large it never fired anywhere else. A quarter of the core
+ * reservation, the currency the crash case was measured in.
+ */
+export const RETAIN_BUDGET_BYTES: u32 = Math.floor((CORE_MEMORY?.buffer.byteLength ?? 256 * 1048576) / 4);
+
+/**
+ * Bytes every live node retains in run sets and cached tiers, world-wide,
+ * kept as the caches change so nothing has to walk the nodes to find out.
+ * Split by whether the node is on screen, which is the line the budget is
+ * drawn on: `off` is what the reclaim pass can act on, `on` is the working
+ * set. A node crossing the frustum moves its bytes from one to the other.
+ */
+const retained = { on: 0, off: 0 };
+
+export function chunk_retained_bytes(): { on: u32; off: u32 } {
+  return { on: retained.on, off: retained.off };
+}
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 
@@ -159,7 +201,7 @@ export const commit_step_stats = {
  * counting React re-renders, and a truer number: a re-render could happen
  * for reasons that changed nothing, an applied layout could not.
  */
-export const node_counts = { added: 0, removed: 0, rebuilt: 0 };
+export const node_counts = { added: 0, removed: 0, rebuilt: 0, released: 0 };
 
 /**
  * Every live node, for the retention walk below.
@@ -208,8 +250,9 @@ export function chunk_retention(): ChunkRetention {
   return out;
 }
 
-export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32 } {
-  const out = { added: node_counts.added, removed: node_counts.removed, rebuilt: node_counts.rebuilt };
+export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; released: u32 } {
+  const out = { added: node_counts.added, removed: node_counts.removed, rebuilt: node_counts.rebuilt, released: node_counts.released };
+  node_counts.released = 0;
   node_counts.added = 0;
   node_counts.removed = 0;
   node_counts.rebuilt = 0;
@@ -220,24 +263,41 @@ export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32 } {
 
 export type ChunkLodControl = {
   blend_active: boolean;
+  /** Showing a tier that is not the one wanted. */
   settling: boolean;
   in_frustum: boolean;
+  /** Nothing of this chunk is on screen yet: a hole to fill rather than a
+   * chunk asking to be sharper. The two are different classes of work
+   * (sched/priority.ts). */
+  empty: boolean;
   distance2: f64;
   /** Squared distance from where the camera is heading (sched/priority.ts).
    * Orders the work; `distance2` still picks the tier. */
   lead_distance2: f64;
   pending: boolean;
-  /** When `pending` last went from false to true, in ms; -1 while not
-   * pending. What the ledger reads to see whether anything is being starved
-   * — the progress rule guarantees one step a frame, not which one. */
+  /** When the work now pending was asked for, in ms; -1 while not pending.
+   * Restarted when the request itself changes, so the seconds a release
+   * spent queued are not credited to the build that replaces it. */
   pending_since: f64;
   /** Holding the scan slot (voxel_scan.ts) or the bake slot
    * (chunk_mesher.ts). The commit loop puts this control first: nothing else
    * can use that slot until it finishes, and a step cap reached on nearer
    * chunks would otherwise starve it — and with it everything waiting. */
   holds_slot: boolean;
+  /**
+   * Where this chunk is and whether it is on screen. Cheap, and run for
+   * every control every frame: `recheck` below is rationed, and ordering the
+   * queue by what a rationed pass last wrote meant ordering by numbers up to
+   * LOD_RECHECK_INTERVAL old.
+   */
+  refresh(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void;
+  /** The decision: which tier, blend state, what to commit. Rationed. */
   recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void;
   commit(budget: FrameBudget): boolean;
+  /** Bytes of built work this chunk keeps off screen, and the call that
+   * gives them back — the stage's memory budget (RETAIN_BUDGET_BYTES). */
+  readonly retained: u32;
+  reclaim(): void;
 };
 
 /**
@@ -379,21 +439,38 @@ export class ChunkNode implements ChunkLodControl {
   // nodes allocates nothing.
   private readonly center = new THREE.Vector3();
   private readonly local_box = new THREE.Box3();
-  private readonly world_box = new THREE.Box3();
   private readonly sphere: THREE.Sphere;
 
   private disposed = false;
 
-  /** The one place `pending` is written, so the time it became pending is
-   * never out of step with it. */
-  private set_pending(pending: boolean): void {
-    if (pending && !this.pending) this.pending_since = performance.now();
+  private request = 0;
+
+  /**
+   * The one place `pending` is written, so the time it became pending is
+   * never out of step with it.
+   *
+   * The clock restarts when `request` changes, not only when `pending` goes
+   * false to true. An off-screen chunk stays pending for as long as its
+   * release is queued, so keying on the flag meant a chunk that sat off
+   * screen for seconds came back into view already holding those seconds and
+   * outranked the middle of the screen, which had just become interesting
+   * (discussions/20260912-what-to-render-when.md).
+   */
+  private set_pending(pending: boolean, request: number): void {
+    if (pending && (!this.pending || request !== this.request)) this.pending_since = performance.now();
     if (!pending) this.pending_since = -1;
+    this.request = request;
     this.pending = pending;
   }
 
   get holds_slot(): boolean {
     return this.scan !== null || this.bake !== null;
+  }
+
+  /** See ChunkLodControl.empty. A chunk that built and found nothing to draw
+   * is finished, not a hole, so this asks whether a layout landed at all. */
+  get empty(): boolean {
+    return !this.layout.ready;
   }
 
   constructor(private readonly deps: ChunkNodeDeps) {
@@ -489,8 +566,7 @@ export class ChunkNode implements ChunkLodControl {
 
   /** The cache's own reference to every bucket it holds, dropped together. */
   private release_bucket_cache(): void {
-    for (const bucket of this.bucket_cache.values()) release_built_mesh(bucket.cubes);
-    this.bucket_cache.clear();
+    for (const [step, bucket] of this.bucket_cache) this.drop_tier(step, bucket);
   }
 
   /**
@@ -509,22 +585,19 @@ export class ChunkNode implements ChunkLodControl {
 
   private clear_column_runs(): void {
     if (!this.column_runs) return;
+    this.account(-this.column_runs.block.bytes);
     release_column_runs(this.column_runs);
     this.column_runs = null;
   }
 
+  private drop_tier(step: LodStep, bucket: BuiltChunkBucket): void {
+    this.bucket_cache.delete(step);
+    this.account(-bucket.cubes.block.bytes);
+    release_built_mesh(bucket.cubes);
+  }
+
   /** Drops every cached tier except OFF_SCREEN's, so a later re-entry has a
    * real tier to transition from rather than a void. */
-  private prune_to_default(): void {
-    for (const [step, bucket] of this.bucket_cache) {
-      if (step === OFF_SCREEN_LOD_STEP) continue;
-      this.bucket_cache.delete(step);
-      release_built_mesh(bucket.cubes);
-    }
-    for (const step of this.decor_cache.keys()) {
-      if (step !== OFF_SCREEN_LOD_STEP) this.decor_cache.delete(step);
-    }
-  }
 
   /** Evicts oldest-built first, never the tiers currently asked for or the
    * off-screen default. The layout holds its own reference, so evicting a
@@ -533,8 +606,42 @@ export class ChunkNode implements ChunkLodControl {
     for (const [step, bucket] of this.bucket_cache) {
       if (this.bucket_cache.size <= MAX_CACHED_LOD_TIERS) return;
       if (step === OFF_SCREEN_LOD_STEP || active.includes(step)) continue;
-      this.bucket_cache.delete(step);
-      release_built_mesh(bucket.cubes);
+      this.drop_tier(step, bucket);
+    }
+  }
+
+  /**
+   * Gives back everything this chunk built, for the stage's budget pass.
+   * Only meaningful off screen: on screen the tiers are the layout.
+   */
+  reclaim(): void {
+    if (this.disposed || this.in_frustum) return;
+    this.reset_all_caches();
+  }
+
+  /** What reclaim() would free. */
+  get retained(): u32 {
+    let bytes = this.column_runs?.block.bytes ?? 0;
+    for (const bucket of this.bucket_cache.values()) bytes += bucket.cubes.block.bytes;
+    return bytes;
+  }
+
+  /** Adds `delta` bytes to whichever side of the frustum this node is on. */
+  private account(delta: number): void {
+    if (this.in_frustum) retained.on += delta;
+    else retained.off += delta;
+  }
+
+  /** Moves this node's bytes across when its frustum membership changes. */
+  private reaccount(now_in_frustum: boolean): void {
+    if (now_in_frustum === this.in_frustum) return;
+    const bytes = this.retained;
+    if (now_in_frustum) {
+      retained.off -= bytes;
+      retained.on += bytes;
+    } else {
+      retained.on -= bytes;
+      retained.off += bytes;
     }
   }
 
@@ -699,6 +806,7 @@ export class ChunkNode implements ChunkLodControl {
     if (!done) return "busy";
 
     this.column_runs = finish_column_scan(this.scan.cursor);
+    this.account(this.column_runs.block.bytes);
     release_chunk_volume(this.scan.volume);
     const scan_ms = this.scan.spent_ms;
     this.scan = null;
@@ -719,6 +827,14 @@ export class ChunkNode implements ChunkLodControl {
    */
   private advance_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
     for (;;) {
+      // A tier nobody wants any more gives the slot back rather than
+      // finishing. There is one bake slot for the whole world, so a
+      // superseded bake delays every chunk, not only this one — the reason
+      // the tier walk this replaced was expensive and not merely slow.
+      if (this.bake && !this.wanted.includes(this.bake.step)) {
+        abort_bake(this.bake.cursor);
+        this.bake = null;
+      }
       if (!this.bake) {
         const step = this.wanted.find((s) => !this.bucket_cache.has(s));
         if (step === undefined) return "done";
@@ -738,7 +854,9 @@ export class ChunkNode implements ChunkLodControl {
 
       const { step, cursor, spent_ms } = this.bake;
       this.bake = null;
-      this.bucket_cache.set(step, bucket_from_baked(finish_bake(cursor), step, "primary"));
+      const bucket = bucket_from_baked(finish_bake(cursor), step, "primary");
+      this.bucket_cache.set(step, bucket);
+      this.account(bucket.cubes.block.bytes);
       lod_build_stats.build_ms += spent_ms;
       lod_build_stats.build_count++;
       lod_build_stats.build_max_ms = Math.max(lod_build_stats.build_max_ms, spent_ms);
@@ -932,35 +1050,49 @@ export class ChunkNode implements ChunkLodControl {
 
   // ---- ChunkLodControl ----
 
-  recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void {
+  /**
+   * See ChunkLodControl.refresh. Measures only.
+   *
+   * One visibility rule for every chunk, a bounding sphere, rather than a
+   * sphere for chunks with no measured bounds and a transformed box for the
+   * rest: a sphere that encloses the box never culls anything the box would
+   * have kept, and costs six plane dots instead of eight transformed corners
+   * — which is what makes running this for every control every frame
+   * affordable.
+   */
+  refresh(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void {
     if (this.disposed) return;
     const bounds = this.layout.bounds;
     if (bounds === null) {
       chunk_distance_to_camera(this.group, CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0, camera, this.center);
+      this.sphere.radius = APPROXIMATE_CHUNK_RADIUS;
     } else {
       set_three_box(this.local_box, bounds);
       this.local_box.getCenter(this.center).applyMatrix4(this.group.matrixWorld);
+      this.sphere.radius = this.local_box.min.distanceTo(this.local_box.max) * 0.5;
     }
     this.distance2 = this.center.distanceToSquared(camera.position);
     this.lead_distance2 = this.center.distanceToSquared(lead);
-    if (bounds === null) {
-      const inside = Math.abs(camera.position.x - this.center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
-        Math.abs(camera.position.y - this.center.y) <= CHUNK_WORLD_SPAN * 0.5;
-      this.in_frustum = inside || frustum.intersectsSphere(this.sphere);
-    } else {
-      this.world_box.copy(this.local_box).applyMatrix4(this.group.matrixWorld);
-      const inside = camera.position.x >= this.world_box.min.x && camera.position.x <= this.world_box.max.x &&
-        camera.position.y >= this.world_box.min.y && camera.position.y <= this.world_box.max.y;
-      this.in_frustum = inside || frustum.intersectsBox(this.world_box);
-    }
+    // The camera standing over (or inside) a chunk: a low-angle frustum can
+    // otherwise rule out the one chunk directly beneath it.
+    const inside = Math.abs(camera.position.x - this.center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
+      Math.abs(camera.position.y - this.center.y) <= CHUNK_WORLD_SPAN * 0.5;
+    const now_in_frustum = inside || frustum.intersectsSphere(this.sphere);
+    this.reaccount(now_in_frustum);
+    this.in_frustum = now_in_frustum;
     this.group.visible = this.in_frustum;
+  }
+
+  recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void {
+    if (this.disposed) return;
+    this.refresh(camera, frustum, lead);
 
     if (!this.in_frustum) {
       // Do not let GPU buffers or derived surfaces accumulate as the camera
       // visits the world. An off-screen chunk keeps only its source key and
       // rebuilds if it re-enters.
       this.desired = { primary: OFF_SCREEN_LOD_STEP, secondary: null };
-      this.set_pending(this.layout.ready);
+      this.set_pending(this.layout.ready, RELEASE_REQUEST);
       // A scan only means anything while this chunk is going to commit. Left
       // open here it would hold the one scan slot for as long as the chunk
       // stayed off-screen, and every other chunk in the world would report
@@ -968,19 +1100,21 @@ export class ChunkNode implements ChunkLodControl {
       if (!this.pending) this.abort_work();
       this.blend_active = false;
       this.settling = false;
-      this.prune_to_default();
       this.apply_decision({ primary: 1, secondary: 0 });
       return;
     }
 
     const guide = get_lod_guide(Math.sqrt(this.distance2), this.layout.primary);
-    // An unloaded chunk has nothing on screen to transition from: build its
-    // correct tier immediately instead of flashing 32 -> 16 -> target merely
-    // because the memory-saving empty state uses OFF_SCREEN_LOD_STEP.
-    const stepped = this.layout.ready ? step_lod_toward(this.layout.primary, guide.lod_step) : guide.lod_step;
-    this.settling = stepped !== guide.lod_step;
-    const blending = !this.settling && guide.blend_active &&
-      guide.blend_finer_step !== null && guide.blend_coarser_step !== null;
+    // Straight to the tier the criterion asks for. Walking one adjacent tier
+    // per commit (the tier walk this replaced) built every tier in between,
+    // and each one had to pass through the single global bake slot before the
+    // tier anyone wanted could start, so a 4 -> 2 -> 1 zoom-in paid for 2 in
+    // full and delayed every other chunk in the world while it did. Nothing
+    // needs the intermediate: commit leaves the layout alone while a build is
+    // in flight, so whatever is already on screen stays until the wanted tier
+    // is ready, and a chunk with nothing built went straight to its target
+    // already.
+    const blending = guide.blend_active && guide.blend_finer_step !== null && guide.blend_coarser_step !== null;
     // Inside a band the finer tier is always primary, whatever guide.lod_step
     // currently says. It crosses from finer to coarser at the band's
     // midpoint, and letting that crossing rename the two tiers made the
@@ -992,14 +1126,21 @@ export class ChunkNode implements ChunkLodControl {
     // refining commits at the band's own inner edge where the fade is over
     // anyway. Neither direction needs a rebuild for it — the two tiers are
     // the same two meshes either way, only their labels were swapping.
-    const primary = blending ? guide.blend_finer_step! : stepped;
+    const primary = blending ? guide.blend_finer_step! : guide.lod_step;
     const secondary = blending ? guide.blend_coarser_step! : null;
     this.desired = { primary, secondary };
-    this.set_pending(!this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary);
+    this.set_pending(
+      !this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary,
+      build_request(primary, secondary),
+    );
+    // Showing a tier that is not the one wanted. Reported by the ledger, and
+    // one of the conditions that keeps a control in the every-frame recheck
+    // set while it crosses a threshold.
+    this.settling = this.pending && this.layout.ready;
     // Same rule as the off-screen branch: a tier that was being scanned for
     // and is no longer wanted must give the slot back now, not never.
     if (!this.pending) this.abort_work();
-    this.blend_active = !this.settling && guide.blend_active;
+    this.blend_active = blending;
 
     if (this.pending || !this.blend_active || guide.blend_finer_step === null || guide.blend_coarser_step === null) {
       this.apply_decision({ primary: 1, secondary: 0 });
@@ -1035,10 +1176,23 @@ export class ChunkNode implements ChunkLodControl {
 
   commit(budget: FrameBudget): boolean {
     if (this.disposed || !this.pending) return false;
+    // A request is only valid on the side of the frustum it was made for.
+    // refresh moves in_frustum every frame while recheck, which sets the
+    // request, is rationed, so for up to LOD_RECHECK_INTERVAL a chunk can be
+    // on screen still holding the release it was handed off screen — and
+    // committing that would bake OFF_SCREEN_LOD_STEP as a real mesh: one
+    // 64u box per chunk, in the middle of the view (2026-09-12). Wait for the
+    // next recheck to ask for what this side actually wants.
+    if ((this.request === RELEASE_REQUEST) === this.in_frustum) return false;
     if (!this.in_frustum) {
-      this.reset_all_caches();
-      // Keep the tiny measured AABB after releasing GPU/surface data so a
-      // later polar change can re-enter using real geometry, not z=0.
+      // A release detaches what the scene draws and nothing else. The run
+      // set and the cached tiers stay, under RETAIN_BUDGET_BYTES, so a chunk
+      // that comes back within seconds — a rotation, a zoom in and out — has
+      // its tier ready instead of rescanning. Work in flight is dropped: a
+      // scan or bake for a chunk nobody can see would only hold the slot.
+      this.abort_work();
+      // Keep the tiny measured AABB after releasing GPU data so a later polar
+      // change can re-enter using real geometry, not z=0.
       this.apply_layout({
         primary: OFF_SCREEN_LOD_STEP,
         secondary: null,
@@ -1047,7 +1201,8 @@ export class ChunkNode implements ChunkLodControl {
         bounds: this.layout.bounds,
         ready: false,
       });
-      this.set_pending(false);
+      this.set_pending(false, RELEASE_REQUEST);
+      if (import.meta.env.DEV) node_counts.released++;
       return true;
     }
 
@@ -1077,7 +1232,7 @@ export class ChunkNode implements ChunkLodControl {
       ready: true,
     });
     if (import.meta.env.DEV) commit_step_stats.attach_ms_max = Math.max(commit_step_stats.attach_ms_max, performance.now() - attach_t0);
-    this.set_pending(false);
+    this.set_pending(false, RELEASE_REQUEST);
     return true;
   }
 }

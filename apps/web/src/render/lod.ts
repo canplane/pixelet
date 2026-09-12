@@ -2,7 +2,7 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
-import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
+import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 /** XY sampling stride in L1 blocks inside one 64x64 chunk. */
 export const LOD_STEP_BY_LEVEL = [1, 2, 4, 8, 16, 32, 64] as const;
@@ -10,40 +10,61 @@ export const LOD_STEP_BY_LEVEL = [1, 2, 4, 8, 16, 32, 64] as const;
 export type LodLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type LodStep = (typeof LOD_STEP_BY_LEVEL)[LodLevel];
 
-/** Moves one adjacent tier so sudden camera/page changes never jump 64 -> 1. */
-export function step_lod_toward(current: LodStep, target: LodStep): LodStep {
-  if (current === target) return target;
-  const current_level = LOD_STEP_BY_LEVEL.indexOf(current);
-  const direction = target < current ? -1 : 1;
-  return LOD_STEP_BY_LEVEL[current_level + direction];
-}
-
 const LOD_MARGIN: f64 = 1.4;
 
-// Explicit world-space distances. Each threshold doubles with the sampling
-// stride, keeping a coarse cell's projected size approximately constant at
-// every handoff. With this ladder the current fog range reaches step 8 at
-// most; 32/64 stay available for future longer ranges and as renderer
-// fallback states without appearing in today's view.
-const LOD_DIST_BY_LEVEL = {
-  LOD0: 192,
-  LOD1: 384,
-  LOD2: 768,
-  LOD3: 1536,
-  LOD4: 3072,
-  LOD5: 6144,
-  LOD6: Infinity,
-} as const;
+/**
+ * The criterion: a tier hands off to the next when one of its cells would
+ * project to about this many pixels on screen.
+ *
+ * Screen-space error, the ordinary rule for chunked terrain LOD, rather than
+ * a table of world distances. A table is this same rule frozen at one
+ * viewport and one field of view, and it cannot say what should happen when
+ * either moves — which is why the value below is not a fresh one: it is the
+ * ladder that was already here (192u for the finest tier at 1080px and 50
+ * degrees), restated. A change of reasoning, not a retune.
+ */
+const REFERENCE_VIEWPORT_H: f64 = 1080;
+const REFERENCE_FOV_DEG: f64 = 50;
+const REFERENCE_THRESHOLD_0: f64 = 192;
 
-/** The six finite distances where one LOD level hands off to the next. */
-const LOD_THRESHOLDS: readonly f64[] = [
-  LOD_DIST_BY_LEVEL.LOD0,
-  LOD_DIST_BY_LEVEL.LOD1,
-  LOD_DIST_BY_LEVEL.LOD2,
-  LOD_DIST_BY_LEVEL.LOD3,
-  LOD_DIST_BY_LEVEL.LOD4,
-  LOD_DIST_BY_LEVEL.LOD5,
-];
+/** Pixels a world unit covers at one unit of distance — the same projection
+ * factor billboard/field.ts and use_distance_fade.ts size their own screen
+ * measurements with. */
+function px_per_unit(viewport_h: f64, fov_deg: f64): f64 {
+  return viewport_h / (2 * Math.tan((fov_deg * Math.PI) / 360));
+}
+
+const TARGET_CELL_PX: f64 = px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / REFERENCE_THRESHOLD_0;
+
+/** The handoff distances, finest first. Derived, so they move with the
+ * projection; each is twice the one before, because each tier's cell is. */
+let LOD_THRESHOLDS: f64[] = [];
+
+function recompute_thresholds(viewport_h: f64, fov_deg: f64): void {
+  const k = px_per_unit(viewport_h, fov_deg) / TARGET_CELL_PX;
+  LOD_THRESHOLDS = LOD_STEP_BY_LEVEL.slice(0, -1).map((step) => step * U_PER_CELL * k);
+}
+
+let projection_h: f64 = REFERENCE_VIEWPORT_H;
+let projection_fov: f64 = REFERENCE_FOV_DEG;
+recompute_thresholds(projection_h, projection_fov);
+
+/**
+ * Tells the ladder what it is projecting onto. Called once a frame by the
+ * chunk scheduler, and a no-op while neither value moves.
+ *
+ * Viewport height in CSS pixels, not device pixels: at dpr 2 the same cell
+ * covers twice the device pixels, and following that would double the
+ * geometry a retina screen builds. Supersampling is what dpr is spent on
+ * here (discussions/20260911-taa-tried-and-closed.md), while which tier to
+ * show is a question about how large a cell looks.
+ */
+export function set_lod_projection(viewport_h: f64, fov_deg: f64): void {
+  if (viewport_h === projection_h && fov_deg === projection_fov) return;
+  projection_h = viewport_h;
+  projection_fov = fov_deg;
+  recompute_thresholds(viewport_h, fov_deg);
+}
 
 /**
  * Half-width (fraction of the threshold's own distance) of the band where
@@ -57,12 +78,13 @@ const LOD_THRESHOLDS: readonly f64[] = [
 const BLEND_BAND_FRACTION: f64 = 0.05;
 
 /**
- * Only thresholds inside the current visible range get dither-blended. The
- * third handoff (768) is the last visible transition before FOG_FAR=900, so
- * including it removes both its hard pop and the old 29% non-blended
- * hysteresis gap. Later thresholds start past the fog range and remain hard
- * transitions, to avoid retaining unused secondary meshes if the render
- * distance is expanded later.
+ * Only thresholds inside the current visible range get dither-blended. At the
+ * reference projection the third handoff (768u) is the last one comfortably
+ * inside render_cfg.RENDER_DIST, so including it removes both its hard pop
+ * and the old 29% non-blended hysteresis gap. The handoff that lands at the
+ * range's own edge, and everything past it, stay hard transitions: geometry
+ * ends there and fog is already opaque, so a second mesh would be retained
+ * for nothing.
  */
 const BLEND_ELIGIBLE_THRESHOLDS: u32 = 3;
 

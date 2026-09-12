@@ -12,7 +12,7 @@
  * is routinely tens of MB — saved as a file, see ledger_trace_download.
  */
 
-import { ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames } from "./ledger.ts";
+import { type FrameSample, ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames } from "./ledger.ts";
 
 type TraceEvent = {
   name: string;
@@ -37,6 +37,52 @@ const ms_to_us = (ms: number): number => Math.round(ms * 1000);
 
 function thread_name(tid: number, name: string): TraceEvent {
   return { name: "thread_name", cat: "__metadata", ph: "M", ts: 0, pid: PID, tid, args: { name } };
+}
+
+/** One frame's numbers as trace args — the counter track and the worst-frame
+ * spans both carry them, so the two never disagree on what a frame was. */
+function frame_args(f: FrameSample): Record<string, unknown> {
+  return {
+    dt_ms: +f.dt_ms.toFixed(2),
+    task_ms: +f.task_ms.toFixed(2),
+    // everything the main thread's own task did not account for:
+    // vsync wait, compositor, GPU, GC between frames.
+    offthread_ms: +Math.max(0, f.dt_ms - f.task_ms).toFixed(2),
+    gpu_ms: +f.gpu_ms.toFixed(2),
+    sched_ms: +f.sched_ms.toFixed(2),
+    budget_ms: +f.budget_ms.toFixed(2),
+    frame_ms: +f.frame_ms.toFixed(2),
+    settled: f.settled ? 1 : 0,
+    ...Object.fromEntries(Object.entries(f.phases).map(([k, v]) => [`phase_${k}_ms`, +v.toFixed(2)])),
+    recheck_ms: +f.cpu.recheck_ms.toFixed(2),
+    commit_ms: +f.cpu.commit_ms.toFixed(2),
+    triangles: f.triangles,
+    ...Object.fromEntries(Object.entries(f.census).map(([tag, [, tris]]) => [`tris_${tag}`, tris])),
+    geometries: f.geometries,
+    textures: f.textures,
+    mounted: f.mounts.added,
+    unmounted: f.mounts.removed,
+    rerendered: f.mounts.rendered,
+    heap_mb: f.heap_mb,
+    pool_live_mb: f.pool.live_mb,
+    pool_idle_mb: f.pool.idle_mb,
+    pool_hits: f.pool.hits,
+    pool_misses: f.pool.misses,
+    scans: f.work.scans,
+    bakes: f.work.bakes,
+    runs: f.work.runs,
+    tile_pages: f.tile_pages,
+    poi_count: f.poi_count,
+    lod_pending: f.lod.pending,
+    lod_in_frustum: f.lod.in_frustum,
+    lod_offscreen_pending: f.lod.offscreen_pending,
+    lod_oldest_release_ms: Math.round(f.lod.oldest_release_ms),
+    lod_oldest_visible_ms: Math.round(f.lod.oldest_visible_ms),
+    draw_calls: f.draw_calls,
+    fill_mpx: +((f.px * f.fx_passes) / 1e6).toFixed(2),
+    q_terrain: f.q_terrain,
+    q_poi: f.q_poi,
+  };
 }
 
 /** The trace as a JSON string. */
@@ -88,45 +134,7 @@ export function ledger_trace_json(): string {
         ts,
         pid: PID,
         tid: TID_FRAMES,
-        args: {
-          dt_ms: +f.dt_ms.toFixed(2),
-          task_ms: +f.task_ms.toFixed(2),
-          // everything the main thread's own task did not account for:
-          // vsync wait, compositor, GPU, GC between frames.
-          offthread_ms: +Math.max(0, f.dt_ms - f.task_ms).toFixed(2),
-          gpu_ms: +f.gpu_ms.toFixed(2),
-          sched_ms: +f.sched_ms.toFixed(2),
-          budget_ms: +f.budget_ms.toFixed(2),
-          frame_ms: +f.frame_ms.toFixed(2),
-          settled: f.settled ? 1 : 0,
-          ...Object.fromEntries(Object.entries(f.phases).map(([k, v]) => [`phase_${k}_ms`, +v.toFixed(2)])),
-          recheck_ms: +f.cpu.recheck_ms.toFixed(2),
-          commit_ms: +f.cpu.commit_ms.toFixed(2),
-          triangles: f.triangles,
-          ...Object.fromEntries(Object.entries(f.census).map(([tag, [, tris]]) => [`tris_${tag}`, tris])),
-          geometries: f.geometries,
-          textures: f.textures,
-          mounted: f.mounts.added,
-          rerendered: f.mounts.rendered,
-          heap_mb: f.heap_mb,
-          pool_live_mb: f.pool.live_mb,
-          pool_idle_mb: f.pool.idle_mb,
-          pool_hit_pct: f.pool.hit_pct,
-          scans: f.work.scans,
-          bakes: f.work.bakes,
-          runs: f.work.runs,
-          tile_pages: f.tile_pages,
-          poi_count: f.poi_count,
-          lod_pending: f.lod.pending,
-          lod_in_frustum: f.lod.in_frustum,
-          lod_offscreen_pending: f.lod.offscreen_pending,
-          lod_oldest_release_ms: Math.round(f.lod.oldest_release_ms),
-          lod_oldest_visible_ms: Math.round(f.lod.oldest_visible_ms),
-          draw_calls: f.draw_calls,
-          fill_mpx: +((f.px * f.fx_passes) / 1e6).toFixed(2),
-          q_terrain: f.q_terrain,
-          q_poi: f.q_poi,
-        },
+        args: frame_args(f),
       });
       // also a duration bar for the scheduler pass, so a slow frame is
       // visible as width, not only as a counter spike
@@ -159,29 +167,9 @@ export function ledger_trace_json(): string {
         pid: PID,
         tid: TID_WORST,
         args: {
-          dt_ms: +f.dt_ms.toFixed(1),
-          task_ms: +f.task_ms.toFixed(2),
-          offthread_ms: +Math.max(0, f.dt_ms - f.task_ms).toFixed(2),
-          gpu_ms: +f.gpu_ms.toFixed(2),
-          sched_ms: +f.sched_ms.toFixed(2),
-          budget_ms: +f.budget_ms.toFixed(2),
-          settled: f.settled,
-          recheck_ms: +f.cpu.recheck_ms.toFixed(2),
-          commit_ms: +f.cpu.commit_ms.toFixed(2),
-          mounted: f.mounts.added,
-          unmounted: f.mounts.removed,
-          rerendered: f.mounts.rendered,
-          geometries: f.geometries,
+          ...frame_args(f),
           d_geometries: prev ? f.geometries - prev.geometries : null,
-          heap_mb: f.heap_mb,
           d_heap_mb: prev ? f.heap_mb - prev.heap_mb : null,
-          pool_live_mb: f.pool.live_mb,
-          pool_idle_mb: f.pool.idle_mb,
-          pool_hit_pct: f.pool.hit_pct,
-          draw_calls: f.draw_calls,
-          triangles: f.triangles,
-          lod_pending: f.lod.pending,
-          lod_in_frustum: f.lod.in_frustum,
         },
       });
     }

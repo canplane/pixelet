@@ -25,27 +25,39 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { FROM_L3_IDX, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { useMapStore } from "@/modules/map/store.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
-import { type ChunkLodControl, ChunkNode, commit_step_stats, lod_build_stats, lod_scheduler, mesh_mount_stats, mesh_unmount_stats, take_node_counts } from "@/modules/world/chunk_node.ts";
+import {
+  chunk_retained_bytes,
+  type ChunkLodControl,
+  ChunkNode,
+  commit_step_stats,
+  lod_build_stats,
+  lod_scheduler,
+  mesh_mount_stats,
+  mesh_unmount_stats,
+  RETAIN_BUDGET_BYTES,
+  take_node_counts,
+} from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { decor_field } from "@/modules/world/decor/field.ts";
-import { RENDER_RADIUS } from "@/modules/world/terrain/config.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
-import { CHEBYSHEV_DIST } from "@/modules/world/terrain/use_tile_fetcher.ts";
 import { usePoiStore } from "@/modules/world/poi/store.ts";
 import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
 import { draw_census_install, draw_census_take } from "@/modules/world/sched/draw_census.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
 import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
-import { by_priority, lead_point } from "@/modules/world/sched/priority.ts";
+import { lead_point, priority_order } from "@/modules/world/sched/priority.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
-import { in_range_chunks } from "@/render/chunk_range.ts";
+import { useRangeAnchor } from "@/modules/world/frame/use_range_anchor.ts";
+import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
+import { render_cfg } from "@/modules/world/environment/config.ts";
+import { set_lod_projection } from "@/render/lod.ts";
 import { compositor_cache_stats } from "@/render/layer/pipeline/compositor.ts";
 import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
@@ -54,6 +66,17 @@ import { update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
 const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
+/* Releases are the lowest class and stay there (sched/priority.ts), but a
+ * class that only ever runs after every visible build never runs at all while
+ * a zoom-out keeps the queue full: 403 of them waited 10.4 s in the
+ * 2026-09-12 capture while heap peaked at 522MB, and a pending release is
+ * holding a mesh the pool could hand to someone else. So they get a small
+ * share of their own rather than being aged up into the classes above. */
+const RELEASE_MAX_PER_FRAME: u32 = 2;
+/* How many off-screen chunks may give their built work back in one frame
+ * once the memory budget is exceeded. Reclaiming is cheap (pool returns),
+ * but the budget is a ceiling to drift back under, not a line to snap to. */
+const RECLAIM_MAX_PER_FRAME: u32 = 16;
 /* The per-pass budgets that used to sit here — a soft allowance per pass and
  * a 16ms hard ceiling each — are gone. Both passes now draw on the one
  * FrameBudget the tick hands every phase (sched/tick.ts), so the frame's
@@ -100,14 +123,11 @@ function work_sample(): { scans: number; bakes: number; runs: number } {
   return sample;
 }
 
-function pool_sample(): { live_mb: number; idle_mb: number; hit_pct: number } {
+/** The core pool's gauges and its cumulative counters; a hit share is a
+ * difference over a window, taken by summary.ts. */
+function pool_sample(): { live_mb: number; idle_mb: number; hits: number; misses: number } {
   const stat = core_pool_stat();
-  const acquires = stat.hits + stat.misses;
-  return {
-    live_mb: Math.round(stat.live_bytes / MB),
-    idle_mb: Math.round(stat.idle_bytes / MB),
-    hit_pct: acquires > 0 ? Math.round((stat.hits / acquires) * 100) : 0,
-  };
+  return { live_mb: Math.round(stat.live_bytes / MB), idle_mb: Math.round(stat.idle_bytes / MB), hits: stat.hits, misses: stat.misses };
 }
 
 /** Who is waiting, and for how long — the progress rule guarantees a step a
@@ -158,13 +178,20 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
     return g;
   }, [page_idx]);
   const nodes = useRef(new Map<string, ChunkNode>());
+  // Two sets, not one: what to build, and what to keep once built. A chunk
+  // that merely drifted past the range is left alone until it is well past
+  // it — see RANGE_HYSTERESIS.
   const offsets = useMemo(() => in_range_chunks(page_base, range_anchor), [page_base, range_anchor]);
+  const keep = useMemo(
+    () => new Set(in_range_chunks(page_base, range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS).map((offset) => offset.key)),
+    [page_base, range_anchor],
+  );
 
   useLayoutEffect(() => {
     const live = nodes.current;
     const wanted = new Map(offsets.map((offset) => [offset.key, offset]));
     for (const [key, node] of live) {
-      if (wanted.has(key)) continue;
+      if (keep.has(key)) continue;
       node.dispose();
       live.delete(key);
     }
@@ -174,13 +201,29 @@ const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => 
       group.add(node.group);
       live.set(key, node);
     }
-  }, [offsets, page_idx, stack, camera, anchor_registry, group]);
+  }, [offsets, keep, page_idx, stack, camera, anchor_registry, group]);
 
+  // Destruction on unmount is deferred by one microtask, and a mount that
+  // arrives in that window cancels it. StrictMode replays every mount as
+  // mount, cleanup, mount, and a cleanup that destroyed the nodes made the
+  // second mount rebuild the whole page from the scan up — up to 256 chunks a
+  // page, on every page the view entered, in development only. Measured
+  // 2026-09-12: with StrictMode on, a zoomed-out pan unmounted five pages and
+  // disposed up to 510 nodes a frame; with it off, none. A real unmount is
+  // never followed by a mount in the same microtask, so it still destroys
+  // exactly as before. AnchorNode survives the same replay for the same
+  // reason (its own doc comment).
+  const teardown = useRef<Promise<void> | null>(null);
   useEffect(() => {
+    teardown.current = null;
     const live = nodes.current;
     return () => {
-      for (const node of live.values()) node.dispose();
-      live.clear();
+      const pending = Promise.resolve().then(() => {
+        if (teardown.current !== pending) return;
+        for (const node of live.values()) node.dispose();
+        live.clear();
+      });
+      teardown.current = pending;
     };
   }, []);
 
@@ -270,6 +313,10 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     const full_recheck = lod_elapsed.current >= LOD_RECHECK_INTERVAL;
     if (full_recheck) lod_elapsed.current = 0;
     update_frustum(frustum, state.camera, projection);
+    // The tier criterion is a screen-space one (render/lod.ts), so it needs
+    // the projection it measures against. Cheap, and a no-op while the
+    // viewport and the field of view hold still.
+    set_lod_projection(state.size.height, (state.camera as THREE.PerspectiveCamera).fov);
 
     // Where the camera is heading — see sched/priority.ts. Both passes below
     // order by it; the tier each chunk picks still comes from the camera as
@@ -290,6 +337,17 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       lead.copy(state.camera.position);
     }
 
+    // Every control, every frame, before anything is sorted: this is only
+    // measurement (ChunkNode.refresh), and it is what the orders below read.
+    // The decision pass under it is rationed, so sorting on what that pass
+    // last wrote meant sorting on numbers up to LOD_RECHECK_INTERVAL old —
+    // during a zoom-out, the difference between "the middle of the screen
+    // matters" and "it did not exist yet".
+    for (const control of controls) control.refresh(state.camera, frustum, lead);
+    // One ordering for both passes of this frame, and one `now` for both:
+    // ageing keys that moved mid-sort would make the comparator inconsistent.
+    const order = priority_order(performance.now());
+
     const recheck_t0 = import.meta.env.DEV ? performance.now() : 0;
     // Same cooperative shape as the commit loop below: the first eligible
     // control this frame always runs (forward progress guaranteed even on
@@ -306,7 +364,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // far chunks resolve first purely because they mounted first, while much
     // closer chunks queued behind them for a frame or more — the opposite
     // of the "resolves outward from the camera" this whole scheduler exists
-    // for. Same by_priority key (sched/priority.ts) the commit loop below
+    // for. Same priority_order key (sched/priority.ts) the commit loop below
     // sorts pending by — one shared notion of priority, not two.
     //
     // distance2 is always a real, if sometimes approximate, camera-relative
@@ -329,7 +387,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     //
     // Filtered to this frame's actually-eligible controls BEFORE sorting,
     // not sorted-then-filtered — controls can number in the thousands
-    // (every terrain chunk across LOAD_RADIUS's whole page window, times
+    // (every terrain chunk across every mounted page, times
     // every decor kind on top), and on all but a full_recheck frame only
     // the blend_active/settling subset (usually far smaller) needs
     // anything done at all. Sorting the full set every single frame
@@ -338,7 +396,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // needless GC pressure and comparisons on the common (non-full_recheck)
     // frame, for a subset most of which was about to be skipped anyway.
     const eligible = controls.filter((control) => full_recheck || control.blend_active || control.settling);
-    eligible.sort(by_priority);
+    eligible.sort(order);
     budget.run(eligible, (control) => {
       control.recheck(state.camera, frustum, lead);
       return true;
@@ -360,7 +418,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // Visible builds/refinements win. Pending work outside the frustum only
     // drops a formerly visible chunk's derived surface and GPU buffers.
     // The slot holder first, whatever its distance — see ChunkLodControl.holds_slot.
-    const pending = pending_total.sort(by_priority);
+    const pending = pending_total.sort(order);
     const commit_t0 = import.meta.env.DEV ? performance.now() : 0;
     // commit() returning false means "nothing to do after all" — it neither
     // counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the deadline, which is
@@ -368,7 +426,27 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // The commit pass gets what the recheck pass left, not a budget of its
     // own — the two used to carry independent allowances, so a frame could
     // legally spend both in full before anything else ran.
-    const committed: u32 = budget.run(pending, (control) => control.commit(budget), { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran;
+    // Visible work takes the frame's steps; releases get their own small
+    // guaranteed share out of what is left. run_under_budget always lets the
+    // first item of a pass do work, so a release lands every frame even on a
+    // frame the visible pass filled — which is the whole point of a
+    // guaranteed share.
+    const step = (control: ChunkLodControl) => control.commit(budget);
+    const committed: u32 = budget.run(pending.filter((control) => control.in_frustum), step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
+      budget.run(pending.filter((control) => !control.in_frustum), step, { max_steps: RELEASE_MAX_PER_FRAME }).ran;
+    // The memory budget: built work is kept off screen until what off-screen
+    // chunks hold is over RETAIN_BUDGET_BYTES, then reclaimed farthest first —
+    // `order` already sorts off-screen controls that way. Bounded per frame
+    // like everything else, and a no-op while under.
+    if (chunk_retained_bytes().off > RETAIN_BUDGET_BYTES) {
+      const off = controls.filter((control) => !control.in_frustum && control.retained > 0).sort(order);
+      let freed = 0;
+      for (const control of off) {
+        if (chunk_retained_bytes().off <= RETAIN_BUDGET_BYTES || freed >= RECLAIM_MAX_PER_FRAME) break;
+        control.reclaim();
+        freed++;
+      }
+    }
     // After the commits, so a chunk's terrain and its decor reach the screen
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
@@ -518,28 +596,24 @@ export type ChunkStageProps = { stack: WorldLayerStack };
  * not passed in either: decor/asset_store.ts owns them and every ChunkNode
  * subscribes to it directly. */
 export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
-  const map_center = useMapStore((state) => state.map_center);
   const tile_map = useTileStore((state) => state.tile_map);
 
-  const center_page_idx = map_center === null ? null : L3_IDX(map_center.i);
-  const center_page_key = center_page_idx?.toString() ?? null;
   const tiles = useMemo(() => Array.from(tile_map.keys()), [tile_map]);
+  const range_anchor = useRangeAnchor();
+  // Every page the render range reaches, nearest first, that has a tile to
+  // draw from. A page whose tile has not arrived contributes nothing and is
+  // simply not mounted; which chunks inside a mounted page become scene
+  // objects is in_range_chunks' own decision.
   const visible_pages = useMemo(() => {
-    if (center_page_idx === null) return tiles;
-    return tiles
-      .map((page_idx) => ({ page_idx, dist: CHEBYSHEV_DIST(ivec.sub(page_idx, center_page_idx)) }))
-      .filter(({ dist }) => dist <= RENDER_RADIUS)
-      .sort((a, b) => a.dist - b.dist)
+    if (range_anchor === null) return tiles;
+    const have = new Set(tiles);
+    // The same hysteresis one level up: a page is kept mounted while any
+    // chunk of it could still be kept, so crossing the range by metres never
+    // destroys a page's worth of built chunks.
+    return pages_in_radius(range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS)
+      .filter(({ page_idx }) => have.has(page_idx))
       .map(({ page_idx }) => page_idx);
-  }, [tiles, center_page_key]);
-
-  const anchor_x = map_center === null ? null : ivec.X(map_center.i) & ~63n;
-  const anchor_y = map_center === null ? null : ivec.Y(map_center.i) & ~63n;
-  const range_anchor_key = anchor_x === null ? null : `${anchor_x},${anchor_y}`;
-  const range_anchor = useMemo(
-    () => anchor_x === null || anchor_y === null ? null : ivec.gather(anchor_x, anchor_y, 0n),
-    [range_anchor_key],
-  );
+  }, [tiles, range_anchor]);
 
   if (range_anchor === null) return null;
   return (

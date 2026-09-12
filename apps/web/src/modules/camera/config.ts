@@ -4,20 +4,18 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 
 /** Camera projection and interaction limits. */
 
-// Only feeds render_cfg's FAR_CLIP (camera far-clip plane) now — sized
-// against terrain/config.ts's RENDER_RADIUS (currently 2 pages, one page
-// = 1024u -> ~2048u real reach from the camera pivot) so that margin stays
-// proportional instead of an arbitrary leftover multiple.
+// Only feeds render_cfg's FAR_CLIP (the camera's far-clip plane), sized past
+// where ground geometry stops so the margin stays proportional rather than an
+// arbitrary leftover multiple.
 /** Control knob for global view-dependent distances.
  *
- * MAX_DIST, fog and RENDER_RADIUS are one chain rather than three knobs: the
- * camera sits MAX_DIST from its pivot, fog has to reach past that or full
- * zoom-out is a screen of solid fog, and geometry has to exist as far as fog
- * can see. Everything here scales by 2, which keeps the haze density at full
- * zoom-out (~33% at the pivot) rather than trading it for reach. What that
- * costs is in FOG_FAR's own comment: the third link in the chain,
- * RENDER_RADIUS, is deliberately NOT following. */
-export const VIEW_DIST: f64 = 2048 * 2;
+ * MAX_DIST, fog and the render range are one chain: the camera sits MAX_DIST
+ * from its pivot, fog has to reach past that or full zoom-out is a screen of
+ * solid fog, and geometry has to exist as far as fog can see. The third link
+ * is render_cfg.RENDER_DIST (world/environment/config.ts), and it is a
+ * distance in the same units as the other two now, so the chain can actually
+ * be read off — it used to end in a count of whole pages that only held at
+ * the middle of a page. */ export const VIEW_DIST: f64 = 2048 * 2;
 
 /** Default tilt angle in degrees from the ground plane. */
 export const DEFAULT_TILT_DEG: f64 = 30;
