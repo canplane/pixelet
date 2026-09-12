@@ -187,6 +187,13 @@ export function fetch_sync(category: string, demands: readonly Demand[]): void {
   emit();
 }
 
+/** Whether a demand with this key is in flight right now. Read-only, for a
+ * caller deciding whether to keep asking for something it has already asked
+ * for (see terrain/use_tile_fetcher.ts's in-flight hysteresis). */
+export function fetch_running(key: string): boolean {
+  return running.has(key);
+}
+
 /** Test-only: abort everything in flight and forget the queue, so each test
  * starts against an empty scheduler. Not part of the runtime surface — the
  * app only ever grows or shrinks a wishlist through fetch_sync. */

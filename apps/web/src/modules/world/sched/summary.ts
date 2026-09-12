@@ -23,6 +23,13 @@ export function pct(sorted: readonly number[], q: number): number {
  * the multiplier on tile_pages, same idea as px × fx_passes. */
 export const TILE_DECODED_MB = 4;
 
+/** A pending chunk waiting longer than this is being passed over rather than
+ * queued. Ten seconds is above what a full zoom-out's queue takes to drain
+ * (~7 s against one scan slot), so an ordinary backlog never trips it, and
+ * below the sixteen-second wait that ageing (priority.ts) exists to prevent:
+ * past it, ageing is not doing its job. */
+export const STARVED_MS = 10_000;
+
 /** A gap this many display intervals long skipped a vsync. */
 const MISSED_INTERVALS = 1.5;
 
@@ -62,6 +69,8 @@ export function summarize_frames(frames: readonly FrameSample[]) {
   const backlog = frames.filter((f) => f.lod.pending > 0);
   const backlog_s = Math.max(1e-3, backlog.reduce((a, f) => a + f.dt_ms, 0) / 1000);
   const commit_ms = sum((f) => f.cpu.commit_ms);
+  const pool_hits = last.pool.hits - first.pool.hits;
+  const pool_acquires = pool_hits + last.pool.misses - first.pool.misses;
 
   return {
     n: frames.length,
@@ -95,6 +104,9 @@ export function summarize_frames(frames: readonly FrameSample[]) {
      * window happened to contain. */
     commit_per_bake: work.bakes > 0 ? commit_ms / work.bakes : null,
     mounts: { added: sum((f) => f.mounts.added), removed: sum((f) => f.mounts.removed) },
+    /** Share of the window's pool acquires served from a region already
+     * reserved; null when the window acquired nothing. */
+    pool_hit_pct: pool_acquires > 0 ? Math.round((pool_hits / pool_acquires) * 100) : null,
     /** Per-frame mean draws and triangles by tag, heaviest first. */
     census: census_mean(frames),
     heap_delta: last.heap_mb - first.heap_mb,

@@ -4,7 +4,7 @@ import { assertEquals } from "@std/assert";
 
 import type { Demand } from "./demand.ts";
 import { ledger_snapshot } from "./ledger.ts";
-import { error_reason, fetch_pending_count, fetch_scheduler_reset, fetch_sync, MAX_INFLIGHT } from "./fetch_scheduler.ts";
+import { error_reason, fetch_pending_count, fetch_running, fetch_scheduler_reset, fetch_sync, MAX_INFLIGHT } from "./fetch_scheduler.ts";
 
 // Scheduler state is module-global (see fetch_scheduler.ts's own doc), so
 // each test resets it first.
@@ -137,6 +137,20 @@ Deno.test("fetch_scheduler - sync() aborts an in-flight demand no longer wanted"
   keep.resolve();
   await flush();
   assertEquals(fetch_pending_count(cat), 0);
+});
+
+Deno.test("fetch_scheduler - fetch_running answers only for keys in flight", async () => {
+  fetch_scheduler_reset();
+  const cat = "running-query";
+  const a = blocking_demand(`${cat}:a`, cat, 0);
+  assertEquals(fetch_running(a.demand.key), false);
+  fetch_sync(cat, [a.demand]);
+  assertEquals(fetch_running(a.demand.key), false); // queued, not yet pumped
+  await flush();
+  assertEquals(fetch_running(a.demand.key), true);
+  a.resolve();
+  await flush();
+  assertEquals(fetch_running(a.demand.key), false);
 });
 
 Deno.test("fetch_scheduler - sync() drops a queued demand no longer wanted", async () => {

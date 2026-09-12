@@ -1,54 +1,78 @@
 // @pxl/web/modules/world/environment/config.ts
 
+import type { f64 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { VIEW_DIST } from "@/modules/camera/config.ts";
 
-// 2x, matching the camera's own distances (see VIEW_DIST). This is the
-// expensive end of that chain: CHUNK_RENDER_DIST below derives from it, so
-// the ground AREA that builds chunk geometry goes as its square — 2x here is
-// 4x the area.
-//
-// This is the same fog distance an iPhone 13 mini discarded the tab under at
-// RENDER_RADIUS=3 (49 mounted pages). RENDER_RADIUS is kept at 2 (25 pages)
-// specifically so this value can stay this high without reproducing that
-// crash — if it recurs anyway, the area alone is enough to trigger it and
-// this is the number to walk back.
-const FOG_FAR = 900 * 2;
+/**
+ * The one render-range knob, in world `u`: how far ground geometry exists,
+ * and where fog finishes hiding its edge. Everything else about range is
+ * derived from it — the chunks that mount, the pages fetched, the pages
+ * evicted (terrain/config.ts).
+ *
+ * It replaces three independently chosen numbers: a fog distance in world
+ * units and two page radii in whole pages. Because both page radii keyed on
+ * the page the view centre stood in, the delivered range was not the stated
+ * one — geometry ended anywhere between one and two pages out depending on
+ * where in its page the camera stood, and crossing a boundary moved the
+ * boundary by a whole page. See
+ * discussions/20260912-what-to-render-when.md.
+ *
+ * Ranges are measured from the view centre, not from the camera, because
+ * residency has to be invariant under rotation: at a wide zoom the camera
+ * sits up to ~1023u from that centre, and following it would sweep pages in
+ * and out of the cache on a spin. Which tier a chunk shows and which chunk is
+ * built first are camera-relative and always were — both measure the chunk's
+ * own 3D bounds centre against the camera, so content standing 100u above the
+ * ground is ranked where it actually is.
+ *
+ * Anchoring the range at the centre is only sufficient because the camera
+ * always looks at it, which keeps the visible wedge nearby. Measured over
+ * every zoom, tilt, aspect ratio and pivot height the camera allows, visible
+ * ground reaches at most ~1532u from the centre — the worst case being a
+ * close zoom onto something standing above the terrain, where the camera
+ * rises with it and sees almost a full fog radius in every direction.
+ * CHUNK_RENDER_DIST is 1664u, two chunks past the range rather than one, so
+ * the margin (132u) also covers the anchor's own chunk quantization (up to
+ * ~90u). render/view_range.test.ts pins this, and widening the field of view
+ * or letting the camera look away from its pivot breaks it there first.
+ *
+ * 1536u is chosen against what it costs to hold. Chunks mount two chunks past
+ * it (CHUNK_RENDER_DIST, 1664u), which touches 21 pages at worst; the pages
+ * actually held are the nearest 32 (~129MB decoded), against the 49 pages
+ * (~197MB) that discarded the tab on an iPhone 13 mini. It is wider than the 1024u that was
+ * really guaranteed before, and it is the same everywhere rather than only at
+ * the middle of a page.
+ */
+const RENDER_DIST: f64 = 1536;
 
 /** Render-distance and fog configuration. */
 export const render_cfg = {
-  // VIEW_DIST (camera/config.ts) is sized against terrain/config.ts's
-  // RENDER_RADIUS — the actual real-world edge of mounted terrain — so
-  // FAR_CLIP has real margin past where geometry stops existing instead of
-  // an arbitrary multiple. The real fog gradient is FOG_NEAR/FOG_FAR below
-  // (THREE's own linear fog, wired in via environment.tsx's <fog>) — it
-  // already landed inside RENDER_RADIUS's reach even before this, so
-  // ground fades into the fog color before it runs out, rather than the
-  // old, much tighter LOAD_RADIUS-driven mount boundary cutting geometry
-  // off before fog had a chance to hide it. The sky dome is fog-exempt
-  // (environment.tsx's `fog={false}`), so the horizon still reads as a
-  // full vista — only ground geometry fades.
+  // VIEW_DIST (camera/config.ts) is sized past CHUNK_RENDER_DIST below, the
+  // real edge of mounted terrain, so FAR_CLIP keeps margin over where
+  // geometry stops existing rather than being an arbitrary multiple. The fog
+  // gradient is FOG_NEAR/FOG_FAR (THREE's own linear fog, wired in via
+  // environment.tsx's <fog>), and it now ends exactly where geometry does, so
+  // ground always fades into the fog colour instead of being cut off while
+  // still visible. The sky dome is fog-exempt (environment.tsx's
+  // `fog={false}`), so the horizon still reads as a full vista — only ground
+  // geometry fades.
   FAR_CLIP: VIEW_DIST * 1.5,
 
-  FOG_NEAR: 320 * 2,
-  FOG_FAR,
+  /** Haze starts here and is total at RENDER_DIST, where geometry stops.
+   * The fraction is the one the previous pair had, so the near edge sits
+   * where it did; what changes is that the far edge is now a distance
+   * geometry actually reaches, so the fade completes instead of being cut. */
+  FOG_NEAR: RENDER_DIST * 0.42,
+  FOG_FAR: RENDER_DIST,
 
-  // How far out chunk_stage.tsx actually mounts a chunk, in real
-  // `u` units — independent of RENDER_RADIUS's own page-count granularity
-  // (terrain/config.ts). RENDER_RADIUS only decides which *pages* are
-  // worth building a chunk list for at all (a coarse, cheap pre-filter);
-  // this decides which of *those* chunks actually become scene objects.
-  // Needed because RENDER_RADIUS can only step in whole L3_RANGE
-  // increments (1024u at the current L3_SHAMT) — nowhere near fine enough
-  // to land close to FOG_FAR without either cutting geometry off
-  // before fog hides it (RENDER_RADIUS=1, ~0u worst case) or badly
-  // overshooting it (RENDER_RADIUS=2, up to ~2048u — a real, measured
-  // mobile rendering-load regression: reported live stutter that wasn't
-  // present at the old, much smaller SHAMT/radius combination traced back
-  // to this exact overshoot, not chunk count or build bursts). Margin is
-  // one chunk's own width so a chunk's far edge doesn't visibly clip
-  // mid-fade right at the cutoff.
-  CHUNK_RENDER_DIST: FOG_FAR + CHUNK_CELL_SPAN * U_PER_CELL,
+  RENDER_DIST,
+  // How far out chunk_stage.tsx actually mounts a chunk. Which pages exist to
+  // mount from is a count rather than a distance (terrain/config.ts's
+  // RESIDENT_PAGES). Two chunks past the range: one so a chunk's far edge does not
+  // visibly clip mid-fade at the cutoff, and one for the margin the invariant
+  // above needs. 21 pages at worst (~85MB decoded).
+  CHUNK_RENDER_DIST: RENDER_DIST + 2 * CHUNK_CELL_SPAN * U_PER_CELL,
 } as const;
 
 /**

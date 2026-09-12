@@ -138,18 +138,16 @@ export type FrameSample = {
   // as px×fx_passes. The gap to heap_mb is geometry/texture/JS overhead.
   tile_pages: number;
   poi_count: number;
-  /** chunk_mesher's block pool: MiB currently borrowed, MiB sitting idle in
-   * its free lists, and the share of acquires served from one. Reads against
-   * heap_mb: `live` tracking the visible chunk count with a high hit rate is
-   * reuse working; a low hit rate is the pool being defeated (class thrash,
-   * or the idle ceiling), and then heap churn is back to allocation rate. */
-  pool: { live_mb: number; idle_mb: number; hit_pct: number };
-  /** chunk work started this frame: `scans` is fresh column_runs (one
-   * MeshRun[][] per chunk — 4096 arrays plus an object per run), `bakes` is
-   * pooled mesh blocks, `runs` the total run count those scans produced.
-   * Prices a committing frame's allocation directly instead of inferring it
-   * from Δheap: scans × ~1MB against the measured Δheap says whether the
-   * remaining churn is column_runs or something else entirely. */
+  /** The core pool (core_pool.ts): MiB lent out, MiB free inside regions
+   * already reserved, and its cumulative acquire counts — served from a
+   * reserved region, or having to reserve another. Counters rather than a
+   * share, because a share is only meaningful over a window: summary.ts
+   * takes it as a difference between a window's first and last frames. */
+  pool: { live_mb: number; idle_mb: number; hits: number; misses: number };
+  /** chunk work started this frame: `scans` chunks scanned into a
+   * column-run set, `bakes` meshes baked, `runs` the runs those scans
+   * produced. Both land in the core pool, so these price a committing
+   * frame's pool traffic directly instead of inferring it from Δheap. */
   work: { scans: number; bakes: number; runs: number };
   // network pressure — fetch_scheduler queued + in-flight, per category
   q_terrain: number;
@@ -397,17 +395,35 @@ export function ledger_last_frame(): FrameSample | null {
   return frame_ring.length > 0 ? frame_ring[frame_ring.length - 1] : null;
 }
 
+/** First index in a ring, ordered by `at`, whose record is at or after `t`. */
+function first_at<T>(ring: readonly T[], t: number, at: (rec: T) => number): number {
+  let lo = 0;
+  let hi = ring.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (at(ring[mid]) < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 /** Frames recorded at or after `t`, newest last — a live reader's window,
  * so it costs the tail it reads and not the whole recording. */
 export function ledger_frames_since(t: number): readonly FrameSample[] {
-  let lo = 0;
-  let hi = frame_ring.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (frame_ring[mid].t < t) lo = mid + 1;
-    else hi = mid;
-  }
-  return frame_ring.slice(lo);
+  return frame_ring.slice(first_at(frame_ring, t, (f) => f.t));
+}
+
+/** Tasks settled at or after `t`. A task is recorded as it settles, so the
+ * ring is in `end_ms` order. */
+export function ledger_tasks_since(t: number): readonly TaskRecord[] {
+  return task_ring.slice(first_at(task_ring, t, (rec) => rec.end_ms));
+}
+
+/** Long frames starting at or after `t`. Filtered rather than searched: two
+ * observers feed this ring, so it is not strictly in time order, and it is
+ * short. */
+export function ledger_long_frames_since(t: number): readonly LongFrameRecord[] {
+  return long_frame_ring.filter((l) => l.t >= t);
 }
 
 /** Copy of the frame buffer, newest last. */
