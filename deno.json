@@ -26,18 +26,18 @@
     "dev:remote": "deno task --cwd apps/web dev:remote",
 
     // Bakes every land page in the geo DB's coverage into ./out/terrain/<version>.
-    // Needs the geo DB up; resumable. Full procedure, verification and upload
-    // steps are in .agents/skills/bake-tiles/SKILL.md.
+    // Needs the geo DB up; resumable. Procedure and verification are in
+    // .agents/skills/bake-tiles/SKILL.md; uploading is publish-bucket.
     "bake:tiles": "deno run -A --env=.env apps/api/src/bake/terrain/tool/bake_tiles.ts",
 
     // Builds the client and publishes the Cloudflare Worker that serves it
     // along with the R2 tiles. Uploading the tiles themselves is separate —
-    // see .agents/skills/bake-tiles/SKILL.md.
+    // see .agents/skills/publish-bucket/SKILL.md.
     "deploy": "deno task --cwd apps/web deploy",
 
     // Copies every file under asset/ to ./out/asset/{glb,png}/<sha256> and
     // regenerates the table the shipped palette reads. Uploading is separate
-    // — see .agents/skills/bake-tiles/SKILL.md.
+    // — see .agents/skills/publish-bucket/SKILL.md.
     "ingest:asset": "deno run -A apps/api/src/bake/asset/tool/ingest_asset.ts",
 
     "build:api": "deno task --cwd apps/api build",

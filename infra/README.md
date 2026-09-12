@@ -298,9 +298,9 @@ than the system may have, where Deno's compat layer satisfies it.
 `wrangler login` once, per machine.
 
 Static assets are content-hashed, so a deploy uploads only what changed and
-the R2 tiles are untouched by it. Uploading tiles is a separate procedure
-with its own verification, in
-[.agents/skills/bake-tiles/SKILL.md](../.agents/skills/bake-tiles/SKILL.md).
+the R2 tiles are untouched by it. Uploading tiles and assets is a separate
+procedure with its own verification, in
+[.agents/skills/publish-bucket/SKILL.md](../.agents/skills/publish-bucket/SKILL.md).
 
 Afterwards, the routes that between them cover every path the app takes
 (the versions are `PUBLISHED_VERSION` in

@@ -6,7 +6,7 @@
 // PoiProvider (provider/overture_provider.ts today) for that page's POIs. A
 // page with none writes a local `.empty` marker instead of an object, so a
 // resumed run can skip it without re-querying the DB — that marker is
-// never uploaded (see "Publishing" below).
+// never uploaded (the publish-bucket skill's sync excludes it).
 //
 // Reusing terrain's land/ocean split rather than a POI-specific
 // classification is deliberate: "does this bbox touch any land polygon"

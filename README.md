@@ -52,7 +52,7 @@ the wrong way to work on a bake, since a published tile prefix is frozen.
 ## Deployment
 
 One Cloudflare Worker serves the built client, the baked pages and the
-assets out of R2 — terrain and POI by version, every model and texture by
+assets out of R2 — terrain, POI and geocode by version, every model and texture by
 content hash — and a reverse proxy to the API, so everything the server
 answers is same-origin under `/api`, and `deno task deploy` publishes all
 three.

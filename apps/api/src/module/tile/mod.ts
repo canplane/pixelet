@@ -1,8 +1,8 @@
 // @pxl/api/module/tile/mod.ts
 //
 // On-demand bake for local dev only, and the ingested assets from disk.
-// Production serves these from R2
-// (see .agents/skills/bake-tiles/SKILL.md); mount.ts gates load() behind
+// Production serves these from R2 (see apps/api/src/bake/README.md and the
+// publish-bucket skill); mount.ts gates load() behind
 // __IS_DEV__ so a deployed build never registers these routes at all.
 
 import type { ServerContext } from "@/main.ts";

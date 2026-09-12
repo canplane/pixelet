@@ -9,8 +9,8 @@
 # reuses from that pipeline is land_pages.json (which page_idx values are
 # land, not ocean), fetched from a stable R2 object (_meta/land_pages.json)
 # rather than rebuilding the classification here. Re-upload that object by
-# hand (see infra/README.md's own bake-tiles procedure) if terrain's own land/
-# ocean classification is ever rebuilt.
+# hand (the publish-bucket skill's terrain step) if terrain's own land/ocean
+# classification is ever rebuilt.
 name: Overture monthly refresh
 
 on:
@@ -61,8 +61,8 @@ jobs:
 
       - name: Fetch land_pages.json (terrain's own land/ocean classification, not regenerated here)
         run: |
-          mkdir -p out/tiles
-          aws s3 cp "s3://pixelet-tiles/_meta/land_pages.json" out/tiles/land_pages.json \
+          mkdir -p out/terrain
+          aws s3 cp "s3://pixelet-tiles/_meta/land_pages.json" out/terrain/land_pages.json \
             --profile r2 --endpoint-url "$R2_ENDPOINT"
 
       - name: Ingest Overture Places + Divisions (Korea)
@@ -79,6 +79,8 @@ jobs:
       - name: Bake reverse geocode
         run: deno run -A apps/api/src/bake/geocode/tool/bake_geocode_tiles.ts --out ./out/geocode/v1 --force
 
+      # The same syncs as the publish-bucket skill's POI/geocode step — keep
+      # the two in step.
       - name: Publish to R2
         run: |
           aws s3 sync ./out/poi/v3 s3://pixelet-tiles/poi/v3 \
