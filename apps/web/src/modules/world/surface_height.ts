@@ -1,33 +1,16 @@
 // @pxl/web/modules/world/surface_height.ts
 
-import type { f64 } from "@xpute/core/kit/word.ts";
-import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import { type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { L2_BASE } from "@pxl/shared/spec/space/indexer.ts";
+import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 
 import { get_ele_at_local } from "./terrain/elevation.ts";
 import { local_world_to_canonical } from "./frame/coord.ts";
-import { get_objects_near } from "./objects/store.ts";
-import { object_aabb } from "./objects/geometry.ts";
-
-// Half a cell is a probe depth that's always safely *inside* whichever
-// cell a surface sits at the bottom of, never exactly on the boundary
-// between it and the empty space below. Probing exactly at a surface's
-// own Z (this function's first, since-fixed version did exactly that)
-// puts floor_div right on a cell edge, where float noise from the PVF3
-// round-trip can tip the resulting cell index either way — observed
-// directly as an object 2+ cells up a stack reading as if the whole stack
-// were only 1 cell tall, every time, regardless of the stack's real
-// height.
-const CELL_PROBE_DEPTH: f64 = U_PER_CELL / 2;
-
-// get_surface_z_at_local calls get_objects_near (a fixed ±1-cell
-// neighborhood, built for nearby collision/hit-testing, not an arbitrary-
-// range scan) once per cell stepped through, both hunting upward for a
-// snap-up target and climbing a contiguous stack — this bound is just a
-// runaway guard, comfortably above any real structure a person would
-// place by hand.
-const MAX_PROBES = 64;
+import { each_column_entry } from "./objects/store.ts";
+import { object_value_is_air } from "@pxl/shared/spec/cell/mod.ts";
 
 // Two Z values within this of each other count as "flush" — guards the
 // climb loop against re-finding the object that just set `surface` on the
@@ -36,6 +19,65 @@ const MAX_PROBES = 64;
 // round-trip conversions object_local_corner's own OVERLAP_EPS guards
 // against elsewhere.
 const SAME_SURFACE_EPS: f64 = 1e-6;
+
+/**
+ * The z extents of every placed object whose footprint covers a local XY,
+ * gathered in one pass over the chunk columns that could hold one.
+ *
+ * This replaces probing upward a cell at a time with a 27-cell neighbourhood
+ * query at each step: with nothing placed at the XY the probe loop ran to
+ * its 64-cell guard every call, and the companion asked twice a frame —
+ * 4.8 ms a frame on a phone, all of it BigInt cell keys and the arrays each
+ * query built (the step table, 2026-09-13). A placed object is at most a
+ * cell across, so one whose footprint covers the point lives in the chunk
+ * the point is in or a chunk within a cell of it; those are read once, with
+ * the store's own cursor, and nothing is allocated.
+ */
+const $probe: V3 = [0, 0, 0];
+const $corner: PVF3 = { i: 0n, f: 0n };
+let $min_z = new Float64Array(64);
+let $max_z = new Float64Array(64);
+const $bases: IVec[] = [];
+
+function push_box(min_z: f64, max_z: f64, n: u32): void {
+  if (n >= $min_z.length) {
+    const grow = (a: Float64Array) => {
+      const b = new Float64Array(a.length * 2);
+      b.set(a);
+      return b;
+    };
+    $min_z = grow($min_z);
+    $max_z = grow($max_z);
+  }
+  $min_z[n] = min_z;
+  $max_z[n] = max_z;
+}
+
+function collect_boxes(map_origin: IVec, local_x: f64, local_y: f64): u32 {
+  let n: u32 = 0;
+  $bases.length = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      $probe[0] = local_x + dx * U_PER_CELL;
+      $probe[1] = local_y + dy * U_PER_CELL;
+      $probe[2] = 0;
+      const base = L2_BASE(TO_XY(local_world_to_canonical($corner, $probe, map_origin).i));
+      if ($bases.includes(base)) continue;
+      $bases.push(base);
+      // The chunk's corner in the local frame; entries are relative to it.
+      const local = { i: ivec.sub(base, map_origin), f: 0n };
+      const bx = pvf3.to_real(pvf3.X(local)), by = pvf3.to_real(pvf3.Y(local)), bz = pvf3.to_real(pvf3.Z(local));
+      each_column_entry(base, (entry) => {
+        if (object_value_is_air(entry.state)) return;
+        const x0 = bx + entry.lx, y0 = by + entry.ly;
+        if (local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size) return;
+        const z0 = bz + entry.lz;
+        push_box(z0, z0 + entry.size, n++);
+      });
+    }
+  }
+  return n;
+}
 
 /**
  * Ground height at a local XY point, accounting for placed objects sitting
@@ -89,24 +131,18 @@ export function surface_z_from_terrain(
   terrain_ele: f64,
   hint_z: f64,
 ): f64 {
-  function objects_at(probe_z: f64): { min: V3; max: V3 }[] {
-    const probe: V3 = [local_x, local_y, probe_z];
-    const corner = local_world_to_canonical({ i: 0n, f: 0n }, probe, map_origin);
-    return get_objects_near(corner, 0)
-      .map((obj) => object_aabb(obj, map_origin))
-      .filter((aabb) => local_x >= aabb.min[0] && local_x < aabb.max[0] && local_y >= aabb.min[1] && local_y < aabb.max[1]);
-  }
+  const n = collect_boxes(map_origin, local_x, local_y);
+  if (n === 0) return terrain_ele;
 
-  // Snap-up search: step upward one cell at a time from the hint (each
-  // probe's own ±1-cell neighborhood plus a full-cell stride keeps the
-  // scan gap-free) for the lowest qualifying top at or above it.
+  // Snap-up: the lowest top at or above the hint, among boxes from the cell
+  // below where the search starts — what stepping upward from there found.
   const search_from = Math.max(hint_z, terrain_ele);
+  const floor_z = (Math.floor(search_from / U_PER_CELL) - 1) * U_PER_CELL;
   let landing: f64 | null = null;
-  for (let i = 0; i < MAX_PROBES && landing === null; i++) {
-    for (const aabb of objects_at(search_from + i * U_PER_CELL)) {
-      if (aabb.max[2] < hint_z - SAME_SURFACE_EPS) continue;
-      if (landing === null || aabb.max[2] < landing) landing = aabb.max[2];
-    }
+  for (let b = 0; b < n; b++) {
+    if ($min_z[b] < floor_z) continue;
+    if ($max_z[b] < hint_z - SAME_SURFACE_EPS) continue;
+    if (landing === null || $max_z[b] < landing) landing = $max_z[b];
   }
 
   let surface = landing ?? terrain_ele;
@@ -114,13 +150,14 @@ export function surface_z_from_terrain(
   // Climb any further objects resting flush on top of the landing spot —
   // the whole point is standing on the *true* top of whatever contiguous
   // structure is under the character, not wherever the snap-up search (or
-  // the ground, in the fallback case) happened to land.
-  for (let i = 0; i < MAX_PROBES; i++) {
+  // the ground, in the fallback case) happened to land. Each pass lifts the
+  // surface past at least one box, so it ends within the box count.
+  for (let pass = 0; pass < n; pass++) {
     let top: f64 | null = null;
-    for (const aabb of objects_at(surface + CELL_PROBE_DEPTH)) {
-      if (aabb.min[2] > surface + SAME_SURFACE_EPS) continue;
-      if (aabb.max[2] <= surface + SAME_SURFACE_EPS) continue;
-      if (top === null || aabb.max[2] > top) top = aabb.max[2];
+    for (let b = 0; b < n; b++) {
+      if ($min_z[b] > surface + SAME_SURFACE_EPS) continue;
+      if ($max_z[b] <= surface + SAME_SURFACE_EPS) continue;
+      if (top === null || $max_z[b] > top) top = $max_z[b];
     }
     if (top === null) break;
     surface = top;

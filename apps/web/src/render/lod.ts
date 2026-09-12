@@ -34,7 +34,9 @@ function px_per_unit(viewport_h: f64, fov_deg: f64): f64 {
   return viewport_h / (2 * Math.tan((fov_deg * Math.PI) / 360));
 }
 
-const TARGET_CELL_PX: f64 = px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / REFERENCE_THRESHOLD_0;
+/** Six pixels at the reference. Exported for whoever applies the same
+ * criterion to something other than a cell — decor, by its extent. */
+export const TARGET_CELL_PX: f64 = px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / REFERENCE_THRESHOLD_0;
 
 /** The handoff distances, finest first. Derived, so they move with the
  * projection; each is twice the one before, because each tier's cell is. */

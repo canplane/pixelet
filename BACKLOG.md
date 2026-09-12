@@ -21,8 +21,9 @@ Nothing queued.
   - **Decor is the GPU load at that zoom.** off-thread p50 11 ms at 363k
     triangles, 17 ms at 780k–1.26M, and 87% of them decor. The near-zoom
     A/B cleared decor of the stalls, not of this. The projected-size
-    criterion (P2 below) is the fix; it moves up as soon as anything
-    below it is done.
+    criterion is in at twelve pixels (every kind on the nearest tier
+    only); re-measure this spot on the phone. If decor is still the cost,
+    the next lever is culling by page (P3).
   - **`interaction/companion` 4.8 ms a frame, max 299.** The largest single
     step on the phone and O(1) by contract; two walkers each sampling the
     surface every frame. Profile the step before touching it.
@@ -61,18 +62,13 @@ Nothing queued.
 
 ## P2
 
-- **Decor: the projected-size criterion, then the low-poly tier.** Decor
-  is 87% of the phone's triangles (tree 386k, car 145k of 390k mean; peak
-  1.09M) and the A/B of 2026-09-13 showed it is not the phone's stall:
-  with decor off, tris fell 58% and dt p50/p95 and the missed share did
-  not move. So this is battery and headroom, not the stutter. The design
-  is settled in
-  [20260911-decor-identity-orientation-and-one-cell-format.md](./discussions/20260911-decor-identity-orientation-and-one-cell-format.md)
-  (follow-up of 2026-09-12): a kind brings its extent, one pixel
-  threshold shared with the terrain tiers decides full / low / none, and
-  the hand-written density ladders go. Extents measured from the GLBs:
-  trees 2.4–3.0 high on a 1×1 footprint, cars 1.5×2.6–2.9, trains
-  1.3×2.5, boats up to 2.8×3.9.
+- **Decor: the impostor tier.** Decided 2026-09-13
+  ([20260911-decor-identity-orientation-and-one-cell-format.md](./discussions/20260911-decor-identity-orientation-and-one-cell-format.md),
+  "Closed"): each variant rendered once to a sprite, far instances drawn
+  as a camera-facing quad through the billboard field. The criterion is
+  in and every shipped kind is on the nearest tier only; the impostor is
+  what would draw them further for two triangles each. Not a phone fix —
+  build it when a wider decor range is wanted.
 - **Terrain page blocks with the page.** `resident.ts` keeps the pool
   blocks a page owns in a `WeakMap<Terrain, Block[]>`; they belong in the
   page table's handle beside the views.
@@ -97,6 +93,11 @@ Nothing queued.
   lands, a spill has to trigger reclaim or refuse, not silently leave the
   memory. Today's live set is a third of the reservation.
 
+- **Decor culling by page.** Decor is drawn for the whole loaded world
+  in one instanced mesh per variant; with the threshold it exists only in
+  the nearest ring, so culling saves the half behind the camera. If the
+  phone re-measurement still puts decor first, split into one mesh per
+  page and variant so three's bounds culling applies.
 - **First load on a phone: the fetch queue, not the network.** Terrain
   and POI pages p50 9.7 s / 13 s from request to adopt, of which the
   network was 1.4–1.9 s; the rest was queue wait behind `MAX_INFLIGHT`

@@ -4,7 +4,7 @@
 // tree_decor.ts's own doc comment for why assets live in a separate file.
 
 import { CAR_MODEL_URLS, CAR_SKIN_URL } from "@pxl/shared/assets/decor/cars.ts";
-import { type DecorKindBundle, NEAREST_TIER_ONLY } from "./decor_layer.ts";
+import type { DecorKindBundle } from "./decor_layer.ts";
 import { CAR_KIND, is_car_eligible } from "./car_kind.ts";
 
 const CAR_VARIANTS = CAR_MODEL_URLS.map((model_url) => ({ model_url, skin_url: CAR_SKIN_URL }));
@@ -20,5 +20,5 @@ export const CAR_DECOR_BUNDLE: DecorKindBundle = {
   seed: CAR_KIND,
   is_eligible: is_car_eligible,
   variants: CAR_VARIANTS,
-  density_by_lod_step: NEAREST_TIER_ONLY,
+  extent_u: 2.9,
 };

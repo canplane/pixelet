@@ -36,8 +36,8 @@
  * by using Chunk's own already-resolved `primary` tier directly (now the
  * literal same value, not just the same arithmetic run twice — a direct
  * structural consequence of sharing one build step). See
- * DECOR_DENSITY_BY_LOD_STEP below for the actual falloff curve and why it's
- * steep rather than a gentle taper.
+ * decor_density below for the falloff, which is the terrain tiers' own
+ * projected-size criterion applied to the kind's extent.
  *
  * LOD BLEND — DONE (2026-09-06). Decor density stepping down a tier
  * (1 -> 0.5 -> 0.25 -> 0) used to pop synchronized across every chunk that
@@ -51,7 +51,7 @@
  * switched across a range of distances instead of all of them switching on
  * the same frame. This does NOT make an individual tree fade or shrink —
  * decor still never blends an instance's own scale/opacity with distance
- * (see DECOR_DENSITY_BY_LOD_STEP below) — it only smears WHERE the
+ * (see decor_density below) — it only smears WHERE the
  * population-level thinning happens across space, the same thing cube
  * content's own blend does for its tier pop. Which of the two a chunk shows
  * is which one it contributes to field.ts, not a flag on a mesh holding the
@@ -98,7 +98,7 @@ import { decor_id_from_num, type DecorId, object_value_is_decor } from "@pxl/sha
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
 import { cell_index, cell_is_occupied, each_column_entry, object_column_of, virtual_hidden_id } from "@/modules/world/objects/store.ts";
-import type { LodStep } from "@/render/lod.ts";
+import { type LodStep, TARGET_CELL_PX } from "@/render/lod.ts";
 
 import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
 import type { DecorVariantAsset } from "./instanced_model.ts";
@@ -110,29 +110,45 @@ import { type DecorInstances, HIDDEN_FLAG, instances_push, instances_reset, inst
 // since a page's own idx already makes every page's stream independent.
 const DECOR_MASTER_SEED = 0xd0c0d0c0_dec0_5eed_0001n;
 
-// Interim thinning step in place of real scheduler-driven LOD (this file's
-// own doc comment above) — snapped to the exact same LOD tiers terrain
-// itself hands off at (render/lod.ts's LOD_STEP_BY_LEVEL), rather than an
-// independent distance curve, so decor density drops in step with terrain
-// detail instead of on its own unrelated schedule.
-//
-// Halved at every tier starting from step1 itself, not a gentle taper:
-// unlike terrain, a remaining decor instance never shrinks or blends with
-// distance — it's the same full-size, full-detail model whether it's the
-// one tree left after thinning or the only one that was ever there, so a
-// moderate density deep into the falloff (e.g. 0.25) still reads as "a
-// sparse forest", clearly present, not "basically gone". Cut to 0 at step8
-// rather than continuing to halve — 0.125 was still a visible handful per
-// once-dense cluster, not actually gone.
-export const DECOR_DENSITY_BY_LOD_STEP: Record<LodStep, f64> = {
-  1: 1,
-  2: 0.5,
-  4: 0.25,
-  8: 0,
-  16: 0,
-  32: 0,
-  64: 0,
-};
+/**
+ * How far a kind is drawn, from its size and nothing else.
+ *
+ * One criterion for every kind, the terrain tiers' own: what decides
+ * whether a thing is drawn is how large it is to the eye
+ * (discussions/20260911-decor-identity-orientation-and-one-cell-format.md,
+ * the 2026-09-12 follow-up). A kind brings its extent — the largest
+ * dimension of its models, in world units — and never a threshold. At the
+ * far edge of a tier's band, a cell projects to TARGET_CELL_PX (render/
+ * lod.ts); an extent of E cells projects to E times that over the step. A
+ * thing that would cover fewer pixels than two of the tier's cells is not
+ * drawn: at that size its absence makes no visible difference, and the
+ * tier's cubes are already coarser than it. The ratio is
+ * viewport-independent, since the thresholds move with the projection and
+ * the cell's pixel size does not. Twelve pixels at the reference viewport
+ * — the middle of the range at which Google's map products stop drawing a
+ * building in 3D (2026-09-13, decided by eye against the alternative of
+ * one cell, which kept trees and cars a tier further out).
+ *
+ * No fade: a kind is drawn at full density up to its last tier and not
+ * past it, the way those clients drop a building rather than thin a
+ * district. What softens the edge is the blend across a band boundary
+ * (below), which staggers the tier change across chunks. The models
+ * shipped today (extents 2.6 to 3.9) are all drawn on the nearest tier
+ * only; a ten-unit building would be drawn to the fourth.
+ *
+ * This replaced a hand-written ladder (1, 1/2, 1/4, 0 by step, and "nearest
+ * tier only" for the kinds that cost more) which set thresholds per kind
+ * by cost. Cost is the low-poly tier's problem, not the criterion's; a
+ * tree and a car of the same size are drawn to the same range.
+ */
+const DECOR_GONE_PX: f64 = TARGET_CELL_PX * 2;
+
+/** The density a kind is scattered at on a tier: 1, or 0 when it is not
+ * drawn there. */
+export function decor_density(extent_u: f64, lod_step: LodStep): f64 {
+  const projected_px = (extent_u / U_PER_CELL) * TARGET_CELL_PX / lod_step;
+  return projected_px < DECOR_GONE_PX ? 0 : 1;
+}
 
 export type DecorKindBundle = {
   /** The kind's name — the bank key's prefix, and so the draw census's tag. */
@@ -152,17 +168,10 @@ export type DecorKindBundle = {
    * for a kind with no user-placeable equivalent yet (boats/cars/trains
    * today — scattered-only, no mode_bar button of their own). */
   decor_id?: DecorId;
-  /** This kind's own ladder in place of DECOR_DENSITY_BY_LOD_STEP. Interim:
-   * a car is ten trees' worth of triangles, and the shared ladder drew it
-   * out to LOD4 — see
-   * discussions/20260911-decor-identity-orientation-and-one-cell-format.md,
-   * where per-kind policy is meant to move into the decor manifest. */
-  density_by_lod_step?: Record<LodStep, f64>;
+  /** The largest dimension of the kind's models, in world units — what
+   * decor_density reads. Measured from the GLBs, the tallest variant. */
+  extent_u: f64;
 };
-
-/** Only the nearest tier. For kinds whose models cost thousands of
- * triangles each and read as a few pixels past it. */
-export const NEAREST_TIER_ONLY: Record<LodStep, f64> = { 1: 1, 2: 0, 4: 0, 8: 0, 16: 0, 32: 0, 64: 0 };
 
 // Seeded purely by the placed object's own absolute position — unlike
 // scatter_decor_candidates' own per-cell RNG (page_seed + cell_x/cell_y),
@@ -251,7 +260,7 @@ function collect_procedural_decor_instances(
   base_y: number,
 ): void {
   if (!useSettingsStore.getState().show_decor) return;
-  const density_scale = (bundle.density_by_lod_step ?? DECOR_DENSITY_BY_LOD_STEP)[lod_step];
+  const density_scale = decor_density(bundle.extent_u, lod_step);
   // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
   // density instead of running it only to have every candidate rejected by
   // its own probability check below — density_scale=0 means "nothing here",
