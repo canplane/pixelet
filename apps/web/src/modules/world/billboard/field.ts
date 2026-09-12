@@ -66,6 +66,9 @@ export class BillboardField {
   private readonly w = new Vector(Float64Array, LANE);
   private readonly h = new Vector(Float64Array, LANE);
   private readonly anchor_frac = new Vector(Float64Array, LANE);
+  /** Which atlas slot each sprite shows, so a sheet that is replaced
+   * mid-pass can be re-pointed for the sprites already written. */
+  private readonly atlas_slot = new Vector(Uint32Array, LANE);
 
   constructor(private readonly render_order: f64) {
     this.group.name = "billboard-field";
@@ -99,6 +102,21 @@ export class BillboardField {
     this.w.set(i, logical_w * WORLD_UNITS_PER_PX);
     this.h.set(i, logical_h * WORLD_UNITS_PER_PX);
     this.anchor_frac.set(i, logical_h > 0 ? center_y / logical_h : 1);
+    this.atlas_slot.set(i, atlas_slot);
+
+    // A grown sheet is a different texture object over a different image, so
+    // every window onto the old one is stale — including the ones already
+    // handed to the sprites written earlier in this same pass, since a badge
+    // drawn for a later sprite is what grew the sheet. Those sprites would
+    // otherwise show a disposed texture until the next placement happened to
+    // write them again, which on a still camera is never: a fresh load in a
+    // dense area drew nothing until the first pan (2026-09-12).
+    if (atlas.texture !== this.sheet) {
+      for (const view of this.views) view?.dispose();
+      this.views.length = 0;
+      this.sheet = atlas.texture;
+      for (let j = 0; j < i; j++) this.materials[j].map = this.sheet_view(atlas, this.atlas_slot.mem[j]);
+    }
 
     const material = this.materials[i];
     const view = this.sheet_view(atlas, atlas_slot);
@@ -117,17 +135,9 @@ export class BillboardField {
    * the upload churn, ahead of the half that removes the draw calls.
    */
   private sheet_view(atlas: BillboardAtlas, slot: u32): THREE.Texture {
-    const sheet = atlas.texture;
-    // A grown sheet is a different texture object over a different image, so
-    // every window onto the old one is stale.
-    if (sheet !== this.sheet) {
-      for (const view of this.views) view?.dispose();
-      this.views.length = 0;
-      this.sheet = sheet;
-    }
     let view = this.views[slot];
     if (!view) {
-      view = sheet.clone();
+      view = atlas.texture.clone();
       this.views[slot] = view;
     }
     // The rectangle itself moves when the sheet repacks and the slot stays
@@ -189,6 +199,20 @@ export class BillboardField {
       const uniform = material.userData?.anchor_drop as { value: number } | undefined;
       if (uniform) uniform.value = drop;
     }
+  }
+
+  /** Dev: what the pool holds and shows, for the ledger's own report. */
+  stats(): { slots: u32; live: u32; visible: u32; mapped: u32; mounted: boolean } {
+    let visible = 0, mapped = 0;
+    for (let i = 0; i < this.sprites.length; i++) {
+      if (this.sprites[i].visible) visible++;
+      if (this.materials[i].map) mapped++;
+    }
+    // Mounted means reachable from a scene, not merely having a parent — a
+    // frame group that was replaced would still be a parent.
+    let root: THREE.Object3D | null = this.group;
+    while (root.parent) root = root.parent;
+    return { slots: this.sprites.length, live: this.count, visible, mapped, mounted: (root as THREE.Scene).isScene === true };
   }
 
   /** Releases every GPU resource this owns. Textures are the caller's. */

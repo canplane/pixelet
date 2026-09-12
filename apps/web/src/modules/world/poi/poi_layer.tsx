@@ -21,7 +21,7 @@
  *   stops being fine.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { invalidate, useThree } from "@react-three/fiber";
 
@@ -36,7 +36,6 @@ import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_local_world_origin, local_world_to_canonical } from "../frame/coord.ts";
 import { useFrameRefs } from "../frame/context.tsx";
 import { register_tile_interest } from "../terrain/store.ts";
-import { FAR_END } from "../billboard/distance_fade.ts";
 import { BILLBOARD_ORDER } from "../billboard/billboard.tsx";
 import { select_visible_billboards } from "../billboard/frustum_budget.ts";
 import { BillboardBatch } from "../billboard/batch.ts";
@@ -61,6 +60,7 @@ import {
 } from "./poi_index.ts";
 import { badge_atlas, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H, cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot } from "./poi_badge.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
+import { BADGE_CELLS_PER_CUBE, fade_end_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
 import { usePoiStore } from "./store.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
@@ -82,15 +82,6 @@ import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
  */
 const MAX_RENDERED = 512;
 
-/**
- * How wide a badge is, in CSS pixels, for picking the tier below.
- *
- * The pill is about this across at full strength (poi_badge.ts), and a cell
- * about a badge wide is the size at which "one badge per cell" and "badges
- * do not sit on each other" are the same statement.
- */
-const BADGE_PX: f64 = 100;
-
 /** The finest and coarsest cell a badge is allowed to snap to, as shifts of
  * the canonical unit. 0 is 1u, the terrain cell itself; 6 is 64u, which is
  * an L2 chunk and the top of the ladder terrain and decor already climb
@@ -100,20 +91,14 @@ const MIN_SHAMT: u32 = 0;
 const MAX_SHAMT: u32 = 6;
 
 /**
- * Which lattice tier badges snap to at this zoom.
- *
- * `px_per_u` is what use_distance_fade computes to hold a billboard at a
- * constant screen size, so this asks how much world a badge covers right
- * now and takes the cell nearest to it. Zooming in walks the tier down and
- * the badges spread; zooming out walks it up and they gather. It is the same
- * ladder terrain climbs, by the same argument, which is why it needs no
+ * Which lattice tier badges snap to at a range: the cube tier's cell there,
+ * times CELLS_PER_BADGE, rounded to the nearest power of two. Zooming in
+ * walks the tier down and the badges spread; zooming out walks it up and
+ * they gather — the same ladder terrain climbs, so it needs no
  * quantisation of its own.
  */
-function tier_shamt(px_k: f64, dist: f64): u32 {
-  // px_k is the projection with the distance divided out — CSS pixels per
-  // world unit *times* distance — so one measurement serves every candidate
-  // and each pays a divide rather than a trig call.
-  const want_u = BADGE_PX * Math.max(1e-3, dist) / px_k;
+function tier_shamt(dist: f64): u32 {
+  const want_u = BADGE_CELLS_PER_CUBE * LOD_CELL_PER_DISTANCE.value * Math.max(1e-3, dist);
   const shamt = Math.round(Math.log2(Math.max(1, want_u)));
   return Math.max(MIN_SHAMT, Math.min(MAX_SHAMT, shamt)) as u32;
 }
@@ -139,7 +124,6 @@ const $center: [f64, f64, f64] = [0, 0, 0];
  * (frustum membership, then nearest-first greedy placement against the
  * screen), and never poi_extractor.ts's rank field: rank is "how notable is
  * this in general", not "is this visible right now". */
-const FAR_END_U2 = FAR_END * FAR_END;
 
 /**
  * Everything a tick works in, allocated once.
@@ -159,6 +143,11 @@ const $hits = CORE_ALLOC.take(Uint32Array, 16384);
 const $batch = new BillboardBatch();
 const $nodes = new CellNodes(4096, CORE_ALLOC);
 const $field = new BillboardField(BILLBOARD_ORDER.poi);
+/** The camera in the frame's own coordinates, and the same as an address. */
+const $cam = new THREE.Vector3();
+const $to_frame = new THREE.Matrix4();
+const $cam_v3: [f64, f64, f64] = [0, 0, 0];
+const $centre: PVF3 = { i: 0n, f: 0n };
 const $kept = CORE_ALLOC.take(Uint32Array, MAX_RENDERED);
 
 /** absolute, projected into local_world_frame's own origin (map_origin) —
@@ -180,6 +169,11 @@ function local_pos_from_absolute(absolute: PVF3, map_origin: IVec): [f64, f64, f
  * middle two is the per-candidate terrain work, which is what clustering
  * would be for.
  */
+/** Dev: the billboard pool behind the badges, for the ledger's own report. */
+export function poi_field_stats(): { slots: u32; live: u32; visible: u32; mapped: u32; mounted: boolean } {
+  return $field.stats();
+}
+
 export const poi_place_stats = { ms: 0, max_ms: 0, sync_ms: 0, max_sync_ms: 0, runs: 0, hits: 0, max_hits: 0, candidates: 0, kept: 0, absorbed: 0, biggest: 0 };
 
 /** What the layer hands React. The anchor comes from the index rather than
@@ -222,18 +216,39 @@ function select_nearby_pois(
   const t0 = performance.now();
   const map_origin = get_local_world_origin(map_center);
 
+  // Everything is measured from the camera, as the chunks are (their tier
+  // is their distance from the camera, sched/chunk_table.ts): the disc the
+  // index holds, the reach a candidate is inside, the tier it is filed at.
+  // Measured from the pivot instead, a wide zoom followed by a tilt down to
+  // the ground filed the places under the camera at the tier of the pivot's
+  // distance, snapped to cells of 2^n across, while the fade — which is by
+  // camera distance (billboard/distance_fade.ts) — drew them as if near.
+  // In the frame's own coordinates, where the index's lanes are. Before the
+  // frame exists there is no camera position in it, and the pivot stands in.
+  let cx: f64, cy: f64, cz: f64;
+  let centre: PVF3 = map_center;
+  if (local_world_frame) {
+    $cam.copy(camera.position).applyMatrix4($to_frame.copy(local_world_frame.matrixWorld).invert());
+    cx = $cam.x;
+    cy = $cam.y;
+    cz = $cam.z;
+    $cam_v3[0] = cx;
+    $cam_v3[1] = cy;
+    $cam_v3[2] = cz;
+    centre = local_world_to_canonical($centre, $cam_v3, map_origin);
+  } else {
+    [cx, cy, cz] = local_pos_from_absolute(map_center, map_origin);
+  }
+
   // Rebuilt when a page arrives or leaves, when the frame origin crosses an
   // L4 boundary, or when the camera leaves the disc the last build covers.
   // Everything below works on what a radius query returns rather than on
   // everything loaded — see poi_index.ts.
-  // Pixels per world unit, times distance — the distance-free half of the
-  // projection, so each candidate below resolves its own tier with a divide.
-  const persp = camera as THREE.PerspectiveCamera;
-  const px_k = viewport_h / (2 * Math.tan((persp.fov * Math.PI) / 360));
-  sync_poi_index(map_center, map_origin, local_pos_from_absolute, poi_flat_pos);
+  sync_poi_index(centre, map_origin, local_pos_from_absolute, poi_flat_pos);
   const t_sync = performance.now();
-  const [cx, cy, cz] = local_pos_from_absolute(map_center, map_origin);
-  const hits = query_poi_index(cx, cy, cz, FAR_END, $hits);
+  const far_end = fade_end_u();
+  const far_end2 = far_end * far_end;
+  const hits = query_poi_index(cx, cy, cz, far_end, $hits);
 
   $batch.reset();
   // Two passes, and they are different questions. The first files every
@@ -247,12 +262,12 @@ function select_nearby_pois(
     // The exact reach, isotropic, on the frame-local lanes the index already
     // holds — plain float arithmetic with no PVF3 and no BigInt in the loop.
     // Both sides carry a real z: entries are grounded at build time
-    // (poi_index.ts) and map_center sits on the terrain surface, so a POI in
-    // a valley below the camera is correctly further away than one at eye
-    // level the same distance across.
+    // (poi_index.ts) and the camera has its own height, so a POI in a valley
+    // below it is correctly further away than one at eye level the same
+    // distance across.
     const dx = poi_x(i) - cx, dy = poi_y(i) - cy, dz = poi_z(i) - cz;
     const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 > FAR_END_U2) continue;
+    if (d2 > far_end2) continue;
 
     // Indexed before its tile arrived, so its z is the bake's flat zero and
     // drawing it would put the badge underground. It stays in the index —
@@ -262,7 +277,7 @@ function select_nearby_pois(
     // Its own tier, from its own distance. Not one tier for the frame: a
     // perspective view holds near and far at once, and a single tier is
     // wrong at whichever end it was not chosen for.
-    $nodes.add(poi_cell_x(i), poi_cell_y(i), poi_cell_z(i), tier_shamt(px_k, Math.sqrt(d2)), i, d2);
+    $nodes.add(poi_cell_x(i), poi_cell_y(i), poi_cell_z(i), tier_shamt(Math.sqrt(d2)), i, d2);
   }
 
   $batch.reset();
@@ -503,14 +518,12 @@ export function PoiLayer() {
   // than to an anchor of its own: every badge is within FAR_END of the
   // camera, so they all share the L4 cell the frame is aligned to, and a
   // per-badge AnchorNode was resolving the same anchor a few hundred times.
-  useLayoutEffect(() => {
-    const frame = local_world_frame_ref.current;
-    if (!frame) return;
-    frame.add($field.group);
-    return () => {
-      frame.remove($field.group);
-    };
-  }, [local_world_frame_ref.current]);
-
-  return null;
+  // This component is a child of that frame, so mounting the group is the
+  // one thing React does here. It was a layout effect keyed on the frame's
+  // ref, which is attached after a child's layout effects run and changes
+  // nothing that re-renders: whether the group ever reached the scene
+  // depended on this component happening to render again after the ref was
+  // set, and a fresh load sometimes drew every badge into a group hanging
+  // off nothing (2026-09-12).
+  return <primitive object={$field.group} />;
 }

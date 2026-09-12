@@ -42,7 +42,7 @@ import type { PoiPage } from "@pxl/shared/bake/format.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
 import { with_ele } from "../terrain/elevation.ts";
-import { FAR_END } from "../billboard/distance_fade.ts";
+import { fade_end_u } from "../billboard/distance_fade.ts";
 import { evict_poi_badges } from "./poi_badge.ts";
 import { poi_pages } from "./store.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
@@ -53,54 +53,64 @@ import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
  * The index holds a disc rather than the whole resident page set, and this
  * is what makes a fixed capacity a statement about geometry instead of a
  * hope about the data. A query is valid as long as everything within
- * FAR_END of the camera is present, so a disc of RESIDENCY around the point
+ * the reach of the camera is present, so a disc of the residency around the point
  * it was built at stays valid until the camera moves REBUILD_MARGIN — which
  * is where the rebuild trigger below comes from.
  *
- * Two rather than one because the margin is what buys the rebuilds being
- * rare; larger costs capacity quadratically, and 640u already covers 605 m.
+ * The margin is what buys the rebuilds being rare; a larger disc costs
+ * capacity quadratically.
  */
-const RESIDENCY: f64 = FAR_END * 2;
-const RESIDENCY2: f64 = RESIDENCY * RESIDENCY;
-const REBUILD_MARGIN2: f64 = (RESIDENCY - FAR_END) * (RESIDENCY - FAR_END);
+/** One and a half rather than two: with the reach at 640u the disc is 960u,
+ * still inside a page, and the margin — half a reach, 320u — is what it was
+ * when the reach was half this. */
+const RESIDENCY_OVER_REACH: f64 = 1.5;
+/** The reach is a fixed number of the terrain's first tier handoff
+ * (render/lod.ts), so it moves with the projection; the disc, the margin
+ * and the pages to sweep are read from it when a rebuild is asked for. */
+function residency(): f64 {
+  return fade_end_u() * RESIDENCY_OVER_REACH;
+}
 
 /**
- * Pages to sweep around the centre one. RESIDENCY (640u) is under a page
- * (L3_RANGE, 1024u), so a point inside the centre page cannot reach past an
- * immediate neighbour — this is exact rather than a heuristic.
- *
- * It is also not optional. `poi_pages` holds the nearest RESIDENT_PAGES
- * (terrain/config.ts), 32 of them, and sweeping all of them would put the
- * whole resident world through a structure whose capacity is meant to be
- * constant.
+ * Pages to sweep around the centre one: as many as the disc can reach. At
+ * the reference projection the disc (960u) is under a page (L3_RANGE,
+ * 1024u), so a point inside the centre page cannot reach past an immediate
+ * neighbour and the radius is one; a taller viewport widens the reach and
+ * the radius follows. Not every resident page: `poi_pages` holds the
+ * nearest RESIDENT_PAGES (terrain/config.ts), 32 of them, and sweeping all
+ * of them would put the whole resident world through a structure whose
+ * capacity is meant to be constant.
  */
-const PAGE_RADIUS = 1;
 const PAGE_U: f64 = Number(L3_RANGE);
+function page_radius(): u32 {
+  return Math.ceil(residency() / PAGE_U);
+}
 
 /**
  * Capacity is the design, not a guess at the data: a fixed ceiling is what
  * keeps the live object count independent of how much world has been
  * visited. Overflow is reported through `stats()` rather than absorbed.
- *
  * The number comes from the densest page in the current bake — 12544 POI in
- * one 1024u page, so 0.012 per u2 — which puts a RESIDENCY disc at 15.4k.
- * This is the next power of two above that. The same density over the 3x3
- * pages would be 113k, which is what the disc is for.
+ * one 1024u page, so 0.012 per u2 — which puts a 960u disc at 35k. This is
+ * the next power of two above that. The same density over the 3x3 pages
+ * would be 113k, which is what the disc is for.
  */
-const CAPACITY: u32 = 32768;
+const CAPACITY: u32 = 65536;
 
-/** Largest prime below 2^16, above CAPACITY. Teschner measured the curve
- * flattening well before the table reaches the item count, and the cost of
+/** A prime above CAPACITY, 2^17 - 1. Teschner measured the curve flattening
+ * well before the table reaches the item count, and the cost of
  * overshooting is memory rather than time. */
-const BUCKETS: u32 = 65521;
+const BUCKETS: u32 = 131071;
 
 /**
- * The cell is the query radius, which here is the reach the old scan used
- * as its coarse limit. One cell per radius keeps a query to a handful of
- * buckets and a POI in exactly one — Teschner measured that ratio as the
- * optimum and found cell size to matter more than table size.
+ * The cell is the query radius at the reference projection — the reach
+ * (render/lod.ts's fade_end_u at 1080px and 50 degrees). One cell per
+ * radius keeps a query to a handful of buckets and a POI in exactly one —
+ * Teschner measured that ratio as the optimum and found cell size to matter
+ * more than table size. Fixed at construction; a reach that moves with the
+ * projection changes how many buckets a query touches, not its answer.
  */
-const CELL: f64 = FAR_END;
+const CELL: f64 = 640;
 
 /**
  * One set of lanes and the hash over them. Two exist: the one queries read
@@ -198,6 +208,8 @@ let built_y: f64 = 0;
 type Job = {
   /** poi_pages.revision the sweep reads at. */
   pages_revision: u32;
+  /** The disc's radius, squared, as it was when the rebuild was asked for. */
+  residency2: f64;
   map_origin: IVec;
   cx: f64;
   cy: f64;
@@ -254,7 +266,8 @@ export function sync_poi_index(
   const [cx, cy] = to_local(map_center, FROM_L3_IDX(center_page));
 
   const moved_x = cx - built_x, moved_y = cy - built_y;
-  const same_place = moved_x * moved_x + moved_y * moved_y <= REBUILD_MARGIN2;
+  const margin = residency() - fade_end_u();
+  const same_place = moved_x * moved_x + moved_y * moved_y <= margin * margin;
   const pages_revision = poi_pages.revision;
   const pages_changed = pages_revision !== built_from;
   if (!pages_changed && map_origin === built_origin && same_place) return true;
@@ -262,8 +275,9 @@ export function sync_poi_index(
   if (job && job.pages_revision === pages_revision && job.map_origin === map_origin) return false;
 
   const pages: Job["pages"] = [];
-  for (let dy = -PAGE_RADIUS; dy <= PAGE_RADIUS; dy++) {
-    for (let dx = -PAGE_RADIUS; dx <= PAGE_RADIUS; dx++) {
+  const radius = page_radius();
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
       pages.push({ page_idx: TO_XY(ivec.add(center_page, ivec.gather(BigInt(dx), BigInt(dy), 0n))), dx, dy });
     }
   }
@@ -279,7 +293,8 @@ export function sync_poi_index(
     return gx * gx + gy * gy;
   };
   pages.sort((a, b) => page_gap2(a) - page_gap2(b));
-  job = { pages_revision, map_origin, cx, cy, pages, next: 0, pages_changed, to_local, flat_pos };
+  const r = residency();
+  job = { pages_revision, residency2: r * r, map_origin, cx, cy, pages, next: 0, pages_changed, to_local, flat_pos };
 
   // The same id can arrive in two pages, since a place near a boundary is
   // baked into both. Deduping once per rebuild rather than per tick is the
@@ -309,7 +324,7 @@ function sweep_page(j: Job, page: Job["pages"][number]): void {
     // that should have been kept. The exact, isotropic test is the caller's,
     // on positions that have a real z by then.
     const ox = pois.x[r] - px, oy = pois.y[r] - py;
-    if (ox * ox + oy * oy > RESIDENCY2) continue;
+    if (ox * ox + oy * oy > j.residency2) continue;
     const id_hash = pois.id_hash[r];
     if ($seen.find(id_hash) >= 0) continue;
     $seen.insert(id_hash);
@@ -458,14 +473,22 @@ export function poi_grounded(i: u32): boolean {
 }
 
 /**
- * Forces the next sync to rebuild.
+ * Forces the next sync to rebuild, and drops a rebuild in progress.
  *
  * The trigger this exists for is terrain arriving: elevation is resolved at
  * build time now, so an entry indexed before its tile landed carries the flat
- * z and is held back from drawing until a rebuild grounds it.
+ * z and is held back from drawing until a rebuild grounds it. A rebuild
+ * already running was grounding against the tiles of the moment it started,
+ * so it has to go too — left alone, the next sync saw a job for the same
+ * pages and origin and deduped the request against it, the finished job
+ * then marked the index current, and the entries it had swept before the
+ * tile landed stayed held back until the camera moved far enough to force
+ * a rebuild for another reason. A fresh load with every tile arriving after
+ * the POI pages drew nothing until the first pan (2026-09-12).
  */
 export function invalidate_poi_index(): void {
   built_from = -1;
+  job = null;
 }
 
 export function poi_index_stats(): PoiIndexStats {

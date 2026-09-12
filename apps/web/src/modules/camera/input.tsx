@@ -83,26 +83,22 @@ function handle_tap(hovered: PVF3): void {
   const { activeTool, object_color_id, object_size, decor_id } = useUiStore.getState();
 
   if (activeTool === "pointer") {
-    // Recenter on the middle of whatever the cursor is on — the exact point
-    // the hover-cursor ghost box is drawn centered on, so "tap the
-    // highlighted box, the camera goes to that box". hovered/hovered_coord
-    // always stores a cell's (min-x, min-y, min-z) corner (see camera/store.ts
-    // and update_hover() below); an object hit resolves it via object_center,
-    // a bare-terrain hit via anchor_center, and both are the same symmetric
-    // corner + half a cell on all three axes. Before, the object branch
-    // centered but terrain recentered on the corner.
-    //
-    // Known consequence: do_pan's ground_snap (elevation.ts's ground_or_raw)
-    // re-grounds Z to the bare terrain surface on the next pan step, so the
-    // first drag after this nudges the camera target by up to half a cell
-    // (terrain) or an object's full height above ground (a stacked cube).
-    // Not fixed here: the camera's own terrain-only ground-snap and the
-    // companion's object-aware surface query (surface_height.ts) are
-    // deliberately kept separate for now — reconciling them is a larger
-    // design call, not a tweak to this line.
+    // Recenter on the centre of the cube the tap names. An object hit is
+    // that object's own centre (object_center). A bare-terrain hit is the
+    // centre of the cube standing on the struck ground — hovered_coord is
+    // the struck ground cell's own (min-x, min-y, min-z) corner (see
+    // camera/store.ts and update_hover() below), so the X/Y are that cell's
+    // centre and the Z comes from the ground's own pivot rule
+    // (elevation.ts's ground_pivot), which is what every pan, the bootstrap
+    // and follow mode set too — so a pan after a terrain tap changes
+    // nothing. A tap on a stacked object still pivots on that object's
+    // centre and the next pan re-grounds to the terrain under it: the
+    // camera's terrain-only ground-snap and the companion's object-aware
+    // surface query (surface_height.ts) are deliberately kept separate for
+    // now.
     const { hovered_object_id } = useCameraStore.getState();
     const hovered_object = hovered_object_id ? get_placed_object(hovered_object_id) : null;
-    const target = hovered_object ? object_center(hovered_object, get_local_world_origin(useMapStore.getState().map_center)) : anchor_center(hovered);
+    const target = hovered_object ? object_center(hovered_object, get_local_world_origin(useMapStore.getState().map_center)) : ground_or_raw(anchor_center(hovered));
 
     useMapStore.getState().set_map_center(target);
     return;

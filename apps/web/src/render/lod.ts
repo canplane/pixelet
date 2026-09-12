@@ -43,6 +43,58 @@ let LOD_THRESHOLDS: f64[] = [];
 function recompute_thresholds(viewport_h: f64, fov_deg: f64): void {
   const k = px_per_unit(viewport_h, fov_deg) / TARGET_CELL_PX;
   LOD_THRESHOLDS = LOD_STEP_BY_LEVEL.slice(0, -1).map((step) => step * U_PER_CELL * k);
+  LOD_SCALE.threshold_0 = LOD_THRESHOLDS[0];
+  LOD_CELL_PER_DISTANCE.value = 2 / LOD_THRESHOLDS[0];
+}
+
+/**
+ * The ladder's own scale, live with the projection: the first handoff
+ * distance in world units — 192u at the reference viewport and field of
+ * view, more on a taller screen, less on a shorter one. Everything that
+ * should keep step with the terrain's tiers is a multiple of it, and the
+ * multiples live here beside it so the proportions are read in one place.
+ */
+export const LOD_SCALE = { threshold_0: REFERENCE_THRESHOLD_0 };
+
+/**
+ * The largest cell drawn at a range, per unit of that range. Just past a
+ * threshold the tier doubles, so a chunk at the first threshold shows
+ * two-cell boxes, at twice that distance four-cell ones, and so on: the
+ * cell drawn at any distance is at most this fraction of it, and half that
+ * just before the next handoff. A uniform object, kept current with the
+ * projection, for whoever has to tolerate a coarse cell's height — the
+ * badge occlusion test.
+ */
+export const LOD_CELL_PER_DISTANCE = { value: 2 / REFERENCE_THRESHOLD_0 };
+
+// ---- What keeps step with the ladder ----
+
+/**
+ * How many terrain cells a place badge's cell spans at any range: the badge
+ * ladder is the cube ladder times this (poi/poi_layer.ts). It was a pixel
+ * width of its own, which came out at about eight cubes and gathered places
+ * plainly apart on screen (2026-09-12); four is the setting, not the
+ * derivation.
+ */
+export const BADGE_CELLS_PER_CUBE: f64 = 4;
+
+/**
+ * Where a world-anchored billboard starts to fade and where it is gone, in
+ * first-handoff units (billboard/distance_fade.ts): full strength inside
+ * 5/4 of the first handoff, gone by 10/3 of it — 240u and 640u at the
+ * reference. Twice the 120u and 320u the fade was first tuned at, which
+ * read as too near once the badges gathered by the cube ladder
+ * (2026-09-12); and moving with the projection now rather than staying
+ * fixed while the tiers under them moved.
+ */
+export const FADE_START_TIERS: f64 = 240 / REFERENCE_THRESHOLD_0;
+export const FADE_END_TIERS: f64 = 640 / REFERENCE_THRESHOLD_0;
+
+export function fade_start_u(): f64 {
+  return FADE_START_TIERS * LOD_SCALE.threshold_0;
+}
+export function fade_end_u(): f64 {
+  return FADE_END_TIERS * LOD_SCALE.threshold_0;
 }
 
 let projection_h: f64 = REFERENCE_VIEWPORT_H;

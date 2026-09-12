@@ -50,6 +50,7 @@
 import * as THREE from "three";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import { LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
 import { SCENE_DEPTH } from "@/render/scene_depth.ts";
 
 /**
@@ -70,21 +71,55 @@ import { SCENE_DEPTH } from "@/render/scene_depth.ts";
 const DEPTH_BIAS_U: f64 = 1;
 
 /**
- * Extra tolerance as a fraction of how far away the anchor is.
+ * Extra tolerance in coarse cells, on top of the fixed one.
  *
- * A depth buffer spends almost all its precision near the camera. With this
- * camera's 0.1 near plane against a far plane thousands of units out, the
- * world distance a stored depth value can be wrong by grows with the square
- * of that distance — under a unit up close, but several units once the view
- * is pulled back. A fixed tolerance is therefore correct only at one zoom
- * level: zoomed out, the ground under a badge quantises to a value nearer
- * than the badge and hides it with nothing in front of it at all.
+ * Two things grow with distance and both are covered by one term. A depth
+ * buffer spends almost all its precision near the camera, so the world
+ * distance a stored value can be wrong by grows with the square of the
+ * range — under a unit up close, several units once the view is pulled
+ * back. And the terrain drawn at a range is the tier for that range: a
+ * badge is grounded on the fine elevation, while a coarse box is shrunk
+ * about its cell's centre, so on a slope its top can sit up to a cell above
+ * the ground the badge stands on — and inside a blend band two tiers take
+ * turns, so which surface the depth copy holds changes with the camera.
+ * Both are proportional to distance, and the tier ladder says how: the
+ * cell drawn at a range is at most LOD_CELL_PER_DISTANCE of that range.
  *
- * Loose enough to swallow that, and still sub-pixel at the range where it
- * gets large — 0.5% of two thousand units is ten, and ten units at two
- * thousand away is nothing anyone can point at.
+ * A cell and a half, so a badge buried by the coarse box of its own slope
+ * is still shown with margin. At two thousand units that is about thirty
+ * units, which at that range is a few pixels of building a badge could be
+ * shown through — nothing anyone can point at. A fixed fraction here was
+ * 0.5%, under one cell just past a threshold, which is exactly the margin
+ * a coarse box on a slope eats — badges on the camera-facing side of every
+ * ridge blinked on and off while the flat ones held still (2026-09-12).
  */
-const DEPTH_BIAS_REL: f64 = 0.005;
+const DEPTH_BIAS_CELLS: f64 = 1.5;
+
+/**
+ * Where the visibility question is asked: at several points up the badge's
+ * own height, from just above the anchor to the top of the pill, and the
+ * badge is hidden only when most of them are behind the world.
+ *
+ * Asked at one point — the anchor, which is the ground point itself — the
+ * question was "is the ground in front of the ground", and on any slope
+ * facing the camera the pixel under the anchor shows the next cell up, a
+ * cell nearer, or at a coarse tier a box a cell or two tall; whether that
+ * cleared the tolerance flipped with every fraction of a unit the camera
+ * moved, and zooming walked badges on the smallest rises through the tiers
+ * so they came and went with each (2026-09-12). A single texel of a
+ * half-resolution copy is also just one texel.
+ *
+ * Coverage is what a label really means by hidden: a ridge that clips the
+ * dot leaves the name readable, a hill in front of the pill does not. So a
+ * badge with a third of its height behind the world is drawn, and one with
+ * more than half is not — and one texel cannot flip that on its own.
+ */
+const DEPTH_SAMPLES = 5;
+/** Hidden once this many of DEPTH_SAMPLES are behind the world. */
+const DEPTH_HIDE_AT = 3;
+/** The lowest sample sits this far above the anchor, so the dot's own cell
+ * is never the one asked about. */
+const DEPTH_LIFT_U: f64 = 2;
 
 // modelMatrix's translation column is the sprite's world position, which is
 // its *centre*, not its anchor: use_distance_fade moves that centre every
@@ -98,14 +133,20 @@ const DEPTH_BIAS_REL: f64 = 0.005;
 // rotates between a billboard and the world is azimuth, about Z (world.tsx's
 // world_frame_ref), and rotating about Z leaves Z alone.
 const VERT_DECL = /* glsl */ `varying vec4 v_anchor_clip;
+varying vec4 v_rise_clip;
 varying vec4 v_upright_clip;
 uniform mat4 u_depth_view_projection;
 uniform float u_depth_bias;
-uniform float u_depth_bias_rel;
+uniform float u_depth_cell;
+uniform float u_depth_bias_cells;
 uniform float u_anchor_drop;
+uniform float u_depth_lift;
 void main() {
-	vec3 anchor_world = modelMatrix[3].xyz - vec3(0.0, 0.0, u_anchor_drop);
-	v_anchor_clip = u_depth_view_projection * vec4(anchor_world, 1.0);`;
+	vec3 anchor_world = modelMatrix[3].xyz - vec3(0.0, 0.0, u_anchor_drop - u_depth_lift);
+	v_anchor_clip = u_depth_view_projection * vec4(anchor_world, 1.0);
+	// The badge's height in world units is the sprite's own Y scale; its
+	// samples climb from the anchor by fractions of it, along world up.
+	v_rise_clip = u_depth_view_projection * vec4(0.0, 0.0, length(modelMatrix[1].xyz), 0.0);`;
 
 // The same quad, positioned as if it stood upright in the world instead of
 // lying flat against the camera — used for depth only, never for shape.
@@ -133,19 +174,21 @@ void main() {
 const VERT_UPRIGHT = /* glsl */ `mvPosition.xy += rotatedPosition;
 	vec3 world_up_view = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
 	float anchor_dist = max(0.0, -modelViewMatrix[3].z);
-	float depth_push = u_depth_bias + anchor_dist * u_depth_bias_rel;
+	float depth_push = u_depth_bias + anchor_dist * u_depth_cell * u_depth_bias_cells;
 	v_upright_clip = projectionMatrix * vec4(
 		modelViewMatrix[3].xyz + vec3(rotatedPosition.x, 0.0, depth_push) + world_up_view * rotatedPosition.y,
 		1.0
 	);`;
 
 const FRAG_DECL = /* glsl */ `varying vec4 v_anchor_clip;
+varying vec4 v_rise_clip;
 varying vec4 v_upright_clip;
 uniform sampler2D t_scene_depth;
 uniform vec2 u_depth_near_far;
 uniform float u_depth_ready;
 uniform float u_depth_bias;
-uniform float u_depth_bias_rel;
+uniform float u_depth_cell;
+uniform float u_depth_bias_cells;
 
 // Distance from the camera, in world units, for a depth-buffer value.
 float view_distance(float depth01) {
@@ -154,18 +197,27 @@ float view_distance(float depth01) {
 	return (2.0 * near * far) / (far + near - ndc_z * (far - near));
 }
 
+// Whether the world is in front of a point of the badge, given in the
+// depth copy's clip space. A point off the edge of the copy has no depth to
+// read; it is not necessarily off *this* frame's screen though — the copy
+// is the previous frame's — so it counts as visible rather than hidden.
+bool behind_world(vec4 clip) {
+	if (clip.w <= 0.0) return false;
+	vec3 ndc = clip.xyz / clip.w;
+	vec2 depth_uv = ndc.xy * 0.5 + 0.5;
+	if (any(lessThan(depth_uv, vec2(0.0))) || any(greaterThan(depth_uv, vec2(1.0)))) return false;
+	float world = view_distance(texture2D(t_scene_depth, depth_uv).x);
+	float point = view_distance(ndc.z * 0.5 + 0.5);
+	return world < point - u_depth_bias - point * u_depth_cell * u_depth_bias_cells;
+}
+
 void main() {
-	if (u_depth_ready > 0.5 && v_anchor_clip.w > 0.0) {
-		vec3 ndc = v_anchor_clip.xyz / v_anchor_clip.w;
-		vec2 depth_uv = ndc.xy * 0.5 + 0.5;
-		// An anchor off the edge of the copy has no depth to read. It is not
-		// necessarily off *this* frame's screen though — the copy is the
-		// previous frame's — so the badge is shown rather than hidden.
-		if (all(greaterThanEqual(depth_uv, vec2(0.0))) && all(lessThanEqual(depth_uv, vec2(1.0)))) {
-			float world = view_distance(texture2D(t_scene_depth, depth_uv).x);
-			float anchor = view_distance(ndc.z * 0.5 + 0.5);
-			if (world < anchor - u_depth_bias - anchor * u_depth_bias_rel) discard;
+	if (u_depth_ready > 0.5) {
+		int hidden = 0;
+		for (int i = 0; i < ${DEPTH_SAMPLES}; i++) {
+			if (behind_world(v_anchor_clip + v_rise_clip * (float(i) / float(${DEPTH_SAMPLES - 1})))) hidden++;
 		}
+		if (hidden >= ${DEPTH_HIDE_AT}) discard;
 	}
 	// Depth of the upright twin, so the GPU's own test can clip this badge
 	// against anything genuinely standing between it and the camera. Written
@@ -190,7 +242,9 @@ export function apply_anchor_occlusion(material: THREE.SpriteMaterial): THREE.Sp
     shader.uniforms.u_depth_view_projection = SCENE_DEPTH.view_projection;
     shader.uniforms.u_depth_near_far = SCENE_DEPTH.near_far;
     shader.uniforms.u_depth_bias = { value: DEPTH_BIAS_U };
-    shader.uniforms.u_depth_bias_rel = { value: DEPTH_BIAS_REL };
+    shader.uniforms.u_depth_cell = LOD_CELL_PER_DISTANCE;
+    shader.uniforms.u_depth_bias_cells = { value: DEPTH_BIAS_CELLS };
+    shader.uniforms.u_depth_lift = { value: DEPTH_LIFT_U };
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", VERT_DECL)
       .replace("mvPosition.xy += rotatedPosition;", VERT_UPRIGHT);

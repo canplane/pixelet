@@ -10,12 +10,13 @@
  */
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import { fade_end_u, fade_start_u } from "@/render/lod.ts";
 import { WORLD_UNITS_PER_PX } from "./canvas_scale.ts";
 
-/** Full opacity/size at or inside FAR_START, smoothstepped to gone by
- * FAR_END. */
-export const FAR_START: f64 = 120;
-export const FAR_END: f64 = 320;
+/** Full opacity/size at or inside fade_start_u(), smoothstepped to gone by
+ * fade_end_u() — both a fixed number of the terrain's first tier handoff
+ * (render/lod.ts), so they move with the projection as the tiers do. */
+export { fade_end_u, fade_start_u };
 
 export type DistanceFadeResult = {
   /** Multiplies the sprite's own full-strength width/height. */
@@ -37,9 +38,10 @@ export type DistanceFadeResult = {
  * anything reasoning about screen boxes needs this and not a projection.
  */
 export function distance_fade_far(dist: f64): f64 {
-  if (dist <= FAR_START) return 1;
-  if (dist >= FAR_END) return 0;
-  const t = (dist - FAR_START) / (FAR_END - FAR_START);
+  const start = fade_start_u(), end = fade_end_u();
+  if (dist <= start) return 1;
+  if (dist >= end) return 0;
+  const t = (dist - start) / (end - start);
   return 1 - t * t * (3 - 2 * t); // smoothstep
 }
 

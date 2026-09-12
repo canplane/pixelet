@@ -18,7 +18,7 @@
  */
 
 import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
+import { poi_field_stats, poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
 import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/modules/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/modules/world/billboard/frustum_budget.ts";
@@ -185,6 +185,12 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     } ms over ${c.place_runs} runs   hit ${poi_place_stats.hits} -> cand ${poi_place_stats.candidates} -> kept ${poi_place_stats.kept} (+${poi_place_stats.absorbed} absorbed, biggest ${poi_place_stats.biggest}${
       billboard_dropped() > 0 ? `, DROPPED ${billboard_dropped()}` : ""
     })   max since load ${n1(poi_place_stats.max_ms)} ms, hit ${poi_place_stats.max_hits}`,
+    `  field   ${
+      (() => {
+        const f = poi_field_stats();
+        return `${f.live} live of ${f.slots} slots, ${f.visible} visible, ${f.mapped} mapped, group ${f.mounted ? "mounted" : "NOT mounted"}`;
+      })()
+    }`,
     `  split   sync ${n1(poi_place_stats.sync_ms)} ms (max since load ${n1(poi_place_stats.max_sync_ms)})   badge ${c.badge_metrics} measured / ${c.badge_builds} built ${
       n1(c.badge_ms)
     }ms total, ${poi_badge_count()} cached`,
