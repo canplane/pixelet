@@ -14,8 +14,10 @@ Nothing queued.
 
 ## P1
 
-- **The chunk bake to a worker.** Decided 2026-09-13, not conditional,
-  after the atom and the palette above:
+- **The chunk bake to a worker.** Decided 2026-09-13, not conditional;
+  the case, with the phone's numbers, in
+  [20260909-cooperative-scheduler-and-task-ledger.md](./discussions/20260909-cooperative-scheduler-and-task-ledger.md)
+  ("The worker's case"):
   a bake is 14–21 ms a unit on the phone against an 8 ms budget, the
   unit is a chunk and the mesher is one call, so on the main thread it
   cannot be cut and forward progress runs it whole (`visible/chunks` max
@@ -27,16 +29,24 @@ Nothing queued.
   the big memory, posts it, and copies the mesh back. The same worker
   hosts the WASM bake later
   ([20260911-single-thread-core-and-when-to-spawn-a-worker.md](./discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md)).
-- **"Everything is a file": the atom and the palette.** Decided
+- **"Everything is a file": the Placement and the palette.** Decided
   2026-09-13, first:
-  [20260913-everything-is-a-file-the-atom-and-the-palette.md](./discussions/20260913-everything-is-a-file-the-atom-and-the-palette.md).
+  [20260913-everything-is-a-file-the-placement-and-the-palette.md](./discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md).
   One `Placement` record for every placed thing (id u64, page-local
   f32 position, span, ENU heading, palette id; ancillary scale,
   rotation, tags) and one global `Palette` record whose rows point at
-  models by content hash in the bucket. Order: the two encoders on the
-  XTP column layer with the named-column extension rule; the palette
-  replaces the constants; the object store and the scatter emit
-  `Placement`; the bucket path and the ingest; then the worker.
+  models by content hash in the bucket. Done 2026-09-13: the column layer
+  (`record/table.ts`), both records with tests, the shipped palette as a
+  record built from the cell constants with every model's measured
+  extent, the decor bundles bound to it, and the object store's persisted
+  form as one `Placement` record per page in a page-keyed container (v7;
+  positions round-trip exactly, since the store's steps are binary
+  fractions and a page-local `f32` holds them). Left, in order:
+  - **The scatter emits `Placement`** when something reads it — the
+    worker is the first consumer; until then the instance lanes are the
+    same columns and a packet would be a copy nobody opens.
+  - **The bucket path and the ingest**: models by content hash, the
+    palette row written by the server, `model_hash` filled.
 - **The phone, at the end of 2026-09-13.** Same spot, same procedure,
   after POI went under the tick, the badges became one instanced quad,
   the companion stopped probing, placement was cut into units and decor

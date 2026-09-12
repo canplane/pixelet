@@ -31,6 +31,11 @@ import { Vector } from "@xpute/core/ds/arena.ts";
 import type { FVec, IVec, PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { fvec, ivec, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/core/kit/encoding.ts";
+import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
+import { encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import type { V3 } from "@pxl/shared/spec/space/v3.ts";
+import { encode_placements, type Placement, PlacementTable } from "@pxl/shared/record/mod.ts";
+import { local_world_to_canonical } from "../frame/coord.ts";
 
 import { OBJECT_LAYOUT, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { shown_ground } from "@pxl/shared/bake/ground.ts";
@@ -50,7 +55,7 @@ import {
 } from "@pxl/shared/spec/cell/mod.ts";
 import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree, SparseTreeLayout } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
-import { FROM_L3_IDX, L2_BASE, L2_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
+import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
@@ -90,7 +95,11 @@ export type OccupiedEntry = PlacedObject | PlacedDecor;
 // v6 (2026-09-11): a palette per L2 chunk and one tree per 64³ band, whose
 // leaves are palette indices, replacing one tree per cell holding catalog
 // values directly — the chunk storage section below. Not migrated.
-export const OBJECT_STORAGE_VERSION: number = 6;
+//
+// v7 (2026-09-13): one Placement record per page in a page-keyed container
+// (the persistence section below) — the same form every placed thing has.
+// Not migrated.
+export const OBJECT_STORAGE_VERSION: number = 7;
 const STORAGE_KEY = `pxl:object:v${OBJECT_STORAGE_VERSION}`;
 
 // ---- Chunk storage ----
@@ -971,99 +980,83 @@ export function usePlacedObject(id: string | null): OccupiedEntry | null {
 
 // ---- Persistence ----
 
-// Packed binary, one record per chunk, little-endian throughout:
-//   [0..4)  u32  chunk_count
-//   [4..8)  u32  reserved
-//   per chunk:
-//     u64  base (the chunk key)
-//     u32  palette_len
-//     u32  wide (0 | 1)
-//     u32  band_count
-//     u32  reserved
-//     u32 × palette_len, padded to 8 bytes
-//     per band:
-//       i64  z
-//       u32  tree_blob_word_len (sparse_tree.encode()'s U64Array length)
-//       u32  reserved
-//       tree_blob_word_len × 8 bytes — sparse_tree.encode(tree)
-const pad8 = (n: number): number => (n + 7) & ~7;
+// One Placement record per page, in a container that names the page:
+//   [page_idx u64, placements pkt, page_idx u64, placements pkt, ...]
+// The record is @pxl/shared/record/placement.ts's — the one form every
+// placed thing has — with positions page-local to FROM_L3_IDX(page_idx).
+// A row's value is the catalog value the store writes (a block colour,
+// AIR, a decor kind), which is its palette id; its id is the hash of the
+// entry's own id. The store carries no heading: a placed decor's facing
+// is derived from its position (decor_layer.ts's user_decor_pick), so the
+// row's heading is written as zero and not read back.
+//
+// Positions round-trip exactly: the store's steps are binary fractions of
+// a cell, and a page-local f32 holds any such value under 1024
+// (discussions/20260913-everything-is-a-file-the-placement-and-the-palette.md).
 
-function encode_objects(): string {
-  type Record = { base: IVec; cpos: number; bands: { z: number; blob: BigUint64Array }[] };
-  const records: Record[] = [];
-  let total = 8;
+const $local: V3 = [0, 0, 0];
+const $abs: PVF3 = { i: 0n, f: 0n };
+
+/** Set while a blob is being replayed into the store, so the writes it
+ * makes neither save (the blob is what is being loaded) nor reindex per
+ * row (the load reindexes every chunk once, after). */
+let restoring = false;
+
+export function encode_objects(): string {
+  const by_page = new Map<IVec, Placement[]>();
   for (let cpos = 0; cpos < chunk_map.size; cpos++) {
-    const bands: Record["bands"] = [];
-    each_band(cpos, (z, bpos) => bands.push({ z, blob: sparse_tree.encode(tree_at(cpos, bpos)) }));
-    records.push({ base: chunk_base_at(cpos), cpos, bands });
-    total += 24 + pad8(c_palette_len.get(cpos) * 4);
-    for (const band of bands) total += 16 + band.blob.byteLength;
+    const base = chunk_base_at(cpos);
+    const page_idx = TO_XY(L3_IDX(base));
+    const page_base = FROM_L3_IDX(page_idx);
+    let rows = by_page.get(page_idx);
+    if (!rows) by_page.set(page_idx, rows = []);
+    each_column_entry(base, (entry) => {
+      const corner = entry.corner();
+      const local: PVF3 = { i: ivec.sub(corner.i, page_base), f: corner.f };
+      rows.push({
+        id: fnv1a64_str(entry.id()),
+        x: pvf3.to_real(pvf3.X(local)),
+        y: pvf3.to_real(pvf3.Y(local)),
+        z: pvf3.to_real(pvf3.Z(local)),
+        size: entry.size,
+        heading: 0,
+        value: entry.state,
+      });
+    });
   }
-
-  const bytes = new Uint8Array(total);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, records.length, true);
-  let offset = 8;
-  for (const { base, cpos, bands } of records) {
-    const len = c_palette_len.get(cpos);
-    view.setBigUint64(offset, base, true);
-    view.setUint32(offset + 8, len, true);
-    view.setUint32(offset + 12, c_wide.get(cpos), true);
-    view.setUint32(offset + 16, bands.length, true);
-    offset += 24;
-    const palette = palette_of(cpos);
-    for (let k = 0; k < len; k++) view.setUint32(offset + k * 4, palette[k], true);
-    offset += pad8(len * 4);
-    for (const { z, blob } of bands) {
-      view.setBigInt64(offset, BigInt(z), true);
-      view.setUint32(offset + 8, blob.length, true);
-      offset += 16;
-      bytes.set(new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength), offset);
-      offset += blob.byteLength;
-    }
-  }
-
-  return bytes_to_b64url(bytes);
+  const pkt = encoder.encode(
+    new TreeView().branch((__) => {
+      for (const [page_idx, rows] of by_page) {
+        if (rows.length === 0) continue;
+        __.u64(page_idx).graft(encode_placements(rows));
+      }
+    }),
+    { init_cap: 1 << 14 },
+  );
+  return bytes_to_b64url(pkt);
 }
 
-function decode_objects(blob: string): void {
+export function decode_objects(blob: string): void {
   const bytes = b64url_to_bytes(blob);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const count = view.getUint32(0, true);
-  let offset = 8;
-  for (let n = 0; n < count; n++) {
-    const base: IVec = view.getBigUint64(offset, true);
-    const len = view.getUint32(offset + 8, true);
-    const wide = view.getUint32(offset + 12, true);
-    const band_count = view.getUint32(offset + 16, true);
-    offset += 24;
-
-    const cpos = open_chunk(base);
-    let palette = palette_of(cpos);
-    let cap = palette.length;
-    while (cap < len) cap *= 2;
-    if (cap !== palette.length) {
-      CORE_ALLOC.give(palette);
-      palette = CORE_ALLOC.take(Uint32Array, cap);
-      keep_palette(cpos, palette);
+  const root = new TreeReader(bytes).read_branch();
+  restoring = true;
+  try {
+    for (let k = 0; k + 1 < root.len; k += 2) {
+      const page_idx = BigInt.asUintN(64, root.at(k).get<bigint>());
+      const page_base = FROM_L3_IDX(page_idx);
+      const table = new PlacementTable(root.at(k + 1).as_branch());
+      for (let r = 0; r < table.count; r++) {
+        $local[0] = table.x[r];
+        $local[1] = table.y[r];
+        $local[2] = table.z[r];
+        const corner = local_world_to_canonical($abs, $local, page_base);
+        write_object_value(corner.i, corner.f, table.size[r], table.value[r]);
+      }
     }
-    for (let k = 0; k < len; k++) palette[k] = view.getUint32(offset + k * 4, true);
-    c_palette_len.set(cpos, len);
-    c_wide.set(cpos, wide);
-    offset += pad8(len * 4);
-
-    for (let b = 0; b < band_count; b++) {
-      const z = Number(view.getBigInt64(offset, true));
-      const word_len = view.getUint32(offset + 8, true);
-      offset += 16;
-      const byte_len = word_len * 8;
-      const words = new BigUint64Array(bytes.buffer.slice(bytes.byteOffset + offset, bytes.byteOffset + offset + byte_len));
-      const bpos = open_band(cpos, z);
-      sparse_tree.free(tree_at(cpos, bpos));
-      keep_tree(bpos, sparse_tree.decode(words, BAND_LAYOUT, leaf_ctor(cpos), CORE_ALLOC));
-      offset += byte_len;
-    }
+  } finally {
+    restoring = false;
   }
+  for (let cpos = 0; cpos < chunk_map.size; cpos++) reindex_chunk(chunk_base_at(cpos));
 }
 
 function load(): void {
@@ -1142,6 +1135,7 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   keep_tree(bpos, tree);
 
   prune_if_empty(cpos, bpos);
+  if (restoring) return;
   save();
   reindex_chunk(base);
 }

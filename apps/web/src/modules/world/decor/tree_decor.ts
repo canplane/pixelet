@@ -17,7 +17,7 @@
 
 import { TREE_MODEL_URLS, TREE_SKIN_URL } from "@pxl/shared/assets/decor/trees.ts";
 import { PINE_MODEL_URLS, PINE_SKIN_URL } from "@pxl/shared/assets/decor/graveyard_trees.ts";
-import type { DecorKindBundle } from "./decor_layer.ts";
+import { bind_palette, type DecorKindBundle } from "./decor_layer.ts";
 import { is_tree_eligible, TREE_KIND } from "./tree_kind.ts";
 
 const TREE_VARIANTS = [
@@ -31,11 +31,10 @@ if (TREE_VARIANTS.length !== TREE_KIND.variant_count) {
   );
 }
 
-export const TREE_DECOR_BUNDLE: DecorKindBundle = {
+export const TREE_DECOR_BUNDLE: DecorKindBundle = bind_palette({
   kind: "tree",
   seed: TREE_KIND,
   is_eligible: is_tree_eligible,
   variants: TREE_VARIANTS,
-  extent_u: 3.0,
   decor_id: "tree",
-};
+});

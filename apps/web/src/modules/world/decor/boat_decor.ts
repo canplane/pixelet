@@ -4,7 +4,7 @@
 // tree_decor.ts's own doc comment for why assets live in a separate file.
 
 import { BOAT_MODEL_URLS, BOAT_SKIN_URL } from "@pxl/shared/assets/decor/boats.ts";
-import type { DecorKindBundle } from "./decor_layer.ts";
+import { bind_palette, type DecorKindBundle } from "./decor_layer.ts";
 import { BOAT_KIND, is_boat_eligible } from "./boat_kind.ts";
 
 const BOAT_VARIANTS = BOAT_MODEL_URLS.map((model_url) => ({ model_url, skin_url: BOAT_SKIN_URL }));
@@ -15,10 +15,9 @@ if (BOAT_VARIANTS.length !== BOAT_KIND.variant_count) {
   );
 }
 
-export const BOAT_DECOR_BUNDLE: DecorKindBundle = {
+export const BOAT_DECOR_BUNDLE: DecorKindBundle = bind_palette({
   kind: "boat",
   seed: BOAT_KIND,
   is_eligible: is_boat_eligible,
   variants: BOAT_VARIANTS,
-  extent_u: 3.9,
-};
+});

@@ -2,7 +2,7 @@
 
 import { assertEquals, assertNotEquals } from "@std/assert";
 
-import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { fvec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { find_overlapping_object } from "./collision.ts";
 import { DECOR_SIZE } from "./size.ts";
@@ -13,8 +13,11 @@ import {
   cell_index,
   cell_is_occupied,
   cell_key,
+  decode_objects,
   each_column_entry,
+  encode_objects,
   get_objects_in_cell,
+  get_objects_near,
   get_placed_object,
   object_column_of,
   object_store_stats,
@@ -194,4 +197,24 @@ Deno.test("objects/store listeners - a column's subscribers hear its own changes
   assertEquals(decor > before, true);
   off_decor();
   off_other();
+});
+
+Deno.test("objects/store persistence - a save is Placement records per page, and loading it puts every object back where it was", () => {
+  // Far from every other test's cells, on its own page.
+  const a = { i: ivec.gather(5000n, 7000n, 12n), f: 0n };
+  const b = { i: ivec.gather(5001n, 7000n, 12n), f: fvec.gather(fvec.from_real(0.25), 0n, 0n) };
+  place(a.i, a.f, 1, "red");
+  place(b.i, b.f, 0.25, "blue");
+  place_decor(ivec.gather(5000n, 7001n, 12n), 0n, DECOR_SIZE, "tree");
+  const shape = (o: { i: bigint; f: bigint; size: number; kind: string }) => [o.i, o.f, o.size, o.kind];
+  const before = get_objects_near(a, 1).map(shape);
+  assertEquals(before.length, 3);
+  const blob = encode_objects();
+
+  for (const o of get_objects_near(a, 1)) remove(o.id);
+  assertEquals(get_objects_near(a, 1).length, 0);
+
+  decode_objects(blob);
+  assertEquals(get_objects_near(a, 1).map(shape), before);
+  assertEquals(encode_objects(), blob);
 });

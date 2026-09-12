@@ -87,13 +87,15 @@
  * not a separate store.
  */
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { Tile } from "@pxl/shared/bake/format.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
 import { decor_id_from_num, type DecorId, object_value_is_decor } from "@pxl/shared/spec/cell/mod.ts";
+
+import { shipped_palette } from "@pxl/shared/record/mod.ts";
 
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import { get_ele_at_local } from "@/modules/world/terrain/elevation.ts";
@@ -168,10 +170,34 @@ export type DecorKindBundle = {
    * for a kind with no user-placeable equivalent yet (boats/cars/trains
    * today — scattered-only, no mode_bar button of their own). */
   decor_id?: DecorId;
-  /** The largest dimension of the kind's models, in world units — what
-   * decor_density reads. Measured from the GLBs, the tallest variant. */
-  extent_u: f64;
+  /** The palette rows of this kind's variants, in variant order — the
+   * shipped palette's `group` of the kind's name. Filled by
+   * `bind_palette`, which also checks the count against `variants`. */
+  palette_rows?: readonly u32[];
 };
+
+/**
+ * Binds a bundle to the palette: its variants' rows, and the extent the
+ * range criterion reads — the largest dimension over every variant, since
+ * the criterion asks how large the kind is to the eye and a kind is drawn
+ * as any of its variants. The asset list and the palette are two files
+ * listing the same models in the same order; the count is checked at
+ * import so they cannot drift apart silently.
+ */
+export function bind_palette(bundle: DecorKindBundle): DecorKindBundle {
+  const rows = shipped_palette().rows_of_group(bundle.kind).filter((row) => shipped_palette().model_key_of(row) !== "");
+  if (rows.length !== bundle.variants.length) {
+    throw new Error(`decor: palette lists ${rows.length} models for ${bundle.kind}, the bundle ${bundle.variants.length}`);
+  }
+  bundle.palette_rows = rows;
+  return bundle;
+}
+
+function kind_extent(bundle: DecorKindBundle): f64 {
+  let extent = 0;
+  for (const row of bundle.palette_rows ?? []) extent = Math.max(extent, shipped_palette().extent_max(row));
+  return extent;
+}
 
 // Seeded purely by the placed object's own absolute position — unlike
 // scatter_decor_candidates' own per-cell RNG (page_seed + cell_x/cell_y),
@@ -260,7 +286,7 @@ function collect_procedural_decor_instances(
   base_y: number,
 ): void {
   if (!useSettingsStore.getState().show_decor) return;
-  const density_scale = decor_density(bundle.extent_u, lod_step);
+  const density_scale = decor_density(kind_extent(bundle), lod_step);
   // Skip the O(CHUNK_CELL_SPAN^2) eligibility+RNG scan entirely at zero
   // density instead of running it only to have every candidate rejected by
   // its own probability check below — density_scale=0 means "nothing here",
