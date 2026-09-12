@@ -56,6 +56,7 @@ import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/mod
 import { useTick } from "@/modules/world/sched/tick.ts";
 import { lead_point, priority_order } from "@/modules/world/sched/priority.ts";
 import { BLEND_ACTIVE, IN_FRUSTUM, PENDING, SETTLING, VISIBILITY_CHANGED } from "@/modules/world/sched/chunk_table.ts";
+import { little_slabs } from "@/modules/world/sched/slabs.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { useRangeAnchor } from "@/modules/world/frame/use_range_anchor.ts";
 import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
@@ -481,6 +482,10 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
     decor_field.update(origin);
+    // The little memory's idle release, on the same tick the big one's
+    // regions are judged on. Nothing borrows a slab yet; the sweep is where
+    // it will be swept from.
+    little_slabs.sweep();
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
     if (committed > 0 || pending_total > committed || blend_active) state.invalidate();
     if (import.meta.env.DEV) visible_pass.current = { pending_total, committed, recheck_ms, commit_ms };

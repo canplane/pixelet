@@ -41,6 +41,15 @@ Nothing queued.
 
 ## P3
 
+- **Move the chunk bake to a worker when the ledger says so.** The signal
+  is the visible phase spending its whole share frame after frame with
+  pending not falling (today: p95 at the still budget, pending 0). The
+  memory side is ready — sched/slabs.ts holds the little memory and its
+  ownership record — and the job is a Demand through the fetch scheduler
+  whose run borrows a slab; what is left is the worker itself and the copy
+  in and out of big. Not before the signal
+  ([20260911-single-thread-core-and-when-to-spawn-a-worker.md](./discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md)).
+
 - **Spill past the reservation must become a budget signal before a WASM
   kernel reads the pool.** The core memory is fixed (`initial == maximum`,
   never grown — grow would detach every view, and resizable buffers read
