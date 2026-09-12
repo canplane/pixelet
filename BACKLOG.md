@@ -59,6 +59,12 @@ Nothing queued.
   lands, a spill has to trigger reclaim or refuse, not silently leave the
   memory. Today's live set is a third of the reservation.
 
+- **POI placement pass under a budget.** `poi_layer.tsx`'s placement runs
+  at most every 200 ms and is not budgeted: 2 ms typical, 20 ms seen once
+  over a cold index. The index sweep already runs as a budgeted step of
+  the content phase; the placement loop is a candidate loop and can be
+  cut the same way. Signal: on a phone, `poi place max` past the frame
+  while the camera moves. Not before the signal.
 - **Ledger ring as lanes.** The dev ledger's frame records are objects
   rebuilt every frame for the overlay. Measurement, not state; only worth
   it if the overlay itself shows up in a profile.

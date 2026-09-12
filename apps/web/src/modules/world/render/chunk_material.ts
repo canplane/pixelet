@@ -10,15 +10,14 @@
  * There used to be one MeshStandardMaterial per chunk mesh — thousands of
  * them — even though `customProgramCacheKey` already forced them all to
  * share a single compiled program and nothing about them differs per chunk:
- * the two uniforms that vary (`u_low_spec`, `u_rim_intensity`) are global
- * settings, not per-chunk state.
+ * the three uniforms that vary (`u_low_spec`, `u_rim_intensity`,
+ * `u_edge_strength`) are global settings, not per-chunk state.
  */
 
 import * as THREE from "three";
 import { invalidate } from "@react-three/fiber";
 
-import { useDebugStore } from "@/app/settings/debug_store.ts";
-import { useSettingsStore } from "@/app/settings/settings_store.ts";
+import { type SettingsStore, useSettingsStore } from "@/app/settings/settings_store.ts";
 import { light_cfg, rim_cfg } from "@/modules/world/environment/config.ts";
 import { glsl_float, inject_rim_light_shader } from "@/modules/world/render/rim_light_shader.ts";
 import { GROUND_LAYERS_SIDE, GROUND_LAYERS_TOP } from "@/render/tex_array.ts";
@@ -36,6 +35,13 @@ export const VISIBLE_ATTR = "a_visible";
 const LOCAL_POS_ATTR = "a_local_pos";
 const BOX_SCALE_ATTR = "a_box_scale";
 const FACES_ATTR = "a_faces";
+
+/** Cube edge shading: how dark an edge bordering open air goes, and how
+ * wide the band is in world units. Chosen by eye once only silhouette and
+ * concave edges were shaded (the old bevel's numbers, tuned when every edge
+ * was, read as a grid); the toggle is the `show_edge_shade` setting. */
+const EDGE_STRENGTH = 0.3;
+const EDGE_WIDTH = 0.03;
 
 /**
  * Injected once per baked chunk-mesh material. Every vertex here is a real,
@@ -58,9 +64,9 @@ function inject_chunk_shader(shader: {
   inject_rim_light_shader(shader);
   shader.uniforms.u_ground_layers_top = { value: GROUND_LAYERS_TOP };
   shader.uniforms.u_ground_layers_side = { value: GROUND_LAYERS_SIDE };
-  shader.uniforms.u_low_spec = { value: true };
-  shader.uniforms.u_edge_strength = { value: 0.3 };
-  shader.uniforms.u_edge_width = { value: 0.03 };
+  shader.uniforms.u_low_spec = { value: false };
+  shader.uniforms.u_edge_strength = { value: EDGE_STRENGTH };
+  shader.uniforms.u_edge_width = { value: EDGE_WIDTH };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
@@ -295,41 +301,27 @@ function create_material(): THREE.MeshStandardMaterial {
   material.customProgramCacheKey = () => "chunk-mesh";
   material.onBeforeCompile = (shader) => {
     inject_chunk_shader(shader);
-    shader.uniforms.u_low_spec.value = useSettingsStore.getState().low_spec;
-    shader.uniforms.u_rim_intensity.value = useSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
-    push_edge_uniforms(shader);
+    push_setting_uniforms(shader, useSettingsStore.getState());
     material.userData.shader = shader;
   };
   return material;
 }
 
 /**
- * The one material every chunk mesh uses. Its two varying uniforms are
+ * The one material every chunk mesh uses. Its three varying uniforms are
  * global settings, so they are pushed here on change rather than through a
  * per-mesh effect; `invalidate` wakes the demand loop, which a React state
  * change used to do implicitly by re-rendering.
  */
 type ShaderUniforms = { uniforms: Record<string, THREE.IUniform> };
 
-function push_edge_uniforms(shader: ShaderUniforms): void {
-  const debug = useDebugStore.getState();
-  shader.uniforms.u_edge_strength.value = useSettingsStore.getState().show_edge_shade ? debug.edgeShadeStrength : 0;
-  shader.uniforms.u_edge_width.value = debug.edgeShadeWidth;
+function push_setting_uniforms(shader: ShaderUniforms, settings: SettingsStore): void {
+  shader.uniforms.u_low_spec.value = !settings.texture_pack;
+  shader.uniforms.u_rim_intensity.value = settings.show_rim_light ? rim_cfg.INTENSITY : 0;
+  shader.uniforms.u_edge_strength.value = settings.show_edge_shade ? EDGE_STRENGTH : 0;
 }
 
 let shared_material: THREE.MeshStandardMaterial | null = null;
-
-/**
- * Console handle for the two continuous knobs, in dev.
- *
- * The binary judgements — is edge shading on at all, does it touch vertical
- * faces — are toggles in the debug section, because they are the ones with
- * an obvious right answer once seen. Strength and width are not: they were
- * tuned when every cube edge was shaded and there is no reason the same
- * numbers read correctly now that a small fraction of edges are. Typing
- * `__pxl_edge({ strength: 0.35 })` and looking is faster than any slider.
- */
-type EdgeGlobals = typeof globalThis & { __pxl_edge?: (next: { strength?: number; width?: number }) => void };
 
 export function chunk_material(): THREE.MeshStandardMaterial {
   if (shared_material) return shared_material;
@@ -337,22 +329,7 @@ export function chunk_material(): THREE.MeshStandardMaterial {
   useSettingsStore.subscribe((state) => {
     const shader = shared_material?.userData.shader as ShaderUniforms | undefined;
     if (!shader) return;
-    shader.uniforms.u_low_spec.value = state.low_spec;
-    shader.uniforms.u_rim_intensity.value = state.show_rim_light ? rim_cfg.INTENSITY : 0;
-    push_edge_uniforms(shader);
-    invalidate();
-  });
-  if (import.meta.env.DEV) {
-    (globalThis as EdgeGlobals).__pxl_edge = ({ strength, width }) =>
-      useDebugStore.getState().setEdgeShade({
-        ...(strength === undefined ? {} : { edgeShadeStrength: strength }),
-        ...(width === undefined ? {} : { edgeShadeWidth: width }),
-      });
-  }
-  useDebugStore.subscribe(() => {
-    const shader = shared_material?.userData.shader as ShaderUniforms | undefined;
-    if (!shader) return;
-    push_edge_uniforms(shader);
+    push_setting_uniforms(shader, state);
     invalidate();
   });
   return shared_material;

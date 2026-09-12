@@ -283,8 +283,8 @@ export function ledger_record(rec: TaskRecord): void {
 }
 
 /**
- * The window's worst-seen values, kept as frames land so a live read
- * (chunk_stage's __PXL_RENDER_STATS__) never scans the ring for them. Reset
+ * The window's worst-seen values, kept as frames land so the report never
+ * scans the ring for them. Reset
  * with the window, like everything else here, so a peak and the frames it
  * came from always describe the same stretch of time.
  */

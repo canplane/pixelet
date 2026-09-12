@@ -14,26 +14,23 @@
     },
     "debug": {
       "section_title": "Debug",
-      "objects": {
+      "section_caption": "Diagnostics, in dev builds only",
+      "show_debug_objects": {
         "label": "Debug Gizmos",
         "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
+      },
+      "show_ledger": {
+        "label": "Scheduler Ledger",
+        "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler, with the report, trace and console-log buttons."
+      },
+      "pixel_dither": {
+        "label": "LOD cross-fade (per pixel)",
+        "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
       },
       "dummy_toast": {
         "label": "Test Toast Notifications",
         "description": "Displays sample toast notifications for UI testing.",
         "message": "Dummy Toast {{index}}"
-      },
-      "ledger_overlay": {
-        "label": "Scheduler Ledger Overlay",
-        "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler."
-      },
-      "ledger_log": {
-        "label": "Scheduler Ledger Console Log",
-        "description": "Streams each settled fetch, missed frame and long animation frame to the browser console as it happens."
-      },
-      "pixel_dither": {
-        "label": "LOD cross-fade (per pixel)",
-        "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
       }
     }
   },

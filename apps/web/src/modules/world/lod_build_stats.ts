@@ -3,8 +3,8 @@
 /**
  * Cumulative (since page load) LOD build timing, dev-only — no console.log
  * anywhere near this (a hot console during a build storm would itself skew
- * the measurement); just plain object writes each call, exposed read-only
- * via ChunkStage's __PXL_RENDER_STATS__ dev global.
+ * the measurement); just plain object writes each call, read by the
+ * scheduler's frame sample and the ledger report (sched/log.ts).
  */
 export const lod_build_stats = {
   scan_ms: 0,

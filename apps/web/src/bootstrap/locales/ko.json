@@ -13,6 +13,7 @@
       "korean": "한국어",
       "english": "English"
     },
+    "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍이 발생하면 HIGH 항목부터 해제해 주세요.",
     "display": {
       "section_title": "표시",
       "section_caption": "월드에 무엇을 보여줄지 설정합니다",
@@ -27,11 +28,12 @@
     },
     "camera": {
       "section_title": "카메라",
-      "lock_tilt": {
+      "section_caption": "시점을 움직이는 방식을 설정합니다",
+      "lock_camera_tilt": {
         "label": "카메라 기울기 고정",
         "description": "카메라의 수직 회전은 고정하고 수평 회전은 유지합니다."
       },
-      "terrain": {
+      "camera_terrain": {
         "through": {
           "label": "지형 통과",
           "description": "카메라가 지형을 그대로 지나갑니다. 땅속에서는 안쪽 면을 그리지 않아 화면이 뒤집혀 보입니다."
@@ -44,79 +46,51 @@
           "label": "지형 타고 넘기",
           "description": "줌은 항상 그대로 적용하고, 대신 시야가 위로 서면서 지형을 넘어갑니다. 모든 배율에 닿을 수 있지만 각도가 저절로 바뀝니다."
         }
-      },
-      "section_caption": "시점을 움직이는 방식을 설정합니다"
+      }
     },
     "editing": {
       "section_title": "편집",
       "section_caption": "도구가 무엇을 바꿀 수 있는지 설정합니다",
-      "terrain_carving": {
+      "enable_terrain_carving": {
         "label": "지형 파내기",
         "description": "아무것도 놓여있지 않은 곳에서 지우개로 실제 지형을 한 칸씩 파낼 수 있게 합니다."
       }
     },
-    "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍이 발생하면 HIGH 항목부터 해제해 주세요.",
     "lighting": {
       "section_title": "조명 & 그림자",
       "section_caption": "형태와 경계를 또렷하게 보여주는 효과",
-      "edge_shade": {
+      "show_edge_shade": {
         "label": "큐브 모서리 음영",
         "description": "허공과 맞닿은 모서리만 어둡게 합니다. 평지는 이음매 없이 이어지고, 높낮이가 바뀌는 곳만 선으로 드러납니다."
       },
-      "shadow_map": {
-        "label": "그림자",
-        "description": "태양과 달의 위치에 따라 실시간으로 변화하는 그림자를 구현합니다."
-      },
-      "rim_light": {
+      "show_rim_light": {
         "label": "림 라이트",
         "description": "오브젝트 실루엣에 얇은 하이라이트를 추가하여 배경과 선명하게 분리합니다."
       },
-      "god_rays": {
-        "label": "갓레이",
-        "description": "지형이나 오브젝트 사이로 새어 나오는 사실적인 햇살 효과입니다."
-      }
-    },
-    "post_fx": {
-      "section_title": "후처리",
-      "section_caption": "화면 전체에 적용되는 시각 효과",
-      "ao": {
+      "show_ao": {
         "label": "앰비언트 오클루전 (AO)",
         "description": "오브젝트가 맞닿는 구석이나 틈새에 세밀한 음영을 표현하여 입체감을 높입니다."
       },
-      "bloom": {
+      "show_bloom": {
         "label": "블룸",
         "description": "해와 달, 야간 위치 비콘처럼 밝은 영역에 부드러운 번짐 효과를 더합니다."
       },
-      "tilt_shift": {
-        "label": "틸트 시프트",
-        "description": "화면 상하단을 블러 처리하여 미니어처 같은 느낌을 연출합니다."
+      "show_god_rays": {
+        "label": "갓레이",
+        "description": "지형이나 오브젝트 사이로 새어 나오는 사실적인 햇살 효과입니다."
       },
-      "chromatic_aberration": {
-        "label": "크로매틱 애버레이션",
-        "description": "화면 가장자리의 빛을 미세하게 분산시켜 카메라 렌즈 왜곡 효과를 줍니다."
+      "show_shadow_map": {
+        "label": "그림자",
+        "description": "태양과 달의 위치에 따라 실시간으로 변화하는 그림자를 구현합니다."
       }
     },
     "quality": {
       "section_title": "그래픽 품질",
-      "aa_mode": {
-        "none": {
-          "label": "기본",
-          "description": "별도 안티에일리어싱 없이 렌더링합니다."
-        },
-        "smaa": {
-          "label": "SMAA",
-          "description": "물체의 외곽선을 부드럽게 다듬어 화면을 깔끔하게 만듭니다."
-        },
-        "supersample": {
-          "label": "고해상도 렌더링",
-          "description": "화면 해상도를 최대 2배로 높여 더 선명하고 깨끗한 화질을 구현합니다."
-        }
-      },
+      "section_caption": "화면의 선명도와 디테일을 설정합니다",
       "texture_pack": {
         "label": "텍스처",
         "description": "블록과 오브젝트 표면에 단색 대신 디테일한 픽셀 아트 텍스처를 적용합니다."
-      },
-      "section_caption": "화면의 선명도와 디테일을 설정합니다"
+      }
     },
     "disclaimer": {
       "section_title": "유의사항",

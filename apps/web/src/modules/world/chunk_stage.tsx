@@ -34,17 +34,7 @@ import { useMapStore } from "@/modules/map/store.ts";
 import { useAnchorRegistry } from "@/modules/world/anchor/context.tsx";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
-import {
-  chunk_retained_bytes,
-  ChunkNode,
-  commit_step_stats,
-  lod_build_stats,
-  lod_scheduler,
-  mesh_mount_stats,
-  mesh_unmount_stats,
-  RETAIN_BUDGET_BYTES,
-  take_node_counts,
-} from "@/modules/world/chunk_node.ts";
+import { chunk_retained_bytes, ChunkNode, lod_build_stats, lod_scheduler, RETAIN_BUDGET_BYTES, take_node_counts } from "@/modules/world/chunk_node.ts";
 import { AnchorNode } from "@/modules/world/anchor/node.tsx";
 import { decor_field } from "@/modules/world/decor/field.ts";
 import { tile_pages, useTileStore } from "@/modules/world/terrain/store.ts";
@@ -52,7 +42,7 @@ import { poi_pages } from "@/modules/world/poi/store.ts";
 import { fetch_pending_count } from "@/modules/world/sched/fetch_scheduler.ts";
 import { draw_census_install, draw_census_take } from "@/modules/world/sched/draw_census.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/modules/world/sched/gpu_timer.ts";
-import { ledger_frame_peak, ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
+import { ledger_last_frame, ledger_record_frame } from "@/modules/world/sched/ledger.ts";
 import { useTick } from "@/modules/world/sched/tick.ts";
 import { lead_point, priority_order } from "@/modules/world/sched/priority.ts";
 import { BLEND_ACTIVE, IN_FRUSTUM, PENDING, SETTLING, VISIBILITY_CHANGED } from "@/modules/world/sched/chunk_table.ts";
@@ -60,11 +50,9 @@ import { little_slabs } from "@/modules/world/sched/slabs.ts";
 import { useFrameRefs } from "@/modules/world/frame/context.tsx";
 import { useRangeAnchor } from "@/modules/world/frame/use_range_anchor.ts";
 import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
-import { render_cfg } from "@/modules/world/environment/config.ts";
+import { post_cfg, render_cfg } from "@/modules/world/environment/config.ts";
 import { set_lod_projection } from "@/render/lod.ts";
-import { compositor_cache_stats } from "@/render/layer/pipeline/compositor.ts";
 import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
-import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { CORE_ALLOC, core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { update_frustum } from "@/render/chunk_lod.ts";
 
@@ -88,12 +76,11 @@ const RECLAIM_MAX_PER_FRAME: u32 = 16;
  * over that pool rather than a second constant. The 4711ms frame the hard
  * ceiling was measured against is recorded in frame_budget.ts. */
 
-/* Session-peak scheduler load used to live here as its own object. It now
- * comes from sched/ledger.ts's ledger_frame_peak(): this loop reports each
- * frame's raw numbers and the ledger keeps both the ring and the window
- * peak, instead of two places tracking the same maxima. The reason the peak
- * exists at all is unchanged — a manual __PXL_RENDER_STATS__ read during a
- * live stutter lands a frame or two after the storm has passed. */
+/* Session-peak scheduler load is sched/ledger.ts's ledger_frame_peak():
+ * this loop reports each frame's raw numbers and the ledger keeps both the
+ * ring and the window peak, which the report prints. A window peak is what
+ * catches a stutter, since a reading taken by hand during one lands a frame
+ * or two after the storm has passed. */
 
 /* The render itself is not timed by wrapping gl.render: the post-processing
  * composer is always on and renders past the wrapper, which read 0. The
@@ -524,9 +511,8 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       for (const resident of poi_pages.handles) poi_count += resident.page.len;
       const fx = useSettingsStore.getState();
       const fx_passes = 1 + // color-grade + vignette, always on (fused)
-        (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_tilt_shift ? 1 : 0) +
-        (fx.show_chromatic_aberration ? 1 : 0) + (fx.show_god_rays ? 1 : 0) +
-        (fx.aa_mode === "smaa" ? 1 : 0) + (fx.show_shadow_map ? 1 : 0);
+        (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_god_rays ? 1 : 0) + (fx.show_shadow_map ? 1 : 0) +
+        (state.viewport.dpr < post_cfg.SMAA_BELOW_DPR ? 1 : 0); // scene.tsx's AutoSmaa
       // Reads and clears in one step, so the next frame starts from zero
       // without a separate reset pass to forget.
       const node_work = take_node_counts();
@@ -569,41 +555,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         q_terrain: fetch_pending_count("terrain"),
         q_poi: fetch_pending_count("poi"),
       });
-      const peak = ledger_frame_peak();
-
-      const debug_stats = {
-        chunks: scheduler.len,
-        in_frustum: in_frustum_cnt,
-        pending_lod: pending_total - committed,
-        pending_lod_total: pending_lod_total_cnt,
-        blend_active: blend_active_cnt,
-        settling_lod,
-        draw_calls: state.gl.info.render.calls,
-        triangles: state.gl.info.render.triangles,
-        geometries: state.gl.info.memory.geometries,
-        textures: state.gl.info.memory.textures,
-        compositor: compositor_cache_stats(),
-        lod_build: { ...lod_build_stats },
-        coarse_instances: { ...coarse_instance_stats },
-        occlusion: { ...occlusion_stats },
-        // Derived from the ledger's session peak rather than a second set of
-        // counters maintained here. Key names kept as they were — this blob
-        // is read from the console and scraped off the canvas dataset.
-        scheduler_peak: {
-          recheck_ms_max: peak.recheck_ms,
-          commit_ms_max: peak.commit_ms,
-          frame_ms_max: peak.sched_ms,
-          settling_lod_max: peak.settling,
-          blend_active_max: peak.blend_active,
-          pending_lod_total_max: peak.pending,
-          in_frustum_max: peak.in_frustum,
-        },
-        mesh_mount: { ...mesh_mount_stats },
-        mesh_unmount: { ...mesh_unmount_stats },
-        commit_step: { ...commit_step_stats },
-      };
-      (globalThis as typeof globalThis & { __PXL_RENDER_STATS__?: unknown }).__PXL_RENDER_STATS__ = debug_stats;
-      state.gl.domElement.dataset.pixeletRenderStats = JSON.stringify(debug_stats);
       // Start the next frame's draw-count accumulation (autoReset is off).
       state.gl.info.reset();
 
