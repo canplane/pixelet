@@ -343,3 +343,38 @@ big. Nothing about little needs building before then.
 - Whether other engines pay the same resizable-buffer penalty. It was
   measured only in V8; it does not change the decision, since the GPU
   rejection alone settles it.
+
+## Update 2026-09-12: what of this exists, and the little memory's skeleton
+
+Taking stock after the linear-memory work
+([20260912-linear-memory-what-is-left.md](./20260912-linear-memory-what-is-left.md)),
+against the model above:
+
+- **Big**: exactly as decided — one fixed `WebAssembly.Memory`, 512 MB now
+  (eight regions; the pool's peak moved it), never grown, every lane and
+  block the client reasons over inside it. Past the reservation the pool
+  spills to plain regions; that spill has to become a budget signal before
+  a kernel reads the memory (BACKLOG.md), and is harmless until then.
+- **The central scheduler, main-thread half**: built. The tick with its
+  frame budget (sched/tick.ts) runs the synchronous work; the fetch
+  scheduler (sched/fetch_scheduler.ts) runs the asynchronous, quota-limited,
+  cancellable work, and its queue is lanes; the ledger reports both.
+- **Little**: the skeleton is in — sched/slabs.ts, the capped, lazily made,
+  idle-released slab pool with the ownership record of which slab is away
+  for which job. Nothing borrows from it. The ledger's `little` line shows
+  it beside the pool and the fetch quota, so the three resources the model
+  names are read in one place.
+- **Worker jobs**: not built, on purpose. A job is a Demand through the
+  fetch scheduler whose `run` borrows a slab, fills it from big, posts it,
+  copies the result back and gives the slab back; the worker itself is
+  spawned once when first needed. The first job is the chunk bake, and the
+  signal is the ledger's: the visible phase spending its whole share frame
+  after frame while pending does not fall. Today's reading is a scheduler
+  p95 at the still budget with pending at zero, so the signal is not there,
+  and building the executor ahead of it would be the runtime-tier
+  generalisation the 2026-09-09 guardrail names.
+
+So the "unified resource manager" is the tick, the fetch scheduler, the
+big pool and the little pool, each reporting into the ledger — not a
+layer above them. That is the shape the guardrail allows, and it is what
+the day the bake moves will find in place.

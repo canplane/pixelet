@@ -19,6 +19,8 @@
 
 import { occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { poi_field_stats, poi_place_stats } from "@/modules/world/poi/poi_layer.tsx";
+import { little_slabs } from "@/modules/world/sched/slabs.ts";
+import { fetch_counts, MAX_INFLIGHT } from "@/modules/world/sched/fetch_scheduler.ts";
 import { poi_index_stats } from "@/modules/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/modules/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/modules/world/billboard/frustum_budget.ts";
@@ -202,6 +204,12 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  reserved ${Math.round(core_pool_stat().reserved_bytes / 1048576)}MB (core ${
       Math.round((CORE_MEMORY?.buffer.byteLength ?? 0) / 1048576)
     }MB kept)  hit ${f.pool_hit_pct ?? "-"}%  biggest ${Math.round(core_pool_stat().max_block_bytes / 1048576)}MB   window scans ${f.work.scans} bakes ${f.work.bakes} runs ${f.work.runs}`,
+    `  little  ${
+      (() => {
+        const l = little_slabs.stats();
+        return `${l.away} away, ${l.home} home of ${l.cap} slabs (${Math.round(l.bytes / 1048576)}MB)`;
+      })()
+    }   fetch queued ${fetch_counts().queued} running ${fetch_counts().running} of ${MAX_INFLIGHT}`,
     `  per     commit/bake ${f.commit_per_bake === null ? "-" : n1(f.commit_per_bake)}ms  build/krun ${per(c.build_ms, c.build_runs / 1000)}ms  scan/chunk ${
       per(c.scan_ms, c.scan_count)
     }ms   (workload-normalised; comparable across sessions)`,

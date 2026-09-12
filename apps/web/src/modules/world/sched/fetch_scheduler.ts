@@ -137,6 +137,11 @@ function emit(): void {
   for (const fn of listeners) fn();
 }
 
+/** Everything the scheduler holds, for the ledger's resources line. */
+export function fetch_counts(): { queued: u32; running: u32 } {
+  return { queued: count(QUEUED), running: count(RUNNING) };
+}
+
 /** Queued + in-flight demands in one category — map_status reads this. */
 export function fetch_pending_count(category: string): number {
   const id = category_names.indexOf(category);
