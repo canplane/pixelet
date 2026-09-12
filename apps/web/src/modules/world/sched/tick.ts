@@ -61,10 +61,43 @@ export type TickContext = {
 };
 export type TickStep = (ctx: TickContext) => void;
 
-const FRAME_MS = 1000 / 60;
+/**
+ * The display's frame interval, measured rather than assumed.
+ *
+ * It was `1000 / 60`, which is wrong on any faster display: the ledger read a
+ * p50 frame of 5.8 ms while the tick was sized for 16.7, so a storm could
+ * spend more than a whole frame scheduling and drop every other one.
+ *
+ * Taken as a low percentile of recent frame gaps, not their mean. The mean
+ * includes the frames this tick itself made long, so sizing the budget from
+ * it would feed an overrun back into a bigger budget. The fast edge of the
+ * distribution is the refresh interval: with vsync, gaps come in multiples
+ * of it, and the smallest common one is it. Gaps past MAX_FRAME_GAP_MS are
+ * not frames at all — under frameloop="demand" an idle canvas draws nothing,
+ * and the gap before the next frame can be seconds.
+ */
+const FRAME_WINDOW = 64;
+const MAX_FRAME_GAP_MS = 50;
+const frame_gaps = new Float64Array(FRAME_WINDOW).fill(1000 / 60);
+const $gaps = new Float64Array(FRAME_WINDOW);
+let frame_gap_at = 0;
+
+function observe_frame_gap(delta_s: number): void {
+  const ms = delta_s * 1000;
+  if (!(ms > 0) || ms > MAX_FRAME_GAP_MS) return;
+  frame_gaps[frame_gap_at] = ms;
+  frame_gap_at = (frame_gap_at + 1) % FRAME_WINDOW;
+}
+
+function frame_ms(): number {
+  $gaps.set(frame_gaps);
+  $gaps.sort();
+  return $gaps[Math.floor(FRAME_WINDOW * 0.1)];
+}
 /** Left unspent on purpose, for the collector and for the frames the
- * estimate below is wrong about. */
-const MARGIN_MS = 2;
+ * estimate below is wrong about — a share of the frame rather than a
+ * constant, so a fast display does not lose most of its frame to it. */
+const MARGIN_SHARE = 0.15;
 /** The clamp. The floor is what keeps a starved frame making progress; the
  * ceiling is what keeps a cheap scene from letting one tick grow into most
  * of a frame and leaving nothing for a spike. */
@@ -157,10 +190,12 @@ function observe_render_cost(): void {
 }
 
 function derive_budget_ms(): number {
-  return Math.min(MAX_BUDGET_MS, Math.max(MIN_BUDGET_MS, FRAME_MS - MARGIN_MS - render_ema_ms));
+  const frame = frame_ms();
+  return Math.min(MAX_BUDGET_MS, Math.max(MIN_BUDGET_MS, frame - frame * MARGIN_SHARE - render_ema_ms));
 }
 
 export function run_tick(state: RootState, delta: number): TickReport {
+  observe_frame_gap(delta);
   observe_render_cost();
   const budget = new FrameBudget(derive_budget_ms());
   const phase_ms: Record<Phase, number> = { interaction: 0, visible: 0, content: 0, cosmetic: 0, report: 0 };

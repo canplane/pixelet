@@ -4,7 +4,7 @@ import { assertEquals } from "@std/assert";
 
 import type { Demand } from "./demand.ts";
 import { ledger_snapshot } from "./ledger.ts";
-import { fetch_pending_count, fetch_scheduler_reset, fetch_sync, MAX_INFLIGHT } from "./fetch_scheduler.ts";
+import { error_reason, fetch_pending_count, fetch_scheduler_reset, fetch_sync, MAX_INFLIGHT } from "./fetch_scheduler.ts";
 
 // Scheduler state is module-global (see fetch_scheduler.ts's own doc), so
 // each test resets it first.
@@ -196,4 +196,11 @@ Deno.test("fetch_scheduler - ledger records outcome for completed and aborted de
   assertEquals(mine.find((r) => r.key === `${cat}:ok`)?.outcome, "ok");
   assertEquals(mine.find((r) => r.key === `${cat}:killed`)?.outcome, "aborted");
   for (const r of mine) assertEquals(typeof r.start_ms, "number");
+});
+
+Deno.test("error_reason - an http failure is grouped by its status, anything else by its kind", () => {
+  assertEquals(error_reason(new Error("[geocode/5788:1842:0] http 503")), "http 503");
+  assertEquals(error_reason(new Error("[tile/1:2:0] http 429")), "http 429");
+  assertEquals(error_reason(new TypeError("Failed to fetch")), "TypeError: Failed to fetch");
+  assertEquals(error_reason("boom"), "string: boom");
 });

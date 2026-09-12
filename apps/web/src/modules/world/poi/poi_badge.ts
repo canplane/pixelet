@@ -340,6 +340,9 @@ export function evict_poi_badges(live: ReadonlySet<string>): u32 {
   for (const id of metrics_cache.keys()) {
     if (!live.has(id)) metrics_cache.delete(id);
   }
+  // The only moment the sheet's live set shrinks, so the moment to see
+  // whether it still needs to be as large as the densest area made it.
+  if (dropped > 0) badge_atlas.compact();
   return dropped;
 }
 

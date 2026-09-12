@@ -34,9 +34,45 @@ import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
  * (the one failure mode pooling introduces): the stale reader then sees NaN
  * geometry instead of a plausible neighbouring chunk.
  */
+/**
+ * The core's memory: one fixed-length `WebAssembly.Memory`, reserved up front
+ * and never grown, that the pool carves its first regions out of.
+ *
+ * Fixed-length rather than resizable, and never grown, for three measured
+ * reasons (discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md):
+ * a view into a grown memory is detached, and every mesh span and run lane
+ * is such a view; views into a resizable buffer read two and a half times
+ * slower in V8; and WebGL and WebGPU reject them outright. A reservation is
+ * committed lazily — untouched pages cost address space, not memory — so it
+ * is sized for the pool's peak rather than to the byte.
+ *
+ * Four regions: the ledger's pool has peaked at roughly 110 MB live with a
+ * region's worth idle, and a region is 64 MB. Past the reservation the pool
+ * allocates plain regions exactly as it always has.
+ *
+ * Null where the reservation fails. A device that refuses a 256 MB
+ * reservation is exactly a device that should not have one, and the pool
+ * then behaves as it did before this existed.
+ */
+const CORE_REGIONS = 4;
+const REGION_BYTES = 1 << 26;
+const WASM_PAGE = 1 << 16;
+
+function reserve_core_memory(): WebAssembly.Memory | null {
+  const pages = (CORE_REGIONS * REGION_BYTES) / WASM_PAGE;
+  try {
+    return new WebAssembly.Memory({ initial: pages, maximum: pages });
+  } catch {
+    return null;
+  }
+}
+
+export const CORE_MEMORY: WebAssembly.Memory | null = reserve_core_memory();
+
 export const MESH_POOL = new BuddyAllocator({
   min_block_bytes: 1 << 12,
-  region_bytes: 1 << 26,
+  region_bytes: REGION_BYTES,
+  backing: CORE_MEMORY?.buffer,
   max_idle_regions: 1,
   poison: false,
   // On again. The precondition it was waiting for is met: a chunk mesh now

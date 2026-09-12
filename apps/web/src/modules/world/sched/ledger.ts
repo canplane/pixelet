@@ -42,6 +42,11 @@ export type TaskRecord = {
    * Absent when it reported none — the run is then one opaque step. */
   phases?: Phases;
   outcome: Outcome;
+  /** Why it failed, when `outcome` is "error": the HTTP status where there
+   * was one, otherwise the error's name and the start of its message. The
+   * count alone could not say whether twelve failures were one cause or
+   * twelve. */
+  error?: string;
 };
 
 /** One rendered frame. Lean on purpose — the live half of the factor set in
@@ -95,7 +100,22 @@ export type FrameSample = {
   /** chunk_stage's own per-frame LOD counts. Here rather than in a separate
    * session-peak object so the ring carries the *shape* of a spike, not only
    * how high it got. */
-  lod: { chunks: number; in_frustum: number; pending: number; settling: number; blend_active: number };
+  lod: {
+    chunks: number;
+    in_frustum: number;
+    pending: number;
+    settling: number;
+    blend_active: number;
+    /** Pending chunks outside the frustum — releases waiting to run. They
+     * sort last by design, so this is where starvation would show first, and
+     * what it would cost is memory: a hidden chunk's mesh stays in the pool
+     * until its release commits. */
+    offscreen_pending: number;
+    /** The longest any pending release has waited, and the longest any
+     * pending on-screen chunk has. */
+    oldest_release_ms: number;
+    oldest_visible_ms: number;
+  };
   /** chunks that React mounted / unmounted since the previous sample —
    * the un-budgeted work that lands outside sched_ms. */
   mounts: { added: number; removed: number; rendered: number };
@@ -278,6 +298,9 @@ export type FramePeak = {
   chunks: number;
   in_frustum: number;
   pending: number;
+  offscreen_pending: number;
+  oldest_release_ms: number;
+  oldest_visible_ms: number;
   settling: number;
   blend_active: number;
 };
@@ -296,6 +319,9 @@ const frame_peak: FramePeak = {
   chunks: 0,
   in_frustum: 0,
   pending: 0,
+  offscreen_pending: 0,
+  oldest_release_ms: 0,
+  oldest_visible_ms: 0,
   settling: 0,
   blend_active: 0,
 };
@@ -350,6 +376,9 @@ export function ledger_record_frame(s: FrameSample): void {
   if (s.lod.chunks > p.chunks) p.chunks = s.lod.chunks;
   if (s.lod.in_frustum > p.in_frustum) p.in_frustum = s.lod.in_frustum;
   if (s.lod.pending > p.pending) p.pending = s.lod.pending;
+  if (s.lod.offscreen_pending > p.offscreen_pending) p.offscreen_pending = s.lod.offscreen_pending;
+  if (s.lod.oldest_release_ms > p.oldest_release_ms) p.oldest_release_ms = s.lod.oldest_release_ms;
+  if (s.lod.oldest_visible_ms > p.oldest_visible_ms) p.oldest_visible_ms = s.lod.oldest_visible_ms;
   if (s.lod.settling > p.settling) p.settling = s.lod.settling;
   if (s.lod.blend_active > p.blend_active) p.blend_active = s.lod.blend_active;
 

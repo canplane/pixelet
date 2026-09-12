@@ -80,6 +80,19 @@ export type BuddyOptions = {
    * a change.
    */
   bypass?: boolean;
+  /**
+   * A buffer to carve regions out of before allocating any of their own —
+   * typically a fixed-length `WebAssembly.Memory`'s buffer, so JS and a
+   * future WASM side address the same bytes.
+   *
+   * Regions are cut from it front to back, one `region_bytes` at a time, and
+   * are never handed back: the bytes belong to the backing, not to the
+   * collector, so releasing them would free nothing. They sit idle and are
+   * reused instead, and `max_idle_regions` governs only the plain regions
+   * allocated once the backing is used up. The backing must never be
+   * resized — a view into a detached buffer reads as length zero.
+   */
+  backing?: ArrayBuffer;
 };
 
 /**
@@ -151,8 +164,15 @@ class Region {
   /** Bytes carved into live blocks; a region with 0 is fully reclaimable. */
   used_bytes: u32 = 0;
 
-  constructor(readonly min_shift: u32, readonly max_order: u32) {
-    this.buf = new ArrayBuffer(1 << (min_shift + max_order));
+  /**
+   * `base` is where this region starts inside `buf`: zero for a region that
+   * owns its buffer, and some multiple of the region size for one carved from
+   * a shared backing. Offsets inside the region — the ones the buddy
+   * arithmetic works in — are relative to it; a block's `byte_offset` is
+   * absolute, so it can index `buf` directly.
+   */
+  constructor(readonly min_shift: u32, readonly max_order: u32, backing: ArrayBuffer | null = null, readonly base: u32 = 0) {
+    this.buf = backing ?? new ArrayBuffer(1 << (min_shift + max_order));
     this.free = [];
     this.is_free = [];
     for (let k = 0; k <= max_order; k++) {
@@ -231,6 +251,11 @@ export class BuddyAllocator {
   private readonly _regions: (Region | null)[] = [];
   private readonly _poison: boolean;
   private readonly _bypass: boolean;
+  private readonly _backing: ArrayBuffer | null;
+  /** How far into the backing regions have been cut. */
+  private _backing_used: u32 = 0;
+  /** Indices of regions carved from the backing — never reclaimed. */
+  private readonly _backed = new Set<number>();
 
   constructor(opts: BuddyOptions = {}) {
     const {
@@ -239,6 +264,7 @@ export class BuddyAllocator {
       max_idle_regions = 2,
       poison = false,
       bypass = false,
+      backing = null,
     } = opts;
     if (min_block_bytes < 8 || region_bytes < min_block_bytes) {
       throw new MarshalError(Errno.EINVAL, `pool: bad region shape min=${min_block_bytes} region=${region_bytes}`);
@@ -250,6 +276,7 @@ export class BuddyAllocator {
     this.max_idle_regions = max_idle_regions;
     this._poison = poison;
     this._bypass = bypass;
+    this._backing = backing;
   }
 
   /**
@@ -284,13 +311,21 @@ export class BuddyAllocator {
       this.stat.live_blocks++;
       this.stat.live_bytes += bytes;
       this.stat.idle_bytes -= block_bytes;
-      return { buf: region.buf, byte_offset: offset, bytes, order, region: i, free: false };
+      return { buf: region.buf, byte_offset: region.base + offset, bytes, order, region: i, free: false };
     }
 
-    const region = new Region(this._min_shift, this._max_order);
+    // The backing first, while it has a whole region left in it; a plain
+    // buffer only after. Backed regions are created first and so sit at the
+    // lowest indices, which the scan above visits first — so plain regions
+    // are the ones that empty out, and they are the only ones reclaimable.
+    const backing = this._backing;
+    const backed = backing !== null && this._backing_used + this.region_bytes <= backing.byteLength;
+    const region = backed ? new Region(this._min_shift, this._max_order, backing, this._backing_used) : new Region(this._min_shift, this._max_order);
+    if (backed) this._backing_used += this.region_bytes;
     const index = this._regions.indexOf(null);
     const i = index >= 0 ? index : this._regions.length;
     this._regions[i] = region;
+    if (backed) this._backed.add(i);
     this.stat.regions++;
     this.stat.reserved_bytes += this.region_bytes;
     this.stat.idle_bytes += this.region_bytes;
@@ -301,7 +336,7 @@ export class BuddyAllocator {
     this.stat.live_blocks++;
     this.stat.live_bytes += bytes;
     this.stat.idle_bytes -= block_bytes;
-    return { buf: region.buf, byte_offset: offset, bytes, order, region: i, free: false };
+    return { buf: region.buf, byte_offset: region.base + offset, bytes, order, region: i, free: false };
   }
 
   /**
@@ -328,7 +363,7 @@ export class BuddyAllocator {
     if (this._poison) new Float64Array(block.buf, block.byte_offset, (1 << (this._min_shift + block.order)) / 8).fill(NaN);
 
     const block_bytes = 1 << (this._min_shift + block.order);
-    region.release(block.order, block.byte_offset, this.stat);
+    region.release(block.order, block.byte_offset - region.base, this.stat);
     region.used_bytes -= block_bytes;
     this.stat.idle_bytes += block_bytes;
     if (region.used_bytes === 0) this._reclaim_empty();
@@ -339,7 +374,7 @@ export class BuddyAllocator {
     let empty = 0;
     for (let i = 0; i < this._regions.length; i++) {
       const region = this._regions[i];
-      if (!region || region.used_bytes > 0) continue;
+      if (!region || region.used_bytes > 0 || this._backed.has(i)) continue;
       if (++empty <= this.max_idle_regions) continue;
       this._regions[i] = null;
       this.stat.regions--;
@@ -353,7 +388,7 @@ export class BuddyAllocator {
   clear(): void {
     for (let i = 0; i < this._regions.length; i++) {
       const region = this._regions[i];
-      if (!region || region.used_bytes > 0) continue;
+      if (!region || region.used_bytes > 0 || this._backed.has(i)) continue;
       this._regions[i] = null;
       this.stat.regions--;
       this.stat.reserved_bytes -= this.region_bytes;

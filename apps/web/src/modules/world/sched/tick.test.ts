@@ -126,3 +126,19 @@ Deno.test("tick - a storm of steps that cost time and report none stays within t
     off();
   }
 });
+
+Deno.test("tick - the budget follows the display's measured frame, not an assumed 60 Hz", () => {
+  // 64 frames fill the whole measurement window, so each run starts clean.
+  const at = (delta_s: number) => {
+    let r = run_tick(state, delta_s);
+    for (let i = 1; i < 64; i++) r = run_tick(state, delta_s);
+    return r.budget_ms;
+  };
+  const at_60 = at(1 / 60);
+  const at_165 = at(1 / 165);
+  assert(at_165 < at_60, `165 Hz got ${at_165} ms, 60 Hz got ${at_60} ms`);
+  // An idle gap under frameloop="demand" is not a frame and moves nothing.
+  const idle = run_tick(state, 3).budget_ms;
+  assertEquals(idle, at_165);
+  at(1 / 60); // leave the window as the other tests expect it
+});

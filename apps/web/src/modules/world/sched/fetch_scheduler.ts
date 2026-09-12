@@ -66,7 +66,21 @@ export function fetch_pending_count(category: string): number {
   return n;
 }
 
-function settle(key: string, entry: Entry, outcome: Outcome, phases?: Phases): void {
+/**
+ * A short, stable label for why a task failed — what the ledger groups
+ * failures by. The repositories throw `"[category/page] http 503"`, so the
+ * status is the useful part when there is one; anything else keeps its
+ * name and the start of its message.
+ */
+export function error_reason(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const http = /\bhttp (\d{3})\b/.exec(message);
+  if (http) return `http ${http[1]}`;
+  const name = err instanceof Error ? err.name : typeof err;
+  return `${name}: ${message}`.slice(0, 80);
+}
+
+function settle(key: string, entry: Entry, outcome: Outcome, phases?: Phases, error?: string): void {
   running.delete(key);
   const end_ms = performance.now();
   ledger_record({
@@ -79,6 +93,7 @@ function settle(key: string, entry: Entry, outcome: Outcome, phases?: Phases): v
     transport_ms: 0,
     phases,
     outcome,
+    error,
   });
   schedule_pump();
   emit();
@@ -135,7 +150,7 @@ function pump(): void {
       .catch((err) => {
         const aborted = controller.signal.aborted;
         if (!aborted) console.error(`[sched/${key}] failed:`, err);
-        settle(key, entry, aborted ? "aborted" : "error");
+        settle(key, entry, aborted ? "aborted" : "error", undefined, aborted ? undefined : error_reason(err));
       });
   }
 }

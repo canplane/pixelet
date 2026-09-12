@@ -131,6 +131,30 @@ type Shelf = {
 
 const bucket = (v: f64, to: u32): u32 => Math.ceil(v / to) * to;
 
+/** Where every entry would go on a sheet of `size`, or null if one does not
+ * fit. The same first-fit shelf rule `place` uses, run on scratch shelves so
+ * a failed plan changes nothing. */
+type Plan = { xs: u32[]; ys: u32[]; shelves: Shelf[]; next_y: u32 };
+
+function pack(size: u32, entries: readonly { w: u32; h: u32 }[]): Plan | null {
+  const shelves: Shelf[] = [];
+  let next_y: u32 = 0;
+  const xs: u32[] = [], ys: u32[] = [];
+  for (const { w, h } of entries) {
+    let shelf = shelves.find((s) => s.h === h && s.cursor + w <= size);
+    if (!shelf) {
+      if (next_y + h > size || w > size) return null;
+      shelf = { y: next_y, h, cursor: 0 };
+      next_y += h;
+      shelves.push(shelf);
+    }
+    xs.push(shelf.cursor);
+    ys.push(shelf.y);
+    shelf.cursor += w;
+  }
+  return { xs, ys, shelves, next_y };
+}
+
 export class BillboardAtlas {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -270,6 +294,34 @@ export class BillboardAtlas {
   }
 
   /**
+   * Halves the sheet for as long as every live entry still fits in half.
+   *
+   * Growth only ever went one way, so a sheet that doubled to 4096 crossing
+   * the densest part of the map stayed at 4096 after the badges that needed
+   * it were gone — the ledger read 12 entries on a 4096 sheet, which is a
+   * 64 MB canvas and another 64 MB of texture holding almost nothing.
+   *
+   * Planned before anything moves: the entries are laid out on the smaller
+   * sheet first, and only if every one of them lands is the sheet rebuilt. A
+   * cheap area test goes first so a sheet that is still mostly in use is not
+   * even tried. Called when badges are evicted, which is the only time the
+   * live set shrinks.
+   */
+  compact(): boolean {
+    let changed = false;
+    while (this.size > INITIAL_SIZE) {
+      const target = this.size / 2;
+      if (this.used_px > (target * target) / 2) break;
+      const live = [...this.entries];
+      const plan = pack(target, live);
+      if (!plan) break;
+      this.rebuild(target, live, plan);
+      changed = true;
+    }
+    return changed;
+  }
+
+  /**
    * Doubles the sheet and replays every live entry onto it.
    *
    * The UV objects are mutated in place rather than replaced, so whatever
@@ -278,47 +330,53 @@ export class BillboardAtlas {
    */
   private grow(): boolean {
     if (this.size >= MAX_SIZE) return false;
-
     const live = [...this.entries];
-    this.size *= 2;
+    const plan = pack(this.size * 2, live);
+    // The sheet doubles and held all of these at half the size, so there is
+    // room by construction; a null here would mean the packer disagrees
+    // with itself.
+    if (!plan) return false;
+    this.rebuild(this.size * 2, live, plan);
+    return true;
+  }
+
+  /**
+   * Replaces the sheet with one of `size` and repaints `live` at the places
+   * `plan` gave them. The one path both growth and compaction take.
+   */
+  private rebuild(size: u32, live: Entry[], plan: Plan): void {
+    this.size = size;
     // A new canvas, not a resize of the live one. three allocates immutable
     // storage for a texture once (texStorage2D, WebGL2) and every later
-    // upload is a texSubImage2D into it, so a canvas that grows under a
-    // texture that has already uploaded overflows what was allocated —
+    // upload is a texSubImage2D into it, so a canvas that changes size under
+    // a texture that has already uploaded overflows what was allocated —
     // GL_INVALID_VALUE from glCopySubTextureCHROMIUM, silent on the page and
     // fatal to the sheet. Replacing the element means no texture ever sees
     // its own image change size.
     this.canvas = document.createElement("canvas");
-    this.canvas.width = this.size;
-    this.canvas.height = this.size;
+    this.canvas.width = size;
+    this.canvas.height = size;
     this.ctx = this.canvas.getContext("2d")!;
 
-    this.shelves = [];
-    this.next_y = 0;
+    this.shelves = plan.shelves;
+    this.next_y = plan.next_y;
+    // Freed slots belonged to the old layout; the plan packed only live
+    // entries, so nothing is free on the new sheet but unshelved space.
     this.free.clear();
-    this.entries.clear();
     this.used_px = 0;
     this.repacks++;
-
-    for (const old of live) {
-      const entry = this.place(old.w, old.h);
-      // The sheet just doubled and held all of these at half the size, so
-      // there is room by construction; a null here would mean the packer
-      // disagrees with itself.
-      if (!entry) continue;
-      entry.draw = old.draw;
-      entry.cw = old.cw;
-      entry.ch = old.ch;
-      // Same object, new rectangle — see this method's own doc comment.
-      entry.uv = old.uv;
+    for (let i = 0; i < live.length; i++) {
+      const entry = live[i];
+      entry.x = plan.xs[i];
+      entry.y = plan.ys[i];
+      // Same object, new rectangle — see grow's own doc comment.
       this.set_uv(entry);
-      this.entries.add(entry);
+      this.used_px += entry.w * entry.h;
       this.paint(entry);
     }
 
     // A resized canvas is a different image as far as the GPU is concerned.
     this.texture.dispose();
     this.texture = this.make_sheet_texture();
-    return true;
   }
 }
