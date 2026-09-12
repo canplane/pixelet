@@ -14,7 +14,8 @@ Nothing queued.
 
 ## P1
 
-- **The chunk bake to a worker.** Decided 2026-09-13, not conditional:
+- **The chunk bake to a worker.** Decided 2026-09-13, not conditional,
+  after the atom and the palette above:
   a bake is 14–21 ms a unit on the phone against an 8 ms budget, the
   unit is a chunk and the mesher is one call, so on the main thread it
   cannot be cut and forward progress runs it whole (`visible/chunks` max
@@ -26,12 +27,16 @@ Nothing queued.
   the big memory, posts it, and copies the mesh back. The same worker
   hosts the WASM bake later
   ([20260911-single-thread-core-and-when-to-spawn-a-worker.md](./discussions/20260911-single-thread-core-and-when-to-spawn-a-worker.md)).
-- **"Everything is a file."** Unblocked 2026-09-13: the linear-memory
-  checklist it waited on is closed. One record format for objects,
-  terrain and decor, extension headers per kind, glTF by external
-  reference; the POI page is its first record and the XTP column layer
-  below is its first piece. After the worker, which it benefits from and
-  does not precede.
+- **"Everything is a file": the atom and the palette.** Decided
+  2026-09-13, first:
+  [20260913-everything-is-a-file-the-atom-and-the-palette.md](./discussions/20260913-everything-is-a-file-the-atom-and-the-palette.md).
+  One `Placement` record for every placed thing (id u64, page-local
+  f32 position, span, ENU heading, palette id; ancillary scale,
+  rotation, tags) and one global `Palette` record whose rows point at
+  models by content hash in the bucket. Order: the two encoders on the
+  XTP column layer with the named-column extension rule; the palette
+  replaces the constants; the object store and the scatter emit
+  `Placement`; the bucket path and the ingest; then the worker.
 - **The phone, at the end of 2026-09-13.** Same spot, same procedure,
   after POI went under the tick, the badges became one instanced quad,
   the companion stopped probing, placement was cut into units and decor
