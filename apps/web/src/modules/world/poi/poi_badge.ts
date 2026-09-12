@@ -161,18 +161,62 @@ function display_name(page: PoiPage, rec: u32): string {
 }
 
 /** Cache misses and what they cost, cumulative. `metrics` is a text
- * measurement; `builds` is a canvas, a bitmap and the texture the sprite
- * takes from it. Every candidate asks for the first and only what is drawn
- * asks for the second, so the gap between the two counts is the fix working. */
+ * measurement — asked only for what is drawn, since a candidate's width
+ * is estimated; `builds` is a canvas, a bitmap and the upload. */
 export const poi_badge_build_stats = { metrics: 0, builds: 0, ms: 0 };
 
-/** The badge's width in logical pixels, measured once per place. */
+/**
+ * Text width from the characters, without the canvas.
+ *
+ * Every candidate a placement offers to the screen needs a width for the
+ * collision test, and a placement over a new area offers a couple of
+ * thousand. `measureText` on a phone is around a millisecond for a Korean
+ * name — shaping — so measuring every candidate was a third of a second
+ * of main-thread time per new area, in units the budget could only take
+ * one of a frame (2026-09-13). An estimate from the character classes is
+ * within a glyph or two of the truth, which the collision test does not
+ * notice, and costs nothing. The font's own advances are read once for
+ * each class rather than assumed, so a font change does not drift it.
+ * What is drawn is measured exactly, at build, and the cache is corrected
+ * to that.
+ */
+let $advance: { cjk: f64; lower: f64; upper: f64; digit: f64; space: f64 } | null = null;
+function advances() {
+  if (!$advance) {
+    const ctx = measure_ctx();
+    $advance = {
+      cjk: ctx.measureText("가나다라마바사아자차").width / 10,
+      lower: ctx.measureText("abcdefghijklmnopqrstuvwxyz").width / 26,
+      upper: ctx.measureText("ABCDEFGHIJKLMNOPQRSTUVWXYZ").width / 26,
+      digit: ctx.measureText("0123456789").width / 10,
+      space: ctx.measureText(" ").width,
+    };
+  }
+  return $advance;
+}
+
+function estimate_text_w(text: string): f64 {
+  const a = advances();
+  let w = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0)!;
+    if (c === 0x20) w += a.space;
+    else if (c >= 0x30 && c <= 0x39) w += a.digit;
+    else if (c >= 0x41 && c <= 0x5a) w += a.upper;
+    else if (c < 0x80) w += a.lower;
+    // Hangul, CJK ideographs, kana, fullwidth forms: one em each.
+    else if (c >= 0x1100) w += a.cjk;
+    else w += a.upper;
+  }
+  return Math.ceil(w);
+}
+
+/** The badge's width in logical pixels: estimated on first ask, exact once
+ * the badge has been drawn. */
 export function poi_badge_logical_w(page: PoiPage, rec: u32): f64 {
   const pos = places.index.find(page.id_hash[rec]);
   if (pos >= 0) return places.logical_w.mem[pos];
-  const text_w = Math.ceil(measure_ctx().measureText(display_name(page, rec)).width);
-  poi_badge_build_stats.metrics++;
-  return places.logical_w.mem[places.insert(page.id_hash[rec], TEXT_X + text_w + GAP)];
+  return places.logical_w.mem[places.insert(page.id_hash[rec], TEXT_X + estimate_text_w(display_name(page, rec)) + GAP)];
 }
 
 /** The pill every badge in this layer stands on: a rect with fully-rounded
@@ -247,11 +291,16 @@ function build_poi_badge(page: PoiPage, rec: u32, logical_w: f64): i32 {
  * everything the selection pass needs without it. NO_SLOT when the sheet is
  * full, which the caller shows as nothing rather than as a wrong rectangle. */
 export function poi_badge_slot(page: PoiPage, rec: u32): i32 {
-  const logical_w = poi_badge_logical_w(page, rec);
+  poi_badge_logical_w(page, rec);
   const pos = places.index.find(page.id_hash[rec]);
   if (places.slot.mem[pos] !== NO_SLOT) return places.slot.mem[pos];
 
   const t0 = performance.now();
+  // Exact, now that it is drawn: the pill has to fit the text, and the
+  // sprite has to be the pill's size.
+  const logical_w = TEXT_X + Math.ceil(measure_ctx().measureText(display_name(page, rec)).width) + GAP;
+  places.logical_w.mem[pos] = logical_w;
+  poi_badge_build_stats.metrics++;
   const slot = build_poi_badge(page, rec, logical_w);
   poi_badge_build_stats.builds++;
   poi_badge_build_stats.ms += performance.now() - t0;

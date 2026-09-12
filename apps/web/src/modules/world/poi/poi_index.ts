@@ -203,8 +203,18 @@ let built_y: f64 = 0;
 /**
  * A rebuild in progress: everything the sweep needs, and how far it got.
  * `pages` is the 3x3 around the centre in sweep order; `next` is the first
- * one not yet done.
+ * one not yet done, and `rec` how far into it the sweep is.
+ *
+ * The unit of work is SWEEP_UNIT records, not a page. A page of the densest
+ * bake is over ten thousand records, and the budget's forward-progress rule
+ * runs a step's first unit whole — so a page as the unit was a 45 ms step on
+ * a phone inside a 2 ms budget (the step table, 2026-09-13). A range is
+ * bounded whatever the page holds — and small, because a record inside the
+ * disc costs a terrain lookup to ground, seventy microseconds on a phone:
+ * five hundred of those was a 36 ms unit.
  */
+const SWEEP_UNIT: u32 = 64;
+
 type Job = {
   /** poi_pages.revision the sweep reads at. */
   pages_revision: u32;
@@ -215,6 +225,12 @@ type Job = {
   cy: f64;
   pages: { page_idx: IVec; dx: number; dy: number }[];
   next: u32;
+  rec: u32;
+  /** The table over the swept lanes has been built — the last unit. */
+  built: boolean;
+  /** When the rebuild was asked for — the wait a finished one reports. */
+  asked_at: f64;
+  frames: u32;
   pages_changed: boolean;
   to_local: (absolute: PVF3, origin: IVec) => readonly [f64, f64, f64];
   flat_pos: (out: PVF3, page: PoiPage, rec: u32, page_idx: IVec) => PVF3;
@@ -225,11 +241,22 @@ export type PoiIndexStats = {
   indexed: u32;
   dropped: u32;
   rebuilds: u32;
-  /** Pages the current rebuild has left, 0 when none is running. */
+  /** Units the current rebuild has left — its pages, plus the table build
+   * — and 0 when none is running. */
   sweeping: u32;
+  /** The last finished rebuild: ask to swap, and the frames it spanned —
+   * the starvation figures for a content step. */
+  wait_ms: f64;
+  max_wait_ms: f64;
+  frames: u32;
+  max_frames: u32;
 };
 
 let rebuilds: u32 = 0;
+let last_wait_ms: f64 = 0;
+let max_wait_ms: f64 = 0;
+let last_frames: u32 = 0;
+let max_frames: u32 = 0;
 
 /** The ids seen this rebuild, by their 64-bit hash — a place near a page
  * boundary is baked into both pages. What eviction asks against, too. */
@@ -294,7 +321,22 @@ export function sync_poi_index(
   };
   pages.sort((a, b) => page_gap2(a) - page_gap2(b));
   const r = residency();
-  job = { pages_revision, residency2: r * r, map_origin, cx, cy, pages, next: 0, pages_changed, to_local, flat_pos };
+  job = {
+    pages_revision,
+    residency2: r * r,
+    map_origin,
+    cx,
+    cy,
+    pages,
+    next: 0,
+    rec: 0,
+    built: false,
+    asked_at: performance.now(),
+    frames: 0,
+    pages_changed,
+    to_local,
+    flat_pos,
+  };
 
   // The same id can arrive in two pages, since a place near a boundary is
   // baked into both. Deduping once per rebuild rather than per tick is the
@@ -306,17 +348,30 @@ export function sync_poi_index(
   return false;
 }
 
-/** One page of the sweep, into `back`. */
-function sweep_page(j: Job, page: Job["pages"][number]): void {
+/** One unit of the sweep: the next SWEEP_UNIT records of the page at
+ * `j.next`, into `back`. Advances the cursors, on to the next page when
+ * this one is done. */
+function sweep_unit(j: Job): void {
+  if (j.next >= j.pages.length) {
+    back.index.build();
+    j.built = true;
+    return;
+  }
+  const page = j.pages[j.next];
   const resident = poi_pages.get(page.page_idx);
-  if (resident === undefined) return;
+  if (resident === undefined) {
+    j.next++;
+    j.rec = 0;
+    return;
+  }
   const pois = resident.page;
   const lanes = back;
 
   // The camera, expressed in this page's own local frame.
   const px = j.cx - page.dx * PAGE_U, py = j.cy - page.dy * PAGE_U;
 
-  for (let r = 0; r < pois.len; r++) {
+  const end = Math.min(pois.len, j.rec + SWEEP_UNIT);
+  for (let r = j.rec; r < end; r++) {
     // Horizontal only, and deliberately: this runs before grounding, so the
     // only z available is the bake's flat zero while the camera's is a real
     // elevation. A cylinder contains the sphere the exact test uses, so
@@ -374,29 +429,39 @@ function sweep_page(j: Job, page: Job["pages"][number]): void {
     // The hash's low 32 bits as a fraction: a stable, even tie-break.
     lanes.tiebreak[i] = Number(id_hash & 0xffffffffn) / 0x1_0000_0000;
   }
+  j.rec = end;
+  if (j.rec >= pois.len) {
+    j.next++;
+    j.rec = 0;
+  }
+}
+
+function* sweep_units(j: Job): IterableIterator<Job> {
+  while (!j.built) yield j;
 }
 
 /**
- * Advances the rebuild, a page per step, for as long as the budget allows.
- * Returns true on the step that finishes it — the moment the live index
- * changed and whoever placed against the old one should place again.
+ * Advances the rebuild, a range of records per unit, for as long as the
+ * budget allows. Returns true on the step that finishes it — the moment
+ * the live index changed and whoever placed against the old one should
+ * place again.
  *
  * The swap is the only point at which queries see anything new, and it is
  * whole: the table is built, the lanes are complete, and the previous build
- * becomes the next rebuild's scratch.
+ * becomes the next rebuild's scratch. The table build is one unit of its
+ * own, after the last range: a bucket pass over what was inserted.
  */
 export function poi_index_sweep(budget: FrameBudget): boolean {
   const j = job;
   if (!j) return false;
+  j.frames++;
 
-  budget.run(j.pages.slice(j.next), (page) => {
-    sweep_page(j, page);
-    j.next++;
+  budget.run(sweep_units(j), (job) => {
+    sweep_unit(job);
     return true;
   });
-  if (j.next < j.pages.length) return false;
+  if (!j.built) return false;
 
-  back.index.build();
   const finished = back;
   back = live;
   live = finished;
@@ -405,6 +470,10 @@ export function poi_index_sweep(budget: FrameBudget): boolean {
   built_x = j.cx;
   built_y = j.cy;
   rebuilds++;
+  last_wait_ms = performance.now() - j.asked_at;
+  if (last_wait_ms > max_wait_ms) max_wait_ms = last_wait_ms;
+  last_frames = j.frames;
+  if (last_frames > max_frames) max_frames = last_frames;
   job = null;
 
   // Only on a page change, not on every step the camera takes. A badge just
@@ -492,5 +561,14 @@ export function invalidate_poi_index(): void {
 }
 
 export function poi_index_stats(): PoiIndexStats {
-  return { indexed: live.count, dropped: live.dropped, rebuilds, sweeping: job ? job.pages.length - job.next : 0 };
+  return {
+    indexed: live.count,
+    dropped: live.dropped,
+    rebuilds,
+    sweeping: job ? job.pages.length - job.next + (job.built ? 0 : 1) : 0,
+    wait_ms: last_wait_ms,
+    max_wait_ms,
+    frames: last_frames,
+    max_frames,
+  };
 }

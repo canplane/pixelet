@@ -122,10 +122,32 @@ export function select_visible_billboards(
   viewport_h: f64,
   out: Uint32Array,
 ): u32 {
+  const n = select_begin(batch, local_world_frame, camera, viewport_w, viewport_h);
+  return select_place(batch, camera, max_count, viewport_w, viewport_h, out, n);
+}
+
+/** The selection's cursor, so a placement job can run the greedy pass a
+ * range of candidates per unit: how many survived the frustum, how far the
+ * placement has got, how many it has kept. One selection at a time. */
+let $n: u32 = 0;
+let $k: u32 = 0;
+let $kept: u32 = 0;
+
+/**
+ * The frustum pass and the sort — one unit. Returns how many candidates
+ * survived, which is what `select_place` walks.
+ */
+export function select_begin(
+  batch: BillboardBatch,
+  local_world_frame: THREE.Object3D,
+  camera: Camera,
+  viewport_w: f64,
+  viewport_h: f64,
+): u32 {
   dropped = 0;
   // Hoisted for the whole pass. Safe because nothing here pushes, and a
   // lane's backing store is only replaced by growth (batch.ts).
-  const { local_x, local_y, local_z, world_x, world_y, world_z, d2, order, tiebreak, w_px, collide_px, anchor_px, absorbed } = batch;
+  const { local_x, local_y, local_z, world_x, world_y, world_z, d2, order, tiebreak, absorbed } = batch;
 
   update_frustum($frustum, camera, $scratch_matrix);
   // getWorldPosition, not camera.position: the two agree today because the
@@ -170,15 +192,40 @@ export function select_visible_billboards(
   // trade one small view for an order of magnitude more comparisons.
   order.subarray(0, n).sort((a, b) => d2[a] - d2[b] || tiebreak[a] - tiebreak[b]);
 
-  // Greedy placement in that order, which is Mapbox GL's shape: compute the
-  // screen box, take the space if it is free, otherwise this candidate does
-  // not draw. Without it the budget was a distance cut that let two badges
-  // sit on top of each other and dropped a third that had room, since
-  // nothing anywhere asked whether they overlapped.
   $screen.begin(viewport_w, viewport_h);
-  let kept: u32 = 0;
+  $n = n;
+  $k = 0;
+  $kept = 0;
+  return n;
+}
 
-  for (let k: u32 = 0; k < n; k++) {
+/**
+ * Greedy placement in distance order, which is Mapbox GL's shape: compute
+ * the screen box, take the space if it is free, otherwise this candidate
+ * does not draw. Without it the budget was a distance cut that let two
+ * badges sit on top of each other and dropped a third that had room, since
+ * nothing anywhere asked whether they overlapped.
+ *
+ * Runs candidates up to `k_end` of the order `select_begin` sorted and
+ * returns how many are kept so far; call again with a larger `k_end` to
+ * continue. A projection per candidate — forty milliseconds for the two
+ * and a half thousand a dense area offers, on a phone (2026-09-13) — is
+ * why this is resumable rather than one call.
+ */
+export function select_place(
+  batch: BillboardBatch,
+  camera: Camera,
+  max_count: u32,
+  viewport_w: f64,
+  viewport_h: f64,
+  out: Uint32Array,
+  k_end: u32,
+): u32 {
+  const { world_x, world_y, world_z, d2, order, w_px, collide_px, anchor_px, absorbed } = batch;
+  let kept = $kept;
+  const end = Math.min(k_end, $n);
+
+  for (let k = $k; k < end; k++) {
     const i = order[k];
 
     const far = distance_fade_far(Math.sqrt(d2[i]));
@@ -244,5 +291,12 @@ export function select_visible_billboards(
     // so it indexes `out` directly.
     absorbed[out[blocker]]++;
   }
+  $k = end;
+  $kept = kept;
   return kept;
+}
+
+/** How many candidates the selection has left to place. */
+export function select_remaining(): u32 {
+  return $n - $k;
 }

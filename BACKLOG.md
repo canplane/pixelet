@@ -14,33 +14,31 @@ Nothing queued.
 
 ## P1
 
-- **POI under the tick.** Opened by four phone reports on 2026-09-13 (iOS
-  Safari, dpr 2; no GPU timer, no LoAF, no longtask). Steady state after
-  load is fine — dt p50 15 ms on a 13 ms display, the tick 5 ms. The
-  stalls (dt p95 220 ms, a third of moving frames missed) went away with
-  POI off and stayed with decor off, and three mechanisms are named:
-  - **The badge atlas uploads whole.** `atlas.ts`'s `add` sets
-    `needsUpdate`, so three re-uploads the full canvas at render — 64 MB
-    at 4096 px — once per frame a badge was built in; seen as
-    `task ~105 / sched 3` seven times in 25 s, and as the same copy off
-    the thread (`task 5 / offthread 220`, `Δtex`) where iOS moves it to
-    the GPU process. Upload the badge's rectangle: a scratch texture and
-    `copyTextureToTexture(src, atlas, region, position)`, flushed from
-    the field's cosmetic step with `state.gl`. Growth and compaction
-    still replace the sheet whole, which is once.
-  - **The index sweep's unit is a page.** `poi_index_sweep` runs under
-    the budget, but `budget.run` over pages lets a page of thousands of
-    records be one step — `content/poi_index 1.5/45 ms` in the step
-    table — and `back.index.build()` is outside the budget. The unit
-    becomes a record range; the build is sliced or bounded.
-  - **Placement is a React effect.** `poi_layer.tsx` places on an epoch
-    that a state update advances, so the pass (2 ms typical, 180 ms seen
-    over a cold index) runs outside the tick, unbudgeted, and the ledger
-    books it as off-thread. It becomes a content step that cuts its
-    candidate loop under the budget.
-  Land all three, then measure once
-  ([20260909-cooperative-scheduler-and-task-ledger.md](./discussions/20260909-cooperative-scheduler-and-task-ledger.md),
-  "Method note").
+- **The phone, after POI went under the tick (2026-09-13).** Same phone,
+  same procedure: dt p95 227 to 68 ms, the upload tasks gone. What the
+  next report showed, in the order of steady-state cost at a zoom with
+  1.26M triangles on screen:
+  - **Decor is the GPU load at that zoom.** off-thread p50 11 ms at 363k
+    triangles, 17 ms at 780k–1.26M, and 87% of them decor. The near-zoom
+    A/B cleared decor of the stalls, not of this. The projected-size
+    criterion (P2 below) is the fix; it moves up as soon as anything
+    below it is done.
+  - **`interaction/companion` 4.8 ms a frame, max 299.** The largest single
+    step on the phone and O(1) by contract; two walkers each sampling the
+    surface every frame. Profile the step before touching it.
+  - **A chunk bake is 14 ms on the phone** (3 ms on the desktop), so the
+    visible phase's unit exceeds the budget and forward progress runs it
+    anyway: `visible/chunks` max 112, commit max 77. The unit is a chunk
+    and the mesher is one call; splitting it is the scan/bake boundary or
+    the worker (P3).
+  - **The content share** is in: content gets 20% of the budget even when
+    the visible phase would take all of it. Re-measure `wait place` on
+    the phone; it read 3.3 s over 25 frames before.
+  - **A repacked sheet still uploads whole.** Growth replaces the texture
+    and its first bind uploads the canvas — 16 MB at 2048, 64 at 4096 —
+    once per size step; the desktop read a 580 ms off-thread frame at the
+    step to 4096. An empty texture plus the live rectangles would be a
+    third of that.
 
 - **XTP: the column-table layer, and a string-sequence leaf.** Two pieces
   that go together, and the first work of "everything is a file":

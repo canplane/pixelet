@@ -180,7 +180,9 @@ const VERT_UPRIGHT = /* glsl */ `mvPosition.xy += rotatedPosition;
 		1.0
 	);`;
 
-const FRAG_DECL = /* glsl */ `varying vec4 v_anchor_clip;
+/** The fragment side, in two parts the instanced field shares: the
+ * declarations and functions, and the body that runs first in main. */
+export const OCCLUSION_FRAG_FUNCS = /* glsl */ `varying vec4 v_anchor_clip;
 varying vec4 v_rise_clip;
 varying vec4 v_upright_clip;
 uniform sampler2D t_scene_depth;
@@ -210,9 +212,9 @@ bool behind_world(vec4 clip) {
 	float point = view_distance(ndc.z * 0.5 + 0.5);
 	return world < point - u_depth_bias - point * u_depth_cell * u_depth_bias_cells;
 }
+`;
 
-void main() {
-	if (u_depth_ready > 0.5) {
+export const OCCLUSION_FRAG_MAIN = /* glsl */ `	if (u_depth_ready > 0.5) {
 		int hidden = 0;
 		for (int i = 0; i < ${DEPTH_SAMPLES}; i++) {
 			if (behind_world(v_anchor_clip + v_rise_clip * (float(i) / float(${DEPTH_SAMPLES - 1})))) hidden++;
@@ -226,6 +228,22 @@ void main() {
 	// avoid.
 	gl_FragDepth = clamp(v_upright_clip.z / v_upright_clip.w * 0.5 + 0.5, 0.0, 1.0);`;
 
+/** The uniforms both the sprite patch and the instanced field bind. The
+ * objects come from SCENE_DEPTH and are shared across every billboard, so
+ * publishing a new copy each frame is one assignment there. */
+export function occlusion_uniforms(): Record<string, THREE.IUniform> {
+  return {
+    t_scene_depth: SCENE_DEPTH.texture,
+    u_depth_ready: SCENE_DEPTH.ready,
+    u_depth_view_projection: SCENE_DEPTH.view_projection,
+    u_depth_near_far: SCENE_DEPTH.near_far,
+    u_depth_bias: { value: DEPTH_BIAS_U },
+    u_depth_cell: LOD_CELL_PER_DISTANCE,
+    u_depth_bias_cells: { value: DEPTH_BIAS_CELLS },
+    u_depth_lift: { value: DEPTH_LIFT_U },
+  };
+}
+
 /**
  * Patches one SpriteMaterial in place. The uniform objects come from
  * SCENE_DEPTH and are shared across every billboard, so publishing a new
@@ -237,18 +255,11 @@ export function apply_anchor_occlusion(material: THREE.SpriteMaterial): THREE.Sp
   material.userData.anchor_drop = anchor_drop;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.u_anchor_drop = anchor_drop;
-    shader.uniforms.t_scene_depth = SCENE_DEPTH.texture;
-    shader.uniforms.u_depth_ready = SCENE_DEPTH.ready;
-    shader.uniforms.u_depth_view_projection = SCENE_DEPTH.view_projection;
-    shader.uniforms.u_depth_near_far = SCENE_DEPTH.near_far;
-    shader.uniforms.u_depth_bias = { value: DEPTH_BIAS_U };
-    shader.uniforms.u_depth_cell = LOD_CELL_PER_DISTANCE;
-    shader.uniforms.u_depth_bias_cells = { value: DEPTH_BIAS_CELLS };
-    shader.uniforms.u_depth_lift = { value: DEPTH_LIFT_U };
+    Object.assign(shader.uniforms, occlusion_uniforms());
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", VERT_DECL)
       .replace("mvPosition.xy += rotatedPosition;", VERT_UPRIGHT);
-    shader.fragmentShader = shader.fragmentShader.replace("void main() {", FRAG_DECL);
+    shader.fragmentShader = shader.fragmentShader.replace("void main() {", `${OCCLUSION_FRAG_FUNCS}\nvoid main() {\n${OCCLUSION_FRAG_MAIN}`);
   };
   // Distinct from an unpatched SpriteMaterial's, so three does not hand this
   // material a cached program compiled without the injection.

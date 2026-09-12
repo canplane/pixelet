@@ -60,6 +60,9 @@ const LIVE_WINDOW_MS = 10_000;
 const MISSED_WARN_SHARE = 0.1;
 /** LoAF's own threshold for a long frame. */
 const LONG_FRAME_MS = 50;
+/** A placement job spanning this many frames is one the content phase is
+ * starving — a quarter second at 60 Hz, longer than a settle. */
+const PLACE_FRAMES_WARN = 15;
 
 function r1(n: number): string {
   return n.toFixed(1);
@@ -208,10 +211,15 @@ export function LedgerOverlay() {
             k="faces kept"
             v={`${c.faces_possible > 0 ? Math.round(c.faces_kept / c.faces_possible * 100) : 0}%`}
           />
+          {
+            /* Latency of a placement job, not a frame's cost — that is the step
+              table's. Warns when one spans more frames than a camera settle
+              would hide. */
+          }
           <Row
-            k="poi place ms"
-            v={`${r1(poi_place_stats.ms)} max${r1(poi_place_stats.max_ms)} hit${poi_place_stats.hits}`}
-            warn={poi_place_stats.ms > 8}
+            k="poi place ms/f"
+            v={`${r1(poi_place_stats.ms)}/${poi_place_stats.frames} max${poi_place_stats.max_frames}f hit${poi_place_stats.hits}`}
+            warn={poi_place_stats.max_frames > PLACE_FRAMES_WARN}
           />
           <Row
             k="  cand/kept idx"

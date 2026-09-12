@@ -51,6 +51,27 @@ Deno.test("tick - one budget is shared: what an earlier phase spends, a later on
   }
 });
 
+Deno.test("tick - the visible phase cannot take the content share, and content sees it", () => {
+  const seen = { visible_remaining: -1, content_remaining: -1 };
+  const offs = [
+    on_tick("visible", ({ budget }) => {
+      seen.visible_remaining = budget.remaining();
+      // Runs the budget it was shown to the floor.
+      budget.run(new Array(1000).fill(0), () => (burn(0.05), true));
+    }),
+    on_tick("content", ({ budget }) => {
+      seen.content_remaining = budget.remaining();
+    }),
+  ];
+  try {
+    const report = run_tick(state, 0.016);
+    assert(seen.visible_remaining <= report.budget_ms * 0.8 + 0.01, `visible saw ${seen.visible_remaining} of ${report.budget_ms}`);
+    assert(seen.content_remaining >= report.budget_ms * 0.1, `content saw ${seen.content_remaining} of ${report.budget_ms}`);
+  } finally {
+    offs.forEach((off) => off());
+  }
+});
+
 Deno.test("tick - a step that unregisters itself mid-tick is not run again", () => {
   let runs = 0;
   const off = on_tick("cosmetic", () => {
