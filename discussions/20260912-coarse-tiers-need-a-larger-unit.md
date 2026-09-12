@@ -148,3 +148,14 @@ regions of it.
   block shows a step in the surface where their cells differ. The current
   per-chunk tiers have this already, one chunk at a time; larger units make
   the seams fewer and longer. The blend band exists for this and stays.
+
+## Status 2026-09-13
+
+Not taken. The scan cost this was for went away by another road — the
+terrain layer writes coarse runs from the page heightmap directly, 10.6×
+cheaper than the scan
+([20260912-coarse-tiers-what-the-field-does.md](./20260912-coarse-tiers-what-the-field-does.md),
+"Done") — so the chunk stays the unit at every tier. The block module and
+the span-parametric scan are kept, unwired; the open items above are the
+ones a wider unit would have to answer if draw calls ever make it worth
+it.

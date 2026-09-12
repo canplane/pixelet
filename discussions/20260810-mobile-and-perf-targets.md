@@ -214,3 +214,22 @@ Don't implement any of it preemptively — this is a forward-looking analysis, n
 a task list. When a real mobile-perf pass starts, A is the lead item. Re-measure
 before cutting anything here; the claims came from instrumentation, not from
 reading code and guessing.
+
+## Status 2026-09-13
+
+- **A, main-thread contention** — closed by the tick. A page no longer
+  decodes on arrival (it is an XTP packet copied into the core memory,
+  read in place), and everything that used to run inside React's commit —
+  the scan, the bake, the commit — is a step of one frame budget
+  ([20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)).
+  An iPhone 13 mini reads dt p50 17 ms on a 16 ms display with 13% missed;
+  the one unit that still cannot be cut is the bake, decided for a worker.
+- **The reload after wandering** — the client's state is one fixed 256 MB
+  memory on a handheld and the retained meshes sit under a budget
+  ([20260912-what-to-render-when.md](./20260912-what-to-render-when.md));
+  what WebKit does past that is recorded in
+  [20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md)
+  and left there on purpose.
+- **Persisting decoded pages** — moot: there is no decode to persist, and
+  the HTTP cache already answers the packet.
+- **`enableHighAccuracy: true`** — still open, unchanged.

@@ -378,3 +378,13 @@ So the "unified resource manager" is the tick, the fetch scheduler, the
 big pool and the little pool, each reporting into the ledger — not a
 layer above them. That is the shape the guardrail allows, and it is what
 the day the bake moves will find in place.
+
+## Status 2026-09-13
+
+The first candidate — the chunk bake — is decided for a worker
+([20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md),
+"The worker's case"), on the arithmetic that its unit cannot be cut. Of
+the open items: the iOS reservation is measured (256 MB on a handheld
+holds; what happens past it is in
+[20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md));
+the others are unchanged and not blocking.

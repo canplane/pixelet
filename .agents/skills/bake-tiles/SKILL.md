@@ -5,8 +5,13 @@ description: Pre-bake terrain tiles from the geo DB into gzipped static objects,
 
 # Baking and publishing terrain tiles
 
-The deployed demo has no API server: terrain comes from static objects in a
-bucket. This is how that bucket gets built and republished.
+The deployed API answers search only; the tile routes are dev-only, and
+terrain and POI come from static objects in a bucket. This is how the
+terrain half of that bucket gets built and republished. POI has a sibling
+tool with the same shape — `apps/api/src/bake/poi/tools/bake_poi_tiles.ts`,
+published under `poi/<PUBLISHED_VERSION.poi>` and refreshed monthly by
+`.github/workflows/overture-monthly-refresh.yml` — and the publishing and
+verifying steps below apply to it unchanged.
 
 Background and the reasoning behind this design are in
 [discussions/20260816-deployment-hosting.md](../../../discussions/20260816-deployment-hosting.md).

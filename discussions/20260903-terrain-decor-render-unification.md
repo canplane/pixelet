@@ -310,3 +310,12 @@ worth it" when the thing being achieved is this narrow.
   should be made for its own correctness now, in TS, so a later rewrite (Rust
 - WebGPU or anything else) carries the design over instead of rediscovering
   it — not because the port is imminent or being planned here.
+
+## Status 2026-09-13
+
+The decided direction landed two days later
+([20260905-tier1-geometry-baking-implemented.md](./20260905-tier1-geometry-baking-implemented.md)),
+and the instancing question in "does baking actually reduce device load"
+was reopened and answered differently on 2026-09-10: decor draws from one
+instanced mesh per variant written per chunk (commit af81d24), because
+the measured cost was the per-chunk bake of copies rather than the draw.

@@ -79,7 +79,7 @@ The web app uses Vite as its bundling/build entry; the api runs directly under D
 | Database            | PostgreSQL (main + geographic/PostGIS) |
 | Geodata             | Overture Maps + GEDTM30 (elevation)    |
 
-Two more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3) and a typed-array wire protocol (XTP) for terrain transport. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
+Three more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3), a typed-array wire protocol (XTP) for every page and record the client reads, and a record layer on it — one `Placement` row for every placed thing and one global `Palette` naming what it is. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
 
 **Naming:** Most identifiers here — files, functions, locals — use `snake_case` rather than TypeScript's usual `camelCase` (React hooks, stores, and components keep the ecosystem's own convention, since fighting that adds no value). The engine side of pixelet leans toward data-oriented design, closer to systems programming than typical frontend code, and a WebGPU/WASM path — including a partial Rust port — has been on the table from early on. C/C++/Rust-style abbreviations show up throughout (`len`, `u32`, `new_len` in `@xpute/core/ds`, for instance), and those read oddly bolted onto camelCase (`newLen` next to `len`); `snake_case` sits naturally with them instead. Unifying most of the TypeScript around it also keeps the two languages visually consistent at the boundary.
 
@@ -99,7 +99,8 @@ Two more pieces of the stack are built for this project rather than adopted: a p
     │                                # (no pixelet domain knowledge — portable to other projects)
     │
     └── pxl/
-        └── shared/                 # PVF3 coordinate system, cell/terrain model, bake wire format
+        └── shared/                 # PVF3 coordinate system, cell/terrain model, bake wire format,
+                                     # the record layer (Placement, Palette)
                                      # (pixelet-specific — must stay identical between web and api)
 ```
 
@@ -117,9 +118,9 @@ Storage, network transfer, and rendering deliberately use different scales. See 
 - **L4 Anchor** (`4096` blocks per axis): the floating-origin frame. `get_local_world_origin` snaps the camera's map center down to its L4 base; `AnchorRegistry` keeps one ref-counted `THREE.Group` per live L4 index and re-bases every group's local position when that snapped origin shifts. Carries no Tile/Volume payload of its own — a pure addressing/reparenting mechanism.
 - **L5 Shard** (`65536` blocks per axis): reserved for a future global sharding domain — not implemented (`L5_SHAMT` stays commented out in `indexer.ts`). Once active, its Z lane collapses (Z is only 16 bits, narrower than `L5_SHAMT`), so L5 can only ever address X/Y.
 
-Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) stay sparse octrees in source storage. Object leaf byte `0` is `OBJECT_UNDEF` (sparse absence/fallback); `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`). At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
+Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) are a palette per chunk and a sparse tree per `64³` band. A catalog value of `0` is `OBJECT_UNDEF` (sparse absence/fallback); `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`) — which is also its id in the one global palette. At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
 
-Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. Most of this pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary.
+Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. All of it — pages, bands, runs, meshes, the scheduler's view of every chunk, the POI index, the object store — lives as typed lanes in one fixed `WebAssembly.Memory` behind a buddy allocator, and the frame's work runs as one cooperative tick with one budget, measured by a read-only ledger. Most of the pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary — for now: the decided destination is a WASM core drawing through WebGPU (iOS 26 and iPhone 11 as the floor), and the state is shaped for that move.
 
 ---
 

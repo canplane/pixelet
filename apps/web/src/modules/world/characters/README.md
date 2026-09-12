@@ -12,8 +12,9 @@ same one.
 **What makes something an Actor, not one of the other tiers:** a full,
 unbaked GLTF scene graph cloned per instance (not merged/instanced the way
 decor's static population is — see `instanced_model.ts`'s own doc comment for
-that split), with position/animation driven imperatively in `useFrame` via
-refs rather than React state/props, at "a few, individually distinct"
+that split), with position/animation driven imperatively in a step of the frame's
+tick (`sched/tick.ts`, the interaction phase) via refs rather than React
+state/props, at "a few, individually distinct"
 instance count. `companion.tsx`'s `Walker` (person + pet) is the only
 instance today.
 
