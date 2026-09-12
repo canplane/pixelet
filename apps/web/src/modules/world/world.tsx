@@ -156,7 +156,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
   // callback), but while entries is still empty there's nothing to
   // reposition, so it's safe to keep this synced directly here, before any
   // AnchorNode's layout effect can link() using a stale origin.
-  if (registry.entries.size === 0) registry.cur_map_origin = map_origin;
+  if (registry.size === 0) registry.cur_map_origin = map_origin;
 
   useFrameRotation({ frame_ref: world_frame_ref });
   useFrameTranslation({

@@ -26,12 +26,15 @@
  * disappear while something still refers to it.
  */
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import { Vector } from "@xpute/core/ds/arena.ts";
+import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "@xpute/core/ds/map.ts";
 
 import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
-import type { AtlasUV } from "../billboard/atlas.ts";
-import { BillboardAtlas } from "../billboard/atlas.ts";
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+
+import { BillboardAtlas, NO_SLOT } from "../billboard/atlas.ts";
 import { FONT_FAMILY, FONT_WEIGHT_REGULAR } from "../billboard/canvas_scale.ts";
 import { resolve_poi_theme } from "./poi_theme.ts";
 
@@ -74,40 +77,96 @@ const DOT_BORDER = 1;
  */
 export const badge_atlas = new BillboardAtlas();
 
-/** A badge, as where it is in the sheet and how big it should be drawn. No
- * canvas and no texture of its own — see atlas.ts. */
-export type BuiltBadge = BadgeMetrics & { uv: AtlasUV };
-
-const cache = new Map<string, BuiltBadge>();
-const metrics_cache = new Map<string, BadgeMetrics>();
-
-/**
- * A badge's size, without the badge.
- *
- * Everything the collision pass needs — it works in screen boxes, and a box
- * is a width and a height. Measured it is: three thousand candidates asking
- * for their size used to build three thousand canvases and textures to draw
- * eighty of them, at 0.09 ms each, which is where the 333 ms placement spike
- * came from. Nothing here touches a canvas except one shared measuring
- * context, and that one is never drawn into.
- *
- * Only `logical_w` actually varies today, since the rest is fixed by the
- * layout constants above. Returned as a record anyway: a badge that ever
- * wraps to two lines changes all four, and the callers should not have to be
- * revisited when it does.
- */
-export type BadgeMetrics = {
-  logical_w: f64;
-  logical_h: f64;
-  center_y: f64;
-  collide_h: f64;
-};
-
 const PILL_H = ICON_SIZE + PAD_Y;
 const PILL_R = PILL_H / 2;
 const TEXT_X = PILL_R + ICON_SIZE / 2 + GAP;
 const LOGICAL_H = PILL_H + DOT_GAP + DOT_DIAM;
 const DOT_CY = PILL_H + DOT_GAP + DOT_DIAM / 2;
+
+/**
+ * A badge's size, without the badge — everything the collision pass needs,
+ * since it works in screen boxes and a box is a width and a height. Only the
+ * width varies: it is measured text, and the measurement is cached below.
+ * The rest is fixed by the layout constants above, and named here so a
+ * consumer reads the layout and not a number.
+ */
+export const BADGE_LOGICAL_H: f64 = LOGICAL_H;
+export const BADGE_CENTER_Y: f64 = DOT_CY;
+export const BADGE_COLLIDE_H: f64 = PILL_H;
+
+/**
+ * What is known about each badge: its measured width, and the atlas slot it
+ * is drawn in once it has been (NO_SLOT until then). Keyed in the core
+ * memory — a place by the 64-bit hash of its id, a cluster by its count.
+ * A place's id string is kept as the handle at its position, for the
+ * collision check on every hit and for eviction, which is asked in ids;
+ * the string is the POI record's until that record has a lane form.
+ *
+ * Measuring is cheap and building is not: three thousand candidates asking
+ * for their size used to build three thousand canvases and textures to draw
+ * eighty of them, at 0.09 ms each, which is where the 333 ms placement spike
+ * came from. Nothing here touches a canvas except one shared measuring
+ * context, and that one is never drawn into.
+ */
+class BadgeTable<K extends number | bigint> {
+  readonly index: IndexedMap<K>;
+  readonly logical_w = new Vector(Float64Array, { init_cap: 256, alloc: CORE_ALLOC });
+  readonly slot = new Vector(Int32Array, { init_cap: 256, alloc: CORE_ALLOC });
+  readonly ids: string[] = [];
+  /** Badges drawn in the sheet. */
+  built: u32 = 0;
+
+  constructor(traits: KeyTraits<K>) {
+    this.index = new IndexedMap<K>(traits, 256, CORE_ALLOC);
+  }
+
+  insert(key: K, id: string, logical_w: f64): u32 {
+    const pos = this.index.insert(key);
+    this.logical_w.set(pos, logical_w);
+    this.slot.set(pos, NO_SLOT);
+    this.ids[pos] = id;
+    return pos;
+  }
+
+  remove(pos: u32): void {
+    if (this.slot.mem[pos] !== NO_SLOT) {
+      badge_atlas.release(this.slot.mem[pos]);
+      this.built--;
+    }
+    const from = this.index.remove_at(pos);
+    if (from !== pos) {
+      this.logical_w.mem[pos] = this.logical_w.mem[from];
+      this.slot.mem[pos] = this.slot.mem[from];
+      this.ids[pos] = this.ids[from];
+    }
+    this.logical_w.truncate(from);
+    this.slot.truncate(from);
+    this.ids.length = from;
+  }
+}
+
+/** FNV-1a over the UTF-16 code units, 64 bits wide. */
+function id_hash(id: string): bigint {
+  let h = 0xcbf29ce484222325n;
+  for (let i = 0; i < id.length; i++) {
+    h ^= BigInt(id.charCodeAt(i));
+    h = BigInt.asUintN(64, h * 0x100000001b3n);
+  }
+  return h;
+}
+
+const places = new BadgeTable<bigint>(I64_KEYS);
+const clusters = new BadgeTable<number>(U32_KEYS);
+
+/** The place's position in the table, or -1. */
+function find_place(id: string): i32 {
+  const pos = places.index.find(id_hash(id));
+  if (pos >= 0 && places.ids[pos] !== id) {
+    console.warn(`[poi_badge] id hash collision: "${id}" vs "${places.ids[pos]}"`);
+    return -1;
+  }
+  return pos;
+}
 
 /** One context for every measurement there will ever be. Creating a canvas
  * per call was itself part of the cost being removed here. */
@@ -132,15 +191,13 @@ function display_name(poi: POI): string {
  * asks for the second, so the gap between the two counts is the fix working. */
 export const poi_badge_build_stats = { metrics: 0, builds: 0, ms: 0 };
 
-export function poi_badge_metrics(poi: POI): BadgeMetrics {
-  let m = metrics_cache.get(poi.id);
-  if (!m) {
-    const text_w = Math.ceil(measure_ctx().measureText(display_name(poi)).width);
-    m = { logical_w: TEXT_X + text_w + GAP, logical_h: LOGICAL_H, center_y: DOT_CY, collide_h: PILL_H };
-    poi_badge_build_stats.metrics++;
-    metrics_cache.set(poi.id, m);
-  }
-  return m;
+/** The badge's width in logical pixels, measured once per place. */
+export function poi_badge_logical_w(poi: POI): f64 {
+  const pos = find_place(poi.id);
+  if (pos >= 0) return places.logical_w.mem[pos];
+  const text_w = Math.ceil(measure_ctx().measureText(display_name(poi)).width);
+  poi_badge_build_stats.metrics++;
+  return places.logical_w.mem[places.insert(id_hash(poi.id), poi.id, TEXT_X + text_w + GAP)];
 }
 
 /** The pill every badge in this layer stands on: a rect with fully-rounded
@@ -170,13 +227,11 @@ function draw_anchor_dot(ctx: CanvasRenderingContext2D, logical_w: f64): void {
  * badge used (`poi-item.tsx`), redrawn as one flat canvas texture instead
  * of a DOM element (see this file's own top doc comment on why hover/
  * hover-lift/day-night from that version aren't reproduced here). */
-function build_poi_badge(poi: POI): BuiltBadge | null {
+function build_poi_badge(poi: POI, logical_w: f64): i32 {
   const theme = resolve_poi_theme(poi.category);
   const name = display_name(poi);
-  const m = poi_badge_metrics(poi);
-  const { logical_w } = m;
 
-  const uv = badge_atlas.add(logical_w * RENDER_SCALE, LOGICAL_H * RENDER_SCALE, (ctx) => {
+  return badge_atlas.add(logical_w * RENDER_SCALE, LOGICAL_H * RENDER_SCALE, (ctx) => {
     ctx.imageSmoothingEnabled = false;
     ctx.scale(RENDER_SCALE, RENDER_SCALE);
 
@@ -210,19 +265,19 @@ function build_poi_badge(poi: POI): BuiltBadge | null {
 
     draw_anchor_dot(ctx, logical_w);
   });
-  return uv ? { ...m, uv } : null;
 }
 
-/** The badge for this POI, drawn on first ask and kept after. Only ask for
- * one that is going to be drawn — poi_badge_metrics answers everything the
- * selection pass needs without it. Null when the sheet is full, which the
- * caller shows as nothing rather than as a wrong rectangle. */
-export function poi_badge(poi: POI): BuiltBadge | null {
-  const hit = cache.get(poi.id);
-  if (hit) return hit;
+/** The atlas slot of this POI's badge, drawn on first ask and kept after.
+ * Only ask for one that is going to be drawn — poi_badge_logical_w answers
+ * everything the selection pass needs without it. NO_SLOT when the sheet is
+ * full, which the caller shows as nothing rather than as a wrong rectangle. */
+export function poi_badge_slot(poi: POI): i32 {
+  const logical_w = poi_badge_logical_w(poi);
+  const pos = find_place(poi.id);
+  if (places.slot.mem[pos] !== NO_SLOT) return places.slot.mem[pos];
 
   const t0 = performance.now();
-  const built = build_poi_badge(poi);
+  const slot = build_poi_badge(poi, logical_w);
   poi_badge_build_stats.builds++;
   poi_badge_build_stats.ms += performance.now() - t0;
 
@@ -238,9 +293,10 @@ export function poi_badge(poi: POI): BuiltBadge | null {
   // `atlas ... % used`: eviction on page change may already keep the sheet
   // under its ceiling, in which case this branch is unreachable and should
   // say so instead.
-  if (!built) return null;
-  cache.set(poi.id, built);
-  return built;
+  if (slot === NO_SLOT) return NO_SLOT;
+  places.slot.mem[pos] = slot;
+  places.built++;
+  return slot;
 }
 
 // ---- cluster badge ----
@@ -265,34 +321,26 @@ export function poi_badge(poi: POI): BuiltBadge | null {
  * which is why the diameter no longer grows per decade. */
 const CLUSTER_PAD_X = 10;
 
-const cluster_cache = new Map<u32, BuiltBadge>();
-const cluster_metrics_cache = new Map<u32, BadgeMetrics>();
-
 /** Capped, because four digits does not fit and the difference between 1200
  * and 1400 is not a difference anyone acts on. */
 function cluster_label(count: u32): string {
   return count > 999 ? "999+" : String(count);
 }
 
-export function cluster_badge_metrics(count: u32): BadgeMetrics {
-  let m = cluster_metrics_cache.get(count);
-  if (!m) {
-    const text_w = Math.ceil(measure_ctx().measureText(cluster_label(count)).width);
-    m = { logical_w: Math.max(PILL_H, text_w + CLUSTER_PAD_X * 2), logical_h: LOGICAL_H, center_y: DOT_CY, collide_h: PILL_H };
-    cluster_metrics_cache.set(count, m);
-  }
-  return m;
+export function cluster_badge_logical_w(count: u32): f64 {
+  const pos = clusters.index.find(count);
+  if (pos >= 0) return clusters.logical_w.mem[pos];
+  const text_w = Math.ceil(measure_ctx().measureText(cluster_label(count)).width);
+  return clusters.logical_w.mem[clusters.insert(count, "", Math.max(PILL_H, text_w + CLUSTER_PAD_X * 2))];
 }
 
-export function cluster_badge(count: u32): BuiltBadge | null {
-  let built = cluster_cache.get(count);
-  if (built) return built;
+export function cluster_badge_slot(count: u32): i32 {
+  const logical_w = cluster_badge_logical_w(count);
+  const pos = clusters.index.find(count);
+  if (clusters.slot.mem[pos] !== NO_SLOT) return clusters.slot.mem[pos];
 
   const t0 = performance.now();
-  const m = cluster_badge_metrics(count);
-  const { logical_w } = m;
-
-  const uv = badge_atlas.add(logical_w * RENDER_SCALE, LOGICAL_H * RENDER_SCALE, (ctx) => {
+  const slot = badge_atlas.add(logical_w * RENDER_SCALE, LOGICAL_H * RENDER_SCALE, (ctx) => {
     ctx.imageSmoothingEnabled = false;
     ctx.scale(RENDER_SCALE, RENDER_SCALE);
 
@@ -308,10 +356,10 @@ export function cluster_badge(count: u32): BuiltBadge | null {
   });
   poi_badge_build_stats.builds++;
   poi_badge_build_stats.ms += performance.now() - t0;
-  if (!uv) return null;
-  built = { ...m, uv };
-  cluster_cache.set(count, built);
-  return built;
+  if (slot === NO_SLOT) return NO_SLOT;
+  clusters.slot.mem[pos] = slot;
+  clusters.built++;
+  return slot;
 }
 
 /**
@@ -325,20 +373,14 @@ export function cluster_badge(count: u32): BuiltBadge | null {
  */
 export function evict_poi_badges(live: ReadonlySet<string>): u32 {
   let dropped: u32 = 0;
-  for (const [id, built] of cache) {
-    if (live.has(id)) continue;
-    // Its rectangle goes back to the sheet's free pool. Nothing is disposed
-    // — there is one texture and it outlives every badge in it.
-    badge_atlas.release(built.uv);
-    cache.delete(id);
-    dropped++;
-  }
-  // Metrics go with them. Four numbers rather than a bitmap, so this is about
-  // not growing a map with every page ever visited rather than about memory
-  // that matters — but a stale size is a wrong collision box, so they cannot
-  // outlive the badge either.
-  for (const id of metrics_cache.keys()) {
-    if (!live.has(id)) metrics_cache.delete(id);
+  // Backwards, since a removal moves the last position into the hole. A
+  // badge's rectangle goes back to the sheet's free pool and nothing is
+  // disposed — there is one texture and it outlives every badge in it. The
+  // measured width goes with it: a stale size is a wrong collision box.
+  for (let pos = places.index.size - 1; pos >= 0; pos--) {
+    if (live.has(places.ids[pos])) continue;
+    if (places.slot.mem[pos] !== NO_SLOT) dropped++;
+    places.remove(pos);
   }
   // The only moment the sheet's live set shrinks, so the moment to see
   // whether it still needs to be as large as the densest area made it.
@@ -347,5 +389,5 @@ export function evict_poi_badges(live: ReadonlySet<string>): u32 {
 }
 
 export function poi_badge_count(): u32 {
-  return cache.size;
+  return places.built;
 }

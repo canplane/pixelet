@@ -28,11 +28,14 @@
  * compacts, which is a memmove of the runs it already holds, not a rebuild of
  * the matrices in them.
  *
- * **The frame boundary is still the only place buffers are written.** A
- * contribution change marks a chunk dirty and nothing else; `update` runs
- * once a frame, from the render loop, and is the only writer. An asset
- * arriving or a chunk committing can never run code inside someone else's
- * update.
+ * **A contribution is written as it arrives, and never read again.** The
+ * instances come as lanes the chunk owns (decor/instances.ts) and may hand
+ * back to the pool the moment `set_chunk` returns, so this keeps nothing of
+ * them: the matrices are composed on the spot, and what a slot needs for a
+ * hit — the entry's band, position and column — is copied into lanes of its
+ * own. A floating-origin shift is then a translation of every live matrix
+ * by the exact integer delta, not a rebuild from a source this no longer
+ * holds. `update` runs once a frame for that shift and for compaction.
  *
  * LOD stops being a second mechanism. A chunk contributes what should be
  * drawn right now, so a tier change is a different contribution rather than a
@@ -56,10 +59,15 @@
 
 import * as THREE from "three";
 
-import type { u32 } from "@xpute/core/kit/word.ts";
+import type { i32, u32 } from "@xpute/core/kit/word.ts";
+import type { U32Array } from "@xpute/core/kit/array.ts";
+import { Vector } from "@xpute/core/ds/arena.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { compose_instance_matrix, type ModelInstanceTransform } from "./instanced_model.ts";
+import { compose_instance_matrix } from "./instanced_model.ts";
+import { type DecorInstances, HIDDEN_FLAG, NO_ENTRY } from "./instances.ts";
+import { entry_id_of } from "@/modules/world/objects/store.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /** Identifies one variant across every bundle. Named by kind rather than
@@ -71,25 +79,18 @@ export const variant_key = (kind: string, variant: u32): VariantKey => `${kind}:
 export type DecorVariantContribution = {
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
-  instances: readonly ModelInstanceTransform[];
+  instances: DecorInstances;
 };
 
 /** What one chunk contributes. Held rather than merged so a chunk can be
  * replaced or withdrawn without anything else being recomputed. */
 export type DecorContribution = ReadonlyMap<VariantKey, DecorVariantContribution>;
 
-type Chunk = {
-  /** The chunk's own absolute integer origin, in PVF3 lattice units. Kept as
-   * the lattice value rather than a float so rebasing on a new floating
-   * origin is an exact integer subtraction. */
-  base: IVec;
-  contribution: DecorContribution;
-};
-
 /**
  * A variant's drawn instances, or its hit-only ones — see `Bank.drawn`. Two
- * banks per variant at most, addressed the same way, so a chunk's placement
- * is one flat set of bank keys rather than two parallel structures.
+ * banks per variant at most, addressed the same way. A bank is named once
+ * by its key and thereafter by its index in `banks`; a chunk's placement
+ * is which banks hold a run for it, which each bank's own run index says.
  */
 type BankKey = string;
 const HIDDEN_SUFFIX = "#hidden";
@@ -105,9 +106,7 @@ const MIN_SLICE: u32 = 8;
 const COMPACT_RATIO = 2;
 const COMPACT_FLOOR: u32 = 64;
 
-/** One chunk's run inside a bank: where it starts, how much it was given, and
- * how much of that it is currently using. */
-type Slice = { start: u32; cap: u32; count: u32 };
+const LANE = { init_cap: 64, alloc: CORE_ALLOC } as const;
 
 type Bank = {
   key: BankKey;
@@ -129,13 +128,28 @@ type Bank = {
   end: u32;
   /** Instances actually being drawn, against which `end` is judged. */
   live: u32;
-  slices: Map<string, Slice>;
-  /** Freed run starts by capacity class. */
-  free: Map<u32, u32[]>;
-  /** The transform behind each index, or null for a slot holding nothing —
-   * this is what turns a raycast's `instanceId` back into something the
-   * eraser can act on. */
-  source: (ModelInstanceTransform | null)[];
+  /**
+   * The runs, one per chunk holding instances in this bank: the chunk's
+   * base in an IndexedMap, and at its position where the run starts, how
+   * much it was given, and how much of that it is using.
+   */
+  runs: IndexedMap<bigint>;
+  run_start: Vector<U32Array>;
+  run_cap: Vector<U32Array>;
+  run_count: Vector<U32Array>;
+  /** Freed runs, as start and capacity, taken back by capacity class. */
+  free_start: Vector<U32Array>;
+  free_cap: Vector<U32Array>;
+  /**
+   * What each slot holds, as the store's own numbers — the entry's band and
+   * packed position, and the column it is under — so a raycast's
+   * `instanceId` resolves to an entry the eraser can act on without an
+   * object per slot. NO_ENTRY in `band` is a vacant slot or a procedural
+   * instance, neither of which a hit resolves to. Grown with `capacity`.
+   */
+  src_band: Uint32Array;
+  src_pos: Uint32Array;
+  src_column: BigUint64Array;
 };
 
 const $matrix = new THREE.Matrix4();
@@ -152,18 +166,17 @@ const slice_cap = (need: u32): u32 => {
 export class DecorField {
   readonly group = new THREE.Group();
 
-  private readonly banks = new Map<BankKey, Bank>();
-  private readonly chunks = new Map<string, Chunk>();
-  /** Which banks each chunk currently holds a run in, so a chunk that stops
-   * contributing a variant can be found to release it. */
-  private readonly placement = new Map<string, Set<BankKey>>();
-  private readonly dirty = new Set<string>();
+  /** The banks, by index; `bank_keys` names them so a contribution's variant
+   * key finds its bank. A handful per session, one per variant and side. */
+  private readonly banks: Bank[] = [];
+  private readonly bank_keys: BankKey[] = [];
+  /** Scratch for set_chunk: which banks this chunk wrote this time. */
+  private readonly wrote = new Vector(Uint8Array, LANE);
 
   /** The floating origin the live buffers are expressed against. A shift
    * rebases everything, which is rare — L4 is 4096u — and keeps the floats
    * the GPU sees small, which is the whole point of having an origin. */
   private packed_origin: IVec = 0n;
-  private origin_known = false;
 
   constructor() {
     this.group.name = "decor-field";
@@ -173,217 +186,238 @@ export class DecorField {
     this.group.frustumCulled = false;
   }
 
-  /**
-   * Writes every dirty chunk's run. Called once a frame, from the render
-   * loop, and the only place instance buffers are written.
-   */
+  /** Once a frame, from the render loop: follows a floating-origin shift
+   * and compacts any bank that has drifted. */
   update(map_origin: IVec): void {
-    if (!this.origin_known || map_origin !== this.packed_origin) {
-      this.rebase(map_origin);
-    }
-    if (this.dirty.size === 0) return;
-    for (const key of this.dirty) this.sync(key);
-    this.dirty.clear();
-    for (const bank of this.banks.values()) {
+    if (map_origin !== this.packed_origin) this.shift(map_origin);
+    for (const bank of this.banks) {
       if (bank.end > COMPACT_FLOOR && bank.end > bank.live * COMPACT_RATIO) this.compact(bank);
     }
   }
 
   /**
-   * Replaces one chunk's contribution.
+   * Replaces one chunk's contribution, writing it now.
    *
-   * `base` is the chunk's own absolute lattice origin; the instances inside
-   * are chunk-local, exactly as they are built. Anything absent from
-   * `contribution` is absent from the world, so a chunk withdraws by clearing
-   * rather than by contributing something empty.
+   * `base` is the chunk's own absolute lattice origin and its identity
+   * here; the instances inside are chunk-local, exactly as they are built,
+   * and are only borrowed for the duration of this call. Anything absent
+   * from `contribution` is absent from the world, so a chunk withdraws by
+   * clearing rather than by contributing something empty.
    */
-  set_chunk(key: string, base: IVec, contribution: DecorContribution): void {
-    this.chunks.set(key, { base, contribution });
-    this.dirty.add(key);
+  set_chunk(base: IVec, contribution: DecorContribution): void {
+    const local = ivec.sub(base, this.packed_origin);
+    const ox = ivec.to_real(ivec.X(local));
+    const oy = ivec.to_real(ivec.Y(local));
+    const oz = ivec.to_real(ivec.Z(local));
+
+    const wrote = this.wrote;
+    wrote.truncate(0);
+    for (let b = 0; b < this.banks.length; b++) wrote.push(0);
+    for (const [vkey, variant] of contribution) {
+      const inst = variant.instances;
+      let hidden_cnt = 0;
+      for (let i = 0; i < inst.len; i++) if (inst.flags[i] & HIDDEN_FLAG) hidden_cnt++;
+      if (inst.len - hidden_cnt > 0) {
+        const b = this.ensure_bank(vkey, variant, true);
+        this.write(this.banks[b], base, inst, false, inst.len - hidden_cnt, ox, oy, oz);
+        wrote.set(b, 1);
+      }
+      if (hidden_cnt > 0) {
+        const b = this.ensure_bank(vkey + HIDDEN_SUFFIX, variant, false);
+        this.write(this.banks[b], base, inst, true, hidden_cnt, ox, oy, oz);
+        wrote.set(b, 1);
+      }
+    }
+
+    // A bank this chunk held a run in last time and did not write now.
+    for (let b = 0; b < this.banks.length; b++) {
+      if (wrote.mem[b] === 0) this.release(this.banks[b], base);
+    }
   }
 
-  clear_chunk(key: string): void {
-    if (this.chunks.delete(key)) this.dirty.add(key);
+  clear_chunk(base: IVec): void {
+    for (const bank of this.banks) this.release(bank, base);
   }
 
   /** Every mesh a raycast should consider, drawn or hit-only. */
   hit_meshes(): THREE.InstancedMesh[] {
     const out: THREE.InstancedMesh[] = [];
-    for (const bank of this.banks.values()) {
+    for (const bank of this.banks) {
       if (bank.live > 0) out.push(bank.mesh);
     }
     return out;
   }
 
   /** Resolves a raycast hit back to the instance that produced it. */
-  instance_at(mesh: THREE.Object3D, instance_id: u32): ModelInstanceTransform | null {
-    for (const bank of this.banks.values()) {
-      if (bank.mesh === mesh) return bank.source[instance_id] ?? null;
+  /** The store entry id behind a raycast hit, or null for a procedural
+   * instance or a vacant slot. */
+  entry_at(mesh: THREE.Object3D, instance_id: u32): string | null {
+    for (const bank of this.banks) {
+      if (bank.mesh !== mesh) continue;
+      if (instance_id >= bank.capacity) return null;
+      const band = bank.src_band[instance_id];
+      if (band === NO_ENTRY) return null;
+      return entry_id_of(bank.src_column[instance_id], band, bank.src_pos[instance_id]);
     }
     return null;
   }
 
   dispose(): void {
-    for (const bank of this.banks.values()) {
+    for (const bank of this.banks) {
       this.group.remove(bank.mesh);
       CORE_ALLOC.give(bank.mesh.instanceMatrix.array);
       bank.mesh.dispose();
     }
-    this.banks.clear();
-    this.chunks.clear();
-    this.placement.clear();
-    this.dirty.clear();
+    this.banks.length = 0;
+    this.bank_keys.length = 0;
   }
 
   // ---- rebasing ----
 
-  /** Drops every run and re-queues every chunk against the new origin. The
-   * buffers hold origin-relative positions, so this is the one change that
-   * genuinely invalidates all of them at once. */
-  private rebase(map_origin: IVec): void {
+  /**
+   * Moves every live matrix onto the new origin. The buffers hold
+   * origin-relative positions and the origin is a lattice value, so the
+   * delta is an exact integer and the shift is one addition to each
+   * matrix's translation column — vacant slots included, which have no
+   * extent and stay invisible wherever they are put.
+   */
+  private shift(map_origin: IVec): void {
+    const delta = ivec.sub(this.packed_origin, map_origin);
+    const dx = ivec.to_real(ivec.X(delta));
+    const dy = ivec.to_real(ivec.Y(delta));
+    const dz = ivec.to_real(ivec.Z(delta));
     this.packed_origin = map_origin;
-    this.origin_known = true;
-    for (const bank of this.banks.values()) {
-      bank.end = 0;
-      bank.live = 0;
-      bank.slices.clear();
-      bank.free.clear();
-      bank.source.length = 0;
-      bank.mesh.count = 0;
+    for (const bank of this.banks) {
+      const array = bank.mesh.instanceMatrix.array;
+      for (let i = 0, n = bank.end * 16; i < n; i += 16) {
+        array[i + 12] += dx;
+        array[i + 13] += dy;
+        array[i + 14] += dz;
+      }
       bank.mesh.instanceMatrix.clearUpdateRanges();
+      bank.mesh.instanceMatrix.needsUpdate = true;
     }
-    this.placement.clear();
-    for (const key of this.chunks.keys()) this.dirty.add(key);
   }
 
-  // ---- one chunk ----
-
-  private sync(key: string): void {
-    const chunk = this.chunks.get(key);
-    const previous = this.placement.get(key);
-
-    if (!chunk) {
-      if (previous) {
-        for (const bank_key of previous) this.release(bank_key, key);
-        this.placement.delete(key);
-      }
-      return;
-    }
-
-    const local = ivec.sub(chunk.base, this.packed_origin);
-    const ox = ivec.to_real(ivec.X(local));
-    const oy = ivec.to_real(ivec.Y(local));
-    const oz = ivec.to_real(ivec.Z(local));
-
-    const next = new Set<BankKey>();
-    for (const [vkey, variant] of chunk.contribution) {
-      const drawn: ModelInstanceTransform[] = [];
-      let hidden: ModelInstanceTransform[] | null = null;
-      for (const transform of variant.instances) {
-        if (transform.hidden) (hidden ??= []).push(transform);
-        else drawn.push(transform);
-      }
-      if (drawn.length > 0) {
-        this.write(this.ensure_bank(vkey, variant, true), key, drawn, ox, oy, oz);
-        next.add(vkey);
-      }
-      if (hidden !== null) {
-        const bank_key = vkey + HIDDEN_SUFFIX;
-        this.write(this.ensure_bank(bank_key, variant, false), key, hidden, ox, oy, oz);
-        next.add(bank_key);
-      }
-    }
-
-    if (previous) {
-      for (const bank_key of previous) {
-        if (!next.has(bank_key)) this.release(bank_key, key);
-      }
-    }
-    this.placement.set(key, next);
-  }
-
-  private write(bank: Bank, key: string, list: readonly ModelInstanceTransform[], ox: number, oy: number, oz: number): void {
-    let slice = bank.slices.get(key);
+  /**
+   * Writes the instances of `inst` whose hidden flag equals `hidden` — `count`
+   * of them — into the chunk's run in `bank`. The two banks a variant can
+   * land in (drawn and hidden) each take their half of one lane set in one
+   * pass.
+   */
+  private write(bank: Bank, base: IVec, inst: DecorInstances, hidden: boolean, count: u32, ox: number, oy: number, oz: number): void {
+    let run = bank.runs.find(base);
     // A run that no longer fits is returned whole rather than extended: the
     // neighbouring indices belong to other chunks.
-    if (slice && slice.cap < list.length) {
-      this.free_slice(bank, key, slice);
-      slice = undefined;
+    if (run >= 0 && bank.run_cap.mem[run] < count) {
+      this.free_run(bank, run);
+      run = -1;
     }
-    if (!slice) slice = this.alloc(bank, key, list.length);
+    if (run < 0) run = this.alloc(bank, base, count);
+    const start = bank.run_start.mem[run];
+    const cap = bank.run_cap.mem[run];
 
     const mesh = bank.mesh;
-    for (let i = 0; i < list.length; i++) {
-      compose_instance_matrix($matrix, list[i]);
+    let w = 0;
+    for (let i = 0; i < inst.len; i++) {
+      if (((inst.flags[i] & HIDDEN_FLAG) !== 0) !== hidden) continue;
+      compose_instance_matrix($matrix, inst.x[i], inst.y[i], inst.z[i], inst.rotation_z[i], inst.scale[i]);
       // The chunk offset is a pure translation, so it lands in the matrix's
       // own last column rather than costing a second compose.
       $matrix.elements[12] += ox;
       $matrix.elements[13] += oy;
       $matrix.elements[14] += oz;
-      mesh.setMatrixAt(slice.start + i, $matrix);
-      bank.source[slice.start + i] = list[i];
+      const at = start + w++;
+      mesh.setMatrixAt(at, $matrix);
+      bank.src_band[at] = inst.band[i];
+      bank.src_pos[at] = inst.pos[i];
+      bank.src_column[at] = base;
     }
-    for (let i = list.length; i < slice.cap; i++) {
-      mesh.setMatrixAt(slice.start + i, $vacant);
-      bank.source[slice.start + i] = null;
+    for (let i = count; i < cap; i++) {
+      mesh.setMatrixAt(start + i, $vacant);
+      bank.src_band[start + i] = NO_ENTRY;
     }
 
-    bank.live += list.length - slice.count;
-    slice.count = list.length;
-    this.touch(bank, slice);
+    bank.live += count - bank.run_count.mem[run];
+    bank.run_count.mem[run] = count;
+    this.touch(bank, start, cap);
   }
 
-  private release(bank_key: BankKey, key: string): void {
-    const bank = this.banks.get(bank_key);
-    const slice = bank?.slices.get(key);
-    if (!bank || !slice) return;
-    this.free_slice(bank, key, slice);
+  private release(bank: Bank, base: IVec): void {
+    const run = bank.runs.find(base);
+    if (run >= 0) this.free_run(bank, run);
   }
 
-  private free_slice(bank: Bank, key: string, slice: Slice): void {
-    for (let i = 0; i < slice.cap; i++) {
-      bank.mesh.setMatrixAt(slice.start + i, $vacant);
-      bank.source[slice.start + i] = null;
+  /** Vacates a run and forgets it; its range goes to the bank's free list. */
+  private free_run(bank: Bank, run: u32): void {
+    const start = bank.run_start.mem[run];
+    const cap = bank.run_cap.mem[run];
+    for (let i = 0; i < cap; i++) {
+      bank.mesh.setMatrixAt(start + i, $vacant);
+      bank.src_band[start + i] = NO_ENTRY;
     }
-    bank.live -= slice.count;
-    bank.slices.delete(key);
-    const list = bank.free.get(slice.cap);
-    if (list) list.push(slice.start);
-    else bank.free.set(slice.cap, [slice.start]);
-    this.touch(bank, slice);
+    bank.live -= bank.run_count.mem[run];
+    bank.free_start.push(start);
+    bank.free_cap.push(cap);
+    const from = bank.runs.remove_at(run);
+    if (from !== run) {
+      bank.run_start.mem[run] = bank.run_start.mem[from];
+      bank.run_cap.mem[run] = bank.run_cap.mem[from];
+      bank.run_count.mem[run] = bank.run_count.mem[from];
+    }
+    bank.run_start.truncate(from);
+    bank.run_cap.truncate(from);
+    bank.run_count.truncate(from);
+    this.touch(bank, start, cap);
   }
 
-  private alloc(bank: Bank, key: string, need: u32): Slice {
+  /** A run for the chunk of `need` instances: a freed one of the right
+   * class, or a new one off the end. Returns its position in `runs`. */
+  private alloc(bank: Bank, base: IVec, need: u32): u32 {
     const cap = slice_cap(need);
-    let start = bank.free.get(cap)?.pop();
-    if (start === undefined) {
+    let start: i32 = -1;
+    for (let f = bank.free_cap.len - 1; f >= 0; f--) {
+      if (bank.free_cap.mem[f] !== cap) continue;
+      start = bank.free_start.mem[f];
+      const last = bank.free_cap.len - 1;
+      bank.free_start.mem[f] = bank.free_start.mem[last];
+      bank.free_cap.mem[f] = bank.free_cap.mem[last];
+      bank.free_start.truncate(last);
+      bank.free_cap.truncate(last);
+      break;
+    }
+    if (start < 0) {
       if (bank.end + cap > bank.capacity) this.grow(bank, bank.end + cap);
       start = bank.end;
       bank.end += cap;
       bank.mesh.count = bank.end;
     }
-    const slice: Slice = { start, cap, count: 0 };
-    bank.slices.set(key, slice);
-    return slice;
+    const run = bank.runs.insert(base);
+    bank.run_start.set(run, start);
+    bank.run_cap.set(run, cap);
+    bank.run_count.set(run, 0);
+    return run;
   }
 
   /** Hands three the byte range this run occupies, so the upload is the run
    * rather than the buffer. */
-  private touch(bank: Bank, slice: Slice): void {
-    bank.mesh.instanceMatrix.addUpdateRange(slice.start * 16, slice.cap * 16);
+  private touch(bank: Bank, start: u32, cap: u32): void {
+    bank.mesh.instanceMatrix.addUpdateRange(start * 16, cap * 16);
     bank.mesh.instanceMatrix.needsUpdate = true;
   }
 
   // ---- banks ----
 
-  private ensure_bank(bank_key: BankKey, variant: DecorVariantContribution, drawn: boolean): Bank {
-    const existing = this.banks.get(bank_key);
-    if (existing) {
+  /** The bank's index, opening it on first use. */
+  private ensure_bank(bank_key: BankKey, variant: DecorVariantContribution, drawn: boolean): u32 {
+    const b = this.bank_keys.indexOf(bank_key);
+    if (b >= 0) {
       // A skin can finish after its model, so the material may be replaced
       // under a bank; the geometry cannot — asset_store.ts resolves a URL to
       // a geometry once, and a variant with none contributes nothing at all.
+      const existing = this.banks[b];
       if (existing.mesh.material !== variant.material) existing.mesh.material = variant.material;
-      return existing;
+      return b;
     }
 
     const bank: Bank = {
@@ -394,14 +428,21 @@ export class DecorField {
       capacity: INITIAL_CAPACITY,
       end: 0,
       live: 0,
-      slices: new Map(),
-      free: new Map(),
-      source: [],
+      runs: new IndexedMap(I64_KEYS, 64, CORE_ALLOC),
+      run_start: new Vector(Uint32Array, LANE),
+      run_cap: new Vector(Uint32Array, LANE),
+      run_count: new Vector(Uint32Array, LANE),
+      free_start: new Vector(Uint32Array, LANE),
+      free_cap: new Vector(Uint32Array, LANE),
+      src_band: CORE_ALLOC.take(Uint32Array, INITIAL_CAPACITY).fill(NO_ENTRY),
+      src_pos: CORE_ALLOC.take(Uint32Array, INITIAL_CAPACITY),
+      src_column: CORE_ALLOC.take(BigUint64Array, INITIAL_CAPACITY),
     };
     bank.mesh = this.make_mesh(bank, variant.material, INITIAL_CAPACITY);
     this.group.add(bank.mesh);
-    this.banks.set(bank_key, bank);
-    return bank;
+    this.banks.push(bank);
+    this.bank_keys.push(bank_key);
+    return this.banks.length - 1;
   }
 
   private make_mesh(bank: Bank, material: THREE.Material, capacity: u32): THREE.InstancedMesh {
@@ -436,6 +477,19 @@ export class DecorField {
     mesh.instanceMatrix.array.set(bank.mesh.instanceMatrix.array.subarray(0, bank.end * 16));
     mesh.instanceMatrix.needsUpdate = true;
 
+    const src_band = CORE_ALLOC.take(Uint32Array, capacity).fill(NO_ENTRY);
+    const src_pos = CORE_ALLOC.take(Uint32Array, capacity);
+    const src_column = CORE_ALLOC.take(BigUint64Array, capacity);
+    src_band.set(bank.src_band.subarray(0, bank.end));
+    src_pos.set(bank.src_pos.subarray(0, bank.end));
+    src_column.set(bank.src_column.subarray(0, bank.end));
+    CORE_ALLOC.give(bank.src_band);
+    CORE_ALLOC.give(bank.src_pos);
+    CORE_ALLOC.give(bank.src_column);
+    bank.src_band = src_band;
+    bank.src_pos = src_pos;
+    bank.src_column = src_column;
+
     this.group.remove(bank.mesh);
     CORE_ALLOC.give(bank.mesh.instanceMatrix.array);
     bank.mesh.dispose();
@@ -453,20 +507,31 @@ export class DecorField {
    * past what has been written.
    */
   private compact(bank: Bank): void {
-    const runs = [...bank.slices.entries()].sort((a, b) => a[1].start - b[1].start);
+    const n = bank.runs.size;
+    const order = new Uint32Array(n);
+    for (let r = 0; r < n; r++) order[r] = r;
+    const run_start = bank.run_start.mem;
+    order.sort((a, b) => run_start[a] - run_start[b]);
     const array = bank.mesh.instanceMatrix.array;
     let cursor = 0;
-    for (const [, slice] of runs) {
-      if (slice.start !== cursor) {
-        array.copyWithin(cursor * 16, slice.start * 16, (slice.start + slice.cap) * 16);
-        for (let i = 0; i < slice.cap; i++) bank.source[cursor + i] = bank.source[slice.start + i];
-        slice.start = cursor;
+    for (const run of order) {
+      const start = run_start[run];
+      const cap = bank.run_cap.mem[run];
+      if (start !== cursor) {
+        array.copyWithin(cursor * 16, start * 16, (start + cap) * 16);
+        for (let i = 0; i < cap; i++) {
+          bank.src_band[cursor + i] = bank.src_band[start + i];
+          bank.src_pos[cursor + i] = bank.src_pos[start + i];
+          bank.src_column[cursor + i] = bank.src_column[start + i];
+        }
+        run_start[run] = cursor;
       }
-      cursor += slice.cap;
+      cursor += cap;
     }
     bank.end = cursor;
-    bank.source.length = cursor;
-    bank.free.clear();
+    bank.src_band.fill(NO_ENTRY, cursor);
+    bank.free_start.truncate(0);
+    bank.free_cap.truncate(0);
     bank.mesh.count = cursor;
     // One whole-buffer upload, which is the point of doing this rarely.
     bank.mesh.instanceMatrix.clearUpdateRanges();

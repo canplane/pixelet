@@ -58,12 +58,17 @@
 
 import * as THREE from "three";
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import { Vector } from "@xpute/core/ds/arena.ts";
+
+import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 import { make_canvas_texture } from "./canvas_texture.ts";
 
 /**
- * Where an entry sits, in texture coordinates, in the canvas's own
+ * An entry is a slot, named by its index, and a consumer keeps that index
+ * for as long as the badge is cached. Its rectangle is read through the
+ * `u0`..`v1` accessors, in texture coordinates in the canvas's own
  * orientation: v0 is the top edge and v1 the bottom, so v0 < v1.
  *
  * The sheet is uploaded with `flipY` off, which is the whole reason these
@@ -73,8 +78,11 @@ import { make_canvas_texture } from "./canvas_texture.ts";
  * top then addresses a band measured from the bottom. Consumers map v1 to
  * the bottom of whatever they draw; for a sprite that means a negative
  * repeat, which is the flip expressed once, where it can be seen.
+ *
+ * Read on every use rather than once: the rectangle moves when the sheet
+ * repacks, and the slot index is what stays.
  */
-export type AtlasUV = { u0: f64; v0: f64; u1: f64; v1: f64 };
+export const NO_SLOT: i32 = -1;
 
 export type AtlasStats = {
   /** Sheet edge in device pixels; the sheet is square. */
@@ -102,57 +110,51 @@ const MAX_SIZE = 4096;
  * neighbours are close by in the sheet. */
 const PAD = 1;
 
-type Entry = {
-  x: u32;
-  y: u32;
-  /** The slot, bucketed — what the shelf spends and the free list keys on. */
-  w: u32;
-  h: u32;
-  /** What was actually drawn, which is smaller: bucketing rounds the slot up
-   * so a freed one is reusable, and the difference is transparent padding
-   * that no UV may include. Spanning the slot instead squeezed every badge
-   * horizontally by up to a bucket. */
-  cw: u32;
-  ch: u32;
-  uv: AtlasUV;
-  /** Kept so a repack can replay it. The context it is handed is already
-   * translated to the entry's own origin. */
-  draw: (ctx: CanvasRenderingContext2D) => void;
-  live: boolean;
-};
+/** A slot's state. UNUSED never held anything or lost its rectangle to a
+ * repack; FREE was released and its rectangle can be taken by an entry of
+ * the same size class; LIVE is drawn. */
+const UNUSED = 0;
+const FREE = 1;
+const LIVE = 2;
 
-type Shelf = {
-  y: u32;
-  /** Bucketed, and every entry in the row is allocated at this height. */
-  h: u32;
-  /** How far along the row is spent. */
-  cursor: u32;
-};
+const LANE = { init_cap: 256, alloc: CORE_ALLOC } as const;
 
 const bucket = (v: f64, to: u32): u32 => Math.ceil(v / to) * to;
 
-/** Where every entry would go on a sheet of `size`, or null if one does not
- * fit. The same first-fit shelf rule `place` uses, run on scratch shelves so
- * a failed plan changes nothing. */
-type Plan = { xs: u32[]; ys: u32[]; shelves: Shelf[]; next_y: u32 };
+/**
+ * Where every entry would go on a sheet of `size`, or null if one does not
+ * fit — the same first-fit shelf rule `place` uses, run on scratch shelves
+ * so a failed plan changes nothing. `ws`/`hs` are the entries' bucketed
+ * sizes in the order they are to be placed.
+ */
+type Plan = { xs: Uint32Array; ys: Uint32Array; shelf_y: u32[]; shelf_h: u32[]; shelf_cursor: u32[]; next_y: u32 };
 
-function pack(size: u32, entries: readonly { w: u32; h: u32 }[]): Plan | null {
-  const shelves: Shelf[] = [];
+function pack(size: u32, ws: Uint32Array, hs: Uint32Array, n: u32): Plan | null {
+  const shelf_y: u32[] = [], shelf_h: u32[] = [], shelf_cursor: u32[] = [];
   let next_y: u32 = 0;
-  const xs: u32[] = [], ys: u32[] = [];
-  for (const { w, h } of entries) {
-    let shelf = shelves.find((s) => s.h === h && s.cursor + w <= size);
-    if (!shelf) {
-      if (next_y + h > size || w > size) return null;
-      shelf = { y: next_y, h, cursor: 0 };
-      next_y += h;
-      shelves.push(shelf);
+  const xs = new Uint32Array(n), ys = new Uint32Array(n);
+  for (let i = 0; i < n; i++) {
+    const w = ws[i], h = hs[i];
+    let shelf = -1;
+    for (let s = 0; s < shelf_h.length; s++) {
+      if (shelf_h[s] === h && shelf_cursor[s] + w <= size) {
+        shelf = s;
+        break;
+      }
     }
-    xs.push(shelf.cursor);
-    ys.push(shelf.y);
-    shelf.cursor += w;
+    if (shelf < 0) {
+      if (next_y + h > size || w > size) return null;
+      shelf = shelf_h.length;
+      shelf_y.push(next_y);
+      shelf_h.push(h);
+      shelf_cursor.push(0);
+      next_y += h;
+    }
+    xs[i] = shelf_cursor[shelf];
+    ys[i] = shelf_y[shelf];
+    shelf_cursor[shelf] += w;
   }
-  return { xs, ys, shelves, next_y };
+  return { xs, ys, shelf_y, shelf_h, shelf_cursor, next_y };
 }
 
 export class BillboardAtlas {
@@ -162,14 +164,33 @@ export class BillboardAtlas {
 
   texture: THREE.CanvasTexture;
 
-  private shelves: Shelf[] = [];
+  /** The rows: where each starts, its bucketed height, how far along it is
+   * spent. Every entry in a row is allocated at the row's height. */
+  private readonly shelf_y = new Vector(Uint32Array, LANE);
+  private readonly shelf_h = new Vector(Uint32Array, LANE);
+  private readonly shelf_cursor = new Vector(Uint32Array, LANE);
   private next_y: u32 = 0;
-  /** Freed slots by `${h}:${w}` size class, for reuse before the cursor
-   * moves. A freed entry's pixels stay on the sheet until something else
-   * draws over them, which nothing samples because nothing points there. */
-  private free: Map<string, Entry[]> = new Map();
-  private entries = new Set<Entry>();
 
+  /**
+   * The entries, one slot each. `w`/`h` is the slot, bucketed — what the
+   * shelf spends and what a FREE one is matched on. `cw`/`ch` is what was
+   * actually drawn, which is smaller: bucketing rounds the slot up so a
+   * freed one is reusable, and the difference is transparent padding that
+   * no UV may include. Spanning the slot instead squeezed every badge
+   * horizontally by up to a bucket.
+   */
+  private readonly state = new Vector(Uint8Array, LANE);
+  private readonly x = new Vector(Uint32Array, LANE);
+  private readonly y = new Vector(Uint32Array, LANE);
+  private readonly w = new Vector(Uint32Array, LANE);
+  private readonly h = new Vector(Uint32Array, LANE);
+  private readonly cw = new Vector(Uint32Array, LANE);
+  private readonly ch = new Vector(Uint32Array, LANE);
+  /** What drew each entry, kept so a repack can replay it. The context it
+   * is handed is already translated to the entry's own origin. */
+  private readonly draws: ((ctx: CanvasRenderingContext2D) => void)[] = [];
+
+  private live: u32 = 0;
   private used_px: u32 = 0;
   private repacks: u32 = 0;
 
@@ -183,114 +204,148 @@ export class BillboardAtlas {
 
   private make_sheet_texture(): THREE.CanvasTexture {
     const t = make_canvas_texture(this.canvas);
-    // See AtlasUV: an atlas cannot use the upload flip, because a rectangle
-    // measured from the top would address a band measured from the bottom.
+    // See the header: an atlas cannot use the upload flip, because a
+    // rectangle measured from the top would address a band measured from
+    // the bottom.
     t.flipY = false;
     return t;
   }
 
+  // ---- the rectangle of a slot ----
+
+  u0(slot: u32): f64 {
+    return (this.x.mem[slot] + PAD) / this.size;
+  }
+  v0(slot: u32): f64 {
+    return (this.y.mem[slot] + PAD) / this.size;
+  }
+  u1(slot: u32): f64 {
+    return (this.x.mem[slot] + PAD + this.cw.mem[slot]) / this.size;
+  }
+  v1(slot: u32): f64 {
+    return (this.y.mem[slot] + PAD + this.ch.mem[slot]) / this.size;
+  }
+
   /**
-   * Draws into the sheet and returns where it landed, or null when the sheet
-   * is at its limit and nothing that size is free.
+   * Draws into the sheet and returns the slot it landed in, or NO_SLOT when
+   * the sheet is at its limit and nothing that size is free.
    *
    * `w`/`h` are device pixels — the caller's logical size times whatever
    * supersampling it draws at.
    */
-  add(w: f64, h: f64, draw: (ctx: CanvasRenderingContext2D) => void): AtlasUV | null {
+  add(w: f64, h: f64, draw: (ctx: CanvasRenderingContext2D) => void): i32 {
     const bw = bucket(w + PAD * 2, WIDTH_BUCKET);
     const bh = bucket(h + PAD * 2, HEIGHT_BUCKET);
 
-    let entry = this.take_free(bw, bh);
-    if (!entry) entry = this.place(bw, bh);
-    while (!entry) {
-      if (!this.grow()) return null;
-      entry = this.place(bw, bh);
+    let slot = this.take_free(bw, bh);
+    if (slot < 0) slot = this.place(bw, bh);
+    while (slot < 0) {
+      if (!this.grow()) return NO_SLOT;
+      slot = this.place(bw, bh);
     }
 
-    entry.cw = Math.ceil(w);
-    entry.ch = Math.ceil(h);
-    this.set_uv(entry);
-    entry.draw = draw;
-    entry.live = true;
-    this.entries.add(entry);
-    this.paint(entry);
+    this.cw.mem[slot] = Math.ceil(w);
+    this.ch.mem[slot] = Math.ceil(h);
+    this.draws[slot] = draw;
+    this.state.mem[slot] = LIVE;
+    this.live++;
+    this.paint(slot);
     this.texture.needsUpdate = true;
-    return entry.uv;
+    return slot;
   }
 
-  /** Returns an entry's space to the pool. The pixels are left alone: the
+  /** Returns a slot's space to the pool. The pixels are left alone: the
    * only thing that made them visible was a UV pointing at them. */
-  release(uv: AtlasUV): void {
-    for (const entry of this.entries) {
-      if (entry.uv !== uv) continue;
-      this.entries.delete(entry);
-      entry.live = false;
-      this.used_px -= entry.w * entry.h;
-      const key = `${entry.h}:${entry.w}`;
-      const list = this.free.get(key) ?? [];
-      list.push(entry);
-      this.free.set(key, list);
-      return;
-    }
+  release(slot: u32): void {
+    if (this.state.mem[slot] !== LIVE) return;
+    this.state.mem[slot] = FREE;
+    this.live--;
+    this.used_px -= this.w.mem[slot] * this.h.mem[slot];
   }
 
   stats(): AtlasStats {
-    return { size: this.size, entries: this.entries.size, shelves: this.shelves.length, used_px: this.used_px, repacks: this.repacks };
+    return { size: this.size, entries: this.live, shelves: this.shelf_h.len, used_px: this.used_px, repacks: this.repacks };
   }
 
-  private take_free(w: u32, h: u32): Entry | null {
-    const list = this.free.get(`${h}:${w}`);
-    const entry = list?.pop();
-    if (!entry) return null;
-    this.used_px += entry.w * entry.h;
-    return entry;
+  /** A released slot of this size class, taken back. */
+  private take_free(w: u32, h: u32): i32 {
+    const state = this.state.mem;
+    for (let slot = 0; slot < this.state.len; slot++) {
+      if (state[slot] !== FREE || this.w.mem[slot] !== w || this.h.mem[slot] !== h) continue;
+      this.used_px += w * h;
+      return slot;
+    }
+    return NO_SLOT;
   }
 
-  private place(w: u32, h: u32): Entry | null {
-    let shelf = this.shelves.find((s) => s.h === h && s.cursor + w <= this.size);
-    if (!shelf) {
-      if (this.next_y + h > this.size) return null;
-      shelf = { y: this.next_y, h, cursor: 0 };
+  /** A slot index nobody holds, reused before a new one is opened. */
+  private unused_slot(): u32 {
+    const state = this.state.mem;
+    for (let slot = 0; slot < this.state.len; slot++) if (state[slot] === UNUSED) return slot;
+    const slot = this.state.len;
+    this.state.push(UNUSED);
+    this.x.push(0);
+    this.y.push(0);
+    this.w.push(0);
+    this.h.push(0);
+    this.cw.push(0);
+    this.ch.push(0);
+    return slot;
+  }
+
+  private place(w: u32, h: u32): i32 {
+    let shelf = -1;
+    for (let s = 0; s < this.shelf_h.len; s++) {
+      if (this.shelf_h.mem[s] === h && this.shelf_cursor.mem[s] + w <= this.size) {
+        shelf = s;
+        break;
+      }
+    }
+    if (shelf < 0) {
+      if (this.next_y + h > this.size) return NO_SLOT;
+      shelf = this.shelf_h.len;
+      this.shelf_y.push(this.next_y);
+      this.shelf_h.push(h);
+      this.shelf_cursor.push(0);
       this.next_y += h;
-      this.shelves.push(shelf);
     }
 
-    const x = shelf.cursor;
-    shelf.cursor += w;
+    const slot = this.unused_slot();
+    this.x.mem[slot] = this.shelf_cursor.mem[shelf];
+    this.y.mem[slot] = this.shelf_y.mem[shelf];
+    this.w.mem[slot] = w;
+    this.h.mem[slot] = h;
+    this.shelf_cursor.mem[shelf] += w;
     this.used_px += w * h;
-    return {
-      x,
-      y: shelf.y,
-      w,
-      h,
-      cw: w - PAD * 2,
-      ch: h - PAD * 2,
-      uv: { u0: 0, v0: 0, u1: 0, v1: 0 },
-      draw: () => {},
-      live: true,
-    };
+    return slot;
   }
 
-  /** The window over what was drawn, not over the slot it was drawn in.
-   * Written in place: whoever holds the object keeps holding the right
-   * rectangle across a repack. */
-  private set_uv(entry: Entry): void {
-    entry.uv.u0 = (entry.x + PAD) / this.size;
-    entry.uv.v0 = (entry.y + PAD) / this.size;
-    entry.uv.u1 = (entry.x + PAD + entry.cw) / this.size;
-    entry.uv.v1 = (entry.y + PAD + entry.ch) / this.size;
-  }
-
-  private paint(entry: Entry): void {
+  private paint(slot: u32): void {
     const ctx = this.ctx;
+    const x = this.x.mem[slot], y = this.y.mem[slot], w = this.w.mem[slot], h = this.h.mem[slot];
     ctx.save();
-    ctx.clearRect(entry.x, entry.y, entry.w, entry.h);
+    ctx.clearRect(x, y, w, h);
     ctx.beginPath();
-    ctx.rect(entry.x + PAD, entry.y + PAD, entry.w - PAD * 2, entry.h - PAD * 2);
+    ctx.rect(x + PAD, y + PAD, w - PAD * 2, h - PAD * 2);
     ctx.clip();
-    ctx.translate(entry.x + PAD, entry.y + PAD);
-    entry.draw(ctx);
+    ctx.translate(x + PAD, y + PAD);
+    this.draws[slot](ctx);
     ctx.restore();
+  }
+
+  /** The live slots, in index order, and their bucketed sizes — what a
+   * repack lays out. */
+  private live_slots(): { slots: Uint32Array; ws: Uint32Array; hs: Uint32Array } {
+    const slots = new Uint32Array(this.live), ws = new Uint32Array(this.live), hs = new Uint32Array(this.live);
+    let n = 0;
+    for (let slot = 0; slot < this.state.len; slot++) {
+      if (this.state.mem[slot] !== LIVE) continue;
+      slots[n] = slot;
+      ws[n] = this.w.mem[slot];
+      hs[n] = this.h.mem[slot];
+      n++;
+    }
+    return { slots, ws, hs };
   }
 
   /**
@@ -312,39 +367,36 @@ export class BillboardAtlas {
     while (this.size > INITIAL_SIZE) {
       const target = this.size / 2;
       if (this.used_px > (target * target) / 2) break;
-      const live = [...this.entries];
-      const plan = pack(target, live);
+      const live = this.live_slots();
+      const plan = pack(target, live.ws, live.hs, this.live);
       if (!plan) break;
-      this.rebuild(target, live, plan);
+      this.rebuild(target, live.slots, plan);
       changed = true;
     }
     return changed;
   }
 
-  /**
-   * Doubles the sheet and replays every live entry onto it.
-   *
-   * The UV objects are mutated in place rather than replaced, so whatever
-   * holds one keeps holding the right rectangle without being told. That is
-   * the reason `add` hands back the object it stores instead of a copy.
-   */
+  /** Doubles the sheet and replays every live entry onto it. The slots keep
+   * their indices; only their rectangles move, which is why a consumer
+   * reads the rectangle on every use. */
   private grow(): boolean {
     if (this.size >= MAX_SIZE) return false;
-    const live = [...this.entries];
-    const plan = pack(this.size * 2, live);
+    const live = this.live_slots();
+    const plan = pack(this.size * 2, live.ws, live.hs, this.live);
     // The sheet doubles and held all of these at half the size, so there is
     // room by construction; a null here would mean the packer disagrees
     // with itself.
     if (!plan) return false;
-    this.rebuild(this.size * 2, live, plan);
+    this.rebuild(this.size * 2, live.slots, plan);
     return true;
   }
 
   /**
-   * Replaces the sheet with one of `size` and repaints `live` at the places
-   * `plan` gave them. The one path both growth and compaction take.
+   * Replaces the sheet with one of `size` and repaints the live slots at
+   * the places `plan` gave them. The one path both growth and compaction
+   * take.
    */
-  private rebuild(size: u32, live: Entry[], plan: Plan): void {
+  private rebuild(size: u32, slots: Uint32Array, plan: Plan): void {
     this.size = size;
     // A new canvas, not a resize of the live one. three allocates immutable
     // storage for a texture once (texStorage2D, WebGL2) and every later
@@ -358,21 +410,26 @@ export class BillboardAtlas {
     this.canvas.height = size;
     this.ctx = this.canvas.getContext("2d")!;
 
-    this.shelves = plan.shelves;
+    this.shelf_y.truncate(0);
+    this.shelf_h.truncate(0);
+    this.shelf_cursor.truncate(0);
+    for (let s = 0; s < plan.shelf_h.length; s++) {
+      this.shelf_y.push(plan.shelf_y[s]);
+      this.shelf_h.push(plan.shelf_h[s]);
+      this.shelf_cursor.push(plan.shelf_cursor[s]);
+    }
     this.next_y = plan.next_y;
     // Freed slots belonged to the old layout; the plan packed only live
     // entries, so nothing is free on the new sheet but unshelved space.
-    this.free.clear();
+    for (let slot = 0; slot < this.state.len; slot++) if (this.state.mem[slot] === FREE) this.state.mem[slot] = UNUSED;
     this.used_px = 0;
     this.repacks++;
-    for (let i = 0; i < live.length; i++) {
-      const entry = live[i];
-      entry.x = plan.xs[i];
-      entry.y = plan.ys[i];
-      // Same object, new rectangle — see grow's own doc comment.
-      this.set_uv(entry);
-      this.used_px += entry.w * entry.h;
-      this.paint(entry);
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      this.x.mem[slot] = plan.xs[i];
+      this.y.mem[slot] = plan.ys[i];
+      this.used_px += this.w.mem[slot] * this.h.mem[slot];
+      this.paint(slot);
     }
 
     // A resized canvas is a different image as far as the GPU is concerned.

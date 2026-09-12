@@ -6,7 +6,9 @@ through a symlink), so nothing here should assume a particular assistant.
 
 For what the system is, see [README.md](./README.md) and
 [ARCHITECTURE.md](./ARCHITECTURE.md). For why past decisions went the way they
-did, see [discussions/](./discussions/).
+did, see [discussions/](./discussions/). For what is queued and in what order,
+see [BACKLOG.md](./BACKLOG.md) — work follows the list, not what was last
+noticed.
 
 ---
 

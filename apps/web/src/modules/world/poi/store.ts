@@ -12,35 +12,38 @@
  */
 
 import { create } from "zustand";
-import { immer } from "zustand/middleware/immer";
 
+import type { u32 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
 import type { POI } from "@pxl/shared/bake/model/feature.ts";
 
-export type PoiStore = {
-  poi_map: Map<IVec, POI[]>;
+import { PageTable } from "@/modules/world/page_table.ts";
 
-  get_pois: (page_idx: IVec) => POI[] | undefined;
-  set_pois: (page_idx: IVec, pois: POI[]) => void;
+/** Every resident POI page: the key index in the core memory, the page's
+ * records as its handle. The records themselves are still objects — their
+ * lane form is the record format work, not this table's. */
+export const poi_pages = new PageTable<readonly POI[]>();
+
+export type PoiStore = {
+  /** poi_pages.revision, mirrored so a selector sees a page come and go. */
+  revision: u32;
+
+  get_pois: (page_idx: IVec) => readonly POI[] | undefined;
+  set_pois: (page_idx: IVec, pois: readonly POI[]) => void;
   clear_pois: (page_idx: IVec) => void;
 };
 
-export const usePoiStore = create<PoiStore>()(
-  immer((set, get) => ({
-    poi_map: new Map<IVec, POI[]>(),
+export const usePoiStore = create<PoiStore>()((set) => ({
+  revision: 0,
 
-    get_pois: (page_idx) => get().poi_map.get(TO_XY(page_idx)),
-    set_pois: (page_idx, pois) => {
-      set((state) => {
-        state.poi_map.set(TO_XY(page_idx), pois);
-      });
-    },
-    clear_pois: (page_idx) => {
-      set((state) => {
-        state.poi_map.delete(TO_XY(page_idx));
-      });
-    },
-  })),
-);
+  get_pois: (page_idx) => poi_pages.get(page_idx),
+  set_pois: (page_idx, pois) => {
+    poi_pages.set(page_idx, pois);
+    set({ revision: poi_pages.revision });
+  },
+  clear_pois: (page_idx) => {
+    if (poi_pages.clear(page_idx) === undefined) return;
+    set({ revision: poi_pages.revision });
+  },
+}));

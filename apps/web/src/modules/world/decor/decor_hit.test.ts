@@ -5,8 +5,10 @@ import * as THREE from "three";
 
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import type { ModelInstanceTransform } from "./instanced_model.ts";
+import { entry_id_of } from "@/modules/world/objects/store.ts";
+
 import { decor_field, variant_key } from "./field.ts";
+import { HIDDEN_FLAG, instances_push, instances_reset, instances_take, NO_ENTRY } from "./instances.ts";
 import { raycast_decor } from "./decor_hit.ts";
 
 /** A ray fired straight down through (x, 0, 10) toward -Z — a unit box
@@ -21,12 +23,27 @@ function downward_raycaster(x: number): THREE.Raycaster {
 
 const KEY = variant_key("tree", 0);
 
+/** One instance as the producers push it: a chunk-local position and the
+ * store entry it stands for, or `pos: null` for a procedural one. The id a
+ * hit resolves to is the store's own derivation from (base, band, pos), so
+ * a test names an instance by its pos and asks for the same derivation. */
+type Inst = { x: number; pos: number | null; hidden?: boolean };
+
+function id_at(pos: number, base: IVec = 0n): string {
+  return entry_id_of(base, 0, pos);
+}
+
 /** Publishes one chunk's worth of instances and writes them, the way a frame
  * would. Origin zero on both sides, so the field's group stays at the
  * identity these rays are cast in. */
-function contribute(instances: ModelInstanceTransform[], base: IVec = 0n, chunk = "test-chunk"): void {
+function contribute(list: Inst[], base: IVec = 0n): void {
+  instances_reset();
+  for (const inst of list) {
+    instances_push(inst.x, 0, 0, 0, 1, inst.hidden ? HIDDEN_FLAG : 0, inst.pos === null ? NO_ENTRY : 0, inst.pos ?? 0);
+  }
+  const instances = instances_take();
+  if (!instances) throw new Error("empty contribution");
   decor_field.set_chunk(
-    chunk,
     base,
     new Map([[KEY, {
       geometry: new THREE.BoxGeometry(1, 1, 1),
@@ -37,27 +54,27 @@ function contribute(instances: ModelInstanceTransform[], base: IVec = 0n, chunk 
   decor_field.update(0n);
 }
 
-function withdraw(...chunks: string[]): void {
-  for (const chunk of chunks.length > 0 ? chunks : ["test-chunk"]) decor_field.clear_chunk(chunk);
+function withdraw(...bases: IVec[]): void {
+  for (const base of bases.length > 0 ? bases : [0n]) decor_field.clear_chunk(base);
   decor_field.update(0n);
 }
 
-/** `n` unit boxes two units apart along X, named by their index. */
-function row(prefix: string, n: number): ModelInstanceTransform[] {
-  return Array.from({ length: n }, (_, i) => ({ position: [i * 2, 0, 0] as const, rotation_z: 0, scale: 1, id: `${prefix}${i}` }));
+/** `n` unit boxes two units apart along X, at pos `first + i`. */
+function row(first: number, n: number): Inst[] {
+  return Array.from({ length: n }, (_, i) => ({ x: i * 2, pos: first + i }));
 }
 
 Deno.test("raycast_decor - resolves an instanced hit back to its own user-placed id", () => {
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "leaf-abc" }]);
+  contribute([{ x: 0, pos: 7 }]);
   try {
-    assertEquals(raycast_decor(downward_raycaster(0), 100), "leaf-abc");
+    assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(7));
   } finally {
     withdraw();
   }
 });
 
 Deno.test("raycast_decor - a procedural (id-less) instance stays transparent to hit-testing", () => {
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: null }]);
+  contribute([{ x: 0, pos: null }]);
   try {
     assertEquals(raycast_decor(downward_raycaster(0), 100), null);
   } finally {
@@ -66,13 +83,10 @@ Deno.test("raycast_decor - a procedural (id-less) instance stays transparent to 
 });
 
 Deno.test("raycast_decor - resolves to the correct instance among several in one mesh", () => {
-  contribute([
-    { position: [0, 0, 0], rotation_z: 0, scale: 1, id: "first" },
-    { position: [10, 0, 0], rotation_z: 0, scale: 1, id: "second" },
-  ]);
+  contribute([{ x: 0, pos: 1 }, { x: 10, pos: 2 }]);
   try {
-    assertEquals(raycast_decor(downward_raycaster(0), 100), "first");
-    assertEquals(raycast_decor(downward_raycaster(10), 100), "second");
+    assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(1));
+    assertEquals(raycast_decor(downward_raycaster(10), 100), id_at(2));
   } finally {
     withdraw();
   }
@@ -82,29 +96,29 @@ Deno.test("raycast_decor - an instance the eraser hid is withheld from the draw 
   // The whole reason field.ts keeps a second, invisible mesh: a hover that
   // loses its own target releases the hide, which brings the entry back,
   // which lets the hover find it again.
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "hovered", hidden: true }]);
+  contribute([{ x: 0, pos: 7, hidden: true }]);
   try {
-    assertEquals(raycast_decor(downward_raycaster(0), 100), "hovered");
+    assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(7));
   } finally {
     withdraw();
   }
 });
 
 Deno.test("raycast_decor - a chunk's own base offsets every instance it contributes", () => {
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "offset" }], ivec.gather(64n, 0n, 0n));
+  contribute([{ x: 0, pos: 7 }], ivec.gather(64n, 0n, 0n));
   try {
     assertEquals(raycast_decor(downward_raycaster(0), 100), null);
-    assertEquals(raycast_decor(downward_raycaster(64), 100), "offset");
+    assertEquals(raycast_decor(downward_raycaster(64), 100), id_at(7, ivec.gather(64n, 0n, 0n)));
   } finally {
     withdraw();
   }
 });
 
 Deno.test("raycast_decor - bounded by max_dist, same as the caller's own already-found hit distance", () => {
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "far-enough" }]);
+  contribute([{ x: 0, pos: 7 }]);
   try {
     // Ray origin is at z=10, box top face at z=0.5 -> real hit distance ~9.5.
-    assertEquals(raycast_decor(downward_raycaster(0), 100), "far-enough");
+    assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(7));
     assertEquals(raycast_decor(downward_raycaster(0), 1), null);
   } finally {
     withdraw();
@@ -112,7 +126,7 @@ Deno.test("raycast_decor - bounded by max_dist, same as the caller's own already
 });
 
 Deno.test("raycast_decor - tolerates float noise at the max_dist boundary instead of flickering", () => {
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "on-the-boundary" }]);
+  contribute([{ x: 0, pos: 7 }]);
   try {
     // Real hit distance is exactly 9.5 (ray origin z=10, box top face z=0.5).
     // A caller-supplied max_dist a hair under that (as chunk_raycast.ts's own
@@ -120,7 +134,7 @@ Deno.test("raycast_decor - tolerates float noise at the max_dist boundary instea
     // between the two algorithms, never from real occlusion) must still
     // resolve — this is the exact case that used to flip every frame under a
     // real mouse's own sub-pixel jitter (reported 2026-09-05).
-    assertEquals(raycast_decor(downward_raycaster(0), 9.5 - 0.0005), "on-the-boundary");
+    assertEquals(raycast_decor(downward_raycaster(0), 9.5 - 0.0005), id_at(7));
     // A gap an order of magnitude past the tolerance is a real occlusion
     // (something actually closer than this decor mesh), and must still lose —
     // the tolerance must not swallow legitimate max_dist rejections.
@@ -133,7 +147,7 @@ Deno.test("raycast_decor - tolerates float noise at the max_dist boundary instea
 Deno.test("raycast_decor - nothing contributed, or the ray misses everything, resolves to null", () => {
   assertEquals(raycast_decor(downward_raycaster(0), 100), null);
 
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "somewhere" }]);
+  contribute([{ x: 0, pos: 7 }]);
   try {
     assertEquals(raycast_decor(downward_raycaster(1000), 100), null);
   } finally {
@@ -144,11 +158,11 @@ Deno.test("raycast_decor - nothing contributed, or the ray misses everything, re
 Deno.test("decor field - a chunk shrinking leaves nothing behind in its own run", () => {
   // The slots a chunk no longer uses stay allocated to it, so what they hold
   // has to stop existing rather than stay as it was.
-  contribute(row("a", 3));
+  contribute(row(0, 3));
   try {
-    assertEquals(raycast_decor(downward_raycaster(4), 100), "a2");
-    contribute(row("a", 1));
-    assertEquals(raycast_decor(downward_raycaster(0), 100), "a0");
+    assertEquals(raycast_decor(downward_raycaster(4), 100), id_at(2));
+    contribute(row(0, 1));
+    assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(0));
     assertEquals(raycast_decor(downward_raycaster(2), 100), null);
     assertEquals(raycast_decor(downward_raycaster(4), 100), null);
   } finally {
@@ -160,59 +174,60 @@ Deno.test("decor field - a chunk outgrowing its run moves without disturbing its
   // The run is a power of two from MIN_SLICE, so twelve instances cannot fit
   // where three did: the chunk is handed a different range, and everything
   // else in the buffer has to be untouched by that.
-  contribute(row("a", 3), 0n, "chunk-a");
-  contribute(row("b", 3), ivec.gather(40n, 0n, 0n), "chunk-b");
+  contribute(row(0, 3), 0n);
+  contribute(row(100, 3), ivec.gather(40n, 0n, 0n));
   try {
-    assertEquals(raycast_decor(downward_raycaster(42), 100), "b1");
-    contribute(row("a", 12), 0n, "chunk-a");
-    assertEquals(raycast_decor(downward_raycaster(0), 100), "a0");
-    assertEquals(raycast_decor(downward_raycaster(22), 100), "a11");
-    assertEquals(raycast_decor(downward_raycaster(40), 100), "b0");
-    assertEquals(raycast_decor(downward_raycaster(42), 100), "b1");
-    assertEquals(raycast_decor(downward_raycaster(44), 100), "b2");
+    assertEquals(raycast_decor(downward_raycaster(42), 100), id_at(101, ivec.gather(40n, 0n, 0n)));
+    contribute(row(0, 12), 0n);
+    assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(0));
+    assertEquals(raycast_decor(downward_raycaster(22), 100), id_at(11));
+    assertEquals(raycast_decor(downward_raycaster(40), 100), id_at(100, ivec.gather(40n, 0n, 0n)));
+    assertEquals(raycast_decor(downward_raycaster(42), 100), id_at(101, ivec.gather(40n, 0n, 0n)));
+    assertEquals(raycast_decor(downward_raycaster(44), 100), id_at(102, ivec.gather(40n, 0n, 0n)));
   } finally {
-    withdraw("chunk-a", "chunk-b");
+    withdraw(0n, ivec.gather(40n, 0n, 0n));
   }
 });
 
 Deno.test("decor field - withdrawing one chunk frees only its own run", () => {
-  contribute(row("a", 3), 0n, "chunk-a");
-  contribute(row("b", 3), ivec.gather(40n, 0n, 0n), "chunk-b");
+  contribute(row(0, 3), 0n);
+  contribute(row(100, 3), ivec.gather(40n, 0n, 0n));
   try {
-    withdraw("chunk-a");
+    withdraw(0n);
     assertEquals(raycast_decor(downward_raycaster(0), 100), null);
-    assertEquals(raycast_decor(downward_raycaster(40), 100), "b0");
-    assertEquals(raycast_decor(downward_raycaster(44), 100), "b2");
+    assertEquals(raycast_decor(downward_raycaster(40), 100), id_at(100, ivec.gather(40n, 0n, 0n)));
+    assertEquals(raycast_decor(downward_raycaster(44), 100), id_at(102, ivec.gather(40n, 0n, 0n)));
     // The freed range is reusable, and what lands in it is the new chunk's,
     // not a survivor of the old one's.
-    contribute(row("c", 2), ivec.gather(80n, 0n, 0n), "chunk-c");
-    assertEquals(raycast_decor(downward_raycaster(80), 100), "c0");
+    contribute(row(200, 2), ivec.gather(80n, 0n, 0n));
+    assertEquals(raycast_decor(downward_raycaster(80), 100), id_at(200, ivec.gather(80n, 0n, 0n)));
     assertEquals(raycast_decor(downward_raycaster(0), 100), null);
-    assertEquals(raycast_decor(downward_raycaster(40), 100), "b0");
+    assertEquals(raycast_decor(downward_raycaster(40), 100), id_at(100, ivec.gather(40n, 0n, 0n)));
   } finally {
-    withdraw("chunk-b", "chunk-c");
+    withdraw(ivec.gather(40n, 0n, 0n), ivec.gather(80n, 0n, 0n));
   }
 });
 
 Deno.test("decor field - a floating-origin shift rebases every live run", () => {
-  contribute(row("a", 2), ivec.gather(40n, 0n, 0n), "chunk-a");
+  contribute(row(0, 2), ivec.gather(40n, 0n, 0n));
   try {
-    assertEquals(raycast_decor(downward_raycaster(40), 100), "a0");
+    const base = ivec.gather(40n, 0n, 0n);
+    assertEquals(raycast_decor(downward_raycaster(40), 100), id_at(0, base));
     // The buffers hold origin-relative positions, so moving the origin is the
     // one change that genuinely invalidates all of them.
     decor_field.update(ivec.gather(30n, 0n, 0n));
-    assertEquals(raycast_decor(downward_raycaster(10), 100), "a0");
-    assertEquals(raycast_decor(downward_raycaster(12), 100), "a1");
+    assertEquals(raycast_decor(downward_raycaster(10), 100), id_at(0, base));
+    assertEquals(raycast_decor(downward_raycaster(12), 100), id_at(1, base));
     assertEquals(raycast_decor(downward_raycaster(40), 100), null);
   } finally {
-    decor_field.clear_chunk("chunk-a");
+    decor_field.clear_chunk(ivec.gather(40n, 0n, 0n));
     decor_field.update(0n);
   }
 });
 
 Deno.test("raycast_decor - withdrawing a chunk stops its instances from being hit-tested", () => {
-  contribute([{ position: [0, 0, 0], rotation_z: 0, scale: 1, id: "gone-soon" }]);
-  assertEquals(raycast_decor(downward_raycaster(0), 100), "gone-soon");
+  contribute([{ x: 0, pos: 7 }]);
+  assertEquals(raycast_decor(downward_raycaster(0), 100), id_at(7));
   withdraw();
   assertEquals(raycast_decor(downward_raycaster(0), 100), null);
 });

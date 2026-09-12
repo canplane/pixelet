@@ -1,10 +1,10 @@
-// @xpute/core/ds/indexed_map.test.ts
+// @xpute/core/ds/map.test.ts
 
 import { assertEquals } from "@std/assert";
 
 import { BuddyAllocator } from "./buddy.ts";
 import { buddy_alloc } from "./typed_alloc.ts";
-import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "./indexed_map.ts";
+import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "./map.ts";
 
 Deno.test("IndexedMap - positions are dense and stable until a removal", () => {
   const m = new IndexedMap(I64_KEYS, 4);
@@ -74,4 +74,15 @@ Deno.test("IndexedMap - a seeded walk visits every position once", () => {
   for (let k = 0; k < 37; k++) m.insert(k * 3);
   const seen = [...m.positions_seeded(99n)].sort((a, b) => a - b);
   assertEquals(seen, Array.from({ length: 37 }, (_, i) => i));
+});
+
+Deno.test("IndexedMap - clear forgets every entry and the next inserts start from zero", () => {
+  const m = new IndexedMap(U32_KEYS, 4);
+  for (let k = 0; k < 40; k++) m.insert(k);
+  m.clear();
+  assertEquals(m.size, 0);
+  assertEquals(m.find(3), -1);
+  assertEquals(m.insert(7), 0);
+  assertEquals(m.insert(3), 1);
+  assertEquals(m.find(7), 0);
 });

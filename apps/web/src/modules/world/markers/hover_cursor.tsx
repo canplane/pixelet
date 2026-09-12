@@ -318,7 +318,7 @@ export function HoverCursor() {
     // scale is always 1: real user-placed decor never gets scatter.ts's own
     // jitter (see objects/store.ts's "decor" channel doc comment) — only
     // procedural placements do, and those are never hoverable/selectable.
-    compose_instance_matrix($decor_matrix, { position: [0, 0, 0], rotation_z: decor_pick.rotation, scale: 1, id: null });
+    compose_instance_matrix($decor_matrix, 0, 0, 0, decor_pick.rotation, 1);
     $decor_matrix.decompose($decor_translation, $decor_quaternion, $decor_scale);
   }
 

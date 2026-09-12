@@ -210,7 +210,9 @@ may be discarded, so the format changes without a migration.
 - The extension record: its shape, and what points at it.
 - Footprints of more than one cell for user decor — a part per cell, and
   what erasing one part does to the others.
-- Per-kind level of detail as manifest policy, replacing the interim.
+- ~~Per-kind level of detail as manifest policy, replacing the interim.~~
+  Withdrawn 2026-09-12 (follow-up below): one projected-size criterion, a
+  kind brings its extent.
 
 ## After the interim, and what the GPU cost belongs to
 
@@ -287,3 +289,63 @@ So the order is: the interim above for the GPU now, the memory model and
 the worker next, and this convention after, once the extension record and
 multi-cell footprints have been thought through. Building the manifest
 before those two are settled would likely mean building it twice.
+
+## Follow-up, 2026-09-12: the definition, and how far to draw
+
+Two things settled in conversation while the memory work was going on,
+recorded here so the parked question resumes from them.
+
+**The definition.** Decor is the non-voxel layer and cubes are the voxel
+layer, and that heterogeneity is the right line to draw between them — not
+"trees versus terrain", not "placed versus generated". A cube is a cell of
+the volume the scan and the mesher read; a decor instance is a model at a
+point that paints no voxel. Everything else about decor (identity, footprint,
+orientation, the extension record) follows from its being the layer that is
+not the volume, and any rule that treats a tree as a kind of cube is wrong
+from the start.
+
+**How far to draw.** Decor is not to be made larger to survive distance.
+The rule is the one Google Earth and Google Maps apply to 3D buildings:
+past some distance a thing is drawn low-poly, and past a further one not at
+all. The distance is taken from what those clients do — the altitude at
+which, looking straight down, a building of a given size stops being drawn
+— and applied isotropically as a distance from `camera_center`, so the same
+building disappears at the same range whether it is beneath the camera or
+out toward the horizon. Two things this fixes at once: it gives the
+per-kind level of detail (the open item above) its policy, and it makes the
+cutoff a calibrated number rather than a tuned one.
+
+What exists today is already the shape of it. `DECOR_DENSITY_BY_LOD_STEP`
+is a distance rule — the tier criterion turns distance into a step, and the
+table turns a step into a density that reaches zero at step 8 — so the
+cutoff is a value in that table, not a new mechanism. What is missing is
+the calibration, and a low-poly tier per kind between "full" and "none",
+which is the manifest policy the interim stands in for. Neither is to be
+done under the memory checklist
+([20260912-linear-memory-what-is-left.md](./20260912-linear-memory-what-is-left.md));
+this stays parked as above, one decision shorter.
+
+**One criterion, not one per kind.** The open item above — "per-kind level
+of detail as manifest policy" — is withdrawn. A kind registering its own LOD
+thresholds is the wrong shape: what decides whether a thing is drawn in
+full, drawn low-poly, or not drawn is how large it is to the eye, and that is
+a property of the thing's size and the distance, not of its kind. The size is
+its extent — the volume it occupies in cube terms, or the bounds of its
+polygons — and the criterion is that extent projected to the screen: within
+the eye's resolution, how much of a unit does it cover. Small enough that its
+absence makes no visible difference, and it is not drawn; still large enough
+to read, and it goes low-poly; large, and it is drawn in full. A tree and a
+car and a building are then the same rule at different sizes, and a kind
+brings its extent, never its thresholds.
+
+This is the criterion the terrain tiers already use — screen-space error
+against a pixel threshold, derived from the viewport and field of view
+(render/lod.ts, `set_lod_projection`) — so decor takes the same one rather
+than a second. The distance rule in the previous paragraph is this rule
+stated for a given size: the altitude at which a building of a given extent
+stops being drawn is the range at which that extent falls under the pixel
+threshold, which is why the calibration against Google Earth and Maps is a
+calibration of the threshold and not a table per kind. How those clients
+represent the building meshes themselves at each range — what a low-poly
+building is, when it becomes a footprint, when it is gone — is the
+reference to read when the low-poly tier is built.

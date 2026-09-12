@@ -12,10 +12,12 @@
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
+import { Vector } from "@xpute/core/ds/arena.ts";
+import type { I32Array, U32Array, U8Array } from "@xpute/core/kit/array.ts";
 
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 
-import { CORE_POOL } from "./core_pool.ts";
+import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
 
 export const L2_BAND_SHAMT: u32 = 6;
 export const L2_BAND_CELL_SPAN: u32 = CHUNK_CELL_SPAN;
@@ -51,16 +53,45 @@ export type VoxelMaterial = {
   layer_idx: u32;
 };
 
-export type SubVoxelEntry = VoxelMaterial & {
-  cx: u32;
-  cy: u32;
-  /** Absolute cell-space Z, not relative to a transient terrain floor. */
-  z: i32;
-  sub_sz: u32;
-  sub_ox: u32;
-  sub_oy: u32;
-  sub_oz: u32;
+/**
+ * The rare overflow when several non-overlapping sub-cell objects share one
+ * base voxel: the first takes the voxel, the rest are listed here, as lanes
+ * on the band. `col` is the band-local column (`cy * span + cx`), `z` the
+ * absolute cell-space Z, `material` packed as the voxels are, `sub` the
+ * four sub-cell bytes (ox, oy, oz, sz) in one word. Sorted by column once
+ * the volume is sealed, so a column's own entries are one binary search
+ * away — what a per-(band, column) map of arrays used to be built for on
+ * every scan.
+ */
+export type SubVoxels = {
+  col: Vector<U32Array>;
+  z: Vector<I32Array>;
+  material: Vector<U32Array>;
+  layer_idx: Vector<U8Array>;
+  sub: Vector<U32Array>;
 };
+
+const EXTRA_LANE = { init_cap: 8, alloc: CORE_ALLOC } as const;
+
+function new_sub_voxels(): SubVoxels {
+  return {
+    col: new Vector(Uint32Array, EXTRA_LANE),
+    z: new Vector(Int32Array, EXTRA_LANE),
+    material: new Vector(Uint32Array, EXTRA_LANE),
+    layer_idx: new Vector(Uint8Array, EXTRA_LANE),
+    sub: new Vector(Uint32Array, EXTRA_LANE),
+  };
+}
+
+function clear_sub_voxels(extra: SubVoxels): void {
+  extra.col.truncate(0);
+  extra.z.truncate(0);
+  extra.material.truncate(0);
+  extra.layer_idx.truncate(0);
+  extra.sub.truncate(0);
+}
+
+export const pack_sub_cell = (ox: u32, oy: u32, oz: u32, sz: u32): u32 => (ox | (oy << 8) | (oz << 16) | (sz << 24)) >>> 0;
 
 export type VoxelBand = {
   /** Signed Z-band coordinate. */
@@ -72,7 +103,7 @@ export type VoxelBand = {
   /** Lazily allocated only for bands containing sub-cell objects. */
   sub_cell: Uint8Array | null;
   /** Rare overflow when multiple non-overlapping SVOs share one base voxel. */
-  extra_sub_voxels: SubVoxelEntry[];
+  extra: SubVoxels;
   /** The core pool blocks behind the three arrays above — see
    * release_chunk_volume for when each goes back. */
   blocks: { material: Block; layer_idx: Block; sub_cell: Block | null };
@@ -125,7 +156,7 @@ function new_band(band_z: i32): VoxelBand {
     material: material.view,
     layer_idx: layer_idx.view,
     sub_cell: null,
-    extra_sub_voxels: [],
+    extra: new_sub_voxels(),
     blocks: { material: material.block, layer_idx: layer_idx.block, sub_cell: null },
   };
 }
@@ -150,7 +181,7 @@ export function alloc_chunk_volume(): ChunkVolume {
  * to its cap, and everything else to the core pool. */
 export function release_chunk_volume(volume: ChunkVolume): void {
   for (const band of volume.bands) {
-    band.extra_sub_voxels.length = 0;
+    clear_sub_voxels(band.extra);
     // A rare 1 MiB SVO payload must not become permanent scratch overhead.
     drop_sub_cell(band);
     if (band_pool.length < MAX_POOLED_BANDS) {
@@ -203,9 +234,51 @@ export function ordered_chunk_bands(volume: ChunkVolume): readonly OrderedVoxelB
 }
 
 /** Marks a cached composition immutable. No palette/finalization work exists. */
+/** Closes the volume to painting and orders every band's extra sub-voxels
+ * by column, which is what lets a column find its own during the scan. */
 export function seal_chunk_volume(volume: ChunkVolume): ChunkVolume {
   volume.sealed = true;
+  for (const band of volume.bands) sort_sub_voxels(band.extra);
   return volume;
+}
+
+/** Insertion sort by column — the list is a handful of entries when it is
+ * anything at all — moving every lane together. */
+function sort_sub_voxels(extra: SubVoxels): void {
+  const n = extra.col.len;
+  const col = extra.col.mem, z = extra.z.mem, material = extra.material.mem, layer = extra.layer_idx.mem, sub = extra.sub.mem;
+  for (let i = 1; i < n; i++) {
+    const c = col[i], zi = z[i], m = material[i], l = layer[i], s = sub[i];
+    let j = i - 1;
+    while (j >= 0 && col[j] > c) {
+      col[j + 1] = col[j];
+      z[j + 1] = z[j];
+      material[j + 1] = material[j];
+      layer[j + 1] = layer[j];
+      sub[j + 1] = sub[j];
+      j--;
+    }
+    col[j + 1] = c;
+    z[j + 1] = zi;
+    material[j + 1] = m;
+    layer[j + 1] = l;
+    sub[j + 1] = s;
+  }
+}
+
+/** The range [lo, hi) of a band's extra sub-voxels in column `col`, once
+ * the volume is sealed; [0, 0) when it has none there. */
+export function sub_voxel_range(extra: SubVoxels, col: u32): [u32, u32] {
+  const cols = extra.col.mem;
+  let lo = 0, hi = extra.col.len;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (cols[mid] < col) lo = mid + 1;
+    else hi = mid;
+  }
+  let end = lo;
+  while (end < extra.col.len && cols[end] === col) end++;
+  return [lo, end];
 }
 
 function get_or_create_band(volume: ChunkVolume, band_z: i32): VoxelBand {
@@ -225,7 +298,7 @@ function get_or_create_band(volume: ChunkVolume, band_z: i32): VoxelBand {
   band.material.fill(0);
   band.layer_idx.fill(NO_LAYER);
   drop_sub_cell(band);
-  band.extra_sub_voxels.length = 0;
+  clear_sub_voxels(band.extra);
   volume.bands.splice(insert_at, 0, band);
   volume.min_band_z = Math.min(volume.min_band_z, band_z);
   volume.max_band_z = Math.max(volume.max_band_z, band_z);
@@ -256,8 +329,25 @@ export function set_chunk_voxel(
   band.material[loc.idx] = pack_material(material);
   band.layer_idx[loc.idx] = material.layer_idx;
 
-  if (band.extra_sub_voxels.length > 0) {
-    band.extra_sub_voxels = band.extra_sub_voxels.filter((entry) => entry.cx !== cx || entry.cy !== cy || entry.z !== z);
+  // A later layer replacing the voxel takes its overflow with it.
+  const extra = band.extra;
+  if (extra.col.len > 0) {
+    const col = (cy & L2_BAND_CELL_MASK) * L2_BAND_CELL_SPAN + (cx & L2_BAND_CELL_MASK);
+    let w = 0;
+    for (let i = 0; i < extra.col.len; i++) {
+      if (extra.col.mem[i] === col && extra.z.mem[i] === z) continue;
+      extra.col.mem[w] = extra.col.mem[i];
+      extra.z.mem[w] = extra.z.mem[i];
+      extra.material.mem[w] = extra.material.mem[i];
+      extra.layer_idx.mem[w] = extra.layer_idx.mem[i];
+      extra.sub.mem[w] = extra.sub.mem[i];
+      w++;
+    }
+    extra.col.truncate(w);
+    extra.z.truncate(w);
+    extra.material.truncate(w);
+    extra.layer_idx.truncate(w);
+    extra.sub.truncate(w);
   }
 
   if (sub_cell) {
@@ -279,10 +369,15 @@ export function set_chunk_voxel(
 }
 
 /** Additional SVO sharing a base voxel already claimed within the same layer. */
-export function append_chunk_sub_voxel(volume: ChunkVolume, entry: SubVoxelEntry): void {
-  const loc = locate_voxel(entry.cx, entry.cy, entry.z);
+export function append_chunk_sub_voxel(volume: ChunkVolume, cx: u32, cy: u32, z: i32, material: VoxelMaterial, sub: u32): void {
+  const loc = locate_voxel(cx, cy, z);
   const band = get_or_create_band(volume, loc.band_z);
-  band.extra_sub_voxels.push(entry);
+  const extra = band.extra;
+  extra.col.push((cy & L2_BAND_CELL_MASK) * L2_BAND_CELL_SPAN + (cx & L2_BAND_CELL_MASK));
+  extra.z.push(z);
+  extra.material.push(pack_material(material));
+  extra.layer_idx.push(material.layer_idx);
+  extra.sub.push(sub);
 }
 
 /** Paints one solid column across as many whole signed-Z bands as needed. */

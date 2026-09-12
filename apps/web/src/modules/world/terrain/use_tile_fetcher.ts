@@ -10,7 +10,7 @@ import type { Demand, Phases } from "@/modules/world/sched/demand.ts";
 import { fetch_pending_count, fetch_running, fetch_subscribe, fetch_sync } from "@/modules/world/sched/fetch_scheduler.ts";
 import { fetch_terrain } from "./tile_repository.ts";
 import { release_terrain } from "./resident.ts";
-import { useTileStore } from "./store.ts";
+import { tile_pages, useTileStore } from "./store.ts";
 import { useRangeAnchor } from "@/modules/world/frame/use_range_anchor.ts";
 import { FETCH_HYSTERESIS, page_priority, pages_to_hold } from "@/render/chunk_range.ts";
 import { KEEP_DIST, RESIDENT_PAGES } from "./config.ts";
@@ -66,7 +66,7 @@ function terrain_demands(anchor: IVec, pinned_page_idx: IVec | null): Demand[] {
 
 /** Evicts cached pages that fall outside the cleanup radius. */
 function cleanup_far_tiles(anchor: IVec, pinned_page_idx: IVec | null): void {
-  const { tile_map, clear_tile } = useTileStore.getState();
+  const { clear_tile } = useTileStore.getState();
 
   // Exactly the set the demands above ask for, so a page is never evicted
   // while it is still being fetched. The pinned (device-own) page is exempt:
@@ -74,9 +74,14 @@ function cleanup_far_tiles(anchor: IVec, pinned_page_idx: IVec | null): void {
   // always ground itself.
   const held = new Set(pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES).map(({ page_idx }) => page_idx));
 
-  for (const [page_idx, tile] of tile_map) {
+  // Collected first: clearing moves the table's last page into the hole.
+  const evict: IVec[] = [];
+  for (const page_idx of tile_pages.keys()) {
     if (page_idx === pinned_page_idx || held.has(page_idx)) continue;
-    release_terrain(tile.terrain);
+    evict.push(page_idx);
+  }
+  for (const page_idx of evict) {
+    release_terrain(tile_pages.get(page_idx)!.terrain);
     clear_tile(page_idx);
   }
 }

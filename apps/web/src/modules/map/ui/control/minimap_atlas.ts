@@ -11,7 +11,7 @@ import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constants.ts";
 import { cube_colors, cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { useMapStore } from "@/modules/map/store.ts";
-import { useTileStore } from "@/modules/world/terrain/store.ts";
+import { tile_pages, useTileStore } from "@/modules/world/terrain/store.ts";
 import { camera_cfg } from "@/modules/camera/config.ts";
 
 const { DEFAULT_DIST } = camera_cfg.view;
@@ -47,7 +47,7 @@ export type MinimapAtlas = {
 };
 
 export function useMinimapAtlas(): MinimapAtlas | null {
-  const tile_map = useTileStore((state) => state.tile_map);
+  const tile_revision = useTileStore((state) => state.revision);
   const map_center = useMapStore((state) => state.map_center);
 
   const canvas_ref = useRef<HTMLCanvasElement | null>(null);
@@ -74,7 +74,7 @@ export function useMinimapAtlas(): MinimapAtlas | null {
 
     const max_rel_u: f64 = (ATLAS_RADIUS_PAGES + 0.5) * L3_RANGE_REAL;
 
-    for (const [page_idx, tile] of tile_map) {
+    for (const [page_idx, tile] of tile_pages.entries()) {
       const rel = page_rel_u(page_idx, origin);
       if (Math.abs(rel.x) > max_rel_u || Math.abs(rel.y) > max_rel_u) continue;
 
@@ -109,7 +109,8 @@ export function useMinimapAtlas(): MinimapAtlas | null {
     set_atlas({ url: canvas.toDataURL(), origin });
     // map_center is deliberately excluded: it changes every pan tick and is handled
     // by minimap_pan_px() instead — including it here would rebake on every tick.
-  }, [tile_map, center_page_idx]);
+    // tile_revision: the pages walked above live in tile_pages.
+  }, [tile_revision, center_page_idx]);
 
   return atlas;
 }

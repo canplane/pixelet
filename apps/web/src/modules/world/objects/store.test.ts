@@ -9,7 +9,22 @@ import { DECOR_SIZE } from "./size.ts";
 import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { cell_index, cell_is_occupied, cell_key, each_column_entry, get_objects_in_cell, get_placed_object, object_column_of, object_store_stats, place, place_decor, remove } from "./store.ts";
+import {
+  cell_index,
+  cell_is_occupied,
+  cell_key,
+  each_column_entry,
+  get_objects_in_cell,
+  get_placed_object,
+  object_column_of,
+  object_store_stats,
+  place,
+  place_decor,
+  remove,
+  subscribe_decor_column,
+  subscribe_object_column,
+} from "./store.ts";
+import { L2_BASE } from "@pxl/shared/spec/space/indexer.ts";
 
 // Distinct, far-apart corners per test so leftover module-level state from
 // one test never collides with another (this file has no localStorage under
@@ -155,4 +170,28 @@ Deno.test("objects/store cells - occupancy follows placement and removal, and ai
   const [entry] = get_objects_in_cell(cell_key(ix, iy, iz));
   remove(entry.id);
   assertEquals(cell_is_occupied(ix, iy, iz), false);
+});
+
+Deno.test("objects/store listeners - a column's subscribers hear its own changes, on the right channel, until they unsubscribe", () => {
+  const { i, f } = fresh_corner();
+  const other = fresh_corner();
+  const column = L2_BASE(TO_XY(i));
+  let objects = 0, decor = 0, elsewhere = 0;
+  const off_objects = subscribe_object_column(column, () => objects++);
+  const off_decor = subscribe_decor_column(column, () => decor++);
+  const off_other = subscribe_object_column(L2_BASE(TO_XY(ivec.gather(1_000_000n, 1_000_000n, 0n))), () => elsewhere++);
+
+  place_decor(i, f, DECOR_SIZE, "tree");
+  assertEquals([objects, decor, elsewhere], [1, 1, 0]);
+  place_decor(other.i, other.f, DECOR_SIZE, "tree");
+  const same_column = L2_BASE(TO_XY(other.i)) === column;
+  assertEquals([objects, decor, elsewhere], [same_column ? 2 : 1, same_column ? 2 : 1, 0]);
+
+  off_objects();
+  const before = decor;
+  place(i, f, DECOR_SIZE, "red");
+  assertEquals(objects, same_column ? 2 : 1);
+  assertEquals(decor > before, true);
+  off_decor();
+  off_other();
 });

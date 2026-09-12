@@ -77,49 +77,30 @@ export type DecorVariantAsset = {
   skin_url: string;
 };
 
-export type ModelInstanceTransform = {
-  position: readonly [f64, f64, f64];
-  /** Radians, applied about world Z after the model's own Y-up -> Z-up fix
-   * (see compose_instance_matrix's own doc comment) — this world already
-   * treats Z as up throughout (get_ele_at_local, every V3, ...), while
-   * every glTF asset here is Y-up by spec. */
-  rotation_z: f64;
-  scale: f64;
-  /** Present in the built set but not drawn: set_virtual_hide is
-   * suppressing it while the eraser hovers it. It stays in the list because
-   * hit testing runs against real geometry, so dropping it here would take
-   * the entry out of hit testing too — and a hover that cannot find what it
-   * is hovering releases the hide, which brings the entry back, which lets
-   * the hover find it again. field.ts puts these in a second, never-rendered
-   * instanced mesh for exactly that reason. */
-  hidden?: boolean;
-  /** This instance's own objects/store.ts leaf id, or null for a procedural
-   * (scatter.ts-derived, never-stored) placement — decor_hit.ts's own
-   * raycast_decor uses this to resolve a hit's own instanceId back to a
-   * selectable/erasable entry, and to tell a procedural placement apart from
-   * one (it has no id, so it stays transparent to hit-testing, exactly as it
-   * always has been). */
-  id: string | null;
-};
-
 const Y_UP_TO_Z_UP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 const _position = new THREE.Vector3();
 const _quaternion = new THREE.Quaternion();
 const _z_spin = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 
-/** Bakes the Y-up -> Z-up axis fix directly into the instance matrix — a
+/**
+ * Bakes the Y-up -> Z-up axis fix directly into the instance matrix — a
  * merged/baked mesh's own instances are real, separately-transformed vertex
  * copies, not nested Object3Ds, so there's no separate wrapper-group to hold
  * this the way use_character_model.ts's up_axis_fix Group does for a single
- * companion. */
-export function compose_instance_matrix(out: THREE.Matrix4, transform: ModelInstanceTransform): THREE.Matrix4 {
-  _position.set(transform.position[0], transform.position[1], transform.position[2]);
-  _z_spin.setFromAxisAngle(new THREE.Vector3(0, 0, 1), transform.rotation_z);
+ * companion. `rotation_z` is radians about world Z, applied after that fix:
+ * this world treats Z as up throughout while every glTF asset here is Y-up
+ * by spec. The arguments are the five numbers decor/instances.ts holds per
+ * instance.
+ */
+export function compose_instance_matrix(out: THREE.Matrix4, x: f64, y: f64, z: f64, rotation_z: f64, scale: f64): THREE.Matrix4 {
+  _position.set(x, y, z);
+  _z_spin.setFromAxisAngle(_Z_AXIS, rotation_z);
   _quaternion.copy(_z_spin).multiply(Y_UP_TO_Z_UP);
-  _scale.setScalar(transform.scale);
+  _scale.setScalar(scale);
   return out.compose(_position, _quaternion, _scale);
 }
+const _Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 /* bake_decor_instances lived here — every instance's own transformed copy of
  * the source geometry merged into one buffer per (chunk, variant), the same

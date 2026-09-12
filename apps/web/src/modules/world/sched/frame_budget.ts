@@ -67,7 +67,7 @@ export type PassStats = {
  * always runs. Returns what it managed.
  */
 export function run_under_budget<T>(
-  items: readonly T[],
+  items: Iterable<T>,
   step: (item: T) => boolean,
   opts: BudgetOpts,
 ): PassStats {

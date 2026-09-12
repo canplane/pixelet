@@ -62,7 +62,7 @@ export function raycast_decor(raycaster: THREE.Raycaster, max_dist: f64): string
   for (const hit of hits) {
     if (hit.distance > max_dist + SAME_SURFACE_EPS) break; // sorted nearest-first
     if (hit.instanceId === undefined) continue;
-    const id = decor_field.instance_at(hit.object, hit.instanceId)?.id;
+    const id = decor_field.entry_at(hit.object, hit.instanceId);
     if (id) return id;
   }
   return null;

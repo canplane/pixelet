@@ -37,12 +37,13 @@ import { useDebugStore } from "@/app/settings/debug_store.ts";
 import { useSettingsStore } from "@/app/settings/settings_store.ts";
 import type { AnchorRegistry } from "@/modules/world/anchor/registry.ts";
 import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/modules/world/decor/field.ts";
-import { build_decor_instances, type ModelInstanceTransformList } from "@/modules/world/decor/decor_layer.ts";
+import { build_decor_instances, type DecorInstancesByVariant } from "@/modules/world/decor/decor_layer.ts";
+import { instances_release, instances_retain } from "@/modules/world/decor/instances.ts";
 import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/modules/world/decor/asset_store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/modules/world/objects/store.ts";
 import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/modules/world/render/chunk_material.ts";
 import { useTileStore } from "@/modules/world/terrain/store.ts";
-import { APPROXIMATE_CHUNK_RADIUS, chunk_distance_to_camera, estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
+import { estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
 import {
   bucket_from_baked,
   type BuiltChunkBucket,
@@ -73,6 +74,7 @@ import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
 import { lod_build_stats } from "@/modules/world/lod_build_stats.ts";
 export { lod_build_stats };
 import type { FrameBudget } from "@/modules/world/sched/tick.ts";
+import { BLEND_ACTIVE, ChunkTable, EMPTY, HOLDS_SLOT, IN_FRUSTUM, PENDING, SETTLING } from "@/modules/world/sched/chunk_table.ts";
 import { get_lod_guide, get_lod_pair_visibility, type LodStep } from "@/render/lod.ts";
 import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision, type MountedLodMesh, visibility_coverage } from "@/render/lod_visibility.ts";
 
@@ -99,7 +101,7 @@ export const OFF_SCREEN_LOD_STEP: LodStep = 64;
 const DIRECT_RUNS_MIN_STEP: LodStep = 8;
 
 /** What the pending work is, so that a change of request restarts its wait
- * (ChunkLodControl.pending_since). Releasing a chunk and building one are
+ * (ChunkTable.set_pending). Releasing a chunk and building one are
  * different jobs. */
 const RELEASE_REQUEST = -1;
 
@@ -139,15 +141,12 @@ export const RETAIN_BUDGET_BYTES: u32 = Math.floor((CORE_MEMORY?.buffer.byteLeng
 
 /**
  * Bytes every live node retains in run sets and cached tiers, world-wide,
- * kept as the caches change so nothing has to walk the nodes to find out.
- * Split by whether the node is on screen, which is the line the budget is
+ * split by whether the node is on screen, which is the line the budget is
  * drawn on: `off` is what the reclaim pass can act on, `on` is the working
- * set. A node crossing the frustum moves its bytes from one to the other.
+ * set. The table keeps both as the lanes change.
  */
-const retained = { on: 0, off: 0 };
-
 export function chunk_retained_bytes(): { on: u32; off: u32 } {
-  return { on: retained.on, off: retained.off };
+  return { on: lod_scheduler.retained_on, off: lod_scheduler.retained_off };
 }
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
@@ -192,17 +191,6 @@ export const commit_step_stats = {
  */
 export const node_counts = { added: 0, removed: 0, rebuilt: 0, released: 0 };
 
-/**
- * Every live node, for the retention walk below.
- *
- * The pool can say exactly what it holds and the tile store can say how many
- * pages it decoded, but between them sat 4.4GB nobody could name: measured
- * heap 5268MB against 840MB of pool and ~36MB of tiles. Guessing which
- * subsystem owns an unattributed gap is what this whole exercise keeps
- * proving to be a waste, so the gap gets a counter instead.
- */
-const LIVE_NODES = new Set<ChunkNode>();
-
 export type ChunkRetention = {
   nodes: u32;
   /** Nodes holding a scanned run set, and what those sets cost in the pool. */
@@ -211,8 +199,7 @@ export type ChunkRetention = {
   /** Built LOD tiers held across every node's cache — bounded by
    * MAX_CACHED_LOD_TIERS each, but the product is what matters. */
   tiers: u32;
-  /** Decor: cached per-step builds, and the transform objects inside them.
-   * Neither is pooled, and an instance is a plain object. */
+  /** Decor: cached per-step builds, and the lane instances inside them. */
   decor_steps: u32;
   decor_instances: u32;
 };
@@ -220,7 +207,7 @@ export type ChunkRetention = {
 export function chunk_retention(): ChunkRetention {
   const out: ChunkRetention = { nodes: 0, run_sets: 0, run_set_mb: 0, tiers: 0, decor_steps: 0, decor_instances: 0 };
   let run_bytes = 0;
-  for (const node of LIVE_NODES) {
+  for (const node of lod_scheduler.handles) {
     out.nodes++;
     const runs = node.retained_column_runs;
     if (runs) {
@@ -231,7 +218,7 @@ export function chunk_retention(): ChunkRetention {
     for (const per_bundle of node.retained_decor) {
       out.decor_steps++;
       for (const variants of per_bundle) {
-        for (const list of variants) out.decor_instances += list.length;
+        for (const inst of variants) if (inst) out.decor_instances += inst.len;
       }
     }
   }
@@ -250,52 +237,15 @@ export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; re
 
 // ---- The scheduler's view of a chunk ----
 
-export type ChunkLodControl = {
-  blend_active: boolean;
-  /** Showing a tier that is not the one wanted. */
-  settling: boolean;
-  in_frustum: boolean;
-  /** Nothing of this chunk is on screen yet: a hole to fill rather than a
-   * chunk asking to be sharper. The two are different classes of work
-   * (sched/priority.ts). */
-  empty: boolean;
-  distance2: f64;
-  /** Squared distance from where the camera is heading (sched/priority.ts).
-   * Orders the work; `distance2` still picks the tier. */
-  lead_distance2: f64;
-  pending: boolean;
-  /** When the work now pending was asked for, in ms; -1 while not pending.
-   * Restarted when the request itself changes, so the seconds a release
-   * spent queued are not credited to the build that replaces it. */
-  pending_since: f64;
-  /** Holding the scan slot (voxel_scan.ts) or the bake slot
-   * (chunk_mesher.ts). The commit loop puts this control first: nothing else
-   * can use that slot until it finishes, and a step cap reached on nearer
-   * chunks would otherwise starve it — and with it everything waiting. */
-  holds_slot: boolean;
-  /**
-   * Where this chunk is and whether it is on screen. Cheap, and run for
-   * every control every frame: `recheck` below is rationed, and ordering the
-   * queue by what a rationed pass last wrote meant ordering by numbers up to
-   * LOD_RECHECK_INTERVAL old.
-   */
-  refresh(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void;
-  /** The decision: which tier, blend state, what to commit. Rationed. */
-  recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void;
-  commit(budget: FrameBudget): boolean;
-  /** Bytes of built work this chunk keeps off screen, and the call that
-   * gives them back — the stage's memory budget (RETAIN_BUDGET_BYTES). */
-  readonly retained: u32;
-  reclaim(): void;
-};
-
 /**
- * A plain module singleton now, not a React context. Chunk nodes are not
- * components and have no tree to read a provider from, and there was only
- * ever one registry.
+ * Every chunk the scheduler orders, as lanes (sched/chunk_table.ts). A node
+ * is the handle behind its slot: the numbers the passes read — on screen,
+ * distance, pending and since when, what it holds — live in the table, and
+ * the node reads and writes them through its slot. A plain module singleton,
+ * not a React context: chunk nodes are not components and have no tree to
+ * read a provider from, and there was only ever one.
  */
-export type LodSchedulerRegistry = { controls: Set<ChunkLodControl> };
-export const lod_scheduler: LodSchedulerRegistry = { controls: new Set() };
+export const lod_scheduler = new ChunkTable<ChunkNode>();
 
 // ---- Layout ----
 
@@ -306,10 +256,21 @@ export const lod_scheduler: LodSchedulerRegistry = { controls: new Set() };
  * independent blend state.
  */
 type DecorLayoutPair = {
-  primary: ModelInstanceTransformList[][];
-  secondary: ModelInstanceTransformList[][] | null;
+  primary: DecorInstancesByVariant[];
+  secondary: DecorInstancesByVariant[] | null;
 };
 const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: [], secondary: null };
+
+/** The layout's own hold on the lane sets it shows, taken and dropped as one
+ * with the buckets' — see apply_layout. */
+function retain_decor_pair(pair: DecorLayoutPair): void {
+  for (const variants of pair.primary) for (const inst of variants) if (inst) instances_retain(inst);
+  if (pair.secondary) { for (const variants of pair.secondary) for (const inst of variants) if (inst) instances_retain(inst); }
+}
+function release_decor_pair(pair: DecorLayoutPair): void {
+  for (const variants of pair.primary) for (const inst of variants) if (inst) instances_release(inst);
+  if (pair.secondary) { for (const variants of pair.secondary) for (const inst of variants) if (inst) instances_release(inst); }
+}
 
 type LodLayout = {
   primary: LodStep;
@@ -335,6 +296,11 @@ function set_three_box(box: THREE.Box3, bounds: ChunkBounds): THREE.Box3 {
   return box;
 }
 
+/** The nominal bounding sphere of a chunk nothing has measured yet, in its
+ * own space — the same one sched/chunk_table.ts starts a slot with. */
+const NOMINAL_CENTER: f64 = CHUNK_WORLD_SPAN * 0.5;
+const NOMINAL_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
+
 /** Shared placeholder a mesh holds before its first real geometry and again
  * after that geometry is disposed — never uploaded, never mutated. */
 const EMPTY_GEOMETRY = new THREE.BufferGeometry();
@@ -356,31 +322,24 @@ export type ChunkNodeDeps = {
   anchor_registry: AnchorRegistry;
 };
 
-export class ChunkNode implements ChunkLodControl {
+export class ChunkNode {
   /** This chunk's own scene node, positioned at its page-local origin. */
   readonly group: THREE.Group;
 
-  blend_active = true;
-  settling = false;
-  in_frustum: boolean;
-  distance2: f64;
-  lead_distance2: f64;
-  pending = false;
-  pending_since: f64 = -1;
+  /** This node's slot in lod_scheduler's lanes; the table moves it. */
+  slot: u32 = 0;
 
   private readonly page_off: IVec;
   private readonly key: ChunkKey;
   private readonly object_key: IVec;
-  /** This chunk's own absolute lattice origin, and its identity in
-   * decor/field.ts — decor lives in one world-wide field now, so it needs
-   * both a stable name and the offset to place chunk-local instances at. */
+  /** This chunk's own absolute lattice origin — its identity in
+   * decor/field.ts, and the offset chunk-local instances are placed at. */
   private readonly base_i: IVec;
-  private readonly decor_key: string;
   private readonly stable_hash: f64;
   private readonly registry: ChunkMeshRegistry = { meshes: new Set() };
 
   private readonly bucket_cache = new Map<LodStep, BuiltChunkBucket>();
-  private readonly decor_cache = new Map<LodStep, ModelInstanceTransformList[][]>();
+  private readonly decor_cache = new Map<LodStep, DecorInstancesByVariant[]>();
   /**
    * Every column's runs, scanned once from the live volume and reused across
    * every LOD tier and every transition after that — the composited dense
@@ -392,7 +351,7 @@ export class ChunkNode implements ChunkLodControl {
   private column_runs: ColumnRunSet | null = null;
   /** A bake in progress, held across frames like the scan and bounded the
    * same way: one chunk at a time. `step` is the tier it is baking. */
-  private bake: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null = null;
+  private _bake: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null = null;
   /** The tiers the current build_buckets call is after. */
   private wanted: readonly LodStep[] = [];
   /**
@@ -402,7 +361,25 @@ export class ChunkNode implements ChunkLodControl {
    * stops needing its scan (disposed, source changed, left the frustum) has
    * to abort it rather than drop it. See abort_scan.
    */
-  private scan: { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null = null;
+  private _scan: { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null = null;
+
+  /** The work in flight, and HOLDS_SLOT in the table with it: the slot
+   * holder goes first in every order, so the flag must move the moment the
+   * work does. */
+  private get scan(): { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null {
+    return this._scan;
+  }
+  private set scan(v: { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null) {
+    this._scan = v;
+    lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._bake !== null);
+  }
+  private get bake(): { step: LodStep; cursor: BakeCursor; spent_ms: number } | null {
+    return this._bake;
+  }
+  private set bake(v: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null) {
+    this._bake = v;
+    lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._scan !== null);
+  }
 
   private layout: LodLayout;
   private desired: { primary: LodStep; secondary: LodStep | null };
@@ -424,42 +401,36 @@ export class ChunkNode implements ChunkLodControl {
   private decor_role: ChunkLodRole = "primary";
   private decor_dirty = true;
 
-  // Scratch, reused by recheck() so a per-frame sweep over thousands of
-  // nodes allocates nothing.
-  private readonly center = new THREE.Vector3();
-  private readonly local_box = new THREE.Box3();
-  private readonly sphere: THREE.Sphere;
-
   private disposed = false;
 
-  private request = 0;
+  // ---- the table's lanes, through this node's slot ----
 
-  /**
-   * The one place `pending` is written, so the time it became pending is
-   * never out of step with it.
-   *
-   * The clock restarts when `request` changes, not only when `pending` goes
-   * false to true. An off-screen chunk stays pending for as long as its
-   * release is queued, so keying on the flag meant a chunk that sat off
-   * screen for seconds came back into view already holding those seconds and
-   * outranked the middle of the screen, which had just become interesting
-   * (discussions/20260912-what-to-render-when.md).
-   */
+  get in_frustum(): boolean {
+    return lod_scheduler.has(this.slot, IN_FRUSTUM);
+  }
+  get distance2(): f64 {
+    return lod_scheduler.distance2[this.slot];
+  }
+  get pending(): boolean {
+    return lod_scheduler.has(this.slot, PENDING);
+  }
+  private get request(): number {
+    return lod_scheduler.request[this.slot];
+  }
+  private get blend_active(): boolean {
+    return lod_scheduler.has(this.slot, BLEND_ACTIVE);
+  }
+  private set blend_active(v: boolean) {
+    lod_scheduler.set_flag(this.slot, BLEND_ACTIVE, v);
+  }
+  private set settling(v: boolean) {
+    lod_scheduler.set_flag(this.slot, SETTLING, v);
+  }
   private set_pending(pending: boolean, request: number): void {
-    if (pending && (!this.pending || request !== this.request)) this.pending_since = performance.now();
-    if (!pending) this.pending_since = -1;
-    this.request = request;
-    this.pending = pending;
+    lod_scheduler.set_pending(this.slot, pending, request, performance.now());
   }
-
-  get holds_slot(): boolean {
-    return this.scan !== null || this.bake !== null;
-  }
-
-  /** See ChunkLodControl.empty. A chunk that built and found nothing to draw
-   * is finished, not a hole, so this asks whether a layout landed at all. */
-  get empty(): boolean {
-    return !this.layout.ready;
+  private get holds_slot(): boolean {
+    return this._scan !== null || this._bake !== null;
   }
 
   constructor(private readonly deps: ChunkNodeDeps) {
@@ -468,23 +439,20 @@ export class ChunkNode implements ChunkLodControl {
     this.key = { page_idx, page_off: this.page_off };
     this.object_key = object_column_of(page_idx, this.page_off);
     this.base_i = ivec.add(FROM_L3_IDX(page_idx), this.page_off);
-    this.decor_key = `${page_idx.toString()}:${offset.key}`;
-    this.stable_hash = blend_hash(this.decor_key);
-    this.sphere = new THREE.Sphere(this.center, APPROXIMATE_CHUNK_RADIUS);
+    this.stable_hash = blend_hash(`${page_idx.toString()}:${offset.key}`);
 
     this.group = new THREE.Group();
     this.group.name = `chunk/${offset.key}`;
     this.group.position.set(offset.base_x * U_PER_CELL, offset.base_y * U_PER_CELL, 0);
 
+    // The table measures every slot before anything is sorted, so nothing
+    // here seeds a distance; the one-shot estimate only picks the tier the
+    // first recheck's hysteresis starts from. Off screen until the table's
+    // first pass says otherwise.
+    lod_scheduler.add(this, ivec.to_real(ivec.X(this.base_i)), ivec.to_real(ivec.Y(this.base_i)));
+    lod_scheduler.set_flag(this.slot, EMPTY, true);
+    this.group.visible = false;
     const view = estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, this.base_i);
-    // Seeded from the same one-shot camera-relative estimate rather than a
-    // true (Infinity) sentinel: the scheduler ranks a same-frame batch of
-    // fresh controls by distance2, and every one of them starts with nothing
-    // built to measure exactly, so Infinity would degrade that ranking to
-    // registration order for the whole batch.
-    this.in_frustum = view.in_frustum;
-    this.distance2 = view.distance2;
-    this.lead_distance2 = view.distance2;
     this.desired = { primary: view.in_frustum ? view.lod_step : OFF_SCREEN_LOD_STEP, secondary: null };
     this.layout = {
       primary: this.desired.primary,
@@ -516,26 +484,24 @@ export class ChunkNode implements ChunkLodControl {
       subscribe_decor_assets(() => this.on_decor_assets()),
     );
 
-    lod_scheduler.controls.add(this);
-    if (import.meta.env.DEV) LIVE_NODES.add(this);
     if (import.meta.env.DEV) node_counts.added++;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    lod_scheduler.controls.delete(this);
-    LIVE_NODES.delete(this);
     for (const off of this.unsubscribes) off();
     this.abort_work();
-    decor_field.clear_chunk(this.decor_key);
+    decor_field.clear_chunk(this.base_i);
     this.detach_all();
     for (const bucket of this.layout.buckets) release_built_mesh(bucket.cubes);
+    release_decor_pair(this.layout.decor);
     this.layout = { ...this.layout, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false };
     this.release_bucket_cache();
-    this.decor_cache.clear();
+    this.clear_decor_cache();
     this.clear_column_runs();
     this.group.removeFromParent();
+    lod_scheduler.remove(this.slot);
     if (import.meta.env.DEV) node_counts.removed++;
   }
 
@@ -547,8 +513,17 @@ export class ChunkNode implements ChunkLodControl {
   get retained_tier_cnt(): u32 {
     return this.bucket_cache.size;
   }
-  get retained_decor(): Iterable<ModelInstanceTransformList[][]> {
+  get retained_decor(): Iterable<DecorInstancesByVariant[]> {
     return this.decor_cache.values();
+  }
+
+  /** Drops the cache's hold on every lane set it has; a set the layout is
+   * still showing lives on until the layout lets go. */
+  private clear_decor_cache(): void {
+    for (const per_bundle of this.decor_cache.values()) {
+      for (const variants of per_bundle) for (const inst of variants) if (inst) instances_release(inst);
+    }
+    this.decor_cache.clear();
   }
 
   // ---- caches ----
@@ -568,7 +543,7 @@ export class ChunkNode implements ChunkLodControl {
   private reset_all_caches(): void {
     this.abort_work();
     this.release_bucket_cache();
-    this.decor_cache.clear();
+    this.clear_decor_cache();
     this.clear_column_runs();
   }
 
@@ -608,30 +583,10 @@ export class ChunkNode implements ChunkLodControl {
     this.reset_all_caches();
   }
 
-  /** What reclaim() would free. */
-  get retained(): u32 {
-    let bytes = this.column_runs?.block.bytes ?? 0;
-    for (const bucket of this.bucket_cache.values()) bytes += bucket.cubes.block.bytes;
-    return bytes;
-  }
-
-  /** Adds `delta` bytes to whichever side of the frustum this node is on. */
+  /** What reclaim() would free is the table's own count of what this node
+   * holds, on whichever side of the frustum it is. */
   private account(delta: number): void {
-    if (this.in_frustum) retained.on += delta;
-    else retained.off += delta;
-  }
-
-  /** Moves this node's bytes across when its frustum membership changes. */
-  private reaccount(now_in_frustum: boolean): void {
-    if (now_in_frustum === this.in_frustum) return;
-    const bytes = this.retained;
-    if (now_in_frustum) {
-      retained.off -= bytes;
-      retained.on += bytes;
-    } else {
-      retained.on -= bytes;
-      retained.off += bytes;
-    }
+    lod_scheduler.account(this.slot, delta);
   }
 
   // ---- source changes ----
@@ -680,7 +635,7 @@ export class ChunkNode implements ChunkLodControl {
     const assets = decor_bundle_assets();
     if (this.bundle_assets === assets) return;
     this.bundle_assets = assets;
-    this.decor_cache.clear();
+    this.clear_decor_cache();
     if (!this.layout.ready) return;
     this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
   }
@@ -701,7 +656,7 @@ export class ChunkNode implements ChunkLodControl {
     if (revision === this.decor_revision && show_decor === this.show_decor) return;
     this.decor_revision = revision;
     this.show_decor = show_decor;
-    this.decor_cache.clear();
+    this.clear_decor_cache();
     if (!this.layout.ready) return;
     this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
   }
@@ -922,7 +877,7 @@ export class ChunkNode implements ChunkLodControl {
 
   /** Decor's own build — no volume scan, no dependency on the cube caches
    * at all (a decor entry never paints a voxel). */
-  private build_decor_step(step: LodStep): ModelInstanceTransformList[][] {
+  private build_decor_step(step: LodStep): DecorInstancesByVariant[] {
     const cached = this.decor_cache.get(step);
     if (cached) return cached;
     const built = this.bundle_assets.map(({ bundle }) => build_decor_instances(this.tile as never, step, this.deps.page_idx, this.deps.offset.base_x, this.deps.offset.base_y, bundle));
@@ -960,9 +915,15 @@ export class ChunkNode implements ChunkLodControl {
   private apply_layout(next: LodLayout): void {
     const previous = this.layout;
     for (const bucket of next.buckets) retain_built_mesh(bucket.cubes);
+    retain_decor_pair(next.decor);
     this.layout = next;
+    // A chunk that built and found nothing to draw is finished, not a hole,
+    // so EMPTY asks whether a layout landed at all.
+    lod_scheduler.set_flag(this.slot, EMPTY, !next.ready);
+    if (next.bounds !== previous.bounds) this.publish_bounds(next.bounds);
     this.attach(next);
     for (const bucket of previous.buckets) release_built_mesh(bucket.cubes);
+    release_decor_pair(previous.decor);
     if (import.meta.env.DEV) node_counts.rebuilt++;
   }
 
@@ -1032,14 +993,14 @@ export class ChunkNode implements ChunkLodControl {
     this.decor_shown = shown;
     this.decor_role = role;
     if (!shown) {
-      decor_field.clear_chunk(this.decor_key);
+      decor_field.clear_chunk(this.base_i);
       return;
     }
 
     const source = role === "secondary" ? this.layout.decor.secondary! : this.layout.decor.primary;
     const contribution: Map<string, DecorVariantContribution> = new Map();
     this.bundle_assets.forEach(({ bundle, geometries, materials }, bi) => {
-      const variants: ModelInstanceTransformList[] | undefined = source[bi];
+      const variants: DecorInstancesByVariant | undefined = source[bi];
       if (!variants) return;
       geometries.forEach((geometry, variant) => {
         const material = materials[variant];
@@ -1047,11 +1008,11 @@ export class ChunkNode implements ChunkLodControl {
         // A variant whose model or skin is still in flight contributes
         // nothing; the arrival rebuilds this chunk's decor and lands here
         // again with both halves in hand.
-        if (!geometry || !material || !instances || instances.length === 0) return;
+        if (!geometry || !material || !instances) return;
         contribution.set(variant_key(bundle.kind, variant), { geometry, material, instances });
       });
     });
-    decor_field.set_chunk(this.decor_key, this.base_i, contribution as DecorContribution);
+    decor_field.set_chunk(this.base_i, contribution as DecorContribution);
   }
 
   /**
@@ -1078,44 +1039,37 @@ export class ChunkNode implements ChunkLodControl {
     if (import.meta.env.DEV) record_timing(mesh_unmount_stats, performance.now() - t0);
   }
 
-  // ---- ChunkLodControl ----
+  // ---- the scheduler's calls ----
 
   /**
-   * See ChunkLodControl.refresh. Measures only.
-   *
-   * One visibility rule for every chunk, a bounding sphere, rather than a
-   * sphere for chunks with no measured bounds and a transformed box for the
-   * rest: a sphere that encloses the box never culls anything the box would
-   * have kept, and costs six plane dots instead of eight transformed corners
-   * — which is what makes running this for every control every frame
-   * affordable.
+   * The bounding sphere the table culls this chunk by, in the chunk's own
+   * space: the measured box's centre and half its diagonal, or the nominal
+   * sphere while nothing is measured. A sphere that encloses the box never
+   * culls anything the box would have kept, and costs six plane dots instead
+   * of eight transformed corners — which is what makes testing every chunk
+   * every frame affordable (ChunkTable.refresh).
    */
-  refresh(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void {
-    if (this.disposed) return;
-    const bounds = this.layout.bounds;
+  private publish_bounds(bounds: ChunkBounds | null): void {
     if (bounds === null) {
-      chunk_distance_to_camera(this.group, CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0, camera, this.center);
-      this.sphere.radius = APPROXIMATE_CHUNK_RADIUS;
-    } else {
-      set_three_box(this.local_box, bounds);
-      this.local_box.getCenter(this.center).applyMatrix4(this.group.matrixWorld);
-      this.sphere.radius = this.local_box.min.distanceTo(this.local_box.max) * 0.5;
+      lod_scheduler.set_bounds(this.slot, NOMINAL_CENTER, NOMINAL_CENTER, 0, NOMINAL_RADIUS);
+      return;
     }
-    this.distance2 = this.center.distanceToSquared(camera.position);
-    this.lead_distance2 = this.center.distanceToSquared(lead);
-    // The camera standing over (or inside) a chunk: a low-angle frustum can
-    // otherwise rule out the one chunk directly beneath it.
-    const inside = Math.abs(camera.position.x - this.center.x) <= CHUNK_WORLD_SPAN * 0.5 &&
-      Math.abs(camera.position.y - this.center.y) <= CHUNK_WORLD_SPAN * 0.5;
-    const now_in_frustum = inside || frustum.intersectsSphere(this.sphere);
-    this.reaccount(now_in_frustum);
-    this.in_frustum = now_in_frustum;
-    this.group.visible = this.in_frustum;
+    const dx = bounds.max_x - bounds.min_x;
+    const dy = bounds.max_y - bounds.min_y;
+    const dz = bounds.max_z - bounds.min_z;
+    lod_scheduler.set_bounds(
+      this.slot,
+      (bounds.min_x + bounds.max_x) * 0.5,
+      (bounds.min_y + bounds.max_y) * 0.5,
+      (bounds.min_z + bounds.max_z) * 0.5,
+      Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5,
+    );
   }
 
-  recheck(camera: THREE.Camera, frustum: THREE.Frustum, lead: THREE.Vector3): void {
+  /** The decision: which tier, blend state, what to commit. Rationed by the
+   * stage; reads what the table's refresh measured this frame. */
+  recheck(): void {
     if (this.disposed) return;
-    this.refresh(camera, frustum, lead);
 
     if (!this.in_frustum) {
       // Do not let GPU buffers or derived surfaces accumulate as the camera

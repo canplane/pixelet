@@ -2,7 +2,8 @@
 
 /** Sparse placed objects -> shared temporary 64x64 chunk. */
 
-import type { u32 } from "@xpute/core/kit/word.ts";
+import type { i32, u32 } from "@xpute/core/kit/word.ts";
+import { IndexedMap, U32_KEYS } from "@xpute/core/ds/map.ts";
 
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constants.ts";
 import { cube_hex, is_terrain_style_cube, object_value_is_air, object_value_is_decor, placeable_cube_id_from_num, type PlaceableCubeId, terrain_style_cube_source } from "@pxl/shared/spec/cell/mod.ts";
@@ -13,8 +14,9 @@ import { column_has_entries, each_column_entry, object_column_of, object_column_
 import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255 } from "../terrain/shader_meta.ts";
 
-import { append_chunk_sub_voxel, type ChunkVolume, MaterialClass, NO_LAYER, pack_sub_cell_fraction, set_chunk_voxel, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/volume.ts";
+import { append_chunk_sub_voxel, type ChunkVolume, MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction, set_chunk_voxel, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/volume.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
+import { CORE_ALLOC } from "../pipeline/core_pool.ts";
 
 export function chunk_origin_of(page_idx: IVec, page_off: IVec): IVec {
   return ivec.add(FROM_L3_IDX(page_idx), page_off);
@@ -36,6 +38,16 @@ export function chunk_origin_of(page_idx: IVec, page_off: IVec): IVec {
  * already don't need it for: layer-tap blending itself only cares whether
  * layer_idx is real, never material_class.
  */
+/**
+ * The voxels this paint has claimed, so a second sub-cell object landing on
+ * a claimed one is filed as overflow rather than overwriting it. Keyed by
+ * the packed cell address — chunk-local x and y in six bits each and the
+ * absolute cell Z, biased to stay positive, above — and cleared per paint.
+ */
+const claimed = new IndexedMap(U32_KEYS, 256, CORE_ALLOC);
+const Z_BIAS: u32 = 1 << 19;
+const voxel_address = (cx: u32, cy: u32, z: i32): u32 => (((z + Z_BIAS) << 12) | (cy << 6) | cx) >>> 0;
+
 function resolve_solid_material(color_id: PlaceableCubeId): VoxelMaterial {
   if (is_terrain_style_cube(color_id)) {
     const { channel, terrain_num_id } = terrain_style_cube_source(color_id);
@@ -71,7 +83,7 @@ export class ObjectWorldLayer implements WorldLayer {
   }
 
   paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean {
-    const claimed = new Set<string>();
+    claimed.clear();
     let any = false;
 
     // A raycast paints the real set; only the drawn build sees the eraser
@@ -104,12 +116,12 @@ export class ObjectWorldLayer implements WorldLayer {
 
       for (let cy: u32 = cy0; cy < cy1; cy++) {
         for (let cx: u32 = cx0; cx < cx1; cx++) {
-          const address = `${cx},${cy},${z}`;
+          const address = voxel_address(cx, cy, z);
           any = true;
-          if (claimed.has(address) && !is_air) {
-            append_chunk_sub_voxel(target, { cx, cy, z, ...material, sub_sz, sub_ox, sub_oy, sub_oz });
+          if (claimed.find(address) >= 0 && !is_air) {
+            append_chunk_sub_voxel(target, cx, cy, z, material, pack_sub_cell(sub_ox, sub_oy, sub_oz, sub_sz));
           } else {
-            claimed.add(address);
+            claimed.insert(address);
             set_chunk_voxel(target, cx, cy, z, material, is_sub_cell ? [sub_ox, sub_oy, sub_oz, sub_sz] : undefined);
           }
         }
