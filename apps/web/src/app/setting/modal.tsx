@@ -19,6 +19,13 @@ export type SettingsModalProps = {
   type: "settings";
 };
 
+// Each tab scrolls on its own. One scroller around both panels kept its
+// scrollTop across a switch, so a long scroll down the effects list opened
+// the info tab already scrolled past its top; Radix mounts a panel fresh
+// when it becomes active, so a scroller per panel starts at zero every time.
+const TAB_SCROLL = "flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-4";
+const TAB_PAD = { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" } as const;
+
 export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
   const { open, onOpenChange } = props;
   const { t } = useTranslation();
@@ -56,34 +63,29 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             </TabsTrigger>
           </TabsList>
 
-          <div
-            className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
-          >
-            <TabsContent value="effects">
-              <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
-              <Separator />
-              <SettingsSection section="display" />
-              <SettingsSection section="camera" />
-              <SettingsSection section="editing" />
-              <SettingsSection section="lighting" />
-              <SettingsSection section="quality" />
-              {__IS_DEV__ && (
-                <>
-                  <Separator />
-                  <DebugSection />
-                </>
-              )}
-            </TabsContent>
+          <TabsContent value="effects" className={TAB_SCROLL} style={TAB_PAD}>
+            <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
+            <Separator />
+            <SettingsSection section="display" />
+            <SettingsSection section="camera" />
+            <SettingsSection section="editing" />
+            <SettingsSection section="lighting" />
+            <SettingsSection section="quality" />
+            {__IS_DEV__ && (
+              <>
+                <Separator />
+                <DebugSection />
+              </>
+            )}
+          </TabsContent>
 
-            <TabsContent value="info">
-              <LanguageSection />
-              <Separator />
-              <DisclaimerSection />
-              <AttributionSection />
-              <AboutSection />
-            </TabsContent>
-          </div>
+          <TabsContent value="info" className={TAB_SCROLL} style={TAB_PAD}>
+            <LanguageSection />
+            <Separator />
+            <DisclaimerSection />
+            <AttributionSection />
+            <AboutSection />
+          </TabsContent>
         </Tabs>
       </SheetContent>
     </Sheet>

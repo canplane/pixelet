@@ -19,7 +19,6 @@ function build_label(): string {
 
 export function AboutSection() {
   const { t } = useTranslation();
-  const contact_url = "https://github.com/canplane";
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
@@ -31,13 +30,7 @@ export function AboutSection() {
 
         <span>{t("settings.about.tagline")}</span>
 
-        <span>
-          © 2025{" "}
-          <a href={contact_url} target="_blank" rel="noreferrer" className="underline hover:text-foreground">
-            canplane
-          </a>
-          . All rights reserved.
-        </span>
+        <span>© 2025 pixelet. All rights reserved.</span>
 
         <span className="text-muted-foreground/70">
           {APP_ENV !== "production" && `${env_label} · `}

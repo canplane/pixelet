@@ -51,9 +51,11 @@ the wrong way to work on a bake, since a published tile prefix is frozen.
 
 ## Deployment
 
-One Cloudflare Worker serves the built client, the terrain tiles out of R2,
-and a reverse proxy to the API — so everything the server answers is
-same-origin under `/api`, and `deno task deploy` publishes all three.
+One Cloudflare Worker serves the built client, the baked pages and the
+assets out of R2 — terrain and POI by version, every model and texture by
+content hash — and a reverse proxy to the API, so everything the server
+answers is same-origin under `/api`, and `deno task deploy` publishes all
+three.
 
 The API itself, forward search's only real dependency, runs on a single
 Hetzner VM alongside its two Postgres instances and Caddy. Everything else
@@ -96,7 +98,8 @@ Three more pieces of the stack are built for this project rather than adopted: a
 ├── asset/                          # The shipped models and texture pack, by rendering tier
 │   ├── cube/                       # (cube, decor, actor) — no code imports these: they are
 │   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each
-│   └── actor/                      # into the bucket and the table the palette reads
+│   ├── actor/                      # into the bucket and the table the palette reads
+│   └── brand/                      # the symbol and the preview the icons are rendered from
 │
 └── packages/
     ├── xpute/

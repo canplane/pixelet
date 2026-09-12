@@ -1,6 +1,7 @@
 {
   "name": "pixelet",
   "short_name": "pixelet",
+  "description": "The real world is a canvas for stacking virtual blocks.",
   "icons": [
     {
       "src": "/favicon/web-app-manifest-192x192.png",
@@ -13,6 +14,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/favicon/web-app-manifest-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "theme_color": "#080c0f",

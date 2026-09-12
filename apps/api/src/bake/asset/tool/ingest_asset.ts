@@ -183,8 +183,9 @@ async function ingest(): Promise<Ingested[]> {
     if (!file.endsWith(".glb") && !file.endsWith(".png")) continue;
     const path = relative(ASSET_DIR, file).replaceAll("\\", "/");
     // The native-resolution texture originals are the resize source for
-    // download_texture_pack.ts, not something the client draws.
-    if (path.startsWith("cube/original/")) continue;
+    // download_texture_pack.ts, and the brand sources are render_brand.ts's
+    // — neither is something the client fetches by key.
+    if (path.startsWith("cube/original/") || path.startsWith("brand/")) continue;
     const bytes = await Deno.readFile(file);
     const type = path.endsWith(".glb") ? "glb" : "png";
     const hex = await sha256_hex(bytes);
