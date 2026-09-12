@@ -96,3 +96,65 @@ Deno.test("pool - bypass hands every request its own buffer and reuses nothing",
   assertEquals(p.stat.regions, 0);
   assertEquals(p.stat.spills, 2);
 });
+
+// ---- backing ----
+
+const REGION = 1 << 16;
+
+function backed(regions: number, overrides: Record<string, unknown> = {}) {
+  const backing = new ArrayBuffer(REGION * regions);
+  return { backing, pool: pool({ backing, max_idle_regions: 0, ...overrides }) };
+}
+
+Deno.test("pool - regions come out of the backing first, at absolute offsets", () => {
+  const { backing, pool: p } = backed(2);
+  const a = p.acquire(REGION);
+  const b = p.acquire(REGION);
+  assert(a.buf === backing && b.buf === backing, "both regions carved from the backing");
+  assertEquals([a.byte_offset, b.byte_offset].sort((x, y) => x - y), [0, REGION]);
+
+  // Writing through one block must not show up in the other.
+  new Uint8Array(a.buf, a.byte_offset, a.bytes).fill(1);
+  new Uint8Array(b.buf, b.byte_offset, b.bytes).fill(2);
+  assertEquals(new Uint8Array(a.buf, a.byte_offset, a.bytes).every((v) => v === 1), true);
+});
+
+Deno.test("pool - a block in a backed region past the first round-trips through release", () => {
+  // The second region's base is not zero, so release has to subtract it
+  // before the buddy arithmetic, or it frees the wrong span.
+  const { pool: p } = backed(2);
+  const first = p.acquire(REGION);
+  const small = p.acquire(1 << 12);
+  assertEquals(small.byte_offset >= REGION, true);
+  p.release(small);
+  const again = p.acquire(1 << 12);
+  assertEquals(again.byte_offset, small.byte_offset);
+  p.release(again);
+  p.release(first);
+});
+
+Deno.test("pool - past the backing it falls back to plain regions, and only those are reclaimed", () => {
+  const { backing, pool: p } = backed(1);
+  const a = p.acquire(REGION);
+  const b = p.acquire(REGION);
+  assert(a.buf === backing, "first region is the backing");
+  assert(b.buf !== backing, "second region is a plain buffer");
+  assertEquals(p.stat.regions, 2);
+
+  p.release(a);
+  p.release(b);
+  // max_idle_regions is 0: the plain region goes, the backed one stays.
+  assertEquals(p.stat.regions, 1);
+  p.clear();
+  assertEquals(p.stat.regions, 1);
+
+  // And the backed region is what serves the next request.
+  const c = p.acquire(1 << 12);
+  assert(c.buf === backing, "reused from the backing");
+});
+
+Deno.test("pool - a backing smaller than a region is not used at all", () => {
+  const backing = new ArrayBuffer(REGION - 1);
+  const p = pool({ backing });
+  assert(p.acquire(1 << 12).buf !== backing);
+});

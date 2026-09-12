@@ -75,6 +75,9 @@ function summarize_frames(frames: readonly FrameSample[]) {
     recheck_p95: p95((f) => f.cpu.recheck_ms),
     commit_p95: p95((f) => f.cpu.commit_ms),
     render_p95: p95((f) => f.cpu.render_ms),
+    /** Per tick phase — see sched/tick.ts. Frames recorded before phases
+     * existed read 0 rather than breaking the percentile. */
+    phase_p95: Object.fromEntries(Object.keys(last.phases ?? {}).map((k) => [k, p95((f) => f.phases?.[k] ?? 0)])) as Record<string, number>,
     last,
     heap_delta,
   };
@@ -95,6 +98,16 @@ function summarize_tasks(tasks: readonly TaskRecord[]) {
     return { cat, n: g.ok + g.aborted + g.error, p50: pct(lat, 0.5), p95: pct(lat, 0.95), ok: g.ok, aborted: g.aborted, error: g.error };
   });
 }
+
+/** A pending chunk waiting longer than this is being passed over rather than
+ * queued — see the `wait` line in log.ts. Two seconds is a dozen recheck
+ * intervals: long enough that ordinary queueing during a pan clears it. */
+const STARVED_MS = 2000;
+
+/** The interaction phase runs unbudgeted and is meant to be O(1) — camera,
+ * frame, puck, companion. Past this, it is eating the budget the phases after
+ * it receive. */
+const INTERACTION_WARN_MS = 2;
 
 function Row(props: { k: string; v: string; warn?: boolean }) {
   return (
@@ -177,11 +190,21 @@ export function LedgerOverlay() {
             v={`${r1(f.recheck_p95)}/${r1(f.commit_p95)}/${r1(f.render_p95)}`}
             warn={Math.max(f.recheck_p95, f.commit_p95, f.render_p95) > FRAME_BUDGET_MS}
           />
+          <Row
+            k="phase p95 i/v/c/s"
+            v={`${r1(f.phase_p95.interaction ?? 0)}/${r1(f.phase_p95.visible ?? 0)}/${r1(f.phase_p95.content ?? 0)}/${r1(f.phase_p95.cosmetic ?? 0)}`}
+            warn={(f.phase_p95.interaction ?? 0) > INTERACTION_WARN_MS}
+          />
           <div className="my-1 border-t border-white/10" />
           <Row
             k="lod c/f/p"
             v={`${f.last.lod.chunks}/${f.last.lod.in_frustum}/${f.last.lod.pending}`}
             warn={f.last.lod.pending > 32}
+          />
+          <Row
+            k="wait rel/vis"
+            v={`${f.last.lod.offscreen_pending} ${Math.round(f.last.lod.oldest_release_ms)}/${Math.round(f.last.lod.oldest_visible_ms)}ms`}
+            warn={Math.max(f.last.lod.oldest_release_ms, f.last.lod.oldest_visible_ms) > STARVED_MS}
           />
           <div className="my-1 border-t border-white/10" />
           <Row k="draws" v={String(f.last.draw_calls)} />

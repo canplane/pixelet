@@ -227,6 +227,10 @@ export type ChunkLodControl = {
    * Orders the work; `distance2` still picks the tier. */
   lead_distance2: f64;
   pending: boolean;
+  /** When `pending` last went from false to true, in ms; -1 while not
+   * pending. What the ledger reads to see whether anything is being starved
+   * — the progress rule guarantees one step a frame, not which one. */
+  pending_since: f64;
   /** Holding the scan slot (voxel_scan.ts) or the bake slot
    * (chunk_mesher.ts). The commit loop puts this control first: nothing else
    * can use that slot until it finishes, and a step cap reached on nearer
@@ -313,6 +317,7 @@ export class ChunkNode implements ChunkLodControl {
   distance2: f64;
   lead_distance2: f64;
   pending = false;
+  pending_since: f64 = -1;
 
   private readonly page_off: IVec;
   private readonly key: ChunkKey;
@@ -378,6 +383,14 @@ export class ChunkNode implements ChunkLodControl {
   private readonly sphere: THREE.Sphere;
 
   private disposed = false;
+
+  /** The one place `pending` is written, so the time it became pending is
+   * never out of step with it. */
+  private set_pending(pending: boolean): void {
+    if (pending && !this.pending) this.pending_since = performance.now();
+    if (!pending) this.pending_since = -1;
+    this.pending = pending;
+  }
 
   get holds_slot(): boolean {
     return this.scan !== null || this.bake !== null;
@@ -946,7 +959,7 @@ export class ChunkNode implements ChunkLodControl {
       // visits the world. An off-screen chunk keeps only its source key and
       // rebuilds if it re-enters.
       this.desired = { primary: OFF_SCREEN_LOD_STEP, secondary: null };
-      this.pending = this.layout.ready;
+      this.set_pending(this.layout.ready);
       // A scan only means anything while this chunk is going to commit. Left
       // open here it would hold the one scan slot for as long as the chunk
       // stayed off-screen, and every other chunk in the world would report
@@ -981,7 +994,7 @@ export class ChunkNode implements ChunkLodControl {
     const primary = blending ? guide.blend_finer_step! : stepped;
     const secondary = blending ? guide.blend_coarser_step! : null;
     this.desired = { primary, secondary };
-    this.pending = !this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary;
+    this.set_pending(!this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary);
     // Same rule as the off-screen branch: a tier that was being scanned for
     // and is no longer wanted must give the slot back now, not never.
     if (!this.pending) this.abort_work();
@@ -1033,7 +1046,7 @@ export class ChunkNode implements ChunkLodControl {
         bounds: this.layout.bounds,
         ready: false,
       });
-      this.pending = false;
+      this.set_pending(false);
       return true;
     }
 
@@ -1063,7 +1076,7 @@ export class ChunkNode implements ChunkLodControl {
       ready: true,
     });
     if (import.meta.env.DEV) commit_step_stats.attach_ms_max = Math.max(commit_step_stats.attach_ms_max, performance.now() - attach_t0);
-    this.pending = false;
+    this.set_pending(false);
     return true;
   }
 }

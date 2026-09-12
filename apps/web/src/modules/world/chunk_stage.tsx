@@ -132,6 +132,27 @@ function pool_sample(): { live_mb: number; idle_mb: number; hit_pct: number } {
   };
 }
 
+/** Who is waiting, and for how long — the progress rule guarantees a step a
+ * frame, not which one, so this is what shows whether something is being
+ * passed over indefinitely. */
+function starvation(controls: readonly ChunkLodControl[]): { offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
+  const now = performance.now();
+  let offscreen_pending: u32 = 0;
+  let oldest_release_ms: f64 = 0;
+  let oldest_visible_ms: f64 = 0;
+  for (const control of controls) {
+    if (!control.pending || control.pending_since < 0) continue;
+    const waited = now - control.pending_since;
+    if (control.in_frustum) {
+      if (waited > oldest_visible_ms) oldest_visible_ms = waited;
+    } else {
+      offscreen_pending++;
+      if (waited > oldest_release_ms) oldest_release_ms = waited;
+    }
+  }
+  return { offscreen_pending, oldest_release_ms, oldest_visible_ms };
+}
+
 type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec };
 
 /**
@@ -445,6 +466,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
           pending: pending_lod_total_cnt,
           settling: settling_lod,
           blend_active: blend_active_cnt,
+          ...starvation(controls),
         },
         heap_mb: perf_memory ? Math.round(perf_memory.usedJSHeapSize / 1_048_576) : 0,
         tile_pages: useTileStore.getState().tile_map.size,

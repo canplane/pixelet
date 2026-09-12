@@ -68,7 +68,9 @@ function task_line(rec: TaskRecord): string {
   const queued = rec.start_ms !== null ? rec.start_ms - rec.enqueue_ms : null;
   const ran = rec.start_ms !== null ? rec.end_ms - rec.start_ms : null;
   const timing = queued === null ? "" : ` q${n1(queued)} r${n1(ran!)}`;
-  return `[${lpad(n1(rec.enqueue_ms), 9)}] ${pad(rec.key, 34)} ${pad(rec.outcome, 7)} ${lpad(n1(total), 8)}ms${timing} p${rec.priority}${phases_text(rec.phases)}`;
+  return `[${lpad(n1(rec.enqueue_ms), 9)}] ${pad(rec.key, 34)} ${pad(rec.outcome, 7)} ${lpad(n1(total), 8)}ms${timing} p${rec.priority}${phases_text(rec.phases)}${
+    rec.error ? `  [${rec.error}]` : ""
+  }`;
 }
 
 function signed(n: number): string {
@@ -146,7 +148,9 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  task    p50 ${n1(pct(sorted((f) => f.task_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.task_ms), 0.95))} ms   (main thread's own rAF task)`,
     `  offthd  p50 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.5))}  p95 ${n1(pct(sorted((f) => Math.max(0, f.dt_ms - f.task_ms)), 0.95))} ms   (vsync/compositor/GPU/GC)`,
     `  gpu     p50 ${n1(pct(sorted((f) => f.gpu_ms), 0.5))}  p95 ${n1(pct(sorted((f) => f.gpu_ms), 0.95))} ms${last.gpu_ms === 0 ? "   (timer unsupported or unresolved)" : ""}`,
-    `  sched   p95 ${n1(pct(sched, 0.95))}  max ${n1(sched[sched.length - 1])} ms   budget ${n1(last.budget_ms)}   phases ${Object.entries(last.phases).map(([k, v]) => `${k} ${n1(v)}`).join("  ")}`,
+    `  sched   p95 ${n1(pct(sched, 0.95))}  max ${n1(sched[sched.length - 1])} ms   budget ${n1(last.budget_ms)}   phase p95 ${
+      Object.keys(last.phases ?? {}).map((k) => `${k} ${n1(pct(sorted((f) => f.phases?.[k] ?? 0), 0.95))}`).join("  ")
+    }`,
     `  cpu     rck p95 ${n1(pct(rck, 0.95))}  cmt p95 ${n1(pct(cmt, 0.95))}  rnd p95 ${n1(pct(rnd, 0.95))} ms`,
     `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  tex ${last.textures}  fill ${(last.px / 1e6).toFixed(1)}Mpx x${last.fx_passes}`,
     `  mem     heap ${last.heap_mb}MB (${heap_delta >= 0 ? "+" : ""}${heap_delta})  tiles ${last.tile_pages} (~${last.tile_pages * TILE_DECODED_MB}MB)  poi ${last.poi_count}`,
@@ -184,6 +188,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
       })()
     }`,
     `  lod     chunks ${last.lod.chunks}  in-frustum ${last.lod.in_frustum}  pending ${last.lod.pending}  settling ${last.lod.settling}  blending ${last.lod.blend_active}`,
+    `  wait    releases ${last.lod.offscreen_pending} pending, oldest ${Math.round(last.lod.oldest_release_ms)} ms   on-screen oldest ${Math.round(last.lod.oldest_visible_ms)} ms`,
     `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} rerender ${last.mounts.rendered}   window total +${frames.reduce((a, f) => a + f.mounts.added, 0)}/-${
       frames.reduce((a, f) => a + f.mounts.removed, 0)
     }`,
@@ -200,6 +205,7 @@ function peak_section(): string[] {
     `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  rck ${n1(p.recheck_ms)}  cmt ${n1(p.commit_ms)}  rnd ${n1(p.render_ms)} ms`,
     `  draws ${p.draw_calls}  tris ${Math.round(p.triangles / 1000)}k  heap ${p.heap_mb}MB  queue t${p.q_terrain}/p${p.q_poi}`,
     `  lod chunks ${p.chunks}  in-frustum ${p.in_frustum}  pending ${p.pending}  settling ${p.settling}  blending ${p.blend_active}`,
+    `  wait releases ${p.offscreen_pending} pending, oldest ${Math.round(p.oldest_release_ms)} ms   on-screen oldest ${Math.round(p.oldest_visible_ms)} ms`,
   ];
 }
 
@@ -211,6 +217,8 @@ function tasks_section(tasks: readonly TaskRecord[]): string[] {
     ok: number;
     aborted: number;
     error: number;
+    /** Failures by reason — see fetch_scheduler.ts's error_reason. */
+    reasons: Map<string, number>;
     /** summed phase values + how many records contributed, for a mean. */
     phase_sum: Map<string, number>;
     phase_n: number;
@@ -218,12 +226,16 @@ function tasks_section(tasks: readonly TaskRecord[]): string[] {
   const by = new Map<string, Group>();
   for (const rec of tasks) {
     let g = by.get(rec.category);
-    if (!g) by.set(rec.category, g = { lat: [], ok: 0, aborted: 0, error: 0, phase_sum: new Map(), phase_n: 0 });
+    if (!g) by.set(rec.category, g = { lat: [], ok: 0, aborted: 0, error: 0, reasons: new Map(), phase_sum: new Map(), phase_n: 0 });
     if (rec.outcome === "ok") {
       g.ok++;
       g.lat.push(rec.end_ms - rec.enqueue_ms);
     } else if (rec.outcome === "aborted") g.aborted++;
-    else g.error++;
+    else {
+      g.error++;
+      const reason = rec.error ?? "unrecorded";
+      g.reasons.set(reason, (g.reasons.get(reason) ?? 0) + 1);
+    }
     if (rec.phases) {
       g.phase_n++;
       for (const [k, v] of Object.entries(rec.phases)) g.phase_sum.set(k, (g.phase_sum.get(k) ?? 0) + v);
@@ -235,7 +247,9 @@ function tasks_section(tasks: readonly TaskRecord[]): string[] {
     const lat = g.lat.sort((a, b) => a - b);
     const bound = category_info(cat)?.bound ?? "?";
     lines.push(
-      `  ${pad(cat, 9)}${pad(bound, 9)}n=${g.ok + g.aborted + g.error}   p50 ${n1(pct(lat, 0.5))}  p95 ${n1(pct(lat, 0.95))} ms   ok ${g.ok}  ab ${g.aborted}  err ${g.error}`,
+      `  ${pad(cat, 9)}${pad(bound, 9)}n=${g.ok + g.aborted + g.error}   p50 ${n1(pct(lat, 0.5))}  p95 ${n1(pct(lat, 0.95))} ms   ok ${g.ok}  ab ${g.aborted}  err ${g.error}${
+        g.reasons.size > 0 ? ` (${[...g.reasons.entries()].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} x${n}`).join(", ")})` : ""
+      }`,
     );
     // Mean phase split — the number that says whether the static bound-class
     // label above is actually true for this run.
