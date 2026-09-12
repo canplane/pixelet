@@ -1,3 +1,9 @@
+# The project name is pinned so the volumes keep the names they were made
+# under: compose derives it from the directory otherwise, and this file
+# lived in infra/ before infra/local/ — pgdata-geo is several gigabytes of
+# ingested data that must not be re-created under a new name.
+name: infra
+
 services:
   db-main:
     image: postgres:16

@@ -23,7 +23,7 @@ cd pixelet
 cp .env.example .env
 cp apps/web/.env.example apps/web/.env
 
-docker compose --env-file .env -f infra/docker-compose.yml up -d
+docker compose --env-file .env -f infra/local/docker-compose.yml up -d
 
 deno task dev
 ```

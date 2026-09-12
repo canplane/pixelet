@@ -1,7 +1,7 @@
 # infra/prod/docker-compose.yml
 #
 # The Hetzner VM's own stack — apps/api plus the two Postgres instances it
-# needs (same DB_MAIN/DB_GEO split infra/docker-compose.yml already uses
+# needs (same DB_MAIN/DB_GEO split infra/local/docker-compose.yml already uses
 # for local dev, kept identical here rather than consolidating into one
 # Postgres server: same env var shape, same mental model, and Postgres's
 # own idle footprint is small enough that two containers costs nothing

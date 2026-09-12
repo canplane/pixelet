@@ -33,7 +33,7 @@ import { SectionTitle } from "@/app/setting/setting_row.tsx";
  * courtesy, not part of what the licence asks, and they were long enough to
  * crowd out the line below, which is not optional. The link is the DOI of the
  * distribution this pipeline actually consumes
- * (infra/elevation/metadata.json), so the notice, the README and the ingest
+ * (apps/api/src/bake/elevation/metadata.json), so the notice, the README and the ingest
  * script all name one source instead of three mirrors of it.
  *
  * **Copernicus.** This one is compulsory and its wording is dictated. GEDTM30
