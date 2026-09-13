@@ -44,23 +44,14 @@
  * 320 MB in one pool, ~4 MB a terrain page, the largest mesh block 1 MB) and
  * are adjusted after a phone reading. Past its range the page and mesh
  * sections still spill to plain regions the collector can take back — the
- * previous behaviour, kept until the byte budget bounds what is drawn
- * (BACKLOG P1); the spill is counted per section and the ledger shows it.
- *
- * The buddy over each section's range runs in the Rust module
- * (crates/pxl-core/src/buddy.rs): the module is instantiated over the
- * memory here, before any section is cut, and each section's pool names
- * its blocks through it — the core owns the allocation of the memory it
- * works in, and what the module cannot reach, the plain regions past a
- * range, stays the TypeScript pool's. A device that could reserve no
- * memory gets no module and plain pools.
+ * previous behaviour, kept until a kernel reads the pool; the spill is
+ * counted per section and the ledger shows it.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
-import { BuddyAllocator, type BuddyStat, type PoolKernel } from "@xpute/core/ds/buddy.ts";
+import { BuddyAllocator, type BuddyStat } from "@xpute/core/ds/buddy.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { instantiate_pxl, type PxlExports } from "@/wasm/pxl.ts";
 
 const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
@@ -106,32 +97,6 @@ function reserve_core_memory(): WebAssembly.Memory | null {
 
 export const CORE_MEMORY: WebAssembly.Memory | null = reserve_core_memory();
 
-/** The module section's range, for the check at instantiation and the
- * ledger: `[0, MODULE_BYTES)` of the core memory. */
-export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: MODULE_BYTES };
-
-/**
- * The one module over the core memory, or null where there is no core
- * memory. Awaited here: the sections' pools are cut through it, and the
- * first fixed allocation happens at import, so nothing may run before it
- * has arrived. A module that fails to load fails the client — the core
- * memory exists for the core, and the TypeScript pools alone would be a
- * different program.
- */
-export const CORE_PXL: PxlExports | null = CORE_MEMORY === null ? null : await instantiate_pxl(CORE_MEMORY, MODULE_BYTES);
-
-/** A section's kernel: pool `id` in the module, over `[offset, offset + bytes)`. */
-function kernel_of(pxl: PxlExports, offset: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): PoolKernel & { id: u32 } {
-  const id = pxl.pxl_pool_new(offset, bytes, region_bytes, min_block_bytes);
-  return {
-    id,
-    acquire: (bytes) => pxl.pxl_pool_acquire(id, bytes),
-    release: (at, bytes) => pxl.pxl_pool_release(id, at, bytes) !== 0,
-    is_free: (at, bytes) => pxl.pxl_pool_is_free(id, at, bytes) !== 0,
-    stat: () => new Uint32Array(pxl.memory.buffer, pxl.pxl_pool_stat(id), 12),
-  };
-}
-
 export type SectionName = "fixed" | "page" | "mesh";
 
 export type Section = {
@@ -141,9 +106,6 @@ export type Section = {
   readonly bytes: u32;
   readonly pool: BuddyAllocator;
   readonly alloc: AddressedAlloc;
-  /** The module's id for the pool over this section's range, where there
-   * is a module. */
-  readonly kernel_id: u32 | null;
 };
 
 /**
@@ -172,12 +134,10 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
       bytes -= MODULE_BYTES;
       region_bytes = FIXED_REGION_BYTES;
     }
-    const kernel = CORE_PXL !== null ? kernel_of(CORE_PXL, offset, bytes, region_bytes, 1 << 12) : null;
     const pool = new BuddyAllocator({
       min_block_bytes: 1 << 12,
       region_bytes,
       backing: backing ?? undefined,
-      kernel: kernel ?? undefined,
       backing_offset: backing ? offset : undefined,
       backing_bytes: backing ? bytes : undefined,
       max_idle_regions: 1,
@@ -195,7 +155,7 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
       // a released mesh` in the console is a real ownership bug, not noise.
       bypass: false,
     });
-    const s: Section = { name, offset, bytes, pool, alloc: buddy_alloc(pool), kernel_id: kernel?.id ?? null };
+    const s: Section = { name, offset, bytes, pool, alloc: buddy_alloc(pool) };
     offset += bytes;
     return s;
   };
@@ -208,10 +168,9 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
 
 export const CORE_SECTIONS: Readonly<Record<SectionName, Section>> = lay_out(CORE_MEMORY);
 
-// The module's volumes take their standing band stores from the fixed
-// section, which never runs out, and the rest from the mesh section
-// (crates/pxl-core/src/volume.rs).
-if (CORE_PXL !== null) CORE_PXL.pxl_volume_pools(CORE_SECTIONS.fixed.kernel_id!, CORE_SECTIONS.mesh.kernel_id!);
+/** The module section's range, for the check at instantiation and the
+ * ledger: `[0, MODULE_BYTES)` of the core memory. */
+export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: MODULE_BYTES };
 
 /** The fixed section: allocated once, never freed, refuses rather than
  * spills. Where a lane that a kernel must find lives. */

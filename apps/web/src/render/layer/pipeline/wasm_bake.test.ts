@@ -9,20 +9,20 @@ import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { LOD_STEP_BY_LEVEL } from "@/render/lod.ts";
-import type { PxlExports } from "@/wasm/pxl.ts";
+import { instantiate_pxl, type PxlExports } from "@/wasm/pxl.ts";
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./voxel.ts";
 import { type MeshRun, pack_column_runs, release_column_runs } from "./voxel_scan.ts";
 import { bake_chunk_mesh, BakeContext, type BakedChunkMesh, carve_visibility } from "./chunk_mesher.ts";
-import { CORE_MEMORY, CORE_POOL, CORE_PXL, MODULE_SECTION } from "./core_pool.ts";
+import { CORE_MEMORY, CORE_POOL, MODULE_SECTION } from "./core_pool.ts";
 import { carve_column_run_set } from "./column_run.ts";
 import { type MeshPool, WasmBaker } from "./wasm_bake.ts";
 
-/** The one module over the core memory, which is where pack_column_runs's
- * sets and the mesh pool's blocks are — and whose pools run in it, so no
- * test may instantiate another over the same memory. */
+/** The module over the core memory, which is where pack_column_runs's sets
+ * and the mesh pool's blocks are. Instantiated per test: each instance
+ * starts the module's statics afresh. */
 function pxl(): Promise<PxlExports> {
-  assert(CORE_PXL !== null, "the core memory reserved and the module over it");
-  return Promise.resolve(CORE_PXL);
+  assert(CORE_MEMORY !== null, "the core memory reserved");
+  return instantiate_pxl(CORE_MEMORY);
 }
 
 /** A context whose meshes come from the core pool, as the wasm bake's
