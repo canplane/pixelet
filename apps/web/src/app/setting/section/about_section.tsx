@@ -4,7 +4,7 @@ import { Box } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { SectionTitle } from "@/app/setting/setting_row.tsx";
-import { APP_ENV, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
+import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { PUBLISHED_VERSION } from "@/lib/env/route.ts";
 import { OBJECT_STORAGE_VERSION } from "@/module/world/object/store.ts";
 
@@ -34,7 +34,7 @@ export function AboutSection() {
 
         <span className="text-muted-foreground/70">
           {APP_ENV !== "production" && `${env_label} · `}
-          {build_label()}
+          {`${BUILD_NUMBER} · ${BUILD_ID} · ${build_label()}`}
           {` · ${PUBLISHED_TILES ? `Terrain ${PUBLISHED_VERSION.terrain}` : "Live terrain"}`}
           {` · ${PUBLISHED_TILES ? `POI ${PUBLISHED_VERSION.poi}` : "Live POI"}`}
           {` · Object v${OBJECT_STORAGE_VERSION}`}

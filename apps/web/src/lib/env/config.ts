@@ -25,6 +25,15 @@ export const APP_ENV: string = __APP_ENV__;
  * shown rather than here, so it reads in the viewer's own timezone. */
 export const BUILD_TIME: string = __BUILD_TIME__;
 
+/** Which source this bundle was built from, `r<commits>-<hash>[-dirty]`
+ * (vite.config.ts#build_id). Shown beside the build time, and stamped on
+ * every ledger report and trace so a measurement names what it measured. */
+export const BUILD_ID: string = __BUILD_ID__;
+
+/** Which official build this is, counted per deploy outside git: `b<n>`,
+ * `b<n>+` for a local build after it, `b?` before any (script/deploy.ts). */
+export const BUILD_NUMBER: string = __BUILD_NUMBER__;
+
 /**
  * Whether tiles come from a published bake rather than a live API. Decides
  * whether a version token is in the path, where the dev proxy forwards, and

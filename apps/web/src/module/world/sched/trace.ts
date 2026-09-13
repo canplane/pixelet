@@ -12,6 +12,7 @@
  * is routinely tens of MB — saved as a file, see ledger_trace_download.
  */
 
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
 import { type FrameSample, ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames } from "./ledger.ts";
 
 type TraceEvent = {
@@ -196,7 +197,9 @@ export function ledger_trace_json(): string {
     }
   }
 
-  return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms" });
+  // Chrome's trace format keeps a top-level `metadata` object; a trace read
+  // back later names the build it came from.
+  return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms", metadata: { build_number: BUILD_NUMBER, build_id: BUILD_ID, build_time: BUILD_TIME } });
 }
 
 /**

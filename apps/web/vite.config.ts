@@ -2,6 +2,9 @@
 
 import { defineConfig, type HmrContext, loadEnv } from "vite";
 import deno from "@deno/vite-plugin";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +18,43 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const apiBaseDefault = "http://127.0.0.1:3000";
+
+/**
+ * Which source a build is: `r<commits>-<hash>`, and `-dirty` when the
+ * working tree had uncommitted changes. The hash is the identity; the count
+ * is only there so two builds read in order at a glance, and it is not
+ * stable — a rewritten history renumbers it. Derived from git rather than a
+ * counter kept in a file, which would have to be bumped by a commit of its
+ * own and would count builds rather than source. A dev server takes it once,
+ * at start, so edits made while it runs do not mark it dirty.
+ */
+function build_id(): string {
+  try {
+    const git = (args: string) => execSync(`git ${args}`, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    const dirty = git("status --porcelain") !== "" ? "-dirty" : "";
+    return `r${git("rev-list --count HEAD")}-${git("rev-parse --short HEAD")}${dirty}`;
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Which official build this is: `b<n>` when script/deploy.ts handed the
+ * build its number, `b<n>+` for any other build after the last deploy this
+ * checkout made, `b?` before one. The count lives in the bucket, not in git
+ * (see deploy.ts); .build_number is only this checkout's copy of the last
+ * number it published.
+ */
+function build_number(): string {
+  const official = process.env.PXL_BUILD_NUMBER;
+  if (official) return `b${official}`;
+  try {
+    const last = readFileSync(path.join(__dirname, ".build_number"), "utf8").trim();
+    return /^\d+$/.test(last) ? `b${last}+` : "b?";
+  } catch {
+    return "b?";
+  }
+}
 
 // Where `deno task dev:remote` points when nothing overrides it: the project's
 // own published deployment. Override with VITE_REMOTE_ORIGIN — which
@@ -218,6 +258,8 @@ export default defineConfig(({ mode }) => {
        * timezone at the point it is displayed (see about_section.tsx).
        * Baking a timezone in here would be baking in the builder's. */
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+      __BUILD_ID__: JSON.stringify(build_id()),
+      __BUILD_NUMBER__: JSON.stringify(build_number()),
 
       /** A droplet fades. A pixelet remains. 🫧 */
       __APP_NAME__: JSON.stringify("pixelet"),

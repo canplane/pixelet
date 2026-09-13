@@ -33,7 +33,9 @@
     // and publish so a leak stops the deploy rather than being noticed on the
     // live site.
     "check:bundle": "deno run -A script/check_bundle.ts",
-    "deploy": "deno task build && deno task check:bundle && deno run -A --node-modules-dir=auto npm:wrangler deploy",
+    // Takes the next build number from the counter in the bucket, then does
+    // the three steps above under it — see script/deploy.ts.
+    "deploy": "deno run -A script/deploy.ts",
 
     "check": "deno check src/index.ts",
     // Pure-logic modules only (camera orbit math, LOD selection, ...) — none

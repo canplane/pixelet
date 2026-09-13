@@ -198,6 +198,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   JSON input` when the proxy returns an empty 200 (seen 2026-09-12, several
   pages at once); the page is retried by the next sync. Goes away with the
   XTP page (a short packet fails the header check instead) — verify then.
+- **The build number moves to CI when there is one.** Official builds are
+  counted like a build lab's (2026-09-13): one counter outside git, in the
+  bucket at `meta/build-number`, taken by `deno task deploy` because that is
+  the only central build today (apps/web/script/deploy.ts). A build lab
+  numbers every build of main and ships some of them; with a CI building
+  main, the increment moves into it, deploy picks one of its numbered
+  builds, and the count continues from the counter as it stands — never
+  reset.
 
 ## Parked, with the reason on file
 

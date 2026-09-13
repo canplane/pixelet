@@ -30,6 +30,7 @@ import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
 import { CORE_MEMORY, core_pool_stat, core_sections_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
 import { chunk_retained_bytes, chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
 import { category_info } from "./category.ts";
 import {
   type FrameSample,
@@ -332,7 +333,7 @@ export function ledger_report_text(): string {
     !!PerformanceObserver.supportedEntryTypes?.includes("long-animation-frames");
 
   const out = [
-    `=== sched/ledger @ t=${n1(performance.now())}ms ===`,
+    `=== sched/ledger @ t=${n1(performance.now())}ms  build ${BUILD_NUMBER} ${BUILD_ID} (${BUILD_TIME}) ===`,
     ...frames_section(frames),
     ...(frames.length > 0 ? peak_section() : []),
     ...tasks_section(tasks),

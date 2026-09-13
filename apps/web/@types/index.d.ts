@@ -20,6 +20,12 @@ declare global {
   /** Build timestamp, ISO-8601 UTC. Changes every build by construction. */
   const __BUILD_TIME__: string;
 
+  /** Which source the build is, from git: `r<commits>-<hash>[-dirty]`. */
+  const __BUILD_ID__: string;
+
+  /** Which official build: `b<n>`, `b<n>+` after it, or `b?`. */
+  const __BUILD_NUMBER__: string;
+
   /** A droplet fades. A pixelet remains. 🫧 */
   const __APP_NAME__: string;
 
