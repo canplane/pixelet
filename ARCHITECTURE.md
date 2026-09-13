@@ -66,9 +66,9 @@ Terrain today is Tile-shaped data addressed at Page granularity; objects are Vol
 
 ## Memory
 
-The client's state is one fixed `WebAssembly.Memory` — 512 MB on the desktop, 256 on a phone, `initial == maximum`, never grown, since growing would detach every view and a resizable buffer is slower to read and refused by WebGL — carved by a buddy allocator (`render/layer/pipeline/core_pool.ts`, `@xpute/core/ds/buddy.ts`) into blocks that typed-array views are taken over. Everything the canvas reads each frame lives there as **lanes** (structure-of-arrays typed views): terrain pages, voxel bands, column run sets, baked meshes, the chunk table, decor instance matrices, the POI index, the badge atlas's slots, the object store's records and its derived index, and every registry that used to be a `Map` or a `Set` of objects (`IndexedMap`, `PageTable`); a table whose columns move together is one `Lanes` (`@xpute/core/ds/lanes.ts`), and a block with several spans is cut by `carver`. The allocator itself allocates nothing: its free lists are threaded through the free blocks. What stays in the JS heap is glue — the `Mesh`, `BufferAttribute` and `Group` three.js requires, React, and the handles that name a slot — measured at 30–40 MB of objects on a loaded page.
+The client's state is one fixed `WebAssembly.Memory` — 512 MB on the desktop, 256 on a phone, `initial == maximum`, never grown, since growing would detach every view and a resizable buffer is slower to read and refused by WebGL — cut into **sections** with fixed starts and sizes (`render/layer/pipeline/core_pool.ts`, [issue/20260913-sections-of-the-core-memory-and-what-full-means.md](./issue/20260913-sections-of-the-core-memory-and-what-full-means.md)), each its own buddy allocator (`@xpute/core/ds/buddy.ts`) over its range, none borrowing from another: **fixed** for what is allocated once and never freed (the change log, the scheduler's lanes, the mesher's scratch; it refuses rather than spills, so a shortfall fails at startup), **page** for resident terrain and POI pages, **mesh** for what churns as the view moves. Blocks are what typed-array views are taken over. Everything the canvas reads each frame lives there as **lanes** (structure-of-arrays typed views): terrain pages, voxel bands, column run sets, baked meshes, the chunk table, decor instance matrices, the POI index, the badge atlas's slots, the object store's records and its derived index, and every registry that used to be a `Map` or a `Set` of objects (`IndexedMap`, `PageTable`); a table whose columns move together is one `Lanes` (`@xpute/core/ds/lanes.ts`), and a block with several spans is cut by `carver`. The allocator itself allocates nothing: its free lists are threaded through the free blocks. What stays in the JS heap is glue — the `Mesh`, `BufferAttribute` and `Group` three.js requires, React, and the handles that name a slot — measured at 30–40 MB of objects on a loaded page.
 
-The rules that came out of that move ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past the reservation the pool hands out plain regions the collector can reclaim. Beside the big memory sits the **little memory** (`module/world/sched/slab.ts`): fixed-size transferable slabs, made on demand and released when idle, for work that will leave the thread — a `WebAssembly.Memory` cannot be transferred, so a worker job travels in a slab and comes back the same way.
+The rules that came out of that move ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past its range the page and mesh sections still hand out plain regions the collector can reclaim, counted per section; a bake the mesh section refuses keeps its place and asks again next tick, and the mesh section's fill is a second trigger for reclaiming off-screen chunks. Beside the big memory sits the **little memory** (`module/world/sched/slab.ts`): fixed-size transferable slabs, made on demand and released when idle, for work that will leave the thread — a `WebAssembly.Memory` cannot be transferred, so a worker job travels in a slab and comes back the same way.
 
 ## Terrain Data and Streaming
 
@@ -218,17 +218,45 @@ memory budget over the retained meshes.
 The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
-The one unit that cannot be cut is a chunk bake — one mesher call, 14–21
-ms on a phone against an 8 ms budget — and moving that unit whole to a
-worker is decided and next (BACKLOG); the little memory above is its
-transport, and the job stays a Demand with a priority, a budget and an
-abort. `module/world/sched/` also holds the fetch scheduler (a priority
+The chunk bake is stepped too — a few rows or a few hundred boxes a call,
+its longest single step 6 ms on a phone — and a worker for it was built
+behind a dev setting and measured not to help
+([issue/experiment/20260913-bake-worker-on-the-phone.md](./issue/experiment/20260913-bake-worker-on-the-phone.md));
+the stepped path is the one that ships, and the worker path stays as a
+measurement knob over the frame, port and link in `@xpute/core/ipc/`,
+with the little memory above as its transport. `module/world/sched/` also holds the fetch scheduler (a priority
 queue over a concurrency ceiling, aborting what falls out of a category's
 wishlist) and the **ledger**: a read-only ring of frames and tasks with a
 step table, per-job waits, a draw census and a GPU timer where one exists,
 printed as a report and exported as a Chrome trace. The ledger observes; it
 never feeds back into the schedulers' own decisions
 ([issue/20260909-cooperative-scheduler-and-task-ledger.md](./issue/20260909-cooperative-scheduler-and-task-ledger.md)).
+
+### The channel: commands and changes
+
+What crosses a boundary — between the UI and the world, the main thread and
+a worker, later the glue and a WASM core — has two halves, both data
+([issue/20260913-boundaries-commands-and-what-comes-back-from-april.md](./issue/20260913-boundaries-commands-and-what-comes-back-from-april.md),
+[issue/20260913-the-read-direction-a-change-log.md](./issue/20260913-the-read-direction-a-change-log.md)).
+The write half is a **command**: a numeric `cmd`, args, a body, an `errno`
+reply, laid out as a frame in the buffer that carries it (`@xpute/core/ipc/frame.ts`),
+dispatched by a port that is codec and dispatch only, carried by a link
+that transfers. The read half is a **change log** (`@xpute/core/ipc/change.ts`):
+a source bumps `(topic, key)` and the topic's tick becomes the key's
+revision, written to a revision table and one fixed ring; a reader compares
+a revision or walks the ring from its cursor, and a cursor the ring has
+overwritten re-reads its topics. A change carries no value — the value is
+read where it lives — so the ring is small and a span of it crosses a
+boundary unchanged. The world's log (`module/world/change.ts`) numbers six
+topics — object column, decor column, object cell, terrain page, POI page,
+decor asset — and every way of reading that existed before (store
+revisions, per-key listeners, page interests, `useSyncExternalStore`, the
+per-tick pull) is an adapter over it; listeners run when the tick pumps,
+never inside the write. Inside a page nothing on these boundaries is lost,
+so there is no acknowledgement, deadline or retry; reliability is decided at
+the network boundary alone, when a server exists. A command travels on a
+ring in the receiver's memory with a doorbell that names only a count — the
+submission ring is built with the first Rust piece.
 
 ## Camera
 
