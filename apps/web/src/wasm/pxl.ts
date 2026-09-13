@@ -24,7 +24,7 @@
  * every static host gives.
  */
 
-import type { u32 } from "@xpute/core/kit/word.ts";
+import type { i32, u32 } from "@xpute/core/kit/word.ts";
 
 /** What the module exports. Every address is into the memory it was
  * instantiated over. */
@@ -51,6 +51,17 @@ export type PxlExports = {
   pxl_pool_release(id: u32, at: u32, bytes: u32): u32;
   pxl_pool_is_free(id: u32, at: u32, bytes: u32): u32;
   pxl_pool_stat(id: u32): u32;
+  pxl_volume_pools(fixed: u32, mesh: u32): void;
+  pxl_volume_open(): u32;
+  pxl_volume_fill_column(id: u32, cx: u32, cy: u32, z0: i32, z1: i32, material: u32, layer_idx: u32): u32;
+  pxl_volume_set_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32): u32;
+  pxl_volume_append_sub_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32): u32;
+  pxl_volume_seal(id: u32): void;
+  pxl_volume_release(id: u32): void;
+  pxl_volume_bands(id: u32): u32;
+  pxl_volume_band(id: u32, i: u32): u32;
+  pxl_volume_stat(): u32;
+  pxl_scan_begin_volume(id: u32): u32;
 };
 
 /** pxl_bake_step's answers (crates/pxl-wasm/src/lib.rs). */

@@ -29,8 +29,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      wasm_bake.test.ts. The whole-chunk scan followed the same day
      (crates/pxl-core/src/scan.rs, wasm_scan.test.ts byte for byte against
      voxel_scan.ts; 1.9x on V8), reading the composite's bands where the
-     compositor left them. Still TypeScript: the compositor and the volume
-     it paints, the direct path (`fill_column_runs`, a writer callback per
+     compositor left them. Still TypeScript: the compositor's stack and the
+     adapters that paint (the volume they paint is the module's, evening of
+     2026-09-13), the direct path (`fill_column_runs`, a writer callback per
      layer) and the raycast's per-column `merge_column_runs`. Which thread it
      runs on is measured when it exists: the worker was tried on the phone
      and bought nothing, because the stepped bake already yields and the
@@ -78,8 +79,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      section's range moved into the module (crates/pxl-core/src/buddy.rs,
      held to the TypeScript pool's addresses request for request by
      core_pool.test.ts): the module is instantiated before the map is cut,
-     and the TypeScript pool names blocks through it. Next: the volume and
-     the compositor's paint over module-owned bands, then the adapters.
+     and the TypeScript pool names blocks through it. Then the volume
+     (crates/pxl-core/src/volume.rs): bands are the module's, taken from the
+     fixed section for the sixteen standing stores and the mesh section past
+     them, every paint a call into it, and readers get views; the Rust scan
+     opens a volume by id. Next: the adapters — terrain's heightfield and
+     the object store are already in the memory — with the direct path and
+     the raycast walk.
 
 ## P1
 

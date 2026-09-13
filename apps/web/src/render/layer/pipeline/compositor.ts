@@ -40,7 +40,9 @@ export function composite_chunk_layers(stack: WorldLayerStack, key: ChunkKey, op
   const out = alloc_chunk_volume();
   let any_present = false;
   for (const layer of stack) any_present = layer.paint(key, out, opts) || any_present;
-  if (!any_present) {
+  // A starved volume — a band the pools had no block for — is not the
+  // composite that was asked for; the caller is blocked and asks again.
+  if (!any_present || out.starved) {
     release_chunk_volume(out);
     return null;
   }

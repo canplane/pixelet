@@ -121,9 +121,10 @@ export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { o
 export const CORE_PXL: PxlExports | null = CORE_MEMORY === null ? null : await instantiate_pxl(CORE_MEMORY, MODULE_BYTES);
 
 /** A section's kernel: pool `id` in the module, over `[offset, offset + bytes)`. */
-function kernel_of(pxl: PxlExports, offset: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): PoolKernel {
+function kernel_of(pxl: PxlExports, offset: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): PoolKernel & { id: u32 } {
   const id = pxl.pxl_pool_new(offset, bytes, region_bytes, min_block_bytes);
   return {
+    id,
     acquire: (bytes) => pxl.pxl_pool_acquire(id, bytes),
     release: (at, bytes) => pxl.pxl_pool_release(id, at, bytes) !== 0,
     is_free: (at, bytes) => pxl.pxl_pool_is_free(id, at, bytes) !== 0,
@@ -140,6 +141,9 @@ export type Section = {
   readonly bytes: u32;
   readonly pool: BuddyAllocator;
   readonly alloc: AddressedAlloc;
+  /** The module's id for the pool over this section's range, where there
+   * is a module. */
+  readonly kernel_id: u32 | null;
 };
 
 /**
@@ -168,11 +172,12 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
       bytes -= MODULE_BYTES;
       region_bytes = FIXED_REGION_BYTES;
     }
+    const kernel = CORE_PXL !== null ? kernel_of(CORE_PXL, offset, bytes, region_bytes, 1 << 12) : null;
     const pool = new BuddyAllocator({
       min_block_bytes: 1 << 12,
       region_bytes,
       backing: backing ?? undefined,
-      kernel: CORE_PXL !== null ? kernel_of(CORE_PXL, offset, bytes, region_bytes, 1 << 12) : undefined,
+      kernel: kernel ?? undefined,
       backing_offset: backing ? offset : undefined,
       backing_bytes: backing ? bytes : undefined,
       max_idle_regions: 1,
@@ -190,7 +195,7 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
       // a released mesh` in the console is a real ownership bug, not noise.
       bypass: false,
     });
-    const s: Section = { name, offset, bytes, pool, alloc: buddy_alloc(pool) };
+    const s: Section = { name, offset, bytes, pool, alloc: buddy_alloc(pool), kernel_id: kernel?.id ?? null };
     offset += bytes;
     return s;
   };
@@ -202,6 +207,11 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
 }
 
 export const CORE_SECTIONS: Readonly<Record<SectionName, Section>> = lay_out(CORE_MEMORY);
+
+// The module's volumes take their standing band stores from the fixed
+// section, which never runs out, and the rest from the mesh section
+// (crates/pxl-core/src/volume.rs).
+if (CORE_PXL !== null) CORE_PXL.pxl_volume_pools(CORE_SECTIONS.fixed.kernel_id!, CORE_SECTIONS.mesh.kernel_id!);
 
 /** The fixed section: allocated once, never freed, refuses rather than
  * spills. Where a lane that a kernel must find lives. */
