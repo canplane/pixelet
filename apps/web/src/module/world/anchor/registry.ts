@@ -18,7 +18,7 @@ import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { FROM_L4_IDX } from "@pxl/shared/spec/space/indexer.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /**
  * The live anchors as a table: the L4 index in an IndexedMap in the core
@@ -33,8 +33,8 @@ export class AnchorRegistry {
   /** Current local-world origin used to place live anchor groups. */
   cur_map_origin: IVec = 0n;
 
-  private readonly index = new IndexedMap<bigint>(I64_KEYS, 64, CORE_ALLOC);
-  private readonly nlink = new Vector(Uint32Array, { init_cap: 64, alloc: CORE_ALLOC });
+  private readonly index = new IndexedMap<bigint>(I64_KEYS, 64, FIXED_ALLOC);
+  private readonly nlink = new Vector(Uint32Array, { init_cap: 64, alloc: FIXED_ALLOC });
   private readonly groups: THREE.Group[] = [];
 
   /** Live anchors. */

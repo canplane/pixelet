@@ -15,13 +15,19 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Taken from the smallest separable piece outward: a piece is first cut
   out behind a boundary that carries typed arrays, still in TypeScript, so
   the boundary is proven before the language changes behind it. In order:
-  1. **Spill past the reservation becomes a budget signal.** The core
-     memory is fixed (`initial == maximum`, never grown — grow would detach every view, and resizable buffers read
-     2.5x slower and are refused by WebGL/WebGPU); past 512 MB the buddy pool
-     hands out plain ArrayBuffer regions, which a kernel over the wasm memory
-     cannot see. Harmless while everything computes in JS; when a kernel
-     lands, a spill has to trigger reclaim or refuse, not silently leave the
-     memory. Today's live set is a third of the reservation.
+  1. **Sections of the core memory, and what full means in each.**
+     Designed 2026-09-13:
+     [20260913-sections-of-the-core-memory-and-what-full-means.md](./20260913-sections-of-the-core-memory-and-what-full-means.md).
+     The one buddy pool over the core memory becomes a map of sections
+     with fixed starts and sizes — fixed (rings, tables, scratch, failing
+     at startup if short), page, mesh, scratch — none borrowing from
+     another, so a spill names its kind and the rings are where a WASM core
+     expects them. Full is answered per section by one rule — drop what
+     can be re-read, refuse at the sender what cannot — with reclaim of
+     off-screen chunks as the mesh section's first response and a null
+     acquire the chunk retries next tick as its last. In order: the map,
+     the fixed section's tenants, the pages, the ledger and the reclaim
+     trigger; the ring's EAGAIN comes with the ring.
   2. **The mesher in Rust.** The first Rust. The bake already takes a
      context and carves its input and output over any block (column_run.ts,
      carve_baked_mesh), and the bake command carries both across a boundary

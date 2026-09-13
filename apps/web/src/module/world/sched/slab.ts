@@ -47,7 +47,7 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 /** One job's worth. Against a largest pooled block of 1 MB (the ledger's
  * `biggest`), with room for the run set that goes out and the mesh that
@@ -62,7 +62,7 @@ const NONE = 0;
 const HOME = 1;
 const AWAY = 2;
 
-const LANE = { init_cap: 8, alloc: CORE_ALLOC } as const;
+const LANE = { init_cap: 8, alloc: FIXED_ALLOC } as const;
 
 export type SlabStats = { cap: u32; home: u32; away: u32; bytes: u32 };
 

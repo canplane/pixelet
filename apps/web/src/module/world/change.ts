@@ -17,7 +17,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import { ChangeLog, type Revision } from "@xpute/core/ipc/change.ts";
 import { ChangeWaker } from "@xpute/core/ipc/change_waker.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 export const enum WorldTopic {
   /** A column's cube content (object/store.ts), keyed by column base. */
@@ -40,8 +40,10 @@ const WORLD_TOPICS: u32 = 6;
  * frames; a reader further behind re-reads its topics. */
 const JOURNAL_CAPACITY: u32 = 4096;
 
-export const world_changes: ChangeLog = new ChangeLog({ topics: WORLD_TOPICS, capacity: JOURNAL_CAPACITY, keys_per_topic: 256, alloc: CORE_ALLOC });
-export const world_wakers: ChangeWaker = new ChangeWaker(world_changes, CORE_ALLOC);
+// In the fixed section: the journal is a ring a WASM core will read at a
+// known place, and the section refuses rather than spills.
+export const world_changes: ChangeLog = new ChangeLog({ topics: WORLD_TOPICS, capacity: JOURNAL_CAPACITY, keys_per_topic: 256, alloc: FIXED_ALLOC });
+export const world_wakers: ChangeWaker = new ChangeWaker(world_changes, FIXED_ALLOC);
 
 let request_tick: () => void = () => {};
 

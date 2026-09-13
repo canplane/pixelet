@@ -8,7 +8,7 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { Lanes } from "@xpute/core/ds/lanes.ts";
 
-import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
+import { CORE_POOL, FIXED_ALLOC } from "./core_pool.ts";
 import { carve_column_run_set, column_run_set_bytes, type ColumnRunSet } from "./column_run.ts";
 
 import { band_voxel_idx, type ChunkVolume, get_chunk_band, L2_BAND_CELL_MASK, L2_BAND_CELL_SPAN, ordered_chunk_bands, sub_voxel_range, type SubVoxels, type VoxelBand } from "./volume.ts";
@@ -247,7 +247,7 @@ function topmost_in_band(
 
 /** The prefix index, filled during the walk and copied into the block. */
 const COLUMN_CNT: u32 = L2_BAND_CELL_SPAN * L2_BAND_CELL_SPAN;
-const COLUMN_STARTS = CORE_ALLOC.take(Uint32Array, COLUMN_CNT + 1);
+const COLUMN_STARTS = FIXED_ALLOC.take(Uint32Array, COLUMN_CNT + 1);
 
 export type { ColumnRunSet };
 
@@ -285,7 +285,7 @@ const SC = new Lanes({
   sub_ox: Uint8Array,
   sub_oy: Uint8Array,
   sub_oz: Uint8Array,
-}, { init_cap: 1 << 13, alloc: CORE_ALLOC });
+}, { init_cap: 1 << 13, alloc: FIXED_ALLOC });
 
 const SPAN_SINK: RunSink = {
   push(z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz) {

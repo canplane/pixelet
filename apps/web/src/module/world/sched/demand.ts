@@ -32,8 +32,9 @@ export type Demand = {
   /** Coarse grouping — scopes sync()'s diff, and is what map_status and the
    * ledger roll up by. */
   category: string;
-  /** Lower runs sooner. Convention: Chebyshev page distance from the view
-   * center, so the nearest page loads first. */
+  /** Lower runs sooner. Convention: the page's Euclidean distance from the
+   * view anchor in whole pages (chunk_range.ts's page_priority), so the
+   * nearest page loads first. */
   priority: number;
   /**
    * Performs the fetch and its store write. Receives the scheduler's

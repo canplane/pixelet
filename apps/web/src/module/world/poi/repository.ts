@@ -5,7 +5,7 @@ import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { encode_empty_poi_page, PoiPage } from "@pxl/shared/bake/format.ts";
 
-import { CORE_POOL } from "@/render/layer/pipeline/core_pool.ts";
+import { PAGE_POOL } from "@/render/layer/pipeline/core_pool.ts";
 
 import { POI_TILE_BASE_URL, PUBLISHED_TILES } from "@/lib/env/config.ts";
 
@@ -39,14 +39,14 @@ export type ResidentPoiPage = { page: PoiPage; block: Block | null };
 const EMPTY_PAGE: ResidentPoiPage = { page: new PoiPage(encode_empty_poi_page()), block: null };
 
 function into_core(pkt: Uint8Array): ResidentPoiPage {
-  const block = CORE_POOL.acquire(pkt.byteLength);
+  const block = PAGE_POOL.acquire(pkt.byteLength);
   const view = new Uint8Array(block.buf, block.byte_offset, pkt.byteLength);
   view.set(pkt);
   return { page: new PoiPage(view), block };
 }
 
 export function release_poi_page(resident: ResidentPoiPage): void {
-  if (resident.block) CORE_POOL.release(resident.block);
+  if (resident.block) PAGE_POOL.release(resident.block);
 }
 
 /** `phases`, when given, is filled with this page's network-vs-open split —

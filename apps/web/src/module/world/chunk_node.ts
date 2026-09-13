@@ -845,8 +845,13 @@ export class ChunkNode {
         const step_t0 = import.meta.env.DEV ? performance.now() : 0;
         done = step_bake(this.bake.cursor);
         if (import.meta.env.DEV) record_bake_step(performance.now() - step_t0);
+        // The mesh section had no block for it. Keep the bake where it is
+        // and let the frame end: the reclaim pass runs after commit, and the
+        // next tick asks again. Spinning here would only re-ask the pool.
+        if (this.bake.cursor.starved) break;
       } while (!done && (budget === null || budget.remaining() > 0));
       this.bake.spent_ms += performance.now() - t0;
+      if (this.bake.cursor.starved) return "blocked";
       if (!done) return "busy";
 
       const { step, cursor, spent_ms } = this.bake;

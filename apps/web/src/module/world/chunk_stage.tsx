@@ -54,7 +54,7 @@ import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chu
 import { post_cfg, render_cfg } from "@/module/world/environment/config.ts";
 import { set_lod_projection } from "@/render/lod.ts";
 import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
-import { CORE_ALLOC, core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC, core_pool_stat, CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
 import { update_frustum } from "@/render/chunk_lod.ts";
 
 const LOD_RECHECK_INTERVAL: f64 = 0.15;
@@ -70,6 +70,14 @@ const RELEASE_MAX_PER_FRAME: u32 = 2;
  * once the memory budget is exceeded. Reclaiming is cheap (pool returns),
  * but the budget is a ceiling to drift back under, not a line to snap to. */
 const RECLAIM_MAX_PER_FRAME: u32 = 16;
+/** The mesh section's live share past which off-screen chunks are reclaimed
+ * whatever the retain budget says. Below the range, so a bake in flight can
+ * still land; a knob until a phone reading sets it. */
+const MESH_PRESSURE = 0.9;
+function mesh_section_pressed(): boolean {
+  const { bytes, pool } = CORE_SECTIONS.mesh;
+  return pool.stat.live_bytes > bytes * MESH_PRESSURE;
+}
 /* The per-pass budgets that used to sit here — a soft allowance per pass and
  * a 16ms hard ceiling each — are gone. Both passes now draw on the one
  * FrameBudget the tick hands every phase (sched/tick.ts), so the frame's
@@ -459,8 +467,13 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // The memory budget: built work is kept off screen until what off-screen
     // chunks hold is over RETAIN_BUDGET_BYTES, then reclaimed farthest first —
     // `order` already sorts off-screen chunks that way. Bounded per frame
-    // like everything else, and a no-op while under.
-    if (chunk_retained_bytes().off > RETAIN_BUDGET_BYTES) {
+    // like everything else, and a no-op while under. The mesh section's own
+    // fill is the second trigger: past MESH_PRESSURE of its range the pass
+    // reclaims whatever is off screen, under the retain budget or not, so
+    // the section stays inside the reservation while there is anything to
+    // give back — and a bake the section refused finds room next tick.
+    const over = () => chunk_retained_bytes().off > RETAIN_BUDGET_BYTES || mesh_section_pressed();
+    if (over()) {
       s_offscreen.truncate(0);
       const retained = table.retained;
       for (let i = 0; i < table.len; i++) {
@@ -468,7 +481,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       }
       let freed = 0;
       for (const slot of sorted(s_offscreen, order)) {
-        if (chunk_retained_bytes().off <= RETAIN_BUDGET_BYTES || freed >= RECLAIM_MAX_PER_FRAME) break;
+        if (!over() || freed >= RECLAIM_MAX_PER_FRAME) break;
         handles[slot].reclaim();
         freed++;
       }

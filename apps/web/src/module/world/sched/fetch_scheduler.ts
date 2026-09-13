@@ -31,7 +31,7 @@ import { Lanes } from "@xpute/core/ds/lanes.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 import type { Demand, Phases } from "./demand.ts";
 import { ledger_record, type Outcome } from "./ledger.ts";
@@ -57,8 +57,8 @@ export const MAX_INFLIGHT = 6;
 const QUEUED = 1;
 const RUNNING = 2;
 
-const LANE = { init_cap: 64, alloc: CORE_ALLOC } as const;
-const index = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
+const LANE = { init_cap: 64, alloc: FIXED_ALLOC } as const;
+const index = new IndexedMap(I64_KEYS, 64, FIXED_ALLOC);
 const rows = new Lanes({ state: Uint8Array, category_id: Uint8Array, priority: Float64Array, enqueue_ms: Float64Array, start_ms: Float64Array }, LANE);
 const demands: Demand[] = [];
 const controllers: (AbortController | null)[] = [];

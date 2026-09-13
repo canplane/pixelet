@@ -1,6 +1,6 @@
 // @xpute/core/ds/pool.test.ts
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 
 import { BuddyAllocator } from "./buddy.ts";
 
@@ -157,4 +157,43 @@ Deno.test("pool - a backing smaller than a region is not used at all", () => {
   const backing = new ArrayBuffer(REGION - 1);
   const p = pool({ backing });
   assert(p.acquire(1 << 12).buf !== backing);
+});
+
+Deno.test("pool - two pools over disjoint ranges of one backing never reach each other's regions, and report their own use", () => {
+  const backing = new ArrayBuffer(REGION * 4);
+  const a = pool({ backing, backing_offset: 0, backing_bytes: REGION * 2, no_spill: true });
+  const b = pool({ backing, backing_offset: REGION * 2, backing_bytes: REGION * 2, no_spill: true });
+  const ba = a.acquire(1 << 12), bb = b.acquire(1 << 12);
+  assert(ba.buf === backing && bb.buf === backing);
+  assert(ba.byte_offset < REGION * 2 && bb.byte_offset >= REGION * 2);
+  assertEquals(a.stat.backing_bytes, REGION * 2);
+  assertEquals(a.stat.backing_used, REGION);
+  assertEquals(b.stat.backing_used, REGION);
+});
+
+Deno.test("pool - no_spill refuses past its range and for a request larger than a region, and never opens a plain buffer", () => {
+  const backing = new ArrayBuffer(REGION * 2);
+  const p = pool({ backing, no_spill: true });
+  const held = [];
+  for (;;) {
+    const block = p.try_acquire(REGION);
+    if (block === null) break;
+    held.push(block);
+  }
+  assertEquals(held.length, 2);
+  assertEquals(p.stat.refusals, 1);
+  assertEquals(p.try_acquire(REGION * 2), null, "larger than a region");
+  assertEquals(p.stat.spills, 0);
+  assertThrows(() => p.acquire(REGION));
+  p.release(held[0]);
+  assert(p.try_acquire(REGION) !== null, "room again once a block is back");
+});
+
+Deno.test("pool - a pool that may spill never returns null from try_acquire", () => {
+  const backing = new ArrayBuffer(REGION);
+  const p = pool({ backing });
+  assert(p.try_acquire(REGION) !== null);
+  assert(p.try_acquire(REGION) !== null, "past the backing it spills to a plain region");
+  assertEquals(p.stat.spills, 0);
+  assertEquals(p.stat.backing_used, REGION);
 });
