@@ -17,7 +17,7 @@
  * summary.ts's `missed` and `overran`, the same tests the report counts.
  */
 
-import { CORE_BAKE, core_wasm_heap_used } from "@/render/layer/pipeline/core_bake.ts";
+import { CORE_BAKE, core_fallback_stats, core_wasm_heap_used, core_wasm_staged } from "@/render/layer/pipeline/core_bake.ts";
 import { poi_field_stats, poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { little_slabs } from "@/module/world/sched/slab.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
@@ -268,11 +268,11 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     }   fetch queued ${fetch_counts().queued} running ${fetch_counts().running} of ${MAX_INFLIGHT}`,
     // Both bake paths on one line, so a stepped window and a worker window
     // read side by side. The maxima are since load; the rest are the window's.
-    `  bake    path ${useSettingsStore.getState().bake_path}  stepped: longest step ${n1(lod_build_stats.bake_step_max_ms)}ms   worker: ${c.remote_submitted} sent  ${c.remote_adopted} adopted  away ${
-      per(c.remote_away_ms, c.remote_adopted)
-    }ms (max ${n1(bake_port.stats.away_max_ms)})  adopt ${per(c.remote_adopt_ms, c.remote_adopted)}ms (max ${
-      n1(bake_port.stats.adopt_max_ms)
-    })  ${c.remote_spilled} spilled  ${c.remote_deferred} deferred by the upload cap  ${c.remote_cancelled} cancelled  ${c.remote_failed} failed`,
+    `  bake    path ${useSettingsStore.getState().bake_path}  staged ${core_wasm_staged().meshes} meshes ${core_wasm_staged().sets} sets  fell back: ${core_fallback_stats.spilled} spilled  ${core_fallback_stats.unreached} unreached  ${core_fallback_stats.trapped} trapped   stepped: longest step ${
+      n1(lod_build_stats.bake_step_max_ms)
+    }ms   worker: ${c.remote_submitted} sent  ${c.remote_adopted} adopted  away ${per(c.remote_away_ms, c.remote_adopted)}ms (max ${n1(bake_port.stats.away_max_ms)})  adopt ${
+      per(c.remote_adopt_ms, c.remote_adopted)
+    }ms (max ${n1(bake_port.stats.adopt_max_ms)})  ${c.remote_spilled} spilled  ${c.remote_deferred} deferred by the upload cap  ${c.remote_cancelled} cancelled  ${c.remote_failed} failed`,
     `  per     commit/bake ${f.commit_per_bake === null ? "-" : n1(f.commit_per_bake)}ms  build/krun ${per(c.build_ms, c.build_runs / 1000)}ms  scan/chunk ${
       per(c.scan_ms, c.scan_count)
     }ms   (workload-normalised; comparable across sessions)`,

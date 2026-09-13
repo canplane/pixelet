@@ -60,12 +60,14 @@ const WASM_PAGE = 1 << 16;
  * The module section, from address 0. Equal to crates/pxl-wasm/src/arena.rs's
  * MODULE_BYTES, and checked against it when the module is instantiated
  * (wasm/pxl.ts). Carved out of the first region: the fixed section's pool
- * cuts that region in quarters, so the map stays region-aligned where the
- * pools need it, and a fixed allocation bigger than a quarter — nothing is,
- * the tables are small — would be refused rather than spilled.
+ * cuts what is left of that region in 16 MB regions, so the map stays
+ * region-aligned where the pools need it, and a fixed allocation bigger
+ * than one — nothing is, the tables are small — would be refused rather
+ * than spilled. Half the region for the module: a dense chunk's scratch
+ * ran a 16 MB section out (b3, 2026-09-13).
  */
-export const MODULE_BYTES: u32 = 16 << 20;
-const FIXED_REGION_BYTES: u32 = MODULE_BYTES;
+export const MODULE_BYTES: u32 = 32 << 20;
+const FIXED_REGION_BYTES: u32 = 16 << 20;
 
 /**
  * The map, in regions of 64 MB. Eight on the desktop, four on a phone: the
@@ -73,7 +75,7 @@ const FIXED_REGION_BYTES: u32 = MODULE_BYTES;
  * budget is a fraction of the desktop's.
  *
  *              desktop    phone
- *   fixed         1          1     the module's 16 MB, then the tables,
+ *   fixed         1          1     the module's 32 MB, then the tables,
  *                                  which are small, and headroom for rings
  *   page          2          1     ~49 terrain pages at ~4 MB fit in two
  *   mesh          5          2     the churn; the reclaim pass keeps it under

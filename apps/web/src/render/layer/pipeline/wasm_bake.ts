@@ -11,6 +11,17 @@
  * acquired for it here — at the step the bake first knows its size, which
  * is where the TypeScript bake acquires its own, and where a refusal leaves
  * the bake waiting for the next tick.
+ *
+ * A block the module cannot reach — the mesh section past its range spills
+ * to plain buffers (core_pool.ts), and a run set or a mesh can land in one
+ * — is the module's limit, not an error. A mesh small enough is staged in
+ * the module's own heap and copied out into the block when the bake is
+ * done, which on a phone at a wide zoom is most of them: the section is
+ * over there as a rule, and a bake restarted the TypeScript way would give
+ * the phone's gain back. Too large to stage, the bake reports `spilled`
+ * and its caller bakes that chunk the TypeScript way (core_bake.ts). The
+ * section overflowing is the byte budget's problem (BACKLOG P1), not this
+ * path's to solve by refusing.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
@@ -33,8 +44,14 @@ export type MeshPool = {
 export type WasmBakeCursor = {
   done: boolean;
   starved: boolean;
+  /** The mesh's block was outside the core memory: this bake cannot go
+   * on in the module. Abort it and bake the chunk the TypeScript way. */
+  spilled: boolean;
   /** The block the mesh is being written into, once the bake asked for one. */
   block: Block | null;
+  /** Where the mesh is staged in the module's heap, when the block was out
+   * of the module's reach; copied out at the end. */
+  staged: u32;
   mesh: BakedChunkMesh | null;
 };
 
@@ -46,6 +63,8 @@ export class WasmBaker {
   private seen: Uint32Array = new Uint32Array(6);
   /** The module heap's use after the last finished bake, for the ledger. */
   heap_used: u32 = 0;
+  /** Meshes staged in the module's heap and copied out, for the ledger. */
+  staged = 0;
 
   /** `ctx` is where the counters go and `pool` where the meshes do — the
    * same two the stepped path bakes with. */
@@ -55,27 +74,52 @@ export class WasmBaker {
     return this.open !== null;
   }
 
+  /** Whether the module can read `set` where it is. A caller bakes a set
+   * that is not the TypeScript way. */
+  reaches(set: ColumnRunSet): boolean {
+    return set.block.buf === this.pxl.memory.buffer;
+  }
+
   begin(set: ColumnRunSet, lod_step: LodStep): WasmBakeCursor | null {
     if (this.open !== null) return null;
-    if (set.block.buf !== this.pxl.memory.buffer) throw new Error("render: a wasm bake of a run set outside the core memory");
+    if (!this.reaches(set)) throw new Error("render: a wasm bake of a run set outside the core memory");
     if (this.pxl.pxl_bake_begin(set.block.byte_offset, set.count, set.span, lod_step) === 0) {
       throw new Error("render: the wasm bake was open with no cursor naming it");
     }
-    this.open = { done: false, starved: false, block: null, mesh: null };
+    this.open = { done: false, starved: false, spilled: false, block: null, staged: 0, mesh: null };
     return this.open;
   }
 
+  /** A block for the mesh, or null when the pool refused (`starved`). A
+   * block the module cannot reach is kept and the mesh staged for it, or,
+   * too large to stage, released with the cursor `spilled`. */
+  private mesh_block(cursor: WasmBakeCursor, words: u32): Block | null {
+    const block = this.pool.try_acquire(words * 4);
+    cursor.starved = block === null;
+    if (block === null) return null;
+    if (block.buf !== this.pxl.memory.buffer) {
+      const staged = this.pxl.pxl_bake_mesh_staged(words);
+      if (staged === 0) {
+        this.pool.release(block);
+        cursor.spilled = true;
+        return null;
+      }
+      cursor.staged = staged;
+      this.staged++;
+    }
+    return block;
+  }
+
   step(cursor: WasmBakeCursor): boolean {
+    if (cursor !== this.open) throw new Error("render: step on a wasm bake that is not the open one");
     if (cursor.done) return true;
     const at = this.pxl.pxl_bake_step();
     if (at === STEP_NEED_MESH) {
       const words = this.pxl.pxl_bake_mesh_words();
-      const block = this.pool.try_acquire(words * 4);
-      cursor.starved = block === null;
+      const block = this.mesh_block(cursor, words);
       if (block === null) return false;
-      if (block.buf !== this.pxl.memory.buffer) throw new Error("render: a mesh block outside the core memory");
       cursor.block = block;
-      this.pxl.pxl_bake_mesh(block.byte_offset, words);
+      if (cursor.staged === 0) this.pxl.pxl_bake_mesh(block.byte_offset, words);
       return false;
     }
     cursor.starved = false;
@@ -83,13 +127,17 @@ export class WasmBaker {
     const result = new Uint32Array(this.pxl.memory.buffer, this.pxl.pxl_bake_finish(), RESULT_WORDS);
     const vertex_cnt = result[0], index_cnt = result[1];
     // A mesh of nothing was never asked for; it gets the empty block the
-    // TypeScript bake would have carved.
+    // TypeScript bake would have carved, wherever that is.
     const block = cursor.block ?? this.pool.try_acquire(baked_mesh_bytes(vertex_cnt, index_cnt));
     if (block === null) {
       cursor.starved = true;
       return false;
     }
     cursor.block = block;
+    if (cursor.staged !== 0) {
+      const bytes = baked_mesh_bytes(vertex_cnt, index_cnt);
+      new Uint8Array(block.buf, block.byte_offset, bytes).set(new Uint8Array(this.pxl.memory.buffer, cursor.staged, bytes));
+    }
     cursor.mesh = carve_baked_mesh(block, vertex_cnt, index_cnt);
     add_bake_counters(this.ctx, this.counters_since(result.subarray(2, 8)));
     this.heap_used = result[8];

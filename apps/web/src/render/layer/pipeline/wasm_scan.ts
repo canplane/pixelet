@@ -31,11 +31,16 @@ const MAX_BANDS: u32 = 256;
 export type WasmScanCursor = {
   done: boolean;
   starved: boolean;
+  /** The set's block was outside the core memory: this scan cannot go on
+   * in the module. Abort it and scan the volume the TypeScript way. */
+  spilled: boolean;
   set: ColumnRunSet | null;
 };
 
 export class WasmScanner {
   private open: WasmScanCursor | null = null;
+  /** Sets staged in the module's heap and copied out, for the ledger. */
+  staged = 0;
   private readonly table: Uint32Array;
 
   constructor(private readonly pxl: PxlExports, private readonly pool: MeshPool) {
@@ -47,20 +52,31 @@ export class WasmScanner {
     return this.open !== null;
   }
 
+  /** Whether the module can read every band and lane of `volume` where it
+   * is. A composite that spilled past the mesh section (core_pool.ts) is
+   * scanned the TypeScript way. */
+  reaches(volume: ChunkVolume): boolean {
+    const memory = this.pxl.memory.buffer;
+    if (volume.bands.length > MAX_BANDS) return false;
+    for (const band of volume.bands) {
+      const e = band.extra;
+      for (const lane of [band.material, band.layer_idx, band.sub_cell, e.col.mem, e.z.mem, e.material.mem, e.layer_idx.mem, e.sub.mem]) {
+        if (lane && lane.buffer !== memory) return false;
+      }
+    }
+    return true;
+  }
+
   /** Opens a scan of `volume`, or null while one is open. The volume's
    * bands and lanes must stay where they are until the scan closes. */
   begin(volume: ChunkVolume): WasmScanCursor | null {
     if (this.open !== null) return null;
+    if (!this.reaches(volume)) throw new Error("render: a wasm scan of a volume outside the core memory");
     const bands = volume.bands;
-    if (bands.length > MAX_BANDS) throw new Error(`render: a volume of ${bands.length} bands, past the scan table's ${MAX_BANDS}`);
-    const memory = this.pxl.memory.buffer;
     const t = this.table;
     for (let i = 0; i < bands.length; i++) {
       const band = bands[i];
       const e = band.extra;
-      for (const lane of [band.material, band.layer_idx, band.sub_cell, e.col.mem, e.z.mem, e.material.mem, e.layer_idx.mem, e.sub.mem]) {
-        if (lane && lane.buffer !== memory) throw new Error("render: a wasm scan of a band outside the core memory");
-      }
       const row = i * BAND_WORDS;
       t[row] = band.band_z >>> 0;
       t[row + 1] = band.material.byteOffset;
@@ -74,13 +90,14 @@ export class WasmScanner {
       t[row + 9] = e.sub.mem.byteOffset;
     }
     if (this.pxl.pxl_scan_begin(t.byteOffset, bands.length) === 0) throw new Error("render: the wasm scan was open with no cursor naming it");
-    this.open = { done: false, starved: false, set: null };
+    this.open = { done: false, starved: false, spilled: false, set: null };
     return this.open;
   }
 
   /** One step: a row of columns, or the packing once every row is walked.
    * True once the set is packed. */
   step(cursor: WasmScanCursor): boolean {
+    if (cursor !== this.open) throw new Error("render: step on a wasm scan that is not the open one");
     if (cursor.done) return true;
     const at = this.pxl.pxl_scan_step();
     if (at === STEP_NEED_MESH) {
@@ -88,8 +105,20 @@ export class WasmScanner {
       const block = this.pool.try_acquire(bytes);
       cursor.starved = block === null;
       if (block === null) return false;
-      if (block.buf !== this.pxl.memory.buffer) throw new Error("render: a run set block outside the core memory");
-      this.pxl.pxl_scan_set(block.byte_offset, bytes);
+      if (block.buf !== this.pxl.memory.buffer) {
+        // Out of the module's reach: staged in its heap and copied out, or
+        // too large for that and scanned the TypeScript way (wasm_bake.ts).
+        const staged = this.pxl.pxl_scan_set_staged(bytes);
+        if (staged === 0) {
+          this.pool.release(block);
+          cursor.spilled = true;
+          return false;
+        }
+        new Uint8Array(block.buf, block.byte_offset, bytes).set(new Uint8Array(this.pxl.memory.buffer, staged, bytes));
+        this.staged++;
+      } else {
+        this.pxl.pxl_scan_set(block.byte_offset, bytes);
+      }
       const count = this.pxl.pxl_scan_finish();
       cursor.set = carve_column_run_set(block, count, L2_BAND_CELL_SPAN);
       cursor.done = true;

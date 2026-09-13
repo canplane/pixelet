@@ -160,6 +160,52 @@ of three rules removed from the Rust fails it). On V8 the scan of the
 test's busy composite went from 7.1 ms to 3.7 ms (1.9x); the phone is not
 read yet.
 
+## The phone, with the memory shared
+
+**2026-09-13, later.** The module importing the core memory, the scan in
+Rust and the coarse bake packing cell by cell (see the commits of the
+afternoon), one session on the same iPhone at a wide zoom — 233 chunks in
+the frustum, 1.05M triangles, 3.2M runs baked in the window — read from a
+dev server, so the ledger's build line names the server's start, not the
+source:
+
+|                   | 3 wasm (own memory) | 5 wasm (shared) |
+| ----------------- | ------------------- | --------------- |
+| in frustum / tris | 321 / 983k          | 233 / 1,054k    |
+| build per 1k runs | 0.1 ms              | 0.2 ms          |
+| scan per chunk    | 0.5 ms              | 0.7 ms          |
+| longest bake step | 4 ms                | **21 ms**       |
+| filling, task p50 | 5 ms                | 9 ms            |
+| filling, missed   | 20%                 | 24%             |
+| module heap       | —                   | 1.1 MB of 32    |
+| mesh section      | 153 / 128 MB        | 142 / 128 MB    |
+
+The module's heap was fine. The rest reads worse than session 3, and the
+21 ms step says why: at this zoom the mesh section is past its range on
+the phone (as it was in session 3 — and the page section too, 136 of
+64 MB; the reservation is simply under this view, BACKLOG P1), so blocks
+spill to buffers the module cannot reach, and with the memory shared each
+such bake was restarted the TypeScript way. Session 3's module had its own
+memory and copied its mesh into whatever block it was given, spilled or
+not, so it never lost a bake to the section being full.
+
+Taken the same evening: a mesh or a set up to 8 MB whose block is out of
+the module's reach is staged in the module's heap and copied out, which
+is the copy session 3 always paid, paid only when the section is over;
+larger than that the bake still goes the TypeScript way. The ledger's
+bake line counts both (`staged`, `fell back`).
+
+Read again on the phone (session 6, `b6+ r185-f48ae79`, a lighter pass:
+252 chunks in the frustum at the peak, 1.3M runs baked in the window,
+most of it settled): 33 meshes staged, nothing fell back, build per 1k
+runs back at **0.1 ms**, scan per chunk 0.8 ms, module heap 4.2 MB of 32;
+filling missed 8% of frames at task p50 8 ms. The longest bake step was
+still 17 ms with no TypeScript bake in the window, so that step is the
+module's — or the pool's: a block past the section cuts a 64 MB region
+of its own, which on a phone is an allocation of that size inside the
+step. Not separated; the same cost sits on the TypeScript path, and the
+section being over is P1's.
+
 ## What becomes of it
 
 `wasm` became the default bake path on these numbers, the same day. The

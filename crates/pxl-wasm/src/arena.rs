@@ -9,6 +9,12 @@
 //! before it (`--stack-first`, the default; 1 MB of stack). The section's
 //! size is the one number this crate and core_pool.ts agree on.
 //!
+//! Sized against what a chunk's scratch reaches (wasm_bake.test.ts probes
+//! it): about 140 bytes a run at the peak, most of it a vector's old block
+//! held while its doubled replacement is filled, so a 65k-run chunk — whose
+//! fine mesh no longer fits a pool region — takes under 10 MB of the 31 the
+//! heap has.
+//!
 //! Size classes rather than a bump pointer, because what lives here is the
 //! contexts' scratch — vectors that grow to a chunk's size, several of them
 //! interleaved as scans and bakes alternate — and a bump pointer leaks every
@@ -23,7 +29,7 @@ use core::alloc::{GlobalAlloc, Layout};
 
 /// The section at the front of the core memory that is the module's own.
 /// Equal to core_pool.ts's MODULE_BYTES.
-pub const MODULE_BYTES: usize = 16 << 20;
+pub const MODULE_BYTES: usize = 32 << 20;
 
 /// The smallest class, and the alignment every block has.
 const MIN_SHIFT: usize = 4;

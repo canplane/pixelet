@@ -70,7 +70,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      checklist the renderer fills, not a gate on starting. WebGPU removes
      the WebGL-side costs; it does not shrink the working set — that is the
      byte budget in P1. Settled on the way, 2026-09-13: the module imports
-     the core memory, and the map's first 16 MB is the module section —
+     the core memory, and the map's first 32 MB is the module section —
      its stack, data and heap, where a wasm32 linker puts them, behind a
      bump allocator (crates/pxl-wasm/src/arena.rs) since the memory never
      grows; the module states its size and the client checks the map

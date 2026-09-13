@@ -20,8 +20,17 @@ use pxl_core::scan::{BandView, ExtraView, ScanContext, ScanStep};
 #[global_allocator]
 static ALLOC: arena::Arena = arena::Arena;
 
+/// The most a mesh or a set may be for the module to stage it in its own
+/// heap when the block the client acquired is out of reach (the mesh
+/// section spilled past its range): the client copies it out afterwards.
+/// A phone's largest mesh block was 2 MB; past this the bake goes the
+/// TypeScript way rather than crowd the heap.
+pub const STAGE_BYTES: u32 = 8 << 20;
+
 struct State {
     ctx: BakeContext,
+    /// Where a staged mesh or set is written, kept at its high-water mark.
+    stage: Vec<u32>,
     /// The open bake's run set: its address in the memory, and its shape.
     input: (usize, u32, u32),
     /// vertex_cnt, index_cnt, the six counters, then the arena's use.
@@ -33,16 +42,30 @@ struct State {
 
 static mut STATE: Option<State> = None;
 
+extern "C" {
+    /// The client's: told a panic's message before the trap, since the trap
+    /// itself carries none — `panic = "abort"` and no hook would leave only
+    /// "unreachable" in the console.
+    fn pxl_panic(ptr: *const u8, len: usize);
+}
+
 #[allow(static_mut_refs)]
 fn state() -> &'static mut State {
     // SAFETY: the module runs on one thread and no export re-enters another.
     unsafe {
-        STATE.get_or_insert_with(|| State {
-            ctx: BakeContext::new(),
-            input: (0, 0, 0),
-            result: [0; 9],
-            scan: ScanContext::new(),
-            bands: (0, 0),
+        STATE.get_or_insert_with(|| {
+            std::panic::set_hook(Box::new(|info| {
+                let text = info.to_string();
+                pxl_panic(text.as_ptr(), text.len());
+            }));
+            State {
+                ctx: BakeContext::new(),
+                stage: Vec::new(),
+                input: (0, 0, 0),
+                result: [0; 9],
+                scan: ScanContext::new(),
+                bands: (0, 0),
+            }
         })
     }
 }
@@ -106,6 +129,31 @@ pub extern "C" fn pxl_bake_mesh(at: u32, words: u32) {
     unsafe { state().ctx.provide_mesh(at as *mut u32, words) }
 }
 
+fn stage(words: u32) -> u32 {
+    if words * 4 > STAGE_BYTES {
+        return 0;
+    }
+    let s = state();
+    if s.stage.len() < words as usize {
+        s.stage.resize(words as usize, 0);
+    }
+    s.stage.as_mut_ptr() as u32
+}
+
+/// The mesh goes into the module's own heap instead, for the client to
+/// copy out after `pxl_bake_finish`: returns where, or 0 when the mesh is
+/// too large to stage.
+#[no_mangle]
+pub extern "C" fn pxl_bake_mesh_staged(words: u32) -> u32 {
+    let at = stage(words);
+    if at != 0 {
+        // SAFETY: the stage is this module's, sized for `words`, and no other
+        // export touches it until the bake closes.
+        unsafe { state().ctx.provide_mesh(at as *mut u32, words) }
+    }
+    at
+}
+
 /// Closes the complete bake and returns the address of nine words: vertex
 /// count, index count, the six counters so far, and the module heap's use.
 #[no_mangle]
@@ -130,6 +178,12 @@ pub extern "C" fn pxl_bake_finish() -> *const u32 {
 #[no_mangle]
 pub extern "C" fn pxl_bake_abort() {
     state().ctx.abort();
+}
+
+/// How much of the module's heap has been cut, for the ledger.
+#[no_mangle]
+pub extern "C" fn pxl_heap_used() -> u32 {
+    arena::used() as u32
 }
 
 /// The section the module keeps for itself at the front of the memory, for
@@ -214,6 +268,18 @@ pub extern "C" fn pxl_scan_set_bytes() -> u32 {
 pub extern "C" fn pxl_scan_set(at: u32, bytes: u32) {
     // SAFETY: the client's contract, above.
     unsafe { state().scan.provide_set(at as *mut u8, bytes) }
+}
+
+/// The set is packed into the module's own heap instead, for the client to
+/// copy out: returns where, or 0 when the set is too large to stage.
+#[no_mangle]
+pub extern "C" fn pxl_scan_set_staged(bytes: u32) -> u32 {
+    let at = stage(bytes.div_ceil(4));
+    if at != 0 {
+        // SAFETY: as pxl_bake_mesh_staged.
+        unsafe { state().scan.provide_set(at as *mut u8, bytes) }
+    }
+    at
 }
 
 /// Closes the packed scan: the run count of the set it packed.

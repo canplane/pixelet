@@ -207,7 +207,6 @@ pub struct BakeContext {
     merge_run: Vec<Option<u32>>,
     merge_mask: Vec<u32>,
     buckets: Vec<ZBucketAccum>,
-    cell_range: Vec<u32>,
     co: CoarseLanes,
     co_start: Vec<u32>,
     coarse: OwnedRunSet,
@@ -237,7 +236,6 @@ impl BakeContext {
             merge_run: vec![None; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
             merge_mask: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
             buckets: Vec::with_capacity(1 << 12),
-            cell_range: Vec::with_capacity(2 << 10),
             co: CoarseLanes::default(),
             co_start: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1],
             coarse: OwnedRunSet::default(),
@@ -261,6 +259,10 @@ impl BakeContext {
             return false;
         }
         assert!(set.span as usize <= MAX_BAKE_SPAN, "bake span {} past {}", set.span, MAX_BAKE_SPAN);
+        // Every surviving box is at most one run, so the boxes fit this
+        // many words: reserved up front rather than grown by doubling, which
+        // on a dense chunk held the old block and the new together.
+        self.surviving.reserve((set.count as usize) * 6);
         self.done = false;
         self.mesh = None;
         self.mesh_words = 0;
@@ -339,7 +341,6 @@ impl BakeContext {
         self.mesh = None;
         self.mesh_words = 0;
         self.surviving.clear();
-        self.cell_range.clear();
         self.buckets.clear();
     }
 
@@ -564,6 +565,16 @@ impl BakeContext {
         let (lod_step, res) = (b.lod_step, b.res);
 
         if b.phase == 0 {
+            // Each cell is accumulated and packed before the next: a cell's
+            // buckets depend on nothing outside it (find_or_create_bucket
+            // searches its own range), so the packed runs come out as they
+            // would from a pass over every cell's buckets held at once — the
+            // TypeScript's two phases — without holding them. Held, a dense
+            // chunk's buckets ran to megabytes and, doubling as they grew,
+            // past the module's heap (b3, 2026-09-13).
+            if b.row == 0 {
+                self.co.clear();
+            }
             let row_end = res.min(b.row + coarse_rows_per_step(lod_step));
             for by in b.row..row_end {
                 for bx in 0..res {
@@ -580,35 +591,17 @@ impl BakeContext {
                             }
                         }
                     }
-                    self.cell_range.push(start);
-                    self.cell_range.push(cnt);
+                    self.co_start[(by * res + bx) as usize] = self.co.z0.len() as u32;
+                    self.pack_coarse_cell(start, cnt, lod_step);
+                    self.buckets.truncate(start as usize);
                 }
-            }
-            b.row = row_end;
-            if row_end >= res {
-                b.phase = 1;
-                b.row = 0;
-                self.co.clear();
-            }
-            return false;
-        }
-
-        if b.phase == 1 {
-            let row_end = res.min(b.row + coarse_rows_per_step(lod_step));
-            for c in (b.row * res)..(row_end * res) {
-                self.co_start[c as usize] = self.co.z0.len() as u32;
-                let ri = c as usize * 2;
-                self.pack_coarse_cell(self.cell_range[ri], self.cell_range[ri + 1], lod_step);
             }
             b.row = row_end;
             if row_end < res {
                 return false;
             }
-            let len = self.co.z0.len();
-            self.co_start[(res * res) as usize] = len as u32;
+            self.co_start[(res * res) as usize] = self.co.z0.len() as u32;
             self.fill_coarse_set(res);
-            self.cell_range.clear();
-            self.buckets.clear();
             b.fine = Some(self.begin_fine(res, lod_step));
             b.phase = 2;
             return false;

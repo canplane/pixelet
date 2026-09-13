@@ -26,16 +26,19 @@ import { MODULE_SECTION } from "@/render/layer/pipeline/core_pool.ts";
 export type PxlExports = {
   memory: WebAssembly.Memory;
   pxl_module_bytes(): u32;
+  pxl_heap_used(): u32;
   pxl_bake_begin(at: u32, count: u32, span: u32, lod_step: u32): u32;
   pxl_bake_step(): u32;
   pxl_bake_mesh_words(): u32;
   pxl_bake_mesh(at: u32, words: u32): void;
+  pxl_bake_mesh_staged(words: u32): u32;
   pxl_bake_finish(): u32;
   pxl_bake_abort(): void;
   pxl_scan_begin(bands_at: u32, count: u32): u32;
   pxl_scan_step(): u32;
   pxl_scan_set_bytes(): u32;
   pxl_scan_set(at: u32, bytes: u32): void;
+  pxl_scan_set_staged(bytes: u32): u32;
   pxl_scan_finish(): u32;
   pxl_scan_abort(): void;
 };
@@ -49,7 +52,13 @@ const PXL_WASM_URL = new URL("./pxl.wasm", import.meta.url);
 
 export async function instantiate_pxl(memory: WebAssembly.Memory): Promise<PxlExports> {
   const bytes = await (await fetch(PXL_WASM_URL)).arrayBuffer();
-  const { instance } = await WebAssembly.instantiate(bytes, { env: { memory } });
+  const { instance } = await WebAssembly.instantiate(bytes, {
+    env: {
+      memory,
+      // A panic's message, before the trap: what "unreachable" would otherwise hide.
+      pxl_panic: (ptr: u32, len: u32) => console.error(`[pxl] ${new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len))}`),
+    },
+  });
   const exports = instance.exports as unknown as PxlExports;
   const keeps = exports.pxl_module_bytes();
   if (keeps !== MODULE_SECTION.bytes) {
