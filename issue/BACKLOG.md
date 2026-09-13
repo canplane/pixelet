@@ -10,25 +10,83 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-Nothing queued.
+- **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
+  2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md)).
+  Taken from the smallest separable piece outward: a piece is first cut
+  out behind a boundary that carries typed arrays, still in TypeScript, so
+  the boundary is proven before the language changes behind it. In order:
+  1. **The chunk bake to a worker.** Decided 2026-09-13, not conditional;
+     the case, with the phone's numbers, in
+     [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)
+     ("The worker's case"):
+     while terrain fills in, the bake and the scan take the main thread's
+     budget (step mean 8.7 ms, 252 of 740 frames over, dt p50 29 ms on the
+     phone). The bake already yields — it is stepped — so the case is a
+     second core's throughput, not an uncuttable unit (corrected there),
+     and it is decided on the phone: the stepped path and the worker behind
+     one setting, and the longest single step recorded, because the
+     `visible/chunks` maxima of 64–112 ms are not yet attributed. The
+     control stays on the main thread — what is submitted, its priority,
+     cancellation, and when a result is adopted — and only execution
+     moves. The memory side is ready — sched/slabs.ts
+     holds the little memory and its ownership record — and the mesher takes
+     typed arrays and returns typed arrays. Not through the fetch
+     scheduler: its six slots are shared with the network, and its `run` is
+     a Promise; a bake port on the main thread gives a slab-capped slot, the
+     reply marks the slot, and the chunk adopts it under the budget, with a
+     cap on bytes uploaded a tick while WebGL is still the path. The same worker
+     hosts the WASM bake later
+     ([20260911-single-thread-core-and-when-to-spawn-a-worker.md](./20260911-single-thread-core-and-when-to-spawn-a-worker.md)).
+     The message is April's command shape and frame header as kept in
+     [20260913-boundaries-commands-and-what-comes-back-from-april.md](./20260913-boundaries-commands-and-what-comes-back-from-april.md):
+     a numeric command, XTP args, `tx_id` naming the Demand slot, the body
+     a transferred slab — no transaction controller, no switch.
+  2. **The read direction.** How the UI learns that state changed once the
+     truth is in the core — a subscription or dirty-flag protocol — designed
+     with the command channel
+     ([20260908-command-channel-for-state-mutation.md](./20260908-command-channel-for-state-mutation.md)),
+     not after it; the default without one is copying the world into JS
+     every frame. The hypothesis to design from is a pull — a revision
+     counter read once a tick — per the boundaries document above.
+  3. **Spill past the reservation becomes a budget signal.** The core
+     memory is fixed (`initial == maximum`, never grown — grow would detach every view, and resizable buffers read
+     2.5x slower and are refused by WebGL/WebGPU); past 512 MB the buddy pool
+     hands out plain ArrayBuffer regions, which a kernel over the wasm memory
+     cannot see. Harmless while everything computes in JS; when a kernel
+     lands, a spill has to trigger reclaim or refuse, not silently leave the
+     memory. Today's live set is a third of the reservation.
+  4. **The mesher in Rust, inside the worker.** The first Rust: the
+     boundary from step 1 already carries typed arrays in and out, so the
+     change is behind it. XTP packets land aligned (8 bytes, 16 for SIMD)
+     and are read through checked casts.
+  5. **The core to WASM on the main thread, and a WebGPU renderer.**
+     three.js and R3F leave together (R3F can go earlier on its own). What
+     three.js does for us today is listed in the destination issue as a
+     checklist the renderer fills, not a gate on starting. WebGPU removes
+     the WebGL-side costs; it does not shrink the working set — that is the
+     byte budget in P1.
 
 ## P1
 
-- **The chunk bake to a worker.** Decided 2026-09-13, not conditional;
-  the case, with the phone's numbers, in
-  [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)
-  ("The worker's case"):
-  a bake is 14–21 ms a unit on the phone against an 8 ms budget, the
-  unit is a chunk and the mesher is one call, so on the main thread it
-  cannot be cut and forward progress runs it whole (`visible/chunks` max
-  64–112). Off the thread its main-thread cost is zero; that is
-  arithmetic, not a hypothesis. The memory side is ready — sched/slabs.ts
-  holds the little memory and its ownership record — and the mesher takes
-  typed arrays and returns typed arrays. The job is a Demand through the
-  fetch scheduler whose run borrows a slab, copies the run set in from
-  the big memory, posts it, and copies the mesh back. The same worker
-  hosts the WASM bake later
-  ([20260911-single-thread-core-and-when-to-spawn-a-worker.md](./20260911-single-thread-core-and-when-to-spawn-a-worker.md)).
+- **One byte budget over everything drawn, paid for in LOD.** The phone's
+  page dies because the working set exceeds a budget of about two
+  gigabytes, and a WebView (Capacitor) runs in the same WebKit content
+  process under the same limit — reported by others as a 2048 MB jetsam
+  ceiling on iPhone, consistent with the mini's 1.6–2.1 GB. Today's
+  `RETAIN_BUDGET_BYTES`
+  ([20260912-what-to-render-when.md](./20260912-what-to-render-when.md))
+  covers only what is held off screen; what is on screen has no ceiling.
+  The precedent is CesiumJS: a tileset has `cacheBytes` and
+  `maximumCacheOverflowBytes`, and when the tiles a view needs exceed both
+  it raises the screen-space error until they fit — the view gets coarser,
+  the page does not die
+  ([Cesium3DTileset](https://cesium.com/learn/cesiumjs/ref-doc/Cesium3DTileset.html)).
+  MapLibre sizes its tile cache from the viewport rather than a count
+  ([MapOptions](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)).
+  The same lever exists here: the one LOD criterion's distance thresholds.
+  Needed on the web whatever the graphics API; the renderer in P0-5 is
+  built against it.
+
 - **"Everything is a file": the Placement and the palette.** Decided
   2026-09-13, first:
   [20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md).
@@ -60,16 +118,8 @@ Nothing queued.
   render-path bisect put MSAA and the composer at about a millisecond of
   p50 and five points of the missed share — not worth removing. What is
   left, in order:
-  - **A ~300 ms off-thread frame every twenty seconds or so**, on a still
-    frame with nothing mounted or uploaded. Outside the task and without a
-    GPU timer or LoAF on iOS there is no instrument for it; Safari's own
-    Timelines would be the next look, if it is ever the complaint.
   - **A chunk bake is 14–21 ms on the phone** (3 ms on the desktop) while
     a zoom-out is filling in: the worker, above.
-  - **A repacked sheet still uploads whole.** Growth replaces the texture
-    and its first bind uploads the canvas — 16 MB at 2048, 64 at 4096 —
-    once per size step (`poi_field` max 76 ms on the phone, 151 at 4096).
-    An empty texture plus the live rectangles would be a third of that.
   - **The load storm** is unchanged: `rerender 66`, `mount +384` frames at
     six seconds, and page fetches queued ten seconds behind six in flight
     (P3).
@@ -108,15 +158,6 @@ Nothing queued.
 
 ## P3
 
-- **Spill past the reservation must become a budget signal before a WASM
-  kernel reads the pool.** The core memory is fixed (`initial == maximum`,
-  never grown — grow would detach every view, and resizable buffers read
-  2.5x slower and are refused by WebGL/WebGPU); past 512 MB the buddy pool
-  hands out plain ArrayBuffer regions, which a kernel over the wasm memory
-  cannot see. Harmless while everything computes in JS; when a kernel
-  lands, a spill has to trigger reclaim or refuse, not silently leave the
-  memory. Today's live set is a third of the reservation.
-
 - **Decor culling by page.** Decor is drawn for the whole loaded world
   in one instanced mesh per variant; with the threshold it exists only in
   the nearest ring, so culling saves the half behind the camera. If the
@@ -137,6 +178,17 @@ Nothing queued.
   XTP page (a short packet fails the header check instead) — verify then.
 
 ## Parked, with the reason on file
+
+- **Phone costs that sit on the three.js boundary.** Recorded 2026-09-13
+  and left to the WebGPU renderer, which creates these resources itself:
+  - **A ~300 ms off-thread frame every twenty seconds or so**, on a still
+    frame with nothing mounted or uploaded. Outside the task and without a
+    GPU timer or LoAF on iOS there is no instrument for it; Safari's own
+    Timelines would be the next look, if it is ever the complaint.
+  - **A repacked sheet still uploads whole.** Growth replaces the texture
+    and its first bind uploads the canvas — 16 MB at 2048, 64 at 4096 —
+    once per size step (`poi_field` max 76 ms on the phone, 151 at 4096).
+    An empty texture plus the live rectangles would be a third of that.
 
 - **Layout bucket handle table.** Each node's two `Map<LodStep, …>` caches
   as a fixed (slot × tier) handle table. The vertex data is already pooled

@@ -238,3 +238,70 @@ to a live heap it cannot shrink — and it was left unconfirmed on purpose:
 a ten-minute experiment would name it, and the name would be worth
 having only if a WebGL path were going to stay. It is not. Recorded so
 the next reader does not spend a day on it.
+
+## Scheduled 2026-09-13: Rust, piece by piece
+
+The move is the priority and the core is Rust. It is taken from the
+smallest separable piece outward rather than as one cut: each piece is
+first put behind a boundary that carries typed arrays, in TypeScript, and
+only then does what is behind the boundary change language. The chunk bake
+in a worker is first — it has the phone's numbers behind it and the
+mesher already takes and returns typed arrays. The order is P0 in
+[BACKLOG.md](./BACKLOG.md).
+
+"Cost it before the cut", above, is not a gate. The decision does not turn
+on implementation size, and no estimate would change it. What that line
+was right about is that three.js does work for us that would disappear
+silently, so the renderer is built against a list of it:
+
+- [ ] glTF loading and the model cache (`gltf_cache.ts`, `asset_store`)
+- [ ] texture arrays, and the texture pack's sheet into one
+- [ ] the multisampled target and the composer's chain — sized by the
+      formula in the update above, not by a default
+- [ ] the billboard depth pass (`render/scene_depth.ts`,
+      `billboard/anchor_occlusion.ts`'s `gl_FragDepth` from an upright twin)
+- [ ] shadows, the sky and its render order
+- [ ] frustum culling and bounds, instancing, and buffer lifetimes counted
+      rather than trusted
+
+Filled when the renderer starts, not before.
+
+## Recorded 2026-09-13: the web's ceiling, and the core that is not tied to it
+
+**The ceiling is WebKit's, not the browser's.** On iOS every browser and
+every WebView is WebKit, and a page — in Safari or in a WKWebView, which is
+what Capacitor ships — runs in a WebContent process with its own memory
+limit. Others report it as a 2048 MB jetsam ceiling on iPhone (iPad is
+reported higher); the mini's pressure events at 1.6–2.1 GB agree. The
+app-level `increased-memory-limit` entitlement applies to an app's own
+process and only on some models, per Apple
+([forum](https://developer.apple.com/forums/thread/770868)); nothing found
+says it lifts the WebContent process's. WebGPU in WKWebView follows the
+OS default, which is on from iOS 26
+([forum](https://developer.apple.com/forums/thread/770862)). So a
+Capacitor wrapper buys distribution and native APIs, not memory.
+
+**What escapes it is a native app, and the core does not have to change to
+get there.** WebGPU is a specification before it is a browser API. wgpu
+implements it natively over Vulkan, Metal, Direct3D 12 and OpenGL ES, and
+in the browser over WebGPU and WebGL2 ([wgpu.rs](https://wgpu.rs/)); the
+same Rust renderer and the same WGSL run in both. Rerun's viewer ships one
+Rust + wgpu + egui codebase as a native binary and as WebAssembly
+([egui](https://github.com/emilk/egui)). Figma, the other precedent, keeps
+editing off phones altogether: mobile browsers and its mobile app are
+view-only
+([system requirements](https://help.figma.com/hc/en-us/articles/360039827194-What-browsers-does-Figma-support),
+[mobile app](https://help.figma.com/hc/en-us/articles/1500007537281-Guide-to-the-Figma-mobile-app)).
+
+**The condition is the boundary, not the graphics API.** What does not
+port is the shell: React, `fetch`, OPFS, geolocation and sensors, workers.
+So the core does not call a platform API. Commands arrive in the shape
+[20260913-boundaries-commands-and-what-comes-back-from-april.md](./20260913-boundaries-commands-and-what-comes-back-from-april.md)
+settles, so a web UI and a native one call the same ones; work is a Demand
+in a slot, executed by a worker on the web and by a thread natively; I/O,
+the clock, storage and sensors are handed in, not reached for. A core that
+imports `web_sys` for convenience is a web core.
+
+**And inside the ceiling, the budget.** Leaving WebGL removes WebKit's
+upload copies; it does not make the working set fit. That is the byte
+budget paid for in LOD, in BACKLOG P1.
