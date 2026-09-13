@@ -166,6 +166,7 @@ export class CoreBuild {
   private order: Uint32Array;
   /** Where the frame is written before a tick. */
   readonly frame: Float64Array;
+  private warned_unreachable = false;
 
   constructor(private readonly pxl: PxlExports) {
     this.sq = new Ring(pxl.memory.buffer, pxl.pxl_ring_sq());
@@ -256,6 +257,13 @@ export class CoreBuild {
    * are dropped, and its generation moves by one. */
   source(id: u32, terrain: Terrain | null, show_structures: boolean): void {
     const page = terrain !== null && reaches(this.pxl, terrain) ? terrain : null;
+    // A page past the page section is one the module cannot read, and the
+    // chunk stays unbuilt: the section is sized to hold every resident page
+    // (terrain/config.ts), so this is a real fault, said once.
+    if (terrain !== null && page === null && !this.warned_unreachable) {
+      this.warned_unreachable = true;
+      console.warn(`[render/chunk] chunk ${id}'s page lies outside the core memory; its chunks cannot be built`);
+    }
     const g = page?.ground;
     this.submit(
       id,
@@ -311,6 +319,9 @@ export class CoreBuild {
   tick(): boolean {
     const draw = (this.pxl.pxl_tick() & 1) !== 0;
     this.read();
+    // What the completion ring had no room for, until it is dry: a tick
+    // that finds events still waiting does nothing.
+    while (this.pxl.pxl_drain() > 0) this.read();
     return draw;
   }
 

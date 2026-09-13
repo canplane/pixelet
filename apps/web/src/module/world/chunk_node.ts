@@ -36,7 +36,7 @@ import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type Chunk
 import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
 import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
-import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
 import type { LodStep } from "@/render/lod.ts";
@@ -44,15 +44,19 @@ import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@
 
 /**
  * How much built work chunks may keep *while off screen*: run sets and
- * cached tiers, both in the core pool and sized in bytes. Leaving the frustum
- * used to drop all of it on the first release, and a rotation or a zoom in
- * and out rebuilt every chunk from the scan up; the module reclaims only past
- * this, farthest first (issue/20260912-what-to-render-when.md). It budgets
- * only the optional part: on-screen chunks hold their tiers because that is
- * the layout. A quarter of the core reservation, the currency the crash case
- * was measured in.
+ * cached tiers, both in the mesh section and sized in bytes. Leaving the
+ * frustum used to drop all of it on the first release, and a rotation or a
+ * zoom in and out rebuilt every chunk from the scan up; the module reclaims
+ * only past this, farthest first (issue/20260912-what-to-render-when.md).
+ * It budgets only the optional part: on-screen chunks hold their tiers
+ * because that is the layout. Half the mesh section: the other half is the
+ * on-screen layouts, the volumes a build composes in, and the room a large
+ * block needs in one piece — at a quarter of the whole core reservation
+ * (128 MB of a 256 MB section) the section sat two-thirds full and
+ * fragmented, and refused the fine tiers' blocks 88,000 times in a minute
+ * (2026-09-14).
  */
-export const RETAIN_BUDGET_BYTES: u32 = Math.floor((CORE_MEMORY?.buffer.byteLength ?? 256 * 1048576) / 4);
+export const RETAIN_BUDGET_BYTES: u32 = Math.floor(CORE_SECTIONS.mesh.bytes / 2);
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 

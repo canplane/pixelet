@@ -19,6 +19,21 @@
  */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
+import { GROUND_CH_KEYS } from "@pxl/shared/bake/format.ts";
+
+import { PAGE_SECTION_BYTES } from "@/render/layer/pipeline/core_pool.ts";
+
+/** What one resident page takes of the page section: its ground lanes and
+ * its elevation block, each rounded up to the buddy's power of two. */
+function pow2_ceil(bytes: u32): u32 {
+  return 1 << Math.ceil(Math.log2(Math.max(1, bytes)));
+}
+const PAGE_BLOCK_BYTES: u32 = GROUND_CH_KEYS.length * pow2_ceil(PAGE_CELL_SPAN * PAGE_CELL_SPAN) + pow2_ceil(ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2);
+
+/** Pages a release keeps for its quarantine (resident.ts) while the next
+ * ones arrive, and the shared ocean page. */
+const PAGE_MARGIN: u32 = 4;
 
 /**
  * How many pages stay decoded: the nearest this many, and the rest are
@@ -32,8 +47,13 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
  * once. A radius of a quarter page was tried here first and did exactly that.
  * 32 pages is ~129MB, against the 49 (~197MB) that discarded the tab on an
  * iPhone 13 mini and the 9 (~36MB) the old fetch window held.
+ *
+ * Never more than the core memory's page section holds, less the margin:
+ * a page past the section spills where the module cannot read it, and its
+ * chunks are never built — so the count is bounded here by construction
+ * rather than trusted to agree with core_pool.ts's layout.
  */
-export const RESIDENT_PAGES: u32 = 32;
+export const RESIDENT_PAGES: u32 = Math.min(32, Math.floor(PAGE_SECTION_BYTES / PAGE_BLOCK_BYTES) - PAGE_MARGIN);
 
 /** How far to look when picking those pages. Only wide enough that the
  * nearest RESIDENT_PAGES are always available to pick (39 at worst), since

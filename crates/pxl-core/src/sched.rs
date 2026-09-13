@@ -28,8 +28,14 @@ const RECHECK_INTERVAL_S: f64 = 0.15;
 /// Layouts applied per frame on screen, and releases off it.
 const MAX_COMMITS_PER_FRAME: u32 = 8;
 const MAX_RELEASES_PER_FRAME: u32 = 2;
-/// Off-screen chunks that may give their built work back in one frame.
+/// Off-screen chunks that may give their built work back in one frame, and
+/// how many more when a block was refused this frame: a refusal is a build
+/// on screen going nowhere, and the pool has no spill to fall back on.
 const MAX_RECLAIMS_PER_FRAME: u32 = 16;
+const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
+/// Chunks mounted in one frame: a page comes into range as 256, and the
+/// glue makes a node for each, which is a frame's worth of work.
+const MAX_MOUNTS_PER_FRAME: u32 = 64;
 /// The mesh section's live share past which off-screen chunks are reclaimed
 /// whatever the retain budget says.
 const MESH_PRESSURE: f64 = 0.9;
@@ -220,6 +226,12 @@ pub struct Scheduler {
     ladder: Ladder,
     recheck_elapsed: f64,
     frame: Option<Frame>,
+    /// Something changed that a recheck has not seen: the view moved, a
+    /// chunk came or went, a source was told. The canvas is asked for
+    /// frames until a full recheck has run over it, or the world stops at
+    /// whatever the last frame left — nothing else asks for a frame now
+    /// that chunks are not React children.
+    view_dirty: bool,
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
@@ -234,6 +246,9 @@ pub struct Scheduler {
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
     decor_sample: ChunkSample,
+    /// The builder's refusals as of the last reclaim, so a refusal since
+    /// is pressure now.
+    refused_seen: u32,
 }
 
 impl Default for Scheduler {
@@ -272,6 +287,7 @@ impl Scheduler {
             ladder: Ladder::default(),
             recheck_elapsed: RECHECK_INTERVAL_S,
             frame: None,
+            view_dirty: true,
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
@@ -282,6 +298,7 @@ impl Scheduler {
             mounted_for: None,
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
+            refused_seen: 0,
         }
     }
 
@@ -364,6 +381,7 @@ impl Scheduler {
         self.index.insert(id, self.slots.len());
         self.by_base.insert((base_x as i64, base_y as i64), id);
         self.slots.push(slot);
+        self.view_dirty = true;
     }
 
     /// The chunk whose base is (x, y), in units.
@@ -373,6 +391,7 @@ impl Scheduler {
 
     pub fn remove(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(Event)) {
         let Some(i) = self.index.remove(&id) else { return };
+        self.view_dirty = true;
         self.by_base.remove(&(self.slots[i].base_x as i64, self.slots[i].base_y as i64));
         self.builder.remove(world, id, &mut |e| emit(Event::Build(e)));
         let before = self.slots[i].retained();
@@ -392,6 +411,7 @@ impl Scheduler {
     /// rebuild lands.
     pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool, emit: &mut impl FnMut(Event)) {
         let Some(&i) = self.index.get(&id) else { return };
+        self.view_dirty = true;
         let before = self.slots[i].retained();
         self.builder.source(world, id, page, show_structures, &mut |e| emit(Event::Build(e)));
         let s = &mut self.slots[i];
@@ -487,7 +507,10 @@ impl Scheduler {
             let built = DecorBuild::build(&self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
             let pool = world.volumes.mesh_pool();
-            let Some(at) = world.pools[pool].acquire(bytes) else { return false };
+            let Some(at) = world.pools[pool].acquire(bytes) else {
+                self.builder.stat.starved += 1;
+                return false;
+            };
             // SAFETY: a block of the bytes the build asked for, the glue's
             // once handed over.
             unsafe { built.write(world.volumes.mem().add(at)) };
@@ -504,6 +527,7 @@ impl Scheduler {
         let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
         if changed {
             self.pages_revision = self.pages_revision.wrapping_add(1);
+            self.view_dirty = true;
         }
     }
 
@@ -517,7 +541,7 @@ impl Scheduler {
         if self.mounted_for == Some(key) {
             return;
         }
-        self.mounted_for = Some(key);
+        let mut mounts = 0;
         let (r2, keep2) = (frame.render_dist.powi(2), (frame.render_dist + frame.range_hysteresis).powi(2));
         let rect = |x0: f64, y0: f64, span: f64| {
             let dx = if 0.0 < x0 {
@@ -573,6 +597,11 @@ impl Scheduler {
                     if self.mounted.contains_key(&(page, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
                         continue;
                     }
+                    if mounts >= MAX_MOUNTS_PER_FRAME {
+                        // The rest next frame: the key stays unrecorded.
+                        return;
+                    }
+                    mounts += 1;
                     let id = self.next_mount_id;
                     self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
                     let (px, py) = lanes_xy(page);
@@ -584,6 +613,7 @@ impl Scheduler {
                 }
             }
         }
+        self.mounted_for = Some(key);
     }
 
     // ---- the tick ----
@@ -594,6 +624,9 @@ impl Scheduler {
         let t0 = now();
         let deadline = t0 + frame.budget_ms;
         let hard = deadline + frame.hard_slack_ms;
+        if !self.frame.is_some_and(|prev| same_view(&prev, &frame)) {
+            self.view_dirty = true;
+        }
         self.frame = Some(frame);
         self.ladder.set_projection(frame.viewport_h, frame.fov_deg);
         self.recheck_elapsed += frame.delta_s;
@@ -625,10 +658,13 @@ impl Scheduler {
             .copied()
             .filter(|&id| full_recheck || self.slots[self.index[&id]].flags & (BLEND_ACTIVE | SETTLING) != 0)
             .collect();
-        under_budget(&eligible, u32::MAX, deadline, hard, now, |id| {
+        let rechecked = under_budget(&eligible, u32::MAX, deadline, hard, now, |id| {
             self.recheck(world, id, t0, &frame, emit);
             true
         });
+        if full_recheck && rechecked as usize == eligible.len() {
+            self.view_dirty = false;
+        }
 
         let pending_total = (visible.len() + offscreen.len()) as u32;
         let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |id| self.commit(world, id, emit));
@@ -685,7 +721,7 @@ impl Scheduler {
         c.retained_off = self.retained_off;
         let blending = c.blend_active > 0;
         self.census = c;
-        committed > 0 || pending_total > committed || blending
+        committed > 0 || pending_total > committed || blending || self.view_dirty
     }
 
     /// Where every chunk is and whether it is on screen, from the anchor
@@ -708,6 +744,7 @@ impl Scheduler {
                     self.retained_off += bytes;
                 }
                 emit(Event::Visible { id: s.id, on: visible });
+                self.view_dirty = true;
             }
         }
     }
@@ -918,17 +955,23 @@ impl Scheduler {
     }
 
     /// The retain budget: off-screen built work past it, or the mesh section
-    /// past MESH_PRESSURE, is given back farthest first.
+    /// past MESH_PRESSURE, is given back farthest first. A block refused
+    /// since the last pass is pressure too, whatever the numbers say: the
+    /// section has room in bytes but not in one piece, and what gives it
+    /// back in pieces that join is the off-screen work, farthest first.
     fn reclaim(&mut self, world: &mut World, order: &[u32], emit: &mut impl FnMut(Event)) {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
+        let refused = self.builder.stat.starved != self.refused_seen;
+        self.refused_seen = self.builder.stat.starved;
         let pressed = |world: &World| {
             let p = &world.pools[world.volumes.mesh_pool()];
             p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
         };
+        let cap = if refused { MAX_RECLAIMS_WHEN_REFUSED } else { MAX_RECLAIMS_PER_FRAME };
         let mut freed = 0;
         // The order already puts off-screen chunks farthest first.
         for &id in order {
-            if freed >= MAX_RECLAIMS_PER_FRAME || !(self.retained_off > budget || pressed(world)) {
+            if freed >= cap || !(refused || self.retained_off > budget || pressed(world)) {
                 break;
             }
             let Some(&i) = self.index.get(&id) else { continue };
@@ -951,6 +994,55 @@ impl Scheduler {
             self.account(i, before);
             freed += 1;
         }
+        if !refused || freed >= cap {
+            return;
+        }
+        // Nothing off screen gave enough, or nothing was off screen — a
+        // zoomed-out view has a thousand chunks in the frustum, every one
+        // keeping its runs and up to four tiers, and the section is theirs.
+        // What they show is their layout's tiers; the runs and the other
+        // tiers are a convenience for the next zoom, given back farthest
+        // first, from chunks not mid-build, until the frame's share is spent.
+        for &id in order.iter().rev() {
+            if freed >= cap {
+                break;
+            }
+            let Some(&i) = self.index.get(&id) else { continue };
+            let s = &self.slots[i];
+            if !s.has(IN_FRUSTUM) || s.has(PENDING) {
+                continue;
+            }
+            let spare = s.runs_bytes > 0 || s.tiers.iter().any(|t| t.step != s.layout_primary && t.step != s.layout_secondary);
+            if !spare {
+                continue;
+            }
+            let id = s.id;
+            let (p, q) = (s.layout_primary, s.layout_secondary);
+            let before = s.retained();
+            self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
+            let s = &mut self.slots[i];
+            s.runs_bytes = 0;
+            let mut steps: Vec<u32> = Vec::new();
+            s.tiers.retain(|t| {
+                let keep = t.step == p || t.step == q;
+                if !keep {
+                    steps.push(t.step);
+                }
+                keep
+            });
+            s.decor.retain(|d| {
+                let keep = d.0 == p || d.0 == q;
+                if !keep && !steps.contains(&d.0) {
+                    steps.push(d.0);
+                }
+                keep
+            });
+            for step in steps {
+                emit(Event::Evict { id, step });
+            }
+            self.account(i, before);
+            freed += 1;
+        }
     }
 }
 
@@ -962,6 +1054,22 @@ const PAGE_SPAN: f64 = 1024.0;
 const PAGE_CHUNK_AXIS: u32 = 16;
 const CHUNK_SPAN_CELLS: u32 = 64;
 const PAGE_SHAMT: u32 = 10;
+
+/// Whether two frames look at the world the same way: what a recheck's
+/// answer depends on, not the budget or the elapsed time.
+fn same_view(a: &Frame, b: &Frame) -> bool {
+    a.root == b.root
+        && a.origin == b.origin
+        && a.planes == b.planes
+        && a.camera == b.camera
+        && a.lead == b.lead
+        && a.viewport_h == b.viewport_h
+        && a.fov_deg == b.fov_deg
+        && a.pixel_dither == b.pixel_dither
+        && a.anchor == b.anchor
+        && a.render_dist == b.render_dist
+        && a.show_decor == b.show_decor
+}
 
 /// A lattice word's X and Y lanes, signed: pvf3/ivec.ts's layout, X in the
 /// top 24 bits, Y in the next 24, Z in the low 16.

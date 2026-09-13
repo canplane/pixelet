@@ -76,8 +76,10 @@ struct State {
     hit: [f64; HIT_WORDS],
 }
 
-/// Entries each ring holds.
-pub const RING_CAPACITY: u32 = 1024;
+/// Entries each ring holds: a page mounting is 64 chunks a frame, each
+/// with its tiers, decor and layout to come, and the glue reads the ring
+/// dry between ticks — 4096 entries is 256 KB a ring.
+pub const RING_CAPACITY: u32 = 4096;
 
 fn new_ring(capacity: u32) -> Ring {
     let words = vec![0u32; ring_words(capacity as usize)].leak();
@@ -1005,6 +1007,10 @@ fn after(s: &mut State) {
 pub extern "C" fn pxl_tick() -> u32 {
     let s = state();
     drain(s);
+    // Events the ring had no room for are posted first; a tick on top of
+    // them would only queue more. The glue reads the ring dry and drains
+    // again before the next tick, so this is a frame lost only when it
+    // does not.
     if !s.events.is_empty() || s.volumes.is_none() {
         return 1;
     }
