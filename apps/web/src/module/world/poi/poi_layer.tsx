@@ -43,6 +43,7 @@ import { CellNodes } from "../billboard/cell_node.ts";
 import { BillboardField } from "../billboard/field.ts";
 import {
   invalidate_poi_index,
+  NO_TIER,
   poi_cell_x,
   poi_cell_y,
   poi_cell_z,
@@ -52,15 +53,17 @@ import {
   poi_page,
   poi_rec,
   poi_tiebreak,
+  poi_tier,
   poi_x,
   poi_y,
   poi_z,
   query_poi_index,
+  set_poi_tier,
   sync_poi_index,
 } from "./poi_index.ts";
 import { badge_atlas, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H, cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot } from "./poi_badge.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
-import { BADGE_CELLS_PER_CUBE, fade_end_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
+import { BADGE_SHAMT_OVER_CUBE, fade_end_u, get_lod_level, lod_step_at, LOD_STEP_BY_LEVEL, type LodStep } from "@/render/lod.ts";
 import { usePoiStore } from "./store.ts";
 import { type FrameBudget, useTick } from "@/module/world/sched/tick.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
@@ -91,16 +94,19 @@ const MIN_SHAMT: u32 = 0;
 const MAX_SHAMT: u32 = 6;
 
 /**
- * Which lattice tier badges snap to at a range: the cube tier's cell there,
- * times CELLS_PER_BADGE, rounded to the nearest power of two. Zooming in
- * walks the tier down and the badges spread; zooming out walks it up and
- * they gather — the same ladder terrain climbs, so it needs no
- * quantisation of its own.
+ * Which lattice tier a badge snaps to: the cube tier at its range, by the
+ * same criterion and the same hysteresis chunks use (lod_step_at), raised
+ * BADGE_SHAMT_OVER_CUBE tiers. So a badge gathers or spreads at exactly the
+ * distance the terrain under that range hands off, and resists flipping
+ * back the way a chunk does. The level it last showed is its record's
+ * one-byte state (poi_index.ts).
  */
-function tier_shamt(dist: f64): u32 {
-  const want_u = BADGE_CELLS_PER_CUBE * LOD_CELL_PER_DISTANCE.value * Math.max(1e-3, dist);
-  const shamt = Math.round(Math.log2(Math.max(1, want_u)));
-  return Math.max(MIN_SHAMT, Math.min(MAX_SHAMT, shamt)) as u32;
+function tier_shamt(dist: f64, i: u32): u32 {
+  const last = poi_tier(i);
+  const current: LodStep = last === NO_TIER ? LOD_STEP_BY_LEVEL[LOD_STEP_BY_LEVEL.length - 1] : LOD_STEP_BY_LEVEL[last];
+  const level = get_lod_level(lod_step_at(Math.max(1e-3, dist), current));
+  if (level !== last) set_poi_tier(i, level);
+  return Math.max(MIN_SHAMT, Math.min(MAX_SHAMT, level + BADGE_SHAMT_OVER_CUBE)) as u32;
 }
 
 /** center.xyz (page-local real units, overture_provider.ts) resolved against
@@ -459,7 +465,7 @@ function file_stage(j: PlaceJob): void {
     // Its own tier, from its own distance. Not one tier for the frame: a
     // perspective view holds near and far at once, and a single tier is
     // wrong at whichever end it was not chosen for.
-    $nodes.add(poi_cell_x(i), poi_cell_y(i), poi_cell_z(i), tier_shamt(Math.sqrt(d2)), i, d2);
+    $nodes.add(poi_cell_x(i), poi_cell_y(i), poi_cell_z(i), tier_shamt(Math.sqrt(d2), i), i, d2);
   }
   if (j.h >= j.hits) {
     j.n = 0;

@@ -162,6 +162,10 @@ type Lanes = {
   /** FNV-1a of the id, hashed once here rather than once per frame in the
    * selector that only ever uses it to break a tie. */
   tiebreak: Float64Array;
+  /** The cube-ladder level the record's badge last showed, or NO_TIER —
+   * the hysteresis state lod_step_at needs, one byte a record. A rebuild
+   * starts every record at NO_TIER, as a new chunk starts coarse. */
+  tier: Uint8Array;
   count: u32;
   dropped: u32;
 };
@@ -182,6 +186,7 @@ function make_lanes(): Lanes {
     cell_y: CORE_ALLOC.take(Int32Array, CAPACITY),
     cell_z: CORE_ALLOC.take(Int32Array, CAPACITY),
     tiebreak: CORE_ALLOC.take(Float64Array, CAPACITY),
+    tier: CORE_ALLOC.take(Uint8Array, CAPACITY),
     count: 0,
     dropped: 0,
   };
@@ -428,6 +433,7 @@ function sweep_unit(j: Job): void {
     lanes.grounded_ok[i] = grounded === null ? 0 : 1;
     // The hash's low 32 bits as a fraction: a stable, even tie-break.
     lanes.tiebreak[i] = Number(id_hash & 0xffffffffn) / 0x1_0000_0000;
+    lanes.tier[i] = NO_TIER;
   }
   j.rec = end;
   if (j.rec >= pois.len) {
@@ -539,6 +545,14 @@ export function poi_cell_z(i: u32): i32 {
 }
 export function poi_grounded(i: u32): boolean {
   return live.grounded_ok[i] !== 0;
+}
+/** No tier shown yet. */
+export const NO_TIER: u32 = 0xff;
+export function poi_tier(i: u32): u32 {
+  return live.tier[i];
+}
+export function set_poi_tier(i: u32, level: u32): void {
+  live.tier[i] = level;
 }
 
 /**

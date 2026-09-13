@@ -31,14 +31,10 @@
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
+import { lattice_hash4 } from "@xpute/core/ds/lattice_hash.ts";
 
 /** Marks a slot as never written in this generation. */
 const EMPTY: i32 = -1;
-
-/** Knuth's multiplicative constant per axis, the same mixing spatial_hash.ts
- * uses. The shamt joins the key because two tiers can be live at once and a
- * parent's address collides with its child's on a coarse axis. */
-const P1 = 73856093, P2 = 19349663, P3 = 83492791, P4 = 32452843;
 
 export type CellNodeStats = {
   nodes: u32;
@@ -119,7 +115,9 @@ export class CellNodes {
    */
   add(cell_x: i32, cell_y: i32, cell_z: i32, shamt: u32, src: u32, d2: f64): i32 {
     const kx = cell_x >> shamt, ky = cell_y >> shamt, kz = cell_z >> shamt;
-    const h = (Math.imul(kx, P1) ^ Math.imul(ky, P2) ^ Math.imul(kz, P3) ^ Math.imul(shamt, P4)) >>> 0;
+    // The shamt joins the key: two tiers can be live at once, and a parent's
+    // address collides with its child's on a coarse axis.
+    const h = lattice_hash4(kx, ky, kz, shamt);
 
     for (let probe = 0; probe <= this.mask; probe++) {
       const slot = (h + probe) & this.mask;
