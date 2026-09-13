@@ -30,14 +30,12 @@
  *   ownership ledger the central scheduler needs: it is what says what to do
  *   with a buffer whose job outlived the chunk that asked for it.
  *
- * A worker job itself is a Demand (sched/demand.ts) run through the fetch
- * scheduler, since it has the same shape — quota, wishlist replacement,
- * abort; what `run` does is borrow a slab, fill it from the big memory,
- * post it, and on return copy the result back and give the slab back. None
- * of that exists yet: the first job is the chunk bake, and the ledger says
- * when one core has stopped being enough (the same record, "The first
- * candidate, and when"). This module exists so that the day it does, the
- * memory side is not designed in a hurry.
+ * A worker job is sent by the bake port (sched/bake_port.ts), not run as a
+ * Demand through the fetch scheduler: that scheduler's quota is the
+ * network's, and its completion is a Promise, where a bake's is read by the
+ * tick. The port borrows a slab, fills it from the big memory, posts it,
+ * and on return copies the result back and gives the slab back — the slab
+ * away is the request away, and its owner is the job that sent it.
  *
  * Slots are lanes: a state and an owner per slab in the core memory, the
  * `ArrayBuffer` handles beside them. A borrowed slab's buffer handle is

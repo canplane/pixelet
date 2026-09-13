@@ -5,21 +5,10 @@ import { assert, assertEquals } from "@std/assert";
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
-import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./volume.ts";
+import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./voxel.ts";
 import { type MeshRun, pack_column_runs } from "./voxel_scan.ts";
-import {
-  abort_bake,
-  bake_chunk_mesh,
-  bake_chunk_mesh_coarse,
-  bake_open,
-  type BakedChunkMesh,
-  begin_bake,
-  coarse_instance_stats,
-  finish_bake,
-  occlusion_stats,
-  release_chunk_mesh,
-  step_bake,
-} from "./chunk_mesher.ts";
+import { abort_bake, bake_chunk_mesh, bake_chunk_mesh_coarse, bake_open, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "./chunk_mesher.ts";
+import { CORE_BAKE, release_chunk_mesh } from "./core_bake.ts";
 
 function empty_columns(): MeshRun[][] {
   return Array.from({ length: CHUNK_CELL_SPAN * CHUNK_CELL_SPAN }, () => []);
@@ -96,7 +85,7 @@ Deno.test("LOD1 - a merged box does not stamp one column's edge across its whole
   }
   columns[idx(5, 2)] = [run(0, 1, 200, 100, 50)];
 
-  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  const boxes = boxes_of(bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1));
   // The cell under the step keeps its edge, and the three beside it do not
   // inherit it. merged_mask reads a box's +Y border from column 0 of its far
   // row, so a merge that spanned this row would have given all four the
@@ -113,7 +102,7 @@ Deno.test("LOD1 - a user cube flush against terrain draws no seam between them",
   columns[idx(5, 5)] = [run(0, 0, 200, 100, 50, MaterialClass.LAND)];
   columns[idx(6, 5)] = [run(0, 0, 50, 100, 200, MaterialClass.OBJECT)];
 
-  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  const boxes = boxes_of(bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1));
   const land = boxes.get("5.5,5.5,0.5")!;
   const cube = boxes.get("6.5,5.5,0.5")!;
   assertEquals(land & CREASE_PX_BIT, 0);
@@ -130,7 +119,7 @@ Deno.test("LOD1 - a wall capped by a user cube is not shaded as a silhouette", (
   // their top edges are not open air.
   columns[idx(5, 5)] = [run(0, 0, 200, 100, 50, MaterialClass.LAND), run(1, 1, 50, 100, 200, MaterialClass.OBJECT)];
 
-  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  const boxes = boxes_of(bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1));
   assert((boxes.get("5.5,5.5,0.5")! & CAP_PZ_BIT) !== 0);
   // Nothing above the cube itself, so it stays uncapped.
   assertEquals(boxes.get("5.5,5.5,1.5")! & CAP_PZ_BIT, 0);
@@ -152,7 +141,7 @@ Deno.test("LOD1 - a carved-and-refilled cell draws no outline in the flat ground
     run(2, 2, 50, 100, 200, MaterialClass.OBJECT),
   ];
 
-  const boxes = boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  const boxes = boxes_of(bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1));
   // Merged boxes, so these are the real centres — asserted present first,
   // since `undefined & bit` is 0 and would pass every check below silently.
   for (const [key, inward] of [["4.5,6.5,1.5", CREASE_PX_BIT], ["8.5,6.5,1.5", CREASE_NX_BIT]] as const) {
@@ -171,7 +160,7 @@ Deno.test("coarse mesher - a fully-covered cell doesn't shrink and blends its co
     columns[idx(cx, cy)] = [run(4, 5, 255, 0, 0)];
   }
 
-  const built = bake_chunk_mesh(pack_column_runs(columns), 2);
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 2);
   assertEquals(box_cnt(built, 5), 1); // coarse boxes are always open-bottom
   assertEquals(box_scale_of(built, 0, 5)[2], 2); // span(2) * cbrt(fill=1) = 2, no shrink
   assert(built.rgb[0] > 0); // red channel present
@@ -188,7 +177,7 @@ Deno.test("coarse mesher - terrain and object columns in the same cell blend int
   columns[idx(0, 1)] = [run(4, 5, 0, 0, 255, MaterialClass.OBJECT)];
   columns[idx(1, 1)] = [run(4, 5, 0, 0, 255, MaterialClass.OBJECT)];
 
-  const built = bake_chunk_mesh(pack_column_runs(columns), 2);
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 2);
   assertEquals(box_cnt(built, 5), 1); // coarse output is always one merged, open-bottom box
   assert(built.rgb[0] > 0); // red contributed
   assert(built.rgb[2] > 0); // blue contributed too — genuinely blended, not one or the other
@@ -202,14 +191,14 @@ Deno.test("coarse mesher - a sparse cell shrinks isotropically about its cell ce
   // size means here; position within the cell is below this tier.
   sparse[idx(1, 2)] = [run(4, 4, 200, 100, 50)];
 
-  const lone = bake_chunk_mesh(pack_column_runs(sparse), 4);
+  const lone = bake_chunk_mesh(CORE_BAKE, pack_column_runs(sparse), 4);
   assertEquals(box_cnt(lone, 5), 1); // open-bottom, like every coarse box
   assertEquals(box_scale_of(lone, 0, 5), [1, 1, 1]);
   assertEquals(box_center_of(lone, 0, 5), [2, 2, 6]);
 
   const filled = empty_columns();
   for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) filled[idx(cx, cy)] = [run(4, 5, 200, 100, 50)];
-  const built = bake_chunk_mesh(pack_column_runs(filled), 2);
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(filled), 2);
   assertEquals(box_cnt(built, 5), 1);
   // Full cell: no shrink, and it stays a plain full-cell run that can still
   // merge and cull against its neighbours.
@@ -219,7 +208,7 @@ Deno.test("coarse mesher - a sparse cell shrinks isotropically about its cell ce
 Deno.test("coarse mesher - finest LOD still requires per-run meshing", () => {
   let threw = false;
   try {
-    bake_chunk_mesh_coarse(pack_column_runs(empty_columns()), 1);
+    bake_chunk_mesh_coarse(CORE_BAKE, pack_column_runs(empty_columns()), 1);
   } catch {
     threw = true;
   }
@@ -242,8 +231,8 @@ Deno.test("LOD1 - a terrain run fully boxed in by solid terrain neighbors and co
   columns[idx(cx, cy - 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
-  const culled_before = occlusion_stats.culled;
-  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const culled_before = CORE_BAKE.occlusion.culled;
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1);
   // Five runs survive whole-run culling (4 neighbours + the centre's own
   // STRUCTURE top; its buried LAND run is the one culled), but they no
   // longer each emit five faces — run_face_mask drops the ones nothing can
@@ -251,7 +240,7 @@ Deno.test("LOD1 - a terrain run fully boxed in by solid terrain neighbors and co
   // of its sides are exposed: 5 faces. Each neighbour is flush against the
   // centre column on exactly one side: 4 faces each.
   assertEquals(built.vertex_cnt, (5 + 4 * 4) * 4);
-  assertEquals(occlusion_stats.culled, culled_before + 1);
+  assertEquals(CORE_BAKE.occlusion.culled, culled_before + 1);
 });
 
 Deno.test("LOD1 - an object placed on terrain does not occlusion-cull the terrain beneath it", () => {
@@ -271,8 +260,8 @@ Deno.test("LOD1 - an object placed on terrain does not occlusion-cull the terrai
   columns[idx(cx, cy - 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
-  const culled_before = occlusion_stats.culled;
-  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const culled_before = CORE_BAKE.occlusion.culled;
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1);
   // Nothing is whole-run culled, and the object's presence must not cost the
   // terrain under it its top face — that is this test's original point and
   // face culling has to honour it too, which is why the coverage test it
@@ -283,7 +272,7 @@ Deno.test("LOD1 - an object placed on terrain does not occlusion-cull the terrai
   // not its bottom, which the terrain directly beneath really does hide.
   // Each neighbour keeps four, flush against the centre on one side.
   assertEquals(built.vertex_cnt, (1 + 5 + 4 * 4) * 4);
-  assertEquals(occlusion_stats.culled, culled_before);
+  assertEquals(CORE_BAKE.occlusion.culled, culled_before);
 });
 
 Deno.test("LOD1 - a chunk-edge column is never occlusion-culled even if it looks fully surrounded on its other sides", () => {
@@ -296,7 +285,7 @@ Deno.test("LOD1 - a chunk-edge column is never occlusion-culled even if it looks
   columns[idx(cx, cy + 1)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
   // (cx-1, cy) doesn't exist — this column is at the chunk's own edge.
 
-  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1);
   // Nothing is whole-run culled, and the edge face is kept for the same
   // reason the run is: the neighbouring chunk's data is not available here,
   // so its -X side stays even though the other three are flush.
@@ -317,18 +306,18 @@ Deno.test("coarse_instance_stats counts cells too diffuse for any single box to 
   columns[idx(0, 0)] = [run(4, 4, 200, 100, 50)];
   columns[idx(3, 3)] = [run(4, 4, 200, 100, 50)];
 
-  const total_before = coarse_instance_stats.total;
-  const low_fill_before = coarse_instance_stats.low_fill;
-  bake_chunk_mesh(pack_column_runs(columns), 4);
-  assertEquals(coarse_instance_stats.total, total_before + 1);
-  assertEquals(coarse_instance_stats.low_fill, low_fill_before + 1);
+  const total_before = CORE_BAKE.coarse_instances.total;
+  const low_fill_before = CORE_BAKE.coarse_instances.low_fill;
+  bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 4);
+  assertEquals(CORE_BAKE.coarse_instances.total, total_before + 1);
+  assertEquals(CORE_BAKE.coarse_instances.low_fill, low_fill_before + 1);
 });
 
 Deno.test("bake_chunk_mesh - a box's baked position matches its own real-unit center", () => {
   const columns = empty_columns();
   columns[idx(1, 2)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
 
-  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1);
   assertEquals(box_cnt(built, 5), 1);
   assertEquals(box_center_of(built, 0, 5), [1.5, 2.5, 0.5]);
 });
@@ -344,8 +333,8 @@ Deno.test("LOD1 - a flat plateau emits its top faces and its rim, not five faces
     for (let cy = lo; cy <= hi; cy++) columns[idx(cx, cy)] = [run(0, 0, 10, 20, 30, MaterialClass.LAND)];
   }
 
-  const culled_before = occlusion_stats.culled;
-  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const culled_before = CORE_BAKE.occlusion.culled;
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1);
 
   // The whole plateau is one box. Every cell holds the same run — same z
   // span, same material — and no interior border carries a crease, so the
@@ -354,7 +343,7 @@ Deno.test("LOD1 - a flat plateau emits its top faces and its rim, not five faces
   assertEquals(built.vertex_cnt, 5 * 4);
   // ...and not one run was occlusion-culled, which is the point: the two
   // tests are looking at different things.
-  assertEquals(occlusion_stats.culled, culled_before);
+  assertEquals(CORE_BAKE.occlusion.culled, culled_before);
 });
 
 // ---- Edge-mask symmetry ----
@@ -408,7 +397,7 @@ function mixed_scene(place: (cx: u32, cy: u32) => [u32, u32]): MeshRun[][] {
 }
 
 function masks_by_centre(columns: MeshRun[][]): Map<string, number> {
-  return boxes_of(bake_chunk_mesh(pack_column_runs(columns), 1));
+  return boxes_of(bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1));
 }
 
 Deno.test("edge mask - mirroring X mirrors the mask and changes nothing else", () => {
@@ -440,7 +429,7 @@ Deno.test("edge mask - transposing X and Y transposes the mask and changes nothi
  * needs the extent, since a merged box's centre says nothing about whether
  * it reaches the edge of the scene. */
 function boxes_with_extent(columns: MeshRun[][]): { c: number[]; s: number[]; mask: number }[] {
-  const built = bake_chunk_mesh(pack_column_runs(columns), 1);
+  const built = bake_chunk_mesh(CORE_BAKE, pack_column_runs(columns), 1);
   const out = new Map<string, { c: number[]; s: number[]; mask: number }>();
   for (let v = 0; v < built.vertex_cnt; v++) {
     const o = v * 3;
@@ -508,9 +497,9 @@ function same_mesh(a: BakedChunkMesh, b: BakedChunkMesh): void {
 
 Deno.test("stepped bake - stepping bakes exactly what the whole bake bakes, at every tier", () => {
   for (const step of [1, 2, 4, 8] as const) {
-    const whole = bake_chunk_mesh(pack_column_runs(busy_columns()), step);
+    const whole = bake_chunk_mesh(CORE_BAKE, pack_column_runs(busy_columns()), step);
 
-    const cursor = begin_bake(pack_column_runs(busy_columns()), step);
+    const cursor = begin_bake(CORE_BAKE, pack_column_runs(busy_columns()), step);
     assert(cursor !== null);
     let steps = 0;
     while (!step_bake(cursor)) steps++;
@@ -525,28 +514,28 @@ Deno.test("stepped bake - stepping bakes exactly what the whole bake bakes, at e
 
 Deno.test("stepped bake - only one may be open, and an abort leaves the scratch as it found it", () => {
   const set = pack_column_runs(busy_columns());
-  const before_fine = bake_chunk_mesh(set, 1);
-  const before_coarse = bake_chunk_mesh(set, 4);
+  const before_fine = bake_chunk_mesh(CORE_BAKE, set, 1);
+  const before_coarse = bake_chunk_mesh(CORE_BAKE, set, 4);
 
   // Abort a fine bake deep enough that it holds a builder block.
-  const fine = begin_bake(set, 1);
+  const fine = begin_bake(CORE_BAKE, set, 1);
   assert(fine !== null);
-  assertEquals(begin_bake(set, 2), null);
-  assertEquals(bake_open(), true);
+  assertEquals(begin_bake(CORE_BAKE, set, 2), null);
+  assertEquals(bake_open(CORE_BAKE), true);
   for (let i = 0; i < 17; i++) step_bake(fine);
   abort_bake(fine);
-  assertEquals(bake_open(), false);
+  assertEquals(bake_open(CORE_BAKE), false);
 
   // And a coarse one part-way through accumulating.
-  const coarse = begin_bake(set, 4);
+  const coarse = begin_bake(CORE_BAKE, set, 4);
   assert(coarse !== null);
   step_bake(coarse);
   abort_bake(coarse);
-  assertEquals(bake_open(), false);
+  assertEquals(bake_open(CORE_BAKE), false);
 
   // Nothing the aborted bakes left behind changes what the next ones build.
-  const after_fine = bake_chunk_mesh(set, 1);
-  const after_coarse = bake_chunk_mesh(set, 4);
+  const after_fine = bake_chunk_mesh(CORE_BAKE, set, 1);
+  const after_coarse = bake_chunk_mesh(CORE_BAKE, set, 4);
   same_mesh(after_fine, before_fine);
   same_mesh(after_coarse, before_coarse);
   for (const m of [before_fine, before_coarse, after_fine, after_coarse]) release_chunk_mesh(m);

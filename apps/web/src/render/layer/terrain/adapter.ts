@@ -13,7 +13,8 @@ import { useTileStore } from "@/module/world/terrain/store.ts";
 import { slice_chunk } from "./chunk.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT } from "./shader_meta.ts";
 
-import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN, MaterialClass, NO_LAYER, type VoxelMaterial } from "../pipeline/volume.ts";
+import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN } from "../pipeline/volume.ts";
+import { MaterialClass, NO_LAYER, type VoxelMaterial } from "../pipeline/voxel.ts";
 import type { ColumnRunWriter } from "../pipeline/voxel_scan.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";

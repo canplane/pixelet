@@ -84,8 +84,7 @@ through WebGPU, three.js gone, iOS 26 and iPhone 11 as the floor
 — is scheduled, and the order is P0 in
 [issue/BACKLOG.md](./issue/BACKLOG.md): a piece is first cut out behind a
 boundary that carries typed arrays, still in TypeScript, and only then does
-what sits behind the boundary become Rust. The chunk bake in a worker is the
-first piece. Until a piece's turn, the client is TypeScript with Three.js
+what sits behind the boundary become Rust. Until a piece's turn, the client is TypeScript with Three.js
 used directly, unwrapped, and the state is already in the shape the move
 wants: lanes in one linear memory, one tick, records. Build the next thing in
 that shape; don't port a piece ahead of the list, and don't propose keeping a
@@ -313,6 +312,11 @@ just don't treat them as authority.
   reached only by reading code is a hypothesis. Say so when that's all you have,
   and if a predicted fix turns out not to work, revert it rather than leaving it
   in.
+- **Don't propose measuring what is going to be replaced.** Instrumenting
+  code the plan already retires — the three.js and React glue before the
+  WebGPU renderer, today — decides nothing before it leaves and only lengthens
+  the milestone. Measure what survives the move, or what a decision in front
+  of us actually turns on; otherwise say what is known and move on.
 - **"Revert" means leave no trace.** Restore the exact prior text — no comment
   explaining what was tried, no `// removed: ...` marker, no doc note about the
   tradeoff. An abandoned in-session experiment gets erased completely. That is

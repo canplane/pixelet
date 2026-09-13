@@ -176,7 +176,7 @@ about ten lines. Not taken for the bake worker, for four reasons:
 - Completion arrives as a microtask beside the tick, a second path to keep
   in step with the one that reads Demand state.
 - The message is a JS object graph. When the worker's inside becomes Rust
-  (P0-4), the protocol would have to be imitated there or removed — the
+  (the Rust mesher in BACKLOG P0), the protocol would have to be imitated there or removed — the
   one-cut rewiring this schedule avoids.
 - Each call allocates, on a path that runs dozens of times a second during
   a zoom-out.
@@ -189,7 +189,7 @@ that stays JS, runs one-off tool-shaped jobs, and has no part in a frame.
 
 ## Open
 
-- **The read direction** (BACKLOG P0-2). The first row suggests the UI
+- **The read direction** (BACKLOG P0-1). The first row suggests the UI
   pulls: a revision counter per thing it watches, read once a tick, and a
   read of the lanes when it moved. That is a hypothesis to design, not a
   conclusion from Figma, which does not say.

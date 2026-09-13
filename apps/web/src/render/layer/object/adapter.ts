@@ -14,7 +14,8 @@ import { column_has_entries, each_column_entry, object_column_of, object_column_
 import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255 } from "../terrain/shader_meta.ts";
 
-import { append_chunk_sub_voxel, type ChunkVolume, MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction, set_chunk_voxel, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/volume.ts";
+import { append_chunk_sub_voxel, type ChunkVolume, set_chunk_voxel } from "../pipeline/volume.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/voxel.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
 import { CORE_ALLOC } from "../pipeline/core_pool.ts";
 

@@ -16,6 +16,7 @@ This is deliberately **not** where reference documentation goes. The split:
 | How to operate something               | a `README.md` next to that infra | `infra/README.md`                                  |
 | **What is queued, and in what order**  | **`BACKLOG.md`, here**           | the worker for the bake                            |
 | **Why a decision went the way it did** | **a dated file here**            | why terrain tiles are pre-baked to an object store |
+| **An experiment, and its numbers**     | **`experiment/`, dated**         | the bake worker on the phone                       |
 
 A document belongs here when it would otherwise be lost: the alternatives that
 were weighed and rejected, the numbers a choice was made on, the constraint that
@@ -23,6 +24,12 @@ made an obvious-looking approach wrong. Once a decision hardens into "just how
 the system works", the _result_ moves into reference docs — but the reasoning
 stays here, because reference docs are the wrong place to explain a road not
 taken.
+
+An experiment goes under [`experiment/`](./experiment/) — a dated file, or
+a dated directory when it keeps code — and records the procedure, the
+numbers and what it showed, whether or not anything was decided on it. The
+decision, when there is one, stays in the issue the experiment was run for,
+which links to it.
 
 Files are named `YYYYMMDD-topic.md`, matching the dating convention the
 `checkpoint/YYYYMMDD-*` branches already use. The date is when the discussion
@@ -68,7 +75,7 @@ last section is the authority when the two disagree.
 | 20260909-camera-terrain-collision                           | **built** (gate + setting)                                                                                                                                                |
 | 20260909-april-checkpoint-salvage                           | **record** · CommandPort still "worth taking later"                                                                                                                       |
 | 20260909-lod-look-and-seams                                 | **built** · TAA closed                                                                                                                                                    |
-| 20260909-cooperative-scheduler-and-task-ledger              | **built** (tick, ledger, priority) · worker decided; its premise corrected — the bake already yields, the case is throughput, confirmed on the phone                      |
+| 20260909-cooperative-scheduler-and-task-ledger              | **built** (tick, ledger, priority) · bake worker measured on the phone and not taken; stepped stays                                                                       |
 | 20260908-terrain-source-migration                           | **built** (Overture + GEDTM30)                                                                                                                                            |
 | 20260908-overture-poi-adoption                              | **built** · next-gen sources noted                                                                                                                                        |
 | 20260908-geocode-poi-provider-survey                        | **record** · plan followed                                                                                                                                                |

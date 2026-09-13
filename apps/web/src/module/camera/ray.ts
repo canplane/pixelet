@@ -43,7 +43,7 @@ import { get_objects_near, type OccupiedEntry } from "@/module/world/object/stor
 import { with_raycast_composite } from "@/render/layer/pipeline/compositor.ts";
 import { chunk_origin_of } from "@/render/layer/object/adapter.ts";
 import { CHUNK_STAGE_LAYERS } from "@/module/world/stack.ts";
-import { MaterialClass } from "@/render/layer/pipeline/volume.ts";
+import { MaterialClass } from "@/render/layer/pipeline/voxel.ts";
 import { ray_hit_chunk, type WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
 import type { ChunkKey } from "@/render/layer/pipeline/contract.ts";
 

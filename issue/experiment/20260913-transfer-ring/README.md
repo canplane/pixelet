@@ -1,4 +1,4 @@
-# transfer_ring
+# The transfer ring
 
 An experiment, not a component. Nothing imports it and nothing was decided
 on it.
@@ -16,7 +16,7 @@ window as N slots of one `SharedArrayBuffer` with a state per slot and
 `Atomics` to hand over.
 
 ```sh
-deno run -A graveyard/experiment/transfer_ring/bench.ts
+deno run -A issue/experiment/20260913-transfer-ring/bench.ts
 ```
 
 ## Results, 2026-09-13
@@ -71,4 +71,4 @@ and not a phone.
 Related: `apps/web/src/module/world/sched/slab.ts` is this shape between
 the main thread and a worker, with `SLAB_CAP = 4` chosen without a
 measurement; and the in-page boundaries in
-[issue/20260913-boundaries-commands-and-what-comes-back-from-april.md](../../../issue/20260913-boundaries-commands-and-what-comes-back-from-april.md).
+[issue/20260913-boundaries-commands-and-what-comes-back-from-april.md](../../20260913-boundaries-commands-and-what-comes-back-from-april.md).

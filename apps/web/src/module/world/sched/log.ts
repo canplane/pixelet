@@ -17,9 +17,11 @@
  * summary.ts's `missed` and `overran`, the same tests the report counts.
  */
 
-import { coarse_instance_stats, occlusion_stats } from "@/render/layer/pipeline/chunk_mesher.ts";
+import { CORE_BAKE } from "@/render/layer/pipeline/core_bake.ts";
 import { poi_field_stats, poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { little_slabs } from "@/module/world/sched/slab.ts";
+import { useSettingsStore } from "@/app/setting/store.ts";
+import { bake_port } from "@/module/world/sched/bake_port.ts";
 import { tick_step_stats, tick_step_stats_reset } from "@/module/world/sched/tick.ts";
 import { fetch_counts, MAX_INFLIGHT } from "@/module/world/sched/fetch_scheduler.ts";
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
@@ -98,18 +100,26 @@ function long_frame_line(l: LongFrameRecord): string {
  */
 function counters() {
   return {
-    faces_kept: occlusion_stats.faces_kept,
-    faces_possible: occlusion_stats.faces_possible,
-    runs_culled: occlusion_stats.culled,
-    runs_total: occlusion_stats.total_runs,
-    coarse_boxes: coarse_instance_stats.total,
-    coarse_low_fill: coarse_instance_stats.low_fill,
+    faces_kept: CORE_BAKE.occlusion.faces_kept,
+    faces_possible: CORE_BAKE.occlusion.faces_possible,
+    runs_culled: CORE_BAKE.occlusion.culled,
+    runs_total: CORE_BAKE.occlusion.total_runs,
+    coarse_boxes: CORE_BAKE.coarse_instances.total,
+    coarse_low_fill: CORE_BAKE.coarse_instances.low_fill,
     bands_reused: band_pool_stats.reused,
     bands_allocated: band_pool_stats.allocated,
     build_ms: lod_build_stats.build_ms,
     build_runs: lod_build_stats.build_runs,
     scan_ms: lod_build_stats.scan_ms,
     scan_count: lod_build_stats.scan_count,
+    remote_submitted: bake_port.stats.submitted,
+    remote_adopted: bake_port.stats.adopted,
+    remote_spilled: bake_port.stats.spilled,
+    remote_cancelled: bake_port.stats.cancelled,
+    remote_failed: bake_port.stats.failed,
+    remote_deferred: bake_port.stats.deferred,
+    remote_away_ms: bake_port.stats.away_ms,
+    remote_adopt_ms: bake_port.stats.adopt_ms,
     badge_metrics: poi_badge_build_stats.metrics,
     badge_builds: poi_badge_build_stats.builds,
     badge_ms: poi_badge_build_stats.ms,
@@ -240,6 +250,13 @@ function frames_section(frames: readonly FrameSample[]): string[] {
         return `${l.away} away, ${l.home} home of ${l.cap} slabs (${Math.round(l.bytes / 1048576)}MB)`;
       })()
     }   fetch queued ${fetch_counts().queued} running ${fetch_counts().running} of ${MAX_INFLIGHT}`,
+    // Both bake paths on one line, so a stepped window and a worker window
+    // read side by side. The maxima are since load; the rest are the window's.
+    `  bake    path ${useSettingsStore.getState().bake_path}  stepped: longest step ${n1(lod_build_stats.bake_step_max_ms)}ms   worker: ${c.remote_submitted} sent  ${c.remote_adopted} adopted  away ${
+      per(c.remote_away_ms, c.remote_adopted)
+    }ms (max ${n1(bake_port.stats.away_max_ms)})  adopt ${per(c.remote_adopt_ms, c.remote_adopted)}ms (max ${
+      n1(bake_port.stats.adopt_max_ms)
+    })  ${c.remote_spilled} spilled  ${c.remote_deferred} deferred by the upload cap  ${c.remote_cancelled} cancelled  ${c.remote_failed} failed`,
     `  per     commit/bake ${f.commit_per_bake === null ? "-" : n1(f.commit_per_bake)}ms  build/krun ${per(c.build_ms, c.build_runs / 1000)}ms  scan/chunk ${
       per(c.scan_ms, c.scan_count)
     }ms   (workload-normalised; comparable across sessions)`,

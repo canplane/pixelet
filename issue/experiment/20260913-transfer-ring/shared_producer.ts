@@ -1,4 +1,4 @@
-// graveyard/experiment/transfer_ring/shared_producer.ts
+// issue/experiment/20260913-transfer-ring/shared_producer.ts
 
 // The same window over a SharedArrayBuffer: N slots, a state per slot, Atomics
 // to hand over. Polls with a 1 ms wait, so it keeps a core busy — an upper

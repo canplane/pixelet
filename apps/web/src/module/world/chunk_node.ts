@@ -57,6 +57,9 @@ import {
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { composite_chunk_layers } from "@/render/layer/pipeline/compositor.ts";
 import { abort_bake, bake_open, type BakeCursor, begin_bake, finish_bake, step_bake } from "@/render/layer/pipeline/chunk_mesher.ts";
+import { CORE_BAKE } from "@/render/layer/pipeline/core_bake.ts";
+import { add_bake_counters } from "@/render/layer/pipeline/bake_command.ts";
+import { bake_port } from "@/module/world/sched/bake_port.ts";
 import {
   abort_column_scan,
   begin_column_scan,
@@ -70,7 +73,7 @@ import {
 } from "@/render/layer/pipeline/voxel_scan.ts";
 import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
 import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
-import { lod_build_stats, record_build, record_scan } from "@/module/world/lod_build_stat.ts";
+import { lod_build_stats, record_bake_step, record_build, record_scan } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
 import type { FrameBudget } from "@/module/world/sched/tick.ts";
 import { BLEND_ACTIVE, ChunkTable, EMPTY, HOLDS_SLOT, IN_FRUSTUM, PENDING, SETTLING } from "@/module/world/sched/chunk_table.ts";
@@ -352,6 +355,10 @@ export class ChunkNode {
   /** A bake in progress, held across frames like the scan and bounded the
    * same way: one chunk at a time. `step` is the tier it is baking. */
   private _bake: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null = null;
+  /** A bake sent to the worker and not yet adopted: the tier, and the tx_id
+   * the bake port knows it by. Holds no slot — up to the slab cap of these
+   * are away at once — so it does not move HOLDS_SLOT. */
+  private remote: { step: LodStep; tx: u32 } | null = null;
   /** The tiers the current build_buckets call is after. */
   private wanted: readonly LodStep[] = [];
   /**
@@ -801,6 +808,19 @@ export class ChunkNode {
    * camera hunting across a threshold would keep a chunk from ever finishing.
    */
   private advance_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
+    // The path is read per call, so the setting switches between frames; a
+    // bake open on the other path is dropped rather than finished.
+    if (useSettingsStore.getState().bake_path === "worker") {
+      if (this.bake) {
+        abort_bake(this.bake.cursor);
+        this.bake = null;
+      }
+      return this.advance_remote_bake(column_runs, budget);
+    }
+    if (this.remote) {
+      bake_port.cancel(this.remote.tx);
+      this.remote = null;
+    }
     for (;;) {
       // A tier nobody wants any more gives the slot back rather than
       // finishing. There is one bake slot for the whole world, so a
@@ -813,8 +833,8 @@ export class ChunkNode {
       if (!this.bake) {
         const step = this.wanted.find((s) => !this.bucket_cache.has(s));
         if (step === undefined) return "done";
-        if (bake_open()) return "blocked";
-        const cursor = begin_bake(column_runs, step);
+        if (bake_open(CORE_BAKE)) return "blocked";
+        const cursor = begin_bake(CORE_BAKE, column_runs, step);
         if (cursor === null) return "blocked";
         this.bake = { step, cursor, spent_ms: 0 };
       }
@@ -822,7 +842,9 @@ export class ChunkNode {
       const t0 = performance.now();
       let done: boolean;
       do {
+        const step_t0 = import.meta.env.DEV ? performance.now() : 0;
         done = step_bake(this.bake.cursor);
+        if (import.meta.env.DEV) record_bake_step(performance.now() - step_t0);
       } while (!done && (budget === null || budget.remaining() > 0));
       this.bake.spent_ms += performance.now() - t0;
       if (!done) return "busy";
@@ -842,6 +864,61 @@ export class ChunkNode {
     }
   }
 
+  /**
+   * The worker path: the same three answers advance_bake gives, from a bake
+   * that runs elsewhere. Sending one is work this frame ("busy"); waiting on
+   * one is not ("blocked"), so a chunk with a bake away costs the budget
+   * nothing until its reply is adopted. What is timed as the build here is
+   * the adoption — the copy in and the bucket — which is the bake's whole
+   * cost to this thread.
+   */
+  private advance_remote_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
+    for (;;) {
+      if (this.remote && !this.wanted.includes(this.remote.step)) {
+        bake_port.cancel(this.remote.tx);
+        this.remote = null;
+      }
+      if (!this.remote) {
+        const step = this.wanted.find((s) => !this.bucket_cache.has(s));
+        if (step === undefined) return "done";
+        const tx = bake_port.submit(this.bake_job(step), column_runs, step);
+        if (tx === null) return "blocked";
+        this.remote = { step, tx };
+        return "busy";
+      }
+
+      const polled = bake_port.poll(this.remote.tx);
+      if (polled === "away") return "blocked";
+      if (polled === "failed" || !bake_port.can_adopt(this.remote.tx)) {
+        if (polled === "failed") {
+          bake_port.cancel(this.remote.tx);
+          this.remote = null;
+        }
+        return "blocked";
+      }
+
+      const t0 = performance.now();
+      const { step, tx } = this.remote;
+      this.remote = null;
+      const reply = bake_port.adopt(tx, CORE_BAKE.pool);
+      if (!reply) return "blocked";
+      add_bake_counters(CORE_BAKE, reply.counters);
+      const bucket = bucket_from_baked(reply.mesh, step, "primary");
+      this.bucket_cache.set(step, bucket);
+      this.account(bucket.cubes.block.bytes);
+      record_build(performance.now() - t0, column_runs.count);
+
+      if (budget !== null && budget.remaining() <= 0) {
+        return this.wanted.some((s) => !this.bucket_cache.has(s)) ? "busy" : "done";
+      }
+    }
+  }
+
+  /** The slab ledger's name for a bake of this chunk at `step`. */
+  private bake_job(step: LodStep): string {
+    return `bake:${this.deps.page_idx}:${this.deps.offset.base_x},${this.deps.offset.base_y}:${step}`;
+  }
+
   /** Drops any scan or bake in progress and returns what it holds. Called
    * wherever this chunk stops needing them — which must include every place
    * `pending` goes false, or the slot stays taken and nothing else builds. */
@@ -850,6 +927,10 @@ export class ChunkNode {
     if (this.bake) {
       abort_bake(this.bake.cursor);
       this.bake = null;
+    }
+    if (this.remote) {
+      bake_port.cancel(this.remote.tx);
+      this.remote = null;
     }
   }
 

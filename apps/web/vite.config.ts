@@ -151,6 +151,15 @@ export default defineConfig(({ mode }) => {
       alias: { "@": path.resolve(__dirname, "src") },
     },
 
+    // A worker is bundled by its own Rollup pass, which gets none of the
+    // plugins above: without the deno resolver there, the bake worker's first
+    // `@xpute/` import failed to resolve and the build stopped. ES modules
+    // because the worker is spawned with `type: "module"`.
+    worker: {
+      format: "es",
+      plugins: () => [deno()],
+    },
+
     // .glb isn't in Vite's default recognized-asset extension list, so
     // without this each import (companion character/pet models) has to
     // rely solely on its own `?url` query suffix to be treated as an

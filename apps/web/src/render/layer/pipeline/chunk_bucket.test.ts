@@ -3,7 +3,8 @@
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import * as THREE from "three";
 
-import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, release_chunk_volume } from "./volume.ts";
+import { alloc_chunk_volume, fill_chunk_column, release_chunk_volume } from "./volume.ts";
+import { MaterialClass, NO_LAYER } from "./voxel.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { build_chunk_bucket, chunk_bounds, release_built_mesh, retain_built_mesh } from "./chunk_bucket.ts";
 import { DETACHED_BLOCK } from "@xpute/core/ds/buddy.ts";

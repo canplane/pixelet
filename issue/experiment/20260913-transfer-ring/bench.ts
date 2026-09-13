@@ -1,4 +1,4 @@
-// graveyard/experiment/transfer_ring/bench.ts
+// issue/experiment/20260913-transfer-ring/bench.ts
 
 const url = (f) => new URL(f, import.meta.url).href;
 const ms = 1500;

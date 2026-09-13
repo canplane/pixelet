@@ -3,9 +3,11 @@
 import { assertEquals } from "@std/assert";
 import * as THREE from "three";
 
-import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, MaterialClass, NO_LAYER, set_chunk_voxel } from "./volume.ts";
+import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, set_chunk_voxel } from "./volume.ts";
+import { MaterialClass, NO_LAYER } from "./voxel.ts";
 import { DETACHED_BLOCK } from "@xpute/core/ds/buddy.ts";
 import { bake_chunk_mesh, type BakedChunkMesh } from "./chunk_mesher.ts";
+import { CORE_BAKE } from "./core_bake.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { composite_chunk_layers } from "./compositor.ts";
 import { ray_hit_chunk } from "./chunk_raycast.ts";
@@ -80,7 +82,7 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
   // across LOD builds, instead of bake_chunk_mesh touching the volume
   // itself.
   const column_runs = scan_all_column_runs(volume);
-  const built = bake_chunk_mesh(column_runs, 1);
+  const built = bake_chunk_mesh(CORE_BAKE, column_runs, 1);
   // One full object box (24 verts — OBJECT-class runs always keep their
   // bottom face) + one open-bottom terrain box (20 verts), both in this one
   // baked mesh. The object comes first: the greedy merge emits everything
