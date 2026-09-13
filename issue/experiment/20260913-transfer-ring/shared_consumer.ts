@@ -1,4 +1,4 @@
-// graveyard/experiment/transfer_ring/shared_consumer.ts
+// issue/experiment/20260913-transfer-ring/shared_consumer.ts
 
 self.onmessage = (e) => {
   const { sab, st, n, size, touch } = e.data;

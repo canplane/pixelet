@@ -10,9 +10,11 @@
 import { assertEquals } from "@std/assert";
 
 import type { WorldLayer } from "../pipeline/contract.ts";
-import { alloc_chunk_volume, fill_chunk_column, MaterialClass, NO_LAYER, release_chunk_volume } from "../pipeline/volume.ts";
+import { alloc_chunk_volume, fill_chunk_column, release_chunk_volume } from "../pipeline/volume.ts";
+import { MaterialClass, NO_LAYER } from "../pipeline/voxel.ts";
 import { fill_column_runs, release_column_runs, scan_all_column_runs } from "../pipeline/voxel_scan.ts";
-import { bake_chunk_mesh, release_chunk_mesh } from "../pipeline/chunk_mesher.ts";
+import { bake_chunk_mesh } from "../pipeline/chunk_mesher.ts";
+import { CORE_BAKE, release_chunk_mesh } from "../pipeline/core_bake.ts";
 
 const SPAN = 64;
 /** A rolling hillside with a ridge: every column a different height. */
@@ -50,7 +52,7 @@ function via_direct() {
 Deno.test("direct runs - the same heightmap bakes to the same coarse mesh through both paths", () => {
   for (const step of [8, 16] as const) {
     const a = via_scan(), b = via_direct();
-    const ma = bake_chunk_mesh(a, step), mb = bake_chunk_mesh(b, step);
+    const ma = bake_chunk_mesh(CORE_BAKE, a, step), mb = bake_chunk_mesh(CORE_BAKE, b, step);
     assertEquals(mb.vertex_cnt, ma.vertex_cnt, `step ${step}: vertex count`);
     assertEquals(Array.from(mb.position), Array.from(ma.position), `step ${step}: positions`);
     assertEquals(Array.from(mb.rgb), Array.from(ma.rgb), `step ${step}: colours`);

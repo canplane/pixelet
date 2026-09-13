@@ -2,18 +2,8 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import {
-  alloc_chunk_volume,
-  append_chunk_sub_voxel,
-  fill_chunk_column,
-  MaterialClass,
-  NO_LAYER,
-  pack_sub_cell,
-  pack_sub_cell_fraction,
-  release_chunk_volume,
-  seal_chunk_volume,
-  set_chunk_voxel,
-} from "./volume.ts";
+import { alloc_chunk_volume, append_chunk_sub_voxel, fill_chunk_column, release_chunk_volume, seal_chunk_volume, set_chunk_voxel } from "./volume.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction } from "./voxel.ts";
 import {
   abort_column_scan,
   begin_column_scan,

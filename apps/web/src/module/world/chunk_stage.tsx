@@ -47,6 +47,7 @@ import { useTick } from "@/module/world/sched/tick.ts";
 import { lead_point, priority_order } from "@/module/world/sched/priority.ts";
 import { BLEND_ACTIVE, IN_FRUSTUM, PENDING, SETTLING, VISIBILITY_CHANGED } from "@/module/world/sched/chunk_table.ts";
 import { little_slabs } from "@/module/world/sched/slab.ts";
+import { bake_port } from "@/module/world/sched/bake_port.ts";
 import { useFrameRefs } from "@/module/world/frame/context.tsx";
 import { useRangeAnchor } from "@/module/world/frame/use_range_anchor.ts";
 import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
@@ -451,6 +452,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // always lets the first item of a pass do work, so a release lands every
     // frame even on a frame the visible pass filled — which is the whole
     // point of a guaranteed share.
+    bake_port.begin_tick();
     const step = (slot: u32) => handles[slot].commit(budget);
     const committed: u32 = budget.run(sorted(s_visible, order), step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
       budget.run(sorted(s_offscreen, order), step, { max_steps: RELEASE_MAX_PER_FRAME }).ran;
@@ -476,8 +478,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // fixed, kept fixed now that decor is contributed rather than mounted.
     decor_field.update(origin);
     // The little memory's idle release, on the same tick the big one's
-    // regions are judged on. Nothing borrows a slab yet; the sweep is where
-    // it will be swept from.
+    // regions are judged on.
     little_slabs.sweep();
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
     if (committed > 0 || pending_total > committed || blend_active) state.invalidate();

@@ -21,7 +21,7 @@ import { type SettingsStore, useSettingsStore } from "@/app/setting/store.ts";
 import { light_cfg, rim_cfg } from "@/module/world/environment/config.ts";
 import { glsl_float, inject_rim_light_shader } from "@/module/world/render/rim_light_shader.ts";
 import { GROUND_LAYERS_SIDE, GROUND_LAYERS_TOP } from "@/render/tex_array.ts";
-import { NO_LAYER } from "@/render/layer/pipeline/volume.ts";
+import { NO_LAYER } from "@/render/layer/pipeline/voxel.ts";
 import type { BuiltChunkMesh } from "@/render/layer/pipeline/chunk_bucket.ts";
 
 // Per-vertex attribute names for the baked chunk mesh (chunk_mesher.ts) —

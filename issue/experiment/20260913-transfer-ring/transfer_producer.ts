@@ -1,4 +1,4 @@
-// graveyard/experiment/transfer_ring/transfer_producer.ts
+// issue/experiment/20260913-transfer-ring/transfer_producer.ts
 
 // Holds N buffers and may only send while it holds one; the consumer returns
 // each after reading. The free list is the window and the credit.

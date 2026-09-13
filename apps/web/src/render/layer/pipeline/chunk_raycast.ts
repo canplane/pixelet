@@ -6,7 +6,8 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { type ChunkVolume, MaterialClass } from "./volume.ts";
+import { type ChunkVolume } from "./volume.ts";
+import { MaterialClass } from "./voxel.ts";
 import { merge_column_runs, run_to_box } from "./voxel_scan.ts";
 
 const $aabb_o: V3 = [0, 0, 0];

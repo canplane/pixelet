@@ -15,51 +15,31 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Taken from the smallest separable piece outward: a piece is first cut
   out behind a boundary that carries typed arrays, still in TypeScript, so
   the boundary is proven before the language changes behind it. In order:
-  1. **The chunk bake to a worker.** Decided 2026-09-13, not conditional;
-     the case, with the phone's numbers, in
-     [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)
-     ("The worker's case"):
-     while terrain fills in, the bake and the scan take the main thread's
-     budget (step mean 8.7 ms, 252 of 740 frames over, dt p50 29 ms on the
-     phone). The bake already yields — it is stepped — so the case is a
-     second core's throughput, not an uncuttable unit (corrected there),
-     and it is decided on the phone: the stepped path and the worker behind
-     one setting, and the longest single step recorded, because the
-     `visible/chunks` maxima of 64–112 ms are not yet attributed. The
-     control stays on the main thread — what is submitted, its priority,
-     cancellation, and when a result is adopted — and only execution
-     moves. The memory side is ready — sched/slabs.ts
-     holds the little memory and its ownership record — and the mesher takes
-     typed arrays and returns typed arrays. Not through the fetch
-     scheduler: its six slots are shared with the network, and its `run` is
-     a Promise; a bake port on the main thread gives a slab-capped slot, the
-     reply marks the slot, and the chunk adopts it under the budget, with a
-     cap on bytes uploaded a tick while WebGL is still the path. The same worker
-     hosts the WASM bake later
-     ([20260911-single-thread-core-and-when-to-spawn-a-worker.md](./20260911-single-thread-core-and-when-to-spawn-a-worker.md)).
-     The message is April's command shape and frame header as kept in
-     [20260913-boundaries-commands-and-what-comes-back-from-april.md](./20260913-boundaries-commands-and-what-comes-back-from-april.md):
-     a numeric command, XTP args, `tx_id` naming the Demand slot, the body
-     a transferred slab — no transaction controller, no switch.
-  2. **The read direction.** How the UI learns that state changed once the
+  1. **The read direction.** How the UI learns that state changed once the
      truth is in the core — a subscription or dirty-flag protocol — designed
      with the command channel
      ([20260908-command-channel-for-state-mutation.md](./20260908-command-channel-for-state-mutation.md)),
      not after it; the default without one is copying the world into JS
      every frame. The hypothesis to design from is a pull — a revision
      counter read once a tick — per the boundaries document above.
-  3. **Spill past the reservation becomes a budget signal.** The core
+  2. **Spill past the reservation becomes a budget signal.** The core
      memory is fixed (`initial == maximum`, never grown — grow would detach every view, and resizable buffers read
      2.5x slower and are refused by WebGL/WebGPU); past 512 MB the buddy pool
      hands out plain ArrayBuffer regions, which a kernel over the wasm memory
      cannot see. Harmless while everything computes in JS; when a kernel
      lands, a spill has to trigger reclaim or refuse, not silently leave the
      memory. Today's live set is a third of the reservation.
-  4. **The mesher in Rust, inside the worker.** The first Rust: the
-     boundary from step 1 already carries typed arrays in and out, so the
-     change is behind it. XTP packets land aligned (8 bytes, 16 for SIMD)
-     and are read through checked casts.
-  5. **The core to WASM on the main thread, and a WebGPU renderer.**
+  3. **The mesher in Rust.** The first Rust. The bake already takes a
+     context and carves its input and output over any block (column_run.ts,
+     carve_baked_mesh), and the bake command carries both across a boundary
+     unchanged, so the change is behind a seam that exists. Which thread it
+     runs on is measured when it exists: the worker was tried on the phone
+     and bought nothing, because the stepped bake already yields and the
+     fill-in cost is elsewhere
+     ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)).
+     XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
+     checked casts.
+  4. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a
      checklist the renderer fills, not a gate on starting. WebGPU removes
@@ -84,7 +64,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   MapLibre sizes its tile cache from the viewport rather than a count
   ([MapOptions](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)).
   The same lever exists here: the one LOD criterion's distance thresholds.
-  Needed on the web whatever the graphics API; the renderer in P0-5 is
+  Needed on the web whatever the graphics API; the renderer in P0-4 is
   built against it.
 
 - **"Everything is a file": the Placement and the palette.** Decided
@@ -178,6 +158,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   XTP page (a short packet fails the header check instead) — verify then.
 
 ## Parked, with the reason on file
+
+- **Where the fill-in frame's commit goes.** While terrain fills in on the
+  phone the main-thread task p95 is ~27 ms whichever thread bakes, so the
+  cost is scan, attach or mount rather than the bake; splitting `commit` into
+  those would name it. Not now: attach and mount are three.js geometry and
+  React's reconciler, which the WebGPU renderer (P0-4) replaces, and a
+  breakdown of code that is leaving decides nothing before it leaves. Scan
+  is core and stays; measure it when it is the piece being ported.
+- **The bake worker path.** Behind the dev setting `bake_path`, default
+  `stepped`. Measured on the phone and not taken
+  ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md));
+  kept, not deleted, because it is small and tested and the frame, port and
+  link under it are the boundary later pieces use. Remove it when a piece
+  does use that boundary, or when the renderer makes the question moot.
 
 - **Phone costs that sit on the three.js boundary.** Recorded 2026-09-13
   and left to the WebGPU renderer, which creates these resources itself:

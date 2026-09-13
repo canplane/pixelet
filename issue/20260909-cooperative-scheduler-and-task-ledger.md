@@ -891,6 +891,13 @@ longest single step recorded, since the maxima below (64–112 ms) were not
 attributed to a step. If one step is that long, cutting it finer comes
 before the worker.
 
+**Measured 2026-09-13, and not taken.** The longest stepped step on the
+phone was 6.0 ms; while terrain filled in the main-thread task p95 was the
+same on both paths and the stepped path finished more bakes in fewer
+frames. `stepped` stays the default; the numbers and what was not measured
+are in
+[experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md).
+
 What the numbers say about the value. In the steady state, once loading
 is done, the bake barely runs: `visible/chunks` 0.7–2.9 ms a frame, the
 task 2 ms, the frame at the display rate; a worker changes nothing there.

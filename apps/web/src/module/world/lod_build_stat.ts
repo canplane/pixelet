@@ -20,6 +20,9 @@ export const lod_build_stats = {
   build_max_ms: 0,
   build_runs: 0,
   build_runs_max: 0,
+  /** The longest single step_bake call on the stepped path — whether a step
+   * is small, which is what makes the stepped bake cooperative at all. */
+  bake_step_max_ms: 0,
 };
 
 /** One scan or one build done: its time into the sum, the count, and the
@@ -37,4 +40,8 @@ export function record_build(ms: number, runs: number): void {
   if (ms > s.build_max_ms) s.build_max_ms = ms;
   s.build_runs += runs;
   if (runs > s.build_runs_max) s.build_runs_max = runs;
+}
+
+export function record_bake_step(ms: number): void {
+  if (ms > lod_build_stats.bake_step_max_ms) lod_build_stats.bake_step_max_ms = ms;
 }

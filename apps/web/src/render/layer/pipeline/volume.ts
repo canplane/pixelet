@@ -10,7 +10,7 @@
  * exists only between Z bands.
  */
 
-import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import type { I32Array, U32Array, U8Array } from "@xpute/core/kit/array.ts";
@@ -18,6 +18,7 @@ import type { I32Array, U32Array, U8Array } from "@xpute/core/kit/array.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
+import { NO_LAYER, pack_material, unpack_material, type VoxelMaterial } from "./voxel.ts";
 
 export const L2_BAND_SHAMT: u32 = 6;
 export const L2_BAND_CELL_SPAN: u32 = CHUNK_CELL_SPAN;
@@ -32,26 +33,6 @@ if (L2_BAND_CELL_SPAN !== 1 << L2_BAND_SHAMT) {
 export function band_voxel_idx(x: u32, y: u32, z: u32): u32 {
   return (y * L2_BAND_CELL_SPAN + x) * L2_BAND_CELL_SPAN + z;
 }
-
-/** No texture-array layer applies; use the material's flat RGB. */
-export const NO_LAYER: u32 = 255;
-
-export const enum MaterialClass {
-  AIR = 0,
-  LAND = 1,
-  WATER = 2,
-  TRANSPORT = 3,
-  STRUCTURE = 4,
-  OBJECT = 5,
-}
-
-export type VoxelMaterial = {
-  material_class: MaterialClass;
-  r: u32;
-  g: u32;
-  b: u32;
-  layer_idx: u32;
-};
 
 /**
  * The rare overflow when several non-overlapping sub-cell objects share one
@@ -90,8 +71,6 @@ function clear_sub_voxels(extra: SubVoxels): void {
   extra.layer_idx.truncate(0);
   extra.sub.truncate(0);
 }
-
-export const pack_sub_cell = (ox: u32, oy: u32, oz: u32, sz: u32): u32 => (ox | (oy << 8) | (oz << 16) | (sz << 24)) >>> 0;
 
 export type VoxelBand = {
   /** Signed Z-band coordinate. */
@@ -193,25 +172,6 @@ export function release_chunk_volume(volume: ChunkVolume): void {
   }
   volume.bands = [];
   volume.sealed = true;
-}
-
-export function pack_material(material: VoxelMaterial): u32 {
-  return (
-    ((material.material_class & 255) << 24) |
-    ((material.r & 255) << 16) |
-    ((material.g & 255) << 8) |
-    (material.b & 255)
-  ) >>> 0;
-}
-
-export function unpack_material(packed: u32, layer_idx: u32): VoxelMaterial {
-  return {
-    material_class: (packed >>> 24) as MaterialClass,
-    r: (packed >>> 16) & 255,
-    g: (packed >>> 8) & 255,
-    b: packed & 255,
-    layer_idx,
-  };
 }
 
 export function get_chunk_band(
@@ -409,30 +369,4 @@ export function fill_chunk_column(
 /** Direct material lookup by band-local voxel idx. */
 export function band_material(band: VoxelBand, voxel_idx: u32): VoxelMaterial {
   return unpack_material(band.material[voxel_idx], band.layer_idx[voxel_idx]);
-}
-
-export const SUB_CELL_NONE: u32 = 0;
-export const SUB_CELL_SCALE: u32 = 256;
-
-export function pack_sub_cell_fraction(fraction: f64): u32 {
-  return Math.min(SUB_CELL_SCALE - 1, Math.max(0, Math.round(fraction * SUB_CELL_SCALE)));
-}
-
-export function unpack_sub_cell_fraction(packed: u32): f64 {
-  return packed / SUB_CELL_SCALE;
-}
-
-/**
- * The largest packed value, read as exactly 1 rather than 255/256.
- *
- * An offset of 1 is meaningless, so `unpack_sub_cell_fraction` never needs
- * to express it. A *size* of 1 is not: coarse LOD fits a box to what is
- * actually inside a cell, and a box that fills one axis while shrinking
- * another is the ordinary case, not an edge one. Reading the top value as
- * full costs a comparison and keeps 0 free as SUB_CELL_NONE.
- */
-export const SUB_CELL_FULL: u32 = SUB_CELL_SCALE - 1;
-
-export function unpack_sub_cell_size(packed: u32): f64 {
-  return packed === SUB_CELL_FULL ? 1 : packed / SUB_CELL_SCALE;
 }

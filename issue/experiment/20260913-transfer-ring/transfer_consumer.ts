@@ -1,4 +1,4 @@
-// graveyard/experiment/transfer_ring/transfer_consumer.ts
+// issue/experiment/20260913-transfer-ring/transfer_consumer.ts
 
 self.onmessage = (e) => {
   const { port, touch } = e.data;

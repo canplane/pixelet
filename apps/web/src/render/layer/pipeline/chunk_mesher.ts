@@ -29,14 +29,14 @@
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Arena, Vector } from "@xpute/core/ds/arena.ts";
 import { Lanes } from "@xpute/core/ds/lanes.ts";
-import { carver } from "@xpute/core/ds/typed_alloc.ts";
-import type { Block } from "@xpute/core/ds/buddy.ts";
-import { CORE_ALLOC, CORE_POOL } from "./core_pool.ts";
+import { type AddressedAlloc, buddy_alloc, carver } from "@xpute/core/ds/typed_alloc.ts";
+import type { Block, BuddyAllocator } from "@xpute/core/ds/buddy.ts";
+import type { U32Array } from "@xpute/core/kit/array.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 
 import type { LodStep } from "@/render/lod.ts";
-import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "./volume.ts";
-import { alloc_column_run_set, type ColumnRunSet, release_column_runs } from "./voxel_scan.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "./voxel.ts";
+import { carve_column_run_set, column_run_set_bytes, type ColumnRunSet } from "./column_run.ts";
 
 /**
  * One baked chunk mesh's raw vertex data — position/normal are the real
@@ -85,20 +85,19 @@ export type BakedChunkMesh = {
 };
 
 /**
- * Dev-only, cumulative since page load: how many coarse-LOD boxes this
- * session has written, and how many were dropped for being too diffuse to
- * draw. Exposed the same no-console way, as a line of the ledger report
+ * Dev-only, cumulative for one context: how many coarse-LOD boxes it has
+ * written, and how many were dropped for being too diffuse to draw. Exposed the same no-console way, as a line of the ledger report
  * (sched/log.ts).
  *
  * Nothing is actually dropped: a sparse cell shrinks instead, all the way
  * down. `low_fill` prices what a threshold-cull policy would have skipped,
  * so the question stays answerable with a count rather than a guess.
  */
-export const coarse_instance_stats = { total: 0, low_fill: 0 };
+export type CoarseInstanceStats = { total: u32; low_fill: u32 };
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
 /**
- * Dev-only, cumulative since page load.
+ * Dev-only, cumulative for one context.
  *
  * `total_runs`/`culled` are runs seen and runs with no visible face at all.
  * `faces_possible`/`faces_kept` are the per-face half (run_face_mask), and
@@ -107,7 +106,7 @@ const LOW_FILL_THRESHOLD: f64 = 0.25;
  * emitted, but real chunks are not plateaus and the ratio is the number
  * worth watching, not the one that was hoped for.
  */
-export const occlusion_stats = { total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0 };
+export type OcclusionStats = { total_runs: u32; culled: u32; faces_possible: u32; faces_kept: u32 };
 
 /** sRGB byte -> linear [0,1], by table: three powers per box, thousands of
  * boxes per chunk, for 256 possible inputs. */
@@ -251,11 +250,6 @@ function block_bytes(vertex_total: u32, index_total: u32): u32 {
   return (vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) + index_total) * 4;
 }
 
-/** Hands one baked mesh's block back. Every view into it is dead afterwards. */
-export function release_chunk_mesh(mesh: BakedChunkMesh): void {
-  CORE_POOL.release(mesh.block);
-}
-
 /**
  * The per-vertex LOD selector's own span inside an already-baked mesh's
  * block. Not part of BakedChunkMesh: this module bakes real geometry and
@@ -287,25 +281,38 @@ type MeshBuilder = {
   i_cnt: u32;
 };
 
-function alloc_builder(vertex_total: u32, index_total: u32): MeshBuilder {
-  const block = CORE_POOL.acquire(block_bytes(vertex_total, index_total));
-  // Every span is measured from the block's own start, never the buffer's:
-  // a region is shared with other live chunks' blocks.
+/** The bytes one mesh's block holds, visibility's span included. What a
+ * mesh copied across a thread boundary has to carry. */
+export function baked_mesh_bytes(vertex_cnt: u32, index_cnt: u32): u32 {
+  return block_bytes(vertex_cnt, index_cnt);
+}
+
+/**
+ * A mesh's views over a block laid out by this module — the one it was
+ * baked into, or a copy of those bytes somewhere else. Every span is
+ * measured from the block's own start, never the buffer's: a region is
+ * shared with other live chunks' blocks.
+ */
+export function carve_baked_mesh(block: Block, vertex_cnt: u32, index_cnt: u32): BakedChunkMesh {
   const cut = carver(block.buf, block.byte_offset);
   return {
     block,
-    position: cut(Float32Array, vertex_total * 3),
-    normal: cut(Float32Array, vertex_total * 3),
-    local_pos: cut(Float32Array, vertex_total * 3),
-    box_scale: cut(Float32Array, vertex_total * 3),
-    rgb: cut(Float32Array, vertex_total * 3),
-    layer_taps: cut(Float32Array, vertex_total * 4),
-    faces: cut(Float32Array, vertex_total),
+    vertex_cnt,
+    position: cut(Float32Array, vertex_cnt * 3),
+    normal: cut(Float32Array, vertex_cnt * 3),
+    local_pos: cut(Float32Array, vertex_cnt * 3),
+    box_scale: cut(Float32Array, vertex_cnt * 3),
+    rgb: cut(Float32Array, vertex_cnt * 3),
+    layer_taps: cut(Float32Array, vertex_cnt * 4),
+    faces: cut(Float32Array, vertex_cnt),
     // visibility's own span sits here, carved on demand by carve_visibility.
-    index: new Uint32Array(block.buf, block.byte_offset + vertex_total * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_total),
-    v_cnt: 0,
-    i_cnt: 0,
+    index: new Uint32Array(block.buf, block.byte_offset + vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_cnt),
   };
+}
+
+function alloc_builder(pool: BuddyAllocator, vertex_total: u32, index_total: u32): MeshBuilder {
+  const mesh = carve_baked_mesh(pool.acquire(block_bytes(vertex_total, index_total)), vertex_total, index_total);
+  return { ...mesh, v_cnt: 0, i_cnt: 0 };
 }
 
 function finish_builder(builder: MeshBuilder): BakedChunkMesh {
@@ -491,7 +498,7 @@ function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 
  * — it excluded chunk-edge columns, which the mask handles by keeping the
  * edge face rather than by keeping the whole run.
  *
- * occlusion_stats.culled now counts empty masks, which is the same quantity
+ * ctx.occlusion.culled now counts empty masks, which is the same quantity
  * the name always meant. */
 
 function run_include_bottom(set: ColumnRunSet, i: u32): boolean {
@@ -579,8 +586,8 @@ function run_face_mask(set: ColumnRunSet, span: u32, cx: u32, cy: u32, i: u32): 
  * from the live `ChunkVolume` and reusable across every LOD rebuild after
  * that, long after the volume itself is released back to its pool.
  */
-export function bake_chunk_mesh(set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
-  const cursor = begin_bake(set, lod_step);
+export function bake_chunk_mesh(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
+  const cursor = begin_bake(ctx, set, lod_step);
   if (!cursor) throw new Error("render: bake_chunk_mesh while a stepped bake is open");
   while (!step_bake(cursor)) { /* run to completion */ }
   return finish_bake(cursor);
@@ -588,7 +595,7 @@ export function bake_chunk_mesh(set: ColumnRunSet, lod_step: LodStep): BakedChun
 
 // ---- stepped bake ----
 //
-// The bake is a sequence of passes over module-level scratch, each of which
+// The bake is a sequence of passes over its context's scratch, each of which
 // walks rows of columns or a list of boxes in order and depends only on the
 // passes before it having finished. That makes each pass resumable at a row
 // or box boundary with no stitching: stop anywhere, resume, and the scratch
@@ -597,9 +604,9 @@ export function bake_chunk_mesh(set: ColumnRunSet, lod_step: LodStep): BakedChun
 //   fine    mask rows -> merge rows -> size + allocate -> emit boxes
 //   coarse  accumulate rows -> pack rows -> (a fine bake over the result)
 //
-// One bake at a time, because the scratch is shared — `begin_bake` refuses a
-// second while one is open, and the holder is expected to finish or abort
-// it. Abort returns what the bake holds: the builder's pooled block once
+// One bake at a time per context, because a context's scratch is shared —
+// `begin_bake` refuses a second while one is open, and the holder is
+// expected to finish or abort it. Abort returns what the bake holds: the builder's pooled block once
 // emit has started, and a coarse bake's intermediate run set.
 
 /** Rows a mask or merge step walks, and boxes an emit step writes. Sized so
@@ -609,23 +616,22 @@ const BAKE_ROWS_PER_STEP: u32 = 8;
 const BAKE_BOXES_PER_STEP: u32 = 512;
 
 export type BakeCursor = {
+  ctx: BakeContext;
   fine: FineBake | null;
   coarse: CoarseBake | null;
   done: boolean;
 };
 
-let open_bake: BakeCursor | null = null;
-
 /** Whether a bake is open — so a would-be holder can skip preparing one. */
-export function bake_open(): boolean {
-  return open_bake !== null;
+export function bake_open(ctx: BakeContext): boolean {
+  return ctx.open !== null;
 }
 
 /** Opens a bake of `set` at `lod_step`, or returns null while another is open. */
-export function begin_bake(set: ColumnRunSet, lod_step: LodStep): BakeCursor | null {
-  if (open_bake !== null) return null;
-  open_bake = lod_step === 1 ? { fine: begin_fine(set, set.span, 1), coarse: null, done: false } : { fine: null, coarse: begin_coarse(set, lod_step), done: false };
-  return open_bake;
+export function begin_bake(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): BakeCursor | null {
+  if (ctx.open !== null) return null;
+  ctx.open = lod_step === 1 ? { ctx, fine: begin_fine(ctx, set, set.span, 1), coarse: null, done: false } : { ctx, fine: null, coarse: begin_coarse(ctx, set, lod_step), done: false };
+  return ctx.open;
 }
 
 /** One step. Returns true once the bake is complete, at which point
@@ -636,33 +642,82 @@ export function step_bake(cursor: BakeCursor): boolean {
 }
 
 export function finish_bake(cursor: BakeCursor): BakedChunkMesh {
-  if (cursor !== open_bake || !cursor.done) {
+  if (cursor !== cursor.ctx.open || !cursor.done) {
     throw new Error("render: finish_bake on a bake that is not the open, complete one");
   }
   const mesh = cursor.coarse ? finish_coarse(cursor.coarse) : finish_fine(cursor.fine!);
-  open_bake = null;
+  cursor.ctx.open = null;
   return mesh;
 }
 
 /** Drops a bake without finishing it, returning everything it holds. */
 export function abort_bake(cursor: BakeCursor): void {
-  if (cursor !== open_bake) return;
+  if (cursor !== cursor.ctx.open) return;
   if (cursor.coarse) abort_coarse(cursor.coarse);
   else abort_fine(cursor.fine!);
-  open_bake = null;
+  cursor.ctx.open = null;
 }
 
 /**
- * Which runs survived occlusion, as (cx, cy, run index, face mask) quads
- * rather than one object per entry: a dense chunk survives thousands of
- * runs, and the second pass only needs to find each run again, not to hold
- * it. The mask is carried rather than recomputed because the counting pass
- * has to know the visible face count exactly — the block below is sized from
- * it — and the neighbour lookups that produce it are the expensive part.
- * Module-level and rewound by hand: bake_chunk_mesh_fine is synchronous and
- * non-reentrant, so one scratch store serves every chunk.
+ * Everything one thread's bakes share: the pool a mesh and a coarse tier's
+ * intermediate run set are carved from, the scratch every pass rewinds, the
+ * one open bake, and the counters. Nothing in this module reaches past it,
+ * so the main thread bakes into the core pool and a worker into a memory of
+ * its own, running the same code — what makes the bake movable to a worker
+ * now and to Rust later, where a context is what a function would be handed
+ * anyway.
  */
-const SURVIVING = new Vector(Uint32Array, { init_cap: 6 * (1 << 12), alloc: CORE_ALLOC });
+export class BakeContext {
+  readonly alloc: AddressedAlloc;
+  /**
+   * Which runs survived occlusion, as (cx, cy, run index, face mask) quads
+   * rather than one object per entry: a dense chunk survives thousands of
+   * runs, and the second pass only needs to find each run again, not to hold
+   * it. The mask is carried rather than recomputed because the counting pass
+   * has to know the visible face count exactly — the block below is sized from
+   * it — and the neighbour lookups that produce it are the expensive part.
+   * Rewound by hand: a bake is synchronous within its context and one is
+   * open at a time, so one scratch store serves every chunk.
+   */
+  readonly surviving: Vector<U32Array>;
+  /** One entry per cell of the merge plane: the mergeable run's index or
+   * -1, and that run's face mask. */
+  readonly merge_run: Int32Array;
+  readonly merge_mask: Int32Array;
+  /**
+   * Every coarse cell's Z buckets, bump-allocated and rewound per chunk.
+   * `bake_chunk_mesh_coarse` fills one cell completely before starting the
+   * next, so a cell's buckets are contiguous here and `cell_range` below only
+   * has to remember (start, count) — no per-cell container at all, where the
+   * previous shape allocated `res^2` arrays plus an object per bucket on every
+   * single rebuild.
+   */
+  readonly buckets: Arena<ZBucketAccum>;
+  readonly cell_range: Vector<U32Array>;
+  /** One coarse run, before it is packed into an exactly-sized set. Same
+   * scratch-then-copy shape voxel_scan.ts uses, for the same reason: the run
+   * count is only known once the walk is done. */
+  /** `sub` is the run's isotropic inset, packed `offset | scale<<8`, or 0 for
+   * a box that fills its cell — which is SUB_CELL_NONE in both bytes, so zero
+   * is unambiguous. */
+  readonly co: Lanes<typeof CO_LANES>;
+  readonly co_start: Uint32Array;
+  open: BakeCursor | null = null;
+  readonly occlusion: OcclusionStats = { total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0 };
+  readonly coarse_instances: CoarseInstanceStats = { total: 0, low_fill: 0 };
+
+  constructor(readonly pool: BuddyAllocator) {
+    const alloc = buddy_alloc(pool);
+    this.alloc = alloc;
+    this.surviving = new Vector(Uint32Array, { init_cap: 6 * (1 << 12), alloc });
+    this.merge_run = alloc.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
+    this.merge_mask = alloc.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
+    this.buckets = new Arena<ZBucketAccum>(new_bucket_accum, { init_cap: 1 << 12 });
+    this.cell_range = new Vector(Uint32Array, { init_cap: 2 * (1 << 10), alloc });
+    this.co = new Lanes(CO_LANES, { init_cap: 1 << 11, alloc });
+    this.co_start = alloc.take(Uint32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1);
+  }
+}
 
 /**
  * Greedy merge over the surviving runs, in the run domain rather than the
@@ -711,12 +766,12 @@ const Y_BORDER_BITS = FACE_PY | FACE_NY | CREASE_PY | CREASE_NY | RISES_PY | RIS
  * Everything the merge did not consume is equal across the rectangle by
  * construction, so it can come from anywhere.
  */
-function merged_mask(span: u32, col: u32, w: u32, h: u32): u32 {
-  const near = MERGE_MASK[col];
+function merged_mask(ctx: BakeContext, span: u32, col: u32, w: u32, h: u32): u32 {
+  const near = ctx.merge_mask[col];
   if (w === 1 && h === 1) return near;
-  const far_x = MERGE_MASK[col + (w - 1)];
-  const far_y = MERGE_MASK[col + (h - 1) * span];
-  const far_xy = MERGE_MASK[col + (h - 1) * span + (w - 1)];
+  const far_x = ctx.merge_mask[col + (w - 1)];
+  const far_y = ctx.merge_mask[col + (h - 1) * span];
+  const far_xy = ctx.merge_mask[col + (h - 1) * span + (w - 1)];
   const from_far = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX | FACE_PY | CREASE_PY | RISES_PY | DIPS_PY |
     DIAG_PP | DIAG_PN | DIAG_NP;
   return (near & ~from_far) |
@@ -741,8 +796,8 @@ function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
 // A coarse tier's grid is smaller than a chunk's and uses the top-left
 // corner.
 const MAX_BAKE_SPAN = CHUNK_CELL_SPAN;
-const MERGE_RUN = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
-const MERGE_MASK = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
+
+const CO_LANES = { z0: Int32Array, z1: Int32Array, rgb: Uint32Array, layer: Uint32Array, sub: Uint32Array };
 
 /**
  * Meshes one run set. Both LOD tiers go through here: `span` is the grid
@@ -757,10 +812,11 @@ const MERGE_MASK = CORE_ALLOC.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
  * size and the gaps between them; full-size merged boxes show it plainly.
  */
 type FineBake = {
+  ctx: BakeContext;
   set: ColumnRunSet;
   span: u32;
   xy_scale: u32;
-  /** Where this bake's boxes start in SURVIVING. */
+  /** Where this bake's boxes start in the context's `surviving`. */
   base: u32;
   /** 0 mask, 1 merge, 2 emit. */
   phase: 0 | 1 | 2;
@@ -769,15 +825,15 @@ type FineBake = {
   emit_at: u32;
 };
 
-function begin_fine(set: ColumnRunSet, span: u32, xy_scale: u32): FineBake {
+function begin_fine(ctx: BakeContext, set: ColumnRunSet, span: u32, xy_scale: u32): FineBake {
   // Only the cells this grid uses: the merge reads `col = cy * span + cx`,
   // so a coarse grid occupies the first span² entries, not a square corner.
-  MERGE_RUN.fill(-1, 0, span * span);
-  return { set, span, xy_scale, base: SURVIVING.len, phase: 0, row: 0, builder: null, emit_at: 0 };
+  ctx.merge_run.fill(-1, 0, span * span);
+  return { ctx, set, span, xy_scale, base: ctx.surviving.len, phase: 0, row: 0, builder: null, emit_at: 0 };
 }
 
 function step_fine(b: FineBake): boolean {
-  const { set, span } = b;
+  const { ctx, set, span } = b;
 
   if (b.phase === 0) {
     const row_end = Math.min(span, b.row + BAKE_ROWS_PER_STEP);
@@ -788,12 +844,12 @@ function step_fine(b: FineBake): boolean {
         let mergeable = -1;
         let mergeable_mask = 0;
         for (let i = set.start[col]; i < end; i++) {
-          occlusion_stats.total_runs++;
+          ctx.occlusion.total_runs++;
           const mask = run_face_mask(set, span, cx, cy, i);
-          occlusion_stats.faces_possible += run_include_bottom(set, i) ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
+          ctx.occlusion.faces_possible += run_include_bottom(set, i) ? FULL_FACE_CNT : OPEN_BOTTOM_FACE_CNT;
           // Concave bits shade an edge but never keep a run alive on their own.
           if ((mask & ALL_FACES) === 0) {
-            occlusion_stats.culled++;
+            ctx.occlusion.culled++;
             continue;
           }
           if (set.sub_sz[i] === SUB_CELL_NONE && mergeable < 0) {
@@ -802,11 +858,11 @@ function step_fine(b: FineBake): boolean {
             continue;
           }
           // Not a merge candidate: emit it as its own single-cell box.
-          push_box(cx, cy, i, mask, 1, 1);
+          push_box(ctx, cx, cy, i, mask, 1, 1);
         }
         if (mergeable >= 0) {
-          MERGE_RUN[col] = mergeable;
-          MERGE_MASK[col] = mergeable_mask;
+          ctx.merge_run[col] = mergeable;
+          ctx.merge_mask[col] = mergeable_mask;
         }
       }
     }
@@ -827,9 +883,9 @@ function step_fine(b: FineBake): boolean {
     for (let cy: u32 = b.row; cy < row_end; cy++) {
       for (let cx: u32 = 0; cx < span; cx++) {
         const col = cy * span + cx;
-        const run = MERGE_RUN[col];
+        const run = ctx.merge_run[col];
         if (run < 0) continue;
-        const mask = MERGE_MASK[col];
+        const mask = ctx.merge_mask[col];
 
         let w = 1;
         while (cx + w < span) {
@@ -837,12 +893,12 @@ function step_fine(b: FineBake): boolean {
           // not to the cell this box started at. Testing `mask` instead made
           // the condition loop-invariant, so it only ever asked about the
           // first border and let the merge run through every later one.
-          if ((MERGE_MASK[col + w - 1] & X_SEAM_BITS) !== 0) break;
+          if ((ctx.merge_mask[col + w - 1] & X_SEAM_BITS) !== 0) break;
           const next = col + w;
-          const next_run = MERGE_RUN[next];
+          const next_run = ctx.merge_run[next];
           if (next_run < 0 || !runs_match(set, run, next_run)) break;
           // Everything the merge does not consume must agree.
-          if ((MERGE_MASK[next] & ~X_BORDER_BITS) !== (mask & ~X_BORDER_BITS)) break;
+          if ((ctx.merge_mask[next] & ~X_BORDER_BITS) !== (mask & ~X_BORDER_BITS)) break;
           w++;
         }
 
@@ -850,11 +906,11 @@ function step_fine(b: FineBake): boolean {
         outer: while (cy + h < span) {
           const row = col + h * span;
           for (let k = 0; k < w; k++) {
-            if ((MERGE_MASK[col + (h - 1) * span + k] & Y_SEAM_BITS) !== 0) break outer;
+            if ((ctx.merge_mask[col + (h - 1) * span + k] & Y_SEAM_BITS) !== 0) break outer;
             const cell = row + k;
-            const cell_run = MERGE_RUN[cell];
+            const cell_run = ctx.merge_run[cell];
             if (cell_run < 0 || !runs_match(set, run, cell_run)) break outer;
-            if ((MERGE_MASK[cell] & ~Y_BORDER_BITS) !== (MERGE_MASK[col + k] & ~Y_BORDER_BITS)) break outer;
+            if ((ctx.merge_mask[cell] & ~Y_BORDER_BITS) !== (ctx.merge_mask[col + k] & ~Y_BORDER_BITS)) break outer;
             // merged_mask reads the box's +Y border from column 0 of its far
             // row, and the comparison above deliberately ignores Y bits, so
             // without this the whole row has to be asked whether it agrees
@@ -862,15 +918,15 @@ function step_fine(b: FineBake): boolean {
             // belonging to one column got stamped across the box's full width
             // — a line running over flat ground, starting and stopping where
             // the merge happened to.
-            if ((MERGE_MASK[cell] & Y_SEAM_BITS) !== (MERGE_MASK[row] & Y_SEAM_BITS)) break outer;
+            if ((ctx.merge_mask[cell] & Y_SEAM_BITS) !== (ctx.merge_mask[row] & Y_SEAM_BITS)) break outer;
           }
           h++;
         }
 
         for (let j = 0; j < h; j++) {
-          for (let k = 0; k < w; k++) MERGE_RUN[col + j * span + k] = -1;
+          for (let k = 0; k < w; k++) ctx.merge_run[col + j * span + k] = -1;
         }
-        push_box(cx, cy, run, merged_mask(span, col, w, h), w, h);
+        push_box(ctx, cx, cy, run, merged_mask(ctx, span, col, w, h), w, h);
       }
     }
     b.row = row_end;
@@ -880,23 +936,23 @@ function step_fine(b: FineBake): boolean {
     // is sized here rather than in the pass above.
     let vertex_total: u32 = 0;
     let index_total: u32 = 0;
-    for (let s_i = b.base; s_i < SURVIVING.len; s_i += 6) {
-      const faces = face_cnt_of(SURVIVING.get(s_i + 3) & ALL_FACES);
-      occlusion_stats.faces_kept += faces;
+    for (let s_i = b.base; s_i < ctx.surviving.len; s_i += 6) {
+      const faces = face_cnt_of(ctx.surviving.get(s_i + 3) & ALL_FACES);
+      ctx.occlusion.faces_kept += faces;
       vertex_total += faces * 4;
       index_total += faces * 6;
     }
-    b.builder = alloc_builder(vertex_total, index_total);
+    b.builder = alloc_builder(ctx.pool, vertex_total, index_total);
     b.phase = 2;
     b.emit_at = b.base;
     return false;
   }
 
   const builder = b.builder!;
-  const emit_end = Math.min(SURVIVING.len, b.emit_at + BAKE_BOXES_PER_STEP * 6);
+  const emit_end = Math.min(ctx.surviving.len, b.emit_at + BAKE_BOXES_PER_STEP * 6);
   for (let s_i = b.emit_at; s_i < emit_end; s_i += 6) {
-    const cx = SURVIVING.get(s_i), cy = SURVIVING.get(s_i + 1), i = SURVIVING.get(s_i + 2);
-    const mask = SURVIVING.get(s_i + 3), w = SURVIVING.get(s_i + 4), h = SURVIVING.get(s_i + 5);
+    const cx = ctx.surviving.get(s_i), cy = ctx.surviving.get(s_i + 1), i = ctx.surviving.get(s_i + 2);
+    const mask = ctx.surviving.get(s_i + 3), w = ctx.surviving.get(s_i + 4), h = ctx.surviving.get(s_i + 5);
     const sub_sz = set.sub_sz[i];
     const unit = b.xy_scale * U_PER_CELL;
     const depth = (set.z1[i] + 1 - set.z0[i]) * U_PER_CELL;
@@ -945,28 +1001,28 @@ function step_fine(b: FineBake): boolean {
     );
   }
   b.emit_at = emit_end;
-  return emit_end >= SURVIVING.len;
+  return emit_end >= ctx.surviving.len;
 }
 
 function finish_fine(b: FineBake): BakedChunkMesh {
-  SURVIVING.truncate(b.base);
+  b.ctx.surviving.truncate(b.base);
   return finish_builder(b.builder!);
 }
 
 function abort_fine(b: FineBake): void {
-  if (b.builder) CORE_POOL.release(b.builder.block);
-  SURVIVING.truncate(b.base);
+  if (b.builder) b.ctx.pool.release(b.builder.block);
+  b.ctx.surviving.truncate(b.base);
 }
 
 /** Records one box to emit: cell origin, its run, its mask, and how many
  * cells it spans. Stride 6 in the same scratch the pre-merge pass used. */
-function push_box(cx: u32, cy: u32, run: u32, mask: u32, w: u32, h: u32): void {
-  SURVIVING.push(cx);
-  SURVIVING.push(cy);
-  SURVIVING.push(run);
-  SURVIVING.push(mask);
-  SURVIVING.push(w);
-  SURVIVING.push(h);
+function push_box(ctx: BakeContext, cx: u32, cy: u32, run: u32, mask: u32, w: u32, h: u32): void {
+  ctx.surviving.push(cx);
+  ctx.surviving.push(cy);
+  ctx.surviving.push(run);
+  ctx.surviving.push(mask);
+  ctx.surviving.push(w);
+  ctx.surviving.push(h);
 }
 
 /**
@@ -1003,32 +1059,9 @@ type ZBucketAccum = {
   tap_cnt: u32;
 };
 
-/**
- * Every coarse cell's Z buckets, bump-allocated and rewound per chunk.
- * `bake_chunk_mesh_coarse` fills one cell completely before starting the
- * next, so a cell's buckets are contiguous here and CELL_RANGE below only
- * has to remember (start, count) — no per-cell container at all, where the
- * previous shape allocated `res^2` arrays plus an object per bucket on every
- * single rebuild.
- */
-const BUCKETS = new Arena<ZBucketAccum>(
-  () => ({
-    bz: 0,
-    coverage: 0,
-    sr: 0,
-    sg: 0,
-    sb: 0,
-    surfaces: 0,
-    tag: 0,
-    tr: 0,
-    tg: 0,
-    tb: 0,
-    taps: 0,
-    tap_cnt: 0,
-  }),
-  { init_cap: 1 << 12 },
-);
-const CELL_RANGE = new Vector(Uint32Array, { init_cap: 2 * (1 << 10), alloc: CORE_ALLOC });
+function new_bucket_accum(): ZBucketAccum {
+  return { bz: 0, coverage: 0, sr: 0, sg: 0, sb: 0, surfaces: 0, tag: 0, tr: 0, tg: 0, tb: 0, taps: 0, tap_cnt: 0 };
+}
 
 /**
  * Linear scan, not a Map: a coarse cell's real Z-bucket count is small
@@ -1041,11 +1074,11 @@ const CELL_RANGE = new Vector(Uint32Array, { init_cap: 2 * (1 << 10), alloc: COR
  * freshly appended bucket, which is how the caller knows to widen its count
  * (append-at-the-end is the only growth, since one cell is filled at a time).
  */
-function find_or_create_bucket(start: u32, cnt: u32, bz: i32): u32 {
+function find_or_create_bucket(ctx: BakeContext, start: u32, cnt: u32, bz: i32): u32 {
   for (let i = start; i < start + cnt; i++) {
-    if (BUCKETS.get(i).bz === bz) return i;
+    if (ctx.buckets.get(i).bz === bz) return i;
   }
-  const acc = BUCKETS.alloc();
+  const acc = ctx.buckets.alloc();
   acc.bz = bz;
   acc.sr = 0;
   acc.sg = 0;
@@ -1055,7 +1088,7 @@ function find_or_create_bucket(start: u32, cnt: u32, bz: i32): u32 {
   acc.coverage = 0;
   acc.taps = 0;
   acc.tap_cnt = 0;
-  return BUCKETS.len - 1;
+  return ctx.buckets.len - 1;
 }
 
 /** Folds one sub-column's contribution to this bucket's visible surface,
@@ -1119,7 +1152,7 @@ function bucket_taps(acc: ZBucketAccum): u32 {
  * run can create a bucket the cell did not have yet, and the count is the
  * only thing that grows.
  */
-function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunSet, i: u32, tag: u32): u32 {
+function accumulate_run(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunSet, i: u32, tag: u32): u32 {
   const run_z0 = set.z0[i], run_z1 = set.z1[i];
   // A fine run packs one layer into all four taps, so any byte is it.
   const run_r = set.r[i], run_g = set.g[i], run_b = set.b[i], run_layer = set.layer_taps[i] & 255;
@@ -1127,8 +1160,8 @@ function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunS
     const frac = unpack_sub_cell_size(set.sub_sz[i]);
     const w = frac * frac * frac;
     if (w <= 0) return cnt;
-    const idx = find_or_create_bucket(start, cnt, Math.floor(run_z0 / lod_step));
-    const acc = BUCKETS.get(idx);
+    const idx = find_or_create_bucket(ctx, start, cnt, Math.floor(run_z0 / lod_step));
+    const acc = ctx.buckets.get(idx);
     acc.coverage += w;
     collect_surface(acc, tag, run_r, run_g, run_b);
     collect_layer_tap(acc, run_layer);
@@ -1142,24 +1175,15 @@ function accumulate_run(start: u32, cnt: u32, lod_step: LodStep, set: ColumnRunS
     const bucket_hi = bucket_lo + lod_step - 1;
     const overlap = Math.min(run_z1, bucket_hi) - Math.max(run_z0, bucket_lo) + 1;
     if (overlap <= 0) continue;
-    const idx = find_or_create_bucket(start, cnt, bz);
+    const idx = find_or_create_bucket(ctx, start, cnt, bz);
     cnt = Math.max(cnt, idx - start + 1);
-    const acc = BUCKETS.get(idx);
+    const acc = ctx.buckets.get(idx);
     acc.coverage += overlap;
     collect_surface(acc, tag, run_r, run_g, run_b);
     collect_layer_tap(acc, run_layer);
   }
   return cnt;
 }
-
-/** One coarse run, before it is packed into an exactly-sized set. Same
- * scratch-then-copy shape voxel_scan.ts uses, for the same reason: the run
- * count is only known once the walk is done. */
-/** `sub` is the run's isotropic inset, packed `offset | scale<<8`, or 0 for
- * a box that fills its cell — which is SUB_CELL_NONE in both bytes, so zero
- * is unambiguous. */
-const CO = new Lanes({ z0: Int32Array, z1: Int32Array, rgb: Uint32Array, layer: Uint32Array, sub: Uint32Array }, { init_cap: 1 << 11, alloc: CORE_ALLOC });
-const CO_START = CORE_ALLOC.take(Uint32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1);
 
 function to_u8(v: f64): u32 {
   return Math.max(0, Math.min(255, Math.round(v)));
@@ -1181,7 +1205,7 @@ function to_u8(v: f64): u32 {
  * varies per bucket: stacking two different footprints into one run would
  * draw whichever one the lower bucket happened to have.
  */
-function pack_coarse_cell(start: u32, cnt: u32, lod_step: LodStep): void {
+function pack_coarse_cell(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodStep): void {
   let open = -1;
   let last_top = 0;
   let previous_bz = -0x7fffffff;
@@ -1190,7 +1214,7 @@ function pack_coarse_cell(start: u32, cnt: u32, lod_step: LodStep): void {
     let pick = -1;
     let pick_bz = 0;
     for (let i = start; i < start + cnt; i++) {
-      const bz = BUCKETS.get(i).bz;
+      const bz = ctx.buckets.get(i).bz;
       if (bz <= previous_bz) continue;
       if (pick < 0 || bz < pick_bz) {
         pick = i;
@@ -1200,12 +1224,12 @@ function pack_coarse_cell(start: u32, cnt: u32, lod_step: LodStep): void {
     if (pick < 0) break;
     previous_bz = pick_bz;
 
-    const acc = BUCKETS.get(pick);
+    const acc = ctx.buckets.get(pick);
     const bucket_lo = pick_bz * lod_step;
     const bucket_hi = bucket_lo + lod_step - 1;
     const fill: f64 = Math.min(1, acc.coverage / (lod_step * lod_step * lod_step));
-    coarse_instance_stats.total++;
-    if (fill < LOW_FILL_THRESHOLD) coarse_instance_stats.low_fill++;
+    ctx.coarse_instances.total++;
+    if (fill < LOW_FILL_THRESHOLD) ctx.coarse_instances.low_fill++;
 
     // Cube root, so the box's volume is the fill fraction of the cell's.
     const linear = Math.cbrt(fill);
@@ -1216,14 +1240,14 @@ function pack_coarse_cell(start: u32, cnt: u32, lod_step: LodStep): void {
 
     // Only full cells stack. Two shrunken boxes are two boxes with air
     // between them, which is the whole point of shrinking them.
-    const co = CO.mem;
+    const co = ctx.co.mem;
     if (sub === 0 && open >= 0 && bucket_lo === last_top + 1 && co.rgb[open] === rgb && co.layer[open] === taps && co.sub[open] === 0) {
       co.z1[open] = bucket_hi;
       last_top = bucket_hi;
       continue;
     }
-    open = CO.push();
-    const m = CO.mem;
+    open = ctx.co.push();
+    const m = ctx.co.mem;
     m.z0[open] = bucket_lo;
     m.z1[open] = bucket_hi;
     m.rgb[open] = rgb;
@@ -1303,12 +1327,13 @@ function pack_inset(linear: f64): u32 {
  * same amortization the old per-chunk surface cache had, without that
  * surface's single-height-per-column ceiling (see `accumulate_run`).
  */
-export function bake_chunk_mesh_coarse(set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
+export function bake_chunk_mesh_coarse(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): BakedChunkMesh {
   if (lod_step === 1) throw new Error("render: finest LOD requires per-run meshing");
-  return bake_chunk_mesh(set, lod_step);
+  return bake_chunk_mesh(ctx, set, lod_step);
 }
 
 type CoarseBake = {
+  ctx: BakeContext;
   set: ColumnRunSet;
   lod_step: LodStep;
   /** Coarse cells per axis. */
@@ -1322,14 +1347,15 @@ type CoarseBake = {
   fine: FineBake | null;
 };
 
-function begin_coarse(set: ColumnRunSet, lod_step: LodStep): CoarseBake {
+function begin_coarse(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): CoarseBake {
   if (lod_step === 1) throw new Error("render: finest LOD requires per-run meshing");
   return {
+    ctx,
     set,
     lod_step,
     res: set.span / lod_step,
-    bucket_base: BUCKETS.len,
-    range_base: CELL_RANGE.len,
+    bucket_base: ctx.buckets.len,
+    range_base: ctx.cell_range.len,
     phase: 0,
     row: 0,
     coarse: null,
@@ -1344,13 +1370,13 @@ function coarse_rows_per_step(lod_step: LodStep): u32 {
 }
 
 function step_coarse(b: CoarseBake): boolean {
-  const { set, lod_step, res } = b;
+  const { ctx, set, lod_step, res } = b;
 
   if (b.phase === 0) {
     const row_end = Math.min(res, b.row + coarse_rows_per_step(lod_step));
     for (let by: u32 = b.row; by < row_end; by++) {
       for (let bx: u32 = 0; bx < res; bx++) {
-        const start = BUCKETS.len;
+        const start = ctx.buckets.len;
         let cnt: u32 = 0;
         for (let j: u32 = 0; j < lod_step; j++) {
           const cy = by * lod_step + j;
@@ -1360,18 +1386,18 @@ function step_coarse(b: CoarseBake): boolean {
             const end = set.start[col + 1];
             // col + 1 so no sub-column ever carries tag 0, which is what a
             // freshly allocated bucket holds.
-            for (let i = set.start[col]; i < end; i++) cnt = accumulate_run(start, cnt, lod_step, set, i, col + 1);
+            for (let i = set.start[col]; i < end; i++) cnt = accumulate_run(ctx, start, cnt, lod_step, set, i, col + 1);
           }
         }
-        CELL_RANGE.push(start);
-        CELL_RANGE.push(cnt);
+        ctx.cell_range.push(start);
+        ctx.cell_range.push(cnt);
       }
     }
     b.row = row_end;
     if (row_end >= res) {
       b.phase = 1;
       b.row = 0;
-      CO.clear();
+      ctx.co.clear();
     }
     return false;
   }
@@ -1386,18 +1412,18 @@ function step_coarse(b: CoarseBake): boolean {
     // boxes.
     const row_end = Math.min(res, b.row + coarse_rows_per_step(lod_step));
     for (let c: u32 = b.row * res; c < row_end * res; c++) {
-      CO_START[c] = CO.len;
+      ctx.co_start[c] = ctx.co.len;
       const ri = b.range_base + c * 2;
-      pack_coarse_cell(CELL_RANGE.get(ri), CELL_RANGE.get(ri + 1), lod_step);
+      pack_coarse_cell(ctx, ctx.cell_range.get(ri), ctx.cell_range.get(ri + 1), lod_step);
     }
     b.row = row_end;
     if (row_end < res) return false;
 
-    CO_START[res * res] = CO.len;
-    const coarse = alloc_column_run_set(CO.len);
-    coarse.start.set(CO_START.subarray(0, res * res + 1));
-    const co = CO.mem;
-    for (let i: u32 = 0; i < CO.len; i++) {
+    ctx.co_start[res * res] = ctx.co.len;
+    const coarse = carve_column_run_set(ctx.pool.acquire(column_run_set_bytes(ctx.co.len, CHUNK_CELL_SPAN)), ctx.co.len, CHUNK_CELL_SPAN);
+    coarse.start.set(ctx.co_start.subarray(0, res * res + 1));
+    const co = ctx.co.mem;
+    for (let i: u32 = 0; i < ctx.co.len; i++) {
       const rgb = co.rgb[i];
       coarse.z0[i] = co.z0[i];
       coarse.z1[i] = co.z1[i];
@@ -1415,10 +1441,10 @@ function step_coarse(b: CoarseBake): boolean {
       coarse.sub_oy[i] = inset;
       coarse.sub_oz[i] = inset;
     }
-    CELL_RANGE.truncate(b.range_base);
-    BUCKETS.truncate(b.bucket_base);
+    ctx.cell_range.truncate(b.range_base);
+    ctx.buckets.truncate(b.bucket_base);
     b.coarse = coarse;
-    b.fine = begin_fine(coarse, res, lod_step);
+    b.fine = begin_fine(ctx, coarse, res, lod_step);
     b.phase = 2;
     return false;
   }
@@ -1428,13 +1454,13 @@ function step_coarse(b: CoarseBake): boolean {
 
 function finish_coarse(b: CoarseBake): BakedChunkMesh {
   const baked = finish_fine(b.fine!);
-  release_column_runs(b.coarse!);
+  b.ctx.pool.release(b.coarse!.block);
   return baked;
 }
 
 function abort_coarse(b: CoarseBake): void {
   if (b.fine) abort_fine(b.fine);
-  if (b.coarse) release_column_runs(b.coarse);
-  CELL_RANGE.truncate(b.range_base);
-  BUCKETS.truncate(b.bucket_base);
+  if (b.coarse) b.ctx.pool.release(b.coarse.block);
+  b.ctx.cell_range.truncate(b.range_base);
+  b.ctx.buckets.truncate(b.bucket_base);
 }

@@ -5,7 +5,8 @@
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { LodStep } from "@/render/lod.ts";
 import type { ColumnRunSet } from "./voxel_scan.ts";
-import { bake_chunk_mesh, type BakedChunkMesh, carve_visibility, release_chunk_mesh } from "./chunk_mesher.ts";
+import { bake_chunk_mesh, type BakedChunkMesh, carve_visibility } from "./chunk_mesher.ts";
+import { CORE_BAKE, release_chunk_mesh } from "./core_bake.ts";
 
 export type ChunkOffsets = {
   key: string;
@@ -113,7 +114,7 @@ export function build_chunk_bucket(
   lod_step: LodStep,
   role: ChunkLodRole,
 ): BuiltChunkBucket {
-  return bucket_from_baked(bake_chunk_mesh(column_runs, lod_step), lod_step, role);
+  return bucket_from_baked(bake_chunk_mesh(CORE_BAKE, column_runs, lod_step), lod_step, role);
 }
 
 /** Wraps a mesh baked elsewhere — the stepped bake chunk_node.ts runs across

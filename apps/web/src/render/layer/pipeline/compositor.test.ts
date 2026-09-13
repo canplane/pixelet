@@ -3,7 +3,8 @@
 import { assertEquals } from "@std/assert";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { band_material, band_voxel_idx, get_chunk_band, MaterialClass, NO_LAYER, set_chunk_voxel } from "./volume.ts";
+import { band_material, band_voxel_idx, get_chunk_band, set_chunk_voxel } from "./volume.ts";
+import { MaterialClass, NO_LAYER } from "./voxel.ts";
 import { clear_compositor_cache, composite_chunk_layers, compositor_cache_stats, same_layer_revisions, with_raycast_composite } from "./compositor.ts";
 import type { ChunkKey, WorldLayer } from "./contract.ts";
 

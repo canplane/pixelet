@@ -72,6 +72,9 @@ export type CameraTerrainMode = (typeof CAMERA_TERRAIN_MODES)[number];
 export const RENDER_PATHS = ["full", "no_msaa", "no_post"] as const;
 export type RenderPath = (typeof RENDER_PATHS)[number];
 
+export const BAKE_PATHS = ["stepped", "worker"] as const;
+export type BakePath = (typeof BAKE_PATHS)[number];
+
 export const SETTINGS = {
   // ---- display: what the world shows. Turning one off removes information
   // — a badge, a scattered tree, a building — which is what separates these
@@ -140,6 +143,12 @@ export const SETTINGS = {
    * no depth pass (badges then draw through terrain). A measurement knob;
    * `full` is the only path the app ships. */
   render_path: choice("debug", RENDER_PATHS, "full", { dev: true }),
+  /** Where a chunk bake runs (chunk_node.ts): stepped under the frame's
+   * budget on the main thread, or whole in the bake worker with the main
+   * thread adopting the result. `worker` was measured on the phone and not
+   * taken (issue/experiment/20260913-bake-worker-on-the-phone.md); it stays
+   * as a measurement knob, like render_path. */
+  bake_path: choice("debug", BAKE_PATHS, "stepped", { dev: true }),
 
   // ---- character: picked in the drawer, not the sheet.
   person_variant_key: text("character", DEFAULT_PERSON_VARIANT_KEY),
