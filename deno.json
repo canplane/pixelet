@@ -24,6 +24,7 @@
     // database, no API process. Not usable for bake work: a published tile
     // prefix is frozen. See apps/web/vite.config.ts.
     "dev:remote": "deno task --cwd apps/web dev:remote",
+    "preview:remote": "deno task --cwd apps/web preview:remote",
 
     // Bakes every land page in the geo DB's coverage into ./out/terrain/<version>.
     // Needs the geo DB up; resumable. Procedure and verification are in

@@ -18,7 +18,7 @@ not rediscover them.
    canvas. Now a mount happens inside the module's tick and a node is a
    plain object. The tick asked for a frame only while something was
    pending, committed or blending — and a chunk just mounted is none of
-   those until the full recheck, which accumulates 0.15 s of *frame*
+   those until the full recheck, which accumulates 0.15 s of _frame_
    time. So: mount tick, nothing pending, no frame, nothing until the
    user moved. Found by driving the tick in a background tab with
    `requestAnimationFrame` polyfilled and reading the census. Fix:

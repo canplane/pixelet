@@ -210,6 +210,10 @@ export default defineConfig(({ mode }) => {
   const published = mode === "production" || remote;
 
   const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
+  const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
+    route.path,
+    remoteOrigin && !route.local_only ? { target: remoteOrigin, changeOrigin: true } : { target: apiBase, changeOrigin: true, ws: route.ws },
+  ]));
 
   return {
     // root `deno task dev` runs dev:api and dev:web concurrently in one
@@ -273,11 +277,14 @@ export default defineConfig(({ mode }) => {
       // every such path at once instead of allow-listing each package.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
       // Each prefix forwarded whole and unrewritten.
-      proxy: Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
-        route.path,
-        remoteOrigin && !route.local_only ? { target: remoteOrigin, changeOrigin: true } : { target: apiBase, changeOrigin: true, ws: route.ws },
-      ])),
+      proxy,
     },
+
+    // The production bundle served here, against the same routes: with
+    // `VITE_DEV_SOURCE=remote`, the deployment's data under the built
+    // client, which is what a measurement of the client alone wants —
+    // the dev server's unbundled modules and hooks are not in it.
+    preview: { proxy },
 
     define: {
       __ENV__: JSON.stringify("browser"),
