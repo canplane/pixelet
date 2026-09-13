@@ -25,8 +25,8 @@ export type DistanceFadeResult = {
   opacity: f64;
 };
 
-/** `px_per_world_unit`: CSS pixels per world unit [u] at `dist`, for the
- * live camera — the caller's own job to compute. */
+/** `px_per_world_unit`: CSS pixels per world unit [u] at the billboard's
+ * view depth, for the live camera — the caller's own job to compute. */
 /**
  * The distance half of the fade, on its own.
  *

@@ -41,9 +41,13 @@ const INIT_CAP: u32 = 256;
 // (0 top, 1 bottom). The corner comes from the unit quad's `position`.
 //
 // The fit is distance_fade.ts's: a fully visible badge is drawn at one
-// screen pixel per logical pixel, so its world size is logical px times
-// distance over the projection's pixels-per-unit-at-one-unit; past the
-// fade's start it shrinks and dims by a smoothstep and is gone at the end.
+// screen pixel per logical pixel, so its world size is logical px times its
+// view depth over the projection's pixels-per-unit-at-one-unit — depth, not
+// distance, because a perspective projection divides by depth, and a badge
+// off the view axis sized by distance drew larger by 1/cos of its angle, the
+// corners of the screen most (2026-09-13). The fade is still by distance:
+// past its start the badge shrinks and dims by a smoothstep and is gone at
+// the end.
 // The centre sits above the anchor by the anchor's own offset so the dot
 // stays pinned while the pill rescales, and the quad extends from that
 // centre along the camera's right and up. The occlusion varyings are
@@ -71,8 +75,9 @@ void main() {
 	vec3 anchor_world = (modelMatrix * vec4(i_anchor, 1.0)).xyz;
 	vec3 anchor_view = (viewMatrix * vec4(anchor_world, 1.0)).xyz;
 	float dist = length(anchor_view);
+	float depth = max(-anchor_view.z, 1e-3);
 	float far = 1.0 - smoothstep(u_fade_start, u_fade_end, dist);
-	vec2 size = i_size * dist / u_px_k * far;
+	vec2 size = i_size * depth / u_px_k * far;
 	v_opacity = far;
 
 	float drop = size.y * (i_anchor_frac - 0.5);

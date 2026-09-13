@@ -39,8 +39,12 @@ export function use_distance_fade(
     sprite.getWorldPosition($world_pos);
     const dist = $world_pos.distanceTo(state.camera.position);
 
+    // Pixels per unit at the sprite's view depth, not its distance: the
+    // projection divides by depth, and fitting by distance drew a sprite off
+    // the view axis larger by 1/cos of its angle.
     const cam = state.camera as THREE.PerspectiveCamera;
-    const px_per_world_unit = state.size.height / (2 * dist * Math.tan((cam.fov * Math.PI) / 360));
+    const depth = Math.max(-$world_pos.applyMatrix4(cam.matrixWorldInverse).z, 1e-3);
+    const px_per_world_unit = state.size.height / (2 * depth * Math.tan((cam.fov * Math.PI) / 360));
 
     const { scale, opacity } = distance_fade_factor(px_per_world_unit, dist);
     sprite.scale.set(width * scale, height * scale, 1);
