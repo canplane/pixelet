@@ -609,6 +609,15 @@ export class BuddyAllocator {
     return Math.max(shift_of(bytes), this._min_shift) - this._min_shift;
   }
 
+  /** The Block for `bytes` the kernel handed out at `byte_offset` to
+   * someone else — the core, acquiring on its own side — so it can be
+   * released here like any other. Zero bytes is the empty block. */
+  adopt(byte_offset: u32, bytes: u32): Block {
+    if (bytes <= 0) return DETACHED_BLOCK;
+    if (this._kernel === null) throw new MarshalError(Errno.EINVAL, "pool: only a pool with a kernel adopts a block");
+    return { buf: this._backing!, byte_offset, bytes, order: this._order_of(bytes), region: KERNEL_REGION, free: false };
+  }
+
   /** Returns the block of `bytes` at this address — what `release` does for
    * a Block, for a caller holding only a view. */
   release_at(buf: ArrayBuffer, byte_offset: u32, bytes: u32): void {

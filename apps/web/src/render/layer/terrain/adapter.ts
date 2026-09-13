@@ -29,7 +29,6 @@ import type { ColumnRunWriter } from "../pipeline/voxel_scan.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
 import { CORE_PXL } from "../pipeline/core_pool.ts";
-import { core_fallback_stats } from "../pipeline/core_bake.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { CELL_SHAMT } from "@pxl/shared/bake/constant.ts";
@@ -147,34 +146,13 @@ export class TerrainWorldLayer implements WorldLayer {
     return [useTileStore.getState().get_tile(key.page_idx), useSettingsStore.getState().show_structures];
   }
 
-  /**
-   * One run per column, floor to elevation, in the column's own material —
-   * the same columns paint() fills into the volume, without the volume. See
-   * WorldLayer.runs.
-   */
-  runs(key: ChunkKey, w: ColumnRunWriter): boolean {
-    const tile = useTileStore.getState().get_tile(key.page_idx);
-    if (!tile) return false;
-    const show_structures = useSettingsStore.getState().show_structures;
-    if (module_reaches(tile.terrain)) {
-      runs_module(tile.terrain, key.page_off, show_structures, w);
-    } else {
-      core_fallback_stats.unreached++;
-      runs_typescript(tile.terrain, key.page_off, show_structures, w);
-    }
-    return true;
-  }
-
   paint(key: ChunkKey, target: ChunkVolume): boolean {
     const tile = useTileStore.getState().get_tile(key.page_idx);
     if (!tile) return false;
-    const show_structures = useSettingsStore.getState().show_structures;
-    if (module_reaches(tile.terrain)) {
-      paint_module(tile.terrain, key.page_off, show_structures, target);
-    } else {
-      core_fallback_stats.unreached++;
-      paint_typescript(tile.terrain, key.page_off, show_structures, target);
-    }
+    // A page the module cannot read has nothing to paint; the chunks built
+    // from it wait for it in the module the same way (core_build.ts).
+    if (!module_reaches(tile.terrain)) return false;
+    paint_module(tile.terrain, key.page_off, useSettingsStore.getState().show_structures, target);
     return true;
   }
 }

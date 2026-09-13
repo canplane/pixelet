@@ -14,6 +14,12 @@
 //! since the count is known only at the end; the set they are packed into
 //! is the caller's (`ScanStep::NeedSet`, `provide_set`), acquired then and
 //! refusable, as the mesher's mesh is.
+//!
+//! The same scratch and packing serve the direct path (`begin_direct`),
+//! where the runs are not walked out of bands but written one call each by
+//! a layer's own source — one a column for terrain — and the same column
+//! walk serves the raycast (`ColumnRuns`), which asks for one column of a
+//! volume on a hover and reads the answer once.
 
 use crate::run_set::run_set_bytes;
 use crate::voxel::{MATERIAL_OBJECT, SUB_CELL_NONE};
@@ -92,6 +98,8 @@ pub struct ScanContext {
     open: bool,
     row: u32,
     packed: bool,
+    /// The direct path's next column to start, while its writer is open.
+    next_col: Option<u32>,
 }
 
 impl Default for ScanContext {
@@ -108,6 +116,7 @@ impl ScanContext {
             open: false,
             row: 0,
             packed: false,
+            next_col: None,
         }
     }
 
@@ -127,7 +136,65 @@ impl ScanContext {
         self.open = true;
         self.row = 0;
         self.packed = false;
+        self.next_col = None;
         true
+    }
+
+    /// Opens the direct path's writer instead of a scan: the runs come one
+    /// call each from a layer's own source, columns in row-major order,
+    /// each column's runs together, then `close_direct` asks for the set as
+    /// a finished scan does. False when a scan or a writer is open.
+    pub fn begin_direct(&mut self) -> bool {
+        if self.open {
+            return false;
+        }
+        self.runs.clear();
+        self.open = true;
+        self.row = 0;
+        self.packed = false;
+        self.next_col = Some(0);
+        true
+    }
+
+    /// Starts column `col`; the columns skipped since the last are empty,
+    /// their prefix entries all pointing at the current run count.
+    pub fn direct_column(&mut self, col: u32) {
+        let next = self.next_col.expect("a column with no direct writer open");
+        assert!(col < COLUMN_CNT as u32, "a column past the chunk");
+        for c in next..=col {
+            self.starts[c as usize] = self.runs.len() as u32;
+        }
+        self.next_col = Some(col + 1);
+    }
+
+    /// One full-cell run `[z0, z1]` of the column last started, in a
+    /// packed 0xCC_RRGGBB material on `layer_idx`.
+    pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) {
+        assert!(self.next_col.is_some_and(|n| n > 0), "a run with no column started");
+        self.runs.push(Run {
+            z0,
+            z1,
+            layer_taps: taps_of(layer_idx),
+            r: (material >> 16) as u8,
+            g: (material >> 8) as u8,
+            b: material as u8,
+            material_class: (material >> 24) as u8,
+            sub_ox: 0,
+            sub_oy: 0,
+            sub_oz: 0,
+            sub_sz: SUB_CELL_NONE,
+        });
+    }
+
+    /// Closes the writer: the columns not started are empty, and the set
+    /// is asked for — `provide_set` this many bytes, then `finish`.
+    pub fn close_direct(&mut self) -> u32 {
+        let next = self.next_col.take().expect("close with no direct writer open");
+        for c in next..=COLUMN_CNT as u32 {
+            self.starts[c as usize] = self.runs.len() as u32;
+        }
+        self.row = BAND_SPAN;
+        self.set_bytes()
     }
 
     /// Walks up to a step's rows of `bands`, the bands it was opened with.
@@ -143,7 +210,7 @@ impl ScanContext {
         for cy in self.row..end {
             for cx in 0..BAND_SPAN {
                 self.starts[(cy * BAND_SPAN + cx) as usize] = self.runs.len() as u32;
-                self.walk_column(bands, cx, cy);
+                walk_column(&mut self.runs, bands, cx, cy);
             }
         }
         self.row = end;
@@ -217,42 +284,97 @@ impl ScanContext {
     pub fn abort(&mut self) {
         self.open = false;
         self.runs.clear();
+        self.next_col = None;
+    }
+}
+
+/// One column's runs for the raycast: the scan's walk, kept apart from the
+/// scan's own scratch so a hover while a scan is open across frames does
+/// not disturb it, and laid out as lanes to read once.
+pub struct ColumnRuns {
+    runs: Vec<Run>,
+    pub z0: Vec<i32>,
+    pub z1: Vec<i32>,
+    pub material_class: Vec<u8>,
+    /// The inset packed as the band stores it: ox, oy, oz, then sz.
+    pub sub: Vec<u32>,
+}
+
+impl Default for ColumnRuns {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ColumnRuns {
+    pub fn new() -> Self {
+        ColumnRuns {
+            runs: Vec::new(),
+            z0: Vec::new(),
+            z1: Vec::new(),
+            material_class: Vec::new(),
+            sub: Vec::new(),
+        }
     }
 
-    fn push(&mut self, run: Run) -> usize {
-        self.runs.push(run);
-        self.runs.len() - 1
-    }
-
-    fn walk_column(&mut self, bands: &[BandView], cx: u32, cy: u32) {
-        let col = (cy * BAND_SPAN + cx) as usize;
-        let mut open: Option<usize> = None;
-        let mut previous_band_z: Option<i32> = None;
+    /// Walks column (cx, cy) of `bands`, ascending by band_z; how many runs.
+    pub fn walk(&mut self, bands: &[BandView], cx: u32, cy: u32) -> usize {
         for band in bands {
-            // Empty signed-Z bands break a material run. Adjacent bands do
-            // not: buried faces at a cache boundary must not reappear.
-            if previous_band_z.is_some_and(|p| band.band_z != p + 1) {
-                open = None;
-            }
-            previous_band_z = Some(band.band_z);
+            band.check();
+        }
+        self.runs.clear();
+        walk_column(&mut self.runs, bands, cx, cy);
+        self.z0.clear();
+        self.z1.clear();
+        self.material_class.clear();
+        self.sub.clear();
+        for run in &self.runs {
+            self.z0.push(run.z0);
+            self.z1.push(run.z1);
+            self.material_class.push(run.material_class);
+            self.sub
+                .push(run.sub_ox as u32 | ((run.sub_oy as u32) << 8) | ((run.sub_oz as u32) << 16) | ((run.sub_sz as u32) << 24));
+        }
+        self.runs.len()
+    }
+}
 
-            let base = col * BAND_SPAN as usize;
-            for local_z in 0..BAND_SPAN as usize {
-                let idx = base + local_z;
-                let packed = band.material[idx];
-                if packed == 0 {
-                    open = None;
-                    continue;
-                }
-                let z = band.band_z * BAND_SPAN as i32 + local_z as i32;
-                let (r, g, b) = ((packed >> 16) as u8, (packed >> 8) as u8, packed as u8);
-                let material_class = (packed >> 24) as u8;
-                let layer_idx = band.layer_idx[idx];
-                let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
-                let sub_sz = sub.map_or(SUB_CELL_NONE, |s| s[3]);
-                if sub_sz != SUB_CELL_NONE {
-                    let s = sub.unwrap();
-                    self.push(Run {
+fn push(runs: &mut Vec<Run>, run: Run) -> usize {
+    runs.push(run);
+    runs.len() - 1
+}
+
+fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
+    let col = (cy * BAND_SPAN + cx) as usize;
+    let mut open: Option<usize> = None;
+    let mut previous_band_z: Option<i32> = None;
+    for band in bands {
+        // Empty signed-Z bands break a material run. Adjacent bands do
+        // not: buried faces at a cache boundary must not reappear.
+        if previous_band_z.is_some_and(|p| band.band_z != p + 1) {
+            open = None;
+        }
+        previous_band_z = Some(band.band_z);
+
+        let base = col * BAND_SPAN as usize;
+        for local_z in 0..BAND_SPAN as usize {
+            let idx = base + local_z;
+            let packed = band.material[idx];
+            if packed == 0 {
+                open = None;
+                continue;
+            }
+            let z = band.band_z * BAND_SPAN as i32 + local_z as i32;
+            let (r, g, b) = ((packed >> 16) as u8, (packed >> 8) as u8, packed as u8);
+            let material_class = (packed >> 24) as u8;
+            let layer_idx = band.layer_idx[idx];
+            let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
+            let sub_sz = sub.map_or(SUB_CELL_NONE, |s| s[3]);
+            if sub_sz != SUB_CELL_NONE {
+                let s = sub.unwrap();
+                push(
+                    runs,
+                    Run {
                         z0: z,
                         z1: z,
                         layer_taps: taps_of(layer_idx),
@@ -264,15 +386,18 @@ impl ScanContext {
                         sub_oy: s[1],
                         sub_oz: s[2],
                         sub_sz,
-                    });
-                    open = None;
-                } else if let Some(i) = open.filter(|&i| {
-                    let o = &self.runs[i];
-                    material_class != MATERIAL_OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
-                }) {
-                    self.runs[i].z1 = z;
-                } else {
-                    open = Some(self.push(Run {
+                    },
+                );
+                open = None;
+            } else if let Some(i) = open.filter(|&i| {
+                let o = &runs[i];
+                material_class != MATERIAL_OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
+            }) {
+                runs[i].z1 = z;
+            } else {
+                open = Some(push(
+                    runs,
+                    Run {
                         z0: z,
                         z1: z,
                         layer_taps: taps_of(layer_idx),
@@ -284,17 +409,20 @@ impl ScanContext {
                         sub_oy: 0,
                         sub_oz: 0,
                         sub_sz: SUB_CELL_NONE,
-                    }));
-                }
+                    },
+                ));
             }
+        }
 
-            let e = &band.extra;
-            if !e.col.is_empty() {
-                let (lo, hi) = extra_range(e.col, col as u32);
-                for i in lo..hi {
-                    let m = e.material[i];
-                    let s = e.sub[i];
-                    self.push(Run {
+        let e = &band.extra;
+        if !e.col.is_empty() {
+            let (lo, hi) = extra_range(e.col, col as u32);
+            for i in lo..hi {
+                let m = e.material[i];
+                let s = e.sub[i];
+                push(
+                    runs,
+                    Run {
                         z0: e.z[i],
                         z1: e.z[i],
                         layer_taps: taps_of(e.layer_idx[i]),
@@ -306,8 +434,8 @@ impl ScanContext {
                         sub_oy: (s >> 8) as u8,
                         sub_oz: (s >> 16) as u8,
                         sub_sz: (s >> 24) as u8,
-                    });
-                }
+                    },
+                );
             }
         }
     }

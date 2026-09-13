@@ -41,20 +41,6 @@
           "description": "The scene drawn straight to the canvas. No grade, no vignette, no depth pass, so badges show through terrain. A measurement, not a look."
         }
       },
-      "bake_path": {
-        "stepped": {
-          "label": "Bake path: stepped",
-          "description": "Chunk bakes run on the main thread, a few rows at a time under the frame budget."
-        },
-        "wasm": {
-          "label": "Bake path: WASM",
-          "description": "Chunk bakes run on the main thread through the Rust mesher, a few rows at a time under the frame budget; the mesh is copied out of the module when it is done."
-        },
-        "worker": {
-          "label": "Bake path: worker",
-          "description": "Chunk bakes run whole in a worker; the main thread copies each mesh in and uploads it, a capped number of bytes per frame."
-        }
-      },
       "dummy_toast": {
         "label": "Test Toast Notifications",
         "description": "Displays sample toast notifications for UI testing.",

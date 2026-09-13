@@ -34,7 +34,8 @@ import { useMapStore } from "@/module/map/store.ts";
 import { useAnchorRegistry } from "@/module/world/anchor/context.tsx";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
-import { chunk_retained_bytes, ChunkNode, lod_build_stats, lod_scheduler, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
+import { chunk_retained_bytes, ChunkNode, lod_build_stats, lod_scheduler, RETAIN_BUDGET_BYTES, take_landed, take_node_counts } from "@/module/world/chunk_node.ts";
+import { CORE_BUILD } from "@/render/layer/pipeline/core_build.ts";
 import { AnchorNode } from "@/module/world/anchor/node.tsx";
 import { decor_field } from "@/module/world/decor/field.ts";
 import { tile_pages, useTileStore } from "@/module/world/terrain/store.ts";
@@ -46,8 +47,6 @@ import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/led
 import { useTick } from "@/module/world/sched/tick.ts";
 import { lead_point, priority_order } from "@/module/world/sched/priority.ts";
 import { BLEND_ACTIVE, IN_FRUSTUM, PENDING, SETTLING, VISIBILITY_CHANGED } from "@/module/world/sched/chunk_table.ts";
-import { little_slabs } from "@/module/world/sched/slab.ts";
-import { bake_port } from "@/module/world/sched/bake_port.ts";
 import { useFrameRefs } from "@/module/world/frame/context.tsx";
 import { useRangeAnchor } from "@/module/world/frame/use_range_anchor.ts";
 import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
@@ -165,6 +164,8 @@ const SLOTS = { init_cap: 4096, alloc: CORE_ALLOC } as const;
 const s_eligible = new Vector(Uint32Array, SLOTS);
 const s_visible = new Vector(Uint32Array, SLOTS);
 const s_offscreen = new Vector(Uint32Array, SLOTS);
+/** The build ids of the visible pending chunks, in order, for the module. */
+const s_ids = new Vector(Uint32Array, SLOTS);
 /** The frustum as six planes of (nx, ny, nz, constant), the form
  * ChunkTable.refresh tests spheres against. */
 const s_planes = new Float64Array(24);
@@ -449,21 +450,31 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
     const commit_t0 = import.meta.env.DEV ? performance.now() : 0;
     // Visible builds/refinements win; pending work outside the frustum only
-    // drops a formerly visible chunk's derived surface and GPU buffers. The
-    // slot holder goes first whatever its distance (chunk_table.ts's
-    // HOLDS_SLOT). commit() returning false means "nothing to do after all"
-    // — it neither counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the
-    // deadline, which is what run_under_budget's own falsy-step rule
-    // preserves. The commit pass gets what the recheck pass left, not a
-    // budget of its own. Visible work takes the frame's steps; releases get
-    // their own small guaranteed share out of what is left. run_under_budget
-    // always lets the first item of a pass do work, so a release lands every
-    // frame even on a frame the visible pass filled — which is the whole
-    // point of a guaranteed share.
-    bake_port.begin_tick();
-    const step = (slot: u32) => handles[slot].commit(budget);
-    const committed: u32 = budget.run(sorted(s_visible, order), step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
+    // drops a formerly visible chunk's derived surface and GPU buffers.
+    // commit() applies a layout whose tiers are all in hand, and otherwise
+    // asks the module for what is missing; returning false means nothing
+    // was applied — it neither counts toward LOD_MAX_CHUNKS_PER_FRAME nor
+    // arms the deadline, which is what run_under_budget's own falsy-step
+    // rule preserves. Releases get their own small guaranteed share: the
+    // first item of a pass always runs.
+    const step = (slot: u32) => handles[slot].commit();
+    const visible = sorted(s_visible, order);
+    let committed: u32 = budget.run(visible, step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
       budget.run(sorted(s_offscreen, order), step, { max_steps: RELEASE_MAX_PER_FRAME }).ran;
+    // The builds, in the module: one call with the visible pending chunks in
+    // priority order and what is left of the budget — the module takes the
+    // slots' holders first — and the tiers that landed committed after.
+    s_ids.truncate(0);
+    for (let k = 0; k < visible.length; k++) {
+      const slot = visible[k];
+      if ((flags[slot] & PENDING) !== 0) s_ids.push(handles[slot].build_id);
+    }
+    CORE_BUILD.tick(s_ids.mem.subarray(0, s_ids.len), Math.max(0, budget.remaining()));
+    for (const node of take_landed()) if (node.commit()) committed++;
+    const built = CORE_BUILD.stat();
+    lod_build_stats.scan_count = built.scans + built.direct;
+    lod_build_stats.direct_count = built.direct;
+    lod_build_stats.build_count = built.bakes;
     // The memory budget: built work is kept off screen until what off-screen
     // chunks hold is over RETAIN_BUDGET_BYTES, then reclaimed farthest first —
     // `order` already sorts off-screen chunks that way. Bounded per frame
@@ -490,9 +501,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
     decor_field.update(origin);
-    // The little memory's idle release, on the same tick the big one's
-    // regions are judged on.
-    little_slabs.sweep();
     const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
     if (committed > 0 || pending_total > committed || blend_active) state.invalidate();
     if (import.meta.env.DEV) visible_pass.current = { pending_total, committed, recheck_ms, commit_ms };

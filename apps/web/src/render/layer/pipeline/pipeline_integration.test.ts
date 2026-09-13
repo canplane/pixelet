@@ -7,7 +7,7 @@ import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_
 import { MaterialClass, NO_LAYER } from "./voxel.ts";
 import { DETACHED_BLOCK } from "@xpute/core/ds/buddy.ts";
 import { bake_chunk_mesh, type BakedChunkMesh } from "./chunk_mesher.ts";
-import { CORE_BAKE } from "./core_bake.ts";
+import { CORE_BAKE } from "./core_build.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { composite_chunk_layers } from "./compositor.ts";
 import { ray_hit_chunk } from "./chunk_raycast.ts";

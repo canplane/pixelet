@@ -9,7 +9,6 @@
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import type { ChunkVolume } from "./volume.ts";
-import type { ColumnRunWriter } from "./voxel_scan.ts";
 
 /**
  * One renderer-owned 64x64 chunk inside an L3 terrain page. `page_off` is
@@ -52,34 +51,6 @@ export interface WorldLayer {
    * (confirmed live, "Maximum update depth exceeded" 2026-09-03).
    */
   paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean;
-
-  /**
-   * The direct path for coarse tiers: the layer's content at `key` as one
-   * list of runs per column, read straight from the layer's own source
-   * without a volume or a scan. Returns false when the layer has nothing at
-   * `key`.
-   *
-   * This is how every established terrain LOD builds its coarse levels —
-   * from the source at the level's own sampling, never by folding the fine
-   * level (issue/20260912-coarse-tiers-what-the-field-does.md). The
-   * terrain page is a heightmap, so its runs are one per column and cost a
-   * few array reads; painting the same heightmap into a 64³ volume and
-   * scanning it back into runs cost ~3 ms per chunk for the same result.
-   *
-   * Optional. A layer that does not offer it forces the scan path for any
-   * key where it has content, so nothing is silently dropped: a layer whose
-   * content cannot be expressed as plain column runs (carved terrain,
-   * sub-cell objects) simply does not implement this.
-   */
-  runs?(key: ChunkKey, w: ColumnRunWriter): boolean;
-
-  /**
-   * Whether this layer has any content at `key`, for a layer that does not
-   * implement `runs`: the node takes the direct path only when every layer
-   * either offers runs or is empty here. Optional; absent means "assume
-   * content", which keeps the scan path.
-   */
-  present?(key: ChunkKey): boolean;
 }
 
 /** Registration order is override priority: later layers win. */

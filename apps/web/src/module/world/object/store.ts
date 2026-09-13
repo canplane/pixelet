@@ -7,27 +7,30 @@
  * whole-world walk), and every query is scoped to a cell or chunk (never a
  * scan over every placed object anywhere).
  *
- * Two layers:
- * - chunk storage: one record per L2 chunk column holding user objects — a
- *   palette, and one sparse octree per 64³ band whose leaves are palette
- *   indices (see the section itself).
- * - a cell index, entry lanes and per-column revisions: derived, kept
- *   OUTSIDE zustand's own reactive state (same reasoning terrain/store.ts's
- *   own "interests" registry uses: this changes on every place()/remove(),
- *   and diffing/copying a big Map on every mutation just to satisfy
- *   zustand's own immutability convention would reintroduce the exact
- *   O(total objects) cost this file exists to avoid). Reactivity is a
- *   small keyed listener registry instead — a component subscribed to one
- *   chunk/cell key is notified only when THAT key's own objects actually
- *   changed, never on an unrelated placement elsewhere in the world.
+ * The records are the module's (crates/pxl-core/src/object.rs): one per
+ * L2 chunk column holding user objects — a palette, and one sparse octree
+ * per 64³ band whose leaves are palette indices — and, derived from them a
+ * chunk at a time, the chunk's entries as three lanes and an index of the
+ * cells they fall in. A coordinate is lowered here to a chunk key, a band
+ * and a lattice position before it crosses, and what comes back is lanes
+ * read as views. What stays here is what is string- or platform-shaped:
+ * the leaf ids, the eraser's two virtual edits, the change log's bumps and
+ * the React subscriptions on them, and the persisted form in localStorage.
+ *
+ * The index, entry lanes and per-column revisions are derived, kept
+ * OUTSIDE zustand's own reactive state (same reasoning terrain/store.ts's
+ * own "interests" registry uses: this changes on every place()/remove(),
+ * and diffing/copying a big Map on every mutation just to satisfy
+ * zustand's own immutability convention would reintroduce the exact
+ * O(total objects) cost this file exists to avoid). Reactivity is a
+ * small keyed listener registry instead — a component subscribed to one
+ * chunk/cell key is notified only when THAT key's own objects actually
+ * changed, never on an unrelated placement elsewhere in the world.
  */
 
 import { useSyncExternalStore } from "react";
 
-import type { f64 } from "@xpute/core/kit/word.ts";
-import type { TypedArrayCtor, U16Array, U8Array } from "@xpute/core/kit/array.ts";
-import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
-import { Vector } from "@xpute/core/ds/arena.ts";
+import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import type { FVec, IVec, PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { fvec, ivec, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/core/kit/encoding.ts";
@@ -47,16 +50,14 @@ import {
   is_terrain_style_cube,
   object_value_is_air,
   object_value_is_decor,
-  object_value_is_present,
   placeable_cube_id_from_num,
   placeable_cube_num_id,
   type PlaceableCubeId,
   terrain_style_cube_source,
 } from "@pxl/shared/spec/cell/mod.ts";
-import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
-import type { SparseTree, SparseTreeLayout } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_BUILD } from "@/render/layer/pipeline/core_build.ts";
 import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
@@ -109,30 +110,34 @@ const STORAGE_KEY = `pxl:object:v${OBJECT_STORAGE_VERSION}`;
 // sparse octree per 64³ band — the unified cell format of
 // issue/20260911-decor-identity-orientation-and-one-cell-format.md.
 // The palette is per chunk; a leaf holds a palette index, not a catalog
-// value; and the leaf lane is as wide as the palette needs — 8 bits up to
-// 256 states, 16 past that, widened in place when a chunk crosses. A state
-// is today's catalog value (cube colour, AIR, decor kind); when the decor
-// manifest lands it becomes a resource id's state, and only palettes change.
+// value. A state is today's catalog value (cube colour, AIR, decor kind);
+// when the decor manifest lands it becomes a resource id's state, and only
+// palettes change.
 //
 // A band tree replaces the tree per cell. It is the unit the mesher already
 // reads in (volume.ts's bands are the same 64³), it drops the string-keyed
 // map of cells, and whole-cell writes stop needing a special case: the cell
 // tier sits inside the tree's range instead of being its root.
+//
+// The records are the module's; what this section does is lower a
+// coordinate to what the module keys by — the chunk (L2_BASE of the XY
+// column, passed as the IVec it is), the band's Z, and the position within
+// the band in finest-tier steps, which is the low bits of each lane of the
+// coordinate shifted to the finest level — and read its lanes back.
 
-type ObjectTree = SparseTree<U8Array | U16Array>;
-
-/** One band: the aligned 64³ cube of cells `[z·64, z·64 + 64)` in its
- * chunk's column, down to the finest sub-cell tier. */
-const BAND_LAYOUT: SparseTreeLayout = { dim: 3, min: OBJECT_LAYOUT.min, max: OBJECT_LAYOUT.max + L2_SHAMT };
 /** Cells along one side of a chunk, and of a band. */
 const CHUNK_CELLS: bigint = 1n << BigInt(L2_SHAMT);
-/** Finest-tier steps along one side of a cell. */
+/** Finest-tier steps along one side of a cell, and of a band. */
 const CELL_STEPS: number = 1 << -OBJECT_LAYOUT.min;
-/** States a narrow (8-bit) leaf lane can index. */
-const NARROW_STATES = 256;
+const BAND_STEP_MASK: bigint = BigInt(CELL_STEPS) * CHUNK_CELLS - 1n;
 const VOID = cube_types.common.VOID;
 
 const CELL_SIZE_FP = pvf3.from_real(U_PER_CELL);
+
+function pxl() {
+  if (CORE_PXL === null) throw new Error("object/store: the store needs the core memory and the module over it");
+  return CORE_PXL;
+}
 
 /** BigInt has no floor-div — `/` truncates toward zero, which is wrong for negative coordinates (the X axis is signed/cyclic, see indexer.ts). CELL_SIZE_FP is always positive, so only `a`'s sign matters. */
 function floor_div(a: bigint, b: bigint): bigint {
@@ -189,205 +194,48 @@ export function object_column_of(page_idx: IVec, page_off: IVec): IVec {
   return L2_BASE(TO_XY(ivec.add(FROM_L3_IDX(TO_XY(page_idx)), TO_XY(page_off))));
 }
 
-/*
- * Chunk and band records, as lanes — numbers only.
- *
- * Two indices, each a dense IndexedMap: chunks by their column key (L2_BASE
- * of the XY column), and bands by their own key — L2_BASE of the full
- * coordinate, Z included — so a band is found directly and a chunk keeps no
- * list of its bands, only the Z range they span. What a record holds sits at
- * its position in typed lanes beside its index.
- *
- * A palette and a band's tree are core-memory storage, held here by handle
- * (typed_alloc.ts's AddressedAlloc): a u32 naming the block, from which a
- * view is made when the storage is used and dropped after. Anything that can
- * move a tree — a write that grows it, a compact, a retype — goes through
- * `tree_at` and `keep_tree`, which writes the new handles back. A view's byte
- * length is how the pool recovers a block's size when it is given back, so a
- * tree is always made at its chunk's real lane width.
- */
-const LANE = { init_cap: 64, alloc: CORE_ALLOC } as const;
-
-const chunk_map = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
-/** Index → state. Index 0 is VOID in every chunk, which is what a zeroed leaf
- * lane already reads as. */
-const c_palette = new Vector(Uint32Array, LANE);
-const c_palette_cap = new Vector(Uint32Array, LANE);
-const c_palette_len = new Vector(Uint32Array, LANE);
-/** 1 when the chunk's leaf lanes are 16-bit rather than 8. */
-const c_wide = new Vector(Uint8Array, LANE);
-/** The band Z range the chunk's bands lie in; a band inside it may be gone. */
-const c_band_min = new Vector(Int32Array, LANE);
-const c_band_max = new Vector(Int32Array, LANE);
-/** The chunk's entries (see Entries below), in three lanes by handle —
- * `c_e_count` of them in room for `c_e_cap`. A cap of 0 holds no block. */
-const c_e_band = new Vector(Uint32Array, LANE);
-const c_e_pos = new Vector(Uint32Array, LANE);
-const c_e_state = new Vector(Uint32Array, LANE);
-const c_e_count = new Vector(Uint32Array, LANE);
-const c_e_cap = new Vector(Uint32Array, LANE);
-
-const band_map = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
-const b_heap = new Vector(Uint32Array, LANE);
-const b_data = new Vector(Uint32Array, LANE);
-const b_cap = new Vector(Uint32Array, LANE);
-const b_head = new Vector(Uint32Array, LANE);
-
-/** A chunk's key back in IVec form — the map stores it folded to signed. */
-function chunk_base_at(pos: number): IVec {
-  return BigInt.asUintN(64, chunk_map.key_at(pos));
-}
-
-/** The key of band `z` in the column whose base is `base`: L2_BASE of the
- * band's own corner, the same key a coordinate inside it produces. */
-function band_key(base: IVec, z: number): IVec {
-  const [cx0, cy0] = cell_index({ i: base, f: 0n });
-  return L2_BASE(cell_corner(cx0, cy0, BigInt(z) * CHUNK_CELLS).i);
-}
-
 function band_z_of(iz: bigint): number {
   return Number(floor_div(iz, CHUNK_CELLS));
 }
 
-function leaf_ctor(cpos: number): TypedArrayCtor<U8Array | U16Array> {
-  return (c_wide.get(cpos) ? Uint16Array : Uint8Array) as TypedArrayCtor<U8Array | U16Array>;
-}
+const PVF3_REG: PVF3 = { i: 0n, f: 0n };
 
-function palette_of(cpos: number): Uint32Array {
-  return CORE_ALLOC.view_of(Uint32Array, c_palette.get(cpos), c_palette_cap.get(cpos));
-}
+/** A coordinate as the module keys it: its column, band, and position
+ * within the band in finest-tier steps. One object, reused. */
+const $at = { key: 0n as IVec, band: 0, x: 0, y: 0, z: 0 };
 
-function keep_palette(cpos: number, view: Uint32Array): void {
-  c_palette.set(cpos, CORE_ALLOC.handle_of(view));
-  c_palette_cap.set(cpos, view.length);
-}
-
-/** A band's tree, made from its lanes. */
-function tree_at(cpos: number, bpos: number): ObjectTree {
-  const cap = b_cap.get(bpos);
-  return {
-    layout: BAND_LAYOUT,
-    mem: {
-      heap: CORE_ALLOC.view_of(Uint32Array, b_heap.get(bpos), cap),
-      data: CORE_ALLOC.view_of(leaf_ctor(cpos), b_data.get(bpos), cap),
-      head: b_head.get(bpos),
-      cap,
-      alloc: CORE_ALLOC,
-    },
-  };
-}
-
-/** Writes a tree back into its lanes — after anything that may have moved it. */
-function keep_tree(bpos: number, tree: ObjectTree): void {
-  b_heap.set(bpos, CORE_ALLOC.handle_of(tree.mem.heap));
-  b_data.set(bpos, CORE_ALLOC.handle_of(tree.mem.data));
-  b_cap.set(bpos, tree.mem.cap);
-  b_head.set(bpos, tree.mem.head);
-}
-
-function open_chunk(base: IVec): number {
-  const found = chunk_map.find(base);
-  if (found >= 0) return found;
-  const pos = chunk_map.insert(base);
-  keep_palette(pos, CORE_ALLOC.take(Uint32Array, 16));
-  c_palette_len.set(pos, 1);
-  c_wide.set(pos, 0);
-  c_band_min.set(pos, 0x7fffffff);
-  c_band_max.set(pos, -0x80000000);
-  c_e_count.set(pos, 0);
-  c_e_cap.set(pos, 0);
-  return pos;
-}
-
-/** Removes a chunk that has no bands left, moving the last one's lanes into
- * its position. */
-function close_chunk(pos: number): void {
-  unindex_cells(pos);
-  free_entries(pos);
-  CORE_ALLOC.give(palette_of(pos));
-  const from = chunk_map.remove_at(pos);
-  if (from === pos) return;
-  for (const lane of [c_palette, c_palette_cap, c_palette_len, c_band_min, c_band_max, c_e_band, c_e_pos, c_e_state, c_e_count, c_e_cap]) lane.set(pos, lane.get(from));
-  c_wide.set(pos, c_wide.get(from));
-}
-
-/** Visits the chunk's bands by position. */
-function each_band(cpos: number, visit: (z: number, bpos: number) => void): void {
-  const base = chunk_base_at(cpos);
-  for (let z = c_band_min.get(cpos); z <= c_band_max.get(cpos); z++) {
-    const bpos = band_map.find(band_key(base, z));
-    if (bpos >= 0) visit(z, bpos);
-  }
-}
-
-function open_band(cpos: number, z: number): number {
-  const key = band_key(chunk_base_at(cpos), z);
-  const found = band_map.find(key);
-  if (found >= 0) return found;
-  const pos = band_map.insert(key);
-  keep_tree(pos, sparse_tree.alloc(BAND_LAYOUT, 64, leaf_ctor(cpos), CORE_ALLOC));
-  if (z < c_band_min.get(cpos)) c_band_min.set(cpos, z);
-  if (z > c_band_max.get(cpos)) c_band_max.set(cpos, z);
-  return pos;
-}
-
-/** Removes a band, then tightens its chunk's Z range — and removes the chunk
- * when nothing is left in it. */
-function close_band(cpos: number, bpos: number): void {
-  sparse_tree.free(tree_at(cpos, bpos));
-  const from = band_map.remove_at(bpos);
-  if (from !== bpos) { for (const lane of [b_heap, b_data, b_cap, b_head]) lane.set(bpos, lane.get(from)); }
-
-  let lo = 0x7fffffff;
-  let hi = -0x80000000;
-  each_band(cpos, (z) => {
-    if (z < lo) lo = z;
-    if (z > hi) hi = z;
-  });
-  if (lo > hi) {
-    close_chunk(cpos);
-    return;
-  }
-  c_band_min.set(cpos, lo);
-  c_band_max.set(cpos, hi);
-}
-
-/** The state's index in the chunk's palette, appended if new — widening
- * every band's leaf lane the moment the palette outgrows eight bits. */
-function palette_index(cpos: number, state: number): number {
-  let palette = palette_of(cpos);
-  const len = c_palette_len.get(cpos);
-  for (let k = 0; k < len; k++) if (palette[k] === state) return k;
-  if (len === palette.length) {
-    const grown = CORE_ALLOC.take(Uint32Array, palette.length * 2);
-    grown.set(palette);
-    CORE_ALLOC.give(palette);
-    keep_palette(cpos, grown);
-    palette = grown;
-  }
-  palette[len] = state;
-  c_palette_len.set(cpos, len + 1);
-  if (len >= NARROW_STATES && !c_wide.get(cpos)) {
-    // Made at the narrow width they have, then widened and kept — the width
-    // flag changes last, so every tree is read at the width it really is.
-    each_band(cpos, (_z, bpos) => {
-      const tree = tree_at(cpos, bpos);
-      sparse_tree.retype(tree, Uint16Array);
-      keep_tree(bpos, tree);
-    });
-    c_wide.set(cpos, 1);
-  }
-  return len;
+function lower(coord: PVF3): typeof $at {
+  $at.key = L2_BASE(TO_XY(coord.i));
+  $at.band = band_z_of(cell_index(coord)[2]);
+  const lattice = pvf3.sh(PVF3_REG, coord, -OBJECT_LAYOUT.min).i;
+  $at.x = Number(ivec.X(lattice) & BAND_STEP_MASK);
+  $at.y = Number(ivec.Y(lattice) & BAND_STEP_MASK);
+  $at.z = Number(ivec.Z(lattice) & BAND_STEP_MASK);
+  return $at;
 }
 
 /** The state stored at `coord`, VOID where nothing is. */
 function read_state(coord: PVF3): number {
-  const base = L2_BASE(TO_XY(coord.i));
-  const cpos = chunk_map.find(base);
-  if (cpos < 0) return VOID;
-  const bpos = band_map.find(band_key(base, band_z_of(cell_index(coord)[2])));
-  if (bpos < 0) return VOID;
-  return palette_of(cpos)[sparse_tree.read(tree_at(cpos, bpos), coord)];
+  const at = lower(coord);
+  return pxl().pxl_object_read(at.key, at.band, at.x, at.y, at.z);
+}
+
+/** A chunk's entry lanes, as views over the module's — valid until the
+ * next write or reindex; null where the chunk holds nothing. */
+function entry_lanes(base: IVec): [Int32Array, Uint32Array, Uint32Array] | null {
+  const p = pxl();
+  const row_at = p.pxl_object_chunk(base);
+  if (row_at === 0) return null;
+  const buf = p.memory.buffer;
+  const row = new Uint32Array(buf, row_at, 4);
+  const n = row[0];
+  return [new Int32Array(buf, row[1], n), new Uint32Array(buf, row[2], n), new Uint32Array(buf, row[3], n)];
+}
+
+function entry_count(base: IVec): number {
+  const p = pxl();
+  const row_at = p.pxl_object_chunk(base);
+  return row_at === 0 ? 0 : new Uint32Array(p.memory.buffer, row_at, 1)[0];
 }
 
 /** Deterministic id for a walked leaf block — encodes exactly what remove() needs to locate it again (including its own cell key, so remove() never needs a reverse lookup), no random/stored identity required. */
@@ -413,12 +261,14 @@ function local_offset(x: number, y: number, z: number): PVF3 {
 // than a cell split into the cells it covers, since everything downstream
 // (collision's 3×3×3 neighbourhood, a size never past one cell) assumes an
 // entry is at most a cell, and a band tree merges eight neighbouring cubes
-// of one colour into one leaf when it compacts. Kept per chunk as three
-// lanes: the band, a packed position, the state. A tree walked depth first
-// visits a cell's leaves together, so a cell's entries are one contiguous run.
+// of one colour into one leaf when it compacts. The module keeps them per
+// chunk as three lanes — the band, a packed position, the state — read here
+// as views. A tree walked depth first visits a cell's leaves together, so a
+// cell's entries are one contiguous run.
 //
 // `pos` packs the leaf's band-local position in finest-tier steps — 0..511 on
-// each axis, nine bits each — and its level above the finest in four.
+// each axis, nine bits each — and its level above the finest in four, as
+// object.rs's pack_pos does.
 
 const POS_BITS = 9;
 const POS_MASK = (1 << POS_BITS) - 1;
@@ -527,75 +377,11 @@ export class EntryCursor {
   }
 }
 
-const s_band = new Vector(Int32Array, LANE);
-const s_pos = new Vector(Uint32Array, LANE);
-const s_state = new Vector(Uint32Array, LANE);
 /** Column walks and cell lookups each have their own, so a cell lookup made
  * while nothing else is walking cannot clobber a walk in progress. */
 const $cursor = new EntryCursor();
 const $cell_cursor = new EntryCursor();
-
-function entry_lanes(cpos: number): [Int32Array, Uint32Array, Uint32Array] {
-  const cap = c_e_cap.get(cpos);
-  return [
-    CORE_ALLOC.view_of(Int32Array, c_e_band.get(cpos), cap),
-    CORE_ALLOC.view_of(Uint32Array, c_e_pos.get(cpos), cap),
-    CORE_ALLOC.view_of(Uint32Array, c_e_state.get(cpos), cap),
-  ];
-}
-
-function free_entries(cpos: number): void {
-  if (c_e_cap.get(cpos) > 0) { for (const lane of entry_lanes(cpos)) CORE_ALLOC.give(lane); }
-  c_e_cap.set(cpos, 0);
-  c_e_count.set(cpos, 0);
-}
-
-/** Re-reads a chunk's trees into its entry lanes. */
-function derive_entries(cpos: number): void {
-  s_band.truncate(0);
-  s_pos.truncate(0);
-  s_state.truncate(0);
-  const push = (band: number, pos: number, state: number): void => {
-    s_band.push(band);
-    s_pos.push(pos);
-    s_state.push(state);
-  };
-  const palette = palette_of(cpos);
-  each_band(cpos, (bz, bpos) => {
-    sparse_tree.walk(tree_at(cpos, bpos), (x, y, z, level, idx) => {
-      const val = palette[idx];
-      if (!object_value_is_present(val) || val === cube_types.common.UNKNOWN) return;
-      if (level <= 0) {
-        push(bz, pack_pos(x, y, z, level), val);
-        return;
-      }
-      const span = 1 << (level - OBJECT_LAYOUT.min);
-      for (let dz = 0; dz < span; dz += CELL_STEPS) {
-        for (let dy = 0; dy < span; dy += CELL_STEPS) {
-          for (let dx = 0; dx < span; dx += CELL_STEPS) push(bz, pack_pos(x + dx, y + dy, z + dz, 0), val);
-        }
-      }
-    });
-  });
-
-  const n = s_state.len;
-  if (n > c_e_cap.get(cpos)) {
-    free_entries(cpos);
-    let cap = 8;
-    while (cap < n) cap *= 2;
-    c_e_band.set(cpos, CORE_ALLOC.handle_of(CORE_ALLOC.take(Int32Array, cap)));
-    c_e_pos.set(cpos, CORE_ALLOC.handle_of(CORE_ALLOC.take(Uint32Array, cap)));
-    c_e_state.set(cpos, CORE_ALLOC.handle_of(CORE_ALLOC.take(Uint32Array, cap)));
-    c_e_cap.set(cpos, cap);
-  }
-  if (n > 0) {
-    const [bands, poss, states] = entry_lanes(cpos);
-    bands.set(s_band.mem.subarray(0, n));
-    poss.set(s_pos.mem.subarray(0, n));
-    states.set(s_state.mem.subarray(0, n));
-  }
-  c_e_count.set(cpos, n);
-}
+const $edit_cursor = new EntryCursor();
 
 /** The cell key a leaf id starts with — see leaf_id. */
 function entry_cell_key(id: string): string {
@@ -605,67 +391,27 @@ function entry_cell_key(id: string): string {
 // ---- Index (outside zustand — see this file's own doc comment) ----
 //
 // Cells by their corner, each naming the run of its chunk's entries it
-// covers; revisions and listeners by column. All of it is derived from the
-// chunk storage above and rebuilt a chunk at a time by reindex_chunk.
+// covers — the module's, rebuilt a chunk at a time by reindex_chunk, which
+// then bumps the revisions of the column and of every cell that changed.
 
-const cell_map = new IndexedMap(I64_KEYS, 256, CORE_ALLOC);
-const cell_start = new Vector(Uint32Array, LANE);
-const cell_count = new Vector(Uint32Array, LANE);
-/** Entries in the cell that really occupy it — every kind but AIR, which is
- * an erase-marker rather than a thing (OccupiedEntry). */
-const cell_solid = new Vector(Uint32Array, LANE);
+/** The run [start, start + count) of the column's entries in the cell at
+ * band-local (cx, cy) and absolute cell Z, and how many of them really
+ * occupy it — every kind but AIR, which is an erase-marker rather than a
+ * thing (OccupiedEntry). One object, reused; null where the cell holds
+ * nothing. */
+const $cell = { start: 0, count: 0, solid: 0 };
 
-/** Cells whose entries changed since the last notification, by corner. */
-const touched_cells = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
-
-/** Removes a chunk's cells from the index, reading its entry lanes as they
- * were before the change that is being reindexed. */
-function unindex_cells(cpos: number): void {
-  const n = c_e_count.get(cpos);
-  if (n === 0) return;
-  const [bands, poss, states] = entry_lanes(cpos);
-  const [cx0, cy0] = cell_index({ i: chunk_base_at(cpos), f: 0n });
-  $cursor.at_chunk(cx0, cy0);
-  let last = "";
-  for (let k = 0; k < n; k++) {
-    $cursor.load(bands[k], poss[k], states[k]);
-    const cell = $cursor.cell();
-    const key = cell_key(...cell);
-    if (key === last) continue;
-    last = key;
-    const corner = cell_corner(...cell).i;
-    touched_cells.insert(corner);
-    const p = cell_map.find(corner);
-    if (p < 0) continue;
-    const from = cell_map.remove_at(p);
-    if (from !== p) { for (const lane of [cell_start, cell_count, cell_solid]) lane.set(p, lane.get(from)); }
-  }
-}
-
-function index_cells(cpos: number): void {
-  const n = c_e_count.get(cpos);
-  if (n === 0) return;
-  const [bands, poss, states] = entry_lanes(cpos);
-  const [cx0, cy0] = cell_index({ i: chunk_base_at(cpos), f: 0n });
-  $cursor.at_chunk(cx0, cy0);
-  let last = "";
-  let p = -1;
-  for (let k = 0; k < n; k++) {
-    $cursor.load(bands[k], poss[k], states[k]);
-    const cell = $cursor.cell();
-    const key = cell_key(...cell);
-    if (key !== last) {
-      last = key;
-      const corner = cell_corner(...cell).i;
-      touched_cells.insert(corner);
-      p = cell_map.insert(corner);
-      cell_start.set(p, k);
-      cell_count.set(p, 0);
-      cell_solid.set(p, 0);
-    }
-    cell_count.set(p, cell_count.get(p) + 1);
-    if (!object_value_is_air(states[k])) cell_solid.set(p, cell_solid.get(p) + 1);
-  }
+function cell_run(ix: bigint, iy: bigint, iz: bigint): typeof $cell | null {
+  const base = column_of_cell(ix, iy, iz);
+  const [cx0, cy0] = cell_index({ i: base, f: 0n });
+  const p = pxl();
+  const row_at = p.pxl_object_cell(base, Number(ix - cx0), Number(iy - cy0), Number(iz));
+  if (row_at === 0) return null;
+  const row = new Uint32Array(p.memory.buffer, row_at, 3);
+  $cell.start = row[0];
+  $cell.count = row[1];
+  $cell.solid = row[2];
+  return $cell;
 }
 
 /**
@@ -694,20 +440,26 @@ function bump_column(base: IVec, objects: boolean, decor: boolean): void {
  * is read. Dropped when their cell changes. */
 const placed_snapshots = new Map<string, OccupiedEntry | null>();
 
-/** Re-derives one chunk's entries and cells, then tells whoever is watching. */
+/** Re-derives one chunk's entries and cells in the module, then tells
+ * whoever is watching: the column, and every cell whose entries changed —
+ * which the module reports as band-local rows, made absolute here. */
 function reindex_chunk(base: IVec): void {
-  const cpos = chunk_map.find(base);
-  if (cpos >= 0) {
-    unindex_cells(cpos);
-    derive_entries(cpos);
-    index_cells(cpos);
-  }
+  const p = pxl();
+  p.pxl_object_reindex(base);
   bump_column(base, true, true);
-  for (const id of placed_snapshots.keys()) {
-    if (touched_cells.find(cell_corner(...parse_cell_key(entry_cell_key(id))).i) >= 0) placed_snapshots.delete(id);
+  const n = p.pxl_object_touched();
+  if (n === 0) return;
+  const rows = new Int32Array(p.memory.buffer, p.pxl_object_touched_at(), n * 3);
+  const [cx0, cy0] = cell_index({ i: base, f: 0n });
+  const touched = new Set<bigint>();
+  for (let t = 0; t < n; t++) {
+    const corner = cell_corner(cx0 + BigInt(rows[t * 3]), cy0 + BigInt(rows[t * 3 + 1]), BigInt(rows[t * 3 + 2])).i;
+    touched.add(corner);
+    bump_world(WorldTopic.OBJECT_CELL, corner);
   }
-  for (let t = 0; t < touched_cells.size; t++) bump_world(WorldTopic.OBJECT_CELL, BigInt.asUintN(64, touched_cells.key_at(t)));
-  touched_cells.clear();
+  for (const id of placed_snapshots.keys()) {
+    if (touched.has(cell_corner(...parse_cell_key(entry_cell_key(id))).i)) placed_snapshots.delete(id);
+  }
 }
 
 /**
@@ -733,19 +485,17 @@ export function entry_id_of(base: IVec, band: number, pos: number): string {
 /** Whether any entry — including the carve preview — is filed under a
  * column. One map lookup; what a coarse build asks before skipping the scan. */
 export function column_has_entries(base: IVec): boolean {
-  const cpos = chunk_map.find(base);
-  if (cpos >= 0 && c_e_count.get(cpos) > 0) return true;
+  if (entry_count(base) > 0) return true;
   return virtual_carve_preview !== null && virtual_carve_preview.column === base;
 }
 
 export function each_column_entry(base: IVec, visit: (entry: EntryCursor) => void, render: boolean = false): void {
-  const cpos = chunk_map.find(base);
-  const n = cpos < 0 ? 0 : c_e_count.get(cpos);
-  if (n > 0) {
-    const [bands, poss, states] = entry_lanes(cpos);
+  const lanes = entry_lanes(base);
+  if (lanes !== null) {
+    const [bands, poss, states] = lanes;
     const [cx0, cy0] = cell_index({ i: base, f: 0n });
     $cursor.at_chunk(cx0, cy0);
-    for (let k = 0; k < n; k++) {
+    for (let k = 0; k < bands.length; k++) {
       $cursor.load(bands[k], poss[k], states[k]);
       if (render && virtual_hide_id !== null && $cursor.id() === virtual_hide_id) continue;
       visit($cursor);
@@ -758,16 +508,49 @@ export function each_column_entry(base: IVec, visit: (entry: EntryCursor) => voi
   }
 }
 
+/**
+ * The drawn build's two edits to a column, as the module's paint takes
+ * them: the hidden entry by its band and packed position — only when it is
+ * this column's, since the same numbers name a different entry in every
+ * other column — and the carve preview by its corner relative to the
+ * column's base. One object, reused.
+ */
+export type ColumnEdits = { hide: 0 | 1; hide_band: i32; hide_pos: u32; carve: 0 | 1; lx: f64; ly: f64; lz: f64; size: f64 };
+const $edits: ColumnEdits = { hide: 0, hide_band: 0, hide_pos: 0, carve: 0, lx: 0, ly: 0, lz: 0, size: 0 };
+
+export function column_render_edits(base: IVec): ColumnEdits {
+  $edits.hide = 0;
+  $edits.carve = 0;
+  const hide = virtual_hide_id === null ? null : parse_leaf_id(virtual_hide_id);
+  if (hide !== null) {
+    const [ix, iy, iz] = parse_cell_key(hide.key);
+    if (column_of_cell(ix, iy, iz) === base) {
+      $edits.hide = 1;
+      $edits.hide_band = band_z_of(iz);
+      $edits.hide_pos = pack_pos(hide.x, hide.y, hide.z, hide.level);
+    }
+  }
+  const carve = virtual_carve_preview;
+  if (carve !== null && carve.column === base) {
+    $cursor.load_fixed(base, carve.i, carve.f, carve.size, cube_types.common.AIR, carve.id);
+    $edits.carve = 1;
+    $edits.lx = $cursor.lx;
+    $edits.ly = $cursor.ly;
+    $edits.lz = $cursor.lz;
+    $edits.size = carve.size;
+  }
+  return $edits;
+}
+
 function each_cell_entry(ix: bigint, iy: bigint, iz: bigint, visit: (entry: EntryCursor) => void): void {
-  const p = cell_map.find(cell_corner(ix, iy, iz).i);
-  if (p < 0) return;
+  const run = cell_run(ix, iy, iz);
+  if (run === null) return;
   const base = column_of_cell(ix, iy, iz);
-  const [bands, poss, states] = entry_lanes(chunk_map.find(base));
+  const [bands, poss, states] = entry_lanes(base)!;
   const [cx0, cy0] = cell_index({ i: base, f: 0n });
   $cell_cursor.at_chunk(cx0, cy0);
-  const start = cell_start.get(p);
-  const end = start + cell_count.get(p);
-  for (let k = start; k < end; k++) {
+  const end = run.start + run.count;
+  for (let k = run.start; k < end; k++) {
     $cell_cursor.load(bands[k], poss[k], states[k]);
     visit($cell_cursor);
   }
@@ -790,8 +573,8 @@ export function get_objects_in_cell(key: string): readonly OccupiedEntry[] {
 /** Whether anything really occupies the cell — what scattered decor asks
  * before standing in it, without making an object to find out. */
 export function cell_is_occupied(ix: bigint, iy: bigint, iz: bigint): boolean {
-  const p = cell_map.find(cell_corner(ix, iy, iz).i);
-  return p >= 0 && cell_solid.get(p) > 0;
+  const run = cell_run(ix, iy, iz);
+  return run !== null && run.solid > 0;
 }
 
 /** Objects near a candidate corner+size — the cell it's in plus the 26 neighbors, since a candidate near a cell face can legitimately need to see an object one cell over (collision.ts's find_overlapping_object, ray.ts's resolve_hit_object). 27 O(1) lookups, still independent of total object count. */
@@ -852,6 +635,7 @@ export function set_virtual_hide(id: string | null): void {
   const previous = virtual_hide_id;
   if (previous === id) return;
   virtual_hide_id = id;
+  send_render_edits();
   if (previous) bump_for_object(previous);
   if (id) bump_for_object(id);
 }
@@ -883,6 +667,7 @@ export function set_virtual_carve_preview(i: IVec, f: FVec, size: f64): void {
   if (virtual_carve_preview?.key === key) return;
   const previous = virtual_carve_preview;
   virtual_carve_preview = { key, column: column_of_cell(ix, iy, iz), i, f, size, id: `virtual-carve:${key}` };
+  send_render_edits();
   if (previous) bump_column(previous.column, true, false);
   bump_column(virtual_carve_preview.column, true, false);
 }
@@ -891,7 +676,26 @@ export function clear_virtual_carve_preview(): void {
   if (!virtual_carve_preview) return;
   const { column } = virtual_carve_preview;
   virtual_carve_preview = null;
+  send_render_edits();
   bump_column(column, true, false);
+}
+
+/** Tells the module's builds the two edits, before the bumps that rebuild
+ * the columns they touch reach a chunk. */
+function send_render_edits(): void {
+  const hide = virtual_hide_id === null ? null : parse_leaf_id(virtual_hide_id);
+  let hide_edit = null;
+  if (hide !== null) {
+    const [ix, iy, iz] = parse_cell_key(hide.key);
+    hide_edit = { column: column_of_cell(ix, iy, iz), band: band_z_of(iz), pos: pack_pos(hide.x, hide.y, hide.z, hide.level) };
+  }
+  const carve = virtual_carve_preview;
+  let carve_edit = null;
+  if (carve !== null) {
+    $edit_cursor.load_fixed(carve.column, carve.i, carve.f, carve.size, cube_types.common.AIR, carve.id);
+    carve_edit = { column: carve.column, lx: $edit_cursor.lx, ly: $edit_cursor.ly, lz: $edit_cursor.lz, size: carve.size };
+  }
+  CORE_BUILD.edits(hide_edit, carve_edit);
 }
 
 /** Cube-content revision of a column — a decor-only change never bumps it. */
@@ -950,10 +754,18 @@ const $abs: PVF3 = { i: 0n, f: 0n };
  * row (the load reindexes every chunk once, after). */
 let restoring = false;
 
+/** The columns holding objects, in the module's order — for a walk over
+ * everything placed, which is what a save is. */
+export function object_columns(): IVec[] {
+  const p = pxl();
+  const keys: IVec[] = [];
+  for (let i = 0, n = p.pxl_object_chunks(); i < n; i++) keys.push(BigInt.asUintN(64, p.pxl_object_chunk_key(i)));
+  return keys;
+}
+
 export function encode_objects(): string {
   const by_page = new Map<IVec, Placement[]>();
-  for (let cpos = 0; cpos < chunk_map.size; cpos++) {
-    const base = chunk_base_at(cpos);
+  for (const base of object_columns()) {
     const page_idx = TO_XY(L3_IDX(base));
     const page_base = FROM_L3_IDX(page_idx);
     let rows = by_page.get(page_idx);
@@ -1004,7 +816,7 @@ export function decode_objects(blob: string): void {
   } finally {
     restoring = false;
   }
-  for (let cpos = 0; cpos < chunk_map.size; cpos++) reindex_chunk(chunk_base_at(cpos));
+  for (const base of object_columns()) reindex_chunk(base);
 }
 
 function load(): void {
@@ -1014,12 +826,7 @@ function load(): void {
     if (raw) decode_objects(raw);
   } catch {
     // An unreadable blob starts the world empty, as a missing one does.
-    while (band_map.size > 0) {
-      const bpos = band_map.size - 1;
-      const key: IVec = BigInt.asUintN(64, band_map.key_at(bpos));
-      close_band(chunk_map.find(TO_XY(key)), bpos);
-    }
-    while (chunk_map.size > 0) close_chunk(chunk_map.size - 1);
+    pxl().pxl_object_clear();
   }
 }
 
@@ -1030,32 +837,27 @@ function save(): void {
 
 load();
 // Initial index build — O(total objects), paid once at module load.
-for (let cpos = 0; cpos < chunk_map.size; cpos++) reindex_chunk(chunk_base_at(cpos));
+for (const base of object_columns()) reindex_chunk(base);
 
 /** Chunks and bands currently holding objects. */
 export function object_store_stats(): { chunks: number; bands: number; cells: number } {
-  return { chunks: chunk_map.size, bands: band_map.size, cells: cell_map.size };
+  const p = pxl();
+  const row = new Uint32Array(p.memory.buffer, p.pxl_object_stat(), 3);
+  return { chunks: row[0], bands: row[1], cells: row[2] };
 }
 
 // ---- Mutations ----
-
-/** Drops a band once every leaf in it reads back VOID, and the chunk once it
- * has no band left — a redundant place() and a remove() both write VOID on
- * purpose, and a record carrying no information would otherwise sit in
- * every save for nothing. */
-function prune_if_empty(cpos: number, bpos: number): void {
-  let empty = true;
-  sparse_tree.walk(tree_at(cpos, bpos), (_x, _y, _z, _level, idx) => {
-    if (idx !== 0) empty = false;
-  });
-  if (empty) close_band(cpos, bpos);
-}
 
 /**
  * i/f is taken as-is — whatever camera/ray.ts's world_adjacent_corner
  * already computed (the same coordinate the hover preview and overlap
  * check used), never re-derived or re-snapped here. One source of truth
  * for where a placement goes, not a second one that quietly overrides it.
+ *
+ * The module writes the leaf, compacts the band and drops it — and the
+ * chunk — once every leaf in it reads back VOID: a redundant place() and a
+ * remove() both write VOID on purpose, and a record carrying no
+ * information would otherwise sit in every save for nothing.
  */
 function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   const coord: PVF3 = { i, f };
@@ -1064,25 +866,9 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   // cell is level 0, inside a band tree's range, so it needs no special
   // case the way a cell's own root once did.
   const level = Math.round(Math.log2(size));
-  const base = L2_BASE(TO_XY(i));
-  const z = band_z_of(cell_index(coord)[2]);
-
-  let cpos = chunk_map.find(base);
-  if (cpos < 0 && val === VOID) return;
-  if (cpos < 0) cpos = open_chunk(base);
-  let bpos = band_map.find(band_key(base, z));
-  if (bpos < 0 && val === VOID) return;
-  if (bpos < 0) bpos = open_band(cpos, z);
-
-  // The index first: it may widen the chunk's lanes, and the tree is made at
-  // whatever width that leaves.
-  const idx = palette_index(cpos, val);
-  const tree = tree_at(cpos, bpos);
-  sparse_tree.write(tree, coord, idx, level);
-  sparse_tree.compact(tree);
-  keep_tree(bpos, tree);
-
-  prune_if_empty(cpos, bpos);
+  const at = lower(coord);
+  const base = at.key;
+  pxl().pxl_object_write(base, at.band, at.x, at.y, at.z, level, val);
   if (restoring) return;
   save();
   reindex_chunk(base);

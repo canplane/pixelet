@@ -153,3 +153,26 @@ Deno.test("wasm scan - an abort at any point leaves the next scan as it would ha
   release_column_runs(expected);
   release_column_runs(actual);
 });
+
+Deno.test("wasm scan - the module's column walk is merge_column_runs, run for run, at every column", async () => {
+  const { column_runs } = await import("./chunk_raycast.ts");
+  const { merge_column_runs } = await import("./voxel_scan.ts");
+  await pxl();
+  const volume = scene(5);
+  let runs_seen = 0;
+  for (let cy = 0; cy < 64; cy++) {
+    for (let cx = 0; cx < 64; cx++) {
+      const expected = merge_column_runs(volume, cx, cy);
+      const actual = column_runs(volume, cx, cy);
+      assertEquals(actual.len, expected.length, `column ${cx},${cy}: run count`);
+      for (let i = 0; i < expected.length; i++) {
+        const e = expected[i];
+        const sub = (e.sub_ox | (e.sub_oy << 8) | (e.sub_oz << 16) | (e.sub_sz << 24)) >>> 0;
+        assertEquals([actual.z0[i], actual.z1[i], actual.material_class[i], actual.sub[i]], [e.z0, e.z1, e.material_class, sub], `column ${cx},${cy}: run ${i}`);
+      }
+      runs_seen += expected.length;
+    }
+  }
+  assert(runs_seen > 4096);
+  release_chunk_volume(volume);
+});

@@ -10,7 +10,7 @@ import { type MeshRun, pack_column_runs } from "./voxel_scan.ts";
 import { abort_bake, bake_chunk_mesh, bake_chunk_mesh_coarse, bake_open, BakeContext, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "./chunk_mesher.ts";
 import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
-import { CORE_BAKE, release_chunk_mesh } from "./core_bake.ts";
+import { CORE_BAKE, release_chunk_mesh } from "./core_build.ts";
 
 function empty_columns(): MeshRun[][] {
   return Array.from({ length: CHUNK_CELL_SPAN * CHUNK_CELL_SPAN }, () => []);

@@ -34,21 +34,38 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the channels' override, held cell for cell to the TypeScript adapter by
      terrain.test.ts; paint 1.8x and the direct path 2.8x on V8), reading a
      page's lanes where the client keeps them and painting the module's own
-     volume. Still TypeScript: the compositor's stack, the object layer's
-     paint — it walks the object store's records, and goes with the store —
-     the direct path's writer (`fill_column_runs`, fed by the module's
-     sampling for terrain) and the raycast's per-column `merge_column_runs`
-     over the module's bands. Which thread it
-     runs on is measured when it exists: the worker was tried on the phone
-     and bought nothing, because the stepped bake already yields and the
-     fill-in cost is elsewhere
-     ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)).
+     volume. Then the object store and, with it, the object layer's paint
+     (crates/pxl-core/src/{sparse_tree,object}.rs, held entry for entry and
+     voxel for voxel to the TypeScript by store_reference.test.ts), the
+     direct path's writer (the scan's scratch, the terrain's runs written
+     inside the module) and the raycast's column walk (the scan's own,
+     read as lanes). Then the chunks' builds themselves (2026-09-14,
+     crates/pxl-core/src/build.rs, held byte for byte to the TypeScript
+     pipeline by core_build.test.ts): the node says which tiers it lacks,
+     and the module makes the runs — the direct way, or by composing terrain
+     and objects into a volume and scanning it — bakes the tiers under the
+     frame's budget in one `pxl_tick`, and hands each mesh over in a block of
+     the mesh section. Retired with it, to
+     `archive/20260914-ts-build-paths`: the TypeScript fallback for a trapped
+     module, the `bake_path` setting's stepped and worker paths (the worker
+     had been measured to buy nothing,
+     [experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)),
+     the bake port and its little slabs, and staging a mesh past the core
+     memory: a block the pool refuses leaves the work where it is. The
+     TypeScript scan, mesher and volume readers stay only as the references
+     the tests hold the module to. Still TypeScript: the recheck (the
+     camera, the frustum and the LOD criterion), the chunk table's order,
+     decor, and the raycast's composite.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
-     The rings are not built yet: the bake is still called export by export.
+     Built 2026-09-14 (crates/pxl-core/src/ring.rs, @xpute/core/ipc/ring.ts):
+     a submission ring and a completion ring, a pair in the module's heap,
+     64-byte entries; `pxl_tick` is the doorbell and the glue reads the
+     completions when it returns. The chunks' builds are the first commands
+     on them.
      **Carried into the port, not fixed in TypeScript first** — an audit
      of the mesher, scan and volume on 2026-09-13 found these, and each is
      what Rust's types or an algorithm rewrite resolve on the way, so
@@ -89,10 +106,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      (crates/pxl-core/src/volume.rs): bands are the module's, taken from the
      fixed section for the sixteen standing stores and the mesh section past
      them, every paint a call into it, and readers get views; the Rust scan
-     opens a volume by id. Then the terrain layer's reading of a page. Next:
-     the object store — its records are in the memory already — and with
-     it the object layer's paint, the direct path's writer and the raycast
-     walk; then the scheduler's tick.
+     opens a volume by id. Then the terrain layer's reading of a page, and
+     the object store with the object layer's paint, the direct path's
+     writer and the raycast walk, and the chunks' builds under one tick
+     through the rings (2026-09-14). Next: whatever else stands before the
+     renderer; then the renderer, starting with the hover cursor. The cursor goes first because it is
+     where the two sides already disagree: since the object store moved
+     into the module, the eraser's half-transparent ghost over a placed
+     cube shows late or not at all while the hide itself lands (decor's
+     ghost is unaffected; the build before the move, 9ff57fe, is fine) —
+     suspected to be ordering across the boundary, not chased in three.js.
+     With the same move its side textures lie on their side on some walls,
+     which 9ff57fe does not do either. Both go with drawing the ghost
+     through the chunk pipeline — one box through the mesher and the chunk
+     material with an opacity — so it cannot diverge from what it previews.
 
 ## P1
 
@@ -170,6 +197,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **XTP encoder without per-leaf objects.** A node object per leaf and a
   closure per scalar at encode; mechanical, format-unchanged, bake-side
   only. With the above, not on its own.
+
+- **Placed objects come back moved after a reload.** Found 2026-09-14: a
+  wall of fifteen cubes (five along X, three up Z) reloads as thirteen
+  cells on one Z layer spread along Y. `decode_objects` turns a
+  `Placement` row back through `local_world_to_canonical` (the
+  projection), which is not the inverse of the page-local offset
+  `encode_objects` writes. In since v7; not the module's.
 
 ## P2
 

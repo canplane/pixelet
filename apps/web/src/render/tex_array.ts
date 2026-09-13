@@ -8,8 +8,8 @@
  * Ground layers occupy indices [0, GROUND_LAYER_META.length) — same
  * numbering GROUND_LAYER_INDEX_LOOKUP_FLAT (shader_meta.ts) already uses,
  * unchanged — and object colors are appended right after, at
- * [GROUND_LAYER_META.length, total), looked up via OBJECT_LAYER_IDX
- * below (object/adapter.ts's own consumer).
+ * [GROUND_LAYER_META.length, total), the numbering shader_meta.ts's
+ * OBJECT_LAYER_IDX gives them (object/adapter.ts's own consumer).
  *
  * Two arrays, TOP and SIDE, same layer numbering — a real ground type often
  * wants a different image on its side faces (grass-top/dirt-side) than its
@@ -27,8 +27,8 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 
 import * as THREE from "three";
 
-import { GROUND_LAYER_META, hex_to_rgb255 } from "./layer/terrain/shader_meta.ts";
-import { cube_hex, cube_ids, type CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
+import { GROUND_LAYER_META, hex_to_rgb255, OBJECT_LAYER_IDX } from "./layer/terrain/shader_meta.ts";
+import { cube_hex, cube_ids } from "@pxl/shared/spec/cell/mod.ts";
 import { type CubeFace, SHIPPED_SHEET, shipped_texture_tile } from "@pxl/shared/record/texture.ts";
 import { asset_url } from "@/lib/env/route.ts";
 
@@ -37,25 +37,7 @@ const LAYER_TEX_SZ = 256;
 
 type LayerMetaLike = { ch_key: string; type_key: string; layer_index: u32 };
 
-/** Object colors, numbered starting right after every ground layer — see
- * this file's own doc comment. object/adapter.ts reads this to resolve
- * VoxelMaterial.layer_idx the same way terrain/adapter.ts reads
- * GROUND_LAYER_INDEX_LOOKUP_FLAT.
- *
- * cube_ids (cell/mod.ts) is only ever the original 15 flat colors — the
- * terrain-styled catalog (2026-09-06's own cell/mod.ts, derived from
- * cube_types' own land/water/structure/transport channels) is a completely
- * separate numbering, deliberately never mixed into this one: those ids are
- * meant to look identical to an existing ground layer, not get a new one of
- * their own — object/adapter.ts's own resolve_solid_material reads
- * GROUND_LAYER_INDEX_LOOKUP_FLAT directly for them instead of this table, so
- * cube_ids never needs filtering here. */
-export const OBJECT_LAYER_IDX: Partial<Record<CubeColorId, u32>> = {};
-const LAYER_META: LayerMetaLike[] = cube_ids.map((color_id, i) => {
-  const layer_index = GROUND_LAYER_META.length + i;
-  OBJECT_LAYER_IDX[color_id] = layer_index;
-  return { ch_key: "block", type_key: color_id, layer_index };
-});
+const LAYER_META: LayerMetaLike[] = cube_ids.map((color_id) => ({ ch_key: "block", type_key: color_id, layer_index: OBJECT_LAYER_IDX[color_id]! }));
 
 const COMBINED_META: readonly LayerMetaLike[] = [...GROUND_LAYER_META, ...LAYER_META];
 const LAYER_CNT: u32 = COMBINED_META.length;
@@ -91,8 +73,7 @@ function build_placeholder_data(sz: u32): Uint8Array {
     fill_layer(data, m.layer_index, sz, r, g, b);
   }
   for (const color_id of cube_ids) {
-    const layer_index = OBJECT_LAYER_IDX[color_id];
-    if (layer_index === undefined) continue; // unreachable — every id in cube_ids gets an entry above.
+    const layer_index = OBJECT_LAYER_IDX[color_id]!;
     const [r, g, b] = hex_to_rgb255(cube_hex(color_id));
     fill_layer(data, layer_index, sz, r, g, b);
   }

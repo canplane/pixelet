@@ -36,14 +36,12 @@ export type PxlExports = {
   pxl_bake_step(): u32;
   pxl_bake_mesh_words(): u32;
   pxl_bake_mesh(at: u32, words: u32): void;
-  pxl_bake_mesh_staged(words: u32): u32;
   pxl_bake_finish(): u32;
   pxl_bake_abort(): void;
   pxl_scan_begin(bands_at: u32, count: u32): u32;
   pxl_scan_step(): u32;
   pxl_scan_set_bytes(): u32;
   pxl_scan_set(at: u32, bytes: u32): void;
-  pxl_scan_set_staged(bytes: u32): u32;
   pxl_scan_finish(): u32;
   pxl_scan_abort(): void;
   pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): u32;
@@ -70,6 +68,26 @@ export type PxlExports = {
   pxl_terrain_material_at(): u32;
   pxl_terrain_layer_at(): u32;
   pxl_terrain_ele_at(): u32;
+  pxl_object_write(key: bigint, band_z: i32, x: u32, y: u32, z: u32, level: i32, state: u32): void;
+  pxl_object_reindex(key: bigint): void;
+  pxl_object_touched(): u32;
+  pxl_object_touched_at(): u32;
+  pxl_object_read(key: bigint, band_z: i32, x: u32, y: u32, z: u32): u32;
+  pxl_object_chunk(key: bigint): u32;
+  pxl_object_cell(key: bigint, cx: u32, cy: u32, cz: i32): u32;
+  pxl_object_chunks(): u32;
+  pxl_object_chunk_key(i: u32): bigint;
+  pxl_object_clear(): void;
+  pxl_object_stat(): u32;
+  pxl_object_kind(state: u32, kind: u32, material: u32, layer: u32): void;
+  pxl_column_runs(id: u32, cx: u32, cy: u32): u32;
+  pxl_column_runs_at(): u32;
+  pxl_ring_sq(): u32;
+  pxl_ring_cq(): u32;
+  pxl_drain(): u32;
+  pxl_tick(order_at: u32, order_len: u32, budget_ms: number): u32;
+  pxl_build_stat(): u32;
+  pxl_object_paint(volume: u32, key: bigint, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: number, ly: number, lz: number, size: number): u32;
 };
 
 /** pxl_bake_step's answers (crates/pxl-wasm/src/lib.rs). */
@@ -88,6 +106,8 @@ export async function instantiate_pxl(memory: WebAssembly.Memory, module_bytes: 
       memory,
       // A panic's message, before the trap: what "unreachable" would otherwise hide.
       pxl_panic: (ptr: u32, len: u32) => console.error(`[pxl] ${new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len))}`),
+      // The clock a tick's budget is spent against.
+      pxl_now: () => performance.now(),
     },
   });
   const exports = instance.exports as unknown as PxlExports;

@@ -1,23 +1,35 @@
 // @pxl/web/render/layer/object/adapter.ts
 
-/** Sparse placed objects -> shared temporary 64x64 chunk. */
+/**
+ * Sparse placed objects -> shared temporary 64x64 chunk. The paint is the
+ * module's (crates/pxl-core/src/object.rs's Painter) over the store's
+ * records, which are the module's too; what this file does is teach it
+ * what each state paints as, once, and hand it the drawn build's edits.
+ */
 
-import type { i32, u32 } from "@xpute/core/kit/word.ts";
-import { IndexedMap, U32_KEYS } from "@xpute/core/ds/map.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
 
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
-import { cube_hex, is_terrain_style_cube, object_value_is_air, object_value_is_decor, placeable_cube_id_from_num, type PlaceableCubeId, terrain_style_cube_source } from "@pxl/shared/spec/cell/mod.ts";
+import {
+  cube_hex,
+  cube_types,
+  decor_ids,
+  decor_num_id,
+  is_terrain_style_cube,
+  placeable_cube_ids,
+  placeable_cube_num_id,
+  type PlaceableCubeId,
+  terrain_style_cube_source,
+} from "@pxl/shared/spec/cell/mod.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { column_has_entries, each_column_entry, object_column_of, object_column_revision } from "@/module/world/object/store.ts";
-import { OBJECT_LAYER_IDX } from "../../tex_array.ts";
-import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255 } from "../terrain/shader_meta.ts";
+import { column_render_edits, object_column_of, object_column_revision } from "@/module/world/object/store.ts";
+import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255, OBJECT_LAYER_IDX } from "../terrain/shader_meta.ts";
 
-import { append_chunk_sub_voxel, type ChunkVolume, set_chunk_voxel } from "../pipeline/volume.ts";
-import { MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction, SUB_CELL_NONE, type VoxelMaterial } from "../pipeline/voxel.ts";
+import { type ChunkVolume, note_paint } from "../pipeline/volume.ts";
+import { MaterialClass, NO_LAYER, pack_material, type VoxelMaterial } from "../pipeline/voxel.ts";
 import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
-import { CORE_ALLOC } from "../pipeline/core_pool.ts";
+import { CORE_PXL } from "../pipeline/core_pool.ts";
 
 export function chunk_origin_of(page_idx: IVec, page_off: IVec): IVec {
   return ivec.add(FROM_L3_IDX(page_idx), page_off);
@@ -39,17 +51,7 @@ export function chunk_origin_of(page_idx: IVec, page_off: IVec): IVec {
  * already don't need it for: layer-tap blending itself only cares whether
  * layer_idx is real, never material_class.
  */
-/**
- * The voxels this paint has claimed, so a second sub-cell object landing on
- * a claimed one is filed as overflow rather than overwriting it. Keyed by
- * the packed cell address — chunk-local x and y in six bits each and the
- * absolute cell Z, biased to stay positive, above — and cleared per paint.
- */
-const claimed = new IndexedMap(U32_KEYS, 256, CORE_ALLOC);
-const Z_BIAS: u32 = 1 << 19;
-const voxel_address = (cx: u32, cy: u32, z: i32): u32 => (((z + Z_BIAS) << 12) | (cy << 6) | cx) >>> 0;
-
-function resolve_solid_material(color_id: PlaceableCubeId): VoxelMaterial {
+export function resolve_solid_material(color_id: PlaceableCubeId): VoxelMaterial {
   if (is_terrain_style_cube(color_id)) {
     const { channel, terrain_num_id } = terrain_style_cube_source(color_id);
     const color_flat = GROUND_COLOR_LOOKUP_FLAT[channel];
@@ -69,6 +71,27 @@ function resolve_solid_material(color_id: PlaceableCubeId): VoxelMaterial {
   return { material_class: MaterialClass.OBJECT, r, g, b, layer_idx };
 }
 
+/** What the module's paint takes a state for: object.rs's Kind. */
+const KIND_SOLID: u32 = 1;
+const KIND_AIR: u32 = 2;
+const KIND_DECOR: u32 = 3;
+
+/** Teaches the module every state the catalog can put in a leaf: each
+ * placeable cube's material, AIR, and the decor kinds, which paint
+ * nothing. Once, at import, as the terrain adapter teaches its tables. */
+function teach_module(): void {
+  const p = CORE_PXL;
+  if (p === null) return;
+  for (const id of placeable_cube_ids) {
+    const m = resolve_solid_material(id);
+    p.pxl_object_kind(placeable_cube_num_id(id), KIND_SOLID, pack_material(m), m.layer_idx);
+  }
+  p.pxl_object_kind(cube_types.common.AIR, KIND_AIR, 0, NO_LAYER);
+  for (const id of decor_ids) p.pxl_object_kind(decor_num_id(id), KIND_DECOR, 0, NO_LAYER);
+}
+
+teach_module();
+
 export class ObjectWorldLayer implements WorldLayer {
   readonly name = "objects";
 
@@ -76,58 +99,16 @@ export class ObjectWorldLayer implements WorldLayer {
     return [object_column_revision(object_column_of(key.page_idx, key.page_off))];
   }
 
-  /** Placed objects carve, stack and sit off the cell grid, none of which a
-   * plain column run expresses; a column that holds any keeps the scan path
-   * (WorldLayer.runs). */
-  present(key: ChunkKey): boolean {
-    return column_has_entries(object_column_of(key.page_idx, key.page_off));
-  }
-
   paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean {
-    claimed.clear();
-    let any = false;
-
+    const p = CORE_PXL;
+    if (p === null) throw new Error("render/object: the object layer paints through the module");
+    const base = object_column_of(key.page_idx, key.page_off);
     // A raycast paints the real set; only the drawn build sees the eraser
     // preview's edits (store.ts's set_virtual_hide).
-    each_column_entry(object_column_of(key.page_idx, key.page_off), (obj) => {
-      // Decor (a user-placed tree, say) never paints a voxel of its own —
-      // it renders as decor_layer.ts's own separate instanced GLB geometry,
-      // not a chunk_mesher.ts box, and has no colour to paint with anyway.
-      if (object_value_is_decor(obj.state)) return;
-
-      const local_x = obj.lx;
-      const local_y = obj.ly;
-      const base_z_real = obj.lz;
-      const is_sub_cell = obj.size < U_PER_CELL;
-      const cx0 = is_sub_cell ? Math.max(0, Math.floor(local_x / U_PER_CELL)) : Math.max(0, Math.round(local_x / U_PER_CELL));
-      const cy0 = is_sub_cell ? Math.max(0, Math.floor(local_y / U_PER_CELL)) : Math.max(0, Math.round(local_y / U_PER_CELL));
-      const z = is_sub_cell ? Math.floor(base_z_real / U_PER_CELL) : Math.round(base_z_real / U_PER_CELL);
-      if (cx0 >= CHUNK_CELL_SPAN || cy0 >= CHUNK_CELL_SPAN) return;
-
-      const sz_cells = Math.max(1, Math.round(obj.size / U_PER_CELL));
-      const cx1 = Math.min(CHUNK_CELL_SPAN, cx0 + sz_cells);
-      const cy1 = Math.min(CHUNK_CELL_SPAN, cy0 + sz_cells);
-      const is_air = object_value_is_air(obj.state);
-      const material: VoxelMaterial = is_air ? { material_class: MaterialClass.AIR, r: 0, g: 0, b: 0, layer_idx: NO_LAYER } : resolve_solid_material(placeable_cube_id_from_num(obj.state));
-
-      const sub_sz = is_sub_cell ? pack_sub_cell_fraction(obj.size / U_PER_CELL) : SUB_CELL_NONE;
-      const sub_ox = is_sub_cell ? pack_sub_cell_fraction((local_x - cx0 * U_PER_CELL) / U_PER_CELL) : 0;
-      const sub_oy = is_sub_cell ? pack_sub_cell_fraction((local_y - cy0 * U_PER_CELL) / U_PER_CELL) : 0;
-      const sub_oz = is_sub_cell ? pack_sub_cell_fraction((base_z_real - z * U_PER_CELL) / U_PER_CELL) : 0;
-
-      for (let cy: u32 = cy0; cy < cy1; cy++) {
-        for (let cx: u32 = cx0; cx < cx1; cx++) {
-          const address = voxel_address(cx, cy, z);
-          any = true;
-          if (claimed.find(address) >= 0 && !is_air) {
-            append_chunk_sub_voxel(target, cx, cy, z, material, pack_sub_cell(sub_ox, sub_oy, sub_oz, sub_sz));
-          } else {
-            claimed.insert(address);
-            set_chunk_voxel(target, cx, cy, z, material, is_sub_cell ? [sub_ox, sub_oy, sub_oz, sub_sz] : undefined);
-          }
-        }
-      }
-    }, !opts?.for_raycast);
-    return any;
+    const e = column_render_edits(base);
+    const render = !opts?.for_raycast;
+    const made = render ? p.pxl_object_paint(target.id, base, e.hide, e.hide_band, e.hide_pos, e.carve, e.lx, e.ly, e.lz, e.size) : p.pxl_object_paint(target.id, base, 0, 0, 0, 0, 0, 0, 0, 0);
+    note_paint(target, (made & 2) === 0 ? 1 : 0);
+    return (made & 1) !== 0;
   }
 }
