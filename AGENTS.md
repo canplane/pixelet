@@ -77,15 +77,19 @@ and working (place, erase, stack, raycast, persist). The chat/social half is a U
 shell wired to nothing. UI polish here does not imply feature completeness; check
 current code before characterizing any part of the product surface.
 
-**Don't start the WASM/WebGPU move unprompted.** The destination is decided
-and on file — a WASM core drawing through WebGPU, three.js gone, iOS 26 and
-iPhone 11 as the floor
+**The WASM/WebGPU move is the priority, taken from the smallest separable
+piece outward.** The destination — a Rust core compiled to WASM, drawing
+through WebGPU, three.js gone, iOS 26 and iPhone 11 as the floor
 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
-— and not started. Until it is, the client is TypeScript with Three.js used
-directly, unwrapped, and the state is already in the shape the move wants:
-lanes in one linear memory, one tick, records. Build the next thing in that
-shape; don't open the port itself, and don't propose keeping a WebGL path or
-supporting pre-WebGPU devices — that question is closed.
+— is scheduled, and the order is P0 in
+[issue/BACKLOG.md](./issue/BACKLOG.md): a piece is first cut out behind a
+boundary that carries typed arrays, still in TypeScript, and only then does
+what sits behind the boundary become Rust. The chunk bake in a worker is the
+first piece. Until a piece's turn, the client is TypeScript with Three.js
+used directly, unwrapped, and the state is already in the shape the move
+wants: lanes in one linear memory, one tick, records. Build the next thing in
+that shape; don't port a piece ahead of the list, and don't propose keeping a
+WebGL path or supporting pre-WebGPU devices — that question is closed.
 
 **That doesn't license implementation-shaped architecture.** The client is
 going to be rewritten — by whoever ends up doing it, on whatever timeline —

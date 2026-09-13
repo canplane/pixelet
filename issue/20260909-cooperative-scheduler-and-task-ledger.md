@@ -871,12 +871,25 @@ number.
 A cooperative scheduler and a worker are not alternatives. The scheduler
 interleaves work that can yield — every unit smaller than the budget, so
 several kinds of work share a frame without a stall; POI was that, and
-cutting it into units solved it without a thread. A worker takes work
-that cannot yield. The chunk bake is one mesher call, and on the phone
-that call is 14–21 ms against an 8 ms budget (`commit/bake 21.6 ms`,
-`scan/chunk 9.3 ms`); forward progress runs the unit whole, so the frame
-is lost by construction. The choices are to make the mesher resumable —
-invasive — or to move the unit whole.
+cutting it into units solved it without a thread. A worker adds a core
+for work that is heavy in total, whether or not it yields.
+
+**Corrected 2026-09-13.** This section first said the chunk bake could
+not yield — "one mesher call … forward progress runs the unit whole, so
+the frame is lost by construction". That was wrong when written. The
+stepped bake (`begin_bake`/`step_bake`, eight rows or 512 boxes a step)
+landed in d331d94 on 2026-09-12, before the phone reading, and
+`chunk_node.advance_bake` yields between steps under the budget. The
+number cited for it, `commit/bake 21.6 ms`, is `commit_ms / bakes` in
+`sched/summary.ts`: a bake's commit time summed across the frames it took,
+not one stall. What the reading does show is the load: while terrain fills
+in, the bake and the scan take the main thread's budget from everything
+else. So the worker's case is throughput and the main thread's share, not
+an uncuttable unit — and it is to be confirmed on the phone rather than
+assumed, with the stepped path and the worker behind one setting, and the
+longest single step recorded, since the maxima below (64–112 ms) were not
+attributed to a step. If one step is that long, cutting it finer comes
+before the worker.
 
 What the numbers say about the value. In the steady state, once loading
 is done, the bake barely runs: `visible/chunks` 0.7–2.9 ms a frame, the
