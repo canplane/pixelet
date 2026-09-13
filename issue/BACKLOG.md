@@ -149,7 +149,25 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      opens a volume by id. Then the terrain layer's reading of a page, and
      the object store with the object layer's paint, the direct path's
      writer and the raycast walk, and the chunks' builds under one tick
-     through the rings (2026-09-14). Next: whatever else stands before the
+     through the rings (2026-09-14). The moves read against the
+     TypeScript they replaced the same day
+     ([the safety valves the module did not have](./20260914-the-safety-valves-the-module-did-not-have.md)):
+     four things the runtime around the TypeScript had done — a React
+     child asking for the next frame, a page painted from past the page
+     section, a pool that spilled rather than refuse, a page mounted as
+     one React commit — had no counterpart in the module, and each was a
+     stall; the module has its own now. **Before the renderer, the
+     performance pass the profile of 2026-09-14 points at** (measured with
+     the ledger, dev build, desktop): the fine tiers' throughput — a
+     zoom-in scans about 25 chunks a second, compose, scan and bake at
+     ~40 ms a chunk, `BakeContext::step` the largest Rust entry — and the
+     refusals a zoom-in still meets (414 in one, the 2–4 MB blocks of fine
+     meshes against a section fragmented by run sets and tiers: a
+     large-block region, or a reclaim that coalesces). What the profile
+     also shows and the renderer removes: three's `updateMatrixWorld` over
+     2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
+     world (tree 281k, car 99k triangles a frame; P3 below). Next:
+     whatever else stands before the
      renderer; then the renderer, starting with the hover cursor. The cursor goes first because it is
      where the two sides already disagree: since the object store moved
      into the module, the eraser's half-transparent ghost over a placed
