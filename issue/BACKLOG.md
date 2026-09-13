@@ -15,23 +15,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Taken from the smallest separable piece outward: a piece is first cut
   out behind a boundary that carries typed arrays, still in TypeScript, so
   the boundary is proven before the language changes behind it. In order:
-  1. **The read direction.** Designed 2026-09-13, not built:
-     [20260913-the-read-direction-a-change-log.md](./20260913-the-read-direction-a-change-log.md).
-     A change is `{topic u16, key u64, revision u32}`; a source bumps, which
-     writes a revision table and one fixed-capacity journal; a reader either
-     compares a point revision or reads the journal from its cursor, and an
-     overwritten cursor reads as lost and re-reads its topics. Push, pull,
-     React and a worker's mirror are adapters over it. Left, in order: the
-     log in `@xpute/core/ipc/change.ts`, then the six mechanisms that read
-     today moved onto it one at a time.
-  2. **Spill past the reservation becomes a budget signal.** The core
+  1. **Spill past the reservation becomes a budget signal.** The core
      memory is fixed (`initial == maximum`, never grown — grow would detach every view, and resizable buffers read
      2.5x slower and are refused by WebGL/WebGPU); past 512 MB the buddy pool
      hands out plain ArrayBuffer regions, which a kernel over the wasm memory
      cannot see. Harmless while everything computes in JS; when a kernel
      lands, a spill has to trigger reclaim or refuse, not silently leave the
      memory. Today's live set is a third of the reservation.
-  3. **The mesher in Rust.** The first Rust. The bake already takes a
+  2. **The mesher in Rust.** The first Rust. The bake already takes a
      context and carves its input and output over any block (column_run.ts,
      carve_baked_mesh), and the bake command carries both across a boundary
      unchanged, so the change is behind a seam that exists. Which thread it
@@ -44,7 +35,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
-  4. **The core to WASM on the main thread, and a WebGPU renderer.**
+  3. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a
      checklist the renderer fills, not a gate on starting. WebGPU removes
@@ -69,7 +60,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   MapLibre sizes its tile cache from the viewport rather than a count
   ([MapOptions](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)).
   The same lever exists here: the one LOD criterion's distance thresholds.
-  Needed on the web whatever the graphics API; the renderer in P0-4 is
+  Needed on the web whatever the graphics API; the renderer in P0-3 is
   built against it.
 
 - **"Everything is a file": the Placement and the palette.** Decided
@@ -168,7 +159,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   phone the main-thread task p95 is ~27 ms whichever thread bakes, so the
   cost is scan, attach or mount rather than the bake; splitting `commit` into
   those would name it. Not now: attach and mount are three.js geometry and
-  React's reconciler, which the WebGPU renderer (P0-4) replaces, and a
+  React's reconciler, which the WebGPU renderer (P0-3) replaces, and a
   breakdown of code that is leaving decides nothing before it leaves. Scan
   is core and stays; measure it when it is the piece being ported.
 - **The bake worker path.** Behind the dev setting `bake_path`, default

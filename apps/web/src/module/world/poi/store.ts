@@ -17,11 +17,12 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { PageTable } from "@/module/world/page_table.ts";
+import { WorldTopic } from "@/module/world/change.ts";
 import { release_poi_page, type ResidentPoiPage } from "./repository.ts";
 
 /** Every resident POI page: the key index in the core memory, the page —
  * its packet in a core block, opened as lanes — as its handle. */
-export const poi_pages = new PageTable<ResidentPoiPage>();
+export const poi_pages = new PageTable<ResidentPoiPage>(WorldTopic.POI_PAGE);
 
 export type PoiStore = {
   /** poi_pages.revision, mirrored so a selector sees a page come and go. */

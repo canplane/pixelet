@@ -73,7 +73,7 @@ deferrals, no failures.
 `stepped` stays the default and the worker path stays behind the setting,
 not deleted: it is small, tested, and the frame, port and link it stands on
 are the boundary the later pieces use. P0-1 is closed on these numbers, and
-the Rust mesher (P0-4) no longer presumes a worker — where it runs is
+the Rust mesher no longer presumes a worker — where it runs is
 measured when it exists.
 
 Not measured:

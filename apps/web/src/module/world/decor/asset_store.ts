@@ -13,9 +13,10 @@
  * appeared or did not depending on whether the browser cache beat the first
  * chunk build.
  *
- * Here arrival is a notification like any other source change, and a
- * ChunkNode subscribes to it exactly the way it already subscribes to tiles
- * and to the object store. Nothing has to be told twice.
+ * Here arrival is a change like any other: each model or skin that lands is
+ * a bump on the world change log's decor-asset topic, and a ChunkNode hears
+ * it the way it hears tiles and the object store — at the tick's pump.
+ * Nothing has to be told twice.
  *
  * Kept out of instanced_model.ts on purpose: this module reaches
  * decor_registry.ts and store.ts — the app's state — and
@@ -31,6 +32,8 @@ import { set_rim_intensity } from "@/module/world/render/lit_gltf_material.ts";
 import { load_gltf, load_texture } from "@/module/world/gltf_cache.ts";
 import { make_lit_gltf_material } from "@/module/world/render/lit_gltf_material.ts";
 import { type DecorVariantAsset, merge_scene_geometry } from "./instanced_model.ts";
+import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
+import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import type { DecorKindBundle } from "./decor_layer.ts";
 import { DECOR_BUNDLES } from "./decor_registry.ts";
 
@@ -45,8 +48,6 @@ export type DecorBundleAssets = {
 const geometry_by_url = new Map<string, THREE.BufferGeometry | null>();
 const material_by_url = new Map<string, THREE.MeshStandardMaterial | null>();
 
-const listeners = new Set<() => void>();
-
 /** Rebuilt whole on every arrival so a consumer can tell "changed" by
  * identity, the way a revision number would. Arrivals are a few dozen
  * events across a session, not a per-frame stream. */
@@ -60,9 +61,9 @@ function build_snapshot(): readonly DecorBundleAssets[] {
   }));
 }
 
-function publish(): void {
+function publish(url: string): void {
   snapshot = build_snapshot();
-  for (const on_change of listeners) on_change();
+  bump_world(WorldTopic.DECOR_ASSET, fnv1a64_str(url));
 }
 
 function rim_intensity(): number {
@@ -74,7 +75,7 @@ function load_variant(variant: DecorVariantAsset): void {
     geometry_by_url.set(variant.model_url, null);
     load_gltf(variant.model_url).then((gltf) => {
       geometry_by_url.set(variant.model_url, merge_scene_geometry(gltf.scene));
-      publish();
+      publish(variant.model_url);
     });
   }
   if (!material_by_url.has(variant.skin_url)) {
@@ -102,7 +103,7 @@ function load_variant(variant: DecorVariantAsset): void {
       const material = make_lit_gltf_material(texture, `decor-mesh:${variant.skin_url}`);
       set_rim_intensity(material, rim_intensity());
       material_by_url.set(variant.skin_url, material);
-      publish();
+      publish(variant.skin_url);
     });
   }
 }
@@ -128,9 +129,16 @@ export function decor_bundle_assets(): readonly DecorBundleAssets[] {
   return snapshot;
 }
 
+/** Calls `on_change` once for a pump in which any asset arrived, however
+ * many did: every consumer re-reads the whole snapshot anyway. */
 export function subscribe_decor_assets(on_change: () => void): () => void {
-  listeners.add(on_change);
-  return () => listeners.delete(on_change);
+  let heard = world_changes.tick(WorldTopic.DECOR_ASSET);
+  return world_wakers.subscribe_topic(WorldTopic.DECOR_ASSET, () => {
+    const tick = world_changes.tick(WorldTopic.DECOR_ASSET);
+    if (tick === heard) return;
+    heard = tick;
+    on_change();
+  });
 }
 
 /** The same store, for the handful of React consumers that need it — the

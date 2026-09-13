@@ -12,9 +12,10 @@
  * handles are the glue three.js and the mesher read through; the keys, the
  * positions and the walk are linear.
  *
- * React reads a `revision` rather than a map identity: every set and clear
- * bumps it, and a component that selected the map now selects the revision
- * and reads the table. The keys are normalised through TO_XY on the way in
+ * A table given a world topic writes every set and clear to the world
+ * change log (module/world/change.ts) — which page, as its own key — and its
+ * `revision` is that topic's tick; readers compare it, or hear the pages
+ * through the log's wakers. Without a topic it only counts. The keys are normalised through TO_XY on the way in
  * (xy.ts on why), and come back out unsigned, the form every IVec is.
  */
 
@@ -25,14 +26,20 @@ import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { bump_world, world_changes, type WorldTopic } from "@/module/world/change.ts";
 
 export class PageTable<T> {
   private readonly index = new IndexedMap<bigint>(I64_KEYS, 64, CORE_ALLOC);
   /** What each position holds. */
   readonly handles: T[] = [];
-  /** Bumped by every set and clear; what a React subscriber watches. */
-  revision: u32 = 0;
-  private readonly listeners = new Set<() => void>();
+  private count: u32 = 0;
+
+  constructor(readonly topic: WorldTopic | null = null) {}
+
+  /** Moves on every set and clear: the topic's tick, or a count. */
+  get revision(): u32 {
+    return this.topic === null ? this.count : world_changes.tick(this.topic);
+  }
 
   get size(): u32 {
     return this.index.size;
@@ -48,20 +55,22 @@ export class PageTable<T> {
   }
 
   set(page_idx: IVec, value: T): void {
-    const pos = this.index.insert(TO_XY(page_idx));
+    const key = TO_XY(page_idx);
+    const pos = this.index.insert(key);
     this.handles[pos] = value;
-    this.bump();
+    this.changed(key, false);
   }
 
   /** Removes the page and returns what it held, or undefined. */
   clear(page_idx: IVec): T | undefined {
-    const pos = this.index.find(TO_XY(page_idx));
+    const key = TO_XY(page_idx);
+    const pos = this.index.find(key);
     if (pos < 0) return undefined;
     const held = this.handles[pos];
     const from = this.index.remove_at(pos);
     if (from !== pos) this.handles[pos] = this.handles[from];
     this.handles.length = from;
-    this.bump();
+    this.changed(key, true);
     return held;
   }
 
@@ -78,14 +87,11 @@ export class PageTable<T> {
     for (let pos = 0; pos < this.index.size; pos++) yield [this.key_at(pos), this.handles[pos]];
   }
 
-  /** Called after every set and clear. */
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  private bump(): void {
-    this.revision++;
-    for (const listener of this.listeners) listener();
+  private changed(key: IVec, left: boolean): void {
+    this.count++;
+    if (this.topic === null) return;
+    const unsigned = BigInt.asUintN(64, key);
+    bump_world(this.topic, unsigned);
+    if (left) world_changes.forget(this.topic, unsigned);
   }
 }

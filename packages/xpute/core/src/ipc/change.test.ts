@@ -127,3 +127,25 @@ Deno.test("waker - a pump whose cursor was overwritten wakes every listener it h
   waker.pump();
   assertEquals([a, cell], [1, 1]);
 });
+
+Deno.test("waker - a topic listener hears each changed key of its topic once per pump, and null when the pump was lost", () => {
+  const log = new ChangeLog({ topics: 2, capacity: 4 });
+  const waker = new ChangeWaker(log);
+  const heard: (bigint | null)[] = [];
+  const off = waker.subscribe_topic(PAGE, (key) => heard.push(key));
+  log.bump(PAGE, 1n);
+  log.bump(CELL, 1n);
+  log.bump(PAGE, 2n);
+  log.bump(PAGE, 1n);
+  waker.pump();
+  assertEquals(heard, [1n, 2n]);
+  heard.length = 0;
+  for (let k = 0n; k < 6n; k++) log.bump(PAGE, k);
+  waker.pump();
+  assertEquals(heard, [null]);
+  off();
+  log.bump(PAGE, 9n);
+  heard.length = 0;
+  waker.pump();
+  assertEquals(heard, []);
+});
