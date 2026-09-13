@@ -30,11 +30,10 @@ import {
 } from "./store.ts";
 import { L2_BASE } from "@pxl/shared/spec/space/indexer.ts";
 
-// Distinct, far-apart corners per test so leftover module-level state from
-// one test never collides with another (this file has no localStorage under
-// `deno test` — see store.ts's own `typeof localStorage === "undefined"`
-// guard — so nothing persists between test files, but tests within this one
-// file still share the same module-level chunk storage).
+// Distinct, far-apart corners per test so leftover state from one test
+// never collides with another. The store is shared across test files and,
+// through Deno's localStorage (kept per config location, so it survives a
+// run), across runs: a test that places must not assume it starts empty.
 let next_cell_x = 0n;
 function fresh_corner(): { i: ReturnType<typeof ivec.gather>; f: 0n } {
   const i = ivec.gather(next_cell_x, 0n, 0n);

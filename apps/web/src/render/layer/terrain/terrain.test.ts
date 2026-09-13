@@ -2,17 +2,12 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import type { u32 } from "@xpute/core/kit/word.ts";
-import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
-import { type Ground, GROUND_CH_KEYS, GroundChannelKey, type Terrain } from "@pxl/shared/bake/format.ts";
-import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { into_core } from "@/module/world/terrain/resident.ts";
 import { alloc_chunk_volume, release_chunk_volume, seal_chunk_volume } from "../pipeline/volume.ts";
 import { column_run_set_bytes, type ColumnRunSet } from "../pipeline/column_run.ts";
 import { fill_column_runs, release_column_runs } from "../pipeline/voxel_scan.ts";
-import { GROUND_COLOR_LOOKUP_FLAT } from "./shader_meta.ts";
+import { page } from "./page_fixture.ts";
 import { paint_module, paint_typescript, runs_module, runs_typescript } from "./adapter.ts";
 
 /** The first index at which two lanes differ, or -1: a diff of a whole
@@ -21,47 +16,6 @@ function first_difference(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length !== b.length) return Math.min(a.length, b.length);
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return i;
   return -1;
-}
-
-function rng(seed: u32): () => u32 {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s ^= s << 13;
-    s ^= s >>> 17;
-    s ^= s << 5;
-    return s >>> 0;
-  };
-}
-
-/** The type ids a channel's table knows, so a cell can carry a real one,
- * plus VOID; land also carries SEA, the bare type masked as water. */
-function types_of(ch: GroundChannelKey): u32[] {
-  const has = GROUND_COLOR_LOOKUP_FLAT[ch]?.has;
-  const out: u32[] = [cube_types.common.VOID];
-  if (has) { for (let t = 1; t < 256; t++) if (has[t]) out.push(t); }
-  return out;
-}
-
-/** A page in the core memory: a rolling elevation raster with a few sharp
- * steps, and ground that is mostly land with water, structures and roads
- * sprinkled — enough of each that every channel decides some cell. */
-function page(seed: u32): Terrain {
-  const next = rng(seed);
-  const ele = new Int16Array(ELE_PADDED_SPAN * ELE_PADDED_SPAN);
-  for (let i = 0; i < ele.length; i++) ele[i] = -60 + (next() % 300) - (next() % 7 === 0 ? 200 : 0);
-  const ground = {} as Ground;
-  const types = Object.fromEntries(GROUND_CH_KEYS.map((k) => [k, types_of(k)])) as Record<GroundChannelKey, u32[]>;
-  for (const key of GROUND_CH_KEYS) {
-    const lane = new Uint8Array(PAGE_CELL_SPAN * PAGE_CELL_SPAN);
-    const choices = types[key];
-    const sparse = key !== GroundChannelKey.LAND;
-    for (let i = 0; i < lane.length; i++) {
-      if (sparse && next() % 5 !== 0) continue;
-      lane[i] = key === GroundChannelKey.LAND && next() % 9 === 0 ? cube_types.land.SEA : choices[next() % choices.length];
-    }
-    ground[key] = lane;
-  }
-  return into_core({ ele, ground }, false);
 }
 
 const OFFSETS = [[0, 0], [64, 0], [0, 960], [960, 960], [320, 448]].map(([x, y]) => ivec.gather(BigInt(x), BigInt(y), 0n));

@@ -7,7 +7,7 @@ import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_
 import { MaterialClass, NO_LAYER } from "./voxel.ts";
 import { DETACHED_BLOCK } from "@xpute/core/ds/buddy.ts";
 import { bake_chunk_mesh, type BakedChunkMesh } from "./chunk_mesher.ts";
-import { CORE_BAKE } from "./core_bake.ts";
+import { CORE_BAKE } from "./core_build.ts";
 import { scan_all_column_runs } from "./voxel_scan.ts";
 import { composite_chunk_layers } from "./compositor.ts";
 import { ray_hit_chunk } from "./chunk_raycast.ts";
@@ -58,7 +58,6 @@ function split_terrain_and_object(built: BakedChunkMesh, terrain_vertex_cnt: num
 Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast share exact boxes", () => {
   const terrain: WorldLayer = {
     name: "test-terrain",
-    revision: () => [1],
     paint: (_key, target) => {
       fill_chunk_column(target, 2, 3, -18, 18, LAND);
       return true;
@@ -66,7 +65,6 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
   };
   const objects: WorldLayer = {
     name: "test-objects",
-    revision: () => [1],
     paint: (_key, target) => {
       // Exact 1/256 values: x=.25, y=.5, z=.75, size=.5 cell.
       set_chunk_voxel(target, 2, 3, 20, OBJECT, [64, 128, 192, 128]);

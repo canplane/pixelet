@@ -9,9 +9,18 @@
 //! (apps/web/src/render/layer/pipeline/wasm_bake.test.ts).
 
 pub mod buddy;
+pub mod build;
+pub mod change;
+pub mod decor;
+pub mod lod;
 pub mod mesher;
+pub mod object;
+pub mod raycast;
+pub mod ring;
 pub mod run_set;
 pub mod scan;
+pub mod sched;
+pub mod sparse_tree;
 pub mod terrain;
 pub mod volume;
 pub mod voxel;

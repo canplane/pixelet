@@ -26,6 +26,32 @@ import { PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
  * predicate has to answer. */
 export type DecorEligibility = (land: u32, water: u32, structure: u32, transport: u32) => boolean;
 
+/** What a channel's type must be for a kind to stand on the cell: anything,
+ * nothing painted, or one of a list of types. */
+export type DecorChannelRule = "any" | "void" | readonly u32[];
+
+/** A kind's rule per ground channel, declared so the module can be taught
+ * the same rule (crates/pxl-core/src/decor.rs) and `eligibility_of` derives
+ * the predicate the TypeScript reference reads. */
+export type DecorRules = {
+  land: DecorChannelRule;
+  water: DecorChannelRule;
+  structure: DecorChannelRule;
+  transport: DecorChannelRule;
+};
+
+export const DECOR_RULE_CHANNELS: readonly (keyof DecorRules)[] = ["land", "water", "structure", "transport"];
+
+function rule_allows(rule: DecorChannelRule, t: u32): boolean {
+  if (rule === "any") return true;
+  if (rule === "void") return t === cube_types.common.VOID;
+  return rule.includes(t);
+}
+
+export function eligibility_of(rules: DecorRules): DecorEligibility {
+  return (land, water, structure, transport) => rule_allows(rules.land, land) && rule_allows(rules.water, water) && rule_allows(rules.structure, structure) && rule_allows(rules.transport, transport);
+}
+
 /**
  * How a placed instance picks its own heading:
  * - "random": uniform over a full turn — fine for anything that reads the

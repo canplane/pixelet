@@ -43,7 +43,7 @@ Extent is a linear range on one packed lane (`RANGE` in `indexer.ts`), not an in
 
 L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `indexer.ts`). Once implemented, its Z lane collapses — Z is only 16 bits wide, narrower than `L5_SHAMT` — so L5 can only ever address X/Y, regardless of what any layer does with it.
 
-Objects have no server persistence yet — the store is client-local. It keeps a palette per L2 chunk and one sparse tree per occupied `64³` band whose leaves are palette indices, all as lanes in the core memory (`module/world/object/store.ts`), with a derived cell index for occupancy and hit tests. It persists as one `Placement` record per L3 page ([Records](#records)), which is the form a server would receive too.
+Objects have no server persistence yet — the store is client-local. Its records are the module's (`crates/pxl-core/src/object.rs`): a palette per L2 chunk and one sparse octree per occupied `64³` band whose leaves are palette indices, with the chunk's entries derived as lanes and a cell index over them for occupancy and hit tests; `module/world/object/store.ts` lowers a coordinate to what the module keys by, reads the lanes back as views, and keeps the leaf ids, the change-log bumps and the eraser's virtual edits. The object layer paints in the module too. It persists as one `Placement` record per L3 page ([Records](#records)), which is the form a server would receive too.
 
 One chunk node (`module/world/chunk_node.ts`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
 
@@ -68,7 +68,7 @@ Terrain today is Tile-shaped data addressed at Page granularity; objects are Vol
 
 The client's state is one fixed `WebAssembly.Memory` — 512 MB on the desktop, 256 on a phone, `initial == maximum`, never grown, since growing would detach every view and a resizable buffer is slower to read and refused by WebGL — cut into **sections** with fixed starts and sizes (`render/layer/pipeline/core_pool.ts`, [issue/20260913-sections-of-the-core-memory-and-what-full-means.md](./issue/20260913-sections-of-the-core-memory-and-what-full-means.md)), none borrowing from another: **module**, the first 32 MB, for the Rust module's own stack, data and heap (where a wasm32 linker puts them; its allocator is `crates/pxl-wasm/src/arena.rs`, and the module states its size so the map is checked at instantiation), then each its own buddy allocator over its range — the buddy itself runs in the module (`crates/pxl-core/src/buddy.rs`), the TypeScript pool (`@xpute/core/ds/buddy.ts`) naming its blocks through it and keeping only what the module cannot reach, the plain regions past a range: **fixed** for what is allocated once and never freed (the change log, the scheduler's lanes, the mesher's scratch, the module's sixteen standing band stores; it refuses rather than spills, so a shortfall fails at startup), **page** for resident terrain and POI pages, **mesh** for what churns as the view moves. Blocks are what typed-array views are taken over. Everything the canvas reads each frame lives there as **lanes** (structure-of-arrays typed views): terrain pages, voxel bands, column run sets, baked meshes, the chunk table, decor instance matrices, the POI index, the badge atlas's slots, the object store's records and its derived index, and every registry that used to be a `Map` or a `Set` of objects (`IndexedMap`, `PageTable`); a table whose columns move together is one `Lanes` (`@xpute/core/ds/lanes.ts`), and a block with several spans is cut by `carver`. The allocator itself allocates nothing: its free lists are threaded through the free blocks. What stays in the JS heap is glue — the `Mesh`, `BufferAttribute` and `Group` three.js requires, React, and the handles that name a slot — measured at 30–40 MB of objects on a loaded page.
 
-The rules that came out of that move ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past its range the page and mesh sections still hand out plain regions the collector can reclaim, counted per section; a bake the mesh section refuses keeps its place and asks again next tick, and the mesh section's fill is a second trigger for reclaiming off-screen chunks. Beside the big memory sits the **little memory** (`module/world/sched/slab.ts`): fixed-size transferable slabs, made on demand and released when idle, for work that will leave the thread — a `WebAssembly.Memory` cannot be transferred, so a worker job travels in a slab and comes back the same way.
+The rules that came out of that move ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past its range the page section still hands out plain regions the collector can reclaim, which the module cannot read; the mesh section's blocks for builds come from the module's own pool and are refused past it, and a refused build keeps its place and asks again next tick, and the mesh section's fill is a second trigger for reclaiming off-screen chunks.
 
 ## Terrain Data and Streaming
 
@@ -218,22 +218,22 @@ memory budget over the retained meshes.
 The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
-The chunk scan and bake are stepped too — a row of columns, a few rows of
-masks or a few hundred boxes a call — and run, with the terrain layer's
-reading of a page and the volume it paints, through the Rust scan and
-mesher (`crates/pxl-core`, compiled by
+A chunk's build runs in the Rust core (`crates/pxl-core`, compiled by
 `crates/pxl-wasm` into one module with numeric exports and no bindgen, which
-imports the core memory: a run set is baked in the block it lives in and the
-mesh written into the block acquired for it, nothing copied). It is held byte
-for byte to the TypeScript mesher, which stays behind the dev setting
-`bake_path` as the reference; on a phone the Rust bake cost a third to a
-half as much per run and its longest step was 1–4 ms against 12–17
+imports the core memory): the node sends which tiers it lacks through a
+submission ring, the stage calls `pxl_tick` once a frame with the pending
+chunks in priority order and what is left of the budget, and the module makes
+the runs — straight from the terrain for a coarse tier with nothing placed,
+else by composing terrain and objects into a volume and scanning it — and
+bakes the tiers a step at a time, one scan and one bake open at once. Each
+mesh comes back through the completion ring in a block of the mesh section
+the node then owns; nothing is copied, and a block the pool refuses leaves
+the work where it is for a later tick. The TypeScript scan and mesher stay
+only as the references the module is held to byte for byte; on a phone the
+Rust bake cost a third to a half as much per run and its longest step was
+1–4 ms against 12–17
 ([issue/experiment/20260913-mesher-in-rust/](./issue/experiment/20260913-mesher-in-rust/)).
-A worker for the bake was built behind the same setting and measured not to
-help
-([issue/experiment/20260913-bake-worker-on-the-phone.md](./issue/experiment/20260913-bake-worker-on-the-phone.md));
-it stays as a measurement knob over the frame, port and link in
-`@xpute/core/ipc/`, with the little memory above as its transport. `module/world/sched/` also holds the fetch scheduler (a priority
+`module/world/sched/` also holds the fetch scheduler (a priority
 queue over a concurrency ceiling, aborting what falls out of a category's
 wishlist) and the **ledger**: a read-only ring of frames and tasks with a
 step table, per-job waits, a draw census and a GPU timer where one exists,

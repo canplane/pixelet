@@ -12,7 +12,7 @@
  */
 
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
-import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
+import { type DecorEligibility, type DecorKindSeed, type DecorRules, eligibility_of } from "./scatter.ts";
 
 // Arbitrary, fixed — only has to stay stable across sessions (see
 // DecorKindSeed's own doc comment); reusing @xpute/core's own SEED_SALT
@@ -55,9 +55,10 @@ export const TREE_KIND: DecorKindSeed = {
  * dirt. SPORTS was considered too (its own texture leans mint-green) but
  * left out: it's a maintained field, not natural ground, and reads wrong
  * with trees scattered across it. */
-export const is_tree_eligible: DecorEligibility = (land, water, structure, transport) => {
-  if (water !== cube_types.common.VOID) return false;
-  if (structure !== cube_types.common.VOID) return false;
-  if (transport !== cube_types.common.VOID) return false;
-  return land === cube_types.land.GREEN_LIGHT || land === cube_types.land.GREEN_DEEP || land === cube_types.land.BARE;
+export const TREE_RULES: DecorRules = {
+  land: [cube_types.land.GREEN_LIGHT, cube_types.land.GREEN_DEEP, cube_types.land.BARE],
+  water: "void",
+  structure: "void",
+  transport: "void",
 };
+export const is_tree_eligible: DecorEligibility = eligibility_of(TREE_RULES);

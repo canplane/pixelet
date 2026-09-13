@@ -6,7 +6,7 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { LodStep } from "@/render/lod.ts";
 import type { ColumnRunSet } from "./voxel_scan.ts";
 import { bake_chunk_mesh, type BakedChunkMesh, carve_visibility } from "./chunk_mesher.ts";
-import { CORE_BAKE, release_chunk_mesh } from "./core_bake.ts";
+import { CORE_BAKE, release_chunk_mesh } from "./core_build.ts";
 
 export type ChunkOffsets = {
   key: string;

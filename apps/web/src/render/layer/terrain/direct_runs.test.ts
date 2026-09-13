@@ -9,12 +9,11 @@
 
 import { assertEquals } from "@std/assert";
 
-import type { WorldLayer } from "../pipeline/contract.ts";
 import { alloc_chunk_volume, fill_chunk_column, release_chunk_volume } from "../pipeline/volume.ts";
 import { MaterialClass, NO_LAYER } from "../pipeline/voxel.ts";
 import { fill_column_runs, release_column_runs, scan_all_column_runs } from "../pipeline/voxel_scan.ts";
 import { bake_chunk_mesh } from "../pipeline/chunk_mesher.ts";
-import { CORE_BAKE, release_chunk_mesh } from "../pipeline/core_bake.ts";
+import { CORE_BAKE, release_chunk_mesh } from "../pipeline/core_build.ts";
 
 const SPAN = 64;
 /** A rolling hillside with a ridge: every column a different height. */
@@ -33,20 +32,13 @@ function via_scan() {
 }
 
 /** The direct path: one run per column, packed. */
-const direct: WorldLayer = {
-  name: "test-heightmap",
-  revision: () => [1],
-  paint: () => false,
-  runs: (_key, w) => {
+function via_direct() {
+  return fill_column_runs(SPAN, (w) => {
     for (let i = 0; i < SPAN * SPAN; i++) {
       w.column(i);
       w.run(FLOOR, ele[i] - 1, material(i));
     }
-    return true;
-  },
-};
-function via_direct() {
-  return fill_column_runs(SPAN, (w) => direct.runs!({ page_idx: 0n, page_off: 0n }, w));
+  });
 }
 
 Deno.test("direct runs - the same heightmap bakes to the same coarse mesh through both paths", () => {

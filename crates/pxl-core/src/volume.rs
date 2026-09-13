@@ -427,6 +427,40 @@ impl Volumes {
         self.free_ids.push(id);
     }
 
+    /// The memory the volumes' addresses are offsets into.
+    pub fn mem(&self) -> *mut u8 {
+        self.mem
+    }
+
+    pub fn mesh_pool(&self) -> usize {
+        self.mesh_pool as usize
+    }
+
+    /// Band `i` of volume `id` as the scan reads it, over the memory.
+    ///
+    /// # Safety
+    /// The views are valid until the volume is painted again or released.
+    pub unsafe fn band_view(&mut self, id: usize, i: usize) -> crate::scan::BandView<'static> {
+        let row = *self.band_row(id, i);
+        let mem = self.mem;
+        let at = |w: u32| mem.add(w as usize);
+        let voxels = BAND_VOXELS;
+        let n = row[4] as usize;
+        crate::scan::BandView {
+            band_z: row[0] as i32,
+            material: core::slice::from_raw_parts(at(row[1]) as *const u32, voxels),
+            layer_idx: core::slice::from_raw_parts(at(row[2]) as *const u8, voxels),
+            sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]) as *const u8, voxels * 4)),
+            extra: crate::scan::ExtraView {
+                col: core::slice::from_raw_parts(at(row[5]) as *const u32, n),
+                z: core::slice::from_raw_parts(at(row[6]) as *const i32, n),
+                material: core::slice::from_raw_parts(at(row[7]) as *const u32, n),
+                layer_idx: core::slice::from_raw_parts(at(row[8]), n),
+                sub: core::slice::from_raw_parts(at(row[9]) as *const u32, n),
+            },
+        }
+    }
+
     pub fn band_count(&self, id: usize) -> usize {
         self.volumes[id].as_ref().map_or(0, |v| v.bands.len())
     }

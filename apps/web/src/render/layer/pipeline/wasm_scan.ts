@@ -2,13 +2,13 @@
 
 /**
  * The whole-chunk scan through the Rust scan (crates/pxl-core/src/scan.rs),
- * with the stepped scan's contract (voxel_scan.ts): one open at a time, a
- * row of columns a step under the caller's budget, and a packed run set
- * out of the mesh section at the end — `starved` when the section has no
- * block for it, and the scan waits.
- *
- * The composite is the module's own volume (volume.ts), so the scan is
- * opened by its id and reads the bands where the module painted them.
+ * export by export, with the stepped scan's contract (voxel_scan.ts): one
+ * open at a time, a row of columns a step, and a packed run set out of the
+ * pool at the end — `starved` when the pool has no block for it. The harness
+ * the Rust scan is held byte for byte to the TypeScript one through
+ * (wasm_scan.test.ts); the chunks on screen are built by the module's own
+ * build (core_build.ts). The composite is the module's own volume, opened by
+ * its id.
  */
 
 import type { Block } from "@xpute/core/ds/buddy.ts";
@@ -21,27 +21,15 @@ import type { MeshPool } from "./wasm_bake.ts";
 export type WasmScanCursor = {
   done: boolean;
   starved: boolean;
-  /** The set's block was outside the core memory: this scan cannot go on
-   * in the module. Abort it and scan the volume the TypeScript way. */
-  spilled: boolean;
   set: ColumnRunSet | null;
 };
 
 export class WasmScanner {
   private open: WasmScanCursor | null = null;
-  /** Sets staged in the module's heap and copied out, for the ledger. */
-  staged = 0;
-
   constructor(private readonly pxl: PxlExports, private readonly pool: MeshPool) {}
 
   is_open(): boolean {
     return this.open !== null;
-  }
-
-  /** Whether the module can read `volume` where it is: every volume is the
-   * module's own now, so always. Kept as the question core_bake asks. */
-  reaches(_volume: ChunkVolume): boolean {
-    return true;
   }
 
   /** Opens a scan of `volume`, or null while one is open. The volume must
@@ -49,7 +37,7 @@ export class WasmScanner {
   begin(volume: ChunkVolume): WasmScanCursor | null {
     if (this.open !== null) return null;
     if (this.pxl.pxl_scan_begin_volume(volume.id) === 0) throw new Error("render: the wasm scan was open with no cursor naming it");
-    this.open = { done: false, starved: false, spilled: false, set: null };
+    this.open = { done: false, starved: false, set: null };
     return this.open;
   }
 
@@ -64,22 +52,9 @@ export class WasmScanner {
       const block = this.pool.try_acquire(bytes);
       cursor.starved = block === null;
       if (block === null) return false;
-      if (block.buf !== this.pxl.memory.buffer) {
-        // Out of the module's reach: staged in its heap and copied out, or
-        // too large for that and scanned the TypeScript way (wasm_bake.ts).
-        const staged = this.pxl.pxl_scan_set_staged(bytes);
-        if (staged === 0) {
-          this.pool.release(block);
-          cursor.spilled = true;
-          return false;
-        }
-        new Uint8Array(block.buf, block.byte_offset, bytes).set(new Uint8Array(this.pxl.memory.buffer, staged, bytes));
-        this.staged++;
-      } else {
-        this.pxl.pxl_scan_set(block.byte_offset, bytes);
-      }
-      const count = this.pxl.pxl_scan_finish();
-      cursor.set = carve_column_run_set(block, count, L2_BAND_CELL_SPAN);
+      if (block.buf !== this.pxl.memory.buffer) throw new Error("render: a run set block outside the core memory");
+      this.pxl.pxl_scan_set(block.byte_offset, bytes);
+      cursor.set = carve_column_run_set(block, this.pxl.pxl_scan_finish(), L2_BAND_CELL_SPAN);
       cursor.done = true;
       return true;
     }

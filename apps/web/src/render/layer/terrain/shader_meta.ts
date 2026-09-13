@@ -4,6 +4,7 @@ import type { u32, u8 } from "@xpute/core/kit/word.ts";
 import type { U8Array } from "@xpute/core/kit/array.ts";
 
 import { cube_colors, cube_types } from "@pxl/shared/spec/cell/cube.ts";
+import { cube_ids, type CubeColorId } from "@pxl/shared/spec/cell/mod.ts";
 import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { LAND_BASE_TYPE } from "@pxl/shared/bake/ground.ts";
 
@@ -214,6 +215,23 @@ function build_flat_layer_index_lookup(meta: readonly TerrainLayerMeta[]): FlatL
 }
 
 export const GROUND_LAYER_INDEX_LOOKUP_FLAT: FlatLayerIndexLookup = build_flat_layer_index_lookup(GROUND_LAYER_META);
+
+/** Object colors, numbered starting right after every ground layer —
+ * tex_array.ts builds the array in this order, and object/adapter.ts reads
+ * this to resolve VoxelMaterial.layer_idx the same way terrain/adapter.ts
+ * reads GROUND_LAYER_INDEX_LOOKUP_FLAT. Here rather than beside the
+ * texture because it is a numbering, not a texture: what a placed cube's
+ * layer is must be answerable where no canvas exists.
+ *
+ * cube_ids (cell/mod.ts) is only ever the original 15 flat colors — the
+ * terrain-styled catalog (2026-09-06's own cell/mod.ts, derived from
+ * cube_types' own land/water/structure/transport channels) is a completely
+ * separate numbering, deliberately never mixed into this one: those ids are
+ * meant to look identical to an existing ground layer, not get a new one of
+ * their own — object/adapter.ts's own resolve_solid_material reads
+ * GROUND_LAYER_INDEX_LOOKUP_FLAT directly for them instead of this table, so
+ * cube_ids never needs filtering here. */
+export const OBJECT_LAYER_IDX: Readonly<Partial<Record<CubeColorId, u32>>> = Object.fromEntries(cube_ids.map((color_id, i) => [color_id, GROUND_LAYER_META.length + i]));
 
 /** Per-channel `float type -> float layer_index` functions — the array
  * equivalent of build_color_mappings' get_color_ch_X, generated from the

@@ -21,7 +21,7 @@ import { Vector } from "@xpute/core/ds/arena.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
-import type { ChangeLog, Cursor, Topic } from "./change.ts";
+import type { ChangeJournal, Cursor, Topic } from "./change.ts";
 
 type Listener = () => void;
 /** A changed key, or null: the pump lost its place, re-read the topic. */
@@ -40,7 +40,7 @@ export class ChangeWaker {
   private readonly topic_lists: TopicListener[][] = [];
   private readonly topic_seen: IndexedMap<bigint>[] = [];
 
-  constructor(private readonly log: ChangeLog, alloc: TypedAlloc = HEAP_ALLOC) {
+  constructor(private readonly log: ChangeJournal, alloc: TypedAlloc = HEAP_ALLOC) {
     this.cursor = log.head;
     for (let t = 0; t < log.topics; t++) {
       this.keys.push(new IndexedMap(I64_KEYS, 16, alloc));

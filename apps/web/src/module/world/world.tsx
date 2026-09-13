@@ -47,7 +47,9 @@ import { PoiLayer } from "./poi/poi_layer.tsx";
 // camera/ray.ts's own raycast can composite the exact same layer stack
 // instead of a second, possibly-drifting registration.
 import { ChunkStage, LodSchedulerProvider } from "./chunk_stage.tsx";
-import { CHUNK_STAGE_LAYERS } from "./stack.ts";
+// The layers teach the module their tables when imported; the chunks it
+// builds read them.
+import "./stack.ts";
 
 // Dynamic rather than a plain top-level import so the character/pet model
 // code (GLTFLoader, skinning, animation mixer — otherwise unused anywhere
@@ -235,7 +237,7 @@ export const World = forwardRef<THREE.Group>((_props, ref) => {
 
             <AnchorSpace registry={registry}>
               <LodSchedulerProvider>
-                <ChunkStage stack={CHUNK_STAGE_LAYERS} />
+                <ChunkStage />
               </LodSchedulerProvider>
 
               <HoverCursor />

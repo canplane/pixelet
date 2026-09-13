@@ -92,7 +92,7 @@ pub struct PageView<'a> {
 }
 
 /// JavaScript's Math.round: ties toward +∞, where Rust's go away from zero.
-fn js_round(x: f64) -> f64 {
+pub fn js_round(x: f64) -> f64 {
     if x.fract() == -0.5 {
         x.ceil()
     } else {

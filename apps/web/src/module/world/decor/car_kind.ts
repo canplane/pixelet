@@ -15,7 +15,7 @@
  */
 
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
-import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
+import { type DecorEligibility, type DecorKindSeed, type DecorRules, eligibility_of } from "./scatter.ts";
 
 const CAR_KIND_TAG = 0xca5_eed0_0003_dec0n;
 
@@ -39,7 +39,10 @@ export const CAR_KIND: DecorKindSeed = {
  * counts) as that road type regardless of whatever land/water/structure
  * value happens to sit underneath it. ROAD_DEFAULT and PEDESTRIAN are
  * deliberately excluded — see this file's own doc comment. */
-export const is_car_eligible: DecorEligibility = (_land, _water, _structure, transport) =>
-  transport === cube_types.transport.ROAD_MOTORWAY ||
-  transport === cube_types.transport.ROAD_PRIMARY ||
-  transport === cube_types.transport.ROAD_SECONDARY;
+export const CAR_RULES: DecorRules = {
+  land: "any",
+  water: "any",
+  structure: "any",
+  transport: [cube_types.transport.ROAD_MOTORWAY, cube_types.transport.ROAD_PRIMARY, cube_types.transport.ROAD_SECONDARY],
+};
+export const is_car_eligible: DecorEligibility = eligibility_of(CAR_RULES);

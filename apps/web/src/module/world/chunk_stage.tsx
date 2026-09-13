@@ -25,59 +25,33 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import type { U32Array } from "@xpute/core/kit/array.ts";
-import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { FROM_L3_IDX, L4_BASE, L4_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useMapStore } from "@/module/map/store.ts";
 import { useAnchorRegistry } from "@/module/world/anchor/context.tsx";
-import { Vector } from "@xpute/core/ds/arena.ts";
 
-import { chunk_retained_bytes, ChunkNode, lod_build_stats, lod_scheduler, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
-import { AnchorNode } from "@/module/world/anchor/node.tsx";
+import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
+import { CORE_BUILD, FRAME } from "@/render/layer/pipeline/core_build.ts";
+import type { AnchorRegistry } from "@/module/world/anchor/registry.ts";
+import { world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { decor_field } from "@/module/world/decor/field.ts";
-import { tile_pages, useTileStore } from "@/module/world/terrain/store.ts";
+import { tile_pages } from "@/module/world/terrain/store.ts";
 import { poi_pages } from "@/module/world/poi/store.ts";
 import { fetch_pending_count } from "@/module/world/sched/fetch_scheduler.ts";
 import { draw_census_install, draw_census_take } from "@/module/world/sched/draw_census.ts";
 import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/module/world/sched/gpu_timer.ts";
 import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/ledger.ts";
-import { useTick } from "@/module/world/sched/tick.ts";
-import { lead_point, priority_order } from "@/module/world/sched/priority.ts";
-import { BLEND_ACTIVE, IN_FRUSTUM, PENDING, SETTLING, VISIBILITY_CHANGED } from "@/module/world/sched/chunk_table.ts";
-import { little_slabs } from "@/module/world/sched/slab.ts";
-import { bake_port } from "@/module/world/sched/bake_port.ts";
+import { HARD_SLACK_MS, useTick } from "@/module/world/sched/tick.ts";
+import { lead_point } from "@/module/world/sched/priority.ts";
 import { useFrameRefs } from "@/module/world/frame/context.tsx";
-import { useRangeAnchor } from "@/module/world/frame/use_range_anchor.ts";
-import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
+import { range_anchor_of, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
 import { post_cfg, render_cfg } from "@/module/world/environment/config.ts";
 import { set_lod_projection } from "@/render/lod.ts";
-import type { WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
-import { CORE_ALLOC, core_pool_stat, CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
+import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { update_frustum } from "@/render/chunk_lod.ts";
 
-const LOD_RECHECK_INTERVAL: f64 = 0.15;
-const LOD_MAX_CHUNKS_PER_FRAME: u32 = 8;
-/* Releases are the lowest class and stay there (sched/priority.ts), but a
- * class that only ever runs after every visible build never runs at all while
- * a zoom-out keeps the queue full: 403 of them waited 10.4 s in the
- * 2026-09-12 capture while heap peaked at 522MB, and a pending release is
- * holding a mesh the pool could hand to someone else. So they get a small
- * share of their own rather than being aged up into the classes above. */
-const RELEASE_MAX_PER_FRAME: u32 = 2;
-/* How many off-screen chunks may give their built work back in one frame
- * once the memory budget is exceeded. Reclaiming is cheap (pool returns),
- * but the budget is a ceiling to drift back under, not a line to snap to. */
-const RECLAIM_MAX_PER_FRAME: u32 = 16;
-/** The mesh section's live share past which off-screen chunks are reclaimed
- * whatever the retain budget says. Below the range, so a bake in flight can
- * still land; a knob until a phone reading sets it. */
-const MESH_PRESSURE = 0.9;
-function mesh_section_pressed(): boolean {
-  const { bytes, pool } = CORE_SECTIONS.mesh;
-  return pool.stat.live_bytes > bytes * MESH_PRESSURE;
-}
 /* The per-pass budgets that used to sit here — a soft allowance per pass and
  * a 16ms hard ceiling each — are gone. Both passes now draw on the one
  * FrameBudget the tick hands every phase (sched/tick.ts), so the frame's
@@ -135,136 +109,57 @@ function pool_sample(): { live_mb: number; idle_mb: number; hits: number; misses
  * progress rule guarantees a step a frame, not which one, so the waits are
  * what show whether something is being passed over indefinitely. */
 function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
-  const now = performance.now();
-  const { flags, pending_since } = lod_scheduler;
-  let in_frustum: u32 = 0, settling: u32 = 0, blend_active: u32 = 0;
-  let offscreen_pending: u32 = 0;
-  let oldest_release_ms: f64 = 0;
-  let oldest_visible_ms: f64 = 0;
-  for (let i = 0; i < lod_scheduler.len; i++) {
-    const f = flags[i];
-    if (f & IN_FRUSTUM) in_frustum++;
-    if (f & SETTLING) settling++;
-    if (f & BLEND_ACTIVE) blend_active++;
-    if ((f & PENDING) === 0 || pending_since[i] < 0) continue;
-    const waited = now - pending_since[i];
-    if (f & IN_FRUSTUM) {
-      if (waited > oldest_visible_ms) oldest_visible_ms = waited;
-    } else {
-      offscreen_pending++;
-      if (waited > oldest_release_ms) oldest_release_ms = waited;
-    }
-  }
-  return { in_frustum, settling, blend_active, offscreen_pending, oldest_release_ms, oldest_visible_ms };
-}
-
-/** Slot lists a frame sorts and walks: what to recheck, what to commit on
- * each side of the frustum, what to reclaim. Scratch, so a pass over
- * thousands of chunks allocates nothing. */
-const SLOTS = { init_cap: 4096, alloc: CORE_ALLOC } as const;
-const s_eligible = new Vector(Uint32Array, SLOTS);
-const s_visible = new Vector(Uint32Array, SLOTS);
-const s_offscreen = new Vector(Uint32Array, SLOTS);
-/** The frustum as six planes of (nx, ny, nz, constant), the form
- * ChunkTable.refresh tests spheres against. */
-const s_planes = new Float64Array(24);
-
-function sorted(slots: Vector<U32Array>, order: (a: u32, b: u32) => number): U32Array {
-  const view = slots.mem.subarray(0, slots.len);
-  view.sort(order);
-  return view;
-}
-
-type PageChunksProps = { page_idx: IVec; stack: WorldLayerStack; range_anchor: IVec };
-
-/** A chunk's absolute base from its page and its page-local offset — the
- * same value ChunkNode registers itself under. */
-function chunk_base(page_base: IVec, offset: { base_x: number; base_y: number }): IVec {
-  return ivec.add(page_base, ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n));
-}
-
-/** The live nodes of one page, copied out: disposing removes slots. */
-function this_page_nodes(page_idx: IVec): ChunkNode[] {
-  return lod_scheduler.handles.filter((node) => node.page_idx === page_idx);
+  const c = CORE_BUILD.census();
+  return {
+    in_frustum: c.in_frustum,
+    settling: c.settling,
+    blend_active: c.blend_active,
+    offscreen_pending: c.offscreen_pending,
+    oldest_release_ms: c.oldest_release_ms,
+    oldest_visible_ms: c.oldest_visible_ms,
+  };
 }
 
 /**
- * One page's worth of chunks, created and destroyed imperatively.
- *
- * This is where React stops. A page is a handful of components; its ~256
- * chunks are ChunkNodes (chunk_node.ts), plain objects hung off one group.
- * The rendered tree used to reach all the way down — a component per chunk,
- * per LOD role, and per decor variant, thousands of them re-reconciled
- * whenever a layout changed — which bought nothing (a chunk is described by
- * no props and reads no other chunk's state) and cost the deferral that made
- * chunk memory unsafe to reason about.
- *
- * `offsets` changes only when the page or the range anchor does, so the diff
- * below is normally empty; when it does change it is a set difference by
- * chunk key, not a reconciliation.
+ * The anchor groups the mounted chunks hang under, one a page: an L4 anchor
+ * group from the registry, and a holder at the page's base inside it. Made
+ * with a page's first chunk and let go with its last. The module decides
+ * which chunks exist (crates/pxl-core/src/sched.rs, the range mount); this
+ * only gives each a place in the scene.
  */
-const PageChunks = memo(({ page_idx, stack, range_anchor }: PageChunksProps) => {
-  const page_base = FROM_L3_IDX(page_idx);
-  const camera = useThree((state) => state.camera);
-  const anchor_registry = useAnchorRegistry();
-  const group = useMemo(() => {
-    const g = new THREE.Group();
-    g.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
-    return g;
-  }, [page_idx]);
-  // Two sets, not one: what to build, and what to keep once built. A chunk
-  // that merely drifted past the range is left alone until it is well past
-  // it — see RANGE_HYSTERESIS. Both are chunk bases: a chunk's identity in
-  // the scheduler table, which is where this diff asks what is live.
-  const offsets = useMemo(() => in_range_chunks(page_base, range_anchor), [page_base, range_anchor]);
-  const keep = useMemo(
-    () =>
-      new Set(
-        in_range_chunks(page_base, range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS).map((offset) => chunk_base(page_base, offset)),
-      ),
-    [page_base, range_anchor],
-  );
+type PageHolder = { holder: THREE.Group; anchor_idx: IVec; count: u32 };
+const page_holders = new Map<IVec, PageHolder>();
+const mounted_page = new Map<u32, IVec>();
 
-  useLayoutEffect(() => {
-    for (const node of this_page_nodes(page_idx)) {
-      if (!keep.has(lod_scheduler.base_of(node.slot))) node.dispose();
-    }
-    for (const offset of offsets) {
-      if (lod_scheduler.find(chunk_base(page_base, offset)) >= 0) continue;
-      const node = new ChunkNode({ page_idx, offset, stack, camera, anchor_registry });
-      group.add(node.group);
-    }
-  }, [offsets, keep, page_idx, page_base, stack, camera, anchor_registry, group]);
+function mount_chunk(registry: AnchorRegistry, id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
+  let page = page_holders.get(page_idx);
+  if (!page) {
+    const page_base = FROM_L3_IDX(page_idx);
+    const anchor_idx = L4_IDX(page_base);
+    const holder = new THREE.Group();
+    holder.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
+    const local = ivec.sub(page_base, L4_BASE(page_base));
+    holder.position.set(ivec.to_real(ivec.X(local)), ivec.to_real(ivec.Y(local)), ivec.to_real(ivec.Z(local)));
+    registry.link(anchor_idx).add(holder);
+    page = { holder, anchor_idx, count: 0 };
+    page_holders.set(page_idx, page);
+  }
+  page.count++;
+  mounted_page.set(id, page_idx);
+  const node = new ChunkNode({ page_idx, offset: { key: `${base_x},${base_y}`, base_x, base_y }, id });
+  page.holder.add(node.group);
+}
 
-  // Destruction on unmount is deferred by one microtask, and a mount that
-  // arrives in that window cancels it. StrictMode replays every mount as
-  // mount, cleanup, mount, and a cleanup that destroyed the nodes made the
-  // second mount rebuild the whole page from the scan up — up to 256 chunks a
-  // page, on every page the view entered, in development only. Measured
-  // 2026-09-12: with StrictMode on, a zoomed-out pan unmounted five pages and
-  // disposed up to 510 nodes a frame; with it off, none. A real unmount is
-  // never followed by a mount in the same microtask, so it still destroys
-  // exactly as before. AnchorNode survives the same replay for the same
-  // reason (its own doc comment).
-  const teardown = useRef<Promise<void> | null>(null);
-  useEffect(() => {
-    teardown.current = null;
-    return () => {
-      const pending = Promise.resolve().then(() => {
-        if (teardown.current !== pending) return;
-        for (const node of this_page_nodes(page_idx)) node.dispose();
-      });
-      teardown.current = pending;
-    };
-  }, [page_idx]);
-
-  return (
-    <AnchorNode i={page_base}>
-      <primitive object={group} />
-    </AnchorNode>
-  );
-});
-PageChunks.displayName = "PageChunks";
+function unmount_chunk(registry: AnchorRegistry, id: u32): void {
+  const page_idx = mounted_page.get(id);
+  if (page_idx === undefined) return;
+  mounted_page.delete(id);
+  const page = page_holders.get(page_idx)!;
+  if (--page.count > 0) return;
+  page.holder.removeFromParent();
+  registry.unlink(page.anchor_idx);
+  page_holders.delete(page_idx);
+}
 
 /**
  * Runs the scheduler's passes over lod_scheduler's lanes — mounted once
@@ -279,8 +174,6 @@ PageChunks.displayName = "PageChunks";
  * longer exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const scheduler = lod_scheduler;
-  const lod_elapsed = useRef(LOD_RECHECK_INTERVAL);
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const { gl } = useThree();
   const anchor_registry = useAnchorRegistry();
@@ -333,28 +226,16 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
   useTick("visible", ({ state, delta, budget }) => {
     if (import.meta.env.DEV) gpu_timer_begin();
-    const table = scheduler;
     visible_pass.current = null;
-    if (table.len === 0) return;
-    lod_elapsed.current += delta;
-    const full_recheck = lod_elapsed.current >= LOD_RECHECK_INTERVAL;
-    if (full_recheck) lod_elapsed.current = 0;
     update_frustum(frustum, state.camera, projection);
-    for (let p = 0; p < 6; p++) {
-      const plane = frustum.planes[p];
-      s_planes[p * 4] = plane.normal.x;
-      s_planes[p * 4 + 1] = plane.normal.y;
-      s_planes[p * 4 + 2] = plane.normal.z;
-      s_planes[p * 4 + 3] = plane.constant;
-    }
-    // The tier criterion is a screen-space one (render/lod.ts), so it needs
-    // the projection it measures against. Cheap, and a no-op while the
-    // viewport and the field of view hold still.
+    // The tier criterion is a screen-space one (render/lod.ts), and the
+    // other layers that read it (decor, badges) read it from here; the
+    // module takes the same projection through the frame.
     set_lod_projection(state.size.height, (state.camera as THREE.PerspectiveCamera).fov);
 
-    // Where the camera is heading — see sched/priority.ts. Both passes below
-    // order by it; the tier each chunk picks still comes from the camera as
-    // drawn.
+    // Where the camera is heading — see sched/priority.ts. The module orders
+    // the work by it; the tier each chunk picks still comes from the camera
+    // as drawn.
     const target = useMapStore.getState().map_center;
     const local_frame = local_world_frame_ref.current;
     const origin = anchor_registry.cur_map_origin;
@@ -372,130 +253,62 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       lead.copy(state.camera.position);
     }
 
-    // Every chunk, every frame, before anything is sorted: this is only
-    // measurement, and it is what the orders below read. The decision pass
-    // under it is rationed, so sorting on what that pass last wrote meant
-    // sorting on numbers up to LOD_RECHECK_INTERVAL old — during a zoom-out,
-    // the difference between "the middle of the screen matters" and "it did
-    // not exist yet". One matrix for every chunk: the anchor root's, which
-    // is the frame every chunk group is a pure translation inside.
+    // The frame, written where the module reads it (core_build.ts's FRAME),
+    // then the module's pass over every chunk: measure, recheck, commit,
+    // build and reclaim, under what is left of the budget. One matrix for
+    // every chunk: the anchor root's, the frame every chunk group is a pure
+    // translation inside.
+    const f = CORE_BUILD.frame;
+    f.set(anchor_registry.root.matrixWorld.elements, FRAME.root);
+    f[FRAME.origin] = ivec.to_real(ivec.X(origin));
+    f[FRAME.origin + 1] = ivec.to_real(ivec.Y(origin));
+    f[FRAME.origin + 2] = ivec.to_real(ivec.Z(origin));
+    for (let p = 0; p < 6; p++) {
+      const plane = frustum.planes[p];
+      f[FRAME.planes + p * 4] = plane.normal.x;
+      f[FRAME.planes + p * 4 + 1] = plane.normal.y;
+      f[FRAME.planes + p * 4 + 2] = plane.normal.z;
+      f[FRAME.planes + p * 4 + 3] = plane.constant;
+    }
     const cam = state.camera.position;
-    table.refresh(
-      anchor_registry.root.matrixWorld.elements,
-      ivec.to_real(ivec.X(origin)),
-      ivec.to_real(ivec.Y(origin)),
-      ivec.to_real(ivec.Z(origin)),
-      s_planes,
-      cam.x,
-      cam.y,
-      cam.z,
-      lead.x,
-      lead.y,
-      lead.z,
-    );
-    // One ordering for both passes of this frame, and one `now` for both:
-    // ageing keys that moved mid-sort would make the comparator inconsistent.
-    const order = priority_order(table, performance.now());
+    f[FRAME.camera] = cam.x;
+    f[FRAME.camera + 1] = cam.y;
+    f[FRAME.camera + 2] = cam.z;
+    f[FRAME.lead] = lead.x;
+    f[FRAME.lead + 1] = lead.y;
+    f[FRAME.lead + 2] = lead.z;
+    f[FRAME.viewport_h] = state.size.height;
+    f[FRAME.fov_deg] = (state.camera as THREE.PerspectiveCamera).fov;
+    f[FRAME.delta_s] = delta;
+    f[FRAME.budget_ms] = budget.remaining();
+    f[FRAME.hard_slack_ms] = HARD_SLACK_MS;
+    f[FRAME.pixel_dither] = useSettingsStore.getState().pixel_dither ? 1 : 0;
+    f[FRAME.retain_budget_bytes] = RETAIN_BUDGET_BYTES;
+    // The range the module mounts chunks within, from the chunk the map
+    // centre is in: render/chunk_range.ts's anchor, radius and hysteresis.
+    const range_anchor = target ? range_anchor_of(target.i) : null;
+    f[FRAME.has_anchor] = range_anchor === null ? 0 : 1;
+    f[FRAME.anchor_x] = range_anchor === null ? 0 : ivec.to_real(ivec.X(range_anchor));
+    f[FRAME.anchor_y] = range_anchor === null ? 0 : ivec.to_real(ivec.Y(range_anchor));
+    f[FRAME.render_dist] = render_cfg.CHUNK_RENDER_DIST;
+    f[FRAME.range_hysteresis] = RANGE_HYSTERESIS;
+    f[FRAME.show_decor] = useSettingsStore.getState().show_decor ? 1 : 0;
 
-    // The lists this frame walks, in one pass over the flag lane: the scene
-    // nodes whose visibility moved, the chunks to recheck, and the pending
-    // work on each side of the frustum.
-    const flags = table.flags;
-    const handles = table.handles;
-    s_eligible.truncate(0);
-    s_visible.truncate(0);
-    s_offscreen.truncate(0);
-    let pending_total: u32 = 0;
-    for (let i = 0; i < table.len; i++) {
-      const f = flags[i];
-      if (f & VISIBILITY_CHANGED) {
-        handles[i].group.visible = (f & IN_FRUSTUM) !== 0;
-        flags[i] = f & ~VISIBILITY_CHANGED;
-      }
-      if (full_recheck || (f & (BLEND_ACTIVE | SETTLING)) !== 0) s_eligible.push(i);
-      if (f & PENDING) {
-        pending_total++;
-        if (f & IN_FRUSTUM) s_visible.push(i);
-        else s_offscreen.push(i);
-      }
-    }
-
-    const recheck_t0 = import.meta.env.DEV ? performance.now() : 0;
-    // Same cooperative shape as the commit loop below: the first eligible
-    // chunk this frame always runs (forward progress guaranteed even on a
-    // slow frame), the rest are time-boxed. Profiled: during a fast zoom,
-    // settling/blend_active can both spike into the dozens at once, and
-    // rechecking every one of them every single frame cost up to ~23ms by
-    // itself — a stale blend/settling flag for one skipped frame is a much
-    // smaller visual cost than that.
-    //
-    // Sorted by the same priority_order the commit loop below sorts pending
-    // by — one shared notion of priority, not two — and filtered to this
-    // frame's eligible chunks before sorting: on all but a full_recheck
-    // frame only the blend_active/settling subset needs anything done.
-    // Distance alone orders it; an "urgent" tier for fresh chunks backfired
-    // under sustained camera movement, where the leading edge mints new
-    // chunks without end and an older, nearer, still-pending one starves.
-    budget.run(sorted(s_eligible, order), (slot) => {
-      handles[slot].recheck();
-      return true;
-    });
-
-    // A chunk whose recheck the budget skipped still carries last frame's
-    // flag and still needs a repaint scheduled for it, so this is read off
-    // the lane, not off what ran.
-    const blend_active = table.count(BLEND_ACTIVE) > 0;
-    const recheck_ms = import.meta.env.DEV ? performance.now() - recheck_t0 : 0;
-
-    const commit_t0 = import.meta.env.DEV ? performance.now() : 0;
-    // Visible builds/refinements win; pending work outside the frustum only
-    // drops a formerly visible chunk's derived surface and GPU buffers. The
-    // slot holder goes first whatever its distance (chunk_table.ts's
-    // HOLDS_SLOT). commit() returning false means "nothing to do after all"
-    // — it neither counts toward LOD_MAX_CHUNKS_PER_FRAME nor arms the
-    // deadline, which is what run_under_budget's own falsy-step rule
-    // preserves. The commit pass gets what the recheck pass left, not a
-    // budget of its own. Visible work takes the frame's steps; releases get
-    // their own small guaranteed share out of what is left. run_under_budget
-    // always lets the first item of a pass do work, so a release lands every
-    // frame even on a frame the visible pass filled — which is the whole
-    // point of a guaranteed share.
-    bake_port.begin_tick();
-    const step = (slot: u32) => handles[slot].commit(budget);
-    const committed: u32 = budget.run(sorted(s_visible, order), step, { max_steps: LOD_MAX_CHUNKS_PER_FRAME }).ran +
-      budget.run(sorted(s_offscreen, order), step, { max_steps: RELEASE_MAX_PER_FRAME }).ran;
-    // The memory budget: built work is kept off screen until what off-screen
-    // chunks hold is over RETAIN_BUDGET_BYTES, then reclaimed farthest first —
-    // `order` already sorts off-screen chunks that way. Bounded per frame
-    // like everything else, and a no-op while under. The mesh section's own
-    // fill is the second trigger: past MESH_PRESSURE of its range the pass
-    // reclaims whatever is off screen, under the retain budget or not, so
-    // the section stays inside the reservation while there is anything to
-    // give back — and a bake the section refused finds room next tick.
-    const over = () => chunk_retained_bytes().off > RETAIN_BUDGET_BYTES || mesh_section_pressed();
-    if (over()) {
-      s_offscreen.truncate(0);
-      const retained = table.retained;
-      for (let i = 0; i < table.len; i++) {
-        if ((flags[i] & IN_FRUSTUM) === 0 && retained[i] > 0) s_offscreen.push(i);
-      }
-      let freed = 0;
-      for (const slot of sorted(s_offscreen, order)) {
-        if (!over() || freed >= RECLAIM_MAX_PER_FRAME) break;
-        handles[slot].reclaim();
-        freed++;
-      }
-    }
+    const t0 = import.meta.env.DEV ? performance.now() : 0;
+    const draw = CORE_BUILD.tick();
+    const built = CORE_BUILD.stat();
+    lod_build_stats.scan_count = built.scans + built.direct;
+    lod_build_stats.direct_count = built.direct;
+    lod_build_stats.build_count = built.bakes;
     // After the commits, so a chunk's terrain and its decor reach the screen
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
     decor_field.update(origin);
-    // The little memory's idle release, on the same tick the big one's
-    // regions are judged on.
-    little_slabs.sweep();
-    const commit_ms = import.meta.env.DEV ? performance.now() - commit_t0 : 0;
-    if (committed > 0 || pending_total > committed || blend_active) state.invalidate();
-    if (import.meta.env.DEV) visible_pass.current = { pending_total, committed, recheck_ms, commit_ms };
+    if (draw) state.invalidate();
+    if (import.meta.env.DEV) {
+      const c = CORE_BUILD.census();
+      visible_pass.current = { pending_total: c.pending, committed: c.committed, recheck_ms: 0, commit_ms: performance.now() - t0 };
+    }
   }, "chunks");
 
   // The ledger, after every other phase has run, so `sched_ms` is the whole
@@ -558,7 +371,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         fx_passes,
         mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
         lod: {
-          chunks: scheduler.len,
+          chunks: chunk_nodes.size,
           pending: pending_lod_total_cnt,
           ...lod_census(),
         },
@@ -588,39 +401,40 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export type ChunkStageProps = { stack: WorldLayerStack };
+export type ChunkStageProps = Record<string, never>;
 
-/** Renders terrain/objects AND every decor kind together — see this file's
- * own top doc comment and decor_layer.ts's for why decor no longer has its
- * own top-level component (DecorLayer, retired 2026-09-05). Decor models are
- * not passed in either: decor/asset_store.ts owns them and every ChunkNode
- * subscribes to it directly. */
-export const ChunkStage = memo(({ stack }: ChunkStageProps) => {
-  const tile_revision = useTileStore((state) => state.revision);
-
-  // tile_revision: the keys live in tile_pages; the revision is what moves.
-  const tiles = useMemo(() => Array.from(tile_pages.keys()), [tile_revision]);
-  const range_anchor = useRangeAnchor();
-  // Every page the render range reaches, nearest first, that has a tile to
-  // draw from. A page whose tile has not arrived contributes nothing and is
-  // simply not mounted; which chunks inside a mounted page become scene
-  // objects is in_range_chunks' own decision.
-  const visible_pages = useMemo(() => {
-    if (range_anchor === null) return tiles;
-    const have = new Set(tiles);
-    // The same hysteresis one level up: a page is kept mounted while any
-    // chunk of it could still be kept, so crossing the range by metres never
-    // destroys a page's worth of built chunks.
-    return pages_in_radius(range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS)
-      .filter(({ page_idx }) => have.has(page_idx))
-      .map(({ page_idx }) => page_idx);
-  }, [tiles, range_anchor]);
-
-  if (range_anchor === null) return null;
-  return (
-    <group name="chunk-stage">
-      {visible_pages.map((page_idx) => <PageChunks key={page_idx.toString()} page_idx={page_idx} stack={stack} range_anchor={range_anchor} />)}
-    </group>
-  );
+/**
+ * Tells the module which pages have a terrain tile, and makes and drops the
+ * nodes of the chunks it mounts from them. Everything else — which chunks,
+ * when — is the module's, from the range anchor the visible pass writes
+ * into the frame. Decor models are not passed in: decor/asset_store.ts owns
+ * them and every ChunkNode subscribes to it directly.
+ */
+export const ChunkStage = memo((_: ChunkStageProps) => {
+  const anchor_registry = useAnchorRegistry();
+  useLayoutEffect(() => {
+    CORE_BUILD.mounts = {
+      on_mount: (id, page_idx, base_x, base_y) => mount_chunk(anchor_registry, id, page_idx, base_x, base_y),
+      on_unmount: (id) => unmount_chunk(anchor_registry, id),
+    };
+    for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, true);
+    const off = world_wakers.subscribe_topic(WorldTopic.TERRAIN_PAGE, (key) => {
+      if (key === null) {
+        for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, true);
+        return;
+      }
+      const page_idx = BigInt.asUintN(64, key);
+      CORE_BUILD.page(page_idx, tile_pages.has(page_idx));
+    });
+    // The stage leaving takes its pages out of the range, and the module
+    // unmounts their chunks on the next tick. Nothing is disposed here: a
+    // StrictMode replay puts every page back before that tick, and the
+    // module then has nothing to unmount and nothing to mount again.
+    return () => {
+      off();
+      for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, false);
+    };
+  }, [anchor_registry]);
+  return null;
 });
 ChunkStage.displayName = "ChunkStage";

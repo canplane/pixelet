@@ -34,21 +34,78 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the channels' override, held cell for cell to the TypeScript adapter by
      terrain.test.ts; paint 1.8x and the direct path 2.8x on V8), reading a
      page's lanes where the client keeps them and painting the module's own
-     volume. Still TypeScript: the compositor's stack, the object layer's
-     paint — it walks the object store's records, and goes with the store —
-     the direct path's writer (`fill_column_runs`, fed by the module's
-     sampling for terrain) and the raycast's per-column `merge_column_runs`
-     over the module's bands. Which thread it
-     runs on is measured when it exists: the worker was tried on the phone
-     and bought nothing, because the stepped bake already yields and the
-     fill-in cost is elsewhere
-     ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)).
+     volume. Then the object store and, with it, the object layer's paint
+     (crates/pxl-core/src/{sparse_tree,object}.rs, held entry for entry and
+     voxel for voxel to the TypeScript by store_reference.test.ts), the
+     direct path's writer (the scan's scratch, the terrain's runs written
+     inside the module) and the raycast's column walk (the scan's own,
+     read as lanes). Then the chunks' builds themselves (2026-09-14,
+     crates/pxl-core/src/build.rs, held byte for byte to the TypeScript
+     pipeline by core_build.test.ts): the node says which tiers it lacks,
+     and the module makes the runs — the direct way, or by composing terrain
+     and objects into a volume and scanning it — bakes the tiers under the
+     frame's budget in one `pxl_tick`, and hands each mesh over in a block of
+     the mesh section. Retired with it, to
+     `archive/20260914-ts-build-paths`: the TypeScript fallback for a trapped
+     module, the `bake_path` setting's stepped and worker paths (the worker
+     had been measured to buy nothing,
+     [experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)),
+     the bake port and its little slabs, and staging a mesh past the core
+     memory: a block the pool refuses leaves the work where it is. The
+     TypeScript scan, mesher and volume readers stay only as the references
+     the tests hold the module to. Then the scheduler (2026-09-14,
+     crates/pxl-core/src/{sched,lod}.rs): the chunk table, the frustum test,
+     the LOD criterion and its blends, the priority order, the commits, the
+     tier cache and the retain budget's reclaim, over a frame the glue
+     writes where the module reads it; the node is a sink for what the
+     module decides. Then the world's change log (crates/pxl-core/src/change.rs):
+     the journal and the revisions are the module's, read as views; the
+     object store bumps its column and cell topics inside its reindex, and
+     the sources still in TypeScript — the page tables, decor's assets, the
+     eraser's hide — bump through an export. Then the range mount: which
+     chunks exist is the module's, from the range anchor, the render
+     distance and its hysteresis in the frame and the pages with a tile
+     (held to render/chunk_range.ts's in_range_chunks by
+     core_sched.test.ts); the stage makes a node and an anchor holder for a
+     chunk the module mounts, and drops them when it unmounts. Then decor's
+     build (2026-09-14, crates/pxl-core/src/decor.rs, held instance for
+     instance to decor_layer.ts's build_decor_instances by
+     core_decor.test.ts — the scatter's streams bit for bit, splitmix64
+     drawn as JavaScript rounds it): the kinds are taught with their rules
+     as data (a channel is any type, void, or one of a list), the module
+     builds a tier's decor beside the tier and hands it over as one block of
+     lanes per (kind, variant) before the layout, a decor-only change
+     (a tree placed, the eraser's hide, the setting) rebuilds it with
+     `pxl_decor_now` and tells the layout again with the cubes left
+     attached, and the block goes with the tier's eviction. The node holds
+     blocks; the field reads their groups as views. Then the raycast
+     (2026-09-14, crates/pxl-core/src/raycast.rs, held box for box and face
+     for face to camera/ray.ts's chunk walk over chunk_raycast.ts by
+     core_raycast.test.ts): the chunk DDA, the cell DDA and the slab test
+     over the scan's column walk, and compositor.ts's little cache of
+     composites — now the module's, keyed by the chunk and the count its
+     sources were told, composed of the real set with no hover edits — over
+     the chunks the scheduler holds. Retired to `archive/20260914-ts-raycast`:
+     the TypeScript walk of the world, the ray LRU with its layer
+     revisions, and the temporary composite for a drawn build. The
+     TypeScript composite and the chunk walk stay as the references.
+     What is left outside the module: the scene — three.js meshes and
+     instanced decor fed from the module's blocks, and decor's hit test
+     against those meshes (decor_hit.ts) — the elevation sample the hover's
+     corner takes (world_hover_pvf3 over terrain/elevation.ts), the sources
+     (the page tables, the object store's persistence, the assets) and the
+     UI. The scene and decor's hit test go with three; the elevation sample
+     is a read of the module's terrain when the hover cursor is rewritten.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
-     The rings are not built yet: the bake is still called export by export.
+     Built 2026-09-14 (crates/pxl-core/src/ring.rs, @xpute/core/ipc/ring.ts):
+     a submission ring and a completion ring, a pair in the module's heap,
+     64-byte entries; `pxl_tick` is the doorbell and the glue reads the
+     completions when it returns. The chunks' builds are the first commands
+     on them.
      **Carried into the port, not fixed in TypeScript first** — an audit
      of the mesher, scan and volume on 2026-09-13 found these, and each is
      what Rust's types or an algorithm rewrite resolve on the way, so
@@ -89,10 +146,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      (crates/pxl-core/src/volume.rs): bands are the module's, taken from the
      fixed section for the sixteen standing stores and the mesh section past
      them, every paint a call into it, and readers get views; the Rust scan
-     opens a volume by id. Then the terrain layer's reading of a page. Next:
-     the object store — its records are in the memory already — and with
-     it the object layer's paint, the direct path's writer and the raycast
-     walk; then the scheduler's tick.
+     opens a volume by id. Then the terrain layer's reading of a page, and
+     the object store with the object layer's paint, the direct path's
+     writer and the raycast walk, and the chunks' builds under one tick
+     through the rings (2026-09-14). Next: whatever else stands before the
+     renderer; then the renderer, starting with the hover cursor. The cursor goes first because it is
+     where the two sides already disagree: since the object store moved
+     into the module, the eraser's half-transparent ghost over a placed
+     cube shows late or not at all while the hide itself lands (decor's
+     ghost is unaffected; the build before the move, 9ff57fe, is fine) —
+     suspected to be ordering across the boundary, not chased in three.js.
+     With the same move its side textures lie on their side on some walls,
+     which 9ff57fe does not do either. Both go with drawing the ghost
+     through the chunk pipeline — one box through the mesher and the chunk
+     material with an opacity — so it cannot diverge from what it previews.
 
 ## P1
 
@@ -171,6 +238,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   closure per scalar at encode; mechanical, format-unchanged, bake-side
   only. With the above, not on its own.
 
+- **Placed objects come back moved after a reload.** Found 2026-09-14: a
+  wall of fifteen cubes (five along X, three up Z) reloads as thirteen
+  cells on one Z layer spread along Y. `decode_objects` turns a
+  `Placement` row back through `local_world_to_canonical` (the
+  projection), which is not the inverse of the page-local offset
+  `encode_objects` writes. In since v7; not the module's.
+
 ## P2
 
 - **Compression, chosen by traffic.** Recorded 2026-09-13, not scheduled:
@@ -229,6 +303,23 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   main, the increment moves into it, deploy picks one of its numbered
   builds, and the count continues from the counter as it stands — never
   reset.
+
+- **The scheduler's port, read against the TypeScript it replaced.**
+  Read line for line on 2026-09-14 after the move (crates/pxl-core/src/sched.rs
+  against 9ff57fe's chunk_node.ts, chunk_stage.tsx, chunk_table.ts,
+  priority.ts). Fixed: the reclaim walked the order backwards and gave back
+  the nearest off-screen chunk first (core_sched.test.ts now pins farthest
+  first); a layout the node re-attached on its own — decor changing — lost
+  the blend the module does not repeat. Brought back to the TypeScript's
+  behaviour: builds move at most eight chunks a frame, counting only chunks
+  that made progress; the pending lists are taken before the recheck; a
+  rebuild on the spot trims the tier cache. Hardened: a layout naming a tier
+  the node does not hold is warned and the chunk rebuilt from its sources,
+  outside the ring read, instead of throwing inside the frame. What has no
+  equivalence test is this layer: the pieces under it (mesher, scan, volume,
+  terrain, object store, build) are held to the TypeScript byte for byte,
+  the scheduler only by its order's unit tests and core_sched.test.ts's
+  cases — worth a trace-driven comparison if its behaviour is ever in doubt.
 
 ## Parked, with the reason on file
 

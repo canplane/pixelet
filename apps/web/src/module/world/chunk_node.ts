@@ -1,265 +1,150 @@
 // @pxl/web/module/world/chunk_node.ts
 
 /**
- * One chunk, owned imperatively.
+ * One chunk's scene half.
  *
- * This was a React component (`Chunk`, plus a `ChunkMesh` per LOD role and a
- * `DecorVariantMesh` per decor variant) and there were thousands of them
- * live. React was not being asked to do anything React is good at here:
- * nothing about a chunk is described by props, no chunk reads another's
- * state, and every one of its "components" existed purely to own a
- * `THREE.Mesh` behind a `<primitive>`. What React did add was a deferral —
- * it decides *later* when a layout actually mounts and unmounts — and that
- * deferral is what made the chunk's own memory unsafe to reason about:
- * between `set_layout` and the mount there is a window in which the layout
- * names meshes that nothing owns, and the LOD scheduler runs inside it. Three
- * separate reference-counting bugs came out of that window before this
- * existed (see the git history around chunk_stage.tsx).
+ * Every decision about a chunk is the module's (crates/pxl-core/src/sched.rs):
+ * whether it is on screen, which tiers it shows and how a blend weighs them,
+ * what to build and when, what to give back. What stays here is what the
+ * decisions act on and the sources they are made from: the `THREE.Group` and
+ * the meshes attached to it, the tiers and decor blocks the module handed
+ * over, decor's contribution to decor/field.ts, and the subscriptions that
+ * say a chunk's sources changed.
  *
- * So: a plain object with a `THREE.Group`, a `dispose()`, and a `commit()`
- * that builds geometry and attaches it in the same call. Nothing here is
- * deferred, which is the whole point — a mesh has exactly one owner, this
- * node, for a lifetime this file decides.
- *
- * Three.js stays. `Mesh`/`BufferGeometry`/`Material` are the abstraction
- * being kept; going to raw GL calls would harden the code around WebGL
- * semantics, and WebGPU is on the roadmap.
+ * A mesh has exactly one owner at a time — the tier cache, the layout, or
+ * both through a count — and a layout's meshes are attached in the call that
+ * applies it, so a layout never names a mesh nothing owns. That rule came
+ * out of three reference-counting bugs under React's deferred mounts (the
+ * git history around chunk_stage.tsx), and is why this is a plain object.
  */
 
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
+import { CELL_SHAMT, CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import type { Terrain } from "@pxl/shared/bake/format.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
-import type { AnchorRegistry } from "@/module/world/anchor/registry.ts";
 import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/module/world/decor/field.ts";
-import { build_decor_instances, type DecorInstancesByVariant } from "@/module/world/decor/decor_layer.ts";
-import { instances_release, instances_retain } from "@/module/world/decor/instance.ts";
 import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/module/world/decor/asset_store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
 import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/module/world/render/chunk_material.ts";
 import { register_tile_interest, useTileStore } from "@/module/world/terrain/store.ts";
-import { estimate_initial_chunk_view } from "@/render/chunk_lod.ts";
-import {
-  bucket_from_baked,
-  type BuiltChunkBucket,
-  chunk_bounds,
-  type ChunkBounds,
-  type ChunkLodRole,
-  type ChunkOffsets,
-  mesh_bounds,
-  release_built_mesh,
-  retain_built_mesh,
-} from "@/render/layer/pipeline/chunk_bucket.ts";
-import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
-import { composite_chunk_layers } from "@/render/layer/pipeline/compositor.ts";
-import { begin_core_bake, begin_core_scan, CORE_BAKE, core_scan_open, type CoreBake, type CoreScan, resolve_core_mesher } from "@/render/layer/pipeline/core_bake.ts";
-import { add_bake_counters } from "@/render/layer/pipeline/bake_command.ts";
-import { bake_port } from "@/module/world/sched/bake_port.ts";
-import { column_scan_open, type ColumnRunSet, fill_column_runs, release_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
-import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
+import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, mesh_bounds, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
+import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
+import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
+import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
 import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
-import { lod_build_stats, record_bake_step, record_build, record_scan } from "@/module/world/lod_build_stat.ts";
+import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
-import type { FrameBudget } from "@/module/world/sched/tick.ts";
-import { BLEND_ACTIVE, ChunkTable, EMPTY, HOLDS_SLOT, IN_FRUSTUM, PENDING, SETTLING } from "@/module/world/sched/chunk_table.ts";
-import { get_lod_guide, get_lod_pair_visibility, type LodStep } from "@/render/lod.ts";
-import { apply_visibility, type ChunkMeshRegistry, type ChunkVisibilityDecision, type MountedLodMesh, visibility_coverage } from "@/render/lod_visibility.ts";
-
-// ---- Budgets and tiers ----
-
-/* Nothing here is deferred any more. Both the scan and the bake step a few
- * rows at a time under the frame's shared budget (voxel_scan.ts,
- * chunk_mesher.ts), so an expensive chunk costs more frames rather than a
- * longer one — which is what the per-chunk defer-once heuristics that used to
- * sit here were approximating from a cost estimate. */
-
-/**
- * The coarsest LOD_STEP_BY_LEVEL tier (render/lod.ts) doubles as the
- * memory-saving "nothing built" state for a chunk that's off-screen or
- * hasn't measured its own real target yet — one real box's worth of
- * geometry per chunk instead of zero, so a later re-entry always has
- * *something* to transition from rather than popping in from a true void.
- */
-export const OFF_SCREEN_LOD_STEP: LodStep = 64;
-
-/** The first tier whose cells fold enough columns that the volume and the
- * scan buy nothing visible: from here up a chunk's runs come straight from
- * the layers' sources (ChunkNode.direct_runs_allowed). */
-const DIRECT_RUNS_MIN_STEP: LodStep = 8;
-
-/** What the pending work is, so that a change of request restarts its wait
- * (ChunkTable.set_pending). Releasing a chunk and building one are
- * different jobs. */
-const RELEASE_REQUEST = -1;
-
-function build_request(primary: LodStep, secondary: LodStep | null): number {
-  return (primary << 8) | (secondary ?? 0);
-}
-
-/**
- * How many built LOD tiers one chunk may keep. Three is the floor — the
- * active primary, its secondary during a blend, and OFF_SCREEN's own
- * standing entry — so four leaves exactly one tier of hysteresis for the
- * threshold hunting the cache exists to absorb, and nothing beyond that.
- * Measured before this cap existed: live mesh bytes climbed to 1.26GB while
- * the in-frustum count and the geometry count held flat, which was this
- * cache filling in every tier a chunk had ever been asked for.
- */
-const MAX_CACHED_LOD_TIERS = 4;
+import type { LodStep } from "@/render/lod.ts";
+import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 
 /**
  * How much built work chunks may keep *while off screen*: run sets and
- * cached tiers, both in the core pool and sized in bytes.
- *
- * Leaving the frustum used to drop all of it on the first release, whatever
- * memory looked like, and a rotation or a zoom in and out — seconds off
- * screen — rebuilt every chunk from the scan up. Now a release only detaches
- * the scene mesh, and this decides when built work is actually reclaimed:
- * when what off-screen chunks hold is over it, the stage takes from them
- * farthest first (issue/20260912-what-to-render-when.md).
- *
- * It budgets only the optional part. On-screen chunks hold their run set and
- * tiers because that is the layout, and at a wide zoom that alone is ~170MB
- * (602 chunks, 2026-09-12); a budget over the whole would either be unmeetable
- * there or so large it never fired anywhere else. A quarter of the core
- * reservation, the currency the crash case was measured in.
+ * cached tiers, both in the core pool and sized in bytes. Leaving the frustum
+ * used to drop all of it on the first release, and a rotation or a zoom in
+ * and out rebuilt every chunk from the scan up; the module reclaims only past
+ * this, farthest first (issue/20260912-what-to-render-when.md). It budgets
+ * only the optional part: on-screen chunks hold their tiers because that is
+ * the layout. A quarter of the core reservation, the currency the crash case
+ * was measured in.
  */
 export const RETAIN_BUDGET_BYTES: u32 = Math.floor((CORE_MEMORY?.buffer.byteLength ?? 256 * 1048576) / 4);
 
-/**
- * Bytes every live node retains in run sets and cached tiers, world-wide,
- * split by whether the node is on screen, which is the line the budget is
- * drawn on: `off` is what the reclaim pass can act on, `on` is the working
- * set. The table keeps both as the lanes change.
- */
-export function chunk_retained_bytes(): { on: u32; off: u32 } {
-  return { on: lod_scheduler.retained_on, off: lod_scheduler.retained_off };
-}
-
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
-
-/** Cached rather than read per chunk: recheck() runs over every live node
- * on its own interval, and a store read there is a couple of thousand
- * lookups a tick for a flag that changes when someone clicks a toggle. */
-let pixel_dither = useSettingsStore.getState().pixel_dither;
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----
 
-/**
- * Chunks that appeared / disappeared since the last frame sample, dev-only.
- * `rebuilt` counts layouts actually applied — the imperative successor to
- * counting React re-renders, and a truer number: a re-render could happen
- * for reasons that changed nothing, an applied layout could not.
- */
+/** Chunks that appeared, disappeared and applied a layout since the last
+ * frame sample, dev-only. */
 export const node_counts = { added: 0, removed: 0, rebuilt: 0, released: 0 };
+
+export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; released: u32 } {
+  const out = { ...node_counts };
+  Object.assign(node_counts, { added: 0, removed: 0, rebuilt: 0, released: 0 });
+  return out;
+}
 
 export type ChunkRetention = {
   nodes: u32;
-  /** Nodes holding a scanned run set, and what those sets cost in the pool. */
+  /** Nodes holding a run set, and what those sets cost in the pool. */
   run_sets: u32;
   run_set_mb: u32;
-  /** Built LOD tiers held across every node's cache — bounded by
-   * MAX_CACHED_LOD_TIERS each, but the product is what matters. */
+  /** Built tiers held across every node's cache. */
   tiers: u32;
-  /** Decor: cached per-step builds, and the lane instances inside them. */
+  /** Decor: cached per-step blocks, and the instances inside them. */
   decor_steps: u32;
   decor_instances: u32;
 };
 
+// ---- The live chunks ----
+
+/** Every live node by the module's id. */
+export const chunk_nodes = new Map<u32, ChunkNode>();
+
 export function chunk_retention(): ChunkRetention {
   const out: ChunkRetention = { nodes: 0, run_sets: 0, run_set_mb: 0, tiers: 0, decor_steps: 0, decor_instances: 0 };
   let run_bytes = 0;
-  for (const node of lod_scheduler.handles) {
+  for (const node of chunk_nodes.values()) {
     out.nodes++;
-    const runs = node.retained_column_runs;
-    if (runs) {
+    if (node.retained_run_bytes > 0) {
       out.run_sets++;
-      run_bytes += runs.block.bytes;
+      run_bytes += node.retained_run_bytes;
     }
     out.tiers += node.retained_tier_cnt;
-    for (const per_bundle of node.retained_decor) {
+    for (const decor of node.retained_decor) {
       out.decor_steps++;
-      for (const variants of per_bundle) {
-        for (const inst of variants) if (inst) out.decor_instances += inst.len;
-      }
+      for (const inst of decor.groups) if (inst) out.decor_instances += inst.len;
     }
   }
   out.run_set_mb = Math.round(run_bytes / 1048576);
   return out;
 }
 
-export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; released: u32 } {
-  const out = { added: node_counts.added, removed: node_counts.removed, rebuilt: node_counts.rebuilt, released: node_counts.released };
-  node_counts.released = 0;
-  node_counts.added = 0;
-  node_counts.removed = 0;
-  node_counts.rebuilt = 0;
-  return out;
-}
-
-// ---- The scheduler's view of a chunk ----
-
-/**
- * Every chunk the scheduler orders, as lanes (sched/chunk_table.ts). A node
- * is the handle behind its slot: the numbers the passes read — on screen,
- * distance, pending and since when, what it holds — live in the table, and
- * the node reads and writes them through its slot. A plain module singleton,
- * not a React context: chunk nodes are not components and have no tree to
- * read a provider from, and there was only ever one.
- */
-export const lod_scheduler = new ChunkTable<ChunkNode>();
-
 /**
  * The world-wide sources, subscribed once for every node rather than once
- * per node. A tile arrival reaches the nodes of its page and no others; a
- * settings change and a decor asset arrival reach every node, since either
- * can change what any of them shows. Each node used to hold three
- * subscriptions of its own, so a tile landing during a pan ran two and a
- * half thousand closures to find the two hundred it concerned, and a
- * toggle ran five thousand. The per-column subscriptions stay per node:
- * the store already routes those to the chunk they touch.
+ * per node: a tile arrival reaches the nodes of its page and no others; a
+ * settings change and a decor asset arrival reach every node. The
+ * per-column subscriptions stay per node: the store already routes those.
  */
-useSettingsStore.subscribe((state) => {
-  pixel_dither = state.pixel_dither;
-  for (const node of lod_scheduler.handles) {
+useSettingsStore.subscribe(() => {
+  for (const node of chunk_nodes.values()) {
     node.on_source_change();
     node.on_decor_change();
   }
 });
 register_tile_interest(() => true, (page_idx) => {
-  for (const node of lod_scheduler.handles) if (node.page_idx === page_idx) node.on_source_change();
+  for (const node of chunk_nodes.values()) if (node.page_idx === page_idx) node.on_source_change();
 });
 subscribe_decor_assets(() => {
-  for (const node of lod_scheduler.handles) node.on_decor_assets();
+  for (const node of chunk_nodes.values()) node.on_decor_assets();
 });
 
 // ---- Layout ----
 
 /**
- * One entry per bundle (matching bundle_assets' own order), each itself one
- * entry per that bundle's own variant. `secondary` mirrors LodLayout's
- * exactly (null outside a blend band) rather than decor tracking its own
- * independent blend state.
+ * The decor blocks of the layout's two tiers; `secondary` mirrors the
+ * layout's (null outside a blend band) rather than decor tracking its own
+ * blend. A tier's block is null while the module has none for it.
  */
 type DecorLayoutPair = {
-  primary: DecorInstancesByVariant[];
-  secondary: DecorInstancesByVariant[] | null;
+  primary: DecorBlock | null;
+  secondary: DecorBlock | null;
 };
-const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: [], secondary: null };
+const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: null, secondary: null };
 
-/** The layout's own hold on the lane sets it shows, taken and dropped as one
+/** The layout's own hold on the blocks it shows, taken and dropped as one
  * with the buckets' — see apply_layout. */
 function retain_decor_pair(pair: DecorLayoutPair): void {
-  for (const variants of pair.primary) for (const inst of variants) if (inst) instances_retain(inst);
-  if (pair.secondary) { for (const variants of pair.secondary) for (const inst of variants) if (inst) instances_retain(inst); }
+  if (pair.primary) decor_block_retain(pair.primary);
+  if (pair.secondary) decor_block_retain(pair.secondary);
 }
 function release_decor_pair(pair: DecorLayoutPair): void {
-  for (const variants of pair.primary) for (const inst of variants) if (inst) instances_release(inst);
-  if (pair.secondary) { for (const variants of pair.secondary) for (const inst of variants) if (inst) instances_release(inst); }
+  if (pair.primary) decor_block_release(pair.primary);
+  if (pair.secondary) decor_block_release(pair.secondary);
 }
 
 type LodLayout = {
@@ -267,37 +152,26 @@ type LodLayout = {
   secondary: LodStep | null;
   buckets: BuiltChunkBucket[];
   decor: DecorLayoutPair;
-  bounds: ChunkBounds | null;
   ready: boolean;
 };
 
-function blend_hash(key: string): f64 {
+/** The hash that picks which side of a per-chunk blend a chunk falls on, so
+ * neighbours cross at different moments. */
+function blend_hash(key: string): u32 {
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
-  return (hash >>> 0) / 0x1_0000_0000;
+  return hash >>> 0;
 }
 
-function set_three_box(box: THREE.Box3, bounds: ChunkBounds): THREE.Box3 {
-  box.min.set(bounds.min_x, bounds.min_y, bounds.min_z);
-  box.max.set(bounds.max_x, bounds.max_y, bounds.max_z);
-  return box;
-}
-
-/** The nominal bounding sphere of a chunk nothing has measured yet, in its
- * own space — the same one sched/chunk_table.ts starts a slot with. */
-const NOMINAL_CENTER: f64 = CHUNK_WORLD_SPAN * 0.5;
-const NOMINAL_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
-
-/** Shared placeholder a mesh holds before its first real geometry and again
- * after that geometry is disposed — never uploaded, never mutated. */
+/** Shared placeholder a mesh holds after its geometry is disposed — never
+ * uploaded, never mutated. */
 const EMPTY_GEOMETRY = new THREE.BufferGeometry();
 
 /** One attached cube mesh: the scene object, the mesh data behind it, and
- * the registry entry the LOD blend flips. Kept together because they are
- * created and destroyed as one thing. */
+ * the registry entry the LOD blend flips. Created and destroyed as one. */
 type AttachedCubes = {
   mesh: THREE.Mesh;
   bucket: BuiltChunkBucket;
@@ -307,78 +181,40 @@ type AttachedCubes = {
 export type ChunkNodeDeps = {
   page_idx: IVec;
   offset: ChunkOffsets;
-  stack: WorldLayerStack;
-  camera: THREE.Camera;
-  anchor_registry: AnchorRegistry;
+  /** The id the module mounted the chunk under; without one the node adds
+   * its own chunk to the module. */
+  id?: u32;
 };
 
 export class ChunkNode {
   /** This chunk's own scene node, positioned at its page-local origin. */
   readonly group: THREE.Group;
-
-  /** This node's slot in lod_scheduler's lanes; the table moves it. */
-  slot: u32 = 0;
   /** The page this chunk belongs to, for the page's own mount diff. */
   readonly page_idx: IVec;
-
-  private readonly page_off: IVec;
-  private readonly key: ChunkKey;
-  private readonly object_key: IVec;
   /** This chunk's own absolute lattice origin — its identity in
    * decor/field.ts, and the offset chunk-local instances are placed at. */
-  private readonly base_i: IVec;
-  private readonly stable_hash: f64;
+  readonly base_i: IVec;
+
+  private readonly object_key: IVec;
   private readonly registry: ChunkMeshRegistry = { meshes: new Set() };
+  /** The module's id for this chunk. */
+  private readonly id: u32;
 
+  /** The tiers and the decor blocks the module handed over, by step. */
   private readonly bucket_cache = new Map<LodStep, BuiltChunkBucket>();
-  private readonly decor_cache = new Map<LodStep, DecorInstancesByVariant[]>();
-  /**
-   * Every column's runs, scanned once from the live volume and reused across
-   * every LOD tier and every transition after that — the composited dense
-   * bands live for one synchronous pass, but this copy of their *results*
-   * (a packed run set, not views into the volume) survives it. Its block
-   * comes from the same pool the vertex blocks do, so it has to be handed
-   * back the same way — see clear_column_runs.
-   */
-  private column_runs: ColumnRunSet | null = null;
-  /** A bake in progress, held across frames like the scan and bounded the
-   * same way: one chunk at a time. `step` is the tier it is baking. */
-  private _bake: { step: LodStep; job: CoreBake; spent_ms: number } | null = null;
-  /** A bake sent to the worker and not yet adopted: the tier, and the tx_id
-   * the bake port knows it by. Holds no slot — up to the slab cap of these
-   * are away at once — so it does not move HOLDS_SLOT. */
-  private remote: { step: LodStep; tx: u32 } | null = null;
-  /** The tiers the current build_buckets call is after. */
-  private wanted: readonly LodStep[] = [];
-  /**
-   * A scan in progress, held across frames: the composite it reads and the
-   * row it is up to. Pooled bands stay checked out for as long as this is
-   * set, which voxel_scan.ts bounds to one chunk at a time — so a node that
-   * stops needing its scan (disposed, source changed, left the frustum) has
-   * to abort it rather than drop it. See abort_scan.
-   */
-  private _scan: { volume: ChunkVolume; job: CoreScan; spent_ms: number } | null = null;
+  private readonly decor_cache = new Map<LodStep, DecorBlock>();
+  /** How many times the module has been told this chunk's sources: a tier
+   * built from an earlier telling is stale and released on arrival. */
+  private generation: u32 = 0;
+  /** What this chunk's runs hold in the mesh section, as the module said. */
+  private runs_bytes: u32 = 0;
 
-  /** The work in flight, and HOLDS_SLOT in the table with it: the slot
-   * holder goes first in every order, so the flag must move the moment the
-   * work does. */
-  private get scan(): { volume: ChunkVolume; job: CoreScan; spent_ms: number } | null {
-    return this._scan;
-  }
-  private set scan(v: { volume: ChunkVolume; job: CoreScan; spent_ms: number } | null) {
-    this._scan = v;
-    lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._bake !== null);
-  }
-  private get bake(): { step: LodStep; job: CoreBake; spent_ms: number } | null {
-    return this._bake;
-  }
-  private set bake(v: { step: LodStep; job: CoreBake; spent_ms: number } | null) {
-    this._bake = v;
-    lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._scan !== null);
-  }
-
-  private layout: LodLayout;
-  private desired: { primary: LodStep; secondary: LodStep | null };
+  private layout: LodLayout = { primary: 64, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false };
+  private shown = false;
+  /** The blend the module last told for this layout. The module does not
+   * repeat an unchanged one, so a layout this node re-attaches on its own
+   * (decor changing) puts it back rather than showing the defaults. */
+  private blend: { primary: number; secondary: number; decor_secondary: boolean } | null = null;
 
   private tile: unknown;
   private show_structures: boolean;
@@ -399,66 +235,17 @@ export class ChunkNode {
 
   private disposed = false;
 
-  // ---- the table's lanes, through this node's slot ----
-
-  get in_frustum(): boolean {
-    return lod_scheduler.has(this.slot, IN_FRUSTUM);
-  }
-  get distance2(): f64 {
-    return lod_scheduler.distance2[this.slot];
-  }
-  get pending(): boolean {
-    return lod_scheduler.has(this.slot, PENDING);
-  }
-  private get request(): number {
-    return lod_scheduler.request[this.slot];
-  }
-  private get blend_active(): boolean {
-    return lod_scheduler.has(this.slot, BLEND_ACTIVE);
-  }
-  private set blend_active(v: boolean) {
-    lod_scheduler.set_flag(this.slot, BLEND_ACTIVE, v);
-  }
-  private set settling(v: boolean) {
-    lod_scheduler.set_flag(this.slot, SETTLING, v);
-  }
-  private set_pending(pending: boolean, request: number): void {
-    lod_scheduler.set_pending(this.slot, pending, request, performance.now());
-  }
-  private get holds_slot(): boolean {
-    return this._scan !== null || this._bake !== null;
-  }
-
   constructor(private readonly deps: ChunkNodeDeps) {
-    const { page_idx, offset, anchor_registry, camera } = deps;
+    const { page_idx, offset } = deps;
     this.page_idx = page_idx;
-    this.page_off = ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n);
-    this.key = { page_idx, page_off: this.page_off };
-    this.object_key = object_column_of(page_idx, this.page_off);
-    this.base_i = ivec.add(FROM_L3_IDX(page_idx), this.page_off);
-    this.stable_hash = blend_hash(`${page_idx.toString()}:${offset.key}`);
+    const page_off = ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n);
+    this.object_key = object_column_of(page_idx, page_off);
+    this.base_i = ivec.add(FROM_L3_IDX(page_idx), page_off);
 
     this.group = new THREE.Group();
     this.group.name = `chunk/${offset.key}`;
     this.group.position.set(offset.base_x * U_PER_CELL, offset.base_y * U_PER_CELL, 0);
-
-    // The table measures every slot before anything is sorted, so nothing
-    // here seeds a distance; the one-shot estimate only picks the tier the
-    // first recheck's hysteresis starts from. Off screen until the table's
-    // first pass says otherwise.
-    lod_scheduler.add(this, this.base_i);
-    lod_scheduler.set_flag(this.slot, EMPTY, true);
     this.group.visible = false;
-    const view = estimate_initial_chunk_view(camera, anchor_registry.cur_map_origin, this.base_i);
-    this.desired = { primary: view.in_frustum ? view.lod_step : OFF_SCREEN_LOD_STEP, secondary: null };
-    this.layout = {
-      primary: this.desired.primary,
-      secondary: null,
-      buckets: [],
-      decor: EMPTY_DECOR_PAIR,
-      bounds: null,
-      ready: false,
-    };
 
     this.tile = useTileStore.getState().get_tile(page_idx);
     this.show_structures = useSettingsStore.getState().show_structures;
@@ -469,21 +256,43 @@ export class ChunkNode {
 
     // Direct store subscriptions rather than hooks: a node is not a
     // component, and a placement should not have to travel through a render
-    // to reach the chunk it changed. The world-wide sources are subscribed
-    // once at module level (above) and dispatched to the nodes concerned.
+    // to reach the chunk it changed.
     this.unsubscribes.push(
       subscribe_object_column(this.object_key, () => this.on_source_change()),
       subscribe_decor_column(this.object_key, () => this.on_decor_change()),
     );
 
+    if (deps.id !== undefined) {
+      this.id = deps.id;
+      CORE_BUILD.attach(this.id, this);
+    } else {
+      this.id = CORE_BUILD.add(
+        this,
+        this.base_i,
+        ivec.to_real(ivec.X(this.base_i)),
+        ivec.to_real(ivec.Y(this.base_i)),
+        Number(ivec.X(page_off)) << -CELL_SHAMT,
+        Number(ivec.Y(page_off)) << -CELL_SHAMT,
+        blend_hash(`${page_idx.toString()}:${offset.key}`),
+      );
+    }
+    this.tell_source();
+    chunk_nodes.set(this.id, this);
+
     if (import.meta.env.DEV) node_counts.added++;
   }
 
-  dispose(): void {
+  /** The module unmounted this chunk: everything it held there is gone. */
+  on_unmount(): void {
+    this.dispose(false);
+  }
+
+  dispose(tell_module: boolean = true): void {
     if (this.disposed) return;
     this.disposed = true;
     for (const off of this.unsubscribes) off();
-    this.abort_work();
+    if (tell_module) CORE_BUILD.remove(this.id);
+    chunk_nodes.delete(this.id);
     decor_field.clear_chunk(this.base_i);
     this.detach_all();
     for (const bucket of this.layout.buckets) release_built_mesh(bucket.cubes);
@@ -491,104 +300,129 @@ export class ChunkNode {
     this.layout = { ...this.layout, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false };
     this.release_bucket_cache();
     this.clear_decor_cache();
-    this.clear_column_runs();
     this.group.removeFromParent();
-    lod_scheduler.remove(this.slot);
     if (import.meta.env.DEV) node_counts.removed++;
   }
 
-  /** Read by chunk_retention; dev-only, and never a way to reach in and
-   * mutate what this node owns. */
-  get retained_column_runs(): ColumnRunSet | null {
-    return this.column_runs;
+  /** Read by chunk_retention; dev-only. */
+  get retained_run_bytes(): u32 {
+    return this.runs_bytes;
   }
   get retained_tier_cnt(): u32 {
     return this.bucket_cache.size;
   }
-  get retained_decor(): Iterable<DecorInstancesByVariant[]> {
+  get retained_decor(): Iterable<DecorBlock> {
     return this.decor_cache.values();
   }
 
-  /** Drops the cache's hold on every lane set it has; a set the layout is
-   * still showing lives on until the layout lets go. */
-  private clear_decor_cache(): void {
-    for (const per_bundle of this.decor_cache.values()) {
-      for (const variants of per_bundle) for (const inst of variants) if (inst) instances_release(inst);
+  // ---- the module's calls ----
+
+  on_tier(generation: u32, step: LodStep, mesh: BakedChunkMesh): void {
+    if (this.disposed || generation !== this.generation || this.bucket_cache.has(step)) {
+      release_chunk_mesh(mesh);
+      return;
     }
-    this.decor_cache.clear();
+    this.bucket_cache.set(step, bucket_from_baked(mesh, step, "primary"));
   }
 
-  // ---- caches ----
-
-  /** The cache's own reference to every bucket it holds, dropped together. */
-  private release_bucket_cache(): void {
-    for (const [step, bucket] of this.bucket_cache) this.drop_tier(step, bucket);
+  on_runs(bytes: u32): void {
+    this.runs_bytes = bytes;
   }
 
-  /**
-   * Both build caches AND the scan they were built from — the two moments
-   * that need a hard reset (a source revision changed, or this chunk just
-   * left the frustum for commit() to act on) always want all three gone
-   * together. The frustum-exit path in recheck() wants the softer prune
-   * below instead: keep something cheap resident, not nothing.
-   */
-  private reset_all_caches(): void {
-    this.abort_work();
-    this.release_bucket_cache();
-    this.clear_decor_cache();
-    this.clear_column_runs();
+  on_visible(on: boolean): void {
+    this.shown = on;
+    this.group.visible = on;
+    this.sync_decor();
   }
 
-  private clear_column_runs(): void {
-    if (!this.column_runs) return;
-    this.account(-this.column_runs.block.bytes);
-    release_column_runs(this.column_runs);
-    this.column_runs = null;
+  on_decor(step: LodStep, decor: DecorBlock): void {
+    if (this.disposed || this.decor_cache.has(step)) {
+      decor_block_release(decor);
+      return;
+    }
+    this.decor_cache.set(step, decor);
   }
 
-  private drop_tier(step: LodStep, bucket: BuiltChunkBucket): void {
-    this.bucket_cache.delete(step);
-    this.account(-bucket.cubes.block.bytes);
-    release_built_mesh(bucket.cubes);
-  }
-
-  /** Drops every cached tier except OFF_SCREEN's, so a later re-entry has a
-   * real tier to transition from rather than a void. */
-
-  /** Evicts oldest-built first, never the tiers currently asked for or the
-   * off-screen default. The layout holds its own reference, so evicting a
-   * tier that is still on screen costs a rebuild, not a black chunk. */
-  private trim_bucket_cache(active: readonly LodStep[]): void {
-    for (const [step, bucket] of this.bucket_cache) {
-      if (this.bucket_cache.size <= MAX_CACHED_LOD_TIERS) return;
-      if (step === OFF_SCREEN_LOD_STEP || active.includes(step)) continue;
-      this.drop_tier(step, bucket);
+  on_evict(step: LodStep): void {
+    const bucket = this.bucket_cache.get(step);
+    if (bucket) {
+      this.bucket_cache.delete(step);
+      release_built_mesh(bucket.cubes);
+    }
+    const decor = this.decor_cache.get(step);
+    if (decor) {
+      this.decor_cache.delete(step);
+      decor_block_release(decor);
     }
   }
 
-  /**
-   * Gives back everything this chunk built, for the stage's budget pass.
-   * Only meaningful off screen: on screen the tiers are the layout.
-   */
-  reclaim(): void {
-    if (this.disposed || this.in_frustum) return;
-    this.reset_all_caches();
+  on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void {
+    if (this.disposed) return;
+    if (!ready) {
+      this.blend = null;
+      this.apply_layout({ primary, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false });
+      if (import.meta.env.DEV) node_counts.released++;
+      return;
+    }
+    const steps = secondary === null ? [primary] : [primary, secondary];
+    const buckets = steps
+      .map((step) => this.bucket_cache.get(step))
+      .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
+      .map((bucket) => ({ ...bucket, role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole }))
+      .sort((a, b) => a.lod_step - b.lod_step);
+    if (buckets.length !== steps.length) {
+      // The module and this node disagree about what is held. Keep what is
+      // on screen and start the chunk over from its sources, which tells the
+      // module to forget its tiers and build the layout again.
+      // After the completion ring's read this call is inside, which a
+      // rebuild would re-enter.
+      console.warn(`[render/chunk] the module laid out tiers ${steps} of chunk ${this.id} this node does not hold; rebuilding it`);
+      queueMicrotask(() => {
+        if (this.disposed) return;
+        this.release_bucket_cache();
+        this.tell_source();
+        CORE_BUILD.build_now(this.id);
+      });
+      return;
+    }
+    const decor = this.decor_pair(primary, secondary);
+    // The same tiers told again with the same meshes is the module's decor
+    // rebuild (decor_now): the cubes stay attached, or the rebuild would be
+    // the flicker the decor/solid split exists to avoid.
+    const same_tiers = this.layout.ready && this.layout.buckets.length === buckets.length &&
+      buckets.every((b, k) => b.cubes === this.layout.buckets[k].cubes && b.role === this.layout.buckets[k].role);
+    if (same_tiers) {
+      this.apply_decor(decor);
+      return;
+    }
+    this.blend = null;
+    this.apply_layout({ primary, secondary, buckets, decor, ready: true });
   }
 
-  /** What reclaim() would free is the table's own count of what this node
-   * holds, on whichever side of the frustum it is. */
-  private account(delta: number): void {
-    lod_scheduler.account(this.slot, delta);
+  /** One decision, two consumers. Cube content dithers between the two tiers
+   * per fragment; decor takes whichever tier the module says it is mostly
+   * on, since an instance is drawn or it is not. */
+  on_blend(primary: number, secondary: number, decor_secondary: boolean): void {
+    this.blend = { primary, secondary, decor_secondary };
+    apply_visibility(this.registry, { primary, secondary });
+    this.sync_decor(decor_secondary ? "secondary" : "primary");
   }
 
   // ---- source changes ----
 
+  /** Tells the module what this chunk is made of now. */
+  private tell_source(): void {
+    const tile = this.tile as { terrain: Terrain } | null | undefined;
+    CORE_BUILD.source(this.id, tile?.terrain ?? null, this.show_structures);
+    this.generation++;
+  }
+
   /**
-   * A source revision rebuilds the currently displayed LOD, not the whole
-   * visible world. `objects_revision` is the SOLID-only revision: a
-   * decor-only change never lands here. A solid change still clears decor's
-   * cache too, because a newly placed cube can occlude a procedurally
-   * scattered decor candidate that used to render there.
+   * A source revision rebuilds what the chunk shows, not the whole visible
+   * world: the module is told, and builds this chunk's layout to the end at
+   * once, so a placement shows in the frame it was made. `objects_revision`
+   * is the SOLID-only revision; a solid change still clears decor's cache,
+   * because a newly placed cube can occlude a scattered decor candidate.
    */
   on_source_change(): void {
     if (this.disposed) return;
@@ -599,411 +433,102 @@ export class ChunkNode {
     this.tile = tile;
     this.show_structures = show_structures;
     this.objects_revision = objects_revision;
-
-    this.reset_all_caches();
-    if (!this.layout.ready) {
-      if (this.layout.bounds !== null) this.apply_layout({ ...this.layout, bounds: null });
-      return;
-    }
-    const content = this.build_layout_content(this.layout.primary, this.layout.secondary);
-    // Deferred — keep whatever is on screen, just mark not-ready so the next
-    // recheck() sets pending and retries.
-    if (content === null) {
-      this.apply_layout({ ...this.layout, ready: false });
-      return;
-    }
-    this.apply_layout({ ...this.layout, ...content, ready: true });
+    this.release_bucket_cache();
+    this.clear_decor_cache();
+    this.tell_source();
+    CORE_BUILD.build_now(this.id);
   }
 
   /**
    * Decor models finish loading well after the first chunks are built, and
    * a node that never heard about it drew no decor for the rest of its
-   * life — which is why decor showed or did not depending on whether the
-   * browser cache beat the first chunk build. Decor meshes only: a model
-   * arriving says nothing about cube content.
+   * life. The instances are the same; what this chunk contributes to
+   * decor/field.ts — a geometry and a skin per variant — is not.
    */
   on_decor_assets(): void {
     if (this.disposed) return;
     const assets = decor_bundle_assets();
     if (this.bundle_assets === assets) return;
     this.bundle_assets = assets;
-    this.clear_decor_cache();
-    if (!this.layout.ready) return;
-    this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
+    this.decor_dirty = true;
+    this.sync_decor();
   }
 
   /**
-   * Decor's own revision-only rebuild. It must never touch bucket_cache or
-   * column_runs: that would reintroduce the needless cube rescan/rebake —
-   * visible as a flicker — this split exists to avoid.
+   * Decor's own revision-only rebuild, in the module. It must never touch
+   * the tiers: that would reintroduce the needless cube rebuild — visible as
+   * a flicker — this split exists to avoid.
    */
   on_decor_change(): void {
     if (this.disposed) return;
     const revision = decor_column_revision(this.object_key);
-    // show_decor sits here rather than in on_source_change for the reason
-    // this split exists at all: hiding scattered decor changes no cube, and
-    // rebuilding them would flicker. It is the decor half's own
-    // show_structures.
     const show_decor = useSettingsStore.getState().show_decor;
     if (revision === this.decor_revision && show_decor === this.show_decor) return;
     this.decor_revision = revision;
     this.show_decor = show_decor;
     this.clear_decor_cache();
-    if (!this.layout.ready) return;
-    this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
+    CORE_BUILD.decor_now(this.id, show_decor);
   }
 
-  // ---- building ----
+  // ---- caches ----
 
-  /**
-   * Cube content only (terrain + solid objects, chunk_mesher.ts's baked
-   * mesh). A null return means "not finished this frame" — the scan or the
-   * bake is part-way, or waiting on the slot another chunk holds — distinct
-   * from an empty result (built, genuinely nothing to draw).
-   *
-   * Decor is deliberately not built here: any decor-only change would
-   * otherwise force this to re-run and rescan cube content that never
-   * changed. build_decor_step below is the split-out replacement, and the
-   * two still run together whenever cube content itself rebuilds, so decor
-   * is never committed without the cube content it sits on.
-   */
-  private build_buckets(primary: LodStep, secondary: LodStep | null, budget: FrameBudget | null): BuiltChunkBucket[] | null {
-    const steps = secondary === null || secondary === primary ? [primary] : [primary, secondary];
-    const missing = steps.filter((step) => !this.bucket_cache.has(step));
-    this.wanted = steps;
-
-    if (missing.length > 0) {
-      if (!this.column_runs) {
-        const state = this.advance_scan(budget);
-        if (state !== "done") return null;
-      }
-      const column_runs = this.column_runs;
-      if (column_runs && this.advance_bake(column_runs, budget) !== "done") return null;
-    }
-
-    // Tiers outside the current pair are kept rather than evicted, because a
-    // build storm during a pan hunts back and forth across a threshold and
-    // rebuilding from column_runs isn't free — but only up to
-    // MAX_CACHED_LOD_TIERS of them.
-    this.trim_bucket_cache(steps);
-    return steps
-      .map((step) => this.bucket_cache.get(step))
-      .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
-      .map((bucket) => ({ ...bucket, role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole }))
-      .sort((a, b) => a.lod_step - b.lod_step);
+  private release_bucket_cache(): void {
+    for (const bucket of this.bucket_cache.values()) release_built_mesh(bucket.cubes);
+    this.bucket_cache.clear();
   }
 
-  /**
-   * Moves the scan along, and says where it got to.
-   *
-   * "done" — column_runs is filled and the bake can proceed.
-   * "busy" — rows were scanned, more remain; the chunk stays pending and the
-   *          caller reports real work done, since it was.
-   * "blocked" — nothing scanned: another chunk holds the one scan slot, or no
-   *          layer had painted this key yet (a real if rare transient a batch
-   *          of chunks racing their first build can hit — NOT "nothing here,
-   *          done forever", which is why it keeps the chunk pending rather
-   *          than falling through to an empty bucket list and a permanent
-   *          hole).
-   *
-   * With no budget (a source-change rebuild outside the tick) the scan runs
-   * to completion in one call, as it always did.
-   */
-  /**
-   * Whether this chunk's runs can come straight from the layers' sources:
-   * every wanted tier is coarse, and every layer either offers runs or has
-   * nothing here. Coarse tiers fold columns into cells, so the exactness
-   * the volume and the scan buy — placed cubes carving terrain, sub-cell
-   * objects — is not visible at them anyway; the finest tiers keep the scan.
-   */
-  private direct_runs_allowed(): boolean {
-    if (this.wanted.some((step) => step < DIRECT_RUNS_MIN_STEP)) return false;
-    for (const layer of this.deps.stack) {
-      if (layer.runs) continue;
-      if (layer.present === undefined || layer.present(this.key)) return false;
-    }
-    return true;
+  /** Drops the cache's hold on every block it has; a block the layout is
+   * still showing lives on until the layout lets go. */
+  private clear_decor_cache(): void {
+    for (const decor of this.decor_cache.values()) decor_block_release(decor);
+    this.decor_cache.clear();
   }
 
-  private advance_scan(budget: FrameBudget | null): "done" | "busy" | "blocked" {
-    const step_t0 = performance.now();
-    if (!this.scan && this.direct_runs_allowed()) {
-      // The direct path: one run per column read from each layer's own
-      // source, packed straight into a run set. No volume, no scan slot, no
-      // stepping — it is a few thousand array reads, three orders of
-      // magnitude under the scan it replaces
-      // (issue/20260912-coarse-tiers-what-the-field-does.md).
-      // The scratch is the TypeScript scan's, so one in flight means wait.
-      if (column_scan_open()) return "blocked";
-      let any = false;
-      const set = fill_column_runs(CHUNK_CELL_SPAN, (w) => {
-        for (const layer of this.deps.stack) if (layer.runs && layer.runs(this.key, w)) any = true;
-      });
-      if (!any) {
-        release_column_runs(set);
-        return "blocked";
-      }
-      this.column_runs = set;
-      this.account(this.column_runs.block.bytes);
-      record_scan(performance.now() - step_t0);
-      lod_build_stats.direct_count++;
-      return "done";
-    }
-    // The scan goes the way the bake does (advance_bake), except that the
-    // worker path scans here: the worker bakes only.
-    const mesher = resolve_core_mesher(useSettingsStore.getState().bake_path === "wasm" ? "wasm" : "ts");
-    if (this.scan && this.scan.job.mesher !== mesher) this.abort_scan();
-    if (!this.scan) {
-      // Cheap check before the expensive compose: composing and then finding
-      // the slot taken would spend a couple of milliseconds per pending chunk
-      // for nothing, every frame the slot is busy.
-      if (core_scan_open(mesher)) return "blocked";
-      const volume = composite_chunk_layers(this.deps.stack, this.key);
-      if (volume === null) return "blocked";
-      const job = begin_core_scan(mesher, volume);
-      if (job === null) {
-        release_chunk_volume(volume);
-        return "blocked";
-      }
-      this.scan = { volume, job, spent_ms: 0 };
-      lod_build_stats.scan_bands += volume.bands.length;
-      lod_build_stats.scan_bands_max = Math.max(lod_build_stats.scan_bands_max, volume.bands.length);
-    }
-
-    // At least one step, whatever the budget says — forward progress is the
-    // invariant — then as many more as the budget still has room for. A step
-    // is a few rows, around a millisecond on a band-heavy chunk.
-    let done: boolean;
-    do {
-      done = this.scan.job.advance();
-      // The mesh section had no block for the set: keep the scan where it
-      // is and let the frame end, as a starved bake does.
-      if (this.scan.job.starved()) break;
-    } while (!done && (budget === null || budget.remaining() > 0));
-    // Time actually spent scanning, summed across the frames it took — not
-    // the wall time from first step to last, which would count the frames
-    // in between as cost.
-    this.scan.spent_ms += performance.now() - step_t0;
-    if (this.scan.job.starved()) return "blocked";
-    if (!done) return "busy";
-
-    this.column_runs = this.scan.job.finish();
-    this.account(this.column_runs.block.bytes);
-    release_chunk_volume(this.scan.volume);
-    record_scan(this.scan.spent_ms);
-    this.scan = null;
-    return "done";
-  }
-
-  /**
-   * Bakes whatever tier `wanted` still lacks, stepping under the budget, and
-   * says where it got to — the same three answers advance_scan gives.
-   *
-   * A bake already open is carried to completion even if its tier is no
-   * longer wanted: it is a bounded amount of work, the result is cached
-   * rather than wasted, and restarting on every change of mind is how a
-   * camera hunting across a threshold would keep a chunk from ever finishing.
-   */
-  private advance_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
-    // The path is read per call, so the setting switches between frames; a
-    // bake open on the other path is dropped rather than finished.
-    const path = useSettingsStore.getState().bake_path;
-    if (path === "worker") {
-      if (this.bake) {
-        this.bake.job.abort();
-        this.bake = null;
-      }
-      return this.advance_remote_bake(column_runs, budget);
-    }
-    const mesher = resolve_core_mesher(path === "wasm" ? "wasm" : "ts");
-    if (this.remote) {
-      bake_port.cancel(this.remote.tx);
-      this.remote = null;
-    }
-    for (;;) {
-      // A tier nobody wants any more gives the slot back rather than
-      // finishing. There is one bake slot for the whole world, so a
-      // superseded bake delays every chunk, not only this one — the reason
-      // the tier walk this replaced was expensive and not merely slow.
-      if (this.bake && (!this.wanted.includes(this.bake.step) || this.bake.job.mesher !== mesher)) {
-        this.bake.job.abort();
-        this.bake = null;
-      }
-      if (!this.bake) {
-        const step = this.wanted.find((s) => !this.bucket_cache.has(s));
-        if (step === undefined) return "done";
-        const job = begin_core_bake(mesher, column_runs, step);
-        if (job === null) return "blocked";
-        this.bake = { step, job, spent_ms: 0 };
-      }
-
-      const t0 = performance.now();
-      let done: boolean;
-      do {
-        const step_t0 = import.meta.env.DEV ? performance.now() : 0;
-        done = this.bake.job.advance();
-        if (import.meta.env.DEV) record_bake_step(performance.now() - step_t0);
-        // The mesh section had no block for it. Keep the bake where it is
-        // and let the frame end: the reclaim pass runs after commit, and the
-        // next tick asks again. Spinning here would only re-ask the pool.
-        if (this.bake.job.starved()) break;
-      } while (!done && (budget === null || budget.remaining() > 0));
-      this.bake.spent_ms += performance.now() - t0;
-      if (this.bake.job.starved()) return "blocked";
-      if (!done) return "busy";
-
-      const { step, job, spent_ms } = this.bake;
-      this.bake = null;
-      const bucket = bucket_from_baked(job.finish(), step, "primary");
-      this.bucket_cache.set(step, bucket);
-      this.account(bucket.cubes.block.bytes);
-      record_build(spent_ms, column_runs.count);
-
-      // A second wanted tier starts in this same call only if the budget
-      // still has room; otherwise it waits for the next commit.
-      if (budget !== null && budget.remaining() <= 0) {
-        return this.wanted.some((s) => !this.bucket_cache.has(s)) ? "busy" : "done";
-      }
-    }
-  }
-
-  /**
-   * The worker path: the same three answers advance_bake gives, from a bake
-   * that runs elsewhere. Sending one is work this frame ("busy"); waiting on
-   * one is not ("blocked"), so a chunk with a bake away costs the budget
-   * nothing until its reply is adopted. What is timed as the build here is
-   * the adoption — the copy in and the bucket — which is the bake's whole
-   * cost to this thread.
-   */
-  private advance_remote_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
-    for (;;) {
-      if (this.remote && !this.wanted.includes(this.remote.step)) {
-        bake_port.cancel(this.remote.tx);
-        this.remote = null;
-      }
-      if (!this.remote) {
-        const step = this.wanted.find((s) => !this.bucket_cache.has(s));
-        if (step === undefined) return "done";
-        const tx = bake_port.submit(this.bake_job(step), column_runs, step);
-        if (tx === null) return "blocked";
-        this.remote = { step, tx };
-        return "busy";
-      }
-
-      const polled = bake_port.poll(this.remote.tx);
-      if (polled === "away") return "blocked";
-      if (polled === "failed" || !bake_port.can_adopt(this.remote.tx)) {
-        if (polled === "failed") {
-          bake_port.cancel(this.remote.tx);
-          this.remote = null;
-        }
-        return "blocked";
-      }
-
-      const t0 = performance.now();
-      const { step, tx } = this.remote;
-      this.remote = null;
-      const reply = bake_port.adopt(tx, CORE_BAKE.pool);
-      if (!reply) return "blocked";
-      add_bake_counters(CORE_BAKE, reply.counters);
-      const bucket = bucket_from_baked(reply.mesh, step, "primary");
-      this.bucket_cache.set(step, bucket);
-      this.account(bucket.cubes.block.bytes);
-      record_build(performance.now() - t0, column_runs.count);
-
-      if (budget !== null && budget.remaining() <= 0) {
-        return this.wanted.some((s) => !this.bucket_cache.has(s)) ? "busy" : "done";
-      }
-    }
-  }
-
-  /** The slab ledger's name for a bake of this chunk at `step`. */
-  private bake_job(step: LodStep): string {
-    return `bake:${this.deps.page_idx}:${this.deps.offset.base_x},${this.deps.offset.base_y}:${step}`;
-  }
-
-  /** Drops any scan or bake in progress and returns what it holds. Called
-   * wherever this chunk stops needing them — which must include every place
-   * `pending` goes false, or the slot stays taken and nothing else builds. */
-  private abort_work(): void {
-    this.abort_scan();
-    if (this.bake) {
-      this.bake.job.abort();
-      this.bake = null;
-    }
-    if (this.remote) {
-      bake_port.cancel(this.remote.tx);
-      this.remote = null;
-    }
-  }
-
-  /** Drops a scan in progress and returns its composite to the pool. */
-  private abort_scan(): void {
-    if (!this.scan) return;
-    this.scan.job.abort();
-    release_chunk_volume(this.scan.volume);
-    this.scan = null;
-  }
-
-  /** Decor's own build — no volume scan, no dependency on the cube caches
-   * at all (a decor entry never paints a voxel). */
-  private build_decor_step(step: LodStep): DecorInstancesByVariant[] {
-    const cached = this.decor_cache.get(step);
-    if (cached) return cached;
-    const built = this.bundle_assets.map(({ bundle }) => build_decor_instances(this.tile as never, step, this.deps.page_idx, this.deps.offset.base_x, this.deps.offset.base_y, bundle));
-    this.decor_cache.set(step, built);
-    return built;
-  }
-
-  private build_decor_pair(primary: LodStep, secondary: LodStep | null): DecorLayoutPair {
+  /** The layout's decor from the cache: the module hands a tier's decor
+   * over before the layout, so a tier without one has none. */
+  private decor_pair(primary: LodStep, secondary: LodStep | null): DecorLayoutPair {
     return {
-      primary: this.build_decor_step(primary),
-      secondary: secondary !== null && secondary !== primary ? this.build_decor_step(secondary) : null,
+      primary: this.decor_cache.get(primary) ?? null,
+      secondary: secondary !== null && secondary !== primary ? this.decor_cache.get(secondary) ?? null : null,
     };
-  }
-
-  private build_layout_content(
-    primary: LodStep,
-    secondary: LodStep | null,
-  ): { buckets: BuiltChunkBucket[]; decor: DecorLayoutPair; bounds: ChunkBounds | null } | null {
-    const buckets = this.build_buckets(primary, secondary, null);
-    if (buckets === null) return null;
-    return { buckets, decor: this.build_decor_pair(primary, secondary), bounds: chunk_bounds(buckets) };
   }
 
   // ---- attaching ----
 
   /**
-   * The one place the layout changes, and the reason this file exists: the
-   * new layout's meshes are built and attached *here*, synchronously, so
-   * there is never a moment where a layout names meshes nothing owns. Under
-   * React that moment was real and the LOD scheduler ran inside it.
-   *
-   * Retain-before-release, so a bucket carried across two layouts never
-   * transiently reaches zero.
+   * The one place the layout changes: the new layout's meshes are attached
+   * here, synchronously, so there is never a moment where a layout names
+   * meshes nothing owns. Retain-before-release, so a bucket carried across
+   * two layouts never transiently reaches zero.
    */
   private apply_layout(next: LodLayout): void {
     const previous = this.layout;
     for (const bucket of next.buckets) retain_built_mesh(bucket.cubes);
     retain_decor_pair(next.decor);
     this.layout = next;
-    // A chunk that built and found nothing to draw is finished, not a hole,
-    // so EMPTY asks whether a layout landed at all.
-    lod_scheduler.set_flag(this.slot, EMPTY, !next.ready);
-    if (next.bounds !== previous.bounds) this.publish_bounds(next.bounds);
-    this.attach(next);
+    this.detach_all();
+    for (const bucket of next.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket);
+    this.decor_dirty = true;
+    if (this.blend !== null) {
+      apply_visibility(this.registry, this.blend);
+      this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
+    } else {
+      this.sync_decor();
+    }
     for (const bucket of previous.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(previous.decor);
     if (import.meta.env.DEV) node_counts.rebuilt++;
   }
 
-  private attach(layout: LodLayout): void {
-    this.detach_all();
-    for (const bucket of layout.buckets) {
-      if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket);
-    }
+  /** The layout's decor alone: the cubes stay as they are. */
+  private apply_decor(decor: DecorLayoutPair): void {
+    const previous = this.layout.decor;
+    retain_decor_pair(decor);
+    this.layout = { ...this.layout, decor };
     this.decor_dirty = true;
-    this.sync_decor();
+    if (this.blend !== null) this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
+    else this.sync_decor();
+    release_decor_pair(previous);
   }
 
   private attach_cubes(bucket: BuiltChunkBucket): void {
@@ -1011,25 +536,22 @@ export class ChunkNode {
     const geometry = create_geometry(built);
     const mesh = new THREE.Mesh(geometry, chunk_material());
     // Unconditional: the real cost is gated at the renderer level by the
-    // Canvas's own `shadows` prop, and three.js compiles no shadow-map
-    // shader while gl.shadowMap.enabled is false.
+    // Canvas's own `shadows` prop.
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.name = `${bucket.role}/lod/${bucket.lod_step}`;
     built.visibility.fill(bucket.role === "primary" ? 1 : 0);
 
-    // Not geometry.computeBoundingBox()/computeBoundingSphere(): those walk
-    // every vertex through three.js's generic accumulation, real cost on a
-    // rebuild storm. mesh_bounds' direct min/max scan over the already-baked
-    // real positions is exact and far cheaper.
+    // Not geometry.computeBoundingBox(): mesh_bounds' direct scan over the
+    // baked positions is exact and far cheaper on a rebuild storm.
     const bounds = mesh_bounds(built);
     if (bounds) {
-      geometry.boundingBox = set_three_box(new THREE.Box3(), bounds);
+      geometry.boundingBox = new THREE.Box3(new THREE.Vector3(bounds.min_x, bounds.min_y, bounds.min_z), new THREE.Vector3(bounds.max_x, bounds.max_y, bounds.max_z));
       const center = geometry.boundingBox.getCenter(new THREE.Vector3());
       geometry.boundingSphere = new THREE.Sphere(center, center.distanceTo(geometry.boundingBox.max));
     } else {
       geometry.boundingBox = new THREE.Box3();
-      geometry.boundingSphere = new THREE.Sphere();
+      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0), 0);
     }
 
     const attribute = geometry.getAttribute(VISIBLE_ATTR);
@@ -1044,17 +566,12 @@ export class ChunkNode {
   }
 
   /**
-   * Tells decor/field.ts what this chunk shows right now, if that has
-   * changed.
-   *
-   * A chunk owns no decor mesh any more; it owns a *contribution*, and the
-   * three things that can change it are whether the chunk is on screen, which
-   * LOD tier it is showing, and whether its instances were rebuilt. Anything
-   * else — an asset arriving, another chunk moving, the floating origin
-   * shifting — is not this chunk's business and never was.
+   * Tells decor/field.ts what this chunk shows right now, if that changed:
+   * whether the chunk is on screen, which tier it shows, and whether its
+   * instances were rebuilt. Nothing else is this chunk's business.
    */
   private sync_decor(want_role: ChunkLodRole = this.decor_role): void {
-    const shown = this.in_frustum;
+    const shown = this.shown;
     const role: ChunkLodRole = this.layout.decor.secondary !== null ? want_role : "primary";
     if (!this.decor_dirty && shown === this.decor_shown && role === this.decor_role) return;
     this.decor_dirty = false;
@@ -1064,34 +581,22 @@ export class ChunkNode {
       decor_field.clear_chunk(this.base_i);
       return;
     }
-
-    const source = role === "secondary" ? this.layout.decor.secondary! : this.layout.decor.primary;
+    const source = role === "secondary" ? this.layout.decor.secondary : this.layout.decor.primary;
     const contribution: Map<string, DecorVariantContribution> = new Map();
-    this.bundle_assets.forEach(({ bundle, geometries, materials }, bi) => {
-      const variants: DecorInstancesByVariant | undefined = source[bi];
-      if (!variants) return;
+    // The block's groups are every bundle's variants in bundle order, the
+    // order the kinds were taught (decor_registry.ts).
+    let group = 0;
+    for (const { bundle, geometries, materials } of this.bundle_assets) {
       geometries.forEach((geometry, variant) => {
         const material = materials[variant];
-        const instances = variants[variant];
+        const instances = source?.groups[group++] ?? null;
         // A variant whose model or skin is still in flight contributes
-        // nothing; the arrival rebuilds this chunk's decor and lands here
-        // again with both halves in hand.
+        // nothing; the arrival re-syncs this chunk and lands here.
         if (!geometry || !material || !instances) return;
         contribution.set(variant_key(bundle.kind, variant), { geometry, material, instances });
       });
-    });
+    }
     decor_field.set_chunk(this.base_i, contribution as DecorContribution);
-  }
-
-  /**
-   * One decision, two consumers. Cube content dithers between the two tiers
-   * per fragment; decor takes whichever tier it is mostly on, since an
-   * instance is drawn or it is not. That was a `visible` flip on a mesh and
-   * is now which tier the chunk contributes.
-   */
-  private apply_decision(decision: ChunkVisibilityDecision): void {
-    apply_visibility(this.registry, decision);
-    this.sync_decor(visibility_coverage(decision.secondary) > visibility_coverage(decision.primary) ? "secondary" : "primary");
   }
 
   private detach_all(): void {
@@ -1103,189 +608,5 @@ export class ChunkNode {
       entry.mesh.geometry = EMPTY_GEOMETRY;
     }
     this.attached_cubes = [];
-  }
-
-  // ---- the scheduler's calls ----
-
-  /**
-   * The bounding sphere the table culls this chunk by, in the chunk's own
-   * space: the measured box's centre and half its diagonal, or the nominal
-   * sphere while nothing is measured. A sphere that encloses the box never
-   * culls anything the box would have kept, and costs six plane dots instead
-   * of eight transformed corners — which is what makes testing every chunk
-   * every frame affordable (ChunkTable.refresh).
-   */
-  private publish_bounds(bounds: ChunkBounds | null): void {
-    if (bounds === null) {
-      lod_scheduler.set_bounds(this.slot, NOMINAL_CENTER, NOMINAL_CENTER, 0, NOMINAL_RADIUS);
-      return;
-    }
-    const dx = bounds.max_x - bounds.min_x;
-    const dy = bounds.max_y - bounds.min_y;
-    const dz = bounds.max_z - bounds.min_z;
-    lod_scheduler.set_bounds(
-      this.slot,
-      (bounds.min_x + bounds.max_x) * 0.5,
-      (bounds.min_y + bounds.max_y) * 0.5,
-      (bounds.min_z + bounds.max_z) * 0.5,
-      Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5,
-    );
-  }
-
-  /** The decision: which tier, blend state, what to commit. Rationed by the
-   * stage; reads what the table's refresh measured this frame. */
-  recheck(): void {
-    if (this.disposed) return;
-
-    if (!this.in_frustum) {
-      // Do not let GPU buffers or derived surfaces accumulate as the camera
-      // visits the world. An off-screen chunk keeps only its source key and
-      // rebuilds if it re-enters.
-      this.desired = { primary: OFF_SCREEN_LOD_STEP, secondary: null };
-      this.set_pending(this.layout.ready, RELEASE_REQUEST);
-      // A scan only means anything while this chunk is going to commit. Left
-      // open here it would hold the one scan slot for as long as the chunk
-      // stayed off-screen, and every other chunk in the world would report
-      // "blocked" — which read as: move somewhere new and nothing builds.
-      if (!this.pending) this.abort_work();
-      this.blend_active = false;
-      this.settling = false;
-      this.apply_decision({ primary: 1, secondary: 0 });
-      return;
-    }
-
-    const guide = get_lod_guide(Math.sqrt(this.distance2), this.layout.primary);
-    // Straight to the tier the criterion asks for. Walking one adjacent tier
-    // per commit (the tier walk this replaced) built every tier in between,
-    // and each one had to pass through the single global bake slot before the
-    // tier anyone wanted could start, so a 4 -> 2 -> 1 zoom-in paid for 2 in
-    // full and delayed every other chunk in the world while it did. Nothing
-    // needs the intermediate: commit leaves the layout alone while a build is
-    // in flight, so whatever is already on screen stays until the wanted tier
-    // is ready, and a chunk with nothing built went straight to its target
-    // already.
-    const blending = guide.blend_active && guide.blend_finer_step !== null && guide.blend_coarser_step !== null;
-    // Inside a band the finer tier is always primary, whatever guide.lod_step
-    // currently says. It crosses from finer to coarser at the band's
-    // midpoint, and letting that crossing rename the two tiers made the
-    // layout pending exactly halfway through the fade — which abandons the
-    // blend and snaps the chunk to one tier until the rebuild lands.
-    //
-    // That is why zooming out popped while zooming in did not: coarsening
-    // commits at the threshold itself, in the middle of the band, while
-    // refining commits at the band's own inner edge where the fade is over
-    // anyway. Neither direction needs a rebuild for it — the two tiers are
-    // the same two meshes either way, only their labels were swapping.
-    const primary = blending ? guide.blend_finer_step! : guide.lod_step;
-    const secondary = blending ? guide.blend_coarser_step! : null;
-    this.desired = { primary, secondary };
-    this.set_pending(
-      !this.layout.ready || this.layout.primary !== primary || this.layout.secondary !== secondary,
-      build_request(primary, secondary),
-    );
-    // Showing a tier that is not the one wanted. Reported by the ledger, and
-    // one of the conditions that keeps a control in the every-frame recheck
-    // set while it crosses a threshold.
-    this.settling = this.pending && this.layout.ready;
-    // Same rule as the off-screen branch: a tier that was being scanned for
-    // and is no longer wanted must give the slot back now, not never.
-    if (!this.pending) this.abort_work();
-    this.blend_active = blending;
-
-    if (this.pending || !this.blend_active || guide.blend_finer_step === null || guide.blend_coarser_step === null) {
-      this.apply_decision({ primary: 1, secondary: 0 });
-      return;
-    }
-    // Two ways to spend a blend band. Per chunk: a stable hash decides which
-    // tier this whole chunk shows, so neighbours cross at different moments
-    // and the world does not pop in one frame — cheap, and nothing is ever
-    // drawn twice. Per fragment: both tiers draw, punched with complementary
-    // dither patterns, which is what engines mean by an LOD cross-fade. The
-    // second reads as a real fade and costs the overdraw of drawing a
-    // blending chunk twice; it also wants temporal AA to average the pattern,
-    // which this renderer does not have (MSAA is spatial), so a moving camera
-    // will show the pattern crawling.
-    const pair = get_lod_pair_visibility(this.stable_hash, guide.coarse_fraction);
-    // The coarser tier leads and the finer one lags, rather than the two
-    // splitting the band between them. Complementary patterns only tile
-    // without gaps if both tiers fill the same volume, and a coarse box is
-    // shrunk to its cell's occupancy — so where it has pulled away from the
-    // fine geometry, exclusive patterns would dissolve to background instead
-    // of to the other tier. Overlapping them costs the overdraw of a doubly
-    // drawn chunk at mid-band and leaves no hole that isn't the coarse tier's
-    // own.
-    const f = guide.coarse_fraction;
-    const finer = pixel_dither ? 2 + Math.max(0, f * 2 - 1) : (pair.finer ? 1 : 0);
-    const coarser = pixel_dither ? Math.min(1, f * 2) : (pair.coarser ? 1 : 0);
-    const primary_is_finer = this.layout.primary === guide.blend_finer_step;
-    this.apply_decision({
-      primary: primary_is_finer ? finer : coarser,
-      secondary: primary_is_finer ? coarser : finer,
-    });
-  }
-
-  commit(budget: FrameBudget): boolean {
-    if (this.disposed || !this.pending) return false;
-    // A request is only valid on the side of the frustum it was made for.
-    // refresh moves in_frustum every frame while recheck, which sets the
-    // request, is rationed, so for up to LOD_RECHECK_INTERVAL a chunk can be
-    // on screen still holding the release it was handed off screen — and
-    // committing that would bake OFF_SCREEN_LOD_STEP as a real mesh: one
-    // 64u box per chunk, in the middle of the view (2026-09-12). Wait for the
-    // next recheck to ask for what this side actually wants.
-    if ((this.request === RELEASE_REQUEST) === this.in_frustum) {
-      // The request is for the other side of the frustum, and only recheck
-      // can replace it — but recheck is rationed, and at boot with a hundred
-      // chunks pending it may not reach this one for a while. Work in flight
-      // must not wait on that: a bake left open here held the one bake slot
-      // for the whole world, and nothing built for seventy seconds after
-      // load (2026-09-12). A slot is given back the moment its holder cannot
-      // use it, never at the next rationed pass.
-      this.abort_work();
-      return false;
-    }
-    if (!this.in_frustum) {
-      // A release detaches what the scene draws and nothing else. The run
-      // set and the cached tiers stay, under RETAIN_BUDGET_BYTES, so a chunk
-      // that comes back within seconds — a rotation, a zoom in and out — has
-      // its tier ready instead of rescanning. Work in flight is dropped: a
-      // scan or bake for a chunk nobody can see would only hold the slot.
-      this.abort_work();
-      // Keep the tiny measured AABB after releasing GPU data so a later polar
-      // change can re-enter using real geometry, not z=0.
-      this.apply_layout({
-        primary: OFF_SCREEN_LOD_STEP,
-        secondary: null,
-        buckets: [],
-        decor: EMPTY_DECOR_PAIR,
-        bounds: this.layout.bounds,
-        ready: false,
-      });
-      this.set_pending(false, RELEASE_REQUEST);
-      if (import.meta.env.DEV) node_counts.released++;
-      return true;
-    }
-
-    const desired = this.desired;
-    const buckets = this.build_buckets(desired.primary, desired.secondary, budget);
-    // Not built this frame: the scan or the bake is part-way, or waiting on
-    // the slot another chunk holds. Stay pending and
-    // leave whatever is on screen alone rather than popping it to empty. A
-    // scan that advanced is real work and is reported as such, so the
-    // budget loop counts it — the alternative reads as "nothing happened"
-    // and lets the loop walk on to start scans it cannot start.
-    if (buckets === null) return this.holds_slot;
-
-    const bounds = chunk_bounds(buckets);
-    this.apply_layout({
-      primary: desired.primary,
-      secondary: desired.secondary,
-      buckets,
-      decor: this.build_decor_pair(desired.primary, desired.secondary),
-      bounds,
-      ready: true,
-    });
-    this.set_pending(false, RELEASE_REQUEST);
-    return true;
   }
 }
