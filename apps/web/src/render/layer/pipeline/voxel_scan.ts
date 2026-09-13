@@ -22,10 +22,12 @@ export type MeshRun = {
   b: u32;
   layer_idx: u32;
   material_class: MaterialClass;
-  sub_sz: u32;
+  /** The box's inset in its cell, packed as the band stores it: three
+   * offsets then a size, SUB_CELL_NONE (0) meaning a full cell. */
   sub_ox: u32;
   sub_oy: u32;
   sub_oz: u32;
+  sub_sz: u32;
 };
 
 /** One band's overflow sub-voxels in a column, pushed as runs of height
@@ -36,7 +38,7 @@ function push_sub_voxel_runs(sink: RunSink, extra: SubVoxels, col: u32): void {
     const z = extra.z.mem[i];
     const m = extra.material.mem[i];
     const sub = extra.sub.mem[i];
-    sink.push(z, z, (m >>> 16) & 255, (m >>> 8) & 255, m & 255, extra.layer_idx.mem[i], (m >>> 24) as MaterialClass, sub >>> 24, sub & 255, (sub >>> 8) & 255, (sub >>> 16) & 255);
+    sink.push(z, z, (m >>> 16) & 255, (m >>> 8) & 255, m & 255, extra.layer_idx.mem[i], (m >>> 24) as MaterialClass, sub & 255, (sub >>> 8) & 255, (sub >>> 16) & 255, sub >>> 24);
   }
 }
 
@@ -67,10 +69,10 @@ type RunSink = {
     b: u32,
     layer_idx: u32,
     material_class: MaterialClass,
-    sub_sz: u32,
     sub_ox: u32,
     sub_oy: u32,
     sub_oz: u32,
+    sub_sz: u32,
   ): u32;
   extend(index: u32, z1: i32): void;
 };
@@ -91,8 +93,6 @@ function walk_column_runs(
 ): void {
   if (volume.bands.length === 0) return;
 
-  const band_x = Math.floor(cx / L2_BAND_CELL_SPAN);
-  const band_y = Math.floor(cy / L2_BAND_CELL_SPAN);
   const local_x = cx & L2_BAND_CELL_MASK;
   const local_y = cy & L2_BAND_CELL_MASK;
 
@@ -100,7 +100,7 @@ function walk_column_runs(
   let open_r = 0, open_g = 0, open_b = 0, open_layer = 0, open_class = MaterialClass.LAND;
 
   const ordered = only_band_z === undefined ? ordered_chunk_bands(volume) : (() => {
-    const band = get_chunk_band(volume, band_x, band_y, only_band_z);
+    const band = get_chunk_band(volume, only_band_z);
     return band ? [band] : [];
   })();
   let previous_band_z: i32 | null = null;
@@ -127,7 +127,7 @@ function walk_column_runs(
       const sub_sz = band.sub_cell?.[so + 3] ?? SUB_CELL_NONE;
 
       if (sub_sz !== SUB_CELL_NONE) {
-        sink.push(z, z, r, g, b, layer_idx, material_class, sub_sz, band.sub_cell![so], band.sub_cell![so + 1], band.sub_cell![so + 2]);
+        sink.push(z, z, r, g, b, layer_idx, material_class, band.sub_cell![so], band.sub_cell![so + 1], band.sub_cell![so + 2], sub_sz);
         open = -1;
       } else if (
         open >= 0 && material_class !== MaterialClass.OBJECT && open_r === r && open_g === g && open_b === b &&
@@ -159,12 +159,12 @@ class ArrayRunSink implements RunSink {
     b: u32,
     layer_idx: u32,
     material_class: MaterialClass,
-    sub_sz: u32,
     sub_ox: u32,
     sub_oy: u32,
     sub_oz: u32,
+    sub_sz: u32,
   ): u32 {
-    return this.runs.push({ z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz }) - 1;
+    return this.runs.push({ z0, z1, r, g, b, layer_idx, material_class, sub_ox, sub_oy, sub_oz, sub_sz }) - 1;
   }
 
   extend(index: u32, z1: i32): void {
@@ -195,13 +195,11 @@ export function topmost_voxel(
   only_band_z?: i32,
 ): { z: i32; r: u32; g: u32; b: u32; layer_idx: u32 } | null {
   if (volume.bands.length === 0) return null;
-  const band_x = Math.floor(cx / L2_BAND_CELL_SPAN);
-  const band_y = Math.floor(cy / L2_BAND_CELL_SPAN);
   const local_x = cx & L2_BAND_CELL_MASK;
   const local_y = cy & L2_BAND_CELL_MASK;
 
   if (only_band_z !== undefined) {
-    const band = get_chunk_band(volume, band_x, band_y, only_band_z);
+    const band = get_chunk_band(volume, only_band_z);
     return band ? topmost_in_band(band, local_x, local_y, only_band_z) : null;
   }
   const ordered = ordered_chunk_bands(volume);
@@ -279,16 +277,16 @@ const SC = new Lanes({
   r: Uint8Array,
   g: Uint8Array,
   b: Uint8Array,
-  layer: Uint32Array,
-  cls: Uint8Array,
-  sub_sz: Uint8Array,
+  layer_taps: Uint32Array,
+  material_class: Uint8Array,
   sub_ox: Uint8Array,
   sub_oy: Uint8Array,
   sub_oz: Uint8Array,
+  sub_sz: Uint8Array,
 }, { init_cap: 1 << 13, alloc: FIXED_ALLOC });
 
 const SPAN_SINK: RunSink = {
-  push(z0, z1, r, g, b, layer_idx, material_class, sub_sz, sub_ox, sub_oy, sub_oz) {
+  push(z0, z1, r, g, b, layer_idx, material_class, sub_ox, sub_oy, sub_oz, sub_sz) {
     const i = SC.push();
     const m = SC.mem;
     m.z0[i] = z0;
@@ -296,8 +294,8 @@ const SPAN_SINK: RunSink = {
     m.r[i] = r;
     m.g[i] = g;
     m.b[i] = b;
-    m.layer[i] = layer_idx * 0x01010101;
-    m.cls[i] = material_class;
+    m.layer_taps[i] = layer_idx * 0x01010101;
+    m.material_class[i] = material_class;
     m.sub_sz[i] = sub_sz;
     m.sub_ox[i] = sub_ox;
     m.sub_oy[i] = sub_oy;
@@ -461,8 +459,8 @@ function pack_scratch(span: u32): ColumnRunSet {
   set.r.set(m.r.subarray(0, n));
   set.g.set(m.g.subarray(0, n));
   set.b.set(m.b.subarray(0, n));
-  set.layer_taps.set(m.layer.subarray(0, n));
-  set.material_class.set(m.cls.subarray(0, n));
+  set.layer_taps.set(m.layer_taps.subarray(0, n));
+  set.material_class.set(m.material_class.subarray(0, n));
   set.sub_sz.set(m.sub_sz.subarray(0, n));
   set.sub_sx.set(m.sub_sz.subarray(0, n));
   set.sub_sy.set(m.sub_sz.subarray(0, n));

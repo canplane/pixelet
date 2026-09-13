@@ -133,7 +133,7 @@ Deno.test("pipeline - one dense band stores direct 5-byte materials without a pa
     });
   }
 
-  const band = get_chunk_band(volume, 0, 0, 0)!;
+  const band = get_chunk_band(volume, 0)!;
   assertEquals(band.material.byteLength + band.layer_idx.byteLength, 64 * 64 * 64 * 5);
   const last_idx = band_voxel_idx(63, 3, 0);
   assertEquals(band_material(band, last_idx).r, 255);

@@ -27,7 +27,7 @@ Deno.test("volume - a sub-cell buffer borrowed after another's reads as none eve
 
   const second = alloc_chunk_volume();
   set_chunk_voxel(second, 9, 9, 9, STONE, [1, 2, 3, 4]);
-  const band = get_chunk_band(second, 0, 0, 0)!;
+  const band = get_chunk_band(second, 0)!;
   const stale = band_voxel_idx(5, 5, 5) * 4;
   assertEquals([...band.sub_cell!.subarray(stale, stale + 4)], [0, 0, 0, 0]);
   release_chunk_volume(second);

@@ -31,6 +31,25 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
+     **Carried into the port, not fixed in TypeScript first** — an audit
+     of the mesher, scan and volume on 2026-09-13 found these, and each is
+     what Rust's types or an algorithm rewrite resolve on the way, so
+     changing them here would be paying twice:
+     - callbacks and objects in the kernel: `RunSink`, `fill_column_runs`'s
+       writer closure, `Arena<ZBucketAccum>`'s object factory and per-bucket
+       object reads, `locate_voxel`'s returned object, `sub_cell?.` and the
+       `fine!`/`coarse!` pair — enums and structs in Rust;
+     - the scan's module-level scratch (`SC`, `COLUMN_STARTS`, `open_scan`)
+       bound to the main thread's memory at import — a context, as the
+       mesher's is, when the scan is the piece being ported;
+     - algorithm: a run's own column scanned four times in `run_face_mask`
+       and neighbour walks restarting from the column head (O(k²) per
+       stacked column), the coarse pack's selection sort per cell,
+       `SubVoxels` as five parallel Vectors and its compaction on every
+       write — rewritten in Rust and checked byte for byte against the
+       TypeScript bake;
+     - `-1` sentinels in typed lanes and `Infinity`-style sentinels, and
+       exceptions as API guards — `Option` and `Result`.
   2. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a
@@ -154,6 +173,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Ledger ring as lanes.** The dev ledger's frame records are objects
   rebuilt every frame for the overlay. Measurement, not state; only worth
   it if the overlay itself shows up in a profile.
+- **The run set's per-axis inset has no writer.** `sub_sx`/`sub_sy` are
+  always a copy of `sub_sz` (the scan, the coarse pack and the object
+  adapter all set the three equal), so the per-axis design column_run.ts
+  documents — a pillar narrow in XY and full in Z — costs two bytes a run
+  for nothing today. Either the coarse bake learns to fit XY and Z
+  separately, or the lanes go; decided with the Rust mesher, since the
+  format is its input.
 - **POI fetch on an empty body.** `fetch_poi` throws `Unexpected end of
   JSON input` when the proxy returns an empty 200 (seen 2026-09-12, several
   pages at once); the page is retried by the next sync. Goes away with the

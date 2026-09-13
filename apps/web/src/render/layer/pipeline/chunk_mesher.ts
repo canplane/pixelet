@@ -127,21 +127,111 @@ for (let i = 0; i < 256; i++) {
 // outside for every face, derived from face_normal = tangent_u x tangent_v.
 // The -Z (bottom) face MUST stay last — emit_box conditionally drops it,
 // mirroring the old TERRAIN_BOX/OBJECT_BOX open-bottom-vs-full split.
-type Face = { normal: readonly [f64, f64, f64]; corners: readonly (readonly [f64, f64, f64])[] };
-const FACES: readonly Face[] = [
-  { normal: [1, 0, 0], corners: [[0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5], [0.5, -0.5, 0.5]] },
-  { normal: [-1, 0, 0], corners: [[-0.5, -0.5, -0.5], [-0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]] },
-  { normal: [0, 1, 0], corners: [[-0.5, 0.5, -0.5], [-0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.5, 0.5, -0.5]] },
-  { normal: [0, -1, 0], corners: [[-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, -0.5, 0.5], [-0.5, -0.5, 0.5]] },
-  { normal: [0, 0, 1], corners: [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]] },
-  { normal: [0, 0, -1], corners: [[-0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, -0.5, -0.5]] },
-];
-const FULL_FACE_CNT: u32 = FACES.length;
-const OPEN_BOTTOM_FACE_CNT: u32 = FACES.length - 1;
+// Flat tables rather than an array of face objects: emit_box reads them per
+// corner of every box in a chunk, and a struct of two f64 tables is what
+// the same table is in any language.
+const FULL_FACE_CNT: u32 = 6;
+const OPEN_BOTTOM_FACE_CNT: u32 = FULL_FACE_CNT - 1;
+/** FULL_FACE_CNT × 3: each face's outward normal. */
+const FACE_NORMAL = new Float64Array([
+  1,
+  0,
+  0,
+  -1,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  -1,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  -1,
+]);
+/** FULL_FACE_CNT × 4 × 3: each face's four corners, in winding order. */
+const FACE_CORNER = new Float64Array([
+  0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  0.5,
+  -0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  0.5,
+  0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  0.5,
+  -0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  -0.5,
+  0.5,
+  0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  0.5,
+  0.5,
+  -0.5,
+  0.5,
+  -0.5,
+  -0.5,
+]);
 
 // ---- Per-face visibility ----
 //
-// Bit i is FACES[i], so the order is +X, -X, +Y, -Y, +Z, -Z.
+// Bit i is face i of the tables above, so the order is +X, -X, +Y, -Y, +Z, -Z.
 //
 // Every box used to emit all five (or six) of its faces regardless of what
 // sat next to it. On flat ground that is four hidden faces per box: a 64x64
@@ -363,21 +453,23 @@ function emit_box(
 
   for (let f: u32 = 0; f < FULL_FACE_CNT; f++) {
     if ((faces & (1 << f)) === 0) continue;
-    const face = FACES[f];
+    const n = f * 3;
+    const nx = FACE_NORMAL[n], ny = FACE_NORMAL[n + 1], nz = FACE_NORMAL[n + 2];
     const base_v = builder.v_cnt;
     for (let c = 0; c < 4; c++) {
-      const corner = face.corners[c];
+      const k = (f * 4 + c) * 3;
+      const lx = FACE_CORNER[k], ly = FACE_CORNER[k + 1], lz = FACE_CORNER[k + 2];
       const vi = builder.v_cnt++;
       const po = vi * 3, lo = vi * 4;
-      builder.position[po] = cx + corner[0] * size_x;
-      builder.position[po + 1] = cy + corner[1] * size_y;
-      builder.position[po + 2] = cz + corner[2] * size_z;
-      builder.normal[po] = face.normal[0];
-      builder.normal[po + 1] = face.normal[1];
-      builder.normal[po + 2] = face.normal[2];
-      builder.local_pos[po] = corner[0];
-      builder.local_pos[po + 1] = corner[1];
-      builder.local_pos[po + 2] = corner[2];
+      builder.position[po] = cx + lx * size_x;
+      builder.position[po + 1] = cy + ly * size_y;
+      builder.position[po + 2] = cz + lz * size_z;
+      builder.normal[po] = nx;
+      builder.normal[po + 1] = ny;
+      builder.normal[po + 2] = nz;
+      builder.local_pos[po] = lx;
+      builder.local_pos[po + 1] = ly;
+      builder.local_pos[po + 2] = lz;
       builder.box_scale[po] = size_x;
       builder.box_scale[po + 1] = size_y;
       builder.box_scale[po + 2] = size_z;
@@ -440,10 +532,11 @@ function column_fills_range(set: ColumnRunSet, col: u32, z0: i32, z1: i32): bool
 
 const HIDES_SIDE: u32 = 1;
 const RISES_ABOVE: u32 = 2;
-const EXTENDS_BELOW: u32 = 4;
+const DIPS_BELOW: u32 = 4;
 /** Same span as HIDES_SIDE, but counting placed objects too. The face still
  * survives beside one; the edge just stops being a silhouette. */
 const ABUTS_SIDE: u32 = 8;
+const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
 
 /**
  * Both questions a neighbour column can answer about one run, in one pass.
@@ -462,7 +555,6 @@ const ABUTS_SIDE: u32 = 8;
 function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 {
   const above = z1 + 1;
   const below = z0 - 1;
-  const all = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | EXTENDS_BELOW;
   let rel: u32 = 0;
   // Shading asks whether the neighbour covers this run's side at all, so
   // consecutive runs count together: carving a cell and refilling it with
@@ -484,8 +576,8 @@ function neighbour_relation(set: ColumnRunSet, col: u32, z0: i32, z1: i32): u32 
     // have stayed opens a hole.
     if (r_z0 <= z0 && r_z1 >= z1 && set.material_class[i] !== MaterialClass.OBJECT) rel |= HIDES_SIDE;
     if (r_z0 <= above && r_z1 >= above) rel |= RISES_ABOVE;
-    if (r_z0 <= below && r_z1 >= below) rel |= EXTENDS_BELOW;
-    if (rel === all) break;
+    if (r_z0 <= below && r_z1 >= below) rel |= DIPS_BELOW;
+    if (rel === ALL_RELATIONS) break;
   }
   return rel;
 }
@@ -510,6 +602,12 @@ function run_include_bottom(set: ColumnRunSet, i: u32): boolean {
   return set.material_class[i] === MaterialClass.OBJECT;
 }
 
+/** Exactly one of the two faces meeting at a corner survives — where a wall
+ * can turn, and the only place a diagonal is worth scanning. */
+function wants_diagonal(mask: u32, a: u32, b: u32): boolean {
+  return ((mask & a) !== 0 && (mask & b) === 0) || ((mask & b) !== 0 && (mask & a) === 0);
+}
+
 /** What one side's neighbour relation does to the mask: hides the face,
  * or leaves its edge a silhouette; rises past the top or dips under the
  * bottom. The same four rules on each of the four sides. */
@@ -517,7 +615,7 @@ function side_bits(mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips
   if ((rel & HIDES_SIDE) !== 0) mask &= ~face;
   if ((rel & ABUTS_SIDE) === 0) mask |= crease;
   if ((rel & RISES_ABOVE) !== 0) mask |= rises;
-  if ((rel & EXTENDS_BELOW) !== 0) mask |= dips;
+  if ((rel & DIPS_BELOW) !== 0) mask |= dips;
   return mask;
 }
 
@@ -565,17 +663,16 @@ function run_face_mask(set: ColumnRunSet, span: u32, cx: u32, cy: u32, i: u32): 
   // One diagonal per quadrant, and only where a wall could actually turn:
   // one of the two faces meeting there exists while the other's own axis
   // neighbour hides it.
-  const wants_diagonal = (a: u32, b: u32) => ((mask & a) !== 0 && (mask & b) === 0) || ((mask & b) !== 0 && (mask & a) === 0);
-  if (cx + 1 < span && cy + 1 < span && wants_diagonal(FACE_PX, FACE_PY)) {
+  if (cx + 1 < span && cy + 1 < span && wants_diagonal(mask, FACE_PX, FACE_PY)) {
     if (column_fills_range(set, col + span + 1, z0, z1)) mask |= DIAG_PP;
   }
-  if (cx + 1 < span && cy > 0 && wants_diagonal(FACE_PX, FACE_NY)) {
+  if (cx + 1 < span && cy > 0 && wants_diagonal(mask, FACE_PX, FACE_NY)) {
     if (column_fills_range(set, col - span + 1, z0, z1)) mask |= DIAG_PN;
   }
-  if (cx > 0 && cy + 1 < span && wants_diagonal(FACE_NX, FACE_PY)) {
+  if (cx > 0 && cy + 1 < span && wants_diagonal(mask, FACE_NX, FACE_PY)) {
     if (column_fills_range(set, col + span - 1, z0, z1)) mask |= DIAG_NP;
   }
-  if (cx > 0 && cy > 0 && wants_diagonal(FACE_NX, FACE_NY)) {
+  if (cx > 0 && cy > 0 && wants_diagonal(mask, FACE_NX, FACE_NY)) {
     if (column_fills_range(set, col - span - 1, z0, z1)) mask |= DIAG_NN;
   }
   return mask;
@@ -762,6 +859,9 @@ export class BakeContext {
  * an edge to shade. A merge may not swallow a border carrying any of them. */
 const X_SEAM_BITS = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX;
 const Y_SEAM_BITS = FACE_PY | CREASE_PY | RISES_PY | DIPS_PY;
+/** The bits a merged box takes from its far cells rather than its near
+ * corner — merged_mask's own reason, below. */
+const FROM_FAR_BITS = X_SEAM_BITS | Y_SEAM_BITS | DIAG_PP | DIAG_PN | DIAG_NP;
 
 /** Bits that describe the +X/-X borders, which a merge along X consumes. */
 const X_BORDER_BITS = FACE_PX | FACE_NX | CREASE_PX | CREASE_NX | RISES_PX | RISES_NX | DIPS_PX | DIPS_NX |
@@ -786,11 +886,9 @@ function merged_mask(ctx: BakeContext, span: u32, col: u32, w: u32, h: u32): u32
   const far_x = ctx.merge_mask[col + (w - 1)];
   const far_y = ctx.merge_mask[col + (h - 1) * span];
   const far_xy = ctx.merge_mask[col + (h - 1) * span + (w - 1)];
-  const from_far = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX | FACE_PY | CREASE_PY | RISES_PY | DIPS_PY |
-    DIAG_PP | DIAG_PN | DIAG_NP;
-  return (near & ~from_far) |
-    (far_x & (FACE_PX | CREASE_PX | RISES_PX | DIPS_PX | DIAG_PN)) |
-    (far_y & (FACE_PY | CREASE_PY | RISES_PY | DIPS_PY | DIAG_NP)) |
+  return (near & ~FROM_FAR_BITS) |
+    (far_x & (X_SEAM_BITS | DIAG_PN)) |
+    (far_y & (Y_SEAM_BITS | DIAG_NP)) |
     (far_xy & DIAG_PP);
 }
 
@@ -811,7 +909,7 @@ function runs_match(set: ColumnRunSet, a: u32, b: u32): boolean {
 // corner.
 const MAX_BAKE_SPAN = CHUNK_CELL_SPAN;
 
-const CO_LANES = { z0: Int32Array, z1: Int32Array, rgb: Uint32Array, layer: Uint32Array, sub: Uint32Array };
+const CO_LANES = { z0: Int32Array, z1: Int32Array, rgb: Uint32Array, layer_taps: Uint32Array, sub: Uint32Array };
 
 /**
  * Meshes one run set. Both LOD tiers go through here: `span` is the grid
@@ -972,12 +1070,12 @@ function step_fine(b: FineBake): boolean {
   }
 
   const builder = b.builder!;
+  const unit = b.xy_scale * U_PER_CELL;
   const emit_end = Math.min(ctx.surviving.len, b.emit_at + BAKE_BOXES_PER_STEP * 6);
   for (let s_i = b.emit_at; s_i < emit_end; s_i += 6) {
     const cx = ctx.surviving.get(s_i), cy = ctx.surviving.get(s_i + 1), i = ctx.surviving.get(s_i + 2);
     const mask = ctx.surviving.get(s_i + 3), w = ctx.surviving.get(s_i + 4), h = ctx.surviving.get(s_i + 5);
     const sub_sz = set.sub_sz[i];
-    const unit = b.xy_scale * U_PER_CELL;
     const depth = (set.z1[i] + 1 - set.z0[i]) * U_PER_CELL;
     let min_x: f64, min_y: f64, min_z: f64, size_x: f64, size_y: f64, size_z: f64;
     if (sub_sz === SUB_CELL_NONE) {
@@ -1182,7 +1280,6 @@ function accumulate_run(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodSte
   if (set.sub_sz[i] !== SUB_CELL_NONE) {
     const frac = unpack_sub_cell_size(set.sub_sz[i]);
     const w = frac * frac * frac;
-    if (w <= 0) return cnt;
     const idx = find_or_create_bucket(ctx, start, cnt, Math.floor(run_z0 / lod_step));
     const acc = ctx.buckets.get(idx);
     acc.coverage += w;
@@ -1197,7 +1294,6 @@ function accumulate_run(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodSte
     const bucket_lo = bz * lod_step;
     const bucket_hi = bucket_lo + lod_step - 1;
     const overlap = Math.min(run_z1, bucket_hi) - Math.max(run_z0, bucket_lo) + 1;
-    if (overlap <= 0) continue;
     const idx = find_or_create_bucket(ctx, start, cnt, bz);
     cnt = Math.max(cnt, idx - start + 1);
     const acc = ctx.buckets.get(idx);
@@ -1244,7 +1340,6 @@ function pack_coarse_cell(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodS
         pick_bz = bz;
       }
     }
-    if (pick < 0) break;
     previous_bz = pick_bz;
 
     const acc = ctx.buckets.get(pick);
@@ -1264,7 +1359,7 @@ function pack_coarse_cell(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodS
     // Only full cells stack. Two shrunken boxes are two boxes with air
     // between them, which is the whole point of shrinking them.
     const co = ctx.co.mem;
-    if (sub === 0 && open >= 0 && bucket_lo === last_top + 1 && co.rgb[open] === rgb && co.layer[open] === taps && co.sub[open] === 0) {
+    if ((sub & INSET_SET) === 0 && open >= 0 && bucket_lo === last_top + 1 && co.rgb[open] === rgb && co.layer_taps[open] === taps && (co.sub[open] & INSET_SET) === 0) {
       co.z1[open] = bucket_hi;
       last_top = bucket_hi;
       continue;
@@ -1274,7 +1369,7 @@ function pack_coarse_cell(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodS
     m.z0[open] = bucket_lo;
     m.z1[open] = bucket_hi;
     m.rgb[open] = rgb;
-    m.layer[open] = taps;
+    m.layer_taps[open] = taps;
     m.sub[open] = sub;
     last_top = bucket_hi;
   }
@@ -1282,14 +1377,20 @@ function pack_coarse_cell(ctx: BakeContext, start: u32, cnt: u32, lod_step: LodS
 
 /**
  * One isotropic scale and the centring offset that goes with it, packed
- * `o | s<<8` and used for all three axes.
+ * `o | s<<8 | INSET_SET`, used for all three axes; a box that fills its
+ * cell is 0, with no bit set.
  *
  * Both are fractions of the extent the box would otherwise have had, which
  * is what makes one packed value serve X, Y and Z: the cell is a cube in
  * cells, so the same pair centres the box on every axis.
+ *
+ * The flag bit is what makes "full" and "inset" distinguishable whatever
+ * the two bytes hold: a scale that rounds to 0 — a cell below 1/512 full —
+ * packed to a zero word and was read back as a full box.
  */
+const INSET_SET: u32 = 1 << 16;
 function pack_inset(linear: f64): u32 {
-  return (pack_sub_cell_fraction((1 - linear) * 0.5) | (pack_sub_cell_fraction(linear) << 8)) >>> 0;
+  return (pack_sub_cell_fraction((1 - linear) * 0.5) | (pack_sub_cell_fraction(linear) << 8) | INSET_SET) >>> 0;
 }
 
 /**
@@ -1374,7 +1475,6 @@ type CoarseBake = {
 };
 
 function begin_coarse(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): CoarseBake {
-  if (lod_step === 1) throw new Error("render: finest LOD requires per-run meshing");
   return {
     ctx,
     set,
@@ -1447,10 +1547,12 @@ function step_coarse(b: CoarseBake): boolean {
     if (row_end < res) return false;
 
     ctx.co_start[res * res] = ctx.co.len;
-    const block = ctx.pool.try_acquire(column_run_set_bytes(ctx.co.len, CHUNK_CELL_SPAN));
+    // Carved for its own grid: res² columns, not a chunk's 64², which is
+    // what `span` on a run set means (column_run.ts).
+    const block = ctx.pool.try_acquire(column_run_set_bytes(ctx.co.len, res));
     b.starved = block === null;
     if (block === null) return false;
-    const coarse = carve_column_run_set(block, ctx.co.len, CHUNK_CELL_SPAN);
+    const coarse = carve_column_run_set(block, ctx.co.len, res);
     coarse.start.set(ctx.co_start.subarray(0, res * res + 1));
     const co = ctx.co.mem;
     for (let i: u32 = 0; i < ctx.co.len; i++) {
@@ -1460,11 +1562,13 @@ function step_coarse(b: CoarseBake): boolean {
       coarse.r[i] = (rgb >>> 16) & 255;
       coarse.g[i] = (rgb >>> 8) & 255;
       coarse.b[i] = rgb & 255;
-      coarse.layer_taps[i] = co.layer[i];
+      coarse.layer_taps[i] = co.layer_taps[i];
       coarse.material_class[i] = MaterialClass.LAND;
       const sub = co.sub[i];
       const inset = sub & 255, scale = (sub >>> 8) & 255;
-      coarse.sub_sz[i] = sub === 0 ? SUB_CELL_NONE : scale;
+      // SUB_CELL_NONE is 0 and a set scale is never 0 here: the fraction is
+      // packed to at least 1 before the flag, so the two cannot collide.
+      coarse.sub_sz[i] = (sub & INSET_SET) === 0 ? SUB_CELL_NONE : Math.max(1, scale);
       coarse.sub_sx[i] = scale;
       coarse.sub_sy[i] = scale;
       coarse.sub_ox[i] = inset;
@@ -1474,7 +1578,7 @@ function step_coarse(b: CoarseBake): boolean {
     ctx.cell_range.truncate(b.range_base);
     ctx.buckets.truncate(b.bucket_base);
     b.coarse = coarse;
-    b.fine = begin_fine(ctx, coarse, res, lod_step);
+    b.fine = begin_fine(ctx, coarse, coarse.span, lod_step);
     b.phase = 2;
     return false;
   }

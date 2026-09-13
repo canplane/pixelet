@@ -13,7 +13,7 @@ Deno.test("lanes - rows are claimed, written, swap-removed and the moved row is 
     t.mem.key[row] = BigInt(-i);
   }
   assertEquals(t.len, 5);
-  assertEquals(t.cap >= 5, true);
+  assertEquals(t.mem.id.length >= 5, true, "grew past init_cap");
   assertEquals(Array.from(t.mem.id.subarray(0, 5)), [0, 10, 20, 30, 40]);
 
   const from = t.swap_remove(1);
