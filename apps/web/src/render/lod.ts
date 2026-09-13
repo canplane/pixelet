@@ -79,6 +79,10 @@ export const LOD_CELL_PER_DISTANCE = { value: 2 / REFERENCE_THRESHOLD_0 };
  * derivation.
  */
 export const BADGE_CELLS_PER_CUBE: f64 = 4;
+/** The same, as a shift on the lattice: a badge node sits this many tiers
+ * above the cube tier at its range. */
+export const BADGE_SHAMT_OVER_CUBE: u32 = Math.log2(BADGE_CELLS_PER_CUBE);
+if (!Number.isInteger(BADGE_SHAMT_OVER_CUBE)) throw new Error("render: BADGE_CELLS_PER_CUBE must be a power of two");
 
 /**
  * Where a world-anchored billboard starts to fade and where it is gone, in
@@ -180,7 +184,13 @@ export function get_lod_pair_visibility(r: f64, coarse_fraction: f64): { finer: 
 // have no band to stay consistent with, so they keep the original, wider
 // LOD_MARGIN-based cushion — a hard pop there is already the least
 // noticeable case (see BLEND_ELIGIBLE_THRESHOLDS's own comment).
-function calculate_lod_step(dist: f64, current_lod_step: LodStep): LodStep {
+/**
+ * The tier a thing at `dist` shows, given the tier it shows now — the one
+ * criterion every lattice consumer climbs, cubes and badges alike, so they
+ * hand off at the same distances with the same hysteresis and move
+ * together on screen.
+ */
+export function lod_step_at(dist: f64, current_lod_step: LodStep): LodStep {
   for (let i = 0; i < LOD_THRESHOLDS.length; i++) {
     const raw_t: f64 = LOD_THRESHOLDS[i];
     const finer_step: LodStep = LOD_STEP_BY_LEVEL[i];
@@ -200,7 +210,8 @@ function calculate_lod_step(dist: f64, current_lod_step: LodStep): LodStep {
   return LOD_STEP_BY_LEVEL[LOD_STEP_BY_LEVEL.length - 1];
 }
 
-function get_lod_level(lod_step: LodStep): LodLevel {
+/** A step's place on the ladder, which is also its shift: step = 1 << level. */
+export function get_lod_level(lod_step: LodStep): LodLevel {
   if (lod_step === 1) return 0;
   if (lod_step === 2) return 1;
   if (lod_step === 4) return 2;
@@ -248,7 +259,7 @@ export type LodGuide = {
 };
 
 export function get_lod_guide(dist: f64, current_lod_step: LodStep): LodGuide {
-  const lod_step: LodStep = calculate_lod_step(dist, current_lod_step);
+  const lod_step: LodStep = lod_step_at(dist, current_lod_step);
   const lod_level: LodLevel = get_lod_level(lod_step);
   const instance_cnt: u32 = get_instance_cnt(lod_step);
 
@@ -260,7 +271,7 @@ export function get_lod_guide(dist: f64, current_lod_step: LodStep): LodGuide {
 
     const finer: LodStep = LOD_STEP_BY_LEVEL[i];
     const coarser: LodStep = LOD_STEP_BY_LEVEL[i + 1];
-    // calculate_lod_step's hysteresis can occasionally leave lod_step
+    // lod_step_at's hysteresis can occasionally leave lod_step
     // outside this specific {finer, coarser} pair even while `dist` sits
     // inside this threshold's band (e.g. right after a large, sudden
     // distance jump, before the per-chunk memoized current_lod_step catches

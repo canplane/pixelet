@@ -3,6 +3,7 @@
 import { assert, assertEquals } from "@std/assert";
 
 import { SpatialHash } from "./spatial_hash.ts";
+import { lattice_hash3, lattice_hash4 } from "./lattice_hash.ts";
 
 type Point = { id: number; x: number; y: number; z: number };
 
@@ -235,4 +236,9 @@ Deno.test("spatial_hash - a saturated table returns no id twice and none from a 
     }
     for (const id of within(points, probe.x, probe.y, probe.z, 1)) assert(ids.includes(id), `missed ${id}`);
   }
+});
+
+Deno.test("lattice_hash - a tier folded in separates a parent's address from its child's", () => {
+  assertEquals(lattice_hash3(3, -4, 5), lattice_hash4(3, -4, 5, 0));
+  assert(lattice_hash4(1, 1, 1, 0) !== lattice_hash4(1, 1, 1, 1));
 });

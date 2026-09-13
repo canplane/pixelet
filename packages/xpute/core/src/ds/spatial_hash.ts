@@ -64,17 +64,8 @@
  */
 
 import type { f64, i32, u32 } from "../kit/word.ts";
+import { lattice_hash3 } from "./lattice_hash.ts";
 import { HEAP_ALLOC, type TypedAlloc } from "./typed_alloc.ts";
-
-/**
- * Teschner's three large primes. Their only job is to decorrelate the axes
- * before the xor, so that a lattice of points does not collapse onto a few
- * buckets — any large primes do, and these are the published ones, kept so
- * a reader can match this against the paper.
- */
-const P1 = 73856093;
-const P2 = 19349663;
-const P3 = 83492791;
 
 /** 27 in 3D: the query box can straddle at most one cell boundary per axis
  * when the radius is the cell size, which is the sizing this is built for.
@@ -172,8 +163,7 @@ export class SpatialHash {
 
   /** Bucket for a cell coordinate triple. */
   private bucket(cx: i32, cy: i32, cz: i32): u32 {
-    const h = (Math.imul(cx, P1) ^ Math.imul(cy, P2) ^ Math.imul(cz, P3)) >>> 0;
-    return h % this.bucket_count;
+    return lattice_hash3(cx, cy, cz) % this.bucket_count;
   }
 
   /**
