@@ -13,6 +13,8 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import type { LodStep } from "@/render/lod.ts";
+import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { in_range_chunks } from "@/render/chunk_range.ts";
 import { page } from "../terrain/page_fixture.ts";
 import "../terrain/adapter.ts";
 import "../object/adapter.ts";
@@ -149,4 +151,86 @@ Deno.test("core sched - past the retain budget, the farthest off-screen chunk gi
     for (const mesh of c.heard.tiers.values()) release_chunk_mesh(mesh);
   }
   CORE_BUILD.pump();
+});
+
+Deno.test("core sched - the module mounts the chunks of a tiled page within the range, keeps them past it by the hysteresis, and unmounts the rest", () => {
+  const mounted = new Map<u32, [u32, u32]>();
+  const unmounted: u32[] = [];
+  CORE_BUILD.mounts = {
+    on_mount: (id, _page, bx, by) => {
+      mounted.set(id, [bx, by]);
+      CORE_BUILD.attach(id, { on_tier: (_g, _s, m) => release_chunk_mesh(m), on_runs: () => {}, on_visible: () => {}, on_layout: () => {}, on_blend: () => {}, on_evict: () => {} });
+    },
+    on_unmount: (id) => {
+      mounted.delete(id);
+      unmounted.push(id);
+    },
+  };
+  const PAGE = ivec.gather(3n, 4n, 0n);
+  const page_x = 3 * 1024, page_y = 4 * 1024;
+  CORE_BUILD.page(PAGE, true);
+  // Anchored at the page's corner with a radius of one chunk: the four
+  // chunks touching the corner's square of reach inside the page.
+  frame(0, 0, 0);
+  const f = CORE_BUILD.frame;
+  f[FRAME.has_anchor] = 1;
+  f[FRAME.anchor_x] = page_x + 128;
+  f[FRAME.anchor_y] = page_y + 128;
+  f[FRAME.render_dist] = 1;
+  f[FRAME.range_hysteresis] = 64;
+  CORE_BUILD.tick();
+  const bases = [...mounted.values()].map(([x, y]) => `${x},${y}`).sort();
+  assertEquals(bases, ["128,128", "128,64", "64,128", "64,64"]);
+
+  // A chunk's step away: within the hysteresis, nothing leaves.
+  f[FRAME.anchor_x] = page_x + 192;
+  CORE_BUILD.tick();
+  assertEquals(unmounted.length, 0);
+  assert(mounted.size > 4, "the new neighbours come in");
+
+  // The tile leaves: every chunk of the page goes.
+  CORE_BUILD.page(PAGE, false);
+  CORE_BUILD.tick();
+  assertEquals(mounted.size, 0);
+  CORE_BUILD.mounts = null;
+});
+
+Deno.test("core sched - the chunks the module mounts are render/chunk_range.ts's in_range_chunks, anchor for anchor", () => {
+  let mounted = new Set<string>();
+  const ids = new Map<u32, string>();
+  CORE_BUILD.mounts = {
+    on_mount: (id, _page, bx, by) => {
+      ids.set(id, `${bx},${by}`);
+      mounted.add(`${bx},${by}`);
+      CORE_BUILD.attach(id, { on_tier: (_g, _s, m) => release_chunk_mesh(m), on_runs: () => {}, on_visible: () => {}, on_layout: () => {}, on_blend: () => {}, on_evict: () => {} });
+    },
+    on_unmount: (id) => void mounted.delete(ids.get(id)!),
+  };
+  const PAGE = ivec.gather(5n, 2n, 0n);
+  const base = FROM_L3_IDX(PAGE);
+  let seed = 17;
+  const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648);
+  for (let k = 0; k < 20; k++) {
+    // A fresh range each time: the page out, a tick to unmount, the page in.
+    CORE_BUILD.page(PAGE, false);
+    CORE_BUILD.tick();
+    mounted = new Set();
+    const ax = 5 * 1024 - 600 + (next() % 2200), ay = 2 * 1024 - 600 + (next() % 2200);
+    const anchor = ivec.gather(BigInt(ax & ~63), BigInt(ay & ~63), 0n);
+    const radius = 100 + (next() % 900);
+    frame(0, 0, 0);
+    const f = CORE_BUILD.frame;
+    f[FRAME.has_anchor] = 1;
+    f[FRAME.anchor_x] = ax & ~63;
+    f[FRAME.anchor_y] = ay & ~63;
+    f[FRAME.render_dist] = radius;
+    f[FRAME.range_hysteresis] = 0;
+    CORE_BUILD.page(PAGE, true);
+    CORE_BUILD.tick();
+    const expected = in_range_chunks(base, anchor, radius).map((o) => o.key).sort();
+    assertEquals([...mounted].sort(), expected, `anchor ${ax & ~63},${ay & ~63} radius ${radius}`);
+  }
+  CORE_BUILD.page(PAGE, false);
+  CORE_BUILD.tick();
+  CORE_BUILD.mounts = null;
 });

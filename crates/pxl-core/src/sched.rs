@@ -12,7 +12,7 @@
 //! decision about them. Why each rule is what it is lives in the TypeScript
 //! it came from; the history there is the reasoning here.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::lod::{Ladder, COARSEST};
@@ -69,12 +69,29 @@ pub struct Frame {
     pub hard_slack_ms: f64,
     pub pixel_dither: bool,
     pub retain_budget_bytes: f64,
+    /// The range anchor — the map centre's chunk, in units — when there is
+    /// one, the radius chunks are mounted within, and how much further out a
+    /// mounted chunk is kept.
+    pub anchor: Option<[f64; 2]>,
+    pub render_dist: f64,
+    pub range_hysteresis: f64,
 }
 
 /// What the glue is told.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
     Build(BuildEvent),
+    /// A chunk came into range: its page and its page-local base, in units.
+    Mount {
+        id: u32,
+        page: u64,
+        base_x: u32,
+        base_y: u32,
+    },
+    /// A chunk left the range, and everything the module held for it is gone.
+    Unmount {
+        id: u32,
+    },
     /// Show or hide the chunk's group.
     Visible {
         id: u32,
@@ -188,6 +205,13 @@ pub struct Scheduler {
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
+    /// The pages with a terrain tile, which chunks are mounted from.
+    pages: BTreeSet<u64>,
+    pages_revision: u32,
+    /// The chunks the module mounted, by page and page-local base.
+    mounted: BTreeMap<(u64, u32, u32), u32>,
+    next_mount_id: u32,
+    mounted_for: Option<([f64; 2], f64, f64, u32)>,
 }
 
 impl Default for Scheduler {
@@ -228,6 +252,11 @@ impl Scheduler {
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
+            pages: BTreeSet::new(),
+            pages_revision: 0,
+            mounted: BTreeMap::new(),
+            next_mount_id: MOUNT_ID_BASE,
+            mounted_for: None,
         }
     }
 
@@ -335,6 +364,93 @@ impl Scheduler {
         }
     }
 
+    /// A page's terrain tile arrived, or left.
+    pub fn page(&mut self, page: u64, present: bool) {
+        let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
+        if changed {
+            self.pages_revision = self.pages_revision.wrapping_add(1);
+        }
+    }
+
+    /// render/chunk_range.ts's rule, a page and a chunk at a time: a chunk
+    /// whose square is within the radius of the anchor is mounted, and one
+    /// already mounted is kept until it is past the radius and the
+    /// hysteresis; a page with no tile, or out past both, mounts nothing.
+    fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
+        let Some(anchor) = frame.anchor else { return };
+        let key = (anchor, frame.render_dist, frame.range_hysteresis, self.pages_revision);
+        if self.mounted_for == Some(key) {
+            return;
+        }
+        self.mounted_for = Some(key);
+        let (r2, keep2) = (frame.render_dist.powi(2), (frame.render_dist + frame.range_hysteresis).powi(2));
+        let rect = |x0: f64, y0: f64, span: f64| {
+            let dx = if 0.0 < x0 {
+                x0
+            } else if 0.0 > x0 + span {
+                -(x0 + span)
+            } else {
+                0.0
+            };
+            let dy = if 0.0 < y0 {
+                y0
+            } else if 0.0 > y0 + span {
+                -(y0 + span)
+            } else {
+                0.0
+            };
+            dx * dx + dy * dy
+        };
+        let page_origin = |page: u64| {
+            let (px, py) = lanes_xy(page);
+            ((px << PAGE_SHAMT) as f64 - anchor[0], (py << PAGE_SHAMT) as f64 - anchor[1])
+        };
+
+        // Leave: every mounted chunk past the keep radius or on a page that left.
+        let gone: Vec<((u64, u32, u32), u32)> = self
+            .mounted
+            .iter()
+            .filter(|(&(page, bx, by), _)| {
+                if !self.pages.contains(&page) {
+                    return true;
+                }
+                let (x0, y0) = page_origin(page);
+                rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > keep2
+            })
+            .map(|(&k, &id)| (k, id))
+            .collect();
+        for (k, id) in gone {
+            self.mounted.remove(&k);
+            self.remove(world, id, emit);
+            emit(Event::Unmount { id });
+        }
+
+        // Enter: every chunk within the radius on a page with a tile.
+        let pages: Vec<u64> = self.pages.iter().copied().collect();
+        for page in pages {
+            let (x0, y0) = page_origin(page);
+            if rect(x0, y0, PAGE_SPAN) > keep2 {
+                continue;
+            }
+            for cy in 0..PAGE_CHUNK_AXIS {
+                for cx in 0..PAGE_CHUNK_AXIS {
+                    let (bx, by) = (cx * CHUNK_SPAN_CELLS, cy * CHUNK_SPAN_CELLS);
+                    if self.mounted.contains_key(&(page, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
+                        continue;
+                    }
+                    let id = self.next_mount_id;
+                    self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
+                    let (px, py) = lanes_xy(page);
+                    let (wx, wy) = ((px << PAGE_SHAMT) + bx as i64, (py << PAGE_SHAMT) + by as i64);
+                    let base = ((wx as u64 & 0xff_ffff) << 40) | ((wy as u64 & 0xff_ffff) << 16);
+                    emit(Event::Mount { id, page, base_x: bx, base_y: by });
+                    self.add(id, base, wx as f64, wy as f64, bx, by, blend_hash(page, bx, by));
+                    self.mounted.insert((page, bx, by), id);
+                }
+            }
+        }
+    }
+
     // ---- the tick ----
 
     /// One frame: measure every chunk, recheck, commit, build and reclaim
@@ -351,6 +467,7 @@ impl Scheduler {
             self.recheck_elapsed = 0.0;
         }
 
+        self.mount(world, &frame, emit);
         self.refresh(&frame, emit);
         let order = self.order(t0);
 
@@ -693,6 +810,33 @@ impl Scheduler {
             freed += 1;
         }
     }
+}
+
+/// Ids the module gives the chunks it mounts, apart from any the glue adds.
+const MOUNT_ID_BASE: u32 = 1 << 31;
+/// A page's side in cells and units, its chunks on a side, a chunk's side
+/// in cells, and the lattice shift from a page index to its base.
+const PAGE_SPAN: f64 = 1024.0;
+const PAGE_CHUNK_AXIS: u32 = 16;
+const CHUNK_SPAN_CELLS: u32 = 64;
+const PAGE_SHAMT: u32 = 10;
+
+/// A lattice word's X and Y lanes, signed: pvf3/ivec.ts's layout, X in the
+/// top 24 bits, Y in the next 24, Z in the low 16.
+fn lanes_xy(v: u64) -> (i64, i64) {
+    ((v as i64) >> 40, ((v << 24) as i64) >> 40)
+}
+
+/// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over the
+/// key chunk_node.ts named it by, `<page index>:<base x>,<base y>`.
+fn blend_hash(page: u64, bx: u32, by: u32) -> u32 {
+    let key = format!("{}:{},{}", page, bx, by);
+    let mut h: u32 = 2166136261;
+    for b in key.bytes() {
+        h ^= b as u32;
+        h = h.wrapping_mul(16777619);
+    }
+    h
 }
 
 /// What a chunk's place in the order is decided by.

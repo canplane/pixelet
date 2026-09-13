@@ -44,15 +44,18 @@ const OP_CHUNK_REMOVE = 2;
 const OP_CHUNK_SOURCE = 3;
 const OP_CHUNK_WANT = 4;
 const OP_EDITS = 6;
+const OP_PAGE = 7;
 const OP_TIER = 16;
 const OP_RUNS = 17;
 const OP_VISIBLE = 18;
 const OP_LAYOUT = 19;
 const OP_BLEND = 20;
 const OP_EVICT = 21;
+const OP_MOUNT = 22;
+const OP_UNMOUNT = 23;
 
 /** crates/pxl-wasm/src/lib.rs's frame block: doubles, in this order. */
-export const FRAME_WORDS = 56;
+export const FRAME_WORDS = 61;
 export const FRAME = {
   root: 0,
   origin: 16,
@@ -66,7 +69,21 @@ export const FRAME = {
   hard_slack_ms: 53,
   pixel_dither: 54,
   retain_budget_bytes: 55,
+  anchor_x: 56,
+  anchor_y: 57,
+  has_anchor: 58,
+  render_dist: 59,
+  range_hysteresis: 60,
 } as const;
+
+/** What the stage is told about the chunks the module mounts from the range. */
+export type MountListener = {
+  /** A chunk came into range: its page and page-local base, in units. The
+   * listener makes its node and attaches it as the chunk's sink. */
+  on_mount(id: u32, page_idx: bigint, base_x: u32, base_y: u32): void;
+  /** A chunk left the range, after its sink heard on_unmount. */
+  on_unmount(id: u32): void;
+};
 
 /** What a chunk is told. */
 export type ChunkBuildSink = {
@@ -83,6 +100,8 @@ export type ChunkBuildSink = {
   on_blend(primary: number, secondary: number, decor_secondary: boolean): void;
   /** Let go of a tier; a layout showing it keeps its own hold. */
   on_evict(step: LodStep): void;
+  /** The module unmounted the chunk: nothing more comes. */
+  on_unmount?(): void;
 };
 
 /** The scheduler's census, for the ledger. */
@@ -135,6 +154,8 @@ export class CoreBuild {
   private readonly cq: Ring;
   private readonly sinks = new Map<u32, ChunkBuildSink>();
   private next_id: u32 = 1;
+  /** Who makes and drops the nodes of mounted chunks. */
+  mounts: MountListener | null = null;
   private order: Uint32Array;
   /** Where the frame is written before a tick. */
   readonly frame: Float64Array;
@@ -163,6 +184,18 @@ export class CoreBuild {
       const id = w[at + RING_USER];
       const op = w[at + RING_OP] & 0xffff;
       const a = at + RING_ARGS;
+      if (op === OP_MOUNT) {
+        this.mounts?.on_mount(id, BigInt(w[a]) | (BigInt(w[a + 1]) << 32n), w[a + 2], w[a + 3]);
+        this.cq.advance();
+        continue;
+      }
+      if (op === OP_UNMOUNT) {
+        this.sinks.get(id)?.on_unmount?.();
+        this.sinks.delete(id);
+        this.mounts?.on_unmount(id);
+        this.cq.advance();
+        continue;
+      }
       const sink = this.sinks.get(id);
       if (op === OP_TIER) {
         const mesh = carve_baked_mesh(CORE_POOL.adopt(w[a + 2], w[a + 3]), w[a + 4], w[a + 5]);
@@ -188,6 +221,17 @@ export class CoreBuild {
     const b = BigInt.asUintN(64, base);
     this.submit(id, OP_CHUNK_ADD, id, Number(b & 0xffffffffn), Number(b >> 32n), tx0, ty0, base_x >>> 0, base_y >>> 0, stable_hash >>> 0);
     return id;
+  }
+
+  /** Makes `sink` the one a mounted chunk's events reach. */
+  attach(id: u32, sink: ChunkBuildSink): void {
+    this.sinks.set(id, sink);
+  }
+
+  /** Whether page `page_idx` has a terrain tile chunks can be mounted from. */
+  page(page_idx: bigint, present: boolean): void {
+    const b = BigInt.asUintN(64, page_idx);
+    this.submit(0, OP_PAGE, Number(b & 0xffffffffn), Number(b >> 32n), present ? 1 : 0);
   }
 
   /** Drops the chunk and its work; nothing more reaches its sink. */

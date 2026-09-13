@@ -83,13 +83,8 @@ export type ChunkRetention = {
 
 // ---- The live chunks ----
 
-/** Every live node by the module's id, and by its absolute base. */
+/** Every live node by the module's id. */
 export const chunk_nodes = new Map<u32, ChunkNode>();
-const by_base = new Map<IVec, ChunkNode>();
-
-export function chunk_at(base: IVec): ChunkNode | undefined {
-  return by_base.get(base);
-}
 
 export function chunk_retention(): ChunkRetention {
   const out: ChunkRetention = { nodes: 0, run_sets: 0, run_set_mb: 0, tiers: 0, decor_steps: 0, decor_instances: 0 };
@@ -187,6 +182,9 @@ type AttachedCubes = {
 export type ChunkNodeDeps = {
   page_idx: IVec;
   offset: ChunkOffsets;
+  /** The id the module mounted the chunk under; without one the node adds
+   * its own chunk to the module. */
+  id?: u32;
 };
 
 export class ChunkNode {
@@ -265,29 +263,37 @@ export class ChunkNode {
       subscribe_decor_column(this.object_key, () => this.on_decor_change()),
     );
 
-    this.id = CORE_BUILD.add(
-      this,
-      this.base_i,
-      ivec.to_real(ivec.X(this.base_i)),
-      ivec.to_real(ivec.Y(this.base_i)),
-      Number(ivec.X(page_off)) << -CELL_SHAMT,
-      Number(ivec.Y(page_off)) << -CELL_SHAMT,
-      blend_hash(`${page_idx.toString()}:${offset.key}`),
-    );
+    if (deps.id !== undefined) {
+      this.id = deps.id;
+      CORE_BUILD.attach(this.id, this);
+    } else {
+      this.id = CORE_BUILD.add(
+        this,
+        this.base_i,
+        ivec.to_real(ivec.X(this.base_i)),
+        ivec.to_real(ivec.Y(this.base_i)),
+        Number(ivec.X(page_off)) << -CELL_SHAMT,
+        Number(ivec.Y(page_off)) << -CELL_SHAMT,
+        blend_hash(`${page_idx.toString()}:${offset.key}`),
+      );
+    }
     this.tell_source();
     chunk_nodes.set(this.id, this);
-    by_base.set(this.base_i, this);
 
     if (import.meta.env.DEV) node_counts.added++;
   }
 
-  dispose(): void {
+  /** The module unmounted this chunk: everything it held there is gone. */
+  on_unmount(): void {
+    this.dispose(false);
+  }
+
+  dispose(tell_module: boolean = true): void {
     if (this.disposed) return;
     this.disposed = true;
     for (const off of this.unsubscribes) off();
-    CORE_BUILD.remove(this.id);
+    if (tell_module) CORE_BUILD.remove(this.id);
     chunk_nodes.delete(this.id);
-    by_base.delete(this.base_i);
     decor_field.clear_chunk(this.base_i);
     this.detach_all();
     for (const bucket of this.layout.buckets) release_built_mesh(bucket.cubes);

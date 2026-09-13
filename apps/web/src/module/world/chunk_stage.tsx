@@ -25,18 +25,19 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
+import { FROM_L3_IDX, L4_BASE, L4_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useMapStore } from "@/module/map/store.ts";
 import { useAnchorRegistry } from "@/module/world/anchor/context.tsx";
 
-import { chunk_at, chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
+import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
 import { CORE_BUILD, FRAME } from "@/render/layer/pipeline/core_build.ts";
-import { AnchorNode } from "@/module/world/anchor/node.tsx";
+import type { AnchorRegistry } from "@/module/world/anchor/registry.ts";
+import { world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { decor_field } from "@/module/world/decor/field.ts";
-import { tile_pages, useTileStore } from "@/module/world/terrain/store.ts";
+import { tile_pages } from "@/module/world/terrain/store.ts";
 import { poi_pages } from "@/module/world/poi/store.ts";
 import { fetch_pending_count } from "@/module/world/sched/fetch_scheduler.ts";
 import { draw_census_install, draw_census_take } from "@/module/world/sched/draw_census.ts";
@@ -45,8 +46,7 @@ import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/led
 import { HARD_SLACK_MS, useTick } from "@/module/world/sched/tick.ts";
 import { lead_point } from "@/module/world/sched/priority.ts";
 import { useFrameRefs } from "@/module/world/frame/context.tsx";
-import { useRangeAnchor } from "@/module/world/frame/use_range_anchor.ts";
-import { in_range_chunks, pages_in_radius, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
+import { range_anchor_of, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
 import { post_cfg, render_cfg } from "@/module/world/environment/config.ts";
 import { set_lod_projection } from "@/render/lod.ts";
 import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
@@ -120,94 +120,46 @@ function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offs
   };
 }
 
-type PageChunksProps = { page_idx: IVec; range_anchor: IVec };
-
-/** A chunk's absolute base from its page and its page-local offset — the
- * same value ChunkNode registers itself under. */
-function chunk_base(page_base: IVec, offset: { base_x: number; base_y: number }): IVec {
-  return ivec.add(page_base, ivec.gather(BigInt(offset.base_x), BigInt(offset.base_y), 0n));
-}
-
-/** The live nodes of one page, copied out: disposing removes slots. */
-function this_page_nodes(page_idx: IVec): ChunkNode[] {
-  return [...chunk_nodes.values()].filter((node) => node.page_idx === page_idx);
-}
-
 /**
- * One page's worth of chunks, created and destroyed imperatively.
- *
- * This is where React stops. A page is a handful of components; its ~256
- * chunks are ChunkNodes (chunk_node.ts), plain objects hung off one group.
- * The rendered tree used to reach all the way down — a component per chunk,
- * per LOD role, and per decor variant, thousands of them re-reconciled
- * whenever a layout changed — which bought nothing (a chunk is described by
- * no props and reads no other chunk's state) and cost the deferral that made
- * chunk memory unsafe to reason about.
- *
- * `offsets` changes only when the page or the range anchor does, so the diff
- * below is normally empty; when it does change it is a set difference by
- * chunk key, not a reconciliation.
+ * The anchor groups the mounted chunks hang under, one a page: an L4 anchor
+ * group from the registry, and a holder at the page's base inside it. Made
+ * with a page's first chunk and let go with its last. The module decides
+ * which chunks exist (crates/pxl-core/src/sched.rs, the range mount); this
+ * only gives each a place in the scene.
  */
-const PageChunks = memo(({ page_idx, range_anchor }: PageChunksProps) => {
-  const page_base = FROM_L3_IDX(page_idx);
-  const group = useMemo(() => {
-    const g = new THREE.Group();
-    g.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
-    return g;
-  }, [page_idx]);
-  // Two sets, not one: what to build, and what to keep once built. A chunk
-  // that merely drifted past the range is left alone until it is well past
-  // it — see RANGE_HYSTERESIS. Both are chunk bases: a chunk's identity in
-  // the scheduler table, which is where this diff asks what is live.
-  const offsets = useMemo(() => in_range_chunks(page_base, range_anchor), [page_base, range_anchor]);
-  const keep = useMemo(
-    () =>
-      new Set(
-        in_range_chunks(page_base, range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS).map((offset) => chunk_base(page_base, offset)),
-      ),
-    [page_base, range_anchor],
-  );
+type PageHolder = { holder: THREE.Group; anchor_idx: IVec; count: u32 };
+const page_holders = new Map<IVec, PageHolder>();
+const mounted_page = new Map<u32, IVec>();
 
-  useLayoutEffect(() => {
-    for (const node of this_page_nodes(page_idx)) {
-      if (!keep.has(node.base_i)) node.dispose();
-    }
-    for (const offset of offsets) {
-      if (chunk_at(chunk_base(page_base, offset))) continue;
-      const node = new ChunkNode({ page_idx, offset });
-      group.add(node.group);
-    }
-  }, [offsets, keep, page_idx, page_base, group]);
+function mount_chunk(registry: AnchorRegistry, id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
+  let page = page_holders.get(page_idx);
+  if (!page) {
+    const page_base = FROM_L3_IDX(page_idx);
+    const anchor_idx = L4_IDX(page_base);
+    const holder = new THREE.Group();
+    holder.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
+    const local = ivec.sub(page_base, L4_BASE(page_base));
+    holder.position.set(ivec.to_real(ivec.X(local)), ivec.to_real(ivec.Y(local)), ivec.to_real(ivec.Z(local)));
+    registry.link(anchor_idx).add(holder);
+    page = { holder, anchor_idx, count: 0 };
+    page_holders.set(page_idx, page);
+  }
+  page.count++;
+  mounted_page.set(id, page_idx);
+  const node = new ChunkNode({ page_idx, offset: { key: `${base_x},${base_y}`, base_x, base_y }, id });
+  page.holder.add(node.group);
+}
 
-  // Destruction on unmount is deferred by one microtask, and a mount that
-  // arrives in that window cancels it. StrictMode replays every mount as
-  // mount, cleanup, mount, and a cleanup that destroyed the nodes made the
-  // second mount rebuild the whole page from the scan up — up to 256 chunks a
-  // page, on every page the view entered, in development only. Measured
-  // 2026-09-12: with StrictMode on, a zoomed-out pan unmounted five pages and
-  // disposed up to 510 nodes a frame; with it off, none. A real unmount is
-  // never followed by a mount in the same microtask, so it still destroys
-  // exactly as before. AnchorNode survives the same replay for the same
-  // reason (its own doc comment).
-  const teardown = useRef<Promise<void> | null>(null);
-  useEffect(() => {
-    teardown.current = null;
-    return () => {
-      const pending = Promise.resolve().then(() => {
-        if (teardown.current !== pending) return;
-        for (const node of this_page_nodes(page_idx)) node.dispose();
-      });
-      teardown.current = pending;
-    };
-  }, [page_idx]);
-
-  return (
-    <AnchorNode i={page_base}>
-      <primitive object={group} />
-    </AnchorNode>
-  );
-});
-PageChunks.displayName = "PageChunks";
+function unmount_chunk(registry: AnchorRegistry, id: u32): void {
+  const page_idx = mounted_page.get(id);
+  if (page_idx === undefined) return;
+  mounted_page.delete(id);
+  const page = page_holders.get(page_idx)!;
+  if (--page.count > 0) return;
+  page.holder.removeFromParent();
+  registry.unlink(page.anchor_idx);
+  page_holders.delete(page_idx);
+}
 
 /**
  * Runs the scheduler's passes over lod_scheduler's lanes — mounted once
@@ -275,7 +227,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   useTick("visible", ({ state, delta, budget }) => {
     if (import.meta.env.DEV) gpu_timer_begin();
     visible_pass.current = null;
-    if (chunk_nodes.size === 0) return;
     update_frustum(frustum, state.camera, projection);
     // The tier criterion is a screen-space one (render/lod.ts), and the
     // other layers that read it (decor, badges) read it from here; the
@@ -333,6 +284,14 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     f[FRAME.hard_slack_ms] = HARD_SLACK_MS;
     f[FRAME.pixel_dither] = useSettingsStore.getState().pixel_dither ? 1 : 0;
     f[FRAME.retain_budget_bytes] = RETAIN_BUDGET_BYTES;
+    // The range the module mounts chunks within, from the chunk the map
+    // centre is in: render/chunk_range.ts's anchor, radius and hysteresis.
+    const range_anchor = target ? range_anchor_of(target.i) : null;
+    f[FRAME.has_anchor] = range_anchor === null ? 0 : 1;
+    f[FRAME.anchor_x] = range_anchor === null ? 0 : ivec.to_real(ivec.X(range_anchor));
+    f[FRAME.anchor_y] = range_anchor === null ? 0 : ivec.to_real(ivec.Y(range_anchor));
+    f[FRAME.render_dist] = render_cfg.CHUNK_RENDER_DIST;
+    f[FRAME.range_hysteresis] = RANGE_HYSTERESIS;
 
     const t0 = import.meta.env.DEV ? performance.now() : 0;
     const draw = CORE_BUILD.tick();
@@ -443,37 +402,38 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
 export type ChunkStageProps = Record<string, never>;
 
-/** Renders terrain/objects AND every decor kind together — see this file's
- * own top doc comment and decor_layer.ts's for why decor no longer has its
- * own top-level component (DecorLayer, retired 2026-09-05). Decor models are
- * not passed in either: decor/asset_store.ts owns them and every ChunkNode
- * subscribes to it directly. */
+/**
+ * Tells the module which pages have a terrain tile, and makes and drops the
+ * nodes of the chunks it mounts from them. Everything else — which chunks,
+ * when — is the module's, from the range anchor the visible pass writes
+ * into the frame. Decor models are not passed in: decor/asset_store.ts owns
+ * them and every ChunkNode subscribes to it directly.
+ */
 export const ChunkStage = memo((_: ChunkStageProps) => {
-  const tile_revision = useTileStore((state) => state.revision);
-
-  // tile_revision: the keys live in tile_pages; the revision is what moves.
-  const tiles = useMemo(() => Array.from(tile_pages.keys()), [tile_revision]);
-  const range_anchor = useRangeAnchor();
-  // Every page the render range reaches, nearest first, that has a tile to
-  // draw from. A page whose tile has not arrived contributes nothing and is
-  // simply not mounted; which chunks inside a mounted page become scene
-  // objects is in_range_chunks' own decision.
-  const visible_pages = useMemo(() => {
-    if (range_anchor === null) return tiles;
-    const have = new Set(tiles);
-    // The same hysteresis one level up: a page is kept mounted while any
-    // chunk of it could still be kept, so crossing the range by metres never
-    // destroys a page's worth of built chunks.
-    return pages_in_radius(range_anchor, render_cfg.CHUNK_RENDER_DIST + RANGE_HYSTERESIS)
-      .filter(({ page_idx }) => have.has(page_idx))
-      .map(({ page_idx }) => page_idx);
-  }, [tiles, range_anchor]);
-
-  if (range_anchor === null) return null;
-  return (
-    <group name="chunk-stage">
-      {visible_pages.map((page_idx) => <PageChunks key={page_idx.toString()} page_idx={page_idx} range_anchor={range_anchor} />)}
-    </group>
-  );
+  const anchor_registry = useAnchorRegistry();
+  useLayoutEffect(() => {
+    CORE_BUILD.mounts = {
+      on_mount: (id, page_idx, base_x, base_y) => mount_chunk(anchor_registry, id, page_idx, base_x, base_y),
+      on_unmount: (id) => unmount_chunk(anchor_registry, id),
+    };
+    for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, true);
+    const off = world_wakers.subscribe_topic(WorldTopic.TERRAIN_PAGE, (key) => {
+      if (key === null) {
+        for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, true);
+        return;
+      }
+      const page_idx = BigInt.asUintN(64, key);
+      CORE_BUILD.page(page_idx, tile_pages.has(page_idx));
+    });
+    // The stage leaving takes its pages out of the range, and the module
+    // unmounts their chunks on the next tick. Nothing is disposed here: a
+    // StrictMode replay puts every page back before that tick, and the
+    // module then has nothing to unmount and nothing to mount again.
+    return () => {
+      off();
+      for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, false);
+    };
+  }, [anchor_registry]);
+  return null;
 });
 ChunkStage.displayName = "ChunkStage";

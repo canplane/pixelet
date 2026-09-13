@@ -772,6 +772,7 @@ pub const OP_CHUNK_SOURCE: u32 = 3; // id, has page, show structures, land, wate
 /// The builder's own ask, bypassing the scheduler: for the tests that hold
 /// a build to the TypeScript pipeline, never sent by the glue.
 pub const OP_CHUNK_WANT: u32 = 4; // id, step, step (0 is none)
+pub const OP_PAGE: u32 = 7; // page lo, page hi, present
 pub const OP_EDITS: u32 = 6; // hide, key lo, key hi, band, pos, carve, key lo, key hi, lx, ly, lz, size (f32 bits)
 /// Completions.
 pub const OP_TIER: u32 = 16; // user id; generation, step, at, bytes, vertex count, index count
@@ -780,12 +781,15 @@ pub const OP_VISIBLE: u32 = 18; // user id; on
 pub const OP_LAYOUT: u32 = 19; // user id; primary, secondary, ready
 pub const OP_BLEND: u32 = 20; // user id; primary weight, secondary weight (f32 bits), decor takes the secondary
 pub const OP_EVICT: u32 = 21; // user id; step
+pub const OP_MOUNT: u32 = 22; // user id; page lo, page hi, base x, base y
+pub const OP_UNMOUNT: u32 = 23; // user id
 
 /// Doubles in the frame block, in the order sched::Frame names them: the
 /// root matrix (16), the origin (3), the planes (24), the camera (3), the
 /// lead (3), then viewport height, fov, delta seconds, budget, hard slack,
-/// pixel dither and the retain budget.
-pub const FRAME_WORDS: usize = 56;
+/// pixel dither and the retain budget, then the range anchor's x and y,
+/// whether there is one, the render distance and the range hysteresis.
+pub const FRAME_WORDS: usize = 61;
 
 #[no_mangle]
 pub extern "C" fn pxl_ring_sq() -> u32 {
@@ -833,6 +837,8 @@ fn completion(e: &Event) -> Entry {
             decor_secondary,
         } => put(id, OP_BLEND, &[primary.to_bits(), secondary.to_bits(), decor_secondary as u32]),
         Event::Evict { id, step } => put(id, OP_EVICT, &[step]),
+        Event::Mount { id, page, base_x, base_y } => put(id, OP_MOUNT, &[page as u32, (page >> 32) as u32, base_x, base_y]),
+        Event::Unmount { id } => put(id, OP_UNMOUNT, &[]),
     }
     done
 }
@@ -881,6 +887,7 @@ fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
             s.sched.source(&mut world, a[0], page, a[2] != 0, &mut emit);
         }
         OP_CHUNK_WANT => s.sched.builder.want(&mut world, a[0], [a[1], a[2]]),
+        OP_PAGE => s.sched.page(key(a[0], a[1]), a[2] != 0),
         OP_EDITS => {
             let f = |w: u32| f32::from_bits(w) as f64;
             let hide = (a[0] != 0).then(|| (key(a[1], a[2]), a[3] as i32, a[4]));
@@ -1004,6 +1011,9 @@ pub extern "C" fn pxl_tick() -> u32 {
     frame.hard_slack_ms = f[53];
     frame.pixel_dither = f[54] != 0.0;
     frame.retain_budget_bytes = f[55];
+    frame.anchor = (f[58] != 0.0).then_some([f[56], f[57]]);
+    frame.render_dist = f[59];
+    frame.range_hysteresis = f[60];
     let (mut world, events, sched) = world_of(s);
     let draw = sched.tick(&mut world, frame, &now, &mut |e| events.push_back(e));
     flush(s);

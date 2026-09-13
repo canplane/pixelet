@@ -62,8 +62,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the journal and the revisions are the module's, read as views; the
      object store bumps its column and cell topics inside its reindex, and
      the sources still in TypeScript — the page tables, decor's assets, the
-     eraser's hide — bump through an export. Still TypeScript: which chunks
-     exist (the page mount diff), decor, and the raycast's composite.
+     eraser's hide — bump through an export. Then the range mount: which
+     chunks exist is the module's, from the range anchor, the render
+     distance and its hysteresis in the frame and the pages with a tile
+     (held to render/chunk_range.ts's in_range_chunks by
+     core_sched.test.ts); the stage makes a node and an anchor holder for a
+     chunk the module mounts, and drops them when it unmounts. Still
+     TypeScript: decor, and the raycast's composite.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

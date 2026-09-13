@@ -7,6 +7,9 @@ import { Ring, RING_OP, RING_RESULT, RING_USER } from "@xpute/core/ipc/ring.ts";
 
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 
+/** An op crates/pxl-wasm/src/lib.rs does not number. */
+const UNNUMBERED = 0xfff;
+
 Deno.test("rings - the glue submits, one drain completes each in order, and a full completion ring holds the rest back", () => {
   assert(CORE_PXL !== null);
   const p = CORE_PXL;
@@ -21,7 +24,7 @@ Deno.test("rings - the glue submits, one drain completes each in order, and a fu
   assertEquals(sq.len, 0);
 
   // The completion ring is now full: new submissions wait in theirs.
-  for (let k = 0; k < 5; k++) sq.push(1000 + k, 7, 0);
+  for (let k = 0; k < 5; k++) sq.push(1000 + k, UNNUMBERED, 0);
   assertEquals(p.pxl_drain(), 0, "nothing completes into a full ring");
   assertEquals(sq.len, 5, "and nothing is dropped");
 
@@ -32,6 +35,6 @@ Deno.test("rings - the glue submits, one drain completes each in order, and a fu
   }
   assertEquals(p.pxl_drain(), 5);
   const at = cq.peek();
-  assertEquals([cq.words[at + RING_USER], cq.words[at + RING_OP], cq.words[at + RING_RESULT] | 0], [1000, 7, Errno.ENOSYS]);
+  assertEquals([cq.words[at + RING_USER], cq.words[at + RING_OP], cq.words[at + RING_RESULT] | 0], [1000, UNNUMBERED, Errno.ENOSYS]);
   while (cq.peek() >= 0) cq.advance();
 });
