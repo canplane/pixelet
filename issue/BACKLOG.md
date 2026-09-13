@@ -121,6 +121,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
+- **Compression, chosen by traffic.** Recorded 2026-09-13, not scheduled:
+  [20260913-compression-by-traffic.md](./20260913-compression-by-traffic.md).
+  Brotli q11 takes a third off the baked terrain pages and a fifth off POI
+  against gzip, and every browser on the floor takes `br`; zstd is below
+  the floor in Safari. The baked pages go first when this is taken up (a new
+  terrain version, the bake, the uploads and the monthly workflow). Live
+  responses want a fast level, realtime messages want an encoding and a
+  stream more than a codec, and the codec stays in the transport, never in
+  the command frame.
+
 - **Decor: the impostor tier.** Decided 2026-09-13
   ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
   "Closed"): each variant rendered once to a sprite, far instances drawn
