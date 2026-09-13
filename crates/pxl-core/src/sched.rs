@@ -25,15 +25,9 @@ const CHUNK_WORLD_SPAN: f64 = 64.0;
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
 /// How often every chunk is rechecked, whatever is moving.
 const RECHECK_INTERVAL_S: f64 = 0.15;
-/// Layouts applied per frame on screen, and releases off it — more of the
-/// latter after a frame that had a block refused: a release is cheap, and
-/// what an off-screen chunk still shows is what the refused block needs
-/// room among. A zoom-in leaves a thousand chunks showing their last
-/// layout off screen; at two a frame that is eight seconds of the fine
-/// tiers finding no room (2026-09-14).
+/// Layouts applied per frame on screen, and releases off it.
 const MAX_COMMITS_PER_FRAME: u32 = 8;
 const MAX_RELEASES_PER_FRAME: u32 = 2;
-const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 /// Off-screen chunks that may give their built work back in one frame, and
 /// how many more when a block was refused this frame: a refusal is a build
 /// on screen going nowhere, and the pool has no spill to fall back on.
@@ -253,10 +247,8 @@ pub struct Scheduler {
     decor_kinds: Vec<DecorKind>,
     decor_sample: ChunkSample,
     /// The builder's refusals as of the last reclaim, so a refusal since
-    /// is pressure now; and whether the last pass saw one, for the next
-    /// frame's release cap.
+    /// is pressure now.
     refused_seen: u32,
-    refused_last: bool,
 }
 
 impl Default for Scheduler {
@@ -307,7 +299,6 @@ impl Scheduler {
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
             refused_seen: 0,
-            refused_last: false,
         }
     }
 
@@ -677,8 +668,7 @@ impl Scheduler {
 
         let pending_total = (visible.len() + offscreen.len()) as u32;
         let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
-        let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
-        committed += under_budget(&offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
+        committed += under_budget(&offscreen, MAX_RELEASES_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
 
         // The builds, visible pending first in order, with what is left; the
         // chunks a tier landed on are committed after.
@@ -977,7 +967,6 @@ impl Scheduler {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
         let refused = self.builder.stat.starved != self.refused_seen;
         self.refused_seen = self.builder.stat.starved;
-        self.refused_last = refused;
         let pressed = |world: &World| {
             let p = &world.pools[world.volumes.mesh_pool()];
             p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE

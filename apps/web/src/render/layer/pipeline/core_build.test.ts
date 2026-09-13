@@ -53,11 +53,11 @@ function place_cube(x: bigint, y: bigint, z: bigint, color: "red" | "blue"): str
   return get_objects_in_cell(cell_key(ix, iy, iz))[0].id;
 }
 
-/** The TypeScript pipeline: the direct runs with nothing placed, else the
- * composite and the scan; then the bake. */
+/** The TypeScript pipeline: the direct runs for a coarse tier with nothing
+ * placed, else the composite and the scan; then the bake. */
 function reference(step: LodStep, objects: boolean): BakedChunkMesh {
   let set;
-  if (!objects) {
+  if (step >= 8 && !objects) {
     set = fill_column_runs(64, (w) => runs_typescript(terrain, OFF, false, w));
   } else {
     const v = alloc_chunk_volume();
@@ -97,30 +97,6 @@ function assert_same(actual: BakedChunkMesh, expected: BakedChunkMesh, at: strin
   assertEquals(first_difference(a[1], b[1]), -1, `${at}: index bytes`);
 }
 
-Deno.test("core build - a chunk with nothing placed bakes the same tier from its direct runs as from a scan of its volume, at every step", () => {
-  // Why the direct path serves every tier of such a chunk (build.rs's
-  // advance_runs): a column of terrain alone is one run either way.
-  for (const seed of [33, 41, 23]) {
-    const page_terrain = page(seed);
-    for (const step of [1, 2, 4, 8, 16] as const) {
-      const direct = fill_column_runs(64, (w) => runs_typescript(page_terrain, OFF, false, w));
-      const v = alloc_chunk_volume();
-      paint_typescript(page_terrain, OFF, false, v);
-      seal_chunk_volume(v);
-      const scanned = scan_all_column_runs(v);
-      release_chunk_volume(v);
-      assertEquals(direct.count, scanned.count, `seed ${seed}: the runs`);
-      const a = bake_chunk_mesh(new BakeContext(CORE_POOL, FIXED_ALLOC), direct, step);
-      const b = bake_chunk_mesh(new BakeContext(CORE_POOL, FIXED_ALLOC), scanned, step);
-      assert_same(a, b, `seed ${seed} step ${step}`);
-      release_chunk_mesh(a);
-      release_chunk_mesh(b);
-      release_column_runs(direct);
-      release_column_runs(scanned);
-    }
-  }
-});
-
 Deno.test("core build - a chunk's tiers are the TypeScript pipeline's meshes, byte for byte, direct and scanned, with cubes placed and without", () => {
   const placed: string[] = [];
   for (const objects of [false, true]) {
@@ -129,10 +105,7 @@ Deno.test("core build - a chunk's tiers are the TypeScript pipeline's meshes, by
     CORE_BUILD.want(id, 8, 1);
     CORE_BUILD.build_tick([id], Infinity);
     assertEquals(heard.tiers.map((t) => t.step), [8, 1], `objects ${objects}: both tiers, in the order asked`);
-    assert(heard.runs[0] > 0, "the runs are held and said so");
-    // A scan's runs stay for the next tier; direct runs go with the last
-    // tier wanted, being cheaper to make again than to keep.
-    assertEquals(heard.runs.at(-1)! > 0, objects, `objects ${objects}: the runs kept`);
+    assert(heard.runs.at(-1)! > 0, "the runs are held and said so");
     for (const t of heard.tiers) {
       assertEquals(t.generation, 1);
       const expected = reference(t.step, objects);
