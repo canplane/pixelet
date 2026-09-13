@@ -27,7 +27,7 @@ import { type ChunkVolume, fill_chunk_column, L2_BAND_CELL_SPAN, note_paint } fr
 import { MaterialClass, NO_LAYER, type VoxelMaterial } from "../pipeline/voxel.ts";
 import type { ColumnRunWriter } from "../pipeline/voxel_scan.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
-import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
+import type { ChunkKey, WorldLayer } from "../pipeline/contract.ts";
 import { CORE_PXL } from "../pipeline/core_pool.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -141,10 +141,6 @@ function module_read(terrain: Terrain, page_off: IVec, show_structures: boolean)
 
 export class TerrainWorldLayer implements WorldLayer {
   readonly name = "terrain";
-
-  revision(key: ChunkKey): WorldLayerRevision {
-    return [useTileStore.getState().get_tile(key.page_idx), useSettingsStore.getState().show_structures];
-  }
 
   paint(key: ChunkKey, target: ChunkVolume): boolean {
     const tile = useTileStore.getState().get_tile(key.page_idx);

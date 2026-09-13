@@ -15,6 +15,7 @@ pub mod decor;
 pub mod lod;
 pub mod mesher;
 pub mod object;
+pub mod raycast;
 pub mod ring;
 pub mod run_set;
 pub mod scan;

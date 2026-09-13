@@ -9,43 +9,35 @@
  * tops, a second DDA for terrain walls, and a third real-AABB pass over the
  * raw PlacedObject[] for objects) that could each find a different answer
  * for what should be the same physical surface; now there's one DDA that
- * walks composite_chunk()'s own voxel-derived boxes (via
- * render/layer/pipeline/voxel_scan.ts's merge_column_runs/run_to_box — the SAME functions
- * chunk_stage.tsx meshes with) and returns whichever box the ray actually
+ * walks the composite's own voxel-derived boxes — the same column walk the
+ * chunks are meshed from — and returns whichever box the ray actually
  * struck first, regardless of whether it came from terrain or an object.
  *
- * Walks every chunk the ray's own XY projection actually crosses within
- * max_dist (ray_hit_world's own outer chunk-DDA, ray_hit_chunk's own inner
- * per-cell DDA within each) — not just whichever one chunk happens to
- * contain some reference point. composite_chunk isn't free, but it's
- * memoized per chunk (compositor.ts's own cache) against the handful of
- * things that can actually invalidate it, so re-visiting the same chunk
- * across repeated hover ticks (the common case — the cursor doesn't teleport
- * between frames) doesn't pay full recompute cost each time, and max_dist
- * itself (ray_pick's own INTERACT_RADIUS_U*1.5) keeps a genuinely fresh area
- * to a small local set of chunks.
+ * The walk is the module's (crates/pxl-core/src/raycast.rs): every chunk
+ * the ray's own XY projection crosses within max_dist, a cell DDA within
+ * each, over composites it keeps between hovers — the cursor doesn't
+ * teleport between frames, so the same chunks come up again — each valid
+ * for the sources its chunk was last told. What stays here is the ray in
+ * the local world frame, the interact radius, and what a hit means for a
+ * placement: the corner a new cube takes, the voxel the eraser digs, and
+ * which placed object a hit resolves to.
  */
 
 import * as THREE from "three";
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { type IVec, ivec, projection, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { L2_IDX_IN_L3, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
+import { U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import { with_ele } from "@/module/world/terrain/elevation.ts";
 import { get_local_world_origin, local_world_to_canonical } from "../world/frame/coord.ts";
 import { aabb_overlap, object_aabb } from "@/module/world/object/geometry.ts";
 import { get_objects_near, type OccupiedEntry } from "@/module/world/object/store.ts";
 
-import { with_raycast_composite } from "@/render/layer/pipeline/compositor.ts";
-import { chunk_origin_of } from "@/render/layer/object/adapter.ts";
-import { CHUNK_STAGE_LAYERS } from "@/module/world/stack.ts";
 import { MaterialClass } from "@/render/layer/pipeline/voxel.ts";
-import { ray_hit_chunk, type WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
-import type { ChunkKey } from "@/render/layer/pipeline/contract.ts";
+import { ray_hit_world, type WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
 
 const $origin = new THREE.Vector3();
 const $dir = new THREE.Vector3();
@@ -77,97 +69,6 @@ export function in_interact_radius(a: PVF3, b: PVF3): boolean {
   const dx: f64 = pvf3.to_real(pvf3.X(a)) - pvf3.to_real(pvf3.X(b));
   const dy: f64 = pvf3.to_real(pvf3.Y(a)) - pvf3.to_real(pvf3.Y(b));
   return dx * dx + dy * dy <= INTERACT_RADIUS2_U;
-}
-
-const CHUNK_W: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
-
-/**
- * Single raycast entry point's real body — an outer 2D DDA over CHUNK_W-
- * sized cells (same shape as ray_hit_chunk's own per-cell DDA, one grid
- * size coarser), walking every chunk the ray's XY projection crosses
- * within max_dist and testing each via ray_hit_chunk. Non-decreasing
- * entry-t order, so the first chunk reporting a hit holds the nearest one.
- *
- * Chunk keys come from the ray's own trajectory, not map_center — an
- * earlier version tested only the one chunk containing map_center (the pan
- * target), which silently found nothing the moment the cursor wasn't near
- * screen center, since max_dist can reach into a neighboring chunk that
- * was never even composited.
- */
-function ray_hit_world(ray: THREE.Ray, map_origin: IVec, max_dist: f64): WorldHit | null {
-  const ox: f64 = ray.origin.x;
-  const oy: f64 = ray.origin.y;
-  const dx: f64 = ray.direction.x;
-  const dy: f64 = ray.direction.y;
-
-  // grid_cx/grid_cy are chunk-grid indices in ray-local (map_origin-
-  // relative) space — floor(local_x / CHUNK_W), the chunk-level analogue of
-  // ray_hit_chunk's own cell_x/cell_y.
-  function test_chunk(grid_cx: f64, grid_cy: f64): WorldHit | null {
-    // A point comfortably inside this chunk-grid cell's own footprint
-    // (its center) — which real chunk that resolves to is what matters,
-    // not this exact sub-position within it.
-    const sample_x: f64 = (grid_cx + 0.5) * CHUNK_W;
-    const sample_y: f64 = (grid_cy + 0.5) * CHUNK_W;
-    const abs: PVF3 = local_world_to_canonical({ i: 0n, f: 0n }, [sample_x, sample_y, 0], map_origin);
-    const page_idx: IVec = L3_IDX(abs.i);
-    const page_off: IVec = L2_IDX_IN_L3(abs.i);
-    const key: ChunkKey = { page_idx, page_off };
-
-    return with_raycast_composite(CHUNK_STAGE_LAYERS, key, (volume) => {
-      if (!volume) return null;
-      const chunk_origin: IVec = chunk_origin_of(page_idx, page_off);
-      const delta: IVec = ivec.sub(chunk_origin, map_origin);
-      const chunk_ox: f64 = ivec.to_real(ivec.X(delta));
-      const chunk_oy: f64 = ivec.to_real(ivec.Y(delta));
-      return ray_hit_chunk(ray, volume, chunk_ox, chunk_oy, max_dist);
-    });
-  }
-
-  // A ray that never crosses a chunk boundary in XY (looking straight
-  // down/up) can only ever be over the one chunk it started above.
-  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
-    return test_chunk(Math.floor(ox / CHUNK_W), Math.floor(oy / CHUNK_W));
-  }
-
-  let grid_cx: f64 = Math.floor(ox / CHUNK_W);
-  let grid_cy: f64 = Math.floor(oy / CHUNK_W);
-
-  const step_x: f64 = dx > 0 ? 1 : -1;
-  const step_y: f64 = dy > 0 ? 1 : -1;
-
-  const t_delta_x: f64 = Math.abs(dx) < 1e-9 ? Infinity : CHUNK_W / Math.abs(dx);
-  const t_delta_y: f64 = Math.abs(dy) < 1e-9 ? Infinity : CHUNK_W / Math.abs(dy);
-
-  let t_max_x: f64 = Math.abs(dx) < 1e-9 ? Infinity : ((dx > 0 ? grid_cx + 1 : grid_cx) * CHUNK_W - ox) / dx;
-  let t_max_y: f64 = Math.abs(dy) < 1e-9 ? Infinity : ((dy > 0 ? grid_cy + 1 : grid_cy) * CHUNK_W - oy) / dy;
-
-  // max_dist is typically well under one CHUNK_W (INTERACT_RADIUS_U*1.5 —
-  // see this file's own doc comment), so this is usually just 1-3 chunks,
-  // never unbounded regardless of how far along the ray max_dist reaches.
-  const max_chunks: u32 = Math.ceil(max_dist / CHUNK_W) + 2;
-
-  for (let i = 0; i < max_chunks; i++) {
-    const found = test_chunk(grid_cx, grid_cy);
-    if (found) return found;
-
-    // Every remaining chunk boundary is already farther than max_dist —
-    // nothing left within range to find, same early-exit reasoning
-    // ray_hit_chunk's own per-cell DDA gets for free from its bounded
-    // max_cells (a chunk-level step is too coarse for that same bound to
-    // fall out of the loop count alone, so this checks distance directly).
-    if (Math.min(t_max_x, t_max_y) > max_dist) break;
-
-    if (t_max_x < t_max_y) {
-      grid_cx += step_x;
-      t_max_x += t_delta_x;
-    } else {
-      grid_cy += step_y;
-      t_max_y += t_delta_y;
-    }
-  }
-
-  return null;
 }
 
 /** The struck top terrain cell's own (min-x, min-y, min-z) CORNER — for the

@@ -23,12 +23,12 @@ import {
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { column_render_edits, object_column_of, object_column_revision } from "@/module/world/object/store.ts";
+import { column_render_edits, object_column_of } from "@/module/world/object/store.ts";
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT, hex_to_rgb255, OBJECT_LAYER_IDX } from "../terrain/shader_meta.ts";
 
 import { type ChunkVolume, note_paint } from "../pipeline/volume.ts";
 import { MaterialClass, NO_LAYER, pack_material, type VoxelMaterial } from "../pipeline/voxel.ts";
-import type { ChunkKey, WorldLayer, WorldLayerRevision } from "../pipeline/contract.ts";
+import type { ChunkKey, WorldLayer } from "../pipeline/contract.ts";
 import { CORE_PXL } from "../pipeline/core_pool.ts";
 
 export function chunk_origin_of(page_idx: IVec, page_off: IVec): IVec {
@@ -94,10 +94,6 @@ teach_module();
 
 export class ObjectWorldLayer implements WorldLayer {
   readonly name = "objects";
-
-  revision(key: ChunkKey): WorldLayerRevision {
-    return [object_column_revision(object_column_of(key.page_idx, key.page_off))];
-  }
 
   paint(key: ChunkKey, target: ChunkVolume, opts?: { for_raycast?: boolean }): boolean {
     const p = CORE_PXL;

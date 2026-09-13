@@ -78,8 +78,24 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      (a tree placed, the eraser's hide, the setting) rebuilds it with
      `pxl_decor_now` and tells the layout again with the cubes left
      attached, and the block goes with the tier's eviction. The node holds
-     blocks; the field reads their groups as views. Still TypeScript: the
-     raycast's composite.
+     blocks; the field reads their groups as views. Then the raycast
+     (2026-09-14, crates/pxl-core/src/raycast.rs, held box for box and face
+     for face to camera/ray.ts's chunk walk over chunk_raycast.ts by
+     core_raycast.test.ts): the chunk DDA, the cell DDA and the slab test
+     over the scan's column walk, and compositor.ts's little cache of
+     composites — now the module's, keyed by the chunk and the count its
+     sources were told, composed of the real set with no hover edits — over
+     the chunks the scheduler holds. Retired to `archive/20260914-ts-raycast`:
+     the TypeScript walk of the world, the ray LRU with its layer
+     revisions, and the temporary composite for a drawn build. The
+     TypeScript composite and the chunk walk stay as the references.
+     What is left outside the module: the scene — three.js meshes and
+     instanced decor fed from the module's blocks, and decor's hit test
+     against those meshes (decor_hit.ts) — the elevation sample the hover's
+     corner takes (world_hover_pvf3 over terrain/elevation.ts), the sources
+     (the page tables, the object store's persistence, the assets) and the
+     UI. The scene and decor's hit test go with three; the elevation sample
+     is a read of the module's terrain when the hover cursor is rewritten.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

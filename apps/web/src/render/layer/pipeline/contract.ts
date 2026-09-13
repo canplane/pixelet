@@ -3,7 +3,9 @@
 /**
  * Adapter contract between source-specific world stores and the renderer's
  * temporary L2 64x64 column. Source-side storage (dense terrain pages,
- * sparse object octrees) stays untouched by this contract.
+ * sparse object octrees) stays untouched by this contract. What is drawn
+ * and hit-tested is composed in the module from the same sources; the
+ * layers here are the TypeScript reference the module is held to.
  */
 
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -20,29 +22,17 @@ export type ChunkKey = {
   page_off: IVec;
 };
 
-/**
- * Reference/value tuple describing everything that can change a layer's
- * output for one key. Tuple items are compared with Object.is. A new layer
- * owns this contract itself; compositor.ts never imports concrete stores or
- * grows another hard-coded invalidation condition.
- */
-export type WorldLayerRevision = readonly unknown[];
-
 export interface WorldLayer {
   readonly name: string;
-
-  /** Cheap, synchronous cache identity for this layer at `key`. */
-  revision(key: ChunkKey): WorldLayerRevision;
 
   /**
    * Paints directly into the shared signed-band target. Later registered
    * layers overwrite earlier layers at the same voxel. Returns true when the
    * layer contributed at least one voxel.
    *
-   * `opts.for_raycast` tells a layer this composite is for hit-testing
-   * (compositor.ts's own with_raycast_composite), not the real GPU-mesh
-   * build (with_temporary_composite) — see ObjectWorldLayer's own use of it
-   * in render/layer/object/adapter.ts. A layer that paints a cosmetic,
+   * `opts.for_raycast` tells a layer this composite is for hit-testing,
+   * not the drawn build — see ObjectWorldLayer's own use of it in
+   * render/layer/object/adapter.ts. A layer that paints a cosmetic,
    * render-only exclusion (an object hover-hidden for the eraser tool's
    * preview, object/store.ts's set_virtual_hide) must still paint the real
    * thing for a raycast pass, or the raycaster can no longer hit what the

@@ -1,0 +1,325 @@
+//! The world's one raycast: module/camera/ray.ts's ray_hit_world and
+//! render/layer/pipeline/chunk_raycast.ts's ray_hit_chunk, with
+//! compositor.ts's little cache of composites, in the core.
+//!
+//! A ray walks the chunks its XY projection crosses (a DDA a chunk wide),
+//! and in each the cells it crosses (a DDA a cell wide), testing exactly
+//! the boxes the mesher emits: the scan's own column walk over the chunk's
+//! composite of the real set — no hover edits, or the raycaster stops
+//! hitting what the cursor points at and the hide flickers on and off. The
+//! composites are kept between hovers, a few at a time, each valid for the
+//! sources its chunk was last told; the cursor does not teleport between
+//! frames, so the same chunks come up again and again.
+
+use crate::build::World;
+use crate::scan::{BandView, ColumnRuns};
+use crate::sched::Scheduler;
+use crate::terrain::CHUNK_SPAN;
+use crate::voxel::{unpack_sub_cell_fraction, SUB_CELL_NONE};
+
+/// bake/constant.ts's U_PER_CELL.
+const U_PER_CELL: f64 = 1.0;
+const CHUNK_W: f64 = CHUNK_SPAN as f64 * U_PER_CELL;
+/// A hover ray crosses at most a few chunks at the interact radius.
+const MAX_ENTRIES: usize = 4;
+/// Hard budget: at 1.25 MiB each, eight direct bands are about 10 MiB.
+const MAX_BANDS: usize = 8;
+
+/// What a ray struck: the box, in the ray's own space, and its face.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Hit {
+    pub material_class: u8,
+    pub normal: [f64; 3],
+    pub point: [f64; 3],
+    pub t: f64,
+    pub box_min: [f64; 3],
+    pub box_max: [f64; 3],
+}
+
+struct Entry {
+    id: u32,
+    generation: u32,
+    volume: usize,
+    bands: usize,
+    used: u32,
+}
+
+#[derive(Default)]
+pub struct Raycast {
+    entries: Vec<Entry>,
+    tick: u32,
+    column: ColumnRuns,
+}
+
+struct Slab {
+    t: f64,
+    axis: usize,
+    sign: f64,
+}
+
+/// Ray/AABB slab test, as chunk_raycast.ts has it.
+fn ray_aabb(o: &[f64; 3], d: &[f64; 3], min: &[f64; 3], max: &[f64; 3]) -> Option<Slab> {
+    let mut t_enter = f64::NEG_INFINITY;
+    let mut t_exit = f64::INFINITY;
+    let mut enter_axis = 0;
+    let mut enter_sign = -1.0;
+    for axis in 0..3 {
+        let dir = d[axis];
+        if dir.abs() < 1e-12 {
+            if o[axis] < min[axis] || o[axis] > max[axis] {
+                return None;
+            }
+            continue;
+        }
+        let t_lo = (min[axis] - o[axis]) / dir;
+        let t_hi = (max[axis] - o[axis]) / dir;
+        let (near, far) = if dir > 0.0 { (t_lo, t_hi) } else { (t_hi, t_lo) };
+        if near > t_enter {
+            t_enter = near;
+            enter_axis = axis;
+            enter_sign = if dir > 0.0 { -1.0 } else { 1.0 };
+        }
+        t_exit = t_exit.min(far);
+        if t_enter > t_exit {
+            return None;
+        }
+    }
+    if t_exit < 0.0 {
+        return None;
+    }
+    Some(Slab {
+        t: t_enter,
+        axis: enter_axis,
+        sign: enter_sign,
+    })
+}
+
+/// The box run `i` of the column is, chunk-local: chunk_raycast.ts's
+/// run_box.
+fn run_box(cx: u32, cy: u32, runs: &ColumnRuns, i: usize) -> ([f64; 3], [f64; 3]) {
+    let sub = runs.sub[i];
+    let sub_sz = (sub >> 24) as u8;
+    if sub_sz == SUB_CELL_NONE {
+        let min = [cx as f64 * U_PER_CELL, cy as f64 * U_PER_CELL, runs.z0[i] as f64 * U_PER_CELL];
+        let max = [(cx + 1) as f64 * U_PER_CELL, (cy + 1) as f64 * U_PER_CELL, (runs.z1[i] + 1) as f64 * U_PER_CELL];
+        return (min, max);
+    }
+    let sz = unpack_sub_cell_fraction(sub_sz) * U_PER_CELL;
+    let min = [
+        (cx as f64 + unpack_sub_cell_fraction((sub & 255) as u8)) * U_PER_CELL,
+        (cy as f64 + unpack_sub_cell_fraction(((sub >> 8) & 255) as u8)) * U_PER_CELL,
+        (runs.z0[i] as f64 + unpack_sub_cell_fraction(((sub >> 16) & 255) as u8)) * U_PER_CELL,
+    ];
+    (min, [min[0] + sz, min[1] + sz, min[2] + sz])
+}
+
+impl Raycast {
+    /// The nearest box within `max_dist` along the ray from `o` in
+    /// direction `d`, both relative to `origin` (the map origin, in units)
+    /// on X and Y, or none. Chunks the scheduler holds are tested; a
+    /// chunk with no page, or whose composite the pool refused, holds
+    /// nothing.
+    pub fn hit(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: [f64; 3], d: [f64; 3], max_dist: f64) -> Option<Hit> {
+        let (dx, dy) = (d[0], d[1]);
+        if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
+            return self.test_chunk(world, sched, origin, &o, &d, (o[0] / CHUNK_W).floor(), (o[1] / CHUNK_W).floor(), max_dist);
+        }
+        let mut gx = (o[0] / CHUNK_W).floor();
+        let mut gy = (o[1] / CHUNK_W).floor();
+        let step_x = if dx > 0.0 { 1.0 } else { -1.0 };
+        let step_y = if dy > 0.0 { 1.0 } else { -1.0 };
+        let t_delta_x = if dx.abs() < 1e-9 { f64::INFINITY } else { CHUNK_W / dx.abs() };
+        let t_delta_y = if dy.abs() < 1e-9 { f64::INFINITY } else { CHUNK_W / dy.abs() };
+        let mut t_max_x = if dx.abs() < 1e-9 {
+            f64::INFINITY
+        } else {
+            ((if dx > 0.0 { gx + 1.0 } else { gx }) * CHUNK_W - o[0]) / dx
+        };
+        let mut t_max_y = if dy.abs() < 1e-9 {
+            f64::INFINITY
+        } else {
+            ((if dy > 0.0 { gy + 1.0 } else { gy }) * CHUNK_W - o[1]) / dy
+        };
+        let max_chunks = (max_dist / CHUNK_W).ceil() as usize + 2;
+        for _ in 0..max_chunks {
+            if let Some(hit) = self.test_chunk(world, sched, origin, &o, &d, gx, gy, max_dist) {
+                return Some(hit);
+            }
+            if t_max_x.min(t_max_y) > max_dist {
+                break;
+            }
+            if t_max_x < t_max_y {
+                gx += step_x;
+                t_max_x += t_delta_x;
+            } else {
+                gy += step_y;
+                t_max_y += t_delta_y;
+            }
+        }
+        None
+    }
+
+    /// The chunk at grid cell (gx, gy) of the ray's space: its composite,
+    /// kept or made, then the cell walk through it.
+    #[allow(clippy::too_many_arguments)]
+    fn test_chunk(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: &[f64; 3], d: &[f64; 3], gx: f64, gy: f64, max_dist: f64) -> Option<Hit> {
+        // A point inside the grid cell, then the chunk it falls in.
+        let bx = (((gx + 0.5) * CHUNK_W + origin[0]) / CHUNK_W).floor() * CHUNK_W;
+        let by = (((gy + 0.5) * CHUNK_W + origin[1]) / CHUNK_W).floor() * CHUNK_W;
+        let id = sched.chunk_at(bx as i64, by as i64)?;
+        let (volume, temporary) = self.acquire(world, sched, id)?;
+        let hit = self.hit_chunk(world, volume, o, d, bx - origin[0], by - origin[1], max_dist);
+        if temporary {
+            world.volumes.release(world.pools, volume);
+        }
+        hit
+    }
+
+    /// The chunk's composite: the kept one when its chunk's sources have
+    /// not been told again since, else made now and kept unless too tall
+    /// to keep. Least recently used is let go first.
+    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, id: u32) -> Option<(usize, bool)> {
+        self.tick = self.tick.wrapping_add(1);
+        let generation = sched.builder.generation_of(id);
+        if let Some(k) = self.entries.iter().position(|e| e.id == id) {
+            if Some(self.entries[k].generation) == generation {
+                self.entries[k].used = self.tick;
+                return Some((self.entries[k].volume, false));
+            }
+            self.remove(world, k);
+        }
+        let (volume, generation) = sched.builder.compose_real(world, id)?;
+        let bands = world.volumes.band_count(volume);
+        if bands > MAX_BANDS {
+            return Some((volume, true));
+        }
+        self.entries.push(Entry {
+            id,
+            generation,
+            volume,
+            bands,
+            used: self.tick,
+        });
+        while self.entries.len() > MAX_ENTRIES || self.entries.iter().map(|e| e.bands).sum::<usize>() > MAX_BANDS {
+            let oldest = (0..self.entries.len()).min_by_key(|&k| self.entries[k].used).unwrap();
+            if oldest == self.entries.len() - 1 {
+                break;
+            }
+            self.remove(world, oldest);
+        }
+        Some((volume, false))
+    }
+
+    fn remove(&mut self, world: &mut World, k: usize) {
+        let e = self.entries.swap_remove(k);
+        world.volumes.release(world.pools, e.volume);
+    }
+
+    /// Lets every kept composite go.
+    pub fn clear(&mut self, world: &mut World) {
+        while !self.entries.is_empty() {
+            self.remove(world, 0);
+        }
+    }
+
+    /// Cell-DDA through one chunk at (chunk_ox, chunk_oy) of the ray's
+    /// space: chunk_raycast.ts's ray_hit_chunk.
+    #[allow(clippy::too_many_arguments)]
+    fn hit_chunk(&mut self, world: &mut World, volume: usize, o: &[f64; 3], d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
+        let bands: Vec<BandView> = (0..world.volumes.band_count(volume))
+            // SAFETY: the composite is sealed and held until released here or kept.
+            .map(|i| unsafe { world.volumes.band_view(volume, i) })
+            .collect();
+        let (ox, oy) = (o[0] - chunk_ox, o[1] - chunk_oy);
+        let (dx, dy) = (d[0], d[1]);
+        let span = CHUNK_SPAN as f64;
+
+        let test_cell = |column: &mut ColumnRuns, cx: u32, cy: u32| -> Option<Hit> {
+            let n = column.walk(&bands, cx, cy);
+            let mut best: Option<(Slab, u8, [f64; 3], [f64; 3])> = None;
+            for i in 0..n {
+                let (mut min, mut max) = run_box(cx, cy, column, i);
+                min[0] += chunk_ox;
+                min[1] += chunk_oy;
+                max[0] += chunk_ox;
+                max[1] += chunk_oy;
+                let Some(slab) = ray_aabb(o, d, &min, &max) else { continue };
+                if slab.t < 0.0 || best.as_ref().is_some_and(|b| slab.t >= b.0.t) {
+                    continue;
+                }
+                best = Some((slab, column.material_class[i], min, max));
+            }
+            let (slab, material_class, box_min, box_max) = best?;
+            if slab.t > max_dist {
+                return None;
+            }
+            let mut normal = [0.0; 3];
+            normal[slab.axis] = slab.sign;
+            let t = slab.t;
+            Some(Hit {
+                material_class,
+                normal,
+                point: [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t],
+                t,
+                box_min,
+                box_max,
+            })
+        };
+
+        if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
+            let cx = (ox / U_PER_CELL).floor();
+            let cy = (oy / U_PER_CELL).floor();
+            if cx < 0.0 || cx >= span || cy < 0.0 || cy >= span {
+                return None;
+            }
+            return test_cell(&mut self.column, cx as u32, cy as u32);
+        }
+
+        let mut cell_x = (ox / U_PER_CELL).floor();
+        let mut cell_y = (oy / U_PER_CELL).floor();
+        let step_x = if dx > 0.0 { 1.0 } else { -1.0 };
+        let step_y = if dy > 0.0 { 1.0 } else { -1.0 };
+        let t_delta_x = if dx.abs() < 1e-9 { f64::INFINITY } else { U_PER_CELL / dx.abs() };
+        let t_delta_y = if dy.abs() < 1e-9 { f64::INFINITY } else { U_PER_CELL / dy.abs() };
+        let mut t_max_x = if dx.abs() < 1e-9 {
+            f64::INFINITY
+        } else {
+            ((if dx > 0.0 { cell_x + 1.0 } else { cell_x }) * U_PER_CELL - ox) / dx
+        };
+        let mut t_max_y = if dy.abs() < 1e-9 {
+            f64::INFINITY
+        } else {
+            ((if dy > 0.0 { cell_y + 1.0 } else { cell_y }) * U_PER_CELL - oy) / dy
+        };
+        let max_cells = (max_dist.min(CHUNK_W * 1.5) / U_PER_CELL).ceil() as usize + 2;
+        for _ in 0..max_cells {
+            if cell_x >= 0.0 && cell_x < span && cell_y >= 0.0 && cell_y < span {
+                if let Some(found) = test_cell(&mut self.column, cell_x as u32, cell_y as u32) {
+                    return Some(found);
+                }
+            }
+            if t_max_x < t_max_y {
+                cell_x += step_x;
+                t_max_x += t_delta_x;
+            } else {
+                cell_y += step_y;
+                t_max_y += t_delta_y;
+            }
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_slab_test_names_the_entered_face() {
+        let s = ray_aabb(&[0.5, 0.5, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).unwrap();
+        assert_eq!((s.t, s.axis, s.sign), (4.0, 2, 1.0));
+        assert!(ray_aabb(&[2.0, 0.5, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).is_none());
+        // Behind the origin.
+        assert!(ray_aabb(&[0.5, 0.5, -5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).is_none());
+    }
+}

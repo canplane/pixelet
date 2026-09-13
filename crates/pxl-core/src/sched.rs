@@ -215,6 +215,8 @@ pub struct Scheduler {
     pub builder: Builder,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
+    /// The chunk at a base, in units, for the raycast's walk.
+    by_base: BTreeMap<(i64, i64), u32>,
     ladder: Ladder,
     recheck_elapsed: f64,
     frame: Option<Frame>,
@@ -266,6 +268,7 @@ impl Scheduler {
             builder: Builder::new(),
             slots: Vec::new(),
             index: BTreeMap::new(),
+            by_base: BTreeMap::new(),
             ladder: Ladder::default(),
             recheck_elapsed: RECHECK_INTERVAL_S,
             frame: None,
@@ -354,11 +357,18 @@ impl Scheduler {
             }
         }
         self.index.insert(id, self.slots.len());
+        self.by_base.insert((base_x as i64, base_y as i64), id);
         self.slots.push(slot);
+    }
+
+    /// The chunk whose base is (x, y), in units.
+    pub fn chunk_at(&self, x: i64, y: i64) -> Option<u32> {
+        self.by_base.get(&(x, y)).copied()
     }
 
     pub fn remove(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(Event)) {
         let Some(i) = self.index.remove(&id) else { return };
+        self.by_base.remove(&(self.slots[i].base_x as i64, self.slots[i].base_y as i64));
         self.builder.remove(world, id, &mut |e| emit(Event::Build(e)));
         let before = self.slots[i].retained();
         if self.slots[i].has(IN_FRUSTUM) {

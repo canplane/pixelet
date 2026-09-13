@@ -171,6 +171,20 @@ impl Builder {
         Some((c.base, c.tx0, c.ty0, c.page?, c.show_structures))
     }
 
+    /// The chunk's composite of the real set — no edits — as a sealed volume
+    /// for a raycast, or none: no page, or a paint refused. With the count
+    /// its sources have been told, which a cached composite is valid for.
+    pub fn compose_real(&mut self, world: &mut World, id: u32) -> Option<(usize, u32)> {
+        let c = self.chunks.get(&id)?;
+        let (page, generation) = (c.page?, c.generation);
+        let volume = self.compose(world, id, page, false)?;
+        Some((volume, generation))
+    }
+
+    pub fn generation_of(&self, id: u32) -> Option<u32> {
+        self.chunks.get(&id).map(|c| c.generation)
+    }
+
     /// The hidden entry's band and packed position, when it is in the column `key`.
     pub fn hide_in(&self, key: u64) -> Option<(i32, u32)> {
         self.hide.filter(|h| h.0 == key).map(|h| (h.1, h.2))
@@ -342,7 +356,7 @@ impl Builder {
             if self.scan_job.is_some() {
                 return Progress::Blocked;
             }
-            match self.compose(world, id, page) {
+            match self.compose(world, id, page, true) {
                 Some(volume) => {
                     let bands: Vec<BandView> = (0..world.volumes.band_count(volume)).map(|i| unsafe { world.volumes.band_view(volume, i) }).collect();
                     assert!(self.scan.begin(&bands), "a scan open with no job naming it");
@@ -396,16 +410,17 @@ impl Builder {
     }
 
     /// Paints the terrain and then the objects into a new volume, sealed;
-    /// none when a paint was refused.
-    fn compose(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<usize> {
+    /// none when a paint was refused. With `edits`, the drawn build's hide
+    /// and carve; without, the real set — what a raycast tests.
+    fn compose(&mut self, world: &mut World, id: u32, page: PageLanes, edits: bool) -> Option<usize> {
         let c = &self.chunks[&id];
         let (base, tx0, ty0, show) = (c.base, c.tx0, c.ty0, c.show_structures);
         self.sample.read(&Self::page_view(world, page), world.materials, tx0, ty0, show);
         let volume = world.volumes.open();
         let mut ok = self.sample.paint(world.volumes, world.pools, volume);
         if ok {
-            let hide = self.hide.filter(|h| h.0 == base).map(|h| (h.1, h.2));
-            let carve = self.carve.filter(|c| c.0 == base).map(|c| c.1);
+            let hide = self.hide.filter(|h| edits && h.0 == base).map(|h| (h.1, h.2));
+            let carve = self.carve.filter(|c| edits && c.0 == base).map(|c| c.1);
             ok = !world.painter.paint(world.store, world.volumes, world.pools, volume, base, hide, carve).refused;
         }
         if !ok {

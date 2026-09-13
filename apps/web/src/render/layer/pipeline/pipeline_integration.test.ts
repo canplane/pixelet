@@ -58,7 +58,6 @@ function split_terrain_and_object(built: BakedChunkMesh, terrain_vertex_cnt: num
 Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast share exact boxes", () => {
   const terrain: WorldLayer = {
     name: "test-terrain",
-    revision: () => [1],
     paint: (_key, target) => {
       fill_chunk_column(target, 2, 3, -18, 18, LAND);
       return true;
@@ -66,7 +65,6 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
   };
   const objects: WorldLayer = {
     name: "test-objects",
-    revision: () => [1],
     paint: (_key, target) => {
       // Exact 1/256 values: x=.25, y=.5, z=.75, size=.5 cell.
       set_chunk_voxel(target, 2, 3, 20, OBJECT, [64, 128, 192, 128]);

@@ -19,6 +19,7 @@ use pxl_core::change::ChangeLog;
 use pxl_core::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::object::{Carve, Kind, Painter, Store};
+use pxl_core::raycast::Raycast;
 use pxl_core::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
 use pxl_core::run_set::{run_set_bytes, RunSet};
 use pxl_core::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
@@ -69,6 +70,10 @@ struct State {
     census: [f64; 12],
     events: std::collections::VecDeque<Event>,
     build_stat: [u32; 11],
+    /// The world's raycast and its kept composites, and the last hit as
+    /// doubles the glue reads.
+    raycast: Raycast,
+    hit: [f64; HIT_WORDS],
 }
 
 /// Entries each ring holds.
@@ -120,6 +125,8 @@ fn state() -> &'static mut State {
                 sq: new_ring(RING_CAPACITY),
                 cq: new_ring(RING_CAPACITY),
                 sched: Scheduler::new(),
+                raycast: Raycast::default(),
+                hit: [0.0; HIT_WORDS],
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
@@ -1081,6 +1088,71 @@ pub extern "C" fn pxl_decor_rule(kind: u32, channel: u32, mode: u32) {
 #[no_mangle]
 pub extern "C" fn pxl_decor_allow(kind: u32, channel: u32, t: u32) {
     state().sched.decor_allow(kind, channel as usize & 3, t as u8);
+}
+
+/// Doubles at pxl_raycast_at after a hit: the material class, the face
+/// normal, the point, t, the box's min and max — 14.
+pub const HIT_WORDS: usize = 14;
+
+/// The world's raycast (crates/pxl-core/src/raycast.rs): the ray from
+/// (ox, oy, oz) along (dx, dy, dz), relative to the map origin at
+/// (origin_x, origin_y) in units, within `max_dist`. 1 when something was
+/// struck, the hit written at pxl_raycast_at. Applies the submissions
+/// waiting first, so a placement just made is what the ray tests.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
+    let s = state();
+    drain(s);
+    let hit = {
+        let (mut world, raycast, sched) = raycast_of(s);
+        raycast.hit(&mut world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
+    };
+    let Some(h) = hit else { return 0 };
+    s.hit = [
+        h.material_class as f64,
+        h.normal[0],
+        h.normal[1],
+        h.normal[2],
+        h.point[0],
+        h.point[1],
+        h.point[2],
+        h.t,
+        h.box_min[0],
+        h.box_min[1],
+        h.box_min[2],
+        h.box_max[0],
+        h.box_max[1],
+        h.box_max[2],
+    ];
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_raycast_at() -> u32 {
+    state().hit.as_ptr() as u32
+}
+
+/// Lets the raycast's kept composites go.
+#[no_mangle]
+pub extern "C" fn pxl_raycast_clear() {
+    let s = state();
+    let (mut world, raycast, _) = raycast_of(s);
+    raycast.clear(&mut world);
+}
+
+fn raycast_of(s: &mut State) -> (World<'_>, &mut Raycast, &mut Scheduler) {
+    (
+        World {
+            volumes: s.volumes.as_mut().expect("pxl_volume_pools before any build"),
+            pools: &mut s.pools,
+            materials: &s.terrain,
+            store: &s.objects,
+            painter: &mut s.painter,
+        },
+        &mut s.raycast,
+        &mut s.sched,
+    )
 }
 
 /// The builder alone over the `order_len` ids at `order_at`, for the tests
