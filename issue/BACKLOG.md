@@ -14,21 +14,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md)).
   Taken from the smallest separable piece outward: a piece is first cut
   out behind a boundary that carries typed arrays, still in TypeScript, so
-  the boundary is proven before the language changes behind it. In order:
-  1. **Sections of the core memory, and what full means in each.**
-     Designed 2026-09-13:
-     [20260913-sections-of-the-core-memory-and-what-full-means.md](./20260913-sections-of-the-core-memory-and-what-full-means.md).
-     The one buddy pool over the core memory becomes a map of sections
-     with fixed starts and sizes — fixed (rings, tables, scratch, failing
-     at startup if short), page, mesh, scratch — none borrowing from
-     another, so a spill names its kind and the rings are where a WASM core
-     expects them. Full is answered per section by one rule — drop what
-     can be re-read, refuse at the sender what cannot — with reclaim of
-     off-screen chunks as the mesh section's first response and a null
-     acquire the chunk retries next tick as its last. In order: the map,
-     the fixed section's tenants, the pages, the ledger and the reclaim
-     trigger; the ring's EAGAIN comes with the ring.
-  2. **The mesher in Rust.** The first Rust. The bake already takes a
+  the boundary is proven before the language changes behind it. Done on
+  the way, 2026-09-13: the bake takes a context; the bake as a command over
+  a frame, port and link; the read direction as a change log; the core
+  memory's sections. In order:
+  1. **The mesher in Rust.** The first Rust. The bake already takes a
      context and carves its input and output over any block (column_run.ts,
      carve_baked_mesh), and the bake command carries both across a boundary
      unchanged, so the change is behind a seam that exists. Which thread it
@@ -41,7 +31,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
-  3. **The core to WASM on the main thread, and a WebGPU renderer.**
+  2. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a
      checklist the renderer fills, not a gate on starting. WebGPU removes
@@ -66,7 +56,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   MapLibre sizes its tile cache from the viewport rather than a count
   ([MapOptions](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)).
   The same lever exists here: the one LOD criterion's distance thresholds.
-  Needed on the web whatever the graphics API; the renderer in P0-3 is
+  Needed on the web whatever the graphics API; the renderer in P0-2 is
   built against it.
 
 - **"Everything is a file": the Placement and the palette.** Decided
@@ -175,7 +165,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   phone the main-thread task p95 is ~27 ms whichever thread bakes, so the
   cost is scan, attach or mount rather than the bake; splitting `commit` into
   those would name it. Not now: attach and mount are three.js geometry and
-  React's reconciler, which the WebGPU renderer (P0-3) replaces, and a
+  React's reconciler, which the WebGPU renderer (P0-2) replaces, and a
   breakdown of code that is leaving decides nothing before it leaves. Scan
   is core and stays; measure it when it is the piece being ported.
 - **The bake worker path.** Behind the dev setting `bake_path`, default

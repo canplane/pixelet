@@ -100,10 +100,13 @@ Three more pieces of the stack are built for this project rather than adopted: a
 │   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each
 │   ├── actor/                      # into the bucket and the table the palette reads
 │   └── brand/                      # the symbol and the preview the icons are rendered from
+├── issue/                          # What was decided and why, the backlog, and experiment/
+│                                    # for what was tried and measured
 │
 └── packages/
     ├── xpute/
-    │   └── core/                   # Generic kit/collections/io/errors + XTP binary protocol
+    │   └── core/                   # Generic kit/collections/io/errors, XTP binary protocol,
+    │                                # the channel (command frame, port, link, change log)
     │                                # (no pixelet domain knowledge — portable to other projects)
     │
     └── pxl/
@@ -128,7 +131,7 @@ Storage, network transfer, and rendering deliberately use different scales. See 
 
 Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) are a palette per chunk and a sparse tree per `64³` band. A catalog value of `0` is `OBJECT_UNDEF` (sparse absence/fallback); `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`) — which is also its id in the one global palette. At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
 
-Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. All of it — pages, bands, runs, meshes, the scheduler's view of every chunk, the POI index, the object store — lives as typed lanes in one fixed `WebAssembly.Memory` behind a buddy allocator, and the frame's work runs as one cooperative tick with one budget, measured by a read-only ledger. Most of the pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary — for now: the decided destination is a WASM core drawing through WebGPU (iOS 26 and iPhone 11 as the floor), and the state is shaped for that move.
+Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. All of it — pages, bands, runs, meshes, the scheduler's view of every chunk, the POI index, the object store — lives as typed lanes in one fixed `WebAssembly.Memory`, cut into sections with fixed starts (fixed, page, mesh) each behind its own buddy allocator, and the frame's work runs as one cooperative tick with one budget, measured by a read-only ledger. Across every boundary the client has — the UI and the world, a worker, later the core — a mutation is a numeric command and a change is a `(topic, key, revision)` in one change log, so how state is delivered is an adapter and never the protocol. Most of the pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary — for now: the decided destination is a Rust core in WASM drawing through WebGPU (iOS 26 and iPhone 11 as the floor), taken a piece at a time, and the state, the commands and the change log are the shape that move needs.
 
 ---
 

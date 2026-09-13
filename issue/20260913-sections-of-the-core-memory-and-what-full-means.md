@@ -1,14 +1,14 @@
 # Sections of the core memory, and what "full" means in each
 
-**2026-09-13** — BACKLOG P0-1 asked for spill past the reservation to become
+**2026-09-13** — BACKLOG P0-1 at the time asked for spill past the reservation to become
 a budget signal before a WASM kernel reads the pool. Working out what that
 signal is showed the pool has no map: one buddy pool over the whole core
 memory, every kind of thing carved from it in arrival order, so where a
 structure lands and which kind of thing overflowed are accidents of
 sequence. This records the map that replaces it, and — the part that
 started as a question about April's transaction controller — what each
-part of the map does when it is full. Design; the first step is being
-built.
+part of the map does when it is full. Built the same day (d8db67e): steps
+1–4 of the order below; step 5 comes with the ring.
 
 ## What there is today
 
@@ -106,12 +106,14 @@ already does.
 ## Order
 
 1. `core_pool.ts` becomes the map: section pools over `CORE_MEMORY` at fixed
-   offsets; today's `CORE_POOL` is the mesh section.
+   offsets; today's `CORE_POOL` is the mesh section. — done
 2. The fixed section takes the change log, the waker's lanes, the bake
    context's scratch and the scheduler's lanes, through an acquire that
-   fails rather than spills.
-3. The page section takes terrain and POI pages.
+   fails rather than spills. — done
+3. The page section takes terrain and POI pages. — done
 4. Per-section use in the ledger, and the mesh section's threshold as a
    second trigger for the reclaim pass; an acquire that returns null, and
-   chunk_node treating null as "next tick".
+   chunk_node treating null as "next tick". — done; the mesh section still
+   spills today, so the null path is exercised by its test until a kernel
+   makes the section refuse
 5. The submission ring's `EAGAIN` comes with the ring, at the Rust mesher.
