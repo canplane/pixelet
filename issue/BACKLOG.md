@@ -40,7 +40,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      fill-in cost is elsewhere
      ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)).
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
-     checked casts.
+     checked casts. The glue and the core talk through rings in the core's
+     linear memory with a drain export as the doorbell — the submission
+     ring is built here, where the boundary first exists
+     ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
   4. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a

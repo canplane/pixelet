@@ -187,6 +187,69 @@ on the worker side, and a requeue on the worker's `error` event — on the
 order of fifty lines. comlink remains a reasonable choice for a worker
 that stays JS, runs one-off tool-shaped jobs, and has no part in a frame.
 
+## Rings: how a command travels, inside a worker and between them
+
+Added 2026-09-13, later the same day. The scheduler is two levels: a
+central one that owns the workers and the memory handed between them (the
+big memory and the little slabs), and one per worker — the main thread
+counts as one — sitting beside or inside its WASM core. What moves between
+them is decided above; this is how it moves.
+
+**The doorbell carries a number; the ring carries the message.** A command
+is written into a region of the receiver's memory laid out as a ring, and
+the receiver is told only that there is something to read — a tick, a
+count, a tail position — never the command itself. That is the shape
+hardware settled on: an interrupt raises a vector number and the handler
+reads memory; an NVMe or network queue is a ring of descriptors in shared
+memory with a doorbell write naming the new tail; virtio's virtqueues and
+io_uring's submission and completion rings are the same, and a GPU command
+buffer is filled first and submitted once.
+
+**Two levels, one shape.**
+
+| Level                                           | What travels                   | How                                                                                                                                                            |
+| ----------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inside a worker (the JS glue and its WASM core) | commands and their completions | rings in that worker's linear memory, and a doorbell: an export called once a tick with a count                                                                |
+| Between workers (the central scheduler)         | units of work                  | slabs moved by transfer — a ring whose entries are the buffers themselves ([experiment/20260913-transfer-ring](./experiment/20260913-transfer-ring/README.md)) |
+
+**Why it fits here.**
+
+- **One crossing a tick.** What a call between JS and WASM costs is its
+  conversions; commands written in place and drained by one call pay that
+  once a frame, not once a command.
+- **No shared memory across threads.** A ring lives in one linear memory,
+  so the glue and the core read and write it without copies and without a
+  SharedArrayBuffer; only whole slabs cross threads.
+- **No locks.** Each ring has one producer and one consumer: the glue writes
+  the submission ring and the core reads it, the core writes the completion
+  ring and the glue reads it. Head and tail are numbers in the memory.
+
+**What is already this shape.** The frame (`@xpute/core/ipc/frame.ts`), a
+fixed eight-word header then args then body, is a ring entry's layout. The
+change log (`@xpute/core/ipc/change.ts`) is a fixed ring in linear memory
+with cursors — a completion ring for the read direction. The tick is the
+clock interrupt, and it already drains that ring
+(`world_wakers.pump()`). What does not exist yet is the submission ring:
+today a frame is written into a slab and posted, which is the
+between-workers level, not the inside-a-worker one.
+
+**Two rules that come with it.**
+
+- **A full ring's policy depends on what it carries.** The change log may
+  overwrite, because a lost reader re-reads its topics. A command ring may
+  not: a submit into a full ring fails (`EAGAIN`) and the submitter waits,
+  which is backpressure, never loss.
+- **A query that needs its answer now stays a synchronous call.** A raycast
+  under the pointer does not wait a tick. Commands and their effects go
+  through the ring; immediate queries are calls — io_uring leaves some
+  system calls synchronous for the same reason.
+
+**When.** The submission ring is built with the first Rust piece (BACKLOG
+P0, the mesher), where a JS–WASM boundary first exists to put it on: an SPSC
+ring in `@xpute/core/ipc/`, and a drain export as the doorbell. Built
+earlier, between two TypeScript halves, there is no boundary to prove it
+against.
+
 ## Open
 
 - **The read direction** (BACKLOG P0-1). The first row suggests the UI
