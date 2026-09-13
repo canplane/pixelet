@@ -7,9 +7,9 @@
  * whether it is on screen, which tiers it shows and how a blend weighs them,
  * what to build and when, what to give back. What stays here is what the
  * decisions act on and the sources they are made from: the `THREE.Group` and
- * the meshes attached to it, the tiers the module handed over, decor's build
- * and its contribution to decor/field.ts, and the subscriptions that say a
- * chunk's sources changed.
+ * the meshes attached to it, the tiers and decor blocks the module handed
+ * over, decor's contribution to decor/field.ts, and the subscriptions that
+ * say a chunk's sources changed.
  *
  * A mesh has exactly one owner at a time — the tier cache, the layout, or
  * both through a count — and a layout's meshes are attached in the call that
@@ -28,8 +28,6 @@ import type { Terrain } from "@pxl/shared/bake/format.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/module/world/decor/field.ts";
-import { build_decor_instances, type DecorInstancesByVariant } from "@/module/world/decor/decor_layer.ts";
-import { instances_release, instances_retain } from "@/module/world/decor/instance.ts";
 import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/module/world/decor/asset_store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
 import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/module/world/render/chunk_material.ts";
@@ -37,6 +35,7 @@ import { register_tile_interest, useTileStore } from "@/module/world/terrain/sto
 import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, mesh_bounds, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
 import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
+import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
 import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
@@ -76,7 +75,7 @@ export type ChunkRetention = {
   run_set_mb: u32;
   /** Built tiers held across every node's cache. */
   tiers: u32;
-  /** Decor: cached per-step builds, and the lane instances inside them. */
+  /** Decor: cached per-step blocks, and the instances inside them. */
   decor_steps: u32;
   decor_instances: u32;
 };
@@ -96,9 +95,9 @@ export function chunk_retention(): ChunkRetention {
       run_bytes += node.retained_run_bytes;
     }
     out.tiers += node.retained_tier_cnt;
-    for (const per_bundle of node.retained_decor) {
+    for (const decor of node.retained_decor) {
       out.decor_steps++;
-      for (const variants of per_bundle) for (const inst of variants) if (inst) out.decor_instances += inst.len;
+      for (const inst of decor.groups) if (inst) out.decor_instances += inst.len;
     }
   }
   out.run_set_mb = Math.round(run_bytes / 1048576);
@@ -127,25 +126,25 @@ subscribe_decor_assets(() => {
 // ---- Layout ----
 
 /**
- * One entry per bundle (matching bundle_assets' own order), each itself one
- * entry per that bundle's own variant. `secondary` mirrors the layout's
- * (null outside a blend band) rather than decor tracking its own blend.
+ * The decor blocks of the layout's two tiers; `secondary` mirrors the
+ * layout's (null outside a blend band) rather than decor tracking its own
+ * blend. A tier's block is null while the module has none for it.
  */
 type DecorLayoutPair = {
-  primary: DecorInstancesByVariant[];
-  secondary: DecorInstancesByVariant[] | null;
+  primary: DecorBlock | null;
+  secondary: DecorBlock | null;
 };
-const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: [], secondary: null };
+const EMPTY_DECOR_PAIR: DecorLayoutPair = { primary: null, secondary: null };
 
-/** The layout's own hold on the lane sets it shows, taken and dropped as one
+/** The layout's own hold on the blocks it shows, taken and dropped as one
  * with the buckets' — see apply_layout. */
 function retain_decor_pair(pair: DecorLayoutPair): void {
-  for (const variants of pair.primary) for (const inst of variants) if (inst) instances_retain(inst);
-  if (pair.secondary) { for (const variants of pair.secondary) for (const inst of variants) if (inst) instances_retain(inst); }
+  if (pair.primary) decor_block_retain(pair.primary);
+  if (pair.secondary) decor_block_retain(pair.secondary);
 }
 function release_decor_pair(pair: DecorLayoutPair): void {
-  for (const variants of pair.primary) for (const inst of variants) if (inst) instances_release(inst);
-  if (pair.secondary) { for (const variants of pair.secondary) for (const inst of variants) if (inst) instances_release(inst); }
+  if (pair.primary) decor_block_release(pair.primary);
+  if (pair.secondary) decor_block_release(pair.secondary);
 }
 
 type LodLayout = {
@@ -201,9 +200,9 @@ export class ChunkNode {
   /** The module's id for this chunk. */
   private readonly id: u32;
 
-  /** The tiers the module handed over, by step. */
+  /** The tiers and the decor blocks the module handed over, by step. */
   private readonly bucket_cache = new Map<LodStep, BuiltChunkBucket>();
-  private readonly decor_cache = new Map<LodStep, DecorInstancesByVariant[]>();
+  private readonly decor_cache = new Map<LodStep, DecorBlock>();
   /** How many times the module has been told this chunk's sources: a tier
    * built from an earlier telling is stale and released on arrival. */
   private generation: u32 = 0;
@@ -312,7 +311,7 @@ export class ChunkNode {
   get retained_tier_cnt(): u32 {
     return this.bucket_cache.size;
   }
-  get retained_decor(): Iterable<DecorInstancesByVariant[]> {
+  get retained_decor(): Iterable<DecorBlock> {
     return this.decor_cache.values();
   }
 
@@ -336,12 +335,25 @@ export class ChunkNode {
     this.sync_decor();
   }
 
+  on_decor(step: LodStep, decor: DecorBlock): void {
+    if (this.disposed || this.decor_cache.has(step)) {
+      decor_block_release(decor);
+      return;
+    }
+    this.decor_cache.set(step, decor);
+  }
+
   on_evict(step: LodStep): void {
     const bucket = this.bucket_cache.get(step);
-    if (!bucket) return;
-    this.bucket_cache.delete(step);
-    release_built_mesh(bucket.cubes);
-    if (!this.shown) this.clear_decor_cache();
+    if (bucket) {
+      this.bucket_cache.delete(step);
+      release_built_mesh(bucket.cubes);
+    }
+    const decor = this.decor_cache.get(step);
+    if (decor) {
+      this.decor_cache.delete(step);
+      decor_block_release(decor);
+    }
   }
 
   on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void {
@@ -373,8 +385,18 @@ export class ChunkNode {
       });
       return;
     }
+    const decor = this.decor_pair(primary, secondary);
+    // The same tiers told again with the same meshes is the module's decor
+    // rebuild (decor_now): the cubes stay attached, or the rebuild would be
+    // the flicker the decor/solid split exists to avoid.
+    const same_tiers = this.layout.ready && this.layout.buckets.length === buckets.length &&
+      buckets.every((b, k) => b.cubes === this.layout.buckets[k].cubes && b.role === this.layout.buckets[k].role);
+    if (same_tiers) {
+      this.apply_decor(decor);
+      return;
+    }
     this.blend = null;
-    this.apply_layout({ primary, secondary, buckets, decor: this.build_decor_pair(primary, secondary), ready: true });
+    this.apply_layout({ primary, secondary, buckets, decor, ready: true });
   }
 
   /** One decision, two consumers. Cube content dithers between the two tiers
@@ -420,22 +442,22 @@ export class ChunkNode {
   /**
    * Decor models finish loading well after the first chunks are built, and
    * a node that never heard about it drew no decor for the rest of its
-   * life. Decor meshes only: a model arriving says nothing about cube content.
+   * life. The instances are the same; what this chunk contributes to
+   * decor/field.ts — a geometry and a skin per variant — is not.
    */
   on_decor_assets(): void {
     if (this.disposed) return;
     const assets = decor_bundle_assets();
     if (this.bundle_assets === assets) return;
     this.bundle_assets = assets;
-    this.clear_decor_cache();
-    if (!this.layout.ready) return;
-    this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
+    this.decor_dirty = true;
+    this.sync_decor();
   }
 
   /**
-   * Decor's own revision-only rebuild. It must never touch the tiers: that
-   * would reintroduce the needless cube rebuild — visible as a flicker —
-   * this split exists to avoid.
+   * Decor's own revision-only rebuild, in the module. It must never touch
+   * the tiers: that would reintroduce the needless cube rebuild — visible as
+   * a flicker — this split exists to avoid.
    */
   on_decor_change(): void {
     if (this.disposed) return;
@@ -445,8 +467,7 @@ export class ChunkNode {
     this.decor_revision = revision;
     this.show_decor = show_decor;
     this.clear_decor_cache();
-    if (!this.layout.ready) return;
-    this.apply_layout({ ...this.layout, decor: this.build_decor_pair(this.layout.primary, this.layout.secondary) });
+    CORE_BUILD.decor_now(this.id, show_decor);
   }
 
   // ---- caches ----
@@ -456,29 +477,19 @@ export class ChunkNode {
     this.bucket_cache.clear();
   }
 
-  /** Drops the cache's hold on every lane set it has; a set the layout is
+  /** Drops the cache's hold on every block it has; a block the layout is
    * still showing lives on until the layout lets go. */
   private clear_decor_cache(): void {
-    for (const per_bundle of this.decor_cache.values()) {
-      for (const variants of per_bundle) for (const inst of variants) if (inst) instances_release(inst);
-    }
+    for (const decor of this.decor_cache.values()) decor_block_release(decor);
     this.decor_cache.clear();
   }
 
-  /** Decor's own build — no dependency on the cube tiers at all (a decor
-   * entry never paints a voxel). */
-  private build_decor_step(step: LodStep): DecorInstancesByVariant[] {
-    const cached = this.decor_cache.get(step);
-    if (cached) return cached;
-    const built = this.bundle_assets.map(({ bundle }) => build_decor_instances(this.tile as never, step, this.deps.page_idx, this.deps.offset.base_x, this.deps.offset.base_y, bundle));
-    this.decor_cache.set(step, built);
-    return built;
-  }
-
-  private build_decor_pair(primary: LodStep, secondary: LodStep | null): DecorLayoutPair {
+  /** The layout's decor from the cache: the module hands a tier's decor
+   * over before the layout, so a tier without one has none. */
+  private decor_pair(primary: LodStep, secondary: LodStep | null): DecorLayoutPair {
     return {
-      primary: this.build_decor_step(primary),
-      secondary: secondary !== null && secondary !== primary ? this.build_decor_step(secondary) : null,
+      primary: this.decor_cache.get(primary) ?? null,
+      secondary: secondary !== null && secondary !== primary ? this.decor_cache.get(secondary) ?? null : null,
     };
   }
 
@@ -507,6 +518,17 @@ export class ChunkNode {
     for (const bucket of previous.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(previous.decor);
     if (import.meta.env.DEV) node_counts.rebuilt++;
+  }
+
+  /** The layout's decor alone: the cubes stay as they are. */
+  private apply_decor(decor: DecorLayoutPair): void {
+    const previous = this.layout.decor;
+    retain_decor_pair(decor);
+    this.layout = { ...this.layout, decor };
+    this.decor_dirty = true;
+    if (this.blend !== null) this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
+    else this.sync_decor();
+    release_decor_pair(previous);
   }
 
   private attach_cubes(bucket: BuiltChunkBucket): void {
@@ -559,20 +581,21 @@ export class ChunkNode {
       decor_field.clear_chunk(this.base_i);
       return;
     }
-    const source = role === "secondary" ? this.layout.decor.secondary! : this.layout.decor.primary;
+    const source = role === "secondary" ? this.layout.decor.secondary : this.layout.decor.primary;
     const contribution: Map<string, DecorVariantContribution> = new Map();
-    this.bundle_assets.forEach(({ bundle, geometries, materials }, bi) => {
-      const variants: DecorInstancesByVariant | undefined = source[bi];
-      if (!variants) return;
+    // The block's groups are every bundle's variants in bundle order, the
+    // order the kinds were taught (decor_registry.ts).
+    let group = 0;
+    for (const { bundle, geometries, materials } of this.bundle_assets) {
       geometries.forEach((geometry, variant) => {
         const material = materials[variant];
-        const instances = variants[variant];
+        const instances = source?.groups[group++] ?? null;
         // A variant whose model or skin is still in flight contributes
-        // nothing; the arrival rebuilds this chunk's decor and lands here.
+        // nothing; the arrival re-syncs this chunk and lands here.
         if (!geometry || !material || !instances) return;
         contribution.set(variant_key(bundle.kind, variant), { geometry, material, instances });
       });
-    });
+    }
     decor_field.set_chunk(this.base_i, contribution as DecorContribution);
   }
 

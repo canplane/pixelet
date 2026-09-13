@@ -1,28 +1,13 @@
 // @pxl/web/module/world/decor/instance.ts
 
 /**
- * A chunk's decor instances for one variant, as lanes.
+ * The TypeScript build of a chunk's decor instances for one variant, as
+ * lanes — the reference the module's build is held to
+ * (core_decor.test.ts); what is drawn comes from the module as a block
+ * (render/layer/pipeline/decor_block.ts).
  *
- * What an instance is: a chunk-local position, a spin about Z, a scale, and
- * where it came from — a user-placed entry in object/store.ts, or a
- * procedural scatter that no store names. That was an object per instance
- * (~22,000 live at a wide zoom, 2026-09-12) held twice: once in the chunk's
- * per-step cache and once in decor/field.ts's `source` array so a hit could
- * find its id. Now it is six typed lanes in core memory, and the id is not
- * stored at all: a placed entry is named by its band and packed position in
- * the store's own lanes, two u32s, and the string id is rebuilt from those
- * only when a hit needs it (object/store.ts's entry_id_of).
- *
- * `hidden` stays as a flag lane rather than a separate list: field.ts still
- * routes hidden instances to a never-rendered mesh so hit testing keeps
- * seeing them, and reads the flag per instance as it writes.
- *
- * A set has owners, counted: the node's per-step cache and the layout that
- * is showing it die independently — the cache is reclaimed off screen
- * while the layout waits for its release to commit, and a source change
- * empties the cache while a deferred rebuild keeps the layout — so "the
- * cache dropped it" cannot mean "the lanes are free". The same `rc` the
- * baked meshes carry (chunk_bucket.ts), for the same reason.
+ * A set has owners, counted, the same `rc` the baked meshes carry
+ * (chunk_bucket.ts): the last one out returns the lanes to the pool.
  */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
@@ -30,34 +15,12 @@ import type { TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { type DecorInstances, HIDDEN_FLAG, NO_ENTRY } from "@/render/layer/pipeline/decor_block.ts";
 
-/** Sentinel in `band` for a procedural instance: nothing in the store names
- * it, so a hit on it resolves to no entry. */
-export const NO_ENTRY: u32 = 0xffffffff;
+export { type DecorInstances, HIDDEN_FLAG, NO_ENTRY };
 
 /** Scratch grows from here and lives in the core pool like every lane. */
 const LANE = { init_cap: 1024, alloc: CORE_ALLOC } as const;
-
-/** The lanes; `len` instances are live. One of these per (chunk, step,
- * variant), allocated from the core pool and handed back on release. */
-export type DecorInstances = {
-  /** Owners still holding this set; the lanes go back to the pool at zero. */
-  rc: u32;
-  len: u32;
-  x: Float32Array;
-  y: Float32Array;
-  z: Float32Array;
-  rotation_z: Float32Array;
-  scale: Float32Array;
-  /** Bit 0: hidden (set_virtual_hide is suppressing it). */
-  flags: Uint8Array;
-  /** The store entry this instance is, as object/store.ts's own (band,
-   * packed position); NO_ENTRY in `band` for a procedural instance. */
-  band: Uint32Array;
-  pos: Uint32Array;
-};
-
-export const HIDDEN_FLAG: u32 = 1;
 
 /**
  * The builder every producer appends into — module scratch, so building a

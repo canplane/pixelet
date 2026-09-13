@@ -7,11 +7,12 @@
  */
 
 import { bind_palette, type DecorKindBundle } from "./decor_layer.ts";
-import { is_tree_eligible, TREE_KIND } from "./tree_kind.ts";
+import { is_tree_eligible, TREE_KIND, TREE_RULES } from "./tree_kind.ts";
 
 export const TREE_DECOR_BUNDLE: DecorKindBundle = bind_palette({
   kind: "tree",
   seed: TREE_KIND,
+  rules: TREE_RULES,
   is_eligible: is_tree_eligible,
   decor_id: "tree",
 });

@@ -27,6 +27,7 @@ import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 import type { LodStep } from "@/render/lod.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { BakeContext, type BakedChunkMesh, carve_baked_mesh } from "./chunk_mesher.ts";
+import { decor_block_carve, decor_block_release, type DecorBlock } from "./decor_block.ts";
 import { CORE_POOL, CORE_PXL, FIXED_ALLOC } from "./core_pool.ts";
 
 /** The TypeScript bake's context over the core pool, for the references. */
@@ -53,9 +54,10 @@ const OP_BLEND = 20;
 const OP_EVICT = 21;
 const OP_MOUNT = 22;
 const OP_UNMOUNT = 23;
+const OP_DECOR = 24;
 
 /** crates/pxl-wasm/src/lib.rs's frame block: doubles, in this order. */
-export const FRAME_WORDS = 61;
+export const FRAME_WORDS = 62;
 export const FRAME = {
   root: 0,
   origin: 16,
@@ -74,6 +76,7 @@ export const FRAME = {
   has_anchor: 58,
   render_dist: 59,
   range_hysteresis: 60,
+  show_decor: 61,
 } as const;
 
 /** What the stage is told about the chunks the module mounts from the range. */
@@ -98,8 +101,12 @@ export type ChunkBuildSink = {
   on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void;
   /** Weigh the layout's two tiers so, and give decor the secondary's. */
   on_blend(primary: number, secondary: number, decor_secondary: boolean): void;
-  /** Let go of a tier; a layout showing it keeps its own hold. */
+  /** Let go of a tier and the decor at its step; a layout showing them
+   * keeps its own hold. */
   on_evict(step: LodStep): void;
+  /** The chunk's decor at `step`, the sink's to keep or release; a layout
+   * comes after the decor of every tier in it. */
+  on_decor(step: LodStep, decor: DecorBlock): void;
   /** The module unmounted the chunk: nothing more comes. */
   on_unmount?(): void;
 };
@@ -201,6 +208,10 @@ export class CoreBuild {
         const mesh = carve_baked_mesh(CORE_POOL.adopt(w[a + 2], w[a + 3]), w[a + 4], w[a + 5]);
         if (sink) sink.on_tier(w[a], w[a + 1] as LodStep, mesh);
         else release_chunk_mesh(mesh);
+      } else if (op === OP_DECOR) {
+        const decor = decor_block_carve(CORE_POOL.adopt(w[a + 1], w[a + 2]));
+        if (sink) sink.on_decor(w[a] as LodStep, decor);
+        else decor_block_release(decor);
       } else if (sink) {
         if (op === OP_RUNS) sink.on_runs(w[a]);
         else if (op === OP_VISIBLE) sink.on_visible(w[a] !== 0);
@@ -307,6 +318,14 @@ export class CoreBuild {
    * made: a placement shows in the frame it was made. */
   build_now(id: u32): void {
     this.pxl.pxl_build_now(id);
+    this.read();
+  }
+
+  /** Rebuilds chunk `id`'s decor for the layout it shows, now, and tells
+   * the layout again; the tiers are untouched. `show_decor` is the setting
+   * as it stands, since the frame is written only before a tick. */
+  decor_now(id: u32, show_decor: boolean): void {
+    this.pxl.pxl_decor_now(id, show_decor ? 1 : 0);
     this.read();
   }
 

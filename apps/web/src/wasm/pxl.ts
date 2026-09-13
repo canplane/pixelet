@@ -85,6 +85,10 @@ export type PxlExports = {
   pxl_drain(): u32;
   pxl_tick(): u32;
   pxl_build_now(id: u32): void;
+  pxl_decor_now(id: u32, show_decor: u32): void;
+  pxl_decor_kind(tag_lo: u32, tag_hi: u32, density: number, variant_count: u32, align_transport: u32, extent: number, decor_value: number): u32;
+  pxl_decor_rule(kind: u32, channel: u32, mode: u32): void;
+  pxl_decor_allow(kind: u32, channel: u32, t: u32): void;
   pxl_build_tick(order_at: u32, order_len: u32, budget_ms: number): void;
   pxl_frame_at(): u32;
   pxl_census(): u32;

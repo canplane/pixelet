@@ -11,6 +11,7 @@
 pub mod buddy;
 pub mod build;
 pub mod change;
+pub mod decor;
 pub mod lod;
 pub mod mesher;
 pub mod object;

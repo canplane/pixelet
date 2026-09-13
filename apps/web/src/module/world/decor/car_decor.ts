@@ -7,10 +7,11 @@
  */
 
 import { bind_palette, type DecorKindBundle } from "./decor_layer.ts";
-import { CAR_KIND, is_car_eligible } from "./car_kind.ts";
+import { CAR_KIND, CAR_RULES, is_car_eligible } from "./car_kind.ts";
 
 export const CAR_DECOR_BUNDLE: DecorKindBundle = bind_palette({
   kind: "car",
   seed: CAR_KIND,
+  rules: CAR_RULES,
   is_eligible: is_car_eligible,
 });

@@ -292,6 +292,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     f[FRAME.anchor_y] = range_anchor === null ? 0 : ivec.to_real(ivec.Y(range_anchor));
     f[FRAME.render_dist] = render_cfg.CHUNK_RENDER_DIST;
     f[FRAME.range_hysteresis] = RANGE_HYSTERESIS;
+    f[FRAME.show_decor] = useSettingsStore.getState().show_decor ? 1 : 0;
 
     const t0 = import.meta.env.DEV ? performance.now() : 0;
     const draw = CORE_BUILD.tick();

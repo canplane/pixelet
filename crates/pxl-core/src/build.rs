@@ -164,6 +164,18 @@ impl Builder {
         }
     }
 
+    /// What chunk `id` is made of, for a decor build: its column's base, where
+    /// it starts in its page, and its page's lanes.
+    pub fn source_of(&self, id: u32) -> Option<(u64, u32, u32, PageLanes, bool)> {
+        let c = self.chunks.get(&id)?;
+        Some((c.base, c.tx0, c.ty0, c.page?, c.show_structures))
+    }
+
+    /// The hidden entry's band and packed position, when it is in the column `key`.
+    pub fn hide_in(&self, key: u64) -> Option<(i32, u32)> {
+        self.hide.filter(|h| h.0 == key).map(|h| (h.1, h.2))
+    }
+
     /// The chunks holding the scan slot and the bake slot.
     pub fn holders(&self) -> [Option<u32>; 2] {
         [self.scan_job.as_ref().map(|j| j.id), self.bake_job.as_ref().map(|j| j.id)]
@@ -369,7 +381,7 @@ impl Builder {
         world.store.chunk_lanes(base).is_some_and(|l| l.count > 0) || matches!(self.carve, Some((k, _)) if k == base)
     }
 
-    fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
+    pub fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
         let mem = world.volumes.mem();
         let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
         let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;

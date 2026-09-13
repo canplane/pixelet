@@ -21,6 +21,7 @@ import { paint_typescript, runs_typescript } from "../terrain/adapter.ts";
 import { ObjectWorldLayer } from "../object/adapter.ts";
 import { bake_chunk_mesh, BakeContext, type BakedChunkMesh, carve_visibility } from "./chunk_mesher.ts";
 import { CORE_BUILD, release_chunk_mesh } from "./core_build.ts";
+import { decor_block_release, type DecorBlock } from "./decor_block.ts";
 import { CORE_POOL, FIXED_ALLOC } from "./core_pool.ts";
 import { alloc_chunk_volume, release_chunk_volume, seal_chunk_volume } from "./volume.ts";
 import { fill_column_runs, release_column_runs, scan_all_column_runs } from "./voxel_scan.ts";
@@ -82,6 +83,7 @@ function chunk(): { id: u32; heard: Heard } {
     on_layout: () => {},
     on_blend: () => {},
     on_evict: () => {},
+    on_decor: (_s: LodStep, d: DecorBlock) => decor_block_release(d),
   };
   const id = CORE_BUILD.add(sink, BASE, 320, 448, 320, 448);
   CORE_BUILD.source(id, terrain, false);

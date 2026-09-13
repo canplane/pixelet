@@ -15,7 +15,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
+use crate::decor::{Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::lod::{Ladder, COARSEST};
+use crate::terrain::ChunkSample;
 
 /// A chunk's side, in world units.
 const CHUNK_WORLD_SPAN: f64 = 64.0;
@@ -75,6 +77,8 @@ pub struct Frame {
     pub anchor: Option<[f64; 2]>,
     pub render_dist: f64,
     pub range_hysteresis: f64,
+    /// Whether procedural decor is scattered at all (the setting).
+    pub show_decor: bool,
 }
 
 /// What the glue is told.
@@ -112,10 +116,20 @@ pub enum Event {
         secondary: f32,
         decor_secondary: bool,
     },
-    /// Let go of a tier the glue holds; the layout keeps what it shows.
+    /// Let go of a tier the glue holds, and the decor at its step; the
+    /// layout keeps what it shows.
     Evict {
         id: u32,
         step: u32,
+    },
+    /// The chunk's decor at a tier, as decor.rs's block of `bytes` at `at`,
+    /// the glue's to release; every tier of a layout has its decor handed
+    /// over before the layout.
+    Decor {
+        id: u32,
+        step: u32,
+        at: u32,
+        bytes: u32,
     },
 }
 
@@ -148,6 +162,8 @@ struct Slot {
     runs_bytes: u32,
     /// The tiers the glue holds, oldest built first.
     tiers: Vec<Tier>,
+    /// The decor blocks the glue holds: a step and its bytes.
+    decor: Vec<(u32, u32)>,
     layout_primary: u32,
     layout_secondary: u32,
     layout_ready: bool,
@@ -170,7 +186,7 @@ impl Slot {
     }
 
     fn retained(&self) -> f64 {
-        self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>()
+        self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>() + self.decor.iter().map(|d| d.1 as f64).sum::<f64>()
     }
 
     fn tier(&self, step: u32) -> Option<&Tier> {
@@ -212,6 +228,10 @@ pub struct Scheduler {
     mounted: BTreeMap<(u64, u32, u32), u32>,
     next_mount_id: u32,
     mounted_for: Option<([f64; 2], f64, f64, u32)>,
+    /// The decor kinds, in the order the glue taught them — the order of
+    /// the groups in every decor block.
+    decor_kinds: Vec<DecorKind>,
+    decor_sample: ChunkSample,
 }
 
 impl Default for Scheduler {
@@ -257,7 +277,34 @@ impl Scheduler {
             mounted: BTreeMap::new(),
             next_mount_id: MOUNT_ID_BASE,
             mounted_for: None,
+            decor_kinds: Vec::new(),
+            decor_sample: ChunkSample::default(),
         }
+    }
+
+    /// Teaches a decor kind; its index. Its rules start as `Any` on every
+    /// channel, and `decor_rule` sets them.
+    pub fn decor_kind(&mut self, kind: DecorKind) -> u32 {
+        self.decor_kinds.push(kind);
+        (self.decor_kinds.len() - 1) as u32
+    }
+
+    pub fn decor_rule(&mut self, kind: u32, channel: usize, rule: DecorRule) {
+        if let Some(k) = self.decor_kinds.get_mut(kind as usize) {
+            k.rules[channel] = rule;
+        }
+    }
+
+    /// Allows one type on a channel of a kind's rule, which becomes `OneOf`
+    /// if it was not.
+    pub fn decor_allow(&mut self, kind: u32, channel: usize, t: u8) {
+        let Some(k) = self.decor_kinds.get_mut(kind as usize) else { return };
+        let mut bits = match k.rules[channel] {
+            DecorRule::OneOf(b) => b,
+            _ => [0; 4],
+        };
+        bits[(t >> 6) as usize] |= 1 << (t & 63);
+        k.rules[channel] = DecorRule::OneOf(bits);
     }
 
     fn account(&mut self, i: usize, before: f64) {
@@ -292,6 +339,7 @@ impl Scheduler {
             request: 0,
             runs_bytes: 0,
             tiers: Vec::new(),
+            decor: Vec::new(),
             layout_primary: COARSEST,
             layout_secondary: 0,
             layout_ready: false,
@@ -324,14 +372,16 @@ impl Scheduler {
         }
     }
 
-    /// The chunk's sources changed. The tiers the glue holds are stale and it
-    /// lets them go itself; what is on screen stays until the rebuild lands.
+    /// The chunk's sources changed. The tiers and decor the glue holds are
+    /// stale and it lets them go itself; what is on screen stays until the
+    /// rebuild lands.
     pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool, emit: &mut impl FnMut(Event)) {
         let Some(&i) = self.index.get(&id) else { return };
         let before = self.slots[i].retained();
         self.builder.source(world, id, page, show_structures, &mut |e| emit(Event::Build(e)));
         let s = &mut self.slots[i];
         s.tiers.clear();
+        s.decor.clear();
         s.runs_bytes = 0;
         if !s.layout_ready {
             s.bc = [CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0.0];
@@ -354,7 +404,7 @@ impl Scheduler {
             let (slots, index, ron, roff) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off);
             self.builder.tick(world, &[id], f64::INFINITY, now, &mut |e| self_record(slots, index, mem, ron, roff, e, emit));
         }
-        if self.ask(world, i, p, s2) {
+        if self.ask(world, i, p, s2) && self.ensure_decor(world, i, [p, s2], emit) {
             self.trim(i, [p, s2], emit);
             self.apply_layout(i, p, s2, true, emit);
         } else {
@@ -362,6 +412,76 @@ impl Scheduler {
             s.layout_ready = false;
             s.set(EMPTY, true);
         }
+    }
+
+    /// Only the chunk's decor changed (an entry placed or hidden, the
+    /// setting): the decor the glue holds is stale and it let it go; the
+    /// layout's decor is rebuilt now and the layout told again, the tiers
+    /// untouched. Unless a block was refused, when it lands on a later tick.
+    pub fn decor_now(&mut self, world: &mut World, id: u32, show_decor: bool, emit: &mut impl FnMut(Event)) {
+        if let Some(f) = self.frame.as_mut() {
+            f.show_decor = show_decor;
+        }
+        let Some(&i) = self.index.get(&id) else { return };
+        let before = self.slots[i].retained();
+        self.slots[i].decor.clear();
+        self.account(i, before);
+        if !self.slots[i].layout_ready {
+            return;
+        }
+        let (p, s2) = (self.slots[i].layout_primary, self.slots[i].layout_secondary);
+        if self.ensure_decor(world, i, [p, s2], emit) {
+            self.apply_layout(i, p, s2, true, emit);
+        } else {
+            let s = &mut self.slots[i];
+            s.layout_ready = false;
+            s.set(EMPTY, true);
+        }
+    }
+
+    /// Whether the glue holds the decor of every tier in `steps`, building
+    /// and handing over what it lacks: false when the pool refused a block.
+    /// A chunk with no page has no decor to build.
+    fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], emit: &mut impl FnMut(Event)) -> bool {
+        let id = self.slots[i].id;
+        let Some((base, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else { return true };
+        let show_decor = self.frame.is_some_and(|f| f.show_decor);
+        let (key_x, key_y) = lanes_xy(base);
+        let page_idx = gather_xy(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT);
+        let mut sampled = false;
+        for step in steps {
+            if step == 0 || self.slots[i].decor.iter().any(|d| d.0 == step) {
+                continue;
+            }
+            let view = Builder::page_view(world, page);
+            if !sampled {
+                self.decor_sample.read(&view, world.materials, tx0, ty0, show_structures);
+                sampled = true;
+            }
+            let chunk = DecorChunk {
+                page: &view,
+                page_idx,
+                key: base,
+                key_x,
+                key_y,
+                tx0,
+                ty0,
+                show_decor,
+                hide: self.builder.hide_in(base),
+            };
+            let built = DecorBuild::build(&self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
+            let bytes = built.bytes();
+            let pool = world.volumes.mesh_pool();
+            let Some(at) = world.pools[pool].acquire(bytes) else { return false };
+            // SAFETY: a block of the bytes the build asked for, the glue's
+            // once handed over.
+            unsafe { built.write(world.volumes.mem().add(at)) };
+            let before = self.slots[i].retained();
+            self.slots[i].decor.push((step, bytes));
+            self.account(i, before);
+            emit(Event::Decor { id, step, at: at as u32, bytes });
+        }
+        true
     }
 
     /// A page's terrain tile arrived, or left.
@@ -746,6 +866,7 @@ impl Scheduler {
                 continue;
             }
             s.tiers.remove(k);
+            s.decor.retain(|d| d.0 != st);
             emit(Event::Evict { id: s.id, step: st });
         }
         self.account(i, before);
@@ -772,7 +893,7 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
-        if !self.ask(world, i, p, q) {
+        if !self.ask(world, i, p, q) || !self.ensure_decor(world, i, [p, q], emit) {
             return false;
         }
         self.trim(i, [p, q], emit);
@@ -803,8 +924,14 @@ impl Scheduler {
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
-            for t in s.tiers.drain(..) {
-                emit(Event::Evict { id, step: t.step });
+            let mut steps: Vec<u32> = s.tiers.drain(..).map(|t| t.step).collect();
+            for (step, _) in s.decor.drain(..) {
+                if !steps.contains(&step) {
+                    steps.push(step);
+                }
+            }
+            for step in steps {
+                emit(Event::Evict { id, step });
             }
             self.account(i, before);
             freed += 1;
@@ -825,6 +952,11 @@ const PAGE_SHAMT: u32 = 10;
 /// top 24 bits, Y in the next 24, Z in the low 16.
 fn lanes_xy(v: u64) -> (i64, i64) {
     ((v as i64) >> 40, ((v << 24) as i64) >> 40)
+}
+
+/// The lattice word of (x, y, 0).
+fn gather_xy(x: i64, y: i64) -> u64 {
+    ((x as u64 & 0xff_ffff) << 40) | ((y as u64 & 0xff_ffff) << 16)
 }
 
 /// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over the

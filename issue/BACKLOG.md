@@ -67,8 +67,19 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      distance and its hysteresis in the frame and the pages with a tile
      (held to render/chunk_range.ts's in_range_chunks by
      core_sched.test.ts); the stage makes a node and an anchor holder for a
-     chunk the module mounts, and drops them when it unmounts. Still
-     TypeScript: decor, and the raycast's composite.
+     chunk the module mounts, and drops them when it unmounts. Then decor's
+     build (2026-09-14, crates/pxl-core/src/decor.rs, held instance for
+     instance to decor_layer.ts's build_decor_instances by
+     core_decor.test.ts — the scatter's streams bit for bit, splitmix64
+     drawn as JavaScript rounds it): the kinds are taught with their rules
+     as data (a channel is any type, void, or one of a list), the module
+     builds a tier's decor beside the tier and hands it over as one block of
+     lanes per (kind, variant) before the layout, a decor-only change
+     (a tree placed, the eraser's hide, the setting) rebuilds it with
+     `pxl_decor_now` and tells the layout again with the cubes left
+     attached, and the block goes with the tier's eviction. The node holds
+     blocks; the field reads their groups as views. Still TypeScript: the
+     raycast's composite.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

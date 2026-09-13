@@ -11,7 +11,7 @@
  */
 
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
-import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
+import { type DecorEligibility, type DecorKindSeed, type DecorRules, eligibility_of } from "./scatter.ts";
 
 const TRAIN_KIND_TAG = 0x7ba1_5eed_0004_dec0n;
 
@@ -31,4 +31,5 @@ export const TRAIN_KIND: DecorKindSeed = {
 
 /** Only the transport channel matters — same reasoning as
  * car_kind.ts's own is_car_eligible. */
-export const is_train_eligible: DecorEligibility = (_land, _water, _structure, transport) => transport === cube_types.transport.RAIL_MAIN;
+export const TRAIN_RULES: DecorRules = { land: "any", water: "any", structure: "any", transport: [cube_types.transport.RAIL_MAIN] };
+export const is_train_eligible: DecorEligibility = eligibility_of(TRAIN_RULES);

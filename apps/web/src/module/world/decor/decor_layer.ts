@@ -93,7 +93,7 @@ import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { derive_seed_u64, make_rng, u32_to_unit } from "@xpute/core/kit/rng.ts";
-import { decor_id_from_num, type DecorId, object_value_is_decor } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_id_from_num, decor_num_id, type DecorId, object_value_is_decor } from "@pxl/shared/spec/cell/mod.ts";
 
 import { shipped_palette } from "@pxl/shared/record/mod.ts";
 
@@ -102,8 +102,9 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import { get_ele_at_local } from "@/module/world/terrain/elevation.ts";
 import { cell_index, cell_is_occupied, each_column_entry, object_column_of, virtual_hidden_id } from "@/module/world/object/store.ts";
 import { type LodStep, TARGET_CELL_PX } from "@/render/lod.ts";
+import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 
-import { type DecorEligibility, type DecorKindSeed, scatter_decor_candidates } from "./scatter.ts";
+import { DECOR_RULE_CHANNELS, type DecorEligibility, type DecorKindSeed, type DecorRules, scatter_decor_candidates } from "./scatter.ts";
 import type { DecorVariantAsset } from "./instanced_model.ts";
 import { type DecorInstances, HIDDEN_FLAG, instances_push, instances_reset, instances_take, NO_ENTRY } from "./instance.ts";
 
@@ -157,6 +158,9 @@ export type DecorKindBundle = {
   /** The kind's name — the bank key's prefix, and so the draw census's tag. */
   kind: string;
   seed: DecorKindSeed;
+  /** Where the kind stands, as the module is taught it; `is_eligible` is
+   * the same rule as the predicate this reference reads. */
+  rules: DecorRules;
   is_eligible: DecorEligibility;
   /** One entry per variant_count, filled by `bind_palette` from the
    * palette's rows for this kind — see instanced_model.ts's own doc comment
@@ -201,6 +205,35 @@ function kind_extent(bundle: DecorKindBundle): f64 {
   let extent = 0;
   for (const row of bundle.palette_rows ?? []) extent = Math.max(extent, shipped_palette().extent_max(row));
   return extent;
+}
+
+/**
+ * Teaches the module every kind, in bundle order — the order of the groups
+ * in the decor blocks it hands over (crates/pxl-core/src/decor.rs): each
+ * kind's variants in variant order, one group a variant. Called once, from
+ * decor_registry.ts, with the registry's own list.
+ */
+export function teach_decor_kinds(bundles: readonly DecorKindBundle[]): void {
+  const pxl = CORE_PXL;
+  if (pxl === null) return;
+  for (const bundle of bundles) {
+    const tag = BigInt.asUintN(64, bundle.seed.tag);
+    const kind = pxl.pxl_decor_kind(
+      Number(tag & 0xffffffffn),
+      Number(tag >> 32n),
+      bundle.seed.density,
+      bundle.seed.variant_count,
+      bundle.seed.orientation === "align_transport" ? 1 : 0,
+      kind_extent(bundle),
+      bundle.decor_id ? decor_num_id(bundle.decor_id) : -1,
+    );
+    DECOR_RULE_CHANNELS.forEach((channel, ch) => {
+      const rule = bundle.rules[channel];
+      if (rule === "any") return;
+      pxl.pxl_decor_rule(kind, ch, rule === "void" ? 1 : 2);
+      if (rule !== "void") { for (const t of rule) pxl.pxl_decor_allow(kind, ch, t); }
+    });
+  }
 }
 
 // Seeded purely by the placed object's own absolute position — unlike

@@ -6,7 +6,7 @@
  */
 
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
-import type { DecorEligibility, DecorKindSeed } from "./scatter.ts";
+import { type DecorEligibility, type DecorKindSeed, type DecorRules, eligibility_of } from "./scatter.ts";
 
 const BOAT_KIND_TAG = 0xb0a7_5eed_0002_dec0n;
 
@@ -33,8 +33,10 @@ export const BOAT_KIND: DecorKindSeed = {
  * either one (a pier, a bridge deck) would win over water and actually
  * render as itself, not water, at that cell — a boat there would visually
  * float on top of a bridge instead of the water beneath it. */
-export const is_boat_eligible: DecorEligibility = (_land, water, structure, transport) => {
-  if (structure !== cube_types.common.VOID) return false;
-  if (transport !== cube_types.common.VOID) return false;
-  return water === cube_types.water.RIVER || water === cube_types.water.LAKE;
+export const BOAT_RULES: DecorRules = {
+  land: "any",
+  water: [cube_types.water.RIVER, cube_types.water.LAKE],
+  structure: "void",
+  transport: "void",
 };
+export const is_boat_eligible: DecorEligibility = eligibility_of(BOAT_RULES);

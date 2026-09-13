@@ -20,6 +20,7 @@ import "../terrain/adapter.ts";
 import "../object/adapter.ts";
 import type { BakedChunkMesh } from "./chunk_mesher.ts";
 import { CORE_BUILD, FRAME, release_chunk_mesh } from "./core_build.ts";
+import { decor_block_release, type DecorBlock } from "./decor_block.ts";
 
 const terrain = page(33);
 
@@ -50,6 +51,7 @@ function chunk(x: u32, y: u32): { id: u32; heard: Heard } {
       if (mesh) release_chunk_mesh(mesh);
       heard.tiers.delete(step);
     },
+    on_decor: (_s: LodStep, d: DecorBlock) => decor_block_release(d),
   };
   const id = CORE_BUILD.add(sink, ivec.gather(BigInt(x), BigInt(y), 0n), x, y, x, y, 7);
   CORE_BUILD.source(id, terrain, false);
@@ -159,7 +161,15 @@ Deno.test("core sched - the module mounts the chunks of a tiled page within the 
   CORE_BUILD.mounts = {
     on_mount: (id, _page, bx, by) => {
       mounted.set(id, [bx, by]);
-      CORE_BUILD.attach(id, { on_tier: (_g, _s, m) => release_chunk_mesh(m), on_runs: () => {}, on_visible: () => {}, on_layout: () => {}, on_blend: () => {}, on_evict: () => {} });
+      CORE_BUILD.attach(id, {
+        on_tier: (_g, _s, m) => release_chunk_mesh(m),
+        on_runs: () => {},
+        on_visible: () => {},
+        on_layout: () => {},
+        on_blend: () => {},
+        on_evict: () => {},
+        on_decor: (_s, d) => decor_block_release(d),
+      });
     },
     on_unmount: (id) => {
       mounted.delete(id);
@@ -202,7 +212,15 @@ Deno.test("core sched - the chunks the module mounts are render/chunk_range.ts's
     on_mount: (id, _page, bx, by) => {
       ids.set(id, `${bx},${by}`);
       mounted.add(`${bx},${by}`);
-      CORE_BUILD.attach(id, { on_tier: (_g, _s, m) => release_chunk_mesh(m), on_runs: () => {}, on_visible: () => {}, on_layout: () => {}, on_blend: () => {}, on_evict: () => {} });
+      CORE_BUILD.attach(id, {
+        on_tier: (_g, _s, m) => release_chunk_mesh(m),
+        on_runs: () => {},
+        on_visible: () => {},
+        on_layout: () => {},
+        on_blend: () => {},
+        on_evict: () => {},
+        on_decor: (_s, d) => decor_block_release(d),
+      });
     },
     on_unmount: (id) => void mounted.delete(ids.get(id)!),
   };

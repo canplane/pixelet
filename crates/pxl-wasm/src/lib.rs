@@ -16,6 +16,7 @@ mod arena;
 use pxl_core::buddy::Pool;
 use pxl_core::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::change::ChangeLog;
+use pxl_core::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::object::{Carve, Kind, Painter, Store};
 use pxl_core::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
@@ -783,13 +784,15 @@ pub const OP_BLEND: u32 = 20; // user id; primary weight, secondary weight (f32 
 pub const OP_EVICT: u32 = 21; // user id; step
 pub const OP_MOUNT: u32 = 22; // user id; page lo, page hi, base x, base y
 pub const OP_UNMOUNT: u32 = 23; // user id
+pub const OP_DECOR: u32 = 24; // user id; step, at, bytes
 
 /// Doubles in the frame block, in the order sched::Frame names them: the
 /// root matrix (16), the origin (3), the planes (24), the camera (3), the
 /// lead (3), then viewport height, fov, delta seconds, budget, hard slack,
 /// pixel dither and the retain budget, then the range anchor's x and y,
-/// whether there is one, the render distance and the range hysteresis.
-pub const FRAME_WORDS: usize = 61;
+/// whether there is one, the render distance and the range hysteresis, and
+/// whether decor is scattered.
+pub const FRAME_WORDS: usize = 62;
 
 #[no_mangle]
 pub extern "C" fn pxl_ring_sq() -> u32 {
@@ -839,6 +842,7 @@ fn completion(e: &Event) -> Entry {
         Event::Evict { id, step } => put(id, OP_EVICT, &[step]),
         Event::Mount { id, page, base_x, base_y } => put(id, OP_MOUNT, &[page as u32, (page >> 32) as u32, base_x, base_y]),
         Event::Unmount { id } => put(id, OP_UNMOUNT, &[]),
+        Event::Decor { id, step, at, bytes } => put(id, OP_DECOR, &[step, at, bytes]),
     }
     done
 }
@@ -1014,6 +1018,7 @@ pub extern "C" fn pxl_tick() -> u32 {
     frame.anchor = (f[58] != 0.0).then_some([f[56], f[57]]);
     frame.render_dist = f[59];
     frame.range_hysteresis = f[60];
+    frame.show_decor = f[61] != 0.0;
     let (mut world, events, sched) = world_of(s);
     let draw = sched.tick(&mut world, frame, &now, &mut |e| events.push_back(e));
     flush(s);
@@ -1031,6 +1036,51 @@ pub extern "C" fn pxl_build_now(id: u32) {
     sched.build_now(&mut world, id, &now, &mut |e| events.push_back(e));
     flush(s);
     after(s);
+}
+
+/// Rebuilds chunk `id`'s decor for the layout it shows, now, after the
+/// submissions waiting are applied; `show_decor` is the setting as it is.
+#[no_mangle]
+pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
+    let s = state();
+    drain(s);
+    let (mut world, events, sched) = world_of(s);
+    sched.decor_now(&mut world, id, show_decor != 0, &mut |e| events.push_back(e));
+    flush(s);
+    after(s);
+}
+
+/// Teaches a decor kind, in group order: its tag, density, variant count,
+/// whether it aligns to transport, its extent in units, and the object
+/// store's value a placed one carries (-1 for none). Its index.
+#[no_mangle]
+pub extern "C" fn pxl_decor_kind(tag_lo: u32, tag_hi: u32, density: f64, variant_count: u32, align_transport: u32, extent: f64, decor_value: i32) -> u32 {
+    state().sched.decor_kind(DecorKind {
+        tag: key(tag_lo, tag_hi),
+        density,
+        variant_count,
+        align_transport: align_transport != 0,
+        extent,
+        decor_value: (decor_value >= 0).then_some(decor_value as u32),
+        rules: [DecorRule::Any; 4],
+    })
+}
+
+/// A kind's rule on a channel (land 0, water 1, structure 2, transport 3):
+/// 0 any type, 1 void only, 2 one of the types `pxl_decor_allow` adds.
+#[no_mangle]
+pub extern "C" fn pxl_decor_rule(kind: u32, channel: u32, mode: u32) {
+    let rule = match mode {
+        0 => DecorRule::Any,
+        1 => DecorRule::Void,
+        _ => DecorRule::OneOf([0; 4]),
+    };
+    state().sched.decor_rule(kind, channel as usize & 3, rule);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_decor_allow(kind: u32, channel: u32, t: u32) {
+    state().sched.decor_allow(kind, channel as usize & 3, t as u8);
 }
 
 /// The builder alone over the `order_len` ids at `order_at`, for the tests
