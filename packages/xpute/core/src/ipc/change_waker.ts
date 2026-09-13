@@ -10,6 +10,9 @@
  * consumer code inside it. A pump that finds its cursor overwritten wakes
  * every listener it holds: each of them re-reads, which is what `lost`
  * means.
+ *
+ * A topic listener hears every changed key of its topic instead, once per
+ * key per pump, and null when the pump was lost — its filter is its own.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
@@ -21,6 +24,8 @@ import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 import type { ChangeLog, Cursor, Topic } from "./change.ts";
 
 type Listener = () => void;
+/** A changed key, or null: the pump lost its place, re-read the topic. */
+export type TopicListener = (key: bigint | null) => void;
 
 export class ChangeWaker {
   private cursor: Cursor;
@@ -30,6 +35,10 @@ export class ChangeWaker {
   private readonly keys: IndexedMap<bigint>[] = [];
   private readonly lists: Listener[][][] = [];
   private readonly woken: Vector<U32Array>[] = [];
+  /** Per topic: whole-topic listeners, and the keys already given to them
+   * this pump. */
+  private readonly topic_lists: TopicListener[][] = [];
+  private readonly topic_seen: IndexedMap<bigint>[] = [];
 
   constructor(private readonly log: ChangeLog, alloc: TypedAlloc = HEAP_ALLOC) {
     this.cursor = log.head;
@@ -37,6 +46,8 @@ export class ChangeWaker {
       this.keys.push(new IndexedMap(I64_KEYS, 16, alloc));
       this.lists.push([]);
       this.woken.push(new Vector(Uint32Array, { init_cap: 16, alloc }));
+      this.topic_lists.push([]);
+      this.topic_seen.push(new IndexedMap(I64_KEYS, 64, alloc));
     }
   }
 
@@ -62,6 +73,16 @@ export class ChangeWaker {
     };
   }
 
+  /** Hears every key of `topic` that changes. */
+  subscribe_topic(topic: Topic, listener: TopicListener): () => void {
+    const list = this.topic_lists[topic];
+    list.push(listener);
+    return () => {
+      const at = list.indexOf(listener);
+      if (at >= 0) list.splice(at, 1);
+    };
+  }
+
   /** Wakes the listeners of every key changed since the last pump. Returns
    * how many listeners ran. */
   pump(): u32 {
@@ -72,13 +93,22 @@ export class ChangeWaker {
     if (!log.readable(this.cursor)) {
       for (let t = 0; t < this.lists.length; t++) {
         for (let p = 0; p < this.keys[t].size; p++) ran += this.wake(t, p, pump);
+        for (const listener of this.topic_lists[t].slice()) listener(null), ran++;
       }
     } else {
+      for (const seen of this.topic_seen) seen.clear();
       for (let c = this.cursor; c < log.head; c++) {
         const i = log.slot(c);
         const t = log.topic[i];
-        const p = this.keys[t].find(log.key[i]);
+        const key = log.key[i];
+        const p = this.keys[t].find(key);
         if (p >= 0) ran += this.wake(t, p, pump);
+        const topic_list = this.topic_lists[t];
+        if (topic_list.length === 0) continue;
+        const seen = this.topic_seen[t];
+        if (seen.find(key) >= 0) continue;
+        seen.insert(key);
+        for (const listener of topic_list.slice()) listener(key), ran++;
       }
     }
     this.cursor = log.head;

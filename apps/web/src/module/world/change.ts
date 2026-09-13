@@ -26,8 +26,15 @@ export const enum WorldTopic {
   DECOR_COLUMN = 1,
   /** One cell's placed entries, keyed by cell corner. */
   OBJECT_CELL = 2,
+  /** A resident terrain page arrived or left, keyed by page index. */
+  TERRAIN_PAGE = 3,
+  /** A resident POI page arrived or left, keyed by page index. */
+  POI_PAGE = 4,
+  /** A decor model or skin finished loading, keyed by its URL's FNV-1a
+   * hash. */
+  DECOR_ASSET = 5,
 }
-const WORLD_TOPICS: u32 = 3;
+const WORLD_TOPICS: u32 = 6;
 
 /** Enough for a zoom-out's worth of pages and a burst of edits between two
  * frames; a reader further behind re-reads its topics. */

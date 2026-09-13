@@ -252,7 +252,7 @@ against.
 
 ## Open
 
-- **The read direction** (BACKLOG P0-1). The first row suggests the UI
+- **The read direction** (built — [20260913-the-read-direction-a-change-log.md](./20260913-the-read-direction-a-change-log.md)). The first row suggests the UI
   pulls: a revision counter per thing it watches, read once a tick, and a
   read of the lanes when it moved. That is a hypothesis to design, not a
   conclusion from Figma, which does not say.

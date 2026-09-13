@@ -1,6 +1,6 @@
 # The read direction: a change log, and everything else as an adapter over it
 
-**2026-09-13** — BACKLOG P0-1. Once the truth is in a core, the UI has to
+**2026-09-13** — BACKLOG P0-1 at the time. Once the truth is in a core, the UI has to
 learn that it changed without the core knowing what the UI cares about;
 without a protocol for that, the default is copying the world into JS
 every frame
@@ -8,7 +8,7 @@ every frame
 "What it still costs"). The write direction has its shape — a numeric
 command with an errno reply
 ([20260913-boundaries-commands-and-what-comes-back-from-april.md](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
-This is the read direction's. Design only; nothing is built yet.
+This is the read direction's. Built the same day; see the last section.
 
 ## Constraints, set before the design
 
@@ -137,3 +137,36 @@ read half.
   in the first version, and said so in the code.
 - **The order the six move in.** 6 and 3 are closest to the shape already;
   2 is the one that removes the most callbacks. Decided when building.
+
+## Built, 2026-09-13
+
+- **The log** — `@xpute/core/ipc/change.ts` (c2b1364), as above.
+- **Push delivery** — `@xpute/core/ipc/change_waker.ts`: listeners per
+  (topic, key), and topic listeners that hear each changed key, once per key
+  per pump, null when the pump lost its place.
+- **The world's log** — `module/world/change.ts`: six topics (object
+  column, decor column, object cell, terrain page, POI page, decor asset),
+  over the core pool; `bump_world` records a change and asks for a frame,
+  because the canvas renders on demand; the tick pumps before its first
+  phase.
+- **The six mechanisms**, each now an adapter:
+  - 3 and 6 — the object store's revisions are `revision_of`, its column and
+    cell listeners are the waker's (5a573af).
+  - 1 and 4 — a PageTable given a topic bumps it on every set and clear and
+    forgets a page that left; its revision is the topic's tick, which the
+    zustand stores mirror for React (a9f60aa).
+  - 2 — `register_tile_interest` keeps its signature as a filter over the
+    terrain topic (a9f60aa).
+  - 5 — decor asset arrival is its own topic; `subscribe_decor_assets` calls
+    once per pump in which anything arrived, and `useDecorAssets` stays a
+    `useSyncExternalStore` over it.
+
+**What moved in behaviour:** every listener runs at the start of the next
+frame, never inside the write that caused it. Checked by hand in the running
+app after the object and page steps: terrain fills, search re-grounds, the
+puck and the POI badges sit on the ground. The decor-asset step is checked
+by the tests only so far.
+
+**Not in it:** settings, the toasts and the fetch queue's status keep their
+own subscriptions. They are local state or scheduling, the split this
+document drew at the start.
