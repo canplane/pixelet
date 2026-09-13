@@ -6,6 +6,12 @@
  * field.ts's (one instanced mesh per variant for the whole world); this file
  * decides only what exists.
  *
+ * What is drawn is built by the module (crates/pxl-core/src/decor.rs, a
+ * block of lanes a chunk and tier, handed to chunk_node.ts) from the kinds
+ * this file teaches it (teach_decor_kinds); build_decor_instances below is
+ * the TypeScript build the module's is held to (core_decor.test.ts), and
+ * the account of why each rule is what it is.
+ *
  * As of 2026-09-05's second pass (see the merged-scheduling paragraph
  * below), decor no longer owns its own scheduled component tree: this file
  * exports build_decor_instances (a pure function) and DecorVariantMesh (a
@@ -216,6 +222,7 @@ function kind_extent(bundle: DecorKindBundle): f64 {
 export function teach_decor_kinds(bundles: readonly DecorKindBundle[]): void {
   const pxl = CORE_PXL;
   if (pxl === null) return;
+  pxl.pxl_decor_forget();
   for (const bundle of bundles) {
     const tag = BigInt.asUintN(64, bundle.seed.tag);
     const kind = pxl.pxl_decor_kind(
@@ -364,9 +371,8 @@ function collect_procedural_decor_instances(
 }
 
 /** Pure "what would this chunk look like at this LOD tier, given this
- * source data" computation — called directly from chunk_stage.tsx's own
- * Chunk (build_ref.current(), alongside its own cube build), which already
- * has every one of these inputs in scope from building its own content.
+ * source data" computation — the reference the module's build is held to,
+ * with every input a chunk's node has in scope.
  *
  * Returned positions are chunk-local (relative to this chunk's own
  * [base_x, base_y] corner), matching chunk_mesher.ts's own baked cube

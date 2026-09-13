@@ -335,11 +335,16 @@ export class ChunkNode {
     this.sync_decor();
   }
 
+  /** The module hands a step's decor over only where it believes this node
+   * holds none, so one already held is stale (a rebuild this node started
+   * with tell_source) and gives way. */
   on_decor(step: LodStep, decor: DecorBlock): void {
-    if (this.disposed || this.decor_cache.has(step)) {
+    if (this.disposed) {
       decor_block_release(decor);
       return;
     }
+    const held = this.decor_cache.get(step);
+    if (held) decor_block_release(held);
     this.decor_cache.set(step, decor);
   }
 
@@ -380,6 +385,7 @@ export class ChunkNode {
       queueMicrotask(() => {
         if (this.disposed) return;
         this.release_bucket_cache();
+        this.clear_decor_cache();
         this.tell_source();
         CORE_BUILD.build_now(this.id);
       });

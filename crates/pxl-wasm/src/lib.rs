@@ -1057,6 +1057,14 @@ pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
     after(s);
 }
 
+/// Forgets every decor kind taught, so the glue can teach the list again
+/// (a module of it re-evaluated by the dev server) without the groups
+/// doubling.
+#[no_mangle]
+pub extern "C" fn pxl_decor_forget() {
+    state().sched.decor_forget();
+}
+
 /// Teaches a decor kind, in group order: its tag, density, variant count,
 /// whether it aligns to transport, its extent in units, and the object
 /// store's value a placed one carries (-1 for none). Its index.
@@ -1131,14 +1139,6 @@ pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz
 #[no_mangle]
 pub extern "C" fn pxl_raycast_at() -> u32 {
     state().hit.as_ptr() as u32
-}
-
-/// Lets the raycast's kept composites go.
-#[no_mangle]
-pub extern "C" fn pxl_raycast_clear() {
-    let s = state();
-    let (mut world, raycast, _) = raycast_of(s);
-    raycast.clear(&mut world);
 }
 
 fn raycast_of(s: &mut State) -> (World<'_>, &mut Raycast, &mut Scheduler) {

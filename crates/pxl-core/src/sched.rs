@@ -292,6 +292,11 @@ impl Scheduler {
         (self.decor_kinds.len() - 1) as u32
     }
 
+    /// Forgets every kind taught, for a glue that teaches them again.
+    pub fn decor_forget(&mut self) {
+        self.decor_kinds.clear();
+    }
+
     pub fn decor_rule(&mut self, kind: u32, channel: usize, rule: DecorRule) {
         if let Some(k) = self.decor_kinds.get_mut(kind as usize) {
             k.rules[channel] = rule;

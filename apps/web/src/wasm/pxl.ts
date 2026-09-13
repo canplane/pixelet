@@ -88,7 +88,7 @@ export type PxlExports = {
   pxl_decor_now(id: u32, show_decor: u32): void;
   pxl_raycast(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;
   pxl_raycast_at(): u32;
-  pxl_raycast_clear(): void;
+  pxl_decor_forget(): void;
   pxl_decor_kind(tag_lo: u32, tag_hi: u32, density: number, variant_count: u32, align_transport: u32, extent: number, decor_value: number): u32;
   pxl_decor_rule(kind: u32, channel: u32, mode: u32): void;
   pxl_decor_allow(kind: u32, channel: u32, t: u32): void;
