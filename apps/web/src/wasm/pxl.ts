@@ -62,6 +62,14 @@ export type PxlExports = {
   pxl_volume_band(id: u32, i: u32): u32;
   pxl_volume_stat(): u32;
   pxl_scan_begin_volume(id: u32): u32;
+  pxl_terrain_base(r: u32, g: u32, b: u32, layer: u32, cls: u32): void;
+  pxl_terrain_channel(ch: u32, cls: u32): void;
+  pxl_terrain_type(ch: u32, type_id: u32, r: u32, g: u32, b: u32, has_color: u32, layer: u32, has_layer: u32): void;
+  pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u32, transport_at: u32, ele_at: u32, tx0: u32, ty0: u32, show_structures: u32): i32;
+  pxl_terrain_paint(volume: u32): u32;
+  pxl_terrain_material_at(): u32;
+  pxl_terrain_layer_at(): u32;
+  pxl_terrain_ele_at(): u32;
 };
 
 /** pxl_bake_step's answers (crates/pxl-wasm/src/lib.rs). */

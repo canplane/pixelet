@@ -12,6 +12,7 @@ pub mod buddy;
 pub mod mesher;
 pub mod run_set;
 pub mod scan;
+pub mod terrain;
 pub mod volume;
 pub mod voxel;
 

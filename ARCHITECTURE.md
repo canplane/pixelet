@@ -219,7 +219,8 @@ The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
 The chunk scan and bake are stepped too — a row of columns, a few rows of
-masks or a few hundred boxes a call — and run through the Rust scan and
+masks or a few hundred boxes a call — and run, with the terrain layer's
+reading of a page and the volume it paints, through the Rust scan and
 mesher (`crates/pxl-core`, compiled by
 `crates/pxl-wasm` into one module with numeric exports and no bindgen, which
 imports the core memory: a run set is baked in the block it lives in and the

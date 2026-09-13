@@ -207,6 +207,12 @@ function painted(volume: ChunkVolume, ok: u32): void {
   (volume as ModuleVolume).painted(ok);
 }
 
+/** What a paint made in the module directly (a terrain chunk, say) tells
+ * the volume: whether it was refused, and that its views are stale. */
+export function note_paint(volume: ChunkVolume, ok: u32): void {
+  painted(volume, ok);
+}
+
 /** Full replacement at one voxel: later WorldLayers overwrite earlier ones. */
 export function set_chunk_voxel(
   volume: ChunkVolume,

@@ -17,6 +17,7 @@ use pxl_core::buddy::Pool;
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::run_set::{run_set_bytes, RunSet};
 use pxl_core::scan::{BandView, ExtraView, ScanContext, ScanStep};
+use pxl_core::terrain::{ChunkSample, Materials, PageView, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_core::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 
 #[global_allocator]
@@ -46,6 +47,9 @@ struct State {
     volumes: Option<Volumes>,
     /// The open scan's bands, when it reads a volume of the module's.
     scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,
+    /// The terrain tables, and the last chunk read.
+    terrain: Materials,
+    chunk: ChunkSample,
 }
 
 static mut STATE: Option<State> = None;
@@ -76,6 +80,8 @@ fn state() -> &'static mut State {
                 pools: Vec::new(),
                 volumes: None,
                 scan_rows: Vec::new(),
+                terrain: Materials::default(),
+                chunk: ChunkSample::default(),
             }
         })
     }
@@ -469,4 +475,85 @@ pub extern "C" fn pxl_scan_begin_volume(id: u32) -> u32 {
     }
     s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
     s.scan.begin(&band_views(s.bands)) as u32
+}
+
+/// The material every terrain cell starts from: bare land.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_base(r: u32, g: u32, b: u32, layer: u32, class: u32) {
+    let t = &mut state().terrain;
+    t.base_rgb = [r as u8, g as u8, b as u8];
+    t.base_layer = layer as u8;
+    t.base_class = class as u8;
+}
+
+/// The material class channel `ch` paints (0 land, 1 water, 2 structure,
+/// 3 transport).
+#[no_mangle]
+pub extern "C" fn pxl_terrain_channel(ch: u32, class: u32) {
+    state().terrain.channels[ch as usize].class = class as u8;
+}
+
+/// What type `type_id` of channel `ch` looks like: its colour, if it has
+/// one, and its texture-array layer, if it has one.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_type(ch: u32, type_id: u32, r: u32, g: u32, b: u32, has_color: u32, layer: u32, has_layer: u32) {
+    let c = &mut state().terrain.channels[ch as usize];
+    let t = type_id as usize;
+    c.rgb[t] = [r as u8, g as u8, b as u8];
+    c.has_color[t] = has_color != 0;
+    c.layer[t] = layer as u8;
+    c.has_layer[t] = has_layer != 0;
+}
+
+/// Reads the chunk at page cell (tx0, ty0) of the page whose ground lanes
+/// (land, water, structure, transport; a type byte a cell) and padded
+/// elevation raster are at the addresses given: its cells' materials and
+/// tops, for pxl_terrain_paint and the lanes below. Returns the floor.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u32, transport_at: u32, ele_at: u32, tx0: u32, ty0: u32, show_structures: u32) -> i32 {
+    let s = state();
+    let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+    let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+    assert!(tx0 + CHUNK_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
+    // SAFETY: the client's page lanes, kept in the core memory for as long
+    // as the page is resident; a page's shape is fixed.
+    let page = unsafe {
+        PageView {
+            ground: [
+                core::slice::from_raw_parts(land_at as usize as *const u8, cells),
+                core::slice::from_raw_parts(water_at as usize as *const u8, cells),
+                core::slice::from_raw_parts(structure_at as usize as *const u8, cells),
+                core::slice::from_raw_parts(transport_at as usize as *const u8, cells),
+            ],
+            ele: core::slice::from_raw_parts(ele_at as usize as *const i16, samples),
+        }
+    };
+    s.chunk.read(&page, &s.terrain, tx0, ty0, show_structures != 0);
+    s.chunk.floor
+}
+
+/// Paints the chunk last read into `volume`, one column a cell from the
+/// floor. 0 when a band could not be made.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_paint(volume: u32) -> u32 {
+    let s = state();
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    s.chunk.paint(v, &mut s.pools, volume as usize - 1) as u32
+}
+
+/// The chunk last read, for the direct path: the addresses of its 4096
+/// packed materials, layer bytes and elevations.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_material_at() -> u32 {
+    state().chunk.material.as_ptr() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_terrain_layer_at() -> u32 {
+    state().chunk.layer_idx.as_ptr() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_terrain_ele_at() -> u32 {
+    state().chunk.ele.as_ptr() as u32
 }

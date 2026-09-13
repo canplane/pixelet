@@ -18,6 +18,14 @@ import { MaterialClass, NO_LAYER, pack_sub_cell, SUB_CELL_NONE, type VoxelMateri
 import { type MeshRun, pack_column_runs, release_column_runs, scan_all_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
 import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, fill_chunk_column, seal_chunk_volume, set_chunk_voxel } from "../../../apps/web/src/render/layer/pipeline/volume.ts";
 import { WasmScanner } from "../../../apps/web/src/render/layer/pipeline/wasm_scan.ts";
+import { paint_module, paint_typescript, runs_module, runs_typescript } from "../../../apps/web/src/render/layer/terrain/adapter.ts";
+import { GROUND_COLOR_LOOKUP_FLAT } from "../../../apps/web/src/render/layer/terrain/shader_meta.ts";
+import { into_core } from "../../../apps/web/src/module/world/terrain/resident.ts";
+import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
+import { type Ground, GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
+import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { release_chunk_volume } from "../../../apps/web/src/render/layer/pipeline/volume.ts";
+import { fill_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
 import { bake_chunk_mesh, BakeContext } from "../../../apps/web/src/render/layer/pipeline/chunk_mesher.ts";
 import { WasmBaker } from "../../../apps/web/src/render/layer/pipeline/wasm_bake.ts";
 import { CORE_POOL, CORE_PXL } from "../../../apps/web/src/render/layer/pipeline/core_pool.ts";
@@ -132,4 +140,48 @@ function scene_volume(): ChunkVolume {
     }
   }
   return seal_chunk_volume(v);
+}
+
+// The terrain layer, likewise: the chunk sampled and painted by the
+// TypeScript adapter against the module, over a synthetic page in the core
+// memory (terrain.test.ts's), plus the direct path's runs.
+{
+  const next = (() => {
+    let s = 7 >>> 0;
+    return () => {
+      s ^= s << 13;
+      s ^= s >>> 17;
+      s ^= s << 5;
+      return s >>> 0;
+    };
+  })();
+  const ele = new Int16Array(ELE_PADDED_SPAN * ELE_PADDED_SPAN);
+  for (let i = 0; i < ele.length; i++) ele[i] = -60 + (next() % 300);
+  const ground = {} as Ground;
+  for (const key of GROUND_CH_KEYS) {
+    const lane = new Uint8Array(PAGE_CELL_SPAN * PAGE_CELL_SPAN);
+    const has = GROUND_COLOR_LOOKUP_FLAT[key]?.has;
+    const types: number[] = [];
+    if (has) { for (let t = 1; t < 256; t++) if (has[t]) types.push(t); }
+    for (let i = 0; i < lane.length; i++) if (key === GroundChannelKey.LAND || next() % 5 === 0) lane[i] = types[next() % types.length];
+    ground[key] = lane;
+  }
+  const terrain = into_core({ ele, ground }, false);
+  const off = ivec.gather(320n, 448n, 0n);
+  Deno.bench({ name: "ts", group: "terrain paint", baseline: true }, () => {
+    const v = alloc_chunk_volume();
+    paint_typescript(terrain, off, true, v);
+    release_chunk_volume(v);
+  });
+  Deno.bench({ name: "wasm", group: "terrain paint" }, () => {
+    const v = alloc_chunk_volume();
+    paint_module(terrain, off, true, v);
+    release_chunk_volume(v);
+  });
+  Deno.bench({ name: "ts", group: "terrain direct runs", baseline: true }, () => {
+    release_column_runs(fill_column_runs(64, (w) => runs_typescript(terrain, off, true, w)));
+  });
+  Deno.bench({ name: "wasm", group: "terrain direct runs" }, () => {
+    release_column_runs(fill_column_runs(64, (w) => runs_module(terrain, off, true, w)));
+  });
 }
