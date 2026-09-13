@@ -1,8 +1,10 @@
 // issue/experiment/20260913-mesher-in-rust/bench.ts
 //
 // The TypeScript mesher against the Rust one, whole bakes of the same run
-// sets at the tiers a view mostly holds. The wasm side includes its copy in
-// and copy out, since that is what the main thread pays.
+// sets at the tiers a view mostly holds, both over the core memory. (When
+// this was first run the module had its own memory, and the wasm side
+// included a copy in and a copy out; it shares the core memory now and
+// copies nothing.)
 //
 // Usage (from the repo root, after `deno task build:wasm`):
 //   deno bench -A --no-check issue/experiment/20260913-mesher-in-rust/bench.ts
@@ -16,6 +18,7 @@ import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "../../../apps/web/src/re
 import { type MeshRun, pack_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
 import { bake_chunk_mesh, BakeContext } from "../../../apps/web/src/render/layer/pipeline/chunk_mesher.ts";
 import { WasmBaker } from "../../../apps/web/src/render/layer/pipeline/wasm_bake.ts";
+import { CORE_MEMORY, CORE_POOL } from "../../../apps/web/src/render/layer/pipeline/core_pool.ts";
 import { instantiate_pxl } from "../../../apps/web/src/wasm/pxl.ts";
 
 // wasm_bake.test.ts's scene: stacked runs with gaps, objects, sub-cells, layers.
@@ -57,21 +60,21 @@ function scene(seed: number, flat: boolean): MeshRun[][] {
   return columns;
 }
 
-const pxl = await instantiate_pxl();
-const ts_ctx = new BakeContext(new BuddyAllocator(), buddy_alloc(new BuddyAllocator()));
-const wasm_ctx = new BakeContext(new BuddyAllocator(), buddy_alloc(new BuddyAllocator()));
-const baker = new WasmBaker(pxl, wasm_ctx.pool, wasm_ctx);
+const pxl = await instantiate_pxl(CORE_MEMORY!);
+const ts_ctx = new BakeContext(CORE_POOL, buddy_alloc(new BuddyAllocator()));
+const wasm_ctx = new BakeContext(CORE_POOL, buddy_alloc(new BuddyAllocator()));
+const baker = new WasmBaker(pxl, CORE_POOL, wasm_ctx);
 
 for (const [name, set] of [["flat", pack_column_runs(scene(1, true))], ["busy", pack_column_runs(scene(2, false))]] as const) {
   for (const step of [1, 2, 4, 16] as const) {
     const group = `${name} (${set.count} runs) step ${step}`;
     Deno.bench({ name: "ts", group, baseline: true }, () => {
-      ts_ctx.pool.release(bake_chunk_mesh(ts_ctx, set, step).block);
+      CORE_POOL.release(bake_chunk_mesh(ts_ctx, set, step).block);
     });
     Deno.bench({ name: "wasm", group }, () => {
       const c = baker.begin(set, step)!;
       while (!baker.step(c)) { /* whole */ }
-      wasm_ctx.pool.release(baker.finish(c).block);
+      CORE_POOL.release(baker.finish(c).block);
     });
   }
 }

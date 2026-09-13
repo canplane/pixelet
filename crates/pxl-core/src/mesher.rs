@@ -9,10 +9,11 @@
 //! is lives in the TypeScript, which stays the reference until it is gone.
 //!
 //! What the port does not carry over: the scratch is plain vectors owned by
-//! the context rather than lanes carved from the core memory, and the mesh
-//! is written into the context's own words rather than a pool block. The
-//! caller copies the words into a block when the bake is done, which is
-//! where the pool can refuse — so a bake here never starves mid-way.
+//! the context rather than lanes carved from the core memory. The mesh is
+//! written where the caller says — a block from the mesh section, in the
+//! TypeScript's layout — which the caller provides once the bake knows the
+//! mesh's size (`Step::NeedMesh`) and may fail to, as a pool refuses; the
+//! bake then waits at that step, as the TypeScript one does.
 
 use crate::fdlibm;
 use crate::run_set::{OwnedRunSet, RunSet};
@@ -113,11 +114,32 @@ pub struct Counters {
     pub coarse_low_fill: u32,
 }
 
-/// A finished mesh: its counts, and its words in the context.
-pub struct Mesh<'a> {
+/// A finished mesh: its counts, in the words the caller provided.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mesh {
     pub vertex_cnt: u32,
     pub index_cnt: u32,
-    pub words: &'a [u32],
+}
+
+/// Where a bake stands after a step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// More steps to go.
+    Working,
+    /// The mesh's size is known and it has nowhere to go: `provide_mesh`
+    /// this many words, then step on. Returned again by every step until
+    /// then.
+    NeedMesh(u32),
+    Done,
+}
+
+/// The words a mesh is written into: a caller's, held as a raw range so the
+/// context owes them no lifetime — the caller keeps them valid until the
+/// bake finishes or aborts.
+#[derive(Clone, Copy)]
+struct MeshTarget {
+    ptr: *mut u32,
+    words: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -189,13 +211,12 @@ pub struct BakeContext {
     co: CoarseLanes,
     co_start: Vec<u32>,
     coarse: OwnedRunSet,
-    /// The mesh words, grown to the largest mesh baked and never cleared:
-    /// every word a mesh uses is written by the emit before it is read,
-    /// except the visibility lane, which the renderer owns and a pool block
-    /// would not have zeroed either. Zeroing it per bake wrote a large mesh
-    /// twice.
-    mesh: Vec<u32>,
-    mesh_len: usize,
+    /// Every word a mesh uses is written by the emit before it is read,
+    /// except the visibility lane, which the renderer owns — so the target
+    /// is never cleared, which for a large mesh would write it twice.
+    mesh: Option<MeshTarget>,
+    /// Words the open bake's mesh takes, once its size is known.
+    mesh_words: u32,
     v_cnt: u32,
     i_cnt: u32,
     open: Option<Open>,
@@ -220,8 +241,8 @@ impl BakeContext {
             co: CoarseLanes::default(),
             co_start: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1],
             coarse: OwnedRunSet::default(),
-            mesh: Vec::new(),
-            mesh_len: 0,
+            mesh: None,
+            mesh_words: 0,
             v_cnt: 0,
             i_cnt: 0,
             open: None,
@@ -241,7 +262,8 @@ impl BakeContext {
         }
         assert!(set.span as usize <= MAX_BAKE_SPAN, "bake span {} past {}", set.span, MAX_BAKE_SPAN);
         self.done = false;
-        self.mesh_len = 0;
+        self.mesh = None;
+        self.mesh_words = 0;
         self.v_cnt = 0;
         self.i_cnt = 0;
         self.open = Some(if lod_step == 1 {
@@ -265,10 +287,13 @@ impl BakeContext {
     }
 
     /// Advances the open bake by one step over `set`, the set it was opened
-    /// with. True once the mesh is complete.
-    pub fn step(&mut self, set: &RunSet) -> bool {
+    /// with.
+    pub fn step(&mut self, set: &RunSet) -> Step {
         if self.done {
-            return true;
+            return Step::Done;
+        }
+        if self.mesh_words > 0 && self.mesh.is_none() {
+            return Step::NeedMesh(self.mesh_words);
         }
         let mut open = self.open.take().expect("bake step with no bake open");
         self.done = match &mut open {
@@ -276,24 +301,43 @@ impl BakeContext {
             Open::Coarse(b) => self.step_coarse(b, set),
         };
         self.open = Some(open);
-        self.done
+        if self.done {
+            Step::Done
+        } else if self.mesh_words > 0 && self.mesh.is_none() {
+            Step::NeedMesh(self.mesh_words)
+        } else {
+            Step::Working
+        }
     }
 
-    /// The complete mesh. Its words stay valid until the next bake begins.
-    pub fn finish(&mut self) -> Mesh<'_> {
+    /// Hands the bake the words its mesh goes into, after `Step::NeedMesh`.
+    ///
+    /// # Safety
+    /// `ptr` must address at least the words asked for, 4-aligned, and stay
+    /// valid and otherwise untouched until `finish` or `abort`.
+    pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
+        assert!(self.mesh_words > 0 && self.mesh.is_none(), "mesh provided to a bake that did not ask");
+        assert!(words >= self.mesh_words, "mesh of {} words provided where {} were asked", words, self.mesh_words);
+        self.mesh = Some(MeshTarget { ptr, words: self.mesh_words as usize });
+    }
+
+    /// The complete mesh's counts. Its words are the caller's.
+    pub fn finish(&mut self) -> Mesh {
         assert!(self.done && self.open.is_some(), "finish on a bake that is not open and complete");
         self.open = None;
+        self.mesh = None;
         self.surviving.clear();
         Mesh {
             vertex_cnt: self.v_cnt,
             index_cnt: self.i_cnt,
-            words: &self.mesh[..self.mesh_len],
         }
     }
 
     pub fn abort(&mut self) {
         self.open = None;
         self.done = false;
+        self.mesh = None;
+        self.mesh_words = 0;
         self.surviving.clear();
         self.cell_range.clear();
         self.buckets.clear();
@@ -416,10 +460,7 @@ impl BakeContext {
             }
             b.vertex_total = vertex_total;
             b.index_total = index_total;
-            self.mesh_len = mesh_words(vertex_total, index_total) as usize;
-            if self.mesh.len() < self.mesh_len {
-                self.mesh.resize(self.mesh_len, 0);
-            }
+            self.mesh_words = mesh_words(vertex_total, index_total);
             self.v_cnt = 0;
             self.i_cnt = 0;
             b.phase = 2;
@@ -484,7 +525,10 @@ impl BakeContext {
         let (position, normal, local_pos, box_scale, color, layer_taps, face_lane) = (lane(0), lane(3), lane(6), lane(9), lane(12), lane(15), lane(19));
         let index = lane((F32_PER_VERTEX + VIS_F32_PER_VERTEX) as usize);
         let centre = [min[0] + size[0] * 0.5, min[1] + size[1] * 0.5, min[2] + size[2] * 0.5];
-        let m = &mut self.mesh;
+        let target = self.mesh.expect("emit with no mesh provided");
+        // SAFETY: provide_mesh's contract — the range is the caller's, valid
+        // and untouched until the bake closes.
+        let m = unsafe { core::slice::from_raw_parts_mut(target.ptr, target.words) };
         for f in 0..FULL_FACE_CNT as usize {
             if faces & (1 << f) == 0 {
                 continue;

@@ -141,10 +141,12 @@ their band).
   `merge_run`'s `-1` and the pack's `pick`/`open` are `Option`. Neither
   measured.
 
-What would move a fine bake is not in the mesher: the copy out goes when
-the module shares the core memory and writes the mesh into its block
-(P0-2), and the writing itself is bounded by how many faces survive, which
-the merge and the tiers decide.
+What would move a fine bake was not in the mesher: the copy out went the
+same day, when the module was given the core memory to import — the run
+set is baked where it lies and the mesh written into its block, in the map's
+new module section — and `busy` at step 1 went from 4.0 to 3.3 ms through
+the module (bench.ts, V8; the TypeScript 4.1). The writing itself is bounded
+by how many faces survive, which the merge and the tiers decide.
 
 ## What becomes of it
 

@@ -9,7 +9,7 @@
  */
 
 import type { LodStep } from "@/render/lod.ts";
-import { CORE_POOL, FIXED_ALLOC } from "./core_pool.ts";
+import { CORE_MEMORY, CORE_POOL, FIXED_ALLOC } from "./core_pool.ts";
 import { abort_bake, BakeContext, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "./chunk_mesher.ts";
 import type { ColumnRunSet } from "./column_run.ts";
 import { lazy_wasm_baker } from "./wasm_bake.ts";
@@ -40,11 +40,19 @@ export type CoreBake = {
   abort(): void;
 };
 
-const core_wasm_baker = lazy_wasm_baker(CORE_POOL, CORE_BAKE);
+const core_wasm_baker = lazy_wasm_baker(CORE_MEMORY, CORE_POOL, CORE_BAKE);
+
+/** The module heap's use after its last bake, for the ledger; null until
+ * the module has baked. */
+export function core_wasm_heap_used(): number | null {
+  const baker = core_wasm_baker();
+  return typeof baker === "string" ? null : baker.heap_used;
+}
 
 /** The mesher a bake asking for `wanted` gets: the Rust one unless its
- * module failed to load, when the TypeScript one stands in — the mesh is
- * the same either way. Asking also starts the module's load. */
+ * module failed to load or there is no core memory for it to share, when
+ * the TypeScript one stands in — the mesh is the same either way. Asking
+ * also starts the module's load. */
 export function resolve_core_mesher(wanted: CoreMesher): CoreMesher {
   return wanted === "wasm" && core_wasm_baker() === "failed" ? "ts" : wanted;
 }

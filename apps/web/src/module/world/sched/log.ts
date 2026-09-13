@@ -17,7 +17,7 @@
  * summary.ts's `missed` and `overran`, the same tests the report counts.
  */
 
-import { CORE_BAKE } from "@/render/layer/pipeline/core_bake.ts";
+import { CORE_BAKE, core_wasm_heap_used } from "@/render/layer/pipeline/core_bake.ts";
 import { poi_field_stats, poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { little_slabs } from "@/module/world/sched/slab.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
@@ -27,7 +27,7 @@ import { fetch_counts, MAX_INFLIGHT } from "@/module/world/sched/fetch_scheduler
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/module/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
-import { CORE_MEMORY, core_pool_stat, core_sections_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_MEMORY, core_pool_stat, core_sections_stat, MODULE_SECTION } from "@/render/layer/pipeline/core_pool.ts";
 import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
 import { chunk_retained_bytes, chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
@@ -248,7 +248,12 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     // Each section against its own range: the fixed one refuses past it, the
     // others spill to plain regions the collector can take back — a spill or
     // a refusal here is the memory map's own signal, per kind.
-    `  section ${
+    `  section module ${
+      (() => {
+        const used = core_wasm_heap_used();
+        return used === null ? "-" : (used / 1048576).toFixed(1);
+      })()
+    } heap of ${Math.round(MODULE_SECTION.bytes / 1048576)}MB   ${
       core_sections_stat().map(({ name, bytes, stat }) =>
         `${name} ${Math.round(stat.live_bytes / 1048576)}/${Math.round(stat.backing_used / 1048576)} of ${Math.round(bytes / 1048576)}MB${stat.spills > 0 ? ` SPILLED ${stat.spills}` : ""}${
           stat.refusals > 0 ? ` REFUSED ${stat.refusals}` : ""

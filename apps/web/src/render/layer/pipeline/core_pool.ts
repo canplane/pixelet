@@ -23,6 +23,13 @@
  *
  * Sections, in address order:
  *
+ *   module   the Rust core's own: its stack, its data and its heap, at the
+ *            front because that is where a wasm32 module's linker puts them
+ *            (`--stack-first`, and data at the base). No pool — the module
+ *            is the only writer, and crates/pxl-wasm/src/arena.rs is the
+ *            allocator over it. Its size is the one number both sides
+ *            agree on, and the module says its own at instantiation so the
+ *            map is checked rather than trusted.
  *   fixed    what is allocated once at startup and never freed — the change
  *            log's journal and tables, the scheduler's lanes, the mesher's
  *            scratch, later the command rings. Refuses rather than spills:
@@ -50,13 +57,24 @@ const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
 
 /**
+ * The module section, from address 0. Equal to crates/pxl-wasm/src/arena.rs's
+ * MODULE_BYTES, and checked against it when the module is instantiated
+ * (wasm/pxl.ts). Carved out of the first region: the fixed section's pool
+ * cuts that region in quarters, so the map stays region-aligned where the
+ * pools need it, and a fixed allocation bigger than a quarter — nothing is,
+ * the tables are small — would be refused rather than spilled.
+ */
+export const MODULE_BYTES: u32 = 16 << 20;
+const FIXED_REGION_BYTES: u32 = MODULE_BYTES;
+
+/**
  * The map, in regions of 64 MB. Eight on the desktop, four on a phone: the
  * whole reservation is charged to the page by JavaScriptCore, and a phone's
  * budget is a fraction of the desktop's.
  *
  *              desktop    phone
- *   fixed         1          1     the tables are small; a whole region is
- *                                  the granularity, and headroom for rings
+ *   fixed         1          1     the module's 16 MB, then the tables,
+ *                                  which are small, and headroom for rings
  *   page          2          1     ~49 terrain pages at ~4 MB fit in two
  *   mesh          5          2     the churn; the reclaim pass keeps it under
  */
@@ -107,10 +125,16 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
 
   let offset = 0;
   const section = (name: SectionName, count: u32, no_spill: boolean): Section => {
-    const bytes = count * REGION_BYTES;
+    let bytes = count * REGION_BYTES;
+    let region_bytes = REGION_BYTES;
+    if (name === "fixed") {
+      offset += MODULE_BYTES;
+      bytes -= MODULE_BYTES;
+      region_bytes = FIXED_REGION_BYTES;
+    }
     const pool = new BuddyAllocator({
       min_block_bytes: 1 << 12,
-      region_bytes: REGION_BYTES,
+      region_bytes,
       backing: backing ?? undefined,
       backing_offset: backing ? offset : undefined,
       backing_bytes: backing ? bytes : undefined,
@@ -141,6 +165,10 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
 }
 
 export const CORE_SECTIONS: Readonly<Record<SectionName, Section>> = lay_out(CORE_MEMORY);
+
+/** The module section's range, for the check at instantiation and the
+ * ledger: `[0, MODULE_BYTES)` of the core memory. */
+export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: MODULE_BYTES };
 
 /** The fixed section: allocated once, never freed, refuses rather than
  * spills. Where a lane that a kernel must find lives. */

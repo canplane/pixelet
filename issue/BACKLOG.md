@@ -20,8 +20,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   memory's sections. In order:
   1. **The mesher in Rust.** The first Rust. Ported 2026-09-13 as a
      line-for-line translation — crates/pxl-core's mesher behind
-     crates/pxl-wasm's numeric exports, no wasm-bindgen, the module's own
-     memory with a copy in and out — stepped on the main thread as
+     crates/pxl-wasm's numeric exports, no wasm-bindgen, over the core
+     memory the module imports (a run set baked where it lies, the mesh
+     written into its block) — stepped on the main thread as
      `bake_path: wasm`, the default since the phone reading
      ([experiment/20260913-mesher-in-rust/](./experiment/20260913-mesher-in-rust/)),
      and held byte for byte to the TypeScript bake at every tier by
@@ -64,12 +65,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      three.js does for us today is listed in the destination issue as a
      checklist the renderer fills, not a gate on starting. WebGPU removes
      the WebGL-side costs; it does not shrink the working set — that is the
-     byte budget in P1. Open, from the mesher's port: importing the core
-     memory into the module, rather than copying through the module's own,
-     collides with where a wasm32 module puts its data and stack — address
-     0 upward, which is where the fixed section begins today — so the map
-     reserves the module's low range, or the linker is told where to start
-     (`--global-base`, a stack size), before the core can share it.
+     byte budget in P1. Settled on the way, 2026-09-13: the module imports
+     the core memory, and the map's first 16 MB is the module section —
+     its stack, data and heap, where a wasm32 linker puts them, behind a
+     bump allocator (crates/pxl-wasm/src/arena.rs) since the memory never
+     grows; the module states its size and the client checks the map
+     against it at instantiation.
 
 ## P1
 
