@@ -127,3 +127,26 @@ Deno.test("core sched - a coarse camera lands a coarse tier, and build_now rebui
   CORE_BUILD.pump();
   for (const mesh of heard.tiers.values()) release_chunk_mesh(mesh);
 });
+
+Deno.test("core sched - past the retain budget, the farthest off-screen chunk gives its tiers back first", () => {
+  const near = chunk(320, 448);
+  const far = chunk(960, 960);
+  frame(352, 480, 60);
+  tick_until(() => near.heard.layouts.some((l) => l.ready) && far.heard.layouts.some((l) => l.ready), 200);
+
+  // Both off screen, the camera still by the near one.
+  CORE_BUILD.frame[FRAME.planes + 3] = -1e9;
+  CORE_BUILD.frame[FRAME.camera] = -1e6;
+  tick_until(() => near.heard.layouts.at(-1)?.ready === false && far.heard.layouts.at(-1)?.ready === false, 200);
+  // Room for all but a little: one chunk's worth freed is enough.
+  CORE_BUILD.frame[FRAME.retain_budget_bytes] = CORE_BUILD.census().retained_off - 1;
+  CORE_BUILD.tick();
+  assert(far.heard.evicted.length > 0, "the far chunk gave its tiers back");
+  assertEquals(near.heard.evicted.length, 0, "the near one kept them");
+
+  for (const c of [near, far]) {
+    CORE_BUILD.remove(c.id);
+    for (const mesh of c.heard.tiers.values()) release_chunk_mesh(mesh);
+  }
+  CORE_BUILD.pump();
+});

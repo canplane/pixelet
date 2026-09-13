@@ -326,6 +326,7 @@ impl Scheduler {
             self.builder.tick(world, &[id], f64::INFINITY, now, &mut |e| self_record(slots, index, mem, ron, roff, e, emit));
         }
         if self.ask(world, i, p, s2) {
+            self.trim(i, [p, s2], emit);
             self.apply_layout(i, p, s2, true, emit);
         } else {
             let s = &mut self.slots[i];
@@ -353,16 +354,8 @@ impl Scheduler {
         self.refresh(&frame, emit);
         let order = self.order(t0);
 
-        let eligible: Vec<u32> = order
-            .iter()
-            .copied()
-            .filter(|&id| full_recheck || self.slots[self.index[&id]].flags & (BLEND_ACTIVE | SETTLING) != 0)
-            .collect();
-        under_budget(&eligible, u32::MAX, deadline, hard, now, |id| {
-            self.recheck(world, id, t0, &frame, emit);
-            true
-        });
-
+        // The pending lists from the flags as the frame found them, before
+        // the recheck moves them, as the stage's pass had it.
         let (mut visible, mut offscreen) = (Vec::new(), Vec::new());
         for &id in &order {
             let s = &self.slots[self.index[&id]];
@@ -374,6 +367,17 @@ impl Scheduler {
                 }
             }
         }
+
+        let eligible: Vec<u32> = order
+            .iter()
+            .copied()
+            .filter(|&id| full_recheck || self.slots[self.index[&id]].flags & (BLEND_ACTIVE | SETTLING) != 0)
+            .collect();
+        under_budget(&eligible, u32::MAX, deadline, hard, now, |id| {
+            self.recheck(world, id, t0, &frame, emit);
+            true
+        });
+
         let pending_total = (visible.len() + offscreen.len()) as u32;
         let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |id| self.commit(world, id, emit));
         committed += under_budget(&offscreen, MAX_RELEASES_PER_FRAME, deadline, hard, now, |id| self.commit(world, id, emit));
@@ -386,7 +390,7 @@ impl Scheduler {
         {
             let (slots, index, ron, roff) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off);
             let mem = world_mem(world);
-            self.builder.tick(world, &still, budget, now, &mut |e| {
+            self.builder.tick_capped(world, &still, budget, MAX_COMMITS_PER_FRAME, now, &mut |e| {
                 if let BuildEvent::Tier { id, .. } = e {
                     landed.push(id);
                 }
@@ -669,7 +673,8 @@ impl Scheduler {
             p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
         };
         let mut freed = 0;
-        for &id in order.iter().rev() {
+        // The order already puts off-screen chunks farthest first.
+        for &id in order {
             if freed >= MAX_RECLAIMS_PER_FRAME || !(self.retained_off > budget || pressed(world)) {
                 break;
             }

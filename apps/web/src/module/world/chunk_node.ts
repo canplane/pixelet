@@ -214,6 +214,10 @@ export class ChunkNode {
 
   private layout: LodLayout = { primary: 64, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false };
   private shown = false;
+  /** The blend the module last told for this layout. The module does not
+   * repeat an unchanged one, so a layout this node re-attaches on its own
+   * (decor changing) puts it back rather than showing the defaults. */
+  private blend: { primary: number; secondary: number; decor_secondary: boolean } | null = null;
 
   private tile: unknown;
   private show_structures: boolean;
@@ -337,6 +341,7 @@ export class ChunkNode {
   on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void {
     if (this.disposed) return;
     if (!ready) {
+      this.blend = null;
       this.apply_layout({ primary, secondary: null, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false });
       if (import.meta.env.DEV) node_counts.released++;
       return;
@@ -347,7 +352,22 @@ export class ChunkNode {
       .filter((bucket): bucket is BuiltChunkBucket => bucket !== undefined)
       .map((bucket) => ({ ...bucket, role: (bucket.lod_step === primary ? "primary" : "secondary") as ChunkLodRole }))
       .sort((a, b) => a.lod_step - b.lod_step);
-    if (buckets.length !== steps.length) throw new Error(`render: the module laid out tiers ${steps} of chunk ${this.id} it never handed over`);
+    if (buckets.length !== steps.length) {
+      // The module and this node disagree about what is held. Keep what is
+      // on screen and start the chunk over from its sources, which tells the
+      // module to forget its tiers and build the layout again.
+      // After the completion ring's read this call is inside, which a
+      // rebuild would re-enter.
+      console.warn(`[render/chunk] the module laid out tiers ${steps} of chunk ${this.id} this node does not hold; rebuilding it`);
+      queueMicrotask(() => {
+        if (this.disposed) return;
+        this.release_bucket_cache();
+        this.tell_source();
+        CORE_BUILD.build_now(this.id);
+      });
+      return;
+    }
+    this.blend = null;
     this.apply_layout({ primary, secondary, buckets, decor: this.build_decor_pair(primary, secondary), ready: true });
   }
 
@@ -355,6 +375,7 @@ export class ChunkNode {
    * per fragment; decor takes whichever tier the module says it is mostly
    * on, since an instance is drawn or it is not. */
   on_blend(primary: number, secondary: number, decor_secondary: boolean): void {
+    this.blend = { primary, secondary, decor_secondary };
     apply_visibility(this.registry, { primary, secondary });
     this.sync_decor(decor_secondary ? "secondary" : "primary");
   }
@@ -471,7 +492,12 @@ export class ChunkNode {
     this.detach_all();
     for (const bucket of next.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket);
     this.decor_dirty = true;
-    this.sync_decor();
+    if (this.blend !== null) {
+      apply_visibility(this.registry, this.blend);
+      this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
+    } else {
+      this.sync_decor();
+    }
     for (const bucket of previous.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(previous.decor);
     if (import.meta.env.DEV) node_counts.rebuilt++;

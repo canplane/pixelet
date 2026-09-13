@@ -268,6 +268,23 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   builds, and the count continues from the counter as it stands — never
   reset.
 
+- **The scheduler's port, read against the TypeScript it replaced.**
+  Read line for line on 2026-09-14 after the move (crates/pxl-core/src/sched.rs
+  against 9ff57fe's chunk_node.ts, chunk_stage.tsx, chunk_table.ts,
+  priority.ts). Fixed: the reclaim walked the order backwards and gave back
+  the nearest off-screen chunk first (core_sched.test.ts now pins farthest
+  first); a layout the node re-attached on its own — decor changing — lost
+  the blend the module does not repeat. Brought back to the TypeScript's
+  behaviour: builds move at most eight chunks a frame, counting only chunks
+  that made progress; the pending lists are taken before the recheck; a
+  rebuild on the spot trims the tier cache. Hardened: a layout naming a tier
+  the node does not hold is warned and the chunk rebuilt from its sources,
+  outside the ring read, instead of throwing inside the frame. What has no
+  equivalence test is this layer: the pieces under it (mesher, scan, volume,
+  terrain, object store, build) are held to the TypeScript byte for byte,
+  the scheduler only by its order's unit tests and core_sched.test.ts's
+  cases — worth a trace-driven comparison if its behaviour is ever in doubt.
+
 ## Parked, with the reason on file
 
 - **Where the fill-in frame's commit goes.** While terrain fills in on the

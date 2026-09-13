@@ -268,10 +268,27 @@ impl Builder {
     /// holders of the scan and the bake slot first: a slot held is every
     /// other chunk's wait. At least one step is taken, whatever the budget.
     pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(Event)) {
+        self.tick_capped(world, order, budget_ms, u32::MAX, now, emit);
+    }
+
+    /// `tick`, stopping once `max_chunks` chunks have made progress: the
+    /// scheduler's cap on how many chunks move in a frame. A chunk that
+    /// waits on a slot or a block does not count.
+    pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(Event)) {
         let t0 = now();
         let mut stepped = false;
-        let holders = [self.scan_job.as_ref().map(|j| j.id), self.bake_job.as_ref().map(|j| j.id)];
+        let mut moved = 0;
+        let holders = self.holders();
+        let mut seen: Vec<u32> = Vec::new();
         for id in holders.into_iter().flatten().chain(order.iter().copied()) {
+            if seen.contains(&id) {
+                continue;
+            }
+            seen.push(id);
+            if moved >= max_chunks {
+                return;
+            }
+            let mut progressed = false;
             loop {
                 if stepped && now() - t0 >= budget_ms {
                     return;
@@ -283,6 +300,10 @@ impl Builder {
                 if progress != Progress::Busy {
                     break;
                 }
+                progressed = true;
+            }
+            if progressed {
+                moved += 1;
             }
         }
     }
