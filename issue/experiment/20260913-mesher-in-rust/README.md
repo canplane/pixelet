@@ -166,8 +166,8 @@ read yet.
 Rust and the coarse bake packing cell by cell (see the commits of the
 afternoon), one session on the same iPhone at a wide zoom — 233 chunks in
 the frustum, 1.05M triangles, 3.2M runs baked in the window — read from a
-dev server, so the ledger's build line names the server's start, not the
-source:
+dev server, whose ledger build line then named the server's start rather
+than the source (since made per page load):
 
 |                   | 3 wasm (own memory) | 5 wasm (shared) |
 | ----------------- | ------------------- | --------------- |

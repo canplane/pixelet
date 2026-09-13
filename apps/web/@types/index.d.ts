@@ -17,17 +17,19 @@ declare global {
    * one thing about them the build knows and the source cannot. */
   const __PUBLISHED_TILES__: boolean;
 
-  /** Build timestamp, ISO-8601 UTC. Changes every build by construction. */
-  const __BUILD_TIME__: string;
-
-  /** Which source the build is, from git: `r<commits>-<hash>[-dirty]`. */
-  const __BUILD_ID__: string;
-
-  /** Which official build: `b<n>`, `b<n>+` after it, or `b?`. */
-  const __BUILD_NUMBER__: string;
-
   /** A droplet fades. A pixelet remains. 🫧 */
   const __APP_NAME__: string;
 
   const __ROLE__: "server" | "client";
+}
+
+/** What a build is, from vite.config.ts#build_stamp: read through
+ * lib/env/config.ts, which names each. */
+declare module "virtual:pxl-build" {
+  /** ISO-8601 UTC. */
+  export const time: string;
+  /** `r<commits>-<hash>[-dirty]`, from git. */
+  export const id: string;
+  /** `b<n>`, `b<n>+` after it, or `b?`. */
+  export const number: string;
 }
