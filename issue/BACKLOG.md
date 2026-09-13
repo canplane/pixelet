@@ -18,10 +18,27 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the way, 2026-09-13: the bake takes a context; the bake as a command over
   a frame, port and link; the read direction as a change log; the core
   memory's sections. In order:
-  1. **The mesher in Rust.** The first Rust. The bake already takes a
-     context and carves its input and output over any block (column_run.ts,
-     carve_baked_mesh), and the bake command carries both across a boundary
-     unchanged, so the change is behind a seam that exists. Which thread it
+  1. **The mesher in Rust.** The first Rust. Ported 2026-09-13 as a
+     line-for-line translation — crates/pxl-core's mesher behind
+     crates/pxl-wasm's numeric exports, no wasm-bindgen, over the core
+     memory the module imports (a run set baked where it lies, the mesh
+     written into its block) — stepped on the main thread as
+     `bake_path: wasm`, the default since the phone reading
+     ([experiment/20260913-mesher-in-rust/](./experiment/20260913-mesher-in-rust/)),
+     and held byte for byte to the TypeScript bake at every tier by
+     wasm_bake.test.ts. The whole-chunk scan followed the same day
+     (crates/pxl-core/src/scan.rs, wasm_scan.test.ts byte for byte against
+     voxel_scan.ts; 1.9x on V8), reading the composite's bands where the
+     compositor left them. The terrain layer followed
+     (crates/pxl-core/src/terrain.rs: the bicubic sample, the water recess,
+     the channels' override, held cell for cell to the TypeScript adapter by
+     terrain.test.ts; paint 1.8x and the direct path 2.8x on V8), reading a
+     page's lanes where the client keeps them and painting the module's own
+     volume. Still TypeScript: the compositor's stack, the object layer's
+     paint — it walks the object store's records, and goes with the store —
+     the direct path's writer (`fill_column_runs`, fed by the module's
+     sampling for terrain) and the raycast's per-column `merge_column_runs`
+     over the module's bands. Which thread it
      runs on is measured when it exists: the worker was tried on the phone
      and bought nothing, because the stepped bake already yields and the
      fill-in cost is elsewhere
@@ -31,31 +48,51 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
+     The rings are not built yet: the bake is still called export by export.
      **Carried into the port, not fixed in TypeScript first** — an audit
      of the mesher, scan and volume on 2026-09-13 found these, and each is
      what Rust's types or an algorithm rewrite resolve on the way, so
      changing them here would be paying twice:
      - callbacks and objects in the kernel: `RunSink`, `fill_column_runs`'s
-       writer closure, `Arena<ZBucketAccum>`'s object factory and per-bucket
-       object reads, `locate_voxel`'s returned object, `sub_cell?.` and the
-       `fine!`/`coarse!` pair — enums and structs in Rust;
+       writer closure, `locate_voxel`'s returned object, `sub_cell?.` — enums
+       and structs in Rust (the mesher's own — the bucket arena's objects and
+       the `fine!`/`coarse!` pair — went with the translation);
      - the scan's module-level scratch (`SC`, `COLUMN_STARTS`, `open_scan`)
-       bound to the main thread's memory at import — a context, as the
-       mesher's is, when the scan is the piece being ported;
-     - algorithm: a run's own column scanned four times in `run_face_mask`
-       and neighbour walks restarting from the column head (O(k²) per
-       stacked column), the coarse pack's selection sort per cell,
-       `SubVoxels` as five parallel Vectors and its compaction on every
-       write — rewritten in Rust and checked byte for byte against the
-       TypeScript bake;
-     - `-1` sentinels in typed lanes and `Infinity`-style sentinels, and
-       exceptions as API guards — `Option` and `Result`.
+       is a context in the Rust scan; the TypeScript's stays for the direct
+       path and the reference until they follow;
+     - algorithm: `SubVoxels` as five parallel Vectors and its compaction
+       on every write — the volume's, rewritten with the compositor (the
+       Rust scan reads the five lanes as they are). The mesher's two
+       were taken the same day: the coarse pack sorts its buckets; the O(k²)
+       neighbour walks were rewritten as forward cursors, measured to buy
+       nothing at the stack heights the scan produces, and reverted — where
+       a fine bake's time goes is the face masks and writing the mesh
+       ([experiment, "The rewrite, measured"](./experiment/20260913-mesher-in-rust/#the-rewrite-measured));
+     - `Infinity`-style sentinels and exceptions as API guards in the
+       volume — `Option` and `Result` (the mesher's and scan's `-1`s are
+       `Option`; their asserts stay, as a malformed input is a bug).
   2. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a
      checklist the renderer fills, not a gate on starting. WebGPU removes
      the WebGL-side costs; it does not shrink the working set — that is the
-     byte budget in P1.
+     byte budget in P1. Settled on the way, 2026-09-13: the module imports
+     the core memory, and the map's first 32 MB is the module section —
+     its stack, data and heap, where a wasm32 linker puts them, behind a
+     bump allocator (crates/pxl-wasm/src/arena.rs) since the memory never
+     grows; the module states its size and the client checks the map
+     against it at instantiation. The same day, the buddy over every
+     section's range moved into the module (crates/pxl-core/src/buddy.rs,
+     held to the TypeScript pool's addresses request for request by
+     core_pool.test.ts): the module is instantiated before the map is cut,
+     and the TypeScript pool names blocks through it. Then the volume
+     (crates/pxl-core/src/volume.rs): bands are the module's, taken from the
+     fixed section for the sixteen standing stores and the mesh section past
+     them, every paint a call into it, and readers get views; the Rust scan
+     opens a volume by id. Then the terrain layer's reading of a page. Next:
+     the object store — its records are in the memory already — and with
+     it the object layer's paint, the direct path's writer and the raycast
+     walk; then the scheduler's tick.
 
 ## P1
 
@@ -184,6 +221,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   JSON input` when the proxy returns an empty 200 (seen 2026-09-12, several
   pages at once); the page is retried by the next sync. Goes away with the
   XTP page (a short packet fails the header check instead) — verify then.
+- **The build number moves to CI when there is one.** Official builds are
+  counted like a build lab's (2026-09-13): one counter outside git, in the
+  bucket at `meta/build-number`, taken by `deno task deploy` because that is
+  the only central build today (apps/web/script/deploy.ts). A build lab
+  numbers every build of main and ships some of them; with a CI building
+  main, the increment moves into it, deploy picks one of its numbered
+  builds, and the count continues from the counter as it stands — never
+  reset.
 
 ## Parked, with the reason on file
 
@@ -195,7 +240,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   breakdown of code that is leaving decides nothing before it leaves. Scan
   is core and stays; measure it when it is the piece being ported.
 - **The bake worker path.** Behind the dev setting `bake_path`, default
-  `stepped`. Measured on the phone and not taken
+  `wasm`. Measured on the phone and not taken
   ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md));
   kept, not deleted, because it is small and tested and the frame, port and
   link under it are the boundary later pieces use. Remove it when a piece

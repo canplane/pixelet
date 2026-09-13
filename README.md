@@ -14,7 +14,7 @@ _Started on December 15, 2025._
 
 ## Getting Started
 
-> Requires [Deno](https://deno.land/) 2.x and Docker (for the local Postgres databases).
+> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`; the client's core module is built from `crates/` by every dev, build and test task), and Docker (for the local Postgres databases).
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -78,6 +78,7 @@ The web app uses Vite as its bundling/build entry; the api runs directly under D
 | Web UI              | React 19                               |
 | API                 | Hono                                   |
 | 3D Rendering        | Three.js + React Three Fiber           |
+| Core (in progress)  | Rust → WebAssembly (`crates/`)         |
 | Database            | PostgreSQL (main + geographic/PostGIS) |
 | Geodata             | Overture Maps + GEDTM30 (elevation)    |
 
@@ -95,6 +96,8 @@ Three more pieces of the stack are built for this project rather than adopted: a
 │   ├── web/                        # Web client (Deno + Vite + React 19 + R3F)
 │   └── api/                        # API server (Deno + Hono), Overture bake pipeline,
 │                                    # the asset ingest
+├── crates/                         # The Rust core: pxl-core (the chunk mesher so far),
+│                                    # pxl-wasm (the one WebAssembly module over it)
 ├── asset/                          # The shipped models and texture pack, by rendering tier
 │   ├── cube/                       # (cube, decor, actor) — no code imports these: they are
 │   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each
@@ -131,7 +134,7 @@ Storage, network transfer, and rendering deliberately use different scales. See 
 
 Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) are a palette per chunk and a sparse tree per `64³` band. A catalog value of `0` is `OBJECT_UNDEF` (sparse absence/fallback); `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`) — which is also its id in the one global palette. At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
 
-Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. All of it — pages, bands, runs, meshes, the scheduler's view of every chunk, the POI index, the object store — lives as typed lanes in one fixed `WebAssembly.Memory`, cut into sections with fixed starts (fixed, page, mesh) each behind its own buddy allocator, and the frame's work runs as one cooperative tick with one budget, measured by a read-only ledger. Across every boundary the client has — the UI and the world, a worker, later the core — a mutation is a numeric command and a change is a `(topic, key, revision)` in one change log, so how state is delivered is an adapter and never the protocol. Most of the pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary — for now: the decided destination is a Rust core in WASM drawing through WebGPU (iOS 26 and iPhone 11 as the floor), taken a piece at a time, and the state, the commands and the change log are the shape that move needs.
+Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. All of it — pages, bands, runs, meshes, the scheduler's view of every chunk, the POI index, the object store — lives as typed lanes in one fixed `WebAssembly.Memory`, cut into sections with fixed starts (the Rust module's own, then fixed, page, mesh) each behind its own allocator, and the frame's work runs as one cooperative tick with one budget, measured by a read-only ledger. Across every boundary the client has — the UI and the world, a worker, later the core — a mutation is a numeric command and a change is a `(topic, key, revision)` in one change log, so how state is delivered is an adapter and never the protocol. Most of the pipeline is renderer-independent typed-array math; Three.js / React Three Fiber owns the final scene, material, texture, frustum, and GPU submission boundary — for now: the decided destination is a Rust core in WASM drawing through WebGPU (iOS 26 and iPhone 11 as the floor), taken a piece at a time, and the state, the commands and the change log are the shape that move needs.
 
 ---
 

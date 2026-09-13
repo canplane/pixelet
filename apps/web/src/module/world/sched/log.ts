@@ -17,7 +17,7 @@
  * summary.ts's `missed` and `overran`, the same tests the report counts.
  */
 
-import { CORE_BAKE } from "@/render/layer/pipeline/core_bake.ts";
+import { CORE_BAKE, core_fallback_stats, core_wasm_heap_used, core_wasm_staged } from "@/render/layer/pipeline/core_bake.ts";
 import { poi_field_stats, poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { little_slabs } from "@/module/world/sched/slab.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
@@ -27,9 +27,10 @@ import { fetch_counts, MAX_INFLIGHT } from "@/module/world/sched/fetch_scheduler
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/module/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
-import { CORE_MEMORY, core_pool_stat, core_sections_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_MEMORY, core_pool_stat, core_sections_stat, MODULE_SECTION } from "@/render/layer/pipeline/core_pool.ts";
 import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
 import { chunk_retained_bytes, chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
 import { category_info } from "./category.ts";
 import {
   type FrameSample,
@@ -106,8 +107,8 @@ function counters() {
     runs_total: CORE_BAKE.occlusion.total_runs,
     coarse_boxes: CORE_BAKE.coarse_instances.total,
     coarse_low_fill: CORE_BAKE.coarse_instances.low_fill,
-    bands_reused: band_pool_stats.reused,
-    bands_allocated: band_pool_stats.allocated,
+    bands_reused: band_pool_stats().reused,
+    bands_allocated: band_pool_stats().allocated,
     build_ms: lod_build_stats.build_ms,
     build_runs: lod_build_stats.build_runs,
     scan_ms: lod_build_stats.scan_ms,
@@ -247,7 +248,12 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     // Each section against its own range: the fixed one refuses past it, the
     // others spill to plain regions the collector can take back — a spill or
     // a refusal here is the memory map's own signal, per kind.
-    `  section ${
+    `  section module ${
+      (() => {
+        const used = core_wasm_heap_used();
+        return used === null ? "-" : (used / 1048576).toFixed(1);
+      })()
+    } heap of ${Math.round(MODULE_SECTION.bytes / 1048576)}MB   ${
       core_sections_stat().map(({ name, bytes, stat }) =>
         `${name} ${Math.round(stat.live_bytes / 1048576)}/${Math.round(stat.backing_used / 1048576)} of ${Math.round(bytes / 1048576)}MB${stat.spills > 0 ? ` SPILLED ${stat.spills}` : ""}${
           stat.refusals > 0 ? ` REFUSED ${stat.refusals}` : ""
@@ -262,11 +268,11 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     }   fetch queued ${fetch_counts().queued} running ${fetch_counts().running} of ${MAX_INFLIGHT}`,
     // Both bake paths on one line, so a stepped window and a worker window
     // read side by side. The maxima are since load; the rest are the window's.
-    `  bake    path ${useSettingsStore.getState().bake_path}  stepped: longest step ${n1(lod_build_stats.bake_step_max_ms)}ms   worker: ${c.remote_submitted} sent  ${c.remote_adopted} adopted  away ${
-      per(c.remote_away_ms, c.remote_adopted)
-    }ms (max ${n1(bake_port.stats.away_max_ms)})  adopt ${per(c.remote_adopt_ms, c.remote_adopted)}ms (max ${
-      n1(bake_port.stats.adopt_max_ms)
-    })  ${c.remote_spilled} spilled  ${c.remote_deferred} deferred by the upload cap  ${c.remote_cancelled} cancelled  ${c.remote_failed} failed`,
+    `  bake    path ${useSettingsStore.getState().bake_path}  staged ${core_wasm_staged().meshes} meshes ${core_wasm_staged().sets} sets  fell back: ${core_fallback_stats.spilled} spilled  ${core_fallback_stats.unreached} unreached  ${core_fallback_stats.trapped} trapped   stepped: longest step ${
+      n1(lod_build_stats.bake_step_max_ms)
+    }ms   worker: ${c.remote_submitted} sent  ${c.remote_adopted} adopted  away ${per(c.remote_away_ms, c.remote_adopted)}ms (max ${n1(bake_port.stats.away_max_ms)})  adopt ${
+      per(c.remote_adopt_ms, c.remote_adopted)
+    }ms (max ${n1(bake_port.stats.adopt_max_ms)})  ${c.remote_spilled} spilled  ${c.remote_deferred} deferred by the upload cap  ${c.remote_cancelled} cancelled  ${c.remote_failed} failed`,
     `  per     commit/bake ${f.commit_per_bake === null ? "-" : n1(f.commit_per_bake)}ms  build/krun ${per(c.build_ms, c.build_runs / 1000)}ms  scan/chunk ${
       per(c.scan_ms, c.scan_count)
     }ms   (workload-normalised; comparable across sessions)`,
@@ -332,7 +338,7 @@ export function ledger_report_text(): string {
     !!PerformanceObserver.supportedEntryTypes?.includes("long-animation-frames");
 
   const out = [
-    `=== sched/ledger @ t=${n1(performance.now())}ms ===`,
+    `=== sched/ledger @ t=${n1(performance.now())}ms  build ${BUILD_NUMBER} ${BUILD_ID} (${BUILD_TIME}) ===`,
     ...frames_section(frames),
     ...(frames.length > 0 ? peak_section() : []),
     ...tasks_section(tasks),

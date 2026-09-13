@@ -42,16 +42,20 @@
 
     "build:api": "deno task --cwd apps/api build",
     "build:web": "deno task --cwd apps/web build",
+    "build:wasm": "deno task --cwd apps/web build:wasm",
 
     // Drops what Deno and Vite materialize and re-checks from nothing. Named
     // paths only; nothing is found by name and deleted.
     "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/api/dist apps/web/dist && deno task check",
 
-    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute",
+    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust",
     "check:api": "deno task --cwd apps/api check",
     "check:web": "deno task --cwd apps/web check",
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
+    // The Rust core, for the target it ships to. Clippy type-checks as it
+    // lints, and a warning fails it, as a type error fails the others.
+    "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings",
 
     "test": "deno task test:web && deno task test:api && deno task test:shared && deno task test:xpute",
     "test:web": "deno task --cwd apps/web test",

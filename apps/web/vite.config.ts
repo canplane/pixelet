@@ -1,7 +1,10 @@
 // @pxl/web/../vite.config.ts
 
-import { defineConfig, type HmrContext, loadEnv } from "vite";
+import { defineConfig, type HmrContext, loadEnv, type Plugin } from "vite";
 import deno from "@deno/vite-plugin";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +18,84 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const apiBaseDefault = "http://127.0.0.1:3000";
+
+/**
+ * Which source a build is: `r<commits>-<hash>`, and `-dirty` when the
+ * working tree had uncommitted changes. The hash is the identity; the count
+ * is only there so two builds read in order at a glance, and it is not
+ * stable — a rewritten history renumbers it. Derived from git rather than a
+ * counter kept in a file, which would have to be bumped by a commit of its
+ * own and would count builds rather than source.
+ */
+function build_id(): string {
+  try {
+    const git = (args: string) => execSync(`git ${args}`, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    const dirty = git("status --porcelain") !== "" ? "-dirty" : "";
+    return `r${git("rev-list --count HEAD")}-${git("rev-parse --short HEAD")}${dirty}`;
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Which official build this is: `b<n>` when script/deploy.ts handed the
+ * build its number, `b<n>+` for any other build after the last deploy this
+ * checkout made, `b?` before one. The count lives in the bucket, not in git
+ * (see deploy.ts); .build_number is only this checkout's copy of the last
+ * number it published.
+ */
+function build_number(): string {
+  const official = process.env.PXL_BUILD_NUMBER;
+  if (official) return `b${official}`;
+  try {
+    const last = readFileSync(path.join(__dirname, ".build_number"), "utf8").trim();
+    return /^\d+$/.test(last) ? `b${last}+` : "b?";
+  } catch {
+    return "b?";
+  }
+}
+
+/**
+ * `virtual:pxl-build` — what a build is: when it was built, which source,
+ * which official number (lib/env/config.ts reads it). A module rather than
+ * `define` constants so that a dev server gives every page load the values
+ * as they are then, not as they were when the server started: the module is
+ * dropped from the graph on each navigation and computed again on import,
+ * so a ledger report taken from a long-running dev server names the source
+ * actually on screen.
+ *
+ * The time is evaluated at build, so it updates itself with nothing to
+ * remember — a date someone has to bump by hand goes stale silently. It
+ * does mean the bundle hash changes on every build even when no source
+ * did; that is the cost of it being accurate, chosen over the commit date.
+ * UTC: it is formatted for the reader's own timezone where it is shown
+ * (about_section.tsx).
+ */
+function build_stamp(): Plugin {
+  const id = "virtual:pxl-build";
+  const resolved = "\0" + id;
+  return {
+    name: "pxl-build-stamp",
+    resolveId(source) {
+      return source === id ? resolved : undefined;
+    },
+    load(source) {
+      if (source !== resolved) return undefined;
+      return `export const time = ${JSON.stringify(new Date().toISOString())};\n` +
+        `export const id = ${JSON.stringify(build_id())};\n` +
+        `export const number = ${JSON.stringify(build_number())};\n`;
+    },
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.headers.accept?.includes("text/html")) {
+          const mod = server.moduleGraph.getModuleById(resolved);
+          if (mod) server.moduleGraph.invalidateModule(mod);
+        }
+        next();
+      });
+    },
+  };
+}
 
 // Where `deno task dev:remote` points when nothing overrides it: the project's
 // own published deployment. Override with VITE_REMOTE_ORIGIN — which
@@ -138,6 +219,7 @@ export default defineConfig(({ mode }) => {
     clearScreen: false,
 
     plugins: [
+      build_stamp(),
       deno(),
       react(),
       tailwindcss(), // Tailwind
@@ -203,21 +285,6 @@ export default defineConfig(({ mode }) => {
       __IS_DEV__: JSON.stringify(isDev),
 
       __PUBLISHED_TILES__: JSON.stringify(published),
-
-      /** When this bundle was built, ISO-8601 in UTC. Evaluated here, so it
-       * updates itself on every build with nothing to remember — which is
-       * the whole point: a date someone has to bump by hand is a date that
-       * goes stale silently.
-       *
-       * It does mean the bundle hash changes on every build even when no
-       * source did, since this string is part of the output. That is the
-       * cost of the thing being accurate rather than approximately right,
-       * and it was chosen knowingly over stamping the commit date instead.
-       *
-       * UTC, not local: the value is formatted for the reader's own
-       * timezone at the point it is displayed (see about_section.tsx).
-       * Baking a timezone in here would be baking in the builder's. */
-      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
 
       /** A droplet fades. A pixelet remains. 🫧 */
       __APP_NAME__: JSON.stringify("pixelet"),

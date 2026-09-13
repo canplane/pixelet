@@ -1,0 +1,12 @@
+[package]
+name = "pxl-wasm"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+pxl-core = { path = "../pxl-core" }

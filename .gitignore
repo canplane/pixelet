@@ -181,6 +181,13 @@ vite.config.ts.timestamp-*
 
 # Rust workspace build output
 /target
+/crates/target
+
+# The core's module, built from crates/ by apps/web/script/build_wasm.ts
+apps/web/src/wasm/pxl.wasm
+
+# The last build number this checkout published (apps/web/script/deploy.ts)
+apps/web/.build_number
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk

@@ -35,10 +35,10 @@ export type MeshRun = {
 function push_sub_voxel_runs(sink: RunSink, extra: SubVoxels, col: u32): void {
   const [lo, hi] = sub_voxel_range(extra, col);
   for (let i = lo; i < hi; i++) {
-    const z = extra.z.mem[i];
-    const m = extra.material.mem[i];
-    const sub = extra.sub.mem[i];
-    sink.push(z, z, (m >>> 16) & 255, (m >>> 8) & 255, m & 255, extra.layer_idx.mem[i], (m >>> 24) as MaterialClass, sub & 255, (sub >>> 8) & 255, (sub >>> 16) & 255, sub >>> 24);
+    const z = extra.z[i];
+    const m = extra.material[i];
+    const sub = extra.sub[i];
+    sink.push(z, z, (m >>> 16) & 255, (m >>> 8) & 255, m & 255, extra.layer_idx[i], (m >>> 24) as MaterialClass, sub & 255, (sub >>> 8) & 255, (sub >>> 16) & 255, sub >>> 24);
   }
 }
 
@@ -144,7 +144,7 @@ function walk_column_runs(
       }
     }
 
-    if (band.extra.col.len > 0) push_sub_voxel_runs(sink, band.extra, local_y * L2_BAND_CELL_SPAN + local_x);
+    if (band.extra.len > 0) push_sub_voxel_runs(sink, band.extra, local_y * L2_BAND_CELL_SPAN + local_x);
   }
 }
 

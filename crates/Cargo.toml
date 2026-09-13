@@ -1,0 +1,21 @@
+# The Rust half of the client: one core, compiled to one WebAssembly module
+# that the main thread and each worker instantiate for themselves.
+# issue/20260912-why-the-destination-is-wasm.md; BACKLOG P0.
+
+[workspace]
+resolver = "2"
+members = ["pxl-core", "pxl-wasm"]
+
+[workspace.package]
+edition = "2021"
+version = "0.0.0"
+publish = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
