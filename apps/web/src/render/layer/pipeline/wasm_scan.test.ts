@@ -4,18 +4,18 @@ import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
-import { instantiate_pxl, type PxlExports } from "@/wasm/pxl.ts";
+import type { PxlExports } from "@/wasm/pxl.ts";
 import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, fill_chunk_column, release_chunk_volume, seal_chunk_volume, set_chunk_voxel } from "./volume.ts";
 import { MaterialClass, NO_LAYER, pack_sub_cell, type VoxelMaterial } from "./voxel.ts";
 import { column_run_set_bytes, type ColumnRunSet } from "./column_run.ts";
 import { release_column_runs, scan_all_column_runs } from "./voxel_scan.ts";
-import { CORE_MEMORY, CORE_POOL } from "./core_pool.ts";
+import { CORE_POOL, CORE_PXL } from "./core_pool.ts";
 import type { MeshPool } from "./wasm_bake.ts";
 import { WasmScanner } from "./wasm_scan.ts";
 
 function pxl(): Promise<PxlExports> {
-  assert(CORE_MEMORY !== null, "the core memory reserved");
-  return instantiate_pxl(CORE_MEMORY);
+  assert(CORE_PXL !== null, "the core memory reserved and the module over it");
+  return Promise.resolve(CORE_PXL);
 }
 
 function rng(seed: u32): () => u32 {

@@ -9,12 +9,12 @@
  */
 
 import type { LodStep } from "@/render/lod.ts";
-import { CORE_MEMORY, CORE_POOL, FIXED_ALLOC } from "./core_pool.ts";
+import { CORE_POOL, CORE_PXL, FIXED_ALLOC } from "./core_pool.ts";
 import { abort_bake, BakeContext, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "./chunk_mesher.ts";
 import type { ColumnRunSet } from "./column_run.ts";
 import type { ChunkVolume } from "./volume.ts";
 import { abort_column_scan, begin_column_scan, column_scan_open, finish_column_scan, scan_column_rows } from "./voxel_scan.ts";
-import { lazy_wasm_baker } from "./wasm_bake.ts";
+import { WasmBaker } from "./wasm_bake.ts";
 import { WasmScanner } from "./wasm_scan.ts";
 
 export const CORE_BAKE: BakeContext = new BakeContext(CORE_POOL, FIXED_ALLOC);
@@ -43,7 +43,12 @@ export type CoreBake = {
   abort(): void;
 };
 
-const load_wasm_baker = lazy_wasm_baker(CORE_MEMORY, CORE_POOL, CORE_BAKE);
+/** The Rust baker and scanner over the module, where there is one — the
+ * module arrives with the core memory (core_pool.ts), so there is no
+ * waiting for it. A device with no core memory has neither and bakes the
+ * TypeScript way. */
+const wasm_baker: WasmBaker | null = CORE_PXL === null ? null : new WasmBaker(CORE_PXL, CORE_POOL, CORE_BAKE);
+const wasm_scanner: WasmScanner | null = CORE_PXL === null ? null : new WasmScanner(CORE_PXL, CORE_POOL);
 
 /**
  * A module that trapped is not used again: its statics are whatever the
@@ -56,8 +61,13 @@ let wasm_trapped = false;
  * ledger: `spilled` is the mesh section past its range — the byte budget's
  * signal (BACKLOG P1) — `unreached` a set or volume already outside it. */
 export const core_fallback_stats = { spilled: 0, unreached: 0, trapped: 0 };
-function core_wasm_baker(): ReturnType<typeof load_wasm_baker> {
-  return wasm_trapped ? "failed" : load_wasm_baker();
+
+function core_wasm_baker(): WasmBaker | null {
+  return wasm_trapped ? null : wasm_baker;
+}
+
+function core_wasm_scanner(): WasmScanner | null {
+  return wasm_trapped ? null : wasm_scanner;
 }
 
 function trapped(err: unknown): void {
@@ -66,35 +76,23 @@ function trapped(err: unknown): void {
   console.error("[render/core_bake] the pxl module trapped; scans and bakes fall back to the TypeScript path for the rest of the session:", err);
 }
 
-/** The one Rust scanner, over the same module as the baker; made when the
- * module has arrived. */
-let core_wasm_scanner: WasmScanner | null = null;
-function wasm_scanner(): WasmScanner | null {
-  const baker = core_wasm_baker();
-  if (typeof baker === "string") return null;
-  return core_wasm_scanner ??= new WasmScanner(baker.pxl, CORE_POOL);
-}
-
-/** The module heap's use after its last bake, for the ledger; null until
- * the module has baked. */
+/** The module heap's use after its last bake, for the ledger; null where
+ * there is no module. */
 export function core_wasm_heap_used(): number | null {
-  const baker = core_wasm_baker();
-  return typeof baker === "string" ? null : baker.heap_used;
+  return wasm_baker?.heap_used ?? null;
 }
 
 /** Meshes and sets the module staged in its heap and copied out because
  * their block was past the mesh section's range, for the ledger. */
 export function core_wasm_staged(): { meshes: number; sets: number } {
-  const baker = core_wasm_baker();
-  return { meshes: typeof baker === "string" ? 0 : baker.staged, sets: core_wasm_scanner?.staged ?? 0 };
+  return { meshes: wasm_baker?.staged ?? 0, sets: wasm_scanner?.staged ?? 0 };
 }
 
 /** The mesher a bake asking for `wanted` gets: the Rust one unless its
- * module failed to load or there is no core memory for it to share, when
- * the TypeScript one stands in — the mesh is the same either way. Asking
- * also starts the module's load. */
+ * module trapped or there is no core memory for it to share, when the
+ * TypeScript one stands in — the mesh is the same either way. */
 export function resolve_core_mesher(wanted: CoreMesher): CoreMesher {
-  return wanted === "wasm" && core_wasm_baker() === "failed" ? "ts" : wanted;
+  return wanted === "wasm" && core_wasm_baker() === null ? "ts" : wanted;
 }
 
 /**
@@ -112,7 +110,7 @@ export type CoreScan = {
 
 export function core_scan_open(mesher: CoreMesher): boolean {
   if (mesher === "ts") return column_scan_open();
-  return wasm_scanner()?.is_open() ?? false;
+  return core_wasm_scanner()?.is_open() ?? false;
 }
 
 /**
@@ -184,12 +182,11 @@ function ts_bake(set: ColumnRunSet, step: LodStep): Job<BakedChunkMesh> | null {
 
 /**
  * Opens a scan of `volume` on `mesher`, or null while its one scan is
- * taken or, for the Rust one, while the module is still arriving. A volume
- * the module cannot reach is scanned the TypeScript way whatever `mesher`.
+ * taken. A volume the module cannot reach, or a `wasm` ask where there is
+ * no module (resolve_core_mesher first), is scanned the TypeScript way.
  */
 export function begin_core_scan(mesher: CoreMesher, volume: ChunkVolume): CoreScan | null {
-  const scanner = mesher === "wasm" ? wasm_scanner() : null;
-  if (mesher === "wasm" && scanner === null) return null;
+  const scanner = mesher === "wasm" ? core_wasm_scanner() : null;
   if (scanner === null || !scanner.reaches(volume)) {
     if (scanner !== null) core_fallback_stats.unreached++;
     const job = ts_scan(volume);
@@ -205,14 +202,12 @@ export function begin_core_scan(mesher: CoreMesher, volume: ChunkVolume): CoreSc
 
 /**
  * Opens a bake of `set` at `step` on `mesher`, or null when that mesher's
- * one bake is taken — or, for the Rust mesher, while its module is still
- * arriving or has failed (resolve_core_mesher first). Either way the caller
- * is blocked and asks again next tick. A set the module cannot reach is
- * baked the TypeScript way whatever `mesher`.
+ * one bake is taken, and the caller asks again next tick. A set the module
+ * cannot reach, or a `wasm` ask where there is no module
+ * (resolve_core_mesher first), is baked the TypeScript way.
  */
 export function begin_core_bake(mesher: CoreMesher, set: ColumnRunSet, step: LodStep): CoreBake | null {
   const baker = mesher === "wasm" ? core_wasm_baker() : null;
-  if (typeof baker === "string") return null;
   if (baker === null || !baker.reaches(set)) {
     if (baker !== null) core_fallback_stats.unreached++;
     const job = ts_bake(set, step);

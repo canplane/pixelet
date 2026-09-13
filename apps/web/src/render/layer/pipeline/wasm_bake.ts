@@ -28,7 +28,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 
 import type { LodStep } from "@/render/lod.ts";
-import { instantiate_pxl, type PxlExports, STEP_DONE, STEP_NEED_MESH } from "@/wasm/pxl.ts";
+import { type PxlExports, STEP_DONE, STEP_NEED_MESH } from "@/wasm/pxl.ts";
 import type { ColumnRunSet } from "./column_run.ts";
 import { type BakeContext, baked_mesh_bytes, type BakedChunkMesh, carve_baked_mesh } from "./chunk_mesher.ts";
 import { add_bake_counters, type BakeCounters } from "./bake_command.ts";
@@ -164,28 +164,4 @@ export class WasmBaker {
     this.seen.set(now);
     return counters;
   }
-}
-
-/**
- * Instantiates the module once, on first use: "loading" until it has
- * arrived, so a caller treats the bake as blocked and asks again next tick,
- * and "failed" for good if it does not arrive — or if there is no core
- * memory to share — so a caller can bake another way rather than wait.
- */
-export function lazy_wasm_baker(memory: WebAssembly.Memory | null, pool: MeshPool, ctx: BakeContext): () => WasmBaker | "loading" | "failed" {
-  let state: WasmBaker | "idle" | "loading" | "failed" = memory === null ? "failed" : "idle";
-  return () => {
-    if (state !== "idle") return state;
-    state = "loading";
-    instantiate_pxl(memory!).then(
-      (pxl) => {
-        state = new WasmBaker(pxl, pool, ctx);
-      },
-      (err) => {
-        state = "failed";
-        console.error("[render/wasm_bake] the pxl module did not load; bakes fall back to the TypeScript mesher:", err);
-      },
-    );
-    return state;
-  };
 }

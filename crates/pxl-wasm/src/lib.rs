@@ -13,9 +13,12 @@
 
 mod arena;
 
+use pxl_core::buddy::Pool;
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::run_set::{run_set_bytes, RunSet};
 use pxl_core::scan::{BandView, ExtraView, ScanContext, ScanStep};
+use pxl_core::terrain::{ChunkSample, Materials, PageView, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_core::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 
 #[global_allocator]
 static ALLOC: arena::Arena = arena::Arena;
@@ -38,6 +41,15 @@ struct State {
     scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.
     bands: (usize, u32),
+    /// The pools over the memory's sections, by the id pxl_pool_new gave.
+    pools: Vec<Pool>,
+    /// The volumes, once pxl_volume_pools has said which pools they draw on.
+    volumes: Option<Volumes>,
+    /// The open scan's bands, when it reads a volume of the module's.
+    scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,
+    /// The terrain tables, and the last chunk read.
+    terrain: Materials,
+    chunk: ChunkSample,
 }
 
 static mut STATE: Option<State> = None;
@@ -65,6 +77,11 @@ fn state() -> &'static mut State {
                 result: [0; 9],
                 scan: ScanContext::new(),
                 bands: (0, 0),
+                pools: Vec::new(),
+                volumes: None,
+                scan_rows: Vec::new(),
+                terrain: Materials::default(),
+                chunk: ChunkSample::default(),
             }
         })
     }
@@ -194,14 +211,15 @@ pub extern "C" fn pxl_module_bytes() -> u32 {
 }
 
 /// Words a band takes in the table `pxl_scan_begin` reads (wasm_scan.ts
-/// writes the same): band_z; the addresses of the material, layer and
-/// sub-cell lanes (0 for no sub-cells); the extras' count and the addresses
-/// of their five lanes.
-pub const BAND_WORDS: usize = 10;
+/// writes the same, and a volume of the module's says its bands in): band_z;
+/// the addresses of the material, layer and sub-cell lanes (0 for no
+/// sub-cells); the extras' count and the addresses of their five lanes.
+pub const BAND_WORDS: usize = VOLUME_BAND_WORDS;
 
 fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
-    // SAFETY: the client writes the table into a lane of its own and every
-    // address in it names a lane of a band it keeps until the scan closes;
+    // SAFETY: the table is either the client's, written into a lane of its
+    // own with every address naming a lane of a band it keeps until the scan
+    // closes, or the module's own, copied from a volume it holds;
     // ScanContext::begin checks each lane's length against the band's.
     unsafe {
         let table = core::slice::from_raw_parts(at as *const u32, count as usize * BAND_WORDS);
@@ -291,4 +309,251 @@ pub extern "C" fn pxl_scan_finish() -> u32 {
 #[no_mangle]
 pub extern "C" fn pxl_scan_abort() {
     state().scan.abort();
+}
+
+/// A pool over `bytes` bytes of the memory at `start` — a section of the
+/// map — cut in regions of `region_bytes` with blocks of at least
+/// `min_block_bytes`: its id, for the calls below. The client's
+/// BuddyAllocator delegates its backed range here and keeps what it does
+/// past it (buddy.ts).
+#[no_mangle]
+pub extern "C" fn pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32) -> u32 {
+    let s = state();
+    // SAFETY: the memory is the module's own linear memory, addressed from
+    // 0, and the client keeps the range for this pool alone.
+    let pool = unsafe { Pool::new(core::ptr::null_mut(), start as usize, bytes as usize, region_bytes, min_block_bytes) };
+    s.pools.push(pool);
+    s.pools.len() as u32 - 1
+}
+
+/// Borrows at least `bytes` from pool `id`: the block's address, or 0 when
+/// the range is used up or the request is larger than a region.
+#[no_mangle]
+pub extern "C" fn pxl_pool_acquire(id: u32, bytes: u32) -> u32 {
+    state().pools[id as usize].acquire(bytes).map_or(0, |at| at as u32)
+}
+
+/// Returns the block of `bytes` at `at` to pool `id`: 1, or 0 for a block
+/// the pool does not hold or holds already.
+#[no_mangle]
+pub extern "C" fn pxl_pool_release(id: u32, at: u32, bytes: u32) -> u32 {
+    state().pools[id as usize].release(at as usize, bytes) as u32
+}
+
+/// Whether the block of `bytes` at `at` is free in pool `id`.
+#[no_mangle]
+pub extern "C" fn pxl_pool_is_free(id: u32, at: u32, bytes: u32) -> u32 {
+    state().pools[id as usize].is_free(at as usize, bytes) as u32
+}
+
+/// The address of pool `id`'s stat: twelve words in PoolStat's order.
+#[no_mangle]
+pub extern "C" fn pxl_pool_stat(id: u32) -> *const u32 {
+    &state().pools[id as usize].stat as *const _ as *const u32
+}
+
+fn volumes() -> &'static mut Volumes {
+    state().volumes.as_mut().expect("pxl_volume_pools before any volume")
+}
+
+/// Which pools volumes draw on: the standing band stores from `fixed`,
+/// the rest and the sub-cell lanes from `mesh` (ids from pxl_pool_new).
+#[no_mangle]
+pub extern "C" fn pxl_volume_pools(fixed: u32, mesh: u32) {
+    let s = state();
+    // SAFETY: the pools were cut from this module's memory, addressed from 0.
+    s.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), fixed, mesh) });
+}
+
+/// A volume with no bands: its id plus one (0 is never a volume).
+#[no_mangle]
+pub extern "C" fn pxl_volume_open() -> u32 {
+    volumes().open() as u32 + 1
+}
+
+/// Paints one solid column of `material`/`layer_idx` from z0 to z1. 0 when a
+/// band could not be made for it — no pool had room — and the volume is
+/// then not the composite asked for.
+#[no_mangle]
+pub extern "C" fn pxl_volume_fill_column(id: u32, cx: u32, cy: u32, z0: i32, z1: i32, material: u32, layer_idx: u32) -> u32 {
+    let s = state();
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    v.fill_column(
+        &mut s.pools,
+        id as usize - 1,
+        (cx, cy),
+        z0,
+        z1,
+        Voxel {
+            material,
+            layer_idx: layer_idx as u8,
+            sub: 0,
+        },
+    ) as u32
+}
+
+/// Full replacement at one voxel; `sub` is pack_sub_cell's word, 0 for a
+/// full cell. 0 as pxl_volume_fill_column.
+#[no_mangle]
+pub extern "C" fn pxl_volume_set_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32) -> u32 {
+    let s = state();
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    v.set_voxel(
+        &mut s.pools,
+        id as usize - 1,
+        Cell { cx, cy, z },
+        Voxel {
+            material,
+            layer_idx: layer_idx as u8,
+            sub,
+        },
+    ) as u32
+}
+
+/// Another sub-cell object on a base voxel already claimed.
+#[no_mangle]
+pub extern "C" fn pxl_volume_append_sub_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32) -> u32 {
+    let s = state();
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    v.append_sub_voxel(
+        &mut s.pools,
+        id as usize - 1,
+        Cell { cx, cy, z },
+        Voxel {
+            material,
+            layer_idx: layer_idx as u8,
+            sub,
+        },
+    ) as u32
+}
+
+/// Closes the volume to painting and sorts its overflow by column.
+#[no_mangle]
+pub extern "C" fn pxl_volume_seal(id: u32) {
+    volumes().seal(id as usize - 1);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_volume_release(id: u32) {
+    let s = state();
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    v.release(&mut s.pools, id as usize - 1);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_volume_bands(id: u32) -> u32 {
+    volumes().band_count(id as usize - 1) as u32
+}
+
+/// The address of band `i`'s row — BAND_WORDS words, as pxl_scan_begin
+/// reads them — valid until the volume is painted again.
+#[no_mangle]
+pub extern "C" fn pxl_volume_band(id: u32, i: u32) -> *const u32 {
+    volumes().band_row(id as usize - 1, i as usize).as_ptr()
+}
+
+/// The address of the volumes' stat: allocated, reused, refused.
+#[no_mangle]
+pub extern "C" fn pxl_volume_stat() -> *const u32 {
+    &volumes().stat as *const _ as *const u32
+}
+
+/// Opens a scan of a volume of the module's: its bands' rows are copied
+/// out, so the scan reads them as it reads a client's table. 0 when a
+/// scan is already open.
+#[no_mangle]
+pub extern "C" fn pxl_scan_begin_volume(id: u32) -> u32 {
+    let s = state();
+    if s.scan.is_open() {
+        return 0;
+    }
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let count = v.band_count(id as usize - 1);
+    s.scan_rows.clear();
+    for i in 0..count {
+        s.scan_rows.push(*v.band_row(id as usize - 1, i));
+    }
+    s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
+    s.scan.begin(&band_views(s.bands)) as u32
+}
+
+/// The material every terrain cell starts from: bare land.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_base(r: u32, g: u32, b: u32, layer: u32, class: u32) {
+    let t = &mut state().terrain;
+    t.base_rgb = [r as u8, g as u8, b as u8];
+    t.base_layer = layer as u8;
+    t.base_class = class as u8;
+}
+
+/// The material class channel `ch` paints (0 land, 1 water, 2 structure,
+/// 3 transport).
+#[no_mangle]
+pub extern "C" fn pxl_terrain_channel(ch: u32, class: u32) {
+    state().terrain.channels[ch as usize].class = class as u8;
+}
+
+/// What type `type_id` of channel `ch` looks like: its colour, if it has
+/// one, and its texture-array layer, if it has one.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_type(ch: u32, type_id: u32, r: u32, g: u32, b: u32, has_color: u32, layer: u32, has_layer: u32) {
+    let c = &mut state().terrain.channels[ch as usize];
+    let t = type_id as usize;
+    c.rgb[t] = [r as u8, g as u8, b as u8];
+    c.has_color[t] = has_color != 0;
+    c.layer[t] = layer as u8;
+    c.has_layer[t] = has_layer != 0;
+}
+
+/// Reads the chunk at page cell (tx0, ty0) of the page whose ground lanes
+/// (land, water, structure, transport; a type byte a cell) and padded
+/// elevation raster are at the addresses given: its cells' materials and
+/// tops, for pxl_terrain_paint and the lanes below. Returns the floor.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u32, transport_at: u32, ele_at: u32, tx0: u32, ty0: u32, show_structures: u32) -> i32 {
+    let s = state();
+    let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+    let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+    assert!(tx0 + CHUNK_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
+    // SAFETY: the client's page lanes, kept in the core memory for as long
+    // as the page is resident; a page's shape is fixed.
+    let page = unsafe {
+        PageView {
+            ground: [
+                core::slice::from_raw_parts(land_at as usize as *const u8, cells),
+                core::slice::from_raw_parts(water_at as usize as *const u8, cells),
+                core::slice::from_raw_parts(structure_at as usize as *const u8, cells),
+                core::slice::from_raw_parts(transport_at as usize as *const u8, cells),
+            ],
+            ele: core::slice::from_raw_parts(ele_at as usize as *const i16, samples),
+        }
+    };
+    s.chunk.read(&page, &s.terrain, tx0, ty0, show_structures != 0);
+    s.chunk.floor
+}
+
+/// Paints the chunk last read into `volume`, one column a cell from the
+/// floor. 0 when a band could not be made.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_paint(volume: u32) -> u32 {
+    let s = state();
+    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    s.chunk.paint(v, &mut s.pools, volume as usize - 1) as u32
+}
+
+/// The chunk last read, for the direct path: the addresses of its 4096
+/// packed materials, layer bytes and elevations.
+#[no_mangle]
+pub extern "C" fn pxl_terrain_material_at() -> u32 {
+    state().chunk.material.as_ptr() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_terrain_layer_at() -> u32 {
+    state().chunk.layer_idx.as_ptr() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_terrain_ele_at() -> u32 {
+    state().chunk.ele.as_ptr() as u32
 }

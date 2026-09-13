@@ -29,9 +29,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      wasm_bake.test.ts. The whole-chunk scan followed the same day
      (crates/pxl-core/src/scan.rs, wasm_scan.test.ts byte for byte against
      voxel_scan.ts; 1.9x on V8), reading the composite's bands where the
-     compositor left them. Still TypeScript: the compositor and the volume
-     it paints, the direct path (`fill_column_runs`, a writer callback per
-     layer) and the raycast's per-column `merge_column_runs`. Which thread it
+     compositor left them. The terrain layer followed
+     (crates/pxl-core/src/terrain.rs: the bicubic sample, the water recess,
+     the channels' override, held cell for cell to the TypeScript adapter by
+     terrain.test.ts; paint 1.8x and the direct path 2.8x on V8), reading a
+     page's lanes where the client keeps them and painting the module's own
+     volume. Still TypeScript: the compositor's stack, the object layer's
+     paint — it walks the object store's records, and goes with the store —
+     the direct path's writer (`fill_column_runs`, fed by the module's
+     sampling for terrain) and the raycast's per-column `merge_column_runs`
+     over the module's bands. Which thread it
      runs on is measured when it exists: the worker was tried on the phone
      and bought nothing, because the stepped bake already yields and the
      fill-in cost is elsewhere
@@ -74,7 +81,18 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      its stack, data and heap, where a wasm32 linker puts them, behind a
      bump allocator (crates/pxl-wasm/src/arena.rs) since the memory never
      grows; the module states its size and the client checks the map
-     against it at instantiation.
+     against it at instantiation. The same day, the buddy over every
+     section's range moved into the module (crates/pxl-core/src/buddy.rs,
+     held to the TypeScript pool's addresses request for request by
+     core_pool.test.ts): the module is instantiated before the map is cut,
+     and the TypeScript pool names blocks through it. Then the volume
+     (crates/pxl-core/src/volume.rs): bands are the module's, taken from the
+     fixed section for the sixteen standing stores and the mesh section past
+     them, every paint a call into it, and readers get views; the Rust scan
+     opens a volume by id. Then the terrain layer's reading of a page. Next:
+     the object store — its records are in the memory already — and with
+     it the object layer's paint, the direct path's writer and the raycast
+     walk; then the scheduler's tick.
 
 ## P1
 

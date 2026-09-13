@@ -8,9 +8,12 @@
 //! byte-for-byte agreement with it until the TypeScript is gone
 //! (apps/web/src/render/layer/pipeline/wasm_bake.test.ts).
 
+pub mod buddy;
 pub mod mesher;
 pub mod run_set;
 pub mod scan;
+pub mod terrain;
+pub mod volume;
 pub mod voxel;
 
 mod fdlibm;

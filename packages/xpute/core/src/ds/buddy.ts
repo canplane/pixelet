@@ -108,7 +108,36 @@ export type BuddyOptions = {
    * backing must be able to see — nothing it lends may live outside it.
    */
   no_spill?: boolean;
+  /**
+   * A kernel that owns the backing range: the buddy over it runs there,
+   * and this pool only names its blocks — an address in, an address out —
+   * and keeps what the kernel cannot do, the plain regions past the range.
+   * Given with `backing`, and the range is the kernel's to cut.
+   */
+  kernel?: PoolKernel;
 };
+
+/**
+ * The backed side of a pool, run elsewhere (crates/pxl-core/src/buddy.rs
+ * through pxl-wasm's pool exports): blocks named by their address in the
+ * backing. `acquire` answers 0 for a refusal; `release` false for a block
+ * the kernel does not hold or holds already. `stat` is the kernel's count
+ * of what it did, in BuddyStat's first twelve fields' order.
+ */
+export type PoolKernel = {
+  acquire(bytes: u32): u32;
+  release(at: u32, bytes: u32): boolean;
+  is_free(at: u32, bytes: u32): boolean;
+  stat(): ArrayLike<u32>;
+};
+
+/** The `region` of a block the kernel lent: it is in the backing, and the
+ * kernel is the one to ask about it. */
+const KERNEL_REGION = -2;
+
+/** The handle of a kernel block: its address, and the high bit to say so
+ * (no backing is 2 GB). A block in a plain region keeps the packed form. */
+const KERNEL_HANDLE: u32 = 0x8000_0000;
 
 /**
  * One borrowed span: `bytes` of `buf` starting at `byte_offset`. The region
@@ -282,7 +311,9 @@ export class BuddyAllocator {
   readonly region_bytes: u32;
   readonly max_idle_regions: u32;
 
-  readonly stat: BuddyStat = {
+  /** The pool's own counts: with a kernel, the plain side only — `stat`
+   * folds the kernel's in. */
+  private readonly _stat: BuddyStat = {
     live_bytes: 0,
     idle_bytes: 0,
     reserved_bytes: 0,
@@ -300,6 +331,35 @@ export class BuddyAllocator {
     refusals: 0,
   };
 
+  /** What the pool has done, both sides together when a kernel holds the
+   * backed one. Read fresh each time. */
+  get stat(): Readonly<BuddyStat> {
+    const own = this._stat;
+    const k = this._kernel;
+    if (k === null) return own;
+    const ks = k.stat();
+    return {
+      live_bytes: own.live_bytes + ks[0],
+      idle_bytes: own.idle_bytes + ks[1],
+      reserved_bytes: own.reserved_bytes + ks[2],
+      regions: own.regions + ks[3],
+      live_blocks: own.live_blocks + ks[4],
+      hits: own.hits + ks[5],
+      misses: own.misses + ks[6],
+      spills: own.spills,
+      evictions: own.evictions,
+      splits: own.splits + ks[7],
+      merges: own.merges + ks[8],
+      max_block_bytes: Math.max(own.max_block_bytes, ks[9]),
+      backing_used: ks[10],
+      backing_bytes: own.backing_bytes,
+      // The kernel refuses past its range whatever the pool's policy; for a
+      // pool that may spill, that is where a plain region begins, not a
+      // refusal the caller saw.
+      refusals: own.refusals + (this._no_spill ? ks[11] : 0),
+    };
+  }
+
   private readonly _min_shift: u32;
   private readonly _max_order: u32;
   private readonly _regions: (Region | null)[] = [];
@@ -307,6 +367,7 @@ export class BuddyAllocator {
   private readonly _bypass: boolean;
   private readonly _no_spill: boolean;
   private readonly _backing: ArrayBuffer | null;
+  private readonly _kernel: PoolKernel | null;
   /** The backing range: where it starts, and how far into it regions have
    * been cut. `_backing_used` is an absolute offset. */
   private readonly _backing_offset: u32;
@@ -332,6 +393,7 @@ export class BuddyAllocator {
       bypass = false,
       backing = null,
       no_spill = false,
+      kernel = null,
     } = opts;
     if (min_block_bytes < 8 || region_bytes < min_block_bytes) {
       throw new MarshalError(Errno.EINVAL, `pool: bad region shape min=${min_block_bytes} region=${region_bytes}`);
@@ -345,6 +407,8 @@ export class BuddyAllocator {
     this._bypass = bypass;
     this._no_spill = no_spill;
     this._backing = backing;
+    if (kernel !== null && backing === null) throw new MarshalError(Errno.EINVAL, "pool: a kernel needs the backing it runs over");
+    this._kernel = kernel;
     // An explicit range must be whole regions; the default is however many
     // whole regions the backing holds past the offset, which for a backing
     // smaller than a region is none.
@@ -359,7 +423,7 @@ export class BuddyAllocator {
     this._backing_offset = offset;
     this._backing_used = offset;
     this._backing_end = backing !== null ? offset + bytes : 0;
-    this.stat.backing_bytes = backing !== null ? bytes : 0;
+    this._stat.backing_bytes = backing !== null ? bytes : 0;
     if (no_spill && backing === null) throw new MarshalError(Errno.EINVAL, "pool: no_spill needs a backing to refuse past");
     this._order_bits = shift_of(this._max_order + 2);
   }
@@ -383,19 +447,19 @@ export class BuddyAllocator {
    */
   try_acquire(bytes: u32): Block | null {
     if (bytes <= 0) return DETACHED_BLOCK;
-    if (bytes > this.stat.max_block_bytes) this.stat.max_block_bytes = bytes;
+    if (bytes > this._stat.max_block_bytes) this._stat.max_block_bytes = bytes;
 
     if (this._no_spill && bytes > this.region_bytes) {
-      this.stat.refusals++;
+      this._stat.refusals++;
       return null;
     }
     if (this._bypass || bytes > this.region_bytes) {
       // Bypassed, or larger than a region can ever hold. Its own buffer,
       // never reused — a region sized for that would waste more than the
       // spill does.
-      this.stat.spills++;
-      this.stat.live_blocks++;
-      this.stat.live_bytes += bytes;
+      this._stat.spills++;
+      this._stat.live_blocks++;
+      this._stat.live_bytes += bytes;
       const buf = new ArrayBuffer(bytes);
       this._spills.add(buf);
       return { buf, byte_offset: 0, bytes, order: -1, region: -1, free: false };
@@ -404,16 +468,24 @@ export class BuddyAllocator {
     const order = Math.max(shift_of(bytes), this._min_shift) - this._min_shift;
     const block_bytes = 1 << (this._min_shift + order);
 
+    // The kernel's range first, and only the kernel cuts it; past it, the
+    // plain regions below, as a pool with no kernel goes past its backing.
+    if (this._kernel !== null) {
+      const at = this._kernel.acquire(bytes);
+      if (at !== 0) return { buf: this._backing!, byte_offset: at, bytes, order, region: KERNEL_REGION, free: false };
+      if (this._no_spill) return null;
+    }
+
     for (let i = 0; i < this._regions.length; i++) {
       const region = this._regions[i];
       if (!region) continue;
-      const offset = region.alloc(order, this.stat);
+      const offset = region.alloc(order, this._stat);
       if (offset < 0) continue;
       region.used_bytes += block_bytes;
-      this.stat.hits++;
-      this.stat.live_blocks++;
-      this.stat.live_bytes += bytes;
-      this.stat.idle_bytes -= block_bytes;
+      this._stat.hits++;
+      this._stat.live_blocks++;
+      this._stat.live_bytes += bytes;
+      this._stat.idle_bytes -= block_bytes;
       return { buf: region.buf, byte_offset: region.base + offset, bytes, order, region: i, free: false };
     }
 
@@ -421,16 +493,16 @@ export class BuddyAllocator {
     // buffer only after. Backed regions are created first and so sit at the
     // lowest indices, which the scan above visits first — so plain regions
     // are the ones that empty out, and they are the only ones reclaimable.
-    const backing = this._backing;
+    const backing = this._kernel === null ? this._backing : null;
     const backed = backing !== null && this._backing_used + this.region_bytes <= this._backing_end;
     if (!backed && this._no_spill) {
-      this.stat.refusals++;
+      this._stat.refusals++;
       return null;
     }
     const region = backed ? new Region(this._min_shift, this._max_order, backing, this._backing_used) : new Region(this._min_shift, this._max_order);
     if (backed) {
       this._backing_used += this.region_bytes;
-      this.stat.backing_used = this._backing_used - this._backing_offset;
+      this._stat.backing_used = this._backing_used - this._backing_offset;
     }
     const index = this._regions.indexOf(null);
     const i = index >= 0 ? index : this._regions.length;
@@ -441,16 +513,16 @@ export class BuddyAllocator {
     } else {
       this._plain_at.set(region.buf, i);
     }
-    this.stat.regions++;
-    this.stat.reserved_bytes += this.region_bytes;
-    this.stat.idle_bytes += this.region_bytes;
+    this._stat.regions++;
+    this._stat.reserved_bytes += this.region_bytes;
+    this._stat.idle_bytes += this.region_bytes;
 
-    const offset = region.alloc(order, this.stat);
+    const offset = region.alloc(order, this._stat);
     region.used_bytes += block_bytes;
-    this.stat.misses++;
-    this.stat.live_blocks++;
-    this.stat.live_bytes += bytes;
-    this.stat.idle_bytes -= block_bytes;
+    this._stat.misses++;
+    this._stat.live_blocks++;
+    this._stat.live_bytes += bytes;
+    this._stat.idle_bytes -= block_bytes;
     return { buf: region.buf, byte_offset: region.base + offset, bytes, order, region: i, free: false };
   }
 
@@ -466,8 +538,13 @@ export class BuddyAllocator {
       return;
     }
     block.free = true;
-    this.stat.live_blocks--;
-    this.stat.live_bytes -= block.bytes;
+    if (block.region === KERNEL_REGION) {
+      if (this._poison) new Float64Array(block.buf, block.byte_offset, (1 << (this._min_shift + block.order)) / 8).fill(NaN);
+      this._kernel!.release(block.byte_offset, block.bytes);
+      return;
+    }
+    this._stat.live_blocks--;
+    this._stat.live_bytes -= block.bytes;
     if (block.order < 0) return; // a spill owns its buffer; nothing to give back
 
     const region = this._regions[block.region];
@@ -478,9 +555,9 @@ export class BuddyAllocator {
     if (this._poison) new Float64Array(block.buf, block.byte_offset, (1 << (this._min_shift + block.order)) / 8).fill(NaN);
 
     const block_bytes = 1 << (this._min_shift + block.order);
-    region.release(block.order, block.byte_offset - region.base, this.stat);
+    region.release(block.order, block.byte_offset - region.base, this._stat);
     region.used_bytes -= block_bytes;
-    this.stat.idle_bytes += block_bytes;
+    this._stat.idle_bytes += block_bytes;
     if (region.used_bytes === 0) this._reclaim_empty();
   }
 
@@ -493,10 +570,10 @@ export class BuddyAllocator {
       if (++empty <= this.max_idle_regions) continue;
       this._plain_at.delete(region.buf);
       this._regions[i] = null;
-      this.stat.regions--;
-      this.stat.reserved_bytes -= this.region_bytes;
-      this.stat.idle_bytes -= this.region_bytes;
-      this.stat.evictions++;
+      this._stat.regions--;
+      this._stat.reserved_bytes -= this.region_bytes;
+      this._stat.idle_bytes -= this.region_bytes;
+      this._stat.evictions++;
     }
   }
 
@@ -507,9 +584,9 @@ export class BuddyAllocator {
       if (!region || region.used_bytes > 0 || this._backed.has(i)) continue;
       this._plain_at.delete(region.buf);
       this._regions[i] = null;
-      this.stat.regions--;
-      this.stat.reserved_bytes -= this.region_bytes;
-      this.stat.idle_bytes -= this.region_bytes;
+      this._stat.regions--;
+      this._stat.reserved_bytes -= this.region_bytes;
+      this._stat.idle_bytes -= this.region_bytes;
     }
   }
 
@@ -536,6 +613,11 @@ export class BuddyAllocator {
    * a Block, for a caller holding only a view. */
   release_at(buf: ArrayBuffer, byte_offset: u32, bytes: u32): void {
     if (bytes <= 0) return;
+    if (this._kernel !== null && buf === this._backing) {
+      if (this._poison) new Float64Array(buf, byte_offset, (1 << (this._min_shift + this._order_of(bytes))) / 8).fill(NaN);
+      if (!this._kernel.release(byte_offset, bytes)) console.warn(`[pool] release of a ${bytes}B block the kernel does not hold, or holds already, ignored`);
+      return;
+    }
     const i = this._locate(buf, byte_offset);
     if (i < 0) {
       if (!this._spills.has(buf)) {
@@ -543,8 +625,8 @@ export class BuddyAllocator {
         return;
       }
       this._spills.delete(buf);
-      this.stat.live_blocks--;
-      this.stat.live_bytes -= bytes;
+      this._stat.live_blocks--;
+      this._stat.live_bytes -= bytes;
       return;
     }
     const region = this._regions[i]!;
@@ -554,19 +636,20 @@ export class BuddyAllocator {
       console.warn(`[pool] double release of a ${bytes}B block ignored`);
       return;
     }
-    this.stat.live_blocks--;
-    this.stat.live_bytes -= bytes;
+    this._stat.live_blocks--;
+    this._stat.live_bytes -= bytes;
     const block_bytes = 1 << (this._min_shift + order);
     if (this._poison) new Float64Array(buf, byte_offset, block_bytes / 8).fill(NaN);
-    region.release(order, offset, this.stat);
+    region.release(order, offset, this._stat);
     region.used_bytes -= block_bytes;
-    this.stat.idle_bytes += block_bytes;
+    this._stat.idle_bytes += block_bytes;
     if (region.used_bytes === 0) this._reclaim_empty();
   }
 
   /** The handle for the block of `bytes` at this address. A spill has none:
    * it is not in a region. */
   handle_at(buf: ArrayBuffer, byte_offset: u32, bytes: u32): u32 {
+    if (this._kernel !== null && buf === this._backing) return (KERNEL_HANDLE | byte_offset) >>> 0;
     const i = this._locate(buf, byte_offset);
     if (i < 0) throw new MarshalError(Errno.EINVAL, `pool: a ${bytes}B block outside every region has no handle`);
     if (i >= 1 << (32 - this._order_bits - this._max_order)) throw new MarshalError(Errno.EOVERFLOW, `pool: region ${i} does not fit a handle`);
@@ -576,6 +659,7 @@ export class BuddyAllocator {
 
   /** Where the block a handle names starts. */
   handle_base(handle: u32): { buf: ArrayBuffer; byte_offset: u32 } {
+    if ((handle & KERNEL_HANDLE) !== 0) return { buf: this._backing!, byte_offset: (handle & ~KERNEL_HANDLE) >>> 0 };
     const i = handle >>> (this._order_bits + this._max_order);
     const region = this._regions[i]!;
     const page = handle & ((1 << this._max_order) - 1);

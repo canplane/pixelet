@@ -143,8 +143,90 @@ export function LedgerOverlay() {
     !!PerformanceObserver.supportedEntryTypes?.includes("long-animation-frames");
 
   return (
-    <div className="pointer-events-none fixed left-2 top-[84px] z-50 w-[228px] rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
+    <div className="pointer-events-none fixed left-2 top-[84px] z-50 max-h-[calc(100dvh-96px)] w-[228px] overflow-hidden rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
       <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger, last {LIVE_WINDOW_MS / 1000}s</div>
+
+      {
+        /* The recording and its buttons come first: on a phone the panel
+          runs past the bottom of the screen, and what must stay reachable
+          is start/stop and the exports, not the last rows of numbers. The
+          body below is clipped rather than scrolled — the panel lets
+          gestures through to the map, and a scrolling body would not. */
+      }
+      <Row
+        k={rec.recording ? "REC" : "stopped"}
+        v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
+        warn={rec.recording || rec.truncated}
+      />
+
+      {
+        /* start and stop are both always present rather than one toggle.
+          Recording auto-begins at load so a cold-load stall is never missed,
+          which means a toggle would only ever show "stop" until you had
+          already stopped once — and then "start" is the button you cannot
+          find when you want to begin a clean window. */
+      }
+      <div className="mt-1 flex gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            ledger_window_start();
+            force((n) => n + 1);
+          }}
+          title="clear everything and begin a fresh window"
+          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
+            rec.recording ? "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90" : "border-emerald-400/40 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
+          }`}
+        >
+          start
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            ledger_recording_stop();
+            force((n) => n + 1);
+          }}
+          disabled={!rec.recording}
+          title="freeze the window so exports are stable while you read them"
+          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
+            rec.recording ? "border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20" : "border-white/10 bg-white/5 text-white/25"
+          }`}
+        >
+          stop
+        </button>
+      </div>
+      <div className="mt-1 flex gap-1">
+        <button
+          type="button"
+          onClick={() => void ledger_report_to_console()}
+          title="print + copy a text report"
+          className="pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90"
+        >
+          report
+        </button>
+        <button
+          type="button"
+          onClick={() => ledger_trace_download()}
+          title="save a Chrome-trace file for Perfetto"
+          className="pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90"
+        >
+          trace
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            ledger_set_logging(!logging);
+            force((n) => n + 1);
+          }}
+          title="stream each settled task, missed frame and long frame to the console"
+          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
+            logging ? "border-sky-400/40 bg-sky-400/10 text-sky-300 hover:bg-sky-400/20" : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90"
+          }`}
+        >
+          log
+        </button>
+      </div>
+      <div className="my-1 border-t border-white/10" />
 
       {!f && <div className="text-white/45">no frames sampled yet</div>}
       {f && (
@@ -259,81 +341,6 @@ export function LedgerOverlay() {
           warn={!!worst_long && worst_long.duration_ms > 100}
         />
       )}
-
-      <div className="my-1 border-t border-white/10" />
-      <Row
-        k={rec.recording ? "REC" : "stopped"}
-        v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
-        warn={rec.recording || rec.truncated}
-      />
-
-      {
-        /* start and stop are both always present rather than one toggle.
-          Recording auto-begins at load so a cold-load stall is never missed,
-          which means a toggle would only ever show "stop" until you had
-          already stopped once — and then "start" is the button you cannot
-          find when you want to begin a clean window. */
-      }
-      <div className="mt-1.5 flex gap-1">
-        <button
-          type="button"
-          onClick={() => {
-            ledger_window_start();
-            force((n) => n + 1);
-          }}
-          title="clear everything and begin a fresh window"
-          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
-            rec.recording ? "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90" : "border-emerald-400/40 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
-          }`}
-        >
-          start
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            ledger_recording_stop();
-            force((n) => n + 1);
-          }}
-          disabled={!rec.recording}
-          title="freeze the window so exports are stable while you read them"
-          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
-            rec.recording ? "border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20" : "border-white/10 bg-white/5 text-white/25"
-          }`}
-        >
-          stop
-        </button>
-      </div>
-      <div className="mt-1 flex gap-1">
-        <button
-          type="button"
-          onClick={() => void ledger_report_to_console()}
-          title="print + copy a text report"
-          className="pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90"
-        >
-          report
-        </button>
-        <button
-          type="button"
-          onClick={() => ledger_trace_download()}
-          title="save a Chrome-trace file for Perfetto"
-          className="pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90"
-        >
-          trace
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            ledger_set_logging(!logging);
-            force((n) => n + 1);
-          }}
-          title="stream each settled task, missed frame and long frame to the console"
-          className={`pointer-events-auto flex-1 rounded border py-1 transition-colors ${
-            logging ? "border-sky-400/40 bg-sky-400/10 text-sky-300 hover:bg-sky-400/20" : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/90"
-          }`}
-        >
-          log
-        </button>
-      </div>
     </div>
   );
 }
