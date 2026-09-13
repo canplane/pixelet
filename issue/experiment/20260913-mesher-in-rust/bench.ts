@@ -20,8 +20,7 @@ import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, fill_chun
 import { WasmScanner } from "../../../apps/web/src/render/layer/pipeline/wasm_scan.ts";
 import { bake_chunk_mesh, BakeContext } from "../../../apps/web/src/render/layer/pipeline/chunk_mesher.ts";
 import { WasmBaker } from "../../../apps/web/src/render/layer/pipeline/wasm_bake.ts";
-import { CORE_MEMORY, CORE_POOL } from "../../../apps/web/src/render/layer/pipeline/core_pool.ts";
-import { instantiate_pxl } from "../../../apps/web/src/wasm/pxl.ts";
+import { CORE_POOL, CORE_PXL } from "../../../apps/web/src/render/layer/pipeline/core_pool.ts";
 
 // wasm_bake.test.ts's scene: stacked runs with gaps, objects, sub-cells, layers.
 function scene(seed: number, flat: boolean): MeshRun[][] {
@@ -62,7 +61,7 @@ function scene(seed: number, flat: boolean): MeshRun[][] {
   return columns;
 }
 
-const pxl = await instantiate_pxl(CORE_MEMORY!);
+const pxl = CORE_PXL!;
 const ts_ctx = new BakeContext(CORE_POOL, buddy_alloc(new BuddyAllocator()));
 const wasm_ctx = new BakeContext(CORE_POOL, buddy_alloc(new BuddyAllocator()));
 const baker = new WasmBaker(pxl, CORE_POOL, wasm_ctx);

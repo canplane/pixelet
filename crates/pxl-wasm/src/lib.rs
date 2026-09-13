@@ -13,6 +13,7 @@
 
 mod arena;
 
+use pxl_core::buddy::Pool;
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::run_set::{run_set_bytes, RunSet};
 use pxl_core::scan::{BandView, ExtraView, ScanContext, ScanStep};
@@ -38,6 +39,8 @@ struct State {
     scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.
     bands: (usize, u32),
+    /// The pools over the memory's sections, by the id pxl_pool_new gave.
+    pools: Vec<Pool>,
 }
 
 static mut STATE: Option<State> = None;
@@ -65,6 +68,7 @@ fn state() -> &'static mut State {
                 result: [0; 9],
                 scan: ScanContext::new(),
                 bands: (0, 0),
+                pools: Vec::new(),
             }
         })
     }
@@ -291,4 +295,45 @@ pub extern "C" fn pxl_scan_finish() -> u32 {
 #[no_mangle]
 pub extern "C" fn pxl_scan_abort() {
     state().scan.abort();
+}
+
+/// A pool over `bytes` bytes of the memory at `start` — a section of the
+/// map — cut in regions of `region_bytes` with blocks of at least
+/// `min_block_bytes`: its id, for the calls below. The client's
+/// BuddyAllocator delegates its backed range here and keeps what it does
+/// past it (buddy.ts).
+#[no_mangle]
+pub extern "C" fn pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32) -> u32 {
+    let s = state();
+    // SAFETY: the memory is the module's own linear memory, addressed from
+    // 0, and the client keeps the range for this pool alone.
+    let pool = unsafe { Pool::new(core::ptr::null_mut(), start as usize, bytes as usize, region_bytes, min_block_bytes) };
+    s.pools.push(pool);
+    s.pools.len() as u32 - 1
+}
+
+/// Borrows at least `bytes` from pool `id`: the block's address, or 0 when
+/// the range is used up or the request is larger than a region.
+#[no_mangle]
+pub extern "C" fn pxl_pool_acquire(id: u32, bytes: u32) -> u32 {
+    state().pools[id as usize].acquire(bytes).map_or(0, |at| at as u32)
+}
+
+/// Returns the block of `bytes` at `at` to pool `id`: 1, or 0 for a block
+/// the pool does not hold or holds already.
+#[no_mangle]
+pub extern "C" fn pxl_pool_release(id: u32, at: u32, bytes: u32) -> u32 {
+    state().pools[id as usize].release(at as usize, bytes) as u32
+}
+
+/// Whether the block of `bytes` at `at` is free in pool `id`.
+#[no_mangle]
+pub extern "C" fn pxl_pool_is_free(id: u32, at: u32, bytes: u32) -> u32 {
+    state().pools[id as usize].is_free(at as usize, bytes) as u32
+}
+
+/// The address of pool `id`'s stat: twelve words in PoolStat's order.
+#[no_mangle]
+pub extern "C" fn pxl_pool_stat(id: u32) -> *const u32 {
+    &state().pools[id as usize].stat as *const _ as *const u32
 }

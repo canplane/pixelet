@@ -13,13 +13,18 @@
  * than later if the map disagrees: the sections after it would be under
  * the module's stack.
  *
+ * One instance per memory, and for the core memory it is core_pool.ts's,
+ * made before anything else uses the memory: instantiating writes the
+ * module's data segments over the module section, so a second instance
+ * over the same memory would erase the first's state — its pools' free
+ * lists among it.
+ *
  * Instantiated from bytes rather than streamed: streaming insists on an
  * `application/wasm` response, which neither a `file:` URL under Deno nor
  * every static host gives.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { MODULE_SECTION } from "@/render/layer/pipeline/core_pool.ts";
 
 /** What the module exports. Every address is into the memory it was
  * instantiated over. */
@@ -41,6 +46,11 @@ export type PxlExports = {
   pxl_scan_set_staged(bytes: u32): u32;
   pxl_scan_finish(): u32;
   pxl_scan_abort(): void;
+  pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): u32;
+  pxl_pool_acquire(id: u32, bytes: u32): u32;
+  pxl_pool_release(id: u32, at: u32, bytes: u32): u32;
+  pxl_pool_is_free(id: u32, at: u32, bytes: u32): u32;
+  pxl_pool_stat(id: u32): u32;
 };
 
 /** pxl_bake_step's answers (crates/pxl-wasm/src/lib.rs). */
@@ -50,7 +60,9 @@ export const STEP_DONE: u32 = 2;
 
 const PXL_WASM_URL = new URL("./pxl.wasm", import.meta.url);
 
-export async function instantiate_pxl(memory: WebAssembly.Memory): Promise<PxlExports> {
+/** Instantiates the module over `memory`, whose first `module_bytes` are
+ * the map's module section. */
+export async function instantiate_pxl(memory: WebAssembly.Memory, module_bytes: u32): Promise<PxlExports> {
   const bytes = await (await fetch(PXL_WASM_URL)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: {
@@ -61,8 +73,8 @@ export async function instantiate_pxl(memory: WebAssembly.Memory): Promise<PxlEx
   });
   const exports = instance.exports as unknown as PxlExports;
   const keeps = exports.pxl_module_bytes();
-  if (keeps !== MODULE_SECTION.bytes) {
-    throw new Error(`pxl: the module keeps ${keeps} bytes of the memory and the map reserves ${MODULE_SECTION.bytes}`);
+  if (keeps !== module_bytes) {
+    throw new Error(`pxl: the module keeps ${keeps} bytes of the memory and the map reserves ${module_bytes}`);
   }
   return { ...exports, memory };
 }

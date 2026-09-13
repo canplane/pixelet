@@ -74,7 +74,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      its stack, data and heap, where a wasm32 linker puts them, behind a
      bump allocator (crates/pxl-wasm/src/arena.rs) since the memory never
      grows; the module states its size and the client checks the map
-     against it at instantiation.
+     against it at instantiation. The same day, the buddy over every
+     section's range moved into the module (crates/pxl-core/src/buddy.rs,
+     held to the TypeScript pool's addresses request for request by
+     core_pool.test.ts): the module is instantiated before the map is cut,
+     and the TypeScript pool names blocks through it. Next: the volume and
+     the compositor's paint over module-owned bands, then the adapters.
 
 ## P1
 
