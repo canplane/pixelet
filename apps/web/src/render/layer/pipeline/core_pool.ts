@@ -86,10 +86,19 @@ const FIXED_REGION_BYTES: u32 = 16 << 20;
  *              desktop    phone
  *   fixed         1          1     the module's 32 MB, then the tables,
  *                                  which are small, and headroom for rings
- *   page          2          1     ~49 terrain pages at ~4 MB fit in two
- *   mesh          5          2     the churn; the reclaim pass keeps it under
+ *   page          3          2     every page the terrain store keeps
+ *                                  resident (terrain/config.ts derives the
+ *                                  count from this section), and the ones
+ *                                  in their release quarantine
+ *   mesh          4          1     the churn; the reclaim pass keeps it under
+ *
+ * A page the section cannot hold spills to a plain region the module
+ * cannot read, and its chunks are never built (core_build.ts's `reaches`):
+ * a page is 4 MB of ground lanes and a 16 KB elevation block, so two
+ * regions held 31 of the 32 pages kept — one page missing from the world,
+ * whichever arrived last (2026-09-14).
  */
-const LAYOUT = HANDHELD ? { fixed: 1, page: 1, mesh: 2 } : { fixed: 1, page: 2, mesh: 5 };
+const LAYOUT = HANDHELD ? { fixed: 1, page: 2, mesh: 1 } : { fixed: 1, page: 3, mesh: 4 };
 const CORE_REGIONS = LAYOUT.fixed + LAYOUT.page + LAYOUT.mesh;
 
 function reserve_core_memory(): WebAssembly.Memory | null {
@@ -207,6 +216,10 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
 }
 
 export const CORE_SECTIONS: Readonly<Record<SectionName, Section>> = lay_out(CORE_MEMORY);
+
+/** The page section's size: what bounds how many terrain pages stay
+ * resident (terrain/config.ts). */
+export const PAGE_SECTION_BYTES: u32 = CORE_SECTIONS.page.bytes;
 
 // The module's volumes take their standing band stores from the fixed
 // section, which never runs out, and the rest from the mesh section

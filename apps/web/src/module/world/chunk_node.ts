@@ -36,7 +36,7 @@ import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type Chunk
 import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
 import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
-import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
 import type { LodStep } from "@/render/lod.ts";
@@ -44,15 +44,19 @@ import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@
 
 /**
  * How much built work chunks may keep *while off screen*: run sets and
- * cached tiers, both in the core pool and sized in bytes. Leaving the frustum
- * used to drop all of it on the first release, and a rotation or a zoom in
- * and out rebuilt every chunk from the scan up; the module reclaims only past
- * this, farthest first (issue/20260912-what-to-render-when.md). It budgets
- * only the optional part: on-screen chunks hold their tiers because that is
- * the layout. A quarter of the core reservation, the currency the crash case
- * was measured in.
+ * cached tiers, both in the mesh section and sized in bytes. Leaving the
+ * frustum used to drop all of it on the first release, and a rotation or a
+ * zoom in and out rebuilt every chunk from the scan up; the module reclaims
+ * only past this, farthest first (issue/20260912-what-to-render-when.md).
+ * It budgets only the optional part: on-screen chunks hold their tiers
+ * because that is the layout. Half the mesh section: the other half is the
+ * on-screen layouts, the volumes a build composes in, and the room a large
+ * block needs in one piece — at a quarter of the whole core reservation
+ * (128 MB of a 256 MB section) the section sat two-thirds full and
+ * fragmented, and refused the fine tiers' blocks 88,000 times in a minute
+ * (2026-09-14).
  */
-export const RETAIN_BUDGET_BYTES: u32 = Math.floor((CORE_MEMORY?.buffer.byteLength ?? 256 * 1048576) / 4);
+export const RETAIN_BUDGET_BYTES: u32 = Math.floor(CORE_SECTIONS.mesh.bytes / 2);
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 
@@ -61,6 +65,11 @@ const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 /** Chunks that appeared, disappeared and applied a layout since the last
  * frame sample, dev-only. */
 export const node_counts = { added: 0, removed: 0, rebuilt: 0, released: 0 };
+
+/** The last layouts that landed, dev-only: when, where, which tier — the
+ * order the world fills in, read off the console. */
+export const landing_log: { t: number; base_x: number; base_y: number; step: LodStep; ready: boolean }[] = [];
+const LANDING_LOG_CAP = 2048;
 
 export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; released: u32 } {
   const out = { ...node_counts };
@@ -335,11 +344,16 @@ export class ChunkNode {
     this.sync_decor();
   }
 
+  /** The module hands a step's decor over only where it believes this node
+   * holds none, so one already held is stale (a rebuild this node started
+   * with tell_source) and gives way. */
   on_decor(step: LodStep, decor: DecorBlock): void {
-    if (this.disposed || this.decor_cache.has(step)) {
+    if (this.disposed) {
       decor_block_release(decor);
       return;
     }
+    const held = this.decor_cache.get(step);
+    if (held) decor_block_release(held);
     this.decor_cache.set(step, decor);
   }
 
@@ -380,10 +394,14 @@ export class ChunkNode {
       queueMicrotask(() => {
         if (this.disposed) return;
         this.release_bucket_cache();
+        this.clear_decor_cache();
         this.tell_source();
         CORE_BUILD.build_now(this.id);
       });
       return;
+    }
+    if (import.meta.env.DEV && landing_log.length < LANDING_LOG_CAP) {
+      landing_log.push({ t: performance.now(), base_x: this.deps.offset.base_x, base_y: this.deps.offset.base_y, step: primary, ready: true });
     }
     const decor = this.decor_pair(primary, secondary);
     // The same tiers told again with the same meshes is the module's decor

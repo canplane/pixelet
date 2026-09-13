@@ -244,10 +244,51 @@ Deno.test("core sched - the chunks the module mounts are render/chunk_range.ts's
     f[FRAME.render_dist] = radius;
     f[FRAME.range_hysteresis] = 0;
     CORE_BUILD.page(PAGE, true);
-    CORE_BUILD.tick();
+    // A page mounts over a few frames, 64 chunks a frame.
+    for (let k = 0; k < 8; k++) CORE_BUILD.tick();
     const expected = in_range_chunks(base, anchor, radius).map((o) => o.key).sort();
     assertEquals([...mounted].sort(), expected, `anchor ${ax & ~63},${ay & ~63} radius ${radius}`);
   }
+  CORE_BUILD.page(PAGE, false);
+  CORE_BUILD.tick();
+  CORE_BUILD.mounts = null;
+});
+
+Deno.test("core sched - after a mount, or the view moving, the module asks for frames until a full recheck has run, and rests once nothing is pending", () => {
+  CORE_BUILD.mounts = {
+    on_mount: (id) =>
+      CORE_BUILD.attach(id, {
+        on_tier: (_g, _s, m) => release_chunk_mesh(m),
+        on_runs: () => {},
+        on_visible: () => {},
+        on_layout: () => {},
+        on_blend: () => {},
+        on_evict: () => {},
+        on_decor: (_s, d) => decor_block_release(d),
+      }),
+    on_unmount: () => {},
+  };
+  const PAGE = ivec.gather(7n, 7n, 0n);
+  CORE_BUILD.page(PAGE, true);
+  // A camera far above: every chunk mounts at the coarsest tier and lands quickly.
+  frame(7 * 1024 + 512, 7 * 1024 + 512, 20000);
+  const f = CORE_BUILD.frame;
+  f[FRAME.has_anchor] = 1;
+  f[FRAME.anchor_x] = 7 * 1024 + 512;
+  f[FRAME.anchor_y] = 7 * 1024 + 512;
+  f[FRAME.render_dist] = 64;
+  f[FRAME.range_hysteresis] = 0;
+  f[FRAME.delta_s] = 0.01;
+  // The mount tick: nothing pending yet, and still a frame is asked for.
+  assert(CORE_BUILD.tick(), "the mount asks for a frame");
+  // Frames keep coming until the layouts land; then, the view still, none.
+  let asked = true;
+  for (let i = 0; i < 400 && asked; i++) asked = CORE_BUILD.tick();
+  assert(!asked, "the world rests");
+  assertEquals(CORE_BUILD.census().pending, 0);
+  // The camera moves: a frame is asked for even before the next full recheck.
+  f[FRAME.camera] += 1;
+  assert(CORE_BUILD.tick(), "a moved view asks for a frame");
   CORE_BUILD.page(PAGE, false);
   CORE_BUILD.tick();
   CORE_BUILD.mounts = null;

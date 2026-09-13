@@ -28,24 +28,29 @@ docker compose --env-file .env -f infra/local/docker-compose.yml up -d
 deno task dev
 ```
 
-| Task                   | Description                                        |
-| ---------------------- | -------------------------------------------------- |
-| `deno task dev`        | Start web + api concurrently                       |
-| `deno task dev:web`    | Frontend only                                      |
-| `deno task dev:api`    | Backend only                                       |
-| `deno task dev:remote` | Frontend only, served by the live deployment       |
-| `deno task build:web`  | Build frontend                                     |
-| `deno task build:api`  | Build backend                                      |
-| `deno task bake:tiles` | Bake terrain into `./out/terrain/<version>`        |
-| `deno task deploy`     | Build the client and publish the Cloudflare Worker |
-| `deno task check`      | Type-check all packages                            |
-| `deno task test`       | Run all tests                                      |
-| `deno task lint`       | Lint                                               |
-| `deno task fmt`        | Format                                             |
+| Task                       | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `deno task dev`            | Start web + api concurrently                                         |
+| `deno task dev:web`        | Frontend only                                                        |
+| `deno task dev:api`        | Backend only                                                         |
+| `deno task dev:remote`     | Frontend only, served by the live deployment                         |
+| `deno task preview:remote` | The production bundle, served locally, data from the live deployment |
+| `deno task build:web`      | Build frontend                                                       |
+| `deno task build:api`      | Build backend                                                        |
+| `deno task bake:tiles`     | Bake terrain into `./out/terrain/<version>`                          |
+| `deno task deploy`         | Build the client and publish the Cloudflare Worker                   |
+| `deno task check`          | Type-check all packages                                              |
+| `deno task test`           | Run all tests                                                        |
+| `deno task lint`           | Lint                                                                 |
+| `deno task fmt`            | Format                                                               |
 
 `dev:remote` needs no Docker, no database and no API process: every server
 route is proxied to the published deployment. It is the quickest way in, and
 the wrong way to work on a bake, since a published tile prefix is frozen.
+`preview:remote` is the same data under the built client at
+`localhost:4173`: what to measure the client against, since the dev server's
+unbundled modules and hooks are not in it — the ledger overlay is, being
+compiled in for development only, so a reading there is DevTools' profile.
 
 ---
 

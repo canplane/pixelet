@@ -149,7 +149,32 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      opens a volume by id. Then the terrain layer's reading of a page, and
      the object store with the object layer's paint, the direct path's
      writer and the raycast walk, and the chunks' builds under one tick
-     through the rings (2026-09-14). Next: whatever else stands before the
+     through the rings (2026-09-14). The moves read against the
+     TypeScript they replaced the same day
+     ([the safety valves the module did not have](./20260914-the-safety-valves-the-module-did-not-have.md)):
+     four things the runtime around the TypeScript had done — a React
+     child asking for the next frame, a page painted from past the page
+     section, a pool that spilled rather than refuse, a page mounted as
+     one React commit — had no counterpart in the module, and each was a
+     stall; the module has its own now. **Before the renderer, the
+     performance pass the profile of 2026-09-14 points at** (measured with
+     the ledger, dev build, desktop). Taken the same day, on the module's
+     own counters: a chunk with nothing placed takes the direct path at
+     every tier, since its runs are the same either way (pinned by
+     core_build.test.ts) — a zoom-in scanned every chunk in view, about 25
+     a second, most of them empty of objects; direct runs go with the last
+     tier wanted rather than filling the section with small blocks; and a
+     frame that had a block refused releases off-screen layouts at 64 a
+     frame rather than 2, since what they still show is the room the
+     refused block needs. A zoom-in over a thousand chunks settles in a
+     second with under a hundred refusals, from six seconds and counting.
+     Left for the frame-based pass after the renderer: `BakeContext::step`
+     itself (face masks and the mesh write), and a large-block region if
+     refusals show again. What the profile
+     also shows and the renderer removes: three's `updateMatrixWorld` over
+     2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
+     world (tree 281k, car 99k triangles a frame; P3 below). Next:
+     whatever else stands before the
      renderer; then the renderer, starting with the hover cursor. The cursor goes first because it is
      where the two sides already disagree: since the object store moved
      into the module, the eraser's half-transparent ghost over a placed

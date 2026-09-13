@@ -15,7 +15,7 @@ Deno.test("rings - the glue submits, one drain completes each in order, and a fu
   const p = CORE_PXL;
   const sq = new Ring(p.memory.buffer, p.pxl_ring_sq());
   const cq = new Ring(p.memory.buffer, p.pxl_ring_cq());
-  assertEquals([sq.capacity, cq.capacity], [1024, 1024]);
+  assertEquals([sq.capacity, cq.capacity], [4096, 4096]);
 
   const n = sq.capacity;
   for (let k = 0; k < n; k++) assertEquals(sq.push(k, 0, k * 3), Errno.OK);

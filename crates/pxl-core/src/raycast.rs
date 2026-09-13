@@ -215,13 +215,6 @@ impl Raycast {
         world.volumes.release(world.pools, e.volume);
     }
 
-    /// Lets every kept composite go.
-    pub fn clear(&mut self, world: &mut World) {
-        while !self.entries.is_empty() {
-            self.remove(world, 0);
-        }
-    }
-
     /// Cell-DDA through one chunk at (chunk_ox, chunk_oy) of the ray's
     /// space: chunk_raycast.ts's ray_hit_chunk.
     #[allow(clippy::too_many_arguments)]

@@ -76,8 +76,10 @@ struct State {
     hit: [f64; HIT_WORDS],
 }
 
-/// Entries each ring holds.
-pub const RING_CAPACITY: u32 = 1024;
+/// Entries each ring holds: a page mounting is 64 chunks a frame, each
+/// with its tiers, decor and layout to come, and the glue reads the ring
+/// dry between ticks — 4096 entries is 256 KB a ring.
+pub const RING_CAPACITY: u32 = 4096;
 
 fn new_ring(capacity: u32) -> Ring {
     let words = vec![0u32; ring_words(capacity as usize)].leak();
@@ -1005,6 +1007,10 @@ fn after(s: &mut State) {
 pub extern "C" fn pxl_tick() -> u32 {
     let s = state();
     drain(s);
+    // Events the ring had no room for are posted first; a tick on top of
+    // them would only queue more. The glue reads the ring dry and drains
+    // again before the next tick, so this is a frame lost only when it
+    // does not.
     if !s.events.is_empty() || s.volumes.is_none() {
         return 1;
     }
@@ -1055,6 +1061,14 @@ pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
     sched.decor_now(&mut world, id, show_decor != 0, &mut |e| events.push_back(e));
     flush(s);
     after(s);
+}
+
+/// Forgets every decor kind taught, so the glue can teach the list again
+/// (a module of it re-evaluated by the dev server) without the groups
+/// doubling.
+#[no_mangle]
+pub extern "C" fn pxl_decor_forget() {
+    state().sched.decor_forget();
 }
 
 /// Teaches a decor kind, in group order: its tag, density, variant count,
@@ -1131,14 +1145,6 @@ pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz
 #[no_mangle]
 pub extern "C" fn pxl_raycast_at() -> u32 {
     state().hit.as_ptr() as u32
-}
-
-/// Lets the raycast's kept composites go.
-#[no_mangle]
-pub extern "C" fn pxl_raycast_clear() {
-    let s = state();
-    let (mut world, raycast, _) = raycast_of(s);
-    raycast.clear(&mut world);
 }
 
 fn raycast_of(s: &mut State) -> (World<'_>, &mut Raycast, &mut Scheduler) {
