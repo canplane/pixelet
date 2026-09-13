@@ -181,6 +181,10 @@ vite.config.ts.timestamp-*
 
 # Rust workspace build output
 /target
+/crates/target
+
+# The core's module, built from crates/ by apps/web/script/build_wasm.ts
+apps/web/src/wasm/pxl.wasm
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk

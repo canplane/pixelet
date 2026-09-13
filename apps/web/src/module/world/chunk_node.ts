@@ -56,8 +56,7 @@ import {
 } from "@/render/layer/pipeline/chunk_bucket.ts";
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { composite_chunk_layers } from "@/render/layer/pipeline/compositor.ts";
-import { abort_bake, bake_open, type BakeCursor, begin_bake, finish_bake, step_bake } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { CORE_BAKE } from "@/render/layer/pipeline/core_bake.ts";
+import { begin_core_bake, CORE_BAKE, type CoreBake, resolve_core_mesher } from "@/render/layer/pipeline/core_bake.ts";
 import { add_bake_counters } from "@/render/layer/pipeline/bake_command.ts";
 import { bake_port } from "@/module/world/sched/bake_port.ts";
 import {
@@ -354,7 +353,7 @@ export class ChunkNode {
   private column_runs: ColumnRunSet | null = null;
   /** A bake in progress, held across frames like the scan and bounded the
    * same way: one chunk at a time. `step` is the tier it is baking. */
-  private _bake: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null = null;
+  private _bake: { step: LodStep; job: CoreBake; spent_ms: number } | null = null;
   /** A bake sent to the worker and not yet adopted: the tier, and the tx_id
    * the bake port knows it by. Holds no slot — up to the slab cap of these
    * are away at once — so it does not move HOLDS_SLOT. */
@@ -380,10 +379,10 @@ export class ChunkNode {
     this._scan = v;
     lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._bake !== null);
   }
-  private get bake(): { step: LodStep; cursor: BakeCursor; spent_ms: number } | null {
+  private get bake(): { step: LodStep; job: CoreBake; spent_ms: number } | null {
     return this._bake;
   }
-  private set bake(v: { step: LodStep; cursor: BakeCursor; spent_ms: number } | null) {
+  private set bake(v: { step: LodStep; job: CoreBake; spent_ms: number } | null) {
     this._bake = v;
     lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._scan !== null);
   }
@@ -810,13 +809,15 @@ export class ChunkNode {
   private advance_bake(column_runs: ColumnRunSet, budget: FrameBudget | null): "done" | "busy" | "blocked" {
     // The path is read per call, so the setting switches between frames; a
     // bake open on the other path is dropped rather than finished.
-    if (useSettingsStore.getState().bake_path === "worker") {
+    const path = useSettingsStore.getState().bake_path;
+    if (path === "worker") {
       if (this.bake) {
-        abort_bake(this.bake.cursor);
+        this.bake.job.abort();
         this.bake = null;
       }
       return this.advance_remote_bake(column_runs, budget);
     }
+    const mesher = resolve_core_mesher(path === "wasm" ? "wasm" : "ts");
     if (this.remote) {
       bake_port.cancel(this.remote.tx);
       this.remote = null;
@@ -826,37 +827,36 @@ export class ChunkNode {
       // finishing. There is one bake slot for the whole world, so a
       // superseded bake delays every chunk, not only this one — the reason
       // the tier walk this replaced was expensive and not merely slow.
-      if (this.bake && !this.wanted.includes(this.bake.step)) {
-        abort_bake(this.bake.cursor);
+      if (this.bake && (!this.wanted.includes(this.bake.step) || this.bake.job.mesher !== mesher)) {
+        this.bake.job.abort();
         this.bake = null;
       }
       if (!this.bake) {
         const step = this.wanted.find((s) => !this.bucket_cache.has(s));
         if (step === undefined) return "done";
-        if (bake_open(CORE_BAKE)) return "blocked";
-        const cursor = begin_bake(CORE_BAKE, column_runs, step);
-        if (cursor === null) return "blocked";
-        this.bake = { step, cursor, spent_ms: 0 };
+        const job = begin_core_bake(mesher, column_runs, step);
+        if (job === null) return "blocked";
+        this.bake = { step, job, spent_ms: 0 };
       }
 
       const t0 = performance.now();
       let done: boolean;
       do {
         const step_t0 = import.meta.env.DEV ? performance.now() : 0;
-        done = step_bake(this.bake.cursor);
+        done = this.bake.job.advance();
         if (import.meta.env.DEV) record_bake_step(performance.now() - step_t0);
         // The mesh section had no block for it. Keep the bake where it is
         // and let the frame end: the reclaim pass runs after commit, and the
         // next tick asks again. Spinning here would only re-ask the pool.
-        if (this.bake.cursor.starved) break;
+        if (this.bake.job.starved()) break;
       } while (!done && (budget === null || budget.remaining() > 0));
       this.bake.spent_ms += performance.now() - t0;
-      if (this.bake.cursor.starved) return "blocked";
+      if (this.bake.job.starved()) return "blocked";
       if (!done) return "busy";
 
-      const { step, cursor, spent_ms } = this.bake;
+      const { step, job, spent_ms } = this.bake;
       this.bake = null;
-      const bucket = bucket_from_baked(finish_bake(cursor), step, "primary");
+      const bucket = bucket_from_baked(job.finish(), step, "primary");
       this.bucket_cache.set(step, bucket);
       this.account(bucket.cubes.block.bytes);
       record_build(spent_ms, column_runs.count);
@@ -930,7 +930,7 @@ export class ChunkNode {
   private abort_work(): void {
     this.abort_scan();
     if (this.bake) {
-      abort_bake(this.bake.cursor);
+      this.bake.job.abort();
       this.bake = null;
     }
     if (this.remote) {

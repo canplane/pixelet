@@ -1,0 +1,2 @@
+# Matches deno fmt's lineWidth, so the two halves of the repo wrap alike.
+max_width = 200

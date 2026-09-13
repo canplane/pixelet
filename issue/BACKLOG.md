@@ -18,10 +18,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the way, 2026-09-13: the bake takes a context; the bake as a command over
   a frame, port and link; the read direction as a change log; the core
   memory's sections. In order:
-  1. **The mesher in Rust.** The first Rust. The bake already takes a
-     context and carves its input and output over any block (column_run.ts,
-     carve_baked_mesh), and the bake command carries both across a boundary
-     unchanged, so the change is behind a seam that exists. Which thread it
+  1. **The mesher in Rust.** The first Rust. Ported 2026-09-13 as a
+     line-for-line translation — crates/pxl-core's mesher behind
+     crates/pxl-wasm's numeric exports, no wasm-bindgen, the module's own
+     memory with a copy in and out — stepped on the main thread as
+     `bake_path: wasm`, the default since the phone reading
+     ([experiment/20260913-mesher-in-rust/](./experiment/20260913-mesher-in-rust/)),
+     and held byte for byte to the TypeScript bake at every tier by
+     wasm_bake.test.ts. The mesher's own carried items are settled (below):
+     what is left of this item is the scan's and the volume's, when they are
+     the piece. Which thread it
      runs on is measured when it exists: the worker was tried on the phone
      and bought nothing, because the stepped bake already yields and the
      fill-in cost is elsewhere
@@ -31,31 +37,39 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
+     The rings are not built yet: the bake is still called export by export.
      **Carried into the port, not fixed in TypeScript first** — an audit
      of the mesher, scan and volume on 2026-09-13 found these, and each is
      what Rust's types or an algorithm rewrite resolve on the way, so
      changing them here would be paying twice:
      - callbacks and objects in the kernel: `RunSink`, `fill_column_runs`'s
-       writer closure, `Arena<ZBucketAccum>`'s object factory and per-bucket
-       object reads, `locate_voxel`'s returned object, `sub_cell?.` and the
-       `fine!`/`coarse!` pair — enums and structs in Rust;
+       writer closure, `locate_voxel`'s returned object, `sub_cell?.` — enums
+       and structs in Rust (the mesher's own — the bucket arena's objects and
+       the `fine!`/`coarse!` pair — went with the translation);
      - the scan's module-level scratch (`SC`, `COLUMN_STARTS`, `open_scan`)
        bound to the main thread's memory at import — a context, as the
        mesher's is, when the scan is the piece being ported;
-     - algorithm: a run's own column scanned four times in `run_face_mask`
-       and neighbour walks restarting from the column head (O(k²) per
-       stacked column), the coarse pack's selection sort per cell,
-       `SubVoxels` as five parallel Vectors and its compaction on every
-       write — rewritten in Rust and checked byte for byte against the
-       TypeScript bake;
-     - `-1` sentinels in typed lanes and `Infinity`-style sentinels, and
-       exceptions as API guards — `Option` and `Result`.
+     - algorithm: `SubVoxels` as five parallel Vectors and its compaction
+       on every write — rewritten in Rust with the scan. The mesher's two
+       were taken the same day: the coarse pack sorts its buckets; the O(k²)
+       neighbour walks were rewritten as forward cursors, measured to buy
+       nothing at the stack heights the scan produces, and reverted — where
+       a fine bake's time goes is the face masks and writing the mesh
+       ([experiment, "The rewrite, measured"](./experiment/20260913-mesher-in-rust/#the-rewrite-measured));
+     - `Infinity`-style sentinels and exceptions as API guards in the scan
+       and volume — `Option` and `Result` (the mesher's `-1`s are `Option`
+       now; its asserts stay, as a bake handed a malformed set is a bug).
   2. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a
      checklist the renderer fills, not a gate on starting. WebGPU removes
      the WebGL-side costs; it does not shrink the working set — that is the
-     byte budget in P1.
+     byte budget in P1. Open, from the mesher's port: importing the core
+     memory into the module, rather than copying through the module's own,
+     collides with where a wasm32 module puts its data and stack — address
+     0 upward, which is where the fixed section begins today — so the map
+     reserves the module's low range, or the linker is told where to start
+     (`--global-base`, a stack size), before the core can share it.
 
 ## P1
 
@@ -195,7 +209,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   breakdown of code that is leaving decides nothing before it leaves. Scan
   is core and stays; measure it when it is the piece being ported.
 - **The bake worker path.** Behind the dev setting `bake_path`, default
-  `stepped`. Measured on the phone and not taken
+  `wasm`. Measured on the phone and not taken
   ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md));
   kept, not deleted, because it is small and tested and the frame, port and
   link under it are the boundary later pieces use. Remove it when a piece

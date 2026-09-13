@@ -4,7 +4,7 @@ A spatial engine for turning real-world geographic data and player-built objects
 
 The engine is split into a pixelet-specific domain layer (**`@pxl/shared`**: coordinate system, cell/terrain model, spatial hierarchy, bake wire format, the record layer) and a project-agnostic utility layer (**`@xpute/core`**: collections, allocators, codecs, and the binary tree protocol those formats use) — see [Repository Structure](./README.md#repository-structure).
 
-Three things run through every section below, and are the shape the client has had since September 2026: the world's state lives in **one linear memory** ([Memory](#memory)), the frame's work runs as **one cooperative tick** with one budget ([Scheduling](#scheduling)), and what the client measures about itself is a **read-only ledger** that never feeds back ([Scheduling](#scheduling)). The destination those were built for — a Rust core in WASM drawing through WebGPU, with three.js gone — is decided and under way piece by piece, the chunk bake in a worker first; see [issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md).
+Three things run through every section below, and are the shape the client has had since September 2026: the world's state lives in **one linear memory** ([Memory](#memory)), the frame's work runs as **one cooperative tick** with one budget ([Scheduling](#scheduling)), and what the client measures about itself is a **read-only ledger** that never feeds back ([Scheduling](#scheduling)). The destination those were built for — a Rust core in WASM drawing through WebGPU, with three.js gone — is decided and under way piece by piece — the chunk mesher is the first Rust, in `crates/`; see [issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md).
 
 > Earlier iterations explored a decentralized P2P/WebRTC runtime (`xpute` as a peer-symmetric IPC substrate) and a Rust/WebGPU rewrite of the spatial/bake stack. Both were parked in favor of a plain client-server MVP; the WASM/WebGPU direction is decided again as of 2026-09-12 (above), to be built on the MVP's state model rather than resumed from the April checkpoint. Their last states are preserved on `checkpoint/20260107-float`, `checkpoint/20260405-xpute`, and `checkpoint/20260409-wasm-aborted`.
 
@@ -218,13 +218,19 @@ memory budget over the retained meshes.
 The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
-The chunk bake is stepped too — a few rows or a few hundred boxes a call,
-its longest single step 6 ms on a phone — and a worker for it was built
-behind a dev setting and measured not to help
+The chunk bake is stepped too — a few rows or a few hundred boxes a call —
+and runs through the Rust mesher (`crates/pxl-core`, compiled by
+`crates/pxl-wasm` into one module with numeric exports and no bindgen,
+copied into and out of the module's own memory for now). It is held byte
+for byte to the TypeScript mesher, which stays behind the dev setting
+`bake_path` as the reference; on a phone the Rust bake cost a third to a
+half as much per run and its longest step was 1–4 ms against 12–17
+([issue/experiment/20260913-mesher-in-rust/](./issue/experiment/20260913-mesher-in-rust/)).
+A worker for the bake was built behind the same setting and measured not to
+help
 ([issue/experiment/20260913-bake-worker-on-the-phone.md](./issue/experiment/20260913-bake-worker-on-the-phone.md));
-the stepped path is the one that ships, and the worker path stays as a
-measurement knob over the frame, port and link in `@xpute/core/ipc/`,
-with the little memory above as its transport. `module/world/sched/` also holds the fetch scheduler (a priority
+it stays as a measurement knob over the frame, port and link in
+`@xpute/core/ipc/`, with the little memory above as its transport. `module/world/sched/` also holds the fetch scheduler (a priority
 queue over a concurrency ceiling, aborting what falls out of a category's
 wishlist) and the **ledger**: a read-only ring of frames and tasks with a
 step table, per-job waits, a draw census and a GPU timer where one exists,
@@ -256,7 +262,8 @@ never inside the write. Inside a page nothing on these boundaries is lost,
 so there is no acknowledgement, deadline or retry; reliability is decided at
 the network boundary alone, when a server exists. A command travels on a
 ring in the receiver's memory with a doorbell that names only a count — the
-submission ring is built with the first Rust piece.
+submission ring is not built yet: the Rust mesher is still called export by
+export.
 
 ## Camera
 

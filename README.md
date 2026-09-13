@@ -14,7 +14,7 @@ _Started on December 15, 2025._
 
 ## Getting Started
 
-> Requires [Deno](https://deno.land/) 2.x and Docker (for the local Postgres databases).
+> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`; the client's core module is built from `crates/` by every dev, build and test task), and Docker (for the local Postgres databases).
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -78,6 +78,7 @@ The web app uses Vite as its bundling/build entry; the api runs directly under D
 | Web UI              | React 19                               |
 | API                 | Hono                                   |
 | 3D Rendering        | Three.js + React Three Fiber           |
+| Core (in progress)  | Rust → WebAssembly (`crates/`)         |
 | Database            | PostgreSQL (main + geographic/PostGIS) |
 | Geodata             | Overture Maps + GEDTM30 (elevation)    |
 
@@ -95,6 +96,8 @@ Three more pieces of the stack are built for this project rather than adopted: a
 │   ├── web/                        # Web client (Deno + Vite + React 19 + R3F)
 │   └── api/                        # API server (Deno + Hono), Overture bake pipeline,
 │                                    # the asset ingest
+├── crates/                         # The Rust core: pxl-core (the chunk mesher so far),
+│                                    # pxl-wasm (the one WebAssembly module over it)
 ├── asset/                          # The shipped models and texture pack, by rendering tier
 │   ├── cube/                       # (cube, decor, actor) — no code imports these: they are
 │   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each

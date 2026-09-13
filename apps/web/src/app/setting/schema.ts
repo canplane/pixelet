@@ -72,7 +72,7 @@ export type CameraTerrainMode = (typeof CAMERA_TERRAIN_MODES)[number];
 export const RENDER_PATHS = ["full", "no_msaa", "no_post"] as const;
 export type RenderPath = (typeof RENDER_PATHS)[number];
 
-export const BAKE_PATHS = ["stepped", "worker"] as const;
+export const BAKE_PATHS = ["stepped", "wasm", "worker"] as const;
 export type BakePath = (typeof BAKE_PATHS)[number];
 
 export const SETTINGS = {
@@ -144,11 +144,15 @@ export const SETTINGS = {
    * `full` is the only path the app ships. */
   render_path: choice("debug", RENDER_PATHS, "full", { dev: true }),
   /** Where a chunk bake runs (chunk_node.ts): stepped under the frame's
-   * budget on the main thread, or whole in the bake worker with the main
-   * thread adopting the result. `worker` was measured on the phone and not
-   * taken (issue/experiment/20260913-bake-worker-on-the-phone.md); it stays
-   * as a measurement knob, like render_path. */
-  bake_path: choice("debug", BAKE_PATHS, "stepped", { dev: true }),
+   * budget on the main thread, through the Rust mesher (crates/pxl-core) or
+   * the TypeScript one, or whole in the bake worker with the main thread
+   * adopting the result. `wasm` is the default on the phone reading
+   * (issue/experiment/20260913-mesher-in-rust/); `stepped` stays as the
+   * reference the Rust mesher is held byte for byte to, until the
+   * TypeScript mesher is retired. `worker` was measured and not taken
+   * (issue/experiment/20260913-bake-worker-on-the-phone.md); it stays as a
+   * measurement knob, like render_path. */
+  bake_path: choice("debug", BAKE_PATHS, "wasm", { dev: true }),
 
   // ---- character: picked in the drawer, not the sheet.
   person_variant_key: text("character", DEFAULT_PERSON_VARIANT_KEY),

@@ -12,12 +12,16 @@
   },
 
   "tasks": {
-    "dev": "deno run -A --node-modules-dir=auto npm:vite",
+    // The Rust core's module, from crates/, into src/wasm/pxl.wasm. Every
+    // task that loads it depends on this, so it is never stale or missing.
+    "build:wasm": "deno run -A script/build_wasm.ts",
+
+    "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
     // Server routes answered by the published deployment instead of a local
     // API + PostGIS. See vite.config.ts's VITE_DEV_SOURCE comment.
-    "dev:remote": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite",
+    "dev:remote": { "command": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
 
-    "build": "deno run -A --node-modules-dir=auto npm:vite build",
+    "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm"] },
     "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
 
     // Build, then publish the Worker (app + R2 tile route). Run through Deno
@@ -37,7 +41,7 @@
     // browser/jsdom harness. A component that needs a mounted <Canvas> isn't
     // a target for this task; that's what the live browser verification
     // pass this project's been using is for instead.
-    "test": "deno test -A src"
+    "test": { "command": "deno test -A src", "dependencies": ["build:wasm"] }
   },
 
   "compilerOptions": {
