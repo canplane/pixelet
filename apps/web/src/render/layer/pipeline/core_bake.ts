@@ -8,10 +8,10 @@
  * imports this one.
  */
 
-import { CORE_POOL } from "./core_pool.ts";
+import { CORE_POOL, FIXED_ALLOC } from "./core_pool.ts";
 import { BakeContext, type BakedChunkMesh } from "./chunk_mesher.ts";
 
-export const CORE_BAKE: BakeContext = new BakeContext(CORE_POOL);
+export const CORE_BAKE: BakeContext = new BakeContext(CORE_POOL, FIXED_ALLOC);
 
 /** Hands one baked mesh's block back to the core pool. Every view into it is
  * dead afterwards. */

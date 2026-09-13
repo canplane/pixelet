@@ -310,9 +310,11 @@ export function carve_baked_mesh(block: Block, vertex_cnt: u32, index_cnt: u32):
   };
 }
 
-function alloc_builder(pool: BuddyAllocator, vertex_total: u32, index_total: u32): MeshBuilder {
-  const mesh = carve_baked_mesh(pool.acquire(block_bytes(vertex_total, index_total)), vertex_total, index_total);
-  return { ...mesh, v_cnt: 0, i_cnt: 0 };
+/** Null when the pool refuses: the section is full and the bake waits. */
+function alloc_builder(pool: BuddyAllocator, vertex_total: u32, index_total: u32): MeshBuilder | null {
+  const block = pool.try_acquire(block_bytes(vertex_total, index_total));
+  if (block === null) return null;
+  return { ...carve_baked_mesh(block, vertex_total, index_total), v_cnt: 0, i_cnt: 0 };
 }
 
 function finish_builder(builder: MeshBuilder): BakedChunkMesh {
@@ -620,6 +622,10 @@ export type BakeCursor = {
   fine: FineBake | null;
   coarse: CoarseBake | null;
   done: boolean;
+  /** The last step could not get the mesh's block: the pool's section is
+   * full. The bake keeps its place and the holder tries again next tick —
+   * after the reclaim pass has had a frame to free something. */
+  starved: boolean;
 };
 
 /** Whether a bake is open — so a would-be holder can skip preparing one. */
@@ -630,14 +636,20 @@ export function bake_open(ctx: BakeContext): boolean {
 /** Opens a bake of `set` at `lod_step`, or returns null while another is open. */
 export function begin_bake(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): BakeCursor | null {
   if (ctx.open !== null) return null;
-  ctx.open = lod_step === 1 ? { ctx, fine: begin_fine(ctx, set, set.span, 1), coarse: null, done: false } : { ctx, fine: null, coarse: begin_coarse(ctx, set, lod_step), done: false };
+  ctx.open = lod_step === 1
+    ? { ctx, fine: begin_fine(ctx, set, set.span, 1), coarse: null, done: false, starved: false }
+    : { ctx, fine: null, coarse: begin_coarse(ctx, set, lod_step), done: false, starved: false };
   return ctx.open;
 }
 
 /** One step. Returns true once the bake is complete, at which point
  * `finish_bake` hands the mesh over. */
 export function step_bake(cursor: BakeCursor): boolean {
-  if (!cursor.done) cursor.done = cursor.coarse ? step_coarse(cursor.coarse) : step_fine(cursor.fine!);
+  if (!cursor.done) {
+    cursor.done = cursor.coarse ? step_coarse(cursor.coarse) : step_fine(cursor.fine!);
+    const fine = cursor.coarse ? cursor.coarse.fine : cursor.fine;
+    cursor.starved = (cursor.coarse !== null && cursor.coarse.starved) || (fine !== null && fine.starved);
+  }
   return cursor.done;
 }
 
@@ -706,8 +718,10 @@ export class BakeContext {
   readonly occlusion: OcclusionStats = { total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0 };
   readonly coarse_instances: CoarseInstanceStats = { total: 0, low_fill: 0 };
 
-  constructor(readonly pool: BuddyAllocator) {
-    const alloc = buddy_alloc(pool);
+  /** `pool` is where meshes and a coarse tier's run set are carved;
+   * `alloc`, where the scratch lives — the same pool unless the caller
+   * keeps its fixed lanes apart from its churn. */
+  constructor(readonly pool: BuddyAllocator, alloc: AddressedAlloc = buddy_alloc(pool)) {
     this.alloc = alloc;
     this.surviving = new Vector(Uint32Array, { init_cap: 6 * (1 << 12), alloc });
     this.merge_run = alloc.take(Int32Array, MAX_BAKE_SPAN * MAX_BAKE_SPAN);
@@ -823,13 +837,17 @@ type FineBake = {
   row: u32;
   builder: MeshBuilder | null;
   emit_at: u32;
+  /** Totals once the merge is done, kept across a starved step so the
+   * counting pass — which also counts kept faces — runs once. */
+  totals: { vertex_total: u32; index_total: u32 } | null;
+  starved: boolean;
 };
 
 function begin_fine(ctx: BakeContext, set: ColumnRunSet, span: u32, xy_scale: u32): FineBake {
   // Only the cells this grid uses: the merge reads `col = cy * span + cx`,
   // so a coarse grid occupies the first span² entries, not a square corner.
   ctx.merge_run.fill(-1, 0, span * span);
-  return { ctx, set, span, xy_scale, base: ctx.surviving.len, phase: 0, row: 0, builder: null, emit_at: 0 };
+  return { ctx, set, span, xy_scale, base: ctx.surviving.len, phase: 0, row: 0, builder: null, emit_at: 0, totals: null, starved: false };
 }
 
 function step_fine(b: FineBake): boolean {
@@ -934,15 +952,20 @@ function step_fine(b: FineBake): boolean {
 
     // Totals are only knowable once merging is done, which is why the block
     // is sized here rather than in the pass above.
-    let vertex_total: u32 = 0;
-    let index_total: u32 = 0;
-    for (let s_i = b.base; s_i < ctx.surviving.len; s_i += 6) {
-      const faces = face_cnt_of(ctx.surviving.get(s_i + 3) & ALL_FACES);
-      ctx.occlusion.faces_kept += faces;
-      vertex_total += faces * 4;
-      index_total += faces * 6;
+    if (b.totals === null) {
+      let vertex_total: u32 = 0;
+      let index_total: u32 = 0;
+      for (let s_i = b.base; s_i < ctx.surviving.len; s_i += 6) {
+        const faces = face_cnt_of(ctx.surviving.get(s_i + 3) & ALL_FACES);
+        ctx.occlusion.faces_kept += faces;
+        vertex_total += faces * 4;
+        index_total += faces * 6;
+      }
+      b.totals = { vertex_total, index_total };
     }
-    b.builder = alloc_builder(ctx.pool, vertex_total, index_total);
+    b.builder = alloc_builder(ctx.pool, b.totals.vertex_total, b.totals.index_total);
+    b.starved = b.builder === null;
+    if (b.starved) return false;
     b.phase = 2;
     b.emit_at = b.base;
     return false;
@@ -1345,6 +1368,9 @@ type CoarseBake = {
   row: u32;
   coarse: ColumnRunSet | null;
   fine: FineBake | null;
+  /** The packed run set's block was refused; the pack is complete in the
+   * scratch and only the copy out waits. */
+  starved: boolean;
 };
 
 function begin_coarse(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): CoarseBake {
@@ -1360,6 +1386,7 @@ function begin_coarse(ctx: BakeContext, set: ColumnRunSet, lod_step: LodStep): C
     row: 0,
     coarse: null,
     fine: null,
+    starved: false,
   };
 }
 
@@ -1420,7 +1447,10 @@ function step_coarse(b: CoarseBake): boolean {
     if (row_end < res) return false;
 
     ctx.co_start[res * res] = ctx.co.len;
-    const coarse = carve_column_run_set(ctx.pool.acquire(column_run_set_bytes(ctx.co.len, CHUNK_CELL_SPAN)), ctx.co.len, CHUNK_CELL_SPAN);
+    const block = ctx.pool.try_acquire(column_run_set_bytes(ctx.co.len, CHUNK_CELL_SPAN));
+    b.starved = block === null;
+    if (block === null) return false;
+    const coarse = carve_column_run_set(block, ctx.co.len, CHUNK_CELL_SPAN);
     coarse.start.set(ctx.co_start.subarray(0, res * res + 1));
     const co = ctx.co.mem;
     for (let i: u32 = 0; i < ctx.co.len; i++) {

@@ -25,11 +25,11 @@ import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 import { bump_world, world_changes, type WorldTopic } from "@/module/world/change.ts";
 
 export class PageTable<T> {
-  private readonly index = new IndexedMap<bigint>(I64_KEYS, 64, CORE_ALLOC);
+  private readonly index = new IndexedMap<bigint>(I64_KEYS, 64, FIXED_ALLOC);
   /** What each position holds. */
   readonly handles: T[] = [];
   private count: u32 = 0;

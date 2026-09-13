@@ -28,7 +28,7 @@ import type * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 import { EMPTY, HOLDS_SLOT, IN_FRUSTUM, type PriorityLanes } from "./chunk_table.ts";
 
@@ -103,13 +103,13 @@ export const AGE_HALF_MS: f64 = 4000;
  * thousand chunks spent fifty thousand `2 ** x` on ordering alone. Sized
  * to the flag lane, which is the table's capacity.
  */
-let keys = CORE_ALLOC.take(Float64Array, 4096);
+let keys = FIXED_ALLOC.take(Float64Array, 4096);
 
 function fill_keys(lanes: PriorityLanes, now: f64): Float64Array {
   const n = lanes.flags.length;
   if (keys.length < n) {
-    CORE_ALLOC.give(keys);
-    keys = CORE_ALLOC.take(Float64Array, n);
+    FIXED_ALLOC.give(keys);
+    keys = FIXED_ALLOC.take(Float64Array, n);
   }
   const { lead_distance2, pending_since } = lanes;
   for (let i = 0; i < n; i++) {

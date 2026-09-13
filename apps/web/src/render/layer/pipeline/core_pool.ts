@@ -1,78 +1,70 @@
 // @pxl/web/render/layer/pipeline/core_pool.ts
 
 /**
- * The one buddy pool the core's data lives in, carved out of the core
- * memory below.
+ * The core memory and its map: one fixed `WebAssembly.Memory`, cut into
+ * sections with fixed starts and sizes, each its own buddy pool over its
+ * range. No section may borrow from another, so a burst in one kind of
+ * thing can never evict another kind, "full" always names which kind, and
+ * a structure that must sit in linear memory is placed there by
+ * construction rather than by load order
+ * (issue/20260913-sections-of-the-core-memory-and-what-full-means.md).
  *
- * It was the mesh pool, and is renamed for what it has become: chunk
- * meshes (chunk_mesher.ts), column-run sets (voxel_scan.ts) and resident
- * terrain pages (world/terrain/resident.ts) all borrow from it. One pool
- * rather than one per producer is deliberate — buddy can only move bytes
- * between sizes that live in the same region, and one memory is the point:
- * issue/20260911-single-thread-core-and-when-to-spawn-a-worker.md.
+ * The memory is fixed-length rather than resizable, and never grown, for
+ * three measured reasons
+ * (issue/20260911-single-thread-core-and-when-to-spawn-a-worker.md): a view
+ * into a grown memory is detached, and every mesh span and run lane is such
+ * a view; views into a resizable buffer read two and a half times slower in
+ * V8; and WebGL and WebGPU reject them outright. A reservation is committed
+ * lazily — untouched pages cost address space, not memory — so it is sized
+ * for the peak rather than to the byte. JavaScriptCore nonetheless reports
+ * the whole reservation as the page's JavaScript memory (a Safari heap
+ * timeline read it as one 512 MB ArrayBuffer), which is why a phone gets
+ * half of it.
+ *
+ * Sections, in address order:
+ *
+ *   fixed    what is allocated once at startup and never freed — the change
+ *            log's journal and tables, the scheduler's lanes, the mesher's
+ *            scratch, later the command rings. Refuses rather than spills:
+ *            a shortfall here is a startup failure, never a runtime one, and
+ *            the section's layout is the contract a WASM core is handed.
+ *   page     resident terrain and POI pages. Long-lived; bounded by the
+ *            cleanup count and this cap.
+ *   mesh     chunk meshes, run sets, tier caches, voxel bands — what churns
+ *            as the view moves. The section the reclaim pass answers to.
+ *
+ * Sizes come from what the ledger has reported (a reservation peak of
+ * 320 MB in one pool, ~4 MB a terrain page, the largest mesh block 1 MB) and
+ * are adjusted after a phone reading. Past its range the page and mesh
+ * sections still spill to plain regions the collector can take back — the
+ * previous behaviour, kept until a kernel reads the pool; the spill is
+ * counted per section and the ledger shows it.
  */
 
-import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
 import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
+import { BuddyAllocator, type BuddyStat } from "@xpute/core/ds/buddy.ts";
+import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 
-/**
- * Region sizing.
- *
- * Region size is a balance between the largest real block and how much a
- * single live block can strand. A region is only reclaimed once it is
- * *fully* empty, so at 256MB one surviving chunk held a quarter-gigabyte
- * hostage: measured, 339MB live against 1502MB idle.
- *
- * 256MB was chosen when a dense urban chunk at LOD1 measured 67MB. Face
- * culling then dropped real terrain to 24% of the faces it used to emit, so
- * the largest block is around a quarter of what it was and the region can
- * shrink with it — `pool.stat.max_block_bytes` is the number to check this
- * against, and the report prints it. Anything above a region still works; it
- * just spills to its own buffer and is never reused.
- *
- * `poison` stays off even in development — it is a memset of every released
- * block, which would distort the very rebuild storm this pool exists to
- * measure. Turn it on here when hunting a view that outlived its release
- * (the one failure mode pooling introduces): the stale reader then sees NaN
- * geometry instead of a plausible neighbouring chunk.
- */
-/**
- * The core's memory: one fixed-length `WebAssembly.Memory`, reserved up front
- * and never grown, that the pool carves its first regions out of.
- *
- * Fixed-length rather than resizable, and never grown, for three measured
- * reasons (issue/20260911-single-thread-core-and-when-to-spawn-a-worker.md):
- * a view into a grown memory is detached, and every mesh span and run lane
- * is such a view; views into a resizable buffer read two and a half times
- * slower in V8; and WebGL and WebGPU reject them outright. A reservation is
- * committed lazily — untouched pages cost address space, not memory — so it
- * is sized for the pool's peak rather than to the byte. JavaScriptCore
- * nonetheless reports the whole reservation as the page's JavaScript
- * memory (a Safari heap timeline read it as one 512 MB ArrayBuffer), which
- * is why a phone gets half of it below.
- *
- * Eight regions, 512 MB. Four were sized for meshes alone and the ledger
- * already read 384 MB reserved at a load peak; terrain pages add about 4 MB
- * each, up to the 49 the cleanup radius keeps (terrain/config.ts). Past the
- * reservation the pool allocates plain regions exactly as it always has.
- *
- * Tried at half the size when the full one is refused, and null when that
- * fails too: a device that refuses both is exactly a device that should not
- * have one, and the pool then behaves as it did before this existed.
- */
-const CORE_REGIONS = 8;
-/** Half on a phone. Whatever the OS commits, JavaScriptCore reports the
- * whole reservation against the page, and the page's budget there is a
- * fraction of the desktop's; past it the pool hands out plain regions the
- * collector can take back. */
-const HANDHELD_REGIONS = CORE_REGIONS / 2;
 const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
 
+/**
+ * The map, in regions of 64 MB. Eight on the desktop, four on a phone: the
+ * whole reservation is charged to the page by JavaScriptCore, and a phone's
+ * budget is a fraction of the desktop's.
+ *
+ *              desktop    phone
+ *   fixed         1          1     the tables are small; a whole region is
+ *                                  the granularity, and headroom for rings
+ *   page          2          1     ~49 terrain pages at ~4 MB fit in two
+ *   mesh          5          2     the churn; the reclaim pass keeps it under
+ */
+const LAYOUT = HANDHELD ? { fixed: 1, page: 1, mesh: 2 } : { fixed: 1, page: 2, mesh: 5 };
+const CORE_REGIONS = LAYOUT.fixed + LAYOUT.page + LAYOUT.mesh;
+
 function reserve_core_memory(): WebAssembly.Memory | null {
-  const first = HANDHELD ? HANDHELD_REGIONS : CORE_REGIONS;
-  for (const regions of [first, first / 2]) {
+  for (const regions of [CORE_REGIONS, Math.ceil(CORE_REGIONS / 2)]) {
     const pages = (regions * REGION_BYTES) / WASM_PAGE;
     try {
       return new WebAssembly.Memory({ initial: pages, maximum: pages });
@@ -85,30 +77,95 @@ function reserve_core_memory(): WebAssembly.Memory | null {
 
 export const CORE_MEMORY: WebAssembly.Memory | null = reserve_core_memory();
 
-export const CORE_POOL = new BuddyAllocator({
-  min_block_bytes: 1 << 12,
-  region_bytes: REGION_BYTES,
-  backing: CORE_MEMORY?.buffer,
-  max_idle_regions: 1,
-  poison: false,
-  // On again. The precondition it was waiting for is met: a chunk mesh now
-  // has exactly two owners — chunk_node.ts's LOD cache and the layout naming
-  // it — and both are mutated synchronously by the node, in one call, with
-  // the geometry attached and detached in the same step. There is no longer
-  // a window in which a layout names meshes nothing holds, which is what
-  // made recycling unsafe while React decided mount timing.
-  //
-  // If `[pool] double release` or `[chunk_bucket] retain of a released mesh`
-  // ever appears again, that is a real ownership bug and not noise: turn
-  // `poison` on to catch the stale reader at the read rather than the
-  // release.
-  bypass: false,
-});
+export type SectionName = "fixed" | "page" | "mesh";
 
-/** Typed lanes carved from the core pool — what a structure is handed so its
- * columns live in the core memory rather than on the heap. */
-export const CORE_ALLOC: AddressedAlloc = buddy_alloc(CORE_POOL);
+export type Section = {
+  readonly name: SectionName;
+  /** Where the section starts in the core memory, and its size. */
+  readonly offset: u32;
+  readonly bytes: u32;
+  readonly pool: BuddyAllocator;
+  readonly alloc: AddressedAlloc;
+};
 
-export function core_pool_stat(): Readonly<typeof CORE_POOL.stat> {
+/**
+ * Cuts the reservation into the map. A device that reserved half asks for
+ * the same proportions over what it got; a device that reserved nothing
+ * gets plain pools with the same names, which behave as the one pool did
+ * before this existed.
+ */
+function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section> {
+  const backing = memory?.buffer ?? null;
+  const total = backing ? backing.byteLength / REGION_BYTES : CORE_REGIONS;
+  const scale = total / CORE_REGIONS;
+  const regions = {
+    fixed: Math.max(1, Math.round(LAYOUT.fixed * scale)),
+    page: Math.max(1, Math.round(LAYOUT.page * scale)),
+    mesh: 0,
+  };
+  regions.mesh = Math.max(1, total - regions.fixed - regions.page);
+
+  let offset = 0;
+  const section = (name: SectionName, count: u32, no_spill: boolean): Section => {
+    const bytes = count * REGION_BYTES;
+    const pool = new BuddyAllocator({
+      min_block_bytes: 1 << 12,
+      region_bytes: REGION_BYTES,
+      backing: backing ?? undefined,
+      backing_offset: backing ? offset : undefined,
+      backing_bytes: backing ? bytes : undefined,
+      max_idle_regions: 1,
+      no_spill: backing !== null && no_spill,
+      // `poison` stays off even in development — it is a memset of every
+      // released block, which would distort the very rebuild storm the pool
+      // exists to measure. Turn it on when hunting a view that outlived its
+      // release: the stale reader then sees NaN instead of a plausible
+      // neighbouring chunk.
+      poison: false,
+      // Reuse is on: a chunk mesh has exactly two owners — chunk_node.ts's
+      // LOD cache and the layout naming it — both mutated synchronously by
+      // the node, so there is no window in which a layout names meshes
+      // nothing holds. `[pool] double release` or `[chunk_bucket] retain of
+      // a released mesh` in the console is a real ownership bug, not noise.
+      bypass: false,
+    });
+    const s: Section = { name, offset, bytes, pool, alloc: buddy_alloc(pool) };
+    offset += bytes;
+    return s;
+  };
+  return {
+    fixed: section("fixed", regions.fixed, true),
+    page: section("page", regions.page, false),
+    mesh: section("mesh", regions.mesh, false),
+  };
+}
+
+export const CORE_SECTIONS: Readonly<Record<SectionName, Section>> = lay_out(CORE_MEMORY);
+
+/** The fixed section: allocated once, never freed, refuses rather than
+ * spills. Where a lane that a kernel must find lives. */
+export const FIXED_ALLOC: AddressedAlloc = CORE_SECTIONS.fixed.alloc;
+
+/** The page section's pool: resident terrain and POI pages. */
+export const PAGE_POOL: BuddyAllocator = CORE_SECTIONS.page.pool;
+
+/**
+ * The mesh section's pool and typed lanes — what was the one core pool.
+ * Chunk meshes, run sets, tier caches, voxel bands, and every lane the
+ * churning structures carve.
+ */
+export const CORE_POOL: BuddyAllocator = CORE_SECTIONS.mesh.pool;
+export const CORE_ALLOC: AddressedAlloc = CORE_SECTIONS.mesh.alloc;
+
+export function core_pool_stat(): Readonly<BuddyStat> {
   return CORE_POOL.stat;
 }
+
+/** Every section's gauges, for the ledger: how much of its range each has
+ * cut, what is live in it, and whether it has spilled or refused. */
+export function core_sections_stat(): { name: SectionName; bytes: u32; stat: Readonly<BuddyStat> }[] {
+  return (["fixed", "page", "mesh"] as const).map((name) => ({ name, bytes: CORE_SECTIONS[name].bytes, stat: CORE_SECTIONS[name].pool.stat }));
+}
+
+/** The reservation's size, for the budgets drawn against it. */
+export const CORE_MEMORY_BYTES: u32 = CORE_MEMORY?.buffer.byteLength ?? CORE_REGIONS * REGION_BYTES;

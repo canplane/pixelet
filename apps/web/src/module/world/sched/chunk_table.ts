@@ -31,7 +31,7 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 /** Same slack render/chunk_lod.ts allows a chunk that has not measured its
@@ -62,7 +62,7 @@ export type PriorityLanes = {
   pending_since: Float64Array;
 };
 
-const LANE = { init_cap: 4096, alloc: CORE_ALLOC } as const;
+const LANE = { init_cap: 4096, alloc: FIXED_ALLOC } as const;
 
 /** One row per chunk: absolute lattice origin (the packed word and its two
  * axes in units), the bounding sphere in the chunk's own space (measured box
@@ -93,7 +93,7 @@ const SLOT_LANES = {
 
 export class ChunkTable<T extends { slot: u32 }> {
   /** Slot by chunk base, for whoever asks whether a chunk is live. */
-  private readonly by_base = new IndexedMap(I64_KEYS, 4096, CORE_ALLOC);
+  private readonly by_base = new IndexedMap(I64_KEYS, 4096, FIXED_ALLOC);
   /** Which slot the base at each index position names. */
   private readonly by_base_slot = new Vector(Uint32Array, LANE);
 

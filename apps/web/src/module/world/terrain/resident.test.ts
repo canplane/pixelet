@@ -4,7 +4,7 @@ import { assert, assertEquals } from "@std/assert";
 
 import { GroundChannelKey, type Terrain } from "@pxl/shared/bake/format.ts";
 
-import { CORE_MEMORY, CORE_POOL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_MEMORY, PAGE_POOL } from "@/render/layer/pipeline/core_pool.ts";
 import { into_core, release_terrain } from "./resident.ts";
 
 const CHANNEL_BYTES = 1 << 20;
@@ -45,27 +45,27 @@ Deno.test("into_core - a page's arrays are copied into the core memory, value fo
 });
 
 Deno.test("into_core - each channel takes exactly one 1 MiB block, not a rounded-up page", async () => {
-  const before = CORE_POOL.stat.live_blocks;
+  const before = PAGE_POOL.stat.live_blocks;
   const page = into_core(decoded_page(1));
-  assertEquals(CORE_POOL.stat.live_blocks - before, 5, "four channels and the elevation grid");
+  assertEquals(PAGE_POOL.stat.live_blocks - before, 5, "four channels and the elevation grid");
   release_terrain(page, 0);
   await settle(10);
 });
 
 Deno.test("release_terrain - blocks go back only after the quarantine", async () => {
-  const before = CORE_POOL.stat.live_bytes;
+  const before = PAGE_POOL.stat.live_bytes;
   const page = into_core(decoded_page(2));
-  const held = CORE_POOL.stat.live_bytes - before;
+  const held = PAGE_POOL.stat.live_bytes - before;
   release_terrain(page, 20);
-  assertEquals(CORE_POOL.stat.live_bytes - before, held, "still borrowed during the quarantine");
+  assertEquals(PAGE_POOL.stat.live_bytes - before, held, "still borrowed during the quarantine");
   await settle(60);
-  assertEquals(CORE_POOL.stat.live_bytes, before);
+  assertEquals(PAGE_POOL.stat.live_bytes, before);
 });
 
 Deno.test("release_terrain - a shared page is never released", async () => {
-  const before = CORE_POOL.stat.live_bytes;
+  const before = PAGE_POOL.stat.live_bytes;
   const ocean = into_core(decoded_page(3), false);
   release_terrain(ocean, 0);
   await settle(20);
-  assert(CORE_POOL.stat.live_bytes > before, "the ocean page stays borrowed");
+  assert(PAGE_POOL.stat.live_bytes > before, "the ocean page stays borrowed");
 });

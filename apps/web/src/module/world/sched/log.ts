@@ -27,7 +27,7 @@ import { fetch_counts, MAX_INFLIGHT } from "@/module/world/sched/fetch_scheduler
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/module/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
-import { CORE_MEMORY, core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_MEMORY, core_pool_stat, core_sections_stat } from "@/render/layer/pipeline/core_pool.ts";
 import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
 import { chunk_retained_bytes, chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
 import { category_info } from "./category.ts";
@@ -244,6 +244,16 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  reserved ${Math.round(core_pool_stat().reserved_bytes / 1048576)}MB (core ${
       Math.round((CORE_MEMORY?.buffer.byteLength ?? 0) / 1048576)
     }MB kept)  hit ${f.pool_hit_pct ?? "-"}%  biggest ${Math.round(core_pool_stat().max_block_bytes / 1048576)}MB   window scans ${f.work.scans} bakes ${f.work.bakes} runs ${f.work.runs}`,
+    // Each section against its own range: the fixed one refuses past it, the
+    // others spill to plain regions the collector can take back — a spill or
+    // a refusal here is the memory map's own signal, per kind.
+    `  section ${
+      core_sections_stat().map(({ name, bytes, stat }) =>
+        `${name} ${Math.round(stat.live_bytes / 1048576)}/${Math.round(stat.backing_used / 1048576)} of ${Math.round(bytes / 1048576)}MB${stat.spills > 0 ? ` SPILLED ${stat.spills}` : ""}${
+          stat.refusals > 0 ? ` REFUSED ${stat.refusals}` : ""
+        }`
+      ).join("   ")
+    }   (live/cut of range)`,
     `  little  ${
       (() => {
         const l = little_slabs.stats();

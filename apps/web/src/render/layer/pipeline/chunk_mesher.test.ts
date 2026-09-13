@@ -7,7 +7,9 @@ import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "./voxel.ts";
 import { type MeshRun, pack_column_runs } from "./voxel_scan.ts";
-import { abort_bake, bake_chunk_mesh, bake_chunk_mesh_coarse, bake_open, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "./chunk_mesher.ts";
+import { abort_bake, bake_chunk_mesh, bake_chunk_mesh_coarse, bake_open, BakeContext, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "./chunk_mesher.ts";
+import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
+import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 import { CORE_BAKE, release_chunk_mesh } from "./core_bake.ts";
 
 function empty_columns(): MeshRun[][] {
@@ -539,4 +541,30 @@ Deno.test("stepped bake - only one may be open, and an abort leaves the scratch 
   same_mesh(after_fine, before_fine);
   same_mesh(after_coarse, before_coarse);
   for (const m of [before_fine, before_coarse, after_fine, after_coarse]) release_chunk_mesh(m);
+});
+
+Deno.test("stepped bake - a pool that refuses the mesh's block starves the bake, which keeps its place and finishes once there is room", () => {
+  const backing = new ArrayBuffer(1 << 20);
+  const pool = new BuddyAllocator({ min_block_bytes: 1 << 12, region_bytes: 1 << 20, backing, no_spill: true });
+  // Scratch from a pool of its own, so the section below holds meshes only.
+  const ctx = new BakeContext(pool, buddy_alloc(new BuddyAllocator()));
+  const set = pack_column_runs(busy_columns());
+  // Take the whole section first, so the mesh has nowhere to go.
+  const hog = pool.acquire(1 << 20);
+  const cursor = begin_bake(ctx, set, 8)!;
+  let steps = 0;
+  while (!step_bake(cursor) && !cursor.starved) steps++;
+  assert(cursor.starved, "the bake reports the refusal rather than throwing");
+  assert(!cursor.done);
+  const kept_before = ctx.occlusion.faces_kept;
+  assert(!step_bake(cursor) && cursor.starved, "still starved on the next step");
+  assertEquals(ctx.occlusion.faces_kept, kept_before, "the counting pass does not run again");
+  pool.release(hog);
+  while (!step_bake(cursor)) { /* room now */ }
+  assert(!cursor.starved);
+  const mesh = finish_bake(cursor);
+  const direct = bake_chunk_mesh(CORE_BAKE, set, 8);
+  assertEquals(mesh.vertex_cnt, direct.vertex_cnt);
+  pool.release(mesh.block);
+  release_chunk_mesh(direct);
 });

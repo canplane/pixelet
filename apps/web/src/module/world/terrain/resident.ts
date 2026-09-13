@@ -29,7 +29,7 @@
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import type { Ground, GroundChannelKey, Terrain } from "@pxl/shared/bake/format.ts";
 
-import { CORE_POOL } from "@/render/layer/pipeline/core_pool.ts";
+import { PAGE_POOL } from "@/render/layer/pipeline/core_pool.ts";
 
 export const QUARANTINE_MS = 1000;
 
@@ -38,7 +38,7 @@ export const QUARANTINE_MS = 1000;
 const owned = new WeakMap<Terrain, Block[]>();
 
 function copy_u8(src: Uint8Array, blocks: Block[]): Uint8Array<ArrayBuffer> {
-  const block = CORE_POOL.acquire(src.byteLength);
+  const block = PAGE_POOL.acquire(src.byteLength);
   blocks.push(block);
   const view = new Uint8Array(block.buf, block.byte_offset, src.length);
   view.set(src);
@@ -52,7 +52,7 @@ function copy_u8(src: Uint8Array, blocks: Block[]): Uint8Array<ArrayBuffer> {
  */
 export function into_core(src: Terrain, own: boolean = true): Terrain {
   const blocks: Block[] = [];
-  const ele_block = CORE_POOL.acquire(src.ele.byteLength);
+  const ele_block = PAGE_POOL.acquire(src.ele.byteLength);
   blocks.push(ele_block);
   const ele = new Int16Array(ele_block.buf, ele_block.byte_offset, src.ele.length);
   ele.set(src.ele);
@@ -72,6 +72,6 @@ export function release_terrain(terrain: Terrain, quarantine_ms: number = QUARAN
   if (!blocks) return;
   owned.delete(terrain);
   setTimeout(() => {
-    for (const block of blocks) CORE_POOL.release(block);
+    for (const block of blocks) PAGE_POOL.release(block);
   }, quarantine_ms);
 }

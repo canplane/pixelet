@@ -93,6 +93,21 @@ export type BuddyOptions = {
    * resized — a view into a detached buffer reads as length zero.
    */
   backing?: ArrayBuffer;
+  /**
+   * The range of the backing this pool may carve: a start offset and a byte
+   * length, both multiples of `region_bytes`. Several pools over one memory
+   * take disjoint ranges — the sections of a core memory — and none can
+   * reach another's. Defaults to the whole backing.
+   */
+  backing_offset?: u32;
+  backing_bytes?: u32;
+  /**
+   * Refuse rather than spill: once the backing range is used up, `acquire`
+   * returns null instead of opening a plain buffer, and a request larger
+   * than a region returns null too. For a pool whose bytes a kernel over the
+   * backing must be able to see — nothing it lends may live outside it.
+   */
+  no_spill?: boolean;
 };
 
 /**
@@ -136,6 +151,12 @@ export type BuddyStat = {
   /** Largest single request seen. What region_bytes has to be chosen against:
    * below it, every such request spills and is never reused. */
   max_block_bytes: u32;
+  /** Bytes of the backing range cut into regions so far, and the range's
+   * size — how close the pool is to its first spill or refusal. */
+  backing_used: u32;
+  backing_bytes: u32;
+  /** Acquires refused under `no_spill`. */
+  refusals: u32;
 };
 
 /**
@@ -274,6 +295,9 @@ export class BuddyAllocator {
     splits: 0,
     merges: 0,
     max_block_bytes: 0,
+    backing_used: 0,
+    backing_bytes: 0,
+    refusals: 0,
   };
 
   private readonly _min_shift: u32;
@@ -281,9 +305,13 @@ export class BuddyAllocator {
   private readonly _regions: (Region | null)[] = [];
   private readonly _poison: boolean;
   private readonly _bypass: boolean;
+  private readonly _no_spill: boolean;
   private readonly _backing: ArrayBuffer | null;
-  /** How far into the backing regions have been cut. */
-  private _backing_used: u32 = 0;
+  /** The backing range: where it starts, and how far into it regions have
+   * been cut. `_backing_used` is an absolute offset. */
+  private readonly _backing_offset: u32;
+  private readonly _backing_end: u32;
+  private _backing_used: u32;
   /** Indices of regions carved from the backing — never reclaimed. */
   private readonly _backed = new Set<number>();
   /** Region index by where it starts in the backing, and by its own buffer —
@@ -303,6 +331,7 @@ export class BuddyAllocator {
       poison = false,
       bypass = false,
       backing = null,
+      no_spill = false,
     } = opts;
     if (min_block_bytes < 8 || region_bytes < min_block_bytes) {
       throw new MarshalError(Errno.EINVAL, `pool: bad region shape min=${min_block_bytes} region=${region_bytes}`);
@@ -314,7 +343,24 @@ export class BuddyAllocator {
     this.max_idle_regions = max_idle_regions;
     this._poison = poison;
     this._bypass = bypass;
+    this._no_spill = no_spill;
     this._backing = backing;
+    // An explicit range must be whole regions; the default is however many
+    // whole regions the backing holds past the offset, which for a backing
+    // smaller than a region is none.
+    const offset = opts.backing_offset ?? 0;
+    const whole = backing === null ? 0 : Math.max(0, backing.byteLength - offset) - (Math.max(0, backing.byteLength - offset) % this.region_bytes);
+    const bytes = opts.backing_bytes ?? whole;
+    if (backing !== null) {
+      if (offset % this.region_bytes !== 0 || bytes % this.region_bytes !== 0 || offset + bytes > backing.byteLength) {
+        throw new MarshalError(Errno.EINVAL, `pool: backing range ${offset}+${bytes} is not whole regions inside ${backing.byteLength}`);
+      }
+    }
+    this._backing_offset = offset;
+    this._backing_used = offset;
+    this._backing_end = backing !== null ? offset + bytes : 0;
+    this.stat.backing_bytes = backing !== null ? bytes : 0;
+    if (no_spill && backing === null) throw new MarshalError(Errno.EINVAL, "pool: no_spill needs a backing to refuse past");
     this._order_bits = shift_of(this._max_order + 2);
   }
 
@@ -324,9 +370,25 @@ export class BuddyAllocator {
    * it later reads must zero it itself.
    */
   acquire(bytes: u32): Block {
+    const block = this.try_acquire(bytes);
+    if (block === null) throw new MarshalError(Errno.ENOMEM, `pool: ${bytes}B refused, the backing range is used up`);
+    return block;
+  }
+
+  /**
+   * `acquire` that returns null where a `no_spill` pool would refuse: the
+   * backing range used up, or a request larger than a region. A pool that
+   * may spill never returns null. The signal a caller acts on by reclaiming
+   * or by asking again next tick.
+   */
+  try_acquire(bytes: u32): Block | null {
     if (bytes <= 0) return DETACHED_BLOCK;
     if (bytes > this.stat.max_block_bytes) this.stat.max_block_bytes = bytes;
 
+    if (this._no_spill && bytes > this.region_bytes) {
+      this.stat.refusals++;
+      return null;
+    }
     if (this._bypass || bytes > this.region_bytes) {
       // Bypassed, or larger than a region can ever hold. Its own buffer,
       // never reused — a region sized for that would waste more than the
@@ -360,9 +422,16 @@ export class BuddyAllocator {
     // lowest indices, which the scan above visits first — so plain regions
     // are the ones that empty out, and they are the only ones reclaimable.
     const backing = this._backing;
-    const backed = backing !== null && this._backing_used + this.region_bytes <= backing.byteLength;
+    const backed = backing !== null && this._backing_used + this.region_bytes <= this._backing_end;
+    if (!backed && this._no_spill) {
+      this.stat.refusals++;
+      return null;
+    }
     const region = backed ? new Region(this._min_shift, this._max_order, backing, this._backing_used) : new Region(this._min_shift, this._max_order);
-    if (backed) this._backing_used += this.region_bytes;
+    if (backed) {
+      this._backing_used += this.region_bytes;
+      this.stat.backing_used = this._backing_used - this._backing_offset;
+    }
     const index = this._regions.indexOf(null);
     const i = index >= 0 ? index : this._regions.length;
     this._regions[i] = region;

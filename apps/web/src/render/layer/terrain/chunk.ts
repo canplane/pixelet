@@ -16,7 +16,7 @@ import { L2_SHAMT, L3_SHAMT } from "@pxl/shared/spec/space/indexer.ts";
 
 import { type Ground, type Terrain } from "@pxl/shared/bake/format.ts";
 import { CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 import { dense_ele_region } from "./elevation.ts";
 
 const PAGE_CHUNK_SPAN: u32 = 1 << (L3_SHAMT - L2_SHAMT);
@@ -82,12 +82,12 @@ export function chunk_offsets(): readonly IVec[] {
  */
 const SLICE_CELLS = CHUNK_CELL_SPAN * CHUNK_CELL_SPAN;
 const SLICE_GROUND: Ground = {
-  land: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
-  water: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
-  structure: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
-  transport: CORE_ALLOC.take(Uint8Array, SLICE_CELLS),
+  land: FIXED_ALLOC.take(Uint8Array, SLICE_CELLS),
+  water: FIXED_ALLOC.take(Uint8Array, SLICE_CELLS),
+  structure: FIXED_ALLOC.take(Uint8Array, SLICE_CELLS),
+  transport: FIXED_ALLOC.take(Uint8Array, SLICE_CELLS),
 };
-const SLICE_ELE = CORE_ALLOC.take(Int16Array, SLICE_CELLS);
+const SLICE_ELE = FIXED_ALLOC.take(Int16Array, SLICE_CELLS);
 const SLICE: Terrain = { ground: SLICE_GROUND, ele: SLICE_ELE };
 
 export function slice_chunk(page_ground: Ground, page_ele: I16Array, page_off: IVec): Terrain {
