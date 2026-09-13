@@ -51,10 +51,11 @@
  */
 
 import { useLayoutEffect, useRef } from "react";
-import { type RootState, useFrame } from "@react-three/fiber";
+import { type RootState, useFrame, useThree } from "@react-three/fiber";
 
 import { type BudgetOpts, type PassStats, run_under_budget } from "./frame_budget.ts";
 import { ledger_last_frame } from "./ledger.ts";
+import { bind_tick_request, world_wakers } from "@/module/world/change.ts";
 
 export type Phase = "interaction" | "visible" | "content" | "cosmetic" | "report";
 export const PHASES: readonly Phase[] = ["interaction", "visible", "content", "cosmetic", "report"];
@@ -308,6 +309,9 @@ export function run_tick(state: RootState, delta: number): TickReport {
     settled: false,
   };
 
+  // What changed since the last frame reaches its listeners before anything
+  // reads the world this frame — and outside the write that changed it.
+  world_wakers.pump();
   run_phase("interaction", ctx);
   ctx.settled = t0 - moved_at >= SETTLE_MS;
   if (!ctx.settled && !prev_settled) observe_frame_gap(delta);
@@ -326,6 +330,8 @@ export function run_tick(state: RootState, delta: number): TickReport {
 /** The one `useFrame` in the world. Mount once, inside the Canvas, before
  * anything that registers a step. */
 export function TickDriver() {
+  const invalidate = useThree((s) => s.invalidate);
+  useLayoutEffect(() => bind_tick_request(() => invalidate()), [invalidate]);
   useFrame((state, delta) => {
     run_tick(state, delta);
   });
