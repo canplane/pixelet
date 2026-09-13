@@ -119,6 +119,11 @@ impl Pool {
         }
     }
 
+    /// The bytes of the range the pool cuts.
+    pub fn range_bytes(&self) -> usize {
+        self.end - self.start
+    }
+
     pub fn region_bytes(&self) -> u32 {
         self.region_bytes
     }

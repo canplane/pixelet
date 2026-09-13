@@ -14,12 +14,13 @@
 mod arena;
 
 use pxl_core::buddy::Pool;
-use pxl_core::build::{Builder, Event, PageLanes, World};
+use pxl_core::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::object::{Carve, Kind, Painter, Store};
 use pxl_core::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
 use pxl_core::run_set::{run_set_bytes, RunSet};
 use pxl_core::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
+use pxl_core::sched::{Event, Frame, Scheduler};
 use pxl_core::terrain::{ChunkSample, Materials, PageView, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_core::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 
@@ -57,7 +58,10 @@ struct State {
     cq: Ring,
     /// The chunks' builds, and the events they made that the completion
     /// ring had no room for yet.
-    builder: Builder,
+    sched: Scheduler,
+    /// The frame the glue writes before each tick (FRAME_WORDS doubles).
+    frame: [f64; FRAME_WORDS],
+    census: [f64; 12],
     events: std::collections::VecDeque<Event>,
     build_stat: [u32; 11],
 }
@@ -110,7 +114,9 @@ fn state() -> &'static mut State {
                 column_row: [0; 4],
                 sq: new_ring(RING_CAPACITY),
                 cq: new_ring(RING_CAPACITY),
-                builder: Builder::new(),
+                sched: Scheduler::new(),
+                frame: [0.0; FRAME_WORDS],
+                census: [0.0; 12],
                 events: std::collections::VecDeque::new(),
                 build_stat: [0; 11],
             }
@@ -711,15 +717,26 @@ pub extern "C" fn pxl_column_runs_at() -> u32 {
 /// No effect; completes with its first argument, for the rings' own test.
 pub const OP_NOP: u32 = 0;
 /// Submissions: a chunk's life and what it is built from.
-pub const OP_CHUNK_ADD: u32 = 1; // id, base lo, base hi, tx0, ty0
+pub const OP_CHUNK_ADD: u32 = 1; // id, base lo, base hi, tx0, ty0, base x (i32), base y (i32), stable hash
 pub const OP_CHUNK_REMOVE: u32 = 2; // id
 pub const OP_CHUNK_SOURCE: u32 = 3; // id, has page, show structures, land, water, structure, transport, ele
+/// The builder's own ask, bypassing the scheduler: for the tests that hold
+/// a build to the TypeScript pipeline, never sent by the glue.
 pub const OP_CHUNK_WANT: u32 = 4; // id, step, step (0 is none)
-pub const OP_CHUNK_RECLAIM: u32 = 5; // id
 pub const OP_EDITS: u32 = 6; // hide, key lo, key hi, band, pos, carve, key lo, key hi, lx, ly, lz, size (f32 bits)
-/// Completions: a tier's mesh, and what a chunk's runs hold.
+/// Completions.
 pub const OP_TIER: u32 = 16; // user id; generation, step, at, bytes, vertex count, index count
 pub const OP_RUNS: u32 = 17; // user id; bytes
+pub const OP_VISIBLE: u32 = 18; // user id; on
+pub const OP_LAYOUT: u32 = 19; // user id; primary, secondary, ready
+pub const OP_BLEND: u32 = 20; // user id; primary weight, secondary weight (f32 bits), decor takes the secondary
+pub const OP_EVICT: u32 = 21; // user id; step
+
+/// Doubles in the frame block, in the order sched::Frame names them: the
+/// root matrix (16), the origin (3), the planes (24), the camera (3), the
+/// lead (3), then viewport height, fov, delta seconds, budget, hard slack,
+/// pixel dither and the retain budget.
+pub const FRAME_WORDS: usize = 56;
 
 #[no_mangle]
 pub extern "C" fn pxl_ring_sq() -> u32 {
@@ -731,14 +748,24 @@ pub extern "C" fn pxl_ring_cq() -> u32 {
     state().cq.address() as u32
 }
 
+#[no_mangle]
+pub extern "C" fn pxl_frame_at() -> u32 {
+    state().frame.as_ptr() as u32
+}
+
 fn key(lo: u32, hi: u32) -> u64 {
     lo as u64 | ((hi as u64) << 32)
 }
 
 fn completion(e: &Event) -> Entry {
     let mut done: Entry = [0; 16];
+    let mut put = |id: u32, op: u32, args: &[u32]| {
+        done[USER] = id;
+        done[OP] = op;
+        done[ARGS..ARGS + args.len()].copy_from_slice(args);
+    };
     match *e {
-        Event::Tier {
+        Event::Build(BuildEvent::Tier {
             id,
             generation,
             step,
@@ -746,16 +773,17 @@ fn completion(e: &Event) -> Entry {
             bytes,
             vertex_cnt,
             index_cnt,
-        } => {
-            done[USER] = id;
-            done[OP] = OP_TIER;
-            done[ARGS..ARGS + 6].copy_from_slice(&[generation, step, at, bytes, vertex_cnt, index_cnt]);
-        }
-        Event::Runs { id, bytes } => {
-            done[USER] = id;
-            done[OP] = OP_RUNS;
-            done[ARGS] = bytes;
-        }
+        }) => put(id, OP_TIER, &[generation, step, at, bytes, vertex_cnt, index_cnt]),
+        Event::Build(BuildEvent::Runs { id, bytes }) => put(id, OP_RUNS, &[bytes]),
+        Event::Visible { id, on } => put(id, OP_VISIBLE, &[on as u32]),
+        Event::Layout { id, primary, secondary, ready } => put(id, OP_LAYOUT, &[primary, secondary, ready as u32]),
+        Event::Blend {
+            id,
+            primary,
+            secondary,
+            decor_secondary,
+        } => put(id, OP_BLEND, &[primary.to_bits(), secondary.to_bits(), decor_secondary as u32]),
+        Event::Evict { id, step } => put(id, OP_EVICT, &[step]),
     }
     done
 }
@@ -773,7 +801,12 @@ fn flush(s: &mut State) -> u32 {
     posted
 }
 
-/// Applies one submission; false for an op nobody numbers, which completes
+fn now() -> f64 {
+    // SAFETY: the import is the client's clock and reads nothing of ours.
+    unsafe { pxl_now() }
+}
+
+/// Applies one submission; none for an op nobody numbers, which completes
 /// with ENOSYS.
 fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
     let a = &sub[ARGS..];
@@ -789,17 +822,16 @@ fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
     let mut emit = |e: Event| events.push_back(e);
     match sub[OP] & 0xffff {
         OP_NOP => return Some(a[0]),
-        OP_CHUNK_ADD => s.builder.add(a[0], key(a[1], a[2]), a[3], a[4]),
-        OP_CHUNK_REMOVE => s.builder.remove(&mut world, a[0], &mut emit),
+        OP_CHUNK_ADD => s.sched.add(a[0], key(a[1], a[2]), a[5] as i32 as f64, a[6] as i32 as f64, a[3], a[4], a[7]),
+        OP_CHUNK_REMOVE => s.sched.remove(&mut world, a[0], &mut emit),
         OP_CHUNK_SOURCE => {
             let page = (a[1] != 0).then(|| PageLanes {
                 ground: [a[3] as usize, a[4] as usize, a[5] as usize, a[6] as usize],
                 ele: a[7] as usize,
             });
-            s.builder.source(&mut world, a[0], page, a[2] != 0, &mut emit);
+            s.sched.source(&mut world, a[0], page, a[2] != 0, &mut emit);
         }
-        OP_CHUNK_WANT => s.builder.want(&mut world, a[0], [a[1], a[2]]),
-        OP_CHUNK_RECLAIM => s.builder.reclaim(&mut world, a[0], &mut emit),
+        OP_CHUNK_WANT => s.sched.builder.want(&mut world, a[0], [a[1], a[2]]),
         OP_EDITS => {
             let f = |w: u32| f32::from_bits(w) as f64;
             let hide = (a[0] != 0).then(|| (key(a[1], a[2]), a[3] as i32, a[4]));
@@ -814,7 +846,7 @@ fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
                     },
                 )
             });
-            s.builder.set_edits(hide, carve);
+            s.sched.builder.set_edits(hide, carve);
         }
         _ => return None,
     }
@@ -851,32 +883,23 @@ pub extern "C" fn pxl_drain() -> u32 {
     drain(state())
 }
 
-/// The frame's one call: applies the submissions waiting, then advances the
-/// builds of the `order_len` chunk ids at `order_at` — in that order, the
-/// slots' holders first — for `budget_ms`, and returns how many completions
-/// it posted. The glue reads the completion ring when this returns.
-#[no_mangle]
-pub extern "C" fn pxl_tick(order_at: u32, order_len: u32, budget_ms: f64) -> u32 {
-    let s = state();
-    let mut posted = drain(s);
-    if !s.events.is_empty() || s.volumes.is_none() {
-        return posted;
-    }
-    // SAFETY: the glue's lane of ids, read before anything else can write it.
-    let order: Vec<u32> = unsafe { core::slice::from_raw_parts(order_at as usize as *const u32, order_len as usize) }.to_vec();
-    let mut world = World {
-        volumes: s.volumes.as_mut().unwrap(),
-        pools: &mut s.pools,
-        materials: &s.terrain,
-        store: &s.objects,
-        painter: &mut s.painter,
-    };
-    let events = &mut s.events;
-    // SAFETY: the import is the client's clock and reads nothing of ours.
-    s.builder.tick(&mut world, &order, budget_ms, &|| unsafe { pxl_now() }, &mut |e| events.push_back(e));
-    posted += flush(s);
-    let st = s.builder.stat;
-    let c = s.builder.bake_context().counters;
+fn world_of(s: &mut State) -> (World<'_>, &mut std::collections::VecDeque<Event>, &mut Scheduler) {
+    (
+        World {
+            volumes: s.volumes.as_mut().expect("pxl_volume_pools before any build"),
+            pools: &mut s.pools,
+            materials: &s.terrain,
+            store: &s.objects,
+            painter: &mut s.painter,
+        },
+        &mut s.events,
+        &mut s.sched,
+    )
+}
+
+fn after(s: &mut State) {
+    let st = s.sched.builder.stat;
+    let c = s.sched.builder.bake_context().counters;
     s.build_stat = [
         st.direct,
         st.scans,
@@ -890,7 +913,79 @@ pub extern "C" fn pxl_tick(order_at: u32, order_len: u32, budget_ms: f64) -> u32
         c.coarse_low_fill,
         arena::used() as u32,
     ];
-    posted
+    let k = s.sched.census;
+    s.census = [
+        k.chunks as f64,
+        k.in_frustum as f64,
+        k.settling as f64,
+        k.blend_active as f64,
+        k.pending as f64,
+        k.offscreen_pending as f64,
+        k.oldest_visible_ms,
+        k.oldest_release_ms,
+        k.committed as f64,
+        k.released as f64,
+        k.retained_on,
+        k.retained_off,
+    ];
+}
+
+/// The frame's one call: applies the submissions waiting, then the
+/// scheduler's pass over every chunk with the frame the glue wrote at
+/// pxl_frame_at. Bit 0: the canvas has something new to draw. The glue reads
+/// the completion ring when this returns.
+#[no_mangle]
+pub extern "C" fn pxl_tick() -> u32 {
+    let s = state();
+    drain(s);
+    if !s.events.is_empty() || s.volumes.is_none() {
+        return 1;
+    }
+    let f = s.frame;
+    let mut frame = Frame::default();
+    frame.root.copy_from_slice(&f[0..16]);
+    frame.origin.copy_from_slice(&f[16..19]);
+    frame.planes.copy_from_slice(&f[19..43]);
+    frame.camera.copy_from_slice(&f[43..46]);
+    frame.lead.copy_from_slice(&f[46..49]);
+    frame.viewport_h = f[49];
+    frame.fov_deg = f[50];
+    frame.delta_s = f[51];
+    frame.budget_ms = f[52];
+    frame.hard_slack_ms = f[53];
+    frame.pixel_dither = f[54] != 0.0;
+    frame.retain_budget_bytes = f[55];
+    let (mut world, events, sched) = world_of(s);
+    let draw = sched.tick(&mut world, frame, &now, &mut |e| events.push_back(e));
+    flush(s);
+    after(s);
+    draw as u32
+}
+
+/// Rebuilds chunk `id`'s layout to the end now, after the submissions
+/// waiting are applied: what a placement shows the same frame by.
+#[no_mangle]
+pub extern "C" fn pxl_build_now(id: u32) {
+    let s = state();
+    drain(s);
+    let (mut world, events, sched) = world_of(s);
+    sched.build_now(&mut world, id, &now, &mut |e| events.push_back(e));
+    flush(s);
+    after(s);
+}
+
+/// The builder alone over the `order_len` ids at `order_at`, for the tests
+/// that hold a build to the TypeScript pipeline: no scheduler.
+#[no_mangle]
+pub extern "C" fn pxl_build_tick(order_at: u32, order_len: u32, budget_ms: f64) {
+    let s = state();
+    drain(s);
+    // SAFETY: the caller's lane of ids.
+    let order: Vec<u32> = unsafe { core::slice::from_raw_parts(order_at as usize as *const u32, order_len as usize) }.to_vec();
+    let (mut world, events, sched) = world_of(s);
+    sched.builder.tick(&mut world, &order, budget_ms, &now, &mut |e| events.push_back(Event::Build(e)));
+    flush(s);
+    after(s);
 }
 
 /// Runs made the direct way, scans, bakes and refused blocks so far, the
@@ -899,4 +994,13 @@ pub extern "C" fn pxl_tick(order_at: u32, order_len: u32, budget_ms: f64) -> u32
 #[no_mangle]
 pub extern "C" fn pxl_build_stat() -> *const u32 {
     state().build_stat.as_ptr()
+}
+
+/// The scheduler's census as twelve doubles: chunks, in the frustum,
+/// settling, blending, pending, pending off screen, the oldest visible and
+/// release waits in ms, committed this tick, released so far, and the bytes
+/// retained on and off screen.
+#[no_mangle]
+pub extern "C" fn pxl_census() -> *const f64 {
+    state().census.as_ptr()
 }

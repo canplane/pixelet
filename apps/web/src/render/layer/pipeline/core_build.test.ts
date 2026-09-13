@@ -75,7 +75,15 @@ type Heard = { tiers: { generation: u32; step: LodStep; mesh: BakedChunkMesh }[]
 
 function chunk(): { id: u32; heard: Heard } {
   const heard: Heard = { tiers: [], runs: [] };
-  const id = CORE_BUILD.add({ on_tier: (generation, step, mesh) => heard.tiers.push({ generation, step, mesh }), on_runs: (b) => heard.runs.push(b) }, BASE, 320, 448);
+  const sink = {
+    on_tier: (generation: u32, step: LodStep, mesh: BakedChunkMesh) => heard.tiers.push({ generation, step, mesh }),
+    on_runs: (b: u32) => heard.runs.push(b),
+    on_visible: () => {},
+    on_layout: () => {},
+    on_blend: () => {},
+    on_evict: () => {},
+  };
+  const id = CORE_BUILD.add(sink, BASE, 320, 448, 320, 448);
   CORE_BUILD.source(id, terrain, false);
   return { id, heard };
 }
@@ -93,7 +101,7 @@ Deno.test("core build - a chunk's tiers are the TypeScript pipeline's meshes, by
     if (objects) { for (let k = 0n; k < 6n; k++) placed.push(place_cube(320n + 5n + k, 448n + 7n, 40n + k, "red")); }
     const { id, heard } = chunk();
     CORE_BUILD.want(id, 8, 1);
-    CORE_BUILD.tick([id], Infinity);
+    CORE_BUILD.build_tick([id], Infinity);
     assertEquals(heard.tiers.map((t) => t.step), [8, 1], `objects ${objects}: both tiers, in the order asked`);
     assert(heard.runs.at(-1)! > 0, "the runs are held and said so");
     for (const t of heard.tiers) {
@@ -109,21 +117,21 @@ Deno.test("core build - a chunk's tiers are the TypeScript pipeline's meshes, by
   for (const id of placed) remove(id);
 });
 
-Deno.test("core build - a source change mid-build makes what was in flight stale, and a reclaim lets the runs go", () => {
+Deno.test("core build - a source change mid-build makes what was in flight stale and lets the runs go", () => {
   const { id, heard } = chunk();
   CORE_BUILD.want(id, 1, null);
   // One step: the runs, and the bake opened.
-  CORE_BUILD.tick([id], 0);
-  CORE_BUILD.tick([id], 0);
+  CORE_BUILD.build_tick([id], 0);
+  CORE_BUILD.build_tick([id], 0);
   assertEquals(heard.tiers.length, 0, "a fine bake is not done in two steps");
   CORE_BUILD.source(id, terrain, true);
   CORE_BUILD.want(id, 1, null);
-  CORE_BUILD.tick([id], Infinity);
+  CORE_BUILD.build_tick([id], Infinity);
   assertEquals(heard.tiers.map((t) => [t.generation, t.step]), [[2, 1]], "only the new generation's tier arrives");
   const mesh = heard.tiers[0].mesh;
-  CORE_BUILD.reclaim(id);
+  CORE_BUILD.source(id, terrain, true);
   CORE_BUILD.pump();
-  assertEquals(heard.runs.at(-1), 0, "a reclaim lets the runs go");
+  assertEquals(heard.runs.at(-1), 0, "a source change lets the runs go");
   release_chunk_mesh(mesh);
   CORE_BUILD.remove(id);
   CORE_BUILD.pump();
@@ -134,7 +142,7 @@ Deno.test("core build - the eraser's hide leaves its cube out of the drawn build
   const build = () => {
     const { id, heard } = chunk();
     CORE_BUILD.want(id, 1, null);
-    CORE_BUILD.tick([id], Infinity);
+    CORE_BUILD.build_tick([id], Infinity);
     CORE_BUILD.remove(id);
     CORE_BUILD.pump();
     return heard.tiers[0].mesh;

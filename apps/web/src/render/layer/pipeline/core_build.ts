@@ -1,16 +1,18 @@
 // @pxl/web/render/layer/pipeline/core_build.ts
 
 /**
- * The glue's half of the chunks' builds, which run in the module
- * (crates/pxl-core/src/build.rs): commands into the submission ring, one
+ * The glue's half of the chunks' scheduling and builds, which run in the
+ * module (crates/pxl-core/src/{sched,build}.rs): commands into the
+ * submission ring, the frame written where the module reads it, one
  * `pxl_tick` a frame, and the completion ring read when it returns.
  *
- * A chunk here is an id and a sink. The node says what the chunk is made of
- * and which tiers it lacks; the module makes its runs and bakes its tiers
- * under the frame's budget and hands each mesh over whole, in a block of the
- * mesh section the sink now owns. A command is applied at the next tick, or
- * at once when the ring is full — `pump` makes room — so a sequence of them
- * is applied in the order it was sent.
+ * A chunk here is an id and a sink. The node says what the chunk is made of;
+ * the module decides whether it is on screen, which tiers it shows and how a
+ * blend weighs them, builds the tiers under the frame's budget, and tells the
+ * sink — a mesh handed over whole in a block of the mesh section the sink
+ * then owns, a layout to show, a tier to let go. A command is applied at the
+ * next tick, or at once when the ring is full — `pump` makes room — so a
+ * sequence of them is applied in the order it was sent.
  *
  * The TypeScript scan and mesher stay as the references the module is held
  * to (wasm_bake.test.ts, wasm_scan.test.ts); nothing on screen is built by
@@ -41,10 +43,30 @@ const OP_CHUNK_ADD = 1;
 const OP_CHUNK_REMOVE = 2;
 const OP_CHUNK_SOURCE = 3;
 const OP_CHUNK_WANT = 4;
-const OP_CHUNK_RECLAIM = 5;
 const OP_EDITS = 6;
 const OP_TIER = 16;
 const OP_RUNS = 17;
+const OP_VISIBLE = 18;
+const OP_LAYOUT = 19;
+const OP_BLEND = 20;
+const OP_EVICT = 21;
+
+/** crates/pxl-wasm/src/lib.rs's frame block: doubles, in this order. */
+export const FRAME_WORDS = 56;
+export const FRAME = {
+  root: 0,
+  origin: 16,
+  planes: 19,
+  camera: 43,
+  lead: 46,
+  viewport_h: 49,
+  fov_deg: 50,
+  delta_s: 51,
+  budget_ms: 52,
+  hard_slack_ms: 53,
+  pixel_dither: 54,
+  retain_budget_bytes: 55,
+} as const;
 
 /** What a chunk is told. */
 export type ChunkBuildSink = {
@@ -53,6 +75,30 @@ export type ChunkBuildSink = {
   on_tier(generation: u32, step: LodStep, mesh: BakedChunkMesh): void;
   /** The bytes the chunk's runs hold now. */
   on_runs(bytes: u32): void;
+  /** Show the chunk's group, or hide it. */
+  on_visible(on: boolean): void;
+  /** Show this layout, whose tiers the sink holds; not ready is nothing. */
+  on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void;
+  /** Weigh the layout's two tiers so, and give decor the secondary's. */
+  on_blend(primary: number, secondary: number, decor_secondary: boolean): void;
+  /** Let go of a tier; a layout showing it keeps its own hold. */
+  on_evict(step: LodStep): void;
+};
+
+/** The scheduler's census, for the ledger. */
+export type Census = {
+  chunks: u32;
+  in_frustum: u32;
+  settling: u32;
+  blend_active: u32;
+  pending: u32;
+  offscreen_pending: u32;
+  oldest_visible_ms: number;
+  oldest_release_ms: number;
+  committed: u32;
+  released: u32;
+  retained_on: number;
+  retained_off: number;
 };
 
 /** The build counters the ledger reads, cumulative since load. */
@@ -79,17 +125,25 @@ function f32_bits(v: number): u32 {
   return $f32_bits[0];
 }
 
+function f32_of(bits: u32): number {
+  $f32_bits[0] = bits;
+  return $f32[0];
+}
+
 export class CoreBuild {
   private readonly sq: Ring;
   private readonly cq: Ring;
   private readonly sinks = new Map<u32, ChunkBuildSink>();
   private next_id: u32 = 1;
   private order: Uint32Array;
+  /** Where the frame is written before a tick. */
+  readonly frame: Float64Array;
 
   constructor(private readonly pxl: PxlExports) {
     this.sq = new Ring(pxl.memory.buffer, pxl.pxl_ring_sq());
     this.cq = new Ring(pxl.memory.buffer, pxl.pxl_ring_cq());
     this.order = FIXED_ALLOC.take(Uint32Array, 1024);
+    this.frame = new Float64Array(pxl.memory.buffer, pxl.pxl_frame_at(), FRAME_WORDS);
   }
 
   /** Makes room in the submission ring: applies what waits, and hands out
@@ -114,20 +168,25 @@ export class CoreBuild {
         const mesh = carve_baked_mesh(CORE_POOL.adopt(w[a + 2], w[a + 3]), w[a + 4], w[a + 5]);
         if (sink) sink.on_tier(w[a], w[a + 1] as LodStep, mesh);
         else release_chunk_mesh(mesh);
-      } else if (op === OP_RUNS) {
-        sink?.on_runs(w[a]);
+      } else if (sink) {
+        if (op === OP_RUNS) sink.on_runs(w[a]);
+        else if (op === OP_VISIBLE) sink.on_visible(w[a] !== 0);
+        else if (op === OP_LAYOUT) sink.on_layout(w[a] as LodStep, w[a + 1] === 0 ? null : w[a + 1] as LodStep, w[a + 2] !== 0);
+        else if (op === OP_BLEND) sink.on_blend(f32_of(w[a]), f32_of(w[a + 1]), w[a + 2] !== 0);
+        else if (op === OP_EVICT) sink.on_evict(w[a] as LodStep);
       }
       this.cq.advance();
     }
   }
 
-  /** A new chunk whose column's base is `base`, starting at page cell
-   * (tx0, ty0): its id. */
-  add(sink: ChunkBuildSink, base: bigint, tx0: u32, ty0: u32): u32 {
+  /** A new chunk whose column's base is `base` — its X and Y in units
+   * beside it — starting at page cell (tx0, ty0), with the hash that picks
+   * its side of a per-chunk blend: its id. */
+  add(sink: ChunkBuildSink, base: bigint, base_x: number, base_y: number, tx0: u32, ty0: u32, stable_hash: u32 = 0): u32 {
     const id = this.next_id++;
     this.sinks.set(id, sink);
     const b = BigInt.asUintN(64, base);
-    this.submit(id, OP_CHUNK_ADD, id, Number(b & 0xffffffffn), Number(b >> 32n), tx0, ty0);
+    this.submit(id, OP_CHUNK_ADD, id, Number(b & 0xffffffffn), Number(b >> 32n), tx0, ty0, base_x >>> 0, base_y >>> 0, stable_hash >>> 0);
     return id;
   }
 
@@ -157,14 +216,10 @@ export class CoreBuild {
     );
   }
 
-  /** The tiers the chunk lacks, most wanted first; none gives its work back. */
+  /** The builder's ask, past the scheduler — for the tests that hold a
+   * build to the TypeScript pipeline, with `build_tick`. */
   want(id: u32, first: LodStep | null, second: LodStep | null): void {
     this.submit(id, OP_CHUNK_WANT, id, first ?? 0, second ?? 0);
-  }
-
-  /** Gives back the chunk's runs and its work, keeping its sources. */
-  reclaim(id: u32): void {
-    this.submit(id, OP_CHUNK_RECLAIM, id);
   }
 
   /** The drawn build's edits: the hidden entry by its column, band and
@@ -195,17 +250,49 @@ export class CoreBuild {
     );
   }
 
-  /** The frame's call: every command sent so far applied, then the chunks in
-   * `ids` advanced in that order for `budget_ms`, and what came of it handed
-   * to their sinks. */
-  tick(ids: ArrayLike<u32>, budget_ms: number): void {
+  /** The frame's call, once `frame` is written: every command sent so far
+   * applied, the scheduler's pass, and what came of it handed to the sinks.
+   * Whether the canvas has something new to draw. */
+  tick(): boolean {
+    const draw = (this.pxl.pxl_tick() & 1) !== 0;
+    this.read();
+    return draw;
+  }
+
+  /** Rebuilds chunk `id`'s layout to the end now, and hands over what that
+   * made: a placement shows in the frame it was made. */
+  build_now(id: u32): void {
+    this.pxl.pxl_build_now(id);
+    this.read();
+  }
+
+  /** The builder alone over `ids`, for the tests: no scheduler. */
+  build_tick(ids: ArrayLike<u32>, budget_ms: number): void {
     if (ids.length > this.order.length) {
       FIXED_ALLOC.give(this.order);
       this.order = FIXED_ALLOC.take(Uint32Array, 1 << Math.ceil(Math.log2(ids.length)));
     }
     for (let i = 0; i < ids.length; i++) this.order[i] = ids[i];
-    this.pxl.pxl_tick(this.order.byteOffset, ids.length, budget_ms);
+    this.pxl.pxl_build_tick(this.order.byteOffset, ids.length, budget_ms);
     this.read();
+  }
+
+  census(): Census {
+    const c = new Float64Array(this.pxl.memory.buffer, this.pxl.pxl_census(), 12);
+    return {
+      chunks: c[0],
+      in_frustum: c[1],
+      settling: c[2],
+      blend_active: c[3],
+      pending: c[4],
+      offscreen_pending: c[5],
+      oldest_visible_ms: c[6],
+      oldest_release_ms: c[7],
+      committed: c[8],
+      released: c[9],
+      retained_on: c[10],
+      retained_off: c[11],
+    };
   }
 
   stat(): BuildStat {

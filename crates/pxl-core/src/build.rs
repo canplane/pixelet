@@ -164,6 +164,11 @@ impl Builder {
         }
     }
 
+    /// The chunks holding the scan slot and the bake slot.
+    pub fn holders(&self) -> [Option<u32>; 2] {
+        [self.scan_job.as_ref().map(|j| j.id), self.bake_job.as_ref().map(|j| j.id)]
+    }
+
     pub fn bake_context(&self) -> &BakeContext {
         &self.bake
     }

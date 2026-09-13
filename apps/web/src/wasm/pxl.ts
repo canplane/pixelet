@@ -85,7 +85,11 @@ export type PxlExports = {
   pxl_ring_sq(): u32;
   pxl_ring_cq(): u32;
   pxl_drain(): u32;
-  pxl_tick(order_at: u32, order_len: u32, budget_ms: number): u32;
+  pxl_tick(): u32;
+  pxl_build_now(id: u32): void;
+  pxl_build_tick(order_at: u32, order_len: u32, budget_ms: number): void;
+  pxl_frame_at(): u32;
+  pxl_census(): u32;
   pxl_build_stat(): u32;
   pxl_object_paint(volume: u32, key: bigint, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: number, ly: number, lz: number, size: number): u32;
 };

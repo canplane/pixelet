@@ -53,9 +53,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the bake port and its little slabs, and staging a mesh past the core
      memory: a block the pool refuses leaves the work where it is. The
      TypeScript scan, mesher and volume readers stay only as the references
-     the tests hold the module to. Still TypeScript: the recheck (the
-     camera, the frustum and the LOD criterion), the chunk table's order,
-     decor, and the raycast's composite.
+     the tests hold the module to. Then the scheduler (2026-09-14,
+     crates/pxl-core/src/{sched,lod}.rs): the chunk table, the frustum test,
+     the LOD criterion and its blends, the priority order, the commits, the
+     tier cache and the retain budget's reclaim, over a frame the glue
+     writes where the module reads it; the node is a sink for what the
+     module decides. Still TypeScript: which chunks exist (the page mount
+     diff), decor, and the raycast's composite.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

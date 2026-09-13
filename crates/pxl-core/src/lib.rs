@@ -10,11 +10,13 @@
 
 pub mod buddy;
 pub mod build;
+pub mod lod;
 pub mod mesher;
 pub mod object;
 pub mod ring;
 pub mod run_set;
 pub mod scan;
+pub mod sched;
 pub mod sparse_tree;
 pub mod terrain;
 pub mod volume;

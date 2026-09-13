@@ -26,7 +26,7 @@ import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/module/wo
 import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
 import { CORE_MEMORY, core_pool_stat, core_sections_stat, MODULE_SECTION } from "@/render/layer/pipeline/core_pool.ts";
 import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
-import { chunk_retained_bytes, chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
+import { chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
 import { category_info } from "./category.ts";
 import {
@@ -263,8 +263,8 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     } scans/s over ${n1(f.backlog_s)}s`,
     `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the core pool`,
     `  retain  nodes ${retain.nodes}  runsets ${retain.run_sets} (${retain.run_set_mb}MB)  tiers ${retain.tiers}  decor ${retain.decor_steps} steps / ${retain.decor_instances} instances   kept on-screen ${
-      Math.round(chunk_retained_bytes().on / 1048576)
-    }MB, off-screen ${Math.round(chunk_retained_bytes().off / 1048576)} / ${Math.round(RETAIN_BUDGET_BYTES / 1048576)}MB budget`,
+      Math.round(CORE_BUILD.census().retained_on / 1048576)
+    }MB, off-screen ${Math.round(CORE_BUILD.census().retained_off / 1048576)} / ${Math.round(RETAIN_BUDGET_BYTES / 1048576)}MB budget`,
     `  lod     chunks ${last.lod.chunks}  in-frustum ${last.lod.in_frustum}  pending ${last.lod.pending}  settling ${last.lod.settling}  blending ${last.lod.blend_active}`,
     `  wait    releases ${last.lod.offscreen_pending} pending, oldest ${Math.round(last.lod.oldest_release_ms)} ms${starved(last.lod.oldest_release_ms)}   on-screen oldest ${
       Math.round(last.lod.oldest_visible_ms)
