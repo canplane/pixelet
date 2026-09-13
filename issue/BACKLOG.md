@@ -26,9 +26,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      `bake_path: wasm`, the default since the phone reading
      ([experiment/20260913-mesher-in-rust/](./experiment/20260913-mesher-in-rust/)),
      and held byte for byte to the TypeScript bake at every tier by
-     wasm_bake.test.ts. The mesher's own carried items are settled (below):
-     what is left of this item is the scan's and the volume's, when they are
-     the piece. Which thread it
+     wasm_bake.test.ts. The whole-chunk scan followed the same day
+     (crates/pxl-core/src/scan.rs, wasm_scan.test.ts byte for byte against
+     voxel_scan.ts; 1.9x on V8), reading the composite's bands where the
+     compositor left them. Still TypeScript: the compositor and the volume
+     it paints, the direct path (`fill_column_runs`, a writer callback per
+     layer) and the raycast's per-column `merge_column_runs`. Which thread it
      runs on is measured when it exists: the worker was tried on the phone
      and bought nothing, because the stepped bake already yields and the
      fill-in cost is elsewhere
@@ -48,18 +51,19 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
        and structs in Rust (the mesher's own — the bucket arena's objects and
        the `fine!`/`coarse!` pair — went with the translation);
      - the scan's module-level scratch (`SC`, `COLUMN_STARTS`, `open_scan`)
-       bound to the main thread's memory at import — a context, as the
-       mesher's is, when the scan is the piece being ported;
+       is a context in the Rust scan; the TypeScript's stays for the direct
+       path and the reference until they follow;
      - algorithm: `SubVoxels` as five parallel Vectors and its compaction
-       on every write — rewritten in Rust with the scan. The mesher's two
+       on every write — the volume's, rewritten with the compositor (the
+       Rust scan reads the five lanes as they are). The mesher's two
        were taken the same day: the coarse pack sorts its buckets; the O(k²)
        neighbour walks were rewritten as forward cursors, measured to buy
        nothing at the stack heights the scan produces, and reverted — where
        a fine bake's time goes is the face masks and writing the mesh
        ([experiment, "The rewrite, measured"](./experiment/20260913-mesher-in-rust/#the-rewrite-measured));
-     - `Infinity`-style sentinels and exceptions as API guards in the scan
-       and volume — `Option` and `Result` (the mesher's `-1`s are `Option`
-       now; its asserts stay, as a bake handed a malformed set is a bug).
+     - `Infinity`-style sentinels and exceptions as API guards in the
+       volume — `Option` and `Result` (the mesher's and scan's `-1`s are
+       `Option`; their asserts stay, as a malformed input is a bug).
   2. **The core to WASM on the main thread, and a WebGPU renderer.**
      three.js and R3F leave together (R3F can go earlier on its own). What
      three.js does for us today is listed in the destination issue as a

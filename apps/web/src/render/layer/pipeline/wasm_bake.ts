@@ -49,7 +49,7 @@ export class WasmBaker {
 
   /** `ctx` is where the counters go and `pool` where the meshes do — the
    * same two the stepped path bakes with. */
-  constructor(private readonly pxl: PxlExports, private readonly pool: MeshPool, private readonly ctx: BakeContext) {}
+  constructor(readonly pxl: PxlExports, private readonly pool: MeshPool, private readonly ctx: BakeContext) {}
 
   is_open(): boolean {
     return this.open !== null;

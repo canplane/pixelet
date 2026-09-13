@@ -14,8 +14,10 @@ import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
-import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "../../../apps/web/src/render/layer/pipeline/voxel.ts";
-import { type MeshRun, pack_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell, SUB_CELL_NONE, type VoxelMaterial } from "../../../apps/web/src/render/layer/pipeline/voxel.ts";
+import { type MeshRun, pack_column_runs, release_column_runs, scan_all_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
+import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, fill_chunk_column, seal_chunk_volume, set_chunk_voxel } from "../../../apps/web/src/render/layer/pipeline/volume.ts";
+import { WasmScanner } from "../../../apps/web/src/render/layer/pipeline/wasm_scan.ts";
 import { bake_chunk_mesh, BakeContext } from "../../../apps/web/src/render/layer/pipeline/chunk_mesher.ts";
 import { WasmBaker } from "../../../apps/web/src/render/layer/pipeline/wasm_bake.ts";
 import { CORE_MEMORY, CORE_POOL } from "../../../apps/web/src/render/layer/pipeline/core_pool.ts";
@@ -77,4 +79,58 @@ for (const [name, set] of [["flat", pack_column_runs(scene(1, true))], ["busy", 
       CORE_POOL.release(baker.finish(c).block);
     });
   }
+}
+
+// The scan, likewise: the TypeScript walk against the Rust one over the
+// same composite, both writing their set into the core pool.
+{
+  const volume = scene_volume();
+  Deno.bench({ name: "ts", group: "scan (busy composite)", baseline: true }, () => {
+    release_column_runs(scan_all_column_runs(volume));
+  });
+  const scanner = new WasmScanner(pxl, CORE_POOL);
+  Deno.bench({ name: "wasm", group: "scan (busy composite)" }, () => {
+    const c = scanner.begin(volume)!;
+    while (!scanner.step(c)) { /* whole */ }
+    release_column_runs(scanner.finish(c));
+  });
+}
+
+// wasm_scan.test.ts's composite: stacked runs, band gaps, objects, sub-cells,
+// overflow.
+function scene_volume(): ChunkVolume {
+  let s = 2 >>> 0;
+  const next = () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    return s >>> 0;
+  };
+  const material = (cls: MaterialClass = MaterialClass.LAND): VoxelMaterial => ({
+    material_class: cls,
+    r: next() % 256,
+    g: next() % 256,
+    b: next() % 256,
+    layer_idx: next() % 3 === 0 ? NO_LAYER : next() % 12,
+  });
+  const v = alloc_chunk_volume();
+  for (let cy = 0; cy < 64; cy++) {
+    for (let cx = 0; cx < 64; cx++) {
+      const base = -70 + (next() % 20);
+      const top = base + 40 + (next() % 60);
+      fill_chunk_column(v, cx, cy, base, top, material());
+      if (next() % 3 === 0) fill_chunk_column(v, cx, cy, top - 5, top, material());
+      if (next() % 7 === 0) fill_chunk_column(v, cx, cy, top + 64 + (next() % 130), top + 200, material());
+      if (next() % 5 === 0) {
+        const m = material(MaterialClass.OBJECT);
+        for (let k = 0; k < 3; k++) set_chunk_voxel(v, cx, cy, top + 1 + k, m);
+      }
+      if (next() % 6 === 0) {
+        const z = top + 2;
+        set_chunk_voxel(v, cx, cy, z, material(MaterialClass.OBJECT), [next() % 128, next() % 128, next() % 128, 1 + (next() % 127)]);
+        if (next() % 2 === 0) append_chunk_sub_voxel(v, cx, cy, z, material(MaterialClass.OBJECT), pack_sub_cell(next() % 128, next() % 128, next() % 128, 1 + (next() % 127)));
+      }
+    }
+  }
+  return seal_chunk_volume(v);
 }

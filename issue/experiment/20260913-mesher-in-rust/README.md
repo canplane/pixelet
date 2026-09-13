@@ -148,6 +148,18 @@ new module section — and `busy` at step 1 went from 4.0 to 3.3 ms through
 the module (bench.ts, V8; the TypeScript 4.1). The writing itself is bounded
 by how many faces survive, which the merge and the tiers decide.
 
+## The scan, the same day
+
+The whole-chunk scan went the same way — crates/pxl-core/src/scan.rs, the
+walk translated from voxel_scan.ts, reading the composite's bands and
+overflow lanes where the compositor left them in the core memory through
+a table of addresses, packing the set into a block acquired at the end —
+and wasm_scan.test.ts holds it byte for byte to the TypeScript scan over
+composites with band gaps, stacked objects, sub-cells and overflow (each
+of three rules removed from the Rust fails it). On V8 the scan of the
+test's busy composite went from 7.1 ms to 3.7 ms (1.9x); the phone is not
+read yet.
+
 ## What becomes of it
 
 `wasm` became the default bake path on these numbers, the same day. The

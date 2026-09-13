@@ -15,6 +15,7 @@ mod arena;
 
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::run_set::{run_set_bytes, RunSet};
+use pxl_core::scan::{BandView, ExtraView, ScanContext, ScanStep};
 
 #[global_allocator]
 static ALLOC: arena::Arena = arena::Arena;
@@ -25,6 +26,9 @@ struct State {
     input: (usize, u32, u32),
     /// vertex_cnt, index_cnt, the six counters, then the arena's use.
     result: [u32; 9],
+    scan: ScanContext,
+    /// The open scan's band table: its address, and how many bands.
+    bands: (usize, u32),
 }
 
 static mut STATE: Option<State> = None;
@@ -37,6 +41,8 @@ fn state() -> &'static mut State {
             ctx: BakeContext::new(),
             input: (0, 0, 0),
             result: [0; 9],
+            scan: ScanContext::new(),
+            bands: (0, 0),
         })
     }
 }
@@ -131,4 +137,92 @@ pub extern "C" fn pxl_bake_abort() {
 #[no_mangle]
 pub extern "C" fn pxl_module_bytes() -> u32 {
     arena::MODULE_BYTES as u32
+}
+
+/// Words a band takes in the table `pxl_scan_begin` reads (wasm_scan.ts
+/// writes the same): band_z; the addresses of the material, layer and
+/// sub-cell lanes (0 for no sub-cells); the extras' count and the addresses
+/// of their five lanes.
+pub const BAND_WORDS: usize = 10;
+
+fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
+    // SAFETY: the client writes the table into a lane of its own and every
+    // address in it names a lane of a band it keeps until the scan closes;
+    // ScanContext::begin checks each lane's length against the band's.
+    unsafe {
+        let table = core::slice::from_raw_parts(at as *const u32, count as usize * BAND_WORDS);
+        table
+            .chunks_exact(BAND_WORDS)
+            .map(|w| {
+                let voxels = (pxl_core::scan::BAND_SPAN * pxl_core::scan::BAND_SPAN * pxl_core::scan::BAND_SPAN) as usize;
+                let extras = w[4] as usize;
+                BandView {
+                    band_z: w[0] as i32,
+                    material: core::slice::from_raw_parts(w[1] as usize as *const u32, voxels),
+                    layer_idx: core::slice::from_raw_parts(w[2] as usize as *const u8, voxels),
+                    sub_cell: (w[3] != 0).then(|| core::slice::from_raw_parts(w[3] as usize as *const u8, voxels * 4)),
+                    extra: ExtraView {
+                        col: core::slice::from_raw_parts(w[5] as usize as *const u32, extras),
+                        z: core::slice::from_raw_parts(w[6] as usize as *const i32, extras),
+                        material: core::slice::from_raw_parts(w[7] as usize as *const u32, extras),
+                        layer_idx: core::slice::from_raw_parts(w[8] as usize as *const u8, extras),
+                        sub: core::slice::from_raw_parts(w[9] as usize as *const u32, extras),
+                    },
+                }
+            })
+            .collect()
+    }
+}
+
+/// Opens a scan of the `count` bands described at `at`, ascending by
+/// band_z. 0 when a scan is already open.
+#[no_mangle]
+pub extern "C" fn pxl_scan_begin(at: u32, count: u32) -> u32 {
+    let s = state();
+    if s.scan.is_open() {
+        return 0;
+    }
+    s.bands = (at as usize, count);
+    s.scan.begin(&band_views(s.bands)) as u32
+}
+
+/// One step of the open scan: STEP_WORKING, STEP_NEED_MESH — here the run
+/// set, whose bytes `pxl_scan_set_bytes` says, to be given by
+/// `pxl_scan_set` — or STEP_DONE.
+#[no_mangle]
+pub extern "C" fn pxl_scan_step() -> u32 {
+    let s = state();
+    match s.scan.step(&band_views(s.bands)) {
+        ScanStep::Working => STEP_WORKING,
+        ScanStep::NeedSet(_) => STEP_NEED_MESH,
+        ScanStep::Done => STEP_DONE,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_scan_set_bytes() -> u32 {
+    let s = state();
+    match s.scan.step(&band_views(s.bands)) {
+        ScanStep::NeedSet(bytes) => bytes,
+        _ => 0,
+    }
+}
+
+/// Where the run set goes: `bytes` bytes at `at`, 4-aligned, the client's.
+/// Packs it now; the next step is STEP_DONE.
+#[no_mangle]
+pub extern "C" fn pxl_scan_set(at: u32, bytes: u32) {
+    // SAFETY: the client's contract, above.
+    unsafe { state().scan.provide_set(at as *mut u8, bytes) }
+}
+
+/// Closes the packed scan: the run count of the set it packed.
+#[no_mangle]
+pub extern "C" fn pxl_scan_finish() -> u32 {
+    state().scan.finish()
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_scan_abort() {
+    state().scan.abort();
 }

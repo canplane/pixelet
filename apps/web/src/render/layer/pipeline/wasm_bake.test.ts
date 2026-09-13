@@ -211,6 +211,10 @@ Deno.test("wasm bake - the module keeps what the map reserves for it, and its he
     while (!baker.step(c)) { /* whole */ }
     CORE_POOL.release(baker.finish(c).block);
   }
-  assert(baker.heap_used > 0 && baker.heap_used < MODULE_SECTION.bytes / 4, `module heap at ${baker.heap_used} bytes`);
+  // The coarse bake's buckets are the bulk of it: 80 bytes each, one per
+  // (cell, height) a run touches, so a busy chunk at step 2 reaches a few
+  // megabytes, and the class rounding can double that. Half the section is
+  // the line; past it the sizing needs revisiting, not the test.
+  assert(baker.heap_used > 0 && baker.heap_used < MODULE_SECTION.bytes / 2, `module heap at ${baker.heap_used} bytes`);
   release_column_runs(set);
 });

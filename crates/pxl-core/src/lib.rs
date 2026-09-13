@@ -10,6 +10,7 @@
 
 pub mod mesher;
 pub mod run_set;
+pub mod scan;
 pub mod voxel;
 
 mod fdlibm;

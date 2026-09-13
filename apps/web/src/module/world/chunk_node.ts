@@ -56,20 +56,10 @@ import {
 } from "@/render/layer/pipeline/chunk_bucket.ts";
 import type { ChunkKey, WorldLayerStack } from "@/render/layer/pipeline/contract.ts";
 import { composite_chunk_layers } from "@/render/layer/pipeline/compositor.ts";
-import { begin_core_bake, CORE_BAKE, type CoreBake, resolve_core_mesher } from "@/render/layer/pipeline/core_bake.ts";
+import { begin_core_bake, begin_core_scan, CORE_BAKE, core_scan_open, type CoreBake, type CoreScan, resolve_core_mesher } from "@/render/layer/pipeline/core_bake.ts";
 import { add_bake_counters } from "@/render/layer/pipeline/bake_command.ts";
 import { bake_port } from "@/module/world/sched/bake_port.ts";
-import {
-  abort_column_scan,
-  begin_column_scan,
-  column_scan_open,
-  type ColumnRunSet,
-  type ColumnScan,
-  fill_column_runs,
-  finish_column_scan,
-  release_column_runs,
-  scan_column_rows,
-} from "@/render/layer/pipeline/voxel_scan.ts";
+import { column_scan_open, type ColumnRunSet, fill_column_runs, release_column_runs } from "@/render/layer/pipeline/voxel_scan.ts";
 import { type ChunkVolume, release_chunk_volume } from "@/render/layer/pipeline/volume.ts";
 import { CORE_MEMORY } from "@/render/layer/pipeline/core_pool.ts";
 import { lod_build_stats, record_bake_step, record_build, record_scan } from "@/module/world/lod_build_stat.ts";
@@ -367,15 +357,15 @@ export class ChunkNode {
    * stops needing its scan (disposed, source changed, left the frustum) has
    * to abort it rather than drop it. See abort_scan.
    */
-  private _scan: { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null = null;
+  private _scan: { volume: ChunkVolume; job: CoreScan; spent_ms: number } | null = null;
 
   /** The work in flight, and HOLDS_SLOT in the table with it: the slot
    * holder goes first in every order, so the flag must move the moment the
    * work does. */
-  private get scan(): { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null {
+  private get scan(): { volume: ChunkVolume; job: CoreScan; spent_ms: number } | null {
     return this._scan;
   }
-  private set scan(v: { volume: ChunkVolume; cursor: ColumnScan; spent_ms: number } | null) {
+  private set scan(v: { volume: ChunkVolume; job: CoreScan; spent_ms: number } | null) {
     this._scan = v;
     lod_scheduler.set_flag(this.slot, HOLDS_SLOT, v !== null || this._bake !== null);
   }
@@ -743,7 +733,7 @@ export class ChunkNode {
       // stepping — it is a few thousand array reads, three orders of
       // magnitude under the scan it replaces
       // (issue/20260912-coarse-tiers-what-the-field-does.md).
-      // The scratch is the scan's, so a stepped scan in flight means wait.
+      // The scratch is the TypeScript scan's, so one in flight means wait.
       if (column_scan_open()) return "blocked";
       let any = false;
       const set = fill_column_runs(CHUNK_CELL_SPAN, (w) => {
@@ -759,19 +749,23 @@ export class ChunkNode {
       lod_build_stats.direct_count++;
       return "done";
     }
+    // The scan goes the way the bake does (advance_bake), except that the
+    // worker path scans here: the worker bakes only.
+    const mesher = resolve_core_mesher(useSettingsStore.getState().bake_path === "wasm" ? "wasm" : "ts");
+    if (this.scan && this.scan.job.mesher !== mesher) this.abort_scan();
     if (!this.scan) {
       // Cheap check before the expensive compose: composing and then finding
       // the slot taken would spend a couple of milliseconds per pending chunk
       // for nothing, every frame the slot is busy.
-      if (column_scan_open()) return "blocked";
+      if (core_scan_open(mesher)) return "blocked";
       const volume = composite_chunk_layers(this.deps.stack, this.key);
       if (volume === null) return "blocked";
-      const cursor = begin_column_scan(volume);
-      if (cursor === null) {
+      const job = begin_core_scan(mesher, volume);
+      if (job === null) {
         release_chunk_volume(volume);
         return "blocked";
       }
-      this.scan = { volume, cursor, spent_ms: 0 };
+      this.scan = { volume, job, spent_ms: 0 };
       lod_build_stats.scan_bands += volume.bands.length;
       lod_build_stats.scan_bands_max = Math.max(lod_build_stats.scan_bands_max, volume.bands.length);
     }
@@ -781,15 +775,19 @@ export class ChunkNode {
     // is a few rows, around a millisecond on a band-heavy chunk.
     let done: boolean;
     do {
-      done = scan_column_rows(this.scan.cursor);
+      done = this.scan.job.advance();
+      // The mesh section had no block for the set: keep the scan where it
+      // is and let the frame end, as a starved bake does.
+      if (this.scan.job.starved()) break;
     } while (!done && (budget === null || budget.remaining() > 0));
     // Time actually spent scanning, summed across the frames it took — not
     // the wall time from first step to last, which would count the frames
     // in between as cost.
     this.scan.spent_ms += performance.now() - step_t0;
+    if (this.scan.job.starved()) return "blocked";
     if (!done) return "busy";
 
-    this.column_runs = finish_column_scan(this.scan.cursor);
+    this.column_runs = this.scan.job.finish();
     this.account(this.column_runs.block.bytes);
     release_chunk_volume(this.scan.volume);
     record_scan(this.scan.spent_ms);
@@ -942,7 +940,7 @@ export class ChunkNode {
   /** Drops a scan in progress and returns its composite to the pool. */
   private abort_scan(): void {
     if (!this.scan) return;
-    abort_column_scan(this.scan.cursor);
+    this.scan.job.abort();
     release_chunk_volume(this.scan.volume);
     this.scan = null;
   }

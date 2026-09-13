@@ -218,8 +218,9 @@ memory budget over the retained meshes.
 The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
-The chunk bake is stepped too — a few rows or a few hundred boxes a call —
-and runs through the Rust mesher (`crates/pxl-core`, compiled by
+The chunk scan and bake are stepped too — a row of columns, a few rows of
+masks or a few hundred boxes a call — and run through the Rust scan and
+mesher (`crates/pxl-core`, compiled by
 `crates/pxl-wasm` into one module with numeric exports and no bindgen, which
 imports the core memory: a run set is baked in the block it lives in and the
 mesh written into the block acquired for it, nothing copied). It is held byte

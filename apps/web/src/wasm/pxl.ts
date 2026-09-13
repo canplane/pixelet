@@ -32,6 +32,12 @@ export type PxlExports = {
   pxl_bake_mesh(at: u32, words: u32): void;
   pxl_bake_finish(): u32;
   pxl_bake_abort(): void;
+  pxl_scan_begin(bands_at: u32, count: u32): u32;
+  pxl_scan_step(): u32;
+  pxl_scan_set_bytes(): u32;
+  pxl_scan_set(at: u32, bytes: u32): void;
+  pxl_scan_finish(): u32;
+  pxl_scan_abort(): void;
 };
 
 /** pxl_bake_step's answers (crates/pxl-wasm/src/lib.rs). */
