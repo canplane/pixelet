@@ -51,21 +51,12 @@ export class Lanes<S extends LaneSpec> {
   get len(): u32 {
     return this._len;
   }
-  get cap(): u32 {
-    return this._cap;
-  }
 
   /** Claims the next row and returns its index; the lanes hold whatever
    * the previous occupant left, so the caller writes every lane it reads. */
   push(): u32 {
     if (this._len >= this._cap) this.grow(Math.max(this._cap * 2, 1));
     return this._len++;
-  }
-
-  /** Room for `cnt` more rows without a grow inside a hot loop. */
-  reserve(cnt: u32): void {
-    const req = this._len + cnt;
-    if (req > this._cap) this.grow(Math.max(this._cap * 2, req));
   }
 
   truncate(new_len: u32): void {

@@ -23,7 +23,7 @@ function layer(name: string, r: number): WorldLayer {
 
 Deno.test("compositor - later registered layers overwrite the same voxel", () => {
   const volume = composite_chunk_layers([layer("first", 10), layer("second", 20)], KEY)!;
-  const band = get_chunk_band(volume, 0, 0, 0)!;
+  const band = get_chunk_band(volume, 0)!;
   assertEquals(band_material(band, band_voxel_idx(0, 0, 0)).r, 20);
 });
 
@@ -37,7 +37,7 @@ Deno.test("compositor - explicit air from a later layer clears lower terrain", (
     },
   };
   const volume = composite_chunk_layers([layer("terrain", 10), air], KEY)!;
-  const band = get_chunk_band(volume, 0, 0, 0)!;
+  const band = get_chunk_band(volume, 0)!;
   assertEquals(band_material(band, band_voxel_idx(0, 0, 0)).material_class, MaterialClass.AIR);
 });
 

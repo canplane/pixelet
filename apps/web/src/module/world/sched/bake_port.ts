@@ -175,13 +175,6 @@ export class BakePort {
     }
   }
 
-  /** Slabs away or holding a reply, for the ledger. */
-  in_flight(): u32 {
-    let n = 0;
-    for (let i = 0; i < this.state.length; i++) if (this.state[i] === AWAY || this.state[i] === READY || this.state[i] === CANCELLED) n++;
-    return n;
-  }
-
   private find(tx_id: u32): number {
     for (let i = 0; i < this.tx.length; i++) if (this.state[i] !== FREE && this.tx[i] === tx_id) return i;
     return -1;

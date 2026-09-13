@@ -91,8 +91,6 @@ export type VoxelBand = {
 export type ChunkVolume = {
   /** Small ascending-Z array; normally one or two dense bands. */
   bands: VoxelBand[];
-  min_band_z: i32;
-  max_band_z: i32;
   sealed: boolean;
 };
 
@@ -153,7 +151,7 @@ export const band_pool_stats = { allocated: 0, reused: 0 };
 const band_pool: VoxelBand[] = [];
 
 export function alloc_chunk_volume(): ChunkVolume {
-  return { bands: [], min_band_z: Infinity, max_band_z: -Infinity, sealed: false };
+  return { bands: [], sealed: false };
 }
 
 /** Returns a consumed temporary composition: bands to the scratch pool up
@@ -174,14 +172,11 @@ export function release_chunk_volume(volume: ChunkVolume): void {
   volume.sealed = true;
 }
 
-export function get_chunk_band(
-  volume: ChunkVolume,
-  band_x: u32,
-  band_y: u32,
-  band_z: i32,
-): VoxelBand | undefined {
-  if (band_x !== 0 || band_y !== 0) return undefined;
-  return volume.bands.find((band) => band.band_z === band_z);
+/** The band at `band_z`, or undefined. A chunk is one column of bands, so
+ * the signed Z index is the whole key. */
+export function get_chunk_band(volume: ChunkVolume, band_z: i32): VoxelBand | undefined {
+  for (const band of volume.bands) if (band.band_z === band_z) return band;
+  return undefined;
 }
 
 export function chunk_band_zs(volume: ChunkVolume): i32[] {
@@ -260,8 +255,6 @@ function get_or_create_band(volume: ChunkVolume, band_z: i32): VoxelBand {
   drop_sub_cell(band);
   clear_sub_voxels(band.extra);
   volume.bands.splice(insert_at, 0, band);
-  volume.min_band_z = Math.min(volume.min_band_z, band_z);
-  volume.max_band_z = Math.max(volume.max_band_z, band_z);
   return band;
 }
 
