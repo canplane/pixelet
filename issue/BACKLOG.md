@@ -15,13 +15,15 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Taken from the smallest separable piece outward: a piece is first cut
   out behind a boundary that carries typed arrays, still in TypeScript, so
   the boundary is proven before the language changes behind it. In order:
-  1. **The read direction.** How the UI learns that state changed once the
-     truth is in the core — a subscription or dirty-flag protocol — designed
-     with the command channel
-     ([20260908-command-channel-for-state-mutation.md](./20260908-command-channel-for-state-mutation.md)),
-     not after it; the default without one is copying the world into JS
-     every frame. The hypothesis to design from is a pull — a revision
-     counter read once a tick — per the boundaries document above.
+  1. **The read direction.** Designed 2026-09-13, not built:
+     [20260913-the-read-direction-a-change-log.md](./20260913-the-read-direction-a-change-log.md).
+     A change is `{topic u16, key u64, revision u32}`; a source bumps, which
+     writes a revision table and one fixed-capacity journal; a reader either
+     compares a point revision or reads the journal from its cursor, and an
+     overwritten cursor reads as lost and re-reads its topics. Push, pull,
+     React and a worker's mirror are adapters over it. Left, in order: the
+     log in `@xpute/core/ipc/change.ts`, then the six mechanisms that read
+     today moved onto it one at a time.
   2. **Spill past the reservation becomes a budget signal.** The core
      memory is fixed (`initial == maximum`, never grown — grow would detach every view, and resizable buffers read
      2.5x slower and are refused by WebGL/WebGPU); past 512 MB the buddy pool

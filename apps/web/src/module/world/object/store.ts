@@ -57,6 +57,7 @@ import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree, SparseTreeLayout } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
 
@@ -668,75 +669,24 @@ function index_cells(cpos: number): void {
 }
 
 /**
- * Per-column revisions, from one counter shared by every column and never
- * reset — a column's own counter could come back to a value a chunk had
- * already seen once the column emptied and filled again. Two per column,
- * cube content and decor, kept apart so a decor-only change (hovering the
- * eraser over a placed tree) never forces the chunk to rescan and rebake
- * its cubes — visible as a flicker, 2026-09-05 — and a solid-only change
- * never rebuilds decor for nothing.
+ * Per-column revisions, two per column — cube content and decor — kept apart
+ * so a decor-only change (hovering the eraser over a placed tree) never
+ * forces the chunk to rescan and rebake its cubes — visible as a flicker,
+ * 2026-09-05 — and a solid-only change never rebuilds decor for nothing.
+ * They are the world change log's (module/world/change.ts), whose revisions
+ * come from one tick per topic and never repeat for a key, so a column that
+ * empties and fills again cannot hand a chunk a revision it already saw.
  */
-let revision_seq = 0;
 
-/** The last revision handed out — moves on every write to any column, so
- * a reader that cached a derived answer can tell whether the store has
- * changed under it at all. */
+/** Moves on every write to any column, so a reader that cached a derived
+ * answer can tell whether the store has changed under it at all. */
 export function objects_revision(): number {
-  return revision_seq;
+  return world_changes.tick(WorldTopic.OBJECT_COLUMN) + world_changes.tick(WorldTopic.DECOR_COLUMN);
 }
-const rev_map = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
-const rev_objects = new Vector(Uint32Array, LANE);
-const rev_decor = new Vector(Uint32Array, LANE);
-
-/**
- * Listeners stay callbacks, by column and by cell. A consumer subscribed to
- * one key is woken only when that key changed. The keys — a column base, a
- * cell corner — are an IndexedMap in the core memory; the callbacks are the
- * handles at each position, the one part of this that is a function.
- */
-class ListenerTable {
-  private readonly index = new IndexedMap(I64_KEYS, 64, CORE_ALLOC);
-  private readonly lists: (() => void)[][] = [];
-
-  subscribe(key: IVec, listener: () => void): () => void {
-    const pos = this.index.insert(key);
-    (this.lists[pos] ??= []).push(listener);
-    return () => {
-      const p = this.index.find(key);
-      if (p < 0) return;
-      const list = this.lists[p];
-      const at = list.indexOf(listener);
-      if (at >= 0) list.splice(at, 1);
-      if (list.length > 0) return;
-      const from = this.index.remove_at(p);
-      if (from !== p) this.lists[p] = this.lists[from];
-      this.lists.length = from;
-    };
-  }
-
-  notify(key: IVec): void {
-    const pos = this.index.find(key);
-    if (pos < 0) return;
-    // A listener may unsubscribe as it runs; walk what was there when the
-    // notification began.
-    for (const listener of this.lists[pos].slice()) listener();
-  }
-}
-
-const column_listeners = new ListenerTable();
-const decor_column_listeners = new ListenerTable();
-const cell_listeners = new ListenerTable();
 
 function bump_column(base: IVec, objects: boolean, decor: boolean): void {
-  const p = rev_map.insert(base);
-  if (objects) {
-    rev_objects.set(p, ++revision_seq);
-    column_listeners.notify(base);
-  }
-  if (decor) {
-    rev_decor.set(p, ++revision_seq);
-    decor_column_listeners.notify(base);
-  }
+  if (objects) bump_world(WorldTopic.OBJECT_COLUMN, base);
+  if (decor) bump_world(WorldTopic.DECOR_COLUMN, base);
 }
 
 /** Hovered-object snapshots, by id — useSyncExternalStore needs the same
@@ -756,7 +706,7 @@ function reindex_chunk(base: IVec): void {
   for (const id of placed_snapshots.keys()) {
     if (touched_cells.find(cell_corner(...parse_cell_key(entry_cell_key(id))).i) >= 0) placed_snapshots.delete(id);
   }
-  for (let t = 0; t < touched_cells.size; t++) cell_listeners.notify(BigInt.asUintN(64, touched_cells.key_at(t)));
+  for (let t = 0; t < touched_cells.size; t++) bump_world(WorldTopic.OBJECT_CELL, BigInt.asUintN(64, touched_cells.key_at(t)));
   touched_cells.clear();
 }
 
@@ -946,22 +896,20 @@ export function clear_virtual_carve_preview(): void {
 
 /** Cube-content revision of a column — a decor-only change never bumps it. */
 export function object_column_revision(base: IVec): number {
-  const p = rev_map.find(base);
-  return p < 0 ? 0 : rev_objects.get(p);
+  return world_changes.revision_of(WorldTopic.OBJECT_COLUMN, base);
 }
 
 /** Decor revision of a column — a solid-only change never bumps it. */
 export function decor_column_revision(base: IVec): number {
-  const p = rev_map.find(base);
-  return p < 0 ? 0 : rev_decor.get(p);
+  return world_changes.revision_of(WorldTopic.DECOR_COLUMN, base);
 }
 
 export function subscribe_object_column(base: IVec, on_change: () => void): () => void {
-  return column_listeners.subscribe(base, on_change);
+  return world_wakers.subscribe(WorldTopic.OBJECT_COLUMN, base, on_change);
 }
 
 export function subscribe_decor_column(base: IVec, on_change: () => void): () => void {
-  return decor_column_listeners.subscribe(base, on_change);
+  return world_wakers.subscribe(WorldTopic.DECOR_COLUMN, base, on_change);
 }
 
 /** React hook: one hovered object, re-rendering only when its own cell
@@ -969,7 +917,7 @@ export function subscribe_decor_column(base: IVec, on_change: () => void): () =>
 export function usePlacedObject(id: string | null): OccupiedEntry | null {
   const parsed = id ? parse_leaf_id(id) : null;
   return useSyncExternalStore(
-    (on_change) => parsed ? cell_listeners.subscribe(cell_corner(...parse_cell_key(parsed.key)).i, on_change) : () => {},
+    (on_change) => parsed ? world_wakers.subscribe(WorldTopic.OBJECT_CELL, cell_corner(...parse_cell_key(parsed.key)).i, on_change) : () => {},
     () => {
       if (!id) return null;
       if (!placed_snapshots.has(id)) placed_snapshots.set(id, get_placed_object(id));

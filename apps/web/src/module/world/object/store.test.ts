@@ -1,6 +1,7 @@
 // @pxl/web/module/world/object/store.test.ts
 
 import { assertEquals, assertNotEquals } from "@std/assert";
+import { world_wakers } from "@/module/world/change.ts";
 
 import { fvec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
@@ -175,24 +176,29 @@ Deno.test("object/store cells - occupancy follows placement and removal, and air
   assertEquals(cell_is_occupied(ix, iy, iz), false);
 });
 
-Deno.test("object/store listeners - a column's subscribers hear its own changes, on the right channel, until they unsubscribe", () => {
+Deno.test("object/store listeners - a column's subscribers hear its own changes at the next pump, on the right channel, until they unsubscribe", () => {
   const { i, f } = fresh_corner();
   const other = fresh_corner();
   const column = L2_BASE(TO_XY(i));
+  world_wakers.pump();
   let objects = 0, decor = 0, elsewhere = 0;
   const off_objects = subscribe_object_column(column, () => objects++);
   const off_decor = subscribe_decor_column(column, () => decor++);
   const off_other = subscribe_object_column(L2_BASE(TO_XY(ivec.gather(1_000_000n, 1_000_000n, 0n))), () => elsewhere++);
 
   place_decor(i, f, DECOR_SIZE, "tree");
+  assertEquals([objects, decor, elsewhere], [0, 0, 0], "nothing runs inside the write");
+  world_wakers.pump();
   assertEquals([objects, decor, elsewhere], [1, 1, 0]);
   place_decor(other.i, other.f, DECOR_SIZE, "tree");
+  world_wakers.pump();
   const same_column = L2_BASE(TO_XY(other.i)) === column;
   assertEquals([objects, decor, elsewhere], [same_column ? 2 : 1, same_column ? 2 : 1, 0]);
 
   off_objects();
   const before = decor;
   place(i, f, DECOR_SIZE, "red");
+  world_wakers.pump();
   assertEquals(objects, same_column ? 2 : 1);
   assertEquals(decor > before, true);
   off_decor();
