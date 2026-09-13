@@ -158,12 +158,19 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      one React commit — had no counterpart in the module, and each was a
      stall; the module has its own now. **Before the renderer, the
      performance pass the profile of 2026-09-14 points at** (measured with
-     the ledger, dev build, desktop): the fine tiers' throughput — a
-     zoom-in scans about 25 chunks a second, compose, scan and bake at
-     ~40 ms a chunk, `BakeContext::step` the largest Rust entry — and the
-     refusals a zoom-in still meets (414 in one, the 2–4 MB blocks of fine
-     meshes against a section fragmented by run sets and tiers: a
-     large-block region, or a reclaim that coalesces). What the profile
+     the ledger, dev build, desktop). Taken the same day, on the module's
+     own counters: a chunk with nothing placed takes the direct path at
+     every tier, since its runs are the same either way (pinned by
+     core_build.test.ts) — a zoom-in scanned every chunk in view, about 25
+     a second, most of them empty of objects; direct runs go with the last
+     tier wanted rather than filling the section with small blocks; and a
+     frame that had a block refused releases off-screen layouts at 64 a
+     frame rather than 2, since what they still show is the room the
+     refused block needs. A zoom-in over a thousand chunks settles in a
+     second with under a hundred refusals, from six seconds and counting.
+     Left for the frame-based pass after the renderer: `BakeContext::step`
+     itself (face masks and the mesh write), and a large-block region if
+     refusals show again. What the profile
      also shows and the renderer removes: three's `updateMatrixWorld` over
      2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
      world (tree 281k, car 99k triangles a frame; P3 below). Next:
