@@ -66,6 +66,11 @@ const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
  * frame sample, dev-only. */
 export const node_counts = { added: 0, removed: 0, rebuilt: 0, released: 0 };
 
+/** The last layouts that landed, dev-only: when, where, which tier — the
+ * order the world fills in, read off the console. */
+export const landing_log: { t: number; base_x: number; base_y: number; step: LodStep; ready: boolean }[] = [];
+const LANDING_LOG_CAP = 2048;
+
 export function take_node_counts(): { added: u32; removed: u32; rebuilt: u32; released: u32 } {
   const out = { ...node_counts };
   Object.assign(node_counts, { added: 0, removed: 0, rebuilt: 0, released: 0 });
@@ -394,6 +399,9 @@ export class ChunkNode {
         CORE_BUILD.build_now(this.id);
       });
       return;
+    }
+    if (import.meta.env.DEV && landing_log.length < LANDING_LOG_CAP) {
+      landing_log.push({ t: performance.now(), base_x: this.deps.offset.base_x, base_y: this.deps.offset.base_y, step: primary, ready: true });
     }
     const decor = this.decor_pair(primary, secondary);
     // The same tiers told again with the same meshes is the module's decor

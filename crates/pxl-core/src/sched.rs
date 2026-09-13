@@ -15,7 +15,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
-use crate::decor::{Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::lod::{Ladder, COARSEST};
 use crate::terrain::ChunkSample;
 
@@ -260,7 +260,7 @@ impl Default for Scheduler {
 /// Runs `step` over `items` under a budget: the first item always, then
 /// until `cap` items did something or the budget is spent, and never past a
 /// hard deadline once one item was tried. How many did something.
-fn under_budget(items: &[u32], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, mut step: impl FnMut(u32) -> bool) -> u32 {
+fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, mut step: impl FnMut(T) -> bool) -> u32 {
     let mut ran = 0;
     for (visited, &id) in items.iter().enumerate() {
         let t = now();
@@ -489,7 +489,11 @@ impl Scheduler {
                 continue;
             }
             let view = Builder::page_view(world, page);
-            if !sampled {
+            // The elevations are the scatter's; a tier no kind is drawn on,
+            // or decor switched off, stands only the placed entries, which
+            // carry their own height.
+            let scatters = show_decor && self.decor_kinds.iter().any(|k| k.density > 0.0 && decor_density(k.extent, step) > 0.0);
+            if scatters && !sampled {
                 self.decor_sample.read(&view, world.materials, tx0, ty0, show_structures);
                 sampled = true;
             }
@@ -642,24 +646,20 @@ impl Scheduler {
         // The pending lists from the flags as the frame found them, before
         // the recheck moves them, as the stage's pass had it.
         let (mut visible, mut offscreen) = (Vec::new(), Vec::new());
-        for &id in &order {
-            let s = &self.slots[self.index[&id]];
+        for &i in &order {
+            let s = &self.slots[i];
             if s.has(PENDING) {
                 if s.has(IN_FRUSTUM) {
-                    visible.push(id)
+                    visible.push(i)
                 } else {
-                    offscreen.push(id)
+                    offscreen.push(i)
                 }
             }
         }
 
-        let eligible: Vec<u32> = order
-            .iter()
-            .copied()
-            .filter(|&id| full_recheck || self.slots[self.index[&id]].flags & (BLEND_ACTIVE | SETTLING) != 0)
-            .collect();
-        let rechecked = under_budget(&eligible, u32::MAX, deadline, hard, now, |id| {
-            self.recheck(world, id, t0, &frame, emit);
+        let eligible: Vec<usize> = order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (BLEND_ACTIVE | SETTLING) != 0).collect();
+        let rechecked = under_budget(&eligible, u32::MAX, deadline, hard, now, |i| {
+            self.recheck(world, i, t0, &frame, emit);
             true
         });
         if full_recheck && rechecked as usize == eligible.len() {
@@ -667,12 +667,12 @@ impl Scheduler {
         }
 
         let pending_total = (visible.len() + offscreen.len()) as u32;
-        let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |id| self.commit(world, id, emit));
-        committed += under_budget(&offscreen, MAX_RELEASES_PER_FRAME, deadline, hard, now, |id| self.commit(world, id, emit));
+        let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
+        committed += under_budget(&offscreen, MAX_RELEASES_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
 
         // The builds, visible pending first in order, with what is left; the
         // chunks a tier landed on are committed after.
-        let still: Vec<u32> = visible.iter().copied().filter(|&id| self.slots[self.index[&id]].has(PENDING)).collect();
+        let still: Vec<u32> = visible.iter().filter(|&&i| self.slots[i].has(PENDING)).map(|&i| self.slots[i].id).collect();
         let mut landed: Vec<u32> = Vec::new();
         let budget = (deadline - now()).max(0.0);
         {
@@ -686,8 +686,10 @@ impl Scheduler {
             });
         }
         for id in landed {
-            if self.commit(world, id, emit) {
-                committed += 1;
+            if let Some(&i) = self.index.get(&id) {
+                if self.commit(world, i, emit) {
+                    committed += 1;
+                }
             }
         }
 
@@ -749,23 +751,27 @@ impl Scheduler {
         }
     }
 
-    /// Every chunk's id in priority order (`priority`).
-    fn order(&self, now: f64) -> Vec<u32> {
+    /// Every slot in priority order (`priority`), the keys aged once rather
+    /// than in the comparator.
+    fn order(&self, now: f64) -> Vec<usize> {
         let holders = self.builder.holders();
-        let keys: Vec<Priority> = self
+        let keys: Vec<Keyed> = self
             .slots
             .iter()
-            .map(|s| Priority {
-                holds: holders.contains(&Some(s.id)),
-                in_frustum: s.has(IN_FRUSTUM),
-                empty: s.has(EMPTY),
-                lead_distance2: s.lead_distance2,
-                pending_since: s.pending_since,
+            .map(|s| {
+                Priority {
+                    holds: holders.contains(&Some(s.id)),
+                    in_frustum: s.has(IN_FRUSTUM),
+                    empty: s.has(EMPTY),
+                    lead_distance2: s.lead_distance2,
+                    pending_since: s.pending_since,
+                }
+                .keyed(now)
             })
             .collect();
         let mut idx: Vec<usize> = (0..self.slots.len()).collect();
-        idx.sort_by(|&a, &b| priority(&keys[a], &keys[b], now));
-        idx.into_iter().map(|i| self.slots[i].id).collect()
+        idx.sort_by(|&a, &b| priority_keyed(&keys[a], &keys[b]));
+        idx
     }
 
     fn set_pending(&mut self, i: usize, pending: bool, request: i32, now: f64) {
@@ -802,8 +808,7 @@ impl Scheduler {
     }
 
     /// chunk_node.ts's recheck: the tier wanted, the blend, what to commit.
-    fn recheck(&mut self, world: &mut World, id: u32, now: f64, frame: &Frame, emit: &mut impl FnMut(Event)) {
-        let Some(&i) = self.index.get(&id) else { return };
+    fn recheck(&mut self, world: &mut World, i: usize, now: f64, frame: &Frame, emit: &mut impl FnMut(Event)) {
         if !self.slots[i].has(IN_FRUSTUM) {
             self.slots[i].desired = (COARSEST, 0);
             let ready = self.slots[i].layout_ready;
@@ -926,8 +931,7 @@ impl Scheduler {
 
     /// chunk_node.ts's commit: a release off screen, a layout on it whose
     /// tiers are all in hand.
-    fn commit(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(Event)) -> bool {
-        let Some(&i) = self.index.get(&id) else { return false };
+    fn commit(&mut self, world: &mut World, i: usize, emit: &mut impl FnMut(Event)) -> bool {
         let s = &self.slots[i];
         if !s.has(PENDING) {
             return false;
@@ -959,7 +963,7 @@ impl Scheduler {
     /// since the last pass is pressure too, whatever the numbers say: the
     /// section has room in bytes but not in one piece, and what gives it
     /// back in pieces that join is the off-screen work, farthest first.
-    fn reclaim(&mut self, world: &mut World, order: &[u32], emit: &mut impl FnMut(Event)) {
+    fn reclaim(&mut self, world: &mut World, order: &[usize], emit: &mut impl FnMut(Event)) {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
         let refused = self.builder.stat.starved != self.refused_seen;
         self.refused_seen = self.builder.stat.starved;
@@ -970,14 +974,14 @@ impl Scheduler {
         let cap = if refused { MAX_RECLAIMS_WHEN_REFUSED } else { MAX_RECLAIMS_PER_FRAME };
         let mut freed = 0;
         // The order already puts off-screen chunks farthest first.
-        for &id in order {
+        for &i in order {
             if freed >= cap || !(refused || self.retained_off > budget || pressed(world)) {
                 break;
             }
-            let Some(&i) = self.index.get(&id) else { continue };
             if self.slots[i].has(IN_FRUSTUM) || self.slots[i].retained() <= 0.0 {
                 continue;
             }
+            let id = self.slots[i].id;
             let before = self.slots[i].retained();
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
@@ -1003,11 +1007,10 @@ impl Scheduler {
         // What they show is their layout's tiers; the runs and the other
         // tiers are a convenience for the next zoom, given back farthest
         // first, from chunks not mid-build, until the frame's share is spent.
-        for &id in order.iter().rev() {
+        for &i in order.iter().rev() {
             if freed >= cap {
                 break;
             }
-            let Some(&i) = self.index.get(&id) else { continue };
             let s = &self.slots[i];
             if !s.has(IN_FRUSTUM) || s.has(PENDING) {
                 continue;
@@ -1110,18 +1113,33 @@ pub struct Priority {
 /// wanted again; a wait halves the distance key every AGE_HALF_MS, within
 /// its class; at the same key, a hole before a chunk asking to be sharper.
 pub fn priority(a: &Priority, b: &Priority, now: f64) -> core::cmp::Ordering {
-    let key = |p: &Priority| {
-        if p.pending_since < 0.0 {
-            p.lead_distance2
+    priority_keyed(&a.keyed(now), &b.keyed(now))
+}
+
+/// A priority with its distance key aged for one `now`.
+#[derive(Clone, Copy)]
+pub struct Keyed {
+    p: Priority,
+    key: f64,
+}
+
+impl Priority {
+    pub fn keyed(self, now: f64) -> Keyed {
+        let key = if self.pending_since < 0.0 {
+            self.lead_distance2
         } else {
-            p.lead_distance2 * 2f64.powf(-2.0 * (now - p.pending_since) / AGE_HALF_MS)
-        }
-    };
-    b.holds
-        .cmp(&a.holds)
-        .then(b.in_frustum.cmp(&a.in_frustum))
-        .then_with(|| if a.in_frustum { key(a).total_cmp(&key(b)) } else { key(b).total_cmp(&key(a)) })
-        .then(b.empty.cmp(&a.empty))
+            self.lead_distance2 * 2f64.powf(-2.0 * (now - self.pending_since) / AGE_HALF_MS)
+        };
+        Keyed { p: self, key }
+    }
+}
+
+fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
+    b.p.holds
+        .cmp(&a.p.holds)
+        .then(b.p.in_frustum.cmp(&a.p.in_frustum))
+        .then_with(|| if a.p.in_frustum { a.key.total_cmp(&b.key) } else { b.key.total_cmp(&a.key) })
+        .then(b.p.empty.cmp(&a.p.empty))
 }
 
 /// Where a slot is from a frame: on screen, its world centre, and its two
