@@ -54,7 +54,19 @@ export type ChangeLogOptions = {
   alloc?: TypedAlloc;
 };
 
-export class ChangeLog {
+/** What a reader walks: the journal's lanes and positions. ChangeLog is one;
+ * a log kept in a WASM core and read through views is another. */
+export type ChangeJournal = {
+  readonly topics: u32;
+  readonly head: Cursor;
+  readable(cursor: Cursor): boolean;
+  slot(position: Cursor): u32;
+  readonly topic: Uint16Array<ArrayBufferLike>;
+  readonly key: BigInt64Array<ArrayBufferLike>;
+  readonly revision: Uint32Array<ArrayBufferLike>;
+};
+
+export class ChangeLog implements ChangeJournal {
   readonly capacity: u32;
 
   /** Journal lanes. Entry at position p is at index `slot(p)`. */

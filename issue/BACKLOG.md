@@ -58,8 +58,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the LOD criterion and its blends, the priority order, the commits, the
      tier cache and the retain budget's reclaim, over a frame the glue
      writes where the module reads it; the node is a sink for what the
-     module decides. Still TypeScript: which chunks exist (the page mount
-     diff), decor, and the raycast's composite.
+     module decides. Then the world's change log (crates/pxl-core/src/change.rs):
+     the journal and the revisions are the module's, read as views; the
+     object store bumps its column and cell topics inside its reindex, and
+     the sources still in TypeScript — the page tables, decor's assets, the
+     eraser's hide — bump through an export. Still TypeScript: which chunks
+     exist (the page mount diff), decor, and the raycast's composite.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

@@ -15,6 +15,7 @@ mod arena;
 
 use pxl_core::buddy::Pool;
 use pxl_core::build::{Event as BuildEvent, PageLanes, World};
+use pxl_core::change::ChangeLog;
 use pxl_core::mesher::{BakeContext, Step};
 use pxl_core::object::{Carve, Kind, Painter, Store};
 use pxl_core::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
@@ -59,6 +60,9 @@ struct State {
     /// The chunks' builds, and the events they made that the completion
     /// ring had no room for yet.
     sched: Scheduler,
+    /// The world's change log (module/world/change.ts's topics).
+    changes: ChangeLog,
+    change_row: [u32; 6],
     /// The frame the glue writes before each tick (FRAME_WORDS doubles).
     frame: [f64; FRAME_WORDS],
     census: [f64; 12],
@@ -115,6 +119,8 @@ fn state() -> &'static mut State {
                 sq: new_ring(RING_CAPACITY),
                 cq: new_ring(RING_CAPACITY),
                 sched: Scheduler::new(),
+                changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
+                change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
                 census: [0.0; 12],
                 events: std::collections::VecDeque::new(),
@@ -571,26 +577,69 @@ pub extern "C" fn pxl_object_write(key: u64, band_z: i32, x: u32, y: u32, z: u32
     state().objects.write(key, band_z, [x, y, z], level, value);
 }
 
-/// Re-derives the chunk's entries and cells; the cells that changed are
-/// then pxl_object_touched's.
+/// module/world/change.ts's WorldTopic numbers the store bumps, and the
+/// log's shape.
+pub const TOPIC_OBJECT_COLUMN: u16 = 0;
+pub const TOPIC_DECOR_COLUMN: u16 = 1;
+pub const TOPIC_OBJECT_CELL: u16 = 2;
+pub const WORLD_TOPICS: usize = 6;
+pub const JOURNAL_CAPACITY: usize = 4096;
+
+/// A lattice word's X and Y lanes, signed: pvf3/ivec.ts's layout, X in the
+/// top 24 bits, Y in the next 24, Z in the low 16.
+fn lanes_xy(v: u64) -> (i64, i64) {
+    ((v as i64) >> 40, ((v << 24) as i64) >> 40)
+}
+
+fn gather(x: i64, y: i64, z: i64) -> u64 {
+    ((x as u64 & 0xff_ffff) << 40) | ((y as u64 & 0xff_ffff) << 16) | (z as u64 & 0xffff)
+}
+
+/// Re-derives the chunk's entries and cells, and records the change: the
+/// column in both of its topics, and every cell whose entries changed, by
+/// its corner.
 #[no_mangle]
 pub extern "C" fn pxl_object_reindex(key: u64) {
-    state().objects.reindex(key);
-}
-
-/// Takes the cells touched since the last take: how many rows of
-/// (cx, cy, absolute cell z) are at pxl_object_touched_at.
-#[no_mangle]
-pub extern "C" fn pxl_object_touched() -> u32 {
     let s = state();
+    s.objects.reindex(key);
+    s.changes.bump(TOPIC_OBJECT_COLUMN, key);
+    s.changes.bump(TOPIC_DECOR_COLUMN, key);
     let (at, n) = s.objects.take_touched();
-    s.object_row[0] = at as u32;
-    n as u32
+    let (x0, y0) = lanes_xy(key);
+    for r in 0..n {
+        // SAFETY: the rows take_touched just handed back, three words each.
+        let row = unsafe { core::slice::from_raw_parts(at.add(r * 3), 3) };
+        let corner = gather(x0 + row[0] as i64, y0 + row[1] as i64, row[2] as i64);
+        s.changes.bump(TOPIC_OBJECT_CELL, corner);
+    }
+}
+
+// ---- The change log ----
+
+/// The log's lanes as a row of six words: the topic (u16), key (u64) and
+/// revision (u32) lanes, the head word, the ticks (u32 a topic), and the
+/// capacity.
+#[no_mangle]
+pub extern "C" fn pxl_change_lanes() -> *const u32 {
+    let s = state();
+    let l = s.changes.lanes();
+    s.change_row = [l[0] as u32, l[1] as u32, l[2] as u32, l[3] as u32, l[4] as u32, s.changes.capacity() as u32];
+    s.change_row.as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn pxl_object_touched_at() -> u32 {
-    state().object_row[0]
+pub extern "C" fn pxl_change_bump(topic: u32, key: u64) -> u32 {
+    state().changes.bump(topic as u16, key)
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_change_forget(topic: u32, key: u64) {
+    state().changes.forget(topic as u16, key);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_change_revision(topic: u32, key: u64) -> u32 {
+    state().changes.revision_of(topic as u16, key)
 }
 
 #[no_mangle]

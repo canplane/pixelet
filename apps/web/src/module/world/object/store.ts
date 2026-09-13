@@ -58,7 +58,7 @@ import {
 import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { CORE_BUILD } from "@/render/layer/pipeline/core_build.ts";
-import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
+import { bump_world, request_world_tick, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
 
@@ -440,26 +440,23 @@ function bump_column(base: IVec, objects: boolean, decor: boolean): void {
  * is read. Dropped when their cell changes. */
 const placed_snapshots = new Map<string, OccupiedEntry | null>();
 
-/** Re-derives one chunk's entries and cells in the module, then tells
- * whoever is watching: the column, and every cell whose entries changed —
- * which the module reports as band-local rows, made absolute here. */
+/** Re-derives one chunk's entries and cells in the module, which records
+ * the change itself — the column in both of its topics and every cell whose
+ * entries changed — then drops the snapshots of those cells and asks for
+ * the frame that delivers it. */
 function reindex_chunk(base: IVec): void {
-  const p = pxl();
-  p.pxl_object_reindex(base);
-  bump_column(base, true, true);
-  const n = p.pxl_object_touched();
-  if (n === 0) return;
-  const rows = new Int32Array(p.memory.buffer, p.pxl_object_touched_at(), n * 3);
-  const [cx0, cy0] = cell_index({ i: base, f: 0n });
-  const touched = new Set<bigint>();
-  for (let t = 0; t < n; t++) {
-    const corner = cell_corner(cx0 + BigInt(rows[t * 3]), cy0 + BigInt(rows[t * 3 + 1]), BigInt(rows[t * 3 + 2])).i;
-    touched.add(corner);
-    bump_world(WorldTopic.OBJECT_CELL, corner);
+  const log = world_changes;
+  const from = log.head;
+  pxl().pxl_object_reindex(base);
+  for (let c = from; c < log.head; c++) {
+    const i = log.slot(c);
+    if (log.topic[i] !== WorldTopic.OBJECT_CELL) continue;
+    const corner = BigInt.asUintN(64, log.key[i]);
+    for (const id of placed_snapshots.keys()) {
+      if (cell_corner(...parse_cell_key(entry_cell_key(id))).i === corner) placed_snapshots.delete(id);
+    }
   }
-  for (const id of placed_snapshots.keys()) {
-    if (touched.has(cell_corner(...parse_cell_key(entry_cell_key(id))).i)) placed_snapshots.delete(id);
-  }
+  request_world_tick();
 }
 
 /**

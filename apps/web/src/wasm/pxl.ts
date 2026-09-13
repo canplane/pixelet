@@ -70,8 +70,6 @@ export type PxlExports = {
   pxl_terrain_ele_at(): u32;
   pxl_object_write(key: bigint, band_z: i32, x: u32, y: u32, z: u32, level: i32, state: u32): void;
   pxl_object_reindex(key: bigint): void;
-  pxl_object_touched(): u32;
-  pxl_object_touched_at(): u32;
   pxl_object_read(key: bigint, band_z: i32, x: u32, y: u32, z: u32): u32;
   pxl_object_chunk(key: bigint): u32;
   pxl_object_cell(key: bigint, cx: u32, cy: u32, cz: i32): u32;
@@ -91,6 +89,10 @@ export type PxlExports = {
   pxl_frame_at(): u32;
   pxl_census(): u32;
   pxl_build_stat(): u32;
+  pxl_change_lanes(): u32;
+  pxl_change_bump(topic: u32, key: bigint): u32;
+  pxl_change_forget(topic: u32, key: bigint): void;
+  pxl_change_revision(topic: u32, key: bigint): u32;
   pxl_object_paint(volume: u32, key: bigint, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: number, ly: number, lz: number, size: number): u32;
 };
 
