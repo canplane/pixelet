@@ -22,6 +22,7 @@ export const enum Major {
   TIER = 0x04,
   RUNS = 0x05,
   DECOR = 0x06,
+  RAY = 0x07,
 }
 
 /** A chunk's own verbs, past the four every subject has. */
@@ -78,4 +79,17 @@ export const enum Cmd {
   RUNS_UPDATE = 0x0503,
   /** tag chunk · [step u32, at u32, bytes u32] */
   DECOR_CREATE = 0x0601,
+
+  // ---- queries: ACKREQ, answered in the turn they are asked ----
+  //
+  // A ray: [ray f64[9]: origin_x, origin_y (the map origin, units), ox, oy,
+  // oz, dx, dy, dz, max_dist], in the root frame. The reply's result is 1
+  // on a hit and 0 on none.
+
+  /** tag call · [ray f64[9]] → [chunk u32, band u32, pos u32, t f64]: the
+   * placed decor entry struck */
+  DECOR_READ = 0x0602,
+  /** tag call · [ray f64[9]] → [hit f64[14]: material class, normal ×3,
+   * point ×3, t, box min ×3, box max ×3] */
+  RAY_READ = 0x0702,
 }

@@ -30,7 +30,7 @@ use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
 use xpute_core::kit::array::ArrayBuffer;
-use xpute_core::kit::array::U8Array;
+use xpute_core::kit::array::{F64Array, U8Array};
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
 
@@ -100,13 +100,12 @@ struct State {
     frame: [f64; FRAME_WORDS],
     census: [f64; 13],
     events: std::collections::VecDeque<Event>,
+    /// Replies the completion ring had no room for yet: tag, command, result
+    /// and packet, flushed before any event.
+    replies: std::collections::VecDeque<(u32, u32, i32, Option<U8Array>)>,
     build_stat: [u32; 11],
-    /// The world's raycast and its kept composites, and the last hit as
-    /// doubles the glue reads.
+    /// The world's raycast and its kept composites.
     raycast: Raycast,
-    hit: [f64; HIT_WORDS],
-    /// The last decor hit: chunk id, band, packed position, distance.
-    decor_hit: [f64; 4],
     draw_row: [u32; 10],
     model_block: u32,
     /// The last shader or pipeline asked for: where its words sit, and how
@@ -191,8 +190,6 @@ fn state() -> &'static mut State {
                 cq: new_ring(RING_CAPACITY),
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
-                hit: [0.0; HIT_WORDS],
-                decor_hit: [0.0; 4],
                 draw_row: [0; 10],
                 model_block: 0,
                 shader_row: [0; 2],
@@ -207,6 +204,7 @@ fn state() -> &'static mut State {
                 frame: [0.0; FRAME_WORDS],
                 census: [0.0; 13],
                 events: std::collections::VecDeque::new(),
+                replies: std::collections::VecDeque::new(),
                 build_stat: [0; 11],
             }
         })
@@ -967,9 +965,17 @@ fn signal(e: &Event) -> (u32, Cmd, Option<U8Array>) {
     }
 }
 
-/// Moves what fits of the waiting events into the completion ring.
+/// Moves what fits of the waiting replies, then of the waiting events, into
+/// the completion ring: a reply first, since its call is waiting on it.
 fn flush(s: &mut State) -> u32 {
     let mut posted = 0;
+    while let Some((tag, number, value, reply)) = s.replies.front() {
+        if s.cq.push(*tag, *number, FrameFlag::RES as u32, reply.as_ref(), *value) != Errno::OK {
+            return posted;
+        }
+        s.replies.pop_front();
+        posted += 1;
+    }
     while let Some(e) = s.events.front() {
         let (tag, cmd, pkt) = signal(e);
         if s.cq.push(tag, cmd as u32, 0, pkt.as_ref(), 0) != Errno::OK {
@@ -1020,12 +1026,21 @@ fn branch_at(b: &BranchCursor, i: u32) -> Result<Option<BranchCursor>, MarshalEr
     b.at(i)?.opt().map(|c| c.as_branch()).transpose()
 }
 
-/// Applies one submission: its reply's value, or none for a command nobody
-/// numbers, which replies ENOSYS; a packet that does not read as the
-/// command's replies with its errno.
-fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32>, MarshalError> {
+/// A ray as a query's packet carries it: the map origin, the origin, the
+/// direction and the distance.
+fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
+    let r = f.at(0)?.get_array::<f64>()?;
+    <[f64; 9]>::try_from(r.as_slice()).map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a ray of {} doubles, not 9", r.length())), None))
+}
+
+/// Applies one submission: its reply's value and packet, or none for a
+/// command nobody numbers, which replies ENOSYS; a packet that does not read
+/// as the command's replies with its errno.
+fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<(i32, Option<U8Array>)>, MarshalError> {
     let Some(cmd) = Cmd::of(number) else { return Ok(None) };
-    let Parts { mut world, events, sched, .. } = parts(s);
+    let Parts {
+        mut world, events, sched, raycast, ..
+    } = parts(s);
     let mut emit = |e: Event| events.push_back(e);
     match cmd {
         Cmd::NOP => {
@@ -1033,7 +1048,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 Some(_) => u32_at(&fields(pkt)?, 0)?,
                 None => 0,
             };
-            return Ok(Some(value as i32));
+            return Ok(Some((value as i32, None)));
         }
         Cmd::CHUNK_CREATE => {
             let f = fields(pkt)?;
@@ -1076,11 +1091,51 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             };
             sched.builder.set_edits(hide, carve);
         }
+        Cmd::RAY_READ => {
+            let r = ray_at(&fields(pkt)?)?;
+            let Some(h) = raycast.hit(&mut world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
+                return Ok(Some((0, None)));
+            };
+            let row = [
+                h.material_class as f64,
+                h.normal[0],
+                h.normal[1],
+                h.normal[2],
+                h.point[0],
+                h.point[1],
+                h.point[2],
+                h.t,
+                h.box_min[0],
+                h.box_min[1],
+                h.box_min[2],
+                h.box_max[0],
+                h.box_max[1],
+                h.box_max[2],
+            ];
+            return Ok(Some((
+                1,
+                Some(packet(&mut |b| {
+                    b.f64_array(Some(&F64Array::from(&row)));
+                })),
+            )));
+        }
+        Cmd::DECOR_READ => {
+            let r = ray_at(&fields(pkt)?)?;
+            let Some(h) = pxl_core::world::raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
+                return Ok(Some((0, None)));
+            };
+            return Ok(Some((
+                1,
+                Some(packet(&mut |b| {
+                    b.u32(Some(h.chunk)).u32(Some(h.band)).u32(Some(h.pos)).f64(Some(h.t));
+                })),
+            )));
+        }
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
-    Ok(Some(0))
+    Ok(Some((0, None)))
 }
 
 /// Applies every submission waiting, as far as the completion ring has room
@@ -1090,27 +1145,26 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
 /// command's effect is otherwise its signals.
 fn drain(s: &mut State) -> u32 {
     let mut posted = flush(s);
-    while s.cq.len() < s.cq.capacity && s.events.is_empty() {
+    while s.cq.len() < s.cq.capacity && s.events.is_empty() && s.replies.is_empty() {
         let at = s.sq.peek();
         if at < 0 {
             break;
         }
         let at = at as u32;
         let (tag, number, flags) = (s.sq.tag(at), s.sq.cmd(at), s.sq.flags(at));
-        let result = match s.sq.packet(at) {
+        let (result, reply) = match s.sq.packet(at) {
             Ok(pkt) => match apply(s, tag, number, &pkt) {
-                Ok(Some(value)) => Ok(value),
-                Ok(None) => Err(Errno::ENOSYS as i32),
-                Err(e) => Err(e.errno as i32),
+                Ok(Some((value, reply))) => (Ok(value), reply),
+                Ok(None) => (Err(Errno::ENOSYS as i32), None),
+                Err(e) => (Err(e.errno as i32), None),
             },
-            Err(e) => Err(e.errno as i32),
+            Err(e) => (Err(e.errno as i32), None),
         };
         s.sq.advance();
         if flags & FrameFlag::ACKREQ as u32 != 0 || result.is_err() {
-            let value = result.unwrap_or_else(|errno| errno);
-            // The loop's own guard left room for this one.
-            s.cq.push(tag, number, FrameFlag::RES as u32, None, value);
-            posted += 1;
+            // Queued rather than pushed: a reply's packet may not fit the
+            // arena this turn, and a reply is never dropped.
+            s.replies.push_back((tag, number, result.unwrap_or_else(|errno| errno), reply));
         }
         posted += flush(s);
     }
@@ -1569,69 +1623,6 @@ pub extern "C" fn pxl_decor_rule(kind: u32, channel: u32, mode: u32) {
 #[no_mangle]
 pub extern "C" fn pxl_decor_allow(kind: u32, channel: u32, t: u32) {
     state().sched.decor_allow(kind, channel as usize & 3, t as u8);
-}
-
-/// Doubles at pxl_raycast_at after a hit: the material class, the face
-/// normal, the point, t, the box's min and max — 14.
-pub const HIT_WORDS: usize = 14;
-
-/// The world's raycast (crates/pxl/core/src/world/raycast.rs): the ray from
-/// (ox, oy, oz) along (dx, dy, dz), relative to the map origin at
-/// (origin_x, origin_y) in units, within `max_dist`. 1 when something was
-/// struck, the hit written at pxl_raycast_at. Applies the submissions
-/// waiting first, so a placement just made is what the ray tests.
-#[no_mangle]
-pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
-    let s = state();
-    drain(s);
-    let hit = {
-        let Parts { mut world, raycast, sched, .. } = parts(s);
-        raycast.hit(&mut world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
-    };
-    let Some(h) = hit else { return 0 };
-    s.hit = [
-        h.material_class as f64,
-        h.normal[0],
-        h.normal[1],
-        h.normal[2],
-        h.point[0],
-        h.point[1],
-        h.point[2],
-        h.t,
-        h.box_min[0],
-        h.box_min[1],
-        h.box_min[2],
-        h.box_max[0],
-        h.box_max[1],
-        h.box_max[2],
-    ];
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_raycast_at() -> u32 {
-    state().hit.as_ptr() as u32
-}
-
-/// The nearest placed decor instance the ray strikes within `max_dist`
-/// (crates/pxl/core/src/world/raycast.rs's hit_decor), the ray as pxl_raycast
-/// takes it: 1 when one was, its chunk id, band, packed position and
-/// distance written at pxl_raycast_decor_at.
-#[no_mangle]
-pub extern "C" fn pxl_raycast_decor(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
-    let s = state();
-    let hit = {
-        let Parts { world, sched, .. } = parts(s);
-        pxl_core::world::raycast::hit_decor(&world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
-    };
-    let Some(h) = hit else { return 0 };
-    s.decor_hit = [h.chunk as f64, h.band as f64, h.pos as f64, h.t];
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_raycast_decor_at() -> u32 {
-    state().decor_hit.as_ptr() as u32
 }
 
 /// The renderer's handle for a model's mesh block, 0 before it is sealed.

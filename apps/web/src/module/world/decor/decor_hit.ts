@@ -11,9 +11,11 @@
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import type { Vec3 } from "@xpute/core/kit/mat4.ts";
-import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD } from "@/wasm/core_build.ts";
+import { ray_packet } from "@/module/world/raycast.ts";
 import { chunk_nodes } from "@/module/world/chunk_node.ts";
 import { entry_id_of } from "@/module/world/object/store.ts";
 
@@ -36,22 +38,12 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
  * frame, relative to `map_origin`, as the voxel raycast takes it.
  */
 export function raycast_decor(origin: Vec3, direction: Vec3, map_origin: IVec, max_dist: f64): string | null {
-  const p = CORE_PXL;
-  if (!p) return null;
-  const struck = p.pxl_raycast_decor(
-    ivec.to_real(ivec.X(map_origin)),
-    ivec.to_real(ivec.Y(map_origin)),
-    origin.x,
-    origin.y,
-    origin.z,
-    direction.x,
-    direction.y,
-    direction.z,
-    max_dist + SAME_SURFACE_EPS,
-  );
-  if (!struck) return null;
-  const [chunk, band, pos] = new Float64Array(p.memory.buffer, p.pxl_raycast_decor_at(), 3);
-  const node = chunk_nodes.get(chunk);
+  const hit = CORE_BUILD.call(Cmd.DECOR_READ, ray_packet(map_origin, origin, direction, max_dist + SAME_SURFACE_EPS), (struck, reply) => {
+    if (struck !== 1 || reply === null) return null;
+    return { chunk: reply.at(0).get<number>(), band: reply.at(1).get<number>(), pos: reply.at(2).get<number>() };
+  });
+  if (hit === null) return null;
+  const node = chunk_nodes.get(hit.chunk);
   if (!node) return null;
-  return entry_id_of(node.object_key, band, pos);
+  return entry_id_of(node.object_key, hit.band, hit.pos);
 }

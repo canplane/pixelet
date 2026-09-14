@@ -22,6 +22,7 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { Errno } from "@xpute/core/sys/errno.ts";
 import type { U8Array } from "@xpute/core/kit/array.ts";
+import { FrameFlag } from "@xpute/core/ipc/frame.ts";
 import { Ring } from "@xpute/core/ipc/ring.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
@@ -143,6 +144,10 @@ export class CoreBuild {
   private readonly cq: Ring;
   private readonly sinks = new Map<u32, ChunkBuildSink>();
   private next_id: u32 = 1;
+  /** The call waiting on its reply: its tag, and what reads the reply. */
+  private next_call: u32 = 0;
+  private reply_tag: u32 = 0;
+  private reply: ((result: number, f: BranchCursor | null) => void) | null = null;
   /** Who makes and drops the nodes of mounted chunks. */
   mounts: MountListener | null = null;
   private order: Uint32Array;
@@ -166,9 +171,9 @@ export class CoreBuild {
     this.read();
   }
 
-  private submit(tag: u32, cmd: Cmd, pkt: U8Array | null = null): void {
+  private submit(tag: u32, cmd: Cmd, pkt: U8Array | null = null, flags: u32 = 0): void {
     for (;;) {
-      const errno = this.sq.push(tag, cmd, 0, pkt);
+      const errno = this.sq.push(tag, cmd, flags, pkt);
       if (errno === Errno.OK) return;
       if (errno !== Errno.EAGAIN) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} refused by the ring: ${errno}`);
       this.pump();
@@ -182,6 +187,16 @@ export class CoreBuild {
       const cmd = cq.cmd(at) as Cmd;
       const pkt = cq.packet(at);
       const f: BranchCursor | null = pkt ? new TreeReader(pkt).read_branch() : null;
+      if (cq.flags(at) & FrameFlag.RES) {
+        if (this.reply !== null && id === this.reply_tag) {
+          this.reply(cq.result(at), f);
+          this.reply = null;
+        } else if (cq.result(at) < 0) {
+          console.warn(`[wasm/core_build] command 0x${cmd.toString(16)} failed: errno ${cq.result(at)}`);
+        }
+        cq.advance();
+        continue;
+      }
       const u32_at = (i: u32) => f!.at(i).get<number>();
       if (cmd === Cmd.CHUNK_CREATE) {
         this.mounts?.on_mount(id, f!.at(0).get<bigint>(), u32_at(1), u32_at(2));
@@ -213,6 +228,31 @@ export class CoreBuild {
       }
       cq.advance();
     }
+  }
+
+  /**
+   * A query answered in the turn it is asked: submitted with ACKREQ behind
+   * whatever waits — so a placement just sent is what it sees — and the
+   * kernel rung until the reply comes back, the signals before it handed
+   * out as `read` always does. `take` reads the reply; its packet is valid
+   * only inside it.
+   */
+  call<T>(cmd: Cmd, pkt: U8Array | null, take: (result: number, reply: BranchCursor | null) => T): T {
+    const tag = this.next_call = (this.next_call + 1) >>> 0;
+    let out: { value: T } | null = null;
+    this.reply_tag = tag;
+    this.reply = (result, f) => out = { value: take(result, f) };
+    try {
+      this.submit(tag, cmd, pkt, FrameFlag.ACKREQ);
+      while (out === null) {
+        const posted = this.pxl.pxl_drain();
+        this.read();
+        if (out === null && posted === 0 && this.sq.len === 0) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} was never replied to`);
+      }
+    } finally {
+      this.reply = null;
+    }
+    return (out as { value: T }).value;
   }
 
   /** A new chunk whose column's base is `base` — its X and Y in units

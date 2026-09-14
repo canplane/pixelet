@@ -112,14 +112,10 @@ export type PxlExports = {
   pxl_model_seal(model: u32, scale: number): void;
   pxl_model_handle(model: u32): u32;
   pxl_decor_model(group: u32, model: u32): void;
-  pxl_raycast_decor(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;
-  pxl_raycast_decor_at(): u32;
   pxl_actor_new(model: u32): number;
   pxl_actor_place(actor: u32, x: number, y: number, z: number, rotation_z: number, visible: u32): void;
   pxl_actor_play(actor: u32, clip: u32, fade_s: number): void;
   pxl_actor_remove(actor: u32): void;
-  pxl_raycast(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;
-  pxl_raycast_at(): u32;
   pxl_decor_forget(): void;
   pxl_decor_kind(tag_lo: u32, tag_hi: u32, density: number, variant_count: u32, align_transport: u32, extent: number, decor_value: number): u32;
   pxl_decor_rule(kind: u32, channel: u32, mode: u32): void;

@@ -87,6 +87,16 @@ arrived and hands the time back. What that decides about the boundary:
   commands and every signal the scheduler raises travel this way now; the
   rest of the `pxl_*` table is still bindgen, and moves family by family.
   The frame itself stays as it was, for the worker boundary.
+
+  A query is a submission with `ACKREQ` that the glue rings for until its
+  reply comes (`CoreBuild.call`): the ray and the decor hit went first, as
+  the cost check. On V8 with an empty world, the export was 91 ns a ray;
+  the ring is 733 ns. The ring itself is not the cost — a call with no
+  packet is 92 ns, the export's price — but the TypeScript XTP encoder
+  (510 ns for one nine-double packet, a node object per leaf) and reader
+  (314 ns for a fourteen-double reply) are. At a pointer's rate that is
+  under 50 µs a second, and what it points at is BACKLOG P1's "XTP encoder
+  without per-leaf objects", not the ring.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for
