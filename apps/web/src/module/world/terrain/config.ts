@@ -23,6 +23,7 @@ import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { GROUND_CH_KEYS } from "@pxl/shared/bake/format.ts";
 
 import { PAGE_SECTION_BYTES } from "@/wasm/core_pool.ts";
+import { KEEP_DIST as KEEP, PAGE_MARGIN as MARGIN, RESIDENT_PAGES_CAP } from "./config_spec.ts";
 
 /** What one resident page takes of the page section: its ground lanes and
  * its elevation block, each rounded up to the buddy's power of two. */
@@ -31,9 +32,7 @@ function pow2_ceil(bytes: u32): u32 {
 }
 const PAGE_BLOCK_BYTES: u32 = GROUND_CH_KEYS.length * pow2_ceil(PAGE_CELL_SPAN * PAGE_CELL_SPAN) + pow2_ceil(ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2);
 
-/** Pages a release keeps for its quarantine (resident.ts) while the next
- * ones arrive, and the shared ocean page. */
-const PAGE_MARGIN: u32 = 4;
+const PAGE_MARGIN: u32 = MARGIN;
 
 /**
  * How many pages stay decoded: the nearest this many, and the rest are
@@ -53,10 +52,10 @@ const PAGE_MARGIN: u32 = 4;
  * chunks are never built — so the count is bounded here by construction
  * rather than trusted to agree with core_pool.ts's layout.
  */
-export const RESIDENT_PAGES: u32 = Math.min(32, Math.floor(PAGE_SECTION_BYTES / PAGE_BLOCK_BYTES) - PAGE_MARGIN);
+export const RESIDENT_PAGES: u32 = Math.min(RESIDENT_PAGES_CAP, Math.floor(PAGE_SECTION_BYTES / PAGE_BLOCK_BYTES) - PAGE_MARGIN);
 
 /** How far to look when picking those pages. Only wide enough that the
  * nearest RESIDENT_PAGES are always available to pick (39 at worst), since
  * the count is what actually decides; a page beyond this is further than the
  * 32nd nearest can ever be. */
-export const KEEP_DIST: f64 = 3072;
+export const KEEP_DIST: f64 = KEEP;

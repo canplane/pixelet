@@ -48,6 +48,22 @@ function rule_allows(rule: DecorChannelRule, t: u32): boolean {
   return rule.includes(t);
 }
 
+/** A kind's rules as kind.json writes them — a channel's types by
+ * cube_types name — in the numbers a cell's channels hold. */
+export function rules_of(spec: { readonly [K in keyof DecorRules]: "any" | "void" | readonly string[] }): DecorRules {
+  const channel = (key: keyof DecorRules): DecorChannelRule => {
+    const rule = spec[key];
+    if (rule === "any" || rule === "void") return rule;
+    const types = cube_types[key] as Record<string, number>;
+    return rule.map((name) => {
+      const value = types[name];
+      if (value === undefined) throw new Error(`decor kind rule names no ${key} type ${name}`);
+      return value;
+    });
+  };
+  return { land: channel("land"), water: channel("water"), structure: channel("structure"), transport: channel("transport") };
+}
+
 export function eligibility_of(rules: DecorRules): DecorEligibility {
   return (land, water, structure, transport) => rule_allows(rules.land, land) && rule_allows(rules.water, water) && rule_allows(rules.structure, structure) && rule_allows(rules.transport, transport);
 }

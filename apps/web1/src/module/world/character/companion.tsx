@@ -1,0 +1,426 @@
+// @pxl/web/module/world/character/companion.tsx
+
+/**
+ * A companion (person + pet) that sits at map_center, facing the camera
+ * until it has somewhere to walk to. Whenever map_center stops changing —
+ * after a drag, a click-to-navigate tween, a GPS recenter, whatever moved
+ * it — it makes a fixed-duration catch-up walk there and ends up facing its
+ * direction of travel, which it then just keeps (no snapping back to face
+ * the camera once arrived). While map_center is still actively changing it
+ * stays put. Ground height (Z) is re-sampled every frame regardless of
+ * walking state — it "aligns", it doesn't walk there.
+ *
+ * Follow mode (is_follow_mode) is a different regime: map_center is a live
+ * ~1 Hz GPS stream, so the settle-then-dash above never gets to rest and its
+ * fixed dash curve fights the world-scroll damp. There the walker instead
+ * glides toward the target every frame at the world-scroll rate (the two
+ * cancel, holding it at screen center) and keeps its back to the camera by
+ * counter-rotating azimuth — a nav-app "you" marker, map spinning under it.
+ * See FOLLOW_LERP_K below and use_follow_mode.ts.
+ *
+ * Position/facing math lives in path.ts; this file is the thin glue that
+ * reads that math and tells the module's actor where to stand. The model
+ * is registered once per variant (render/gpu/model_asset.ts) and shared
+ * with the settings variant picker's preview.
+ *
+ * Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
+ * both CC0, both real glTF. Their flat toy-block color palette doesn't match
+ * the game's cozy pixel-art palette yet — swapping in a repainted or fully
+ * custom skin is tracked separately, not blocking on it.
+ */
+
+import { memo, type MutableRefObject, useEffect, useRef, useState } from "react";
+
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+
+import { get_surface_z_at_local } from "../surface_height.ts";
+import { objects_revision } from "../object/store.ts";
+import { register_tile_interest } from "../terrain/store.ts";
+import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
+import { useSettingsStore } from "@/app/setting/store.ts";
+import { useCameraStore } from "@/module/camera/store.ts";
+import { camera_cfg } from "@/module/camera/config.ts";
+import { damp_alpha } from "@/module/camera/orbit.ts";
+import { useCompanionLoadStore } from "./store.ts";
+import { ChatBubble } from "./chat_bubble.tsx";
+import { type CharacterVariant, find_person_variant, find_pet_variant } from "@/module/world/character/variant.ts";
+import { useTick } from "@/module/world/sched/tick.ts";
+import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { load_gltf, load_image } from "@/render/gltf/load.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { gpu_renderer } from "@/render/gpu/stage.tsx";
+import { view } from "@/module/world/frame/view.ts";
+import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
+
+/** A variant's model in the module, registered once per model and height
+ * whoever asks first (render/gpu/model_asset.ts). */
+const model_handles = new Map<string, Promise<ModelHandle | null>>();
+function model_for(variant: CharacterVariant): Promise<ModelHandle | null> {
+  const key = `${variant.model_url}|${variant.height_u}`;
+  let entry = model_handles.get(key);
+  if (!entry) {
+    entry = load_gltf(variant.model_url).then((gltf) => (CORE_PXL ? register_model(CORE_PXL, gltf, variant.height_u) : null));
+    model_handles.set(key, entry);
+  }
+  return entry;
+}
+
+// A little to the side of the person, so the two don't occupy the same
+// footprint — arbitrary companion-following offset, not derived from
+// anything about either asset.
+const PET_OFFSET: Vec2 = { x: -0.6, y: -0.6 };
+
+// Catch-up always takes this long, whatever the distance — see
+// sample_walk_plan's own doc comment for why a fixed duration beats a fixed
+// speed here.
+const CATCHUP_DURATION_S: f64 = 0.6;
+
+// How long map_center has to sit still before we call it "settled" and plan
+// a catch-up — see update_settle_tracker's own doc comment for why this
+// reacts to the target itself rather than to any one specific gesture.
+const SETTLE_DELAY_S: f64 = 0.15;
+
+// Follow mode only: the settle-then-dash catch-up above is built for
+// occasional map_center jumps (a pan, a click-to-navigate, a recenter) with
+// long still gaps between. Follow mode feeds it a ~1 Hz stream of GPS jumps
+// instead, so it never gets to just "be there" — it sits perpetually
+// mid-dash, and that dash (a fixed 0.6 s curve after a 0.15 s hold) fights
+// use_view_frame's world-scroll damp, swaying the character along the
+// travel axis on every fix. So in follow mode the character skips all of
+// that and glides toward the target with a plain per-frame exponential lerp
+// at the SAME rate the world scroll damps (camera_cfg POS_DAMP). Because the
+// two run at the same rate toward the same point, they cancel: the
+// character's world position stays at screen center, with only its own
+// (single) catch-up residual showing as a small lean. use_follow_mode.ts
+// drops its own position EMA to match, so this lerp is the one and only
+// position-smoothing stage.
+const FOLLOW_LERP_K: f64 = camera_cfg.smooth.POS_DAMP;
+
+// Follow mode: the walker's rotation.z, set every frame as
+// `FOLLOW_FACING - <parent's world Z rotation>` so its *world* facing stays
+// constant while the map spins under it (nav-app "you" arrow). The idle
+// "face the camera" branch below works out to a model whose forward is -Y in
+// world space at rotation.z 0 (the camera sits at view -Y); +PI turns that
+// to +Y — into the screen, back to the camera.
+const FOLLOW_FACING: f64 = Math.PI;
+
+// Follow-mode walk clip: play it while the glide has a real gap to close,
+// then hold it that much longer before dropping to idle. The glide catches
+// up between GPS fixes (gap -> ~0, then the next fix jumps it again), so
+// without the linger the clip would strobe on/off once per fix; a linger a
+// bit longer than a fix interval keeps it steady while actually moving. EPS
+// is well under one fix's worth of travel (~0.5u at a walking pace) so a
+// real step trips it, over the near-zero settled gap so standing still
+// doesn't.
+const FOLLOW_WALK_EPS: f64 = 0.03;
+const FOLLOW_WALK_LINGER_S: f64 = 1.5;
+
+const IDLE_CLIP = "idle";
+
+type WalkerProps = {
+  /** Mutated in place by Companion every render, never replaced — Walker
+   * reads .current fresh each frame instead of taking these as reactive
+   * props, specifically so map_center's every-frame updates (it tracks the
+   * live camera target) don't force Walker itself to re-render 60x/sec for
+   * no reason. */
+  origin_ref: MutableRefObject<IVec>;
+  /** Full floating-origin IVec (not just its XY page index) — needed to
+   * convert a local XY probe into the absolute PVF3 get_surface_z_at_local
+   * queries placed objects with. Changes far less often than target_ref
+   * (only on an L4 rebase), but threaded the same ref way for consistency
+   * and to avoid forcing a re-render on every map_center tick. */
+  map_origin_ref: MutableRefObject<IVec>;
+  target_ref: MutableRefObject<Vec2>;
+  /** map_center's own current Z — the hint get_surface_z_at_local uses to
+   * pick which shelf to land on when there's a gap under this walker's
+   * XY. Not this walker's own target height (the pet's target_ref has an
+   * XY offset from map_center, but there's only one map_center Z). */
+  target_z_ref: MutableRefObject<f64>;
+  variant: CharacterVariant;
+  /** Only the person talks — the pet doesn't get a chat bubble. */
+  show_chat_bubble?: boolean;
+  /** Which half of useCompanionLoadStore this instance reports readiness
+   * into — see store.ts's own doc comment on why that state lives outside
+   * this component's tree. */
+  role: "person" | "pet";
+};
+
+const Walker = memo(function Walker(props: WalkerProps) {
+  const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
+  // The walker is an actor of the module (crates/pxl/core/src/world/model.rs):
+  // what follows decides where it stands, which way it faces and which clip
+  // it plays, and tells the actor. Its pose here is the walk's own state.
+  const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: ImageBitmap } | null>(null);
+  /** The actor again, as state, for what renders against it: the bubble. */
+  const [actor, set_actor] = useState<u32 | null>(null);
+  useEffect(() => {
+    if (!CORE_PXL) return;
+    let alive = true;
+    Promise.all([model_for(variant), load_image(variant.skin_url)]).then(([model, skin]) => {
+      if (!alive || !model) return;
+      const actor = CORE_BUILD.call(Cmd.ACTOR_CREATE, packet((b) => b.u32(model.model)), (id) => id);
+      if (actor < 0) return;
+      actor_ref.current = { actor, model, skin };
+      set_actor(actor);
+    });
+    return () => {
+      alive = false;
+      if (actor_ref.current) CORE_BUILD.send(actor_ref.current.actor, Cmd.ACTOR_DELETE);
+      actor_ref.current = null;
+      set_actor(null);
+    };
+  }, [variant]);
+  /** Where the walker stands in the root frame and which way it faces. */
+  const pose = useRef({ x: 0, y: 0, z: 0, rotation_z: 0 }).current;
+  const actor_clip_ref = useRef<string | null>(null);
+
+  // Rare toggle, so subscribing (and the re-render it costs) is fine — unlike
+  // map_center, this doesn't churn per frame.
+  const is_follow_mode = useCameraStore((state) => state.is_follow_mode);
+  const was_follow_mode_ref = useRef(false);
+
+  useEffect(() => {
+    const set_ready = role === "person" ? useCompanionLoadStore.getState().set_person_ready : useCompanionLoadStore.getState().set_pet_ready;
+    set_ready(actor !== null);
+  }, [actor, role]);
+
+  const walk_plan_ref = useRef<WalkPlan | null>(null);
+  const settle_ref = useRef<SettleTracker>(init_settle_tracker(target_ref.current, 0));
+  // Faces the camera exactly once — the moment it first has a real parent
+  // transform to resolve the camera's position against — and never again
+  // after that, not even while still idle before the first catch-up walk.
+  // Rotating the camera (azimuth) around a companion that's just standing
+  // there is not a reason for it to keep turning to track the viewer; only
+  // its very first pose should ever be camera-relative.
+  const initial_facing_done_ref = useRef(false);
+
+  // One-time placement at the *current* target, once the actor exists:
+  // target_ref.current can already be thousands of units away from the
+  // pose's default (0,0,0) — the coordinate system's own origin, not "near
+  // the camera" — since it's map_center's offset within its enclosing L4
+  // tile. Walking there at any sane pace would take far too long; only
+  // *subsequent* moves should animate.
+  const placed_for_ref = useRef<u32 | null>(null);
+  useEffect(() => {
+    if (actor === null || placed_for_ref.current === actor) return;
+    pose.x = target_ref.current.x;
+    pose.y = target_ref.current.y;
+    pose.z = 0;
+    placed_for_ref.current = actor;
+    // target_ref deliberately not read reactively here: this is a one-time
+    // initial placement, not a live binding — subsequent moves go through
+    // the settle-tracked catch-up walk in the step below.
+  }, [actor]);
+
+  // Tracks the last map_origin this loop saw, to snap (not glide) across an
+  // L4 rebase — target_ref jumps ~4096u then, and use_view_frame snaps
+  // the world scroll for it.
+  const prev_map_origin_ref = useRef<IVec>(map_origin_ref.current);
+  // Clock time until which the follow-mode walk clip stays on — see
+  // FOLLOW_WALK_LINGER_S.
+  const follow_walk_until_ref = useRef<f64>(0);
+
+  // The last surface answer and what it was asked with (see below).
+  const surface_ref = useRef({ x: NaN, y: NaN, hint: NaN, origin: null as IVec | null, revision: -1, tiles: -1, z: null as f64 | null });
+  // Terrain arriving changes the answer without any object moving.
+  const tile_revision_ref = useRef(0);
+  useEffect(() => register_tile_interest(() => true, () => tile_revision_ref.current++), []);
+
+  useTick("interaction", ({ state, delta }) => {
+    if (actor === null) return;
+
+    const now: f64 = state.clock.getElapsedTime();
+    const origin_page_idx_xy = origin_ref.current;
+    const target = target_ref.current;
+    const rebased: boolean = map_origin_ref.current !== prev_map_origin_ref.current;
+
+    // px/py: this frame's XY for the walker. is_walking: whether the move
+    // clip should play. Filled in by whichever branch runs.
+    let px: f64;
+    let py: f64;
+    let is_walking: boolean;
+
+    if (is_follow_mode) {
+      // Glide toward the target at the world-scroll damp rate — no settle,
+      // no dash. The two motions cancel, holding the walker at screen center
+      // (see FOLLOW_LERP_K's doc comment). rotation is driven every frame
+      // below, so the settle/one-time-facing bookkeeping stays untouched
+      // and resumes cleanly on exit. Snap (not glide) on the entry frame and
+      // across an L4 rebase: both are one-shot jumps use_view_frame
+      // itself snaps through, and gliding a browse-distance gap would fly the
+      // walker in from off-screen.
+      if (rebased || !was_follow_mode_ref.current) {
+        px = target.x;
+        py = target.y;
+      } else {
+        const a: f64 = damp_alpha(FOLLOW_LERP_K, delta);
+        px = pose.x + (target.x - pose.x) * a;
+        py = pose.y + (target.y - pose.y) * a;
+      }
+
+      // Back to the camera, held there while the map spins underneath —
+      // counter-rotate the azimuth the root frame currently carries so the
+      // walker's final facing stays FOLLOW_FACING.
+      pose.rotation_z = FOLLOW_FACING - view.azimuth;
+
+      if (Math.hypot(target.x - px, target.y - py) > FOLLOW_WALK_EPS) {
+        follow_walk_until_ref.current = now + FOLLOW_WALK_LINGER_S;
+      }
+      is_walking = now < follow_walk_until_ref.current;
+      walk_plan_ref.current = null;
+    } else {
+      // On the frame follow mode turns off, rebase the settle tracker to the
+      // live target so update_settle_tracker doesn't read the (large)
+      // accumulated while-following delta as one giant just-settled dash.
+      if (was_follow_mode_ref.current) {
+        settle_ref.current = init_settle_tracker(target, now);
+        walk_plan_ref.current = null;
+      }
+
+      // map_center settling (regardless of what moved it — drag, a click-to
+      // -navigate tween, GPS recenter, ...) plans a fixed-duration catch-up
+      // from wherever the walker actually is right now. While it's still
+      // actively changing, cancel any in-progress catch-up and hold position
+      // — see update_settle_tracker's own doc comment for why this reacts to
+      // the target itself rather than to one specific gesture's own status.
+      const { tracker, just_settled, moved } = update_settle_tracker(settle_ref.current, target, now, SETTLE_DELAY_S);
+      settle_ref.current = tracker;
+      if (just_settled) {
+        walk_plan_ref.current = {
+          start: { x: pose.x, y: pose.y },
+          target: tracker.settled,
+          start_time: now,
+          duration: CATCHUP_DURATION_S,
+        };
+      }
+      if (moved) {
+        walk_plan_ref.current = null;
+      }
+
+      const plan = walk_plan_ref.current;
+      const step = plan ? sample_walk_plan(plan, now) : { x: pose.x, y: pose.y, heading: null, arrived: true };
+      if (step.arrived) walk_plan_ref.current = null;
+
+      px = step.x;
+      py = step.y;
+      is_walking = step.heading !== null;
+
+      // Facing: direction of travel while walking. Otherwise, a one-time
+      // camera-facing pose the very first frame a parent transform exists to
+      // resolve it against — never recomputed again afterward (not on later
+      // idle frames, not as azimuth changes), and never once a walk has
+      // happened, at which point arriving just holds whatever heading that
+      // walk left it on (rotation.z is simply left untouched in that case).
+      // The Y-up to Z-up turn the actor stands with maps the model's native
+      // forward to +Y, hence the +PI/2 offset from a raw heading to the
+      // actor's turn about Z.
+      if (is_walking) {
+        pose.rotation_z = step.heading! + Math.PI / 2;
+      } else if (!initial_facing_done_ref.current) {
+        const heading = heading_to({ x: step.x, y: step.y }, { x: view.eye_local.x, y: view.eye_local.y });
+        pose.rotation_z = heading + Math.PI / 2;
+        initial_facing_done_ref.current = true;
+      }
+    }
+
+    prev_map_origin_ref.current = map_origin_ref.current;
+    was_follow_mode_ref.current = is_follow_mode;
+
+    // Z always aligns to the surface under the walker's (possibly just-
+    // updated) x/y — terrain, or the top of a placed object standing on it,
+    // whichever is higher (get_surface_z_at_local's own doc comment). Asked
+    // again only when something it depends on moved: the walker, the hint,
+    // the frame origin, or the object store. A standing walker asks nothing.
+    const s = surface_ref.current;
+    const revision = objects_revision();
+    if (s.x !== px || s.y !== py || s.hint !== target_z_ref.current || s.origin !== map_origin_ref.current || s.revision !== revision || s.tiles !== tile_revision_ref.current) {
+      s.x = px;
+      s.y = py;
+      s.hint = target_z_ref.current;
+      s.origin = map_origin_ref.current;
+      s.revision = revision;
+      s.tiles = tile_revision_ref.current;
+      s.z = get_surface_z_at_local(origin_page_idx_xy, map_origin_ref.current, px, py, target_z_ref.current);
+    }
+    pose.x = px;
+    pose.y = py;
+    if (s.z !== null) pose.z = s.z;
+
+    const held = actor_ref.current;
+    if (held && CORE_PXL) {
+      const mo = map_origin_ref.current;
+      const at_z = ivec.to_real(ivec.Z(mo)) + pose.z;
+      CORE_BUILD.send(held.actor, Cmd.ACTOR_UPDATE, packet((b) => b.f64(ivec.to_real(ivec.X(mo)) + px).f64(ivec.to_real(ivec.Y(mo)) + py).f64(at_z).f64(pose.rotation_z).bool(true)));
+      const clip = is_walking ? variant.move_clip : IDLE_CLIP;
+      if (actor_clip_ref.current !== clip) {
+        const index = held.model.clips.get(clip);
+        if (index !== undefined) CORE_BUILD.send(held.actor, Cmd.ACTOR_PLAY, packet((b) => b.u32(index).f32(actor_clip_ref.current === null ? 0 : 0.2)));
+        actor_clip_ref.current = clip;
+      }
+      gpu_renderer?.skinned.set_skin(held.model.model, held.skin);
+    }
+    // The next frame is the module's to ask for: an actor playing a clip
+    // keeps the tick awake (model.rs), and nothing here moves otherwise.
+  }, "companion");
+
+  return actor !== null && show_chat_bubble ? <ChatBubble anchor_z={variant.height_u} actor={actor} /> : null;
+});
+
+type CompanionProps = {
+  origin_page_idx_xy: IVec;
+  map_origin: IVec;
+  center_x: f64;
+  center_y: f64;
+  center_z: f64;
+};
+
+export function Companion(props: CompanionProps) {
+  const { origin_page_idx_xy, map_origin, center_x, center_y, center_z } = props;
+
+  const person_variant_key = useSettingsStore((state) => state.person_variant_key);
+  const pet_variant_key = useSettingsStore((state) => state.pet_variant_key);
+  const person_variant = find_person_variant(person_variant_key);
+  const pet_variant = find_pet_variant(pet_variant_key);
+
+  // Stable containers, mutated in place every render — see WalkerProps's
+  // own doc comment for why these are refs rather than plain props.
+  const origin_ref = useRef<IVec>(origin_page_idx_xy);
+  origin_ref.current = origin_page_idx_xy;
+  const map_origin_ref = useRef<IVec>(map_origin);
+  map_origin_ref.current = map_origin;
+  const target_z_ref = useRef<f64>(center_z);
+  target_z_ref.current = center_z;
+  const person_target_ref = useRef<Vec2>({ x: center_x, y: center_y });
+  person_target_ref.current.x = center_x;
+  person_target_ref.current.y = center_y;
+  const pet_target_ref = useRef<Vec2>({ x: center_x + PET_OFFSET.x, y: center_y + PET_OFFSET.y });
+  pet_target_ref.current.x = center_x + PET_OFFSET.x;
+  pet_target_ref.current.y = center_y + PET_OFFSET.y;
+
+  return (
+    <>
+      <Walker
+        key={person_variant.key}
+        origin_ref={origin_ref}
+        map_origin_ref={map_origin_ref}
+        target_ref={person_target_ref}
+        target_z_ref={target_z_ref}
+        variant={person_variant}
+        show_chat_bubble
+        role="person"
+      />
+      <Walker
+        key={pet_variant.key}
+        origin_ref={origin_ref}
+        map_origin_ref={map_origin_ref}
+        target_ref={pet_target_ref}
+        target_z_ref={target_z_ref}
+        variant={pet_variant}
+        role="pet"
+      />
+    </>
+  );
+}

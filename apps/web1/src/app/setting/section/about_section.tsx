@@ -1,0 +1,45 @@
+// @pxl/web/app/setting/section/about_section.tsx
+
+import { Box } from "lucide-react";
+import { useTranslation } from "react-i18next";
+
+import { SectionTitle } from "@/app/setting/setting_row.tsx";
+import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
+import { PUBLISHED_VERSION } from "@/lib/env/route.ts";
+import { OBJECT_STORAGE_VERSION } from "@/module/world/object/store.ts";
+
+const env_label: string = APP_ENV.charAt(0).toUpperCase() + APP_ENV.slice(1);
+
+function build_label(): string {
+  const d = new Date(BUILD_TIME);
+  if (Number.isNaN(d.getTime())) return BUILD_TIME;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+export function AboutSection() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-1">
+      <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
+      <div className="flex flex-col gap-2 py-1 text-[12px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+          <Box className="size-5" aria-hidden="true" />
+          <span>pixelet</span>
+        </div>
+
+        <span>{t("settings.about.tagline")}</span>
+
+        <span>© 2025 pixelet. All rights reserved.</span>
+
+        <span className="text-muted-foreground/70">
+          {APP_ENV !== "production" && `${env_label} · `}
+          {`${BUILD_NUMBER} · ${BUILD_ID} · ${build_label()}`}
+          {` · ${PUBLISHED_TILES ? `Terrain ${PUBLISHED_VERSION.terrain}` : "Live terrain"}`}
+          {` · ${PUBLISHED_TILES ? `POI ${PUBLISHED_VERSION.poi}` : "Live POI"}`}
+          {` · Object v${OBJECT_STORAGE_VERSION}`}
+        </span>
+      </div>
+    </div>
+  );
+}

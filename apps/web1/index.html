@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Favicon: the world-cube symbol, rastered from asset/brand. The ICO
+         carries 16/32/48 as PNG entries; there is no vector of the symbol,
+         so no SVG icon. The manifest's icon srcs are absolute and include
+         the /favicon/ prefix: they used to be bare /web-app-manifest-*.png,
+         which 404s, so an installed Android shortcut had no icon at all. -->
+    <link rel="icon" href="/favicon/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/favicon/web-app-manifest-192x192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+
+    <!-- Matches the app's own --background (oklch(0.15 0.01 240)). Android
+         paints its browser chrome and the standalone splash with this; the
+         manifest defaulted to #ffffff, which flashed white before a map
+         that is almost black. -->
+    <meta name="theme-color" content="#080c0f" />
+
+    <!--
+      viewport-fit=cover: lets content reach under the notch and home
+      indicator, which is also the prerequisite for env(safe-area-inset-*)
+      to report anything but zero.
+
+      No interactive-widget=resizes-content, deliberately. It does keep the
+      overlays on screen when the keyboard opens — by shrinking the layout
+      viewport — but the canvas is sized off that same viewport, so the 3D
+      view resized and reframed itself every time the keyboard appeared.
+      Holding the layout viewport still keeps the world where it was, and the
+      overlays are repositioned instead, from visualViewport (see
+      use_visual_viewport.ts). One mechanism rather than two that disagree.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>pixelet</title>
+    <meta name="description" content="The real world is a canvas for stacking virtual blocks." />
+
+    <!-- Open Graph / Twitter link-preview card. Static, not run through
+         t() — a crawler reads this HTML as-served and never executes the
+         client bundle, so there is no language to switch on. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://plei.me" />
+    <meta property="og:title" content="pixelet" />
+    <meta property="og:description" content="The real world is a canvas for stacking virtual blocks." />
+    <meta property="og:image" content="https://plei.me/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="pixelet" />
+    <meta name="twitter:description" content="The real world is a canvas for stacking virtual blocks." />
+    <meta name="twitter:image" content="https://plei.me/og-image.jpg" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>

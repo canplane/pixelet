@@ -1,0 +1,103 @@
+{
+  "$doc": ["Camera projection and interaction limits."],
+  "VIEW_DIST": {
+    "$value": 4096,
+    "$doc": [
+      "Control knob for global view-dependent distances.",
+      "",
+      "MAX_DIST, fog and the render range are one chain: the camera sits MAX_DIST",
+      "from its pivot, fog has to reach past that or full zoom-out is a screen of",
+      "solid fog, and geometry has to exist as far as fog can see. The third link",
+      "is render_cfg.RENDER_DIST (world/environment/config.json), and it is a",
+      "distance in the same units as the other two, so the chain can be read off.",
+      "Only feeds render_cfg's FAR_CLIP (the camera's far-clip plane), sized past",
+      "where ground geometry stops so the margin stays proportional rather than an",
+      "arbitrary leftover multiple. 2048 * 2."
+    ]
+  },
+  "DEFAULT_TILT_DEG": { "$value": 30, "$doc": ["Default tilt angle in degrees from the ground plane."] },
+  "camera_cfg": {
+    "projection": { "FOV": 50, "NEAR": 0.1 },
+    "view": {
+      "DEFAULT_DIST": { "$value": 16, "$doc": ["4 * 4."] },
+      "DEFAULT_AZIMUTH": 0,
+      "DEFAULT_POLAR": {
+        "$value": 1.0471975511965976,
+        "$doc": ["0 = straight down from above, PI / 2 = horizontal. (90 - DEFAULT_TILT_DEG) * PI / 180."]
+      },
+      "MIN_DIST": {
+        "$value": 2,
+        "$doc": [
+          "Picked against the scale bar's own reading, not as a raw distance",
+          "number with no felt meaning: at a 1080px viewport and Seoul's",
+          "latitude, total_meters ≈ 0.21 * dist (see scale_bar.tsx), giving",
+          "MIN_DIST ≈ 0.25m, MAX_DIST ≈ 200m — a felt-right target, not an exact",
+          "contract (both constants shift with real screen size/latitude, same",
+          "as the scale bar's own reading). 1 * 2."
+        ]
+      },
+      "MAX_DIST": { "$value": 1024, "$doc": ["512 * 2; see MIN_DIST."] },
+      "MIN_POLAR": 0.001,
+      "MAX_POLAR": { "$value": 0.7662421106316569, "$doc": ["PI / 2.05."] }
+    },
+    "input": {
+      "TILT_SWEEP_FRACTION": {
+        "$value": 0.5,
+        "$doc": [
+          "How much of the viewport a vertical drag has to cover to sweep the",
+          "whole tilt range. Stated against the screen rather than as a rad/px",
+          "rate, because that is the only form comparable to azimuth: azimuth",
+          "has no gain at all, it tracks the cursor's angle around screen centre",
+          "1:1 (arcball, see do_rotate() in input.tsx).",
+          "",
+          "They were far apart. The old fixed rate (-0.012 rad/px at a 1080px",
+          "reference) put the entire 90-degree range inside about a tenth of a",
+          "screen height — roughly six times azimuth's angular speed for the",
+          "same finger travel. Both damp toward their target at the same rate,",
+          "so polar's settle after release covered six times the distance and",
+          "read as the gesture still being held."
+        ]
+      },
+      "DOLLY_GAIN": 0.0022,
+      "MIN_ROTATE_RADIUS_PX": {
+        "$value": 24,
+        "$doc": [
+          "azimuth is derived from atan2, unstable at small radius (Δangle ≈",
+          "tangential_jitter / radius — a few px of jitter swings the angle",
+          "wildly up close). Below this radius, azimuth tracking freezes instead",
+          "of following it; see do_rotate()/update_pinch() in input.tsx."
+        ]
+      },
+      "MIN_TWIST_DIST_PX": 24,
+      "AXIS_LOCK_THRESHOLD_PX": {
+        "$value": 12,
+        "$doc": [
+          "A rotate-drag used to derive azimuth and polar simultaneously on",
+          "every move event — a visually \"straight down\" drag still swept",
+          "azimuth unless it started exactly on the vertical centerline, most",
+          "visible once polar saturated (MIN/MAX_POLAR or the ground-collision",
+          "clamp) and the same drag read as a large, unrelated azimuth spin.",
+          "AXIS_LOCK_THRESHOLD_PX gates a one-time decision once total",
+          "displacement passes this radius: whichever axis dominates locks in",
+          "for the rest of the gesture (see do_rotate() in input.tsx). Smaller",
+          "than MIN_ROTATE_RADIUS_PX on purpose — this only needs enough",
+          "displacement to tell vertical from horizontal, not a stable angle reading."
+        ]
+      },
+      "TAP_DRAG_THRESHOLD_PX": {
+        "$value": 4,
+        "$doc": [
+          "did_drag used to flip true on ANY nonzero pointermove delta between",
+          "pointerdown and pointerup — real pointers (trackpad clicks, high-DPI",
+          "mice, touch) almost always report a pixel or two of jitter even on a",
+          "\"stationary\" click, so genuine taps (map recenter, object place/erase)",
+          "were silently getting swallowed as a zero-distance drag. Gate on total",
+          "displacement from pointerdown instead (see tap_start_x/y in",
+          "input.tsx) — small enough that an intentional drag still starts",
+          "panning immediately, large enough to absorb click jitter."
+        ]
+      }
+    },
+    "smooth": { "ROT_DAMP": 10, "POS_DAMP": 10, "CAM_DAMP": 10 }
+  }
+}
