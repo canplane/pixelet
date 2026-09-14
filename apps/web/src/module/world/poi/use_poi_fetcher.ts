@@ -8,7 +8,7 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import type { Demand, Phases } from "@/module/world/sched/demand.ts";
 import { fetch_running, fetch_sync } from "@/module/world/sched/fetch_scheduler.ts";
 import { useRangeAnchor } from "@/module/world/frame/use_range_anchor.ts";
-import { FETCH_HYSTERESIS, page_priority, pages_to_hold } from "@/render/chunk_range.ts";
+import { FETCH_HYSTERESIS, page_priority, pages_to_hold } from "@/module/world/frame/range.ts";
 import { KEEP_DIST, RESIDENT_PAGES } from "../terrain/config.ts";
 import { fetch_poi } from "./repository.ts";
 import { poi_pages, usePoiStore } from "./store.ts";

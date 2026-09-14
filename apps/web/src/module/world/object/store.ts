@@ -7,7 +7,7 @@
  * whole-world walk), and every query is scoped to a cell or chunk (never a
  * scan over every placed object anywhere).
  *
- * The records are the module's (crates/pxl-core/src/object.rs): one per
+ * The records are the module's (crates/pxl-core/src/world/object.rs): one per
  * L2 chunk column holding user objects — a palette, and one sparse octree
  * per 64³ band whose leaves are palette indices — and, derived from them a
  * chunk at a time, the chunk's entries as three lanes and an index of the
@@ -56,8 +56,8 @@ import {
   terrain_style_cube_source,
 } from "@pxl/shared/spec/cell/mod.ts";
 import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
-import { CORE_BUILD } from "@/render/layer/pipeline/core_build.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD } from "@/wasm/core_build.ts";
 import { bump_world, request_world_tick, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
@@ -147,7 +147,7 @@ function floor_div(a: bigint, b: bigint): bigint {
 
 /** Exported for callers that need to probe exact-cell occupancy directly
  * (get_objects_in_cell) instead of get_objects_near's ±1-cell neighborhood —
- * e.g. decor/decor_layer.ts, which must tell "no object in this exact
+ * e.g. decor/decor_kinds.ts, which must tell "no object in this exact
  * ground cell" apart from "an object one cell over" to decide whether a
  * scattered decoration (a tree, say) should render there. */
 export function cell_index(coord: PVF3): [bigint, bigint, bigint] {
@@ -359,7 +359,7 @@ export class EntryCursor {
   }
 
   /** The entry as the store's own two numbers, for a consumer that keeps
-   * instances as lanes (decor/instance.ts) and rebuilds the id on demand
+   * instances as lanes (reference/decor_instance.ts) and rebuilds the id on demand
    * with entry_id_of. A fixed entry has no lane form and reports NO_ENTRY. */
   get band_of(): number {
     return this.fixed ? 0xffffffff : this.band;
@@ -468,7 +468,7 @@ function reindex_chunk(base: IVec): void {
  */
 /**
  * The string id of the entry `(band, pos)` under column `base` — what a
- * consumer that kept an instance as lanes (decor/instance.ts) asks for
+ * consumer that kept an instance as lanes (reference/decor_instance.ts) asks for
  * when a hit on that instance has to resolve to a selectable entry. The
  * same numbers the store's own lanes hold, through the same cursor packing.
  */
@@ -736,7 +736,7 @@ export function usePlacedObject(id: string | null): OccupiedEntry | null {
 // A row's value is the catalog value the store writes (a block colour,
 // AIR, a decor kind), which is its palette id; its id is the hash of the
 // entry's own id. The store carries no heading: a placed decor's facing
-// is derived from its position (decor_layer.ts's user_decor_pick), so the
+// is derived from its position (decor_kinds.ts's user_decor_pick), so the
 // row's heading is written as zero and not read back.
 //
 // Positions round-trip exactly: the store's steps are binary fractions of

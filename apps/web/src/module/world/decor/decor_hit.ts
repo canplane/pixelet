@@ -2,7 +2,7 @@
 
 /**
  * Which user-placed decor entry the pointer's ray strikes, by the module's
- * hit test (crates/pxl-core/src/raycast.rs's hit_decor): the ray against
+ * hit test (crates/pxl-core/src/world/raycast.rs's hit_decor): the ray against
  * the triangles of every placed instance the on-screen chunks show, from
  * the same blocks the renderer draws. What comes back is the chunk it
  * stands in and the entry's band and packed position in that column, which
@@ -13,7 +13,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import type { Vec3 } from "@xpute/core/kit/mat4.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { chunk_nodes } from "@/module/world/chunk_node.ts";
 import { entry_id_of } from "@/module/world/object/store.ts";
 

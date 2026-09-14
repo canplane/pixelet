@@ -101,8 +101,10 @@ Three more pieces of the stack are built for this project rather than adopted: a
 │   ├── web/                        # Web client (Deno + Vite + React 19 + WebGPU)
 │   └── api/                        # API server (Deno + Hono), Overture bake pipeline,
 │                                    # the asset ingest
-├── crates/                         # The Rust core: pxl-core (the chunk mesher so far),
-│                                    # pxl-wasm (the one WebAssembly module over it)
+├── crates/                         # The Rust core: xpute-core (the generic kit, @xpute/core's
+│   ├── xpute-core/                 # counterpart: pools, the arena, the rings, the change log),
+│   ├── pxl-core/                   # pxl-core (the world: bake/, world/, render/, space/), and
+│   └── pxl-wasm/                   # pxl-wasm (the one WebAssembly module over both)
 ├── asset/                          # The shipped models and texture pack, by rendering tier
 │   ├── cube/                       # (cube, decor, actor) — no code imports these: they are
 │   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each

@@ -17,7 +17,7 @@
  *   (the tick runs only when asked), which is correct: idle means nothing to sample.
  *
  * The per-frame CPU breakdown is the tick's phases (sched/tick.ts) plus
- * chunk_stage's recheck/commit split inside the visible phase; there is no
+ * core_tick's recheck/commit split inside the visible phase; there is no
  * per-task-category CPU rollup. Readers: the overlay (ledger_overlay.tsx) and
  * the text report (log.ts), both through summary.ts, and the Chrome-trace
  * export (trace.ts).
@@ -74,16 +74,15 @@ export type FrameSample = {
   budget_ms: number;
   /** sched_ms broken down by phase, in the tick's own order. */
   phases: Record<string, number>;
-  /** chunk_stage's recheck and commit passes, inside the visible phase. The
-   * render is not here: the post-processing composer (always on — color
-   * grade is fused into it) renders past any gl.render wrapper, so a render
-   * timer read 0. `task_ms` below is what covers it. */
+  /** core_tick's recheck and commit passes, inside the visible phase. The
+   * renderer's own submit is inside `task_ms` below; what the GPU then
+   * takes is `gpu_ms`, from its timestamps. */
   cpu: { recheck_ms: number; commit_ms: number };
   /**
    * The whole rAF task: from the scheduler pass starting to the JS stack
-   * emptying, so it covers every other useFrame subscriber *and* the render
-   * the composer performs. Measured with a microtask because the composer
-   * bypasses the gl.render wrapper.
+   * emptying, so it covers every phase of the tick *and* the renderer's
+   * encode and submit. Measured with a microtask, the one vantage point
+   * that sees everything the frame ran.
    *
    * `dt_ms - task_ms` is then everything outside the main thread's own task —
    * vsync wait, compositor, GPU, GC between frames. That split is the whole
@@ -110,7 +109,7 @@ export type FrameSample = {
   census: DrawCensus;
   /** The WebGPU canvas's width*height — the raw fill-rate primitive. */
   px: number;
-  /** chunk_stage's own per-frame LOD counts. Here rather than in a separate
+  /** core_tick's per-frame LOD counts, the module's census. Here rather than in a separate
    * session-peak object so the ring carries the *shape* of a spike, not only
    * how high it got. */
   lod: {

@@ -3,7 +3,7 @@
 import { useGeolocation } from "../module/device/pose/use_geolocation.ts";
 import { useDeviceOrientation } from "../module/device/pose/use_device_orientation.ts";
 
-import { MapScene } from "../module/map/scene.tsx";
+import { MapView } from "../module/map/map_view.tsx";
 
 /** Map page */
 function MapPage() {
@@ -15,7 +15,7 @@ function MapPage() {
     <div className="relative flex-1 w-full flex flex-col items-center">
       {/* <main className="flex-1 container h-full" /> */}
 
-      <MapScene />
+      <MapView />
     </div>
   );
 }

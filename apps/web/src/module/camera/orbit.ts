@@ -2,13 +2,13 @@
 
 /**
  * Pure math for this app's orbit camera model, pulled out of use_camera.ts /
- * use_frame_rotation.ts / environment.tsx so it can be unit tested without a
- * mounted <Canvas>. Doc'd once here because the model is easy to get backwards:
+ * use_view_frame.ts so it can be unit tested on its own. Doc'd once here
+ * because the model is easy to get backwards:
  *
  * **Azimuth never rotates the camera.** Only `dist` and `polar` determine
  * camera.position (orbit_local_offset below), and the camera always looks
  * straight at its target. World content rotates by azimuth under this fixed
- * camera instead (world.tsx's world_frame_ref + use_frame_rotation.ts) — the
+ * camera instead (module/world/frame/view.ts, stepped by use_view_frame.ts) — the
  * ground spins, not the eye. Anything needing "which way is the camera
  * effectively facing" (the sky dome's sun/moon sweep in environment.tsx) has
  * no single camera transform to read that off of — only this rotate2
@@ -54,7 +54,7 @@ export function rotate2(x: f64, y: f64, angle: f64): { x: f64; y: f64 } {
  * Exponential-decay ease-toward-target factor for one frame of `delta`
  * seconds at rate `k` (bigger k = snappier convergence). Shared by every
  * damped camera/frame value in this module tree (dist/polar in
- * use_camera.ts, azimuth in use_frame_rotation.ts) so they all converge
+ * use_camera.ts, azimuth in use_view_frame.ts) so they all converge
  * with the same characteristic curve — apply as
  * `current += (target - current) * damp_alpha(k, delta)`.
  */

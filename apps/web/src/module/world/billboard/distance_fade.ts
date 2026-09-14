@@ -10,11 +10,11 @@
  */
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { fade_end_u, fade_start_u } from "@/render/lod.ts";
+import { fade_end_u, fade_start_u } from "@/module/world/lod.ts";
 
 /** Full opacity/size at or inside fade_start_u(), smoothstepped to gone by
  * fade_end_u() — both a fixed number of the terrain's first tier handoff
- * (render/lod.ts), so they move with the projection as the tiers do. */
+ * (module/world/lod.ts), so they move with the projection as the tiers do. */
 export { fade_end_u, fade_start_u };
 
 export function distance_fade_far(dist: f64): f64 {

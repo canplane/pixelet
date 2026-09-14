@@ -101,7 +101,7 @@ Deno.test("fetch_scheduler - lowest priority number runs first", async () => {
 
 Deno.test("fetch_scheduler - a later category submitting in the same tick still wins on priority", async () => {
   // The bug the coalesced pump fixes: whoever called sync() first used to
-  // fill every slot outright, so MapScene's useTileFetcher-before-
+  // fill every slot outright, so MapView's useTileFetcher-before-
   // usePoiFetcher order beat priority and a POI page sat behind lower-
   // ranked terrain pages. Both submissions here land in one tick.
   fetch_scheduler_reset();

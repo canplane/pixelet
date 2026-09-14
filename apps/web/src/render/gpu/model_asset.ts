@@ -2,7 +2,7 @@
 
 /**
  * A parsed glTF (render/gltf/gltf.ts) handed to the module as a model
- * (crates/pxl-core/src/model.rs): the one place a parsed asset becomes the
+ * (crates/pxl-core/src/world/model.rs): the one place a parsed asset becomes the
  * core's lanes, so a companion, a decor kind or an asset a player brings
  * all enter the world the same way.
  *
@@ -24,7 +24,7 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { type Mat4, mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
-import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/wasm/core_pool.ts";
 import { type Gltf, scene_nodes, world_matrices } from "@/render/gltf/gltf.ts";
 
 export type ModelHandle = {

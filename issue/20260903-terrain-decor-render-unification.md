@@ -20,7 +20,7 @@ call sites:
   about camera position — until each one got its own first real `recheck()`.
   Fixed by seeding `distance2`/`in_frustum` from a new
   `estimate_initial_chunk_view` (`render/chunk_lod.ts`) at construction time,
-  for both `chunk_stage.tsx`'s `Chunk` and `decor_layer.tsx`'s `ChunkDecor`.
+  for both `chunk_stage.tsx`'s `Chunk` and `decor_kinds.tsx`'s `ChunkDecor`.
 - **An "urgent tier" in the recheck sort backfired under sustained camera
   motion.** An earlier fix (since reverted) gave `blend_active`/`settling`
   controls unconditional priority over merely-`full_recheck`-eligible ones —
@@ -42,7 +42,7 @@ call sites:
   this at once produces a contiguous hole or ring, not one stray chunk —
   matching what was reported. Fixed by returning `null` (same as a deferred
   scan) instead of falling through, so the scheduler retries it.
-- **`decor_layer.tsx`'s `ChunkDecor` kept accumulated LOD state
+- **`decor_kinds.tsx`'s `ChunkDecor` kept accumulated LOD state
   (`committed_lod_step`, `committed_tile`, `committed_objects_revision`,
   `has_measured`) as closure-local `let`s inside the `control` `useMemo`
   factory**, unlike `chunk_stage.tsx`'s own `Chunk` (which keeps its
@@ -65,16 +65,16 @@ Unified:
 - One `LodSchedulerRegistry` / `LodSchedulerProvider` recheck-commit loop,
   one shared per-frame work budget (`LOD_WORK_BUDGET_MS`,
   `LOD_MAX_CHUNKS_PER_FRAME`), one priority order — `chunk_stage.tsx`'s
-  `Chunk` and `decor_layer.tsx`'s `ChunkDecor` are equal registrants.
+  `Chunk` and `decor_kinds.tsx`'s `ChunkDecor` are equal registrants.
 - The distance/frustum primitives (`chunk_distance_to_camera`,
   `update_frustum`, `estimate_initial_chunk_view`, `APPROXIMATE_CHUNK_RADIUS`
   — all in `render/chunk_lod.ts`).
 - Page/chunk enumeration (`visible_pages`'s filter logic, `in_range_chunks`)
   — same inputs, same result set for terrain and decor, though
   `visible_pages` itself is duplicated inline in both `ChunkStage` and
-  `DecorLayer` rather than extracted (documented in `decor_layer.tsx`'s own
+  `DecorLayer` rather than extracted (documented in `decor_kinds.tsx`'s own
   doc comment as a deliberate choice, not an oversight).
-- The LOD tier vocabulary (`render/lod.ts`'s `LOD_STEP_BY_LEVEL`,
+- The LOD tier vocabulary (`module/world/lod.ts`'s `LOD_STEP_BY_LEVEL`,
   `get_lod_guide`) — decor's density falloff is keyed to the same tiers
   terrain hands off at, just without the blend/dither machinery (decor
   never blends between tiers).
@@ -83,7 +83,7 @@ Not unified:
 
 - **Geometry/render technique.** `chunk_stage.tsx` instances one shared unit
   box (`TERRAIN_BOX`/`OBJECT_BOX`) at many transforms, with a custom shader
-  (rim light, per-instance color/layer-tap texturing). `decor_layer.tsx`
+  (rim light, per-instance color/layer-tap texturing). `decor_kinds.tsx`
   instances arbitrary per-variant GLB geometry, one `InstancedMesh` per
   (chunk, decor kind) with a plain material, no rim light. Two structurally
   different rendering techniques, not two configurations of one technique.
@@ -113,7 +113,7 @@ A small fix was drafted for the `ready`-state gap specifically: extend
 `LodSchedulerRegistry` with a `ready: Set<string>` of fully-qualified chunk
 keys, have `chunk_stage.tsx`'s `Chunk` publish its own key into it whenever
 `layout.ready` becomes true (a `useEffect` keyed on that React state), and
-have `decor_layer.tsx`'s `ChunkDecor.commit()` refuse to actually apply
+have `decor_kinds.tsx`'s `ChunkDecor.commit()` refuse to actually apply
 (`set_instances_by_variant`) until the co-located terrain key is present —
 returning `false` (stay pending, retry) otherwise.
 
@@ -141,14 +141,14 @@ transformed into chunk-local space, not a shared primitive restyled per
 instance. This is a real rendering-engine rewrite, not a wire-in:
 
 - Replaces `chunk_stage.tsx`'s box-instancing build path
-  (`build_chunk_bucket`, `ChunkInstanceMesh`) and `decor_layer.tsx`'s
+  (`build_chunk_bucket`, `ChunkInstanceMesh`) and `decor_kinds.tsx`'s
   per-variant GLB instancing (`DecorVariantMesh`) with one geometry-agnostic
   per-chunk baking pipeline.
 - The rim-light shader (`inject_instance_shader`, written against
   per-instance attributes `INSTANCE_RGB_ATTR`/`INSTANCE_LAYER_TAPS_ATTR`/
   `INSTANCE_VISIBLE_ATTR`), occlusion culling (`is_run_occluded`, currently
   run-based), the LOD bucket cache (`chunk_bucket.ts`), and the blend/dither
-  transition system (`render/lod.ts`'s `get_lod_pair_visibility`) all
+  transition system (`module/world/lod.ts`'s `get_lod_pair_visibility`) all
   currently assume one shared instanced box and need redesigning against
   merged arbitrary geometry instead.
 - The `ready`/`pending` desync above disappears as a structural consequence
@@ -164,7 +164,7 @@ instance. This is a real rendering-engine rewrite, not a wire-in:
 **Status: decided, explicitly not scheduled for this session** ("귀찮아서
 안 한다", direct user call, 2026-09-03) — not because of implementation size,
 which is not a valid reason per the principle above, but because the user
-chose not to start it today. `decor_layer.tsx`'s own "LONGER-TERM DIRECTION"
+chose not to start it today. `decor_kinds.tsx`'s own "LONGER-TERM DIRECTION"
 doc comment carries the same decision; this file is the fuller record of how
 it was reached, per AGENTS.md's own convention for that.
 

@@ -7,7 +7,7 @@
  * it is. Terrain fetch and the POI index already worked that way — both key
  * on `map_center`, which is the target the view is heading to. Chunks were
  * the one scheduler measuring from the camera as drawn, which lags that
- * target by the frame's damping (use_frame_translation.ts), so during a
+ * target by the frame's damping (frame/use_view_frame.ts), so during a
  * pan they filled in behind the view rather than ahead of it, and during a
  * search jump they kept polishing the place being left.
  *
@@ -21,7 +21,7 @@
  * its distance from the camera as drawn, because that is what is on screen.
  *
  * Distance is aged by how long an item has waited, within one class of work.
- * The order itself is the module's (crates/pxl-core/src/sched.rs); the lead
+ * The order itself is the module's (crates/pxl-core/src/world/sched.rs); the lead
  * point it orders by is worked out here, from the frames the glue holds.
  */
 

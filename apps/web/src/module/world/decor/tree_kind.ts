@@ -3,7 +3,7 @@
 /**
  * The first concrete DecorKind's placement rules — trees on green/forest
  * terrain. Everything kind-specific (which cells count as eligible, how
- * dense) lives here; decor_layer.ts and scatter.ts stay generic so a later
+ * dense) lives here; decor_kinds.ts and scatter.ts stay generic so a later
  * kind (a fence along a road edge, a candle inside a structure, ...) is
  * just another file shaped like this one, not a change to either of those.
  *
@@ -41,13 +41,13 @@ export const TREE_KIND: DecorKindSeed = {
 
 /** Green/forest land, and only where nothing else (water, a structure, a
  * road) already claims the cell — the same "what actually renders there"
- * precedence render/layer/terrain/adapter.ts's ground_material_at applies,
+ * precedence reference/terrain_layer.ts's ground_material_at applies,
  * since a cell whose land channel says GREEN_LIGHT but whose transport
  * channel is a road is a road, not grass.
  *
  * BARE is included alongside the two explicit GREEN_* types even though its
  * own name says "bare ground": it's the fallback land type for any cell
- * with no real landuse tag (see render/layer/terrain/adapter.ts's own
+ * with no real landuse tag (see reference/terrain_layer.ts's own
  * ground_material_at, which uses it as the base before any channel
  * override), and this pack's actual land_bare.png texture is a grassy
  * yellow-green speckle nearly indistinguishable from land_green_light.png —

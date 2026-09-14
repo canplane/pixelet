@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useMapStore } from "@/module/map/store.ts";
-import { range_anchor_of } from "@/render/chunk_range.ts";
+import { range_anchor_of } from "@/module/world/frame/range.ts";
 
 /**
  * The one anchor every range is measured from: what mounts, what is fetched,

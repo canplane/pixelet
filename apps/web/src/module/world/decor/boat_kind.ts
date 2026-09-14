@@ -29,7 +29,7 @@ export const BOAT_KIND: DecorKindSeed = {
 
 /** Open river/lake water only — WETLAND is excluded (too shallow/marshy for
  * a boat to sit in), and structure/transport must both still be VOID: per
- * render/layer/terrain/adapter.ts's own ground_material_at precedence,
+ * reference/terrain_layer.ts's own ground_material_at precedence,
  * either one (a pier, a bridge deck) would win over water and actually
  * render as itself, not water, at that cell — a boat there would visually
  * float on top of a bridge instead of the water beneath it. */

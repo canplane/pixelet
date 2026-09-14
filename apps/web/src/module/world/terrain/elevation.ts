@@ -8,7 +8,7 @@ import { type FVec, type IVec, ivec, type PVF3, pvf3 } from "@pxl/shared/spec/sp
 import { L1_IDX_IN_L3, L3_IDX, L3_RANGE } from "@pxl/shared/spec/space/indexer.ts";
 import { PAGE_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import type { GroundChannelKey, Terrain, Tile } from "@pxl/shared/bake/format.ts";
-import { is_water_family_at, sample_ele, WATER_RECESS_CELLS } from "@/render/layer/terrain/elevation.ts";
+import { is_water_family_at, sample_ele, WATER_RECESS_CELLS } from "@/module/world/terrain/elevation_sample.ts";
 
 const L3_RANGE_REAL: f64 = Number(L3_RANGE);
 

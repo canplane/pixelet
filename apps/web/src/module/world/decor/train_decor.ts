@@ -6,7 +6,7 @@
  * their extents come from (packages/pxl/shared/src/record/shipped.ts).
  */
 
-import { bind_palette, type DecorKindBundle } from "./decor_layer.ts";
+import { bind_palette, type DecorKindBundle } from "./decor_kinds.ts";
 import { is_train_eligible, TRAIN_KIND, TRAIN_RULES } from "./train_kind.ts";
 
 export const TRAIN_DECOR_BUNDLE: DecorKindBundle = bind_palette({

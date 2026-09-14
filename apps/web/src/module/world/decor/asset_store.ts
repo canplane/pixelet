@@ -13,7 +13,7 @@
  *
  * A model is registered with the module as it arrives (render/gpu/
  * model_asset.ts), so the core holds its triangles for the eraser's hit
- * test (crates/pxl-core/src/raycast.rs) and the renderer draws its
+ * test (crates/pxl-core/src/world/raycast.rs) and the renderer draws its
  * instances from the same lanes; the group it is drawn as is its
  * variant's place across every kind, in registry order.
  */
@@ -25,9 +25,9 @@ import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 
 import { load_gltf, load_image } from "@/render/gltf/load.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
-import type { DecorKindBundle, DecorVariantAsset } from "./decor_layer.ts";
+import type { DecorKindBundle, DecorVariantAsset } from "./decor_kinds.ts";
 import { DECOR_BUNDLES } from "./decor_registry.ts";
 
 export type DecorBundleAssets = {

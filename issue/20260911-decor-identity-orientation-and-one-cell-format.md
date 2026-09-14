@@ -203,7 +203,7 @@ may be discarded, so the format changes without a migration.
   already in place.
 - **Interim, until the manifest exists:** cars and trains are drawn at the
   nearest tier only (`NEAREST_TIER_ONLY` on their bundles in
-  decor_layer.ts); every other kind keeps the shared ladder.
+  decor_kinds.ts); every other kind keeps the shared ladder.
 
 ## Open
 
@@ -340,7 +340,7 @@ brings its extent, never its thresholds.
 
 This is the criterion the terrain tiers already use — screen-space error
 against a pixel threshold, derived from the viewport and field of view
-(render/lod.ts, `set_lod_projection`) — so decor takes the same one rather
+(module/world/lod.ts, `set_lod_projection`) — so decor takes the same one rather
 than a second. The distance rule in the previous paragraph is this rule
 stated for a given size: the altitude at which a building of a given extent
 stops being drawn is the range at which that extent falls under the pixel
@@ -352,7 +352,7 @@ reference to read when the low-poly tier is built.
 
 ## Closed 2026-09-13: the criterion is in, and the two tiers are decided
 
-The projected-size criterion is code (`decor_layer.ts`'s `decor_density`):
+The projected-size criterion is code (`decor_kinds.ts`'s `decor_density`):
 a kind brings `extent_u`, the largest dimension of its models measured
 from the GLBs (trees 3.0, cars 2.9, trains 2.6, boats 3.9), and is drawn
 on every tier where that extent projects to at least `DECOR_GONE_PX` at

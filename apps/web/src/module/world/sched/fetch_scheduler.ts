@@ -31,7 +31,7 @@ import { Lanes } from "@xpute/core/ds/lanes.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
-import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 import type { Demand, Phases } from "./demand.ts";
 import { ledger_record, type Outcome } from "./ledger.ts";
@@ -182,7 +182,7 @@ let pump_scheduled = false;
  * Coalesces every pump request in the current tick into one.
  *
  * Measured motivation: with a synchronous pump, whichever subsystem called
- * sync() first won outright — MapScene calls useTileFetcher() before
+ * sync() first won outright — MapView calls useTileFetcher() before
  * usePoiFetcher(), so terrain's nine demands filled all MAX_INFLIGHT slots
  * before POI had submitted anything, and a POI page at priority 1 sat 358ms
  * behind terrain pages at priority 2. Priority can only order the queue; it

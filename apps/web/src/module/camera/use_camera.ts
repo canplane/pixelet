@@ -12,7 +12,7 @@ import { climb_polar } from "./terrain_gate.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick as invalidate } from "@/module/world/change.ts";
-import { view, view_compose } from "@/module/world/view.ts";
+import { view, view_compose } from "@/module/world/frame/view.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
@@ -40,7 +40,7 @@ const CLIMB_RELAX_DAMP: f64 = 5;
 const CLIMB_EPS: f64 = 0.0005;
 
 /** Damps the eye's distance and pitch toward the controls and writes them
- * into the view (module/world/view.ts). */
+ * into the view (module/world/frame/view.ts). */
 export function useCamera() {
   const view_state = useCameraStore((state) => state.view_state);
 
@@ -97,7 +97,7 @@ export function useCamera() {
     // itself. polar is already damped alongside dist just above, and running
     // the absolute angle through a second lag gave tilt an inertia rotation
     // does not have — rotation gets one lag, at the same rate, in
-    // use_frame_rotation.ts. Outside climb mode the offset is zero and the
+    // use_view_frame.ts. Outside climb mode the offset is zero and the
     // drawn pitch is exactly the damped control.
     const want_climb: f64 = useSettingsStore.getState().camera_terrain === "climb" ? climb_polar(dist.current, polar.current, view_state.azimuth) - polar.current : 0;
     const climb_k = want_climb < shown_climb.current ? CLIMB_RISE_DAMP : CLIMB_RELAX_DAMP;

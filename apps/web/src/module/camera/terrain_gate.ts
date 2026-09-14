@@ -121,7 +121,7 @@ export function allowed_step(to: ViewPose, from: ViewPose): ViewPose {
   const start = penetration(from);
   const limit = start === null ? 0 : Math.max(0, start);
 
-  // The short way round, matching how use_frame_rotation.ts damps azimuth.
+  // The short way round, matching how use_view_frame.ts damps azimuth.
   const turn = wrap(to.azimuth - from.azimuth, -Math.PI, Math.PI);
   let last: ViewPose = from;
   for (let i = 1; i <= STEP_SAMPLES; i++) {

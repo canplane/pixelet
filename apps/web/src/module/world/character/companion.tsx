@@ -48,9 +48,9 @@ import { type CharacterVariant, find_person_variant, find_pet_variant } from "@/
 import { useTick } from "@/module/world/sched/tick.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { load_gltf, load_image } from "@/render/gltf/load.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { gpu_renderer } from "@/render/gpu/stage.tsx";
-import { view } from "@/module/world/view.ts";
+import { view } from "@/module/world/frame/view.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 
 /** A variant's model in the module, registered once per model and height
@@ -86,7 +86,7 @@ const SETTLE_DELAY_S: f64 = 0.15;
 // long still gaps between. Follow mode feeds it a ~1 Hz stream of GPS jumps
 // instead, so it never gets to just "be there" — it sits perpetually
 // mid-dash, and that dash (a fixed 0.6 s curve after a 0.15 s hold) fights
-// use_frame_translation's world-scroll damp, swaying the character along the
+// use_view_frame's world-scroll damp, swaying the character along the
 // travel axis on every fix. So in follow mode the character skips all of
 // that and glides toward the target with a plain per-frame exponential lerp
 // at the SAME rate the world scroll damps (camera_cfg POS_DAMP). Because the
@@ -148,7 +148,7 @@ type WalkerProps = {
 
 const Walker = memo(function Walker(props: WalkerProps) {
   const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
-  // The walker is an actor of the module (crates/pxl-core/src/model.rs):
+  // The walker is an actor of the module (crates/pxl-core/src/world/model.rs):
   // what follows decides where it stands, which way it faces and which clip
   // it plays, and tells the actor. Its pose here is the walk's own state.
   const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: ImageBitmap } | null>(null);
@@ -215,7 +215,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
   }, [actor]);
 
   // Tracks the last map_origin this loop saw, to snap (not glide) across an
-  // L4 rebase — target_ref jumps ~4096u then, and use_frame_translation snaps
+  // L4 rebase — target_ref jumps ~4096u then, and use_view_frame snaps
   // the world scroll for it.
   const prev_map_origin_ref = useRef<IVec>(map_origin_ref.current);
   // Clock time until which the follow-mode walk clip stays on — see
@@ -248,7 +248,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
       // (see FOLLOW_LERP_K's doc comment). rotation is driven every frame
       // below, so the settle/one-time-facing bookkeeping stays untouched
       // and resumes cleanly on exit. Snap (not glide) on the entry frame and
-      // across an L4 rebase: both are one-shot jumps use_frame_translation
+      // across an L4 rebase: both are one-shot jumps use_view_frame
       // itself snaps through, and gliding a browse-distance gap would fly the
       // walker in from off-screen.
       if (rebased || !was_follow_mode_ref.current) {

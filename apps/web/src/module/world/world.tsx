@@ -9,7 +9,7 @@
  * 3. Interaction: highlighters and guide markers
  *
  * Coordinate model: every layer places what it has in the root frame
- * (module/world/view.ts), the map's azimuth and the floating origin's
+ * (module/world/frame/view.ts), the map's azimuth and the floating origin's
  * translation, which the view's damping steps write. Nothing here renders
  * DOM but the dev gizmos' labels: each layer tells the module what it has.
  */
@@ -31,24 +31,22 @@ import { get_local_world_origin } from "./frame/coord.ts";
 
 import { LocationPuck } from "./marker/location_puck.tsx";
 import { HoverCursor } from "./marker/hover_cursor.tsx";
-import { DebugLayer } from "./marker/debug_layer.tsx";
+import { DebugGizmos } from "./marker/debug_gizmos.tsx";
 import { PoiLayer } from "./poi/poi_layer.tsx";
 
-// CHUNK_STAGE_LAYERS lives in module/world/stack.ts (not inline here) so
-// camera/ray.ts's own raycast can composite the exact same layer stack
-// instead of a second, possibly-drifting registration.
-import { ChunkStage, LodSchedulerProvider } from "./chunk_stage.tsx";
-// The layers teach the module their tables when imported; the chunks it
-// builds read them.
-import "./stack.ts";
+import { ChunkMounts, CoreTick } from "./core_tick.tsx";
+import { teach_terrain } from "./terrain/teach.ts";
+import { teach_objects } from "./object/teach.ts";
 
-// Dynamic rather than a plain top-level import so the character/pet model
-// code (GLTFLoader, skinning, animation mixer — otherwise unused anywhere
-// else in the app) lands in its own chunk instead of bloating the main one.
-// This lazy() still uses Suspense, but only once — for the code chunk
-// itself, at initial mount — not per-frame like the model-loading inside
-// Companion used to (see use_character_model.ts's own doc comment for why
-// that had to stop being Suspense-based entirely).
+// The module reads its tables when it builds; taught here, before the
+// first page is told.
+teach_terrain();
+teach_objects();
+
+// Dynamic rather than a plain top-level import so the character code (the
+// glTF parser, the skins, the animation) lands in its own chunk instead of
+// bloating the main one. This lazy() still uses Suspense, but only once —
+// for the code chunk itself, at initial mount.
 const Companion = lazy(() => import("./character/companion.tsx").then((m) => ({ default: m.Companion })));
 
 export function World() {
@@ -70,17 +68,17 @@ export function World() {
   // be conditionally mounted here either.
   if (map_center === null) return null;
 
-  // Same computation DebugLayer's own raw_v uses — map_center's position in
+  // Same computation DebugGizmos's raw_v uses — map_center's position in
   // the local floating-origin frame. Companion needs this (not the fixed
-  // L4-tile-center point DebugLayer's anchor_center marker uses) so it sits
+  // L4-tile-center point DebugGizmos's anchor_center marker uses) so it sits
   // wherever the camera actually is, not up to 2048u/~4.9km away.
   const local_map_center: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(map_center.i), map_center.f);
 
   return (
     <>
-      <LodSchedulerProvider>
-        <ChunkStage />
-      </LodSchedulerProvider>
+      <CoreTick>
+        <ChunkMounts />
+      </CoreTick>
 
       <HoverCursor />
       <LocationPuck device_coord={device_coord} />
@@ -96,7 +94,7 @@ export function World() {
         />
       </Suspense>
 
-      {__IS_DEV__ && show_debug_objects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
+      {__IS_DEV__ && show_debug_objects && <DebugGizmos map_center={map_center} map_origin={map_origin} />}
     </>
   );
 }

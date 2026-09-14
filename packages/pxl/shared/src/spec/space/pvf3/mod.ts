@@ -12,8 +12,8 @@
  * - Handles discrete unit-level positioning and global topology.
  *
  * 2. fvec (Fractional Vector):
- * - High-precision local displacement (10-10-10 bit symmetric lanes).
- * - Provides sub-grid resolution (1/1024) within a single integer block.
+ * - High-precision local displacement (8-8-8 bit symmetric lanes, FRAC_W).
+ * - Provides sub-grid resolution (1/256) within a single integer block.
  *
  * 3. projection (Lattice Decomposition/Composition):
  * - Maps (x,y,z) in normalized units <-> (ivec,fvec) tuple (addr/subaddr).

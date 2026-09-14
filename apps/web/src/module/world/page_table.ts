@@ -9,7 +9,7 @@
  * positions, an open-addressing table over packed page keys — and what a
  * page holds sits at its position in a handle array: for terrain the typed
  * views over the page's pool blocks, for POI the page's records. The
- * handles are the glue three.js and the mesher read through; the keys, the
+ * handles are what the glue and the module read a page through; the keys, the
  * positions and the walk are linear.
  *
  * A table given a world topic writes every set and clear to the world
@@ -25,7 +25,7 @@ import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/wasm/core_pool.ts";
 import { bump_world, world_changes, type WorldTopic } from "@/module/world/change.ts";
 
 export class PageTable<T> {

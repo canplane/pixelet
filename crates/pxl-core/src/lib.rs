@@ -6,32 +6,9 @@
 //!
 //! Ported a piece at a time from the TypeScript it replaces, and held to
 //! byte-for-byte agreement with it until the TypeScript is gone
-//! (apps/web/src/render/layer/pipeline/wasm_bake.test.ts).
+//! (apps/web/src/reference/wasm_bake.test.ts).
 
-pub mod billboard;
-pub mod buddy;
-pub mod build;
-pub mod change;
-pub mod debug;
-pub mod decor;
-pub mod draw;
-pub mod environment;
-pub mod ghost;
-pub mod lod;
-pub mod marker;
-pub mod mesher;
-pub mod model;
-pub mod object;
-pub mod raycast;
-pub mod ring;
-pub mod run_set;
-pub mod scan;
-pub mod sched;
-pub mod shader;
-pub mod sparse_tree;
-pub mod terrain;
-pub mod volume;
-pub mod voxel;
-
-mod fdlibm;
-mod srgb;
+pub mod bake;
+pub mod render;
+pub mod space;
+pub mod world;

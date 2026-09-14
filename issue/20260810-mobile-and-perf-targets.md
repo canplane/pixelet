@@ -49,7 +49,7 @@ network responses completing**, cross-checked against
 The cause is a chain that runs **synchronously inside React's render/commit
 phase**, on the same thread as the rAF render loop: `set_tile` fires →
 `layer.tsx`'s `page_to_chunks` (16-chunk slice) → `render/terrain/elevation.ts`'s
-`dense_ele` (bicubic, 4096 samples/chunk) → `shader_meta.ts`'s
+`dense_ele` (bicubic, 4096 samples/chunk) → `layer_table.ts`'s
 `decode_ground_rgba` (per-texel color resolve, up to 65536 texels × 4 channels)
 → texture and shader-material creation. React batches multiple same-tick
 `set_tile` calls into one commit, so a burst of ~5 simultaneous tile arrivals —

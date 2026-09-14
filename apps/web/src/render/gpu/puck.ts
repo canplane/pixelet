@@ -2,7 +2,7 @@
 
 /**
  * The location puck through WebGPU: the module's zone and beacon draws
- * (crates/pxl-core/src/marker.rs) — the zone a unit box a cell instanced
+ * (crates/pxl-core/src/world/marker.rs) — the zone a unit box a cell instanced
  * from the zone block, the beacon a small octahedron — under
  * shader/puck_zone.wgsl and puck_beacon.wgsl. The geometry is built here,
  * once.

@@ -1,4 +1,4 @@
-// @pxl/web/app/hook/use_uiController.ts
+// @pxl/web/app/hook/use_ui_controller.ts
 
 import { useCallback, useMemo, useState } from "react";
 

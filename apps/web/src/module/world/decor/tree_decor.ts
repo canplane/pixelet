@@ -6,7 +6,7 @@
  * their extents come from (packages/pxl/shared/src/record/shipped.ts).
  */
 
-import { bind_palette, type DecorKindBundle } from "./decor_layer.ts";
+import { bind_palette, type DecorKindBundle } from "./decor_kinds.ts";
 import { is_tree_eligible, TREE_KIND, TREE_RULES } from "./tree_kind.ts";
 
 export const TREE_DECOR_BUNDLE: DecorKindBundle = bind_palette({

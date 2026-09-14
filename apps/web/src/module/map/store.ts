@@ -30,10 +30,7 @@ export type MapStore = {
   /** Selected POI entity. */
   selected_poi: POI | null;
   set_selected_poi: (poi: POI | null) => void;
-
   /** HTML portal mount point for canvas overlays. */
-  html_portal_el: HTMLDivElement | null;
-  set_html_portal_el: (el: HTMLDivElement | null) => void;
 };
 
 export const useMapStore = create<MapStore>((set, _get) => ({
@@ -46,7 +43,4 @@ export const useMapStore = create<MapStore>((set, _get) => ({
 
   selected_poi: null,
   set_selected_poi: (poi) => set({ selected_poi: poi }),
-
-  html_portal_el: null,
-  set_html_portal_el: (el) => set({ html_portal_el: el }),
 }));

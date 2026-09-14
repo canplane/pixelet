@@ -15,7 +15,7 @@ import { is_placement_blocked } from "../object/collision.ts";
 import { DECOR_SIZE } from "../object/size.ts";
 import { clear_virtual_carve_preview, set_virtual_carve_preview, set_virtual_hide, usePlacedObject } from "../object/store.ts";
 import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import { user_decor_pick } from "../decor/decor_layer.ts";
+import { user_decor_pick } from "../decor/decor_kinds.ts";
 import { decor_bundle_for } from "../decor/decor_registry.ts";
 import { decor_assets_for, useDecorAssets } from "../decor/asset_store.ts";
 import { marker_colors } from "./style.ts";
@@ -23,11 +23,11 @@ import { shown_ground } from "@pxl/shared/bake/ground.ts";
 import { placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for } from "@pxl/shared/spec/cell/mod.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
 import { fvec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { DECOR_BUNDLES } from "../decor/decor_registry.ts";
 import { request_world_tick } from "../change.ts";
 
-// The ghost is the core's (crates/pxl-core/src/ghost.rs): a box written in
+// The ghost is the core's (crates/pxl-core/src/world/ghost.rs): a box written in
 // the mesher's layout and drawn by the chunk shader, or one decor instance
 // drawn by decor's, half transparent. Everything here decides which ghost
 // and where.
@@ -102,8 +102,8 @@ export function HoverCursor() {
   // clear-then-reset the hide and force a needless chunk rebuild.
   //
   // This ghost's own appearance/disappearance is instant, and the real
-  // object's isn't (its own hide has to propagate through a few React
-  // commits via chunk_stage.tsx's Chunk) — accepted as-is, a deliberate
+  // object's isn't (its own hide lands on the module's next build of the
+  // chunk, a tick or more later) — accepted as-is, a deliberate
   // choice, not an oversight: see set_virtual_hide's own doc comment for
   // the fade/multi-slot system that was built to mask the resulting few
   // milliseconds of overlap, then reverted for being real added complexity

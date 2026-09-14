@@ -118,7 +118,7 @@ export type BuddyOptions = {
 };
 
 /**
- * The backed side of a pool, run elsewhere (crates/pxl-core/src/buddy.rs
+ * The backed side of a pool, run elsewhere (crates/xpute-core/src/ds/buddy.rs
  * through pxl-wasm's pool exports): blocks named by their address in the
  * backing. `acquire` answers 0 for a refusal; `release` false for a block
  * the kernel does not hold or holds already. `stat` is the kernel's count

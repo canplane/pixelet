@@ -4,7 +4,7 @@ import { assert, assertEquals } from "@std/assert";
 
 import { GroundChannelKey, type Terrain } from "@pxl/shared/bake/format.ts";
 
-import { CORE_MEMORY, PAGE_POOL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_MEMORY, PAGE_POOL } from "@/wasm/core_pool.ts";
 import { into_core, release_terrain } from "./resident.ts";
 
 const CHANNEL_BYTES = 1 << 20;

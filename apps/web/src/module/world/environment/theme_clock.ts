@@ -6,8 +6,8 @@
  * get_theme_key() in theme.ts is a pure function of the wall clock — calling
  * it directly inside a component only re-evaluates on that component's next
  * unrelated re-render, not when the clock actually crosses an hour boundary.
- * Four different components (environment.tsx, scene.tsx, location_puck.tsx,
- * html_portal.tsx) each called it independently, so the theme could go stale
+ * Four different components (environment.tsx, map_view.tsx, location_puck.tsx,
+ * the toasts) each called it independently, so the theme could go stale
  * for hours during idle viewing, and different components could show
  * different themes simultaneously if their last re-render happened to land
  * on opposite sides of an hour boundary.
@@ -17,7 +17,7 @@
  *
  * Also now location-aware: get_theme_key() needs the real sunrise/sunset
  * for wherever the map is centered (the module's environment,
- * crates/pxl-core/src/environment.rs, itself needing lat/lon), so each tick reads useMapStore's current map_center directly
+ * crates/pxl-core/src/world/environment.rs, itself needing lat/lon), so each tick reads useMapStore's current map_center directly
  * via getState() rather than a React subscription — this module is a plain
  * singleton outside any component tree, and the interval only needs
  * whatever map_center happens to be *at tick time*, not to re-run the
@@ -30,7 +30,7 @@ import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 
 import { useMapStore } from "@/module/map/store.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { get_theme_key, type WorldThemeKey } from "./theme.ts";
 
 const THEME_CHECK_INTERVAL_MS = 60_000;

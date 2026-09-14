@@ -1,4 +1,4 @@
-// @pxl/web/app/provider/modal-manager.tsx
+// @pxl/web/app/provider/modal_manager.tsx
 
 import { useEffect, useState } from "react";
 

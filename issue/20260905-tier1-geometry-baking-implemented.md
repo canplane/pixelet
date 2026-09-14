@@ -3,7 +3,7 @@
 **2026-09-05** — implements the direction
 [20260903-terrain-decor-render-unification.md](./20260903-terrain-decor-render-unification.md)
 decided but deliberately left unscheduled: replacing `chunk_stage.tsx`'s
-box-instancing and `decor_layer.tsx`'s per-variant GLB-instancing with real
+box-instancing and `decor_kinds.tsx`'s per-variant GLB-instancing with real
 per-chunk baked geometry, Minecraft's own block-mesh model as the literal
 reference. That document is the fuller record of _why_ baking beats
 instancing here (the draw-call-vs-vertex-memory tradeoff, the concrete bugs
@@ -39,9 +39,9 @@ couldn't) settle in advance.
   attribute flip, same `discard`-based approach, same "flip a typed array
   and set `needsUpdate`" cost shape as the per-instance version it replaced
   — this was the one piece of the original discussion's risk list
-  (`render/lod.ts`'s blend system) that turned out to need no redesign at
+  (`module/world/lod.ts`'s blend system) that turned out to need no redesign at
   all, just a wider array.
-- `decor_layer.tsx`'s `DecorVariantMesh` now bakes every placement's own
+- `decor_kinds.tsx`'s `DecorVariantMesh` now bakes every placement's own
   real, separately-transformed copy of its variant's GLB geometry into one
   merged mesh (`instanced_model.ts`'s new `bake_decor_instances`, using
   three.js's own `BufferGeometry.applyMatrix4` — needed here, unlike the
@@ -63,7 +63,7 @@ this session alongside user-placeable decor, back when decor had no real
 geometry to hit-test against — is gone. Decor is now hit-tested with a real
 `THREE.Raycaster` pass against its own baked mesh:
 
-- `decor_layer.tsx`'s own `instanced_model.ts` type (`ModelInstanceTransform`)
+- `decor_kinds.tsx`'s own `instanced_model.ts` type (`ModelInstanceTransform`)
   gained an `id: string | null` field — the placement's own objects/store.ts
   leaf id for a user-placed instance, `null` for a procedural
   (scatter.ts-derived, never-stored) one.

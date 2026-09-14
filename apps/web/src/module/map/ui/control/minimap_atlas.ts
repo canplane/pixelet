@@ -28,7 +28,8 @@ const ATLAS_CENTER_PX: f64 = ATLAS_PX / 2;
 export const MINIMAP_PX_PER_U: f64 = ATLAS_PAGE_PX / L3_RANGE_REAL;
 
 // Ground channel bytes are type IDs, not weights, so this must reuse the same
-// per-channel override order the 3D shader blends with (shader.ts) — reordering
+// per-channel override order the terrain paint resolves a cell by
+// (crates/pxl-core/src/bake/terrain.rs) — reordering
 // GROUND_CH_KEYS here would silently mismatch the 3D terrain's colors.
 const COLOR_TABLE: Record<GroundChannelKey, Record<u8, string | null>> = cube_colors;
 const BASE_COLOR: string = cube_colors.land[cube_types.land.BARE];

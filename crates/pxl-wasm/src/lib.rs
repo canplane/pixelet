@@ -2,7 +2,7 @@
 //!
 //! No wasm-bindgen. What crosses is integers and addresses into the core
 //! memory, which the module imports and shares with the client (build.rs,
-//! arena.rs): a run set is baked where it lies, and the mesh is written into
+//! fixed_heap.rs): a run set is baked where it lies, and the mesh is written into
 //! the block the client acquired for it, so nothing is copied across the
 //! boundary. The boundary is the same shape the command frame already is,
 //! and a thread that instantiates the module needs the memory and nothing
@@ -11,30 +11,52 @@
 //! One bake is open at a time, as with the TypeScript context; the module is
 //! single-threaded, so the state is a plain global.
 
-mod arena;
+use pxl_core::bake::mesher::{BakeContext, Step};
+use pxl_core::bake::run_set::{run_set_bytes, RunSet};
+use pxl_core::bake::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
+use pxl_core::bake::terrain::{ChunkSample, Materials, PageView, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
+use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
+use pxl_core::world::object::{Carve, Kind, Painter, Store};
+use pxl_core::world::raycast::Raycast;
+use pxl_core::world::sched::{Event, Frame, Scheduler};
+use xpute_core::ds::buddy::Pool;
+use xpute_core::ipc::change::ChangeLog;
+use xpute_core::ipc::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
 
-use pxl_core::buddy::Pool;
-use pxl_core::build::{Event as BuildEvent, PageLanes, World};
-use pxl_core::change::ChangeLog;
-use pxl_core::decor::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::mesher::{BakeContext, Step};
-use pxl_core::object::{Carve, Kind, Painter, Store};
-use pxl_core::raycast::Raycast;
-use pxl_core::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
-use pxl_core::run_set::{run_set_bytes, RunSet};
-use pxl_core::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
-use pxl_core::sched::{Event, Frame, Scheduler};
-use pxl_core::terrain::{ChunkSample, Materials, PageView, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use pxl_core::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+/// The section at the front of the core memory that is the module's own.
+/// Equal to core_pool.ts's MODULE_BYTES.
+pub const MODULE_BYTES: usize = 32 << 20;
+
+extern "C" {
+    static __heap_base: u8;
+}
+
+/// The module's heap: what is left of the module's section after the
+/// linker placed the stack and the data before it (`--stack-first`, the
+/// default; 1 MB of stack), up to the section's end. Sized against what a
+/// chunk's scratch reaches (wasm_bake.test.ts probes it): about 140 bytes
+/// a run at the peak, most of it a vector's old block held while its
+/// doubled replacement is filled, so a 65k-run chunk — whose fine mesh no
+/// longer fits a pool region — takes under 10 MB of the 31 the heap has.
+struct ModuleHeap;
+
+impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
+    fn base() -> usize {
+        core::ptr::addr_of!(__heap_base) as usize
+    }
+    const END: usize = MODULE_BYTES;
+}
 
 #[global_allocator]
-static ALLOC: arena::Arena = arena::Arena;
+static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds::fixed_heap::FixedHeap::new();
 
 struct State {
     ctx: BakeContext,
     /// The open bake's run set: its address in the memory, and its shape.
     input: (usize, u32, u32),
-    /// vertex_cnt, index_cnt, the six counters, then the arena's use.
+    /// vertex_cnt, index_cnt, the six counters, then the heap's use.
     result: [u32; 9],
     scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.
@@ -228,7 +250,7 @@ pub extern "C" fn pxl_bake_finish() -> *const u32 {
         c.faces_kept,
         c.coarse_total,
         c.coarse_low_fill,
-        arena::used() as u32,
+        ALLOC.used() as u32,
     ];
     s.result.as_ptr()
 }
@@ -241,14 +263,14 @@ pub extern "C" fn pxl_bake_abort() {
 /// How much of the module's heap has been cut, for the ledger.
 #[no_mangle]
 pub extern "C" fn pxl_heap_used() -> u32 {
-    arena::used() as u32
+    ALLOC.used() as u32
 }
 
 /// The section the module keeps for itself at the front of the memory, for
 /// the client to check its map against.
 #[no_mangle]
 pub extern "C" fn pxl_module_bytes() -> u32 {
-    arena::MODULE_BYTES as u32
+    MODULE_BYTES as u32
 }
 
 /// Words a band takes in the table `pxl_scan_begin` reads (wasm_scan.ts
@@ -267,7 +289,7 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
         table
             .chunks_exact(BAND_WORDS)
             .map(|w| {
-                let voxels = (pxl_core::scan::BAND_SPAN * pxl_core::scan::BAND_SPAN * pxl_core::scan::BAND_SPAN) as usize;
+                let voxels = (pxl_core::bake::scan::BAND_SPAN * pxl_core::bake::scan::BAND_SPAN * pxl_core::bake::scan::BAND_SPAN) as usize;
                 let extras = w[4] as usize;
                 BandView {
                     band_z: w[0] as i32,
@@ -781,7 +803,7 @@ pub extern "C" fn pxl_column_runs_at() -> u32 {
 
 // ---- Rings ----
 //
-// Commands and their effects cross in rings (crates/pxl-core/src/ring.rs);
+// Commands and their effects cross in rings (crates/xpute-core/src/ipc/ring.rs);
 // a query that needs its answer now stays a call. The glue pushes into the
 // submission ring, rings `pxl_drain` once a tick, and reads the completion
 // ring when the call returns.
@@ -993,7 +1015,7 @@ fn after(s: &mut State) {
         c.faces_kept,
         c.coarse_total,
         c.coarse_low_fill,
-        arena::used() as u32,
+        ALLOC.used() as u32,
     ];
     let k = s.sched.census;
     s.census = [
@@ -1065,7 +1087,7 @@ pub extern "C" fn pxl_build_now(id: u32) {
     after(s);
 }
 
-// ---- The billboards (crates/pxl-core/src/billboard.rs) ----
+// ---- The billboards (crates/pxl-core/src/world/billboard.rs) ----
 
 /// A billboard set drawn in `order`: its id.
 #[no_mangle]
@@ -1101,14 +1123,14 @@ pub extern "C" fn pxl_billboards_remove(set: u32) {
     sched.billboards.remove(&mut world, &mut sched.draw, set);
 }
 
-// ---- The shaders and the pipelines (crates/pxl-core/src/shader.rs) ----
+// ---- The shaders and the pipelines (crates/pxl-core/src/render/shader.rs) ----
 
 /// Shader `kind`'s WGSL: a row of two words, its address and its length
 /// in bytes; zero length for a kind that is not one.
 #[no_mangle]
 pub extern "C" fn pxl_shader(kind: u32) -> *const u32 {
     let s = state();
-    let src = pxl_core::shader::source(kind);
+    let src = pxl_core::render::shader::source(kind);
     s.shader_row = [src.as_ptr() as u32, src.len() as u32];
     s.shader_row.as_ptr()
 }
@@ -1119,7 +1141,7 @@ pub extern "C" fn pxl_shader(kind: u32) -> *const u32 {
 #[no_mangle]
 pub extern "C" fn pxl_pipeline(id: u32) -> *const u32 {
     let s = state();
-    s.pipeline = pxl_core::shader::pipeline(id);
+    s.pipeline = pxl_core::render::shader::pipeline(id);
     s.shader_row = [s.pipeline.as_ptr() as u32, s.pipeline.len() as u32];
     s.shader_row.as_ptr()
 }
@@ -1129,10 +1151,10 @@ pub extern "C" fn pxl_pipeline(id: u32) -> *const u32 {
 #[no_mangle]
 pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
     static TABLE: [u32; 13] = {
-        let mut t = [pxl_core::shader::FRAME_FLOATS; 13];
+        let mut t = [pxl_core::render::shader::FRAME_FLOATS; 13];
         let mut k = 0;
         while k < 12 {
-            t[k + 1] = pxl_core::shader::FRAME_AT[k];
+            t[k + 1] = pxl_core::render::shader::FRAME_AT[k];
             k += 1;
         }
         t
@@ -1140,7 +1162,7 @@ pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
     TABLE.as_ptr()
 }
 
-// ---- The dev gizmos (crates/pxl-core/src/debug.rs) ----
+// ---- The dev gizmos (crates/pxl-core/src/world/debug.rs) ----
 
 /// The gizmos' segments: `vertex_cnt` vertices of 6 floats at `lane`,
 /// relative to an origin at (x, y, z) in units.
@@ -1152,13 +1174,13 @@ pub extern "C" fn pxl_debug_set(x: f64, y: f64, z: f64, vertex_cnt: u32, lane: u
     unsafe { sched.debug.set(&mut world, &mut sched.draw, [x, y, z], vertex_cnt, lane as usize) };
 }
 
-// ---- The environment (crates/pxl-core/src/environment.rs) ----
+// ---- The environment (crates/pxl-core/src/world/environment.rs) ----
 
 /// The theme the environment eases toward: THEME_FLOATS floats at `lane`.
 #[no_mangle]
 pub extern "C" fn pxl_env_theme(lane: u32) {
     let s = state();
-    let mut theme = [0.0f32; pxl_core::environment::THEME_FLOATS];
+    let mut theme = [0.0f32; pxl_core::world::environment::THEME_FLOATS];
     // SAFETY: the glue's lane of THEME_FLOATS floats in the memory.
     unsafe { core::ptr::copy_nonoverlapping(lane as usize as *const f32, theme.as_mut_ptr(), theme.len()) };
     s.sched.environment.set_theme(&theme);
@@ -1185,7 +1207,7 @@ pub extern "C" fn pxl_env_at() -> u32 {
     state().sched.environment.out.as_ptr() as u32
 }
 
-// ---- The location puck (crates/pxl-core/src/marker.rs) ----
+// ---- The location puck (crates/pxl-core/src/world/marker.rs) ----
 
 /// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre
 /// relative to the zone's, and which edges border the ring), about a centre
@@ -1212,7 +1234,7 @@ pub extern "C" fn pxl_puck_clear() {
     sched.markers.clear(&mut world, &mut sched.draw);
 }
 
-// ---- Models and actors (crates/pxl-core/src/model.rs) ----
+// ---- Models and actors (crates/pxl-core/src/world/model.rs) ----
 
 /// A model's mesh block for `vertex_cnt` vertices, `index_cnt` indices and
 /// `joint_cnt` joints: its id, or -1 when the pool refused; the block's
@@ -1346,7 +1368,7 @@ pub extern "C" fn pxl_ghost_clear() {
     sched.ghost.clear(&mut world, &mut sched.draw);
 }
 
-/// Hands the renderer's lists over (crates/pxl-core/src/draw.rs): a row of
+/// Hands the renderer's lists over (crates/pxl-core/src/render/draw.rs): a row of
 /// ten words — the uploads' address and count, the frees', the draws', the
 /// uniforms', the rewrites' — valid until the next call. Uploads and frees are what
 /// accumulated since the last call; the draws are the last tick's.
@@ -1417,7 +1439,7 @@ pub extern "C" fn pxl_decor_allow(kind: u32, channel: u32, t: u32) {
 /// normal, the point, t, the box's min and max — 14.
 pub const HIT_WORDS: usize = 14;
 
-/// The world's raycast (crates/pxl-core/src/raycast.rs): the ray from
+/// The world's raycast (crates/pxl-core/src/world/raycast.rs): the ray from
 /// (ox, oy, oz) along (dx, dy, dz), relative to the map origin at
 /// (origin_x, origin_y) in units, within `max_dist`. 1 when something was
 /// struck, the hit written at pxl_raycast_at. Applies the submissions
@@ -1457,7 +1479,7 @@ pub extern "C" fn pxl_raycast_at() -> u32 {
 }
 
 /// The nearest placed decor instance the ray strikes within `max_dist`
-/// (crates/pxl-core/src/raycast.rs's hit_decor), the ray as pxl_raycast
+/// (crates/pxl-core/src/world/raycast.rs's hit_decor), the ray as pxl_raycast
 /// takes it: 1 when one was, its chunk id, band, packed position and
 /// distance written at pxl_raycast_decor_at.
 #[no_mangle]
@@ -1466,7 +1488,7 @@ pub extern "C" fn pxl_raycast_decor(origin_x: f64, origin_y: f64, ox: f64, oy: f
     let s = state();
     let hit = {
         let (world, _, sched) = raycast_of(s);
-        pxl_core::raycast::hit_decor(&world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
+        pxl_core::world::raycast::hit_decor(&world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
     };
     let Some(h) = hit else { return 0 };
     s.decor_hit = [h.chunk as f64, h.band as f64, h.pos as f64, h.t];

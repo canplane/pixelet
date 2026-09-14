@@ -7,7 +7,7 @@
  * chatLines comes from. World-anchored-billboard tier (see
  * issue/20260907-world-rendering-tiers.md); the actual render is
  * a billboard set of the module standing on the companion's actor
- * (crates/pxl-core/src/billboard.rs), drawn from the sheet POI badges share.
+ * (crates/pxl-core/src/world/billboard.rs), drawn from the sheet POI badges share.
  * This file owns only what's chat-bubble-specific: reading chatLines, the
  * show/expire timer, and drawing the notched speech-bubble shape.
  *
@@ -26,7 +26,7 @@ import { BILLBOARD_ORDER } from "../billboard/sheet.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
 import { billboard_sheet } from "../billboard/sheet.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10
@@ -49,8 +49,8 @@ const MAX_TEXT_WIDTH_PX = 220;
 // The canvas below is built at this many real pixels per logical unit, and
 // it should equal the renderer's own device pixel ratio.
 //
-// scene.tsx caps that at 2 (`dpr={[1, 2]}`)
-// and distance_fade_far returns at most 1, so a billboard's drawn size never
+// The tick clamps that to post_cfg.DPR, [1, 2] (sched/tick.ts), and
+// distance_fade_far returns at most 1, so a billboard's drawn size never
 // exceeds its logical size in CSS pixels — the fade only ever shrinks it, so
 // two is the exact requirement rather than a guess.
 //
@@ -141,7 +141,7 @@ export type ChatBubbleProps = {
   actor: u32 | null;
 };
 
-/** Floats a billboard instance takes (crates/pxl-core/src/billboard.rs). */
+/** Floats a billboard instance takes (crates/pxl-core/src/world/billboard.rs). */
 const BILLBOARD_FLOATS = 10;
 
 export function ChatBubble(props: ChatBubbleProps) {

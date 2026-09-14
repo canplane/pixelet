@@ -16,7 +16,7 @@ let root: ReturnType<typeof createRoot> | null = null;
 // starts rendering after async engine init
 export function main(): void {
   try {
-    // 1. infra bootstrap (Three.js basis, i18n)
+    // 1. infra bootstrap (i18n, the settings)
     bootstrap_app();
 
     // 2. UI render

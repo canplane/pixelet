@@ -15,7 +15,7 @@ import { get_ele } from "../terrain/elevation.ts";
 
 import { WorldThemeKey } from "../environment/theme.ts";
 import { useThemeKey } from "../environment/theme_clock.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 import { request_world_tick } from "../change.ts";
 
 const { FOG_FAR } = render_cfg;
@@ -75,7 +75,7 @@ export function LocationPuck(props: LocationPuckProps) {
 
   // Holds the last known device position across a transient GPS dropout (device_coord
   // going null). Without this, the caller previously remounted this component on every
-  // such blip, tearing down and rebuilding the zone's InstancedMesh — that remount, not
+  // such blip, tearing down and rebuilding the zone — that remount, not
   // the position math, was the source of a "stacked/cube" rendering glitch after tab-away-and-back.
   const last_known_device_coord = useRef<PVF3 | null>(null);
   if (device_coord !== null) last_known_device_coord.current = device_coord;
@@ -120,7 +120,7 @@ export function LocationPuck(props: LocationPuckProps) {
 
   const is_night: boolean = theme_key === WorldThemeKey.NIGHT;
 
-  // The puck is the core's (crates/pxl-core/src/marker.rs): this decides
+  // The puck is the core's (crates/pxl-core/src/world/marker.rs): this decides
   // where the device is, which cells the zone covers at what height and
   // where the beacon should stand; the core holds the zone, eases, spins and
   // bobs the beacon, and draws both.

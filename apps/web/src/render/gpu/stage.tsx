@@ -2,7 +2,7 @@
 
 /**
  * The WebGPU canvas, and the frame's uniforms: the camera and the root
- * frame from the view (module/world/view.ts), the environment from the
+ * frame from the view (module/world/frame/view.ts), the environment from the
  * module. Everything is drawn here.
  */
 
@@ -11,11 +11,11 @@ import { useEffect, useRef } from "react";
 import { mat4, mat4_invert, mat4_mul } from "@xpute/core/kit/mat4.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
-import { fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE } from "@/module/world/lod.ts";
 import { billboard_sheet } from "@/module/world/billboard/sheet.ts";
 import { request_world_tick } from "@/module/world/change.ts";
-import { view } from "@/module/world/view.ts";
+import { view } from "@/module/world/frame/view.ts";
 import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/decor/asset_store.ts";
 import { GpuRenderer } from "./renderer.ts";
 import { GL_TO_WGPU } from "./depth.ts";
@@ -32,7 +32,7 @@ export function set_sky_radius(r: number): void {
 
 const EDGE_STRENGTH = 0.3;
 const EDGE_WIDTH = 0.03;
-/** crates/pxl-core/src/environment.rs's ENV_FLOATS. */
+/** crates/pxl-core/src/world/environment.rs's ENV_FLOATS. */
 const ENV_FLOATS = 48;
 
 const $m = mat4();
@@ -88,7 +88,7 @@ export function gpu_frame(dpr: number): void {
   const settings = useSettingsStore.getState();
   u[at.edge_strength] = settings.show_edge_shade ? EDGE_STRENGTH : 0;
   // The light, the fog and the sky's colours and directions are the
-  // module's (crates/pxl-core/src/environment.rs), laid out as these
+  // module's (crates/pxl-core/src/world/environment.rs), laid out as these
   // uniforms take them.
   const pxl = CORE_PXL!;
   const env = new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);

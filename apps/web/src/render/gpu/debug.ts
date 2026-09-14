@@ -2,8 +2,8 @@
 
 /**
  * The dev gizmos through WebGPU: the module's line segments
- * (crates/pxl-core/src/debug.rs) drawn as one line list over everything
- * (shader/debug.wgsl); the labels are DOM (marker/debug_layer.tsx).
+ * (crates/pxl-core/src/world/debug.rs) drawn as one line list over everything
+ * (shader/debug.wgsl); the labels are DOM (marker/debug_gizmos.tsx).
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";

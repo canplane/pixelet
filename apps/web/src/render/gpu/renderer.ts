@@ -2,7 +2,7 @@
 
 /**
  * The WebGPU renderer: executes what the module lists
- * (crates/pxl-core/src/draw.rs) against a device, and decides nothing —
+ * (crates/pxl-core/src/render/draw.rs) against a device, and decides nothing —
  * which block goes to the GPU, which draw is made at what weight and
  * where, are the module's. What lives here is the API: the device and the
  * canvas, the pipelines and their layouts, the buffers behind the module's
@@ -19,7 +19,7 @@
  * A mesh block is uploaded whole, as the mesher laid it out, and drawn
  * with one vertex slot per lane at the lane's offset from the vertex
  * count, the lanes as the chunk pipeline's record lays them out
- * (crates/pxl-core/src/shader.rs); the index lane sits past the
+ * (crates/pxl-core/src/render/shader.rs); the index lane sits past the
  * visibility lane the three path used, which this path does not read —
  * a draw's weight is its uniform. Every pipeline and shader is the
  * module's, built through pipeline.ts.

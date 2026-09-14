@@ -30,7 +30,7 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 /**
  * A frame's worth of candidates is not a residency set, so it grows to what
@@ -50,8 +50,7 @@ const INIT_CAP: u32 = 1 << 10;
 export class BillboardBatch {
   count: u32 = 0;
 
-  /** Position relative to local_world_frame's own origin — see AnchorNode's
-   * own local-offset math (frame/coord.ts). */
+  /** Position relative to the local world frame's origin (frame/coord.ts). */
   private readonly _local_x = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   private readonly _local_y = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
   private readonly _local_z = new Vector(Float64Array, { init_cap: INIT_CAP, alloc: CORE_ALLOC });
@@ -191,9 +190,8 @@ export class BillboardBatch {
 }
 
 /**
- * FNV-1a into [0,1). Same shape as chunk_stage.tsx's own module-private
- * blend_hash — duplicated rather than imported to avoid coupling to that
- * file's internals, and used here once per candidate's lifetime rather than
+ * FNV-1a into [0,1). The same shape as the chunks' stable hash the
+ * scheduler blends by, used here once per candidate's lifetime rather than
  * once per frame.
  */
 export function stable_hash(key: string): f64 {

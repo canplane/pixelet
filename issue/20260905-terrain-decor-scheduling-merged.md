@@ -20,7 +20,7 @@ kind alongside its own cube content, in the same `commit()`. Concretely:
 - `ChunkStage` gains a `decor_bundles` prop. Since a hook can't be called a
   variable number of times per component (`useInstancedModelVariants` once
   per bundle in a `.map()` would violate React's rules of hooks), decor's own
-  GLB assets load through a new `useAllDecorBundleAssets` (decor_layer.tsx):
+  GLB assets load through a new `useAllDecorBundleAssets` (decor_kinds.tsx):
   one hook call, flattening every bundle's own variants into one combined
   list, then re-slicing the single result back into per-bundle groups.
 - `Chunk`'s `build_ref.current()` — already scanning/baking its own cube
@@ -40,7 +40,7 @@ kind alongside its own cube content, in the same `commit()`. Concretely:
   measured for its own `recheck()`) is reused for decor's distance/frustum
   test too; decor's own separate dummy measurement group is gone along with
   the component that owned it.
-- `decor_layer.tsx`'s `ChunkDecor`/`PageDecor`/`DecorLayer` — each a
+- `decor_kinds.tsx`'s `ChunkDecor`/`PageDecor`/`DecorLayer` — each a
   separately-scheduled component with its own `ChunkLodControl`, own
   `tile_ref`/`objects_revision_ref`/`committed_*` bookkeeping duplicating
   what `Chunk` already tracked, own independently-computed distance/LOD
@@ -56,10 +56,10 @@ kind alongside its own cube content, in the same `commit()`. Concretely:
   />` (`DECOR_BUNDLES` a module-level array, not an inline literal —
   `useAllDecorBundleAssets` keys its own memoization off that reference
   staying stable).
-- Removed a circular import as a side effect: `decor_layer.tsx` used to
+- Removed a circular import as a side effect: `decor_kinds.tsx` used to
   import `ChunkLodControl`/`use_lod_scheduler` from `chunk_stage.tsx` (for
   its own now-deleted `ChunkDecor`); `chunk_stage.tsx` now imports _from_
-  `decor_layer.tsx` one-directionally.
+  `decor_kinds.tsx` one-directionally.
 
 ## What this fixes, concretely
 

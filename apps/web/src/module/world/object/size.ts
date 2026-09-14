@@ -9,8 +9,8 @@ import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
  * (U_PER_CELL). Single source of truth for mode_bar's size selector, the
  * placement/erase raycasting and overlap check (camera/ray.ts,
  * object/collision.ts), and the hover preview + real cube render
- * (world/marker/hover_cursor.tsx, layer/chunk_stage.tsx — every size,
- * including sub-cell, goes through the same dense voxel field there).
+ * (world/marker/hover_cursor.tsx, and the module's paint and mesher —
+ * every size, including sub-cell, goes through the same dense voxel field).
  * Tracks U_PER_CELL
  * itself, not a snapshot of its value, so a CELL_SHAMT change (constant.ts)
  * rescales every tier here automatically.
@@ -19,9 +19,9 @@ import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
  * an object at that size lines up 1:1 with a terrain cell (see
  * bake/constant.ts's OBJECT_LAYOUT, whose `max: CELL_SHAMT` is the other
  * half of that reasoning: object/store.ts's sparse tree never spans more
- * than one cell) — the other three (finer) tiers are what render/layer/
- * object/adapter.ts writes as sub-cell voxels (a per-voxel offset+size
- * payload within voxel.ts's dense field, see its own doc comment)
+ * than one cell) — the other three (finer) tiers are what the object paint
+ * (crates/pxl-core/src/world/object.rs) writes as sub-cell voxels (a
+ * per-voxel offset+size payload within the volume's dense field)
  * instead of a full-cell voxel. Deliberately 4 tiers deep, not 3 — when
  * CELL_SHAMT changed
  * U_PER_CELL 0.5u -> 1u, sliding a fixed *count* of tiers down from it would

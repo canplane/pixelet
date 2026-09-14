@@ -25,7 +25,7 @@ const HALF_CELL_FP = pvf3.from_real(U_PER_CELL / 2);
  * block model. object_center below is the placed-cube counterpart: the exact
  * same shape, since a cube's anchor is a true min corner too.
  *
- * decor/decor_layer.ts centers user-placed decor the same way on X/Y but
+ * decor/decor_kinds.ts centers user-placed decor the same way on X/Y but
  * keeps Z on the slot (a decor model's origin sits at its base, not its
  * middle) — the X/Y half of this, not the whole thing.
  */
@@ -40,10 +40,10 @@ export function anchor_center(anchor: PVF3): PVF3 {
 
 /**
  * obj.i/f is this object's corner (min-x, min-y, min-z) — the same
- * convention render/layer/pipeline/chunk_mesher.ts and marker/hover_cursor.tsx render from
+ * convention reference/chunk_mesher.ts and marker/hover_cursor.tsx render from
  * (both add +size/2 on every axis to get the visual center). Returned in
- * map_origin-relative real units, the same low-magnitude space AnchorNode's
- * own local_pos and camera/ray.ts's terrain raycast already operate in.
+ * map_origin-relative real units, the same low-magnitude space the
+ * billboards' local positions and camera/ray.ts's raycast already operate in.
  */
 export function object_local_corner(obj: Pick<OccupiedEntry, "i" | "f">, map_origin: IVec): V3 {
   const local: PVF3 = { i: ivec.sub(obj.i, map_origin), f: obj.f };

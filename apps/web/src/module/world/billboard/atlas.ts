@@ -79,7 +79,7 @@
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 
@@ -206,7 +206,7 @@ export class BillboardAtlas {
    * is handed is already translated to the entry's own origin. */
   private readonly draws: ((ctx: CanvasRenderingContext2D) => void)[] = [];
 
-  /** Counts the sheet's replacements, for a mirror that is not three's. */
+  /** Counts the sheet's replacements, for the renderer's mirror of it. */
   private generation: u32 = 0;
   private live: u32 = 0;
   private used_px: u32 = 0;

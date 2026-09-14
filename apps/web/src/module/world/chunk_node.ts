@@ -1,9 +1,9 @@
 // @pxl/web/module/world/chunk_node.ts
 
 /**
- * One chunk's scene half.
+ * One chunk's glue half.
  *
- * Every decision about a chunk is the module's (crates/pxl-core/src/sched.rs):
+ * Every decision about a chunk is the module's (crates/pxl-core/src/world/sched.rs):
  * whether it is on screen, which tiers it shows and how a blend weighs them,
  * what to build and when, what to give back. What stays here is what the
  * decisions act on and the sources they are made from: the tiers and decor
@@ -14,7 +14,8 @@
  * both through a count — and a layout takes its hold in the call that
  * applies it, so a layout never names a mesh nothing owns. That rule came
  * out of three reference-counting bugs under React's deferred mounts (the
- * git history around chunk_stage.tsx), and is why this is a plain object.
+ * git history around the retired chunk_stage.tsx), and is why this is a
+ * plain object.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
@@ -26,14 +27,14 @@ import type { Terrain } from "@pxl/shared/bake/format.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
 import { register_tile_interest, useTileStore } from "@/module/world/terrain/store.ts";
-import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
-import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
-import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
-import { CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
+import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, release_built_mesh, retain_built_mesh } from "@/render/mesh/chunk_bucket.ts";
+import type { BakedChunkMesh } from "@/render/mesh/mesh_block.ts";
+import { CORE_BUILD, release_chunk_mesh } from "@/wasm/core_build.ts";
+import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/mesh/decor_block.ts";
+import { CORE_SECTIONS } from "@/wasm/core_pool.ts";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
-import type { LodStep } from "@/render/lod.ts";
+import type { LodStep } from "@/module/world/lod.ts";
 
 /**
  * How much built work chunks may keep *while off screen*: run sets and

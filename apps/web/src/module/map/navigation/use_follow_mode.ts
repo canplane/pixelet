@@ -19,7 +19,7 @@ import { useMapNavigation } from "./use_map_navigation.ts";
  * (magnetometer jitter, worse indoors/near metal), and the dead-zone filter
  * in device/pose/store.ts only screens out sub-1.5° noise — this smooths
  * what gets through before it ever reaches azimuth, on top of (not instead
- * of) use_frame_rotation.ts's per-frame ROT_DAMP easing at the render layer.
+ * of) use_view_frame.ts's per-frame ROT_DAMP easing of the view.
  */
 const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 

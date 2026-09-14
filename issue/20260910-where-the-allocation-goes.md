@@ -439,7 +439,7 @@ The proportions are the datum, not the sizes.
  361 kB   0.85%         1.6 MB   3.84%         (anonymous)     chunk_stage.tsx:252
  235 kB   0.55%                                SpriteBillboard2 sprite_billboard.tsx:65
  151 kB   0.35%          233 kB  0.55%         (anonymous)     poi_layer.tsx:335
- 115 kB   0.27%                                collect_procedural_decor_instances  decor_layer.ts:238
+ 115 kB   0.27%                                collect_procedural_decor_instances  decor_kinds.ts:238
   82 kB   0.19%                                Raycaster / Billboard / ChunkNode
   60 kB   0.14%                                add             ivec.ts:146
 ```

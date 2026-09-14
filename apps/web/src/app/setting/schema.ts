@@ -103,7 +103,7 @@ export const SETTINGS = {
 
   // ---- lighting: how readable the same geometry is. Cheapest first; the
   // dev ones at the bottom are the passes not yet decided on.
-  /** Darkens cube edges that border open air (crates/pxl-core/src/shader/chunk.wgsl).
+  /** Darkens cube edges that border open air (crates/pxl-core/src/render/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   show_edge_shade: toggle("lighting", true, { cost: "low" }),
   /** A uniform on an already-compiled shader term; not a pass. */
@@ -128,7 +128,7 @@ export const SETTINGS = {
 
   // ---- debug: diagnostics, dev builds only. Off by default so they are
   // never in the way while eyeballing real rendering.
-  /** world.tsx's DebugLayer gizmos: frame origins, page corners, map centre. */
+  /** marker/debug_gizmos.tsx: frame origins, page corners, map centre, the rings. */
   show_debug_objects: toggle("debug", false, { dev: true }),
   /** The sched/ledger.ts corner panel. The console stream is a button on it. */
   show_ledger: toggle("debug", false, { dev: true }),

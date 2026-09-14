@@ -32,7 +32,7 @@ import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "@xpute/core/ds/m
 
 import type { PoiPage } from "@pxl/shared/bake/format.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 import { NO_SLOT } from "../billboard/atlas.ts";
 import { billboard_sheet } from "../billboard/sheet.ts";
@@ -52,8 +52,8 @@ const GAP = 8;
 const PAD_Y = 7;
 // Supersampling, and it should equal the renderer's own device pixel ratio.
 //
-// scene.tsx caps that at 2 (`dpr={[1, 2]}`)
-// and distance_fade_far returns at most 1, so a billboard's drawn size never
+// The tick clamps that to post_cfg.DPR, [1, 2] (sched/tick.ts), and
+// distance_fade_far returns at most 1, so a billboard's drawn size never
 // exceeds its logical size in CSS pixels — the fade only ever shrinks it.
 // Two is therefore the exact requirement rather than a guess.
 //

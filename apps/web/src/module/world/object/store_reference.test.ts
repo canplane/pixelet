@@ -32,9 +32,10 @@ import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import type { SparseTree } from "@pxl/shared/spec/space/sparse_tree/tree.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 
-import { ObjectWorldLayer, resolve_solid_material } from "@/render/layer/object/adapter.ts";
-import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, release_chunk_volume, seal_chunk_volume, set_chunk_voxel } from "@/render/layer/pipeline/volume.ts";
-import { MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction, SUB_CELL_NONE, type VoxelMaterial } from "@/render/layer/pipeline/voxel.ts";
+import { ObjectWorldLayer } from "@/reference/object_layer.ts";
+import { resolve_solid_material } from "@/module/world/object/material.ts";
+import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, release_chunk_volume, seal_chunk_volume, set_chunk_voxel } from "@/reference/volume.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell, pack_sub_cell_fraction, SUB_CELL_NONE, type VoxelMaterial } from "@/render/mesh/voxel.ts";
 
 import { OBJECT_SIZES } from "./size.ts";
 import {
