@@ -9,7 +9,7 @@
  * allocated in full even if only one peak or object touches it; sparsity
  * exists only between Z bands.
  *
- * The volume lives in the module (crates/pxl-core/src/volume.rs): its bands
+ * The volume lives in the module (crates/pxl-core/src/bake/volume.rs): its bands
  * are blocks of the core memory the module took from the pools, and every
  * paint here is a call into it. What a reader gets back — `bands` — is
  * views over those blocks and over the module's own overflow lanes, taken
@@ -134,7 +134,7 @@ function band_views(id: u32): VoxelBand[] {
 
 export type OrderedVoxelBand = VoxelBand;
 
-/** Words a band's row holds: crates/pxl-core/src/volume.rs's BAND_WORDS. */
+/** Words a band's row holds: crates/pxl-core/src/bake/volume.rs's BAND_WORDS. */
 const BAND_WORDS = 10;
 
 function pxl() {

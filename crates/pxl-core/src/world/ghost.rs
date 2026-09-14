@@ -6,11 +6,11 @@
 //! as the cube it previews, or one decor instance in a block of decor.rs's
 //! layout, drawn by decor's shader from the same model a placed one uses.
 
-use crate::build::World;
-use crate::decor::NO_ENTRY;
-use crate::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use crate::mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
-use crate::voxel::NO_LAYER;
+use crate::bake::mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
+use crate::bake::voxel::NO_LAYER;
+use crate::render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
+use crate::world::build::World;
+use crate::world::decor::NO_ENTRY;
 
 pub const GHOST_OPACITY: f32 = 0.5;
 

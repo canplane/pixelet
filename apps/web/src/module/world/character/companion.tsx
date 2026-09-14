@@ -148,7 +148,7 @@ type WalkerProps = {
 
 const Walker = memo(function Walker(props: WalkerProps) {
   const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
-  // The walker is an actor of the module (crates/pxl-core/src/model.rs):
+  // The walker is an actor of the module (crates/pxl-core/src/world/model.rs):
   // what follows decides where it stands, which way it faces and which clip
   // it plays, and tells the actor. Its pose here is the walk's own state.
   const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: ImageBitmap } | null>(null);

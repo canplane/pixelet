@@ -1,7 +1,7 @@
 // @pxl/web/render/layer/pipeline/wasm_bake.ts
 
 /**
- * The chunk bake through the Rust mesher (crates/pxl-core/src/mesher.rs),
+ * The chunk bake through the Rust mesher (crates/pxl-core/src/bake/mesher.rs),
  * export by export, with the stepped bake's contract: one open at a time, a
  * step per call, `starved` when the pool has no block for the mesh, and the
  * counters added to the context's. What the chunks on screen are built

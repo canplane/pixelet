@@ -13,8 +13,8 @@
 //! A kind is drawn on a tier only where it is at least two of the tier's
 //! cells across; why, and every other rule, is the TypeScript's.
 
-use crate::object::{Store, POS_BITS};
-use crate::terrain::{ChunkSample, PageView, CHUNK_SPAN, PAGE_CELL_SPAN};
+use crate::bake::terrain::{ChunkSample, PageView, CHUNK_SPAN, PAGE_CELL_SPAN};
+use crate::world::object::{Store, POS_BITS};
 
 /// decor_layer.ts's DECOR_MASTER_SEED is written with 80 bits; every use
 /// takes it modulo 2^64 (kit/rng.ts's derive_seed_u64 masks the XOR), so

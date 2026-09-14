@@ -4,8 +4,8 @@
  * Ordered WorldLayer composition into one pooled volume: the TypeScript
  * composite the module's builds and raycast are held to (core_build.test.ts,
  * core_raycast.test.ts). Nothing on screen is composited here; the module
- * composes its own volumes (crates/pxl-core/src/build.rs) and keeps the
- * raycast's between hovers (crates/pxl-core/src/raycast.rs).
+ * composes its own volumes (crates/pxl-core/src/world/build.rs) and keeps the
+ * raycast's between hovers (crates/pxl-core/src/world/raycast.rs).
  */
 
 import { alloc_chunk_volume, type ChunkVolume, release_chunk_volume, seal_chunk_volume } from "./volume.ts";

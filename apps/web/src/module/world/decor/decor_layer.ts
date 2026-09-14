@@ -6,7 +6,7 @@
  * field.ts's (one instanced mesh per variant for the whole world); this file
  * decides only what exists.
  *
- * What is drawn is built by the module (crates/pxl-core/src/decor.rs, a
+ * What is drawn is built by the module (crates/pxl-core/src/world/decor.rs, a
  * block of lanes a chunk and tier, handed to chunk_node.ts) from the kinds
  * this file teaches it (teach_decor_kinds); build_decor_instances below is
  * the TypeScript build the module's is held to (core_decor.test.ts), and
@@ -222,7 +222,7 @@ function kind_extent(bundle: DecorKindBundle): f64 {
 
 /**
  * Teaches the module every kind, in bundle order — the order of the groups
- * in the decor blocks it hands over (crates/pxl-core/src/decor.rs): each
+ * in the decor blocks it hands over (crates/pxl-core/src/world/decor.rs): each
  * kind's variants in variant order, one group a variant. Called once, from
  * decor_registry.ts, with the registry's own list.
  */

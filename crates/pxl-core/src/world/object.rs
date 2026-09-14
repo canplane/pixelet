@@ -15,11 +15,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::buddy::Pool;
-use crate::sparse_tree::Tree;
-use crate::terrain::js_round;
-use crate::volume::{Cell, Volumes, Voxel};
-use crate::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
+use crate::bake::terrain::js_round;
+use crate::bake::volume::{Cell, Volumes, Voxel};
+use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
+use crate::space::sparse_tree::Tree;
+use xpute_core::ds::buddy::Pool;
 
 /// OBJECT_LAYOUT's finest and coarsest levels: an eighth of a cell, and a
 /// cell. A band tree reaches six levels above that, to the band's 64 cells.

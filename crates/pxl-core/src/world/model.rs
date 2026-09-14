@@ -17,8 +17,8 @@
 //! three's mixer did, walks the joints parent first, and writes the joint
 //! palette into the actor's block, which the renderer is told to rewrite.
 
-use crate::build::World;
-use crate::draw::{DrawList, PIPELINE_SKINNED};
+use crate::render::draw::{DrawList, PIPELINE_SKINNED};
+use crate::world::build::World;
 
 /// Words a model vertex takes in the mesh block: position (3), normal (3),
 /// UV (2), joints (4, as u32), weights (4).

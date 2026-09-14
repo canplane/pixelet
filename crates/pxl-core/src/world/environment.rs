@@ -12,7 +12,7 @@
 //! cancel the turn out. The sky is drawn in the camera's frame, where the
 //! sun has to turn with the world to stay over the ground it lights.
 
-use crate::sched::Frame;
+use crate::world::sched::Frame;
 
 /// Floats a theme takes, linear colours: fog (3), sky top, middle and
 /// horizon (9), sun glow (3), ambient colour and intensity (4), hemisphere

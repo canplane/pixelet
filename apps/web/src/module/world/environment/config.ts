@@ -103,7 +103,7 @@ export const light_cfg = {
 /**
  * Fresnel/rim highlight, applied uniformly to everything lit — terrain,
  * placed objects, decor and actors alike, since one shading source lights
- * them (crates/pxl-core/src/shader/shade.wgsl) — a thin bright edge on
+ * them (crates/pxl-core/src/render/shader/shade.wgsl) — a thin bright edge on
  * faces that graze the view direction, the classic "toy block catching
  * light at its silhouette" cue. Originally object-only (meant to help
  * placed objects read as distinct from terrain cells sharing the same
@@ -119,7 +119,7 @@ export const rim_cfg = {
 
 /**
  * The canvas's resolution. The colour grade and the vignette are the
- * shaders' own constants (crates/pxl-core/src/shader/{grade,shade}.wgsl);
+ * shaders' own constants (crates/pxl-core/src/render/shader/{grade,shade}.wgsl);
  * the rest of the post stack three ran — contact AO, bloom, god rays,
  * SMAA — is on archive/20260914-three-draw-paths with its tuning.
  */

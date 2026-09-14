@@ -2,7 +2,7 @@
 
 /**
  * Sparse placed objects -> shared temporary 64x64 chunk. The paint is the
- * module's (crates/pxl-core/src/object.rs's Painter) over the store's
+ * module's (crates/pxl-core/src/world/object.rs's Painter) over the store's
  * records, which are the module's too; what this file does is teach it
  * what each state paints as, once, and hand it the drawn build's edits.
  */

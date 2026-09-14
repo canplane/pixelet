@@ -298,31 +298,31 @@ fn model_groups() -> Vec<Vec<u32>> {
 pub fn pipeline(id: u32) -> Vec<u32> {
     let frame = |visibility: u32| group(&[[0, visibility, UNIFORM]]);
     match id {
-        crate::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
-        crate::draw::PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
+        crate::render::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
+        crate::render::draw::PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         // The hover ghost: biased toward the eye as hover_cursor.tsx's
         // polygon offsets were — slightly clear of a surface, strongly in
         // one.
-        crate::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(), &chunk_groups()),
-        crate::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(), &chunk_groups()),
-        crate::draw::PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
+        crate::render::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(), &chunk_groups()),
+        crate::render::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(), &chunk_groups()),
+        crate::render::draw::PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
         // Back faces culled, as three's material (FrontSide) did: drawn both
         // sides, a closed body's inner faces fight its outer ones for the
         // same depth at a distance, and the character shimmers.
-        crate::draw::PIPELINE_SKINNED => record(lit(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
-        crate::draw::PIPELINE_PUCK_ZONE => record(
+        crate::render::draw::PIPELINE_SKINNED => record(lit(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
+        crate::render::draw::PIPELINE_PUCK_ZONE => record(
             blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0),
             &[lane(12, 0, F32X3), lane(8, 1, F32X2)],
             &[frame(BOTH), group(&[[0, BOTH, UNIFORM]]), group(&[[0, VERTEX, STORAGE]])],
         ),
-        crate::draw::PIPELINE_PUCK_BEACON => record(
+        crate::render::draw::PIPELINE_PUCK_BEACON => record(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &[lane(12, 0, F32X3), lane(12, 1, F32X3)],
             &[frame(BOTH), group(&[[0, BOTH, UNIFORM]])],
         ),
         // The badges: a strip of four corners an instance, blended over the
         // world, tested against its depth and no nearer than it.
-        crate::draw::PIPELINE_BADGE => record(
+        crate::render::draw::PIPELINE_BADGE => record(
             Head {
                 topology: STRIP,
                 shader_msaa: SHADER_BADGE_MSAA,
@@ -333,7 +333,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, FRAME_DEPTH]]), group(&SKIN)],
         ),
         // The gizmos: a line list over everything, no depth test.
-        crate::draw::PIPELINE_DEBUG => record(
+        crate::render::draw::PIPELINE_DEBUG => record(
             Head {
                 topology: LINES,
                 depth_compare: ALWAYS,

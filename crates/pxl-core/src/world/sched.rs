@@ -14,17 +14,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::billboard::Billboards;
-use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
-use crate::debug::DebugLines;
-use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
-use crate::draw::{DrawList, PIPELINE_CHUNK};
-use crate::environment::Environment;
-use crate::ghost::Ghost;
-use crate::lod::{Ladder, COARSEST};
-use crate::marker::Markers;
-use crate::model::Models;
-use crate::terrain::ChunkSample;
+use crate::bake::terrain::ChunkSample;
+use crate::render::draw::{DrawList, PIPELINE_CHUNK};
+use crate::world::billboard::Billboards;
+use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World};
+use crate::world::debug::DebugLines;
+use crate::world::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::world::environment::Environment;
+use crate::world::ghost::Ghost;
+use crate::world::lod::{Ladder, COARSEST};
+use crate::world::marker::Markers;
+use crate::world::model::Models;
 
 /// A chunk's side, in world units.
 const CHUNK_WORLD_SPAN: f64 = 64.0;

@@ -65,7 +65,7 @@
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
     // each pipeline's record to it (crates/pxl-core/src/shader.rs).
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-core",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-core",
 
     "lint": "deno lint",
     "fmt": "deno fmt"

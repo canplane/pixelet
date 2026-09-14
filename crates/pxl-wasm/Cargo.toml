@@ -9,4 +9,5 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
+xpute-core = { path = "../xpute-core" }
 pxl-core = { path = "../pxl-core" }

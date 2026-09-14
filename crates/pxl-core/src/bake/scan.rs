@@ -21,8 +21,8 @@
 //! walk serves the raycast (`ColumnRuns`), which asks for one column of a
 //! volume on a hover and reads the answer once.
 
-use crate::run_set::run_set_bytes;
-use crate::voxel::{MATERIAL_OBJECT, SUB_CELL_NONE};
+use crate::bake::run_set::run_set_bytes;
+use crate::bake::voxel::{MATERIAL_OBJECT, SUB_CELL_NONE};
 
 /// Cells on a band's side; a chunk is one column of bands.
 pub const BAND_SPAN: u32 = 64;

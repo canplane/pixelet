@@ -12,9 +12,9 @@
 //! sampling is what it is are the TypeScript's, mirrored so a chunk read
 //! here is byte for byte the chunk read there (terrain.test.ts).
 
-use crate::buddy::Pool;
-use crate::volume::{Volumes, Voxel};
-use crate::voxel::NO_LAYER;
+use crate::bake::volume::{Volumes, Voxel};
+use crate::bake::voxel::NO_LAYER;
+use xpute_core::ds::buddy::Pool;
 
 pub const CHUNK_SPAN: u32 = 64;
 const CHUNK_CELLS: usize = (CHUNK_SPAN * CHUNK_SPAN) as usize;

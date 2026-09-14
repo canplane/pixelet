@@ -3,7 +3,7 @@
 /**
  * The world's change log: which units of world-shared state changed, read by
  * whoever cares, the way issue/20260913-the-read-direction-a-change-log.md
- * describes. The log is the module's (crates/pxl-core/src/change.rs), where
+ * describes. The log is the module's (crates/xpute-core/src/ipc/change.rs), where
  * the state that changes most — the object store — bumps it itself; this is
  * its glue: the journal read as views, and a bump for the sources still
  * here. Topics are numbered here and in crates/pxl-wasm/src/lib.rs's

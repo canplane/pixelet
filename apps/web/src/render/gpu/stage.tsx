@@ -32,7 +32,7 @@ export function set_sky_radius(r: number): void {
 
 const EDGE_STRENGTH = 0.3;
 const EDGE_WIDTH = 0.03;
-/** crates/pxl-core/src/environment.rs's ENV_FLOATS. */
+/** crates/pxl-core/src/world/environment.rs's ENV_FLOATS. */
 const ENV_FLOATS = 48;
 
 const $m = mat4();
@@ -88,7 +88,7 @@ export function gpu_frame(dpr: number): void {
   const settings = useSettingsStore.getState();
   u[at.edge_strength] = settings.show_edge_shade ? EDGE_STRENGTH : 0;
   // The light, the fog and the sky's colours and directions are the
-  // module's (crates/pxl-core/src/environment.rs), laid out as these
+  // module's (crates/pxl-core/src/world/environment.rs), laid out as these
   // uniforms take them.
   const pxl = CORE_PXL!;
   const env = new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);

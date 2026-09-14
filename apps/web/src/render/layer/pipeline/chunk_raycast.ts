@@ -1,7 +1,7 @@
 // @pxl/web/render/layer/pipeline/chunk_raycast.ts
 
 /**
- * The world's raycast, in the module (crates/pxl-core/src/raycast.rs):
+ * The world's raycast, in the module (crates/pxl-core/src/world/raycast.rs):
  * `ray_hit_world` asks it, over the chunks the scheduler holds and the
  * composites it keeps. The rest of this file is the TypeScript walk of one
  * already-composited chunk, the reference the module's is held to
@@ -112,7 +112,7 @@ export function ray_aabb_hit(ray: RayLike, min: Readonly<V3>, max: Readonly<V3>)
 
 /**
  * One column's runs as lanes, read once: the module's walk of its own
- * volume (crates/pxl-core/src/scan.rs's ColumnRuns) — the same walk the
+ * volume (crates/pxl-core/src/bake/scan.rs's ColumnRuns) — the same walk the
  * scan makes, so the raycast tests exactly the boxes the mesher emits —
  * or, where there is no core memory, the TypeScript walk copied into
  * the same lanes. The inset is packed as the band stores it: ox, oy, oz,

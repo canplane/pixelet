@@ -3,7 +3,7 @@
 /**
  * One chunk's scene half.
  *
- * Every decision about a chunk is the module's (crates/pxl-core/src/sched.rs):
+ * Every decision about a chunk is the module's (crates/pxl-core/src/world/sched.rs):
  * whether it is on screen, which tiers it shows and how a blend weighs them,
  * what to build and when, what to give back. What stays here is what the
  * decisions act on and the sources they are made from: the tiers and decor

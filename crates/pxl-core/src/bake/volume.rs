@@ -17,8 +17,8 @@
 //! cut: the standing stores from the fixed section, which never runs out,
 //! any past the cap from the mesh section, which may.
 
-use crate::buddy::Pool;
-use crate::voxel::{NO_LAYER, SUB_CELL_NONE};
+use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
+use xpute_core::ds::buddy::Pool;
 
 pub const BAND_SPAN: u32 = 64;
 const BAND_MASK: u32 = BAND_SPAN - 1;
@@ -440,18 +440,18 @@ impl Volumes {
     ///
     /// # Safety
     /// The views are valid until the volume is painted again or released.
-    pub unsafe fn band_view(&mut self, id: usize, i: usize) -> crate::scan::BandView<'static> {
+    pub unsafe fn band_view(&mut self, id: usize, i: usize) -> crate::bake::scan::BandView<'static> {
         let row = *self.band_row(id, i);
         let mem = self.mem;
         let at = |w: u32| mem.add(w as usize);
         let voxels = BAND_VOXELS;
         let n = row[4] as usize;
-        crate::scan::BandView {
+        crate::bake::scan::BandView {
             band_z: row[0] as i32,
             material: core::slice::from_raw_parts(at(row[1]) as *const u32, voxels),
             layer_idx: core::slice::from_raw_parts(at(row[2]) as *const u8, voxels),
             sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]) as *const u8, voxels * 4)),
-            extra: crate::scan::ExtraView {
+            extra: crate::bake::scan::ExtraView {
                 col: core::slice::from_raw_parts(at(row[5]) as *const u32, n),
                 z: core::slice::from_raw_parts(at(row[6]) as *const i32, n),
                 material: core::slice::from_raw_parts(at(row[7]) as *const u32, n),

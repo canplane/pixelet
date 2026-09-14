@@ -11,11 +11,11 @@
 //! sources its chunk was last told; the cursor does not teleport between
 //! frames, so the same chunks come up again and again.
 
-use crate::build::World;
-use crate::scan::{BandView, ColumnRuns};
-use crate::sched::Scheduler;
-use crate::terrain::CHUNK_SPAN;
-use crate::voxel::{unpack_sub_cell_fraction, SUB_CELL_NONE};
+use crate::bake::scan::{BandView, ColumnRuns};
+use crate::bake::terrain::CHUNK_SPAN;
+use crate::bake::voxel::{unpack_sub_cell_fraction, SUB_CELL_NONE};
+use crate::world::build::World;
+use crate::world::sched::Scheduler;
 
 /// bake/constant.ts's U_PER_CELL.
 const U_PER_CELL: f64 = 1.0;
@@ -364,14 +364,14 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: [f64; 3]
                 (
                     core::slice::from_raw_parts(mem.add(mesh.at) as *const f32, mesh.vertex_cnt as usize * 3),
                     core::slice::from_raw_parts(
-                        (mem.add(mesh.at) as *const u32).add(mesh.vertex_cnt as usize * crate::model::MODEL_VERTEX_WORDS as usize),
+                        (mem.add(mesh.at) as *const u32).add(mesh.vertex_cnt as usize * crate::world::model::MODEL_VERTEX_WORDS as usize),
                         mesh.index_cnt as usize,
                     ),
                 )
             };
             for i in 0..count {
                 let band = words[band_at + i];
-                if band == crate::decor::NO_ENTRY {
+                if band == crate::world::decor::NO_ENTRY {
                     continue;
                 }
                 let c = [tx + lane(0, i), ty + lane(1, i), lane(2, i)];

@@ -10,7 +10,7 @@ make it read as a different thing from that settings surface when it's the
 same one.
 
 **What makes something an Actor, not one of the other tiers:** one of the
-module's actors (crates/pxl-core/src/model.rs) — a model played by its own
+module's actors (crates/pxl-core/src/world/model.rs) — a model played by its own
 clips, its joint palette written each tick — rather than an instance of a
 static model the way decor's population is, with position and animation
 driven imperatively in a step of the frame's tick (`sched/tick.ts`, the

@@ -14,7 +14,7 @@
  * never-rendered mesh so hit testing keeps seeing them.
  *
  * The module builds a chunk's decor at one tier as one block of the mesh
- * section (crates/pxl-core/src/decor.rs): every group's lanes — a group per
+ * section (crates/pxl-core/src/world/decor.rs): every group's lanes — a group per
  * (kind, variant) in the order the kinds were taught — read here as views.
  * The block is one owner-counted thing, the same `rc` the baked meshes
  * carry (chunk_bucket.ts) for the same reason: the node's per-step cache
@@ -55,7 +55,7 @@ export const HIDDEN_FLAG: u32 = 1;
 
 /**
  * A chunk's decor at one tier as the module builds it
- * (crates/pxl-core/src/decor.rs): one block of the mesh section holding
+ * (crates/pxl-core/src/world/decor.rs): one block of the mesh section holding
  * every group's lanes — a group per (kind, variant) in the order the kinds
  * were taught — read here as views. The block is one owner-counted thing;
  * its groups' lanes live and die with it.

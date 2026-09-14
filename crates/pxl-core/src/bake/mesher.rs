@@ -15,10 +15,10 @@
 //! mesh's size (`Step::NeedMesh`) and may fail to, as a pool refuses; the
 //! bake then waits at that step, as the TypeScript one does.
 
-use crate::fdlibm;
-use crate::run_set::{OwnedRunSet, RunSet};
-use crate::srgb::SRGB_TO_LINEAR;
-use crate::voxel::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
+use crate::bake::run_set::{OwnedRunSet, RunSet};
+use crate::bake::voxel::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
+use xpute_core::kit::math;
+use xpute_core::kit::srgb::SRGB_TO_LINEAR;
 
 /// Cells to a block, and the widest span a bake is handed.
 const U_PER_CELL: f64 = 1.0;
@@ -717,7 +717,7 @@ impl BakeContext {
             if fill < LOW_FILL_THRESHOLD {
                 self.counters.coarse_low_fill += 1;
             }
-            let linear = fdlibm::cbrt(fill);
+            let linear = math::cbrt(fill);
             let sub = if linear >= 1.0 { 0 } else { pack_inset(linear) };
             let n = acc.surfaces.max(1) as f64;
             let rgb = (to_u8(acc.sr / n) << 16) | (to_u8(acc.sg / n) << 8) | to_u8(acc.sb / n);

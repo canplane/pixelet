@@ -103,7 +103,7 @@ export const SETTINGS = {
 
   // ---- lighting: how readable the same geometry is. Cheapest first; the
   // dev ones at the bottom are the passes not yet decided on.
-  /** Darkens cube edges that border open air (crates/pxl-core/src/shader/chunk.wgsl).
+  /** Darkens cube edges that border open air (crates/pxl-core/src/render/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   show_edge_shade: toggle("lighting", true, { cost: "low" }),
   /** A uniform on an already-compiled shader term; not a pass. */

@@ -13,7 +13,7 @@
  * chunks are meshed from — and returns whichever box the ray actually
  * struck first, regardless of whether it came from terrain or an object.
  *
- * The walk is the module's (crates/pxl-core/src/raycast.rs): every chunk
+ * The walk is the module's (crates/pxl-core/src/world/raycast.rs): every chunk
  * the ray's own XY projection crosses within max_dist, a cell DDA within
  * each, over composites it keeps between hovers — the cursor doesn't
  * teleport between frames, so the same chunks come up again — each valid

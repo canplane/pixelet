@@ -103,7 +103,7 @@ function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
 /**
  * The tick's visible and report phases, mounted once above ChunkMounts
  * (world.tsx). Decor is not a registrant of its own: the module builds a
- * tier's decor beside the tier (crates/pxl-core/src/sched.rs), which is
+ * tier's decor beside the tier (crates/pxl-core/src/world/sched.rs), which is
  * what ended the terrain/decor ready-state desync of 2026-09-05.
  */
 export function CoreTick({ children }: { children: ReactNode }) {

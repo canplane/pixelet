@@ -7,9 +7,9 @@
 //! the core holds the instances as a block and lists each set's draw,
 //! placed against the frame's origin, in the order the sets draw in.
 
-use crate::build::World;
-use crate::draw::{DrawList, PIPELINE_BADGE};
-use crate::model::Models;
+use crate::render::draw::{DrawList, PIPELINE_BADGE};
+use crate::world::build::World;
+use crate::world::model::Models;
 
 /// Floats an instance takes: its anchor relative to the set's (3), its
 /// logical size in pixels (2), its rectangle of the sheet (4), and where

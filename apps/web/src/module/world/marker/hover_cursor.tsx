@@ -27,7 +27,7 @@ import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { DECOR_BUNDLES } from "../decor/decor_registry.ts";
 import { request_world_tick } from "../change.ts";
 
-// The ghost is the core's (crates/pxl-core/src/ghost.rs): a box written in
+// The ghost is the core's (crates/pxl-core/src/world/ghost.rs): a box written in
 // the mesher's layout and drawn by the chunk shader, or one decor instance
 // drawn by decor's, half transparent. Everything here decides which ghost
 // and where.

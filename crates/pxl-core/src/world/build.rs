@@ -17,13 +17,13 @@
 
 use std::collections::BTreeMap;
 
-use crate::buddy::Pool;
-use crate::mesher::{mesh_words, BakeContext, Step};
-use crate::object::{Carve, Painter, Store};
-use crate::run_set::RunSet;
-use crate::scan::{BandView, ScanContext, ScanStep};
-use crate::terrain::{ChunkSample, Materials, PageView, CHANNELS, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use crate::volume::Volumes;
+use crate::bake::mesher::{mesh_words, BakeContext, Step};
+use crate::bake::run_set::RunSet;
+use crate::bake::scan::{BandView, ScanContext, ScanStep};
+use crate::bake::terrain::{ChunkSample, Materials, PageView, CHANNELS, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use crate::bake::volume::Volumes;
+use crate::world::object::{Carve, Painter, Store};
+use xpute_core::ds::buddy::Pool;
 
 /// What the glue is told.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -502,7 +502,7 @@ impl Builder {
     }
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
-        let bytes = crate::run_set::run_set_bytes(runs.count, CHUNK_SPAN) as usize;
+        let bytes = crate::bake::run_set::run_set_bytes(runs.count, CHUNK_SPAN) as usize;
         // SAFETY: the chunk's own block, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, CHUNK_SPAN) }
     }

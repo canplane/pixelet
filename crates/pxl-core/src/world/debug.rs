@@ -4,8 +4,8 @@
 //! segments whenever what they mark moves; the core holds them as a block
 //! and lists their draw each frame, placed against the frame's origin.
 
-use crate::build::World;
-use crate::draw::{DrawList, PIPELINE_DEBUG};
+use crate::render::draw::{DrawList, PIPELINE_DEBUG};
+use crate::world::build::World;
 
 /// Floats a vertex takes: its position relative to the set's origin (3)
 /// and its colour, linear (3). Two vertices a segment.

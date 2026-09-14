@@ -150,7 +150,7 @@ by how many faces survive, which the merge and the tiers decide.
 
 ## The scan, the same day
 
-The whole-chunk scan went the same way — crates/pxl-core/src/scan.rs, the
+The whole-chunk scan went the same way — crates/pxl-core/src/bake/scan.rs, the
 walk translated from voxel_scan.ts, reading the composite's bands and
 overflow lanes where the compositor left them in the core memory through
 a table of addresses, packing the set into a block acquired at the end —

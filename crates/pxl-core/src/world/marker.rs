@@ -4,9 +4,9 @@
 //! device is and which cells the zone covers at what height; the core holds
 //! them, animates the beacon each tick, and lists their draws.
 
-use crate::build::World;
-use crate::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
-use crate::sched::Frame;
+use crate::render::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
+use crate::world::build::World;
+use crate::world::sched::Frame;
 
 /// Floats a zone instance takes: the box's centre relative to the zone's
 /// (3), and which of its top, bottom, right and left edges border the ring
