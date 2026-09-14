@@ -19,6 +19,9 @@ import { WorldThemeKey } from "../environment/theme.ts";
 import { useThemeKey } from "../environment/theme_clock.ts";
 import { marker_colors } from "./style.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
+import { request_world_tick } from "../change.ts";
 
 const { FOG_FAR } = render_cfg;
 
@@ -230,6 +233,38 @@ void main() {
 
   const temp_obj = useMemo(() => new THREE.Object3D(), []);
 
+  // Through the WebGPU renderer the puck is the core's (crates/pxl-core/src/
+  // marker.rs): this still decides where the device is, which cells the zone
+  // covers at what height and where the beacon should stand; the core holds
+  // the zone, eases, spins and bobs the beacon, and draws both.
+  const gpu = useGpuDrawsChunks();
+  useLayoutEffect(() => {
+    const p = CORE_PXL;
+    if (!p || !gpu) return;
+    if (!has_ground) {
+      p.pxl_puck_clear();
+      return;
+    }
+    const v: V3 = $v.current;
+    const lane = FIXED_ALLOC.take(Float32Array, ZONE_SAMPLES.length * 7);
+    for (let i: u32 = 0; i < ZONE_SAMPLES.length; i++) {
+      const { off, borders } = ZONE_SAMPLES[i];
+      add3(center_pos, off, v);
+      const coord: PVF3 = projection.project({ i: 0n, f: 0n }, ...v);
+      const delta_ele: f64 = (get_ele(coord.i, coord.f) ?? center_pos[2]) - center_pos[2];
+      set3(off[0], off[1], off[2] + delta_ele, v);
+      center3n(v, U_PER_CELL, v);
+      lane.set([v[0], v[1], v[2], borders[0], borders[1], borders[2], borders[3]], i * 7);
+    }
+    p.pxl_puck_zone(center_pos[0], center_pos[1], center_pos[2], ZONE_SAMPLES.length, lane.byteOffset, ZONE_RADIUS_CELL * U_PER_CELL, FOG_FAR);
+    FIXED_ALLOC.give(lane);
+    request_world_tick();
+  }, [gpu, has_ground, center_pos, recompute_tick]);
+  useEffect(() => {
+    if (gpu) CORE_PXL?.pxl_puck_beacon(beacon_offset[0], beacon_offset[1], is_night ? 1 : 0);
+  }, [gpu, beacon_offset, is_night, center_pos]);
+  useEffect(() => () => CORE_PXL?.pxl_puck_clear(), []);
+
   useLayoutEffect(() => {
     const mesh = zone_ref.current;
     if (!mesh) return;
@@ -324,7 +359,7 @@ void main() {
     state.invalidate();
   }, "puck");
 
-  if (!has_ground) return null;
+  if (!has_ground || gpu) return null;
 
   return (
     <AnchorNode i={center_coord.i} f={center_coord.f}>

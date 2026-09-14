@@ -15,6 +15,7 @@ pub mod decor;
 pub mod draw;
 pub mod ghost;
 pub mod lod;
+pub mod marker;
 pub mod mesher;
 pub mod model;
 pub mod object;

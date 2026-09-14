@@ -238,7 +238,7 @@ export class DecorPass {
     const d = this.device;
     const buffer = (data: ArrayBufferView<ArrayBuffer>, usage: GPUBufferUsageFlags) => {
       const b = d.createBuffer({ size: Math.max(4, (data.byteLength + 3) & ~3), usage: usage | GPUBufferUsage.COPY_DST });
-      d.queue.writeBuffer(b, 0, data.buffer, data.byteOffset, data.byteLength);
+      d.queue.writeBuffer(b, 0, data);
       return b;
     };
     const w = m.skin.width;

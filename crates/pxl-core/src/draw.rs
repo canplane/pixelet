@@ -41,6 +41,12 @@ pub const PIPELINE_GHOST_DECOR: u32 = 4;
 /// handle, the model id, uniform, pipeline), its uniform's fourth float the
 /// turn about Z.
 pub const PIPELINE_SKINNED: u32 = 5;
+/// The location puck (marker.rs): the zone's instances as (the zone block's
+/// handle, the instance count, 0, uniform, pipeline), translated to the
+/// zone's centre; the beacon as (0, night, 0, uniform, pipeline), its
+/// uniform's fourth float its spin.
+pub const PIPELINE_PUCK_ZONE: u32 = 6;
+pub const PIPELINE_PUCK_BEACON: u32 = 7;
 /// Words a rewrite record holds: the handle, and the block's address and
 /// length, whose bytes replace the buffer's.
 pub const REWRITE_WORDS: usize = 3;

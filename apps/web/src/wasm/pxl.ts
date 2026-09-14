@@ -90,6 +90,9 @@ export type PxlExports = {
   pxl_ghost_box(x: number, y: number, z: number, size: number, value: u32, rgb: u32, coplanar: u32): void;
   pxl_ghost_decor(x: number, y: number, z: number, group: u32, rotation: number): void;
   pxl_ghost_clear(): void;
+  pxl_puck_zone(x: number, y: number, z: number, count: u32, lane: u32, snap_dist: number, fog_far: number): void;
+  pxl_puck_beacon(offset_x: number, offset_y: number, night: u32): void;
+  pxl_puck_clear(): void;
   pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32): number;
   pxl_model_block(): u32;
   pxl_model_joint(model: u32, joint: u32, parent: number, at: u32): void;

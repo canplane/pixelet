@@ -24,6 +24,7 @@ import { CHUNK_SHADER } from "./chunk_shader.ts";
 import { SKY_SHADER } from "./sky_shader.ts";
 import { DecorPass } from "./decor.ts";
 import { SkinnedPass } from "./skinned.ts";
+import { PuckPass } from "./puck.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -75,6 +76,8 @@ export class GpuRenderer {
   readonly decor: DecorPass;
   /** Actors' skinned draws (skinned.ts). */
   readonly skinned: SkinnedPass;
+  /** The location puck (puck.ts). */
+  private readonly puck: PuckPass;
   /** Each block's vertex and index counts, as its upload said. */
   private readonly counts = new Map<u32, [u32, u32]>();
   private readonly frame_buffer: GPUBuffer;
@@ -152,6 +155,7 @@ export class GpuRenderer {
     this.bind_group = this.make_bind_group();
     this.decor = new DecorPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.skinned = new SkinnedPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
+    this.puck = new PuckPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
   }
 
   /** A renderer over a device, or null where there is no WebGPU: the app
@@ -256,6 +260,8 @@ export class GpuRenderer {
     this.draw_meshes(pass, draws, (p) => p === PIPELINE_CHUNK);
     this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
     this.skinned.draw(pass, draws, uniforms, this.buffers, this.counts);
+    this.puck.draw_beacon(pass, draws, uniforms);
+    this.puck.draw_zone(pass, draws, uniforms, this.buffers);
     // What is blended goes last, over everything opaque.
     for (const p of [PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR]) {
       if (!this.draw_meshes(pass, draws, (q) => q === p, true)) continue;

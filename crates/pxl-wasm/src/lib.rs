@@ -1055,6 +1055,33 @@ pub extern "C" fn pxl_build_now(id: u32) {
     after(s);
 }
 
+// ---- The location puck (crates/pxl-core/src/marker.rs) ----
+
+/// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre
+/// relative to the zone's, and which edges border the ring), about a centre
+/// at (x, y, z) in units; the beacon jumps rather than eases past
+/// `snap_dist`, and nothing is drawn past `fog_far` of the camera.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_puck_zone(x: f64, y: f64, z: f64, count: u32, lane: u32, snap_dist: f64, fog_far: f64) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    // SAFETY: the glue's lane of count * 7 floats.
+    unsafe { sched.markers.set_zone(&mut world, &mut sched.draw, [x, y, z], count, lane as usize, snap_dist, fog_far) };
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_puck_beacon(offset_x: f64, offset_y: f64, night: u32) {
+    state().sched.markers.set_beacon([offset_x, offset_y], night != 0);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_puck_clear() {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.markers.clear(&mut world, &mut sched.draw);
+}
+
 // ---- Models and actors (crates/pxl-core/src/model.rs) ----
 
 /// A model's mesh block for `vertex_cnt` vertices, `index_cnt` indices and

@@ -19,6 +19,7 @@ use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Ki
 use crate::draw::{DrawList, PIPELINE_CHUNK};
 use crate::ghost::Ghost;
 use crate::lod::{Ladder, COARSEST};
+use crate::marker::Markers;
 use crate::model::Models;
 use crate::terrain::ChunkSample;
 
@@ -248,6 +249,8 @@ pub struct Scheduler {
     pub ghost: Ghost,
     /// Models and the actors that play them (model.rs).
     pub models: Models,
+    /// The location puck (marker.rs).
+    pub markers: Markers,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -315,6 +318,7 @@ impl Scheduler {
             draw: DrawList::default(),
             ghost: Ghost::default(),
             models: Models::default(),
+            markers: Markers::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -751,6 +755,7 @@ impl Scheduler {
 
         self.reclaim(world, &order, emit);
         self.models.tick(world, &mut self.draw, frame.delta_s as f32);
+        let animating = self.markers.tick(&frame);
         self.draw_frame(&frame);
 
         let mut c = Census { committed, ..Census::default() };
@@ -781,7 +786,7 @@ impl Scheduler {
         c.retained_off = self.retained_off;
         let blending = c.blend_active > 0;
         self.census = c;
-        committed > 0 || pending_total > committed || blending || self.view_dirty
+        committed > 0 || pending_total > committed || blending || self.view_dirty || animating
     }
 
     /// This frame's draws: every chunk on screen with a layout, its tiers at
@@ -791,6 +796,7 @@ impl Scheduler {
         self.draw.begin_frame();
         self.ghost.draw(&mut self.draw, frame.origin);
         self.models.draw(&mut self.draw, frame.origin);
+        self.markers.draw(&mut self.draw, frame.origin);
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;
