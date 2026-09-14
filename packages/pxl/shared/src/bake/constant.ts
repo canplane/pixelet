@@ -56,7 +56,7 @@ export const CHUNK_CELL_SPAN: u32 = 1 << (L2_SHAMT - CELL_SHAMT);
  *
  * 2. INTERPOLATION MAPPING:
  *    Source grid coordinates [sx, sy] are derived from texel [tx, ty] via:
- *    step = PAGE_CELL_SPAN / PAGE_ELE_SPAN (e.g., 32)
+ *    step = PAGE_CELL_SPAN / PAGE_ELE_SPAN (1024 / 64 = 16 cells a sample)
  *    sx = tx / step + pad - 0.5
  *
  * 3. QUANTIZATION:
