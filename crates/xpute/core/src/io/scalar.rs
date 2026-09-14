@@ -1,4 +1,4 @@
-// xpute-core/io/scalar.rs
+// xpute_core/io/scalar.rs
 
 //! Binary Scalar I/O
 //!
@@ -222,3 +222,7 @@ pub fn pack128(lo: u64, hi: u64) -> u128 {
 pub fn unpack128(x: u128) -> [u64; 2] {
     [x as u64, (x >> 64) as u64]
 }
+
+#[cfg(test)]
+#[path = "scalar.test.rs"]
+mod test;

@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/indexer.test.rs
+// pxl_shared/spec/space/indexer.test.rs
 
 use super::*;
 use crate::spec::space::pvf3::{ivec, projection, PVF3};
@@ -90,4 +90,56 @@ fn indexer_every_point_in_a_cell_resolves_to_the_same_centre() {
     let mut pc = PVF3::default();
     assert_eq!(ivec::repr(a.i), ivec::repr(L2_CENTER(projection::project(&mut pc, 100.1, 200.9, 33.2).i)));
     assert_eq!(a.f, 0);
+}
+
+/// script/vector/pxl/shared/spec/space/indexer.ts's output.
+const VECTOR: &str = include_str!("../../../vector/spec/space/indexer.tsv");
+
+#[test]
+fn indexer_computes_what_the_typescript_computes() {
+    let v = xpute_core::vector::Vector::load(VECTOR);
+    assert_eq!(L2_RANGE, v.u64("constants.L2_RANGE"));
+    assert_eq!(L3_RANGE, v.u64("constants.L3_RANGE"));
+    assert_eq!(L4_RANGE, v.u64("constants.L4_RANGE"));
+    assert_eq!(L2_SPAN_IN_L3, v.u64("constants.L2_SPAN_IN_L3"));
+    assert_eq!(L2_SPAN_IN_L4, v.u64("constants.L2_SPAN_IN_L4"));
+    assert_eq!(L3_SPAN_IN_L4, v.u64("constants.L3_SPAN_IN_L4"));
+    assert_eq!(L2_MASK, v.u64("constants.L2_MASK"));
+    assert_eq!(L3_MASK, v.u64("constants.L3_MASK"));
+    assert_eq!(L4_MASK, v.u64("constants.L4_MASK"));
+    type Step = (&'static str, fn(IVec) -> IVec);
+    let fns: [Step; 21] = [
+        ("L2_BASE", L2_BASE),
+        ("L3_BASE", L3_BASE),
+        ("L4_BASE", L4_BASE),
+        ("L2_CENTER", L2_CENTER),
+        ("L3_CENTER", L3_CENTER),
+        ("L4_CENTER", L4_CENTER),
+        ("L2_LIMIT", L2_LIMIT),
+        ("L3_LIMIT", L3_LIMIT),
+        ("L4_LIMIT", L4_LIMIT),
+        ("L1_IDX_IN_L2", L1_IDX_IN_L2),
+        ("L1_IDX_IN_L3", L1_IDX_IN_L3),
+        ("L2_IDX_IN_L3", L2_IDX_IN_L3),
+        ("L1_IDX_IN_L4", L1_IDX_IN_L4),
+        ("L2_IDX_IN_L4", L2_IDX_IN_L4),
+        ("L3_IDX_IN_L4", L3_IDX_IN_L4),
+        ("L2_IDX", L2_IDX),
+        ("L3_IDX", L3_IDX),
+        ("L4_IDX", L4_IDX),
+        ("FROM_L2_IDX", FROM_L2_IDX),
+        ("FROM_L3_IDX", FROM_L3_IDX),
+        ("FROM_L4_IDX", FROM_L4_IDX),
+    ];
+    v.each("addrs", |k| {
+        let a = v.u64(&format!("{k}.a"));
+        for (name, f) in fns {
+            assert_eq!(f(a), v.u64(&format!("{k}.{name}")), "{k}.{name}");
+        }
+        for (j, shamt) in [0, 1, 3, 6, 10, 12].into_iter().enumerate() {
+            let mut out = PVF3::default();
+            let c = *SPAN_CENTER(&mut out, a, shamt);
+            assert_eq!((c.i, c.f), (v.u64(&format!("{k}.span.{j}.i")), v.u64(&format!("{k}.span.{j}.f"))), "{k}.SPAN_CENTER({shamt})");
+        }
+    });
 }

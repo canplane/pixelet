@@ -1,4 +1,4 @@
-// xpute-core/sys/console.rs
+// xpute_core/sys/console.rs
 // (no pair: JavaScript's `console` is the runtime's)
 
 //! Where a `console.warn` goes. The module has no console; a host installs

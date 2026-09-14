@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/sparse_tree/mem.rs
+// pxl_shared/spec/space/sparse_tree/mem.rs
 // sparse tree memory primitives
 
 //! sparse tree memory primitives (stateless / data-oriented)

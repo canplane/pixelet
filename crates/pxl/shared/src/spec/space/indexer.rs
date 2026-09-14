@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/indexer.rs
+// pxl_shared/spec/space/indexer.rs
 // Multi-level spatial indexing and hierarchy helpers.
 
 //! Multi-level spatial topology and packed hierarchy helpers.

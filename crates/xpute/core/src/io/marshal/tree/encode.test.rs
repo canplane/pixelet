@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tree/encode.test.rs
+// xpute_core/io/marshal/tree/encode.test.rs
 // (no pair: the TypeScript tree has no test file; the vector holds it to the
 // TypeScript encoder byte for byte)
 
@@ -10,17 +10,12 @@ use crate::kit::array::TypedArray;
 use crate::kit::encoding::bytes_to_hex;
 
 /// script/vector/xpute/core/io/marshal/tree/encode.ts's output.
-const VECTOR: &str = include_str!("../../../../vector/io/marshal/tree/encode.json");
+const VECTOR: &str = include_str!("../../../../vector/io/marshal/tree/encode.tsv");
 
 fn expected(name: &str) -> String {
-    // The vector is a JSON list of {name, packet}; read without a JSON
-    // dependency, since the shape is fixed.
-    let key = format!("\"name\": \"{name}\"");
-    let at = VECTOR.find(&key).unwrap_or_else(|| panic!("no vector {name}"));
-    let rest = &VECTOR[at..];
-    let p = rest.find("\"packet\": \"").unwrap() + "\"packet\": \"".len();
-    let end = rest[p..].find('"').unwrap();
-    rest[p..p + end].to_string()
+    let v: std::collections::HashMap<&str, &str> = VECTOR.lines().filter_map(|l| l.split_once('\t')).collect();
+    let k = (0..).find(|k| v.get(format!("{k}.name").as_str()).is_none_or(|n| *n == name)).unwrap();
+    v.get(format!("{k}.packet").as_str()).unwrap_or_else(|| panic!("no vector {name}")).to_string()
 }
 
 fn encode(build: impl FnOnce(&mut TreeView)) -> Vec<u8> {

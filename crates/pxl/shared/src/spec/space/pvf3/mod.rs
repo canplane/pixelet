@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/pvf3/mod.rs
+// pxl_shared/spec/space/pvf3/mod.rs
 
 //! [PVF3] Packed 3-Vector w/ Fixed-Point Arithmetic
 //! A stateless numerical kernel designed for high-capacity spatial indexing

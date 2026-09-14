@@ -1,4 +1,4 @@
-// xpute-core/kit/math.rs
+// xpute_core/kit/math.rs
 
 pub const EPS: f64 = 1e-5;
 
@@ -49,9 +49,12 @@ pub fn floor_to_step(x: f64, step: f64) -> f64 {
     (x / step).floor() * step
 }
 pub fn round_to_step(x: f64, step: f64) -> f64 {
-    // `Math.round` rounds half up; Rust's `round` rounds half away from zero.
-    (x / step + 0.5).floor() * step
+    crate::kit::fdlibm::round(x / step) * step
 }
 pub fn ceil_to_step(x: f64, step: f64) -> f64 {
     (x / step).ceil() * step
 }
+
+#[cfg(test)]
+#[path = "math.test.rs"]
+mod test;

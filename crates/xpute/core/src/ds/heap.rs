@@ -1,4 +1,4 @@
-// xpute-core/ds/heap.rs
+// xpute_core/ds/heap.rs
 // heap primitives over an external array (0-based).
 //
 // Element:
@@ -261,3 +261,7 @@ pub fn heapsort<T: Copy>(a: &mut [Element<T>]) {
         MaxHeap::heapify(a, 0, end);
     }
 }
+
+#[cfg(test)]
+#[path = "heap.test.rs"]
+mod test;

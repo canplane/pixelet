@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tlv.rs
+// xpute_core/io/marshal/tlv.rs
 
 //! TLV: self-delimiting binary field stream.
 //!
@@ -495,3 +495,7 @@ impl Iterator for TLVReader {
         self.next_value().transpose()
     }
 }
+
+#[cfg(test)]
+#[path = "tlv.test.rs"]
+mod test;

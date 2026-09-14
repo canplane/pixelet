@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/v3.rs
+// pxl_shared/spec/space/v3.rs
 
 //! The TypeScript's optional `out` parameter, defaulting to a new vector,
 //! is a required one here: every function writes into the `out` it is
@@ -125,10 +125,7 @@ pub fn norm3<'a>(v: &V3, out: &'a mut V3) -> &'a mut V3 {
     out
 }
 
-/// `Math.round`: half up, where Rust's `round` is half away from zero.
-fn round(x: f64) -> f64 {
-    (x + 0.5).floor()
-}
+use xpute_core::kit::fdlibm::round;
 
 /// Floors each lane to the lower multiple of the corresponding span.
 pub fn floor3<'a>(base: &V3, span: &V3, out: &'a mut V3) -> &'a mut V3 {
@@ -206,3 +203,7 @@ pub fn snap3n<'a>(v: &V3, mask: i32, out: &'a mut V3) -> &'a mut V3 {
     out[2] = (to_int32(v[2]) & !mask) as f64;
     out
 }
+
+#[cfg(test)]
+#[path = "v3.test.rs"]
+mod test;

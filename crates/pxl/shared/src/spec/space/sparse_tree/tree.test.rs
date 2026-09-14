@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/sparse_tree/tree.test.rs
+// pxl_shared/spec/space/sparse_tree/tree.test.rs
 
 use core::cell::RefCell;
 use std::rc::Rc;
@@ -9,6 +9,7 @@ use xpute_core::ds::typed_alloc::buddy_alloc;
 use super::*;
 use crate::spec::space::pvf3::pvf3;
 use crate::spec::space::sparse_tree::tree as sparse_tree;
+use xpute_core::kit::array::TypedArray;
 
 const LAYOUT: SparseTreeLayout = SparseTreeLayout { dim: 3, min: -3, max: 6 };
 
@@ -50,4 +51,44 @@ fn sparse_tree_compact_a_pooled_tree_hands_its_old_lanes_back() {
     assert_eq!(pool.borrow().stat().live_blocks, 2, "only the compacted heap and data remain borrowed");
     sparse_tree::free(&mut tree);
     assert_eq!(pool.borrow().stat().live_blocks, 0);
+}
+
+/// script/vector/pxl/shared/spec/space/sparse_tree/tree.ts's output.
+const VECTOR: &str = include_str!("../../../../vector/spec/space/sparse_tree/tree.tsv");
+
+#[test]
+fn sparse_tree_computes_what_the_typescript_computes() {
+    let v = xpute_core::vector::Vector::load(VECTOR);
+    v.each("", |k| {
+        let layout = SparseTreeLayout {
+            dim: v.u32(&format!("{k}.dim")),
+            min: v.i32(&format!("{k}.min")),
+            max: v.i32(&format!("{k}.max")),
+        };
+        let coord = |base: &str| {
+            let mut p = PVF3::default();
+            *pvf3::gather(&mut p, v.i64(&format!("{base}.x")), v.i64(&format!("{base}.y")), v.i64(&format!("{base}.z")))
+        };
+        let mut tree = sparse_tree::alloc::<u16>(layout, 8, None);
+        v.each(&format!("{k}.writes"), |w| {
+            sparse_tree::write(&mut tree, &coord(w), v.u32(&format!("{w}.val")) as u16, v.i32(&format!("{w}.level")));
+        });
+        v.each(&format!("{k}.probes"), |p| {
+            assert_eq!(sparse_tree::read(&tree, &coord(p)) as u32, v.u32(&format!("{p}.val")), "{p}");
+        });
+        let mut walked = Vec::new();
+        sparse_tree::walk(&tree, &mut |x, y, z, level, val| walked.push(format!("{x},{y},{z},{level},{val}")));
+        let want: Vec<&str> = (0..v.len(&format!("{k}.walked"))).map(|j| v.s(&format!("{k}.walked.{j}"))).collect();
+        assert_eq!(walked, want, "{k}.walked");
+        assert_eq!(tree.mem.head, v.u32(&format!("{k}.head")), "{k}.head");
+        sparse_tree::compact(&mut tree);
+        assert_eq!(tree.mem.head, v.u32(&format!("{k}.compacted_head")), "{k}.compacted_head");
+        let blob = sparse_tree::encode(&tree);
+        let hex: String = TypedArray::<u8>::over(blob.buffer().clone(), blob.byte_offset(), blob.byte_length())
+            .as_slice()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_eq!(hex, v.s(&format!("{k}.encoded")), "{k}.encoded");
+    });
 }

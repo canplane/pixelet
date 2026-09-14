@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/pvf3/projection.rs
+// pxl_shared/spec/space/pvf3/projection.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Normalized Scalar <-> PVF3 Projection
@@ -92,3 +92,7 @@ pub fn unproject(out: &mut V3, i: IVec, f: FVec) -> &mut V3 {
     out[2] = unproject_comp(ivec::Z(i), fvec::Z(f));
     out
 }
+
+#[cfg(test)]
+#[path = "projection.test.rs"]
+mod test;

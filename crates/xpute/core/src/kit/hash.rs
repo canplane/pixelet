@@ -1,4 +1,4 @@
-// xpute-core/kit/hash.rs
+// xpute_core/kit/hash.rs
 
 //! The SHA-256 functions there are the host's WebCrypto and are not here
 //! (script/pair.exempt.json).
@@ -81,3 +81,7 @@ pub fn fnv1a_64_hex(bytes: &Bytes) -> String {
     fnv1a_64_bytes(&mut st, bytes);
     bytes_to_hex(&fnv1a_64_final(&st))
 }
+
+#[cfg(test)]
+#[path = "hash.test.rs"]
+mod test;

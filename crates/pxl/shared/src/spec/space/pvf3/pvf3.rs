@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/pvf3/pvf3.rs
+// pxl_shared/spec/space/pvf3/pvf3.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Fixed-Point Scalar System
@@ -260,3 +260,7 @@ pub fn dist_sq(v: &PVF3, w: &PVF3) -> i64 {
     let mut reg = PVF3::default();
     norm_sq(sub(&mut reg, v, w))
 }
+
+#[cfg(test)]
+#[path = "pvf3.test.rs"]
+mod test;

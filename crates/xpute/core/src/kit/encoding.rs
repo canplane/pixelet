@@ -1,4 +1,4 @@
-// xpute-core/kit/encoding.rs
+// xpute_core/kit/encoding.rs
 
 //! Encoding utilities
 //! - UTF-8
@@ -199,3 +199,7 @@ pub fn hex_to_bytes(hex: &str) -> Bytes {
     }
     bytes
 }
+
+#[cfg(test)]
+#[path = "encoding.test.rs"]
+mod test;

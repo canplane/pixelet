@@ -1,4 +1,4 @@
-// xpute-core/kit/rng.rs
+// xpute_core/kit/rng.rs
 
 use core::cell::Cell;
 
@@ -120,3 +120,7 @@ pub fn make_rng(seed: Option<u64>) -> RNG {
 pub fn u32_to_unit(x: u32) -> f64 {
     x as f64 / 4_294_967_296.0
 }
+
+#[cfg(test)]
+#[path = "rng.test.rs"]
+mod test;

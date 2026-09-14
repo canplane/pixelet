@@ -1,4 +1,4 @@
-// pxl-shared/spec/space/pvf3/fvec.rs
+// pxl_shared/spec/space/pvf3/fvec.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Fractional Residue Precision System

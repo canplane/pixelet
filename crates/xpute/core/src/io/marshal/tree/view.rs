@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tree/view.rs
+// xpute_core/io/marshal/tree/view.rs
 
 //! The write end: a `TreeView` holds a root node, a `BranchView` a branch's
 //! children, and both write through the same set of typed writers. The

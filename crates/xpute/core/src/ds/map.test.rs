@@ -1,4 +1,4 @@
-// xpute-core/ds/map.test.rs
+// xpute_core/ds/map.test.rs
 
 use core::cell::RefCell;
 use std::collections::HashMap;
@@ -121,4 +121,37 @@ fn indexedmap_clear_forgets_every_entry_and_the_next_inserts_start_from_zero() {
     assert_eq!(m.insert(7), 0);
     assert_eq!(m.insert(3), 1);
     assert_eq!(m.find(7), 0);
+}
+
+/// script/vector/xpute/core/ds/map.ts's output.
+const VECTOR: &str = include_str!("../../vector/ds/map.tsv");
+
+fn replay<T: KeyTraits>(v: &crate::vector::Vector, base: &str, traits: T, key: impl Fn(&str) -> T::Key)
+where
+    T::Key: std::fmt::Debug,
+{
+    let mut m = IndexedMap::new(traits, 2, None);
+    v.each(&format!("{base}.steps"), |k| {
+        if v.s(&format!("{k}.op")) == "remove" {
+            let pos = v.u32(&format!("{k}.pos"));
+            assert_eq!(m.key_at(pos), key(v.s(&format!("{k}.key"))), "{k}.key");
+            assert_eq!(m.remove_at(pos), v.u32(&format!("{k}.from")), "{k}.from");
+        } else {
+            assert_eq!(m.insert(key(v.s(&format!("{k}.key")))), v.u32(&format!("{k}.pos")), "{k}.pos");
+        }
+        assert_eq!(m.size(), v.u32(&format!("{k}.size")), "{k}.size");
+    });
+    let walk: Vec<u32> = m.positions_seeded(99).collect();
+    let want: Vec<u32> = (0..v.len(&format!("{base}.walk"))).map(|j| v.u32(&format!("{base}.walk.{j}"))).collect();
+    assert_eq!(walk, want, "{base}.walk");
+    let walk2: Vec<u32> = m.positions_seeded(0xffffffffffff).collect();
+    let want2: Vec<u32> = (0..v.len(&format!("{base}.walk2"))).map(|j| v.u32(&format!("{base}.walk2.{j}"))).collect();
+    assert_eq!(walk2, want2, "{base}.walk2");
+}
+
+#[test]
+fn indexedmap_places_and_moves_what_the_typescript_places_and_moves() {
+    let v = crate::vector::Vector::load(VECTOR);
+    replay(&v, "i64", I64_KEYS, |s| s.parse().unwrap());
+    replay(&v, "u32", U32_KEYS, |s| s.parse().unwrap());
 }

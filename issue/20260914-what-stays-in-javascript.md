@@ -66,6 +66,17 @@ arrived and hands the time back. What that decides about the boundary:
   allowed only where the languages differ, and every such difference is
   listed with its reason. The tree is mirrored as it is, however it might
   be better arranged — arranging comes later, on both sides at once.
+- **Bit for bit, except where the TypeScript cannot be.** Two exceptions
+  came out of the first vectors. `Math.sin`, `exp`, `log` and the rest are
+  no longer fdlibm in V8 but LLVM libc's correctly rounded functions, and
+  the kernel does not follow the browser's libm: it carries FreeBSD msun's
+  (`xpute_core::kit::fdlibm`) so a result is one set of bits on every
+  toolchain, and the vectors hold the functions to within one ulp and
+  what is computed from them to a few, while a lattice address, which a rounding tie must never move, is
+  held exact. And a vector that catches the TypeScript wrong
+  (`unpack96` losing its low limb through `Number()`) is not copied into
+  the Rust; the test states the divergence and fails once the TypeScript
+  is fixed.
 
 **The destination, whole (2026-09-14).** The client is one Rust kernel
 in WebAssembly drawing through WebGPU, with TypeScript as the shell —

@@ -1,4 +1,4 @@
-// xpute-core/ipc/frame.rs
+// xpute_core/ipc/frame.rs
 
 //! One command across a thread boundary, laid out in the buffer that carries
 //! it.

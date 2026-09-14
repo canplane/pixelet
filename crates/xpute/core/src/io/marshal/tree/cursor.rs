@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tree/cursor.rs
+// xpute_core/io/marshal/tree/cursor.rs
 
 //! The read end: lazy cursors over a packet. The TypeScript's class
 //! hierarchy — `NodeCursor`, with `NullCursor` and `BranchCursor` extending
@@ -585,3 +585,7 @@ impl BranchCursor {
 pub fn array_of<T: AnyElement>(v: &ArrayBufferView) -> Option<TypedArray<T>> {
     TypedArray::of(v)
 }
+
+#[cfg(test)]
+#[path = "cursor.test.rs"]
+mod test;

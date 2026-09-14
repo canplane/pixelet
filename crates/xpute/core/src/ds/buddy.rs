@@ -1,4 +1,4 @@
-// xpute-core/ds/buddy.rs
+// xpute_core/ds/buddy.rs
 
 //! Buddy allocator for buffers whose deaths are unordered.
 //!

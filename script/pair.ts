@@ -20,7 +20,7 @@
 //   but letters and digits as one underscore).
 // - Every vector generator under script/vector/ (a `.ts` at the mirrored
 //   path, exporting `vectors()`) writes what the TypeScript computes for a
-//   fixed input set; the file it writes under the crate's `vector/` (crates/xpute/core/vector, crates/pxl/shared/vector)
+//   fixed input set, as `path<TAB>value` lines; the file it writes under the crate's `vector/` (crates/xpute/core/vector, crates/pxl/shared/vector)
 //   must be committed as written (`deno task vector` writes them) and read
 //   by a Rust test through `include_str!`.
 //
@@ -197,7 +197,8 @@ async function check_tree(tree: Tree): Promise<void> {
       const body = (await Deno.readTextFile(join(rs_dir, f))).replace(/^\s*(\/\/.*|pub mod [a-z_0-9]+;|#\[path = "[^"]*"\]|#!\[.*\])?\s*$/gm, "").trim();
       if (body === "") continue;
     }
-    fail(`${tree.rs}/${f}`, `${tree.rs}/${f} has no TypeScript at ${tree.ts}/${ts} — a Rust module is a whole TypeScript file, at its path`);
+    // A test file belongs to its module, and so does the module's exemption.
+    fail(`${tree.rs}/${f.replace(/\.test\.rs$/, ".rs")}`, `${tree.rs}/${f} has no TypeScript at ${tree.ts}/${ts} — a Rust module is a whole TypeScript file, at its path`);
   }
 
   // Exports and tests, for every paired file.
@@ -232,10 +233,10 @@ async function check_tree(tree: Tree): Promise<void> {
   const vec_dir = join(root, tree.vector);
   const written = new Set<string>();
   for (const g of await files(gen_dir, ".ts")) {
-    const target = g.replace(/\.ts$/, ".json");
+    const target = g.replace(/\.ts$/, ".tsv");
     written.add(target);
     const mod = await import(join(gen_dir, g));
-    const fresh = JSON.stringify(mod.vectors(), (_k, v) => (typeof v === "bigint" ? v.toString() : v), 1) + "\n";
+    const fresh = flatten(mod.vectors());
     const path = join(vec_dir, target);
     const on_disk = (await exists(path)) ? await Deno.readTextFile(path) : null;
     if (on_disk !== fresh) problems.push(`${tree.vector}/${target} is not what ${VECTOR_ROOT}/${relative(join(root, VECTOR_ROOT), join(gen_dir, g))} writes — run \`deno task vector\``);
@@ -245,9 +246,34 @@ async function check_tree(tree: Tree): Promise<void> {
     for (const r of readers) if ((await Deno.readTextFile(join(rs_dir, r))).includes(`vector/${target}`)) read = true;
     if (!read) problems.push(`${tree.vector}/${target} is read by no \`include_str!\` in ${tree.rs}/${g.replace(/\.ts$/, "{.rs,.test.rs}")}`);
   }
-  for (const v of await files(vec_dir, ".json")) {
-    if (!written.has(v)) problems.push(`${tree.vector}/${v} has no generator at ${VECTOR_ROOT}/…/${v.replace(/\.json$/, ".ts")}`);
+  for (const v of await files(vec_dir, ".tsv")) {
+    if (!written.has(v)) problems.push(`${tree.vector}/${v} has no generator at ${VECTOR_ROOT}/…/${v.replace(/\.tsv$/, ".ts")}`);
   }
+}
+
+/**
+ * A generator's vectors as lines of `path<TAB>value`, the path the keys and
+ * indices down to the value joined by dots (`ivec.unary.3.not`): what a
+ * Rust test reads with a split per line and no parser, so the reader is
+ * not itself a thing to verify. A value is a string as it is, a BigInt or
+ * an integer in decimal, a boolean as true/false; a double goes through
+ * script/vector.ts's f64_bits first, and a string must not hold a tab or a
+ * newline.
+ */
+function flatten(value: unknown): string {
+  const lines: string[] = [];
+  const walk = (v: unknown, path: string) => {
+    if (Array.isArray(v)) v.forEach((e, i) => walk(e, path ? `${path}.${i}` : `${i}`));
+    else if (v !== null && typeof v === "object") { for (const [k, e] of Object.entries(v)) walk(e, path ? `${path}.${k}` : k); }
+    else {
+      const text = String(v);
+      if (/[\t\n]/.test(text)) throw new Error(`vector: ${path} holds a tab or a newline`);
+      if (typeof v === "number" && !Number.isSafeInteger(v)) throw new Error(`vector: ${path} is a double; write it through f64_bits`);
+      lines.push(`${path}\t${text}`);
+    }
+  };
+  walk(value, "");
+  return lines.join("\n") + "\n";
 }
 
 /** Writes every generator's vectors: `deno task vector`. */
@@ -256,9 +282,9 @@ async function write_vectors(): Promise<void> {
     const gen_dir = join(root, VECTOR_ROOT, tree.ts.replace(/^packages\//, "").replace(/\/src$/, ""));
     for (const g of await files(gen_dir, ".ts")) {
       const mod = await import(join(gen_dir, g));
-      const path = join(root, tree.vector, g.replace(/\.ts$/, ".json"));
+      const path = join(root, tree.vector, g.replace(/\.ts$/, ".tsv"));
       await Deno.mkdir(dirname(path), { recursive: true });
-      await Deno.writeTextFile(path, JSON.stringify(mod.vectors(), (_k, v) => (typeof v === "bigint" ? v.toString() : v), 1) + "\n");
+      await Deno.writeTextFile(path, flatten(mod.vectors()));
       console.log(`wrote ${relative(root, path)}`);
     }
   }

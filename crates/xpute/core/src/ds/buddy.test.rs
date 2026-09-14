@@ -1,4 +1,4 @@
-// xpute-core/ds/buddy.test.rs
+// xpute_core/ds/buddy.test.rs
 
 use super::*;
 
@@ -251,4 +251,67 @@ fn pool_a_pool_that_may_spill_never_returns_null_from_try_acquire() {
     assert!(p.try_acquire(REGION).is_some(), "past the backing it spills to a plain region");
     assert_eq!(p.stat().spills, 0);
     assert_eq!(p.stat().backing_used, REGION);
+}
+
+/// script/vector/xpute/core/ds/buddy.ts's output.
+const VECTOR: &str = include_str!("../../vector/ds/buddy.tsv");
+
+#[test]
+fn buddy_hands_out_what_the_typescript_hands_out() {
+    let v = crate::vector::Vector::load(VECTOR);
+    let backing = ArrayBuffer::new(1 << 18);
+    let mut p = BuddyAllocator::new(BuddyOptions {
+        min_block_bytes: Some(1 << 8),
+        region_bytes: Some(1 << 16),
+        max_idle_regions: Some(1),
+        backing: Some(backing.clone()),
+        ..Default::default()
+    })
+    .unwrap();
+    let mut live: Vec<Block> = Vec::new();
+    v.each("", |k| {
+        if v.s(&format!("{k}.op")) == "release" {
+            let (at, backed) = (v.u32(&format!("{k}.at")), v.bool(&format!("{k}.backed")));
+            let bytes = v.u32(&format!("{k}.bytes"));
+            let i = live
+                .iter()
+                .position(|b| b.byte_offset == at && b.bytes == bytes && b.buf.is(&backing) == backed)
+                .unwrap_or_else(|| panic!("{k}: no live block at {at}"));
+            let mut b = live.remove(i);
+            p.release(&mut b);
+            let s = p.stat();
+            assert_eq!(
+                (s.live_bytes, s.regions, s.merges, s.evictions),
+                (
+                    v.u32(&format!("{k}.live_bytes")),
+                    v.u32(&format!("{k}.regions")),
+                    v.u32(&format!("{k}.merges")),
+                    v.u32(&format!("{k}.evictions"))
+                ),
+                "{k}"
+            );
+        } else {
+            let bytes = v.u32(&format!("{k}.bytes"));
+            let b = p.acquire(bytes).unwrap();
+            assert_eq!(
+                (b.byte_offset, b.buf.is(&backing), b.order, b.region),
+                (v.u32(&format!("{k}.at")), v.bool(&format!("{k}.backed")), v.i32(&format!("{k}.order")), v.i32(&format!("{k}.region"))),
+                "{k}"
+            );
+            let handle = if b.order >= 0 { p.handle_at(&b.buf, b.byte_offset, bytes).unwrap() as i64 } else { -1 };
+            assert_eq!(handle, v.i64(&format!("{k}.handle")), "{k}.handle");
+            let s = p.stat();
+            assert_eq!(
+                (s.live_bytes, s.regions, s.splits, s.spills),
+                (
+                    v.u32(&format!("{k}.live_bytes")),
+                    v.u32(&format!("{k}.regions")),
+                    v.u32(&format!("{k}.splits")),
+                    v.u32(&format!("{k}.spills"))
+                ),
+                "{k}"
+            );
+            live.push(b);
+        }
+    });
 }

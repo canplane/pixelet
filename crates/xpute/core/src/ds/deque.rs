@@ -1,4 +1,4 @@
-// xpute-core/ds/deque.rs
+// xpute_core/ds/deque.rs
 // deque primitives over an external ring buffer (0-based) — DOD view.
 //
 // Storage contract (caller-owned):
@@ -91,3 +91,7 @@ impl<'a, T> Deque<'a, T> {
         self.len = 0;
     }
 }
+
+#[cfg(test)]
+#[path = "deque.test.rs"]
+mod test;

@@ -1,4 +1,4 @@
-// xpute-core/ds/typed_alloc.test.rs
+// xpute_core/ds/typed_alloc.test.rs
 
 use core::cell::RefCell;
 use std::rc::Rc;

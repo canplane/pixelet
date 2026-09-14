@@ -229,7 +229,8 @@ Two rules that came out of doing it:
 
 This is the import-map path, not the filesystem path — extension included, so
 a `.tsx` file says `.tsx`. New files get one too, tests included. A Rust file
-names its own path the same way, from its crate: `// pxl-shared/spec/space/indexer.rs`
+names its own path the way Rust code names the crate — the crate's
+identifier, then the file's path under `src/`: `// pxl_shared/spec/space/indexer.rs`
 — never its TypeScript pair's, which the mirrored path already says.
 
 The one exception is `shared/ui/shadcn/`, where no file carries a header —

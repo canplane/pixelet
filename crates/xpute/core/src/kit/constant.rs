@@ -1,4 +1,4 @@
-// xpute-core/kit/constant.rs
+// xpute_core/kit/constant.rs
 
 // ---- Sentinels ----
 

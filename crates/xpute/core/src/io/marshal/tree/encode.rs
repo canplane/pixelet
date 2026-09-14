@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tree/encode.rs
+// xpute_core/io/marshal/tree/encode.rs
 
 use crate::kit::array::{Bytes, Kind, TypedArray, U8Array};
 use crate::kit::encoding;
@@ -348,15 +348,36 @@ impl TreeEncoder {
                 }
             }
 
-            // The TypeScript encodes the string into the buffer's tail
-            // optimistically and retries once with the worst-case bound;
-            // a Rust string is UTF-8 already, so its bytes are copied once.
+            // optimistic UTF-8 encode:
+            // - first try encodeInto() into the currently available tail
+            // - if it does not fit, reserve the worst-case bound (s.length * 4)
+            //   and retry once
+            // - avoids an intermediate encode() allocation while keeping retry bounded
+            //
+            // `s.length` is UTF-16 code units, and the bound and the growth
+            // follow it as the TypeScript's do: they decide when a string is
+            // refused at a cap, which is part of what a packet is.
             SequenceType::STR => {
                 let SequenceVal::Str(s) = val else { return Err(bad_type(type_ as u8, st.base)) };
-                if s.len() as u32 > ((self.max_cap - payload_start) >> 2) * 4 {
+                let units = s.encode_utf16().count() as u32;
+                let min_needed = units;
+
+                if units > ((self.max_cap - payload_start) >> 2) {
                     return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("required packet size exceeds max cap ({})", self.max_cap)), None));
                 }
+                let max_needed = units * 4;
+
+                if (self.buf.byte_length() as u32) - payload_start < min_needed {
+                    self._ensure(payload_start + min_needed)?;
+                }
+
+                // encodeInto writes every character only when the tail holds
+                // all of the string's UTF-8; otherwise the worst case is reserved.
                 let data = encoding::te.encode(s);
+                if data.length() as u32 > (self.buf.byte_length() as u32) - payload_start {
+                    self._ensure(payload_start + max_needed)?;
+                }
+
                 len = data.length() as u32; // UTF-8 byte length, excluding trailing NUL
                 payload_sz = len + 1; // wire payload includes trailing NUL for C-friendly reads
 

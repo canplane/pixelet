@@ -9,3 +9,6 @@ path = "src/lib.rs"
 
 [dependencies]
 xpute-core = { path = "../../xpute/core" }
+
+[dev-dependencies]
+xpute-core = { path = "../../xpute/core", features = ["vector"] }

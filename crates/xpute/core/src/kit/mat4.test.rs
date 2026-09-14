@@ -1,4 +1,4 @@
-// xpute-core/kit/mat4.test.rs
+// xpute_core/kit/mat4.test.rs
 
 use super::*;
 
@@ -51,4 +51,66 @@ fn mat4_the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye()
     assert!(inside(0.0, 0.0, 0.0));
     assert!(!inside(0.0, -60.0, 80.0));
     assert!(!inside(0.0, 3000.0, 0.0));
+}
+
+/// script/vector/xpute/core/kit/mat4.ts's output.
+const VECTOR: &str = include_str!("../../vector/kit/mat4.tsv");
+
+#[test]
+fn mat4_computes_what_the_typescript_computes() {
+    let v = crate::vector::Vector::load(VECTOR);
+    // Exact where the arithmetic alone decides; a few ulps where a value
+    // passed through Math's transcendental functions (kit/fdlibm.rs).
+    let exact = |name: &str, got: &[f64]| {
+        for (j, g) in got.iter().enumerate() {
+            assert_eq!(g.to_bits(), v.f64(&format!("{name}.{j}")).to_bits(), "{name}.{j}: {g}");
+        }
+    };
+    let near = |name: &str, got: &[f64]| {
+        for (j, g) in got.iter().enumerate() {
+            let w = v.f64(&format!("{name}.{j}"));
+            let d = if g.to_bits() == w.to_bits() {
+                0
+            } else if g.is_sign_negative() != w.is_sign_negative() {
+                u64::MAX
+            } else {
+                g.abs().to_bits().abs_diff(w.abs().to_bits())
+            };
+            assert!(d <= 8 || (g - w).abs() < 1e-12, "{name}.{j}: {g} vs {w}");
+        }
+    };
+    let (mut r, mut t, mut m, mut persp, mut look, mut up, mut vp, mut inv, mut singular) = (mat4(), mat4(), mat4(), mat4(), mat4(), mat4(), mat4(), mat4(), mat4());
+    mat4_rotation_z(&mut r, 0.7);
+    mat4_translation(&mut t, 5.0, -3.0, 2.25);
+    mat4_mul(&mut m, &r, &t);
+    mat4_perspective(&mut persp, core::f64::consts::PI / 3.0, 1.6, 0.1, 1000.0);
+    mat4_look_at(&mut look, v3(0.5, -30.0, 40.0), v3(1.0, 2.0, 0.0), v3(0.0, 0.0, 1.0));
+    mat4_look_at(&mut up, v3(0.0, 0.0, 10.0), v3(0.0, 0.0, 0.0), v3(0.0, 0.0, 1.0));
+    mat4_mul(&mut vp, &persp, &look);
+    mat4_invert(&mut inv, &vp);
+    mat4_invert(&mut singular, &[0.0; 16]);
+    near("rotation_z", &r);
+    exact("translation", &t);
+    near("mul", &m);
+    near("perspective", &persp);
+    exact("look_at", &look);
+    exact("look_up", &up);
+    near("vp", &vp);
+    near("invert", &inv);
+    exact("singular", &singular);
+    let mut p = Vec3::default();
+    mat4_transform_point(&mut p, &vp, 3.0, -4.0, 5.0);
+    near("point", &[p.x, p.y, p.z]);
+    let mut d = Vec3::default();
+    mat4_transform_direction(&mut d, &look, 1.0, 2.0, 3.0);
+    exact("direction", &[d.x, d.y, d.z]);
+    let (w, want) = (mat4_clip_w(&vp, 3.0, -4.0, 5.0), v.f64("clip_w"));
+    assert!((w - want).abs() < 1e-12, "clip_w: {w} vs {want}");
+    let mut planes = [0.0; 24];
+    mat4_frustum_planes(&mut planes, &vp);
+    near("planes", &planes);
+}
+
+fn v3(x: f64, y: f64, z: f64) -> Vec3 {
+    Vec3 { x, y, z }
 }
