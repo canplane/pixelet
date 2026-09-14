@@ -201,6 +201,12 @@ export const enum LoadMinor {
   IMAGE = 0x10,
 }
 
+/** The world's own verbs. */
+export const enum WorldMinor {
+  LANES = 0x10,
+  ACTION = 0x11,
+}
+
 export const enum Cmd {
   /** Replies with its packet's first child, a u32, or 0 — the rings' own
    * test. */
@@ -525,15 +531,24 @@ export const enum Cmd {
 
   // ---- the world's turn: the shell's events in, the kernel's asks out ----
 
+  /** [app_env str, build_time str, build_id str, build_number str, published_tiles bool,
+   * handheld bool, page_section_bytes u32, mesh_section_bytes f64] — the shell's boot:
+   * what the bundler defined and the memory map; the object store loaded */
+  WORLD_CREATE = 0x1b01,
   /** [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
    * orientation_permission bool] — the effects' turn, then the tick's phases; the
    * viewport in CSS pixels → result: 1 when a frame after this one was asked for */
   WORLD_UPDATE = 0x1b03,
   /** tag call · no packet → [toasts: [[show bool, id str, message_key str, tone u32
    * (0 loading, 1 error, 2 success)]], geolocation u32[] (0 start, 1 stop), orientation
-   * u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool] — what the
-   * turn asks of the shell */
+   * u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool, ui str
+   * (app/shell.rs's snapshot), decor: [[group u32, mesh u32, skin f64 (-1 none)]], skins:
+   * [[model u32, skin u32]]] — what the turn asks of the shell */
   WORLD_READ = 0x1b02,
+  /** tag call · no packet → [stage_at u32]: render/gpu/stage.rs's STAGE_WORDS doubles */
+  WORLD_LANES = 0x1b10,
+  /** tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not */
+  WORLD_ACTION = 0x1b11,
   /** [left f64, top f64, width f64, height f64] — the canvas's client rect */
   INPUT_UPDATE = 0x1c03,
   /** [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,

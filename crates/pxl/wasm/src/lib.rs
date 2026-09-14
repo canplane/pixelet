@@ -231,6 +231,7 @@ pub const BOOT_WORDS: usize = 3;
 /// The boot block's address: what the shell reads once, before any ring.
 #[no_mangle]
 pub extern "C" fn boot() -> *const u32 {
+    install_host();
     let s = state();
     let boot = [MODULE_BYTES as u32, ring_address(&s.sq), ring_address(&s.cq)];
     s.boot = boot;
@@ -987,6 +988,18 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 .collect();
             let log = pxl_core::module::world::sched::log::take_log_lines();
             let draw = pxl_core::module::world::core_tick::take_draw();
+            let ui = pxl_core::app::shell::ui_snapshot_json();
+            let mut decor: Vec<(u32, u32, f64)> = Vec::new();
+            let mut group = 0u32;
+            for entry in pxl_core::module::world::decor::asset_store::decor_bundle_assets() {
+                for (v, model) in entry.models.iter().enumerate() {
+                    let mesh = model.as_ref().and_then(|m| k.sched.models.mesh(m.model)).map_or(0, |mesh| mesh.handle);
+                    let skin = entry.skins.get(v).copied().flatten().map_or(-1.0, |s| s as f64);
+                    decor.push((group, mesh, skin));
+                    group += 1;
+                }
+            }
+            let skins = pxl_core::module::world::character::companion::companion_skins();
             return Ok(Some((
                 0,
                 Some(packet(&mut |b| {
@@ -1023,8 +1036,51 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                         }
                     }));
                     b.bool(Some(draw));
+                    b.str(Some(ui.as_str()));
+                    b.branch(Some(&mut |d| {
+                        for (group, mesh, skin) in &decor {
+                            d.branch(Some(&mut |e| {
+                                e.u32(Some(*group)).u32(Some(*mesh)).f64(Some(*skin));
+                            }));
+                        }
+                    }));
+                    b.branch(Some(&mut |sk| {
+                        for (model, skin) in &skins {
+                            sk.branch(Some(&mut |e| {
+                                e.u32(Some(*model)).u32(Some(*skin));
+                            }));
+                        }
+                    }));
                 })),
             )));
+        }
+        Cmd::WORLD_CREATE => {
+            let f = fields(pkt)?;
+            pxl_core::lib::env::config::set_build_info(pxl_core::lib::env::config::BuildInfo {
+                app_env: f.at(0)?.get_str()?,
+                build_time: f.at(1)?.get_str()?,
+                build_id: f.at(2)?.get_str()?,
+                build_number: f.at(3)?.get_str()?,
+                published_tiles: bool_at(&f, 4)?,
+            });
+            pxl_core::host::set_handheld(bool_at(&f, 5)?);
+            pxl_core::module::world::terrain::config::set_page_section_bytes(u32_at(&f, 6)?);
+            pxl_core::module::world::chunk_node::set_mesh_section_bytes(number_at(&f, 7)?);
+            pxl_core::module::world::object::store::load();
+            return Ok(Some((0, None)));
+        }
+        Cmd::WORLD_LANES => {
+            let at = pxl_core::render::gpu::stage::stage_address() as u32;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(at));
+                })),
+            )));
+        }
+        Cmd::WORLD_ACTION => {
+            let applied = pxl_core::app::shell::ui_action(&fields(pkt)?.at(0)?.get_str()?);
+            return Ok(Some((applied as i32, None)));
         }
         Cmd::INPUT_UPDATE => {
             let f = fields(pkt)?;
@@ -1567,7 +1623,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
+        Cmd::WORLD_CREATE | Cmd::WORLD_LANES | Cmd::WORLD_ACTION | Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
     Ok(Some((0, None)))
@@ -1718,3 +1774,87 @@ fn tick(s: &mut State) -> u32 {
 // ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
 
 // ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
+
+// ---- The host's hooks (pxl_core::host, pxl_core::global) ----
+
+extern "C" {
+    /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
+    #[link_name = "storage_len"]
+    fn host_storage_len(key: *const u8, key_len: usize) -> i32;
+    /// Copies the item's UTF-8 bytes into `dst`, at most `cap` of them.
+    #[link_name = "storage_get"]
+    fn host_storage_get(key: *const u8, key_len: usize, dst: *mut u8, cap: usize);
+    /// `localStorage.setItem(key, value)`.
+    #[link_name = "storage_set"]
+    fn host_storage_set(key: *const u8, key_len: usize, value: *const u8, value_len: usize);
+    /// Writes the local wall clock's five doubles at `out`: unix ms, hours,
+    /// minutes, seconds, and the local day's start in unix ms.
+    #[link_name = "local_time"]
+    fn host_local_time(out: *mut f64);
+    /// A canvas context's `measureText(text).width` in `font`.
+    #[link_name = "measure_text"]
+    fn host_measure_text(font: *const u8, font_len: usize, text: *const u8, text_len: usize) -> f64;
+    /// 32 random bits.
+    #[link_name = "entropy"]
+    fn host_entropy() -> u32;
+}
+
+fn hook_now() -> f64 {
+    // SAFETY: an import with no arguments.
+    unsafe { host_now() }
+}
+
+fn hook_storage_get(key: &str) -> Option<String> {
+    // SAFETY: the host reads `key` where it lies and writes at most the length
+    // it just reported into a buffer of that length.
+    unsafe {
+        let len = host_storage_len(key.as_ptr(), key.len());
+        if len < 0 {
+            return None;
+        }
+        let mut buf = vec![0u8; len as usize];
+        host_storage_get(key.as_ptr(), key.len(), buf.as_mut_ptr(), buf.len());
+        String::from_utf8(buf).ok()
+    }
+}
+
+fn hook_storage_set(key: &str, value: &str) {
+    // SAFETY: the host reads both strings where they lie.
+    unsafe { host_storage_set(key.as_ptr(), key.len(), value.as_ptr(), value.len()) }
+}
+
+fn hook_local_time() -> pxl_core::host::LocalTime {
+    let mut t = [0.0f64; 5];
+    // SAFETY: the host writes five doubles into `t`.
+    unsafe { host_local_time(t.as_mut_ptr()) };
+    pxl_core::host::LocalTime {
+        unix_ms: t[0],
+        hours: t[1],
+        minutes: t[2],
+        seconds: t[3],
+        day_start_ms: t[4],
+    }
+}
+
+fn hook_measure_text(font: &str, text: &str) -> f64 {
+    // SAFETY: the host reads both strings where they lie.
+    unsafe { host_measure_text(font.as_ptr(), font.len(), text.as_ptr(), text.len()) }
+}
+
+fn hook_entropy() -> u64 {
+    // SAFETY: an import with no arguments.
+    unsafe { ((host_entropy() as u64) << 32) | host_entropy() as u64 }
+}
+
+/// Hands the kernel the host's clock, storage, local time, text measure and
+/// entropy, before anything reads them.
+fn install_host() {
+    pxl_core::global::set_clock(hook_now);
+    pxl_core::host::set_storage(pxl_core::host::Storage {
+        get: hook_storage_get,
+        set: hook_storage_set,
+    });
+    pxl_core::host::set_local_time(hook_local_time);
+    pxl_core::host::set_measure_text(hook_measure_text);
+    xpute_core::kit::rng::set_entropy(hook_entropy);
+}
