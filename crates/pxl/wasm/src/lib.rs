@@ -72,7 +72,7 @@ struct State {
     bands: (usize, u32),
     /// The pools over the memory's sections, by the id POOL_CREATE replied.
     pools: Vec<Pool>,
-    /// The volumes, once pxl_volume_pools has said which pools they draw on.
+    /// The volumes, once VOLUME_POOLS has said which pools they draw on.
     volumes: Option<Volumes>,
     /// The open scan's bands, when it reads a volume of the module's.
     scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,
@@ -84,7 +84,6 @@ struct State {
     painter: Painter,
     /// The raycast's column, and the row naming its lanes.
     column: ColumnRuns,
-    column_row: [u32; 4],
     /// The submission ring (glue → core) and the completion ring (core →
     /// glue), in the module's heap for as long as the module lives.
     sq: Ring,
@@ -153,14 +152,6 @@ extern "C" {
     fn pxl_now() -> f64;
 }
 
-/// The state after every submission waiting is applied: what a read export
-/// takes, so a read sees each command sent before it.
-fn settled() -> &'static mut State {
-    let s = state();
-    drain(s);
-    s
-}
-
 fn state() -> &'static mut State {
     // SAFETY: the module runs on one thread and no export re-enters another,
     // so no two references to the state are live at once.
@@ -184,7 +175,6 @@ fn state() -> &'static mut State {
                 objects: Store::new(),
                 painter: Painter::new(),
                 column: ColumnRuns::new(),
-                column_row: [0; 4],
                 sq: new_ring(RING_CAPACITY),
                 cq: new_ring(RING_CAPACITY),
                 sched: Scheduler::new(),
@@ -205,7 +195,7 @@ fn state() -> &'static mut State {
     }
 }
 
-/// What a step reports: `pxl_bake_step`'s return.
+/// What a step reports: BAKE_STEP's and SCAN_STEP's result.
 pub const STEP_WORKING: u32 = 0;
 pub const STEP_NEED_MESH: u32 = 1;
 pub const STEP_DONE: u32 = 2;
@@ -220,82 +210,6 @@ fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
     }
 }
 
-// ---- The bake and the scan, a step at a time ----
-//
-// Reference only: apps/web/src/reference/ drives the bake and the scan by
-// these to hold the module to the TypeScript pipeline it replaced. The
-// live build runs inside the scheduler (pxl_tick) and never crosses here.
-
-/// Opens a bake at `lod_step` of the run set of `count` runs over `span`²
-/// columns at address `at`, in column_run.ts's layout. 0 when a bake is
-/// already open.
-#[no_mangle]
-pub extern "C" fn pxl_bake_begin(at: u32, count: u32, span: u32, lod_step: u32) -> u32 {
-    let s = state();
-    if s.ctx.is_open() {
-        return 0;
-    }
-    s.input = (at as usize, count, span);
-    s.ctx.begin(&input_view(s.input), lod_step) as u32
-}
-
-/// One step of the open bake: STEP_WORKING, STEP_NEED_MESH — the mesh's
-/// words are known (`pxl_bake_mesh_words`) and it has nowhere to go until
-/// `pxl_bake_mesh` — or STEP_DONE.
-#[no_mangle]
-pub extern "C" fn pxl_bake_step() -> u32 {
-    let s = state();
-    match s.ctx.step(&input_view(s.input)) {
-        Step::Working => STEP_WORKING,
-        Step::NeedMesh(_) => STEP_NEED_MESH,
-        Step::Done => STEP_DONE,
-    }
-}
-
-/// The words the open bake's mesh takes, once STEP_NEED_MESH has said so.
-#[no_mangle]
-pub extern "C" fn pxl_bake_mesh_words() -> u32 {
-    let s = state();
-    match s.ctx.step(&input_view(s.input)) {
-        Step::NeedMesh(words) => words,
-        _ => 0,
-    }
-}
-
-/// Where the mesh goes: `words` words at address `at`, 4-aligned, the
-/// client's until the bake finishes or aborts.
-#[no_mangle]
-pub extern "C" fn pxl_bake_mesh(at: u32, words: u32) {
-    // SAFETY: the client's contract, above.
-    unsafe { state().ctx.provide_mesh(at as *mut u32, words) }
-}
-
-/// Closes the complete bake and returns the address of nine words: vertex
-/// count, index count, the six counters so far, and the module heap's use.
-#[no_mangle]
-pub extern "C" fn pxl_bake_finish() -> *const u32 {
-    let s = state();
-    let mesh = s.ctx.finish();
-    let c = s.ctx.counters;
-    s.result = [
-        mesh.vertex_cnt,
-        mesh.index_cnt,
-        c.total_runs,
-        c.culled,
-        c.faces_possible,
-        c.faces_kept,
-        c.coarse_total,
-        c.coarse_low_fill,
-        ALLOC.used() as u32,
-    ];
-    s.result.as_ptr()
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_bake_abort() {
-    state().ctx.abort();
-}
-
 /// The section the module keeps for itself at the front of the memory, for
 /// the client to check its map against.
 #[no_mangle]
@@ -303,8 +217,8 @@ pub extern "C" fn pxl_module_bytes() -> u32 {
     MODULE_BYTES as u32
 }
 
-/// Words a band takes in the table `pxl_scan_begin` reads (wasm_scan.ts
-/// writes the same, and a volume of the module's says its bands in): band_z;
+/// Words a band takes in the table the scan reads (a volume of the module's
+/// says its bands in, VOLUME_READ): band_z;
 /// the addresses of the material, layer and sub-cell lanes (0 for no
 /// sub-cells); the extras' count and the addresses of their five lanes.
 pub const BAND_WORDS: usize = VOLUME_BAND_WORDS;
@@ -339,240 +253,15 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
     }
 }
 
-/// One step of the open scan: STEP_WORKING, STEP_NEED_MESH — here the run
-/// set, whose bytes `pxl_scan_set_bytes` says, to be given by
-/// `pxl_scan_set` — or STEP_DONE.
-#[no_mangle]
-pub extern "C" fn pxl_scan_step() -> u32 {
-    let s = state();
-    match s.scan.step(&band_views(s.bands)) {
-        ScanStep::Working => STEP_WORKING,
-        ScanStep::NeedSet(_) => STEP_NEED_MESH,
-        ScanStep::Done => STEP_DONE,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_scan_set_bytes() -> u32 {
-    let s = state();
-    match s.scan.step(&band_views(s.bands)) {
-        ScanStep::NeedSet(bytes) => bytes,
-        _ => 0,
-    }
-}
-
-/// Where the run set goes: `bytes` bytes at `at`, 4-aligned, the client's.
-/// Packs it now; the next step is STEP_DONE.
-#[no_mangle]
-pub extern "C" fn pxl_scan_set(at: u32, bytes: u32) {
-    // SAFETY: the client's contract, above.
-    unsafe { state().scan.provide_set(at as *mut u8, bytes) }
-}
-
-/// Closes the packed scan: the run count of the set it packed.
-#[no_mangle]
-pub extern "C" fn pxl_scan_finish() -> u32 {
-    state().scan.finish()
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_scan_abort() {
-    state().scan.abort();
-}
-
-fn volumes() -> &'static mut Volumes {
-    opened(&mut state().volumes)
-}
-
-/// The volumes once `pxl_volume_pools` made them; by the field, so the
-/// state's other fields stay borrowable beside them.
+/// The volumes once VOLUME_POOLS made them; by the field, so the state's
+/// other fields stay borrowable beside them.
 fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
-    volumes.as_mut().expect("pxl_volume_pools before any volume")
+    volumes.as_mut().expect("VOLUME_POOLS before any volume")
 }
 
-// ---- Volumes ----
-//
-// The glue sets the pools and reads the stat; the rest — opening, painting
-// and reading a volume by hand, and scanning one — is reference only, as
-// the bake above. The live build composes its volumes itself.
-
-/// Which pools volumes draw on: the standing band stores from `fixed`,
-/// the rest and the sub-cell lanes from `mesh` (ids from POOL_CREATE).
-#[no_mangle]
-pub extern "C" fn pxl_volume_pools(fixed: u32, mesh: u32) {
-    let s = state();
-    // SAFETY: the pools were cut from this module's memory, addressed from 0.
-    s.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), fixed, mesh) });
-}
-
-/// A volume with no bands: its id plus one (0 is never a volume).
-#[no_mangle]
-pub extern "C" fn pxl_volume_open() -> u32 {
-    volumes().open() as u32 + 1
-}
-
-/// Paints one solid column of `material`/`layer_idx` from z0 to z1. 0 when a
-/// band could not be made for it — no pool had room — and the volume is
-/// then not the composite asked for.
-#[no_mangle]
-pub extern "C" fn pxl_volume_fill_column(id: u32, cx: u32, cy: u32, z0: i32, z1: i32, material: u32, layer_idx: u32) -> u32 {
-    let s = state();
-    let v = opened(&mut s.volumes);
-    v.fill_column(
-        &mut s.pools,
-        id as usize - 1,
-        (cx, cy),
-        z0,
-        z1,
-        Voxel {
-            material,
-            layer_idx: layer_idx as u8,
-            sub: 0,
-        },
-    ) as u32
-}
-
-/// Full replacement at one voxel; `sub` is pack_sub_cell's word, 0 for a
-/// full cell. 0 as pxl_volume_fill_column.
-#[no_mangle]
-pub extern "C" fn pxl_volume_set_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32) -> u32 {
-    let s = state();
-    let v = opened(&mut s.volumes);
-    v.set_voxel(
-        &mut s.pools,
-        id as usize - 1,
-        Cell { cx, cy, z },
-        Voxel {
-            material,
-            layer_idx: layer_idx as u8,
-            sub,
-        },
-    ) as u32
-}
-
-/// Another sub-cell object on a base voxel already claimed.
-#[no_mangle]
-pub extern "C" fn pxl_volume_append_sub_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32) -> u32 {
-    let s = state();
-    let v = opened(&mut s.volumes);
-    v.append_sub_voxel(
-        &mut s.pools,
-        id as usize - 1,
-        Cell { cx, cy, z },
-        Voxel {
-            material,
-            layer_idx: layer_idx as u8,
-            sub,
-        },
-    ) as u32
-}
-
-/// Closes the volume to painting and sorts its overflow by column.
-#[no_mangle]
-pub extern "C" fn pxl_volume_seal(id: u32) {
-    volumes().seal(id as usize - 1);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_volume_release(id: u32) {
-    let s = state();
-    let v = opened(&mut s.volumes);
-    v.release(&mut s.pools, id as usize - 1);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_volume_bands(id: u32) -> u32 {
-    volumes().band_count(id as usize - 1) as u32
-}
-
-/// The address of band `i`'s row — BAND_WORDS words, as pxl_scan_begin
-/// reads them — valid until the volume is painted again.
-#[no_mangle]
-pub extern "C" fn pxl_volume_band(id: u32, i: u32) -> *const u32 {
-    volumes().band_row(id as usize - 1, i as usize).as_ptr()
-}
-
-/// The address of the volumes' stat: allocated, reused, refused.
-#[no_mangle]
-pub extern "C" fn pxl_volume_stat() -> *const u32 {
-    &volumes().stat as *const _ as *const u32
-}
-
-/// Opens a scan of a volume of the module's: its bands' rows are copied
-/// out, so the scan reads them as it reads a client's table. 0 when a
-/// scan is already open.
-#[no_mangle]
-pub extern "C" fn pxl_scan_begin_volume(id: u32) -> u32 {
-    let s = state();
-    if s.scan.is_open() {
-        return 0;
-    }
-    let v = opened(&mut s.volumes);
-    let count = v.band_count(id as usize - 1);
-    s.scan_rows.clear();
-    for i in 0..count {
-        s.scan_rows.push(*v.band_row(id as usize - 1, i));
-    }
-    s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
-    s.scan.begin(&band_views(s.bands)) as u32
-}
-
-// ---- Terrain ----
-//
-// The glue teaches the materials (base, channel, type); reading and
-// painting a chunk by hand, and the lanes read back, are reference only.
-
-/// Reads the chunk at page cell (tx0, ty0) of the page whose ground lanes
-/// (land, water, structure, transport; a type byte a cell) and padded
-/// elevation raster are at the addresses given: its cells' materials and
-/// tops, for pxl_terrain_paint and the lanes below. Returns the floor.
-#[no_mangle]
-pub extern "C" fn pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u32, transport_at: u32, ele_at: u32, tx0: u32, ty0: u32, show_structures: u32) -> i32 {
-    let s = settled();
-    let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
-    let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-    assert!(tx0 + CHUNK_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
-    // SAFETY: the client's page lanes, kept in the core memory for as long
-    // as the page is resident; a page's shape is fixed.
-    let page = unsafe {
-        PageView {
-            ground: [
-                core::slice::from_raw_parts(land_at as usize as *const u8, cells),
-                core::slice::from_raw_parts(water_at as usize as *const u8, cells),
-                core::slice::from_raw_parts(structure_at as usize as *const u8, cells),
-                core::slice::from_raw_parts(transport_at as usize as *const u8, cells),
-            ],
-            ele: core::slice::from_raw_parts(ele_at as usize as *const i16, samples),
-        }
-    };
-    s.chunk.read(&page, &s.terrain, tx0, ty0, show_structures != 0);
-    s.chunk.floor
-}
-
-/// Paints the chunk last read into `volume`, one column a cell from the
-/// floor. 0 when a band could not be made.
-#[no_mangle]
-pub extern "C" fn pxl_terrain_paint(volume: u32) -> u32 {
-    let s = settled();
-    let v = opened(&mut s.volumes);
-    s.chunk.paint(v, &mut s.pools, volume as usize - 1) as u32
-}
-
-/// The chunk last read, for the direct path: the addresses of its 4096
-/// packed materials, layer bytes and elevations.
-#[no_mangle]
-pub extern "C" fn pxl_terrain_material_at() -> u32 {
-    state().chunk.material.as_ptr() as u32
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_terrain_layer_at() -> u32 {
-    state().chunk.layer_idx.as_ptr() as u32
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_terrain_ele_at() -> u32 {
-    state().chunk.ele.as_ptr() as u32
+/// The volumes for a command: EINVAL before VOLUME_POOLS.
+fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalError> {
+    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before VOLUME_POOLS"), None))
 }
 
 // ---- Objects ----
@@ -581,10 +270,8 @@ pub extern "C" fn pxl_terrain_ele_at() -> u32 {
 // IVec, passed as it is), the band's Z, the band-local lattice position in
 // finest-tier steps, and the level. What comes back is lanes to take views
 // over, valid until the next write or reindex. The store is the glue's
-// (module/world/object/store.ts); pxl_object_paint is reference only.
-// Writes and reads alike are commands in the rings (pxl_shared::spec::cmd's
-// OBJECT_*); the reference paint below applies what waits first, so it sees
-// every write sent before it.
+// (module/world/object/store.ts). Writes, reads and the reference paint
+// alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
 
 /// module/world/change.ts's WorldTopic numbers the store bumps, and the
 /// log's shape.
@@ -609,55 +296,6 @@ fn reindex_object(s: &mut State, key: u64) {
         let corner = gather(x0 + row[0] as i64, y0 + row[1] as i64, row[2] as i64);
         s.changes.bump(TOPIC_OBJECT_CELL, corner as i64);
     }
-}
-
-// ---- The change log ----
-
-/// Paints the column `key` into `volume`, leaving out the entry at
-/// (hide_band, hide_pos) when `hide` is set and adding the carve preview
-/// at a corner relative to the column's base when `carve` is. Bit 0: a
-/// voxel was painted; bit 1: a paint was refused.
-#[no_mangle]
-pub extern "C" fn pxl_object_paint(volume: u32, key: u64, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: f64, ly: f64, lz: f64, size: f64) -> u32 {
-    let s = settled();
-    let v = opened(&mut s.volumes);
-    let hide = if hide != 0 { Some((hide_band, hide_pos)) } else { None };
-    let carve = if carve != 0 { Some(Carve { lx, ly, lz, size }) } else { None };
-    let made = s.painter.paint(&s.objects, v, &mut s.pools, volume as usize - 1, key, hide, carve);
-    made.any as u32 | ((made.refused as u32) << 1)
-}
-
-// ---- The raycast's column ----
-//
-// Reference only (reference/chunk_raycast.ts); the live raycast is
-// pxl_raycast below.
-
-/// Walks column (cx, cy) of the module's volume `id` into lanes: how many
-/// runs, at the addresses pxl_column_runs_at names — z0, z1 (i32), the
-/// material class (u8) and the packed inset (u32) — valid until the next
-/// walk.
-#[no_mangle]
-pub extern "C" fn pxl_column_runs(id: u32, cx: u32, cy: u32) -> u32 {
-    let s = state();
-    let v = opened(&mut s.volumes);
-    let count = v.band_count(id as usize - 1);
-    let mut rows: Vec<[u32; VOLUME_BAND_WORDS]> = Vec::with_capacity(count);
-    for i in 0..count {
-        rows.push(*v.band_row(id as usize - 1, i));
-    }
-    let n = s.column.walk(&band_views((rows.as_ptr() as usize, count as u32)), cx, cy);
-    s.column_row = [
-        s.column.z0.as_ptr() as u32,
-        s.column.z1.as_ptr() as u32,
-        s.column.material_class.as_ptr() as u32,
-        s.column.sub.as_ptr() as u32,
-    ];
-    n as u32
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_column_runs_at() -> u32 {
-    state().column_row.as_ptr() as u32
 }
 
 // ---- Rings ----
@@ -860,6 +498,14 @@ fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
 /// A child branch, or none where the packet holds a null.
 fn branch_at(b: &BranchCursor, i: u32) -> Result<Option<BranchCursor>, MarshalError> {
     b.at(i)?.opt().map(|c| c.as_branch()).transpose()
+}
+
+/// The volume a packet's child `i` names, as its index: 0 is never a volume.
+fn volume_at(f: &BranchCursor, i: u32) -> Result<usize, MarshalError> {
+    match u32_at(f, i)? {
+        0 => Err(MarshalError::new(Errno::EINVAL, Some("volume 0"), None)),
+        id => Ok(id as usize - 1),
+    }
 }
 
 /// The pool a packet's first child names.
@@ -1139,6 +785,246 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
             return Ok(Some((pool_at(s, &f)?.is_free(at, bytes) as i32, None)));
         }
+        Cmd::VOLUME_POOLS => {
+            let f = fields(pkt)?;
+            // SAFETY: the pools were cut from this module's memory, addressed from 0.
+            s.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), u32_at(&f, 0)?, u32_at(&f, 1)?) });
+            return Ok(Some((0, None)));
+        }
+        Cmd::VOLUME_STAT => {
+            let at = &volumes_of(&mut s.volumes)?.stat as *const _ as usize;
+            return Ok(Some((at as i32, None)));
+        }
+        Cmd::VOLUME_CREATE => return Ok(Some((volumes_of(&mut s.volumes)?.open() as i32 + 1, None))),
+        Cmd::VOLUME_READ => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            let v = volumes_of(&mut s.volumes)?;
+            let count = v.band_count(id);
+            if count == 0 {
+                return Ok(Some((0, None)));
+            }
+            // The words, not the row's address: a row is written into one
+            // scratch the volumes keep, so every band's address would be the
+            // last band's.
+            let rows: Vec<u32> = (0..count).flat_map(|i| *v.band_row(id, i)).collect();
+            let rows = xpute_core::kit::array::U32Array::from(&rows);
+            return Ok(Some((
+                count as i32,
+                Some(packet(&mut |b| {
+                    b.u32_array(Some(&rows));
+                })),
+            )));
+        }
+        Cmd::VOLUME_DELETE => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            volumes_of(&mut s.volumes)?.release(&mut s.pools, id);
+            return Ok(Some((0, None)));
+        }
+        Cmd::VOLUME_FILL => {
+            let f = fields(pkt)?;
+            let id = volume_at(&f, 0)?;
+            let voxel = Voxel {
+                material: u32_at(&f, 5)?,
+                layer_idx: u32_at(&f, 6)? as u8,
+                sub: 0,
+            };
+            let (cx, cy, z0, z1) = (u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?, i32_at(&f, 4)?);
+            let ok = volumes_of(&mut s.volumes)?.fill_column(&mut s.pools, id, (cx, cy), z0, z1, voxel);
+            return Ok(Some((ok as i32, None)));
+        }
+        Cmd::VOLUME_VOXEL | Cmd::VOLUME_SUB_VOXEL => {
+            let f = fields(pkt)?;
+            let id = volume_at(&f, 0)?;
+            let cell = Cell {
+                cx: u32_at(&f, 1)?,
+                cy: u32_at(&f, 2)?,
+                z: i32_at(&f, 3)?,
+            };
+            let voxel = Voxel {
+                material: u32_at(&f, 4)?,
+                layer_idx: u32_at(&f, 5)? as u8,
+                sub: u32_at(&f, 6)?,
+            };
+            let v = volumes_of(&mut s.volumes)?;
+            let ok = if cmd == Cmd::VOLUME_VOXEL {
+                v.set_voxel(&mut s.pools, id, cell, voxel)
+            } else {
+                v.append_sub_voxel(&mut s.pools, id, cell, voxel)
+            };
+            return Ok(Some((ok as i32, None)));
+        }
+        Cmd::VOLUME_SEAL => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            volumes_of(&mut s.volumes)?.seal(id);
+            return Ok(Some((0, None)));
+        }
+        Cmd::BAKE_CREATE => {
+            if s.ctx.is_open() {
+                return Ok(Some((0, None)));
+            }
+            let f = fields(pkt)?;
+            s.input = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?, u32_at(&f, 2)?);
+            let lod_step = u32_at(&f, 3)?;
+            return Ok(Some((s.ctx.begin(&input_view(s.input), lod_step) as i32, None)));
+        }
+        Cmd::BAKE_STEP => {
+            return Ok(Some(match s.ctx.step(&input_view(s.input)) {
+                Step::Working => (STEP_WORKING as i32, None),
+                Step::NeedMesh(words) => (
+                    STEP_NEED_MESH as i32,
+                    Some(packet(&mut |b| {
+                        b.u32(Some(words));
+                    })),
+                ),
+                Step::Done => (STEP_DONE as i32, None),
+            }));
+        }
+        Cmd::BAKE_MESH => {
+            let f = fields(pkt)?;
+            let (at, words) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
+            // SAFETY: the shell's block, `words` words at `at`, 4-aligned, kept
+            // until the bake finishes or aborts.
+            unsafe { s.ctx.provide_mesh(at as *mut u32, words) }
+            return Ok(Some((0, None)));
+        }
+        Cmd::BAKE_FINISH => {
+            let mesh = s.ctx.finish();
+            let c = s.ctx.counters;
+            s.result = [
+                mesh.vertex_cnt,
+                mesh.index_cnt,
+                c.total_runs,
+                c.culled,
+                c.faces_possible,
+                c.faces_kept,
+                c.coarse_total,
+                c.coarse_low_fill,
+                ALLOC.used() as u32,
+            ];
+            return Ok(Some((s.result.as_ptr() as usize as i32, None)));
+        }
+        Cmd::BAKE_DELETE => {
+            s.ctx.abort();
+            return Ok(Some((0, None)));
+        }
+        Cmd::SCAN_CREATE => {
+            if s.scan.is_open() {
+                return Ok(Some((0, None)));
+            }
+            let id = volume_at(&fields(pkt)?, 0)?;
+            let v = volumes_of(&mut s.volumes)?;
+            let count = v.band_count(id);
+            // The rows copied out, so the scan reads them as a table of its own.
+            s.scan_rows.clear();
+            for i in 0..count {
+                s.scan_rows.push(*v.band_row(id, i));
+            }
+            s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
+            return Ok(Some((s.scan.begin(&band_views(s.bands)) as i32, None)));
+        }
+        Cmd::SCAN_STEP => {
+            return Ok(Some(match s.scan.step(&band_views(s.bands)) {
+                ScanStep::Working => (STEP_WORKING as i32, None),
+                ScanStep::NeedSet(bytes) => (
+                    STEP_NEED_MESH as i32,
+                    Some(packet(&mut |b| {
+                        b.u32(Some(bytes));
+                    })),
+                ),
+                ScanStep::Done => (STEP_DONE as i32, None),
+            }));
+        }
+        Cmd::SCAN_SET => {
+            let f = fields(pkt)?;
+            let (at, bytes) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
+            // SAFETY: the shell's block, `bytes` bytes at `at`, 4-aligned.
+            unsafe { s.scan.provide_set(at as *mut u8, bytes) }
+            return Ok(Some((s.scan.finish() as i32, None)));
+        }
+        Cmd::SCAN_DELETE => {
+            s.scan.abort();
+            return Ok(Some((0, None)));
+        }
+        Cmd::TERRAIN_READ => {
+            let f = fields(pkt)?;
+            let (tx0, ty0) = (u32_at(&f, 5)?, u32_at(&f, 6)?);
+            if tx0 > PAGE_CELL_SPAN - CHUNK_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_SPAN {
+                return Err(MarshalError::new(Errno::EINVAL, Some("a chunk past its page"), None));
+            }
+            let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+            let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+            let lanes = [u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?].map(|at| at as usize);
+            // SAFETY: the shell's page lanes, kept in the core memory for as long
+            // as the page is resident; a page's shape is fixed.
+            let page = unsafe {
+                PageView {
+                    ground: [
+                        core::slice::from_raw_parts(lanes[0] as *const u8, cells),
+                        core::slice::from_raw_parts(lanes[1] as *const u8, cells),
+                        core::slice::from_raw_parts(lanes[2] as *const u8, cells),
+                        core::slice::from_raw_parts(lanes[3] as *const u8, cells),
+                    ],
+                    ele: core::slice::from_raw_parts(lanes[4] as *const i16, samples),
+                }
+            };
+            s.chunk.read(&page, &s.terrain, tx0, ty0, bool_at(&f, 7)?);
+            let c = &s.chunk;
+            let (floor, material_at, layer_at, ele_at) = (c.floor, c.material.as_ptr() as usize as u32, c.layer_idx.as_ptr() as usize as u32, c.ele.as_ptr() as usize as u32);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.i32(Some(floor)).u32(Some(material_at)).u32(Some(layer_at)).u32(Some(ele_at));
+                })),
+            )));
+        }
+        Cmd::TERRAIN_PAINT => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            let v = volumes_of(&mut s.volumes)?;
+            return Ok(Some((s.chunk.paint(v, &mut s.pools, id) as i32, None)));
+        }
+        Cmd::OBJECT_PAINT => {
+            let f = fields(pkt)?;
+            let (id, key) = (volume_at(&f, 0)?, u64_at(&f, 1)?);
+            let hide = match branch_at(&f, 2)? {
+                Some(h) => Some((i32_at(&h, 0)?, u32_at(&h, 1)?)),
+                None => None,
+            };
+            let carve = match branch_at(&f, 3)? {
+                Some(c) => Some(Carve {
+                    lx: number_at(&c, 0)?,
+                    ly: number_at(&c, 1)?,
+                    lz: number_at(&c, 2)?,
+                    size: number_at(&c, 3)?,
+                }),
+                None => None,
+            };
+            let v = volumes_of(&mut s.volumes)?;
+            let made = s.painter.paint(&s.objects, v, &mut s.pools, id, key, hide, carve);
+            return Ok(Some(((made.any as u32 | ((made.refused as u32) << 1)) as i32, None)));
+        }
+        Cmd::RAY_COLUMN => {
+            let f = fields(pkt)?;
+            let id = volume_at(&f, 0)?;
+            let (cx, cy) = (u32_at(&f, 1)?, u32_at(&f, 2)?);
+            let v = volumes_of(&mut s.volumes)?;
+            let rows: Vec<[u32; VOLUME_BAND_WORDS]> = (0..v.band_count(id)).map(|i| *v.band_row(id, i)).collect();
+            let n = s.column.walk(&band_views((rows.as_ptr() as usize, rows.len() as u32)), cx, cy);
+            let c = &s.column;
+            let lanes = [
+                c.z0.as_ptr() as usize as u32,
+                c.z1.as_ptr() as usize as u32,
+                c.material_class.as_ptr() as usize as u32,
+                c.sub.as_ptr() as usize as u32,
+            ];
+            return Ok(Some((
+                n as i32,
+                Some(packet(&mut |b| {
+                    for at in lanes {
+                        b.u32(Some(at));
+                    }
+                })),
+            )));
+        }
         _ => {}
     }
     let Parts {
@@ -1261,7 +1147,29 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::POOL_READ
         | Cmd::POOL_ACQUIRE
         | Cmd::POOL_RELEASE
-        | Cmd::POOL_FREE => {
+        | Cmd::POOL_FREE
+        | Cmd::VOLUME_POOLS
+        | Cmd::VOLUME_STAT
+        | Cmd::VOLUME_CREATE
+        | Cmd::VOLUME_READ
+        | Cmd::VOLUME_DELETE
+        | Cmd::VOLUME_FILL
+        | Cmd::VOLUME_VOXEL
+        | Cmd::VOLUME_SUB_VOXEL
+        | Cmd::VOLUME_SEAL
+        | Cmd::BAKE_CREATE
+        | Cmd::BAKE_STEP
+        | Cmd::BAKE_MESH
+        | Cmd::BAKE_FINISH
+        | Cmd::BAKE_DELETE
+        | Cmd::SCAN_CREATE
+        | Cmd::SCAN_STEP
+        | Cmd::SCAN_SET
+        | Cmd::SCAN_DELETE
+        | Cmd::TERRAIN_READ
+        | Cmd::TERRAIN_PAINT
+        | Cmd::OBJECT_PAINT
+        | Cmd::RAY_COLUMN => {
             unreachable!("applied before the parts are taken")
         }
         Cmd::GHOST_BOX => {
@@ -1413,6 +1321,12 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             };
         }
         Cmd::CHUNK_BUILD => sched.build_now(&mut world, tag, &now, &mut emit),
+        Cmd::CHUNK_TICK => {
+            let f = fields(pkt)?;
+            let order = f.at(0)?.get_array::<u32>()?;
+            let budget_ms = number_at(&f, 1)?;
+            sched.builder.tick(&mut world, order.as_slice(), budget_ms, &now, &mut |e| emit(Event::Build(e)));
+        }
         Cmd::CHUNK_DECOR => {
             let show = bool_at(&fields(pkt)?, 0)?;
             sched.decor_now(&mut world, tag, show, &mut emit);
@@ -1538,7 +1452,7 @@ fn after(s: &mut State) {
 
 /// The frame's one call: applies the submissions waiting, then the
 /// scheduler's pass over every chunk with the frame the glue wrote at
-/// pxl_frame_at. Bit 0: the canvas has something new to draw. The glue reads
+/// FRAME_READ's address. Bit 0: the canvas has something new to draw. The glue reads
 /// the completion ring when this returns.
 #[no_mangle]
 pub extern "C" fn pxl_tick() -> u32 {
@@ -1587,17 +1501,3 @@ pub extern "C" fn pxl_tick() -> u32 {
 // ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
 
 // ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
-
-/// The builder alone over the `order_len` ids at `order_at`, for the tests
-/// that hold a build to the TypeScript pipeline: no scheduler.
-#[no_mangle]
-pub extern "C" fn pxl_build_tick(order_at: u32, order_len: u32, budget_ms: f64) {
-    let s = state();
-    drain(s);
-    // SAFETY: the caller's lane of ids.
-    let order: Vec<u32> = unsafe { core::slice::from_raw_parts(order_at as usize as *const u32, order_len as usize) }.to_vec();
-    let Parts { mut world, events, sched, .. } = parts(s);
-    sched.builder.tick(&mut world, &order, budget_ms, &now, &mut |e| events.push_back(Event::Build(e)));
-    flush(s);
-    after(s);
-}

@@ -29,7 +29,7 @@ import type { LodStep } from "@/module/world/lod.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
 import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_carve, decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
-import { CORE_POOL, CORE_PXL, CORE_RING, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_POOL, CORE_PXL, CORE_RING } from "@/wasm/core_pool.ts";
 import { type CoreRing, packet } from "@/wasm/core_ring.ts";
 
 export { packet };
@@ -138,19 +138,18 @@ export class CoreBuild {
   private next_id: u32 = 1;
   /** Who makes and drops the nodes of mounted chunks. */
   mounts: MountListener | null = null;
-  private order: Uint32Array;
   /** Where the frame is written before a tick. */
   readonly frame: Float64Array;
   private warned_unreachable = false;
 
   constructor(private readonly pxl: PxlExports, private readonly ring: CoreRing) {
     ring.signal = (id, cmd, f) => this.signal(id, cmd, f);
-    this.order = FIXED_ALLOC.take(Uint32Array, 1024);
     const buf = pxl.memory.buffer;
     this.frame = ring.call(Cmd.FRAME_READ, null, (_, reply) => new Float64Array(buf, reply!.at(0).get<number>(), FRAME_WORDS));
     const [census_at, stat_at] = ring.call(Cmd.CHUNK_READ, null, (_, reply) => [reply!.at(0).get<number>(), reply!.at(1).get<number>()]);
     this.census_row = new Float64Array(buf, census_at, 13);
     this.stat_row = new Uint32Array(buf, stat_at, 11);
+    this.band_row = new Uint32Array(buf, ring.call(Cmd.VOLUME_STAT, null, (at) => at >>> 0), 3);
   }
 
   /** Makes room in the submission ring: applies what waits, and hands out
@@ -306,13 +305,8 @@ export class CoreBuild {
 
   /** The builder alone over `ids`, for the tests: no scheduler. */
   build_tick(ids: ArrayLike<u32>, budget_ms: number): void {
-    if (ids.length > this.order.length) {
-      FIXED_ALLOC.give(this.order);
-      this.order = FIXED_ALLOC.take(Uint32Array, 1 << Math.ceil(Math.log2(ids.length)));
-    }
-    for (let i = 0; i < ids.length; i++) this.order[i] = ids[i];
-    this.pxl.pxl_build_tick(this.order.byteOffset, ids.length, budget_ms);
-    this.ring.read();
+    this.ring.send(0, Cmd.CHUNK_TICK, packet((p) => p.u32_array(Uint32Array.from(ids)).f64(budget_ms)));
+    this.ring.pump();
   }
 
   /** The census and the build stat are rows at fixed addresses, read
@@ -335,6 +329,8 @@ export class CoreBuild {
     pressure: 0,
   };
   private readonly stat_row: Uint32Array;
+  /** The volumes' stat: allocated, reused, refused. */
+  private readonly band_row: Uint32Array;
   private readonly stat_out: BuildStat = { direct: 0, scans: 0, bakes: 0, starved: 0, total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0, coarse_total: 0, coarse_low_fill: 0, heap_used: 0 };
 
   census(): Census {
@@ -377,7 +373,7 @@ export class CoreBuild {
    * built from the pools, and how often a band was refused. A low reuse
    * share means the stores are under a composite's real band count. */
   band_stat(): { allocated: u32; reused: u32; refused: u32 } {
-    const s = new Uint32Array(this.pxl.memory.buffer, this.pxl.pxl_volume_stat(), 3);
+    const s = this.band_row;
     return { allocated: s[0], reused: s[1], refused: s[2] };
   }
 }

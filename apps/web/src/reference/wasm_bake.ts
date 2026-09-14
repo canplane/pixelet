@@ -2,7 +2,7 @@
 
 /**
  * The chunk bake through the Rust mesher (crates/pxl/core/src/bake/mesher.rs),
- * export by export, with the stepped bake's contract: one open at a time, a
+ * command by command (@pxl/shared/spec/cmd.ts's BAKE_*), with the stepped bake's contract: one open at a time, a
  * step per call, `starved` when the pool has no block for the mesh, and the
  * counters added to the context's. What the chunks on screen are built
  * with is the module's own build (core_build.ts); this is the harness the
@@ -12,9 +12,12 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
 import { type PxlExports, STEP_DONE, STEP_NEED_MESH } from "@/wasm/pxl.ts";
+import { CORE_RING } from "@/wasm/core_pool.ts";
+import { type CoreRing, packet } from "@/wasm/core_ring.ts";
 import type { ColumnRunSet } from "@/reference/column_run.ts";
 import type { BakeContext } from "@/reference/chunk_mesher.ts";
 import { baked_mesh_bytes, type BakedChunkMesh, carve_baked_mesh } from "@/render/mesh/mesh_block.ts";
@@ -56,6 +59,11 @@ export type WasmBakeCursor = {
 
 const RESULT_WORDS: u32 = 9;
 
+function ring(): CoreRing {
+  if (CORE_RING === null) throw new Error("render: a wasm bake needs the core memory and the module over it");
+  return CORE_RING;
+}
+
 export class WasmBaker {
   private open: WasmBakeCursor | null = null;
   /** The module's cumulative counters as of the last finished bake. */
@@ -74,7 +82,7 @@ export class WasmBaker {
   begin(set: ColumnRunSet, lod_step: LodStep): WasmBakeCursor | null {
     if (this.open !== null) return null;
     if (set.block.buf !== this.pxl.memory.buffer) throw new Error("render: a wasm bake of a run set outside the core memory");
-    if (this.pxl.pxl_bake_begin(set.block.byte_offset, set.count, set.span, lod_step) === 0) {
+    if (ring().call(Cmd.BAKE_CREATE, packet((p) => p.u32(set.block.byte_offset).u32(set.count).u32(set.span).u32(lod_step)), (opened) => opened) === 0) {
       throw new Error("render: the wasm bake was open with no cursor naming it");
     }
     this.open = { done: false, starved: false, block: null, mesh: null };
@@ -92,18 +100,21 @@ export class WasmBaker {
   step(cursor: WasmBakeCursor): boolean {
     if (cursor !== this.open) throw new Error("render: step on a wasm bake that is not the open one");
     if (cursor.done) return true;
-    const at = this.pxl.pxl_bake_step();
+    let words: u32 = 0;
+    const at = ring().call(Cmd.BAKE_STEP, null, (step, reply) => {
+      if (step === STEP_NEED_MESH) words = reply!.at(0).get<number>();
+      return step;
+    });
     if (at === STEP_NEED_MESH) {
-      const words = this.pxl.pxl_bake_mesh_words();
       const block = this.mesh_block(cursor, words);
       if (block === null) return false;
       cursor.block = block;
-      this.pxl.pxl_bake_mesh(block.byte_offset, words);
+      ring().send(0, Cmd.BAKE_MESH, packet((p) => p.u32(block.byte_offset).u32(words)));
       return false;
     }
     cursor.starved = false;
     if (at !== STEP_DONE) return false;
-    const result = new Uint32Array(this.pxl.memory.buffer, this.pxl.pxl_bake_finish(), RESULT_WORDS);
+    const result = new Uint32Array(this.pxl.memory.buffer, ring().call(Cmd.BAKE_FINISH, null, (at) => at >>> 0), RESULT_WORDS);
     const vertex_cnt = result[0], index_cnt = result[1];
     // A mesh of nothing was never asked for; it gets the empty block the
     // TypeScript bake would have carved, wherever that is.
@@ -128,7 +139,7 @@ export class WasmBaker {
 
   abort(cursor: WasmBakeCursor): void {
     if (cursor !== this.open) return;
-    if (!cursor.done) this.pxl.pxl_bake_abort();
+    if (!cursor.done) ring().send(0, Cmd.BAKE_DELETE);
     if (cursor.block) this.pool.release(cursor.block);
     this.open = null;
   }

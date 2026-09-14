@@ -180,10 +180,23 @@ arrived and hands the time back. What that decides about the boundary:
   experiment found, now on a path that runs per block rather than per
   frame ([XTP by fixed shape](./experiment/20260914-xtp-by-fixed-shape.md)).
 
+  Then the reference paths (2026-09-15): a volume painted by hand
+  (`VOLUME_*`), the stepped bake and scan (`BAKE_*`, `SCAN_*`), a chunk's
+  terrain read and painted (`TERRAIN_READ`, `TERRAIN_PAINT`), the object
+  paint (`OBJECT_PAINT`), the raycast's column (`RAY_COLUMN`) and the
+  builder alone (`CHUNK_TICK`, its ids in the packet). Two things this
+  family decided. What the module answers in a scratch of its own crosses
+  as words, not as the scratch's address: a volume's band rows are written
+  one at a time into one row, so asked for all of them at once, every
+  band's address was the last band's, and `VOLUME_READ` replies with the
+  rows themselves. And a command sent while the map is being laid out
+  (`VOLUME_POOLS`) is applied before that module has loaded, so the map
+  is whole when anything imports it; one left in the submission ring
+  took a slot the rings' own test counted on.
+
   The shell's exports are then the pipe — the memory, the two rings'
-  addresses, `pxl_drain`, `pxl_tick` — beside `pxl_module_bytes`, the one
-  number the memory's map is checked against before any ring exists, and
-  the reference paths the tests drive.
+  addresses, `pxl_drain`, `pxl_tick` — and `pxl_module_bytes`, the one
+  number the memory's map is checked against before any ring exists.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

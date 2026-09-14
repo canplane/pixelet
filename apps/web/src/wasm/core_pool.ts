@@ -240,7 +240,11 @@ export const PAGE_SECTION_BYTES: u32 = CORE_SECTIONS.page.bytes;
 // The module's volumes take their standing band stores from the fixed
 // section, which never runs out, and the rest from the mesh section
 // (crates/pxl/core/src/bake/volume.rs).
-if (CORE_PXL !== null) CORE_PXL.pxl_volume_pools(CORE_SECTIONS.fixed.kernel_id!, CORE_SECTIONS.mesh.kernel_id!);
+// Applied here, so the map is whole when this module has loaded.
+if (CORE_RING !== null) {
+  CORE_RING.send(0, Cmd.VOLUME_POOLS, packet((p) => p.u32(CORE_SECTIONS.fixed.kernel_id!).u32(CORE_SECTIONS.mesh.kernel_id!)));
+  CORE_RING.settle();
+}
 
 /** The fixed section: allocated once, never freed, refuses rather than
  * spills. Where a lane that a kernel must find lives. */

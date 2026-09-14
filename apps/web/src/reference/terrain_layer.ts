@@ -29,7 +29,9 @@ import { MaterialClass, NO_LAYER, type VoxelMaterial } from "@/render/mesh/voxel
 import type { ColumnRunWriter } from "@/reference/voxel_scan.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import type { ChunkKey, WorldLayer } from "@/reference/contract.ts";
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_PXL, CORE_RING } from "@/wasm/core_pool.ts";
+import { packet } from "@/wasm/core_ring.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { CELL_SHAMT } from "@pxl/shared/bake/constant.ts";
@@ -96,12 +98,24 @@ function module_reaches(terrain: Terrain): boolean {
   return terrain.ele.buffer === memory && GROUND_CH_KEYS.every((k) => terrain.ground[k].buffer === memory);
 }
 
-/** Reads the chunk at `page_off` of `terrain` into the module: its floor. */
-function module_read(terrain: Terrain, page_off: IVec, show_structures: boolean): number {
+/** The module's reading of a chunk: its floor, and where its lanes are. */
+const $read = { floor: 0, material_at: 0, layer_at: 0, ele_at: 0 };
+
+/** Reads the chunk at `page_off` of `terrain` into the module. */
+function module_read(terrain: Terrain, page_off: IVec, show_structures: boolean): typeof $read {
   const g = terrain.ground;
   const tx0: u32 = Number(ivec.X(page_off)) << -CELL_SHAMT;
   const ty0: u32 = Number(ivec.Y(page_off)) << -CELL_SHAMT;
-  return CORE_PXL!.pxl_terrain_read(g.land.byteOffset, g.water.byteOffset, g.structure.byteOffset, g.transport.byteOffset, terrain.ele.byteOffset, tx0, ty0, show_structures ? 1 : 0);
+  const pkt = packet((p) =>
+    p.u32(g.land.byteOffset).u32(g.water.byteOffset).u32(g.structure.byteOffset).u32(g.transport.byteOffset).u32(terrain.ele.byteOffset).u32(tx0).u32(ty0).bool(show_structures)
+  );
+  return CORE_RING!.call(Cmd.TERRAIN_READ, pkt, (_, f) => {
+    $read.floor = f!.at(0).get<number>();
+    $read.material_at = f!.at(1).get<number>();
+    $read.layer_at = f!.at(2).get<number>();
+    $read.ele_at = f!.at(3).get<number>();
+    return $read;
+  });
 }
 
 export class TerrainWorldLayer implements WorldLayer {
@@ -122,17 +136,18 @@ export class TerrainWorldLayer implements WorldLayer {
  * there. The terrain must be within the module's reach. */
 export function paint_module(terrain: Terrain, page_off: IVec, show_structures: boolean, target: ChunkVolume): void {
   module_read(terrain, page_off, show_structures);
-  note_paint(target, CORE_PXL!.pxl_terrain_paint(target.id));
+  note_paint(target, CORE_RING!.call(Cmd.TERRAIN_PAINT, packet((p) => p.u32(target.id)), (ok) => ok));
 }
 
 /** The module's reading of one chunk written as the direct path's runs:
  * one a column, floor to top, in the cell's own material. */
 export function runs_module(terrain: Terrain, page_off: IVec, show_structures: boolean, w: ColumnRunWriter): void {
   const p = CORE_PXL!;
-  const floor = module_read(terrain, page_off, show_structures);
-  const material = new Uint32Array(p.memory.buffer, p.pxl_terrain_material_at(), CHUNK_CELL_SPAN2);
-  const layer = new Uint8Array(p.memory.buffer, p.pxl_terrain_layer_at(), CHUNK_CELL_SPAN2);
-  const ele = new Int16Array(p.memory.buffer, p.pxl_terrain_ele_at(), CHUNK_CELL_SPAN2);
+  const read = module_read(terrain, page_off, show_structures);
+  const floor = read.floor;
+  const material = new Uint32Array(p.memory.buffer, read.material_at, CHUNK_CELL_SPAN2);
+  const layer = new Uint8Array(p.memory.buffer, read.layer_at, CHUNK_CELL_SPAN2);
+  const ele = new Int16Array(p.memory.buffer, read.ele_at, CHUNK_CELL_SPAN2);
   const m = MATERIAL;
   for (let i: u32 = 0; i < CHUNK_CELL_SPAN2; i++) {
     w.column(i);

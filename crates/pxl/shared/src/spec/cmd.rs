@@ -41,6 +41,9 @@ pub enum Major {
     DRAW = 0x15,
     SHADER = 0x16,
     POOL = 0x17,
+    VOLUME = 0x18,
+    BAKE = 0x19,
+    SCAN = 0x1a,
 }
 
 /// The hover ghost's own verbs.
@@ -114,6 +117,49 @@ pub enum PoolMinor {
     FREE = 0x12,
 }
 
+/// A volume's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum VolumeMinor {
+    FILL = 0x10,
+    VOXEL = 0x11,
+    SUB_VOXEL = 0x12,
+    SEAL = 0x13,
+    POOLS = 0x14,
+    STAT = 0x15,
+}
+
+/// The bake's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum BakeMinor {
+    STEP = 0x10,
+    MESH = 0x11,
+    FINISH = 0x12,
+}
+
+/// The scan's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ScanMinor {
+    STEP = 0x10,
+    SET = 0x11,
+}
+
+/// The terrain's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum TerrainMinor {
+    PAINT = 0x10,
+}
+
+/// The raycast's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum RayMinor {
+    COLUMN = 0x10,
+}
+
 /// An object store's own verb.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -123,6 +169,7 @@ pub enum ObjectMinor {
     CELL = 0x12,
     COLUMNS = 0x13,
     STAT = 0x14,
+    PAINT = 0x15,
 }
 
 /// A decor kind's own verb.
@@ -142,6 +189,7 @@ pub enum ChunkMinor {
     BLEND = 0x13,
     BUILD = 0x14,
     DECOR = 0x15,
+    TICK = 0x16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -330,6 +378,88 @@ pub enum Cmd {
     /// is free, 0 where not
     POOL_FREE = 0x1712,
 
+    // ---- the reference paths ----
+    //
+    // A volume painted, baked and scanned by hand, as apps/web/src/reference/
+    // does to hold the module to the TypeScript pipeline it replaced; the
+    // live build composes, bakes and scans inside the scheduler. One bake and
+    // one scan are open at a time, so neither names a subject. A step's
+    // result is 0 working, 1 wanting a block, 2 done.
+    /// tag call · no packet → result: a volume with no bands, its id (never 0)
+    VOLUME_CREATE = 0x1801,
+    /// tag call · [volume u32] → result: its band count; with bands, [rows
+    /// u32[]]: BAND_WORDS words a band — band_z, the material, layer and
+    /// sub-cell lanes' addresses (0 for none), the extras' count and their
+    /// five lanes' addresses — valid until the volume is painted again
+    VOLUME_READ = 0x1802,
+    /// [volume u32] — its bands to the stores up to their cap, the rest to the
+    /// pools
+    VOLUME_DELETE = 0x1804,
+    /// tag call · [volume u32, cx u32, cy u32, z0 i32, z1 i32, material u32,
+    /// layer u32] → result: 1, or 0 when a band could not be made — no pool
+    /// had room — and the volume is not the composite asked for
+    VOLUME_FILL = 0x1810,
+    /// tag call · [volume u32, cx u32, cy u32, z i32, material u32, layer u32,
+    /// sub u32 (0 a full cell)] → result as VOLUME_FILL: the voxel replaced
+    VOLUME_VOXEL = 0x1811,
+    /// tag call · as VOLUME_VOXEL — another sub-cell object on a base voxel
+    /// already claimed
+    VOLUME_SUB_VOXEL = 0x1812,
+    /// [volume u32] — closed to painting, its overflow sorted by column
+    VOLUME_SEAL = 0x1813,
+    /// [fixed u32, mesh u32] — the pools volumes draw on: the standing band
+    /// stores from `fixed`, the rest from `mesh`; before any tick
+    VOLUME_POOLS = 0x1814,
+    /// tag call · no packet → result: where the volumes' stat is, three words:
+    /// allocated, reused, refused
+    VOLUME_STAT = 0x1815,
+    /// tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0
+    /// while a bake is open — of the run set at `at`, in column_run.ts's
+    /// layout, which the shell keeps until the bake closes
+    BAKE_CREATE = 0x1901,
+    /// tag call · no packet → result: the step's; wanting a block, [words
+    /// u32]: the mesh's
+    BAKE_STEP = 0x1910,
+    /// [at u32, words u32] — where the mesh goes, 4-aligned, the shell's
+    BAKE_MESH = 0x1911,
+    /// tag call · no packet → result: where nine words are — vertex count,
+    /// index count, the six counters so far, the module heap's use — the
+    /// complete bake closed
+    BAKE_FINISH = 0x1912,
+    /// no packet — the open bake abandoned
+    BAKE_DELETE = 0x1904,
+    /// tag call · [volume u32] → result: 1, or 0 while a scan is open — the
+    /// volume kept sealed until it closes
+    SCAN_CREATE = 0x1a01,
+    /// tag call · no packet → result: the step's; wanting a block, [bytes
+    /// u32]: the run set's
+    SCAN_STEP = 0x1a10,
+    /// tag call · [at u32, bytes u32] → result: the run count of the set packed
+    /// there, the scan closed
+    SCAN_SET = 0x1a11,
+    /// no packet — the open scan abandoned
+    SCAN_DELETE = 0x1a04,
+    /// tag call · [land u32, water u32, structure u32, transport u32, ele u32
+    /// (addresses), tx0 u32, ty0 u32, show_structures bool] → [floor i32,
+    /// material_at u32, layer_at u32, ele_at u32]: the chunk read, and its
+    /// 4096 packed materials, layer bytes and elevations, valid until the next
+    /// read; EINVAL for a chunk past its page
+    TERRAIN_READ = 0x0a02,
+    /// tag call · [volume u32] → result: 1, or 0 when a band could not be made
+    /// — the chunk last read, a column a cell from the floor
+    TERRAIN_PAINT = 0x0a10,
+    /// tag call · [volume u32, key u64, hide: [band i32, pos u32] | null,
+    /// carve: [lx f64, ly f64, lz f64, size f64] | null] → result: bit 0 a
+    /// voxel painted, bit 1 a paint refused
+    OBJECT_PAINT = 0x0815,
+    /// tag call · [volume u32, cx u32, cy u32] → result: the column's run
+    /// count; [z0_at u32, z1_at u32, class_at u32, sub_at u32]: its lanes,
+    /// valid until the next walk
+    RAY_COLUMN = 0x0710,
+    /// [ids u32[], budget_ms f64] — the builder alone over the chunks, no
+    /// scheduler
+    CHUNK_TICK = 0x0116,
+
     // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
     //
     // CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted
@@ -379,7 +509,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 71] = [
+    const ALL: [Cmd; 94] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -451,6 +581,29 @@ impl Cmd {
         Cmd::POOL_ACQUIRE,
         Cmd::POOL_RELEASE,
         Cmd::POOL_FREE,
+        Cmd::VOLUME_CREATE,
+        Cmd::VOLUME_READ,
+        Cmd::VOLUME_DELETE,
+        Cmd::VOLUME_FILL,
+        Cmd::VOLUME_VOXEL,
+        Cmd::VOLUME_SUB_VOXEL,
+        Cmd::VOLUME_SEAL,
+        Cmd::VOLUME_POOLS,
+        Cmd::VOLUME_STAT,
+        Cmd::BAKE_CREATE,
+        Cmd::BAKE_STEP,
+        Cmd::BAKE_MESH,
+        Cmd::BAKE_FINISH,
+        Cmd::BAKE_DELETE,
+        Cmd::SCAN_CREATE,
+        Cmd::SCAN_STEP,
+        Cmd::SCAN_SET,
+        Cmd::SCAN_DELETE,
+        Cmd::TERRAIN_READ,
+        Cmd::TERRAIN_PAINT,
+        Cmd::OBJECT_PAINT,
+        Cmd::RAY_COLUMN,
+        Cmd::CHUNK_TICK,
     ];
 
     /// The command a message's number names, or none for one nobody numbers.
@@ -538,6 +691,29 @@ mod test {
             (POOL_ACQUIRE, Major::POOL as u32, PoolMinor::ACQUIRE as u32),
             (POOL_RELEASE, Major::POOL as u32, PoolMinor::RELEASE as u32),
             (POOL_FREE, Major::POOL as u32, PoolMinor::FREE as u32),
+            (VOLUME_CREATE, Major::VOLUME as u32, Minor::CREATE as u32),
+            (VOLUME_READ, Major::VOLUME as u32, Minor::READ as u32),
+            (VOLUME_DELETE, Major::VOLUME as u32, Minor::DELETE as u32),
+            (VOLUME_FILL, Major::VOLUME as u32, VolumeMinor::FILL as u32),
+            (VOLUME_VOXEL, Major::VOLUME as u32, VolumeMinor::VOXEL as u32),
+            (VOLUME_SUB_VOXEL, Major::VOLUME as u32, VolumeMinor::SUB_VOXEL as u32),
+            (VOLUME_SEAL, Major::VOLUME as u32, VolumeMinor::SEAL as u32),
+            (VOLUME_POOLS, Major::VOLUME as u32, VolumeMinor::POOLS as u32),
+            (VOLUME_STAT, Major::VOLUME as u32, VolumeMinor::STAT as u32),
+            (BAKE_CREATE, Major::BAKE as u32, Minor::CREATE as u32),
+            (BAKE_STEP, Major::BAKE as u32, BakeMinor::STEP as u32),
+            (BAKE_MESH, Major::BAKE as u32, BakeMinor::MESH as u32),
+            (BAKE_FINISH, Major::BAKE as u32, BakeMinor::FINISH as u32),
+            (BAKE_DELETE, Major::BAKE as u32, Minor::DELETE as u32),
+            (SCAN_CREATE, Major::SCAN as u32, Minor::CREATE as u32),
+            (SCAN_STEP, Major::SCAN as u32, ScanMinor::STEP as u32),
+            (SCAN_SET, Major::SCAN as u32, ScanMinor::SET as u32),
+            (SCAN_DELETE, Major::SCAN as u32, Minor::DELETE as u32),
+            (TERRAIN_READ, Major::TERRAIN as u32, Minor::READ as u32),
+            (TERRAIN_PAINT, Major::TERRAIN as u32, TerrainMinor::PAINT as u32),
+            (OBJECT_PAINT, Major::OBJECT as u32, ObjectMinor::PAINT as u32),
+            (RAY_COLUMN, Major::RAY as u32, RayMinor::COLUMN as u32),
+            (CHUNK_TICK, Major::CHUNK as u32, ChunkMinor::TICK as u32),
         ];
         for (c, major, minor) in parts {
             assert_eq!(c as u32, cmd(major, minor), "{c:?}");

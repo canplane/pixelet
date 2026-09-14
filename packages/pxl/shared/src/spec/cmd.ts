@@ -39,6 +39,9 @@ export const enum Major {
   DRAW = 0x15,
   SHADER = 0x16,
   POOL = 0x17,
+  VOLUME = 0x18,
+  BAKE = 0x19,
+  SCAN = 0x1a,
 }
 
 /** The hover ghost's own verbs. */
@@ -94,6 +97,39 @@ export const enum PoolMinor {
   FREE = 0x12,
 }
 
+/** A volume's own verbs. */
+export const enum VolumeMinor {
+  FILL = 0x10,
+  VOXEL = 0x11,
+  SUB_VOXEL = 0x12,
+  SEAL = 0x13,
+  POOLS = 0x14,
+  STAT = 0x15,
+}
+
+/** The bake's own verbs. */
+export const enum BakeMinor {
+  STEP = 0x10,
+  MESH = 0x11,
+  FINISH = 0x12,
+}
+
+/** The scan's own verbs. */
+export const enum ScanMinor {
+  STEP = 0x10,
+  SET = 0x11,
+}
+
+/** The terrain's own verb. */
+export const enum TerrainMinor {
+  PAINT = 0x10,
+}
+
+/** The raycast's own verb. */
+export const enum RayMinor {
+  COLUMN = 0x10,
+}
+
 /** An object store's own verb. */
 export const enum ObjectMinor {
   REINDEX = 0x10,
@@ -101,6 +137,7 @@ export const enum ObjectMinor {
   CELL = 0x12,
   COLUMNS = 0x13,
   STAT = 0x14,
+  PAINT = 0x15,
 }
 
 /** A decor kind's own verb. */
@@ -116,6 +153,7 @@ export const enum ChunkMinor {
   BLEND = 0x13,
   BUILD = 0x14,
   DECOR = 0x15,
+  TICK = 0x16,
 }
 
 export const enum Cmd {
@@ -307,6 +345,89 @@ export const enum Cmd {
   /** tag call · [pool u32, at u32, bytes u32] → result: 1 where the block is
    * free, 0 where not */
   POOL_FREE = 0x1712,
+
+  // ---- the reference paths ----
+  //
+  // A volume painted, baked and scanned by hand, as apps/web/src/reference/
+  // does to hold the module to the TypeScript pipeline it replaced; the live
+  // build composes, bakes and scans inside the scheduler. One bake and one
+  // scan are open at a time, so neither names a subject. A step's result is
+  // 0 working, 1 wanting a block, 2 done.
+
+  /** tag call · no packet → result: a volume with no bands, its id (never 0) */
+  VOLUME_CREATE = 0x1801,
+  /** tag call · [volume u32] → result: its band count; with bands, [rows
+   * u32[]]: BAND_WORDS words a band — band_z, the material, layer and
+   * sub-cell lanes' addresses (0 for none), the extras' count and their five
+   * lanes' addresses — valid until the volume is painted again */
+  VOLUME_READ = 0x1802,
+  /** [volume u32] — its bands to the stores up to their cap, the rest to the
+   * pools */
+  VOLUME_DELETE = 0x1804,
+  /** tag call · [volume u32, cx u32, cy u32, z0 i32, z1 i32, material u32,
+   * layer u32] → result: 1, or 0 when a band could not be made — no pool had
+   * room — and the volume is not the composite asked for */
+  VOLUME_FILL = 0x1810,
+  /** tag call · [volume u32, cx u32, cy u32, z i32, material u32, layer u32,
+   * sub u32 (0 a full cell)] → result as VOLUME_FILL: the voxel replaced */
+  VOLUME_VOXEL = 0x1811,
+  /** tag call · as VOLUME_VOXEL — another sub-cell object on a base voxel
+   * already claimed */
+  VOLUME_SUB_VOXEL = 0x1812,
+  /** [volume u32] — closed to painting, its overflow sorted by column */
+  VOLUME_SEAL = 0x1813,
+  /** [fixed u32, mesh u32] — the pools volumes draw on: the standing band
+   * stores from `fixed`, the rest from `mesh`; before any tick */
+  VOLUME_POOLS = 0x1814,
+  /** tag call · no packet → result: where the volumes' stat is, three words:
+   * allocated, reused, refused */
+  VOLUME_STAT = 0x1815,
+  /** tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0
+   * while a bake is open — of the run set at `at`, in column_run.ts's layout,
+   * which the shell keeps until the bake closes */
+  BAKE_CREATE = 0x1901,
+  /** tag call · no packet → result: the step's; wanting a block, [words u32]:
+   * the mesh's */
+  BAKE_STEP = 0x1910,
+  /** [at u32, words u32] — where the mesh goes, 4-aligned, the shell's */
+  BAKE_MESH = 0x1911,
+  /** tag call · no packet → result: where nine words are — vertex count,
+   * index count, the six counters so far, the module heap's use — the
+   * complete bake closed */
+  BAKE_FINISH = 0x1912,
+  /** no packet — the open bake abandoned */
+  BAKE_DELETE = 0x1904,
+  /** tag call · [volume u32] → result: 1, or 0 while a scan is open — the
+   * volume kept sealed until it closes */
+  SCAN_CREATE = 0x1a01,
+  /** tag call · no packet → result: the step's; wanting a block, [bytes u32]:
+   * the run set's */
+  SCAN_STEP = 0x1a10,
+  /** tag call · [at u32, bytes u32] → result: the run count of the set packed
+   * there, the scan closed */
+  SCAN_SET = 0x1a11,
+  /** no packet — the open scan abandoned */
+  SCAN_DELETE = 0x1a04,
+  /** tag call · [land u32, water u32, structure u32, transport u32, ele u32
+   * (addresses), tx0 u32, ty0 u32, show_structures bool] → [floor i32,
+   * material_at u32, layer_at u32, ele_at u32]: the chunk read, and its 4096
+   * packed materials, layer bytes and elevations, valid until the next read;
+   * EINVAL for a chunk past its page */
+  TERRAIN_READ = 0x0a02,
+  /** tag call · [volume u32] → result: 1, or 0 when a band could not be made —
+   * the chunk last read, a column a cell from the floor */
+  TERRAIN_PAINT = 0x0a10,
+  /** tag call · [volume u32, key u64, hide: [band i32, pos u32] | null, carve:
+   * [lx f64, ly f64, lz f64, size f64] | null] → result: bit 0 a voxel
+   * painted, bit 1 a paint refused */
+  OBJECT_PAINT = 0x0815,
+  /** tag call · [volume u32, cx u32, cy u32] → result: the column's run count;
+   * [z0_at u32, z1_at u32, class_at u32, sub_at u32]: its lanes, valid until
+   * the next walk */
+  RAY_COLUMN = 0x0710,
+  /** [ids u32[], budget_ms f64] — the builder alone over the chunks, no
+   * scheduler */
+  CHUNK_TICK = 0x0116,
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //
