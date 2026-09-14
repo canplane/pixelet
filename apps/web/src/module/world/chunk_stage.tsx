@@ -254,6 +254,12 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         triangles: gpu?.stat.triangles ?? 0,
         buffers: gpu?.stat.buffers ?? 0,
         buffer_mb: gpu ? Math.round(gpu.stat.bytes / MB) : 0,
+        textures_mb: {
+          depth: gpu ? +(gpu.stat.texture_bytes.depth / MB).toFixed(1) : 0,
+          msaa: gpu ? +(gpu.stat.texture_bytes.msaa / MB).toFixed(1) : 0,
+          shadow: gpu && gpu.shadows ? +(gpu.stat.texture_bytes.shadow / MB).toFixed(1) : 0,
+          layers: gpu ? +(gpu.stat.texture_bytes.layers / MB).toFixed(1) : 0,
+        },
         census: gpu?.census ?? {},
         px: gpu ? gpu.canvas.width * gpu.canvas.height : 0,
         mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },

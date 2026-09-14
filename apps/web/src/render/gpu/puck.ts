@@ -14,6 +14,8 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 
 import { marker_colors } from "@/module/world/marker/style.ts";
 import { GRADE_WGSL } from "./grade.ts";
+import { DEPTH_COMPARE } from "./depth.ts";
+import { FRAME_WGSL as FRAME_STRUCT_WGSL, SHADE_WGSL } from "./frame_wgsl.ts";
 import { linear_rgb as linear } from "./color.ts";
 
 const DRAW_WORDS = 5;
@@ -30,23 +32,7 @@ const BEACON_NIGHT = "#00f2ff";
 const wgsl_vec3 = (c: [number, number, number]) => `vec3f(${c.map((v) => v.toFixed(6)).join(", ")})`;
 
 const FRAME_WGSL = /* wgsl */ `
-struct Frame {
-  view_proj: mat4x4f,
-  camera_pos: vec3f,
-  edge_strength: f32,
-  sun_dir: vec3f,
-  low_spec: f32,
-  sun_color: vec3f,
-  fog_near: f32,
-  ambient: vec3f,
-  fog_far: f32,
-  hemi_sky: vec3f,
-  floor: f32,
-  hemi_ground: vec3f,
-  edge_width: f32,
-  fog_color: vec3f,
-  _pad: f32,
-};
+${FRAME_STRUCT_WGSL}
 struct Draw {
   translation: vec3f,
   fourth: f32,
@@ -86,6 +72,7 @@ fn vs(v: VertexIn) -> VertexOut {
 }
 
 ${GRADE_WGSL}
+${SHADE_WGSL}
 
 fn aastep(thres: f32, value: f32) -> f32 {
   let w = fwidth(value) * 0.5;
@@ -101,7 +88,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let left = (1.0 - aastep(bw, i.uv.x)) * i.borders.w;
   let border = max(max(top, bottom), max(left, right));
   let colour = ${wgsl_vec3(linear(marker_colors.ACTION))};
-  return vec4f(to_srgb(grade(colour)), mix(${ZONE_FILL_OPACITY}, 1.0, border));
+  return vec4f(finish(colour, i.clip.xy), mix(${ZONE_FILL_OPACITY}, 1.0, border));
 }
 `;
 
@@ -128,6 +115,7 @@ fn vs(@location(0) position: vec3f, @location(1) normal: vec3f) -> VertexOut {
 }
 
 ${GRADE_WGSL}
+${SHADE_WGSL}
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
@@ -137,7 +125,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   // Mostly metal, which three lit with no environment to reflect: a little
   // diffuse under the lights, and the emissive glow.
   let lit = colour * (frame.sun_color * max(dot(n, frame.sun_dir), 0.0) + frame.ambient) / 3.14159265 * 0.2;
-  return vec4f(to_srgb(grade(lit + colour * glow)), 1.0);
+  return vec4f(finish(lit + colour * glow, i.clip.xy), 1.0);
 }
 `;
 
@@ -202,7 +190,7 @@ export class PuckPass {
   private readonly zone_groups = new WeakMap<GPUBuffer, GPUBindGroup>();
   private readonly scratch = new Float32Array(new ArrayBuffer(32));
 
-  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer) {
+  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer, sample_count: u32) {
     const blend: GPUBlendState = {
       color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
       alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
@@ -221,7 +209,8 @@ export class PuckPass {
       },
       fragment: { module: zone_module, entryPoint: "fs", targets: [{ format, blend }] },
       primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: "less", depthBias: -4, depthBiasSlopeScale: -1 },
+      depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: DEPTH_COMPARE, depthBias: 4, depthBiasSlopeScale: 1 },
+      multisample: { count: sample_count },
     });
     const beacon_module = device.createShaderModule({ label: "puck/beacon", code: BEACON_SHADER });
     this.beacon_pipeline = device.createRenderPipeline({
@@ -237,7 +226,8 @@ export class PuckPass {
       },
       fragment: { module: beacon_module, entryPoint: "fs", targets: [{ format }] },
       primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-      depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: "less" },
+      depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: DEPTH_COMPARE },
+      multisample: { count: sample_count },
     });
     const uniform = (label: string) => device.createBuffer({ label, size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.zone_uniform = uniform("puck/zone/draw");

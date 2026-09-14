@@ -14,9 +14,13 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
 import { billboard_sheet } from "@/module/world/billboard/sheet.ts";
+import { request_world_tick } from "@/module/world/change.ts";
 import { view } from "@/module/world/view.ts";
 import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/decor/asset_store.ts";
 import { GpuRenderer } from "./renderer.ts";
+import { FRAME_AT } from "./frame_wgsl.ts";
+import { GL_TO_WGPU } from "./depth.ts";
+import { rim_cfg } from "@/module/world/environment/config.ts";
 
 /** The one renderer, once its device has answered. */
 export let gpu_renderer: GpuRenderer | null = null;
@@ -32,9 +36,8 @@ const EDGE_WIDTH = 0.03;
 /** crates/pxl-core/src/environment.rs's ENV_FLOATS. */
 const ENV_FLOATS = 48;
 
-/** GL clip z is [-1, 1]; WebGPU's is [0, 1]. */
-const GL_TO_WGPU = new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 1]);
 const $m = mat4();
+const $light_target = { x: 0, y: 0, z: 0 };
 const $proj = mat4();
 
 /** decor/asset_store.ts's models and skins by group, told to the renderer
@@ -92,6 +95,22 @@ export function gpu_frame(dpr: number): void {
   u.set(env.subarray(0, 24), 20);
   u[23] = settings.texture_pack ? 0 : 1;
   u[39] = EDGE_WIDTH;
+  u[FRAME_AT.rim_intensity] = settings.show_rim_light ? rim_cfg.INTENSITY : 0;
+  u[FRAME_AT.viewport] = gpu.canvas.width;
+  u[FRAME_AT.viewport + 1] = gpu.canvas.height;
+  u[FRAME_AT.vignette] = 1;
+  // The sun's shadow, over the map centre — the root frame's origin
+  // undone — from the light the environment lit the terrain with.
+  gpu.shadows = settings.show_shadow_map;
+  u[FRAME_AT.shadow_strength] = gpu.shadows ? 1 : 0;
+  u[FRAME_AT.shadow_texel] = gpu.shadow.texel;
+  if (gpu.shadows) {
+    $light_target.x = -view.tx;
+    $light_target.y = -view.ty;
+    $light_target.z = -view.tz;
+    gpu.shadow.aim(env.subarray(0, 3), $light_target);
+    u.set(gpu.shadow.light_view_proj, FRAME_AT.light_view_proj);
+  }
 
   // The sky, in the view frame, where the dome stood.
   const sky = gpu.sky;
@@ -108,24 +127,35 @@ export function gpu_frame(dpr: number): void {
  * told the element when it mounts, for the frame loop and the pointer. */
 export function GpuCanvas({ on_canvas }: { on_canvas: (canvas: HTMLCanvasElement | null) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // MSAA is the renderer's targets and every pipeline's sample count: a
+  // change is a new renderer over the same canvas.
+  const msaa = useSettingsStore((state) => state.msaa);
   useEffect(() => {
     const canvas = ref.current;
     on_canvas(canvas);
     if (!canvas || CORE_PXL === null) return;
     let alive = true;
-    GpuRenderer.create(canvas, CORE_PXL).then((r) => {
-      if (!alive) return;
+    let made: GpuRenderer | null = null;
+    GpuRenderer.create(canvas, CORE_PXL, { msaa }).then((r) => {
+      if (!alive) {
+        r?.destroy();
+        return;
+      }
       if (r === null) {
         console.error("[gpu] no WebGPU on this device; nothing can be drawn");
         return;
       }
+      made = r;
       gpu_renderer = r;
+      decor_assets_seen = null;
+      request_world_tick();
     });
     return () => {
       alive = false;
       gpu_renderer = null;
+      made?.destroy();
       on_canvas(null);
     };
-  }, [on_canvas]);
+  }, [on_canvas, msaa]);
   return <canvas ref={ref} className="absolute inset-0 h-full w-full touch-none" />;
 }

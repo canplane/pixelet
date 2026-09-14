@@ -18,6 +18,7 @@
  * nor its name.
  */
 
+import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY } from "@/module/world/character/variant.ts";
 
 /** Rough per-frame cost, shown as a badge on the row. */
@@ -107,12 +108,23 @@ export const SETTINGS = {
   show_edge_shade: toggle("lighting", true, { cost: "low" }),
   /** A uniform on an already-compiled shader term; not a pass. */
   show_rim_light: toggle("lighting", true, { cost: "low" }),
+  /** The sun's shadow map (render/gpu/shadow.ts): the world drawn once more
+   * from the sun each frame, depth only, and a 3x3 compare per fragment;
+   * 16 MB of map on a desktop, 4 on a phone. */
+  show_shadow_map: toggle("lighting", true, { cost: "high" }),
 
   // ---- quality.
   /** Ground colour from the art pack (four sampler2DArray taps per fragment)
    * instead of the flat per-instance average. The shader's `u_low_spec` is
    * this, inverted. */
   texture_pack: toggle("quality", true, { cost: "med" }),
+  /** Four samples a pixel for the frame's colour and depth (renderer.ts):
+   * the largest allocation the page makes — 32 bytes a device pixel, a
+   * hundred megabytes on a phone at its native density — for edges the
+   * far terrain's boxes would otherwise shimmer at. Off on a phone, whose
+   * density does the same job at no cost; the setting is read when the
+   * renderer is made. */
+  msaa: toggle("quality", !HANDHELD, { cost: "high" }),
 
   // ---- debug: diagnostics, dev builds only. Off by default so they are
   // never in the way while eyeballing real rendering.

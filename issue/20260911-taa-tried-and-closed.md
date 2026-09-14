@@ -110,3 +110,23 @@ TAA is closed; two questions it touched are not, and are recorded here so
   full temporal filter — is to be tried on the desktop web first, where
   it can be seen, and only then judged as a replacement. Not on the
   mobile path until it has earned it on the desktop one.
+
+  Measured on the WebGPU renderer, 2026-09-14, M1 Max, a 9.6 Mpx canvas
+  (dpr 2), 4x MSAA on, shadows off: the colour and depth targets 147 MB
+  each (the ledger's `targets` line), GPU 10.6 ms p50 / 20.1 ms p95 by
+  timestamp query, dt p50 16.5 ms against 8.3 ms before the post effects,
+  36% of frames missed — the frame is GPU-bound at that pixel count, which
+  is where MSAA pays in bandwidth, not memory. Not decided on that one
+  capture; the comparison that separates the costs, still to be taken on
+  the same machine and view:
+  1. MSAA off, shadows off — the baseline: reversed-Z, mipmaps, the rim
+     light and the vignette only.
+  2. MSAA off, shadows on — what the shadow map costs: its depth pass and
+     the 3x3 PCF.
+  3. MSAA on, shadows on — the full set.
+
+  Both are settings (quality → MSAA recreates the renderer; lighting →
+  shadows), so the three are one ledger capture each. What the numbers
+  turn on: whether the desktop default stays MSAA on, becomes pixel-count
+  aware (on under a few megapixels, off above), or waits for the cheaper
+  method above.

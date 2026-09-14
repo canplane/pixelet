@@ -15,14 +15,13 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { mat4, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation } from "@xpute/core/kit/mat4.ts";
 
 import { type ModelSkin, SkinnedPass } from "./skinned.ts";
-import { FRAME_UNIFORM_FLOATS, type FrameUniforms } from "./renderer.ts";
+import type { FrameUniforms } from "./renderer.ts";
+import { FRAME_AT, FRAME_UNIFORM_FLOATS } from "./frame_wgsl.ts";
+import { DEPTH_CLEAR, DEPTH_FORMAT, GL_TO_WGPU } from "./depth.ts";
 
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
 const PIPELINE_SKINNED = 5;
-const DEPTH_FORMAT: GPUTextureFormat = "depth24plus";
-/** GL clip z is [-1, 1]; WebGPU's is [0, 1]. */
-const GL_TO_WGPU = new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 1]);
 
 const $proj = mat4();
 const $view = mat4();
@@ -50,7 +49,7 @@ export class PreviewCase {
     this.context = context;
     context.configure({ device, format, alphaMode: "premultiplied" });
     this.frame_buffer = device.createBuffer({ label: "preview/frame", size: FRAME_UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.pass = new SkinnedPass(device, format, DEPTH_FORMAT, this.frame_buffer);
+    this.pass = new SkinnedPass(device, format, DEPTH_FORMAT, this.frame_buffer, null, 1);
   }
 
   set_skin(model: u32, image: ModelSkin): void {
@@ -96,11 +95,15 @@ export class PreviewCase {
     u[18] = this.eye.z + uniforms[at + 2];
     u[27] = 1e9;
     u[31] = 2e9;
+    u[FRAME_AT.viewport] = this.width;
+    u[FRAME_AT.viewport + 1] = this.height;
+    u[FRAME_AT.shadow_strength] = 0;
+    u[FRAME_AT.vignette] = 0;
     this.device.queue.writeBuffer(this.frame_buffer, 0, u);
     const pass = encoder.beginRenderPass({
       label: "preview",
       colorAttachments: [{ view: this.context.getCurrentTexture().createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }],
-      depthStencilAttachment: { view: this.depth.createView(), depthLoadOp: "clear", depthClearValue: 1, depthStoreOp: "store" },
+      depthStencilAttachment: { view: this.depth.createView(), depthLoadOp: "clear", depthClearValue: DEPTH_CLEAR, depthStoreOp: "store" },
     });
     this.pass.draw(pass, own, uniforms, buffers, counts);
     pass.end();
