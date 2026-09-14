@@ -46,6 +46,11 @@ pub enum Major {
     VOLUME = 0x18,
     BAKE = 0x19,
     SCAN = 0x1a,
+    WORLD = 0x1b,
+    INPUT = 0x1c,
+    SENSOR = 0x1d,
+    FETCH = 0x1e,
+    LOAD = 0x1f,
 }
 
 /// The hover ghost's own verbs.
@@ -202,6 +207,46 @@ pub enum StepResult {
     /// Wanting a block, whose size the reply carries.
     NEED_BLOCK = 1,
     DONE = 2,
+}
+
+/// A page's own verb: its terrain, decoded where the kernel reads it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PageMinor {
+    TERRAIN = 0x10,
+    POI = 0x11,
+}
+
+/// The pointer's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum InputMinor {
+    POINTER = 0x10,
+    WHEEL = 0x11,
+}
+
+/// The device sensors' own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SensorMinor {
+    ERROR = 0x10,
+    ORIENTATION = 0x11,
+    PERMISSION = 0x12,
+    VISIBILITY = 0x13,
+}
+
+/// A fetch's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum FetchMinor {
+    GEOCODE = 0x10,
+}
+
+/// A load's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum LoadMinor {
+    IMAGE = 0x10,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -518,10 +563,65 @@ pub enum Cmd {
     OBJECT_COLUMNS = 0x0813,
     /// tag call · no packet → [chunks u32, bands u32, cells u32]
     OBJECT_STAT = 0x0814,
+
+    // ---- the world's turn: the shell's events in, the kernel's asks out ----
+    /// [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
+    /// orientation_permission bool] — the effects' turn, then the tick's phases; the
+    /// viewport in CSS pixels → result: 1 when a frame after this one was asked for
+    WORLD_UPDATE = 0x1b03,
+    /// tag call · no packet → [toasts: [[show bool, id str, message_key str, tone u32
+    /// (0 loading, 1 error, 2 success)]], geolocation u32[] (0 start, 1 stop), orientation
+    /// u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool] — what the
+    /// turn asks of the shell
+    WORLD_READ = 0x1b02,
+    /// [left f64, top f64, width f64, height f64] — the canvas's client rect
+    INPUT_UPDATE = 0x1c03,
+    /// [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
+    /// button i32, x f64, y f64] — a pointer event on the canvas, in client pixels
+    INPUT_POINTER = 0x1c10,
+    /// [delta_y f64]
+    INPUT_WHEEL = 0x1c11,
+    /// [lon f64, lat f64, altitude f64, accuracy f64, heading f64] — a GPS fix; NaN where the
+    /// browser gave none
+    SENSOR_UPDATE = 0x1d03,
+    /// [code u32 (1 permission denied, 2 position unavailable, 3 timeout, 0 other)] — the
+    /// watch failed and was stopped
+    SENSOR_ERROR = 0x1d10,
+    /// [webkit_compass_heading f64, alpha f64, beta f64, gamma f64] — an orientation
+    /// event; NaN where the browser gave none
+    SENSOR_ORIENTATION = 0x1d11,
+    /// [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]
+    SENSOR_PERMISSION = 0x1d12,
+    /// [visible bool] — the tab's visibility
+    SENSOR_VISIBILITY = 0x1d13,
+    /// [page u64, land u32, water u32, structure u32, transport u32, ele u32 (addresses),
+    /// blocks: [[at u32, bytes u32]], own bool] — a page's terrain, copied into the page
+    /// section; `own` false for the shared ocean page no one page owns
+    PAGE_TERRAIN = 0x0210,
+    /// [page u64, block: [at u32, bytes u32] | null] — a page's POI packet, copied into the page
+    /// section; null for the shared empty page
+    PAGE_POI = 0x0211,
+    /// tag call · no packet → [started: [[key str, category str, url str]], aborts: [key
+    /// str], releases: [[at u32, bytes u32]]] — the demands to run, the ones to cancel, and
+    /// the page blocks the kernel let go
+    FETCH_READ = 0x1e02,
+    /// [key str, outcome u32 (0 ok, 1 aborted, 2 error), error str | null, phases: [[name
+    /// str, value f64]]] — a started demand settled
+    FETCH_UPDATE = 0x1e03,
+    /// [page u64, body str | null] — a reverse geocode's answer; null for a 404
+    FETCH_GEOCODE = 0x1e10,
+    /// tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]]
+    LOAD_READ = 0x1f02,
+    /// [url str, bytes u8[]] — a model's bytes
+    LOAD_UPDATE = 0x1f03,
+    /// [url str, handle u32] — an image decoded and held by the shell
+    LOAD_IMAGE = 0x1f10,
+    /// [url str] — a load failed
+    LOAD_DELETE = 0x1f04,
 }
 
 impl Cmd {
-    const ALL: [Cmd; 94] = [
+    const ALL: [Cmd; 113] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -616,6 +716,25 @@ impl Cmd {
         Cmd::OBJECT_CELL,
         Cmd::OBJECT_COLUMNS,
         Cmd::OBJECT_STAT,
+        Cmd::WORLD_UPDATE,
+        Cmd::WORLD_READ,
+        Cmd::INPUT_UPDATE,
+        Cmd::INPUT_POINTER,
+        Cmd::INPUT_WHEEL,
+        Cmd::SENSOR_UPDATE,
+        Cmd::SENSOR_ERROR,
+        Cmd::SENSOR_ORIENTATION,
+        Cmd::SENSOR_PERMISSION,
+        Cmd::SENSOR_VISIBILITY,
+        Cmd::PAGE_TERRAIN,
+        Cmd::PAGE_POI,
+        Cmd::FETCH_READ,
+        Cmd::FETCH_UPDATE,
+        Cmd::FETCH_GEOCODE,
+        Cmd::LOAD_READ,
+        Cmd::LOAD_UPDATE,
+        Cmd::LOAD_IMAGE,
+        Cmd::LOAD_DELETE,
     ];
 
     /// The command a message's number names, or none for one nobody numbers.
@@ -726,6 +845,25 @@ mod test {
             (OBJECT_CELL, Major::OBJECT as u32, ObjectMinor::CELL as u32),
             (OBJECT_COLUMNS, Major::OBJECT as u32, ObjectMinor::COLUMNS as u32),
             (OBJECT_STAT, Major::OBJECT as u32, ObjectMinor::STAT as u32),
+            (WORLD_UPDATE, Major::WORLD as u32, Minor::UPDATE as u32),
+            (WORLD_READ, Major::WORLD as u32, Minor::READ as u32),
+            (INPUT_UPDATE, Major::INPUT as u32, Minor::UPDATE as u32),
+            (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
+            (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),
+            (SENSOR_UPDATE, Major::SENSOR as u32, Minor::UPDATE as u32),
+            (SENSOR_ERROR, Major::SENSOR as u32, SensorMinor::ERROR as u32),
+            (SENSOR_ORIENTATION, Major::SENSOR as u32, SensorMinor::ORIENTATION as u32),
+            (SENSOR_PERMISSION, Major::SENSOR as u32, SensorMinor::PERMISSION as u32),
+            (SENSOR_VISIBILITY, Major::SENSOR as u32, SensorMinor::VISIBILITY as u32),
+            (PAGE_TERRAIN, Major::PAGE as u32, PageMinor::TERRAIN as u32),
+            (PAGE_POI, Major::PAGE as u32, PageMinor::POI as u32),
+            (FETCH_READ, Major::FETCH as u32, Minor::READ as u32),
+            (FETCH_UPDATE, Major::FETCH as u32, Minor::UPDATE as u32),
+            (FETCH_GEOCODE, Major::FETCH as u32, FetchMinor::GEOCODE as u32),
+            (LOAD_READ, Major::LOAD as u32, Minor::READ as u32),
+            (LOAD_UPDATE, Major::LOAD as u32, Minor::UPDATE as u32),
+            (LOAD_IMAGE, Major::LOAD as u32, LoadMinor::IMAGE as u32),
+            (LOAD_DELETE, Major::LOAD as u32, Minor::DELETE as u32),
         ];
         for (c, major, minor) in parts {
             assert_eq!(c as u32, cmd(major, minor), "{c:?}");

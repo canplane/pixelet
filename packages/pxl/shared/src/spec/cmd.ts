@@ -44,6 +44,11 @@ export const enum Major {
   VOLUME = 0x18,
   BAKE = 0x19,
   SCAN = 0x1a,
+  WORLD = 0x1b,
+  INPUT = 0x1c,
+  SENSOR = 0x1d,
+  FETCH = 0x1e,
+  LOAD = 0x1f,
 }
 
 /** The hover ghost's own verbs. */
@@ -164,6 +169,36 @@ export const enum StepResult {
   /** Wanting a block, whose size the reply carries. */
   NEED_BLOCK = 1,
   DONE = 2,
+}
+
+/** A page's own verb: its terrain, decoded where the kernel reads it. */
+export const enum PageMinor {
+  TERRAIN = 0x10,
+  POI = 0x11,
+}
+
+/** The pointer's own verbs. */
+export const enum InputMinor {
+  POINTER = 0x10,
+  WHEEL = 0x11,
+}
+
+/** The device sensors' own verbs. */
+export const enum SensorMinor {
+  ERROR = 0x10,
+  ORIENTATION = 0x11,
+  PERMISSION = 0x12,
+  VISIBILITY = 0x13,
+}
+
+/** A fetch's own verb. */
+export const enum FetchMinor {
+  GEOCODE = 0x10,
+}
+
+/** A load's own verb. */
+export const enum LoadMinor {
+  IMAGE = 0x10,
 }
 
 export const enum Cmd {
@@ -487,4 +522,60 @@ export const enum Cmd {
   OBJECT_COLUMNS = 0x0813,
   /** tag call · no packet → [chunks u32, bands u32, cells u32] */
   OBJECT_STAT = 0x0814,
+
+  // ---- the world's turn: the shell's events in, the kernel's asks out ----
+
+  /** [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
+   * orientation_permission bool] — the effects' turn, then the tick's phases; the
+   * viewport in CSS pixels → result: 1 when a frame after this one was asked for */
+  WORLD_UPDATE = 0x1b03,
+  /** tag call · no packet → [toasts: [[show bool, id str, message_key str, tone u32
+   * (0 loading, 1 error, 2 success)]], geolocation u32[] (0 start, 1 stop), orientation
+   * u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool] — what the
+   * turn asks of the shell */
+  WORLD_READ = 0x1b02,
+  /** [left f64, top f64, width f64, height f64] — the canvas's client rect */
+  INPUT_UPDATE = 0x1c03,
+  /** [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
+   * button i32, x f64, y f64] — a pointer event on the canvas, in client pixels */
+  INPUT_POINTER = 0x1c10,
+  /** [delta_y f64] */
+  INPUT_WHEEL = 0x1c11,
+  /** [lon f64, lat f64, altitude f64, accuracy f64, heading f64] — a GPS fix; NaN where the
+   * browser gave none */
+  SENSOR_UPDATE = 0x1d03,
+  /** [code u32 (1 permission denied, 2 position unavailable, 3 timeout, 0 other)] — the
+   * watch failed and was stopped */
+  SENSOR_ERROR = 0x1d10,
+  /** [webkit_compass_heading f64, alpha f64, beta f64, gamma f64] — an orientation
+   * event; NaN where the browser gave none */
+  SENSOR_ORIENTATION = 0x1d11,
+  /** [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool] */
+  SENSOR_PERMISSION = 0x1d12,
+  /** [visible bool] — the tab's visibility */
+  SENSOR_VISIBILITY = 0x1d13,
+  /** [page u64, land u32, water u32, structure u32, transport u32, ele u32 (addresses),
+   * blocks: [[at u32, bytes u32]], own bool] — a page's terrain, copied into the page
+   * section; `own` false for the shared ocean page no one page owns */
+  PAGE_TERRAIN = 0x0210,
+  /** [page u64, block: [at u32, bytes u32] | null] — a page's POI packet, copied into the page
+   * section; null for the shared empty page */
+  PAGE_POI = 0x0211,
+  /** tag call · no packet → [started: [[key str, category str, url str]], aborts: [key
+   * str], releases: [[at u32, bytes u32]]] — the demands to run, the ones to cancel, and
+   * the page blocks the kernel let go */
+  FETCH_READ = 0x1e02,
+  /** [key str, outcome u32 (0 ok, 1 aborted, 2 error), error str | null, phases: [[name
+   * str, value f64]]] — a started demand settled */
+  FETCH_UPDATE = 0x1e03,
+  /** [page u64, body str | null] — a reverse geocode's answer; null for a 404 */
+  FETCH_GEOCODE = 0x1e10,
+  /** tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]] */
+  LOAD_READ = 0x1f02,
+  /** [url str, bytes u8[]] — a model's bytes */
+  LOAD_UPDATE = 0x1f03,
+  /** [url str, handle u32] — an image decoded and held by the shell */
+  LOAD_IMAGE = 0x1f10,
+  /** [url str] — a load failed */
+  LOAD_DELETE = 0x1f04,
 }
