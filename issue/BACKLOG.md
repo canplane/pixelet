@@ -241,7 +241,24 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   ([MapOptions](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)).
   The same lever exists here: the one LOD criterion's distance thresholds.
   Needed on the web whatever the graphics API; the renderer in P0-2 is
-  built against it.
+  built against it. First seen on the desktop, 2026-09-14, after a zoom
+  through a city: on-screen work 158 MB against the 128 MB budget, the
+  mesh section 181 of 256 MB live and the rest lost to the buddy pool's
+  rounding (a request takes the power of two above it), off screen
+  nothing left to reclaim, 1,091 chunks pending on tiers whose blocks the
+  pool refused, for the rest of the session — the bake slot held by one
+  of them, so nothing else baked either, and the tick spinning a hundred
+  milliseconds a frame over the refusals. Built the same day: a refused
+  block ends the tick's builds and commits, the refused chunk gives up
+  its slot and is not tried again until the pool gives a block back
+  (`PoolStat::releases`), and the budget is paid in LOD — the ladder's
+  pressure (lod.rs): a step in when a block is refused and reclaim found
+  nothing, at most every half second, up to three tiers; a step out after
+  five seconds without a refusal with the section off its mark; the
+  ledger's `lod ... pressure`. Still open: what the rounding costs the
+  section (about a third at the sizes tiers come in) — size classes
+  between the powers of two, or a large-block region — once the pressure
+  has been seen doing its work.
 
 - **"Everything is a file": the Placement and the palette.** Decided
   2026-09-13, first:

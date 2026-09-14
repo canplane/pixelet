@@ -90,9 +90,10 @@ function pool_sample(): { live_mb: number; idle_mb: number; hits: number; misses
  * screen, settling, blending, and who is waiting and for how long — the
  * progress rule guarantees a step a frame, not which one, so the waits are
  * what show whether something is being passed over indefinitely. */
-function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64 } {
+function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offscreen_pending: u32; oldest_release_ms: f64; oldest_visible_ms: f64; pressure: u32 } {
   const c = CORE_BUILD.census();
   return {
+    pressure: c.pressure,
     in_frustum: c.in_frustum,
     settling: c.settling,
     blend_active: c.blend_active,

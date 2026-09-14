@@ -125,6 +125,8 @@ export type Census = {
   released: u32;
   retained_on: number;
   retained_off: number;
+  /** How far the byte budget has pulled the LOD ladder in (sched.rs). */
+  pressure: u32;
 };
 
 /** The build counters the ledger reads, cumulative since load. */
@@ -352,7 +354,7 @@ export class CoreBuild {
   }
 
   census(): Census {
-    const c = new Float64Array(this.pxl.memory.buffer, this.pxl.pxl_census(), 12);
+    const c = new Float64Array(this.pxl.memory.buffer, this.pxl.pxl_census(), 13);
     return {
       chunks: c[0],
       in_frustum: c[1],
@@ -366,6 +368,7 @@ export class CoreBuild {
       released: c[9],
       retained_on: c[10],
       retained_off: c[11],
+      pressure: c[12],
     };
   }
 

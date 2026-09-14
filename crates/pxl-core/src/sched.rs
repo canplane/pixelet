@@ -57,6 +57,18 @@ const MESH_PRESSURE: f64 = 0.9;
 const MAX_CACHED_TIERS: usize = 4;
 /// A wait halves a chunk's distance key every this many milliseconds.
 const AGE_HALF_MS: f64 = 4000.0;
+/// The byte budget, paid in LOD: when the pool refuses a block and reclaim
+/// found nothing to give back, the ladder is pulled in a step (lod.rs's
+/// pressure) and the set on screen gets coarser until it fits; a step at
+/// most this often, so the coarser layouts have time to land and free
+/// what they replace before the next is taken, and up to three tiers. A
+/// step is let out again after this long with no refusal and the section
+/// off its pressure mark. Seen on the desktop, 2026-09-14: a zoom through
+/// a city left 1,091 chunks pending on tiers the section could not hold,
+/// nothing off screen to reclaim, for the rest of the session.
+const MAX_PRESSURE: u32 = 6;
+const PRESSURE_STEP_MS: f64 = 500.0;
+const PRESSURE_RELIEF_MS: f64 = 5000.0;
 
 pub const IN_FRUSTUM: u8 = 1;
 pub const EMPTY: u8 = 2;
@@ -206,6 +218,9 @@ struct Slot {
     desired: (u32, u32),
     /// The last blend told, so an unchanged one is not resent.
     told: Option<(f32, f32, bool)>,
+    /// The mesh pool's release count when its decor was last refused a
+    /// block: not committed again until a block is given back.
+    refused: Option<u32>,
 }
 
 impl Slot {
@@ -245,6 +260,8 @@ pub struct Census {
     pub released: u32,
     pub retained_on: f64,
     pub retained_off: f64,
+    /// The ladder's pressure: how far the byte budget has pulled the LOD in.
+    pub pressure: u32,
 }
 
 pub struct Scheduler {
@@ -298,6 +315,9 @@ pub struct Scheduler {
     /// frame's release cap.
     refused_seen: u32,
     refused_last: bool,
+    /// When the pressure last moved, and when a block was last refused.
+    pressure_at: f64,
+    refused_at: f64,
 }
 
 impl Default for Scheduler {
@@ -357,6 +377,8 @@ impl Scheduler {
             decor_sample: ChunkSample::default(),
             refused_seen: 0,
             refused_last: false,
+            pressure_at: f64::NEG_INFINITY,
+            refused_at: f64::NEG_INFINITY,
         }
     }
 
@@ -428,6 +450,7 @@ impl Scheduler {
             layout_ready: false,
             desired: (COARSEST, 0),
             told: None,
+            refused: None,
         };
         if let Some(frame) = self.frame {
             let (visible, _, d2, _) = measure(&frame, &slot);
@@ -585,6 +608,7 @@ impl Scheduler {
             let pool = world.volumes.mesh_pool();
             let Some(at) = world.pools[pool].acquire(bytes) else {
                 self.builder.stat.starved += 1;
+                self.slots[i].refused = Some(world.pools[pool].stat.releases);
                 return false;
             };
             // SAFETY: a block of the bytes the build asked for, the glue's
@@ -768,7 +792,14 @@ impl Scheduler {
         }
 
         let pending_total = (visible.len() + offscreen.len()) as u32;
-        let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
+        // A commit on screen may build decor, and a block refused ends the
+        // commits this tick as it ends the builds (Builder::tick_capped):
+        // the pool is the same until reclaim, and the decor is scattered
+        // before its block is asked for.
+        let starved = self.builder.stat.starved;
+        let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| {
+            self.builder.stat.starved == starved && self.commit(world, i, emit)
+        });
         let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
         committed += under_budget(&offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
@@ -795,7 +826,8 @@ impl Scheduler {
             }
         }
 
-        self.reclaim(world, &order, emit);
+        let freed = self.reclaim(world, &order, emit);
+        self.press(world, t0, freed);
         self.models.tick(world, &mut self.draw, frame.delta_s as f32);
         let animating = self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
@@ -826,6 +858,7 @@ impl Scheduler {
         c.released = self.census.released;
         c.retained_on = self.retained_on;
         c.retained_off = self.retained_off;
+        c.pressure = self.ladder.pressure();
         let blending = c.blend_active > 0;
         self.census = c;
         committed > 0 || pending_total > committed || blending || self.view_dirty || animating
@@ -1103,6 +1136,9 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
+        if s.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].stat.releases) {
+            return false;
+        }
         if !self.ask(world, i, p, q) || !self.ensure_decor(world, i, [p, q], emit) {
             return false;
         }
@@ -1117,15 +1153,12 @@ impl Scheduler {
     /// since the last pass is pressure too, whatever the numbers say: the
     /// section has room in bytes but not in one piece, and what gives it
     /// back in pieces that join is the off-screen work, farthest first.
-    fn reclaim(&mut self, world: &mut World, order: &[usize], emit: &mut impl FnMut(Event)) {
+    fn reclaim(&mut self, world: &mut World, order: &[usize], emit: &mut impl FnMut(Event)) -> u32 {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
         let refused = self.builder.stat.starved != self.refused_seen;
         self.refused_seen = self.builder.stat.starved;
         self.refused_last = refused;
-        let pressed = |world: &World| {
-            let p = &world.pools[world.volumes.mesh_pool()];
-            p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
-        };
+        let pressed = mesh_pressed;
         let cap = if refused { MAX_RECLAIMS_WHEN_REFUSED } else { MAX_RECLAIMS_PER_FRAME };
         let mut freed = 0;
         // The order already puts off-screen chunks farthest first.
@@ -1159,7 +1192,7 @@ impl Scheduler {
             freed += 1;
         }
         if !refused || freed >= cap {
-            return;
+            return freed;
         }
         // Nothing off screen gave enough, or nothing was off screen — a
         // zoomed-out view has a thousand chunks in the frustum, every one
@@ -1211,7 +1244,36 @@ impl Scheduler {
             self.account(i, before);
             freed += 1;
         }
+        freed
     }
+
+    /// The byte budget paid in LOD (MAX_PRESSURE): a step in when a block
+    /// was refused and reclaim gave nothing back, a step out when the
+    /// refusals have stopped and the section is off its mark. A change is
+    /// a new ladder, and every chunk is rechecked against it.
+    fn press(&mut self, world: &World, now: f64, freed: u32) {
+        if self.refused_last {
+            self.refused_at = now;
+        }
+        let pressure = self.ladder.pressure();
+        let next = if self.refused_last && freed == 0 && pressure < MAX_PRESSURE && now - self.pressure_at >= PRESSURE_STEP_MS {
+            pressure + 1
+        } else if pressure > 0 && now - self.refused_at >= PRESSURE_RELIEF_MS && now - self.pressure_at >= PRESSURE_RELIEF_MS && !mesh_pressed(world) {
+            pressure - 1
+        } else {
+            return;
+        };
+        self.ladder.set_pressure(next);
+        self.pressure_at = now;
+        self.recheck_elapsed = RECHECK_INTERVAL_S;
+        self.view_dirty = true;
+    }
+}
+
+/// Whether the mesh section is live past MESH_PRESSURE.
+fn mesh_pressed(world: &World) -> bool {
+    let p = &world.pools[world.volumes.mesh_pool()];
+    p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
 }
 
 /// Ids the module gives the chunks it mounts, apart from any the glue adds.

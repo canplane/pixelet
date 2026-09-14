@@ -44,6 +44,9 @@ pub struct PoolStat {
     pub backing_used: u32,
     /// Acquires refused: the range used up, or a request past a region.
     pub refusals: u32,
+    /// Blocks given back: the count changes when, and only when, a request
+    /// refused before might be served — what a refused build waits on.
+    pub releases: u32,
 }
 
 struct Region {
@@ -262,6 +265,7 @@ impl Pool {
         let offset = (at - self.regions[r].base) as u32;
         self.stat.live_blocks -= 1;
         self.stat.live_bytes -= bytes;
+        self.stat.releases += 1;
         let block_bytes = 1u32 << (self.min_shift + order);
         let mut k = order;
         let mut at = offset;

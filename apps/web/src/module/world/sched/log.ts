@@ -260,7 +260,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  retain  nodes ${retain.nodes}  runsets ${retain.run_sets} (${retain.run_set_mb}MB)  tiers ${retain.tiers}  decor ${retain.decor_steps} steps / ${retain.decor_instances} instances   kept on-screen ${
       Math.round(CORE_BUILD.census().retained_on / 1048576)
     }MB, off-screen ${Math.round(CORE_BUILD.census().retained_off / 1048576)} / ${Math.round(RETAIN_BUDGET_BYTES / 1048576)}MB budget`,
-    `  lod     chunks ${last.lod.chunks}  in-frustum ${last.lod.in_frustum}  pending ${last.lod.pending}  settling ${last.lod.settling}  blending ${last.lod.blend_active}`,
+    `  lod     chunks ${last.lod.chunks}  in-frustum ${last.lod.in_frustum}  pending ${last.lod.pending}  settling ${last.lod.settling}  blending ${last.lod.blend_active}  pressure ${last.lod.pressure}`,
     `  wait    releases ${last.lod.offscreen_pending} pending, oldest ${Math.round(last.lod.oldest_release_ms)} ms${starved(last.lod.oldest_release_ms)}   on-screen oldest ${
       Math.round(last.lod.oldest_visible_ms)
     } ms${starved(last.lod.oldest_visible_ms)}`,
@@ -277,7 +277,7 @@ function peak_section(): string[] {
     `peak (window)`,
     `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  rck ${n1(p.recheck_ms)}  cmt ${n1(p.commit_ms)} ms`,
     `  draws ${p.draw_calls}  tris ${Math.round(p.triangles / 1000)}k  heap ${p.heap_mb}MB  queue t${p.q_terrain}/p${p.q_poi}`,
-    `  lod chunks ${p.chunks}  in-frustum ${p.in_frustum}  pending ${p.pending}  settling ${p.settling}  blending ${p.blend_active}`,
+    `  lod chunks ${p.chunks}  in-frustum ${p.in_frustum}  pending ${p.pending}  settling ${p.settling}  blending ${p.blend_active}  pressure ${p.pressure}`,
     `  wait releases ${p.offscreen_pending} pending, oldest ${Math.round(p.oldest_release_ms)} ms${starved(p.oldest_release_ms)}   on-screen oldest ${Math.round(p.oldest_visible_ms)} ms${
       starved(p.oldest_visible_ms)
     }`,

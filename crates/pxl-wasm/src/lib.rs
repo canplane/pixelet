@@ -67,7 +67,7 @@ struct State {
     change_row: [u32; 6],
     /// The frame the glue writes before each tick (FRAME_WORDS doubles).
     frame: [f64; FRAME_WORDS],
-    census: [f64; 12],
+    census: [f64; 13],
     events: std::collections::VecDeque<Event>,
     build_stat: [u32; 11],
     /// The world's raycast and its kept composites, and the last hit as
@@ -145,7 +145,7 @@ fn state() -> &'static mut State {
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
-                census: [0.0; 12],
+                census: [0.0; 13],
                 events: std::collections::VecDeque::new(),
                 build_stat: [0; 11],
             }
@@ -1009,6 +1009,7 @@ fn after(s: &mut State) {
         k.released as f64,
         k.retained_on,
         k.retained_off,
+        k.pressure as f64,
     ];
 }
 
@@ -1525,7 +1526,7 @@ pub extern "C" fn pxl_build_stat() -> *const u32 {
     state().build_stat.as_ptr()
 }
 
-/// The scheduler's census as twelve doubles: chunks, in the frustum,
+/// The scheduler's census as thirteen doubles: chunks, in the frustum,
 /// settling, blending, pending, pending off screen, the oldest visible and
 /// release waits in ms, committed this tick, released so far, and the bytes
 /// retained on and off screen.
