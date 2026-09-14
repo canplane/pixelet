@@ -37,6 +37,7 @@ export type PoseStatus = "idle" | "loading" | "ready" | "error";
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 export type RecentPick = { kind: "object" | "decor"; id: string };
 export type ChatLine = { id: number; text: string; ts: number };
+export type SearchRow = { gers_id: string; kind: "poi" | "division"; name: string; subtitle: string; distance: string | null; icon: string; color: string; lon: number; lat: number };
 
 export type UiSnapshot = {
   map: { has_center: boolean; center_lonlat: [number, number] | null; status: "idle" | "loading" | "success" | "error"; is_off_center: boolean };
@@ -53,6 +54,7 @@ export type UiSnapshot = {
   scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean; label: string };
   compass: { show: boolean };
   previews: { id: number; model: number; skin: number }[];
+  search: { loading: boolean; results: SearchRow[] };
   object_storage_version: number;
   report: string | null;
 };
@@ -72,6 +74,7 @@ const INITIAL: UiSnapshot = {
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true, label: "" },
   compass: { show: false },
   previews: [],
+  search: { loading: false, results: [] },
   object_storage_version: 0,
   report: null,
 };
@@ -289,7 +292,8 @@ async function run_demand(key: string, category: string, url: string): Promise<v
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
-  const page = BigInt(key.slice(key.indexOf(":") + 1));
+  const subject = key.slice(key.indexOf(":") + 1);
+  const page = category === "search" ? 0n : BigInt(subject);
   const phases: [string, number][] = [];
   let outcome = 0;
   let error: string | null = null;
@@ -324,6 +328,10 @@ async function run_demand(key: string, category: string, url: string): Promise<v
         if (signal.aborted) release_blocks([block]);
         else CORE_BUILD.send(0, Cmd.PAGE_POI, packet((b) => b.u64(BigInt.asUintN(64, page)).branch((e) => e.u32(block.byte_offset).u32(bytes.byteLength))));
       }
+    } else if (category === "search") {
+      if (!res.ok) throw new Error(`[search] http ${res.status}`);
+      const body = await res.text();
+      CORE_BUILD.send(0, Cmd.FETCH_SEARCH, packet((b) => b.str(key.slice(key.indexOf(":") + 1)).str(body)));
     } else if (category === "geocode") {
       if (res.status === 404) {
         CORE_BUILD.send(0, Cmd.FETCH_GEOCODE, packet((b) => b.u64(BigInt.asUintN(64, page)).str(null)));
