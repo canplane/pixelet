@@ -12,22 +12,21 @@
 //! One bake is open at a time, as with the TypeScript context; the module is
 //! single-threaded, so the state is a plain global.
 
-use pxl_core::bake::mesher::{BakeContext, Step};
+use pxl_core::bake::mesher::Step;
 use pxl_core::bake::run_set::{run_set_bytes, RunSet};
-use pxl_core::bake::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
-use pxl_core::bake::terrain::{ChunkSample, Materials, PageView, ELE_PADDED_SPAN};
+use pxl_core::bake::scan::{BandView, ExtraView, ScanStep};
+use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
 use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
+use pxl_core::kernel::{kernel, reindex_object, Kernel};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::world::object::{Carve, Kind, Painter, Store};
+use pxl_core::world::object::{Carve, Kind};
 use pxl_core::world::pool::Pool;
 use pxl_core::world::raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
-use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::io::marshal::tree::{encoder, BranchCursor, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
-use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
 use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
@@ -64,49 +63,17 @@ impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
 static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds::fixed_heap::FixedHeap::new();
 
 struct State {
-    ctx: BakeContext,
-    /// The open bake's run set: its address in the memory, and its shape.
-    input: (usize, u32, u32),
-    /// vertex_cnt, index_cnt, the six counters, then the heap's use.
-    result: [u32; 9],
-    scan: ScanContext,
-    /// The open scan's band table: its address, and how many bands.
-    bands: (usize, u32),
-    /// The pools over the memory's sections, by the id POOL_CREATE replied.
-    pools: Vec<Pool>,
-    /// The volumes, once VOLUME_POOLS has said which pools they draw on.
-    volumes: Option<Volumes>,
-    /// The open scan's bands, when it reads a volume of the module's.
-    scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,
-    /// The terrain tables, and the last chunk read.
-    terrain: Materials,
-    chunk: ChunkSample,
-    /// The object store, its painter, and the rows its lookups answer in.
-    objects: Store,
-    painter: Painter,
-    /// The raycast's column, and the row naming its lanes.
-    column: ColumnRuns,
     /// The submission ring (glue → core) and the completion ring (core →
     /// glue), in the module's heap for as long as the module lives.
     sq: Ring,
     cq: Ring,
-    /// The chunks' builds, and the events they made that the completion
-    /// ring had no room for yet.
-    sched: Scheduler,
-    /// The world's change log (module/world/change.ts's topics).
-    changes: ChangeLog,
-    /// The frame the glue writes before each tick (FRAME_WORDS doubles).
-    frame: [f64; FRAME_WORDS],
-    census: [f64; 13],
+    /// The events the builds made that the completion ring had no room for yet.
     events: std::collections::VecDeque<Event>,
     /// Replies the completion ring had no room for yet: tag, command, result
     /// and packet, flushed before any event.
     replies: std::collections::VecDeque<(u32, u32, i32, Option<U8Array>)>,
-    build_stat: [u32; 11],
     /// The block `boot` hands out.
     boot: [u32; BOOT_WORDS],
-    /// The world's raycast and its kept composites.
-    raycast: Raycast,
 }
 
 /// Messages each ring holds: a page mounting is 64 chunks a frame, each
@@ -168,34 +135,10 @@ fn state() -> &'static mut State {
                 host_panic(text.as_ptr(), text.len());
             }));
             State {
-                ctx: BakeContext::new(),
-                input: (0, 0, 0),
-                result: [0; 9],
-                scan: ScanContext::new(),
-                bands: (0, 0),
-                pools: Vec::new(),
-                volumes: None,
-                scan_rows: Vec::new(),
-                terrain: Materials::default(),
-                chunk: ChunkSample::default(),
-                objects: Store::new(),
-                painter: Painter::new(),
-                column: ColumnRuns::new(),
                 sq: new_ring(RING_CAPACITY),
                 cq: new_ring(RING_CAPACITY),
-                sched: Scheduler::new(),
-                raycast: Raycast::default(),
-                changes: ChangeLog::new(ChangeLogOptions {
-                    topics: WORLD_TOPICS,
-                    capacity: JOURNAL_CAPACITY,
-                    keys_per_topic: None,
-                    alloc: None,
-                }),
-                frame: [0.0; FRAME_WORDS],
-                census: [0.0; 13],
                 events: std::collections::VecDeque::new(),
                 replies: std::collections::VecDeque::new(),
-                build_stat: [0; 11],
                 boot: [0; BOOT_WORDS],
             }
         })
@@ -268,30 +211,7 @@ fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalErro
 // (module/world/object/store.ts). Writes, reads and the reference paint
 // alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
 
-/// module/world/change.ts's WorldTopic numbers the store bumps, and the
-/// log's shape.
-pub const TOPIC_OBJECT_COLUMN: u32 = 0;
-pub const TOPIC_DECOR_COLUMN: u32 = 1;
-pub const TOPIC_OBJECT_CELL: u32 = 2;
-pub const WORLD_TOPICS: u32 = 6;
-pub const JOURNAL_CAPACITY: u32 = 4096;
-
-/// Re-derives the chunk's entries and cells, and records the change: the
-/// column in both of its topics, and every cell whose entries changed, by
-/// its corner.
-fn reindex_object(s: &mut State, key: u64) {
-    s.objects.reindex(key);
-    s.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
-    s.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
-    let (at, n) = s.objects.take_touched();
-    let (x0, y0) = (ivec::X(key), ivec::Y(key));
-    for r in 0..n {
-        // SAFETY: the rows take_touched just handed back, three words each.
-        let row = unsafe { core::slice::from_raw_parts(at.add(r * 3), 3) };
-        let corner = gather(x0 + row[0] as i64, y0 + row[1] as i64, row[2] as i64);
-        s.changes.bump(TOPIC_OBJECT_CELL, corner as i64);
-    }
-}
+pub use pxl_core::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
 
 // ---- Rings ----
 //
@@ -301,14 +221,6 @@ fn reindex_object(s: &mut State, key: u64) {
 // what it submits and takes apart what completes; nothing here is shaped
 // for it. The glue pushes into the submission ring, rings `interrupt`
 // (DRAIN or TICK), and reads the completion ring when the call returns.
-
-/// Doubles in the frame block, in the order sched::Frame names them: the
-/// root matrix (16), the origin (3), the planes (24), the camera (3), the
-/// lead (3), then viewport height, fov, delta seconds, budget, hard slack,
-/// pixel dither and the retain budget, then the range anchor's x and y,
-/// whether there is one, the render distance and the range hysteresis, and
-/// whether decor is scattered.
-pub const FRAME_WORDS: usize = 62;
 
 /// Words in the boot block: the section the module keeps for itself at the
 /// front of the memory, which the shell checks its map against before
@@ -524,9 +436,9 @@ fn volume_at(f: &BranchCursor, i: u32) -> Result<usize, MarshalError> {
 }
 
 /// The pool a packet's first child names.
-fn pool_at<'a>(s: &'a mut State, f: &BranchCursor) -> Result<&'a mut Pool, MarshalError> {
+fn pool_at<'a>(k: &'a mut Kernel, f: &BranchCursor) -> Result<&'a mut Pool, MarshalError> {
     let id = u32_at(f, 0)?;
-    s.pools.get_mut(id as usize).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some(&format!("no pool {id}")), None))
+    k.pools.get_mut(id as usize).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some(&format!("no pool {id}")), None))
 }
 
 /// A ray as a query's packet carries it: the map origin, the origin, the
@@ -540,21 +452,22 @@ fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
 /// command nobody numbers, which replies ENOSYS; a packet that does not read
 /// as the command's replies with its errno.
 fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<(i32, Option<U8Array>)>, MarshalError> {
+    let k = kernel();
     let Some(cmd) = Cmd::of(number) else { return Ok(None) };
     match cmd {
         Cmd::OBJECT_UPDATE => {
             let f = fields(pkt)?;
-            s.objects
+            k.objects
                 .write(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?], i32_at(&f, 5)?, u32_at(&f, 6)?);
             return Ok(Some((0, None)));
         }
         Cmd::OBJECT_DELETE => {
-            s.objects.clear();
+            k.objects.clear();
             return Ok(Some((0, None)));
         }
         Cmd::OBJECT_REINDEX => {
             let key = u64_at(&fields(pkt)?, 0)?;
-            reindex_object(s, key);
+            reindex_object(k, key);
             return Ok(Some((0, None)));
         }
         Cmd::STATE_UPDATE => {
@@ -565,14 +478,14 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 3 => Kind::Decor,
                 _ => Kind::Untaught,
             };
-            s.painter.teach(u32_at(&f, 0)?, kind, u32_at(&f, 2)?, u32_at(&f, 3)? as u8);
+            k.painter.teach(u32_at(&f, 0)?, kind, u32_at(&f, 2)?, u32_at(&f, 3)? as u8);
             return Ok(Some((0, None)));
         }
         Cmd::TERRAIN_UPDATE => {
             let f = fields(pkt)?;
             let base = f.at(0)?.as_branch()?;
             let channels = f.at(1)?.as_branch()?;
-            let t = &mut s.terrain;
+            let t = &mut k.terrain;
             t.base_rgb = [u32_at(&base, 0)? as u8, u32_at(&base, 1)? as u8, u32_at(&base, 2)? as u8];
             t.base_layer = u32_at(&base, 3)? as u8;
             t.base_class = u32_at(&base, 4)? as u8;
@@ -591,29 +504,29 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::DECOR_KIND_UPDATE => {
             let kinds = fields(pkt)?.at(0)?.as_branch()?;
-            s.sched.decor_forget();
-            for k in kinds.iter() {
-                let k = k?.as_branch()?;
-                let value = i32_at(&k, 5)?;
-                let idx = s.sched.decor_kind(DecorKind {
-                    tag: u64_at(&k, 0)?,
-                    density: number_at(&k, 1)?,
-                    variant_count: u32_at(&k, 2)?,
-                    align_transport: bool_at(&k, 3)?,
-                    extent: number_at(&k, 4)?,
+            k.sched.decor_forget();
+            for kd in kinds.iter() {
+                let kd = kd?.as_branch()?;
+                let value = i32_at(&kd, 5)?;
+                let idx = k.sched.decor_kind(DecorKind {
+                    tag: u64_at(&kd, 0)?,
+                    density: number_at(&kd, 1)?,
+                    variant_count: u32_at(&kd, 2)?,
+                    align_transport: bool_at(&kd, 3)?,
+                    extent: number_at(&kd, 4)?,
                     decor_value: (value >= 0).then_some(value as u32),
                     rules: [DecorRule::Any; 4],
                 });
-                let rules = k.at(6)?.as_branch()?;
+                let rules = kd.at(6)?.as_branch()?;
                 for ch in 0..4 {
                     let r = rules.at(ch)?.as_branch()?;
                     match u32_at(&r, 0)? {
                         0 => {}
-                        1 => s.sched.decor_rule(idx, ch as usize, DecorRule::Void),
+                        1 => k.sched.decor_rule(idx, ch as usize, DecorRule::Void),
                         _ => {
-                            s.sched.decor_rule(idx, ch as usize, DecorRule::OneOf([0; 4]));
+                            k.sched.decor_rule(idx, ch as usize, DecorRule::OneOf([0; 4]));
                             for &t in bytes_at(&r, 1, usize::MAX)?.as_slice() {
-                                s.sched.decor_allow(idx, ch as usize, t);
+                                k.sched.decor_allow(idx, ch as usize, t);
                             }
                         }
                     }
@@ -623,17 +536,17 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::DECOR_KIND_MODEL => {
             let f = fields(pkt)?;
-            s.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
+            k.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
             return Ok(Some((0, None)));
         }
         Cmd::CHANGE_UPDATE | Cmd::CHANGE_READ | Cmd::CHANGE_DELETE => {
             let f = fields(pkt)?;
             let (topic, key) = (u32_at(&f, 0)?, u64_at(&f, 1)? as i64);
             let revision = match cmd {
-                Cmd::CHANGE_UPDATE => s.changes.bump(topic, key),
-                Cmd::CHANGE_READ => s.changes.revision_of(topic, key),
+                Cmd::CHANGE_UPDATE => k.changes.bump(topic, key),
+                Cmd::CHANGE_READ => k.changes.revision_of(topic, key),
                 _ => {
-                    s.changes.forget(topic, key);
+                    k.changes.forget(topic, key);
                     0
                 }
             };
@@ -642,7 +555,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::FRAME_READ => {
             let mut uniform = [pxl_core::render::shader::FRAME_FLOATS; 14];
             uniform[1..].copy_from_slice(&pxl_core::render::shader::FRAME_AT);
-            let (frame_at, uniform) = (s.frame.as_ptr() as u32, xpute_core::kit::array::U32Array::from(&uniform));
+            let (frame_at, uniform) = (k.frame.as_ptr() as u32, xpute_core::kit::array::U32Array::from(&uniform));
             return Ok(Some((
                 0,
                 Some(packet(&mut |b| {
@@ -651,7 +564,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             )));
         }
         Cmd::CHUNK_READ => {
-            let (census_at, stat_at) = (s.census.as_ptr() as u32, s.build_stat.as_ptr() as u32);
+            let (census_at, stat_at) = (k.census.as_ptr() as u32, k.build_stat.as_ptr() as u32);
             return Ok(Some((
                 0,
                 Some(packet(&mut |b| {
@@ -660,7 +573,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             )));
         }
         Cmd::ENV_LANES => {
-            let out_at = s.sched.environment.out.as_ptr() as u32;
+            let out_at = k.sched.environment.out.as_ptr() as u32;
             return Ok(Some((
                 0,
                 Some(packet(&mut |b| {
@@ -669,8 +582,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             )));
         }
         Cmd::CHANGE_LANES => {
-            let l = s.changes.lanes();
-            let capacity = s.changes.capacity;
+            let l = k.changes.lanes();
+            let capacity = k.changes.capacity;
             return Ok(Some((
                 0,
                 Some(packet(&mut |b| {
@@ -684,7 +597,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             )));
         }
         Cmd::DRAW_READ => {
-            let lanes = s.sched.draw.take();
+            let lanes = k.sched.draw.take();
             let row = xpute_core::kit::array::U32Array::from(&lanes.map(|v| v as u32));
             return Ok(Some((
                 0,
@@ -714,20 +627,20 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::MODEL_SEAL => {
             let scale = number_at(&fields(pkt)?, 0)? as f32;
-            let mem = opened(&mut s.volumes).mem();
-            let sched = &mut s.sched;
+            let mem = opened(&mut k.volumes).mem();
+            let sched = &mut k.sched;
             // SAFETY: the model's block is in the volumes' memory.
             unsafe { sched.models.seal(&mut sched.draw, mem, tag, scale) };
             return Ok(Some((0, None)));
         }
         Cmd::OBJECT_READ => {
             let f = fields(pkt)?;
-            let state = s.objects.read(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?]);
+            let state = k.objects.read(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?]);
             return Ok(Some((state as i32, None)));
         }
         Cmd::OBJECT_LANES => {
             let key = u64_at(&fields(pkt)?, 0)?;
-            let Some(lanes) = s.objects.chunk_lanes(key) else { return Ok(Some((0, None))) };
+            let Some(lanes) = k.objects.chunk_lanes(key) else { return Ok(Some((0, None))) };
             let reply = packet(&mut |b| {
                 b.u32(Some(lanes.band_at as u32)).u32(Some(lanes.pos_at as u32)).u32(Some(lanes.state_at as u32));
             });
@@ -735,7 +648,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::OBJECT_CELL => {
             let f = fields(pkt)?;
-            let Some(rec) = s.objects.cell(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?) else {
+            let Some(rec) = k.objects.cell(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?) else {
                 return Ok(Some((0, None)));
             };
             return Ok(Some((
@@ -746,7 +659,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             )));
         }
         Cmd::OBJECT_COLUMNS => {
-            let keys: Vec<u64> = (0..s.objects.chunk_count()).map(|i| s.objects.chunk_key(i)).collect();
+            let keys: Vec<u64> = (0..k.objects.chunk_count()).map(|i| k.objects.chunk_key(i)).collect();
             let keys = xpute_core::kit::array::U64Array::from(&keys);
             return Ok(Some((
                 0,
@@ -756,7 +669,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             )));
         }
         Cmd::OBJECT_STAT => {
-            let o = &s.objects;
+            let o = &k.objects;
             let (chunks, bands, cells) = (o.chunk_count() as u32, o.band_count() as u32, o.cell_count() as u32);
             return Ok(Some((
                 0,
@@ -771,22 +684,22 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             // SAFETY: the memory is the module's own linear memory, addressed
             // from 0, and the shell keeps the range for this pool alone.
             let pool = unsafe { Pool::new(core::ptr::null_mut(), start + bytes, start, bytes, u32_at(&f, 2)?, u32_at(&f, 3)?) };
-            s.pools.push(pool);
-            return Ok(Some((s.pools.len() as i32 - 1, None)));
+            k.pools.push(pool);
+            return Ok(Some((k.pools.len() as i32 - 1, None)));
         }
         Cmd::POOL_READ => {
             let f = fields(pkt)?;
-            return Ok(Some((pool_at(s, &f)?.stat_words() as usize as i32, None)));
+            return Ok(Some((pool_at(k, &f)?.stat_words() as usize as i32, None)));
         }
         Cmd::POOL_ACQUIRE => {
             let f = fields(pkt)?;
             let bytes = u32_at(&f, 1)?;
-            return Ok(Some((pool_at(s, &f)?.acquire(bytes).map_or(0, |at| at as i32), None)));
+            return Ok(Some((pool_at(k, &f)?.acquire(bytes).map_or(0, |at| at as i32), None)));
         }
         Cmd::POOL_RELEASE => {
             let f = fields(pkt)?;
             let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
-            if !pool_at(s, &f)?.release(at, bytes) {
+            if !pool_at(k, &f)?.release(at, bytes) {
                 return Err(MarshalError::new(
                     Errno::EINVAL,
                     Some(&format!("a {bytes}B block at {at} its pool does not hold, or holds already")),
@@ -798,22 +711,22 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::POOL_FREE => {
             let f = fields(pkt)?;
             let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
-            return Ok(Some((pool_at(s, &f)?.is_free(at, bytes) as i32, None)));
+            return Ok(Some((pool_at(k, &f)?.is_free(at, bytes) as i32, None)));
         }
         Cmd::VOLUME_POOLS => {
             let f = fields(pkt)?;
             // SAFETY: the pools were cut from this module's memory, addressed from 0.
-            s.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), u32_at(&f, 0)?, u32_at(&f, 1)?) });
+            k.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), u32_at(&f, 0)?, u32_at(&f, 1)?) });
             return Ok(Some((0, None)));
         }
         Cmd::VOLUME_STAT => {
-            let at = &volumes_of(&mut s.volumes)?.stat as *const _ as usize;
+            let at = &volumes_of(&mut k.volumes)?.stat as *const _ as usize;
             return Ok(Some((at as i32, None)));
         }
-        Cmd::VOLUME_CREATE => return Ok(Some((volumes_of(&mut s.volumes)?.open() as i32 + 1, None))),
+        Cmd::VOLUME_CREATE => return Ok(Some((volumes_of(&mut k.volumes)?.open() as i32 + 1, None))),
         Cmd::VOLUME_READ => {
             let id = volume_at(&fields(pkt)?, 0)?;
-            let v = volumes_of(&mut s.volumes)?;
+            let v = volumes_of(&mut k.volumes)?;
             let count = v.band_count(id);
             if count == 0 {
                 return Ok(Some((0, None)));
@@ -832,7 +745,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::VOLUME_DELETE => {
             let id = volume_at(&fields(pkt)?, 0)?;
-            volumes_of(&mut s.volumes)?.release(&mut s.pools, id);
+            volumes_of(&mut k.volumes)?.release(&mut k.pools, id);
             return Ok(Some((0, None)));
         }
         Cmd::VOLUME_FILL => {
@@ -844,7 +757,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 sub: 0,
             };
             let (cx, cy, z0, z1) = (u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?, i32_at(&f, 4)?);
-            let ok = volumes_of(&mut s.volumes)?.fill_column(&mut s.pools, id, (cx, cy), z0, z1, voxel);
+            let ok = volumes_of(&mut k.volumes)?.fill_column(&mut k.pools, id, (cx, cy), z0, z1, voxel);
             return Ok(Some((ok as i32, None)));
         }
         Cmd::VOLUME_VOXEL | Cmd::VOLUME_SUB_VOXEL => {
@@ -860,30 +773,30 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 layer_idx: u32_at(&f, 5)? as u8,
                 sub: u32_at(&f, 6)?,
             };
-            let v = volumes_of(&mut s.volumes)?;
+            let v = volumes_of(&mut k.volumes)?;
             let ok = if cmd == Cmd::VOLUME_VOXEL {
-                v.set_voxel(&mut s.pools, id, cell, voxel)
+                v.set_voxel(&mut k.pools, id, cell, voxel)
             } else {
-                v.append_sub_voxel(&mut s.pools, id, cell, voxel)
+                v.append_sub_voxel(&mut k.pools, id, cell, voxel)
             };
             return Ok(Some((ok as i32, None)));
         }
         Cmd::VOLUME_SEAL => {
             let id = volume_at(&fields(pkt)?, 0)?;
-            volumes_of(&mut s.volumes)?.seal(id);
+            volumes_of(&mut k.volumes)?.seal(id);
             return Ok(Some((0, None)));
         }
         Cmd::BAKE_CREATE => {
-            if s.ctx.is_open() {
+            if k.ctx.is_open() {
                 return Ok(Some((0, None)));
             }
             let f = fields(pkt)?;
-            s.input = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?, u32_at(&f, 2)?);
+            k.input = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?, u32_at(&f, 2)?);
             let lod_step = u32_at(&f, 3)?;
-            return Ok(Some((s.ctx.begin(&input_view(s.input), lod_step) as i32, None)));
+            return Ok(Some((k.ctx.begin(&input_view(k.input), lod_step) as i32, None)));
         }
         Cmd::BAKE_STEP => {
-            return Ok(Some(match s.ctx.step(&input_view(s.input)) {
+            return Ok(Some(match k.ctx.step(&input_view(k.input)) {
                 Step::Working => (StepResult::WORKING as i32, None),
                 Step::NeedMesh(words) => (
                     StepResult::NEED_BLOCK as i32,
@@ -899,13 +812,13 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let (at, words) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
             // SAFETY: the shell's block, `words` words at `at`, 4-aligned, kept
             // until the bake finishes or aborts.
-            unsafe { s.ctx.provide_mesh(at as *mut u32, words) }
+            unsafe { k.ctx.provide_mesh(at as *mut u32, words) }
             return Ok(Some((0, None)));
         }
         Cmd::BAKE_FINISH => {
-            let mesh = s.ctx.finish();
-            let c = s.ctx.counters;
-            s.result = [
+            let mesh = k.ctx.finish();
+            let c = k.ctx.counters;
+            k.result = [
                 mesh.vertex_cnt,
                 mesh.index_cnt,
                 c.total_runs,
@@ -916,29 +829,29 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 c.coarse_low_fill,
                 ALLOC.used() as u32,
             ];
-            return Ok(Some((s.result.as_ptr() as usize as i32, None)));
+            return Ok(Some((k.result.as_ptr() as usize as i32, None)));
         }
         Cmd::BAKE_DELETE => {
-            s.ctx.abort();
+            k.ctx.abort();
             return Ok(Some((0, None)));
         }
         Cmd::SCAN_CREATE => {
-            if s.scan.is_open() {
+            if k.scan.is_open() {
                 return Ok(Some((0, None)));
             }
             let id = volume_at(&fields(pkt)?, 0)?;
-            let v = volumes_of(&mut s.volumes)?;
+            let v = volumes_of(&mut k.volumes)?;
             let count = v.band_count(id);
             // The rows copied out, so the scan reads them as a table of its own.
-            s.scan_rows.clear();
+            k.scan_rows.clear();
             for i in 0..count {
-                s.scan_rows.push(*v.band_row(id, i));
+                k.scan_rows.push(*v.band_row(id, i));
             }
-            s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
-            return Ok(Some((s.scan.begin(&band_views(s.bands)) as i32, None)));
+            k.bands = (k.scan_rows.as_ptr() as usize, count as u32);
+            return Ok(Some((k.scan.begin(&band_views(k.bands)) as i32, None)));
         }
         Cmd::SCAN_STEP => {
-            return Ok(Some(match s.scan.step(&band_views(s.bands)) {
+            return Ok(Some(match k.scan.step(&band_views(k.bands)) {
                 ScanStep::Working => (StepResult::WORKING as i32, None),
                 ScanStep::NeedSet(bytes) => (
                     StepResult::NEED_BLOCK as i32,
@@ -953,11 +866,11 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let (at, bytes) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
             // SAFETY: the shell's block, `bytes` bytes at `at`, 4-aligned.
-            unsafe { s.scan.provide_set(at as *mut u8, bytes) }
-            return Ok(Some((s.scan.finish() as i32, None)));
+            unsafe { k.scan.provide_set(at as *mut u8, bytes) }
+            return Ok(Some((k.scan.finish() as i32, None)));
         }
         Cmd::SCAN_DELETE => {
-            s.scan.abort();
+            k.scan.abort();
             return Ok(Some((0, None)));
         }
         Cmd::TERRAIN_READ => {
@@ -982,8 +895,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                     ele: core::slice::from_raw_parts(lanes[4] as *const i16, samples),
                 }
             };
-            s.chunk.read(&page, &s.terrain, tx0, ty0, bool_at(&f, 7)?);
-            let c = &s.chunk;
+            k.chunk.read(&page, &k.terrain, tx0, ty0, bool_at(&f, 7)?);
+            let c = &k.chunk;
             let (floor, material_at, layer_at, ele_at) = (c.floor, c.material.as_ptr() as usize as u32, c.layer_idx.as_ptr() as usize as u32, c.ele.as_ptr() as usize as u32);
             return Ok(Some((
                 0,
@@ -994,8 +907,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::TERRAIN_PAINT => {
             let id = volume_at(&fields(pkt)?, 0)?;
-            let v = volumes_of(&mut s.volumes)?;
-            return Ok(Some((s.chunk.paint(v, &mut s.pools, id) as i32, None)));
+            let v = volumes_of(&mut k.volumes)?;
+            return Ok(Some((k.chunk.paint(v, &mut k.pools, id) as i32, None)));
         }
         Cmd::OBJECT_PAINT => {
             let f = fields(pkt)?;
@@ -1013,18 +926,18 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 }),
                 None => None,
             };
-            let v = volumes_of(&mut s.volumes)?;
-            let made = s.painter.paint(&s.objects, v, &mut s.pools, id, key, hide, carve);
+            let v = volumes_of(&mut k.volumes)?;
+            let made = k.painter.paint(&k.objects, v, &mut k.pools, id, key, hide, carve);
             return Ok(Some(((made.any as u32 | ((made.refused as u32) << 1)) as i32, None)));
         }
         Cmd::RAY_COLUMN => {
             let f = fields(pkt)?;
             let id = volume_at(&f, 0)?;
             let (cx, cy) = (u32_at(&f, 1)?, u32_at(&f, 2)?);
-            let v = volumes_of(&mut s.volumes)?;
+            let v = volumes_of(&mut k.volumes)?;
             let rows: Vec<[u32; VOLUME_BAND_WORDS]> = (0..v.band_count(id)).map(|i| *v.band_row(id, i)).collect();
-            let n = s.column.walk(&band_views((rows.as_ptr() as usize, rows.len() as u32)), cx, cy);
-            let c = &s.column;
+            let n = k.column.walk(&band_views((rows.as_ptr() as usize, rows.len() as u32)), cx, cy);
+            let c = &k.column;
             let lanes = [
                 c.z0.as_ptr() as usize as u32,
                 c.z1.as_ptr() as usize as u32,
@@ -1044,7 +957,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
     }
     let Parts {
         mut world, events, sched, raycast, ..
-    } = parts(s);
+    } = parts(k, &mut s.events);
     let mut emit = |e: Event| events.push_back(e);
     match cmd {
         Cmd::NOP => {
@@ -1397,7 +1310,7 @@ fn drain(s: &mut State) -> u32 {
     }
     // The rows the glue reads by address (the build stat, the census) are
     // as of the last command, as they are of the last tick.
-    after(s);
+    after();
     posted
 }
 
@@ -1410,25 +1323,26 @@ struct Parts<'a> {
     raycast: &'a mut Raycast,
 }
 
-fn parts(s: &mut State) -> Parts<'_> {
+fn parts<'a>(k: &'a mut Kernel, events: &'a mut std::collections::VecDeque<Event>) -> Parts<'a> {
     Parts {
         world: World {
-            volumes: opened(&mut s.volumes),
-            pools: &mut s.pools,
-            materials: &s.terrain,
-            store: &s.objects,
-            painter: &mut s.painter,
+            volumes: opened(&mut k.volumes),
+            pools: &mut k.pools,
+            materials: &k.terrain,
+            store: &k.objects,
+            painter: &mut k.painter,
         },
-        events: &mut s.events,
-        sched: &mut s.sched,
-        raycast: &mut s.raycast,
+        events,
+        sched: &mut k.sched,
+        raycast: &mut k.raycast,
     }
 }
 
-fn after(s: &mut State) {
-    let st = s.sched.builder.stat;
-    let c = s.sched.builder.bake_context().counters;
-    s.build_stat = [
+fn after() {
+    let k = kernel();
+    let st = k.sched.builder.stat;
+    let c = k.sched.builder.bake_context().counters;
+    k.build_stat = [
         st.direct,
         st.scans,
         st.bakes,
@@ -1441,21 +1355,21 @@ fn after(s: &mut State) {
         c.coarse_low_fill,
         ALLOC.used() as u32,
     ];
-    let k = s.sched.census;
-    s.census = [
-        k.chunks as f64,
-        k.in_frustum as f64,
-        k.settling as f64,
-        k.blend_active as f64,
-        k.pending as f64,
-        k.offscreen_pending as f64,
-        k.oldest_visible_ms,
-        k.oldest_release_ms,
-        k.committed as f64,
-        k.released as f64,
-        k.retained_on,
-        k.retained_off,
-        k.pressure as f64,
+    let c = k.sched.census;
+    k.census = [
+        c.chunks as f64,
+        c.in_frustum as f64,
+        c.settling as f64,
+        c.blend_active as f64,
+        c.pending as f64,
+        c.offscreen_pending as f64,
+        c.oldest_visible_ms,
+        c.oldest_release_ms,
+        c.committed as f64,
+        c.released as f64,
+        c.retained_on,
+        c.retained_off,
+        c.pressure as f64,
     ];
 }
 
@@ -1464,14 +1378,15 @@ fn after(s: &mut State) {
 /// FRAME_READ's address. 1 when the canvas has something new to draw.
 fn tick(s: &mut State) -> u32 {
     drain(s);
+    let k = kernel();
     // Events the ring had no room for are posted first; a tick on top of
     // them would only queue more. The glue reads the ring dry and drains
     // again before the next tick, so this is a frame lost only when it
     // does not.
-    if !s.events.is_empty() || s.volumes.is_none() {
+    if !s.events.is_empty() || k.volumes.is_none() {
         return 1;
     }
-    let f = s.frame;
+    let f = k.frame;
     let mut frame = Frame::default();
     frame.root.copy_from_slice(&f[0..16]);
     frame.origin.copy_from_slice(&f[16..19]);
@@ -1489,10 +1404,10 @@ fn tick(s: &mut State) -> u32 {
     frame.render_dist = f[59];
     frame.range_hysteresis = f[60];
     frame.show_decor = f[61] != 0.0;
-    let Parts { mut world, events, sched, .. } = parts(s);
+    let Parts { mut world, events, sched, .. } = parts(k, &mut s.events);
     let draw = sched.tick(&mut world, frame, &now, &mut |e| events.push_back(e));
     flush(s);
-    after(s);
+    after();
     draw as u32
 }
 
