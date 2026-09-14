@@ -3,7 +3,7 @@
 /**
  * Which chunks of a page are in range of the anchor, as the TypeScript
  * decided it before the module mounted chunks itself
- * (crates/pxl-core/src/world/sched.rs's range mount): the reference
+ * (crates/pxl/core/src/world/sched.rs's range mount): the reference
  * core_sched.test.ts holds the module's mounts to, anchor for anchor.
  */
 

@@ -671,7 +671,7 @@ function total_nbyte<T extends TypedArray>(mem: SparseTreeMemory<T>, data_bpe: u
   const hdr_nbyte: u32 = WORD_SZ; // [head(u32) | reserved(u32)]
 
   const used: u32 = mem.head;
-  const heap_nbyte: u32 = ALIGN(used << 2, WORD_SZ);
+  const heap_nbyte: u32 = ALIGN(used * 4, WORD_SZ);
   const data_nbyte: u32 = ALIGN(used * data_bpe, WORD_SZ);
 
   return hdr_nbyte + heap_nbyte + data_nbyte;
@@ -696,7 +696,7 @@ function write_mem<T extends TypedArray>(mem: SparseTreeMemory<T>, buf: U8Array)
   SET_WORD(buf_view, off, used, RESERVED);
   off += WORD_SZ;
 
-  const heap_nbyte: u32 = used << 2;
+  const heap_nbyte: u32 = used * 4;
   const heap_buf: U8Array = new Uint8Array(mem.heap.buffer, mem.heap.byteOffset, heap_nbyte);
   buf.set(heap_buf, off);
   off += ALIGN(heap_nbyte, WORD_SZ);
@@ -730,7 +730,7 @@ function read_mem<T extends TypedArray>(
   off += WORD_SZ;
 
   const heap_off: u32 = off;
-  const heap_nbyte: u32 = used << 2;
+  const heap_nbyte: u32 = used * 4;
   off += ALIGN(heap_nbyte, WORD_SZ);
 
   const data_off: u32 = off;

@@ -120,7 +120,7 @@ export function LocationPuck(props: LocationPuckProps) {
 
   const is_night: boolean = theme_key === WorldThemeKey.NIGHT;
 
-  // The puck is the core's (crates/pxl-core/src/world/marker.rs): this decides
+  // The puck is the core's (crates/pxl/core/src/world/marker.rs): this decides
   // where the device is, which cells the zone covers at what height and
   // where the beacon should stand; the core holds the zone, eases, spins and
   // bobs the beacon, and draws both.

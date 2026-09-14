@@ -32,6 +32,65 @@ state of the world from them — damp a camera, decide which page to fetch,
 place a badge, compose a coordinate. If a piece of TypeScript holds a
 number the module would have to ask for, it is on the wrong side.
 
+**Restated 2026-09-14, later the same day, because the audit had begun to
+read it the other way round.** The module is not an accelerator that
+JavaScript hands its hot paths to. It is the program: one WebAssembly
+module, complete and portable, that a browser page, a worker, or a native
+shell can host without the host knowing what a chunk is. In one line:
+TypeScript is the shell, WebAssembly is the kernel, and the tick is the
+interrupt — the shell hands the kernel time, the kernel handles what
+arrived and hands the time back. What that decides about the boundary:
+
+- **No bindgen.** A table of a hundred exported functions, each a typed
+  call into the module, is bindgen by hand — a host written against it
+  has to know the module's API by name, and a second host has to be
+  written again. The boundary is three things and only three: **the
+  rings** (a submission ring and a completion ring in the module's linear
+  memory, every command an entry, every result an entry), **shared
+  memory** (lanes the host lands bytes in and reads records from, at
+  addresses the module hands out through the rings), and **a cooperative
+  scheduler** (the host gives the module time by ringing its doorbell —
+  `pxl_tick` under the frame loop, `pxl_drain` outside it — and the
+  module yields when the budget is spent). What is exported is what
+  cannot be a ring entry: the memory, the rings' addresses, the
+  doorbells, the panic hook. Everything named `pxl_*` today that is not
+  one of those is on its way into the rings.
+- **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
+  space are what a host and the module both stand on, and the module
+  cannot import TypeScript. So each is kept in both languages, file for
+  file and export for export, in the same tree, with a harness
+  (`script/pair.ts`, in `deno task check`) that fails when a file, an
+  export or a test on one side has no pair on the other, and vectors the
+  TypeScript writes and the Rust must reproduce bit for bit. A piece both
+  runtimes need is not a duplicate to move to one side. The check runs one
+  way: what the TypeScript has, the Rust has, and a TypeScript export left
+  out is listed with its reason. The Rust may carry more — the kernel is
+  where the work is going, and a TypeScript twin of a kernel-only piece is
+  written the day something in the shell needs it, not before. The tree is mirrored as it is, however it might
+  be better arranged — arranging comes later, on both sides at once.
+- **Bit for bit, except where the TypeScript cannot be.** Two exceptions
+  came out of the first vectors. `Math.sin`, `exp`, `log` and the rest are
+  no longer fdlibm in V8 but LLVM libc's correctly rounded functions, and
+  the kernel does not follow the browser's libm: it carries FreeBSD msun's
+  (`xpute_core::kit::fdlibm`) so a result is one set of bits on every
+  toolchain, and the vectors hold the functions to within one ulp and
+  what is computed from them to a few, while a lattice address, which a rounding tie must never move, is
+  held exact. And a vector that catches the TypeScript wrong
+  (`unpack96` losing its low limb through `Number()`) is not copied into
+  the Rust; the test states the divergence and fails once the TypeScript
+  is fixed.
+
+**The destination, whole (2026-09-14).** The client is one Rust kernel
+in WebAssembly drawing through WebGPU, with TypeScript as the shell —
+the UI, the browser's interrupts and I/O, and the calls that execute
+what the kernel lists. The server is Rust too, in time; it is not urgent,
+and nothing about the client waits on it. When it comes, `pxl-shared` —
+PVF3, the XTP reader and the bake wire format — is the one crate the
+server and the client kernel both build on, and `@pxl/shared` shrinks to
+what the shell still reads. The mirror the harness holds today runs
+TypeScript → Rust because the TypeScript is the finished side; the day
+the kernel is the original, the direction turns.
+
 Two things are explicitly on both sides:
 
 - **Marshalling** (XTP). The wire format is a contract, and each side

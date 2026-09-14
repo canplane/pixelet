@@ -1,7 +1,7 @@
 // @pxl/web/module/world/raycast.ts
 
 /**
- * The world's raycast, in the module (crates/pxl-core/src/world/raycast.rs):
+ * The world's raycast, in the module (crates/pxl/core/src/world/raycast.rs):
  * `ray_hit_world` asks it, over the chunks the scheduler holds and the
  * composites it keeps, and reads the hit back as doubles. The TypeScript
  * walk the module's is held to is reference/chunk_raycast.ts.

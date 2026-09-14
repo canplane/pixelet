@@ -4,7 +4,7 @@
  * The TypeScript bake as the reference tests drive it: one bake context
  * over the core pools, a tier baked from column runs through it, and the
  * bounds of what was baked — what the client did before the module baked
- * every tier (crates/pxl-core/src/bake/mesher.rs), kept so the tests can
+ * every tier (crates/pxl/core/src/bake/mesher.rs), kept so the tests can
  * hold the module's mesh to it byte for byte.
  */
 

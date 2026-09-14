@@ -63,7 +63,9 @@ export function tx_seq(tx_id: u32): u32 {
 }
 
 export function align8(n: u32): u32 {
-  return (n + 7) & ~7;
+  // In doubles: `&` would wrap a size past 2^31 negative, and a negative
+  // body offset passes every "does it fit" check.
+  return Math.ceil(n / 8) * 8;
 }
 
 /** The message a link carries: the frame, and the spill when there is one. */

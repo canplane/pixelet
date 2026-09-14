@@ -3,7 +3,7 @@
 /**
  * The billboards through WebGPU — the POI badges and the chat bubble: one
  * instanced quad over the module's billboard sets
- * (crates/pxl-core/src/world/billboard.rs), one draw a set, in a pass of their
+ * (crates/pxl/core/src/world/billboard.rs), one draw a set, in a pass of their
  * own after the world with the world's depth attached read-only and bound
  * as a texture at once (shader/badge.wgsl asks both of its depth questions
  * of this frame's depth). The copy three needed, a frame stale and

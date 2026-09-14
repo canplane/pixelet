@@ -7,7 +7,7 @@
  * chatLines comes from. World-anchored-billboard tier (see
  * issue/20260907-world-rendering-tiers.md); the actual render is
  * a billboard set of the module standing on the companion's actor
- * (crates/pxl-core/src/world/billboard.rs), drawn from the sheet POI badges share.
+ * (crates/pxl/core/src/world/billboard.rs), drawn from the sheet POI badges share.
  * This file owns only what's chat-bubble-specific: reading chatLines, the
  * show/expire timer, and drawing the notched speech-bubble shape.
  *
@@ -141,7 +141,7 @@ export type ChatBubbleProps = {
   actor: u32 | null;
 };
 
-/** Floats a billboard instance takes (crates/pxl-core/src/world/billboard.rs). */
+/** Floats a billboard instance takes (crates/pxl/core/src/world/billboard.rs). */
 const BILLBOARD_FLOATS = 10;
 
 export function ChatBubble(props: ChatBubbleProps) {

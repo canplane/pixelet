@@ -2,7 +2,7 @@
 
 /**
  * A parsed glTF (render/gltf/gltf.ts) handed to the module as a model
- * (crates/pxl-core/src/world/model.rs): the one place a parsed asset becomes the
+ * (crates/pxl/core/src/world/model.rs): the one place a parsed asset becomes the
  * core's lanes, so a companion, a decor kind or an asset a player brings
  * all enter the world the same way.
  *

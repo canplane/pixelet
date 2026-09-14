@@ -2,7 +2,7 @@
 
 /**
  * Actors through WebGPU: the module's skinned draws
- * (crates/pxl-core/src/world/model.rs) executed against each model's mesh block
+ * (crates/pxl/core/src/world/model.rs) executed against each model's mesh block
  * and each actor's joint palette, both as the module wrote them, under
  * shader/skinned.wgsl. A model's skin is the glue's, as decor's are:
  * handed over by model id.

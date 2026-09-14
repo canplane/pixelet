@@ -1,0 +1,19 @@
+{
+  "crates/xpute/core/src/ds/fixed_heap.rs": "The module's own heap (a GlobalAlloc over a fixed range): JavaScript has a garbage collector, a WebAssembly module has this. No TypeScript to mirror.",
+  "crates/xpute/core/src/kit/fdlibm.rs": "JavaScript's Math builtins, as FreeBSD msun computes them, so a result is the same bits on every toolchain: the pair of a runtime global, not of a file.",
+  "crates/xpute/core/src/kit/json.rs": "JSON.stringify and JSON.parse of a flat string map, the host's JSON for the records' tags: the pair of a runtime global, not of a file.",
+  "crates/xpute/core/src/sys/console.rs": "JavaScript's console global; the host installs one.",
+  "packages/xpute/core/src/kit/word.ts": "Integer types, casts, fit checks and masked shifts for a language that has only doubles and BigInt: Rust's primitives and `as`. A consumer uses the primitive.",
+  "packages/xpute/core/src/ds/treap_set.ts#Key": "Type-level union (string | number | bigint) the set does not use; the set is generic over its comparator.",
+  "packages/xpute/core/src/kit/type.ts": "Type-level utilities (Async<T>, Nullable<T>): the type system's — Option<T>.",
+  "packages/xpute/core/src/kit/cast.ts": "Bit-pattern reinterpretation at a width, for a language with only doubles and BigInt: `as` casts here.",
+  "packages/xpute/core/src/kit/detect_env.ts": "Runtime detection (browser, worker, Node): the host's; the module has one runtime.",
+  "packages/xpute/core/src/kit/iter.ts": "Generator adapters over iterables (dedupe, except, take, filter): the Iterator trait's own adapters.",
+  "packages/xpute/core/src/kit/lower.ts": "JS-side lowering of plain objects (Object.getPrototypeOf, key ordering) for the tree frontends: JavaScript's object model; the module lowers typed values.",
+  "packages/xpute/core/src/io/json_codec.ts": "JSON encode/decode with the host's JSON: the host's; nothing the module exchanges is JSON.",
+  "packages/xpute/core/src/ipc/link.ts": "The transport — postMessage transfer, structured clone, the microtask queue: the host's. The module's link is the ring.",
+  "packages/xpute/core/src/kit/hash.ts#sha256": "WebCrypto's digest: the host's.",
+  "packages/xpute/core/src/kit/hash.ts#sha256_from_str": "WebCrypto's digest: the host's.",
+  "packages/xpute/core/src/kit/hash.ts#sha256_hex": "WebCrypto's digest: the host's.",
+  "crates/xpute/core/src/vector.rs": "The vectors' reader, test-only; its writer is script/pair.ts, not a file of the kit."
+}

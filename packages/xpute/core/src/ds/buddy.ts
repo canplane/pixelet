@@ -661,7 +661,9 @@ export class BuddyAllocator {
     if (this._kernel !== null && buf === this._backing) return (KERNEL_HANDLE | byte_offset) >>> 0;
     const i = this._locate(buf, byte_offset);
     if (i < 0) throw new MarshalError(Errno.EINVAL, `pool: a ${bytes}B block outside every region has no handle`);
-    if (i >= 1 << (32 - this._order_bits - this._max_order)) throw new MarshalError(Errno.EOVERFLOW, `pool: region ${i} does not fit a handle`);
+    // 2 ** rather than 1 <<: the exponent reaches 31 (a region of one minimum
+    // block), where 1 << 31 is negative and every region would be refused.
+    if (i >= 2 ** (32 - this._order_bits - this._max_order)) throw new MarshalError(Errno.EOVERFLOW, `pool: region ${i} does not fit a handle`);
     const page = (byte_offset - this._regions[i]!.base) >>> this._min_shift;
     return ((i << (this._order_bits + this._max_order)) | (this._order_of(bytes) << this._max_order) | page) >>> 0;
   }

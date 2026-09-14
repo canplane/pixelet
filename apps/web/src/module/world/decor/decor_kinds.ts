@@ -2,7 +2,7 @@
 
 /**
  * The decor kinds: what real GLB models stand where, taught to the module
- * (crates/pxl-core/src/world/decor.rs) as data — each kind's extent, density,
+ * (crates/pxl/core/src/world/decor.rs) as data — each kind's extent, density,
  * the channels it scatters on, its variants and their palette rows — and
  * the falloff by tier the module and the reference build share. The build
  * itself is the module's, a block of lanes a chunk and tier; the
@@ -161,7 +161,7 @@ export function kind_extent(bundle: DecorKindBundle): f64 {
 
 /**
  * Teaches the module every kind, in bundle order — the order of the groups
- * in the decor blocks it hands over (crates/pxl-core/src/world/decor.rs): each
+ * in the decor blocks it hands over (crates/pxl/core/src/world/decor.rs): each
  * kind's variants in variant order, one group a variant. Called once, from
  * decor_registry.ts, with the registry's own list.
  */

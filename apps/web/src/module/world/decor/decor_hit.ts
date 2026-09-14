@@ -2,7 +2,7 @@
 
 /**
  * Which user-placed decor entry the pointer's ray strikes, by the module's
- * hit test (crates/pxl-core/src/world/raycast.rs's hit_decor): the ray against
+ * hit test (crates/pxl/core/src/world/raycast.rs's hit_decor): the ray against
  * the triangles of every placed instance the on-screen chunks show, from
  * the same blocks the renderer draws. What comes back is the chunk it
  * stands in and the entry's band and packed position in that column, which

@@ -2,7 +2,7 @@
 
 /**
  * The TypeScript walk of one already-composited chunk: the reference the
- * module's raycast (crates/pxl-core/src/world/raycast.rs, asked through
+ * module's raycast (crates/pxl/core/src/world/raycast.rs, asked through
  * module/world/raycast.ts) is held to by core_raycast.test.ts — the same
  * slab test, the same boxes.
  */
@@ -63,7 +63,7 @@ export function ray_aabb_hit(ray: RayLike, min: Readonly<V3>, max: Readonly<V3>)
 
 /**
  * One column's runs as lanes, read once: the module's walk of its own
- * volume (crates/pxl-core/src/bake/scan.rs's ColumnRuns) — the same walk the
+ * volume (crates/pxl/core/src/bake/scan.rs's ColumnRuns) — the same walk the
  * scan makes, so the raycast tests exactly the boxes the mesher emits —
  * or, where there is no core memory, the TypeScript walk copied into
  * the same lanes. The inset is packed as the band stores it: ox, oy, oz,

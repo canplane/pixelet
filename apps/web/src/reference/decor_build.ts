@@ -2,7 +2,7 @@
 
 /**
  * The TypeScript build of a chunk's decor at one tier, the reference the
- * module's (crates/pxl-core/src/world/decor.rs) is held to instance for
+ * module's (crates/pxl/core/src/world/decor.rs) is held to instance for
  * instance by core_decor.test.ts — the scatter's streams bit for bit — and
  * the account of why each rule is what it is. The kinds and the density
  * falloff are module/world/decor/decor_kinds.ts's.

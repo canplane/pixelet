@@ -43,9 +43,10 @@ follow that rather than improvising SQL against the raw tables.
 asset                   the shipped models and texture pack; data, not code — nothing imports it
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
-crates/xpute-core       the kit's Rust half — pools, the arena, the rings, the change log; no domain
-crates/pxl-core         the world in Rust — the bake, the scheduler, the objects, the draw list, the shaders
-crates/pxl-wasm         the one WebAssembly module: numeric exports over the two crates
+crates/xpute/core       @xpute/core's pair, file for file (script/pair.ts holds them together); no domain
+crates/pxl/shared       @pxl/shared's pair — PVF3, the indexer, the sparse tree, the adapters
+crates/pxl/core         the world in Rust — the bake, the scheduler, the objects, the draw list, the shaders
+crates/pxl/wasm         the one WebAssembly module: numeric exports over the two crates
 apps/api                Hono server + the Overture/DEM bake pipeline
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
@@ -55,10 +56,19 @@ Two boundaries matter, and both are easy to erode by accident:
 - **`@xpute/core` must contain no pixelet domain knowledge.** It is meant to stay
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
-  `@pxl/shared`. The same line runs through the Rust: `crates/xpute-core` is
-  `@xpute/core`'s counterpart, its tree mirrors `packages/xpute/core/src`
-  (`ds/`, `ipc/`, `kit/`), and `crates/pxl-core` is the only crate that knows
-  what a chunk is.
+  `@pxl/shared`. The same line runs through the Rust: `crates/xpute/core` is
+  `@xpute/core`'s counterpart and `crates/pxl/shared` is `@pxl/shared`'s,
+  each the same tree file for file, export for export and test for test
+  (`deno task check:pair`; a difference the languages force is listed with
+  its reason in `script/pair.exempt.json`). The check runs one way: the
+  Rust may carry more. The TypeScript side is the source and changes only
+  where it is found wrong: a Rust module that needs one thing of a
+  TypeScript file is that whole file, at that path. The same holds when an
+  upper layer moves into the module: every TypeScript file it references
+  comes over whole, at its path, if its `.rs` is not there yet. What was
+  checked and where the two still differ is in
+  [issue/20260914-where-the-pair-differs.md](./issue/20260914-where-the-pair-differs.md).
+  `crates/pxl/core` is the only crate that knows what a chunk is.
 - **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between
@@ -223,7 +233,10 @@ Two rules that came out of doing it:
 ```
 
 This is the import-map path, not the filesystem path — extension included, so
-a `.tsx` file says `.tsx`. New files get one too, tests included.
+a `.tsx` file says `.tsx`. New files get one too, tests included. A Rust file
+names its own path the way Rust code names the crate — the crate's
+identifier, then the file's path under `src/`: `// pxl_shared/spec/space/indexer.rs`
+— never its TypeScript pair's, which the mirrored path already says.
 
 The one exception is `shared/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather

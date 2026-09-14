@@ -26,7 +26,7 @@
  *   module   the Rust core's own: its stack, its data and its heap, at the
  *            front because that is where a wasm32 module's linker puts them
  *            (`--stack-first`, and data at the base). No pool — the module
- *            is the only writer, and crates/xpute-core/src/ds/fixed_heap.rs is the
+ *            is the only writer, and crates/xpute/core/src/ds/fixed_heap.rs is the
  *            allocator over it. Its size is the one number both sides
  *            agree on, and the module says its own at instantiation so the
  *            map is checked rather than trusted.
@@ -48,7 +48,7 @@
  * (BACKLOG P1); the spill is counted per section and the ledger shows it.
  *
  * The buddy over each section's range runs in the Rust module
- * (crates/xpute-core/src/ds/buddy.rs): the module is instantiated over the
+ * (crates/xpute/core/src/ds/buddy.rs): the module is instantiated over the
  * memory here, before any section is cut, and each section's pool names
  * its blocks through it — the core owns the allocation of the memory it
  * works in, and what the module cannot reach, the plain regions past a
@@ -66,7 +66,7 @@ const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
 
 /**
- * The module section, from address 0. Equal to crates/xpute-core/src/ds/fixed_heap.rs's
+ * The module section, from address 0. Equal to crates/xpute/core/src/ds/fixed_heap.rs's
  * MODULE_BYTES, and checked against it when the module is instantiated
  * (wasm/pxl.ts). Carved out of the first region: the fixed section's pool
  * cuts what is left of that region in 16 MB regions, so the map stays
@@ -223,7 +223,7 @@ export const PAGE_SECTION_BYTES: u32 = CORE_SECTIONS.page.bytes;
 
 // The module's volumes take their standing band stores from the fixed
 // section, which never runs out, and the rest from the mesh section
-// (crates/pxl-core/src/bake/volume.rs).
+// (crates/pxl/core/src/bake/volume.rs).
 if (CORE_PXL !== null) CORE_PXL.pxl_volume_pools(CORE_SECTIONS.fixed.kernel_id!, CORE_SECTIONS.mesh.kernel_id!);
 
 /** The fixed section: allocated once, never freed, refuses rather than

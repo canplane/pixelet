@@ -2,7 +2,7 @@
 
 /**
  * What the module is taught about the terrain's materials
- * (crates/pxl-core/src/bake/terrain.rs): the channels' classes, the bare
+ * (crates/pxl/core/src/bake/terrain.rs): the channels' classes, the bare
  * base, and each type's colour and layer from the palette's tables
  * (render/gpu/layer_table.ts). Read here once; the reference reading in
  * reference/terrain_layer.ts uses the same tables, which is what the tests

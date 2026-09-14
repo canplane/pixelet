@@ -2,7 +2,7 @@
 
 /**
  * The world's turn of the tick: the glue between the module
- * (crates/pxl-core, behind wasm/core_build.ts) and the
+ * (crates/pxl/core, behind wasm/core_build.ts) and the
  * page, with no decision of its own. In the visible phase it writes the
  * frame the module reads — the view, the frustum, the budget, the range
  * anchor, the settings — ticks the module once, makes a node for each
@@ -102,7 +102,7 @@ function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
 /**
  * The tick's visible and report phases, mounted once above ChunkMounts
  * (world.tsx). Decor is not a registrant of its own: the module builds a
- * tier's decor beside the tier (crates/pxl-core/src/world/sched.rs), which is
+ * tier's decor beside the tier (crates/pxl/core/src/world/sched.rs), which is
  * what ended the terrain/decor ready-state desync of 2026-09-05.
  */
 export function CoreTick({ children }: { children: ReactNode }) {

@@ -297,7 +297,9 @@ export abstract class NodeCursor {
     const [len] = GET_WORD(this.pkt_view, this.base, WORD_REG);
     const payload_start: u32 = this.base + WORD_SZ;
 
-    const payload_sz: u32 = (len + 7) >>> 3;
+    // In doubles: `>>>` wraps len + 7 past 2^32 to a size of 0, and a
+    // 2^32 - 1 count then passes the bounds check.
+    const payload_sz: u32 = Math.floor((len + 7) / 8);
     if (payload_start > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG, "payload OOB");
     if (payload_sz > this.pkt.byteLength - payload_start) throw new MarshalError(Errno.EBADMSG, "payload OOB");
 

@@ -17,7 +17,7 @@
  */
 
 import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/core/kit/word.ts";
-import { U32, U64 } from "@xpute/core/kit/word.ts";
+import { U64 } from "@xpute/core/kit/word.ts";
 import type { Bytes } from "@xpute/core/kit/array.ts";
 
 // ----------------------------------------------------------------------------
@@ -218,10 +218,12 @@ export const getu128 = (s: Stream): [u64, u64] => {
 
 export const pack96 = (lo: u32, mid: u32, hi: u32): bigint => (U64(BigInt(hi)) << 64n) | (U64(BigInt(mid)) << 32n) | U64(BigInt(lo));
 
+// Each limb is masked while still a bigint: Number() of a value past 2^53
+// rounds away the low bits before U32 could truncate them.
 export const unpack96 = (x: bigint): [u32, u32, u32] => [
-  U32(Number(x)),
-  U32(Number(x >> 32n)),
-  U32(Number(x >> 64n)),
+  Number(x & 0xffffffffn),
+  Number((x >> 32n) & 0xffffffffn),
+  Number((x >> 64n) & 0xffffffffn),
 ];
 
 export const pack128 = (lo: u64, hi: u64): bigint => (U64(hi) << 64n) | U64(lo);

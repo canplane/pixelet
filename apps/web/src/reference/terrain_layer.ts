@@ -4,7 +4,7 @@
  * L3 heightfield -> temporary dense signed-Z render bands, and the direct
  * path's runs.
  *
- * The chunk is read by the module (crates/pxl-core/src/bake/terrain.rs): the
+ * The chunk is read by the module (crates/pxl/core/src/bake/terrain.rs): the
  * page's ground and elevation lanes are in the core memory, so it samples
  * and paints them where they are, with the tables handed to it once here.
  * A page whose lanes spilled past the page section (core_pool.ts) is out of

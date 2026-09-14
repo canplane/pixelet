@@ -4,7 +4,7 @@
  * Pure companion-movement math — no renderer import of any kind, no React.
  * Positioning/timing logic is kept independent of the renderer on purpose,
  * which is how it survived the move from three to the module's actors
- * (crates/pxl-core/src/world/model.rs, placed by companion.tsx) unchanged.
+ * (crates/pxl/core/src/world/model.rs, placed by companion.tsx) unchanged.
  */
 
 import type { f64 } from "@xpute/core/kit/word.ts";

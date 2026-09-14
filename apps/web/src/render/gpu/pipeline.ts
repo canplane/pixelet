@@ -1,7 +1,7 @@
 // @pxl/web/render/gpu/pipeline.ts
 
 /**
- * The pipelines as the module defines them (crates/pxl-core/src/render/shader.rs):
+ * The pipelines as the module defines them (crates/pxl/core/src/render/shader.rs):
  * each read out of the module as a record of words — its shaders, its
  * vertex lanes, its bind group layouts, its primitive, depth and blend
  * state — and turned into WebGPU's descriptor here, and nowhere else. A

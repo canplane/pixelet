@@ -184,6 +184,14 @@ name = "pxl-core"
 version = "0.0.0"
 dependencies = [
  "naga",
+ "pxl-shared",
+ "xpute-core",
+]
+
+[[package]]
+name = "pxl-shared"
+version = "0.0.0"
+dependencies = [
  "xpute-core",
 ]
 
@@ -192,6 +200,7 @@ name = "pxl-wasm"
 version = "0.0.0"
 dependencies = [
  "pxl-core",
+ "pxl-shared",
  "xpute-core",
 ]
 

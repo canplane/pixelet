@@ -7,7 +7,7 @@ import { Ring, RING_OP, RING_RESULT, RING_USER } from "@xpute/core/ipc/ring.ts";
 
 import { CORE_PXL } from "@/wasm/core_pool.ts";
 
-/** An op crates/pxl-wasm/src/lib.rs does not number. */
+/** An op crates/pxl/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0xfff;
 
 Deno.test("rings - the glue submits, one drain completes each in order, and a full completion ring holds the rest back", () => {

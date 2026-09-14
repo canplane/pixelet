@@ -177,7 +177,10 @@ export function hex_to_bytes(hex: string): Bytes {
 
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+    // parseInt reads what it can and stops: "1g" would be 1, "zz" NaN stored as 0.
+    const pair = hex.slice(i, i + 2);
+    if (!/^[0-9a-fA-F]{2}$/.test(pair)) throw new Error("Hex: Invalid digit");
+    bytes[i / 2] = parseInt(pair, 16);
   }
   return bytes;
 }

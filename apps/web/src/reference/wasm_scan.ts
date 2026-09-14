@@ -1,7 +1,7 @@
 // @pxl/web/reference/wasm_scan.ts
 
 /**
- * The whole-chunk scan through the Rust scan (crates/pxl-core/src/bake/scan.rs),
+ * The whole-chunk scan through the Rust scan (crates/pxl/core/src/bake/scan.rs),
  * export by export, with the stepped scan's contract (voxel_scan.ts): one
  * open at a time, a row of columns a step, and a packed run set out of the
  * pool at the end — `starved` when the pool has no block for it. The harness

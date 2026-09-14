@@ -1,7 +1,7 @@
 // @pxl/web/wasm/pxl.ts
 
 /**
- * The Rust core's module (crates/pxl-wasm), instantiated over the core
+ * The Rust core's module (crates/pxl/wasm), instantiated over the core
  * memory. The bytes are built by `deno task build:wasm` into `pxl.wasm`
  * beside this file and are not committed; Vite hashes them into the bundle
  * through the `new URL` below, and Deno's tests read them through the same
@@ -135,7 +135,7 @@ export type PxlExports = {
   pxl_object_paint(volume: u32, key: bigint, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: number, ly: number, lz: number, size: number): u32;
 };
 
-/** pxl_bake_step's answers (crates/pxl-wasm/src/lib.rs). */
+/** pxl_bake_step's answers (crates/pxl/wasm/src/lib.rs). */
 export const STEP_WORKING: u32 = 0;
 export const STEP_NEED_MESH: u32 = 1;
 export const STEP_DONE: u32 = 2;

@@ -3,7 +3,7 @@
 /**
  * POI's own render — world-anchored-billboard tier (see
  * issue/20260907-world-rendering-tiers.md), a billboard set of the module
- * (crates/pxl-core/src/world/billboard.rs) beside chat_bubble.tsx's. A category-themed badge
+ * (crates/pxl/core/src/world/billboard.rs) beside chat_bubble.tsx's. A category-themed badge
  * (poi_theme.ts), brought back from the pre-DoD implementation
  * (`checkpoint/20260107-float`'s `entities/geo/ui/pois/poi-item.tsx`) —
  * still deliberately short of that version in a few ways:
@@ -376,7 +376,7 @@ function poi_place_step(
 function query_stage(j: PlaceJob): void {
   const t0 = performance.now();
   // Everything is measured from the camera, as the chunks are (their tier
-  // is their distance from the camera, crates/pxl-core/src/world/sched.rs): the disc the
+  // is their distance from the camera, crates/pxl/core/src/world/sched.rs): the disc the
   // index holds, the reach a candidate is inside, the tier it is filed at.
   // Measured from the pivot instead, a wide zoom followed by a tilt down to
   // the ground filed the places under the camera at the tier of the pivot's
@@ -504,7 +504,7 @@ function build_stage(j: PlaceJob): void {
   if (j.k >= j.kept) j.stage = COMMIT;
 }
 
-/** Floats a badge takes in the core's block (crates/pxl-core/src/world/billboard.rs). */
+/** Floats a badge takes in the core's block (crates/pxl/core/src/world/billboard.rs). */
 const BADGE_FLOATS = 10;
 let $badge_set: u32 | null = null;
 /** The core's billboard set the badges are, made on first use. */

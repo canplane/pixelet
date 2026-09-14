@@ -1,6 +1,6 @@
 // @pxl/web/../script/build_wasm.ts
 //
-// Builds the Rust core's module (crates/pxl-wasm) and puts it where
+// Builds the Rust core's module (crates/pxl/wasm) and puts it where
 // src/wasm/pxl.ts loads it from. Run by every task that loads the module —
 // dev, build, test — so a checkout never runs against a stale or missing
 // one; cargo's own cache makes a run with nothing changed cost a second.

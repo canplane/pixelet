@@ -21,7 +21,7 @@
  * its distance from the camera as drawn, because that is what is on screen.
  *
  * Distance is aged by how long an item has waited, within one class of work.
- * The order itself is the module's (crates/pxl-core/src/world/sched.rs); the lead
+ * The order itself is the module's (crates/pxl/core/src/world/sched.rs); the lead
  * point it orders by is worked out here, from the frames the glue holds.
  */
 

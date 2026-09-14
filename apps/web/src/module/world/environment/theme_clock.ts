@@ -17,7 +17,7 @@
  *
  * Also now location-aware: get_theme_key() needs the real sunrise/sunset
  * for wherever the map is centered (the module's environment,
- * crates/pxl-core/src/world/environment.rs, itself needing lat/lon), so each tick reads useMapStore's current map_center directly
+ * crates/pxl/core/src/world/environment.rs, itself needing lat/lon), so each tick reads useMapStore's current map_center directly
  * via getState() rather than a React subscription — this module is a plain
  * singleton outside any component tree, and the interval only needs
  * whatever map_center happens to be *at tick time*, not to re-run the

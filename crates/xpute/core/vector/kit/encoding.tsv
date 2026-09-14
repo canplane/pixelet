@@ -1,0 +1,63 @@
+blobs.0.hex	
+blobs.0.b64url	
+blobs.0.back	
+blobs.0.is	true
+blobs.0.hex_back	
+blobs.1.hex	00
+blobs.1.b64url	AA
+blobs.1.back	00
+blobs.1.is	true
+blobs.1.hex_back	00
+blobs.2.hex	ff
+blobs.2.b64url	_w
+blobs.2.back	ff
+blobs.2.is	true
+blobs.2.hex_back	ff
+blobs.3.hex	0102
+blobs.3.b64url	AQI
+blobs.3.back	0102
+blobs.3.is	true
+blobs.3.hex_back	0102
+blobs.4.hex	010203
+blobs.4.b64url	AQID
+blobs.4.back	010203
+blobs.4.is	true
+blobs.4.hex_back	010203
+blobs.5.hex	fbffbf
+blobs.5.b64url	-_-_
+blobs.5.back	fbffbf
+blobs.5.is	true
+blobs.5.hex_back	fbffbf
+blobs.6.hex	0d6ecf3091f253b41576d73899fa5bbc1d7edf40a10263c42586e748a90a6bcc2d8eef50b11273d43596f758b91a7bdc3d9eff60c12283e445a60768c92a8bec
+blobs.6.b64url	DW7PMJHyU7QVdtc4mfpbvB1-30ChAmPEJYbnSKkKa8wtju9QsRJz1DWW91i5GnvcPZ7_YMEig-RFpgdoySqL7A
+blobs.6.back	0d6ecf3091f253b41576d73899fa5bbc1d7edf40a10263c42586e748a90a6bcc2d8eef50b11273d43596f758b91a7bdc3d9eff60c12283e445a60768c92a8bec
+blobs.6.is	true
+blobs.6.hex_back	0d6ecf3091f253b41576d73899fa5bbc1d7edf40a10263c42586e748a90a6bcc2d8eef50b11273d43596f758b91a7bdc3d9eff60c12283e445a60768c92a8bec
+texts.0.t	
+texts.0.utf8	
+texts.0.back	true
+texts.1.t	abc
+texts.1.utf8	616263
+texts.1.back	true
+texts.2.t	한글
+texts.2.utf8	ed959ceab880
+texts.2.back	true
+texts.3.t	🌏
+texts.3.utf8	f09f8c8f
+texts.3.back	true
+texts.4.t	a b
+texts.4.utf8	612062
+texts.4.back	true
+invalid.0.s	ab+c
+invalid.0.is	false
+invalid.1.s	ab/c
+invalid.1.is	false
+invalid.2.s	ab=
+invalid.2.is	false
+invalid.3.s	ok-_
+invalid.3.is	true
+bad_hex.0	throws
+bad_hex.1	throws
+bad_hex.2	throws
+bad_hex.3	throws
+bad_hex.4	ok:ab
