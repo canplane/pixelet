@@ -35,6 +35,7 @@ pub enum Major {
     ACTOR = 0x0f,
     DEBUG = 0x10,
     ENV = 0x11,
+    MODEL = 0x12,
 }
 
 /// The hover ghost's own verbs.
@@ -65,6 +66,16 @@ pub enum BillboardMinor {
 #[repr(u32)]
 pub enum ActorMinor {
     PLAY = 0x10,
+}
+
+/// A model's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ModelMinor {
+    JOINT = 0x10,
+    CLIP = 0x11,
+    CHANNEL = 0x12,
+    SEAL = 0x13,
 }
 
 /// The environment's own verb.
@@ -200,6 +211,26 @@ pub enum Cmd {
     /// [lat f64, lon f64, unix_ms f64] — the observer and the wall clock
     ENV_OBSERVE = 0x1110,
 
+    // ---- models: a mesh block the glue writes, and its skeleton and clips ----
+    /// tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the
+    /// model's id, or -1 when the mesh pool refused; with an id, [block_at u32]
+    /// — where the glue writes the vertices and indices, in the module's
+    /// memory
+    MODEL_CREATE = 0x1201,
+    /// tag call · [model u32] → result: the renderer's handle for its mesh
+    /// block, 0 before it is sealed
+    MODEL_READ = 0x1202,
+    /// tag model · [joint u32, parent i32, pose f32[42]: rest (10), what
+    /// stands above a root (16), inverse bind (16)]
+    MODEL_JOINT = 0x1210,
+    /// tag call · [model u32, duration f32] → result: the clip's index
+    MODEL_CLIP = 0x1211,
+    /// tag model · [clip u32, joint u32, path u32 (0 translation, 1 rotation,
+    /// 2 scale), step bool, times f32[], values f32[]]
+    MODEL_CHANNEL = 0x1212,
+    /// tag model · [scale f32] — complete: its block goes to the GPU
+    MODEL_SEAL = 0x1213,
+
     // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
     //
     // CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted
@@ -249,7 +280,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 47] = [
+    const ALL: [Cmd; 53] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -297,6 +328,12 @@ impl Cmd {
         Cmd::DEBUG_UPDATE,
         Cmd::ENV_UPDATE,
         Cmd::ENV_OBSERVE,
+        Cmd::MODEL_CREATE,
+        Cmd::MODEL_READ,
+        Cmd::MODEL_JOINT,
+        Cmd::MODEL_CLIP,
+        Cmd::MODEL_CHANNEL,
+        Cmd::MODEL_SEAL,
     ];
 
     /// The command a message's number names, or none for one nobody numbers.
@@ -360,6 +397,12 @@ mod test {
             (DEBUG_UPDATE, Major::DEBUG as u32, Minor::UPDATE as u32),
             (ENV_UPDATE, Major::ENV as u32, Minor::UPDATE as u32),
             (ENV_OBSERVE, Major::ENV as u32, EnvMinor::OBSERVE as u32),
+            (MODEL_CREATE, Major::MODEL as u32, Minor::CREATE as u32),
+            (MODEL_READ, Major::MODEL as u32, Minor::READ as u32),
+            (MODEL_JOINT, Major::MODEL as u32, ModelMinor::JOINT as u32),
+            (MODEL_CLIP, Major::MODEL as u32, ModelMinor::CLIP as u32),
+            (MODEL_CHANNEL, Major::MODEL as u32, ModelMinor::CHANNEL as u32),
+            (MODEL_SEAL, Major::MODEL as u32, ModelMinor::SEAL as u32),
         ];
         for (c, major, minor) in parts {
             assert_eq!(c as u32, cmd(major, minor), "{c:?}");

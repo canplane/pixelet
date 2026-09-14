@@ -20,6 +20,8 @@ import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/deco
 import { GpuRenderer } from "./renderer.ts";
 import { GL_TO_WGPU } from "./depth.ts";
 import { rim_cfg } from "@/module/world/environment/config.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 /** The one renderer, once its device has answered. */
 export let gpu_renderer: GpuRenderer | null = null;
@@ -51,11 +53,10 @@ function sync_decor_models(gpu: GpuRenderer): void {
   const assets = decor_bundle_assets();
   if (assets === decor_assets_seen) return;
   decor_assets_seen = assets;
-  const pxl = CORE_PXL!;
   let group = 0;
   for (const { models, skins } of assets) {
     models.forEach((model, v) => {
-      gpu.decor.set_model(group++, model ? pxl.pxl_model_handle(model.model) : 0, skins[v]);
+      gpu.decor.set_model(group++, model ? CORE_BUILD.call(Cmd.MODEL_READ, packet((b) => b.u32(model.model)), (handle) => handle >>> 0) : 0, skins[v]);
     });
   }
 }

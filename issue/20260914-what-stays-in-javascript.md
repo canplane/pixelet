@@ -132,6 +132,14 @@ arrived and hands the time back. What that decides about the boundary:
   phase after the module's tick sends (the chat bubble, the gizmos, a POI
   placement) is still drawn in the frame that sent it, as the direct calls
   were.
+
+  Then a model's loading (`MODEL_*`): the glue asks for a model and is
+  answered with its id and where its mesh block is, writes the vertices
+  and indices there itself — a block in the module's memory the module
+  handed out, which stays valid, so it crosses as an address — and sends
+  the joints, the clips and their channels (keys copied into the packet),
+  then the seal. A query's tag is its call's, so a query about a subject
+  (a model's handle, a clip of a model) carries the subject in its packet.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

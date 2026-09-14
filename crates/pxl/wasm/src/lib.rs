@@ -106,7 +106,6 @@ struct State {
     /// The world's raycast and its kept composites.
     raycast: Raycast,
     draw_row: [u32; 10],
-    model_block: u32,
     /// The last shader or pipeline asked for: where its words sit, and how
     /// many (shader.rs).
     shader_row: [u32; 2],
@@ -197,7 +196,6 @@ fn state() -> &'static mut State {
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
                 draw_row: [0; 10],
-                model_block: 0,
                 shader_row: [0; 2],
                 pipeline: Vec::new(),
                 changes: ChangeLog::new(ChangeLogOptions {
@@ -1046,6 +1044,14 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             s.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
             return Ok(Some((0, None)));
         }
+        Cmd::MODEL_SEAL => {
+            let scale = number_at(&fields(pkt)?, 0)? as f32;
+            let mem = opened(&mut s.volumes).mem();
+            let sched = &mut s.sched;
+            // SAFETY: the model's block is in the volumes' memory.
+            unsafe { sched.models.seal(&mut sched.draw, mem, tag, scale) };
+            return Ok(Some((0, None)));
+        }
         Cmd::OBJECT_READ => {
             let f = fields(pkt)?;
             let state = s.objects.read(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?]);
@@ -1197,7 +1203,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::OBJECT_LANES
         | Cmd::OBJECT_CELL
         | Cmd::OBJECT_COLUMNS
-        | Cmd::OBJECT_STAT => {
+        | Cmd::OBJECT_STAT
+        | Cmd::MODEL_SEAL => {
             unreachable!("applied before the parts are taken")
         }
         Cmd::GHOST_BOX => {
@@ -1285,6 +1292,68 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::ENV_OBSERVE => {
             let f = fields(pkt)?;
             sched.environment.observe(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
+        }
+        Cmd::MODEL_CREATE => {
+            let f = fields(pkt)?;
+            let Some((id, at)) = sched.models.new_model(&mut world, u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
+                return Ok(Some((-1, None)));
+            };
+            return Ok(Some((
+                id as i32,
+                Some(packet(&mut |b| {
+                    b.u32(Some(at as u32));
+                })),
+            )));
+        }
+        Cmd::MODEL_READ => {
+            let model = u32_at(&fields(pkt)?, 0)?;
+            return Ok(Some((sched.models.mesh(model).map_or(0, |m| m.handle) as i32, None)));
+        }
+        Cmd::MODEL_JOINT => {
+            let f = fields(pkt)?;
+            let pose = floats_at(&f, 2, 42)?;
+            let p = pose.as_slice();
+            if p.len() != 42 {
+                return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a joint of {} floats, not 42", p.len())), None));
+            }
+            let (mut rest, mut pre, mut ib) = ([0.0; 10], [0.0; 16], [0.0; 16]);
+            rest.copy_from_slice(&p[0..10]);
+            pre.copy_from_slice(&p[10..26]);
+            ib.copy_from_slice(&p[26..42]);
+            sched.models.joint(tag, u32_at(&f, 0)?, i32_at(&f, 1)?, rest, pre, ib);
+        }
+        Cmd::MODEL_CLIP => {
+            // A query's tag is its call's, so the model is in the packet.
+            let f = fields(pkt)?;
+            return Ok(Some((sched.models.clip(u32_at(&f, 0)?, number_at(&f, 1)? as f32) as i32, None)));
+        }
+        Cmd::MODEL_CHANNEL => {
+            let f = fields(pkt)?;
+            let path = u32_at(&f, 2)?;
+            let (times, values) = (floats_at(&f, 4, 1)?, floats_at(&f, 5, if path == 1 { 4 } else { 3 })?);
+            let width = if path == 1 { 4 } else { 3 };
+            if values.length() != times.length() * width {
+                return Err(MarshalError::new(
+                    Errno::EBADMSG,
+                    Some(&format!("{} keys and {} values of width {width}", times.length(), values.length())),
+                    None,
+                ));
+            }
+            // SAFETY: the keys' floats, in the arena, until this message is
+            // advanced past; the channel copies them.
+            unsafe {
+                sched.models.channel(
+                    core::ptr::null(),
+                    tag,
+                    u32_at(&f, 0)?,
+                    u32_at(&f, 1)?,
+                    path as u8,
+                    bool_at(&f, 3)?,
+                    times.length() as u32,
+                    times.as_slice().as_ptr() as usize,
+                    values.as_slice().as_ptr() as usize,
+                )
+            };
         }
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
@@ -1507,71 +1576,6 @@ pub extern "C" fn pxl_env_at() -> u32 {
 
 // ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
 
-/// A model's mesh block for `vertex_cnt` vertices, `index_cnt` indices and
-/// `joint_cnt` joints: its id, or -1 when the pool refused; the block's
-/// address at pxl_model_block.
-#[no_mangle]
-pub extern "C" fn pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> i32 {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    match sched.models.new_model(&mut world, vertex_cnt, index_cnt, joint_cnt) {
-        Some((id, at)) => {
-            s.model_block = at as u32;
-            id as i32
-        }
-        None => -1,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_model_block() -> u32 {
-    state().model_block
-}
-
-/// Joint `joint` of `model`, from 42 floats at `at`: the rest pose (10),
-/// the transform above a root (16) and the inverse bind matrix (16).
-#[no_mangle]
-pub extern "C" fn pxl_model_joint(model: u32, joint: u32, parent: i32, at: u32) {
-    let s = state();
-    // SAFETY: the glue's lane of 42 floats.
-    let f = unsafe { core::slice::from_raw_parts(at as usize as *const f32, 42) };
-    let mut rest = [0.0; 10];
-    rest.copy_from_slice(&f[0..10]);
-    let mut pre = [0.0; 16];
-    pre.copy_from_slice(&f[10..26]);
-    let mut ib = [0.0; 16];
-    ib.copy_from_slice(&f[26..42]);
-    s.sched.models.joint(model, joint, parent, rest, pre, ib);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_model_clip(model: u32, duration: f32) -> u32 {
-    state().sched.models.clip(model, duration)
-}
-
-/// A channel of a clip: `path` 0 translation, 1 rotation, 2 scale; the keys'
-/// times and values in the glue's lanes.
-#[no_mangle]
-pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32) {
-    let s = state();
-    // SAFETY: the glue's lanes, of the lengths the path gives.
-    unsafe {
-        s.sched
-            .models
-            .channel(core::ptr::null(), model, clip, joint, path as u8, step != 0, key_cnt, times_at as usize, values_at as usize)
-    };
-}
-
-/// The model is complete; `scale` stands it as tall as the glue measured.
-#[no_mangle]
-pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
-    let s = state();
-    let mem = opened(&mut s.volumes).mem();
-    let sched = &mut s.sched;
-    // SAFETY: the model's block is in the volumes' memory.
-    unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
-}
-
 /// Hands the renderer's lists over (crates/pxl/core/src/render/draw.rs): a row of
 /// ten words — the uploads' address and count, the frees', the draws', the
 /// uniforms', the rewrites' — valid until the next call. Uploads and frees are what
@@ -1596,12 +1600,6 @@ pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
     sched.decor_now(&mut world, id, show_decor != 0, &mut |e| events.push_back(e));
     flush(s);
     after(s);
-}
-
-/// The renderer's handle for a model's mesh block, 0 before it is sealed.
-#[no_mangle]
-pub extern "C" fn pxl_model_handle(model: u32) -> u32 {
-    state().sched.models.mesh(model).map_or(0, |m| m.handle)
 }
 
 /// The builder alone over the `order_len` ids at `order_at`, for the tests

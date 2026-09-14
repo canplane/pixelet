@@ -33,6 +33,7 @@ export const enum Major {
   ACTOR = 0x0f,
   DEBUG = 0x10,
   ENV = 0x11,
+  MODEL = 0x12,
 }
 
 /** The hover ghost's own verbs. */
@@ -55,6 +56,14 @@ export const enum BillboardMinor {
 /** An actor's own verb. */
 export const enum ActorMinor {
   PLAY = 0x10,
+}
+
+/** A model's own verbs. */
+export const enum ModelMinor {
+  JOINT = 0x10,
+  CLIP = 0x11,
+  CHANNEL = 0x12,
+  SEAL = 0x13,
 }
 
 /** The environment's own verb. */
@@ -181,6 +190,27 @@ export const enum Cmd {
   ENV_UPDATE = 0x1103,
   /** [lat f64, lon f64, unix_ms f64] — the observer and the wall clock */
   ENV_OBSERVE = 0x1110,
+
+  // ---- models: a mesh block the glue writes, and its skeleton and clips ----
+
+  /** tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the
+   * model's id, or -1 when the mesh pool refused; with an id, [block_at u32]
+   * — where the glue writes the vertices and indices, in the module's
+   * memory */
+  MODEL_CREATE = 0x1201,
+  /** tag call · [model u32] → result: the renderer's handle for its mesh
+   * block, 0 before it is sealed */
+  MODEL_READ = 0x1202,
+  /** tag model · [joint u32, parent i32, pose f32[42]: rest (10), what
+   * stands above a root (16), inverse bind (16)] */
+  MODEL_JOINT = 0x1210,
+  /** tag call · [model u32, duration f32] → result: the clip's index */
+  MODEL_CLIP = 0x1211,
+  /** tag model · [clip u32, joint u32, path u32 (0 translation, 1 rotation,
+   * 2 scale), step bool, times f32[], values f32[]] */
+  MODEL_CHANNEL = 0x1212,
+  /** tag model · [scale f32] — complete: its block goes to the GPU */
+  MODEL_SEAL = 0x1213,
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //

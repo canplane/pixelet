@@ -77,13 +77,6 @@ export type PxlExports = {
   pxl_pipeline(id: u32): u32;
   pxl_frame_uniform_at(): u32;
   pxl_env_daylight(lat: number, lon: number, day_start_ms: number): u32;
-  pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32): number;
-  pxl_model_block(): u32;
-  pxl_model_joint(model: u32, joint: u32, parent: number, at: u32): void;
-  pxl_model_clip(model: u32, duration: number): u32;
-  pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32): void;
-  pxl_model_seal(model: u32, scale: number): void;
-  pxl_model_handle(model: u32): u32;
   pxl_build_tick(order_at: u32, order_len: u32, budget_ms: number): void;
   pxl_frame_at(): u32;
   pxl_census(): u32;
