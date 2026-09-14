@@ -2,7 +2,7 @@
 
 /**
  * The module's object store against the TypeScript it replaced (branch
- * archive/20260913-ts-object-store): a reference built here from the same
+ * archive/20260914-ts-build-paths, the same snapshot): a reference built here from the same
  * octree (@pxl/shared's sparse_tree) and the same derivation, driven by
  * the same random places and removes, and compared after every write —
  * the state read at any point, a chunk's entries lane for lane in the
