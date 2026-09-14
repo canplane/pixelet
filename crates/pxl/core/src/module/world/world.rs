@@ -172,5 +172,6 @@ pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Plat
     state.elapsed_s += delta;
     let report = run_tick(state, delta);
     fetch_pump();
+    crate::render::gpu::stage::stage_write();
     report.invalidated | take_tick_request()
 }
