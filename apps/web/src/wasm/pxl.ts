@@ -101,6 +101,9 @@ export type PxlExports = {
   pxl_env_theme(lane: u32): void;
   pxl_env_observe(lat: number, lon: number, unix_ms: number): void;
   pxl_env_at(): u32;
+  pxl_shader(kind: u32): u32;
+  pxl_pipeline(id: u32): u32;
+  pxl_frame_uniform_at(): u32;
   pxl_env_daylight(lat: number, lon: number, day_start_ms: number): u32;
   pxl_puck_clear(): void;
   pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32): number;

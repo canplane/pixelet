@@ -27,6 +27,7 @@ pub mod ring;
 pub mod run_set;
 pub mod scan;
 pub mod sched;
+pub mod shader;
 pub mod sparse_tree;
 pub mod terrain;
 pub mod volume;

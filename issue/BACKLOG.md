@@ -199,11 +199,17 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      target costs is the ledger's `targets` line; the MSAA comparison still
      to be taken is in
      [20260911-taa-tried-and-closed.md](./20260911-taa-tried-and-closed.md).
-     Next: the shaders and pipeline definitions moved into the crate as
-     their one source, validated by naga in `cargo test` (the WGSL is text
-     the GPU process compiles either way; what the move buys is one source
-     for the lanes' layouts and the constants, not concealment). Open,
-     minor: one POI page
+     The shaders and the pipelines are the crate's (2026-09-14,
+     crates/pxl-core/src/shader.rs and shader/*.wgsl): every pipeline a
+     record of words — shaders, vertex lanes, bind group layouts,
+     primitive, depth and blend state — that render/gpu/pipeline.ts turns
+     into a descriptor, the passes owning no literal; `cargo test`
+     compiles every shader with naga and holds each record to what its
+     shader declares (inputs by location, bindings by group and slot, the
+     frame uniform's offsets), and the glue reads the frame layout from
+     the module. The WGSL is text the GPU process compiles either way;
+     what the move bought is one home for the lanes' layouts, the slots
+     and the constants, not concealment. Open, minor: one POI page
      (6362873910329344) read as a truncated packet on one machine under
      dev:remote, the fetched bytes whole in the console — into_core's view
      the suspect, not reproduced elsewhere. For the frame-based pass

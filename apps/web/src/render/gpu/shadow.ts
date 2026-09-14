@@ -12,13 +12,16 @@
  * camera was tuned at: further than that the map's texels grow past a
  * cell and the shadow reads as blocks. What the map costs is its texels
  * times four bytes, once: 16 MB at 2048, 4 MB at 1024, the phone's.
+ *
+ * The map and its sampler sit at group 0 bindings 1 and 2 in every pass
+ * that reads them (shader/shadow.wgsl).
  */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { mat4, mat4_look_at, mat4_mul } from "@xpute/core/kit/mat4.ts";
 
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { FRAME_AT, FRAME_UNIFORM_FLOATS } from "./frame_wgsl.ts";
+import type { FrameLayout } from "./pipeline.ts";
 
 export const SHADOW_FORMAT: GPUTextureFormat = "depth32float";
 const HALF_EXTENT: f64 = 200;
@@ -48,29 +51,22 @@ export class ShadowPass {
   /** The light's frame: the frame uniform with the light's view_proj. */
   readonly light_frame: GPUBuffer;
   readonly light_view_proj = mat4();
-  private readonly light_uniforms = new Float32Array(new ArrayBuffer(FRAME_UNIFORM_FLOATS * 4));
+  private readonly light_uniforms: Float32Array<ArrayBuffer>;
   readonly bytes: u32;
   /** One texel of the map, in units: the normal offset a fragment takes. */
   readonly texel: f64;
 
-  constructor(private readonly device: GPUDevice) {
+  constructor(private readonly device: GPUDevice, private readonly at: FrameLayout) {
     this.map = device.createTexture({ label: "shadow", size: [MAP_SIZE, MAP_SIZE], format: SHADOW_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
     this.bytes = MAP_SIZE * MAP_SIZE * 4;
     this.texel = (HALF_EXTENT * 2) / MAP_SIZE;
     this.sampler = device.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
-    this.light_frame = device.createBuffer({ label: "shadow/frame", size: FRAME_UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.light_uniforms = new Float32Array(new ArrayBuffer(at.floats * 4));
+    this.light_frame = device.createBuffer({ label: "shadow/frame", size: at.floats * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   }
 
-  /** The map and its sampler as a bind group layout's entries, at
-   * `binding` and the next, beside a pass's frame uniform. */
-  static layout_entries(binding: u32): GPUBindGroupLayoutEntry[] {
-    return [
-      { binding, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
-      { binding: binding + 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
-    ];
-  }
-
-  /** The same, as a bind group's entries. */
+  /** The map and its sampler as a bind group's entries, at `binding` and
+   * the next, beside a pass's frame uniform. */
   group_entries(binding: u32): GPUBindGroupEntry[] {
     return [{ binding, resource: this.map.createView() }, { binding: binding + 1, resource: this.sampler }];
   }
@@ -96,10 +92,10 @@ export class ShadowPass {
     mat4_look_at($view, eye, target, { x: 0, y: 0, z: 1 });
     mat4_mul(this.light_view_proj, ortho($proj, HALF_EXTENT, 0.1, LIGHT_FAR), $view);
     const u = this.light_uniforms;
-    u.set(this.light_view_proj, FRAME_AT.view_proj);
-    u[FRAME_AT.camera_pos] = eye.x;
-    u[FRAME_AT.camera_pos + 1] = eye.y;
-    u[FRAME_AT.camera_pos + 2] = eye.z;
+    u.set(this.light_view_proj, this.at.view_proj);
+    u[this.at.camera_pos] = eye.x;
+    u[this.at.camera_pos + 1] = eye.y;
+    u[this.at.camera_pos + 2] = eye.z;
     this.device.queue.writeBuffer(this.light_frame, 0, u);
   }
 

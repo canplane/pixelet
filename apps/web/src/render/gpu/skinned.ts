@@ -3,21 +3,15 @@
 /**
  * Actors through WebGPU: the module's skinned draws
  * (crates/pxl-core/src/model.rs) executed against each model's mesh block
- * and each actor's joint palette, both as the module wrote them. The vertex
- * shader skins a vertex by its four joints and weights out of the palette,
- * scales it to the model's height, turns glTF's Y-up to this world's Z-up
- * and the actor's heading about Z, and places it; the fragment shader is
- * make_lit_gltf_material's recipe, decor's.
- *
- * A model's skin is the glue's, as decor's are: handed over by model id.
+ * and each actor's joint palette, both as the module wrote them, under
+ * shader/skinned.wgsl. A model's skin is the glue's, as decor's are:
+ * handed over by model id.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
-import { GRADE_WGSL } from "./grade.ts";
-import { FRAME_WGSL, SHADE_WGSL, SHADOW_WGSL } from "./frame_wgsl.ts";
-import { DEPTH_COMPARE } from "./depth.ts";
-import { SHADOW_FORMAT, ShadowPass } from "./shadow.ts";
+import { PIPELINE_SKINNED_DEPTH, type PipelineBuilder, type PipelineRecord } from "./pipeline.ts";
+import { ShadowPass } from "./shadow.ts";
 
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
@@ -26,78 +20,12 @@ const DRAW_UNIFORM_BYTES = 32;
 /** model.rs's MODEL_VERTEX_WORDS. */
 const MODEL_VERTEX_WORDS = 16;
 
-export const SKINNED_SHADER: string = /* wgsl */ `
-${FRAME_WGSL}
-
-struct Draw {
-  translation: vec3f,
-  rotation: f32,
-  opacity: f32,
-  scale: f32,
-  _p0: f32,
-  _p1: f32,
-};
-
-@group(0) @binding(0) var<uniform> frame: Frame;
-@group(1) @binding(0) var<uniform> draw: Draw;
-@group(2) @binding(0) var skin: texture_2d<f32>;
-@group(2) @binding(1) var skin_sampler: sampler;
-@group(3) @binding(0) var<storage, read> palette: array<mat4x4f>;
-
-struct VertexIn {
-  @location(0) position: vec3f,
-  @location(1) normal: vec3f,
-  @location(2) uv: vec2f,
-  @location(3) joints: vec4<u32>,
-  @location(4) weights: vec4f,
-};
-
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-  @location(0) uv: vec2f,
-  @location(1) normal: vec3f,
-  @location(2) world_pos: vec3f,
-};
-
-fn place(v: vec3f) -> vec3f {
-  let up = vec3f(v.x, -v.z, v.y);
-  let c = cos(draw.rotation);
-  let s = sin(draw.rotation);
-  return vec3f(up.x * c - up.y * s, up.x * s + up.y * c, up.z);
-}
-
-@vertex
-fn vs(v: VertexIn) -> VertexOut {
-  let m = palette[v.joints.x] * v.weights.x + palette[v.joints.y] * v.weights.y + palette[v.joints.z] * v.weights.z + palette[v.joints.w] * v.weights.w;
-  let p = (m * vec4f(v.position, 1.0)).xyz * draw.scale;
-  let n = (m * vec4f(v.normal, 0.0)).xyz;
-  let world = place(p) + draw.translation;
-  var o: VertexOut;
-  o.clip = frame.view_proj * vec4f(world, 1.0);
-  o.uv = v.uv;
-  o.normal = place(n);
-  o.world_pos = world;
-  return o;
-}
-
-${GRADE_WGSL}
-${SHADE_WGSL}
-${SHADOW_WGSL(0, 1)}
-
-@fragment
-fn fs(i: VertexOut) -> @location(0) vec4f {
-  let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
-  let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n));
-  return vec4f(finish(color, i.clip.xy), draw.opacity);
-}
-`;
-
 export type ModelSkin = ImageBitmap | HTMLImageElement | HTMLCanvasElement;
 
 export class SkinnedPass {
   private readonly pipeline: GPURenderPipeline;
   private readonly depth_pipeline: GPURenderPipeline;
+  private readonly record: PipelineRecord;
   private readonly frame_group: GPUBindGroup;
   private readonly light_group: GPUBindGroup;
   private readonly draw_layout: GPUBindGroupLayout;
@@ -111,49 +39,15 @@ export class SkinnedPass {
   private readonly skins = new Map<u32, { image: ModelSkin; group: GPUBindGroup }>();
   private readonly palette_groups = new WeakMap<GPUBuffer, GPUBindGroup>();
 
-  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer, shadow: ShadowPass | null, sample_count: u32) {
-    const frame_layout = device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }, ...ShadowPass.layout_entries(1)],
-    });
-    this.draw_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform", hasDynamicOffset: true } }] });
-    this.skin_layout = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: {} },
-        { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
-      ],
-    });
-    this.palette_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } }] });
-    const module = device.createShaderModule({ label: "skinned", code: SKINNED_SHADER });
-    const vertex: GPUVertexState = {
-      module,
-      entryPoint: "vs",
-      buffers: [
-        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
-        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
-        { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
-        { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "uint32x4" }] },
-        { arrayStride: 16, attributes: [{ shaderLocation: 4, offset: 0, format: "float32x4" }] },
-      ],
-    };
-    this.pipeline = device.createRenderPipeline({
-      label: "skinned",
-      layout: device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.palette_layout] }),
-      vertex,
-      fragment: { module, entryPoint: "fs", targets: [{ format }] },
-      // Back faces culled, as three's material (FrontSide) did: drawn both
-      // sides, a closed body's inner faces fight its outer ones for the same
-      // depth at a distance, and the character shimmers.
-      primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-      depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: DEPTH_COMPARE },
-      multisample: { count: sample_count },
-    });
-    this.depth_pipeline = device.createRenderPipeline({
-      label: "skinned/depth",
-      layout: device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.palette_layout] }),
-      vertex,
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: SHADOW_FORMAT, depthWriteEnabled: true, depthCompare: "less" },
-    });
+  constructor(private readonly device: GPUDevice, pipelines: PipelineBuilder, format: GPUTextureFormat, frame_buffer: GPUBuffer, shadow: ShadowPass | null, sample_count: u32) {
+    const lit = pipelines.build(PIPELINE_SKINNED, "skinned", format, sample_count);
+    this.pipeline = lit.pipeline;
+    this.record = lit.record;
+    this.depth_pipeline = pipelines.build(PIPELINE_SKINNED_DEPTH, "skinned/depth", format, sample_count).pipeline;
+    const [frame_layout, draw_layout, skin_layout, palette_layout] = lit.layouts;
+    this.draw_layout = draw_layout;
+    this.skin_layout = skin_layout;
+    this.palette_layout = palette_layout;
     // A case (preview.ts) draws with no shadow map: a blank one stands
     // where the map would be, and every fragment counts as lit.
     const shadow_entries = shadow ? shadow.group_entries(1) : ShadowPass.blank_entries(device, 1);
@@ -242,16 +136,15 @@ export class SkinnedPass {
         this.palette_groups.set(palette, palette_group);
       }
       const [vertex_cnt, index_cnt] = count;
-      const lane = (words: u32) => words * vertex_cnt * 4;
       pass.setBindGroup(1, this.draw_group, [offset]);
       pass.setBindGroup(2, skin.group);
       pass.setBindGroup(3, palette_group);
-      pass.setVertexBuffer(0, mesh, lane(0), lane(3));
-      pass.setVertexBuffer(1, mesh, lane(3), lane(3));
-      pass.setVertexBuffer(2, mesh, lane(6), lane(2));
-      pass.setVertexBuffer(3, mesh, lane(8), lane(4));
-      pass.setVertexBuffer(4, mesh, lane(12), lane(4));
-      pass.setIndexBuffer(mesh, "uint32", lane(MODEL_VERTEX_WORDS), index_cnt * 4);
+      let at = 0;
+      this.record.buffers.forEach((lane, slot) => {
+        pass.setVertexBuffer(slot, mesh, at, vertex_cnt * lane.stride);
+        at += vertex_cnt * lane.stride;
+      });
+      pass.setIndexBuffer(mesh, "uint32", vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
       pass.drawIndexed(index_cnt);
       drawn++;
     }

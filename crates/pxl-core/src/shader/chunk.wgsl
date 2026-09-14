@@ -1,25 +1,11 @@
-// @pxl/web/render/gpu/chunk_shader.ts
-
-/**
- * The chunk mesh's shader in WGSL: module/world/render/chunk_material.ts's
- * injected GLSL over three's standard material, drawn by the WebGPU
- * renderer (renderer.ts) from the mesher's lanes as they lie in a block.
- * Every rule here is that file's — the real-size tile UV from a box's own
- * corner and scale, the edge shading from the mesher's face bits, the
- * screen-space dither a blend is punched with — with the lighting three
- * did for us written out: three's physically based Lambert (the albedo over
- * pi) under the sun, the ambient and the hemisphere, the emissive floor,
- * linear fog, and the post stack's grade and sRGB encode. No tone mapping:
- * three applies it only when drawing to the screen, and the shipped path
- * drew into the composer's target.
- */
-
-import { NO_LAYER } from "@/render/layer/pipeline/voxel.ts";
-import { GRADE_WGSL } from "./grade.ts";
-import { FRAME_WGSL, SHADE_WGSL, SHADOW_WGSL } from "./frame_wgsl.ts";
-
-export const CHUNK_SHADER: string = /* wgsl */ `
-${FRAME_WGSL}
+// The chunk mesh: the mesher's lanes as they lie in a block, one vertex
+// slot a lane. Every rule here was chunk_material.ts's injected GLSL over
+// three's standard material (archive/20260914-three-draw-paths) — the
+// real-size tile UV from a box's own corner and scale, the edge shading
+// from the mesher's face bits, the screen-space dither a blend is punched
+// with — with the lighting three did for us written out in shade.wgsl. No
+// tone mapping: three applied it only when drawing to the screen, and the
+// shipped path drew into the composer's target.
 
 struct Draw {
   translation: vec3f,
@@ -30,11 +16,13 @@ struct Draw {
   _p2: f32,
 };
 
-@group(0) @binding(0) var<uniform> frame: Frame;
-@group(0) @binding(1) var<storage, read> draws: array<Draw>;
-@group(0) @binding(2) var layers_top: texture_2d_array<f32>;
-@group(0) @binding(3) var layers_side: texture_2d_array<f32>;
-@group(0) @binding(4) var layer_sampler: sampler;
+@group(0) @binding(3) var<storage, read> draws: array<Draw>;
+@group(0) @binding(4) var layers_top: texture_2d_array<f32>;
+@group(0) @binding(5) var layers_side: texture_2d_array<f32>;
+@group(0) @binding(6) var layer_sampler: sampler;
+
+// voxel.rs's NO_LAYER: a tap past the last layer means the vertex colour.
+const NO_LAYER: f32 = 255.0;
 
 struct VertexIn {
   @builtin(instance_index) draw: u32,
@@ -175,12 +163,8 @@ fn sample_tap(layer: f32, is_side: bool, uv: vec2f, fallback: vec3f) -> vec3f {
   let top = textureSample(layers_top, layer_sampler, uv, l).rgb;
   let side = textureSample(layers_side, layer_sampler, uv, l).rgb;
   let tex = select(top, side, is_side);
-  return select(tex, fallback, layer > ${NO_LAYER}.0 - 0.5);
+  return select(tex, fallback, layer > NO_LAYER - 0.5);
 }
-
-${GRADE_WGSL}
-${SHADE_WGSL}
-${SHADOW_WGSL(0, 5)}
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
@@ -204,4 +188,3 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n));
   return vec4f(finish(color, i.clip.xy), d.opacity);
 }
-`;

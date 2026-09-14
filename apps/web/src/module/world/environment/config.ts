@@ -101,47 +101,30 @@ export const light_cfg = {
 } as const;
 
 /**
- * Fresnel/rim highlight, applied uniformly to every chunk_stage.tsx baked
- * chunk mesh — terrain and placed objects alike, merged into one mesh per
- * chunk (chunk_mesher.ts) — a thin bright edge on faces that graze the view
- * direction, the classic
- * "toy block catching light at its silhouette" cue. Originally object-only
- * (meant to help placed objects read as distinct from terrain cells sharing
- * the same block palette), but a shared render pipeline shouldn't treat one
- * geometry role differently from another for the same shader term, so it now
- * applies everywhere show_rim_light is on.
+ * Fresnel/rim highlight, applied uniformly to everything lit — terrain,
+ * placed objects, decor and actors alike, since one shading source lights
+ * them (crates/pxl-core/src/shader/shade.wgsl) — a thin bright edge on
+ * faces that graze the view direction, the classic "toy block catching
+ * light at its silhouette" cue. Originally object-only (meant to help
+ * placed objects read as distinct from terrain cells sharing the same
+ * block palette), but a shared render pipeline shouldn't treat one
+ * geometry role differently from another for the same shader term, so it
+ * applies everywhere show_rim_light is on. The falloff's exponent is the
+ * shader's; this is the linear scale on it, the one that controls peak
+ * brightness, written into the frame uniform.
  */
 export const rim_cfg = {
-  COLOR: "#ffffff",
-  // pow(1 - N.V, POWER) falloff. POWER doesn't change peak brightness (at
-  // N.V=0, right at the silhouette, pow(1, POWER) is always 1 regardless of
-  // the exponent) — it controls how wide the lit band reads, low values
-  // spreading the same falloff into a softer, more gradual transition
-  // instead of a hard narrow line.
-  POWER: 1,
-  // Linear scale on the falloff term above — this is the one that actually
-  // controls peak brightness.
   INTENSITY: 0.1,
 } as const;
 
 /**
- * The canvas's resolution and the colour grade over everything. The vignette
- * waits for a pass of its own (render/gpu/grade.ts); the rest of the post
- * stack three ran — contact AO, bloom, god rays, SMAA — comes back through
- * WebGPU with its memory measured (issue/BACKLOG.md), and its tuning is on
- * archive/20260914-three-draw-paths. All numbers here are cosmetic dials.
+ * The canvas's resolution. The colour grade and the vignette are the
+ * shaders' own constants (crates/pxl-core/src/shader/{grade,shade}.wgsl);
+ * the rest of the post stack three ran — contact AO, bloom, god rays,
+ * SMAA — is on archive/20260914-three-draw-paths with its tuning.
  */
 export const post_cfg = {
   /** The canvas draws at the device's pixel ratio clamped to this
    * (scene.tsx's dpr comment on why the cap, and why it is not a cost). */
   DPR: [1, 2] as [number, number],
-  GRADE: {
-    SATURATION: 0.18,
-    CONTRAST: 0.08,
-    BRIGHTNESS: -0.01,
-  },
-  VIGNETTE: {
-    DARKNESS: 0.45,
-    OFFSET: 0.3,
-  },
 } as const;
