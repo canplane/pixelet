@@ -23,6 +23,8 @@ import { ChangeWaker } from "@xpute/core/ipc/change_waker.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 export const enum WorldTopic {
   /** A column's cube content (object/store.ts), keyed by column base. */
@@ -54,7 +56,7 @@ export class ModuleChangeLog implements ChangeJournal {
 
   constructor(private readonly pxl: PxlExports, topics: u32) {
     const buf = pxl.memory.buffer;
-    const row = new Uint32Array(buf, pxl.pxl_change_lanes(), 6);
+    const row = CORE_BUILD.call(Cmd.CHANGE_LANES, null, (_, reply) => Array.from({ length: 6 }, (_, k) => reply!.at(k).get<number>()));
     this.topics = topics;
     this.capacity = row[5];
     this.topic = new Uint16Array(buf, row[0], this.capacity);
@@ -77,20 +79,24 @@ export class ModuleChangeLog implements ChangeJournal {
   }
 
   bump(topic: Topic, key: bigint): Revision {
-    return this.pxl.pxl_change_bump(topic, BigInt.asUintN(64, key));
+    return CORE_BUILD.call(Cmd.CHANGE_UPDATE, topic_key(topic, key), (revision) => revision >>> 0);
   }
 
   forget(topic: Topic, key: bigint): void {
-    this.pxl.pxl_change_forget(topic, BigInt.asUintN(64, key));
+    CORE_BUILD.send(0, Cmd.CHANGE_DELETE, topic_key(topic, key));
   }
 
   revision_of(topic: Topic, key: bigint): Revision {
-    return this.pxl.pxl_change_revision(topic, BigInt.asUintN(64, key));
+    return CORE_BUILD.call(Cmd.CHANGE_READ, topic_key(topic, key), (revision) => revision >>> 0);
   }
 
   tick(topic: Topic): Revision {
     return this.ticks[topic];
   }
+}
+
+function topic_key(topic: Topic, key: bigint) {
+  return packet((p) => p.u32(topic).u64(BigInt.asUintN(64, key)));
 }
 
 function module_log(): ModuleChangeLog {

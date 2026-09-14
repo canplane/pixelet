@@ -23,6 +23,8 @@ import { useMapStore } from "@/module/map/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick } from "@/module/world/change.ts";
 import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { linear_rgb } from "@/render/gpu/color.ts";
 import { set_sky_radius } from "@/render/gpu/stage.tsx";
 
@@ -93,11 +95,10 @@ export function MapEnvironment() {
   const theme_key = useThemeKey();
 
   useEffect(() => {
-    const p = CORE_PXL;
-    if (!p) return;
+    if (!CORE_PXL) return;
     const lane = FIXED_ALLOC.take(Float32Array, THEME_FLOATS);
     write_theme(lane, theme_key);
-    p.pxl_env_theme(lane.byteOffset);
+    CORE_BUILD.send(0, Cmd.ENV_UPDATE, packet((b) => b.f32_array(lane)));
     FIXED_ALLOC.give(lane);
     request_world_tick();
   }, [theme_key]);
@@ -109,14 +110,13 @@ export function MapEnvironment() {
 
   // Before the chunks' step, which runs the module's tick.
   useTick("interaction", () => {
-    const p = CORE_PXL;
-    if (!p) return;
+    if (!CORE_PXL) return;
     const centre = useMapStore.getState().map_center;
     if (centre !== observed_centre) {
       observed_centre = centre;
       if (centre) [observed_lon, observed_lat] = epsg4326.unproject($latlon, centre.i, centre.f);
     }
-    p.pxl_env_observe(observed_lat, observed_lon, Date.now());
+    CORE_BUILD.send(0, Cmd.ENV_OBSERVE, packet((b) => b.f64(observed_lat).f64(observed_lon).f64(Date.now())));
   }, "environment");
 
   return null;

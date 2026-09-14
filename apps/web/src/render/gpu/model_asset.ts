@@ -26,6 +26,8 @@ import { type Mat4, mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { FIXED_ALLOC } from "@/wasm/core_pool.ts";
 import { type Gltf, scene_nodes, world_matrices } from "@/render/gltf/gltf.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 export type ModelHandle = {
   model: u32;
@@ -80,10 +82,13 @@ export function register_model(pxl: PxlExports, gltf: Gltf, height_u: f64 | null
   }
   if (vertex_cnt === 0) return null;
 
-  const id = pxl.pxl_model_new(vertex_cnt, index_cnt, joint_cnt);
+  let block = 0;
+  const id = CORE_BUILD.call(Cmd.MODEL_CREATE, packet((b) => b.u32(vertex_cnt).u32(index_cnt).u32(joint_cnt)), (made, reply) => {
+    if (made >= 0 && reply !== null) block = reply.at(0).get<number>();
+    return made;
+  });
   if (id < 0) return null;
   const model = id as u32;
-  const block = pxl.pxl_model_block();
   const words = new Uint32Array(pxl.memory.buffer, block, vertex_cnt * 16 + index_cnt);
   const floats = new Float32Array(pxl.memory.buffer, block, vertex_cnt * 16 + index_cnt);
   const lane = (k: u32) => k * vertex_cnt;
@@ -153,7 +158,7 @@ export function register_model(pxl: PxlExports, gltf: Gltf, height_u: f64 | null
       row.set([0, 0, 0, 0, 0, 0, 1, 1, 1, 1], 0);
       row.set(IDENTITY, 10);
       row.set(IDENTITY, 26);
-      pxl.pxl_model_joint(model, j, -1, row.byteOffset);
+      CORE_BUILD.send(model, Cmd.MODEL_JOINT, packet((b) => b.u32(j).i32(-1).f32_array(row)));
       continue;
     }
     const node = gltf.nodes[n];
@@ -165,31 +170,27 @@ export function register_model(pxl: PxlExports, gltf: Gltf, height_u: f64 | null
     if (parent < 0 && parent_node >= 0) row.set(worlds[parent_node], 10);
     else row.set(IDENTITY, 10);
     row.set(inverse_bind_of.get(n) ?? IDENTITY, 26);
-    pxl.pxl_model_joint(model, j, parent, row.byteOffset);
+    CORE_BUILD.send(model, Cmd.MODEL_JOINT, packet((b) => b.u32(j).i32(parent).f32_array(row)));
   }
   FIXED_ALLOC.give(row);
 
   // Clips: the channels on joints.
   const clips = new Map<string, u32>();
   for (const anim of gltf.animations) {
-    const c = pxl.pxl_model_clip(model, anim.duration);
+    const c = CORE_BUILD.call(Cmd.MODEL_CLIP, packet((b) => b.u32(model).f32(anim.duration)), (index) => index >>> 0);
     clips.set(anim.name, c);
     for (const channel of anim.channels) {
       const joint = joint_of.get(channel.node);
       if (joint === undefined) continue;
       const width = channel.path === 1 ? 4 : 3;
       const keys = channel.times.length;
-      const times_lane = FIXED_ALLOC.take(Float32Array, keys);
-      const values_lane = FIXED_ALLOC.take(Float32Array, keys * width);
-      times_lane.set(channel.times);
-      values_lane.set(channel.values.subarray(0, keys * width));
-      pxl.pxl_model_channel(model, c, joint, channel.path, channel.step ? 1 : 0, keys, times_lane.byteOffset, values_lane.byteOffset);
-      FIXED_ALLOC.give(times_lane);
-      FIXED_ALLOC.give(values_lane);
+      const times = Float32Array.from(channel.times);
+      const values = Float32Array.from(channel.values.subarray(0, keys * width));
+      CORE_BUILD.send(model, Cmd.MODEL_CHANNEL, packet((b) => b.u32(c).u32(joint).u32(channel.path).bool(channel.step).f32_array(times).f32_array(values)));
     }
   }
 
   const raw = hi - lo;
-  pxl.pxl_model_seal(model, height_u !== null && raw > 0 ? height_u / raw : 1);
+  CORE_BUILD.send(model, Cmd.MODEL_SEAL, packet((b) => b.f32(height_u !== null && raw > 0 ? height_u / raw : 1)));
   return { model, clips, triangles: index_cnt / 3 };
 }

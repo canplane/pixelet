@@ -49,6 +49,8 @@ import { useTick } from "@/module/world/sched/tick.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { load_gltf, load_image } from "@/render/gltf/load.ts";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { gpu_renderer } from "@/render/gpu/stage.tsx";
 import { view } from "@/module/world/frame/view.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
@@ -155,19 +157,18 @@ const Walker = memo(function Walker(props: WalkerProps) {
   /** The actor again, as state, for what renders against it: the bubble. */
   const [actor, set_actor] = useState<u32 | null>(null);
   useEffect(() => {
-    const p = CORE_PXL;
-    if (!p) return;
+    if (!CORE_PXL) return;
     let alive = true;
     Promise.all([model_for(variant), load_image(variant.skin_url)]).then(([model, skin]) => {
       if (!alive || !model) return;
-      const actor = p.pxl_actor_new(model.model);
+      const actor = CORE_BUILD.call(Cmd.ACTOR_CREATE, packet((b) => b.u32(model.model)), (id) => id);
       if (actor < 0) return;
       actor_ref.current = { actor, model, skin };
       set_actor(actor);
     });
     return () => {
       alive = false;
-      if (actor_ref.current) p.pxl_actor_remove(actor_ref.current.actor);
+      if (actor_ref.current) CORE_BUILD.send(actor_ref.current.actor, Cmd.ACTOR_DELETE);
       actor_ref.current = null;
       set_actor(null);
     };
@@ -351,18 +352,12 @@ const Walker = memo(function Walker(props: WalkerProps) {
     const held = actor_ref.current;
     if (held && CORE_PXL) {
       const mo = map_origin_ref.current;
-      CORE_PXL.pxl_actor_place(
-        held.actor,
-        ivec.to_real(ivec.X(mo)) + px,
-        ivec.to_real(ivec.Y(mo)) + py,
-        ivec.to_real(ivec.Z(mo)) + pose.z,
-        pose.rotation_z,
-        1,
-      );
+      const at_z = ivec.to_real(ivec.Z(mo)) + pose.z;
+      CORE_BUILD.send(held.actor, Cmd.ACTOR_UPDATE, packet((b) => b.f64(ivec.to_real(ivec.X(mo)) + px).f64(ivec.to_real(ivec.Y(mo)) + py).f64(at_z).f64(pose.rotation_z).bool(true)));
       const clip = is_walking ? variant.move_clip : IDLE_CLIP;
       if (actor_clip_ref.current !== clip) {
         const index = held.model.clips.get(clip);
-        if (index !== undefined) CORE_PXL.pxl_actor_play(held.actor, index, actor_clip_ref.current === null ? 0 : 0.2);
+        if (index !== undefined) CORE_BUILD.send(held.actor, Cmd.ACTOR_PLAY, packet((b) => b.u32(index).f32(actor_clip_ref.current === null ? 0 : 0.2)));
         actor_clip_ref.current = clip;
       }
       gpu_renderer?.skinned.set_skin(held.model.model, held.skin);

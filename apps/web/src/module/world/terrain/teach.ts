@@ -15,7 +15,8 @@ import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { GROUND_COLOR_LOOKUP_FLAT, GROUND_LAYER_INDEX_LOOKUP_FLAT } from "@/render/gpu/layer_table.ts";
 import { MaterialClass, NO_LAYER } from "@/render/mesh/voxel.ts";
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 
 export const CH_TO_CLASS: Record<GroundChannelKey, MaterialClass> = {
   [GroundChannelKey.LAND]: MaterialClass.LAND,
@@ -33,29 +34,25 @@ export const BASE_G = BASE_FLAT?.has[BASE_TYPE] ? BASE_FLAT.rgb[BASE_TYPE * 3 + 
 export const BASE_B = BASE_FLAT?.has[BASE_TYPE] ? BASE_FLAT.rgb[BASE_TYPE * 3 + 2] : 0;
 export const BASE_LAYER_IDX: u32 = BASE_LAYER?.has[BASE_TYPE] ? BASE_LAYER.index[BASE_TYPE] : NO_LAYER;
 
-/** The channels in the order the module numbers them. */
-const CHANNEL_INDEX: Record<GroundChannelKey, u32> = {
-  [GroundChannelKey.LAND]: 0,
-  [GroundChannelKey.WATER]: 1,
-  [GroundChannelKey.STRUCTURE]: 2,
-  [GroundChannelKey.TRANSPORT]: 3,
-};
+const NO_RGB = new Uint8Array(256 * 3);
+const NO_TYPES = new Uint8Array(256);
 
-/** Hands the module the tables a cell's material is read from: the base,
- * each channel's class, and every type's colour and layer. Once, before
- * any page is told. */
+/** Hands the module the tables a cell's material is read from, whole, in
+ * one command: the base, and each channel's class and every type's colour
+ * and layer, in GROUND_CH_KEYS' order. Once, before any page is told. */
 export function teach_terrain(): void {
-  if (CORE_PXL === null) return;
-  CORE_PXL.pxl_terrain_base(BASE_R, BASE_G, BASE_B, BASE_LAYER_IDX, MaterialClass.LAND);
-  for (const ch_key of GROUND_CH_KEYS) {
-    const ch = CHANNEL_INDEX[ch_key];
-    CORE_PXL.pxl_terrain_channel(ch, CH_TO_CLASS[ch_key]);
-    const color = GROUND_COLOR_LOOKUP_FLAT[ch_key];
-    const layer = GROUND_LAYER_INDEX_LOOKUP_FLAT[ch_key];
-    for (let t = 0; t < 256; t++) {
-      const has_color = color?.has[t] ? 1 : 0;
-      const has_layer = layer?.has[t] ? 1 : 0;
-      CORE_PXL.pxl_terrain_type(ch, t, color?.rgb[t * 3] ?? 0, color?.rgb[t * 3 + 1] ?? 0, color?.rgb[t * 3 + 2] ?? 0, has_color, layer?.index[t] ?? 0, has_layer);
-    }
-  }
+  CORE_BUILD.send(
+    0,
+    Cmd.TERRAIN_UPDATE,
+    packet((p) =>
+      p.branch((base) => base.u32(BASE_R).u32(BASE_G).u32(BASE_B).u32(BASE_LAYER_IDX).u32(MaterialClass.LAND))
+        .branch((channels) => {
+          for (const ch_key of GROUND_CH_KEYS) {
+            const color = GROUND_COLOR_LOOKUP_FLAT[ch_key];
+            const layer = GROUND_LAYER_INDEX_LOOKUP_FLAT[ch_key];
+            channels.branch((c) => c.u32(CH_TO_CLASS[ch_key]).u8_array(color?.rgb ?? NO_RGB).u8_array(color?.has ?? NO_TYPES).u8_array(layer?.index ?? NO_TYPES).u8_array(layer?.has ?? NO_TYPES));
+          }
+        })
+    ),
+  );
 }

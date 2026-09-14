@@ -46,7 +46,7 @@ packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model,
 crates/xpute/core       @xpute/core's pair, file for file (script/pair.ts holds them together); no domain
 crates/pxl/shared       @pxl/shared's pair — PVF3, the indexer, the sparse tree, the adapters
 crates/pxl/core         the world in Rust — the bake, the scheduler, the objects, the draw list, the shaders
-crates/pxl/wasm         the one WebAssembly module: numeric exports over the two crates
+crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the two crates
 apps/api                Hono server + the Overture/DEM bake pipeline
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```

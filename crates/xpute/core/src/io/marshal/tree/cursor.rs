@@ -101,6 +101,22 @@ impl Cursor {
         }
     }
 
+    /// `get<bigint>()`, checked as `get_array` is.
+    pub fn get_bigint(&self) -> Result<i128, MarshalError> {
+        match self.get()? {
+            NodeValue::BigInt(x) => Ok(x),
+            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a bigint, got type 0x{:x}", self.type_())), None)),
+        }
+    }
+
+    /// `get<boolean>()`, checked as `get_array` is.
+    pub fn get_bool(&self) -> Result<bool, MarshalError> {
+        match self.get()? {
+            NodeValue::Bool(b) => Ok(b),
+            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a boolean, got type 0x{:x}", self.type_())), None)),
+        }
+    }
+
     /// `get<string>()`, checked as `get_array` is.
     pub fn get_str(&self) -> Result<String, MarshalError> {
         match self.get()? {

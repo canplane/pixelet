@@ -55,6 +55,153 @@ arrived and hands the time back. What that decides about the boundary:
   cannot be a ring entry: the memory, the rings' addresses, the
   doorbells, the panic hook. Everything named `pxl_*` today that is not
   one of those is on its way into the rings.
+- **The terms of folding the exports into the rings (2026-09-14).**
+  1. The Rust does not bend to JavaScript. Assembling and taking apart
+     what crosses is the shell's job, in XTP; the kernel reads a packet
+     where it lies and writes one where it is asked to. serde for the
+     RPC is avoided — tolerated only as a stopgap that says so.
+  2. The RPC is most likely XTP-shaped, and the fold is tried in that
+     shape first: a ring entry names an op and a packet in shared memory
+     (its offset and length), not a dozen scalar arguments laid out per
+     op.
+  3. The exchange is interrupts over shared memory. An export that
+     remains is a primitive that hands over the turn — the tick, the
+     drain — never a typed call per operation.
+  4. What goes over the network, and in what format, stays the shell's
+     to lead for now. It is a grey zone, not decided.
+
+  **The message, as built (2026-09-14).** What a frame
+  (`@xpute/core/ipc/frame.ts`) needs once the transport is shared memory:
+  four words — `tag`, `cmd | flags`, `result`, `packet` — and an XTP
+  packet in the ring's own arena, its length in its header. The frame's
+  args/body split, its spill and its worker id are gone (the packet is a
+  tree, the arena holds any size, one ring joins two sides); `RES` tells a
+  reply from a signal on the completion ring, and `ACKREQ` asks for a
+  reply. The producer rewinds its arena when it finds the ring empty, so
+  nothing is allocated per message; a full ring or arena is EAGAIN, a
+  packet larger than the arena EMSGSIZE. A command is a number, `major <<
+  8 | minor` (`@xpute/core/ipc/cmd.ts`), the minors below 0x10 being
+  CREATE/READ/UPDATE/DELETE; what the majors are is pxl's
+  (`@pxl/shared/spec/cmd.ts`, one table the glue and the module both
+  read, each command's packet listed beside its number). The chunk
+  commands and every signal the scheduler raises travel this way now; the
+  rest of the `pxl_*` table is still bindgen, and moves family by family.
+  The frame itself stays as it was, for the worker boundary.
+
+  A query is a submission with `ACKREQ` that the glue rings for until its
+  reply comes (`CoreBuild.call`): the ray and the decor hit went first, as
+  the cost check. On V8 with an empty world, the export was 91 ns a ray;
+  the ring is 733 ns. The ring itself is not the cost — a call with no
+  packet is 92 ns, the export's price — but the TypeScript XTP encoder
+  (510 ns for one nine-double packet, a node object per leaf) and reader
+  (314 ns for a fourteen-double reply) are. At a pointer's rate that is
+  under 50 µs a second, and what it points at is BACKLOG P1's "XTP encoder
+  without per-leaf objects", not the ring.
+
+  The writes followed: an object leaf, a chunk's reindex and clearing the
+  store (`OBJECT_*`), what a leaf's state paints as (`STATE_UPDATE`), and
+  the tables taught once — the terrain's materials as one packet
+  (`TERRAIN_UPDATE`, where there were 1,024 calls) and every decor kind
+  with its rules as one (`DECOR_KIND_UPDATE`, where there was a call per
+  kind, rule and allowed type). A drain now applies every submission
+  waiting and holds back only what they make, in the module and in order,
+  until the completion ring has room; so the read exports still standing
+  (the object store's lanes, the reference paints) apply what waits first
+  and see every write sent before them, and the glue's `settle` does the
+  same without handing out a signal, for the reindex whose change log it
+  reads next.
+
+  Then the object store's reads became queries too (`OBJECT_READ`, `_LANES`,
+  `_CELL`, `_COLUMNS`, `_STAT`), answered in the result word where one
+  number is the answer and in a reply packet where it is not. A lane
+  still crosses as its address: `OBJECT_LANES` replies with where the
+  chunk's band, position and state lanes are, and the glue views them in
+  place until the next write. What still applies the waiting submissions
+  before it reads is only the reference paints (`pxl_terrain_read`,
+  `pxl_terrain_paint`, `pxl_object_paint`), which the tests call.
+
+  Then the scene beside the chunks: the hover ghost, the location puck,
+  the billboard sets, the actors, the dev gizmos and the environment's
+  theme and observer (`GHOST_*`, `PUCK_*`, `BILLBOARD_*`, `ACTOR_*`,
+  `DEBUG_UPDATE`, `ENV_*`). Two things this family decided. A lane of
+  floats — a billboard's instances, the puck's zone, the gizmos' vertices,
+  a theme — crosses inside the packet, not as an address: the glue's
+  scratch went back to its allocator the moment the call returned, and a
+  command is applied later, so an address would name memory already
+  reused. And the renderer drains before it takes the lists, so what a
+  phase after the module's tick sends (the chat bubble, the gizmos, a POI
+  placement) is still drawn in the frame that sent it, as the direct calls
+  were.
+
+  Then a model's loading (`MODEL_*`): the glue asks for a model and is
+  answered with its id and where its mesh block is, writes the vertices
+  and indices there itself — a block in the module's memory the module
+  handed out, which stays valid, so it crosses as an address — and sends
+  the joints, the clips and their channels (keys copied into the packet),
+  then the seal. A query's tag is its call's, so a query about a subject
+  (a model's handle, a clip of a model) carries the subject in its packet.
+
+  Then the change log's bump, forget and revision (`CHANGE_*`), a chunk's
+  rebuild now (`CHUNK_BUILD`, `CHUNK_DECOR`) and the day's sunrise and
+  sunset (`ENV_READ`). A chunk node reads its column's revision as it is
+  made, and it is made inside a sink — while the glue is reading the
+  completion ring — so a query may now be asked from inside `read`: it
+  drains, finds its reply where it waits ahead of the head, and leaves it
+  for the read beneath to pass over; a message not yet consumed keeps the
+  arena from rewinding, so the reply's packet stays whole. A turn handed
+  over from inside a sink drains without reading, for the same reason.
+
+  **The passage stays general (2026-09-14).** Bindgen may remain, but as a
+  pipe, not as a passage per purpose: a few exports whose arguments are
+  primitives — a clock, an interrupt number — and nothing in their names
+  or shapes that knows the domain. What the domain needs goes through
+  that pipe as commands; an export named for a frame, a census or a shader
+  is a passage opened for one purpose, and is on its way into the rings.
+
+  The addresses went next: where the frame block, the census, the build
+  stat, the environment's output and the change log's lanes are, the frame
+  uniform's layout, a shader's WGSL and a pipeline's record, each asked
+  once as a query (`FRAME_READ`, `CHUNK_READ`, `ENV_LANES`, `CHANGE_LANES`,
+  `SHADER_READ`, `SHADER_PIPELINE`); and the renderer's lists, taken once a
+  frame (`DRAW_READ`), a query that drains first, so what a late phase sent
+  is still drawn in its frame.
+
+  Then the pools (`POOL_*`, 2026-09-15). The map is cut before anything
+  that builds a chunk exists, so the rings' shell end became its own
+  piece (`wasm/core_ring.ts`), made with the module, and the sections'
+  pools are created and asked for their blocks through it; the builds
+  hear their signals through the same one. An acquire is a query; a
+  release is sent, not asked — whatever could hand the block out again,
+  an acquire or a tick, drains first — and one the pool refuses comes
+  back as the ring's failure reply. Measured on V8: a block acquired and
+  released cost 202 ns through the exports and 1,752 ns through the rings
+  (1,943 ns with the release asked too), and one three-word packet built
+  through `TreeView` alone is 488 ns — the encoder again, as the
+  experiment found, now on a path that runs per block rather than per
+  frame ([XTP by fixed shape](./experiment/20260914-xtp-by-fixed-shape.md)).
+
+  Then the reference paths (2026-09-15): a volume painted by hand
+  (`VOLUME_*`), the stepped bake and scan (`BAKE_*`, `SCAN_*`), a chunk's
+  terrain read and painted (`TERRAIN_READ`, `TERRAIN_PAINT`), the object
+  paint (`OBJECT_PAINT`), the raycast's column (`RAY_COLUMN`) and the
+  builder alone (`CHUNK_TICK`, its ids in the packet). Two things this
+  family decided. What the module answers in a scratch of its own crosses
+  as words, not as the scratch's address: a volume's band rows are written
+  one at a time into one row, so asked for all of them at once, every
+  band's address was the last band's, and `VOLUME_READ` replies with the
+  rows themselves. And a command sent while the map is being laid out
+  (`VOLUME_POOLS`) is applied before that module has loaded, so the map
+  is whole when anything imports it; one left in the submission ring
+  took a slot the rings' own test counted on.
+
+  Then the pipe itself was cut to two (2026-09-15): `boot`, the
+  address of a block read once — the section the module keeps, which the
+  memory's map is checked against before any ring exists, and where the
+  two rings are — and `interrupt(vector)`, the doorbell, whose one
+  argument says what the turn is for (`@xpute/core/ipc/cmd.ts`'s
+  `Interrupt`: DRAIN, TICK). The vectors are the kit's, since handing over
+  a turn is mechanism; what a step answers moved beside the commands it
+  answers (`StepResult`).
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

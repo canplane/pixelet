@@ -27,6 +27,8 @@ import { load_gltf, load_image } from "@/render/gltf/load.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 import { gpu_renderer } from "@/render/gpu/stage.tsx";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import type { CharacterVariant } from "@/module/world/character/variant.ts";
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
@@ -58,8 +60,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
   useEffect(() => {
     const canvas = ref.current;
     const gpu = gpu_renderer;
-    const p = CORE_PXL;
-    if (!canvas || !gpu || !p) return;
+    if (!canvas || !gpu || !CORE_PXL) return;
     const preview = gpu.open_preview(canvas);
     let alive = true;
     let actor: u32 | null = null;
@@ -71,13 +72,13 @@ export function CharacterPreview(props: CharacterPreviewProps) {
 
     Promise.all([case_model_for(variant), load_image(variant.skin_url)]).then(([model, skin]) => {
       if (!alive || !model) return;
-      const id = p.pxl_actor_new(model.model);
+      const id = CORE_BUILD.call(Cmd.ACTOR_CREATE, packet((b) => b.u32(model.model)), (actor) => actor);
       if (id < 0) return;
       actor = id;
       preview.model = model.model;
       preview.set_skin(model.model, skin);
       const idle = model.clips.get(IDLE_CLIP);
-      if (idle !== undefined) p.pxl_actor_play(id, idle, 0);
+      if (idle !== undefined) CORE_BUILD.send(id, Cmd.ACTOR_PLAY, packet((b) => b.u32(idle).f32(0)));
     });
 
     // The case turns on its own clock: the world's tick runs only when
@@ -91,7 +92,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
       preview.resize(rect.width * dpr, rect.height * dpr);
       if (actor !== null) {
         spin += SPIN_RATE_RAD_S * dt;
-        p.pxl_actor_place(actor, at[0], at[1], at[2], spin, 1);
+        CORE_BUILD.send(actor, Cmd.ACTOR_UPDATE, packet((b) => b.f64(at[0]).f64(at[1]).f64(at[2]).f64(spin).bool(true)));
       }
       request_world_tick();
       raf = requestAnimationFrame(frame);
@@ -101,7 +102,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
     return () => {
       alive = false;
       cancelAnimationFrame(raf);
-      if (actor !== null) p.pxl_actor_remove(actor);
+      if (actor !== null) CORE_BUILD.send(actor, Cmd.ACTOR_DELETE);
       gpu.close_preview(preview);
     };
   }, [variant]);

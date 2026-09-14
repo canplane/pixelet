@@ -20,6 +20,8 @@ import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/deco
 import { GpuRenderer } from "./renderer.ts";
 import { GL_TO_WGPU } from "./depth.ts";
 import { rim_cfg } from "@/module/world/environment/config.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 /** The one renderer, once its device has answered. */
 export let gpu_renderer: GpuRenderer | null = null;
@@ -51,11 +53,10 @@ function sync_decor_models(gpu: GpuRenderer): void {
   const assets = decor_bundle_assets();
   if (assets === decor_assets_seen) return;
   decor_assets_seen = assets;
-  const pxl = CORE_PXL!;
   let group = 0;
   for (const { models, skins } of assets) {
     models.forEach((model, v) => {
-      gpu.decor.set_model(group++, model ? pxl.pxl_model_handle(model.model) : 0, skins[v]);
+      gpu.decor.set_model(group++, model ? CORE_BUILD.call(Cmd.MODEL_READ, packet((b) => b.u32(model.model)), (handle) => handle >>> 0) : 0, skins[v]);
     });
   }
 }
@@ -94,8 +95,7 @@ export function gpu_frame(dpr: number): void {
   // The light, the fog and the sky's colours and directions are the
   // module's (crates/pxl/core/src/world/environment.rs), laid out as these
   // uniforms take them.
-  const pxl = CORE_PXL!;
-  env_view ??= new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);
+  env_view ??= new Float32Array(CORE_PXL!.memory.buffer, CORE_BUILD.call(Cmd.ENV_LANES, null, (_, reply) => reply!.at(0).get<number>()), ENV_FLOATS);
   const env = env_view;
   u.set(env.subarray(0, 24), at.env);
   u.set(env.subarray(ENV_OTHER_LIGHT, ENV_OTHER_LIGHT + 8), at.other);

@@ -32,6 +32,8 @@ import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import { useMapStore } from "@/module/map/store.ts";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { get_theme_key, type WorldThemeKey } from "./theme.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 const THEME_CHECK_INTERVAL_MS = 60_000;
 
@@ -53,7 +55,7 @@ function compute_theme_key(): WorldThemeKey {
   day_start.setHours(0, 0, 0, 0);
   let sunrise_hour = 6, sunset_hour = 18;
   if (CORE_PXL) {
-    [sunrise_hour, sunset_hour] = new Float64Array(CORE_PXL.memory.buffer, CORE_PXL.pxl_env_daylight(lat, lon, day_start.getTime()), 2);
+    [sunrise_hour, sunset_hour] = CORE_BUILD.call(Cmd.ENV_READ, packet((p) => p.f64(lat).f64(lon).f64(day_start.getTime())), (_, reply) => [reply!.at(0).get<number>(), reply!.at(1).get<number>()]);
   }
   return get_theme_key(current_hour(now), sunrise_hour, sunset_hour);
 }

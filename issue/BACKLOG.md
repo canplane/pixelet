@@ -134,7 +134,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      a submission ring and a completion ring, a pair in the module's heap,
      64-byte entries; `pxl_tick` is the doorbell and the glue reads the
      completions when it returns. The chunks' builds are the first commands
-     on them.
+     on them. The whole export table folded into them on 2026-09-14 and
+     2026-09-15, family by family, until the module's exports were a boot
+     block and a doorbell (`boot`, `interrupt`)
+     ([what-stays-in-javascript](./20260914-what-stays-in-javascript.md)).
      **Carried into the port, not fixed in TypeScript first** — an audit
      of the mesher, scan and volume on 2026-09-13 found these, and each is
      what Rust's types or an algorithm rewrite resolve on the way, so
@@ -345,7 +348,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     convention, and building it twice is the cost to avoid.
 - **XTP encoder without per-leaf objects.** A node object per leaf and a
   closure per scalar at encode; mechanical, format-unchanged, bake-side
-  only. With the above, not on its own.
+  only. With the above, not on its own. Measured since on the rings
+  (2026-09-14, [experiment/20260914-xtp-by-fixed-shape.md](./experiment/20260914-xtp-by-fixed-shape.md)):
+  a ray query is 709 ns through TreeView and TreeReader and 215 ns with the
+  request written by shape; the request's encode is 492 ns against 54, a
+  reply's read 303 ns against 5. The shape of it is a writer and reader
+  per command generated from `@pxl/shared/spec/cmd.ts`, over XTP, for both
+  sides — the schema on the format, which also checks the packets' types.
+  The pools raised it (2026-09-15): a block acquired and released is
+  1,752 ns through the rings against 202 through the exports, a three-word
+  packet 488 ns of it each way, on a path that runs per block.
 
 - **Placed objects come back moved after a reload.** Found 2026-09-14: a
   wall of fifteen cubes (five along X, three up Z) reloads as thirteen

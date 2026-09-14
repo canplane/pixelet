@@ -8,10 +8,14 @@
  */
 
 import type { f64 } from "@xpute/core/kit/word.ts";
+import type { F64Array, U8Array } from "@xpute/core/kit/array.ts";
+import type { Vec3 } from "@xpute/core/kit/mat4.ts";
+import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD } from "@/wasm/core_build.ts";
 import type { MaterialClass } from "@/render/mesh/voxel.ts";
 
 export type WorldHit = {
@@ -37,29 +41,35 @@ export type RayLike = {
  * comes back.
  */
 export function ray_hit_world(ray: RayLike, map_origin: IVec, max_dist: f64): WorldHit | null {
-  const p = CORE_PXL;
-  if (p === null) throw new Error("render: the raycast walks the module's chunks, which needs the core memory");
-  const struck = p.pxl_raycast(
-    ivec.to_real(ivec.X(map_origin)),
-    ivec.to_real(ivec.Y(map_origin)),
-    ray.origin.x,
-    ray.origin.y,
-    ray.origin.z,
-    ray.direction.x,
-    ray.direction.y,
-    ray.direction.z,
-    max_dist,
-  );
-  if (struck === 0) return null;
-  const h = new Float64Array(p.memory.buffer, p.pxl_raycast_at(), 14);
-  return {
-    material_class: h[0] as MaterialClass,
-    face_normal: [h[1], h[2], h[3]],
-    hit_point: [h[4], h[5], h[6]],
-    t: h[7],
-    box_min: [h[8], h[9], h[10]],
-    box_max: [h[11], h[12], h[13]],
-  };
+  return CORE_BUILD.call(Cmd.RAY_READ, ray_packet(map_origin, ray.origin, ray.direction, max_dist), (struck, reply) => {
+    if (struck !== 1 || reply === null) return null;
+    const h = reply.at(0).get<F64Array>();
+    return {
+      material_class: h[0] as MaterialClass,
+      face_normal: [h[1], h[2], h[3]],
+      hit_point: [h[4], h[5], h[6]],
+      t: h[7],
+      box_min: [h[8], h[9], h[10]],
+      box_max: [h[11], h[12], h[13]],
+    };
+  });
+}
+
+const $ray = new Float64Array(9);
+
+/** A ray as a ray query carries it (@pxl/shared/spec/cmd.ts): the map
+ * origin, then the ray, then the distance. */
+export function ray_packet(map_origin: IVec, origin: Vec3, direction: Vec3, max_dist: f64): U8Array {
+  $ray[0] = ivec.to_real(ivec.X(map_origin));
+  $ray[1] = ivec.to_real(ivec.Y(map_origin));
+  $ray[2] = origin.x;
+  $ray[3] = origin.y;
+  $ray[4] = origin.z;
+  $ray[5] = direction.x;
+  $ray[6] = direction.y;
+  $ray[7] = direction.z;
+  $ray[8] = max_dist;
+  return encoder.encode(new TreeView().branch((b) => b.f64_array($ray)));
 }
 
 /** Ray/AABB slab test. */

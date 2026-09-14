@@ -74,7 +74,7 @@ export type FrameSample = {
   budget_ms: number;
   /** sched_ms broken down by phase, in the tick's own order. */
   phases: Record<string, number>;
-  /** The module's tick (`pxl_tick`), inside the visible phase — its
+  /** The module's tick (the TICK interrupt), inside the visible phase — its
    * builds, commits and reclaim under the frame's budget. The renderer's
    * encode and submit are inside `task_ms` below; what the GPU then takes
    * is `gpu_ms`, from its timestamps. */

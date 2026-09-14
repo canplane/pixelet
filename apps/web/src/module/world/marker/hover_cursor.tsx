@@ -24,6 +24,8 @@ import { placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for } fro
 import { get_ground_type } from "../terrain/elevation.ts";
 import { fvec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { DECOR_BUNDLES } from "../decor/decor_registry.ts";
 import { request_world_tick } from "../change.ts";
 
@@ -234,17 +236,17 @@ export function HoverCursor() {
   const ghost_rgb = parseInt((swatch ?? fallback).slice(1), 16);
   const show_ghost = hovered !== null && !blocked;
   useEffect(() => {
-    const p = CORE_PXL;
-    if (!p) return;
+    if (!CORE_PXL) return;
     if (!show_ghost) {
-      p.pxl_ghost_clear();
+      CORE_BUILD.send(0, Cmd.GHOST_DELETE);
     } else if (is_decor_ghost && decor_pick && decor_group >= 0) {
-      p.pxl_ghost_decor(ghost_x + preview_size / 2, ghost_y + preview_size / 2, ghost_z, decor_group, decor_pick.rotation);
+      const rotation = decor_pick.rotation;
+      CORE_BUILD.send(0, Cmd.GHOST_DECOR, packet((b) => b.f64(ghost_x + preview_size / 2).f64(ghost_y + preview_size / 2).f64(ghost_z).u32(decor_group).f64(rotation)));
     } else {
-      p.pxl_ghost_box(ghost_x, ghost_y, ghost_z, current_scale, ghost_value, ghost_rgb, coplanar_with_terrain ? 1 : 0);
+      CORE_BUILD.send(0, Cmd.GHOST_BOX, packet((b) => b.f64(ghost_x).f64(ghost_y).f64(ghost_z).f64(current_scale).u32(ghost_value).u32(ghost_rgb).bool(coplanar_with_terrain)));
     }
     request_world_tick();
   }, [show_ghost, is_decor_ghost, decor_group, decor_pick?.rotation, ghost_x, ghost_y, ghost_z, preview_size, current_scale, ghost_value, ghost_rgb, coplanar_with_terrain]);
-  useEffect(() => () => CORE_PXL?.pxl_ghost_clear(), []);
+  useEffect(() => () => CORE_BUILD.send(0, Cmd.GHOST_DELETE), []);
   return null;
 }

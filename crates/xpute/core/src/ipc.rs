@@ -2,6 +2,7 @@
 
 pub mod change;
 pub mod change_waker;
+pub mod cmd;
 pub mod frame;
 pub mod port;
 pub mod ring;

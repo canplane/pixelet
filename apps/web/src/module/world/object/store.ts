@@ -31,6 +31,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
+import type { U64Array } from "@xpute/core/kit/array.ts";
 import type { FVec, IVec, PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { fvec, ivec, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/core/kit/encoding.ts";
@@ -57,7 +58,8 @@ import {
 } from "@pxl/shared/spec/cell/mod.ts";
 import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
-import { CORE_BUILD } from "@/wasm/core_build.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { bump_world, request_world_tick, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
@@ -217,25 +219,25 @@ function lower(coord: PVF3): typeof $at {
 /** The state stored at `coord`, VOID where nothing is. */
 function read_state(coord: PVF3): number {
   const at = lower(coord);
-  return pxl().pxl_object_read(at.key, at.band, at.x, at.y, at.z);
+  return CORE_BUILD.call(Cmd.OBJECT_READ, packet((p) => p.u64(BigInt.asUintN(64, at.key)).i32(at.band).u32(at.x).u32(at.y).u32(at.z)), (state) => state >>> 0);
 }
 
 /** A chunk's entry lanes, as views over the module's — valid until the
  * next write or reindex; null where the chunk holds nothing. */
 function entry_lanes(base: IVec): [Int32Array, Uint32Array, Uint32Array] | null {
-  const p = pxl();
-  const row_at = p.pxl_object_chunk(base);
-  if (row_at === 0) return null;
-  const buf = p.memory.buffer;
-  const row = new Uint32Array(buf, row_at, 4);
-  const n = row[0];
-  return [new Int32Array(buf, row[1], n), new Uint32Array(buf, row[2], n), new Uint32Array(buf, row[3], n)];
+  const buf = pxl().memory.buffer;
+  return CORE_BUILD.call(Cmd.OBJECT_LANES, column_packet(base), (n, reply) => {
+    if (n === 0 || reply === null) return null;
+    return [new Int32Array(buf, reply.at(0).get<number>(), n), new Uint32Array(buf, reply.at(1).get<number>(), n), new Uint32Array(buf, reply.at(2).get<number>(), n)];
+  });
 }
 
 function entry_count(base: IVec): number {
-  const p = pxl();
-  const row_at = p.pxl_object_chunk(base);
-  return row_at === 0 ? 0 : new Uint32Array(p.memory.buffer, row_at, 1)[0];
+  return CORE_BUILD.call(Cmd.OBJECT_LANES, column_packet(base), (n) => n);
+}
+
+function column_packet(base: IVec) {
+  return packet((p) => p.u64(BigInt.asUintN(64, base)));
 }
 
 /** Deterministic id for a walked leaf block — encodes exactly what remove() needs to locate it again (including its own cell key, so remove() never needs a reverse lookup), no random/stored identity required. */
@@ -404,14 +406,14 @@ const $cell = { start: 0, count: 0, solid: 0 };
 function cell_run(ix: bigint, iy: bigint, iz: bigint): typeof $cell | null {
   const base = column_of_cell(ix, iy, iz);
   const [cx0, cy0] = cell_index({ i: base, f: 0n });
-  const p = pxl();
-  const row_at = p.pxl_object_cell(base, Number(ix - cx0), Number(iy - cy0), Number(iz));
-  if (row_at === 0) return null;
-  const row = new Uint32Array(p.memory.buffer, row_at, 3);
-  $cell.start = row[0];
-  $cell.count = row[1];
-  $cell.solid = row[2];
-  return $cell;
+  const pkt = packet((p) => p.u64(BigInt.asUintN(64, base)).u32(Number(ix - cx0)).u32(Number(iy - cy0)).i32(Number(iz)));
+  return CORE_BUILD.call(Cmd.OBJECT_CELL, pkt, (held, reply) => {
+    if (held !== 1 || reply === null) return null;
+    $cell.start = reply.at(0).get<number>();
+    $cell.count = reply.at(1).get<number>();
+    $cell.solid = reply.at(2).get<number>();
+    return $cell;
+  });
 }
 
 /**
@@ -447,7 +449,9 @@ const placed_snapshots = new Map<string, OccupiedEntry | null>();
 function reindex_chunk(base: IVec): void {
   const log = world_changes;
   const from = log.head;
-  pxl().pxl_object_reindex(base);
+  CORE_BUILD.send(0, Cmd.OBJECT_REINDEX, packet((p) => p.u64(BigInt.asUintN(64, base))));
+  // The change log is read below, so the reindex is applied now.
+  CORE_BUILD.settle();
   for (let c = from; c < log.head; c++) {
     const i = log.slot(c);
     if (log.topic[i] !== WorldTopic.OBJECT_CELL) continue;
@@ -754,10 +758,7 @@ let restoring = false;
 /** The columns holding objects, in the module's order — for a walk over
  * everything placed, which is what a save is. */
 export function object_columns(): IVec[] {
-  const p = pxl();
-  const keys: IVec[] = [];
-  for (let i = 0, n = p.pxl_object_chunks(); i < n; i++) keys.push(BigInt.asUintN(64, p.pxl_object_chunk_key(i)));
-  return keys;
+  return CORE_BUILD.call(Cmd.OBJECT_COLUMNS, null, (_, reply) => Array.from(reply!.at(0).get<U64Array>(), (k) => k as IVec));
 }
 
 export function encode_objects(): string {
@@ -823,7 +824,7 @@ function load(): void {
     if (raw) decode_objects(raw);
   } catch {
     // An unreadable blob starts the world empty, as a missing one does.
-    pxl().pxl_object_clear();
+    CORE_BUILD.send(0, Cmd.OBJECT_DELETE);
   }
 }
 
@@ -871,9 +872,7 @@ for (const base of object_columns()) reindex_chunk(base);
 
 /** Chunks and bands currently holding objects. */
 export function object_store_stats(): { chunks: number; bands: number; cells: number } {
-  const p = pxl();
-  const row = new Uint32Array(p.memory.buffer, p.pxl_object_stat(), 3);
-  return { chunks: row[0], bands: row[1], cells: row[2] };
+  return CORE_BUILD.call(Cmd.OBJECT_STAT, null, (_, reply) => ({ chunks: reply!.at(0).get<number>(), bands: reply!.at(1).get<number>(), cells: reply!.at(2).get<number>() }));
 }
 
 // ---- Mutations ----
@@ -898,7 +897,7 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   const level = Math.round(Math.log2(size));
   const at = lower(coord);
   const base = at.key;
-  pxl().pxl_object_write(base, at.band, at.x, at.y, at.z, level, val);
+  CORE_BUILD.send(0, Cmd.OBJECT_UPDATE, packet((p) => p.u64(BigInt.asUintN(64, base)).i32(at.band).u32(at.x).u32(at.y).u32(at.z).i32(level).u32(val)));
   if (restoring) return;
   save();
   reindex_chunk(base);

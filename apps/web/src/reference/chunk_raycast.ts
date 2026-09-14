@@ -11,7 +11,10 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
+
+import { CORE_MEMORY, CORE_RING } from "@/wasm/core_pool.ts";
+import { packet } from "@/wasm/core_ring.ts";
 import type { RayLike, WorldHit } from "@/module/world/raycast.ts";
 import { type ChunkVolume } from "@/reference/volume.ts";
 import { MaterialClass, SUB_CELL_NONE, unpack_sub_cell_fraction } from "@/render/mesh/voxel.ts";
@@ -81,17 +84,17 @@ const $ts_runs: ColumnRuns = { len: 0, z0: new Int32Array(64), z1: new Int32Arra
 const $runs: ColumnRuns = { len: 0, z0: new Int32Array(0), z1: new Int32Array(0), material_class: new Uint8Array(0), sub: new Uint32Array(0) };
 
 export function column_runs(volume: ChunkVolume, cx: u32, cy: u32): ColumnRuns {
-  const p = CORE_PXL;
-  if (p !== null) {
-    const n = p.pxl_column_runs(volume.id, cx, cy);
-    const buf = p.memory.buffer;
-    const row = new Uint32Array(buf, p.pxl_column_runs_at(), 4);
-    $runs.len = n;
-    $runs.z0 = new Int32Array(buf, row[0], n);
-    $runs.z1 = new Int32Array(buf, row[1], n);
-    $runs.material_class = new Uint8Array(buf, row[2], n);
-    $runs.sub = new Uint32Array(buf, row[3], n);
-    return $runs;
+  const ring = CORE_RING;
+  if (ring !== null) {
+    const buf = CORE_MEMORY!.buffer;
+    return ring.call(Cmd.RAY_COLUMN, packet((p) => p.u32(volume.id).u32(cx).u32(cy)), (n, f) => {
+      $runs.len = n;
+      $runs.z0 = new Int32Array(buf, f!.at(0).get<number>(), n);
+      $runs.z1 = new Int32Array(buf, f!.at(1).get<number>(), n);
+      $runs.material_class = new Uint8Array(buf, f!.at(2).get<number>(), n);
+      $runs.sub = new Uint32Array(buf, f!.at(3).get<number>(), n);
+      return $runs;
+    });
   }
   const runs = merge_column_runs(volume, cx, cy);
   const out = $ts_runs;

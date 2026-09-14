@@ -11,7 +11,8 @@ import { cube_types, decor_ids, decor_num_id, placeable_cube_ids, placeable_cube
 
 import { resolve_solid_material } from "@/module/world/object/material.ts";
 import { NO_LAYER, pack_material } from "@/render/mesh/voxel.ts";
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 
 /** What the module's paint takes a state for: object.rs's Kind. */
 const KIND_SOLID: u32 = 1;
@@ -22,12 +23,11 @@ const KIND_DECOR: u32 = 3;
  * placeable cube's material, AIR, and the decor kinds, which paint
  * nothing. Once, at import, as the terrain adapter teaches its tables. */
 export function teach_objects(): void {
-  const p = CORE_PXL;
-  if (p === null) return;
+  const teach = (state: u32, kind: u32, material: u32, layer: u32) => CORE_BUILD.send(0, Cmd.STATE_UPDATE, packet((p) => p.u32(state).u32(kind).u32(material >>> 0).u32(layer)));
   for (const id of placeable_cube_ids) {
     const m = resolve_solid_material(id);
-    p.pxl_object_kind(placeable_cube_num_id(id), KIND_SOLID, pack_material(m), m.layer_idx);
+    teach(placeable_cube_num_id(id), KIND_SOLID, pack_material(m), m.layer_idx);
   }
-  p.pxl_object_kind(cube_types.common.AIR, KIND_AIR, 0, NO_LAYER);
-  for (const id of decor_ids) p.pxl_object_kind(decor_num_id(id), KIND_DECOR, 0, NO_LAYER);
+  teach(cube_types.common.AIR, KIND_AIR, 0, NO_LAYER);
+  for (const id of decor_ids) teach(decor_num_id(id), KIND_DECOR, 0, NO_LAYER);
 }
