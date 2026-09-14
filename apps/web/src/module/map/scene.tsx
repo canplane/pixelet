@@ -1,8 +1,6 @@
 // @pxl/web/module/map/scene.tsx
 
-import { useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import type * as THREE from "three";
 
 import { useCamera } from "@/module/camera/use_camera.ts";
 import { CameraInput } from "@/module/camera/input.tsx";
@@ -10,7 +8,6 @@ import { camera_cfg } from "@/module/camera/config.ts";
 import { post_cfg, render_cfg } from "@/module/world/environment/config.ts";
 import { themes, type WorldTheme } from "@/module/world/environment/theme.ts";
 import { useThemeKey } from "@/module/world/environment/theme_clock.ts";
-import { FrameProvider } from "@/module/world/frame/context.tsx";
 
 import { MapEnvironment } from "./environment.tsx";
 import { TickDriver } from "@/module/world/sched/tick.ts";
@@ -40,7 +37,6 @@ export function MapScene() {
   usePoiFetcher();
   useGroundSnapSync();
 
-  const world_ref = useRef<THREE.Group>(null);
   const theme_key = useThemeKey();
   const theme: WorldTheme = themes[theme_key];
 
@@ -106,15 +102,13 @@ export function MapScene() {
               (sched/tick.ts) — one order, one budget. */
           }
           <TickDriver />
-          <FrameProvider>
-            <CameraRig />
+          <CameraRig />
 
-            {/* Lighting and sky environment */}
-            <MapEnvironment />
+          {/* Lighting and sky environment */}
+          <MapEnvironment />
 
-            {/* World layers in the floating-origin local frame */}
-            <World ref={world_ref} />
-          </FrameProvider>
+          {/* World layers in the root frame */}
+          <World />
         </Canvas>
       </div>
 

@@ -1,25 +1,21 @@
 // @pxl/web/module/camera/use_camera.ts
 
 import { useEffect, useRef } from "react";
-import { invalidate, useThree } from "@react-three/fiber";
+import { invalidate } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
 
-import type { V3 } from "@pxl/shared/spec/space/v3.ts";
-
 import { useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
-import { render_cfg } from "@/module/world/environment/config.ts";
-import { damp_alpha, orbit_local_offset } from "./orbit.ts";
+import { damp_alpha } from "./orbit.ts";
 import { climb_polar } from "./terrain_gate.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
+import { view, view_compose } from "@/module/world/view.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
-
-const { FAR_CLIP } = render_cfg;
 
 // frameloop="demand" (scene.tsx) only renders another frame when something
 // calls invalidate() — this damping loop is the main thing driving that
@@ -43,19 +39,9 @@ const CLIMB_RISE_DAMP: f64 = 20;
 const CLIMB_RELAX_DAMP: f64 = 5;
 const CLIMB_EPS: f64 = 0.0005;
 
-/** Native Z-up direction for the web world renderer. */
-export const CAMERA_UP: V3 = [0, 0, 1];
-
+/** Damps the eye's distance and pitch toward the controls and writes them
+ * into the view (module/world/view.ts). */
 export function useCamera() {
-  const { camera } = useThree();
-
-  /** Applies one-time camera runtime defaults for the Z-up scene. */
-  useEffect((): void => {
-    camera.up.set(...CAMERA_UP);
-    camera.far = FAR_CLIP;
-    camera.updateProjectionMatrix();
-  }, [camera]);
-
   const view_state = useCameraStore((state) => state.view_state);
 
   // frameloop="demand": a useFrame callback only runs when a frame is
@@ -127,12 +113,10 @@ export function useCamera() {
     // The offset lags the control, so a pitch steepening toward vertical can
     // still be carrying a climb from a shallower one.
     const view_polar = clamp(polar.current + shown_climb.current, MIN_POLAR, MAX_POLAR);
-    const { horiz_dist, vert_dist } = orbit_local_offset(dist.current, view_polar);
-
-    const pos: V3 = [0, -horiz_dist, vert_dist];
-
-    camera.position.set(pos[0], pos[1], pos[2]);
-    camera.lookAt(0, 0, 0);
-    camera.updateMatrixWorld();
+    if (view.dist !== dist.current || view.polar !== view_polar) {
+      view.dist = dist.current;
+      view.polar = view_polar;
+      view_compose();
+    }
   }, "camera");
 }

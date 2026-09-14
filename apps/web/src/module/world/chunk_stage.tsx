@@ -20,8 +20,7 @@
  * (and its own same-day follow-up) for the fuller account.
  */
 
-import { memo, type ReactNode, useLayoutEffect, useMemo, useRef } from "react";
-import * as THREE from "three";
+import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -41,12 +40,11 @@ import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/led
 import { HARD_SLACK_MS, useTick } from "@/module/world/sched/tick.ts";
 import { lead_point } from "@/module/world/sched/priority.ts";
 import { gpu_frame, gpu_renderer } from "@/render/gpu/stage.tsx";
-import { useFrameRefs } from "@/module/world/frame/context.tsx";
+import { view, view_resize } from "@/module/world/view.ts";
 import { range_anchor_of, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
 import { render_cfg } from "@/module/world/environment/config.ts";
 import { set_lod_projection } from "@/render/lod.ts";
 import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
-import { update_frustum } from "@/render/chunk_lod.ts";
 
 /* The per-pass budgets that used to sit here — a soft allowance per pass and
  * a 16ms hard ceiling each — are gone. Both passes now draw on the one
@@ -124,10 +122,8 @@ function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
  * longer exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const frustum = useMemo(() => new THREE.Frustum(), []);
   const anchor_registry = useAnchorRegistry();
-  const { local_world_frame_ref } = useFrameRefs();
-  const lead = useMemo(() => new THREE.Vector3(), []);
+  const lead = useRef({ x: 0, y: 0, z: 0 }).current;
 
   // Decor hangs off the anchor root rather than off any one chunk or page:
   // it is one field for the whole world (decor/field.ts), and the root is the
@@ -138,8 +134,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       anchor_registry.root.remove(decor_field.group);
     };
   }, [anchor_registry]);
-
-  const projection = useMemo(() => new THREE.Matrix4(), []);
 
   // What the visible phase measured, handed to the report phase below. A
   // ref rather than state: it is written and read inside one tick.
@@ -154,58 +148,52 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
   useTick("visible", ({ state, delta, budget }) => {
     visible_pass.current = null;
-    update_frustum(frustum, state.camera, projection);
+    view_resize(state.size.width, state.size.height);
     // The tier criterion is a screen-space one (render/lod.ts), and the
     // other layers that read it (decor, badges) read it from here; the
     // module takes the same projection through the frame.
-    set_lod_projection(state.size.height, (state.camera as THREE.PerspectiveCamera).fov);
+    set_lod_projection(view.height, view.fov);
 
     // Where the camera is heading — see sched/priority.ts. The module orders
     // the work by it; the tier each chunk picks still comes from the camera
     // as drawn.
     const target = useMapStore.getState().map_center;
-    const local_frame = local_world_frame_ref.current;
     const origin = anchor_registry.cur_map_origin;
-    if (target && local_frame) {
+    if (target) {
       const local = ivec.sub(target.i, origin);
       lead_point(
         lead,
-        state.camera.position,
+        view.eye,
         ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(target.f)),
         ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(target.f)),
         ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(target.f)),
-        local_frame.matrixWorld,
+        view.root,
       );
     } else {
-      lead.copy(state.camera.position);
+      lead.x = view.eye.x;
+      lead.y = view.eye.y;
+      lead.z = view.eye.z;
     }
 
     // The frame, written where the module reads it (core_build.ts's FRAME),
     // then the module's pass over every chunk: measure, recheck, commit,
     // build and reclaim, under what is left of the budget. One matrix for
-    // every chunk: the anchor root's, the frame every chunk group is a pure
+    // every chunk: the root frame's, which every chunk is a pure
     // translation inside.
     const f = CORE_BUILD.frame;
-    f.set(anchor_registry.root.matrixWorld.elements, FRAME.root);
+    f.set(view.root, FRAME.root);
     f[FRAME.origin] = ivec.to_real(ivec.X(origin));
     f[FRAME.origin + 1] = ivec.to_real(ivec.Y(origin));
     f[FRAME.origin + 2] = ivec.to_real(ivec.Z(origin));
-    for (let p = 0; p < 6; p++) {
-      const plane = frustum.planes[p];
-      f[FRAME.planes + p * 4] = plane.normal.x;
-      f[FRAME.planes + p * 4 + 1] = plane.normal.y;
-      f[FRAME.planes + p * 4 + 2] = plane.normal.z;
-      f[FRAME.planes + p * 4 + 3] = plane.constant;
-    }
-    const cam = state.camera.position;
-    f[FRAME.camera] = cam.x;
-    f[FRAME.camera + 1] = cam.y;
-    f[FRAME.camera + 2] = cam.z;
+    f.set(view.planes, FRAME.planes);
+    f[FRAME.camera] = view.eye.x;
+    f[FRAME.camera + 1] = view.eye.y;
+    f[FRAME.camera + 2] = view.eye.z;
     f[FRAME.lead] = lead.x;
     f[FRAME.lead + 1] = lead.y;
     f[FRAME.lead + 2] = lead.z;
-    f[FRAME.viewport_h] = state.size.height;
-    f[FRAME.fov_deg] = (state.camera as THREE.PerspectiveCamera).fov;
+    f[FRAME.viewport_h] = view.height;
+    f[FRAME.fov_deg] = view.fov;
     f[FRAME.delta_s] = delta;
     f[FRAME.budget_ms] = budget.remaining();
     f[FRAME.hard_slack_ms] = HARD_SLACK_MS;
@@ -234,7 +222,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // The field is the eraser's hit test only; the WebGPU renderer draws
     // decor from the module's blocks.
     decor_field.group.visible = false;
-    gpu_frame(state, anchor_registry.root.matrixWorld);
+    gpu_frame(state.viewport.dpr);
     if (draw) state.invalidate();
     if (import.meta.env.DEV) {
       const c = CORE_BUILD.census();

@@ -53,6 +53,7 @@ import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { load_gltf, load_texture } from "@/module/world/gltf_cache.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { gpu_renderer } from "@/render/gpu/stage.tsx";
+import { view } from "@/module/world/view.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 
 /** A variant's model in the module, registered once per model and height
@@ -119,13 +120,6 @@ const FOLLOW_WALK_EPS: f64 = 0.03;
 const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
 const IDLE_CLIP = "idle";
-
-// Scratch for reading the parent frame's current world rotation (follow-mode
-// facing) — reused every frame, never held across the await-free useFrame
-// body. Two Walker instances share these, but their useFrame callbacks run
-// sequentially on one thread and consume the value before yielding.
-const $parent_quat = new THREE.Quaternion();
-const $parent_euler = new THREE.Euler();
 
 type WalkerProps = {
   /** Mutated in place by Companion every render, never replaced — Walker
@@ -210,7 +204,6 @@ const Walker = memo(function Walker(props: WalkerProps) {
   // there is not a reason for it to keep turning to track the viewer; only
   // its very first pose should ever be camera-relative.
   const initial_facing_done_ref = useRef(false);
-  const cam_world_pos = useRef(new THREE.Vector3()).current;
 
   // One-time placement at the *current* target, once the model exists. Not
   // via useFrame: target_ref.current can already be thousands of units away
@@ -275,13 +268,9 @@ const Walker = memo(function Walker(props: WalkerProps) {
       }
 
       // Back to the camera, held there while the map spins underneath —
-      // counter-rotate whatever azimuth the parent frame currently carries
-      // so the walker's final world facing stays FOLLOW_FACING.
-      if (character_root.parent) {
-        character_root.parent.getWorldQuaternion($parent_quat);
-        $parent_euler.setFromQuaternion($parent_quat, "ZYX");
-        character_root.rotation.z = FOLLOW_FACING - $parent_euler.z;
-      }
+      // counter-rotate the azimuth the root frame currently carries so the
+      // walker's final facing stays FOLLOW_FACING.
+      character_root.rotation.z = FOLLOW_FACING - view.azimuth;
 
       if (Math.hypot(target.x - px, target.y - py) > FOLLOW_WALK_EPS) {
         follow_walk_until_ref.current = now + FOLLOW_WALK_LINGER_S;
@@ -336,10 +325,8 @@ const Walker = memo(function Walker(props: WalkerProps) {
       // raw heading to the actual object rotation.
       if (is_walking) {
         character_root.rotation.z = step.heading! + Math.PI / 2;
-      } else if (!initial_facing_done_ref.current && character_root.parent) {
-        state.camera.getWorldPosition(cam_world_pos);
-        character_root.parent.worldToLocal(cam_world_pos);
-        const heading = heading_to({ x: step.x, y: step.y }, { x: cam_world_pos.x, y: cam_world_pos.y });
+      } else if (!initial_facing_done_ref.current) {
+        const heading = heading_to({ x: step.x, y: step.y }, { x: view.eye_local.x, y: view.eye_local.y });
         character_root.rotation.z = heading + Math.PI / 2;
         initial_facing_done_ref.current = true;
       }
@@ -393,13 +380,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
     state.invalidate();
   }, "companion");
 
-  return character_root
-    ? (
-      <primitive object={character_root}>
-        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} actor={actor} />}
-      </primitive>
-    )
-    : null;
+  return character_root && show_chat_bubble ? <ChatBubble anchor_z={variant.height_u} actor={actor} /> : null;
 });
 
 type CompanionProps = {

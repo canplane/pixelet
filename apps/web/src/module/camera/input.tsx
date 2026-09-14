@@ -12,7 +12,7 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/module/map/store.ts";
-import { useFrameRefs } from "@/module/world/frame/context.tsx";
+import { view, view_ray_local } from "@/module/world/view.ts";
 import { ground_or_raw } from "@/module/world/terrain/elevation.ts";
 import { get_local_world_origin } from "@/module/world/frame/coord.ts";
 import { is_placement_blocked } from "@/module/world/object/collision.ts";
@@ -46,25 +46,28 @@ const enum RotateAxisLock {
 
 type PointerPos = { x: f64; y: f64 };
 
-const $ray = new THREE.Ray();
-const $pointer = new THREE.Vector2();
+const $origin = { x: 0, y: 0, z: 0 };
+const $direction = { x: 0, y: 0, z: 0 };
+/** The pointer's ray in the view frame, for the decor hit test three still
+ * runs (decor_hit.ts) — the one thing here that is three's. */
+const $raycaster = new THREE.Raycaster();
+const $v = new THREE.Vector3();
+const $root = new THREE.Matrix4();
 
 /**
  * Which OccupiedEntry `hit` actually struck, decor included — tries a real
  * mesh raycast against baked decor first (decor_hit.ts's raycast_decor,
  * bounded by hit.t: decor sitting on solid ground can only be the right
  * answer when it's genuinely closer along the ray than whatever the
- * abstract voxel raycast already found there), falling back to
- * ray.ts's own solid-object AABB resolution otherwise. Split out of
- * ray.ts itself because only this module holds the live THREE.Raycaster
- * (`raycaster`, from useThree()) a real mesh intersection test needs —
- * ray.ts's own raycast is deliberately THREE-free (chunk_raycast.ts's own
- * doc comment), so wiring a scene-graph raycast into it would mean
- * threading a THREE.Raycaster through a module that otherwise never
- * imports three's runtime types at all.
+ * abstract voxel raycast already found there), falling back to ray.ts's
+ * own solid-object AABB resolution otherwise. The decor test is three's
+ * still, so the ray is put back in the view frame for it.
  */
-function resolve_hit_target(raycaster: THREE.Raycaster, hit: WorldHit, map_origin: IVec): OccupiedEntry | null {
-  const decor_id = raycast_decor(raycaster, hit.t);
+function resolve_hit_target(hit: WorldHit, map_origin: IVec): OccupiedEntry | null {
+  // The same ray in the view frame, where three's decor meshes stand.
+  $raycaster.ray.origin.set(view.eye.x, view.eye.y, view.eye.z);
+  $raycaster.ray.direction.copy($v.set($direction.x, $direction.y, $direction.z).transformDirection($root.fromArray(view.root)));
+  const decor_id = raycast_decor($raycaster, hit.t);
   if (decor_id) {
     const decor = get_placed_object(decor_id);
     if (decor) return decor;
@@ -150,7 +153,7 @@ function handle_tap(hovered: PVF3): void {
 }
 
 export function CameraInput() {
-  const { gl, size, raycaster, camera } = useThree();
+  const { gl, size } = useThree();
 
   /** Radians of pitch per pixel of vertical drag. Negative because dy grows
    * downward and dragging up is the natural "tilt toward the horizon". */
@@ -235,8 +238,6 @@ export function CameraInput() {
   const set_hovered_object_id = useCameraStore.getState().set_hovered_object_id;
   const set_is_follow_mode = useCameraStore.getState().set_is_follow_mode;
 
-  const { world_frame_ref, local_world_frame_ref } = useFrameRefs();
-
   function update_rect() {
     rect_ref.current = gl.domElement.getBoundingClientRect();
   }
@@ -263,7 +264,7 @@ export function CameraInput() {
     const lx: f64 = -dx * units_per_px;
     const ly: f64 = dy * units_per_px;
 
-    const azimuth: f64 = world_frame_ref.current?.rotation.z ?? view_state.azimuth;
+    const azimuth: f64 = view.azimuth;
     const wx: f64 = lx * Math.cos(azimuth) + ly * Math.sin(azimuth);
     const wy: f64 = -lx * Math.sin(azimuth) + ly * Math.cos(azimuth);
 
@@ -597,8 +598,7 @@ export function CameraInput() {
       return;
     }
 
-    $pointer.set(pointer_x.current, pointer_y.current);
-    raycaster.setFromCamera($pointer, camera);
+    view_ray_local(pointer_x.current, pointer_y.current, $origin, $direction);
 
     const { activeTool, object_size } = useUiStore.getState();
     const map_origin = get_local_world_origin(map_center);
@@ -608,7 +608,7 @@ export function CameraInput() {
     // they're all just boxes in the same dense voxel field (ray.ts's own
     // doc comment). No more per-tool "do we need the wall pass" gating —
     // it's not a separate pass anymore.
-    const pick = ray_pick($ray, raycaster.ray, world_frame_ref.current, local_world_frame_ref.current, map_center);
+    const pick = ray_pick($origin, $direction, map_center);
     if (!pick) {
       clear_hovered_once();
       return;
@@ -633,7 +633,7 @@ export function CameraInput() {
       // box as before. resolve_hit_target also resolves a real mesh hit
       // against baked decor (decor_hit.ts) — see that function's own doc
       // comment.
-      const struck_object = resolve_hit_target(raycaster, hit, map_origin);
+      const struck_object = resolve_hit_target(hit, map_origin);
       const precise_box = struck_object ? object_aabb(struck_object, map_origin) : undefined;
 
       set_hovered_coord(world_adjacent_corner(hit, placement_size, map_origin, precise_box));
@@ -642,7 +642,7 @@ export function CameraInput() {
 
     // pointer (recenter on it) and eraser (remove/dig it) both target the
     // struck thing itself, not an adjacent slot.
-    const struck_object = resolve_hit_target(raycaster, hit, map_origin);
+    const struck_object = resolve_hit_target(hit, map_origin);
     set_hovered_object_id(struck_object?.id ?? null);
     if (struck_object) {
       set_hovered_coord({ i: struck_object.i, f: struck_object.f });
