@@ -10,28 +10,14 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
+import { FRAME_WGSL } from "./frame_wgsl.ts";
+
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
 const PIPELINE_DEBUG = 9;
 
 export const DEBUG_SHADER: string = /* wgsl */ `
-struct Frame {
-  view_proj: mat4x4f,
-  camera_pos: vec3f,
-  edge_strength: f32,
-  sun_dir: vec3f,
-  low_spec: f32,
-  sun_color: vec3f,
-  fog_near: f32,
-  ambient: vec3f,
-  fog_far: f32,
-  hemi_sky: vec3f,
-  floor: f32,
-  hemi_ground: vec3f,
-  edge_width: f32,
-  fog_color: vec3f,
-  _pad: f32,
-};
+${FRAME_WGSL}
 struct Draw {
   translation: vec3f,
   _p: f32,
@@ -71,7 +57,7 @@ export class DebugPass {
   private readonly group: GPUBindGroup;
   private readonly scratch = new Float32Array(new ArrayBuffer(16));
 
-  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer) {
+  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer, sample_count: u32) {
     const module = device.createShaderModule({ label: "debug", code: DEBUG_SHADER });
     this.pipeline = device.createRenderPipeline({
       label: "debug",
@@ -87,6 +73,7 @@ export class DebugPass {
       fragment: { module, entryPoint: "fs", targets: [{ format }] },
       primitive: { topology: "line-list" },
       depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: "always" },
+      multisample: { count: sample_count },
     });
     this.draw_buffer = device.createBuffer({ label: "debug/draw", size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.group = device.createBindGroup({

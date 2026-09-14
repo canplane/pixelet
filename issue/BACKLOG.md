@@ -188,15 +188,22 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      module's over its blocks and triangles, the picker's preview is a
      display case of the renderer, and the frame loop is the tick's own
      (sched/tick.ts). Three, R3F, drei and postprocessing are out; the
-     retired paths are on archive/20260914-three-draw-paths. Next: the
-     post effects — rim light, shadows, the vignette, MSAA, mipmaps — with
-     what each costs in memory measured, and the shaders and pipeline
-     definitions moved into the crate as their one source, validated by
-     naga in `cargo test` (the WGSL is text the GPU process compiles either
-     way; what the move buys is one source for the lanes' layouts and the
-     constants, not concealment). Fighting on far coplanar faces and in the
-     blend bands: reversed-Z (`depth32float`, the compare turned) when the
-     post effects are measured. Open, minor: one POI page
+     retired paths are on archive/20260914-three-draw-paths. The post
+     effects are in (2026-09-14, render/gpu/{frame_wgsl,shadow,depth,
+     mips}.ts): one shading source every lit pass calls — the rim light,
+     the sun's shadow map (2048², 1024² handheld, 3x3 PCF), the vignette
+     and the grade folded into forward shading rather than a screen-sized
+     post pass — 4x MSAA as a quality setting, mip chains on the sheets and
+     layers, reversed-Z (`depth32float`, the compare turned) for the far
+     coplanar fighting, and the GPU's own time by timestamp query. What each
+     target costs is the ledger's `targets` line; the MSAA comparison still
+     to be taken is in
+     [20260911-taa-tried-and-closed.md](./20260911-taa-tried-and-closed.md).
+     Next: the shaders and pipeline definitions moved into the crate as
+     their one source, validated by naga in `cargo test` (the WGSL is text
+     the GPU process compiles either way; what the move buys is one source
+     for the lanes' layouts and the constants, not concealment). Open,
+     minor: one POI page
      (6362873910329344) read as a truncated packet on one machine under
      dev:remote, the fetched bytes whole in the console — into_core's view
      the suspect, not reproduced elsewhere. For the frame-based pass

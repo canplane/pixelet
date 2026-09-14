@@ -27,6 +27,8 @@
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 
 import { GRADE_WGSL } from "./grade.ts";
+import { DEPTH_COMPARE_OR_EQUAL, DEPTH_TO_GL_WGSL } from "./depth.ts";
+import { mip_level_count, MipBuilder } from "./mips.ts";
 
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
@@ -44,7 +46,7 @@ const BADGE_UNIFORM_FLOATS = 44;
 
 const f = (v: number) => (Number.isInteger(v) ? `${v}.0` : `${v}`);
 
-export const BADGE_SHADER: string = /* wgsl */ `
+export const BADGE_SHADER = (multisampled: boolean): string => /* wgsl */ `
 struct Badge {
   view: mat4x4f,
   proj: mat4x4f,
@@ -62,7 +64,7 @@ struct Badge {
 
 @group(0) @binding(0) var<uniform> badge: Badge;
 @group(0) @binding(1) var<storage, read> instances: array<f32>;
-@group(0) @binding(2) var world_depth: texture_depth_2d;
+@group(0) @binding(2) var world_depth: ${multisampled ? "texture_depth_multisampled_2d" : "texture_depth_2d"};
 @group(1) @binding(0) var sheet: texture_2d<f32>;
 @group(1) @binding(1) var sheet_sampler: sampler;
 
@@ -74,10 +76,13 @@ struct VertexOut {
   @location(3) @interpolate(flat) hidden: u32,
 };
 
-// Distance from the camera, in world units, for a depth-buffer value in
-// [0, 1] — which is GL's window depth too, so the formula is three's.
+${DEPTH_TO_GL_WGSL}
+
+// Distance from the camera, in world units, for a depth-buffer value —
+// reversed, as depth.ts has it — through GL's clip z, so the formula is
+// three's.
 fn view_distance(d: f32) -> f32 {
-  let z = d * 2.0 - 1.0;
+  let z = depth_to_gl_z(d);
   return (2.0 * badge.near * badge.far) / (badge.far + badge.near - z * (badge.far - badge.near));
 }
 
@@ -94,6 +99,7 @@ fn behind_world(clip: vec4f) -> bool {
   }
   let dims = vec2f(textureDimensions(world_depth));
   let world = view_distance(textureLoad(world_depth, vec2i(uv * dims), 0));
+  // ndc.z is the reversed depth the point would be written at.
   let point = view_distance(ndc.z);
   return world < point - ${f(DEPTH_BIAS_U)} - point * badge.cell * ${f(DEPTH_BIAS_CELLS)};
 }
@@ -161,32 +167,6 @@ fn fs(i: VertexOut) -> FragOut {
 }
 `;
 
-/** One level of the sheet's mip chain from the level above, box-filtered by
- * a linear sample at the centre of each 2x2. */
-export const MIP_SHADER: string = /* wgsl */ `
-@group(0) @binding(0) var above: texture_2d<f32>;
-@group(0) @binding(1) var above_sampler: sampler;
-
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-  @location(0) uv: vec2f,
-};
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32) -> VertexOut {
-  let p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
-  var o: VertexOut;
-  o.clip = vec4f(p[vi], 0.0, 1.0);
-  o.uv = vec2f(p[vi].x * 0.5 + 0.5, 0.5 - p[vi].y * 0.5);
-  return o;
-}
-
-@fragment
-fn fs(i: VertexOut) -> @location(0) vec4f {
-  return textureSample(above, above_sampler, i.uv);
-}
-`;
-
 /** What the pass reads off billboard/atlas.ts's sheet. */
 export type BadgeSheet = {
   /** Mirrors what changed since `generation`: `whole` when the sheet was
@@ -199,9 +179,8 @@ const SHEET_FORMAT: GPUTextureFormat = "rgba8unorm-srgb";
 
 export class BadgePass {
   private readonly pipeline: GPURenderPipeline;
-  private readonly mip_pipeline: GPURenderPipeline;
   private readonly sampler: GPUSampler;
-  private readonly mip_sampler: GPUSampler;
+  private readonly mips: MipBuilder;
   private readonly scratch = new Float32Array(new ArrayBuffer(BADGE_UNIFORM_FLOATS * 4));
   private sheet: GPUTexture | null = null;
   private generation: u32 = -1 >>> 0;
@@ -221,8 +200,8 @@ export class BadgePass {
   far: f64 = 1000;
   cell: f64 = 0.01;
 
-  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat) {
-    const module = device.createShaderModule({ label: "badges", code: BADGE_SHADER });
+  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, sample_count: u32, mips: MipBuilder) {
+    const module = device.createShaderModule({ label: "badges", code: BADGE_SHADER(sample_count > 1) });
     this.pipeline = device.createRenderPipeline({
       label: "badges",
       layout: "auto",
@@ -239,18 +218,11 @@ export class BadgePass {
         }],
       },
       primitive: { topology: "triangle-strip" },
-      depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: "less-equal" },
+      depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: DEPTH_COMPARE_OR_EQUAL },
+      multisample: { count: sample_count },
     });
-    const mip = device.createShaderModule({ label: "badges/mip", code: MIP_SHADER });
-    this.mip_pipeline = device.createRenderPipeline({
-      label: "badges/mip",
-      layout: "auto",
-      vertex: { module: mip, entryPoint: "vs" },
-      fragment: { module: mip, entryPoint: "fs", targets: [{ format: SHEET_FORMAT }] },
-      primitive: { topology: "triangle-list" },
-    });
+    this.mips = mips;
     this.sampler = device.createSampler({ magFilter: "nearest", minFilter: "linear", mipmapFilter: "linear" });
-    this.mip_sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
   }
 
   /** Mirrors the sheet, and rebuilds its mip chain when anything moved. */
@@ -265,7 +237,7 @@ export class BadgePass {
           label: "badges/sheet",
           size: [size, size],
           format: SHEET_FORMAT,
-          mipLevelCount: Math.floor(Math.log2(size)) + 1,
+          mipLevelCount: mip_level_count(size, size),
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         d.queue.copyExternalImageToTexture({ source: canvas }, { texture: this.sheet }, [size, size]);
@@ -281,34 +253,21 @@ export class BadgePass {
         changed = true;
       },
     );
-    if (changed && this.sheet) this.build_mips(this.sheet);
-  }
-
-  private build_mips(texture: GPUTexture): void {
-    const d = this.device;
-    const encoder = d.createCommandEncoder({ label: "badges/mip" });
-    for (let level = 1; level < texture.mipLevelCount; level++) {
-      const group = d.createBindGroup({
-        layout: this.mip_pipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: texture.createView({ baseMipLevel: level - 1, mipLevelCount: 1 }) },
-          { binding: 1, resource: this.mip_sampler },
-        ],
-      });
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{ view: texture.createView({ baseMipLevel: level, mipLevelCount: 1 }), loadOp: "clear", storeOp: "store" }],
-      });
-      pass.setPipeline(this.mip_pipeline);
-      pass.setBindGroup(0, group);
-      pass.draw(3);
-      pass.end();
-    }
-    d.queue.submit([encoder.finish()]);
+    if (changed && this.sheet) this.mips.build(this.sheet);
   }
 
   /** Every billboard set's draw, in the order listed, in one pass of
-   * their own over `color` reading `depth`; how many instances it drew. */
-  draw(encoder: GPUCommandEncoder, color: GPUTextureView, depth: GPUTexture, draws: Uint32Array, uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>): u32 {
+   * their own over `color` (resolved into `resolve` where the colour is
+   * multisampled) reading `depth`; how many instances it drew. */
+  draw(
+    encoder: GPUCommandEncoder,
+    color: GPUTextureView,
+    resolve: GPUTextureView | undefined,
+    depth: GPUTexture,
+    draws: Uint32Array,
+    uniforms: Float32Array,
+    buffers: ReadonlyMap<u32, GPUBuffer>,
+  ): u32 {
     if (!this.sheet_group) return 0;
     let pass: GPURenderPassEncoder | null = null;
     let n = 0;
@@ -358,7 +317,7 @@ export class BadgePass {
       if (!pass) {
         pass = encoder.beginRenderPass({
           label: "badges",
-          colorAttachments: [{ view: color, loadOp: "load", storeOp: "store" }],
+          colorAttachments: [{ view: color, resolveTarget: resolve, loadOp: "load", storeOp: "store" }],
           depthStencilAttachment: { view: depth.createView(), depthReadOnly: true },
         });
         pass.setPipeline(this.pipeline);

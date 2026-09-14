@@ -66,6 +66,10 @@
       "show_rim_light": {
         "label": "Rim Light",
         "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
+      },
+      "show_shadow_map": {
+        "label": "Shadows",
+        "description": "The sun casts shadows from terrain, objects and characters onto the ground."
       }
     },
     "quality": {
@@ -74,6 +78,10 @@
       "texture_pack": {
         "label": "Textures",
         "description": "Applies detailed pixel-art textures to block and object surfaces instead of flat colors."
+      },
+      "msaa": {
+        "label": "Anti-aliasing (MSAA)",
+        "description": "Smooths the edges of far-away blocks by sampling each pixel four times. Costs a lot of graphics memory."
       }
     },
     "disclaimer": {

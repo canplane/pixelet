@@ -16,25 +16,10 @@
 
 import { NO_LAYER } from "@/render/layer/pipeline/voxel.ts";
 import { GRADE_WGSL } from "./grade.ts";
+import { FRAME_WGSL, SHADE_WGSL, SHADOW_WGSL } from "./frame_wgsl.ts";
 
 export const CHUNK_SHADER: string = /* wgsl */ `
-struct Frame {
-  view_proj: mat4x4f,
-  camera_pos: vec3f,
-  edge_strength: f32,
-  sun_dir: vec3f,
-  low_spec: f32,
-  sun_color: vec3f,
-  fog_near: f32,
-  ambient: vec3f,
-  fog_far: f32,
-  hemi_sky: vec3f,
-  floor: f32,
-  hemi_ground: vec3f,
-  edge_width: f32,
-  fog_color: vec3f,
-  _pad: f32,
-};
+${FRAME_WGSL}
 
 struct Draw {
   translation: vec3f,
@@ -70,7 +55,7 @@ struct VertexOut {
   @location(3) local_pos: vec3f,
   @location(4) box_scale: vec3f,
   @location(5) normal: vec3f,
-  @location(6) view_depth: f32,
+  @location(6) world_pos: vec3f,
   @location(7) @interpolate(flat) faces: u32,
   @location(8) @interpolate(flat) draw: u32,
 };
@@ -88,7 +73,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.normal = v.normal;
   o.faces = u32(v.faces + 0.5);
   o.draw = v.draw;
-  o.view_depth = length(world - frame.camera_pos);
+  o.world_pos = world;
   // Real-size tile UV: a box's own [-0.5, 0.5] corner times its real size
   // per axis, so a box spanning many cells repeats the tile once a cell.
   // Side faces put height in v with the box's top at v = 0, the image's
@@ -194,6 +179,8 @@ fn sample_tap(layer: f32, is_side: bool, uv: vec2f, fallback: vec3f) -> vec3f {
 }
 
 ${GRADE_WGSL}
+${SHADE_WGSL}
+${SHADOW_WGSL(0, 5)}
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
@@ -213,16 +200,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var base = select(taps, i.rgb, frame.low_spec > 0.5);
   base = base * mix(1.0, 1.0 - frame.edge_strength, edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
 
-  // three's standard material, roughness 1, metalness 0: the Lambert BRDF
-  // is the albedo over pi, for the direct sun and for the ambient and
-  // hemisphere irradiance alike; the emissive floor is added as it is.
   let n = normalize(i.normal);
-  let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0);
-  let hemi = mix(frame.hemi_ground, frame.hemi_sky, n.z * 0.5 + 0.5);
-  var color = base * (sun + frame.ambient + hemi) / 3.14159265 + base * frame.floor;
-
-  let fog = clamp((i.view_depth - frame.fog_near) / (frame.fog_far - frame.fog_near), 0.0, 1.0);
-  color = mix(color, frame.fog_color, fog);
-  return vec4f(to_srgb(grade(color)), d.opacity);
+  let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n));
+  return vec4f(finish(color, i.clip.xy), d.opacity);
 }
 `;

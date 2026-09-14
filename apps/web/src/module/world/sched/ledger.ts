@@ -102,6 +102,9 @@ export type FrameSample = {
    * frames are the upload churn. */
   buffers: number;
   buffer_mb: number;
+  /** What the frame is drawn into, in MiB: the depth buffer, the
+   * multisampled targets, the shadow map, the texture pack's layers. */
+  textures_mb: { depth: number; msaa: number; shadow: number; layers: number };
   /** draw_calls and triangles split by pipeline — render/gpu/renderer.ts's
    * census. */
   census: DrawCensus;

@@ -14,8 +14,10 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
-import { light_cfg } from "@/module/world/environment/config.ts";
 import { GRADE_WGSL } from "./grade.ts";
+import { FRAME_WGSL, SHADE_WGSL, SHADOW_WGSL } from "./frame_wgsl.ts";
+import { DEPTH_COMPARE } from "./depth.ts";
+import { SHADOW_FORMAT, ShadowPass } from "./shadow.ts";
 
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
@@ -25,23 +27,7 @@ const DRAW_UNIFORM_BYTES = 32;
 const MODEL_VERTEX_WORDS = 16;
 
 export const SKINNED_SHADER: string = /* wgsl */ `
-struct Frame {
-  view_proj: mat4x4f,
-  camera_pos: vec3f,
-  edge_strength: f32,
-  sun_dir: vec3f,
-  low_spec: f32,
-  sun_color: vec3f,
-  fog_near: f32,
-  ambient: vec3f,
-  fog_far: f32,
-  hemi_sky: vec3f,
-  floor: f32,
-  hemi_ground: vec3f,
-  edge_width: f32,
-  fog_color: vec3f,
-  _pad: f32,
-};
+${FRAME_WGSL}
 
 struct Draw {
   translation: vec3f,
@@ -70,7 +56,7 @@ struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
-  @location(2) view_depth: f32,
+  @location(2) world_pos: vec3f,
 };
 
 fn place(v: vec3f) -> vec3f {
@@ -90,22 +76,20 @@ fn vs(v: VertexIn) -> VertexOut {
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.uv = v.uv;
   o.normal = place(n);
-  o.view_depth = length(world - frame.camera_pos);
+  o.world_pos = world;
   return o;
 }
 
 ${GRADE_WGSL}
+${SHADE_WGSL}
+${SHADOW_WGSL(0, 1)}
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0);
-  let hemi = mix(frame.hemi_ground, frame.hemi_sky, n.z * 0.5 + 0.5);
-  var color = albedo * (sun + frame.ambient + hemi) / 3.14159265 + albedo * ${light_cfg.FLOOR};
-  let fog = clamp((i.view_depth - frame.fog_near) / (frame.fog_far - frame.fog_near), 0.0, 1.0);
-  color = mix(color, frame.fog_color, fog);
-  return vec4f(to_srgb(grade(color)), draw.opacity);
+  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n));
+  return vec4f(finish(color, i.clip.xy), draw.opacity);
 }
 `;
 
@@ -113,7 +97,9 @@ export type ModelSkin = ImageBitmap | HTMLImageElement | HTMLCanvasElement;
 
 export class SkinnedPass {
   private readonly pipeline: GPURenderPipeline;
+  private readonly depth_pipeline: GPURenderPipeline;
   private readonly frame_group: GPUBindGroup;
+  private readonly light_group: GPUBindGroup;
   private readonly draw_layout: GPUBindGroupLayout;
   private readonly skin_layout: GPUBindGroupLayout;
   private readonly palette_layout: GPUBindGroupLayout;
@@ -125,8 +111,10 @@ export class SkinnedPass {
   private readonly skins = new Map<u32, { image: ModelSkin; group: GPUBindGroup }>();
   private readonly palette_groups = new WeakMap<GPUBuffer, GPUBindGroup>();
 
-  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer) {
-    const frame_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
+  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer, shadow: ShadowPass | null, sample_count: u32) {
+    const frame_layout = device.createBindGroupLayout({
+      entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }, ...ShadowPass.layout_entries(1)],
+    });
     this.draw_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform", hasDynamicOffset: true } }] });
     this.skin_layout = device.createBindGroupLayout({
       entries: [
@@ -136,28 +124,41 @@ export class SkinnedPass {
     });
     this.palette_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } }] });
     const module = device.createShaderModule({ label: "skinned", code: SKINNED_SHADER });
+    const vertex: GPUVertexState = {
+      module,
+      entryPoint: "vs",
+      buffers: [
+        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
+        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
+        { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
+        { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "uint32x4" }] },
+        { arrayStride: 16, attributes: [{ shaderLocation: 4, offset: 0, format: "float32x4" }] },
+      ],
+    };
     this.pipeline = device.createRenderPipeline({
       label: "skinned",
       layout: device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.palette_layout] }),
-      vertex: {
-        module,
-        entryPoint: "vs",
-        buffers: [
-          { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
-          { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
-          { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
-          { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "uint32x4" }] },
-          { arrayStride: 16, attributes: [{ shaderLocation: 4, offset: 0, format: "float32x4" }] },
-        ],
-      },
+      vertex,
       fragment: { module, entryPoint: "fs", targets: [{ format }] },
       // Back faces culled, as three's material (FrontSide) did: drawn both
       // sides, a closed body's inner faces fight its outer ones for the same
       // depth at a distance, and the character shimmers.
       primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-      depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: "less" },
+      depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: DEPTH_COMPARE },
+      multisample: { count: sample_count },
     });
-    this.frame_group = device.createBindGroup({ layout: frame_layout, entries: [{ binding: 0, resource: { buffer: frame_buffer } }] });
+    this.depth_pipeline = device.createRenderPipeline({
+      label: "skinned/depth",
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.palette_layout] }),
+      vertex,
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: { format: SHADOW_FORMAT, depthWriteEnabled: true, depthCompare: "less" },
+    });
+    // A case (preview.ts) draws with no shadow map: a blank one stands
+    // where the map would be, and every fragment counts as lit.
+    const shadow_entries = shadow ? shadow.group_entries(1) : ShadowPass.blank_entries(device, 1);
+    this.frame_group = device.createBindGroup({ layout: frame_layout, entries: [{ binding: 0, resource: { buffer: frame_buffer } }, ...shadow_entries] });
+    this.light_group = shadow ? device.createBindGroup({ layout: frame_layout, entries: [{ binding: 0, resource: { buffer: shadow.light_frame } }, ...shadow.light_entries(1)] }) : this.frame_group;
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" });
     this.stride = Math.max(DRAW_UNIFORM_BYTES, device.limits.minUniformBufferOffsetAlignment);
     this.draw_scratch = new ArrayBuffer(this.stride * 8);
@@ -205,8 +206,23 @@ export class SkinnedPass {
       for (let i = 0; i < 6; i++) f[at + i] = uniforms[uniform + i];
     }
     this.device.queue.writeBuffer(this.draw_buffer, 0, this.draw_scratch, 0, n * this.stride);
+    return this.draw_pipeline(pass, draws, buffers, counts, this.pipeline, this.frame_group);
+  }
 
-    slot = 0;
+  /** The actors' depth from the light, after `draw` wrote the uniforms. */
+  draw_depth(pass: GPURenderPassEncoder, draws: Uint32Array, buffers: ReadonlyMap<u32, GPUBuffer>, counts: ReadonlyMap<u32, [u32, u32]>): u32 {
+    return this.draw_pipeline(pass, draws, buffers, counts, this.depth_pipeline, this.light_group);
+  }
+
+  private draw_pipeline(
+    pass: GPURenderPassEncoder,
+    draws: Uint32Array,
+    buffers: ReadonlyMap<u32, GPUBuffer>,
+    counts: ReadonlyMap<u32, [u32, u32]>,
+    pipeline: GPURenderPipeline,
+    frame_group: GPUBindGroup,
+  ): u32 {
+    let slot = 0;
     let drawn = 0;
     for (let k = 0; k < draws.length; k += DRAW_WORDS) {
       if (draws[k + 4] !== PIPELINE_SKINNED) continue;
@@ -217,8 +233,8 @@ export class SkinnedPass {
       const count = counts.get(draws[k]);
       if (!mesh || !palette || !skin || !count) continue;
       if (drawn === 0) {
-        pass.setPipeline(this.pipeline);
-        pass.setBindGroup(0, this.frame_group);
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, frame_group);
       }
       let palette_group = this.palette_groups.get(palette);
       if (!palette_group) {

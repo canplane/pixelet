@@ -61,6 +61,7 @@ function frame_args(f: FrameSample): Record<string, unknown> {
     ...Object.fromEntries(Object.entries(f.census).map(([tag, [, tris]]) => [`tris_${tag}`, tris])),
     buffers: f.buffers,
     buffer_mb: f.buffer_mb,
+    targets_mb: +(f.textures_mb.depth + f.textures_mb.msaa + f.textures_mb.shadow + f.textures_mb.layers).toFixed(1),
     mounted: f.mounts.added,
     unmounted: f.mounts.removed,
     rerendered: f.mounts.rendered,

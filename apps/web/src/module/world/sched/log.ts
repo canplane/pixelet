@@ -203,6 +203,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     // cooperative as its longest step.
     `  steps   ${steps_text()}   (ms per frame, max)`,
     `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  buffers ${last.buffers} ${last.buffer_mb}MB  fill ${(last.px / 1e6).toFixed(1)}Mpx`,
+    `  targets depth ${last.textures_mb.depth}MB  msaa ${last.textures_mb.msaa}MB  shadow ${last.textures_mb.shadow}MB  layers ${last.textures_mb.layers}MB`,
     `  by tag  mean ${census_text(f.census)}   (draws/tris per frame)`,
     `          last ${census_text(census_rows(last.census))}`,
     `  mem     heap ${last.heap_mb}MB (${signed(f.heap_delta)})  tiles ${last.tile_pages} (~${last.tile_pages * TILE_DECODED_MB}MB)  poi ${last.poi_count}`,
