@@ -5,7 +5,7 @@ import { assert, assertEquals } from "@std/assert";
 import { Errno } from "@xpute/core/sys/errno.ts";
 import { Ring, RING_OP, RING_RESULT, RING_USER } from "@xpute/core/ipc/ring.ts";
 
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 
 /** An op crates/pxl-wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0xfff;

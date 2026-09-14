@@ -1,4 +1,4 @@
-//! What a voxel's bytes mean — the part of render/layer/pipeline/voxel.ts the
+//! What a voxel's bytes mean — the part of render/mesh/voxel.ts the
 //! mesher reads.
 
 /// A run whose material is a placed object: exempt from hiding its

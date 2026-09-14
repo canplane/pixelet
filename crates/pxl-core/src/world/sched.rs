@@ -660,7 +660,7 @@ impl Scheduler {
         }
     }
 
-    /// render/chunk_range.ts's rule, a page and a chunk at a time: a chunk
+    /// module/world/frame/range.ts's rule, a page and a chunk at a time: a chunk
     /// whose square is within the radius of the anchor is mounted, and one
     /// already mounted is kept until it is past the radius and the
     /// hysteresis; a page with no tile, or out past both, mounts nothing.

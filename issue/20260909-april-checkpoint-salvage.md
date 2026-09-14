@@ -47,9 +47,9 @@ The portable half came across in the August restructure. Today's
 `ds/*`, `kit/*`, `sys/*`, `io/scalar`, `io/json_codec`, `io/marshal/tlv`,
 and `io/marshal/tree` (XTP itself).
 
-`pxl/render/lod.ts` is an ancestor rather than a part. `LOD_STEP_BY_LEVEL`,
+`pxl/module/world/lod.ts` is an ancestor rather than a part. `LOD_STEP_BY_LEVEL`,
 `LOD_MARGIN = 1.4` and the hysteresis in `calculate_lod_step` are all still
-in `render/lod.ts`, which has since grown blend bands and per-threshold
+in `module/world/lod.ts`, which has since grown blend bands and per-threshold
 margins.
 
 ## Worth taking later

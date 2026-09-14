@@ -6,7 +6,7 @@
  * A fetched page decodes into views over the response's own ArrayBuffer, so
  * every resident page used to be a 4 MB buffer of its own that only the
  * collector could reclaim. Here the decoded arrays are copied into the core
- * pool (render/layer/pipeline/core_pool.ts) and the response is dropped:
+ * pool (wasm/core_pool.ts) and the response is dropped:
  * one memory holds the core's data, which is what the big/little decision in
  * issue/20260911-single-thread-core-and-when-to-spawn-a-worker.md is
  * for.
@@ -29,7 +29,7 @@
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import type { Ground, GroundChannelKey, Terrain } from "@pxl/shared/bake/format.ts";
 
-import { PAGE_POOL } from "@/render/layer/pipeline/core_pool.ts";
+import { PAGE_POOL } from "@/wasm/core_pool.ts";
 
 export const QUARANTINE_MS = 1000;
 

@@ -13,7 +13,7 @@ part of the map does when it is full. Built the same day (d8db67e): steps
 ## What there is today
 
 - The core memory is one fixed `WebAssembly.Memory`, 8 regions of 64 MB on
-  the desktop and 4 on a phone (`render/layer/pipeline/core_pool.ts`).
+  the desktop and 4 on a phone (`wasm/core_pool.ts`).
 - One buddy pool carves it. Chunk meshes, run sets, LOD tier caches,
   terrain pages, POI pages, the change log's journal and tables, the
   scheduler's lanes, the mesher's scratch — all from the same pool, in the

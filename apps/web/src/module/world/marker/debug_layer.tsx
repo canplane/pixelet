@@ -26,8 +26,8 @@ import { get_ele, with_ele } from "@/module/world/terrain/elevation.ts";
 import { register_tile_interest } from "@/module/world/terrain/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick } from "@/module/world/change.ts";
-import { view } from "@/module/world/view.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { view } from "@/module/world/frame/view.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 const COLOR: V3 = [0, 0, 0];
 const DASH: f64 = 0.3;

@@ -32,7 +32,7 @@ import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "@xpute/core/ds/m
 
 import type { PoiPage } from "@pxl/shared/bake/format.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 import { NO_SLOT } from "../billboard/atlas.ts";
 import { billboard_sheet } from "../billboard/sheet.ts";

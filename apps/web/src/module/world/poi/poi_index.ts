@@ -45,7 +45,7 @@ import { with_ele } from "../terrain/elevation.ts";
 import { fade_end_u } from "../billboard/distance_fade.ts";
 import { evict_poi_badges } from "./poi_badge.ts";
 import { poi_pages } from "./store.ts";
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 /**
  * How far out this keeps POI, as a multiple of the query reach.
@@ -65,7 +65,7 @@ import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
  * when the reach was half this. */
 const RESIDENCY_OVER_REACH: f64 = 1.5;
 /** The reach is a fixed number of the terrain's first tier handoff
- * (render/lod.ts), so it moves with the projection; the disc, the margin
+ * (module/world/lod.ts), so it moves with the projection; the disc, the margin
  * and the pages to sweep are read from it when a rebuild is asked for. */
 function residency(): f64 {
   return fade_end_u() * RESIDENCY_OVER_REACH;
@@ -104,7 +104,7 @@ const BUCKETS: u32 = 131071;
 
 /**
  * The cell is the query radius at the reference projection — the reach
- * (render/lod.ts's fade_end_u at 1080px and 50 degrees). One cell per
+ * (module/world/lod.ts's fade_end_u at 1080px and 50 degrees). One cell per
  * radius keeps a query to a handful of buckets and a POI in exactly one —
  * Teschner measured that ratio as the optimum and found cell size to matter
  * more than table size. Fixed at construction; a reach that moves with the

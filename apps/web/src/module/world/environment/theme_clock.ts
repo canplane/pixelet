@@ -30,7 +30,7 @@ import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 
 import { useMapStore } from "@/module/map/store.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { get_theme_key, type WorldThemeKey } from "./theme.ts";
 
 const THEME_CHECK_INTERVAL_MS = 60_000;

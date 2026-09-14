@@ -1,5 +1,5 @@
 //! A terrain page's chunk as the render pipeline reads it:
-//! render/layer/terrain/{elevation,adapter}.ts, in Rust.
+//! module/world/terrain/elevation_sample.ts and reference/terrain_layer.ts, in Rust.
 //!
 //! A page is a heightmap — four ground channels of one type byte a cell,
 //! and a coarse elevation raster sampled bicubically at cell centres to the

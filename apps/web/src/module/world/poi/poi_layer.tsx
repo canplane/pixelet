@@ -60,11 +60,11 @@ import {
 } from "./poi_index.ts";
 import { badge_atlas, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H, cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot } from "./poi_badge.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
-import { BADGE_SHAMT_OVER_CUBE, fade_end_u, get_lod_level, lod_step_at, LOD_STEP_BY_LEVEL, type LodStep } from "@/render/lod.ts";
+import { BADGE_SHAMT_OVER_CUBE, fade_end_u, get_lod_level, lod_step_at, LOD_STEP_BY_LEVEL, type LodStep } from "@/module/world/lod.ts";
 import { usePoiStore } from "./store.ts";
 import { type FrameBudget, useTick } from "@/module/world/sched/tick.ts";
-import { CORE_ALLOC, CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
-import { view } from "@/module/world/view.ts";
+import { CORE_ALLOC, CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { view } from "@/module/world/frame/view.ts";
 
 /**
  * A rail, not the mechanism.
@@ -86,7 +86,7 @@ const MAX_RENDERED = 512;
 /** The finest and coarsest cell a badge is allowed to snap to, as shifts of
  * the canonical unit. 0 is 1u, the terrain cell itself; 6 is 64u, which is
  * an L2 chunk and the top of the ladder terrain and decor already climb
- * (render/lod.ts's 1/2/4/.../64). Beyond that the tier belongs to the page,
+ * (module/world/lod.ts's 1/2/4/.../64). Beyond that the tier belongs to the page,
  * not to the badge. */
 const MIN_SHAMT: u32 = 0;
 const MAX_SHAMT: u32 = 6;

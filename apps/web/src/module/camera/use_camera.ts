@@ -12,7 +12,7 @@ import { climb_polar } from "./terrain_gate.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick as invalidate } from "@/module/world/change.ts";
-import { view, view_compose } from "@/module/world/view.ts";
+import { view, view_compose } from "@/module/world/frame/view.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
@@ -40,7 +40,7 @@ const CLIMB_RELAX_DAMP: f64 = 5;
 const CLIMB_EPS: f64 = 0.0005;
 
 /** Damps the eye's distance and pitch toward the controls and writes them
- * into the view (module/world/view.ts). */
+ * into the view (module/world/frame/view.ts). */
 export function useCamera() {
   const view_state = useCameraStore((state) => state.view_state);
 

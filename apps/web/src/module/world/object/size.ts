@@ -19,9 +19,9 @@ import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
  * an object at that size lines up 1:1 with a terrain cell (see
  * bake/constant.ts's OBJECT_LAYOUT, whose `max: CELL_SHAMT` is the other
  * half of that reasoning: object/store.ts's sparse tree never spans more
- * than one cell) — the other three (finer) tiers are what render/layer/
- * object/adapter.ts writes as sub-cell voxels (a per-voxel offset+size
- * payload within voxel.ts's dense field, see its own doc comment)
+ * than one cell) — the other three (finer) tiers are what the object paint
+ * (crates/pxl-core/src/world/object.rs) writes as sub-cell voxels (a
+ * per-voxel offset+size payload within the volume's dense field)
  * instead of a full-cell voxel. Deliberately 4 tiers deep, not 3 — when
  * CELL_SHAMT changed
  * U_PER_CELL 0.5u -> 1u, sliding a fixed *count* of tiers down from it would

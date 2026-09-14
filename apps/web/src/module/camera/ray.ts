@@ -4,7 +4,7 @@
  * Single raycast entry point for the whole world — terrain (any face: top
  * or a cliff/wall side) and placed objects (any size, including sub-cell)
  * alike, since both are painted into the exact same sectioned per-column voxel
- * field (render/layer/pipeline/volume.ts) the module meshes from. This
+ * field (reference/volume.ts) the module meshes from. This
  * used to be two+ separate systems (a 2D heightfield march for terrain
  * tops, a second DDA for terrain walls, and a third real-AABB pass over the
  * raw PlacedObject[] for objects) that could each find a different answer
@@ -20,7 +20,7 @@
  * for the sources its chunk was last told. What stays here is the interact
  * radius, and what a hit means for a placement: the corner a new cube
  * takes, the voxel the eraser digs, and which placed object a hit resolves
- * to. The ray itself is the view's (module/world/view.ts), in the root
+ * to. The ray itself is the view's (module/world/frame/view.ts), in the root
  * frame the chunks are placed in.
  */
 
@@ -36,10 +36,10 @@ import { get_local_world_origin, local_world_to_canonical } from "../world/frame
 import { aabb_overlap, object_aabb } from "@/module/world/object/geometry.ts";
 import { get_objects_near, type OccupiedEntry } from "@/module/world/object/store.ts";
 
-import { MaterialClass } from "@/render/layer/pipeline/voxel.ts";
-import { ray_hit_world, type WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
+import { MaterialClass } from "@/render/mesh/voxel.ts";
+import { ray_hit_world, type WorldHit } from "@/module/world/raycast.ts";
 
-export type { WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
+export type { WorldHit } from "@/module/world/raycast.ts";
 
 const INTERACT_RADIUS_CELL: f64 = 32 / U_PER_CELL - .707;
 const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
@@ -242,7 +242,7 @@ export function world_struck_corner(hit: WorldHit, size: f64, map_origin: IVec):
  * The sectioned voxel field itself carries no object identity
  * (the mesher never needs it, only color/material), so this is a small
  * secondary lookup, not the raycast itself. Decor is never resolved here —
- * it never paints a voxel of its own (render/layer/object/adapter.ts's
+ * it never paints a voxel of its own (reference/object_layer.ts's
  * paint() skips "decor" entries) and has its own real-mesh hit-test now
  * that it bakes into a real THREE.Mesh instead (decor_hit.ts's
  * raycast_decor, called directly from camera/input.tsx alongside this

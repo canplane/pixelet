@@ -26,7 +26,7 @@ import { request_world_tick } from "@/module/world/change.ts";
 import { load_gltf, load_image } from "@/render/gltf/load.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 import { gpu_renderer } from "@/render/gpu/stage.tsx";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import type { CharacterVariant } from "@/module/world/character/variant.ts";
 
 const SPIN_RATE_RAD_S: f64 = 0.6;

@@ -13,7 +13,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import type { Vec3 } from "@xpute/core/kit/mat4.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { chunk_nodes } from "@/module/world/chunk_node.ts";
 import { entry_id_of } from "@/module/world/object/store.ts";
 

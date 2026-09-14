@@ -27,7 +27,7 @@ function tile_url(key: string): string {
  * it's the signal for "nothing but water here", and every such page resolves
  * to one shared tile: baking an empty source at different pages was verified
  * to produce identical bytes, so a single decode can be aliased by all of
- * them (terrain is read-only downstream — see render/layer/terrain/adapter.ts).
+ * them (terrain is read-only downstream — see reference/terrain_layer.ts).
  *
  * Only reachable when a static tile origin is configured. Against the live
  * API every page, ocean included, bakes to a real 200, so a 404 there is a

@@ -15,7 +15,7 @@ import { is_placement_blocked } from "../object/collision.ts";
 import { DECOR_SIZE } from "../object/size.ts";
 import { clear_virtual_carve_preview, set_virtual_carve_preview, set_virtual_hide, usePlacedObject } from "../object/store.ts";
 import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import { user_decor_pick } from "../decor/decor_layer.ts";
+import { user_decor_pick } from "../decor/decor_kinds.ts";
 import { decor_bundle_for } from "../decor/decor_registry.ts";
 import { decor_assets_for, useDecorAssets } from "../decor/asset_store.ts";
 import { marker_colors } from "./style.ts";
@@ -23,7 +23,7 @@ import { shown_ground } from "@pxl/shared/bake/ground.ts";
 import { placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for } from "@pxl/shared/spec/cell/mod.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
 import { fvec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { DECOR_BUNDLES } from "../decor/decor_registry.ts";
 import { request_world_tick } from "../change.ts";
 

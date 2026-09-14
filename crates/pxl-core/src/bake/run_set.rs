@@ -1,4 +1,4 @@
-//! A chunk's column runs: render/layer/pipeline/column_run.ts's layout.
+//! A chunk's column runs: reference/column_run.ts's layout.
 //!
 //! The bytes are the TypeScript run set's bytes, lanes in carve order —
 //! widest element first — so a set copied out of a pool block reads here

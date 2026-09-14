@@ -1,4 +1,4 @@
-//! The render-time volume for one 64×64 chunk: render/layer/pipeline/volume.ts,
+//! The render-time volume for one 64×64 chunk: reference/volume.ts,
 //! in Rust, with its memory the core's.
 //!
 //! World layers paint into whole 64³ signed-Z bands, and the scan and the

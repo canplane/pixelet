@@ -6,7 +6,7 @@
  * The page stays the unit of transfer and storage: one PostGIS query and bake
  * on the API side, one ~4MB decode, one `tile_map` key, one eviction. What is
  * derived rather than chosen is *which* pages: the nearest RESIDENT_PAGES to
- * the view anchor (render/chunk_range.ts's pages_to_hold), which is at once
+ * the view anchor (module/world/frame/range.ts's pages_to_hold), which is at once
  * what gets fetched and what stays decoded. One set, so a page can never be
  * requested and then dropped from under its own in-flight request — every
  * page here is a live query against an API with no cache or rate limit of its
@@ -22,7 +22,7 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { GROUND_CH_KEYS } from "@pxl/shared/bake/format.ts";
 
-import { PAGE_SECTION_BYTES } from "@/render/layer/pipeline/core_pool.ts";
+import { PAGE_SECTION_BYTES } from "@/wasm/core_pool.ts";
 
 /** What one resident page takes of the page section: its ground lanes and
  * its elevation block, each rounded up to the buddy's power of two. */

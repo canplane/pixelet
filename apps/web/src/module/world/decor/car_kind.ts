@@ -33,8 +33,8 @@ export const CAR_KIND: DecorKindSeed = {
   orientation: "align_transport",
 };
 
-/** Only the transport channel matters here: per render/layer/terrain/
- * adapter.ts's own ground_material_at precedence, transport always wins
+/** Only the transport channel matters here: per the terrain paint's
+ * precedence (reference/terrain_layer.ts's ground_material_at), transport always wins
  * last, so a cell whose transport is one of these renders (and therefore
  * counts) as that road type regardless of whatever land/water/structure
  * value happens to sit underneath it. ROAD_DEFAULT and PEDESTRIAN are

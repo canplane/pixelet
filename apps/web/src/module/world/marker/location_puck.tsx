@@ -15,7 +15,7 @@ import { get_ele } from "../terrain/elevation.ts";
 
 import { WorldThemeKey } from "../environment/theme.ts";
 import { useThemeKey } from "../environment/theme_clock.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 import { request_world_tick } from "../change.ts";
 
 const { FOG_FAR } = render_cfg;

@@ -5,7 +5,7 @@ import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { encode_empty_poi_page, PoiPage } from "@pxl/shared/bake/format.ts";
 
-import { PAGE_POOL } from "@/render/layer/pipeline/core_pool.ts";
+import { PAGE_POOL } from "@/wasm/core_pool.ts";
 
 import { POI_TILE_BASE_URL, PUBLISHED_TILES } from "@/lib/env/config.ts";
 

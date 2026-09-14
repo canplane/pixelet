@@ -1,6 +1,6 @@
 //! The object store's records and the object layer's paint:
 //! module/world/object/store.ts's chunk storage, entries and cell index,
-//! and render/layer/object/adapter.ts's paint, in Rust.
+//! and reference/object_layer.ts's paint, in Rust.
 //!
 //! One record per L2 chunk column that holds user objects — a palette,
 //! and one sparse octree per 64³ band whose leaves are palette indices —

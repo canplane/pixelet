@@ -45,7 +45,7 @@
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 import { GridIndex, NO_ROOM, PLACED } from "@xpute/core/ds/grid_index.ts";
-import { view, view_sees_sphere } from "@/module/world/view.ts";
+import { view, view_sees_sphere } from "@/module/world/frame/view.ts";
 import { distance_fade_far } from "./distance_fade.ts";
 import type { BillboardBatch } from "./batch.ts";
 
@@ -99,7 +99,7 @@ const MIN_LEGIBLE_FAR: f64 = 0.12;
  * which is what lets POI badges, chat bubbles and actors share it while
  * storing entirely different things. The caller maps `batch.src[out[i]]`
  * back to its own data. The batch's coordinates are in the root frame
- * (module/world/view.ts), and the view as it stands is what they are
+ * (module/world/frame/view.ts), and the view as it stands is what they are
  * measured against.
  */
 export function select_visible_billboards(batch: BillboardBatch, max_count: u32, viewport_w: f64, viewport_h: f64, out: Uint32Array): u32 {

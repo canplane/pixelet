@@ -30,7 +30,7 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import { poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
 import { badge_atlas } from "@/module/world/poi/poi_badge.ts";
-import { CORE_MEMORY, core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_MEMORY, core_pool_stat } from "@/wasm/core_pool.ts";
 import { category_info } from "./category.ts";
 import {
   ledger_frames_since,

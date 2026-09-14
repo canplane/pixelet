@@ -14,21 +14,21 @@ import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
-import { MaterialClass, NO_LAYER, pack_sub_cell, SUB_CELL_NONE, type VoxelMaterial } from "../../../apps/web/src/render/layer/pipeline/voxel.ts";
-import { type MeshRun, pack_column_runs, release_column_runs, scan_all_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
-import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, fill_chunk_column, seal_chunk_volume, set_chunk_voxel } from "../../../apps/web/src/render/layer/pipeline/volume.ts";
-import { WasmScanner } from "../../../apps/web/src/render/layer/pipeline/wasm_scan.ts";
-import { paint_module, paint_typescript, runs_module, runs_typescript } from "../../../apps/web/src/render/layer/terrain/adapter.ts";
-import { GROUND_COLOR_LOOKUP_FLAT } from "../../../apps/web/src/render/layer/terrain/shader_meta.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell, SUB_CELL_NONE, type VoxelMaterial } from "../../../apps/web/src/render/mesh/voxel.ts";
+import { type MeshRun, pack_column_runs, release_column_runs, scan_all_column_runs } from "../../../apps/web/src/reference/voxel_scan.ts";
+import { alloc_chunk_volume, append_chunk_sub_voxel, type ChunkVolume, fill_chunk_column, seal_chunk_volume, set_chunk_voxel } from "../../../apps/web/src/reference/volume.ts";
+import { WasmScanner } from "../../../apps/web/src/reference/wasm_scan.ts";
+import { paint_module, paint_typescript, runs_module, runs_typescript } from "../../../apps/web/src/reference/terrain_layer.ts";
+import { GROUND_COLOR_LOOKUP_FLAT } from "../../../apps/web/src/render/gpu/layer_table.ts";
 import { into_core } from "../../../apps/web/src/module/world/terrain/resident.ts";
 import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { type Ground, GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { release_chunk_volume } from "../../../apps/web/src/render/layer/pipeline/volume.ts";
-import { fill_column_runs } from "../../../apps/web/src/render/layer/pipeline/voxel_scan.ts";
-import { bake_chunk_mesh, BakeContext } from "../../../apps/web/src/render/layer/pipeline/chunk_mesher.ts";
-import { WasmBaker } from "../../../apps/web/src/render/layer/pipeline/wasm_bake.ts";
-import { CORE_POOL, CORE_PXL } from "../../../apps/web/src/render/layer/pipeline/core_pool.ts";
+import { release_chunk_volume } from "../../../apps/web/src/reference/volume.ts";
+import { fill_column_runs } from "../../../apps/web/src/reference/voxel_scan.ts";
+import { bake_chunk_mesh, BakeContext } from "../../../apps/web/src/reference/chunk_mesher.ts";
+import { WasmBaker } from "../../../apps/web/src/reference/wasm_bake.ts";
+import { CORE_POOL, CORE_PXL } from "../../../apps/web/src/wasm/core_pool.ts";
 
 // wasm_bake.test.ts's scene: stacked runs with gaps, objects, sub-cells, layers.
 function scene(seed: number, flat: boolean): MeshRun[][] {

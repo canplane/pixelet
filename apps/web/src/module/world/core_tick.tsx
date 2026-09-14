@@ -2,7 +2,7 @@
 
 /**
  * The world's turn of the tick: the glue between the module
- * (crates/pxl-core, behind render/layer/pipeline/core_build.ts) and the
+ * (crates/pxl-core, behind wasm/core_build.ts) and the
  * page, with no decision of its own. In the visible phase it writes the
  * frame the module reads — the view, the frustum, the budget, the range
  * anchor, the settings — ticks the module once, makes a node for each
@@ -21,7 +21,7 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import { useMapStore } from "@/module/map/store.ts";
 
 import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
-import { CORE_BUILD, FRAME } from "@/render/layer/pipeline/core_build.ts";
+import { CORE_BUILD, FRAME } from "@/wasm/core_build.ts";
 import { world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { tile_pages } from "@/module/world/terrain/store.ts";
 import { poi_pages } from "@/module/world/poi/store.ts";
@@ -30,11 +30,11 @@ import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/led
 import { HARD_SLACK_MS, useTick } from "@/module/world/sched/tick.ts";
 import { lead_point } from "@/module/world/sched/priority.ts";
 import { gpu_frame, gpu_renderer } from "@/render/gpu/stage.tsx";
-import { view, view_resize } from "@/module/world/view.ts";
-import { range_anchor_of, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
+import { view, view_resize } from "@/module/world/frame/view.ts";
+import { range_anchor_of, RANGE_HYSTERESIS } from "@/module/world/frame/range.ts";
 import { render_cfg } from "@/module/world/environment/config.ts";
-import { set_lod_projection } from "@/render/lod.ts";
-import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
+import { set_lod_projection } from "@/module/world/lod.ts";
+import { core_pool_stat } from "@/wasm/core_pool.ts";
 
 /* The per-pass budgets that used to sit here — a soft allowance per pass and
  * a 16ms hard ceiling each — are gone. Both passes now draw on the one
@@ -123,7 +123,7 @@ export function CoreTick({ children }: { children: ReactNode }) {
   useTick("visible", ({ state, delta, budget }) => {
     visible_pass.current = null;
     view_resize(state.size.width, state.size.height);
-    // The tier criterion is a screen-space one (render/lod.ts), and the
+    // The tier criterion is a screen-space one (module/world/lod.ts), and the
     // other layers that read it (decor, badges) read it from here; the
     // module takes the same projection through the frame.
     set_lod_projection(view.height, view.fov);
@@ -174,7 +174,7 @@ export function CoreTick({ children }: { children: ReactNode }) {
     f[FRAME.pixel_dither] = useSettingsStore.getState().pixel_dither ? 1 : 0;
     f[FRAME.retain_budget_bytes] = RETAIN_BUDGET_BYTES;
     // The range the module mounts chunks within, from the chunk the map
-    // centre is in: render/chunk_range.ts's anchor, radius and hysteresis.
+    // centre is in: module/world/frame/range.ts's anchor, radius and hysteresis.
     const range_anchor = target ? range_anchor_of(target.i) : null;
     f[FRAME.has_anchor] = range_anchor === null ? 0 : 1;
     f[FRAME.anchor_x] = range_anchor === null ? 0 : ivec.to_real(ivec.X(range_anchor));

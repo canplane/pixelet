@@ -10,7 +10,7 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { useMapStore } from "@/module/map/store.ts";
-import { view, view_ray_local } from "@/module/world/view.ts";
+import { view, view_ray_local } from "@/module/world/frame/view.ts";
 import { ground_or_raw } from "@/module/world/terrain/elevation.ts";
 import { get_local_world_origin } from "@/module/world/frame/coord.ts";
 import { is_placement_blocked } from "@/module/world/object/collision.ts";

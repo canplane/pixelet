@@ -30,7 +30,7 @@
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 /**
  * A frame's worth of candidates is not a residency set, so it grows to what

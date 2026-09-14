@@ -22,7 +22,7 @@ import { camera_cfg } from "@/module/camera/config.ts";
 import { useMapStore } from "@/module/map/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick } from "@/module/world/change.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 import { linear_rgb } from "@/render/gpu/color.ts";
 import { set_sky_radius } from "@/render/gpu/stage.tsx";
 

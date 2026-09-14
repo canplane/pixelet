@@ -17,15 +17,14 @@
  * summary.ts's `missed` and `overran`, the same tests the report counts.
  */
 
-import { CORE_BUILD } from "@/render/layer/pipeline/core_build.ts";
+import { CORE_BUILD } from "@/wasm/core_build.ts";
 import { poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { tick_step_stats, tick_step_stats_reset } from "@/module/world/sched/tick.ts";
 import { fetch_counts, MAX_INFLIGHT } from "@/module/world/sched/fetch_scheduler.ts";
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/module/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
-import { CORE_MEMORY, core_pool_stat, core_sections_stat, MODULE_SECTION } from "@/render/layer/pipeline/core_pool.ts";
-import { band_pool_stats } from "@/render/layer/pipeline/volume.ts";
+import { CORE_MEMORY, core_pool_stat, core_sections_stat, MODULE_SECTION } from "@/wasm/core_pool.ts";
 import { chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
 import { category_info } from "./category.ts";
@@ -104,8 +103,8 @@ function counters() {
     runs_total: CORE_BUILD.stat().total_runs,
     coarse_boxes: CORE_BUILD.stat().coarse_total,
     coarse_low_fill: CORE_BUILD.stat().coarse_low_fill,
-    bands_reused: band_pool_stats().reused,
-    bands_allocated: band_pool_stats().allocated,
+    bands_reused: CORE_BUILD.band_stat().reused,
+    bands_allocated: CORE_BUILD.band_stat().allocated,
     build_ms: lod_build_stats.build_ms,
     build_runs: lod_build_stats.build_runs,
     scan_ms: lod_build_stats.scan_ms,

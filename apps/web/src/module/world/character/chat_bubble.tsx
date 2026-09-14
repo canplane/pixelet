@@ -26,7 +26,7 @@ import { BILLBOARD_ORDER } from "../billboard/sheet.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
 import { billboard_sheet } from "../billboard/sheet.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10

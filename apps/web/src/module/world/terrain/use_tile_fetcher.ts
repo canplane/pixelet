@@ -12,7 +12,7 @@ import { fetch_terrain } from "./tile_repository.ts";
 import { release_terrain } from "./resident.ts";
 import { tile_pages, useTileStore } from "./store.ts";
 import { useRangeAnchor } from "@/module/world/frame/use_range_anchor.ts";
-import { FETCH_HYSTERESIS, page_priority, pages_to_hold } from "@/render/chunk_range.ts";
+import { FETCH_HYSTERESIS, page_priority, pages_to_hold } from "@/module/world/frame/range.ts";
 import { KEEP_DIST, RESIDENT_PAGES } from "./config.ts";
 import { MapStatus, useMapStore } from "@/module/map/store.ts";
 import { useMapNavigation } from "@/module/map/navigation/use_map_navigation.ts";

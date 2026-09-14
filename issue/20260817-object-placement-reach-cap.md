@@ -111,7 +111,7 @@ live possibilities remain, none confirmed or ruled out from code alone:
    on every `reindex_cell`, and no elevation-dependent gap was found in it,
    but this class of bug often doesn't show up from reading alone.
 3. **Float32 GPU-instance-matrix precision** in
-   `render/layer/pipeline/chunk_mesher.ts` — the only place in the pipeline
+   `reference/chunk_mesher.ts` — the only place in the pipeline
    where object Z is written into a `Float32Array` as an absolute,
    non-chunk-relative value (`box.min[2] + sz_z*0.5`), rather than the exact
    BigInt math everywhere upstream. By magnitude alone (float32 relative
@@ -154,7 +154,7 @@ Traced `volume.ts`, `compositor.ts`, `chunk_mesher.ts`/`voxel_scan.ts`, and
 - Terrain's own paint function explicitly documents itself as built to have
   no Z cap: _"sparse signed-Z bands can extend through every actual peak, so
   no z_top clamp can cut mountainous terrain or raycasts flat"_
-  (`render/layer/terrain/adapter.ts`).
+  (`reference/terrain_layer.ts`).
 
 By this trace, a newly placed high-altitude object should be picked up on the
 very next `objects_revision`-triggered rebuild, band-wise. So "an entire band

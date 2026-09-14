@@ -64,7 +64,7 @@ Fixed by keeping the settings dependency out of `instanced_model.ts`
 entirely: the material's own `u_rim_intensity` starts at 0 (same
 "compiled in unconditionally, toggled via a uniform" pattern
 `u_low_spec` already uses) and stays that way until something else sets it.
-`decor_layer.tsx`'s own `useAllDecorBundleAssets` — the one real (non-test)
+`decor_kinds.tsx`'s own `useAllDecorBundleAssets` — the one real (non-test)
 consumer that needs the live value, and itself never imported by any test —
 owns the `useSettingsStore` subscription instead, one level up, looping over
 the (small, already-deduplicated-by-variant) materials array on every

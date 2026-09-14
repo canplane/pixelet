@@ -79,7 +79,7 @@
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC } from "@/wasm/core_pool.ts";
 
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 

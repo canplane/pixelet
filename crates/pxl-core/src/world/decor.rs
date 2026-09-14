@@ -16,7 +16,7 @@
 use crate::bake::terrain::{ChunkSample, PageView, CHUNK_SPAN, PAGE_CELL_SPAN};
 use crate::world::object::{Store, POS_BITS};
 
-/// decor_layer.ts's DECOR_MASTER_SEED is written with 80 bits; every use
+/// decor_kinds.ts's DECOR_MASTER_SEED is written with 80 bits; every use
 /// takes it modulo 2^64 (kit/rng.ts's derive_seed_u64 masks the XOR), so
 /// these are the bits that ever mattered.
 const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
@@ -106,13 +106,13 @@ struct Instance {
     pos: u32,
 }
 
-/// render/lod.ts's TARGET_CELL_PX.
+/// module/world/lod.ts's TARGET_CELL_PX.
 fn target_cell_px() -> f64 {
     let px_per_unit = 1080.0 / (2.0 * (50.0 * core::f64::consts::PI / 360.0).tan());
     px_per_unit / 192.0
 }
 
-/// decor_layer.ts's decor_density: 1, or 0 where the kind is under two of
+/// decor_kinds.ts's decor_density: 1, or 0 where the kind is under two of
 /// the tier's cells across.
 pub fn density(extent: f64, step: u32) -> f64 {
     let t = target_cell_px();

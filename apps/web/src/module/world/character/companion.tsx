@@ -48,9 +48,9 @@ import { type CharacterVariant, find_person_variant, find_pet_variant } from "@/
 import { useTick } from "@/module/world/sched/tick.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { load_gltf, load_image } from "@/render/gltf/load.ts";
-import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
 import { gpu_renderer } from "@/render/gpu/stage.tsx";
-import { view } from "@/module/world/view.ts";
+import { view } from "@/module/world/frame/view.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 
 /** A variant's model in the module, registered once per model and height

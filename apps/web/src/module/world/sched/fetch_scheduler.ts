@@ -31,7 +31,7 @@ import { Lanes } from "@xpute/core/ds/lanes.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
 
-import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 import type { Demand, Phases } from "./demand.ts";
 import { ledger_record, type Outcome } from "./ledger.ts";

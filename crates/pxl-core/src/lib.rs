@@ -6,7 +6,7 @@
 //!
 //! Ported a piece at a time from the TypeScript it replaces, and held to
 //! byte-for-byte agreement with it until the TypeScript is gone
-//! (apps/web/src/render/layer/pipeline/wasm_bake.test.ts).
+//! (apps/web/src/reference/wasm_bake.test.ts).
 
 pub mod bake;
 pub mod render;

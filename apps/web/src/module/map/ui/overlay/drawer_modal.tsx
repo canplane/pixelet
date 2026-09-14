@@ -24,7 +24,7 @@ export type DrawerModalProps = {
  * with 30+ terrain-styled entries alongside the original 15 colors reads as
  * noise without headers. "colors" first (the original, most-used set), then
  * one section per cube.ts channel, in the same LAND/WATER/STRUCTURE/
- * TRANSPORT order render/layer/terrain/adapter.ts's own GROUND_CH_KEYS uses. */
+ * TRANSPORT order reference/terrain_layer.ts's own GROUND_CH_KEYS uses. */
 const SECTION_ORDER = ["colors", GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
 type SectionKey = (typeof SECTION_ORDER)[number];
 

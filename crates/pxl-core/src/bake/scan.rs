@@ -1,4 +1,4 @@
-//! A chunk's bands to its column runs: render/layer/pipeline/voxel_scan.ts's
+//! A chunk's bands to its column runs: reference/voxel_scan.ts's
 //! whole-chunk scan, in Rust.
 //!
 //! The same walk in the same steps — a row of columns a step, each column

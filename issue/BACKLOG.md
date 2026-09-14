@@ -65,11 +65,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      eraser's hide — bump through an export. Then the range mount: which
      chunks exist is the module's, from the range anchor, the render
      distance and its hysteresis in the frame and the pages with a tile
-     (held to render/chunk_range.ts's in_range_chunks by
+     (held to module/world/frame/range.ts's in_range_chunks by
      core_sched.test.ts); the stage makes a node and an anchor holder for a
      chunk the module mounts, and drops them when it unmounts. Then decor's
      build (2026-09-14, crates/pxl-core/src/world/decor.rs, held instance for
-     instance to decor_layer.ts's build_decor_instances by
+     instance to decor_kinds.ts's build_decor_instances by
      core_decor.test.ts — the scatter's streams bit for bit, splitmix64
      drawn as JavaScript rounds it): the kinds are taught with their rules
      as data (a channel is any type, void, or one of a list), the module
@@ -183,7 +183,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      chat bubble, over one sheet, with the depth trick asked of this
      frame's depth), the environment (sun, moon, light and sky from the
      clock and the theme), the dev gizmos. The view — camera and root frame
-     — is doubles of our own (module/world/view.ts), the models are read by
+     — is doubles of our own (module/world/frame/view.ts), the models are read by
      a parser of our own (render/gltf), decor's eraser hit test is the
      module's over its blocks and triangles, the picker's preview is a
      display case of the renderer, and the frame loop is the tick's own

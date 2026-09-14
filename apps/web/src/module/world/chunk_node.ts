@@ -26,14 +26,14 @@ import type { Terrain } from "@pxl/shared/bake/format.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
 import { register_tile_interest, useTileStore } from "@/module/world/terrain/store.ts";
-import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
-import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
-import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
-import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
-import { CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
+import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, release_built_mesh, retain_built_mesh } from "@/render/mesh/chunk_bucket.ts";
+import type { BakedChunkMesh } from "@/render/mesh/mesh_block.ts";
+import { CORE_BUILD, release_chunk_mesh } from "@/wasm/core_build.ts";
+import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/mesh/decor_block.ts";
+import { CORE_SECTIONS } from "@/wasm/core_pool.ts";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
-import type { LodStep } from "@/render/lod.ts";
+import type { LodStep } from "@/module/world/lod.ts";
 
 /**
  * How much built work chunks may keep *while off screen*: run sets and

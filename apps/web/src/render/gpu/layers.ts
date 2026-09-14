@@ -4,7 +4,7 @@
  * The texture pack as two 2D array textures on the device — a top and a
  * side face per layer, one layer per ground type and cube colour, indexed
  * by the layer indices the mesher bakes into a vertex's taps
- * (render/layer/terrain/shader_meta.ts). render/tex_array.ts's arrays for
+ * (render/gpu/layer_table.ts). render/tex_array.ts's arrays for
  * three, made for WebGPU: every layer starts as its flat colour, and the
  * pack's sheet replaces them tile by tile once it arrives.
  */
@@ -14,7 +14,7 @@ import { cube_hex, cube_ids } from "@pxl/shared/spec/cell/mod.ts";
 import { type CubeFace, SHIPPED_SHEET, shipped_texture_tile } from "@pxl/shared/record/texture.ts";
 
 import { asset_url } from "@/lib/env/route.ts";
-import { GROUND_LAYER_META, hex_to_rgb255, OBJECT_LAYER_IDX } from "@/render/layer/terrain/shader_meta.ts";
+import { GROUND_LAYER_META, hex_to_rgb255, OBJECT_LAYER_IDX } from "@/render/gpu/layer_table.ts";
 import { mip_level_count, type MipBuilder } from "./mips.ts";
 
 /** Must match TILE_SIZE in apps/api/src/bake/asset/tool/download_texture_pack.ts. */

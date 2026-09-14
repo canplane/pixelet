@@ -9,7 +9,7 @@
  * 3. Interaction: highlighters and guide markers
  *
  * Coordinate model: every layer places what it has in the root frame
- * (module/world/view.ts), the map's azimuth and the floating origin's
+ * (module/world/frame/view.ts), the map's azimuth and the floating origin's
  * translation, which the view's damping steps write. Nothing here renders
  * DOM but the dev gizmos' labels: each layer tells the module what it has.
  */
@@ -34,21 +34,19 @@ import { HoverCursor } from "./marker/hover_cursor.tsx";
 import { DebugLayer } from "./marker/debug_layer.tsx";
 import { PoiLayer } from "./poi/poi_layer.tsx";
 
-// CHUNK_STAGE_LAYERS lives in module/world/stack.ts (not inline here) so
-// camera/ray.ts's own raycast can composite the exact same layer stack
-// instead of a second, possibly-drifting registration.
 import { ChunkMounts, CoreTick } from "./core_tick.tsx";
-// The layers teach the module their tables when imported; the chunks it
-// builds read them.
-import "./stack.ts";
+import { teach_terrain } from "./terrain/teach.ts";
+import { teach_objects } from "./object/teach.ts";
 
-// Dynamic rather than a plain top-level import so the character/pet model
-// code (GLTFLoader, skinning, animation mixer — otherwise unused anywhere
-// else in the app) lands in its own chunk instead of bloating the main one.
-// This lazy() still uses Suspense, but only once — for the code chunk
-// itself, at initial mount — not per-frame like the model-loading inside
-// Companion used to (see use_character_model.ts's own doc comment for why
-// that had to stop being Suspense-based entirely).
+// The module reads its tables when it builds; taught here, before the
+// first page is told.
+teach_terrain();
+teach_objects();
+
+// Dynamic rather than a plain top-level import so the character code (the
+// glTF parser, the skins, the animation) lands in its own chunk instead of
+// bloating the main one. This lazy() still uses Suspense, but only once —
+// for the code chunk itself, at initial mount.
 const Companion = lazy(() => import("./character/companion.tsx").then((m) => ({ default: m.Companion })));
 
 export function World() {

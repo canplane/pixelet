@@ -12,7 +12,7 @@ design's own justification is stale.
 
 ## Root cause
 
-`apps/web/src/render/lod.ts`'s `calculate_lod_step` applies two different
+`apps/web/src/module/world/lod.ts`'s `calculate_lod_step` applies two different
 hysteresis margins depending on whether a threshold is "blend-eligible":
 
 ```ts
@@ -98,7 +98,7 @@ camera to hold chunk distances in the 1097–1536 band and watching whether
    margin to ~0.95 without adding a blended mesh for it. Cheaper than (1), but
    means a plain hard snap at a tighter distance rather than a masked one.
 
-Neither has been implemented. Nothing in `render/lod.ts` or
+Neither has been implemented. Nothing in `module/world/lod.ts` or
 `chunk_stage.tsx` has changed as a result of this investigation.
 
 ## Status 2026-09-13

@@ -50,7 +50,7 @@ Folding all deferrable work into "one cooperative scheduler" is a trap, because
 two kinds of work with different natures are hiding under it.
 
 **A. CPU-bound stepped work** — chunk meshing, tile decode
-(`render/layer/terrain/elevation.ts`'s `dense_ele`, `shader_meta.ts`'s
+(`module/world/terrain/elevation_sample.ts`'s `dense_ele`, `layer_table.ts`'s
 `decode_ground_rgba`), decor scatter, billboard canvas building
 (`poi_layer.tsx`'s `build_poi_badge_canvas`, `chat_bubble.tsx`). This is the
 part that feels like a computer-architecture simulator. It needs: a per-frame

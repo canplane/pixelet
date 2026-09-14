@@ -1,4 +1,4 @@
-//! A chunk's column runs to one mesh: render/layer/pipeline/chunk_mesher.ts,
+//! A chunk's column runs to one mesh: reference/chunk_mesher.ts,
 //! in Rust.
 //!
 //! The same phases in the same steps — face masks, then greedy merge, then

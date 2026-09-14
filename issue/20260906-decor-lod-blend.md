@@ -1,13 +1,13 @@
 # Decor gets the same LOD threshold blend cube content already had
 
-**2026-09-06** — closes the last item on `decor_layer.tsx`'s own
+**2026-09-06** — closes the last item on `decor_kinds.tsx`'s own
 "CURRENT LIMITATIONS" list (see [20260906-decor-lit-shading.md](./20260906-decor-lit-shading.md)
 for the other item that list used to carry, the unlit-material gap, closed
 earlier the same day). Decor's density thinning with distance
 (`DECOR_DENSITY_BY_LOD_STEP`) used to pop synchronized across every chunk
 that crossed a threshold in the same frame — a whole ring of forest visibly
 halving in density at once. Cube content already solved the equivalent
-problem for its own tier pop (`render/lod.ts`'s `get_lod_pair_visibility`);
+problem for its own tier pop (`module/world/lod.ts`'s `get_lod_pair_visibility`);
 decor now reuses the identical mechanism.
 
 ## What this is NOT
@@ -19,7 +19,7 @@ prior discussion: a surviving tree at any density level is always the exact
 same full-detail model). What changes is **where** the population-level
 thinning happens: instead of every chunk at a given distance switching
 density in the same frame (a hard-edged ring), the switch now staggers
-across a range of distances (`render/lod.ts`'s existing `BLEND_BAND_FRACTION`
+across a range of distances (`module/world/lod.ts`'s existing `BLEND_BAND_FRACTION`
 band), the same way cube content's own tier pop got smeared rather than
 fixed.
 
@@ -37,11 +37,11 @@ fixed.
   `secondary` null outside a blend band, mirroring `LodLayout.secondary`
   itself exactly.
 - **New shared `render/lod_visibility.ts`**, holding `apply_visibility` and
-  its registry types — factored out of `chunk_stage.tsx` so decor_layer.tsx
+  its registry types — factored out of `chunk_stage.tsx` so decor_kinds.tsx
   can register into the _same_ registry `ChunkMesh` (cube content) already
-  uses, without decor_layer.tsx importing anything from chunk_stage.tsx
+  uses, without decor_kinds.tsx importing anything from chunk_stage.tsx
   itself (that reverse direction was removed as a circular import back on
-  2026-09-05 — see decor_layer.tsx's own top doc comment). One registry, one
+  2026-09-05 — see decor_kinds.tsx's own top doc comment). One registry, one
   shared `apply_visibility` call per `recheck()`, now drives both cube
   content and decor's own primary/secondary visibility together — a chunk's
   terrain and its trees switch at the exact same moment, not two

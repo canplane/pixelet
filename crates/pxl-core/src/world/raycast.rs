@@ -1,5 +1,5 @@
 //! The world's one raycast: module/camera/ray.ts's ray_hit_world and
-//! render/layer/pipeline/chunk_raycast.ts's ray_hit_chunk, with
+//! reference/chunk_raycast.ts's ray_hit_chunk, with
 //! compositor.ts's little cache of composites, in the core.
 //!
 //! A ray walks the chunks its XY projection crosses (a DDA a chunk wide),

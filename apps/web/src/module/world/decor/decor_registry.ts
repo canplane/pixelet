@@ -10,7 +10,7 @@
  */
 
 import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";
-import { type DecorKindBundle, teach_decor_kinds } from "./decor_layer.ts";
+import { type DecorKindBundle, teach_decor_kinds } from "./decor_kinds.ts";
 import { TREE_DECOR_BUNDLE } from "./tree_decor.ts";
 import { BOAT_DECOR_BUNDLE } from "./boat_decor.ts";
 import { CAR_DECOR_BUNDLE } from "./car_decor.ts";

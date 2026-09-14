@@ -1,7 +1,7 @@
 // @pxl/web/module/world/frame/use_view_frame.ts
 
 /**
- * The root frame's two damped halves (module/world/view.ts): its turn
+ * The root frame's two damped halves (module/world/frame/view.ts): its turn
  * about Z toward the controls' azimuth, and its translation toward putting
  * the map centre at the origin — the view's origin rebased in the same
  * step the translation snaps, so nothing reads the two apart for a tick.
@@ -18,7 +18,7 @@ import { camera_cfg } from "@/module/camera/config.ts";
 import { damp_alpha } from "@/module/camera/orbit.ts";
 import { request_world_tick as invalidate } from "@/module/world/change.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
-import { view, view_compose } from "@/module/world/view.ts";
+import { view, view_compose } from "@/module/world/frame/view.ts";
 
 const { ROT_DAMP, POS_DAMP } = camera_cfg.smooth;
 

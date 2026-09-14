@@ -22,7 +22,7 @@ import type { ChangeJournal, Cursor, Revision, Topic } from "@xpute/core/ipc/cha
 import { ChangeWaker } from "@xpute/core/ipc/change_waker.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 export const enum WorldTopic {
   /** A column's cube content (object/store.ts), keyed by column base. */

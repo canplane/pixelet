@@ -1,4 +1,4 @@
-//! Which tier a chunk shows at a distance: render/lod.ts's criterion, in
+//! Which tier a chunk shows at a distance: module/world/lod.ts's criterion, in
 //! Rust, for the scheduler (sched.rs).
 //!
 //! A tier's handoff distance is where one of its cells stops being larger
