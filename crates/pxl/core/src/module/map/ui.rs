@@ -2,3 +2,4 @@
 
 pub mod control;
 pub mod overlay;
+pub mod toast;
