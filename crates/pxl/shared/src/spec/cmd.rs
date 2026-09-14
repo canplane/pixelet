@@ -36,6 +36,7 @@ pub enum Major {
     DEBUG = 0x10,
     ENV = 0x11,
     MODEL = 0x12,
+    CHANGE = 0x13,
 }
 
 /// The hover ghost's own verbs.
@@ -111,6 +112,8 @@ pub enum ChunkMinor {
     VISIBLE = 0x11,
     LAYOUT = 0x12,
     BLEND = 0x13,
+    BUILD = 0x14,
+    DECOR = 0x15,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -231,6 +234,24 @@ pub enum Cmd {
     /// tag model · [scale f32] — complete: its block goes to the GPU
     MODEL_SEAL = 0x1213,
 
+    // ---- the change log, the chunks' rebuilds now, the day ----
+    /// tag call · [topic u32, key u64] → result: the key's new revision
+    CHANGE_UPDATE = 0x1303,
+    /// tag call · [topic u32, key u64] → result: the key's revision, 0 for
+    /// one never bumped
+    CHANGE_READ = 0x1302,
+    /// [topic u32, key u64] — the key's revision forgotten
+    CHANGE_DELETE = 0x1304,
+    /// tag chunk · no packet — its layout built to the end now: a placement
+    /// shows in the frame it was made
+    CHUNK_BUILD = 0x0114,
+    /// tag chunk · [show_decor bool] — its decor rebuilt now for the layout it
+    /// shows; the tiers untouched
+    CHUNK_DECOR = 0x0115,
+    /// tag call · [lat f64, lon f64, day_start_ms f64] → [sunrise f64, sunset
+    /// f64], in hours after the day's start
+    ENV_READ = 0x1102,
+
     // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
     //
     // CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted
@@ -280,7 +301,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 53] = [
+    const ALL: [Cmd; 59] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -334,6 +355,12 @@ impl Cmd {
         Cmd::MODEL_CLIP,
         Cmd::MODEL_CHANNEL,
         Cmd::MODEL_SEAL,
+        Cmd::CHANGE_UPDATE,
+        Cmd::CHANGE_READ,
+        Cmd::CHANGE_DELETE,
+        Cmd::CHUNK_BUILD,
+        Cmd::CHUNK_DECOR,
+        Cmd::ENV_READ,
     ];
 
     /// The command a message's number names, or none for one nobody numbers.
@@ -403,6 +430,12 @@ mod test {
             (MODEL_CLIP, Major::MODEL as u32, ModelMinor::CLIP as u32),
             (MODEL_CHANNEL, Major::MODEL as u32, ModelMinor::CHANNEL as u32),
             (MODEL_SEAL, Major::MODEL as u32, ModelMinor::SEAL as u32),
+            (CHANGE_UPDATE, Major::CHANGE as u32, Minor::UPDATE as u32),
+            (CHANGE_READ, Major::CHANGE as u32, Minor::READ as u32),
+            (CHANGE_DELETE, Major::CHANGE as u32, Minor::DELETE as u32),
+            (CHUNK_BUILD, Major::CHUNK as u32, ChunkMinor::BUILD as u32),
+            (CHUNK_DECOR, Major::CHUNK as u32, ChunkMinor::DECOR as u32),
+            (ENV_READ, Major::ENV as u32, Minor::READ as u32),
         ];
         for (c, major, minor) in parts {
             assert_eq!(c as u32, cmd(major, minor), "{c:?}");

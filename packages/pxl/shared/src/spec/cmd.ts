@@ -34,6 +34,7 @@ export const enum Major {
   DEBUG = 0x10,
   ENV = 0x11,
   MODEL = 0x12,
+  CHANGE = 0x13,
 }
 
 /** The hover ghost's own verbs. */
@@ -91,6 +92,8 @@ export const enum ChunkMinor {
   VISIBLE = 0x11,
   LAYOUT = 0x12,
   BLEND = 0x13,
+  BUILD = 0x14,
+  DECOR = 0x15,
 }
 
 export const enum Cmd {
@@ -211,6 +214,25 @@ export const enum Cmd {
   MODEL_CHANNEL = 0x1212,
   /** tag model · [scale f32] — complete: its block goes to the GPU */
   MODEL_SEAL = 0x1213,
+
+  // ---- the change log, the chunks' rebuilds now, the day ----
+
+  /** tag call · [topic u32, key u64] → result: the key's new revision */
+  CHANGE_UPDATE = 0x1303,
+  /** tag call · [topic u32, key u64] → result: the key's revision, 0 for
+   * one never bumped */
+  CHANGE_READ = 0x1302,
+  /** [topic u32, key u64] — the key's revision forgotten */
+  CHANGE_DELETE = 0x1304,
+  /** tag chunk · no packet — its layout built to the end now: a placement
+   * shows in the frame it was made */
+  CHUNK_BUILD = 0x0114,
+  /** tag chunk · [show_decor bool] — its decor rebuilt now for the layout it
+   * shows; the tiers untouched */
+  CHUNK_DECOR = 0x0115,
+  /** tag call · [lat f64, lon f64, day_start_ms f64] → [sunrise f64, sunset
+   * f64], in hours after the day's start */
+  ENV_READ = 0x1102,
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //

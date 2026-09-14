@@ -69,22 +69,16 @@ export type PxlExports = {
   pxl_ring_cq(): u32;
   pxl_drain(): u32;
   pxl_tick(): u32;
-  pxl_build_now(id: u32): void;
-  pxl_decor_now(id: u32, show_decor: u32): void;
   pxl_draw_take(): u32;
   pxl_env_at(): u32;
   pxl_shader(kind: u32): u32;
   pxl_pipeline(id: u32): u32;
   pxl_frame_uniform_at(): u32;
-  pxl_env_daylight(lat: number, lon: number, day_start_ms: number): u32;
   pxl_build_tick(order_at: u32, order_len: u32, budget_ms: number): void;
   pxl_frame_at(): u32;
   pxl_census(): u32;
   pxl_build_stat(): u32;
   pxl_change_lanes(): u32;
-  pxl_change_bump(topic: u32, key: bigint): u32;
-  pxl_change_forget(topic: u32, key: bigint): void;
-  pxl_change_revision(topic: u32, key: bigint): u32;
   pxl_object_paint(volume: u32, key: bigint, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: number, ly: number, lz: number, size: number): u32;
 };
 

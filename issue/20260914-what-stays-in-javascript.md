@@ -140,6 +140,23 @@ arrived and hands the time back. What that decides about the boundary:
   the joints, the clips and their channels (keys copied into the packet),
   then the seal. A query's tag is its call's, so a query about a subject
   (a model's handle, a clip of a model) carries the subject in its packet.
+
+  Then the change log's bump, forget and revision (`CHANGE_*`), a chunk's
+  rebuild now (`CHUNK_BUILD`, `CHUNK_DECOR`) and the day's sunrise and
+  sunset (`ENV_READ`). A chunk node reads its column's revision as it is
+  made, and it is made inside a sink — while the glue is reading the
+  completion ring — so a query may now be asked from inside `read`: it
+  drains, finds its reply where it waits ahead of the head, and leaves it
+  for the read beneath to pass over; a message not yet consumed keeps the
+  arena from rewinding, so the reply's packet stays whole. A turn handed
+  over from inside a sink drains without reading, for the same reason.
+
+  **The passage stays general (2026-09-14).** Bindgen may remain, but as a
+  pipe, not as a passage per purpose: a few exports whose arguments are
+  primitives — a clock, an interrupt number — and nothing in their names
+  or shapes that knows the domain. What the domain needs goes through
+  that pipe as commands; an export named for a frame, a census or a shader
+  is a passage opened for one purpose, and is on its way into the rings.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

@@ -678,21 +678,6 @@ pub extern "C" fn pxl_change_lanes() -> *const u32 {
     s.change_row.as_ptr()
 }
 
-#[no_mangle]
-pub extern "C" fn pxl_change_bump(topic: u32, key: u64) -> u32 {
-    state().changes.bump(topic, key as i64)
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_change_forget(topic: u32, key: u64) {
-    state().changes.forget(topic, key as i64);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_change_revision(topic: u32, key: u64) -> u32 {
-    state().changes.revision_of(topic, key as i64)
-}
-
 /// Paints the column `key` into `volume`, leaving out the entry at
 /// (hide_band, hide_pos) when `hide` is set and adding the carve preview
 /// at a corner relative to the column's base when `carve` is. Bit 0: a
@@ -1044,6 +1029,19 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             s.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
             return Ok(Some((0, None)));
         }
+        Cmd::CHANGE_UPDATE | Cmd::CHANGE_READ | Cmd::CHANGE_DELETE => {
+            let f = fields(pkt)?;
+            let (topic, key) = (u32_at(&f, 0)?, u64_at(&f, 1)? as i64);
+            let revision = match cmd {
+                Cmd::CHANGE_UPDATE => s.changes.bump(topic, key),
+                Cmd::CHANGE_READ => s.changes.revision_of(topic, key),
+                _ => {
+                    s.changes.forget(topic, key);
+                    0
+                }
+            };
+            return Ok(Some((revision as i32, None)));
+        }
         Cmd::MODEL_SEAL => {
             let scale = number_at(&fields(pkt)?, 0)? as f32;
             let mem = opened(&mut s.volumes).mem();
@@ -1204,7 +1202,10 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::OBJECT_CELL
         | Cmd::OBJECT_COLUMNS
         | Cmd::OBJECT_STAT
-        | Cmd::MODEL_SEAL => {
+        | Cmd::MODEL_SEAL
+        | Cmd::CHANGE_UPDATE
+        | Cmd::CHANGE_READ
+        | Cmd::CHANGE_DELETE => {
             unreachable!("applied before the parts are taken")
         }
         Cmd::GHOST_BOX => {
@@ -1355,6 +1356,22 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 )
             };
         }
+        Cmd::CHUNK_BUILD => sched.build_now(&mut world, tag, &now, &mut emit),
+        Cmd::CHUNK_DECOR => {
+            let show = bool_at(&fields(pkt)?, 0)?;
+            sched.decor_now(&mut world, tag, show, &mut emit);
+        }
+        Cmd::ENV_READ => {
+            let f = fields(pkt)?;
+            sched.environment.daylight(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
+            let d = sched.environment.daylight;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.f64(Some(d[0])).f64(Some(d[1]));
+                })),
+            )));
+        }
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
@@ -1393,6 +1410,9 @@ fn drain(s: &mut State) -> u32 {
         }
         posted += flush(s);
     }
+    // The rows the glue reads by address (the build stat, the census) are
+    // as of the last command, as they are of the last tick.
+    after(s);
     posted
 }
 
@@ -1500,18 +1520,6 @@ pub extern "C" fn pxl_tick() -> u32 {
     draw as u32
 }
 
-/// Rebuilds chunk `id`'s layout to the end now, after the submissions
-/// waiting are applied: what a placement shows the same frame by.
-#[no_mangle]
-pub extern "C" fn pxl_build_now(id: u32) {
-    let s = state();
-    drain(s);
-    let Parts { mut world, events, sched, .. } = parts(s);
-    sched.build_now(&mut world, id, &now, &mut |e| events.push_back(e));
-    flush(s);
-    after(s);
-}
-
 // ---- The billboards (crates/pxl/core/src/world/billboard.rs) ----
 
 // ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
@@ -1557,15 +1565,6 @@ pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
 
 // ---- The environment (crates/pxl/core/src/world/environment.rs) ----
 
-/// Sunrise and sunset for the local day from `day_start_ms`, in hours
-/// after it: where the two f64s sit.
-#[no_mangle]
-pub extern "C" fn pxl_env_daylight(lat: f64, lon: f64, day_start_ms: f64) -> u32 {
-    let env = &mut state().sched.environment;
-    env.daylight(lat, lon, day_start_ms);
-    env.daylight.as_ptr() as u32
-}
-
 /// Where the environment's ENV_FLOATS output floats sit.
 #[no_mangle]
 pub extern "C" fn pxl_env_at() -> u32 {
@@ -1588,18 +1587,6 @@ pub extern "C" fn pxl_draw_take() -> *const u32 {
         s.draw_row[k] = *v as u32;
     }
     s.draw_row.as_ptr()
-}
-
-/// Rebuilds chunk `id`'s decor for the layout it shows, now, after the
-/// submissions waiting are applied; `show_decor` is the setting as it is.
-#[no_mangle]
-pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
-    let s = state();
-    drain(s);
-    let Parts { mut world, events, sched, .. } = parts(s);
-    sched.decor_now(&mut world, id, show_decor != 0, &mut |e| events.push_back(e));
-    flush(s);
-    after(s);
 }
 
 /// The builder alone over the `order_len` ids at `order_at`, for the tests

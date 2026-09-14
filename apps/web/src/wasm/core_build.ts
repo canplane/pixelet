@@ -144,10 +144,14 @@ export class CoreBuild {
   private readonly cq: Ring;
   private readonly sinks = new Map<u32, ChunkBuildSink>();
   private next_id: u32 = 1;
-  /** The call waiting on its reply: its tag, and what reads the reply. */
+  /** The calls waiting on their replies, by tag; and the replies a call
+   * made inside a sink read ahead of the completion ring's head, which the
+   * read under it then passes over. */
   private next_call: u32 = 0;
-  private reply_tag: u32 = 0;
-  private reply: ((result: number, f: BranchCursor | null) => void) | null = null;
+  private readonly waiting = new Map<u32, (result: number, f: BranchCursor | null) => void>();
+  private readonly taken = new Set<u32>();
+  /** How deep in `read` this is: a sink runs inside it. */
+  private reading = 0;
   /** Who makes and drops the nodes of mounted chunks. */
   mounts: MountListener | null = null;
   private order: Uint32Array;
@@ -171,16 +175,33 @@ export class CoreBuild {
     this.read();
   }
 
+  /** Hands the module the turn: a pump, or inside a sink — where the ring
+   * is being read under this call — only the drain, since reading it again
+   * here would hand the same message out twice. */
+  private turn(): void {
+    if (this.reading > 0) this.pxl.pxl_drain();
+    else this.pump();
+  }
+
   private submit(tag: u32, cmd: Cmd, pkt: U8Array | null = null, flags: u32 = 0): void {
     for (;;) {
       const errno = this.sq.push(tag, cmd, flags, pkt);
       if (errno === Errno.OK) return;
       if (errno !== Errno.EAGAIN) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} refused by the ring: ${errno}`);
-      this.pump();
+      this.turn();
     }
   }
 
   private read(): void {
+    this.reading++;
+    try {
+      this.read_ring();
+    } finally {
+      this.reading--;
+    }
+  }
+
+  private read_ring(): void {
     const cq = this.cq;
     for (let at = cq.peek(); at >= 0; at = cq.peek()) {
       const id = cq.tag(at);
@@ -188,9 +209,11 @@ export class CoreBuild {
       const pkt = cq.packet(at);
       const f: BranchCursor | null = pkt ? new TreeReader(pkt).read_branch() : null;
       if (cq.flags(at) & FrameFlag.RES) {
-        if (this.reply !== null && id === this.reply_tag) {
-          this.reply(cq.result(at), f);
-          this.reply = null;
+        const waiting = this.waiting.get(id);
+        if (this.taken.delete(id)) {
+          // Read already, by the call that asked, from inside a sink.
+        } else if (waiting !== undefined) {
+          waiting(cq.result(at), f);
         } else if (cq.result(at) < 0) {
           console.warn(`[wasm/core_build] command 0x${cmd.toString(16)} failed: errno ${cq.result(at)}`);
         }
@@ -253,19 +276,40 @@ export class CoreBuild {
   call<T>(cmd: Cmd, pkt: U8Array | null, take: (result: number, reply: BranchCursor | null) => T): T {
     const tag = this.next_call = (this.next_call + 1) >>> 0;
     let out: { value: T } | null = null;
-    this.reply_tag = tag;
-    this.reply = (result, f) => out = { value: take(result, f) };
+    this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
     try {
       this.submit(tag, cmd, pkt, FrameFlag.ACKREQ);
+      if (this.reading > 0) {
+        // Inside a sink the ring is being read under this call: the reply is
+        // found where it lies, ahead of the head, and left for that read.
+        this.pxl.pxl_drain();
+        this.take_ahead(tag);
+      }
       while (out === null) {
+        if (this.reading > 0) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} asked inside a sink found the completion ring full`);
         const posted = this.pxl.pxl_drain();
         this.read();
         if (out === null && posted === 0 && this.sq.len === 0) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} was never replied to`);
       }
     } finally {
-      this.reply = null;
+      this.waiting.delete(tag);
     }
     return (out as { value: T }).value;
+  }
+
+  /** The reply to `tag`, read where it waits in the completion ring. A
+   * message not yet consumed keeps the arena from rewinding, so its packet
+   * stays whole. */
+  private take_ahead(tag: u32): void {
+    const cq = this.cq;
+    for (let pos = cq.head; pos !== cq.tail; pos = (pos + 1) >>> 0) {
+      const at = cq.entry_at(pos);
+      if ((cq.flags(at) & FrameFlag.RES) === 0 || cq.tag(at) !== tag) continue;
+      const pkt = cq.packet(at);
+      this.waiting.get(tag)!(cq.result(at), pkt ? new TreeReader(pkt).read_branch() : null);
+      this.taken.add(tag);
+      return;
+    }
   }
 
   /** A new chunk whose column's base is `base` — its X and Y in units
@@ -355,16 +399,16 @@ export class CoreBuild {
   /** Rebuilds chunk `id`'s layout to the end now, and hands over what that
    * made: a placement shows in the frame it was made. */
   build_now(id: u32): void {
-    this.pxl.pxl_build_now(id);
-    this.read();
+    this.send(id, Cmd.CHUNK_BUILD);
+    this.turn();
   }
 
   /** Rebuilds chunk `id`'s decor for the layout it shows, now, and tells
    * the layout again; the tiers are untouched. `show_decor` is the setting
    * as it stands, since the frame is written only before a tick. */
   decor_now(id: u32, show_decor: boolean): void {
-    this.pxl.pxl_decor_now(id, show_decor ? 1 : 0);
-    this.read();
+    this.send(id, Cmd.CHUNK_DECOR, packet((p) => p.bool(show_decor)));
+    this.turn();
   }
 
   /** The builder alone over `ids`, for the tests: no scheduler. */
