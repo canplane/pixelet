@@ -151,9 +151,8 @@ const $cam_v3: [f64, f64, f64] = [0, 0, 0];
 const $centre: PVF3 = { i: 0n, f: 0n };
 const $kept = CORE_ALLOC.take(Uint32Array, MAX_RENDERED);
 
-/** absolute, projected into local_world_frame's own origin (map_origin) —
- * the frame select_visible_billboards' local_x/y/z expects (see
- * AnchorNode's own local_pos in frame/coord.ts). */
+/** absolute, projected into the local world frame's origin (map_origin) —
+ * the frame select_visible_billboards' local_x/y/z expects (frame/coord.ts). */
 function local_pos_from_absolute(absolute: PVF3, map_origin: IVec): [f64, f64, f64] {
   const local: PVF3 = { i: ivec.sub(absolute.i, map_origin), f: absolute.f };
   return [pvf3.to_real(pvf3.X(local)), pvf3.to_real(pvf3.Y(local)), pvf3.to_real(pvf3.Z(local))];
@@ -387,7 +386,7 @@ function poi_place_step(
 function query_stage(j: PlaceJob): void {
   const t0 = performance.now();
   // Everything is measured from the camera, as the chunks are (their tier
-  // is their distance from the camera, sched/chunk_table.ts): the disc the
+  // is their distance from the camera, crates/pxl-core/src/world/sched.rs): the disc the
   // index holds, the reach a candidate is inside, the tier it is filed at.
   // Measured from the pivot instead, a wide zoom followed by a tilt down to
   // the ground filed the places under the camera at the tier of the pivot's
@@ -627,9 +626,9 @@ function pick_of(node: u32, absorbed_extra: u32, map_origin: IVec): PoiPick {
  *
  * A badge is a text label rather than a cursor, so it arriving a frame or
  * two after the camera settles reads as nothing at all. Note also that the
- * anchors themselves never lag: a mounted badge is positioned by AnchorNode
- * every frame regardless. What waits is only the decision about which set is
- * mounted.
+ * anchors themselves never lag: a badge in the module's set is placed
+ * every frame regardless (billboard.rs). What waits is only the decision
+ * about which set is mounted.
  */
 const PLACEMENT_MS = 200;
 

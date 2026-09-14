@@ -51,11 +51,11 @@ export const render_cfg = {
   // VIEW_DIST (camera/config.ts) is sized past CHUNK_RENDER_DIST below, the
   // real edge of mounted terrain, so FAR_CLIP keeps margin over where
   // geometry stops existing rather than being an arbitrary multiple. The fog
-  // gradient is FOG_NEAR/FOG_FAR (THREE's own linear fog, wired in via
-  // environment.tsx's <fog>), and it now ends exactly where geometry does, so
+  // gradient is FOG_NEAR/FOG_FAR (linear, in shade.wgsl, from the theme
+  // through environment.rs), and it ends exactly where geometry does, so
   // ground always fades into the fog colour instead of being cut off while
-  // still visible. The sky dome is fog-exempt (environment.tsx's
-  // `fog={false}`), so the horizon still reads as a full vista — only ground
+  // still visible. The sky is drawn unfogged (sky.wgsl), so the horizon
+  // still reads as a full vista — only ground
   // geometry fades.
   FAR_CLIP: VIEW_DIST * 1.5,
 
@@ -76,17 +76,15 @@ export const render_cfg = {
 } as const;
 
 /**
- * Minimum-brightness floor shared by every real-lit ("real" meaning: an
- * actual MeshStandardMaterial driven by environment.tsx's scene lights, as
- * opposed to terrain's old always-bright custom shader) surface in the
- * scene — placed objects (block.tsx) and terrain/object cells
- * alike (module/world/chunk_stage.tsx). One shared constant, not two
+ * Minimum-brightness floor shared by every lit surface — terrain and
+ * placed cells, decor, actors — through the one shading source
+ * (crates/pxl-core/src/render/shader/shade.wgsl, `frame.floor`, carried
+ * in the theme through environment.rs). One shared constant, not two
  * separate copies, specifically so the two can't drift apart again the way
  * they did before this existed (terrain used to be immune to scene-light
  * dimming by construction while objects weren't, then briefly the reverse
- * once terrain adopted real lighting too — see chunk_stage.tsx's own git
- * history for that whole back-and-forth). Tune this one number to retune
- * both surfaces' night floor at once.
+ * once terrain adopted real lighting too). Tune this one number to retune
+ * every surface's night floor at once.
  */
 export const light_cfg = {
   // Judged on a real device, not a desktop monitor — a darker floor that read
@@ -125,6 +123,6 @@ export const rim_cfg = {
  */
 export const post_cfg = {
   /** The canvas draws at the device's pixel ratio clamped to this
-   * (scene.tsx's dpr comment on why the cap, and why it is not a cost). */
+   * (issue/20260911-taa-tried-and-closed.md on why the cap is where it is). */
   DPR: [1, 2] as [number, number],
 } as const;

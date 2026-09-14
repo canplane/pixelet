@@ -128,7 +128,7 @@ export const SETTINGS = {
 
   // ---- debug: diagnostics, dev builds only. Off by default so they are
   // never in the way while eyeballing real rendering.
-  /** world.tsx's DebugLayer gizmos: frame origins, page corners, map centre. */
+  /** marker/debug_gizmos.tsx: frame origins, page corners, map centre, the rings. */
   show_debug_objects: toggle("debug", false, { dev: true }),
   /** The sched/ledger.ts corner panel. The console stream is a button on it. */
   show_ledger: toggle("debug", false, { dev: true }),

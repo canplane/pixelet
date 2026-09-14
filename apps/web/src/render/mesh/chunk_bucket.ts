@@ -21,8 +21,8 @@ export type BuiltChunkMesh = BakedChunkMesh & {
   visibility: Float32Array;
   /**
    * How many owners still hold this mesh. Two of them exist and die
-   * independently: chunk_stage.tsx's per-chunk LOD cache, and the mounted
-   * geometry that renders it. A cache eviction while the same tier is still
+   * independently: the node's per-chunk tier cache (chunk_node.ts), and the
+   * layout that shows it. A cache eviction while the same tier is still
    * on screen is the normal case, not an edge one (recheck() prunes on
    * frustum exit; commit() replaces the layout a frame later), so "the cache
    * dropped it" cannot mean "the block is free" — hence a count rather than
@@ -73,11 +73,8 @@ function accumulate_mesh_bounds(mesh: BakedChunkMesh, acc: BoundsAcc): void {
 }
 
 /**
- * Derives an exact AABB from one mesh's own baked vertex positions without
- * importing a renderer. Callers with a live mesh (chunk_stage.tsx) use this
- * instead of THREE's InstancedMesh.computeBoundingBox/computeBoundingSphere
- * equivalents to skip walking every vertex through a generic transform —
- * here there's no transform to walk at all, the positions are already real.
+ * Derives an exact AABB from one mesh's own baked vertex positions: there is
+ * no transform to walk, the positions are already real.
  */
 export function mesh_bounds(mesh: BakedChunkMesh): ChunkBounds | null {
   const acc: BoundsAcc = { min_x: Infinity, min_y: Infinity, min_z: Infinity, max_x: -Infinity, max_y: -Infinity, max_z: -Infinity, found: false };

@@ -9,8 +9,8 @@ import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
  * (U_PER_CELL). Single source of truth for mode_bar's size selector, the
  * placement/erase raycasting and overlap check (camera/ray.ts,
  * object/collision.ts), and the hover preview + real cube render
- * (world/marker/hover_cursor.tsx, layer/chunk_stage.tsx — every size,
- * including sub-cell, goes through the same dense voxel field there).
+ * (world/marker/hover_cursor.tsx, and the module's paint and mesher —
+ * every size, including sub-cell, goes through the same dense voxel field).
  * Tracks U_PER_CELL
  * itself, not a snapshot of its value, so a CELL_SHAMT change (constant.ts)
  * rescales every tier here automatically.

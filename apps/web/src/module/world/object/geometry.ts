@@ -42,8 +42,8 @@ export function anchor_center(anchor: PVF3): PVF3 {
  * obj.i/f is this object's corner (min-x, min-y, min-z) — the same
  * convention reference/chunk_mesher.ts and marker/hover_cursor.tsx render from
  * (both add +size/2 on every axis to get the visual center). Returned in
- * map_origin-relative real units, the same low-magnitude space AnchorNode's
- * own local_pos and camera/ray.ts's terrain raycast already operate in.
+ * map_origin-relative real units, the same low-magnitude space the
+ * billboards' local positions and camera/ray.ts's raycast already operate in.
  */
 export function object_local_corner(obj: Pick<OccupiedEntry, "i" | "f">, map_origin: IVec): V3 {
   const local: PVF3 = { i: ivec.sub(obj.i, map_origin), f: obj.f };

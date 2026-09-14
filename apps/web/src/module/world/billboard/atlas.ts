@@ -206,7 +206,7 @@ export class BillboardAtlas {
    * is handed is already translated to the entry's own origin. */
   private readonly draws: ((ctx: CanvasRenderingContext2D) => void)[] = [];
 
-  /** Counts the sheet's replacements, for a mirror that is not three's. */
+  /** Counts the sheet's replacements, for the renderer's mirror of it. */
   private generation: u32 = 0;
   private live: u32 = 0;
   private used_px: u32 = 0;

@@ -3,7 +3,7 @@
 /**
  * Page cache for POI, keyed by L3 page idx — POI's own counterpart to
  * terrain/store.ts's `useTileStore`, deliberately simpler: no interests
- * registry, since PoiLayer.tsx (this directory) is the only consumer today
+ * registry, since poi_layer.tsx (this directory) is the only consumer today
  * (terrain's own registry exists because many independent readers —
  * elevation lookups, terrain rendering, hover — each care about a different
  * subset of loaded pages; a single reader has nothing to save by

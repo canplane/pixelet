@@ -16,8 +16,8 @@
  * already over budget before the loop starts still commits one step, so a
  * single expensive item can never permanently block everything behind it —
  * which is what separates cooperative scheduling from "skip work when
- * busy", and is exactly the rule chunk_stage.tsx's two loops already
- * followed by hand.
+ * busy", and is exactly the rule the chunk stage's two loops already
+ * followed by hand before the scheduler was the module's.
  *
  * A step returning `false` means "did not complete work": it doesn't count
  * toward the cap, mirroring the `if (control.commit()) committed++` shape it

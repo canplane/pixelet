@@ -30,9 +30,10 @@ rebuilt on 2026-09-12/13 into the shape below.
   (`../billboard/atlas.ts`) and cached by id hash; the width a candidate
   offers is estimated from its characters, the badge measured exactly when
   drawn.
-- **`../billboard/field.ts`** — every badge as one instanced quad: anchor,
-  size and sheet rectangle per instance; fit, fade, pinning and the
-  occlusion twin in the vertex shader.
+- **`crates/pxl-core/src/world/billboard.rs` and `render/gpu/badges.ts`** —
+  every badge as one instanced quad: anchor, size and sheet rectangle per
+  instance; fit, fade and the occlusion twin in the vertex shader
+  (`render/shader/badge.wgsl`).
 - **`poi_theme.ts`** — category → icon/colour. `OVERTURE_CATEGORY_MAP`
   (server side, below) translates Overture's `categories.primary` into
   this vocabulary.

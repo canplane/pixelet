@@ -6,8 +6,8 @@
  * get_theme_key() in theme.ts is a pure function of the wall clock — calling
  * it directly inside a component only re-evaluates on that component's next
  * unrelated re-render, not when the clock actually crosses an hour boundary.
- * Four different components (environment.tsx, scene.tsx, location_puck.tsx,
- * html_portal.tsx) each called it independently, so the theme could go stale
+ * Four different components (environment.tsx, map_view.tsx, location_puck.tsx,
+ * the toasts) each called it independently, so the theme could go stale
  * for hours during idle viewing, and different components could show
  * different themes simultaneously if their last re-render happened to land
  * on opposite sides of an hour boundary.

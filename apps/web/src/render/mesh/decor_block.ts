@@ -10,8 +10,8 @@
  * entry is named by its band and packed position in the store's own lanes,
  * two u32s, and the string id is rebuilt from those only when a hit needs
  * it (object/store.ts's entry_id_of). `hidden` is a flag lane rather than
- * a separate list: decor/field.ts still routes hidden instances to a
- * never-rendered mesh so hit testing keeps seeing them.
+ * a separate list: the vertex shader sends a hidden instance outside the
+ * clip volume (decor.wgsl) while the hit test keeps seeing it.
  *
  * The module builds a chunk's decor at one tier as one block of the mesh
  * section (crates/pxl-core/src/world/decor.rs): every group's lanes — a group per

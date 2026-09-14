@@ -31,7 +31,7 @@ import { get_local_world_origin } from "./frame/coord.ts";
 
 import { LocationPuck } from "./marker/location_puck.tsx";
 import { HoverCursor } from "./marker/hover_cursor.tsx";
-import { DebugLayer } from "./marker/debug_layer.tsx";
+import { DebugGizmos } from "./marker/debug_gizmos.tsx";
 import { PoiLayer } from "./poi/poi_layer.tsx";
 
 import { ChunkMounts, CoreTick } from "./core_tick.tsx";
@@ -68,9 +68,9 @@ export function World() {
   // be conditionally mounted here either.
   if (map_center === null) return null;
 
-  // Same computation DebugLayer's own raw_v uses — map_center's position in
+  // Same computation DebugGizmos's raw_v uses — map_center's position in
   // the local floating-origin frame. Companion needs this (not the fixed
-  // L4-tile-center point DebugLayer's anchor_center marker uses) so it sits
+  // L4-tile-center point DebugGizmos's anchor_center marker uses) so it sits
   // wherever the camera actually is, not up to 2048u/~4.9km away.
   const local_map_center: V3 = projection.unproject(fill3(0), L1_IDX_IN_L4(map_center.i), map_center.f);
 
@@ -94,7 +94,7 @@ export function World() {
         />
       </Suspense>
 
-      {__IS_DEV__ && show_debug_objects && <DebugLayer map_center={map_center} map_origin={map_origin} />}
+      {__IS_DEV__ && show_debug_objects && <DebugGizmos map_center={map_center} map_origin={map_origin} />}
     </>
   );
 }

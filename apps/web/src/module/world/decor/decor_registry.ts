@@ -1,12 +1,12 @@
 // @pxl/web/module/world/decor/decor_registry.ts
 
 /**
- * Every decor kind's own bundle, in one place. world.tsx's own mount list
- * (ChunkStage's decor_bundles prop) and marker/hover_cursor.tsx's own
- * ghost-shape resolution (which bundle does a given decor_id's silhouette
- * come from) both need this same lookup — one shared registry instead of
- * two call sites independently assembling "every decor kind" and risking
- * drifting out of sync with each other.
+ * Every decor kind's own bundle, in one place. What the module is taught
+ * (decor_kinds.ts's teach_decor_kinds, from asset_store.ts) and
+ * marker/hover_cursor.tsx's ghost-shape resolution (which bundle does a
+ * given decor_id's silhouette come from) both need this same lookup — one
+ * shared registry instead of two call sites independently assembling
+ * "every decor kind" and risking drifting out of sync with each other.
  */
 
 import type { DecorId } from "@pxl/shared/spec/cell/mod.ts";

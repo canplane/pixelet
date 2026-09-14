@@ -182,7 +182,7 @@ let pump_scheduled = false;
  * Coalesces every pump request in the current tick into one.
  *
  * Measured motivation: with a synchronous pump, whichever subsystem called
- * sync() first won outright — MapScene calls useTileFetcher() before
+ * sync() first won outright — MapView calls useTileFetcher() before
  * usePoiFetcher(), so terrain's nine demands filled all MAX_INFLIGHT slots
  * before POI had submitted anything, and a POI page at priority 1 sat 358ms
  * behind terrain pages at priority 2. Priority can only order the queue; it

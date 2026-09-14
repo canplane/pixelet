@@ -102,8 +102,8 @@ export function HoverCursor() {
   // clear-then-reset the hide and force a needless chunk rebuild.
   //
   // This ghost's own appearance/disappearance is instant, and the real
-  // object's isn't (its own hide has to propagate through a few React
-  // commits via chunk_stage.tsx's Chunk) — accepted as-is, a deliberate
+  // object's isn't (its own hide lands on the module's next build of the
+  // chunk, a tick or more later) — accepted as-is, a deliberate
   // choice, not an oversight: see set_virtual_hide's own doc comment for
   // the fade/multi-slot system that was built to mask the resulting few
   // milliseconds of overlap, then reverted for being real added complexity

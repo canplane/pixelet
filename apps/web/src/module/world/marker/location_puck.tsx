@@ -75,7 +75,7 @@ export function LocationPuck(props: LocationPuckProps) {
 
   // Holds the last known device position across a transient GPS dropout (device_coord
   // going null). Without this, the caller previously remounted this component on every
-  // such blip, tearing down and rebuilding the zone's InstancedMesh — that remount, not
+  // such blip, tearing down and rebuilding the zone — that remount, not
   // the position math, was the source of a "stacked/cube" rendering glitch after tab-away-and-back.
   const last_known_device_coord = useRef<PVF3 | null>(null);
   if (device_coord !== null) last_known_device_coord.current = device_coord;

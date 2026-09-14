@@ -1,4 +1,4 @@
-// @pxl/web/module/world/marker/debug_layer.tsx
+// @pxl/web/module/world/marker/debug_gizmos.tsx
 
 /**
  * The dev gizmos (the `show_debug_objects` setting): the cell the map
@@ -97,7 +97,7 @@ class Sketch {
   }
 
   /**
-   * frame_gizmo.tsx's GyroRing: a horizontal ring and a vertical one
+   * A gyro ring: a horizontal ring and a vertical one
    * through `vertex`, the vertex marked, and the radius drawn when asked,
    * all in the frame `to_local` maps into the root frame.
    */
@@ -173,12 +173,12 @@ function sketch_map(map_center: PVF3, map_origin: IVec): Sketch {
   return s;
 }
 
-type DebugLayerProps = {
+type DebugGizmosProps = {
   map_center: PVF3;
   map_origin: IVec;
 };
 
-export function DebugLayer(props: DebugLayerProps) {
+export function DebugGizmos(props: DebugGizmosProps) {
   const { map_center, map_origin } = props;
   const [tiles, set_tiles] = useState(0);
   useEffect(() => register_tile_interest(() => true, () => set_tiles((t) => t + 1)), []);

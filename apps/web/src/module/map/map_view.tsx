@@ -1,4 +1,10 @@
-// @pxl/web/module/map/scene.tsx
+// @pxl/web/module/map/map_view.tsx
+
+/**
+ * The map as the page shows it: the tick driver over the WebGPU canvas, the
+ * camera and its input, the world, the fetchers that follow the view, and
+ * the overlays on top.
+ */
 
 import { useState } from "react";
 
@@ -15,7 +21,6 @@ import { useTileFetcher } from "@/module/world/terrain/use_tile_fetcher.ts";
 import { usePoiFetcher } from "@/module/world/poi/use_poi_fetcher.ts";
 import { useGroundSnapSync } from "@/module/world/terrain/use_ground_snap_sync.ts";
 import { Overlays } from "./ui/overlay/overlays.tsx";
-import { MapHTMLPortal } from "./portal/html_portal.tsx";
 
 import { GpuCanvas } from "@/render/gpu/stage.tsx";
 import { ToastController } from "./ui/toast/toast_controller.tsx";
@@ -26,7 +31,7 @@ function CameraRig({ element }: { element: HTMLCanvasElement | null }) {
   return <CameraInput element={element} />;
 }
 
-export function MapScene() {
+export function MapView() {
   useMapBootstrap();
   useTileFetcher();
   usePoiFetcher();
@@ -68,7 +73,6 @@ export function MapScene() {
       </div>
 
       {/* HTML overlay portal */}
-      <MapHTMLPortal />
 
       {/* Absolute-position UI layer */}
       <Overlays />

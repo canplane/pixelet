@@ -97,7 +97,7 @@ export function useCamera() {
     // itself. polar is already damped alongside dist just above, and running
     // the absolute angle through a second lag gave tilt an inertia rotation
     // does not have — rotation gets one lag, at the same rate, in
-    // use_frame_rotation.ts. Outside climb mode the offset is zero and the
+    // use_view_frame.ts. Outside climb mode the offset is zero and the
     // drawn pitch is exactly the damped control.
     const want_climb: f64 = useSettingsStore.getState().camera_terrain === "climb" ? climb_polar(dist.current, polar.current, view_state.azimuth) - polar.current : 0;
     const climb_k = want_climb < shown_climb.current ? CLIMB_RISE_DAMP : CLIMB_RELAX_DAMP;

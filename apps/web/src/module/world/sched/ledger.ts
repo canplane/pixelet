@@ -75,15 +75,14 @@ export type FrameSample = {
   /** sched_ms broken down by phase, in the tick's own order. */
   phases: Record<string, number>;
   /** core_tick's recheck and commit passes, inside the visible phase. The
-   * render is not here: the post-processing composer (always on — color
-   * grade is fused into it) renders past any gl.render wrapper, so a render
-   * timer read 0. `task_ms` below is what covers it. */
+   * renderer's own submit is inside `task_ms` below; what the GPU then
+   * takes is `gpu_ms`, from its timestamps. */
   cpu: { recheck_ms: number; commit_ms: number };
   /**
    * The whole rAF task: from the scheduler pass starting to the JS stack
-   * emptying, so it covers every other useFrame subscriber *and* the render
-   * the composer performs. Measured with a microtask because the composer
-   * bypasses the gl.render wrapper.
+   * emptying, so it covers every phase of the tick *and* the renderer's
+   * encode and submit. Measured with a microtask, the one vantage point
+   * that sees everything the frame ran.
    *
    * `dt_ms - task_ms` is then everything outside the main thread's own task —
    * vsync wait, compositor, GPU, GC between frames. That split is the whole

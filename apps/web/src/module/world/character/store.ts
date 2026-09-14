@@ -4,10 +4,10 @@ import { create } from "zustand";
 
 /**
  * Whether the in-world companion's person/pet glTF models have finished
- * loading (companion.tsx's Walker, via use_character_model.ts's root: null
- * until ready) — not persisted, purely a live signal so something outside
- * companion.tsx's own tree (the map toast controller) can tell "is the
- * companion still loading" without reaching into Walker's local state.
+ * loading (companion.tsx registers them with the module once parsed) — not
+ * persisted, purely a live signal so something outside companion.tsx's own
+ * tree (the map toast controller) can tell "is the companion still
+ * loading" without reaching into its local state.
  * Starts false on every mount, which is correct: a fresh Walker instance
  * (variant switch remounts it, key={variant.key}) always starts unloaded.
  *

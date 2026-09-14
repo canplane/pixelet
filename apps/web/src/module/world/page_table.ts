@@ -9,7 +9,7 @@
  * positions, an open-addressing table over packed page keys — and what a
  * page holds sits at its position in a handle array: for terrain the typed
  * views over the page's pool blocks, for POI the page's records. The
- * handles are the glue three.js and the mesher read through; the keys, the
+ * handles are what the glue and the module read a page through; the keys, the
  * positions and the walk are linear.
  *
  * A table given a world topic writes every set and clear to the world

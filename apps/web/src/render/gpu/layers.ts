@@ -4,9 +4,8 @@
  * The texture pack as two 2D array textures on the device — a top and a
  * side face per layer, one layer per ground type and cube colour, indexed
  * by the layer indices the mesher bakes into a vertex's taps
- * (render/gpu/layer_table.ts). render/tex_array.ts's arrays for
- * three, made for WebGPU: every layer starts as its flat colour, and the
- * pack's sheet replaces them tile by tile once it arrives.
+ * (render/gpu/layer_table.ts). Every layer starts as its flat colour, and
+ * the pack's sheet replaces them tile by tile once it arrives.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";

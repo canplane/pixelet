@@ -4,9 +4,9 @@
  * Pure canvas-text helpers shared by every world-anchored billboard (tier 3
  * of issue/20260907-world-rendering-tiers.md) that draws its own
  * content onto a 2D canvas rather than sourcing an image asset — chat_bubble.tsx
- * today, a future POI label tomorrow. No `three` import: this file only ever
- * touches CanvasRenderingContext2D, so it stays usable from anything that
- * needs wrapped text on a canvas, not just a THREE.Sprite consumer.
+ * today, a future POI label tomorrow. This file only ever touches
+ * CanvasRenderingContext2D, so it stays usable from anything that needs
+ * wrapped text on a canvas.
  */
 
 /** Greedy word wrap against ctx's currently-set font, then a per-character

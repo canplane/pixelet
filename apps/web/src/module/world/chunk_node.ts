@@ -1,7 +1,7 @@
 // @pxl/web/module/world/chunk_node.ts
 
 /**
- * One chunk's scene half.
+ * One chunk's glue half.
  *
  * Every decision about a chunk is the module's (crates/pxl-core/src/world/sched.rs):
  * whether it is on screen, which tiers it shows and how a blend weighs them,
@@ -14,7 +14,8 @@
  * both through a count — and a layout takes its hold in the call that
  * applies it, so a layout never names a mesh nothing owns. That rule came
  * out of three reference-counting bugs under React's deferred mounts (the
- * git history around chunk_stage.tsx), and is why this is a plain object.
+ * git history around the retired chunk_stage.tsx), and is why this is a
+ * plain object.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";

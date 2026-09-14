@@ -3,7 +3,7 @@
 /**
  * The frame, as one tick.
  *
- * What this replaces was ten `useFrame` subscribers, each running in the
+ * What this replaces was ten per-frame subscribers of three's loop, each running in the
  * order React happened to mount them, each doing its own work with no idea
  * how much the others had already spent. Two of them carried a budget —
  * the chunk stage's recheck and commit passes — and those two budgets were
@@ -232,7 +232,7 @@ export function on_tick(phase: Phase, step: TickStep, name = "step"): () => void
 /**
  * The React face of `on_tick`: the step always sees the latest closure, and
  * registration happens in a layout effect so it lands in mount order — the
- * same order `useFrame` used to subscribe in.
+ * same order three's loop used to subscribe in.
  */
 export function useTick(phase: Phase, step: TickStep, name = "step"): void {
   const latest = useRef(step);

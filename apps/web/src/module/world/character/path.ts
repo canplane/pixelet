@@ -1,14 +1,10 @@
 // @pxl/web/module/world/character/path.ts
 
 /**
- * Pure companion-movement math for the character pipeline prototype — no
- * renderer import of any kind (no `three`, no React). Positioning/timing
- * logic is kept independent of the current Three.js + R3F renderer on
- * purpose: it is an MVP-stage choice that a future WebGPU + Rust
- * direct-render pipeline could replace, and this module should not need to
- * change if that happens. The Three.js-specific glue (GLTF loading,
- * skinning, animation mixer, writing the result into an Object3D transform)
- * lives in test_walker.tsx.
+ * Pure companion-movement math — no renderer import of any kind, no React.
+ * Positioning/timing logic is kept independent of the renderer on purpose,
+ * which is how it survived the move from three to the module's actors
+ * (crates/pxl-core/src/world/model.rs, placed by companion.tsx) unchanged.
  */
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -46,7 +42,7 @@ export type WalkSample = {
  * on roughly the same beat whether you panned 1 unit or 1000; a fixed real
  * -world walking *speed* would instead make a big pan take proportionally,
  * sometimes absurdly, longer (this is the same failure mode a fixed speed
- * hit on first spawn — see test_walker.tsx's initial-placement comment —
+ * hit on first spawn — see companion.tsx's initial-placement comment —
  * generalized to every subsequent move too).
  */
 export function sample_walk_plan(plan: WalkPlan, now: f64): WalkSample {

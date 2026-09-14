@@ -243,13 +243,12 @@ export function world_struck_corner(hit: WorldHit, size: f64, map_origin: IVec):
  * (the mesher never needs it, only color/material), so this is a small
  * secondary lookup, not the raycast itself. Decor is never resolved here —
  * it never paints a voxel of its own (reference/object_layer.ts's
- * paint() skips "decor" entries) and has its own real-mesh hit-test now
- * that it bakes into a real THREE.Mesh instead (decor_hit.ts's
- * raycast_decor, called directly from camera/input.tsx alongside this
- * function, since it needs the live THREE.Raycaster this module never
- * touches). Linear scan over the same small objects list every other
- * object operation already walks (see object/adapter.ts's own "fine at
- * current placement counts" doc comment) — not the raycast itself, just
+ * paint() skips "decor" entries) and has its own hit test over the
+ * module's blocks and triangles (decor_hit.ts's raycast_decor, over
+ * crates/pxl-core/src/world/raycast.rs's hit_decor, called from
+ * camera/input.tsx alongside this function). Linear scan over the same
+ * small objects list every other object operation already walks — not the
+ * raycast itself, just
  * resolving an already-found hit back to its source. */
 export function resolve_hit_object(hit: WorldHit, map_origin: IVec): OccupiedEntry | null {
   if (hit.material_class !== MaterialClass.OBJECT) return null;

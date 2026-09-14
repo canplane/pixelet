@@ -9,7 +9,7 @@
  * access, and the "is a user object already standing here" check are all
  * decor_kinds.ts's concern instead — this file only ever sees plain
  * ground-channel arrays and a seed, so it can be tested head-on with
- * synthetic ground data, no tile store or Three.js involved.
+ * synthetic ground data, no tile store involved.
  */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
