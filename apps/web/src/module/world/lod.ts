@@ -161,10 +161,6 @@ const BLEND_BAND_FRACTION: f64 = 0.05;
  */
 const BLEND_ELIGIBLE_THRESHOLDS: u32 = 3;
 
-function clamp01(x: f64): f64 {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-
 // Internal sampling uses 1/2/4/8/16/32/64 L1 blocks inside one chunk.
 //
 // Per-threshold hysteresis margin, not one flat factor for every threshold

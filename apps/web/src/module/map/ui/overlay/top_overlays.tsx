@@ -84,17 +84,6 @@ export function TopOverlays() {
             <MapCompass />
           </div>
         </div>
-
-        {
-          /* <div className="w-64 pointer-events-auto">
-          <WorldInspector />
-        </div> */
-        }
-        {
-          /* <div className="w-64 pointer-events-auto">
-          <PoiDetailPanel />
-        </div> */
-        }
       </div>
     </>
   );

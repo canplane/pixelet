@@ -20,7 +20,7 @@ import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useMapStore } from "@/module/map/store.ts";
 
-import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
+import { chunk_nodes, ChunkNode, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
 import { CORE_BUILD, FRAME } from "@/wasm/core_build.ts";
 import { world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { tile_pages } from "@/module/world/terrain/store.ts";
@@ -57,17 +57,16 @@ let last_task_ms = 0;
 
 const MB = 1_048_576;
 
-const last_work = { scans: 0, bakes: 0, runs: 0 };
+const last_work = { scans: 0, bakes: 0 };
 
-function work_sample(): { scans: number; bakes: number; runs: number } {
-  const sample = {
-    scans: lod_build_stats.scan_count - last_work.scans,
-    bakes: lod_build_stats.build_count - last_work.bakes,
-    runs: lod_build_stats.build_runs - last_work.runs,
-  };
-  last_work.scans = lod_build_stats.scan_count;
-  last_work.bakes = lod_build_stats.build_count;
-  last_work.runs = lod_build_stats.build_runs;
+/** The module's builds since the last sample: scans (the direct path
+ * counted with them) and bakes. */
+function work_sample(): { scans: number; bakes: number } {
+  const built = CORE_BUILD.stat();
+  const scans = built.scans + built.direct;
+  const sample = { scans: scans - last_work.scans, bakes: built.bakes - last_work.bakes };
+  last_work.scans = scans;
+  last_work.bakes = built.bakes;
   return sample;
 }
 
@@ -97,7 +96,7 @@ function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offs
 
 /** The module's mounts: a node for each chunk it mounts, gone with it. */
 function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
-  new ChunkNode({ page_idx, offset: { key: `${base_x},${base_y}`, base_x, base_y }, id });
+  new ChunkNode({ page_idx, base_x, base_y, id });
 }
 
 /**
@@ -115,8 +114,7 @@ export function CoreTick({ children }: { children: ReactNode }) {
     {
       pending_total: u32;
       committed: u32;
-      recheck_ms: number;
-      commit_ms: number;
+      tick_ms: number;
     } | null
   >(null);
 
@@ -186,15 +184,11 @@ export function CoreTick({ children }: { children: ReactNode }) {
 
     const t0 = import.meta.env.DEV ? performance.now() : 0;
     const draw = CORE_BUILD.tick();
-    const built = CORE_BUILD.stat();
-    lod_build_stats.scan_count = built.scans + built.direct;
-    lod_build_stats.direct_count = built.direct;
-    lod_build_stats.build_count = built.bakes;
     gpu_frame(state.viewport.dpr);
     if (draw) state.invalidate();
     if (import.meta.env.DEV) {
       const c = CORE_BUILD.census();
-      visible_pass.current = { pending_total: c.pending, committed: c.committed, recheck_ms: 0, commit_ms: performance.now() - t0 };
+      visible_pass.current = { pending_total: c.pending, committed: c.committed, tick_ms: performance.now() - t0 };
     }
   }, "chunks");
 
@@ -207,7 +201,7 @@ export function CoreTick({ children }: { children: ReactNode }) {
       // No chunks this frame — a search jump empties the stage for a moment.
       return;
     }
-    const { pending_total, committed, recheck_ms, commit_ms } = pass;
+    const { pending_total, committed, tick_ms } = pass;
     {
       const pending_lod_total_cnt = pending_total - committed;
       const frame_t0 = budget.t0;
@@ -231,7 +225,7 @@ export function CoreTick({ children }: { children: ReactNode }) {
         sched_ms: frame_ms,
         budget_ms: budget.total_ms,
         phases: { ...phase_ms },
-        cpu: { recheck_ms, commit_ms },
+        cpu: { tick_ms },
         // Filled by the microtask below, which runs once the rAF task's JS
         // stack empties — i.e. after every other step and the render.
         // Carries the previous frame's value here and
@@ -250,7 +244,7 @@ export function CoreTick({ children }: { children: ReactNode }) {
         },
         census: gpu?.census ?? {},
         px: gpu ? gpu.canvas.width * gpu.canvas.height : 0,
-        mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
+        mounts: { added: node_work.added, removed: node_work.removed, layouts: node_work.layouts },
         lod: {
           chunks: chunk_nodes.size,
           pending: pending_lod_total_cnt,

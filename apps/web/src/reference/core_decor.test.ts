@@ -27,8 +27,8 @@ import { into_core } from "@/module/world/terrain/resident.ts";
 import { page } from "@/reference/page_fixture.ts";
 import "@/reference/terrain_layer.ts";
 import "@/reference/object_layer.ts";
-import type { BakedChunkMesh } from "@/reference/chunk_mesher.ts";
 import { CORE_BUILD, FRAME, release_chunk_mesh } from "@/wasm/core_build.ts";
+import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_release, type DecorBlock, type DecorInstances, NO_ENTRY } from "@/render/mesh/decor_block.ts";
 
 const PAGE_IDX = ivec.gather(0n, 0n, 0n);
@@ -65,7 +65,7 @@ type Heard = { decor: Map<LodStep, DecorBlock>; layouts: { primary: LodStep; rea
 function chunk(terrain: Terrain, base_x: number = BASE_X, base_y: number = BASE_Y): { id: u32; heard: Heard } {
   const heard: Heard = { decor: new Map(), layouts: [] };
   const sink = {
-    on_tier: (_g: u32, _s: LodStep, mesh: BakedChunkMesh) => release_chunk_mesh(mesh),
+    on_tier: (_g: u32, _s: LodStep, mesh: MeshBlock) => release_chunk_mesh(mesh),
     on_runs: () => {},
     on_visible: () => {},
     on_layout: (primary: LodStep, _s: LodStep | null, ready: boolean) => {

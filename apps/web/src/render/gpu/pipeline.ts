@@ -52,8 +52,6 @@ const ALPHA_BLEND: GPUBlendState = {
   alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
 };
 
-export type VertexLane = { stride: u32; step: u32 };
-
 /** A pipeline record read into its parts. */
 export type PipelineRecord = {
   shader: u32;

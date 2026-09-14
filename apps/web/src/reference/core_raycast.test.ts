@@ -23,12 +23,12 @@ import { TerrainWorldLayer } from "@/reference/terrain_layer.ts";
 import { ObjectWorldLayer } from "@/reference/object_layer.ts";
 import { page } from "@/reference/page_fixture.ts";
 import { chunk_origin_of } from "@/reference/object_layer.ts";
-import type { BakedChunkMesh } from "@/reference/chunk_mesher.ts";
 import { ray_hit_chunk } from "@/reference/chunk_raycast.ts";
 import { ray_hit_world, type RayLike, type WorldHit } from "@/module/world/raycast.ts";
 import { composite_chunk_layers } from "@/reference/compositor.ts";
 import type { ChunkKey } from "@/reference/contract.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/wasm/core_build.ts";
+import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
 import { MaterialClass } from "@/render/mesh/voxel.ts";
 import { release_chunk_volume } from "@/reference/volume.ts";
@@ -48,7 +48,7 @@ const BASES: [number, number][] = [[320, 448], [384, 448], [320, 512], [384, 512
 const ids: u32[] = [];
 for (const [bx, by] of BASES) {
   const sink = {
-    on_tier: (_g: u32, _s: number, m: BakedChunkMesh) => release_chunk_mesh(m),
+    on_tier: (_g: u32, _s: number, m: MeshBlock) => release_chunk_mesh(m),
     on_runs: () => {},
     on_visible: () => {},
     on_layout: () => {},

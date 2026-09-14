@@ -82,11 +82,12 @@ mapping (the composer never tone-mapped), reversed-Z.
 - ~~**B7**~~ The env, the draw row, the census and the build stat are one
   view each, and `census()`/`stat()` fill one object each. `take_census`
   keeps a fresh object a frame on purpose: the ledger's ring holds it.
-- **B8** Every tier event carves nine mesh lanes and fills the visibility
-  lane; the renderer uploads the block by address and reads no lane. The
-  node's cache becomes `{block, counts, rc}`; `visibility`, `role`,
-  `carve_visibility`, `mesh_bounds` go; the 4 B/vertex visibility lane in
-  the block goes the next time the mesher's layout is touched. **Do.**
+- ~~**B8**~~ A tier arrives as `MeshBlock {block, counts}` and the node
+  holds it until the module evicts the step — no lanes carved, no
+  visibility fill, no count between a cache and a layout the node no
+  longer keeps (the module draws from its own lists). `chunk_bucket.ts`
+  is gone; `carve_baked_mesh`/`carve_visibility` serve the reference tests
+  only. The visibility lane in the block goes with the mesher's layout.
 - ~~**B9**~~ The POI index's `page_idx` / `abs_i` / `abs_f` lanes are gone.
 - **B10** Decor's build does a `store.cell()` lookup for each of 4096 cells
   per kind; `object.rs` inserts then gets; `build.rs`'s `advance` looks a
@@ -125,22 +126,22 @@ mapping (the composer never tone-mapped), reversed-Z.
 
 ## D. Dead code
 
-- **D1** `lod_build_stat.ts` whole; the ledger's `recheck_ms` (always 0)
-  and `work.runs` (always 0) printed in four places; `landing_log`;
-  `chunk_node`'s `shown` / `blend` / `layout.primary`; the node's own
-  `CORE_BUILD.add` / `want` / `build_tick` path (tests only);
-  `column_has_entries`; `_sample_ele_bilinear`; `clamp01`;
-  `select_visible_billboards`; `stable_hash`; `in_range_chunks` and
-  `scatter_decor_candidates` with the eligibility predicates (references
-  only → `reference/`). **Do.**
-- **D2** Store slots nothing reads: `selected_poi`, `reset_view`, the
-  theme's `background` / `grid`, the pose store's `course` / `beta` /
-  `gamma` / timestamps, `use_reverse_geocode`'s `loading`,
-  `PoiPick.key` / `anchor_*` (a BigInt string per drawn badge),
-  `cell_node.stats()`; `MountListener.on_unmount`, `VertexLane`,
-  `CORE_MEMORY_BYTES`, an empty positioned div, commented-out JSX. **Do.**
-- **D3** `enableMapSet()` from immer in main.tsx — nothing uses immer and
-  it is not in the import map. **Do.**
+- ~~**D1**~~ Gone: `lod_build_stat.ts`, `recheck_ms` and `work.runs`
+  (the ledger's `cpu` is `tick_ms`, the module's tick; `mounts.rendered`
+  is `layouts`), `landing_log`, the node's `shown` / `blend` / layout and
+  its own-add path (a node takes the module's id), `clamp01`;
+  `in_range_chunks` is `reference/chunk_range.ts`. Still to move:
+  `column_has_entries`, `_sample_ele_bilinear`, `select_visible_billboards`,
+  `stable_hash`, the scatter with its predicates — with step 5's
+  duplication pass, which touches the same files. `CoreBuild.add` /
+  `want` / `build_tick` stay as the reference tests' door.
+- ~~**D2**~~ Gone: `selected_poi`, `reset_view`, the theme's `background`
+  / `grid`, `PoiPick.key` / `anchor_*`, `VertexLane`, `CORE_MEMORY_BYTES`,
+  the empty div and the commented-out JSX. Kept: the pose store's
+  `beta` / `gamma` (they gate a store write), `MountListener.on_unmount`
+  (the reference tests observe it), `use_reverse_geocode`'s `loading` and
+  `cell_node.stats()` (small, left for the POI move).
+- ~~**D3**~~ immer's `enableMapSet()` is out of main.tsx.
 - **D4** Dead `pub` in the crates (`ring::ARG_WORDS` / `at`,
   `buddy::region_bytes`, `sparse_tree::dep`, `object::BAND_STEPS`,
   `shader::Record` outside tests), six `too_many_arguments` allows on

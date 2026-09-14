@@ -14,18 +14,18 @@ import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-import { in_range_chunks } from "@/module/world/frame/range.ts";
+import { in_range_chunks } from "@/reference/chunk_range.ts";
 import { page } from "@/reference/page_fixture.ts";
 import "@/reference/terrain_layer.ts";
 import "@/reference/object_layer.ts";
-import type { BakedChunkMesh } from "@/reference/chunk_mesher.ts";
+import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { CORE_BUILD, FRAME, release_chunk_mesh } from "@/wasm/core_build.ts";
 import { decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
 
 const terrain = page(33);
 
 type Heard = {
-  tiers: Map<LodStep, BakedChunkMesh>;
+  tiers: Map<LodStep, MeshBlock>;
   layouts: { primary: LodStep; secondary: LodStep | null; ready: boolean }[];
   visible: boolean[];
   evicted: LodStep[];
@@ -34,7 +34,7 @@ type Heard = {
 function chunk(x: u32, y: u32): { id: u32; heard: Heard } {
   const heard: Heard = { tiers: new Map(), layouts: [], visible: [], evicted: [] };
   const sink = {
-    on_tier: (_g: u32, step: LodStep, mesh: BakedChunkMesh) => heard.tiers.set(step, mesh),
+    on_tier: (_g: u32, step: LodStep, mesh: MeshBlock) => heard.tiers.set(step, mesh),
     on_runs: () => {},
     on_visible: (on: boolean) => heard.visible.push(on),
     on_layout: (primary: LodStep, secondary: LodStep | null, ready: boolean) => {

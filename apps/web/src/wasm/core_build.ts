@@ -26,13 +26,13 @@ import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
-import { type BakedChunkMesh, carve_baked_mesh } from "@/render/mesh/mesh_block.ts";
+import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_carve, decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
 import { CORE_POOL, CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 /** Hands one baked mesh's block back to the core pool. Every view into it is
  * dead afterwards. */
-export function release_chunk_mesh(mesh: BakedChunkMesh): void {
+export function release_chunk_mesh(mesh: { block: MeshBlock["block"] }): void {
   CORE_POOL.release(mesh.block);
 }
 
@@ -85,21 +85,25 @@ export type MountListener = {
   on_unmount(id: u32): void;
 };
 
-/** What a chunk is told. */
+/** What a chunk is told. The module draws from its own lists; what the
+ * sink holds is the blocks, for as long as the module names them. */
 export type ChunkBuildSink = {
-  /** Tier `step`, built from the sources of `generation`; the mesh is the
-   * sink's to keep or release. */
-  on_tier(generation: u32, step: LodStep, mesh: BakedChunkMesh): void;
+  /** Tier `step`, built from the sources of `generation`; the block is the
+   * sink's to keep until the module evicts the step, or to release at once
+   * when it is stale. */
+  on_tier(generation: u32, step: LodStep, mesh: MeshBlock): void;
   /** The bytes the chunk's runs hold now. */
   on_runs(bytes: u32): void;
-  /** Show the chunk's group, or hide it. */
-  on_visible(on: boolean): void;
-  /** Show this layout, whose tiers the sink holds; not ready is nothing. */
+  /** Whether the chunk is on screen: what the module decided, told for a
+   * reader that wants it (the reference tests); the draws follow it. */
+  on_visible?(on: boolean): void;
+  /** The layout the module shows, whose tiers the sink holds; not ready is
+   * nothing. */
   on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void;
-  /** Weigh the layout's two tiers so, and give decor the secondary's. */
-  on_blend(primary: number, secondary: number, decor_secondary: boolean): void;
-  /** Let go of a tier and the decor at its step; a layout showing them
-   * keeps its own hold. */
+  /** The layout's blend, as `on_visible`: the draws carry it. */
+  on_blend?(primary: number, secondary: number, decor_secondary: boolean): void;
+  /** Let go of a tier and the decor at its step: the module no longer
+   * names them. */
   on_evict(step: LodStep): void;
   /** The chunk's decor at `step`, the sink's to keep or release; a layout
    * comes after the decor of every tier in it. */
@@ -207,7 +211,7 @@ export class CoreBuild {
       }
       const sink = this.sinks.get(id);
       if (op === OP_TIER) {
-        const mesh = carve_baked_mesh(CORE_POOL.adopt(w[a + 2], w[a + 3]), w[a + 4], w[a + 5]);
+        const mesh: MeshBlock = { block: CORE_POOL.adopt(w[a + 2], w[a + 3]), vertex_cnt: w[a + 4], index_cnt: w[a + 5] };
         if (sink) sink.on_tier(w[a], w[a + 1] as LodStep, mesh);
         else release_chunk_mesh(mesh);
       } else if (op === OP_DECOR) {
@@ -216,9 +220,9 @@ export class CoreBuild {
         else decor_block_release(decor);
       } else if (sink) {
         if (op === OP_RUNS) sink.on_runs(w[a]);
-        else if (op === OP_VISIBLE) sink.on_visible(w[a] !== 0);
+        else if (op === OP_VISIBLE) sink.on_visible?.(w[a] !== 0);
         else if (op === OP_LAYOUT) sink.on_layout(w[a] as LodStep, w[a + 1] === 0 ? null : w[a + 1] as LodStep, w[a + 2] !== 0);
-        else if (op === OP_BLEND) sink.on_blend(f32_of(w[a]), f32_of(w[a + 1]), w[a + 2] !== 0);
+        else if (op === OP_BLEND) sink.on_blend?.(f32_of(w[a]), f32_of(w[a + 1]), w[a + 2] !== 0);
         else if (op === OP_EVICT) sink.on_evict(w[a] as LodStep);
       }
       this.cq.advance();

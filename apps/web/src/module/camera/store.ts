@@ -56,7 +56,6 @@ export type CameraStore = {
   /** Reset signals for camera controllers. */
   reset_dist: () => void;
   reset_azimuth: () => void;
-  reset_view: () => void;
 
   // ---- Interaction ----
 
@@ -129,24 +128,6 @@ export const useCameraStore = create<CameraStore>((set) => ({
       const reached_azimuth = norm_azimuth(reached.azimuth);
       return from.azimuth === reached_azimuth ? state : { view_state: { ...from, azimuth: reached_azimuth } };
     }),
-  reset_view: () =>
-    set((state) => {
-      const next: ViewState = {
-        dist: norm_dist(DEFAULT_DIST),
-        azimuth: norm_azimuth(DEFAULT_AZIMUTH),
-        polar: norm_polar(DEFAULT_POLAR),
-      };
-      const from = state.view_state;
-      const reached = allowed_view(next, from);
-      return {
-        view_state: {
-          dist: norm_dist(reached.dist),
-          azimuth: norm_azimuth(reached.azimuth),
-          polar: norm_polar(reached.polar),
-        },
-      };
-    }),
-
   is_follow_mode: false,
   set_is_follow_mode: (is_follow_mode) => set((state) => state.is_follow_mode === is_follow_mode ? state : { is_follow_mode }),
 }));

@@ -251,7 +251,7 @@ export function LedgerOverlay() {
             k="budget/frame"
             v={`${r1(f.last.budget_ms)}/${r1(f.last.frame_ms)}ms${f.last.settled ? " still" : ""}`}
           />
-          <Row k="rck/cmt p95" v={`${r1(f.recheck.p95)}/${r1(f.commit.p95)}`} />
+          <Row k="tick p95" v={r1(f.tick.p95)} />
           <Row
             k="phase p95 i/v/c/s"
             v={`${r1(f.phases.interaction.p95)}/${r1(f.phases.visible.p95)}/${r1(f.phases.content.p95)}/${r1(f.phases.cosmetic.p95)}`}
