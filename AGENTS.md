@@ -43,7 +43,8 @@ follow that rather than improvising SQL against the raw tables.
 asset                   the shipped models and texture pack; data, not code — nothing imports it
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
-crates/xpute-core       the kit's Rust half — pools, the arena, the rings, the change log; no domain
+crates/xpute-core       @xpute/core's pair, file for file (script/pair.ts holds them together); no domain
+crates/pxl-shared       @pxl/shared's pair — PVF3, the indexer, the sparse tree, the adapters
 crates/pxl-core         the world in Rust — the bake, the scheduler, the objects, the draw list, the shaders
 crates/pxl-wasm         the one WebAssembly module: numeric exports over the two crates
 apps/api                Hono server + the Overture/DEM bake pipeline
@@ -56,9 +57,13 @@ Two boundaries matter, and both are easy to erode by accident:
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
   `@pxl/shared`. The same line runs through the Rust: `crates/xpute-core` is
-  `@xpute/core`'s counterpart, its tree mirrors `packages/xpute/core/src`
-  (`ds/`, `ipc/`, `kit/`), and `crates/pxl-core` is the only crate that knows
-  what a chunk is.
+  `@xpute/core`'s counterpart and `crates/pxl-shared` is `@pxl/shared`'s,
+  each the same tree file for file, export for export and test for test
+  (`deno task check:pair`; a difference the languages force is listed with
+  its reason in `script/pair.exempt.json`). The TypeScript side is the
+  source and is read-only in that relation: a Rust module that needs one
+  thing of a TypeScript file is that whole file, at that path. `crates/pxl-core`
+  is the only crate that knows what a chunk is.
 - **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between

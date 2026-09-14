@@ -16,10 +16,10 @@
 //! bake then waits at that step, as the TypeScript one does.
 
 use crate::bake::run_set::{OwnedRunSet, RunSet};
+use crate::bake::srgb::SRGB_TO_LINEAR;
 use crate::bake::voxel::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::{CHUNK_SPAN, U_PER_CELL};
 use xpute_core::kit::fdlibm;
-use xpute_core::kit::srgb::SRGB_TO_LINEAR;
 
 /// The widest span a bake is handed.
 const MAX_BAKE_SPAN: usize = CHUNK_SPAN as usize;

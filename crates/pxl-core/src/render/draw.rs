@@ -12,7 +12,7 @@
 //! cancels an upload not yet taken: the block is the glue's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
-use xpute_core::ds::buddy::Pool;
+use crate::world::pool::Pool;
 
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.

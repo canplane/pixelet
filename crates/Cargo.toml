@@ -4,7 +4,7 @@
 
 [workspace]
 resolver = "2"
-members = ["xpute-core", "pxl-core", "pxl-wasm"]
+members = ["xpute-core", "pxl-shared", "pxl-core", "pxl-wasm"]
 
 [workspace.package]
 edition = "2021"

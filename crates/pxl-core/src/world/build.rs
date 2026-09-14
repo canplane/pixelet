@@ -24,7 +24,7 @@ use crate::bake::terrain::{ChunkSample, Materials, PageView, CHANNELS, ELE_PADDE
 use crate::bake::volume::Volumes;
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use crate::world::object::{Carve, Painter, Store};
-use xpute_core::ds::buddy::Pool;
+use crate::world::pool::Pool;
 
 /// What the glue is told.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -294,7 +294,7 @@ impl Builder {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake(world);
         }
-        let releases = world.pools[world.volumes.mesh_pool()].stat.releases;
+        let releases = world.pools[world.volumes.mesh_pool()].releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
@@ -369,7 +369,7 @@ impl Builder {
         if c.wanted().next().is_none() {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].stat.releases) {
+        if c.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].releases) {
             return Progress::Blocked;
         }
         if c.runs.is_none() {

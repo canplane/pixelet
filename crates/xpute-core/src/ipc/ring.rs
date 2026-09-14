@@ -1,10 +1,11 @@
-//! A single-producer, single-consumer ring of fixed-size entries in linear
-//! memory: the submission and completion rings between the glue and the
-//! core (issue/20260913-boundaries-commands-and-what-comes-back-from-april.md,
-//! "Rings"), @xpute/core/ipc/ring.ts on the other side.
+// @xpute/core/ipc/ring.ts
+
+//! A single-producer, single-consumer ring of fixed-size entries in a buffer
+//! both sides can see — the submission and completion rings between a glue
+//! and its core, laid out once and shared by address.
 //!
 //! A ring is a header of four u32 words and then `capacity` entries of
-//! ENTRY_WORDS words:
+//! RING_ENTRY_WORDS words:
 //!
 //!   0  capacity   a power of two
 //!   1  head       position of the next entry to consume
@@ -12,178 +13,158 @@
 //!   3  reserved
 //!
 //! Positions only grow and are taken modulo the capacity when read, so
-//! `tail - head` is the number waiting and a full ring is one where that is
-//! the capacity. Each side writes only its own word: the producer the tail,
-//! the consumer the head — which is what lets the two share the ring without
-//! a lock. Both run on one thread today, taking turns at the doorbell; the
-//! discipline is what keeps that true when they do not.
+//! `tail - head` is what waits and a full ring is one where that is the
+//! capacity. Each side writes only its own word — the producer the tail, the
+//! consumer the head — so the two share the ring without a lock.
 //!
-//! An entry, both directions, mirrors the first words of a frame
-//! (@xpute/core/ipc/frame.ts):
+//! An entry mirrors the first words of a frame (frame.rs):
 //!
 //!   0  user       the submitter's, echoed back on the completion
 //!   1  op | flags op in the low 16 bits
-//!   2  result     on a completion: a value, or a negative errno
+//!   2  result     on a completion: a value, or a negative Errno
 //!   3  reserved
-//!   4… args       twelve words; anything larger is a block in the memory,
-//!                 named by its address
+//!   4… args       twelve words; anything larger is a block in the buffer,
+//!                 named by its offset
 //!
-//! A full submission ring refuses (EAGAIN) and the submitter waits; a full
-//! completion ring stops the consumer draining submissions, so nothing is
-//! ever dropped in either direction.
+//! A full ring refuses a push (EAGAIN): the producer waits, and nothing is
+//! dropped. The doorbell — how the consumer is told there is something to
+//! read — is not part of the ring; it is whatever call the two sides already
+//! take turns at.
 
-pub const HEADER_WORDS: usize = 4;
-pub const ENTRY_WORDS: usize = 16;
-pub const ARG_WORDS: usize = ENTRY_WORDS - 4;
+use crate::kit::array::{ArrayBuffer, TypedArray};
+use crate::sys::errno::Errno;
 
-pub type Entry = [u32; ENTRY_WORDS];
+pub const RING_HEADER_WORDS: u32 = 4;
+pub const RING_ENTRY_WORDS: u32 = 16;
+pub const RING_ARG_WORDS: u32 = RING_ENTRY_WORDS - 4;
 
-pub const USER: usize = 0;
-pub const OP: usize = 1;
-pub const RESULT: usize = 2;
-pub const ARGS: usize = 4;
+pub const RING_USER: u32 = 0;
+pub const RING_OP: u32 = 1;
+pub const RING_RESULT: u32 = 2;
+pub const RING_ARGS: u32 = 4;
+
+/// One entry's words, as the core's side writes a completion whole.
+pub type Entry = [u32; RING_ENTRY_WORDS as usize];
 
 /// Words a ring of `capacity` entries takes.
-pub const fn ring_words(capacity: usize) -> usize {
-    HEADER_WORDS + capacity * ENTRY_WORDS
+pub fn ring_words(capacity: u32) -> u32 {
+    RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS
 }
 
-/// A ring laid out at an address. Holds nothing of its own: every read and
-/// write goes to the memory, where the other side sees it.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Ring {
-    at: *mut u32,
+    /// The whole ring's words; entry `slot` starts at `entry_at(slot)`.
+    pub words: TypedArray<u32>,
+    pub capacity: u32,
+    mask: u32,
 }
 
 impl Ring {
-    /// Lays out an empty ring of `capacity` entries at `at`.
-    ///
-    /// # Safety
-    /// `at` must address `ring_words(capacity)` words, 4-aligned, that
-    /// nothing else writes but the ring's two sides.
-    pub unsafe fn init(at: *mut u32, capacity: u32) -> Ring {
-        assert!(capacity.is_power_of_two(), "a ring's capacity is a power of two");
-        core::ptr::write_bytes(at, 0, ring_words(capacity as usize));
-        *at = capacity;
-        Ring { at }
+    /// A ring already laid out at byte `offset` of `buffer`.
+    pub fn new(buffer: ArrayBuffer, offset: u32) -> Ring {
+        let capacity = TypedArray::<u32>::over(buffer.clone(), offset as usize, 1)[0];
+        if capacity == 0 || (capacity & (capacity - 1)) != 0 {
+            panic!("ring: capacity {capacity} at {offset} is not a power of two");
+        }
+        Ring {
+            words: TypedArray::over(buffer, offset as usize, ring_words(capacity) as usize),
+            capacity,
+            mask: capacity - 1,
+        }
     }
 
-    /// A ring already laid out at `at`.
-    ///
-    /// # Safety
-    /// As for `init`, and a ring must be there.
-    pub unsafe fn at(at: *mut u32) -> Ring {
-        Ring { at }
-    }
-
-    pub fn address(&self) -> usize {
-        self.at as usize
-    }
-
-    fn word(&self, i: usize) -> u32 {
-        // SAFETY: within the header, which `init` laid out.
-        unsafe { *self.at.add(i) }
-    }
-
-    fn set_word(&self, i: usize, v: u32) {
-        // SAFETY: as above.
-        unsafe { *self.at.add(i) = v }
-    }
-
-    pub fn capacity(&self) -> u32 {
-        self.word(0)
+    /// Lays out an empty ring of `capacity` entries at byte `offset`.
+    pub fn init(buffer: ArrayBuffer, offset: u32, capacity: u32) -> Ring {
+        if capacity == 0 || (capacity & (capacity - 1)) != 0 {
+            panic!("ring: capacity {capacity} is not a power of two");
+        }
+        let words = TypedArray::<u32>::over(buffer.clone(), offset as usize, ring_words(capacity) as usize);
+        words.fill(0);
+        words.put(0, capacity);
+        Ring::new(buffer, offset)
     }
 
     pub fn head(&self) -> u32 {
-        self.word(1)
+        self.words[1]
     }
 
     pub fn tail(&self) -> u32 {
-        self.word(2)
+        self.words[2]
     }
 
     /// Entries waiting to be consumed.
     pub fn len(&self) -> u32 {
-        self.tail().wrapping_sub(self.head())
+        self.words[2].wrapping_sub(self.words[1])
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn is_full(&self) -> bool {
-        self.len() >= self.capacity()
-    }
-
-    fn entry(&self, position: u32) -> *mut u32 {
-        let slot = (position & (self.capacity() - 1)) as usize;
-        // SAFETY: slot < capacity, inside what `init` laid out.
-        unsafe { self.at.add(HEADER_WORDS + slot * ENTRY_WORDS) }
+    /// Where the entry at `position` starts in `words`.
+    pub fn entry_at(&self, position: u32) -> u32 {
+        RING_HEADER_WORDS + (position & self.mask) * RING_ENTRY_WORDS
     }
 
     // ---- producer ----
 
-    /// Writes one entry at the tail. False, and nothing written, when full.
-    pub fn push(&self, e: &Entry) -> bool {
-        if self.is_full() {
-            return false;
+    /// Writes one entry at the tail: `user`, `op`, and up to twelve args.
+    /// EAGAIN, and nothing written, when full.
+    pub fn push(&self, user: u32, op: u32, args: &[u32]) -> Errno {
+        if self.len() >= self.capacity {
+            return Errno::EAGAIN;
         }
-        let tail = self.tail();
-        // SAFETY: the slot is the producer's until the tail moves past it.
-        unsafe { core::ptr::copy_nonoverlapping(e.as_ptr(), self.entry(tail), ENTRY_WORDS) };
-        self.set_word(2, tail.wrapping_add(1));
-        true
+        if args.len() > RING_ARG_WORDS as usize {
+            panic!("ring: {} args, at most {RING_ARG_WORDS}", args.len());
+        }
+        let tail = self.words[2];
+        let at = self.entry_at(tail) as usize;
+        let w = self.words.as_mut_slice();
+        w[at..at + RING_ENTRY_WORDS as usize].fill(0);
+        w[at + RING_USER as usize] = user;
+        w[at + RING_OP as usize] = op;
+        for (k, &arg) in args.iter().enumerate() {
+            w[at + RING_ARGS as usize + k] = arg;
+        }
+        w[2] = tail.wrapping_add(1);
+        Errno::OK
+    }
+
+    /// Writes one entry at the tail whole — a completion, with its result.
+    /// EAGAIN, and nothing written, when full.
+    pub fn push_entry(&self, entry: &Entry) -> Errno {
+        if self.len() >= self.capacity {
+            return Errno::EAGAIN;
+        }
+        let tail = self.words[2];
+        let at = self.entry_at(tail) as usize;
+        let w = self.words.as_mut_slice();
+        w[at..at + RING_ENTRY_WORDS as usize].copy_from_slice(entry);
+        w[2] = tail.wrapping_add(1);
+        Errno::OK
     }
 
     // ---- consumer ----
 
-    /// The entry at the head, copied out, or none when empty.
-    pub fn peek(&self) -> Option<Entry> {
+    /// Where the entry at the head starts in `words`, or -1 when empty. Read
+    /// it in place, then `advance`.
+    pub fn peek(&self) -> i64 {
         if self.is_empty() {
-            return None;
+            -1
+        } else {
+            self.entry_at(self.words[1]) as i64
         }
-        let mut e = [0u32; ENTRY_WORDS];
-        // SAFETY: the producer finished the slot before moving the tail.
-        unsafe { core::ptr::copy_nonoverlapping(self.entry(self.head()), e.as_mut_ptr(), ENTRY_WORDS) };
-        Some(e)
     }
 
     /// Consumes the entry at the head.
     pub fn advance(&self) {
-        assert!(!self.is_empty(), "advance on an empty ring");
-        self.set_word(1, self.head().wrapping_add(1));
+        if self.is_empty() {
+            panic!("ring: advance on an empty ring");
+        }
+        self.words.put(1, self.words[1].wrapping_add(1));
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn entry(user: u32) -> Entry {
-        let mut e = [0; ENTRY_WORDS];
-        e[USER] = user;
-        e[ARGS] = user * 10;
-        e
-    }
-
-    #[test]
-    fn entries_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
-        let mut mem = vec![0u32; ring_words(4)];
-        // SAFETY: the vector is the ring's words.
-        let r = unsafe { Ring::init(mem.as_mut_ptr(), 4) };
-        for round in 0..3u32 {
-            for k in 0..4 {
-                assert!(r.push(&entry(round * 4 + k)));
-            }
-            assert!(r.is_full());
-            assert!(!r.push(&entry(99)), "a full ring refuses");
-            for k in 0..4 {
-                let e = r.peek().expect("an entry waits");
-                assert_eq!((e[USER], e[ARGS]), (round * 4 + k, (round * 4 + k) * 10));
-                r.advance();
-            }
-            assert!(r.is_empty() && r.peek().is_none());
-        }
-        assert_eq!((r.head(), r.tail()), (12, 12), "positions only grow");
-    }
-}
+#[path = "ring.test.rs"]
+mod test;

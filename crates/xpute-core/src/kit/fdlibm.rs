@@ -53,3 +53,65 @@ pub fn cbrt(x: f64) -> f64 {
     r = (r - t) / (w + r);
     t + t * r
 }
+
+/// `Math.hypot(...values)`, as V8 computes it (builtins-math.tq): scaled by
+/// the largest magnitude and summed with Kahan compensation, so the result
+/// is the same bits whatever the order of magnitudes. Rust's `f64::hypot`
+/// is the platform libm's two-argument one, which differs in the last bit.
+pub fn hypot(values: &[f64]) -> f64 {
+    let mut max = 0.0f64;
+    let mut one_nan = false;
+    for &v in values {
+        let v = v.abs();
+        if v.is_infinite() {
+            return f64::INFINITY;
+        }
+        if v.is_nan() {
+            one_nan = true;
+        } else if v > max {
+            max = v;
+        }
+    }
+    if one_nan {
+        return f64::NAN;
+    }
+    if max == 0.0 {
+        return 0.0;
+    }
+    let mut sum = 0.0f64;
+    let mut compensation = 0.0f64;
+    for &v in values {
+        let n = v.abs() / max;
+        let summand = n * n - compensation;
+        let preliminary = sum + summand;
+        compensation = (preliminary - sum) - summand;
+        sum = preliminary;
+    }
+    sum.sqrt() * max
+}
+
+/// `Math.sin`, `Math.cos`, `Math.tan`, `Math.atan`, `Math.atan2`,
+/// `Math.exp`, `Math.log`: V8's are fdlibm's (base/ieee754.cc), and until
+/// those are ported these are the platform's — the same to the last bit on
+/// the inputs the vectors pin, and a vector is what would say otherwise.
+pub fn sin(x: f64) -> f64 {
+    x.sin()
+}
+pub fn cos(x: f64) -> f64 {
+    x.cos()
+}
+pub fn tan(x: f64) -> f64 {
+    x.tan()
+}
+pub fn atan(x: f64) -> f64 {
+    x.atan()
+}
+pub fn atan2(y: f64, x: f64) -> f64 {
+    y.atan2(x)
+}
+pub fn exp(x: f64) -> f64 {
+    x.exp()
+}
+pub fn log(x: f64) -> f64 {
+    x.ln()
+}

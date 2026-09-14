@@ -17,15 +17,17 @@ use pxl_core::bake::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanSte
 use pxl_core::bake::terrain::{ChunkSample, Materials, PageView, ELE_PADDED_SPAN};
 use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
-use pxl_core::space::ivec::{gather, lanes_xy};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind, Painter, Store};
+use pxl_core::world::pool::Pool;
 use pxl_core::world::raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
-use xpute_core::ds::buddy::Pool;
-use xpute_core::ipc::change::ChangeLog;
-use xpute_core::ipc::ring::{ring_words, Entry, Ring, ARGS, OP, RESULT, USER};
+use pxl_shared::spec::space::pvf3::ivec::{self, gather};
+use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
+use xpute_core::ipc::ring::{ring_words, Entry, Ring, RING_ARGS, RING_ENTRY_WORDS, RING_OP, RING_RESULT, RING_USER};
+use xpute_core::kit::array::ArrayBuffer;
+use xpute_core::sys::errno::Errno;
 
 /// The section at the front of the core memory that is the module's own.
 /// Equal to core_pool.ts's MODULE_BYTES.
@@ -113,11 +115,35 @@ struct State {
 /// dry between ticks — 4096 entries is 256 KB a ring.
 pub const RING_CAPACITY: u32 = 4096;
 
+/// The entry's word indices, as the ring names them.
+const USER: usize = RING_USER as usize;
+const OP: usize = RING_OP as usize;
+const RESULT: usize = RING_RESULT as usize;
+const ARGS: usize = RING_ARGS as usize;
+
 fn new_ring(capacity: u32) -> Ring {
-    let words = vec![0u32; ring_words(capacity as usize)].leak();
+    let words = vec![0u32; ring_words(capacity) as usize].leak();
     // SAFETY: the words are leaked for the module's lifetime and only the
     // two sides of the ring touch them.
-    unsafe { Ring::init(words.as_mut_ptr(), capacity) }
+    let buffer = unsafe { ArrayBuffer::from_raw(words.as_mut_ptr() as *mut u8, words.len() * 4) };
+    Ring::init(buffer, 0, capacity)
+}
+
+/// Where a ring's words start in the memory.
+fn ring_address(ring: &Ring) -> u32 {
+    ring.words.as_slice().as_ptr() as u32
+}
+
+/// The entry at the ring's head, copied out, or none when empty.
+fn peek_entry(ring: &Ring) -> Option<Entry> {
+    let at = ring.peek();
+    if at < 0 {
+        return None;
+    }
+    let at = at as usize;
+    let mut e: Entry = [0; RING_ENTRY_WORDS as usize];
+    e.copy_from_slice(&ring.words.as_slice()[at..at + RING_ENTRY_WORDS as usize]);
+    Some(e)
 }
 
 /// The module's one state, made on first use. A cell rather than a
@@ -175,7 +201,12 @@ fn state() -> &'static mut State {
                 model_block: 0,
                 shader_row: [0; 2],
                 pipeline: Vec::new(),
-                changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
+                changes: ChangeLog::new(ChangeLogOptions {
+                    topics: WORLD_TOPICS,
+                    capacity: JOURNAL_CAPACITY,
+                    keys_per_topic: None,
+                    alloc: None,
+                }),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
                 census: [0.0; 13],
@@ -373,7 +404,7 @@ pub extern "C" fn pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_bl
     let s = state();
     // SAFETY: the memory is the module's own linear memory, addressed from
     // 0, and the client keeps the range for this pool alone.
-    let pool = unsafe { Pool::new(core::ptr::null_mut(), start as usize, bytes as usize, region_bytes, min_block_bytes) };
+    let pool = unsafe { Pool::new(core::ptr::null_mut(), start as usize + bytes as usize, start as usize, bytes as usize, region_bytes, min_block_bytes) };
     s.pools.push(pool);
     s.pools.len() as u32 - 1
 }
@@ -398,10 +429,11 @@ pub extern "C" fn pxl_pool_is_free(id: u32, at: u32, bytes: u32) -> u32 {
     state().pools[id as usize].is_free(at as usize, bytes) as u32
 }
 
-/// The address of pool `id`'s stat: twelve words in PoolStat's order.
+/// The address of pool `id`'s stat: twelve words in BuddyStat's first
+/// twelve fields' order, as PoolKernel's stat.
 #[no_mangle]
 pub extern "C" fn pxl_pool_stat(id: u32) -> *const u32 {
-    &state().pools[id as usize].stat as *const _ as *const u32
+    state().pools[id as usize].stat_words()
 }
 
 fn volumes() -> &'static mut Volumes {
@@ -643,11 +675,11 @@ pub extern "C" fn pxl_object_write(key: u64, band_z: i32, x: u32, y: u32, z: u32
 
 /// module/world/change.ts's WorldTopic numbers the store bumps, and the
 /// log's shape.
-pub const TOPIC_OBJECT_COLUMN: u16 = 0;
-pub const TOPIC_DECOR_COLUMN: u16 = 1;
-pub const TOPIC_OBJECT_CELL: u16 = 2;
-pub const WORLD_TOPICS: usize = 6;
-pub const JOURNAL_CAPACITY: usize = 4096;
+pub const TOPIC_OBJECT_COLUMN: u32 = 0;
+pub const TOPIC_DECOR_COLUMN: u32 = 1;
+pub const TOPIC_OBJECT_CELL: u32 = 2;
+pub const WORLD_TOPICS: u32 = 6;
+pub const JOURNAL_CAPACITY: u32 = 4096;
 
 /// Re-derives the chunk's entries and cells, and records the change: the
 /// column in both of its topics, and every cell whose entries changed, by
@@ -656,15 +688,15 @@ pub const JOURNAL_CAPACITY: usize = 4096;
 pub extern "C" fn pxl_object_reindex(key: u64) {
     let s = state();
     s.objects.reindex(key);
-    s.changes.bump(TOPIC_OBJECT_COLUMN, key);
-    s.changes.bump(TOPIC_DECOR_COLUMN, key);
+    s.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
+    s.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
     let (at, n) = s.objects.take_touched();
-    let (x0, y0) = lanes_xy(key);
+    let (x0, y0) = (ivec::X(key), ivec::Y(key));
     for r in 0..n {
         // SAFETY: the rows take_touched just handed back, three words each.
         let row = unsafe { core::slice::from_raw_parts(at.add(r * 3), 3) };
         let corner = gather(x0 + row[0] as i64, y0 + row[1] as i64, row[2] as i64);
-        s.changes.bump(TOPIC_OBJECT_CELL, corner);
+        s.changes.bump(TOPIC_OBJECT_CELL, corner as i64);
     }
 }
 
@@ -677,23 +709,23 @@ pub extern "C" fn pxl_object_reindex(key: u64) {
 pub extern "C" fn pxl_change_lanes() -> *const u32 {
     let s = state();
     let l = s.changes.lanes();
-    s.change_row = [l[0] as u32, l[1] as u32, l[2] as u32, l[3] as u32, l[4] as u32, s.changes.capacity() as u32];
+    s.change_row = [l[0] as u32, l[1] as u32, l[2] as u32, l[3] as u32, l[4] as u32, s.changes.capacity];
     s.change_row.as_ptr()
 }
 
 #[no_mangle]
 pub extern "C" fn pxl_change_bump(topic: u32, key: u64) -> u32 {
-    state().changes.bump(topic as u16, key)
+    state().changes.bump(topic, key as i64)
 }
 
 #[no_mangle]
 pub extern "C" fn pxl_change_forget(topic: u32, key: u64) {
-    state().changes.forget(topic as u16, key);
+    state().changes.forget(topic, key as i64);
 }
 
 #[no_mangle]
 pub extern "C" fn pxl_change_revision(topic: u32, key: u64) -> u32 {
-    state().changes.revision_of(topic as u16, key)
+    state().changes.revision_of(topic, key as i64)
 }
 
 #[no_mangle]
@@ -851,12 +883,12 @@ pub const FRAME_WORDS: usize = 62;
 
 #[no_mangle]
 pub extern "C" fn pxl_ring_sq() -> u32 {
-    state().sq.address() as u32
+    ring_address(&state().sq)
 }
 
 #[no_mangle]
 pub extern "C" fn pxl_ring_cq() -> u32 {
-    state().cq.address() as u32
+    ring_address(&state().cq)
 }
 
 #[no_mangle]
@@ -906,7 +938,7 @@ fn completion(e: &Event) -> Entry {
 fn flush(s: &mut State) -> u32 {
     let mut posted = 0;
     while let Some(e) = s.events.front() {
-        if !s.cq.push(&completion(e)) {
+        if s.cq.push_entry(&completion(e)) != Errno::OK {
             break;
         }
         s.events.pop_front();
@@ -966,8 +998,8 @@ fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
 /// no-op and an op nobody numbers — since a command's effect is its events.
 fn drain(s: &mut State) -> u32 {
     let mut posted = flush(s);
-    while !s.cq.is_full() && s.events.is_empty() {
-        let Some(sub) = s.sq.peek() else { break };
+    while s.cq.len() < s.cq.capacity && s.events.is_empty() {
+        let Some(sub) = peek_entry(&s.sq) else { break };
         s.sq.advance();
         let op = sub[OP] & 0xffff;
         let result = apply(s, &sub);
@@ -976,7 +1008,7 @@ fn drain(s: &mut State) -> u32 {
             done[USER] = sub[USER];
             done[OP] = sub[OP];
             done[RESULT] = result.unwrap_or((-38i32) as u32); // ENOSYS
-            s.cq.push(&done);
+            s.cq.push_entry(&done);
             posted += 1;
         }
         posted += flush(s);

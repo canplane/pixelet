@@ -15,7 +15,7 @@
 use crate::bake::volume::{Volumes, Voxel};
 use crate::bake::voxel::NO_LAYER;
 use crate::space::constant::{CHUNK_CELLS, CHUNK_SPAN, PAGE_CELL_SPAN};
-use xpute_core::ds::buddy::Pool;
+use crate::world::pool::Pool;
 
 /// A page's cells on a side, and its elevation raster's samples on a side
 /// before and after the padding the bicubic reads past the edge.

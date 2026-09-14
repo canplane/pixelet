@@ -14,4 +14,5 @@ doctest = false
 
 [dependencies]
 xpute-core = { path = "../xpute-core" }
+pxl-shared = { path = "../pxl-shared" }
 pxl-core = { path = "../pxl-core" }

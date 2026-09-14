@@ -99,8 +99,11 @@ mapping (the composer never tone-mapped), reversed-Z.
 
 Not in scope: `packages/xpute/core` and `crates/xpute-core` are the same
 kit twice on purpose, one for each runtime, and stay symmetric; so is
-PVF3 once `space/pvf3.rs` exists, and any piece both runtimes need at
-all. A piece that is in both is not a duplicate to move to one side.
+`@pxl/shared`'s space and `crates/pxl-shared`, and any piece both
+runtimes need at all. A piece that is in both is not a duplicate to move
+to one side. The TypeScript side is read-only in this: nothing there is
+deleted for the Rust's sake, and a Rust module that uses one thing of a
+TypeScript file is that whole file, at the same path (`script/pair.ts`).
 
 - ~~**C1**~~ `space/ivec.rs`: `lanes` / `gather` and their XY halves;
   `object::unpack_pos` for the packed position.
@@ -165,8 +168,10 @@ all. A piece that is in both is not a duplicate to move to one side.
 - **E1–E3** Thirteen static-address exports that could be one table read
   at init; return types split between `*const u32` and `u32`; failure
   sentinels 0 / id+1 / −1 / `u32::MAX`; `pxl_bake_step` +
-  `pxl_bake_mesh_words` stepping twice to read a size. **Hold** — the view
-  and page moves rewrite the export set; settle the conventions then, once.
+  `pxl_bake_mesh_words` stepping twice to read a size. **Superseded** —
+  the export table is bindgen by hand and folds into the rings
+  ([what-stays-in-javascript, restated](./20260914-what-stays-in-javascript.md));
+  nothing in it is tidied on the way out.
 - ~~**E4**~~ lib.rs's sections say which exports are reference only (the
   bake and scan steps, the hand-driven volumes and terrain,
   `pxl_object_paint`, the raycast's column) — the live ones are

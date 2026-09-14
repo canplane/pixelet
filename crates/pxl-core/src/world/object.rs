@@ -20,7 +20,7 @@ use crate::bake::volume::{Cell, Volumes, Voxel};
 use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::U_PER_CELL;
 use crate::space::sparse_tree::Tree;
-use xpute_core::ds::buddy::Pool;
+use crate::world::pool::Pool;
 
 /// OBJECT_LAYOUT's finest and coarsest levels: an eighth of a cell, and a
 /// cell. A band tree reaches six levels above that, to the band's 64 cells.

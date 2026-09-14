@@ -109,6 +109,19 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      renderer's contract (draw list, block layouts, shaders, pipeline
      records) that six world modules fill and nothing in it reads back;
      `pxl-shared` when PVF3 and the reader give it a contract to be.
+     **Restated 2026-09-14 (evening):** the module is the whole program,
+     portable, and not an accelerator — the boundary is the rings, shared
+     memory and the cooperative scheduler, nothing bindgen-shaped, and
+     the `pxl_*` export table folds into the rings. Before the moves, the
+     kits are mirrored whole: `packages/xpute/core/src` ↔
+     `crates/xpute-core/src` and `packages/pxl/shared/src/spec/space` ↔
+     `crates/pxl-shared/src/spec/space`, the same tree, file for file and
+     export for export, held by `script/pair.ts` in `deno task check`
+     (files, exports, tests, and the vectors the TypeScript writes for the
+     Rust to reproduce); language differences are exempted by name with a
+     reason (`script/pair.exempt.json`). The audit's fifth and sixth
+     steps wait behind this, since the export table they would tidy is
+     going away.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

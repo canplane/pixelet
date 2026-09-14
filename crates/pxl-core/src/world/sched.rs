@@ -17,7 +17,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::bake::terrain::ChunkSample;
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
 use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
-use crate::space::ivec::{gather_xy, lanes_xy};
 use crate::world::billboard::Billboards;
 use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::world::debug::DebugLines;
@@ -27,6 +26,7 @@ use crate::world::ghost::Ghost;
 use crate::world::lod::{Ladder, COARSEST, LOD_STEPS};
 use crate::world::marker::Markers;
 use crate::world::model::Models;
+use pxl_shared::spec::space::pvf3::ivec;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
@@ -615,8 +615,8 @@ impl Scheduler {
         let id = self.slots[i].id;
         let Some((base, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else { return true };
         let show_decor = self.frame.is_some_and(|f| f.show_decor);
-        let (key_x, key_y) = lanes_xy(base);
-        let page_idx = gather_xy(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT);
+        let (key_x, key_y) = (ivec::X(base), ivec::Y(base));
+        let page_idx = ivec::gather(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT, 0);
         let mut sampled = false;
         for step in steps {
             if step == 0 || self.slots[i].decor.iter().any(|d| d.step == step) {
@@ -649,7 +649,7 @@ impl Scheduler {
             let pool = world.volumes.mesh_pool();
             let Some(at) = world.pools[pool].acquire(bytes) else {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(world.pools[pool].stat.releases);
+                self.slots[i].refused = Some(world.pools[pool].releases);
                 return false;
             };
             // SAFETY: a block of the bytes the build asked for, the glue's
@@ -731,7 +731,7 @@ impl Scheduler {
             dx * dx + dy * dy
         };
         let page_origin = |page: u64| {
-            let (px, py) = lanes_xy(page);
+            let (px, py) = (ivec::X(page), ivec::Y(page));
             ((px << PAGE_SHAMT) as f64 - anchor[0], (py << PAGE_SHAMT) as f64 - anchor[1])
         };
 
@@ -774,9 +774,9 @@ impl Scheduler {
                     mounts += 1;
                     let id = self.next_mount_id;
                     self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
-                    let (px, py) = lanes_xy(page);
+                    let (px, py) = (ivec::X(page), ivec::Y(page));
                     let (wx, wy) = ((px << PAGE_SHAMT) + bx as i64, (py << PAGE_SHAMT) + by as i64);
-                    let base = gather_xy(wx, wy);
+                    let base = ivec::gather(wx, wy, 0);
                     emit(Event::Mount { id, page, base_x: bx, base_y: by });
                     self.add(id, base, wx as f64, wy as f64, bx, by, blend_hash(page, bx, by));
                     self.mounted.insert((page, bx, by), id);
@@ -1192,7 +1192,7 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
-        if s.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].stat.releases) {
+        if s.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].releases) {
             return false;
         }
         if !self.ask(world, i, p, q) || !self.ensure_decor(world, i, [p, q], emit) {
@@ -1321,7 +1321,7 @@ impl Scheduler {
 /// Whether the mesh section is live past MESH_PRESSURE.
 fn mesh_pressed(world: &World) -> bool {
     let p = &world.pools[world.volumes.mesh_pool()];
-    p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
+    p.stat().live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
 }
 
 /// Ids the module gives the chunks it mounts, apart from any the glue adds.

@@ -18,7 +18,7 @@
 //! any past the cap from the mesh section, which may.
 
 use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
-use xpute_core::ds::buddy::Pool;
+use crate::world::pool::Pool;
 
 /// A band is a chunk's span on every axis.
 pub const BAND_SPAN: u32 = crate::space::constant::CHUNK_SPAN;

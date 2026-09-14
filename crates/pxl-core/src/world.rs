@@ -12,5 +12,6 @@ pub mod lod;
 pub mod marker;
 pub mod model;
 pub mod object;
+pub mod pool;
 pub mod raycast;
 pub mod sched;

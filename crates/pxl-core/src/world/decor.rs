@@ -15,44 +15,30 @@
 
 use crate::bake::terrain::{ChunkSample, PageView};
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
-use crate::space::ivec::gather;
 use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
+use pxl_shared::spec::space::pvf3::ivec::gather;
+use xpute_core::kit::rng::{derive_seed_u64 as derive_seed, make_rng, u32_to_unit, RNG};
 
 /// decor_kinds.ts's DECOR_MASTER_SEED is written with 80 bits; every use
 /// takes it modulo 2^64 (kit/rng.ts's derive_seed_u64 masks the XOR), so
 /// these are the bits that ever mattered.
 const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
-const SEED_SALT: u64 = 0x9e37_79b9_7f4a_7c15;
 const SCALE_JITTER: f64 = 0.18;
 const ALIGN_NEIGHBOR_RADIUS: u32 = 3;
 /// NO_ENTRY: a procedural instance resolves to no stored entry.
 pub const NO_ENTRY: u32 = 0xffff_ffff;
 pub const HIDDEN_FLAG: u8 = 1;
-/// splitmix64's finaliser.
-fn mix64(z: u64) -> u64 {
-    let mut z = z;
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    z ^ (z >> 31)
-}
 
-fn derive_seed(base: u64, tag: u64) -> u64 {
-    mix64((base ^ tag).wrapping_add(SEED_SALT))
-}
-
-/// kit/rng.ts's make_rng: splitmix64, and a draw is `U32(Number(z))` — the
-/// 64-bit word rounded to the nearest double first, then taken modulo 2^32,
-/// which is not the word's low bits once it is past 2^53.
-struct Rng(u64);
+/// decor_build.ts's stream: kit/rng.ts's make_rng, drawn as units.
+struct Rng(RNG);
 
 impl Rng {
-    fn next(&mut self) -> u32 {
-        self.0 = self.0.wrapping_add(SEED_SALT);
-        (mix64(self.0) as f64 % 4_294_967_296.0) as u32
+    fn new(seed: u64) -> Rng {
+        Rng(make_rng(Some(seed)))
     }
 
     fn unit(&mut self) -> f64 {
-        self.next() as f64 / 4_294_967_296.0
+        u32_to_unit((self.0)())
     }
 }
 
@@ -207,7 +193,7 @@ impl DecorBuild {
                         chunk.key_y + (y / CELL_STEPS) as i64,
                         bands[k] as i64 * BAND_CELLS as i64 + (z / CELL_STEPS) as i64,
                     );
-                    let mut rng = Rng(derive_seed(MASTER_SEED, corner));
+                    let mut rng = Rng::new(derive_seed(MASTER_SEED, corner));
                     let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
                     let rotation = rng.unit() * core::f64::consts::PI * 2.0;
                     let hidden = chunk.hide == Some((bands[k], pos));
@@ -238,7 +224,7 @@ impl DecorBuild {
                         if !(0..4).all(|c| kind.rules[c].allows(g[c][idx])) {
                             continue;
                         }
-                        let mut rng = Rng(derive_seed(kind_seed, ((cell_x as u64) << 16) | cell_y as u64));
+                        let mut rng = Rng::new(derive_seed(kind_seed, ((cell_x as u64) << 16) | cell_y as u64));
                         if rng.unit() >= kind.density * d {
                             continue;
                         }
