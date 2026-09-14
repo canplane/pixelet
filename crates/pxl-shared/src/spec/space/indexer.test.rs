@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/indexer.test.ts
+// pxl-shared/spec/space/indexer.test.rs
 
 use super::*;
 use crate::spec::space::pvf3::{ivec, projection, PVF3};

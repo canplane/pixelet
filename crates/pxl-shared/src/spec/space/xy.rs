@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/xy.ts
+// pxl-shared/spec/space/xy.rs
 
 #![allow(non_snake_case)]
 

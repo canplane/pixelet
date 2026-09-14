@@ -1,4 +1,4 @@
-// @xpute/core/ds/arena.ts
+// xpute-core/ds/arena.rs
 
 //! Arena / Vector scratch allocators (bump + mark/rewind)
 //! - Arena: reusable object slots

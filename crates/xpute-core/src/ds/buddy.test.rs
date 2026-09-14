@@ -1,4 +1,4 @@
-// @xpute/core/ds/buddy.test.ts
+// xpute-core/ds/buddy.test.rs
 
 use super::*;
 

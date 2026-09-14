@@ -1,4 +1,4 @@
-// @xpute/core/kit/math.ts
+// xpute-core/kit/math.rs
 
 pub const EPS: f64 = 1e-5;
 

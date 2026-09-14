@@ -1,4 +1,4 @@
-// @xpute/core/io/marshal/tree/mod.ts
+// xpute-core/io/marshal/tree/mod.rs
 
 pub mod cursor;
 pub mod encode;

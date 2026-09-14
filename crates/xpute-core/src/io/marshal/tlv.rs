@@ -1,4 +1,4 @@
-// @xpute/core/io/marshal/tlv.ts
+// xpute-core/io/marshal/tlv.rs
 
 //! TLV: self-delimiting binary field stream.
 //!

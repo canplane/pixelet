@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/adapter/3857.ts
+// pxl-shared/spec/space/adapter/3857.rs
 
 //! EPSG:3857 domain adapter
 //!

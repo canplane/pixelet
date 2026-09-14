@@ -1,4 +1,4 @@
-// @xpute/core/io/marshal/tree/spec.ts
+// xpute-core/io/marshal/tree/spec.rs
 
 //! Relocatable tree packet format.
 //!

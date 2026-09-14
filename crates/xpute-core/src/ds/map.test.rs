@@ -1,4 +1,4 @@
-// @xpute/core/ds/map.test.ts
+// xpute-core/ds/map.test.rs
 
 use core::cell::RefCell;
 use std::collections::HashMap;

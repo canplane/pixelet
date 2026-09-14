@@ -1,4 +1,4 @@
-// @xpute/core/kit/mat4.test.ts
+// xpute-core/kit/mat4.test.rs
 
 use super::*;
 

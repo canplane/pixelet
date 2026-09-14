@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/v3.ts
+// pxl-shared/spec/space/v3.rs
 
 //! The TypeScript's optional `out` parameter, defaulting to a new vector,
 //! is a required one here: every function writes into the `out` it is

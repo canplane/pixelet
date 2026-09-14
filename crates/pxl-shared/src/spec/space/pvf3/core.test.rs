@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/pvf3/core.test.ts
+// pxl-shared/spec/space/pvf3/core.test.rs
 
 use super::*;
 use crate::spec::space::pvf3::{fvec, ivec};

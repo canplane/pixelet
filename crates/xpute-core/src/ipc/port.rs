@@ -1,4 +1,4 @@
-// @xpute/core/ipc/port.ts
+// xpute-core/ipc/port.rs
 
 //! A command table: codec and dispatch, nothing about transport.
 //!

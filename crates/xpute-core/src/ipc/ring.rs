@@ -1,4 +1,4 @@
-// @xpute/core/ipc/ring.ts
+// xpute-core/ipc/ring.rs
 
 //! A single-producer, single-consumer ring of fixed-size entries in a buffer
 //! both sides can see — the submission and completion rings between a glue

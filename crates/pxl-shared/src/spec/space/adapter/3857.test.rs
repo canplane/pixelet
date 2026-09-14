@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/adapter/3857.test.ts
+// pxl-shared/spec/space/adapter/3857.test.rs
 
 use super::*;
 use crate::spec::space::adapter::epsg4326;

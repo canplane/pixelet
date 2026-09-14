@@ -1,4 +1,4 @@
-// @xpute/core/ipc/ring.test.ts
+// xpute-core/ipc/ring.test.rs
 
 use super::*;
 

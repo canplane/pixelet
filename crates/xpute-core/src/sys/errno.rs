@@ -1,4 +1,4 @@
-// @xpute/core/sys/errno.ts
+// xpute-core/sys/errno.rs
 // POSIX/Linux-aligned negative errno
 
 #![allow(clippy::upper_case_acronyms)]

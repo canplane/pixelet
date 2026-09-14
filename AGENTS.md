@@ -228,7 +228,9 @@ Two rules that came out of doing it:
 ```
 
 This is the import-map path, not the filesystem path — extension included, so
-a `.tsx` file says `.tsx`. New files get one too, tests included.
+a `.tsx` file says `.tsx`. New files get one too, tests included. A Rust file
+names its own path the same way, from its crate: `// pxl-shared/spec/space/indexer.rs`
+— never its TypeScript pair's, which the mirrored path already says.
 
 The one exception is `shared/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather

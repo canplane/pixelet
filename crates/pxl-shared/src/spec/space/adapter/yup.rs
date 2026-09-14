@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/adapter/yup.ts
+// pxl-shared/spec/space/adapter/yup.rs
 
 //! Y-up <-> Z-up conversion, for boundaries where Three.js's default basis
 //! meets this project's.

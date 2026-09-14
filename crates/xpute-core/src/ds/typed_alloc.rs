@@ -1,4 +1,4 @@
-// @xpute/core/ds/typed_alloc.ts
+// xpute-core/ds/typed_alloc.rs
 
 //! Where a typed lane's storage comes from.
 //!

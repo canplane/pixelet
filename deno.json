@@ -113,7 +113,9 @@
     "lineWidth": 200,
     "proseWrap": "preserve",
 
-    "exclude": ["node_modules/", "dist/"]
+    // The vectors are what script/pair.ts writes, and are checked byte for
+    // byte as written; formatting them would fail that check.
+    "exclude": ["node_modules/", "dist/", "crates/**/vector/"]
   },
 
   "lint": {

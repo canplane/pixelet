@@ -1,4 +1,4 @@
-// @xpute/core/kit/encoding.ts
+// xpute-core/kit/encoding.rs
 
 //! Encoding utilities
 //! - UTF-8

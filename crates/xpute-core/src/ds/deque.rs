@@ -1,4 +1,4 @@
-// @xpute/core/ds/deque.ts
+// xpute-core/ds/deque.rs
 // deque primitives over an external ring buffer (0-based) — DOD view.
 //
 // Storage contract (caller-owned):

@@ -1,4 +1,4 @@
-// @xpute/core/ipc/change_waker.ts
+// xpute-core/ipc/change_waker.rs
 
 //! Push delivery over a change log: listeners per (topic, key), woken when a
 //! pump finds their key in the journal.

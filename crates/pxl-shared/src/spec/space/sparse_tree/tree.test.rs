@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/sparse_tree/tree.test.ts
+// pxl-shared/spec/space/sparse_tree/tree.test.rs
 
 use core::cell::RefCell;
 use std::rc::Rc;

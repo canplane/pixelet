@@ -1,4 +1,4 @@
-// @xpute/core/io/marshal/tree/cursor.ts
+// xpute-core/io/marshal/tree/cursor.rs
 
 //! The read end: lazy cursors over a packet. The TypeScript's class
 //! hierarchy — `NodeCursor`, with `NullCursor` and `BranchCursor` extending

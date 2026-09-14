@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/pvf3/ivec.ts
+// pxl-shared/spec/space/pvf3/ivec.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Integer Component Precision System

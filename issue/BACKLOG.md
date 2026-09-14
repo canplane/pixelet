@@ -121,7 +121,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      Rust to reproduce); language differences are exempted by name with a
      reason (`script/pair.exempt.json`). The audit's fifth and sixth
      steps wait behind this, since the export table they would tidy is
-     going away.
+     going away. The whole of it: the client is one Rust kernel in
+     WebAssembly drawing through WebGPU with TypeScript as the shell, and
+     the server is Rust too in time (not urgent) — `pxl-shared` then the
+     one crate both build on.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission

@@ -1,4 +1,4 @@
-// @xpute/core/ds/map.ts
+// xpute-core/ds/map.rs
 
 //! A dense array of keys with an index into it: insert appends, delete moves
 //! the last entry into the hole, and a walk over every entry is a walk over

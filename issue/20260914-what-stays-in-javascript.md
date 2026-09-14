@@ -67,6 +67,17 @@ arrived and hands the time back. What that decides about the boundary:
   listed with its reason. The tree is mirrored as it is, however it might
   be better arranged — arranging comes later, on both sides at once.
 
+**The destination, whole (2026-09-14).** The client is one Rust kernel
+in WebAssembly drawing through WebGPU, with TypeScript as the shell —
+the UI, the browser's interrupts and I/O, and the calls that execute
+what the kernel lists. The server is Rust too, in time; it is not urgent,
+and nothing about the client waits on it. When it comes, `pxl-shared` —
+PVF3, the XTP reader and the bake wire format — is the one crate the
+server and the client kernel both build on, and `@pxl/shared` shrinks to
+what the shell still reads. The mirror the harness holds today runs
+TypeScript → Rust because the TypeScript is the finished side; the day
+the kernel is the original, the direction turns.
+
 Two things are explicitly on both sides:
 
 - **Marshalling** (XTP). The wire format is a contract, and each side

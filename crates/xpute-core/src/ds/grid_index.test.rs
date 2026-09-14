@@ -1,4 +1,4 @@
-// @xpute/core/ds/grid_index.test.ts
+// xpute-core/ds/grid_index.test.rs
 
 use super::*;
 

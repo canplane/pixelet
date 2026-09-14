@@ -1,4 +1,4 @@
-// @xpute/core/kit/rng.ts
+// xpute-core/kit/rng.rs
 
 use core::cell::Cell;
 

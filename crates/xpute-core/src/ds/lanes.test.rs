@@ -1,4 +1,4 @@
-// @xpute/core/ds/lanes.test.ts
+// xpute-core/ds/lanes.test.rs
 
 use super::*;
 

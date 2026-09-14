@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/sparse_tree/tree.ts
+// pxl-shared/spec/space/sparse_tree/tree.rs
 // sparse tree (2^d-ary sparse tree; quadtree/octree are special cases)
 
 use xpute_core::ds::typed_alloc::TypedAlloc;

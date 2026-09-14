@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/adapter/4326.ts
+// pxl-shared/spec/space/adapter/4326.rs
 
 //! EPSG:4326 <-> EPSG:3857 Projection Utilities
 //!

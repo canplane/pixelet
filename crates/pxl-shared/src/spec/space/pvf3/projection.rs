@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/pvf3/projection.ts
+// pxl-shared/spec/space/pvf3/projection.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Normalized Scalar <-> PVF3 Projection

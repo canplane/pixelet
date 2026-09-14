@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/pvf3/core.ts
+// pxl-shared/spec/space/pvf3/core.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Central Metadata Configuration

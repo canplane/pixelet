@@ -1,4 +1,4 @@
-// @xpute/core/kit/comp.ts
+// xpute-core/kit/comp.rs
 
 /// A comparator: negative, zero or positive, as `comp(a, b)` reads there.
 pub type Comp<T> = Box<dyn Fn(&T, &T) -> i32>;

@@ -1,4 +1,4 @@
-// @pxl/shared/spec/space/pvf3/pvf3.ts
+// pxl-shared/spec/space/pvf3/pvf3.rs
 
 //! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
 //! Fixed-Point Scalar System
