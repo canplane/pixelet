@@ -15,6 +15,8 @@ import type { RootState } from "@react-three/fiber";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { light_cfg } from "@/module/world/environment/config.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/decor/asset_store.ts";
+import type { DecorModel } from "./decor.ts";
 import { GpuRenderer } from "./renderer.ts";
 
 /** The one renderer, once its device has answered. */
@@ -78,6 +80,67 @@ function put(u: Float32Array, at: number, c: THREE.Color, k: number): void {
   u[at + 2] = c.b * k;
 }
 
+/** decor/asset_store.ts's models and skins by group, as the renderer wants
+ * them, rebuilt when the assets change. */
+let decor_assets_seen: readonly DecorBundleAssets[] | null = null;
+const decor_models = new Map<THREE.BufferGeometry, Omit<DecorModel, "skin">>();
+
+function decor_model(geometry: THREE.BufferGeometry | null, material: THREE.MeshStandardMaterial | null): DecorModel | null {
+  const skin = material?.map?.image as DecorModel["skin"] | undefined;
+  if (!geometry || !skin) return null;
+  let lanes = decor_models.get(geometry);
+  if (!lanes) {
+    const p = geometry.getAttribute("position");
+    const nrm = geometry.getAttribute("normal");
+    const uv = geometry.getAttribute("uv");
+    const count = p.count;
+    const position = new Float32Array(count * 3);
+    const normal = new Float32Array(count * 3);
+    const uvs = new Float32Array(count * 2);
+    for (let i = 0; i < count; i++) {
+      position[i * 3] = p.getX(i);
+      position[i * 3 + 1] = p.getY(i);
+      position[i * 3 + 2] = p.getZ(i);
+      if (nrm) {
+        normal[i * 3] = nrm.getX(i);
+        normal[i * 3 + 1] = nrm.getY(i);
+        normal[i * 3 + 2] = nrm.getZ(i);
+      }
+      if (uv) {
+        uvs[i * 2] = uv.getX(i);
+        uvs[i * 2 + 1] = uv.getY(i);
+      }
+    }
+    const idx = geometry.getIndex();
+    const index = new Uint32Array(idx ? idx.count : count);
+    for (let i = 0; i < index.length; i++) index[i] = idx ? idx.getX(i) : i;
+    lanes = { position, normal, uv: uvs, index };
+    decor_models.set(geometry, lanes);
+  }
+  return { ...lanes, skin };
+}
+
+function sync_decor_models(gpu: GpuRenderer): void {
+  const assets = decor_bundle_assets();
+  if (assets === decor_assets_seen) return;
+  decor_assets_seen = assets;
+  const models: (DecorModel | null)[] = [];
+  const by_skin = new Map<unknown, DecorModel | null>();
+  for (const { geometries, materials } of assets) {
+    geometries.forEach((geometry, v) => {
+      const key = geometry && materials[v] ? `${geometry.uuid}:${materials[v]!.uuid}` : null;
+      if (key !== null && by_skin.has(key)) {
+        models.push(by_skin.get(key)!);
+        return;
+      }
+      const m = decor_model(geometry, materials[v]);
+      if (key !== null) by_skin.set(key, m);
+      models.push(m);
+    });
+  }
+  gpu.decor.set_models(models);
+}
+
 /**
  * Writes the frame's uniforms and draws: called from the chunk stage's
  * visible step after the module's tick, with the anchor root the chunks'
@@ -86,6 +149,7 @@ function put(u: Float32Array, at: number, c: THREE.Color, k: number): void {
 export function gpu_frame(state: RootState, root: THREE.Matrix4): void {
   const gpu = gpu_renderer;
   if (!gpu) return;
+  sync_decor_models(gpu);
   const dpr = state.viewport.dpr;
   gpu.resize(state.size.width * dpr, state.size.height * dpr);
   const cam = state.camera as THREE.PerspectiveCamera;

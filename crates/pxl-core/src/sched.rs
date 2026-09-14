@@ -164,6 +164,15 @@ struct Tier {
     index_cnt: u32,
 }
 
+/// A decor block the glue holds: its step and bytes, the renderer's handle,
+/// and each group's lanes (DecorBuild::group_layout).
+struct Decor {
+    step: u32,
+    bytes: u32,
+    handle: u32,
+    groups: Vec<(u32, u32)>,
+}
+
 struct Slot {
     id: u32,
     base_x: f64,
@@ -180,8 +189,8 @@ struct Slot {
     runs_bytes: u32,
     /// The tiers the glue holds, oldest built first.
     tiers: Vec<Tier>,
-    /// The decor blocks the glue holds: a step and its bytes.
-    decor: Vec<(u32, u32)>,
+    /// The decor blocks the glue holds.
+    decor: Vec<Decor>,
     layout_primary: u32,
     layout_secondary: u32,
     layout_ready: bool,
@@ -204,7 +213,7 @@ impl Slot {
     }
 
     fn retained(&self) -> f64 {
-        self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>() + self.decor.iter().map(|d| d.1 as f64).sum::<f64>()
+        self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>() + self.decor.iter().map(|d| d.bytes as f64).sum::<f64>()
     }
 
     fn tier(&self, step: u32) -> Option<&Tier> {
@@ -421,6 +430,9 @@ impl Scheduler {
         for t in &self.slots[i].tiers {
             self.draw.free(t.handle);
         }
+        for d in &self.slots[i].decor {
+            self.draw.free(d.handle);
+        }
         self.slots.swap_remove(i);
         if i < self.slots.len() {
             self.index.insert(self.slots[i].id, i);
@@ -438,6 +450,9 @@ impl Scheduler {
         let s = &mut self.slots[i];
         for t in &s.tiers {
             self.draw.free(t.handle);
+        }
+        for d in &s.decor {
+            self.draw.free(d.handle);
         }
         s.tiers.clear();
         s.decor.clear();
@@ -483,7 +498,9 @@ impl Scheduler {
         }
         let Some(&i) = self.index.get(&id) else { return };
         let before = self.slots[i].retained();
-        self.slots[i].decor.clear();
+        for d in self.slots[i].decor.drain(..) {
+            self.draw.free(d.handle);
+        }
         self.account(i, before);
         if !self.slots[i].layout_ready {
             return;
@@ -509,7 +526,7 @@ impl Scheduler {
         let page_idx = gather_xy(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT);
         let mut sampled = false;
         for step in steps {
-            if step == 0 || self.slots[i].decor.iter().any(|d| d.0 == step) {
+            if step == 0 || self.slots[i].decor.iter().any(|d| d.step == step) {
                 continue;
             }
             let view = Builder::page_view(world, page);
@@ -543,7 +560,13 @@ impl Scheduler {
             // once handed over.
             unsafe { built.write(world.volumes.mem().add(at)) };
             let before = self.slots[i].retained();
-            self.slots[i].decor.push((step, bytes));
+            let handle = self.draw.upload(at as u32, bytes, 0, 0);
+            self.slots[i].decor.push(Decor {
+                step,
+                bytes,
+                handle,
+                groups: built.group_layout(),
+            });
             self.account(i, before);
             emit(Event::Decor { id, step, at: at as u32, bytes });
         }
@@ -773,6 +796,19 @@ impl Scheduler {
                 }
                 self.draw.draw(PIPELINE_CHUNK, t.handle, t.vertex_cnt, t.index_cnt, translation, visible, 1.0);
             }
+            // Decor takes whichever tier the blend says the chunk is mostly
+            // on: an instance is drawn or it is not.
+            let decor_step = match s.told {
+                Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+                _ => s.layout_primary,
+            };
+            if let Some(d) = s.decor.iter().find(|d| d.step == decor_step) {
+                for (group, &(offset, count)) in d.groups.iter().enumerate() {
+                    if count > 0 {
+                        self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
+                    }
+                }
+            }
         }
     }
 
@@ -974,7 +1010,13 @@ impl Scheduler {
             }
             let gone = s.tiers.remove(k);
             self.draw.free(gone.handle);
-            s.decor.retain(|d| d.0 != st);
+            let draw = &mut self.draw;
+            s.decor.retain(|d| {
+                if d.step == st {
+                    draw.free(d.handle);
+                }
+                d.step != st
+            });
             emit(Event::Evict { id: s.id, step: st });
         }
         self.account(i, before);
@@ -1043,9 +1085,10 @@ impl Scheduler {
                 self.draw.free(t.handle);
                 steps.push(t.step);
             }
-            for (step, _) in s.decor.drain(..) {
-                if !steps.contains(&step) {
-                    steps.push(step);
+            for d in s.decor.drain(..) {
+                self.draw.free(d.handle);
+                if !steps.contains(&d.step) {
+                    steps.push(d.step);
                 }
             }
             for step in steps {
@@ -1092,9 +1135,12 @@ impl Scheduler {
                 keep
             });
             s.decor.retain(|d| {
-                let keep = d.0 == p || d.0 == q;
-                if !keep && !steps.contains(&d.0) {
-                    steps.push(d.0);
+                let keep = d.step == p || d.step == q;
+                if !keep {
+                    draw.free(d.handle);
+                    if !steps.contains(&d.step) {
+                        steps.push(d.step);
+                    }
                 }
                 keep
             });

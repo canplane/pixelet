@@ -22,6 +22,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { CHUNK_SHADER } from "./chunk_shader.ts";
 import { SKY_SHADER } from "./sky_shader.ts";
+import { DecorPass } from "./decor.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -56,6 +57,8 @@ export class GpuRenderer {
   private readonly sky_bind_group: GPUBindGroup;
   private readonly bind_layout: GPUBindGroupLayout;
   private readonly layers: LayerTextures;
+  /** Decor's instanced draws (decor.ts). */
+  readonly decor: DecorPass;
   private readonly frame_buffer: GPUBuffer;
   private draws_buffer: GPUBuffer;
   private bind_group: GPUBindGroup;
@@ -68,7 +71,7 @@ export class GpuRenderer {
   /** The sky's uniforms, likewise. */
   readonly sky: FrameUniforms = new Float32Array(new ArrayBuffer(SKY_UNIFORM_FLOATS * 4));
   /** What the last frame drew, for the ledger. */
-  stat = { draws: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0 };
+  stat = { draws: 0, decor_draws: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0 };
 
   private constructor(readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, private readonly pxl: PxlExports) {
     const context = canvas.getContext("webgpu");
@@ -116,6 +119,7 @@ export class GpuRenderer {
     this.frame_buffer = device.createBuffer({ label: "frame", size: FRAME_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws_buffer = device.createBuffer({ label: "draws", size: 256 * UNIFORM_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.bind_group = this.make_bind_group();
+    this.decor = new DecorPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
   }
 
   /** A renderer over a device, or null where there is no WebGPU: the app
@@ -172,7 +176,9 @@ export class GpuRenderer {
       const [handle, at, bytes] = [uploads[k], uploads[k + 1], uploads[k + 2]];
       this.buffers.get(handle)?.destroy();
       const size = Math.max(4, (bytes + 3) & ~3);
-      const buffer = this.device.createBuffer({ size, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+      // Every block is usable every way a draw reads one: a mesh's lanes as
+      // vertices and indices, a decor block's as storage.
+      const buffer = this.device.createBuffer({ size, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.INDEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
       this.device.queue.writeBuffer(buffer, 0, mem as ArrayBuffer, at, bytes & ~3);
       this.buffers.set(handle, buffer);
       this.stat.bytes += size;
@@ -221,6 +227,7 @@ export class GpuRenderer {
       pass.setIndexBuffer(buffer, "uint32", vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_cnt * 4);
       pass.drawIndexed(index_cnt, 1, 0, 0, uniform);
     }
+    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
     pass.end();
     this.device.queue.submit([encoder.finish()]);
   }

@@ -282,6 +282,18 @@ impl DecorBuild {
         (words * 4) as u32
     }
 
+    /// Each group's first lane word in the block and its count, in group
+    /// order: what a draw of the group reads its instances by.
+    pub fn group_layout(&self) -> Vec<(u32, u32)> {
+        let mut out = Vec::with_capacity(self.groups.len());
+        let mut k = 1 + self.groups.len();
+        for g in &self.groups {
+            out.push((k as u32, g.len() as u32));
+            k += 7 * g.len() + g.len().div_ceil(4);
+        }
+        out
+    }
+
     /// Writes the block.
     ///
     /// # Safety

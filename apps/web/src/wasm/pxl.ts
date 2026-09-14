@@ -114,7 +114,10 @@ const PXL_WASM_URL = new URL("./pxl.wasm", import.meta.url);
 /** Instantiates the module over `memory`, whose first `module_bytes` are
  * the map's module section. */
 export async function instantiate_pxl(memory: WebAssembly.Memory, module_bytes: u32): Promise<PxlExports> {
-  const bytes = await (await fetch(PXL_WASM_URL)).arrayBuffer();
+  // Not from the HTTP cache in development: the dev server rebuilds the
+  // module under the same URL, and a cached one silently runs yesterday's
+  // core under today's glue.
+  const bytes = await (await fetch(PXL_WASM_URL, import.meta.env?.DEV ? { cache: "no-store" } : undefined)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: {
       memory,
