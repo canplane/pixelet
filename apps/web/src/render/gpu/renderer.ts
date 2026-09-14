@@ -23,10 +23,12 @@ import type { PxlExports } from "@/wasm/pxl.ts";
 import { CHUNK_SHADER } from "./chunk_shader.ts";
 import { SKY_SHADER } from "./sky_shader.ts";
 import { DecorPass } from "./decor.ts";
+import { SkinnedPass } from "./skinned.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
 const UPLOAD_WORDS = 5;
+const REWRITE_WORDS = 3;
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
 const PIPELINE_CHUNK = 0;
@@ -71,6 +73,10 @@ export class GpuRenderer {
   private readonly layers: LayerTextures;
   /** Decor's instanced draws (decor.ts). */
   readonly decor: DecorPass;
+  /** Actors' skinned draws (skinned.ts). */
+  readonly skinned: SkinnedPass;
+  /** Each block's vertex and index counts, as its upload said. */
+  private readonly counts = new Map<u32, [u32, u32]>();
   private readonly frame_buffer: GPUBuffer;
   private draws_buffer: GPUBuffer;
   private bind_group: GPUBindGroup;
@@ -145,6 +151,7 @@ export class GpuRenderer {
     this.draws_buffer = device.createBuffer({ label: "draws", size: 256 * UNIFORM_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.bind_group = this.make_bind_group();
     this.decor = new DecorPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
+    this.skinned = new SkinnedPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
   }
 
   /** A renderer over a device, or null where there is no WebGPU: the app
@@ -191,7 +198,8 @@ export class GpuRenderer {
     if (!this.depth) return;
     const pxl = this.pxl;
     const mem = pxl.memory.buffer;
-    const row = new Uint32Array(mem, pxl.pxl_draw_take(), 8);
+    const row = new Uint32Array(mem, pxl.pxl_draw_take(), 10);
+    const rewrites = new Uint32Array(mem, row[8], row[9] * REWRITE_WORDS);
     const uploads = new Uint32Array(mem, row[0], row[1] * UPLOAD_WORDS);
     const frees = new Uint32Array(mem, row[2], row[3]);
     const draws = new Uint32Array(mem, row[4], row[5] * DRAW_WORDS);
@@ -206,7 +214,12 @@ export class GpuRenderer {
       const buffer = this.device.createBuffer({ size, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.INDEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
       this.device.queue.writeBuffer(buffer, 0, mem as ArrayBuffer, at, bytes & ~3);
       this.buffers.set(handle, buffer);
+      this.counts.set(handle, [uploads[k + 3], uploads[k + 4]]);
       this.stat.bytes += size;
+    }
+    for (let k = 0; k < rewrites.length; k += REWRITE_WORDS) {
+      const buffer = this.buffers.get(rewrites[k]);
+      if (buffer) this.device.queue.writeBuffer(buffer, 0, mem as ArrayBuffer, rewrites[k + 1], rewrites[k + 2] & ~3);
     }
     for (const handle of frees) {
       const buffer = this.buffers.get(handle);
@@ -214,6 +227,7 @@ export class GpuRenderer {
       this.stat.bytes -= buffer.size;
       buffer.destroy();
       this.buffers.delete(handle);
+      this.counts.delete(handle);
     }
     this.stat.uploads = uploads.length / UPLOAD_WORDS;
     this.stat.frees = frees.length;
@@ -241,6 +255,7 @@ export class GpuRenderer {
     pass.setBindGroup(0, this.bind_group);
     this.draw_meshes(pass, draws, (p) => p === PIPELINE_CHUNK);
     this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
+    this.skinned.draw(pass, draws, uniforms, this.buffers, this.counts);
     // What is blended goes last, over everything opaque.
     for (const p of [PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR]) {
       if (!this.draw_meshes(pass, draws, (q) => q === p, true)) continue;

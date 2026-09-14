@@ -37,10 +37,18 @@ pub const PIPELINE_DECOR: u32 = 1;
 pub const PIPELINE_GHOST_BOX: u32 = 2;
 pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 3;
 pub const PIPELINE_GHOST_DECOR: u32 = 4;
+/// An actor (model.rs): words (the model's handle, the joint palette's
+/// handle, the model id, uniform, pipeline), its uniform's fourth float the
+/// turn about Z.
+pub const PIPELINE_SKINNED: u32 = 5;
+/// Words a rewrite record holds: the handle, and the block's address and
+/// length, whose bytes replace the buffer's.
+pub const REWRITE_WORDS: usize = 3;
 
 #[derive(Default)]
 pub struct DrawList {
     uploads: Vec<u32>,
+    rewrites: Vec<u32>,
     frees: Vec<u32>,
     draws: Vec<u32>,
     uniforms: Vec<f32>,
@@ -52,6 +60,7 @@ pub struct DrawList {
 #[derive(Default)]
 struct Taken {
     uploads: Vec<u32>,
+    rewrites: Vec<u32>,
     frees: Vec<u32>,
     draws: Vec<u32>,
     uniforms: Vec<f32>,
@@ -73,6 +82,14 @@ impl DrawList {
             return;
         }
         let mut k = 0;
+        while k < self.rewrites.len() {
+            if self.rewrites[k] == handle {
+                self.rewrites.drain(k..k + REWRITE_WORDS);
+            } else {
+                k += REWRITE_WORDS;
+            }
+        }
+        let mut k = 0;
         while k < self.uploads.len() {
             if self.uploads[k] == handle {
                 self.uploads.drain(k..k + UPLOAD_WORDS);
@@ -84,10 +101,27 @@ impl DrawList {
         self.frees.push(handle);
     }
 
+    /// The block behind `handle` changed: its bytes go to the GPU again,
+    /// into the buffer it already has. A rewrite already listed stands.
+    pub fn rewrite(&mut self, handle: u32, at: u32, bytes: u32) {
+        if handle == 0 || self.rewrites.chunks_exact(REWRITE_WORDS).any(|r| r[0] == handle) {
+            return;
+        }
+        self.rewrites.extend_from_slice(&[handle, at, bytes]);
+    }
+
     /// Starts this frame's draws over.
     pub fn begin_frame(&mut self) {
         self.draws.clear();
         self.uniforms.clear();
+    }
+
+    /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_scaled(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32, scale: f32) {
+        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, scale, 0.0, 0.0]);
+        self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
     /// A draw whose record names a pipeline other than the chunk's.
@@ -116,10 +150,12 @@ impl DrawList {
     /// Hands the lists to the glue: the lanes' addresses and counts, valid
     /// until the next take. Uploads and frees start fresh; the draws stay
     /// until the next frame writes them.
-    pub fn take(&mut self) -> [usize; 8] {
+    pub fn take(&mut self) -> [usize; 10] {
         core::mem::swap(&mut self.taken.uploads, &mut self.uploads);
+        core::mem::swap(&mut self.taken.rewrites, &mut self.rewrites);
         core::mem::swap(&mut self.taken.frees, &mut self.frees);
         self.uploads.clear();
+        self.rewrites.clear();
         self.frees.clear();
         self.taken.draws.clear();
         self.taken.draws.extend_from_slice(&self.draws);
@@ -135,6 +171,8 @@ impl DrawList {
             t.draws.len() / DRAW_WORDS,
             t.uniforms.as_ptr() as usize,
             t.uniforms.len() / UNIFORM_FLOATS,
+            t.rewrites.as_ptr() as usize,
+            t.rewrites.len() / REWRITE_WORDS,
         ]
     }
 }

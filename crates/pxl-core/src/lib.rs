@@ -16,6 +16,7 @@ pub mod draw;
 pub mod ghost;
 pub mod lod;
 pub mod mesher;
+pub mod model;
 pub mod object;
 pub mod raycast;
 pub mod ring;

@@ -74,7 +74,8 @@ struct State {
     /// doubles the glue reads.
     raycast: Raycast,
     hit: [f64; HIT_WORDS],
-    draw_row: [u32; 8],
+    draw_row: [u32; 10],
+    model_block: u32,
 }
 
 /// Entries each ring holds: a page mounting is 64 chunks a frame, each
@@ -130,7 +131,8 @@ fn state() -> &'static mut State {
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
                 hit: [0.0; HIT_WORDS],
-                draw_row: [0; 8],
+                draw_row: [0; 10],
+                model_block: 0,
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
@@ -1053,6 +1055,109 @@ pub extern "C" fn pxl_build_now(id: u32) {
     after(s);
 }
 
+// ---- Models and actors (crates/pxl-core/src/model.rs) ----
+
+/// A model's mesh block for `vertex_cnt` vertices, `index_cnt` indices and
+/// `joint_cnt` joints: its id, or -1 when the pool refused; the block's
+/// address at pxl_model_block.
+#[no_mangle]
+pub extern "C" fn pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> i32 {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    match sched.models.new_model(&mut world, vertex_cnt, index_cnt, joint_cnt) {
+        Some((id, at)) => {
+            s.model_block = at as u32;
+            id as i32
+        }
+        None => -1,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_model_block() -> u32 {
+    state().model_block
+}
+
+/// Joint `joint` of `model`, from 42 floats at `at`: the rest pose (10),
+/// the transform above a root (16) and the inverse bind matrix (16).
+#[no_mangle]
+pub extern "C" fn pxl_model_joint(model: u32, joint: u32, parent: i32, at: u32) {
+    let s = state();
+    // SAFETY: the glue's lane of 42 floats.
+    let f = unsafe { core::slice::from_raw_parts(at as usize as *const f32, 42) };
+    let mut rest = [0.0; 10];
+    rest.copy_from_slice(&f[0..10]);
+    let mut pre = [0.0; 16];
+    pre.copy_from_slice(&f[10..26]);
+    let mut ib = [0.0; 16];
+    ib.copy_from_slice(&f[26..42]);
+    s.sched.models.joint(model, joint, parent, rest, pre, ib);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_model_clip(model: u32, duration: f32) -> u32 {
+    state().sched.models.clip(model, duration)
+}
+
+/// A channel of a clip: `path` 0 translation, 1 rotation, 2 scale; the keys'
+/// times and values in the glue's lanes.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32) {
+    let s = state();
+    // SAFETY: the glue's lanes, of the lengths the path gives.
+    unsafe {
+        s.sched
+            .models
+            .channel(core::ptr::null(), model, clip, joint, path as u8, step != 0, key_cnt, times_at as usize, values_at as usize)
+    };
+}
+
+/// The model is complete; `scale` stands it as tall as the glue measured.
+#[no_mangle]
+pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
+    let s = state();
+    let sched = &mut s.sched;
+    sched.models.seal(&mut sched.draw, model, scale);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_model_remove(model: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.models.remove_model(&mut world, &mut sched.draw, model);
+}
+
+/// An actor of `model`: its id, or -1.
+#[no_mangle]
+pub extern "C" fn pxl_actor_new(model: u32) -> i32 {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32)
+}
+
+/// Where the actor stands, in units, its turn about Z, and whether it is drawn.
+#[no_mangle]
+pub extern "C" fn pxl_actor_place(actor: u32, x: f64, y: f64, z: f64, rotation_z: f64, visible: u32) {
+    if let Some(a) = state().sched.models.actor(actor) {
+        a.at = [x, y, z];
+        a.rotation_z = rotation_z as f32;
+        a.visible = visible != 0;
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_actor_play(actor: u32, clip: u32, fade_s: f32) {
+    state().sched.models.play(actor, clip, fade_s);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_actor_remove(actor: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.models.remove_actor(&mut world, &mut sched.draw, actor);
+}
+
 /// The hover ghost as a box of `size` units with its min corner at (x, y,
 /// z) in units, painted as object value `value` paints or, where that paints
 /// nothing, as `rgb` (0xRRGGBB) untextured; `coplanar` when it sits in a
@@ -1083,8 +1188,8 @@ pub extern "C" fn pxl_ghost_clear() {
 }
 
 /// Hands the renderer's lists over (crates/pxl-core/src/draw.rs): a row of
-/// eight words — the uploads' address and count, the frees', the draws',
-/// the uniforms' — valid until the next call. Uploads and frees are what
+/// ten words — the uploads' address and count, the frees', the draws', the
+/// uniforms', the rewrites' — valid until the next call. Uploads and frees are what
 /// accumulated since the last call; the draws are the last tick's.
 #[no_mangle]
 pub extern "C" fn pxl_draw_take() -> *const u32 {

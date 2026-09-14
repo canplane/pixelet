@@ -33,7 +33,7 @@
 import { memo, type MutableRefObject, useEffect, useLayoutEffect, useRef } from "react";
 import * as THREE from "three";
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { get_surface_z_at_local } from "../surface_height.ts";
@@ -51,6 +51,24 @@ import { useCompanionLoadStore } from "./store.ts";
 import { ChatBubble } from "./chat_bubble.tsx";
 import { type CharacterVariant, find_person_variant, find_pet_variant } from "@/module/world/character/variant.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
+import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { load_gltf, load_texture } from "@/module/world/gltf_cache.ts";
+import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { gpu_renderer, useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
+import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
+
+/** A variant's model in the module, registered once per model and height
+ * whoever asks first (render/gpu/model_asset.ts). */
+const model_handles = new Map<string, Promise<ModelHandle | null>>();
+function model_for(variant: CharacterVariant): Promise<ModelHandle | null> {
+  const key = `${variant.model_url}|${variant.height_u}`;
+  let entry = model_handles.get(key);
+  if (!entry) {
+    entry = load_gltf(variant.model_url).then((gltf) => (CORE_PXL ? register_model(CORE_PXL, gltf.scene, gltf.animations, variant.height_u) : null));
+    model_handles.set(key, entry);
+  }
+  return entry;
+}
 
 // A little to the side of the person, so the two don't occupy the same
 // footprint — arbitrary companion-following offset, not derived from
@@ -142,6 +160,36 @@ type WalkerProps = {
 const Walker = memo(function Walker(props: WalkerProps) {
   const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
   const { root: character_root, material: character_material, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
+
+  // Through the WebGPU renderer the walker is an actor of the module
+  // (crates/pxl-core/src/model.rs): what follows still decides where it
+  // stands, which way it faces and which clip it plays, and tells the actor;
+  // three keeps the group only for that and for the chat bubble, and draws
+  // none of its meshes.
+  const gpu = useGpuDrawsChunks();
+  const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: THREE.Texture } | null>(null);
+  useEffect(() => {
+    const p = CORE_PXL;
+    if (!p || !gpu) return;
+    let alive = true;
+    Promise.all([model_for(variant), load_texture(variant.skin_url)]).then(([model, skin]) => {
+      if (!alive || !model) return;
+      const actor = p.pxl_actor_new(model.model);
+      if (actor < 0) return;
+      actor_ref.current = { actor, model, skin };
+    });
+    return () => {
+      alive = false;
+      if (actor_ref.current) p.pxl_actor_remove(actor_ref.current.actor);
+      actor_ref.current = null;
+    };
+  }, [gpu, variant]);
+  useEffect(() => {
+    character_root?.traverse((node) => {
+      if ((node as THREE.Mesh).isMesh) node.visible = !gpu;
+    });
+  }, [character_root, gpu]);
+  const actor_clip_ref = useRef<string | null>(null);
 
   // Same live show_rim_light wiring decor/asset_store.ts does for decor's
   // materials — use_character_model.ts
@@ -328,6 +376,26 @@ const Walker = memo(function Walker(props: WalkerProps) {
       s.z = get_surface_z_at_local(origin_page_idx_xy, map_origin_ref.current, px, py, target_z_ref.current);
     }
     character_root.position.set(px, py, s.z ?? character_root.position.z);
+
+    const held = actor_ref.current;
+    if (held && CORE_PXL) {
+      const mo = map_origin_ref.current;
+      CORE_PXL.pxl_actor_place(
+        held.actor,
+        ivec.to_real(ivec.X(mo)) + px,
+        ivec.to_real(ivec.Y(mo)) + py,
+        ivec.to_real(ivec.Z(mo)) + character_root.position.z,
+        character_root.rotation.z,
+        1,
+      );
+      const clip = is_walking ? variant.move_clip : IDLE_CLIP;
+      if (actor_clip_ref.current !== clip) {
+        const index = held.model.clips.get(clip);
+        if (index !== undefined) CORE_PXL.pxl_actor_play(held.actor, index, actor_clip_ref.current === null ? 0 : 0.2);
+        actor_clip_ref.current = clip;
+      }
+      gpu_renderer?.skinned.set_skin(held.model.model, held.skin.image as ImageBitmap);
+    }
 
     // Crossfade only on an actual state change, not every frame.
     const desired_clip = is_walking ? variant.move_clip : IDLE_CLIP;
