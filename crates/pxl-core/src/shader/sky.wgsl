@@ -1,19 +1,12 @@
-// @pxl/web/render/gpu/sky_shader.ts
+// The sky: environment.tsx's dome shader (archive/20260914-three-draw-paths),
+// drawn as one full-screen triangle behind everything. The dome was a
+// sphere of radius SKY_DOME_SCALE centred on the world origin, coloured by
+// the direction from the origin to the point a pixel's ray meets it; that
+// point is found here by intersecting the ray with the same sphere, so the
+// colours land where they did. The gradient, stars, clouds, sun and moon
+// are that shader's, line for line; the output is graded and encoded to
+// sRGB, as the post stack did.
 
-/**
- * The sky in WGSL: module/map/environment.tsx's dome shader, drawn as one
- * full-screen triangle behind everything. The dome was a sphere of radius
- * SKY_DOME_SCALE centred on the world origin, coloured by the direction from
- * the origin to the point a pixel's ray meets it; that point is found here
- * by intersecting the ray with the same sphere, so the colours land where
- * they did. The gradient, stars, clouds, sun and moon are that shader's,
- * line for line; the output is graded and encoded to sRGB, as the post
- * stack did.
- */
-
-import { GRADE_WGSL } from "./grade.ts";
-
-export const SKY_SHADER: string = /* wgsl */ `
 struct Sky {
   inv_view_proj: mat4x4f,
   camera_pos: vec3f,
@@ -77,8 +70,6 @@ fn fbm(q: vec2f) -> f32 {
   return sum;
 }
 
-${GRADE_WGSL}
-
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4f {
   // The pixel's ray, and where it meets the dome.
@@ -139,4 +130,3 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   color += (hash(v.clip.xy) - 0.5) * (1.0 / 255.0);
   return vec4f(to_srgb(grade(color)), 1.0);
 }
-`;

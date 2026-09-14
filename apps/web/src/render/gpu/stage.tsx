@@ -18,7 +18,6 @@ import { request_world_tick } from "@/module/world/change.ts";
 import { view } from "@/module/world/view.ts";
 import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/decor/asset_store.ts";
 import { GpuRenderer } from "./renderer.ts";
-import { FRAME_AT } from "./frame_wgsl.ts";
 import { GL_TO_WGPU } from "./depth.ts";
 import { rim_cfg } from "@/module/world/environment/config.ts";
 
@@ -80,36 +79,37 @@ export function gpu_frame(dpr: number): void {
   badges.far = view.far;
   badges.cell = LOD_CELL_PER_DISTANCE.value;
   const u = gpu.uniforms;
-  u.set(mat4_mul($m, GL_TO_WGPU, view.local_view_proj), 0);
+  const at = gpu.frame_at;
+  u.set(mat4_mul($m, GL_TO_WGPU, view.local_view_proj), at.view_proj);
   // The camera's position in the root's frame, where the meshes are.
-  u[16] = view.eye_local.x;
-  u[17] = view.eye_local.y;
-  u[18] = view.eye_local.z;
+  u[at.camera_pos] = view.eye_local.x;
+  u[at.camera_pos + 1] = view.eye_local.y;
+  u[at.camera_pos + 2] = view.eye_local.z;
   const settings = useSettingsStore.getState();
-  u[19] = settings.show_edge_shade ? EDGE_STRENGTH : 0;
+  u[at.edge_strength] = settings.show_edge_shade ? EDGE_STRENGTH : 0;
   // The light, the fog and the sky's colours and directions are the
   // module's (crates/pxl-core/src/environment.rs), laid out as these
-  // uniforms take them from their twentieth float.
+  // uniforms take them.
   const pxl = CORE_PXL!;
   const env = new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);
-  u.set(env.subarray(0, 24), 20);
-  u[23] = settings.texture_pack ? 0 : 1;
-  u[39] = EDGE_WIDTH;
-  u[FRAME_AT.rim_intensity] = settings.show_rim_light ? rim_cfg.INTENSITY : 0;
-  u[FRAME_AT.viewport] = gpu.canvas.width;
-  u[FRAME_AT.viewport + 1] = gpu.canvas.height;
-  u[FRAME_AT.vignette] = 1;
+  u.set(env.subarray(0, 24), at.env);
+  u[at.low_spec] = settings.texture_pack ? 0 : 1;
+  u[at.edge_width] = EDGE_WIDTH;
+  u[at.rim_intensity] = settings.show_rim_light ? rim_cfg.INTENSITY : 0;
+  u[at.viewport] = gpu.canvas.width;
+  u[at.viewport + 1] = gpu.canvas.height;
+  u[at.vignette] = 1;
   // The sun's shadow, over the map centre — the root frame's origin
   // undone — from the light the environment lit the terrain with.
   gpu.shadows = settings.show_shadow_map;
-  u[FRAME_AT.shadow_strength] = gpu.shadows ? 1 : 0;
-  u[FRAME_AT.shadow_texel] = gpu.shadow.texel;
+  u[at.shadow_strength] = gpu.shadows ? 1 : 0;
+  u[at.shadow_texel] = gpu.shadow.texel;
   if (gpu.shadows) {
     $light_target.x = -view.tx;
     $light_target.y = -view.ty;
     $light_target.z = -view.tz;
     gpu.shadow.aim(env.subarray(0, 3), $light_target);
-    u.set(gpu.shadow.light_view_proj, FRAME_AT.light_view_proj);
+    u.set(gpu.shadow.light_view_proj, at.light_view_proj);
   }
 
   // The sky, in the view frame, where the dome stood.

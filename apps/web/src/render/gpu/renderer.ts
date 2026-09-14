@@ -18,16 +18,16 @@
  *
  * A mesh block is uploaded whole, as the mesher laid it out, and drawn
  * with one vertex slot per lane at the lane's offset from the vertex
- * count (chunk_mesher.ts's carve_baked_mesh); the index lane sits past the
+ * count, the lanes as the chunk pipeline's record lays them out
+ * (crates/pxl-core/src/shader.rs); the index lane sits past the
  * visibility lane the three path used, which this path does not read —
- * a draw's weight is its uniform.
+ * a draw's weight is its uniform. Every pipeline and shader is the
+ * module's, built through pipeline.ts.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
-import { CHUNK_SHADER } from "./chunk_shader.ts";
-import { SKY_SHADER } from "./sky_shader.ts";
 import { DecorPass } from "./decor.ts";
 import { SkinnedPass } from "./skinned.ts";
 import { PuckPass } from "./puck.ts";
@@ -35,12 +35,10 @@ import { BadgePass } from "./badges.ts";
 import { PreviewCase } from "./preview.ts";
 import { DebugPass } from "./debug.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
-import { FRAME_UNIFORM_FLOATS } from "./frame_wgsl.ts";
-import { DEPTH_CLEAR, DEPTH_COMPARE, DEPTH_FORMAT } from "./depth.ts";
-import { SHADOW_FORMAT, ShadowPass } from "./shadow.ts";
+import { DEPTH_CLEAR, DEPTH_FORMAT } from "./depth.ts";
+import { ShadowPass } from "./shadow.ts";
 import { MipBuilder } from "./mips.ts";
-
-export { FRAME_UNIFORM_FLOATS };
+import { type FrameLayout, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY, PipelineBuilder, type PipelineRecord, read_frame_layout } from "./pipeline.ts";
 
 /** draw.rs's records, in words and floats. */
 const UPLOAD_WORDS = 5;
@@ -71,21 +69,11 @@ const PIPELINE_NAMES: Record<number, string> = {
   [PIPELINE_DEBUG]: "debug",
 };
 
-/** Straight alpha over what is drawn, for the ghost. */
-const ALPHA_BLEND: GPUBlendState = {
-  color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
-  alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-};
-
-/** chunk_mesher.ts's lanes, floats a vertex: position, normal, local_pos,
- * box_scale, rgb, layer_taps, faces; then the visibility lane; then the
- * index lane. */
-const LANE_FLOATS = [3, 3, 3, 3, 3, 4, 1] as const;
-const F32_PER_VERTEX = 20;
+/** The visibility lane past the vertex lanes, floats a vertex, which the
+ * index lane follows. */
 const VIS_F32_PER_VERTEX = 1;
 
-const FRAME_UNIFORM_BYTES = FRAME_UNIFORM_FLOATS * 4;
-/** Floats the sky uniform holds (sky_shader.ts's Sky). */
+/** Floats the sky uniform holds (shader/sky.wgsl's Sky). */
 export const SKY_UNIFORM_FLOATS = 16 + 4 * 7;
 
 /** What the renderer is made with; a change means a new renderer. */
@@ -111,12 +99,18 @@ export class GpuRenderer {
   private readonly sky_buffer: GPUBuffer;
   private readonly sky_bind_group: GPUBindGroup;
   private readonly bind_layout: GPUBindGroupLayout;
+  /** The chunk pipeline's record: the lanes' strides, for the offsets. */
+  private readonly chunk_record: PipelineRecord;
+  private readonly chunk_bytes_per_vertex: u32;
   private readonly layers: LayerTextures;
   /** The chunks' depth from the light, for the shadow map. */
   private readonly depth_pipeline: GPURenderPipeline;
   private light_bind_group: GPUBindGroup;
   readonly shadow: ShadowPass;
   readonly mips: MipBuilder;
+  readonly pipelines: PipelineBuilder;
+  /** The frame uniform's layout, the module's (shader.rs's FRAME_AT). */
+  readonly frame_at: FrameLayout;
   readonly sample_count: u32;
   /** Multisampled colour and depth, the frame's targets under MSAA. */
   private msaa_color: GPUTexture | null = null;
@@ -144,7 +138,7 @@ export class GpuRenderer {
   private width = 0;
   private height = 0;
   /** The frame's uniforms, written by the glue before `frame`. */
-  readonly uniforms: FrameUniforms = new Float32Array(new ArrayBuffer(FRAME_UNIFORM_FLOATS * 4));
+  readonly uniforms: FrameUniforms;
   /** The sky's uniforms, likewise. */
   readonly sky: FrameUniforms = new Float32Array(new ArrayBuffer(SKY_UNIFORM_FLOATS * 4));
   /** What the last frame drew, for the ledger. `gpu_ms` is the GPU's own
@@ -164,82 +158,38 @@ export class GpuRenderer {
     this.context.configure({ device, format: this.format, alphaMode: "premultiplied" });
     this.sample_count = options.msaa ? 4 : 1;
     const samples = this.sample_count;
-    this.mips = new MipBuilder(device);
-    this.shadow = new ShadowPass(device);
+    this.pipelines = new PipelineBuilder(device, pxl);
+    this.frame_at = read_frame_layout(pxl);
+    this.uniforms = new Float32Array(new ArrayBuffer(this.frame_at.floats * 4));
+    this.mips = new MipBuilder(device, this.pipelines);
+    this.shadow = new ShadowPass(device, this.frame_at);
     this.stat.texture_bytes.shadow = this.shadow.bytes;
 
-    this.bind_layout = device.createBindGroupLayout({
-      label: "chunk/bind",
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
-        { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
-        { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
-        { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
-        { binding: 4, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
-        ...ShadowPass.layout_entries(5),
-      ],
-    });
-    const module = device.createShaderModule({ label: "chunk", code: CHUNK_SHADER });
-    const vertex_buffers: GPUVertexBufferLayout[] = LANE_FLOATS.map((floats, location) => ({
-      arrayStride: floats * 4,
-      attributes: [{ shaderLocation: location, offset: 0, format: (floats === 1 ? "float32" : `float32x${floats}`) as GPUVertexFormat }],
-    }));
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.bind_layout] });
-    this.pipeline = device.createRenderPipeline({
-      label: "chunk",
-      layout,
-      vertex: { module, entryPoint: "vs", buffers: vertex_buffers },
-      fragment: { module, entryPoint: "fs", targets: [{ format: this.format }] },
-      primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-      depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: DEPTH_COMPARE },
-      multisample: { count: samples },
-    });
-    this.depth_pipeline = device.createRenderPipeline({
-      label: "chunk/depth",
-      layout,
-      vertex: { module, entryPoint: "vs", buffers: vertex_buffers },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: SHADOW_FORMAT, depthWriteEnabled: true, depthCompare: "less" },
-    });
-    // The bias toward the eye is positive under reversed depth.
-    const ghost = (label: string, bias: number, slope: number) =>
-      device.createRenderPipeline({
-        label,
-        layout,
-        vertex: { module, entryPoint: "vs", buffers: vertex_buffers },
-        fragment: { module, entryPoint: "fs", targets: [{ format: this.format, blend: ALPHA_BLEND }] },
-        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: DEPTH_COMPARE, depthBias: bias, depthBiasSlopeScale: slope },
-        multisample: { count: samples },
-      });
+    const chunk = this.pipelines.build(PIPELINE_CHUNK, "chunk", this.format, samples);
+    this.pipeline = chunk.pipeline;
+    this.bind_layout = chunk.layouts[0];
+    this.chunk_record = chunk.record;
+    this.chunk_bytes_per_vertex = chunk.record.buffers.reduce((sum, b) => sum + b.stride, 0) + VIS_F32_PER_VERTEX * 4;
+    this.depth_pipeline = this.pipelines.build(PIPELINE_CHUNK_DEPTH, "chunk/depth", this.format, samples).pipeline;
     this.ghost_pipelines = {
-      [PIPELINE_GHOST_BOX]: ghost("ghost/box", 1, 1),
-      [PIPELINE_GHOST_BOX_COPLANAR]: ghost("ghost/box/coplanar", 8, 2),
+      [PIPELINE_GHOST_BOX]: this.pipelines.build(PIPELINE_GHOST_BOX, "ghost/box", this.format, samples).pipeline,
+      [PIPELINE_GHOST_BOX_COPLANAR]: this.pipelines.build(PIPELINE_GHOST_BOX_COPLANAR, "ghost/box/coplanar", this.format, samples).pipeline,
     };
-    // The sky: one triangle over the screen, first, writing no depth.
-    const sky_module = device.createShaderModule({ label: "sky", code: SKY_SHADER });
-    this.sky_pipeline = device.createRenderPipeline({
-      label: "sky",
-      layout: "auto",
-      vertex: { module: sky_module, entryPoint: "vs" },
-      fragment: { module: sky_module, entryPoint: "fs", targets: [{ format: this.format }] },
-      primitive: { topology: "triangle-list" },
-      depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
-      multisample: { count: samples },
-    });
+    const sky = this.pipelines.build(PIPELINE_SKY, "sky", this.format, samples);
+    this.sky_pipeline = sky.pipeline;
     this.sky_buffer = device.createBuffer({ label: "sky", size: SKY_UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.sky_bind_group = device.createBindGroup({ layout: this.sky_pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.sky_buffer } }] });
+    this.sky_bind_group = device.createBindGroup({ layout: sky.layouts[0], entries: [{ binding: 0, resource: { buffer: this.sky_buffer } }] });
     this.layers = create_layer_textures(device, this.mips);
     this.stat.texture_bytes.layers = this.layers.bytes;
-    this.frame_buffer = device.createBuffer({ label: "frame", size: FRAME_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.frame_buffer = device.createBuffer({ label: "frame", size: this.frame_at.floats * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws_buffer = device.createBuffer({ label: "draws", size: 256 * UNIFORM_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.bind_group = this.make_bind_group(this.frame_buffer);
     this.light_bind_group = this.make_bind_group(this.shadow.light_frame, true);
-    this.decor = new DecorPass(device, this.format, DEPTH_FORMAT, this.frame_buffer, this.shadow, samples);
-    this.skinned = new SkinnedPass(device, this.format, DEPTH_FORMAT, this.frame_buffer, this.shadow, samples);
-    this.puck = new PuckPass(device, this.format, DEPTH_FORMAT, this.frame_buffer, samples);
-    this.badges = new BadgePass(device, this.format, DEPTH_FORMAT, samples, this.mips);
-    this.debug = new DebugPass(device, this.format, DEPTH_FORMAT, this.frame_buffer, samples);
+    this.decor = new DecorPass(device, this.pipelines, this.format, this.frame_buffer, this.shadow, samples);
+    this.skinned = new SkinnedPass(device, this.pipelines, this.format, this.frame_buffer, this.shadow, samples);
+    this.puck = new PuckPass(device, this.pipelines, this.format, this.frame_buffer, samples);
+    this.badges = new BadgePass(device, this.pipelines, this.format, samples, this.mips);
+    this.debug = new DebugPass(device, this.pipelines, this.format, this.frame_buffer, samples);
     if (device.features.has("timestamp-query")) {
       this.timestamps = {
         set: device.createQuerySet({ type: "timestamp", count: 2 }),
@@ -273,11 +223,11 @@ export class GpuRenderer {
       layout: this.bind_layout,
       entries: [
         { binding: 0, resource: { buffer: frame } },
-        { binding: 1, resource: { buffer: this.draws_buffer } },
-        { binding: 2, resource: this.layers.top.createView({ dimension: "2d-array" }) },
-        { binding: 3, resource: this.layers.side.createView({ dimension: "2d-array" }) },
-        { binding: 4, resource: this.layers.sampler },
-        ...(light ? this.shadow.light_entries(5) : this.shadow.group_entries(5)),
+        ...(light ? this.shadow.light_entries(1) : this.shadow.group_entries(1)),
+        { binding: 3, resource: { buffer: this.draws_buffer } },
+        { binding: 4, resource: this.layers.top.createView({ dimension: "2d-array" }) },
+        { binding: 5, resource: this.layers.side.createView({ dimension: "2d-array" }) },
+        { binding: 6, resource: this.layers.sampler },
       ],
     });
   }
@@ -318,7 +268,7 @@ export class GpuRenderer {
 
   /** A display case over `canvas`, drawn each frame until closed. */
   open_preview(canvas: HTMLCanvasElement): PreviewCase {
-    const preview = new PreviewCase(this.device, canvas, this.format);
+    const preview = new PreviewCase(this.device, this.pipelines, this.frame_at, canvas, this.format);
     this.previews.add(preview);
     return preview;
   }
@@ -502,11 +452,11 @@ export class GpuRenderer {
       }
       any = true;
       let offset = 0;
-      LANE_FLOATS.forEach((floats, slot) => {
+      this.chunk_record.buffers.forEach((lane, slot) => {
         pass.setVertexBuffer(slot, buffer, offset);
-        offset += vertex_cnt * floats * 4;
+        offset += vertex_cnt * lane.stride;
       });
-      pass.setIndexBuffer(buffer, "uint32", vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_cnt * 4);
+      pass.setIndexBuffer(buffer, "uint32", vertex_cnt * this.chunk_bytes_per_vertex, index_cnt * 4);
       pass.drawIndexed(index_cnt, 1, 0, 0, uniform);
     }
     return any;

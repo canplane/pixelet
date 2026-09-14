@@ -14,19 +14,13 @@
  * texture pack is, handed over by group: every bundle's variants in bundle
  * order, the order the kinds were taught.
  *
- * The shader is make_lit_gltf_material's recipe: the skin under three's
- * Lambert (albedo over pi) for the sun, the ambient and the hemisphere, the
- * skin again as the emissive floor, fog, and the grade. An instance is its
- * position, its spin about Z after the glTF Y-up to Z-up turn, and its
- * scale; a hidden one is sent outside the clip volume.
+ * The shader is shader/decor.wgsl; the pipelines are the module's records.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
-import { GRADE_WGSL } from "./grade.ts";
-import { FRAME_WGSL, SHADE_WGSL, SHADOW_WGSL } from "./frame_wgsl.ts";
-import { DEPTH_COMPARE } from "./depth.ts";
-import { SHADOW_FORMAT, ShadowPass } from "./shadow.ts";
+import { PIPELINE_DECOR_DEPTH, type PipelineBuilder, type PipelineRecord } from "./pipeline.ts";
+import type { ShadowPass } from "./shadow.ts";
 
 /** Words and floats of draw.rs's records the decor pass reads. */
 const DRAW_WORDS = 5;
@@ -37,7 +31,7 @@ const PIPELINE_GHOST_DECOR = 4;
  * word, the instance count, the opacity, padding. */
 const DRAW_UNIFORM_BYTES = 32;
 
-/** model_asset.ts's words a vertex: position, normal, uv, joints, weights. */
+/** model.rs's words a vertex: position, normal, uv, joints, weights. */
 const MODEL_VERTEX_WORDS = 16;
 
 type GpuModel = {
@@ -48,90 +42,14 @@ type GpuModel = {
   skin_group: GPUBindGroup;
 };
 
-export const DECOR_SHADER: string = /* wgsl */ `
-${FRAME_WGSL}
-
-struct Draw {
-  translation: vec3f,
-  offset: u32,
-  count: u32,
-  opacity: f32,
-  _p1: u32,
-  _p2: u32,
-};
-
-@group(0) @binding(0) var<uniform> frame: Frame;
-@group(1) @binding(0) var<uniform> draw: Draw;
-@group(2) @binding(0) var skin: texture_2d<f32>;
-@group(2) @binding(1) var skin_sampler: sampler;
-@group(3) @binding(0) var<storage, read> block: array<u32>;
-
-struct VertexIn {
-  @builtin(instance_index) i: u32,
-  @location(0) position: vec3f,
-  @location(1) normal: vec3f,
-  @location(2) uv: vec2f,
-};
-
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-  @location(0) uv: vec2f,
-  @location(1) normal: vec3f,
-  @location(2) world_pos: vec3f,
-};
-
-fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw.offset + k * draw.count + i]);
-}
-
-// glTF is Y-up: a quarter turn about X, (x, y, z) to (x, -z, y), then the
-// instance's spin about Z.
-fn place(v: vec3f, spin: f32) -> vec3f {
-  let up = vec3f(v.x, -v.z, v.y);
-  let c = cos(spin);
-  let s = sin(spin);
-  return vec3f(up.x * c - up.y * s, up.x * s + up.y * c, up.z);
-}
-
-@vertex
-fn vs(v: VertexIn) -> VertexOut {
-  let n = draw.count;
-  let flags = (block[draw.offset + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
-  var o: VertexOut;
-  if ((flags & 1u) != 0u) {
-    o.clip = vec4f(0.0, 0.0, -2.0, 1.0);
-    return o;
-  }
-  let at = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i));
-  let spin = lane(3u, v.i);
-  let scale = lane(4u, v.i);
-  let world = place(v.position * scale, spin) + at + draw.translation;
-  o.clip = frame.view_proj * vec4f(world, 1.0);
-  o.uv = v.uv;
-  o.normal = place(v.normal, spin);
-  o.world_pos = world;
-  return o;
-}
-
-${GRADE_WGSL}
-${SHADE_WGSL}
-${SHADOW_WGSL(0, 1)}
-
-@fragment
-fn fs(i: VertexOut) -> @location(0) vec4f {
-  let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
-  let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n));
-  return vec4f(finish(color, i.clip.xy), draw.opacity);
-}
-`;
-
 export class DecorPass {
   private readonly pipeline: GPURenderPipeline;
   /** The ghost instance: blended, both sides, writing no depth. */
   private readonly ghost_pipeline: GPURenderPipeline;
   /** Depth only, from the light, for the shadow map. */
   private readonly depth_pipeline: GPURenderPipeline;
+  /** The lanes as the record lays them out, for the vertex buffer offsets. */
+  private readonly record: PipelineRecord;
   private readonly frame_group: GPUBindGroup;
   private readonly light_group: GPUBindGroup;
   private readonly draw_layout: GPUBindGroupLayout;
@@ -149,64 +67,16 @@ export class DecorPass {
   private readonly skin_groups = new WeakMap<ImageBitmap, GPUBindGroup>();
   private readonly block_groups = new WeakMap<GPUBuffer, GPUBindGroup>();
 
-  constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer, shadow: ShadowPass, sample_count: u32) {
-    const frame_layout = device.createBindGroupLayout({
-      entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }, ...ShadowPass.layout_entries(1)],
-    });
-    this.draw_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform", hasDynamicOffset: true } }] });
-    this.skin_layout = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: {} },
-        { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
-      ],
-    });
-    this.block_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } }] });
-    const module = device.createShaderModule({ label: "decor", code: DECOR_SHADER });
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.block_layout] });
-    const vertex: GPUVertexState = {
-      module,
-      entryPoint: "vs",
-      buffers: [
-        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
-        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
-        { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
-      ],
-    };
-    this.pipeline = device.createRenderPipeline({
-      label: "decor",
-      layout,
-      vertex,
-      fragment: { module, entryPoint: "fs", targets: [{ format }] },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: DEPTH_COMPARE },
-      multisample: { count: sample_count },
-    });
-    this.depth_pipeline = device.createRenderPipeline({
-      label: "decor/depth",
-      layout,
-      vertex,
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: SHADOW_FORMAT, depthWriteEnabled: true, depthCompare: "less" },
-    });
-    this.ghost_pipeline = device.createRenderPipeline({
-      label: "decor/ghost",
-      layout,
-      vertex,
-      fragment: {
-        module,
-        entryPoint: "fs",
-        targets: [{
-          format,
-          blend: {
-            color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
-            alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-          },
-        }],
-      },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: DEPTH_COMPARE, depthBias: 1, depthBiasSlopeScale: 1 },
-      multisample: { count: sample_count },
-    });
+  constructor(private readonly device: GPUDevice, pipelines: PipelineBuilder, format: GPUTextureFormat, frame_buffer: GPUBuffer, shadow: ShadowPass, sample_count: u32) {
+    const lit = pipelines.build(PIPELINE_DECOR, "decor", format, sample_count);
+    this.pipeline = lit.pipeline;
+    this.record = lit.record;
+    this.depth_pipeline = pipelines.build(PIPELINE_DECOR_DEPTH, "decor/depth", format, sample_count).pipeline;
+    this.ghost_pipeline = pipelines.build(PIPELINE_GHOST_DECOR, "decor/ghost", format, sample_count).pipeline;
+    const [frame_layout, draw_layout, skin_layout, block_layout] = lit.layouts;
+    this.draw_layout = draw_layout;
+    this.skin_layout = skin_layout;
+    this.block_layout = block_layout;
     this.frame_group = device.createBindGroup({ layout: frame_layout, entries: [{ binding: 0, resource: { buffer: frame_buffer } }, ...shadow.group_entries(1)] });
     this.light_group = device.createBindGroup({ layout: frame_layout, entries: [{ binding: 0, resource: { buffer: shadow.light_frame } }, ...shadow.light_entries(1)] });
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" });
@@ -338,9 +208,11 @@ export class DecorPass {
       pass.setBindGroup(2, model.skin_group);
       pass.setBindGroup(3, block_group);
       const vc = model.vertex_cnt;
-      pass.setVertexBuffer(0, model.buffer, 0, vc * 12);
-      pass.setVertexBuffer(1, model.buffer, vc * 12, vc * 12);
-      pass.setVertexBuffer(2, model.buffer, vc * 24, vc * 8);
+      let at = 0;
+      this.record.buffers.forEach((lane, slot) => {
+        pass.setVertexBuffer(slot, model.buffer, at, vc * lane.stride);
+        at += vc * lane.stride;
+      });
       pass.setIndexBuffer(model.buffer, "uint32", vc * MODEL_VERTEX_WORDS * 4, model.index_cnt * 4);
       pass.drawIndexed(model.index_cnt, draws[k + 2]);
       drawn++;

@@ -16,7 +16,7 @@ import { mat4, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation } from
 
 import { type ModelSkin, SkinnedPass } from "./skinned.ts";
 import type { FrameUniforms } from "./renderer.ts";
-import { FRAME_AT, FRAME_UNIFORM_FLOATS } from "./frame_wgsl.ts";
+import type { FrameLayout, PipelineBuilder } from "./pipeline.ts";
 import { DEPTH_CLEAR, DEPTH_FORMAT, GL_TO_WGPU } from "./depth.ts";
 
 const DRAW_WORDS = 5;
@@ -32,7 +32,7 @@ export class PreviewCase {
   private readonly context: GPUCanvasContext;
   private readonly frame_buffer: GPUBuffer;
   private readonly pass: SkinnedPass;
-  private readonly uniforms: FrameUniforms = new Float32Array(new ArrayBuffer(FRAME_UNIFORM_FLOATS * 4));
+  private readonly uniforms: FrameUniforms;
   private depth: GPUTexture | null = null;
   private width = 0;
   private height = 0;
@@ -43,13 +43,14 @@ export class PreviewCase {
   target = { x: 0, y: 0, z: 0.55 };
   fov: f64 = 35;
 
-  constructor(private readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, format: GPUTextureFormat) {
+  constructor(private readonly device: GPUDevice, pipelines: PipelineBuilder, private readonly at: FrameLayout, readonly canvas: HTMLCanvasElement, format: GPUTextureFormat) {
     const context = canvas.getContext("webgpu");
     if (!context) throw new Error("gpu: the preview canvas has no webgpu context");
     this.context = context;
     context.configure({ device, format, alphaMode: "premultiplied" });
-    this.frame_buffer = device.createBuffer({ label: "preview/frame", size: FRAME_UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.pass = new SkinnedPass(device, format, DEPTH_FORMAT, this.frame_buffer, null, 1);
+    this.uniforms = new Float32Array(new ArrayBuffer(at.floats * 4));
+    this.frame_buffer = device.createBuffer({ label: "preview/frame", size: at.floats * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.pass = new SkinnedPass(device, pipelines, format, this.frame_buffer, null, 1);
   }
 
   set_skin(model: u32, image: ModelSkin): void {
@@ -85,20 +86,23 @@ export class PreviewCase {
     // The case's view, with the actor's place in the world taken back out
     // so it stands at the case's origin; the eye where the fog reads it.
     const u = this.uniforms;
+    const f = this.at;
     u.set(frame);
     mat4_perspective($proj, (this.fov * Math.PI) / 180, this.width / this.height, 0.1, 100);
     mat4_look_at($view, this.eye, this.target, { x: 0, y: 0, z: 1 });
     mat4_translation($t, -uniforms[at], -uniforms[at + 1], -uniforms[at + 2]);
-    u.set(mat4_mul($m, mat4_mul($m, mat4_mul($m, GL_TO_WGPU, $proj), $view), $t), 0);
-    u[16] = this.eye.x + uniforms[at];
-    u[17] = this.eye.y + uniforms[at + 1];
-    u[18] = this.eye.z + uniforms[at + 2];
-    u[27] = 1e9;
-    u[31] = 2e9;
-    u[FRAME_AT.viewport] = this.width;
-    u[FRAME_AT.viewport + 1] = this.height;
-    u[FRAME_AT.shadow_strength] = 0;
-    u[FRAME_AT.vignette] = 0;
+    u.set(mat4_mul($m, mat4_mul($m, mat4_mul($m, GL_TO_WGPU, $proj), $view), $t), f.view_proj);
+    u[f.camera_pos] = this.eye.x + uniforms[at];
+    u[f.camera_pos + 1] = this.eye.y + uniforms[at + 1];
+    u[f.camera_pos + 2] = this.eye.z + uniforms[at + 2];
+    // No fog: the near and far pushed out of reach (environment.rs's
+    // fog_near and fog_far in the run).
+    u[f.env + 7] = 1e9;
+    u[f.env + 11] = 2e9;
+    u[f.viewport] = this.width;
+    u[f.viewport + 1] = this.height;
+    u[f.shadow_strength] = 0;
+    u[f.vignette] = 0;
     this.device.queue.writeBuffer(this.frame_buffer, 0, u);
     const pass = encoder.beginRenderPass({
       label: "preview",

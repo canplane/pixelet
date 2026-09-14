@@ -78,6 +78,10 @@ struct State {
     decor_hit: [f64; 4],
     draw_row: [u32; 10],
     model_block: u32,
+    /// The last shader or pipeline asked for: where its words sit, and how
+    /// many (shader.rs).
+    shader_row: [u32; 2],
+    pipeline: Vec<u32>,
 }
 
 /// Entries each ring holds: a page mounting is 64 chunks a frame, each
@@ -136,6 +140,8 @@ fn state() -> &'static mut State {
                 decor_hit: [0.0; 4],
                 draw_row: [0; 10],
                 model_block: 0,
+                shader_row: [0; 2],
+                pipeline: Vec::new(),
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
@@ -1092,6 +1098,45 @@ pub extern "C" fn pxl_billboards_remove(set: u32) {
     let s = state();
     let (mut world, _, sched) = world_of(s);
     sched.billboards.remove(&mut world, &mut sched.draw, set);
+}
+
+// ---- The shaders and the pipelines (crates/pxl-core/src/shader.rs) ----
+
+/// Shader `kind`'s WGSL: a row of two words, its address and its length
+/// in bytes; zero length for a kind that is not one.
+#[no_mangle]
+pub extern "C" fn pxl_shader(kind: u32) -> *const u32 {
+    let s = state();
+    let src = pxl_core::shader::source(kind);
+    s.shader_row = [src.as_ptr() as u32, src.len() as u32];
+    s.shader_row.as_ptr()
+}
+
+/// Pipeline `id`'s record: a row of two words, its address and its length
+/// in words, valid until the next call; zero length for an id that is not
+/// one.
+#[no_mangle]
+pub extern "C" fn pxl_pipeline(id: u32) -> *const u32 {
+    let s = state();
+    s.pipeline = pxl_core::shader::pipeline(id);
+    s.shader_row = [s.pipeline.as_ptr() as u32, s.pipeline.len() as u32];
+    s.shader_row.as_ptr()
+}
+
+/// The frame uniform's layout: the floats it holds, then where each field
+/// starts, in shader.rs's FRAME_AT order.
+#[no_mangle]
+pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
+    static TABLE: [u32; 13] = {
+        let mut t = [pxl_core::shader::FRAME_FLOATS; 13];
+        let mut k = 0;
+        while k < 12 {
+            t[k + 1] = pxl_core::shader::FRAME_AT[k];
+            k += 1;
+        }
+        t
+    };
+    TABLE.as_ptr()
 }
 
 // ---- The dev gizmos (crates/pxl-core/src/debug.rs) ----
