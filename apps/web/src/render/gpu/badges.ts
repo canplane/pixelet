@@ -63,6 +63,8 @@ export class BadgePass {
   near: f64 = 0.1;
   far: f64 = 1000;
   cell: f64 = 0.01;
+  /** 1 to vignette the badges as the world is, 0 to leave them. */
+  vignette: f64 = 1;
 
   constructor(private readonly device: GPUDevice, pipelines: PipelineBuilder, format: GPUTextureFormat, sample_count: u32, mips: MipBuilder) {
     const { pipeline, layouts } = pipelines.build(PIPELINE_BADGE, "badges", format, sample_count);
@@ -111,6 +113,7 @@ export class BadgePass {
     color: GPUTextureView,
     resolve: GPUTextureView | undefined,
     depth: GPUTexture,
+    viewport: readonly [u32, u32],
     draws: Uint32Array,
     uniforms: Float32Array,
     buffers: ReadonlyMap<u32, GPUBuffer>,
@@ -148,6 +151,9 @@ export class BadgePass {
       s[38] = this.near;
       s[39] = this.far;
       s[40] = this.cell;
+      s[41] = this.vignette;
+      s[42] = viewport[0];
+      s[43] = viewport[1];
       this.device.queue.writeBuffer(set.uniform, 0, s);
       if (set.block !== block || set.depth !== depth) {
         set.group = this.device.createBindGroup({

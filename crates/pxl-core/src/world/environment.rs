@@ -21,8 +21,11 @@ use crate::world::sched::Frame;
 pub const THEME_FLOATS: usize = 34;
 /// Floats the output takes: the frame uniform's lighting run (24) and the
 /// sky uniform's colours and directions (24), each aligned to the renderer's
-/// own layout from its twentieth float.
-pub const ENV_FLOATS: usize = 48;
+/// own layout from its twentieth float; then the second light (8): the
+/// dimmer of the sun and the moon, its direction and its colour.
+pub const ENV_FLOATS: usize = 56;
+/// Where the second light starts in the output.
+pub const ENV_OTHER_LIGHT: usize = 48;
 
 /// Where the colours of a theme sit in its floats.
 const FOG: usize = 0;
@@ -175,17 +178,20 @@ impl Environment {
     fn write(&mut self, frame: &Frame) {
         let c = &self.current;
         let o = &mut self.out;
-        // The terrain takes the brighter of the sun and the moon, as three's
-        // strongest directional light was.
+        // The terrain is lit by both the sun and the moon, summed: the
+        // brighter is the frame's sun, which casts the shadow, and the other
+        // is the second light, unshadowed. Summed rather than the brighter
+        // alone, so the light does not snap from one direction to the other
+        // where their intensities cross during a dusk or dawn ease.
         let sun_i = c[SUN + 3] as f64;
-        let (dir, color, intensity) = if self.moon_intensity > sun_i {
-            (self.moon, MOON_COLOR, self.moon_intensity)
-        } else {
-            (self.sun, [c[SUN], c[SUN + 1], c[SUN + 2]], sun_i)
-        };
-        let d = normalize(dir);
-        put3(o, 0, [d[0] as f32, d[1] as f32, d[2] as f32]);
-        put3(o, 4, [color[0] * intensity as f32, color[1] * intensity as f32, color[2] * intensity as f32]);
+        let sun = (self.sun, [c[SUN], c[SUN + 1], c[SUN + 2]], sun_i);
+        let moon = (self.moon, MOON_COLOR, self.moon_intensity);
+        let (first, other) = if self.moon_intensity > sun_i { (moon, sun) } else { (sun, moon) };
+        for (at, (dir, color, intensity)) in [(0, first), (ENV_OTHER_LIGHT, other)] {
+            let d = normalize(dir);
+            put3(o, at, [d[0] as f32, d[1] as f32, d[2] as f32]);
+            put3(o, at + 4, [color[0] * intensity as f32, color[1] * intensity as f32, color[2] * intensity as f32]);
+        }
         o[7] = c[FOG_NEAR];
         let ambient_i = c[AMBIENT + 3];
         put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);

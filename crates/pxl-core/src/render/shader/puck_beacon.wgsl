@@ -31,6 +31,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let n = normalize(i.normal);
   // Mostly metal, which three lit with no environment to reflect: a little
   // diffuse under the lights, and the emissive glow.
-  let lit = colour * (frame.sun_color * max(dot(n, frame.sun_dir), 0.0) + frame.ambient) / 3.14159265 * 0.2;
+  let lit = colour * (frame.sun_color * max(dot(n, frame.sun_dir), 0.0) + frame.other_color * max(dot(n, frame.other_dir), 0.0) + frame.ambient) / PI * 0.2;
   return vec4f(finish(lit + colour * glow, i.clip.xy), 1.0);
 }

@@ -1150,10 +1150,10 @@ pub extern "C" fn pxl_pipeline(id: u32) -> *const u32 {
 /// starts, in shader.rs's FRAME_AT order.
 #[no_mangle]
 pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
-    static TABLE: [u32; 13] = {
-        let mut t = [pxl_core::render::shader::FRAME_FLOATS; 13];
+    static TABLE: [u32; 14] = {
+        let mut t = [pxl_core::render::shader::FRAME_FLOATS; 14];
         let mut k = 0;
-        while k < 12 {
+        while k < 13 {
             t[k + 1] = pxl_core::render::shader::FRAME_AT[k];
             k += 1;
         }

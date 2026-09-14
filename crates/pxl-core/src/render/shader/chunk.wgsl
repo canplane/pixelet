@@ -185,6 +185,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   base = base * mix(1.0, 1.0 - frame.edge_strength, edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
 
   let n = normalize(i.normal);
-  let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n));
+  let color = shade(base, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n));
   return vec4f(finish(color, i.clip.xy), d.opacity);
 }
