@@ -2,17 +2,20 @@
 
 /**
  * The dev gizmos (the `show_debug_objects` setting): the cell the map
- * centre floors to, the map centre itself, the floating origin, and the
- * page's base and centre corners, as line segments the module holds and
- * the renderer draws over everything (crates/pxl-core/src/debug.rs,
- * render/gpu/debug.ts), with labels as DOM over the canvas, projected
- * through the view each frame.
+ * centre floors to, the map centre itself, the floating origin, the page's
+ * base and centre corners, and the two frames' gyro rings — one fixed to
+ * the screen whatever the azimuth, one turning with the map so its vertex
+ * points north — as line segments the module holds and the renderer draws
+ * over everything (crates/pxl-core/src/debug.rs, render/gpu/debug.ts),
+ * with labels as DOM over the canvas, projected through the view each
+ * frame. The map's part is rebuilt when the map moves, the frames' part
+ * when the view does; both go to the module as one set.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { mat4_clip_w, mat4_transform_point } from "@xpute/core/kit/mat4.ts";
+import { type Mat4, mat4_clip_w, mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 import { type IVec, ivec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L1_IDX_IN_L4, L3_BASE, L3_CENTER } from "@pxl/shared/spec/space/indexer.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
@@ -32,6 +35,8 @@ const GAP: f64 = 0.2;
 /** Half the cross a point is drawn as, in units. */
 const POINT_HALF: f64 = 0.15;
 const VERTEX_FLOATS = 6;
+const RING_RADIUS: f64 = 4;
+const RING_SEGMENTS = 64;
 
 type Label = { at: V3; text: string };
 
@@ -78,6 +83,60 @@ class Sketch {
     else this.line(from, to);
     if (label) this.labels.push({ at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2], text: label });
   }
+
+  /** A dashed ring of `radius` about `centre` in the plane of `a` and `b`. */
+  ring(centre: V3, radius: f64, a: V3, b: V3): void {
+    let prev: V3 | null = null;
+    for (let i = 0; i <= RING_SEGMENTS; i++) {
+      const t = (i / RING_SEGMENTS) * Math.PI * 2;
+      const c = Math.cos(t) * radius, sn = Math.sin(t) * radius;
+      const at: V3 = [centre[0] + a[0] * c + b[0] * sn, centre[1] + a[1] * c + b[1] * sn, centre[2] + a[2] * c + b[2] * sn];
+      if (prev && i % 2 === 1) this.line(prev, at);
+      prev = at;
+    }
+  }
+
+  /**
+   * frame_gizmo.tsx's GyroRing: a horizontal ring and a vertical one
+   * through `vertex`, the vertex marked, and the radius drawn when asked,
+   * all in the frame `to_local` maps into the root frame.
+   */
+  gyro(to_local: (v: V3) => V3, vertex: V3, label: string, show_radius: boolean): void {
+    const horiz = Math.hypot(vertex[0], vertex[1]);
+    const dir: V3 = horiz > 1e-9 ? [vertex[0] / horiz, vertex[1] / horiz, 0] : [1, 0, 0];
+    const radius = Math.hypot(vertex[0], vertex[1], vertex[2]);
+    const centre = to_local([0, 0, 0]);
+    const axis = (v: V3): V3 => {
+      const p = to_local(v);
+      return [p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]];
+    };
+    this.ring(centre, radius, axis([1, 0, 0]), axis([0, 1, 0]));
+    this.ring(centre, radius, axis(dir), axis([0, 0, 1]));
+    if (show_radius) this.labelled_line(centre, to_local(vertex), String(radius), true);
+    this.point(to_local(vertex), label);
+  }
+
+  append(other: Sketch): void {
+    this.vertices.push(...other.vertices);
+    this.labels.push(...other.labels);
+  }
+}
+
+const $v = { x: 0, y: 0, z: 0 };
+/** A point of a matrix's frame, in the root frame. */
+const through = (m: Mat4) => (v: V3): V3 => {
+  mat4_transform_point($v, m, v[0], v[1], v[2]);
+  return [$v.x, $v.y, $v.z];
+};
+
+/** The frames' rings: the view frame, which never turns, and the world
+ * frame, which turns with the map, both about the view's origin. */
+function sketch_frames(s: Sketch): void {
+  const view_frame = through(view.inv_root);
+  s.gyro(view_frame, [4, 0, 0], "view-frame (4,0,0)", false);
+  s.point(view_frame([0, 0, 4]), "view-frame (0,0,4)");
+  const world_frame = (v: V3): V3 => [v[0] - view.tx, v[1] - view.ty, v[2] - view.tz];
+  s.gyro(world_frame, [0, RING_RADIUS, 0], "north (world-frame, azimuth-locked)", true);
 }
 
 /** A point in the root frame: its address's offset from the map origin. */
@@ -87,7 +146,7 @@ function local_of(p: PVF3, map_origin: IVec): V3 {
   return [ivec.to_real(ivec.X(local)) + v[0], ivec.to_real(ivec.Y(local)) + v[1], ivec.to_real(ivec.Z(local)) + v[2]];
 }
 
-function sketch(map_center: PVF3, map_origin: IVec): Sketch {
+function sketch_map(map_center: PVF3, map_origin: IVec): Sketch {
   const s = new Sketch();
 
   // raw_v: the map centre as placed, no elevation override. quant_v: the
@@ -124,25 +183,37 @@ export function DebugLayer(props: DebugLayerProps) {
   const [tiles, set_tiles] = useState(0);
   useEffect(() => register_tile_interest(() => true, () => set_tiles((t) => t + 1)), []);
 
-  const drawn = useMemo(() => sketch(map_center, map_origin), [map_center, map_origin, tiles]);
+  const map_sketch = useMemo(() => sketch_map(map_center, map_origin), [map_center, map_origin, tiles]);
+  const drawn = useRef<Sketch>(new Sketch());
+  const [label_texts, set_label_texts] = useState<string[]>([]);
+  const built_for = useRef<{ map: Sketch | null; key: string }>({ map: null, key: "" });
 
-  useEffect(() => {
-    const p = CORE_PXL;
-    if (!p) return;
-    const count: u32 = drawn.vertices.length / VERTEX_FLOATS;
-    const lane = FIXED_ALLOC.take(Float32Array, Math.max(VERTEX_FLOATS, drawn.vertices.length));
-    lane.set(drawn.vertices);
-    p.pxl_debug_set(ivec.to_real(ivec.X(map_origin)), ivec.to_real(ivec.Y(map_origin)), ivec.to_real(ivec.Z(map_origin)), count, lane.byteOffset);
-    FIXED_ALLOC.give(lane);
-    request_world_tick();
-  }, [drawn, map_origin]);
   // Gone with the layer.
   useEffect(() => () => CORE_PXL?.pxl_debug_set(0, 0, 0, 0, 0), []);
 
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   const $p = useRef({ x: 0, y: 0, z: 0 }).current;
   useTick("cosmetic", () => {
-    drawn.labels.forEach((label, k) => {
+    const p = CORE_PXL;
+    if (!p) return;
+    // The frames' rings follow the view; the map's part the map.
+    const key = `${view.azimuth}|${view.tx}|${view.ty}|${view.tz}`;
+    if (built_for.current.map !== map_sketch || built_for.current.key !== key) {
+      built_for.current = { map: map_sketch, key };
+      const s = new Sketch();
+      s.append(map_sketch);
+      sketch_frames(s);
+      drawn.current = s;
+      const count: u32 = s.vertices.length / VERTEX_FLOATS;
+      const lane = FIXED_ALLOC.take(Float32Array, Math.max(VERTEX_FLOATS, s.vertices.length));
+      lane.set(s.vertices);
+      p.pxl_debug_set(ivec.to_real(ivec.X(map_origin)), ivec.to_real(ivec.Y(map_origin)), ivec.to_real(ivec.Z(map_origin)), count, lane.byteOffset);
+      FIXED_ALLOC.give(lane);
+      request_world_tick();
+      const texts = s.labels.map((l) => l.text);
+      if (texts.join("\n") !== label_texts.join("\n")) set_label_texts(texts);
+    }
+    drawn.current.labels.forEach((label, k) => {
       const el = refs.current[k];
       if (!el) return;
       const [x, y, z] = label.at;
@@ -155,15 +226,15 @@ export function DebugLayer(props: DebugLayerProps) {
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {drawn.labels.map((label, k) => (
+      {label_texts.map((text, k) => (
         <div
-          key={`${k}:${label.text}`}
+          key={`${k}:${text}`}
           ref={(el) => {
             refs.current[k] = el;
           }}
           className="absolute left-0 top-0 whitespace-nowrap text-[10px] text-black"
         >
-          {label.text}
+          {text}
         </div>
       ))}
     </div>
