@@ -14,6 +14,9 @@ export function vectors() {
   const rnd = seeded(0x3857);
   const u = () => rnd() / 0x1_0000_0000;
   const lnglat: [number, number, number][] = [[127.0276, 37.4979, 38], [0, 0, 0], [-180, 85.05112878, 0], [179.9999, -85.05112878, 1000], [126.9, 37.5, -12.5]];
+  // Past the domain: a longitude wrapped once, twice and exactly onto the
+  // seam, and a latitude past Mercator's clamp on either side.
+  lnglat.push([190, 89, 0], [-540, -89.9, 5], [360, 85.1, 0], [180, 0, 0], [-180.0000001, -90, 0]);
   for (let k = 0; k < 40; k++) lnglat.push([u() * 360 - 180, u() * 170 - 85, u() * 3000 - 100]);
   return {
     geo: lnglat.map((g) => {
