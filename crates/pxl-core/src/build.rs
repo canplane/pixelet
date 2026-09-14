@@ -70,6 +70,10 @@ struct Chunk {
     /// The tiers the glue lacks, in the order it wants them; 0 is none.
     want: [u32; 2],
     runs: Option<Runs>,
+    /// The mesh pool's release count when it last refused this chunk a
+    /// block: until a block is given back, the same request meets the
+    /// same pool, and the chunk is not tried.
+    refused: Option<u32>,
 }
 
 impl Chunk {
@@ -211,6 +215,7 @@ impl Builder {
                 generation: 0,
                 want: [0; 2],
                 runs: None,
+                refused: None,
             },
         );
     }
@@ -276,6 +281,21 @@ impl Builder {
         }
     }
 
+    /// The pool refused chunk `id` a block: the slot it held is given up —
+    /// held, it is every other chunk's wait, and the chunk cannot use it
+    /// until the pool changes — and the chunk waits for a release.
+    fn refuse(&mut self, world: &mut World, id: u32) {
+        self.stat.starved += 1;
+        self.abort_scan_of(world, id);
+        if matches!(&self.bake_job, Some(j) if j.id == id) {
+            self.abort_bake(world);
+        }
+        let releases = world.pools[world.volumes.mesh_pool()].stat.releases;
+        if let Some(c) = self.chunks.get_mut(&id) {
+            c.refused = Some(releases);
+        }
+    }
+
     fn abort_bake(&mut self, world: &mut World) {
         if let Some(job) = self.bake_job.take() {
             self.bake.abort();
@@ -296,9 +316,15 @@ impl Builder {
 
     /// `tick`, stopping once `max_chunks` chunks have made progress: the
     /// scheduler's cap on how many chunks move in a frame. A chunk that
-    /// waits on a slot or a block does not count.
+    /// waits on a slot or a block does not count. A block refused ends the
+    /// tick: the pool does not change until the scheduler reclaims after,
+    /// so every later request would meet the same pool, and a refusal is
+    /// not free — the direct runs are written whole before their block is
+    /// asked for. A thousand chunks pending on a starved pool spun a
+    /// hundred milliseconds a frame this way (2026-09-14).
     pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(Event)) {
         let t0 = now();
+        let starved = self.stat.starved;
         let mut stepped = false;
         let mut moved = 0;
         let holders = self.holders();
@@ -317,6 +343,9 @@ impl Builder {
                     return;
                 }
                 let progress = self.advance(world, id, emit);
+                if self.stat.starved != starved {
+                    return;
+                }
                 if progress != Progress::Blocked {
                     stepped = true;
                 }
@@ -335,6 +364,9 @@ impl Builder {
         let Some(c) = self.chunks.get(&id) else { return Progress::Done };
         if c.wanted().next().is_none() {
             return Progress::Done;
+        }
+        if c.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].stat.releases) {
+            return Progress::Blocked;
         }
         if c.runs.is_none() {
             return self.advance_runs(world, id, emit);
@@ -368,7 +400,7 @@ impl Builder {
                     self.scan_job = Some(ScanJob { id, volume });
                 }
                 None => {
-                    self.stat.starved += 1;
+                    self.refuse(world, id);
                     return Progress::Blocked;
                 }
             }
@@ -381,7 +413,7 @@ impl Builder {
             ScanStep::NeedSet(bytes) => {
                 let pool = world.volumes.mesh_pool();
                 let Some(at) = world.pools[pool].acquire(bytes) else {
-                    self.stat.starved += 1;
+                    self.refuse(world, id);
                     return Progress::Blocked;
                 };
                 // SAFETY: a block of the bytes asked for, the chunk's until released.
@@ -453,7 +485,7 @@ impl Builder {
         let pool = world.volumes.mesh_pool();
         let Some(at) = world.pools[pool].acquire(bytes) else {
             self.direct.abort();
-            self.stat.starved += 1;
+            self.refuse(world, id);
             return Progress::Blocked;
         };
         // SAFETY: as for a scan's set.
@@ -497,7 +529,7 @@ impl Builder {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
                 let Some(at) = world.pools[pool].acquire(words * 4) else {
-                    self.stat.starved += 1;
+                    self.refuse(world, id);
                     return Progress::Blocked;
                 };
                 // SAFETY: a block of the words asked for, the bake's until it

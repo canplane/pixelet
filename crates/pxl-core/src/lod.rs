@@ -37,35 +37,58 @@ pub struct Guide {
     pub blend: Option<(u32, u32, f64)>,
 }
 
-/// The ladder for one projection.
+/// The ladder for one projection, under a pressure.
 #[derive(Clone, Copy)]
 pub struct Ladder {
     thresholds: [f64; 6],
     viewport_h: f64,
     fov_deg: f64,
+    pressure: u32,
 }
 
 impl Default for Ladder {
     fn default() -> Self {
-        Ladder::new(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG)
+        Ladder::new(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG, 0)
     }
 }
 
 impl Ladder {
-    pub fn new(viewport_h: f64, fov_deg: f64) -> Ladder {
+    /// The ladder scaled by the projection, then pulled in by `pressure`:
+    /// every threshold at 2^(-pressure/2), so two steps of pressure move
+    /// every chunk past the finest band one tier coarser — a quarter of
+    /// the cells, and about a quarter of the bytes — and one step moves
+    /// the outer half of each band. What the memory budget is paid in (sched.rs's pressure): the
+    /// set on screen gets coarser until it fits, as Cesium raises a
+    /// tileset's screen-space error when its tiles exceed its cache.
+    pub fn new(viewport_h: f64, fov_deg: f64, pressure: u32) -> Ladder {
         let target_cell_px = px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / REFERENCE_THRESHOLD_0;
-        let k = px_per_unit(viewport_h, fov_deg) / target_cell_px;
+        let k = px_per_unit(viewport_h, fov_deg) / target_cell_px * 2f64.powf(-(pressure as f64) / 2.0);
         let mut thresholds = [0.0; 6];
         for (i, t) in thresholds.iter_mut().enumerate() {
             *t = LOD_STEPS[i] as f64 * U_PER_CELL * k;
         }
-        Ladder { thresholds, viewport_h, fov_deg }
+        Ladder {
+            thresholds,
+            viewport_h,
+            fov_deg,
+            pressure,
+        }
     }
 
     /// The same ladder unless the projection changed.
     pub fn set_projection(&mut self, viewport_h: f64, fov_deg: f64) {
         if viewport_h != self.viewport_h || fov_deg != self.fov_deg {
-            *self = Ladder::new(viewport_h, fov_deg);
+            *self = Ladder::new(viewport_h, fov_deg, self.pressure);
+        }
+    }
+
+    pub fn pressure(&self) -> u32 {
+        self.pressure
+    }
+
+    pub fn set_pressure(&mut self, pressure: u32) {
+        if pressure != self.pressure {
+            *self = Ladder::new(self.viewport_h, self.fov_deg, pressure);
         }
     }
 
@@ -118,5 +141,24 @@ mod tests {
         assert_eq!(l.step_at(190.0, 2), 2);
         assert_eq!(l.guide(192.0, 1).blend.map(|b| (b.0, b.1)), Some((1, 2)));
         assert_eq!(l.guide(150.0, 1).blend, None);
+    }
+
+    #[test]
+    fn two_steps_of_pressure_are_one_tier_coarser_everywhere() {
+        let l = Ladder::default();
+        let mut pressed = l;
+        pressed.set_pressure(2);
+        for (i, t) in pressed.thresholds.iter().enumerate() {
+            assert!((t - l.thresholds[i] / 2.0).abs() < 1e-9);
+        }
+        // The nearest chunks have no finer tier to lose; past the finest
+        // band's pressed edge, one tier.
+        assert_eq!(pressed.step_at(50.0, 1), 1);
+        for d in [100.0, 300.0, 700.0, 3000.0] {
+            let step = l.step_at(d, 1);
+            assert_eq!(pressed.step_at(d, 1), (step * 2).min(COARSEST), "at {d}");
+        }
+        pressed.set_pressure(0);
+        assert_eq!(pressed.step_at(300.0, 1), l.step_at(300.0, 1));
     }
 }

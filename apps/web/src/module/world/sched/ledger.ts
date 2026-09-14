@@ -128,6 +128,9 @@ export type FrameSample = {
      * pending on-screen chunk has. */
     oldest_release_ms: number;
     oldest_visible_ms: number;
+    /** How far the byte budget has pulled the LOD ladder in: 0 is the
+     * ladder as the view asks for it, 2 one tier coarser. */
+    pressure: number;
   };
   /** chunks that React mounted / unmounted since the previous sample —
    * the un-budgeted work that lands outside sched_ms. */
@@ -309,6 +312,7 @@ export type FramePeak = {
   oldest_visible_ms: number;
   settling: number;
   blend_active: number;
+  pressure: number;
 };
 
 const frame_peak: FramePeak = {
@@ -329,6 +333,7 @@ const frame_peak: FramePeak = {
   oldest_visible_ms: 0,
   settling: 0,
   blend_active: 0,
+  pressure: 0,
 };
 
 /** Copy of the window's worst-seen frame values. */
@@ -382,6 +387,7 @@ export function ledger_record_frame(s: FrameSample): void {
   if (s.lod.oldest_visible_ms > p.oldest_visible_ms) p.oldest_visible_ms = s.lod.oldest_visible_ms;
   if (s.lod.settling > p.settling) p.settling = s.lod.settling;
   if (s.lod.blend_active > p.blend_active) p.blend_active = s.lod.blend_active;
+  if (s.lod.pressure > p.pressure) p.pressure = s.lod.pressure;
 
   sink?.frame?.(s);
 }
