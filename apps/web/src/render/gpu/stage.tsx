@@ -1,14 +1,13 @@
 // @pxl/web/render/gpu/stage.tsx
 
 /**
- * The WebGPU canvas beside three's, and the frame's uniforms read off
- * what three still owns — the camera, the lights, the fog, the sky's
- * colours and directions — until it goes. The canvas sits under three's:
- * it draws the sky and the chunks, and three, cleared transparent, draws
- * what has not moved yet over them, without the terrain's depth.
+ * The WebGPU canvas, and the frame's uniforms read off what three still
+ * owns — the camera, the lights, the fog, the sky's colours and directions
+ * — until it goes. Everything is drawn here; three's canvas above it,
+ * cleared transparent, draws only the dev gizmos.
  */
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { RootState } from "@react-three/fiber";
 
@@ -23,25 +22,6 @@ import { GpuRenderer } from "./renderer.ts";
 
 /** The one renderer, once its device has answered. */
 export let gpu_renderer: GpuRenderer | null = null;
-const renderer_listeners = new Set<() => void>();
-
-/** Whether the sky and the chunks are drawn here rather than by three. */
-export function gpu_draws_chunks(): boolean {
-  return gpu_renderer !== null && useSettingsStore.getState().gpu_chunks;
-}
-
-/** gpu_draws_chunks for a component: the renderer arriving or the setting
- * flipping re-renders it. */
-export function useGpuDrawsChunks(): boolean {
-  return useSyncExternalStore((on_change) => {
-    renderer_listeners.add(on_change);
-    const off = useSettingsStore.subscribe(on_change);
-    return () => {
-      renderer_listeners.delete(on_change);
-      off();
-    };
-  }, gpu_draws_chunks);
-}
 
 /** The sky dome's radius in environment.tsx, which the sky's rays meet. */
 let sky_radius = 1;
@@ -252,16 +232,14 @@ export function GpuCanvas() {
     GpuRenderer.create(canvas, CORE_PXL).then((r) => {
       if (!alive) return;
       if (r === null) {
-        console.error("[gpu] no WebGPU on this device; the chunks stay three's");
+        console.error("[gpu] no WebGPU on this device; nothing can be drawn");
         return;
       }
       gpu_renderer = r;
-      for (const on_change of renderer_listeners) on_change();
     });
     return () => {
       alive = false;
       gpu_renderer = null;
-      for (const on_change of renderer_listeners) on_change();
     };
   }, []);
   return <canvas ref={ref} className="absolute inset-0 h-full w-full" style={{ pointerEvents: "none", zIndex: 0 }} />;

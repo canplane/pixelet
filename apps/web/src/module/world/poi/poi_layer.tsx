@@ -2,8 +2,8 @@
 
 /**
  * POI's own render — world-anchored-billboard tier (see
- * issue/20260907-world-rendering-tiers.md), billboard/billboard.tsx's
- * second consumer after chat_bubble.tsx. A category-themed badge
+ * issue/20260907-world-rendering-tiers.md), a billboard set of the module
+ * (crates/pxl-core/src/billboard.rs) beside chat_bubble.tsx's. A category-themed badge
  * (poi_theme.ts), brought back from the pre-DoD implementation
  * (`checkpoint/20260107-float`'s `entities/geo/ui/pois/poi-item.tsx`) —
  * still deliberately short of that version in a few ways:
@@ -36,11 +36,10 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import { get_local_world_origin, local_world_to_canonical } from "../frame/coord.ts";
 import { useFrameRefs } from "../frame/context.tsx";
 import { register_tile_interest } from "../terrain/store.ts";
-import { BILLBOARD_ORDER } from "../billboard/billboard.tsx";
+import { BILLBOARD_ORDER } from "../billboard/sheet.ts";
 import { select_begin, select_place, select_remaining } from "../billboard/frustum_budget.ts";
 import { BillboardBatch } from "../billboard/batch.ts";
 import { CellNodes } from "../billboard/cell_node.ts";
-import { BillboardField } from "../billboard/field.ts";
 import {
   invalidate_poi_index,
   NO_TIER,
@@ -67,7 +66,6 @@ import { BADGE_SHAMT_OVER_CUBE, fade_end_u, get_lod_level, lod_step_at, LOD_STEP
 import { usePoiStore } from "./store.ts";
 import { type FrameBudget, useTick } from "@/module/world/sched/tick.ts";
 import { CORE_ALLOC, CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
-import { gpu_draws_chunks, useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
 
 /**
  * A rail, not the mechanism.
@@ -149,7 +147,6 @@ const $center: [f64, f64, f64] = [0, 0, 0];
 const $hits = CORE_ALLOC.take(Uint32Array, 16384);
 const $batch = new BillboardBatch();
 const $nodes = new CellNodes(4096, CORE_ALLOC);
-const $field = new BillboardField(BILLBOARD_ORDER.poi);
 /** The camera in the frame's own coordinates, and the same as an address. */
 const $cam = new THREE.Vector3();
 const $to_frame = new THREE.Matrix4();
@@ -176,11 +173,6 @@ function local_pos_from_absolute(absolute: PVF3, map_origin: IVec): [f64, f64, f
  * middle two is the per-candidate terrain work, which is what clustering
  * would be for.
  */
-/** Dev: the billboard pool behind the badges, for the ledger's own report. */
-export function poi_field_stats(): { slots: u32; live: u32; visible: u32; mapped: u32; mounted: boolean } {
-  return $field.stats();
-}
-
 export const poi_place_stats = {
   ms: 0,
   max_ms: 0,
@@ -336,8 +328,6 @@ function poi_place_step(
     wanted = false;
     last_start = now;
     if (!map_center || !show_poi) {
-      $field.begin();
-      $field.end();
       if (CORE_PXL) CORE_PXL.pxl_billboards_write(badge_set(CORE_PXL), 0, 0);
       invalidate();
       return true;
@@ -562,42 +552,34 @@ function badge_set(pxl: NonNullable<typeof CORE_PXL>): u32 {
   return $badge_set;
 }
 
-/** Writes the whole placement in one step: into the field, or through the
- * WebGPU renderer into the core, which holds the badges against the
- * placement's origin until the next commit. */
+/** Writes the whole placement in one step into the core, which holds the
+ * badges against the placement's origin until the next commit. */
 function commit_stage(j: PlaceJob, now: f64): void {
-  const gpu = gpu_draws_chunks() && CORE_PXL !== null;
-  $field.begin();
-  const lane = gpu ? FIXED_ALLOC.take(Float32Array, Math.max(1, j.picks.length) * BADGE_FLOATS) : null;
+  const lane = FIXED_ALLOC.take(Float32Array, Math.max(1, j.picks.length) * BADGE_FLOATS);
   let count: u32 = 0;
   for (const pick of j.picks) {
     // NO_SLOT when the atlas is full. Nothing is drawn for it this pass,
     // which is the honest answer — the alternative is a rectangle
     // belonging to some other badge.
     if (pick.slot === NO_SLOT) continue;
-    if (lane) {
-      const s = pick.slot, o = count++ * BADGE_FLOATS;
-      lane[o] = pick.local_x;
-      lane[o + 1] = pick.local_y;
-      lane[o + 2] = pick.local_z;
-      lane[o + 3] = pick.logical_w;
-      lane[o + 4] = BADGE_LOGICAL_H;
-      lane[o + 5] = badge_atlas.u0(s);
-      lane[o + 6] = badge_atlas.v0(s);
-      lane[o + 7] = badge_atlas.u1(s);
-      lane[o + 8] = badge_atlas.v1(s);
-      lane[o + 9] = BADGE_LOGICAL_H > 0 ? BADGE_CENTER_Y / BADGE_LOGICAL_H : 1;
-    } else {
-      $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas, pick.slot, pick.logical_w, BADGE_LOGICAL_H, BADGE_CENTER_Y);
-    }
+    const s = pick.slot, o = count++ * BADGE_FLOATS;
+    lane[o] = pick.local_x;
+    lane[o + 1] = pick.local_y;
+    lane[o + 2] = pick.local_z;
+    lane[o + 3] = pick.logical_w;
+    lane[o + 4] = BADGE_LOGICAL_H;
+    lane[o + 5] = badge_atlas.u0(s);
+    lane[o + 6] = badge_atlas.v0(s);
+    lane[o + 7] = badge_atlas.u1(s);
+    lane[o + 8] = badge_atlas.v1(s);
+    lane[o + 9] = BADGE_LOGICAL_H > 0 ? BADGE_CENTER_Y / BADGE_LOGICAL_H : 1;
   }
-  $field.end();
   if (CORE_PXL) {
     const set = badge_set(CORE_PXL), origin = j.map_origin;
     CORE_PXL.pxl_billboards_place(set, ivec.to_real(ivec.X(origin)), ivec.to_real(ivec.Y(origin)), ivec.to_real(ivec.Z(origin)));
-    CORE_PXL.pxl_billboards_write(set, count, lane ? lane.byteOffset : 0);
+    CORE_PXL.pxl_billboards_write(set, count, lane.byteOffset);
   }
-  if (lane) FIXED_ALLOC.give(lane);
+  FIXED_ALLOC.give(lane);
   // frameloop="demand": what changed has to ask for the frame that shows it.
   invalidate();
 
@@ -688,7 +670,6 @@ export function PoiLayer() {
   const view_state = useCameraStore((state) => state.view_state);
   const { local_world_frame_ref } = useFrameRefs();
   const { size } = useThree();
-  const gpu = useGpuDrawsChunks();
 
   // Every input a placement depends on asks for one; the step throttles.
   // The view and the centre change every frame of a drag, and asking is a
@@ -698,7 +679,7 @@ export function PoiLayer() {
   useEffect(() => {
     poi_place_request();
     invalidate();
-  }, [view_state, map_center, poi_revision, show_poi, size.width, size.height, gpu]);
+  }, [view_state, map_center, poi_revision, show_poi, size.width, size.height]);
 
   // One subscription for the whole layer, not one per mounted badge. Terrain
   // arriving is what grounds an entry indexed before its tile did, and the
@@ -731,25 +712,5 @@ export function PoiLayer() {
     if (poi_place_busy()) state.invalidate();
   }, "poi_place");
 
-  // One loop for every badge, where there used to be one useFrame per badge,
-  // then the sheet's dirty rectangles up to the GPU — the one place the
-  // renderer is in hand.
-  useTick("cosmetic", ({ state }) => {
-    if (gpu_draws_chunks()) return;
-    $field.update(state.camera, state.size.height);
-    badge_atlas.flush(state.gl);
-  }, "poi_field");
-
-  // Attached to the frame the batch's coordinates are relative to, rather
-  // than to an anchor of its own: every badge is within FAR_END of the
-  // camera, so they all share the L4 cell the frame is aligned to, and a
-  // per-badge AnchorNode was resolving the same anchor a few hundred times.
-  // This component is a child of that frame, so mounting the group is the
-  // one thing React does here. It was a layout effect keyed on the frame's
-  // ref, which is attached after a child's layout effects run and changes
-  // nothing that re-renders: whether the group ever reached the scene
-  // depended on this component happening to render again after the ref was
-  // set, and a fresh load sometimes drew every badge into a group hanging
-  // off nothing (2026-09-12).
-  return <primitive object={$field.group} />;
+  return null;
 }

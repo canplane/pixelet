@@ -225,6 +225,12 @@ export class DecorPass {
     return this.device.createBindGroup({ layout: this.draw_layout, entries: [{ binding: 0, resource: { buffer: this.draw_buffer, size: DRAW_UNIFORM_BYTES } }] });
   }
 
+  /** Triangles one instance of `group` draws; 0 while it loads. */
+  triangles_of(group: u32): u32 {
+    const m = this.models[group];
+    return m ? m.index_cnt / 3 : 0;
+  }
+
   /** The models by group, as the assets stand; a group still loading is null. */
   set_models(sources: readonly (DecorModel | null)[]): void {
     for (let g = 0; g < sources.length; g++) {

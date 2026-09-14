@@ -42,8 +42,6 @@ import { register_tile_interest } from "../terrain/store.ts";
 import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
 import { useCharacterModel } from "./use_character_model.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
-import { rim_cfg } from "@/module/world/environment/config.ts";
-import { set_rim_intensity } from "@/module/world/render/lit_gltf_material.ts";
 import { useCameraStore } from "@/module/camera/store.ts";
 import { camera_cfg } from "@/module/camera/config.ts";
 import { damp_alpha } from "@/module/camera/orbit.ts";
@@ -54,7 +52,7 @@ import { useTick } from "@/module/world/sched/tick.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { load_gltf, load_texture } from "@/module/world/gltf_cache.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
-import { gpu_renderer, useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
+import { gpu_renderer } from "@/render/gpu/stage.tsx";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 
 /** A variant's model in the module, registered once per model and height
@@ -159,20 +157,18 @@ type WalkerProps = {
 
 const Walker = memo(function Walker(props: WalkerProps) {
   const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
-  const { root: character_root, material: character_material, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
+  const { root: character_root } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
 
-  // Through the WebGPU renderer the walker is an actor of the module
-  // (crates/pxl-core/src/model.rs): what follows still decides where it
-  // stands, which way it faces and which clip it plays, and tells the actor;
-  // three keeps the group only for that and for the chat bubble, and draws
-  // none of its meshes.
-  const gpu = useGpuDrawsChunks();
+  // The walker is an actor of the module (crates/pxl-core/src/model.rs):
+  // what follows decides where it stands, which way it faces and which clip
+  // it plays, and tells the actor; three keeps the group only for the
+  // position math, and draws none of its meshes.
   const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: THREE.Texture } | null>(null);
   /** The actor again, as state, for what renders against it: the bubble. */
   const [actor, set_actor] = useState<u32 | null>(null);
   useEffect(() => {
     const p = CORE_PXL;
-    if (!p || !gpu) return;
+    if (!p) return;
     let alive = true;
     Promise.all([model_for(variant), load_texture(variant.skin_url)]).then(([model, skin]) => {
       if (!alive || !model) return;
@@ -187,23 +183,13 @@ const Walker = memo(function Walker(props: WalkerProps) {
       actor_ref.current = null;
       set_actor(null);
     };
-  }, [gpu, variant]);
+  }, [variant]);
   useEffect(() => {
     character_root?.traverse((node) => {
-      if ((node as THREE.Mesh).isMesh) node.visible = !gpu;
+      if ((node as THREE.Mesh).isMesh) node.visible = false;
     });
-  }, [character_root, gpu]);
+  }, [character_root]);
   const actor_clip_ref = useRef<string | null>(null);
-
-  // Same live show_rim_light wiring decor/asset_store.ts does for decor's
-  // materials — use_character_model.ts
-  // itself doesn't know this setting (matching instanced_model.ts's own
-  // reason for the same split), so whichever real render path needs it live
-  // owns the subscription instead.
-  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
-  useEffect(() => {
-    if (character_material) set_rim_intensity(character_material, show_rim_light ? rim_cfg.INTENSITY : 0);
-  }, [character_material, show_rim_light]);
 
   // Rare toggle, so subscribing (and the re-render it costs) is fine — unlike
   // map_center, this doesn't churn per frame.
@@ -224,7 +210,6 @@ const Walker = memo(function Walker(props: WalkerProps) {
   // there is not a reason for it to keep turning to track the viewer; only
   // its very first pose should ever be camera-relative.
   const initial_facing_done_ref = useRef(false);
-  const current_clip_ref = useRef<string | null>(null);
   const cam_world_pos = useRef(new THREE.Vector3()).current;
 
   // One-time placement at the *current* target, once the model exists. Not
@@ -401,14 +386,6 @@ const Walker = memo(function Walker(props: WalkerProps) {
       gpu_renderer?.skinned.set_skin(held.model.model, held.skin.image as ImageBitmap);
     }
 
-    // Crossfade only on an actual state change, not every frame.
-    const desired_clip = is_walking ? variant.move_clip : IDLE_CLIP;
-    if (current_clip_ref.current !== desired_clip) {
-      actions[current_clip_ref.current ?? ""]?.fadeOut(0.2);
-      actions[desired_clip]?.reset().fadeIn(0.2).play();
-      current_clip_ref.current = desired_clip;
-    }
-
     // frameloop="demand" (see scene.tsx / LocationPuck's own use of this):
     // nothing else invalidates on its own while this loop and the clip's
     // internal mixer keep animating, so this component must ask for the
@@ -419,7 +396,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
   return character_root
     ? (
       <primitive object={character_root}>
-        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} actor={gpu ? actor : null} />}
+        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} actor={actor} />}
       </primitive>
     )
     : null;

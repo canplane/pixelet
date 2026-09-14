@@ -83,8 +83,6 @@
     "three-stdlib": "npm:three-stdlib@^2.36.1",
     "@react-three/drei": "npm:@react-three/drei@^10.7.7",
     "@react-three/fiber": "npm:@react-three/fiber@^9.5.0",
-    "@react-three/postprocessing": "npm:@react-three/postprocessing@^3.0.4",
-    "postprocessing": "npm:postprocessing@^6.38.3",
 
     // styling
     "tailwindcss": "npm:tailwindcss@^4.1.18",

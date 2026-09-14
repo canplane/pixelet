@@ -67,18 +67,6 @@
         "label": "Rim Light",
         "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
       },
-      "show_ao": {
-        "label": "Ambient Occlusion (AO)",
-        "description": "Enhances depth by adding detailed contact shadows in crevices and corners."
-      },
-      "show_bloom": {
-        "label": "Bloom",
-        "description": "Adds a soft glow to the brightest things in the scene — the sun, the moon, and the night location beacon."
-      },
-      "show_god_rays": {
-        "label": "God Rays",
-        "description": "Realistic sun shafts streaming through gaps in terrain and objects."
-      },
       "show_shadow_map": {
         "label": "Shadows",
         "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."

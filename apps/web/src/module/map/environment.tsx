@@ -1,6 +1,6 @@
 // @pxl/web/module/map/environment.tsx
 
-import { type RefObject, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { invalidate, useThree } from "@react-three/fiber";
 
@@ -23,7 +23,7 @@ import { useMapStore } from "@/module/map/store.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
-import { gpu_draws_chunks, set_sky_radius } from "@/render/gpu/stage.tsx";
+import { set_sky_radius } from "@/render/gpu/stage.tsx";
 
 const { FOG_NEAR, FOG_FAR, FAR_CLIP } = render_cfg;
 const { MAX_DIST } = camera_cfg.view;
@@ -62,18 +62,6 @@ const FALLBACK_LON = 126.978;
 // is most likely to be looking.
 const SKY_DOME_SCALE = (FAR_CLIP - MAX_DIST) * 0.9;
 set_sky_radius(SKY_DOME_SCALE);
-
-// GodRaysEffect (scene.tsx's EffectComposer) needs a real, occludable scene
-// Mesh to sample as its light source — get_sun_position's own real position
-// (celestial_position.ts's SUN_DISTANCE=100) sits far too close, well inside
-// real terrain's own visible range (render_cfg's FOG_FAR≈900, and the camera
-// itself can orbit up to MAX_DIST=512 further out), so a sun proxy placed
-// there would constantly clip into/through nearby chunks instead of reading
-// as a distant light source. FRUSTUM-safe middle ground: past everywhere
-// real terrain/objects actually render, short of SKY_DOME_SCALE so the dome
-// doesn't clip it.
-const SUN_PROXY_DISTANCE = FOG_FAR + MAX_DIST + 400;
-const SUN_PROXY_RADIUS = SUN_PROXY_DISTANCE * 0.02;
 
 const sky_vert = /* glsl */ `
 varying vec3 v_world_pos;
@@ -286,18 +274,8 @@ const ENV_INVALIDATE_SLOW_MS = 2000;
 // counts as "done" and this can drop back to the slow rate.
 const ENV_TRANSITION_SETTLE_EPS = 0.005;
 
-type MapEnvironmentProps = {
-  // Owned by MapScene (scene.tsx), not here — scene.tsx's own <GodRays sun={...}>
-  // needs this same Mesh instance to read, so the ref has to be created
-  // above both consumers rather than a new one made and kept local here.
-  sun_proxy_ref: RefObject<THREE.Mesh | null>;
-};
-
-export function MapEnvironment(props: MapEnvironmentProps) {
-  const { sun_proxy_ref } = props;
+export function MapEnvironment() {
   const { scene } = useThree();
-
-  const show_god_rays = useSettingsStore((state) => state.show_god_rays);
 
   // Real sun/moon position needs the map's actual latitude/longitude — this
   // read doesn't gate anything, just supplies a location for celestial_position.ts.
@@ -363,7 +341,6 @@ export function MapEnvironment(props: MapEnvironmentProps) {
   const sky_top_color = useMemo(() => new THREE.Color(theme.sky.colors.top), [theme.sky.colors.top]);
   const sky_middle_color = useMemo(() => new THREE.Color(theme.sky.colors.middle), [theme.sky.colors.middle]);
   const sky_horizon_color = useMemo(() => new THREE.Color(theme.sky.colors.horizon), [theme.sky.colors.horizon]);
-  const bg_color = useMemo(() => new THREE.Color(theme.background), [theme.background]);
   const ambient_color = useMemo(() => new THREE.Color(theme.lighting.ambient.color), [theme.lighting.ambient.color]);
   const sun_color = useMemo(() => new THREE.Color(theme.lighting.directional.color), [theme.lighting.directional.color]);
   const hemi_sky_color = useMemo(() => new THREE.Color(theme.lighting.hemisphere.sky), [theme.lighting.hemisphere.sky]);
@@ -480,18 +457,11 @@ export function MapEnvironment(props: MapEnvironmentProps) {
     star_intensity.current = THREE.MathUtils.lerp(star_intensity.current, is_night ? 1 : 0, lerp_factor);
 
     // ---- 1. Fog interpolation ----
-    // Where the WebGPU renderer draws the sky, three clears to nothing and
-    // draws no dome; the uniforms below still move, and it reads them.
-    const gpu_sky = gpu_draws_chunks();
+    // The WebGPU renderer draws the sky; three clears to nothing and draws
+    // no dome. The uniforms below still move, and it reads them.
     const dome = sky_material_ref.current ? scene.getObjectByName("sky") : undefined;
-    if (dome) dome.visible = !gpu_sky;
-    if (gpu_sky) {
-      scene.background = null;
-    } else if (scene.background instanceof THREE.Color) {
-      scene.background.lerp(bg_color, lerp_factor);
-    } else {
-      scene.background = bg_color.clone();
-    }
+    if (dome) dome.visible = false;
+    scene.background = null;
 
     if (scene.fog && "isFog" in scene.fog) {
       const fog = scene.fog as THREE.Fog;
@@ -661,30 +631,6 @@ export function MapEnvironment(props: MapEnvironmentProps) {
       sun_ref.current.color.lerp(sun_color, lerp_factor);
       sun_ref.current.intensity = THREE.MathUtils.lerp(sun_ref.current.intensity, theme.lighting.directional.intensity, lerp_factor);
 
-      // GodRaysEffect's own light-source Mesh (see SUN_PROXY_DISTANCE's doc
-      // comment) — same rotated direction as sun_ref itself, just normalized
-      // and scaled out to a distance real terrain/objects can't clip into.
-      // Not floating-frame-anchored, same reasoning as sun_ref/the sky dome
-      // (MapEnvironment's own doc comment above): this whole component
-      // renders outside World's floating-origin chain, so raw world
-      // coordinates already track the (fixed, lookAt(0,0,0)) camera
-      // correctly without an anchor offset. Kept mounted and updated
-      // unconditionally (show_god_rays or not) rather than conditionally
-      // mounted — scene.tsx's own <GodRays sun={...}> needs a real,
-      // already-attached Mesh ref the first render the setting flips on;
-      // conditionally mounting this element would leave sun_proxy_ref.current
-      // null for that render (refs attach during commit, one render after
-      // the JSX first appears), so GodRaysEffect would either skip a frame
-      // or need extra state just to know when the ref becomes available. A
-      // permanently-mounted 16-segment sphere is cheap enough that avoiding
-      // that complexity is worth it outright.
-      if (sun_proxy_ref.current) {
-        sun_proxy_ref.current.position
-          .set(rotated_sun_dir.x, rotated_sun_dir.y, current_sun_position.current.z)
-          .normalize()
-          .multiplyScalar(SUN_PROXY_DISTANCE);
-      }
-
       // shadow.autoUpdate=false (JSX below) means this is the only thing
       // that ever asks for a new shadow render — see
       // SHADOW_UPDATE_DOT_THRESHOLD's own comment.
@@ -816,31 +762,6 @@ export function MapEnvironment(props: MapEnvironmentProps) {
         shadow-bias={shadow_cfg.SUN_BIAS}
         shadow-normalBias={shadow_cfg.SUN_NORMAL_BIAS}
       />
-
-      {
-        // GodRaysEffect's light-source Mesh (see SUN_PROXY_DISTANCE's doc
-        // comment above and scene.tsx's own <GodRays sun={sun_proxy_ref}>) —
-        // permanently mounted (see the useFrame block's own comment on why),
-        // visible only toggles whether it's ever drawn into the main color
-        // pass; GodRaysEffect reads the ref directly, unaffected by this.
-        // depthWrite={false} + transparent: GodRaysEffect's own constructor
-        // doc comment requires both, so real terrain/objects between the
-        // camera and this mesh occlude the light source for the effect's
-        // own occlusion pass without this sphere ever writing into (or
-        // fighting) the main depth buffer itself.
-        //
-        // colorWrite={false} would seem like a way to hide this sphere's own
-        // visible disc, but GodRaysEffect samples this mesh's actual
-        // contribution to the main color buffer for its occlusion pass — it
-        // is not a separate internal render — so hiding it that way removes
-        // the rays too. This means it really does show two "suns" (this
-        // sphere plus the sky dome's own procedural disc) whenever god rays
-        // are on; known, not fixed.
-      }
-      <mesh ref={sun_proxy_ref} visible={show_god_rays} position={current_sun_position.current}>
-        <sphereGeometry args={[SUN_PROXY_RADIUS, 16, 16]} />
-        <meshBasicMaterial color="#fff6d8" transparent depthWrite={false} toneMapped={false} />
-      </mesh>
 
       <directionalLight
         ref={moon_ref}

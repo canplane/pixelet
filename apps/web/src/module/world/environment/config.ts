@@ -191,44 +191,16 @@ export const shadow_cfg = {
 } as const;
 
 /**
- * Post-processing tuning: a screen-space contact-AO pass to ground blocky
- * cells/buildings against each other, bloom and god rays off the sun, and
- * a punchier color grade than the flat/raw scene output. All numbers here
- * are cosmetic dials — tune freely, nothing downstream depends on these
- * values.
+ * The canvas's resolution and the colour grade over everything. The vignette
+ * waits for a pass of its own (render/gpu/grade.ts); the rest of the post
+ * stack three ran — contact AO, bloom, god rays, SMAA — comes back through
+ * WebGPU with its memory measured (issue/BACKLOG.md), and its tuning is on
+ * archive/20260914-three-draw-paths. All numbers here are cosmetic dials.
  */
 export const post_cfg = {
   /** The canvas draws at the device's pixel ratio clamped to this
    * (scene.tsx's dpr comment on why the cap, and why it is not a cost). */
   DPR: [1, 2] as [number, number],
-  /** SMAA runs on a display whose dpr is under this; at the cap the
-   * resolution does the job (scene.tsx's AutoSmaa). */
-  SMAA_BELOW_DPR: 2,
-  AO: {
-    // halfRes + "performance" quality keeps this cheap enough to not add to
-    // the existing close-zoom frame cost — see the LOD/chunk-density note in
-    // terrain/chunk.tsx for why near-camera cost is already the tight budget.
-    QUALITY: "performance",
-    HALF_RES: true,
-    // Kept to ~1 cell-neighborhood so a riser only shadows its own base. A
-    // wider radius has every small LOD-step riser sampling occlusion from
-    // several neighboring risers up the same slope, outlining every real
-    // edge — on a terraced hillside that reads as contour-line banding, not
-    // soft ambient shadow. INTENSITY is scaled down to match, so the
-    // narrower radius doesn't just concentrate the same darkening.
-    RADIUS: 1.5,
-    INTENSITY: 1.2,
-    DISTANCE_FALLOFF: 1,
-    // warm/dark tint instead of pure black — reads as a contact shadow
-    // rather than a rendering artifact.
-    COLOR: "#1a1006",
-  },
-  BLOOM: {
-    INTENSITY: 0.6,
-    LUMINANCE_THRESHOLD: 0.85,
-    LUMINANCE_SMOOTHING: 0.2,
-    MIPMAP_BLUR: true,
-  },
   GRADE: {
     SATURATION: 0.18,
     CONTRAST: 0.08,
@@ -237,13 +209,5 @@ export const post_cfg = {
   VIGNETTE: {
     DARKNESS: 0.45,
     OFFSET: 0.3,
-  },
-  GOD_RAYS: {
-    SAMPLES: 60,
-    DENSITY: 0.96,
-    DECAY: 0.9,
-    WEIGHT: 0.4,
-    EXPOSURE: 0.6,
-    CLAMP_MAX: 1,
   },
 } as const;

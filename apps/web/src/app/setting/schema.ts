@@ -69,9 +69,6 @@ const text = (section: SettingSection, dflt: string): TextSetting => ({ kind: "t
 export const CAMERA_TERRAIN_MODES = ["through", "stop", "climb"] as const;
 export type CameraTerrainMode = (typeof CAMERA_TERRAIN_MODES)[number];
 
-export const RENDER_PATHS = ["full", "no_msaa", "no_post"] as const;
-export type RenderPath = (typeof RENDER_PATHS)[number];
-
 export const SETTINGS = {
   // ---- display: what the world shows. Turning one off removes information
   // — a badge, a scattered tree, a building — which is what separates these
@@ -105,16 +102,11 @@ export const SETTINGS = {
 
   // ---- lighting: how readable the same geometry is. Cheapest first; the
   // dev ones at the bottom are the passes not yet decided on.
-  /** Darkens cube edges that border open air (render/chunk_material.ts).
+  /** Darkens cube edges that border open air (render/gpu/chunk_shader.ts).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   show_edge_shade: toggle("lighting", true, { cost: "low" }),
   /** A uniform on an already-compiled shader term; not a pass. */
   show_rim_light: toggle("lighting", true, { cost: "low" }),
-  /** N8AO, screen-space. A real pass, confirmed in profiling (scene.tsx). */
-  show_ao: toggle("lighting", false, { cost: "high" }),
-  show_bloom: toggle("lighting", false, { cost: "med", dev: true }),
-  /** Needs an occludable sun mesh (environment.tsx) plus its own raymarch. */
-  show_god_rays: toggle("lighting", false, { cost: "high", dev: true }),
   /** A shadow-camera depth pass per casting light. */
   show_shadow_map: toggle("lighting", false, { cost: "high", dev: true }),
 
@@ -134,17 +126,6 @@ export const SETTINGS = {
    * complementary dither and dissolve, at the cost of drawing a blending
    * chunk twice and a pattern that crawls without temporal AA. */
   pixel_dither: toggle("debug", false, { dev: true }),
-  /** Bisects the pixel pipeline on a device with no GPU timer (scene.tsx):
-   * the full stack, the stack without its 4x MSAA, or no composer at all —
-   * the scene drawn straight to the canvas, with no grade, no vignette and
-   * no depth pass (badges then draw through terrain). A measurement knob;
-   * `full` is the only path the app ships. */
-  render_path: choice("debug", RENDER_PATHS, "full", { dev: true }),
-  /** The chunks drawn by the WebGPU renderer (render/gpu) from the
-   * module's draw list, over three's canvas, rather than as three meshes.
-   * The first piece of the renderer that replaces three; off draws them
-   * the old way for a side-by-side. */
-  gpu_chunks: toggle("debug", true, { dev: true }),
 
   // ---- character: picked in the drawer, not the sheet.
   person_variant_key: text("character", DEFAULT_PERSON_VARIANT_KEY),

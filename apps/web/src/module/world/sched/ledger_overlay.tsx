@@ -267,12 +267,8 @@ export function LedgerOverlay() {
           <Row k="draws" v={String(f.last.draw_calls)} />
           <Row k="tris" v={`${(f.last.triangles / 1000).toFixed(0)}k`} />
           {f.census.slice(0, CENSUS_ROWS).map(([tag, d, t]) => <Row key={tag} k={`  ${tag} d/tris`} v={`${Math.round(d)}/${tris_text(t)}`} />)}
-          <Row k="textures" v={String(f.last.textures)} />
-          <Row
-            k="fill Mpx×n"
-            v={`${(f.last.px / 1e6).toFixed(1)}×${f.last.fx_passes}`}
-            warn={(f.last.px * f.last.fx_passes) / 1e6 > 12}
-          />
+          <Row k="buffers" v={`${f.last.buffers} ${f.last.buffer_mb}MB`} />
+          <Row k="fill Mpx" v={(f.last.px / 1e6).toFixed(1)} warn={f.last.px / 1e6 > 12} />
           <div className="my-1 border-t border-white/10" />
           <Row k="heap" v={f.last.heap_mb ? `${f.last.heap_mb}MB Δ${f.heap_delta >= 0 ? "+" : ""}${f.heap_delta}` : "n/a"} />
           <Row

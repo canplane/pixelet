@@ -57,19 +57,15 @@
  *
  * ---
  *
- * **Uploads are rectangles, not the sheet.** Marking the canvas texture
- * `needsUpdate` had three re-upload the whole canvas at the next render —
- * 64 MB at 4096 px — once for every frame a badge was drawn in, and a phone
- * paid it as a hundred-millisecond task each time (the 2026-09-13 reports in
- * issue/20260909-cooperative-scheduler-and-task-ledger.md). An entry
- * is now recorded as dirty and `flush` uploads its rectangle alone, through
- * a scratch canvas the size of one badge and
- * `renderer.copyTextureToTexture`, which is a `texSubImage2D` of that
- * region. The whole sheet still goes up once, when the texture is first
- * bound, and once more per repack, which replaces the texture — both are
- * once, not per badge. The scratch texture is never rendered with: three
- * takes an unseen source texture's image as the pixels to upload, and a
- * seen one as a GPU texture to blit from.
+ * **Uploads are rectangles, not the sheet.** Re-uploading the whole canvas
+ * whenever a badge was drawn cost 64 MB at 4096 px once for every frame a
+ * badge was drawn in, and a phone paid it as a hundred-millisecond task each
+ * time (the 2026-09-13 reports in
+ * issue/20260909-cooperative-scheduler-and-task-ledger.md). An entry is
+ * recorded as dirty and `flush_into` hands the mirror its rectangle alone,
+ * through a scratch canvas the size of one badge. The whole sheet goes up
+ * once when first mirrored, and once more per repack, which replaces it —
+ * both are once, not per badge.
  *
  * The scratch is drawn by the entry's own closure, not copied from the
  * sheet. Reading a rectangle out of a large accelerated canvas has WebKit
@@ -80,14 +76,11 @@
  * badge twice costs a fraction of a millisecond and reads nothing.
  */
 
-import * as THREE from "three";
-
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
-import { make_canvas_texture } from "./canvas_texture.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 
 /**
@@ -96,13 +89,9 @@ import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
  * `u0`..`v1` accessors, in texture coordinates in the canvas's own
  * orientation: v0 is the top edge and v1 the bottom, so v0 < v1.
  *
- * The sheet is uploaded with `flipY` off, which is the whole reason these
- * read naturally. A texture left at the default is flipped on upload, which
- * a single-image sprite never notices — its UVs span the lot either way —
- * and an atlas notices immediately, because a rectangle measured from the
- * top then addresses a band measured from the bottom. Consumers map v1 to
- * the bottom of whatever they draw; for a sprite that means a negative
- * repeat, which is the flip expressed once, where it can be seen.
+ * The mirror must not flip the sheet on upload, or a rectangle measured
+ * from the top would address a band measured from the bottom. Consumers
+ * map v1 to the bottom of whatever they draw.
  *
  * Read on every use rather than once: the rectangle moves when the sheet
  * repacks, and the slot index is what stays.
@@ -191,8 +180,6 @@ export class BillboardAtlas {
   private ctx: CanvasRenderingContext2D;
   private size: u32 = INITIAL_SIZE;
 
-  texture: THREE.CanvasTexture;
-
   /** The rows: where each starts, its bucketed height, how far along it is
    * spent. Every entry in a row is allocated at the row's height. */
   private readonly shelf_y = new Vector(Uint32Array, LANE);
@@ -232,25 +219,12 @@ export class BillboardAtlas {
   private readonly is_dirty = new Vector(Uint8Array, LANE);
   private scratch: HTMLCanvasElement | null = null;
   private scratch_ctx: CanvasRenderingContext2D | null = null;
-  private scratch_texture: THREE.Texture | null = null;
-  private readonly $region = new THREE.Box2();
-  private readonly $position = new THREE.Vector2();
 
   constructor() {
     this.canvas = document.createElement("canvas");
     this.canvas.width = this.size;
     this.canvas.height = this.size;
     this.ctx = this.canvas.getContext("2d")!;
-    this.texture = this.make_sheet_texture();
-  }
-
-  private make_sheet_texture(): THREE.CanvasTexture {
-    const t = make_canvas_texture(this.canvas);
-    // See the header: an atlas cannot use the upload flip, because a
-    // rectangle measured from the top would address a band measured from
-    // the bottom.
-    t.flipY = false;
-    return t;
   }
 
   // ---- the rectangle of a slot ----
@@ -304,62 +278,11 @@ export class BillboardAtlas {
   }
 
   /**
-   * Uploads every rectangle drawn since the last call. Called from a tick
-   * step with the renderer in hand, once a frame; costs one small upload
-   * per dirty entry and one mipmap pass for the lot.
-   *
-   * The first call binds the sheet through `initTexture`, which uploads the
-   * whole canvas if no window onto it has yet — dirty entries included, so
-   * there is nothing to patch that time.
-   */
-  flush(renderer: THREE.WebGLRenderer): u32 {
-    const n = this.dirty.length;
-    if (n === 0) return 0;
-    const bound = (renderer.properties.get(this.texture) as { __webglTexture?: unknown }).__webglTexture !== undefined;
-    if (!bound) {
-      renderer.initTexture(this.texture);
-    } else {
-      if (!this.scratch) {
-        this.scratch = document.createElement("canvas");
-        this.scratch_ctx = this.scratch.getContext("2d")!;
-        this.scratch_texture = new THREE.Texture(this.scratch);
-        this.scratch_texture.flipY = false;
-      }
-      const scratch = this.scratch, ctx = this.scratch_ctx!, src = this.scratch_texture!;
-      // Mipmaps once, after the last rectangle, rather than per copy. The
-      // flag is part of three's texture cache key, but the key is only
-      // re-read on an upload, and a copy into a bound texture is not one.
-      const mipmaps = this.texture.generateMipmaps;
-      this.texture.generateMipmaps = false;
-      for (let d = 0; d < n; d++) {
-        const slot = this.dirty[d];
-        const x = this.x.mem[slot], y = this.y.mem[slot], w = this.w.mem[slot], h = this.h.mem[slot];
-        if (scratch.width < w || scratch.height < h) {
-          scratch.width = Math.max(scratch.width, w);
-          scratch.height = Math.max(scratch.height, h);
-        }
-        ctx.clearRect(0, 0, w, h);
-        this.paint_into(ctx, slot, 0, 0);
-        this.$region.min.set(0, 0);
-        this.$region.max.set(w, h);
-        this.$position.set(x, y);
-        if (d === n - 1) this.texture.generateMipmaps = mipmaps;
-        renderer.copyTextureToTexture(src, this.texture, this.$region, this.$position);
-        this.uploads++;
-      }
-      this.texture.generateMipmaps = mipmaps;
-    }
-    for (const slot of this.dirty) this.is_dirty.mem[slot] = 0;
-    this.dirty.length = 0;
-    return n;
-  }
-
-  /**
-   * `flush` for a renderer that is not three: `whole` when the sheet was
-   * replaced since the mirror's `generation`, else `part` per dirty entry,
-   * redrawn into the scratch at its origin for the same reason `flush`
-   * redraws it — reading a rectangle out of the sheet reads back all of it
-   * on WebKit. Returns the generation the mirror is now at.
+   * Hands a mirror what was drawn since it last looked: `whole` when the
+   * sheet was replaced since the mirror's `generation`, else `part` per
+   * dirty entry, redrawn into the scratch at its origin — the scratch is
+   * drawn by the entry's own closure rather than copied from the sheet (see
+   * the header). Returns the generation the mirror is now at.
    */
   flush_into(generation: u32, whole: (canvas: HTMLCanvasElement, size: u32) => void, part: (scratch: HTMLCanvasElement, w: u32, h: u32, x: u32, y: u32) => void): u32 {
     if (generation !== this.generation) {
@@ -542,13 +465,8 @@ export class BillboardAtlas {
    */
   private rebuild(size: u32, slots: Uint32Array, plan: Plan): void {
     this.size = size;
-    // A new canvas, not a resize of the live one. three allocates immutable
-    // storage for a texture once (texStorage2D, WebGL2) and every later
-    // upload is a texSubImage2D into it, so a canvas that changes size under
-    // a texture that has already uploaded overflows what was allocated —
-    // GL_INVALID_VALUE from glCopySubTextureCHROMIUM, silent on the page and
-    // fatal to the sheet. Replacing the element means no texture ever sees
-    // its own image change size.
+    // A new canvas, not a resize of the live one: a mirror sized to the old
+    // sheet must never see its image change size under it.
     this.canvas = document.createElement("canvas");
     this.canvas.width = size;
     this.canvas.height = size;
@@ -577,10 +495,8 @@ export class BillboardAtlas {
       this.paint(slot);
     }
 
-    // A resized canvas is a different image as far as the GPU is concerned,
-    // and the new texture's first bind uploads all of it.
-    this.texture.dispose();
-    this.texture = this.make_sheet_texture();
+    // A resized canvas is a different image to a mirror, which the
+    // generation tells it to take whole.
     for (const slot of this.dirty) this.is_dirty.mem[slot] = 0;
     this.dirty.length = 0;
   }

@@ -20,7 +20,7 @@ export function pct(sorted: readonly number[], q: number): number {
 }
 
 /** One decoded terrain page, measured live (terrain/config.ts: ~4.03MB) —
- * the multiplier on tile_pages, same idea as px × fx_passes. */
+ * the multiplier on tile_pages. */
 export const TILE_DECODED_MB = 4;
 
 /** A pending chunk waiting longer than this is being passed over rather than

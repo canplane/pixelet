@@ -6,24 +6,23 @@
  * module/map/ui/overlay/mode_bar.tsx / dummy_chat_text.tsx for where
  * chatLines comes from. World-anchored-billboard tier (see
  * issue/20260907-world-rendering-tiers.md); the actual render is
- * billboard/billboard.tsx's `<Billboard>`, shared with poi_layer.tsx. This
- * file owns only what's chat-bubble-specific: reading chatLines, the
- * show/expire timer, and drawing the notched speech-bubble shape onto a
- * canvas.
+ * a billboard set of the module standing on the companion's actor
+ * (crates/pxl-core/src/billboard.rs), drawn from the sheet POI badges share.
+ * This file owns only what's chat-bubble-specific: reading chatLines, the
+ * show/expire timer, and drawing the notched speech-bubble shape.
  *
  * The bubble is drawn on a plain 2D canvas (notched-corner border, tail)
  * rather than an image asset, since its size has to track the message text
  * anyway.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { wrap_text } from "../billboard/canvas_text.ts";
 import { FONT_FAMILY, FONT_WEIGHT_BOLD } from "../billboard/canvas_scale.ts";
-import { Billboard, BILLBOARD_ORDER, type BuiltBillboard } from "../billboard/billboard.tsx";
-import { make_canvas_texture } from "../billboard/canvas_texture.ts";
+import { BILLBOARD_ORDER } from "../billboard/sheet.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
 import { billboard_sheet } from "../billboard/sheet.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
@@ -132,28 +131,13 @@ function draw_bubble(ctx: CanvasRenderingContext2D, layout: BubbleLayout): void 
   });
 }
 
-function build_bubble_canvas(text: string): BuiltBillboard {
-  const layout = layout_bubble(text);
-  const { box_w, logical_h } = layout;
-  const canvas = document.createElement("canvas");
-  canvas.width = box_w * RENDER_SCALE;
-  canvas.height = logical_h * RENDER_SCALE;
-  draw_bubble(canvas.getContext("2d")!, layout);
-
-  // The whole bubble: unlike a POI badge's anchor dot, every part of this
-  // is message rather than marker.
-  return { canvas, texture: make_canvas_texture(canvas), logical_w: box_w, logical_h, center_y: logical_h, collide_h: logical_h };
-}
-
 export type ChatBubbleProps = {
   /** Local Z (this character's own group frame) of the model's own top —
    * usually its configured height_u. The bubble adds its own clearance
    * above this and positions by its tail tip, not its center, so callers
    * don't need to know anything about the bubble's own current height. */
   anchor_z: f64;
-  /** The character's actor when the WebGPU renderer draws it: the bubble is
-   * then a billboard set of the module standing on the actor
-   * (crates/pxl-core/src/billboard.rs), drawn from the shared sheet. */
+  /** The character's actor, once it exists. */
   actor: u32 | null;
 };
 
@@ -190,28 +174,18 @@ export function ChatBubble(props: ChatBubbleProps) {
     return () => clearTimeout(timer);
   }, [last]);
 
-  const tip_z = anchor_z + HEAD_CLEARANCE_U;
-  const gpu_bubble = useGpuBubble(actor, visible_line?.text ?? null, tip_z);
-
-  const built = useMemo(() => (visible_line && actor === null ? build_bubble_canvas(visible_line.text) : null), [visible_line, actor]);
-  // A bubble's canvas is rebuilt per distinct message rather than cached, so
-  // its texture is this component's to release — unlike a POI badge, which
-  // is held by id and disposed when the badge is evicted.
-  useEffect(() => () => built?.texture.dispose(), [built]);
-
-  if (gpu_bubble) return null;
-  // tip_z is the tail's fixed bottom edge (Billboard's own base_z).
-  return <Billboard built={built} base_z={tip_z} render_order={BILLBOARD_ORDER.chat} />;
+  // The tail tip is the anchor, at the model's top plus the clearance.
+  useBubbleSet(actor, visible_line?.text ?? null, anchor_z + HEAD_CLEARANCE_U);
+  return null;
 }
 
 /**
- * The bubble through the WebGPU renderer: drawn into the shared sheet, and
- * one instance of a billboard set that follows `actor` at `tip_z` — its
- * tail tip, the anchor — so the module places it wherever the actor stands
- * each tick. The instance is written again when the sheet is replaced,
- * which moves its rectangle. Whether this path is the one drawing.
+ * Drawn into the shared sheet, and one instance of a billboard set that
+ * follows `actor` at `tip_z` — so the module places it wherever the actor
+ * stands each tick. The instance is written again when the sheet is
+ * replaced, which moves its rectangle.
  */
-function useGpuBubble(actor: u32 | null, text: string | null, tip_z: f64): boolean {
+function useBubbleSet(actor: u32 | null, text: string | null, tip_z: f64): void {
   const [held, set_held] = useState<{ set: u32; slot: u32; layout: BubbleLayout } | null>(null);
 
   useEffect(() => {
@@ -246,6 +220,4 @@ function useGpuBubble(actor: u32 | null, text: string | null, tip_z: f64): boole
     p.pxl_billboards_write(set, 1, lane.byteOffset);
     FIXED_ALLOC.give(lane);
   }, "chat_bubble");
-
-  return actor !== null;
 }

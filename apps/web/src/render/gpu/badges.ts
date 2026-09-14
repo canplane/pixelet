@@ -17,8 +17,11 @@
  *
  * The sheet is billboard/atlas.ts's canvas, mirrored into a texture a badge
  * at a time and whole when the sheet is replaced, with its mip chain
- * rebuilt after: canvas_texture.ts's mipmapped minification is what keeps
- * the supersampled text from crawling as the camera moves.
+ * rebuilt after. Magnification is nearest, for the pixel read up close;
+ * minification is mipmapped linear, because a badge held at a constant
+ * screen size is still slightly minified against the sheet's supersampled
+ * resolution, and without a mip chain every camera micro-movement samples a
+ * different single texel and the text visibly crawls.
  */
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
