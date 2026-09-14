@@ -23,11 +23,16 @@ use pxl_core::world::object::{Carve, Kind, Painter, Store};
 use pxl_core::world::pool::Pool;
 use pxl_core::world::raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
+use pxl_shared::spec::cmd::Cmd;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
+use xpute_core::io::marshal::tree::{encoder, BranchCursor, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
-use xpute_core::ipc::ring::{ring_words, Entry, Ring, RING_ARGS, RING_ENTRY_WORDS, RING_OP, RING_RESULT, RING_USER};
+use xpute_core::ipc::frame::FrameFlag;
+use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
 use xpute_core::kit::array::ArrayBuffer;
+use xpute_core::kit::array::U8Array;
 use xpute_core::sys::errno::Errno;
+use xpute_core::sys::error::MarshalError;
 
 /// The section at the front of the core memory that is the module's own.
 /// Equal to core_pool.ts's MODULE_BYTES.
@@ -110,40 +115,31 @@ struct State {
     pipeline: Vec<u32>,
 }
 
-/// Entries each ring holds: a page mounting is 64 chunks a frame, each
+/// Messages each ring holds: a page mounting is 64 chunks a frame, each
 /// with its tiers, decor and layout to come, and the glue reads the ring
-/// dry between ticks — 4096 entries is 256 KB a ring.
+/// dry between ticks.
 pub const RING_CAPACITY: u32 = 4096;
 
-/// The entry's word indices, as the ring names them.
-const USER: usize = RING_USER as usize;
-const OP: usize = RING_OP as usize;
-const RESULT: usize = RING_RESULT as usize;
-const ARGS: usize = RING_ARGS as usize;
+/// Each ring's packet arena: what is left of 1 MiB after the header and the
+/// messages. The heap hands out power-of-two classes (fixed_heap.rs), so a
+/// ring a byte past 1 MiB would take 2 MiB of it. A chunk's largest message
+/// is under 128 bytes, so a full ring's packets fit in about half.
+pub const RING_ARENA_BYTES: u32 = (1 << 20) - (RING_HEADER_WORDS + RING_CAPACITY * RING_ENTRY_WORDS) * 4;
 
 fn new_ring(capacity: u32) -> Ring {
-    let words = vec![0u32; ring_words(capacity) as usize].leak();
+    let bytes = ring_bytes(capacity, RING_ARENA_BYTES) as usize;
+    // Words of eight bytes, so the ring and every packet in its arena sit on
+    // an 8-aligned address, as a packet's f64 and u64 lanes need.
+    let words = vec![0u64; bytes.div_ceil(8)].leak();
     // SAFETY: the words are leaked for the module's lifetime and only the
     // two sides of the ring touch them.
-    let buffer = unsafe { ArrayBuffer::from_raw(words.as_mut_ptr() as *mut u8, words.len() * 4) };
-    Ring::init(buffer, 0, capacity)
+    let buffer = unsafe { ArrayBuffer::from_raw(words.as_mut_ptr() as *mut u8, words.len() * 8) };
+    Ring::init(buffer, 0, capacity, RING_ARENA_BYTES)
 }
 
 /// Where a ring's words start in the memory.
 fn ring_address(ring: &Ring) -> u32 {
     ring.words.as_slice().as_ptr() as u32
-}
-
-/// The entry at the ring's head, copied out, or none when empty.
-fn peek_entry(ring: &Ring) -> Option<Entry> {
-    let at = ring.peek();
-    if at < 0 {
-        return None;
-    }
-    let at = at as usize;
-    let mut e: Entry = [0; RING_ENTRY_WORDS as usize];
-    e.copy_from_slice(&ring.words.as_slice()[at..at + RING_ENTRY_WORDS as usize]);
-    Some(e)
 }
 
 /// The module's one state, made on first use. A cell rather than a
@@ -846,32 +842,12 @@ pub extern "C" fn pxl_column_runs_at() -> u32 {
 
 // ---- Rings ----
 //
-// Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs);
-// a query that needs its answer now stays a call. The glue pushes into the
-// submission ring, rings `pxl_drain` once a tick, and reads the completion
-// ring when the call returns.
-
-/// No effect; completes with its first argument, for the rings' own test.
-pub const OP_NOP: u32 = 0;
-/// Submissions: a chunk's life and what it is built from.
-pub const OP_CHUNK_ADD: u32 = 1; // id, base lo, base hi, tx0, ty0, base x (i32), base y (i32), stable hash
-pub const OP_CHUNK_REMOVE: u32 = 2; // id
-pub const OP_CHUNK_SOURCE: u32 = 3; // id, has page, show structures, land, water, structure, transport, ele
-/// The builder's own ask, bypassing the scheduler: for the tests that hold
-/// a build to the TypeScript pipeline, never sent by the glue.
-pub const OP_CHUNK_WANT: u32 = 4; // id, step, step (0 is none)
-pub const OP_PAGE: u32 = 7; // page lo, page hi, present
-pub const OP_EDITS: u32 = 6; // hide, key lo, key hi, band, pos, carve, key lo, key hi, lx, ly, lz, size (f32 bits)
-/// Completions.
-pub const OP_TIER: u32 = 16; // user id; generation, step, at, bytes, vertex count, index count
-pub const OP_RUNS: u32 = 17; // user id; bytes
-pub const OP_VISIBLE: u32 = 18; // user id; on
-pub const OP_LAYOUT: u32 = 19; // user id; primary, secondary, ready
-pub const OP_BLEND: u32 = 20; // user id; primary weight, secondary weight (f32 bits), decor takes the secondary
-pub const OP_EVICT: u32 = 21; // user id; step
-pub const OP_MOUNT: u32 = 22; // user id; page lo, page hi, base x, base y
-pub const OP_UNMOUNT: u32 = 23; // user id
-pub const OP_DECOR: u32 = 24; // user id; step, at, bytes
+// Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
+// a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
+// ring's arena, which the kernel reads where it lies. The glue assembles
+// what it submits and takes apart what completes; nothing here is shaped
+// for it. The glue pushes into the submission ring, rings `pxl_drain` or
+// `pxl_tick`, and reads the completion ring when the call returns.
 
 /// Doubles in the frame block, in the order sched::Frame names them: the
 /// root matrix (16), the origin (3), the planes (24), the camera (3), the
@@ -900,13 +876,23 @@ fn key(lo: u32, hi: u32) -> u64 {
     lo as u64 | ((hi as u64) << 32)
 }
 
-fn completion(e: &Event) -> Entry {
-    let mut done: Entry = [0; 16];
-    let mut put = |id: u32, op: u32, args: &[u32]| {
-        done[USER] = id;
-        done[OP] = op;
-        done[ARGS..ARGS + args.len()].copy_from_slice(args);
-    };
+/// A packet of one branch, its children written by `f`.
+fn packet(f: &mut dyn FnMut(&mut BranchViewImpl)) -> U8Array {
+    let mut t = TreeView::new();
+    t.branch(Some(&mut |b| f(b)));
+    encoder()
+        .encode(
+            &t,
+            TreeEncoderOptions {
+                init_cap: Some(128),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// An event as the signal it raises: its chunk, its command and its packet.
+fn signal(e: &Event) -> (u32, Cmd, Option<U8Array>) {
     match *e {
         Event::Build(BuildEvent::Tier {
             id,
@@ -916,29 +902,77 @@ fn completion(e: &Event) -> Entry {
             bytes,
             vertex_cnt,
             index_cnt,
-        }) => put(id, OP_TIER, &[generation, step, at, bytes, vertex_cnt, index_cnt]),
-        Event::Build(BuildEvent::Runs { id, bytes }) => put(id, OP_RUNS, &[bytes]),
-        Event::Visible { id, on } => put(id, OP_VISIBLE, &[on as u32]),
-        Event::Layout { id, primary, secondary, ready } => put(id, OP_LAYOUT, &[primary, secondary, ready as u32]),
+        }) => (
+            id,
+            Cmd::TIER_CREATE,
+            Some(packet(&mut |b| {
+                b.u32(Some(generation)).u32(Some(step)).u32(Some(at)).u32(Some(bytes)).u32(Some(vertex_cnt)).u32(Some(index_cnt));
+            })),
+        ),
+        Event::Build(BuildEvent::Runs { id, bytes }) => (
+            id,
+            Cmd::RUNS_UPDATE,
+            Some(packet(&mut |b| {
+                b.u32(Some(bytes));
+            })),
+        ),
+        Event::Visible { id, on } => (
+            id,
+            Cmd::CHUNK_VISIBLE,
+            Some(packet(&mut |b| {
+                b.bool(Some(on));
+            })),
+        ),
+        Event::Layout { id, primary, secondary, ready } => (
+            id,
+            Cmd::CHUNK_LAYOUT,
+            Some(packet(&mut |b| {
+                b.u32(Some(primary)).u32(Some(secondary)).bool(Some(ready));
+            })),
+        ),
         Event::Blend {
             id,
             primary,
             secondary,
             decor_secondary,
-        } => put(id, OP_BLEND, &[primary.to_bits(), secondary.to_bits(), decor_secondary as u32]),
-        Event::Evict { id, step } => put(id, OP_EVICT, &[step]),
-        Event::Mount { id, page, base_x, base_y } => put(id, OP_MOUNT, &[page as u32, (page >> 32) as u32, base_x, base_y]),
-        Event::Unmount { id } => put(id, OP_UNMOUNT, &[]),
-        Event::Decor { id, step, at, bytes } => put(id, OP_DECOR, &[step, at, bytes]),
+        } => (
+            id,
+            Cmd::CHUNK_BLEND,
+            Some(packet(&mut |b| {
+                b.f32(Some(primary)).f32(Some(secondary)).bool(Some(decor_secondary));
+            })),
+        ),
+        Event::Evict { id, step } => (
+            id,
+            Cmd::TIER_DELETE,
+            Some(packet(&mut |b| {
+                b.u32(Some(step));
+            })),
+        ),
+        Event::Mount { id, page, base_x, base_y } => (
+            id,
+            Cmd::CHUNK_CREATE,
+            Some(packet(&mut |b| {
+                b.u64(Some(page)).u32(Some(base_x)).u32(Some(base_y));
+            })),
+        ),
+        Event::Unmount { id } => (id, Cmd::CHUNK_DELETE, None),
+        Event::Decor { id, step, at, bytes } => (
+            id,
+            Cmd::DECOR_CREATE,
+            Some(packet(&mut |b| {
+                b.u32(Some(step)).u32(Some(at)).u32(Some(bytes));
+            })),
+        ),
     }
-    done
 }
 
 /// Moves what fits of the waiting events into the completion ring.
 fn flush(s: &mut State) -> u32 {
     let mut posted = 0;
     while let Some(e) = s.events.front() {
-        if s.cq.push_entry(&completion(e)) != Errno::OK {
+        let (tag, cmd, pkt) = signal(e);
+        if s.cq.push(tag, cmd as u32, 0, pkt.as_ref(), 0) != Errno::OK {
             break;
         }
         s.events.pop_front();
@@ -952,63 +986,130 @@ fn now() -> f64 {
     unsafe { pxl_now() }
 }
 
-/// Applies one submission; none for an op nobody numbers, which completes
-/// with ENOSYS.
-fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
-    let a = &sub[ARGS..];
+/// A packet's branch of children, refused when the command needs one and
+/// the message has none.
+fn fields(pkt: &Option<U8Array>) -> Result<BranchCursor, MarshalError> {
+    match pkt {
+        Some(pkt) => TreeReader::new(pkt.clone())?.read_branch(),
+        None => Err(MarshalError::new(Errno::EBADMSG, Some("command without its packet"), None)),
+    }
+}
+
+fn u32_at(b: &BranchCursor, i: u32) -> Result<u32, MarshalError> {
+    Ok(b.at(i)?.get_number()? as u32)
+}
+
+fn i32_at(b: &BranchCursor, i: u32) -> Result<i32, MarshalError> {
+    Ok(b.at(i)?.get_number()? as i32)
+}
+
+fn f32_at(b: &BranchCursor, i: u32) -> Result<f64, MarshalError> {
+    b.at(i)?.get_number()
+}
+
+fn u64_at(b: &BranchCursor, i: u32) -> Result<u64, MarshalError> {
+    Ok(b.at(i)?.get_bigint()? as u64)
+}
+
+fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
+    b.at(i)?.get_bool()
+}
+
+/// A child branch, or none where the packet holds a null.
+fn branch_at(b: &BranchCursor, i: u32) -> Result<Option<BranchCursor>, MarshalError> {
+    b.at(i)?.opt().map(|c| c.as_branch()).transpose()
+}
+
+/// Applies one submission: its reply's value, or none for a command nobody
+/// numbers, which replies ENOSYS; a packet that does not read as the
+/// command's replies with its errno.
+fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32>, MarshalError> {
+    let Some(cmd) = Cmd::of(number) else { return Ok(None) };
     let Parts { mut world, events, sched, .. } = parts(s);
     let mut emit = |e: Event| events.push_back(e);
-    match sub[OP] & 0xffff {
-        OP_NOP => return Some(a[0]),
-        OP_CHUNK_ADD => sched.add(a[0], key(a[1], a[2]), a[5] as i32 as f64, a[6] as i32 as f64, a[3], a[4], a[7]),
-        OP_CHUNK_REMOVE => sched.remove(&mut world, a[0], &mut emit),
-        OP_CHUNK_SOURCE => {
-            let page = (a[1] != 0).then(|| PageLanes {
-                ground: [a[3] as usize, a[4] as usize, a[5] as usize, a[6] as usize],
-                ele: a[7] as usize,
-            });
-            sched.source(&mut world, a[0], page, a[2] != 0, &mut emit);
+    match cmd {
+        Cmd::NOP => {
+            let value = match pkt {
+                Some(_) => u32_at(&fields(pkt)?, 0)?,
+                None => 0,
+            };
+            return Ok(Some(value as i32));
         }
-        OP_CHUNK_WANT => sched.builder.want(&mut world, a[0], [a[1], a[2]]),
-        OP_PAGE => sched.page(key(a[0], a[1]), a[2] != 0),
-        OP_EDITS => {
-            let f = |w: u32| f32::from_bits(w) as f64;
-            let hide = (a[0] != 0).then(|| (key(a[1], a[2]), a[3] as i32, a[4]));
-            let carve = (a[5] != 0).then(|| {
-                (
-                    key(a[6], a[7]),
+        Cmd::CHUNK_CREATE => {
+            let f = fields(pkt)?;
+            sched.add(tag, u64_at(&f, 0)?, i32_at(&f, 3)? as f64, i32_at(&f, 4)? as f64, u32_at(&f, 1)?, u32_at(&f, 2)?, u32_at(&f, 5)?);
+        }
+        Cmd::CHUNK_DELETE => sched.remove(&mut world, tag, &mut emit),
+        Cmd::CHUNK_UPDATE => {
+            let f = fields(pkt)?;
+            let page = match branch_at(&f, 0)? {
+                None => None,
+                Some(p) => Some(PageLanes {
+                    ground: [u32_at(&p, 0)? as usize, u32_at(&p, 1)? as usize, u32_at(&p, 2)? as usize, u32_at(&p, 3)? as usize],
+                    ele: u32_at(&p, 4)? as usize,
+                }),
+            };
+            sched.source(&mut world, tag, page, bool_at(&f, 1)?, &mut emit);
+        }
+        Cmd::CHUNK_WANT => {
+            let f = fields(pkt)?;
+            sched.builder.want(&mut world, tag, [u32_at(&f, 0)?, u32_at(&f, 1)?]);
+        }
+        Cmd::PAGE_CREATE | Cmd::PAGE_DELETE => sched.page(u64_at(&fields(pkt)?, 0)?, cmd == Cmd::PAGE_CREATE),
+        Cmd::EDIT_UPDATE => {
+            let f = fields(pkt)?;
+            let hide = match branch_at(&f, 0)? {
+                None => None,
+                Some(h) => Some((u64_at(&h, 0)?, i32_at(&h, 1)?, u32_at(&h, 2)?)),
+            };
+            let carve = match branch_at(&f, 1)? {
+                None => None,
+                Some(c) => Some((
+                    u64_at(&c, 0)?,
                     Carve {
-                        lx: f(a[8]),
-                        ly: f(a[9]),
-                        lz: f(a[10]),
-                        size: f(a[11]),
+                        lx: f32_at(&c, 1)?,
+                        ly: f32_at(&c, 2)?,
+                        lz: f32_at(&c, 3)?,
+                        size: f32_at(&c, 4)?,
                     },
-                )
-            });
+                )),
+            };
             sched.builder.set_edits(hide, carve);
         }
-        _ => return None,
+        // Signals: the kernel raises these, and a shell submitting one is
+        // asking for something no handler does.
+        Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
-    Some(0)
+    Ok(Some(0))
 }
 
 /// Applies every submission waiting, as far as the completion ring has room
 /// for what they make: a submission left behind waits for the next call,
-/// and nothing is dropped. Completes only what asks for an answer — the
-/// no-op and an op nobody numbers — since a command's effect is its events.
+/// and nothing is dropped. Replies to what asks (`ACKREQ`), and to what
+/// failed — a command nobody numbers, a packet that does not read — since a
+/// command's effect is otherwise its signals.
 fn drain(s: &mut State) -> u32 {
     let mut posted = flush(s);
     while s.cq.len() < s.cq.capacity && s.events.is_empty() {
-        let Some(sub) = peek_entry(&s.sq) else { break };
+        let at = s.sq.peek();
+        if at < 0 {
+            break;
+        }
+        let at = at as u32;
+        let (tag, number, flags) = (s.sq.tag(at), s.sq.cmd(at), s.sq.flags(at));
+        let result = match s.sq.packet(at) {
+            Ok(pkt) => match apply(s, tag, number, &pkt) {
+                Ok(Some(value)) => Ok(value),
+                Ok(None) => Err(Errno::ENOSYS as i32),
+                Err(e) => Err(e.errno as i32),
+            },
+            Err(e) => Err(e.errno as i32),
+        };
         s.sq.advance();
-        let op = sub[OP] & 0xffff;
-        let result = apply(s, &sub);
-        if op == OP_NOP || result.is_none() {
-            let mut done: Entry = [0; 16];
-            done[USER] = sub[USER];
-            done[OP] = sub[OP];
-            done[RESULT] = result.unwrap_or((-38i32) as u32); // ENOSYS
-            s.cq.push_entry(&done);
+        if flags & FrameFlag::ACKREQ as u32 != 0 || result.is_err() {
+            let value = result.unwrap_or_else(|errno| errno);
+            // The loop's own guard left room for this one.
+            s.cq.push(tag, number, FrameFlag::RES as u32, None, value);
             posted += 1;
         }
         posted += flush(s);

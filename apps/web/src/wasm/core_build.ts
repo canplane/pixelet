@@ -21,7 +21,10 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { Errno } from "@xpute/core/sys/errno.ts";
-import { Ring, RING_ARGS, RING_OP, RING_USER } from "@xpute/core/ipc/ring.ts";
+import type { U8Array } from "@xpute/core/kit/array.ts";
+import { Ring } from "@xpute/core/ipc/ring.ts";
+import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
@@ -35,23 +38,6 @@ import { CORE_POOL, CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 export function release_chunk_mesh(mesh: { block: MeshBlock["block"] }): void {
   CORE_POOL.release(mesh.block);
 }
-
-/** crates/pxl/wasm/src/lib.rs's op numbers. */
-const OP_CHUNK_ADD = 1;
-const OP_CHUNK_REMOVE = 2;
-const OP_CHUNK_SOURCE = 3;
-const OP_CHUNK_WANT = 4;
-const OP_EDITS = 6;
-const OP_PAGE = 7;
-const OP_TIER = 16;
-const OP_RUNS = 17;
-const OP_VISIBLE = 18;
-const OP_LAYOUT = 19;
-const OP_BLEND = 20;
-const OP_EVICT = 21;
-const OP_MOUNT = 22;
-const OP_UNMOUNT = 23;
-const OP_DECOR = 24;
 
 /** crates/pxl/wasm/src/lib.rs's frame block: doubles, in this order. */
 export const FRAME_WORDS = 62;
@@ -146,17 +132,10 @@ export type BuildStat = {
   heap_used: u32;
 };
 
-const $f32 = new Float32Array(1);
-const $f32_bits = new Uint32Array($f32.buffer);
-
-function f32_bits(v: number): u32 {
-  $f32[0] = v;
-  return $f32_bits[0];
-}
-
-function f32_of(bits: u32): number {
-  $f32_bits[0] = bits;
-  return $f32[0];
+/** A packet of one branch, its children written by `fill` — what a message
+ * carries (@pxl/shared/spec/cmd.ts). */
+function packet(fill: (b: BranchView) => void): U8Array {
+  return encoder.encode(new TreeView().branch(fill));
 }
 
 export class CoreBuild {
@@ -187,45 +166,52 @@ export class CoreBuild {
     this.read();
   }
 
-  private submit(user: u32, op: u32, ...args: u32[]): void {
-    while (this.sq.push(user, op, ...args) === Errno.EAGAIN) this.pump();
+  private submit(tag: u32, cmd: Cmd, pkt: U8Array | null = null): void {
+    for (;;) {
+      const errno = this.sq.push(tag, cmd, 0, pkt);
+      if (errno === Errno.OK) return;
+      if (errno !== Errno.EAGAIN) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} refused by the ring: ${errno}`);
+      this.pump();
+    }
   }
 
   private read(): void {
-    const w = this.cq.words;
-    for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
-      const id = w[at + RING_USER];
-      const op = w[at + RING_OP] & 0xffff;
-      const a = at + RING_ARGS;
-      if (op === OP_MOUNT) {
-        this.mounts?.on_mount(id, BigInt(w[a]) | (BigInt(w[a + 1]) << 32n), w[a + 2], w[a + 3]);
-        this.cq.advance();
+    const cq = this.cq;
+    for (let at = cq.peek(); at >= 0; at = cq.peek()) {
+      const id = cq.tag(at);
+      const cmd = cq.cmd(at) as Cmd;
+      const pkt = cq.packet(at);
+      const f: BranchCursor | null = pkt ? new TreeReader(pkt).read_branch() : null;
+      const u32_at = (i: u32) => f!.at(i).get<number>();
+      if (cmd === Cmd.CHUNK_CREATE) {
+        this.mounts?.on_mount(id, f!.at(0).get<bigint>(), u32_at(1), u32_at(2));
+        cq.advance();
         continue;
       }
-      if (op === OP_UNMOUNT) {
+      if (cmd === Cmd.CHUNK_DELETE) {
         this.sinks.get(id)?.on_unmount?.();
         this.sinks.delete(id);
         this.mounts?.on_unmount(id);
-        this.cq.advance();
+        cq.advance();
         continue;
       }
       const sink = this.sinks.get(id);
-      if (op === OP_TIER) {
-        const mesh: MeshBlock = { block: CORE_POOL.adopt(w[a + 2], w[a + 3]), vertex_cnt: w[a + 4], index_cnt: w[a + 5] };
-        if (sink) sink.on_tier(w[a], w[a + 1] as LodStep, mesh);
+      if (cmd === Cmd.TIER_CREATE) {
+        const mesh: MeshBlock = { block: CORE_POOL.adopt(u32_at(2), u32_at(3)), vertex_cnt: u32_at(4), index_cnt: u32_at(5) };
+        if (sink) sink.on_tier(u32_at(0), u32_at(1) as LodStep, mesh);
         else release_chunk_mesh(mesh);
-      } else if (op === OP_DECOR) {
-        const decor = decor_block_carve(CORE_POOL.adopt(w[a + 1], w[a + 2]));
-        if (sink) sink.on_decor(w[a] as LodStep, decor);
+      } else if (cmd === Cmd.DECOR_CREATE) {
+        const decor = decor_block_carve(CORE_POOL.adopt(u32_at(1), u32_at(2)));
+        if (sink) sink.on_decor(u32_at(0) as LodStep, decor);
         else decor_block_release(decor);
       } else if (sink) {
-        if (op === OP_RUNS) sink.on_runs(w[a]);
-        else if (op === OP_VISIBLE) sink.on_visible?.(w[a] !== 0);
-        else if (op === OP_LAYOUT) sink.on_layout(w[a] as LodStep, w[a + 1] === 0 ? null : w[a + 1] as LodStep, w[a + 2] !== 0);
-        else if (op === OP_BLEND) sink.on_blend?.(f32_of(w[a]), f32_of(w[a + 1]), w[a + 2] !== 0);
-        else if (op === OP_EVICT) sink.on_evict(w[a] as LodStep);
+        if (cmd === Cmd.RUNS_UPDATE) sink.on_runs(u32_at(0));
+        else if (cmd === Cmd.CHUNK_VISIBLE) sink.on_visible?.(f!.at(0).get<boolean>());
+        else if (cmd === Cmd.CHUNK_LAYOUT) sink.on_layout(u32_at(0) as LodStep, u32_at(1) === 0 ? null : u32_at(1) as LodStep, f!.at(2).get<boolean>());
+        else if (cmd === Cmd.CHUNK_BLEND) sink.on_blend?.(u32_at(0), u32_at(1), f!.at(2).get<boolean>());
+        else if (cmd === Cmd.TIER_DELETE) sink.on_evict(u32_at(0) as LodStep);
       }
-      this.cq.advance();
+      cq.advance();
     }
   }
 
@@ -236,7 +222,7 @@ export class CoreBuild {
     const id = this.next_id++;
     this.sinks.set(id, sink);
     const b = BigInt.asUintN(64, base);
-    this.submit(id, OP_CHUNK_ADD, id, Number(b & 0xffffffffn), Number(b >> 32n), tx0, ty0, base_x >>> 0, base_y >>> 0, stable_hash >>> 0);
+    this.submit(id, Cmd.CHUNK_CREATE, packet((p) => p.u64(b).u32(tx0).u32(ty0).i32(base_x | 0).i32(base_y | 0).u32(stable_hash >>> 0)));
     return id;
   }
 
@@ -248,12 +234,12 @@ export class CoreBuild {
   /** Whether page `page_idx` has a terrain tile chunks can be mounted from. */
   page(page_idx: bigint, present: boolean): void {
     const b = BigInt.asUintN(64, page_idx);
-    this.submit(0, OP_PAGE, Number(b & 0xffffffffn), Number(b >> 32n), present ? 1 : 0);
+    this.submit(0, present ? Cmd.PAGE_CREATE : Cmd.PAGE_DELETE, packet((p) => p.u64(b)));
   }
 
   /** Drops the chunk and its work; nothing more reaches its sink. */
   remove(id: u32): void {
-    this.submit(id, OP_CHUNK_REMOVE, id);
+    this.submit(id, Cmd.CHUNK_DELETE);
     this.sinks.delete(id);
   }
 
@@ -272,49 +258,32 @@ export class CoreBuild {
     const g = page?.ground;
     this.submit(
       id,
-      OP_CHUNK_SOURCE,
-      id,
-      page ? 1 : 0,
-      show_structures ? 1 : 0,
-      g ? g.land.byteOffset : 0,
-      g ? g.water.byteOffset : 0,
-      g ? g.structure.byteOffset : 0,
-      g ? g.transport.byteOffset : 0,
-      page ? page.ele.byteOffset : 0,
+      Cmd.CHUNK_UPDATE,
+      packet((p) =>
+        p.branch(
+          page && g ? (l) => l.u32(g.land.byteOffset).u32(g.water.byteOffset).u32(g.structure.byteOffset).u32(g.transport.byteOffset).u32(page.ele.byteOffset) : null,
+        ).bool(show_structures)
+      ),
     );
   }
 
   /** The builder's ask, past the scheduler — for the tests that hold a
    * build to the TypeScript pipeline, with `build_tick`. */
   want(id: u32, first: LodStep | null, second: LodStep | null): void {
-    this.submit(id, OP_CHUNK_WANT, id, first ?? 0, second ?? 0);
+    this.submit(id, Cmd.CHUNK_WANT, packet((p) => p.u32(first ?? 0).u32(second ?? 0)));
   }
 
   /** The drawn build's edits: the hidden entry by its column, band and
    * packed position, and the carve preview by its column and its corner
    * relative to it. */
   edits(hide: { column: bigint; band: number; pos: u32 } | null, carve: { column: bigint; lx: number; ly: number; lz: number; size: number } | null): void {
-    const split = (k: bigint): [u32, u32] => {
-      const b = BigInt.asUintN(64, k);
-      return [Number(b & 0xffffffffn), Number(b >> 32n)];
-    };
-    const [hl, hh] = hide ? split(hide.column) : [0, 0];
-    const [cl, ch] = carve ? split(carve.column) : [0, 0];
     this.submit(
       0,
-      OP_EDITS,
-      hide ? 1 : 0,
-      hl,
-      hh,
-      hide ? hide.band >>> 0 : 0,
-      hide ? hide.pos : 0,
-      carve ? 1 : 0,
-      cl,
-      ch,
-      carve ? f32_bits(carve.lx) : 0,
-      carve ? f32_bits(carve.ly) : 0,
-      carve ? f32_bits(carve.lz) : 0,
-      carve ? f32_bits(carve.size) : 0,
+      Cmd.EDIT_UPDATE,
+      packet((p) =>
+        p.branch(hide ? (h) => h.u64(BigInt.asUintN(64, hide.column)).i32(hide.band | 0).u32(hide.pos) : null)
+          .branch(carve ? (c) => c.u64(BigInt.asUintN(64, carve.column)).f32(carve.lx).f32(carve.ly).f32(carve.lz).f32(carve.size) : null)
+      ),
     );
   }
 

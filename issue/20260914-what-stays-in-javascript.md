@@ -55,6 +55,38 @@ arrived and hands the time back. What that decides about the boundary:
   cannot be a ring entry: the memory, the rings' addresses, the
   doorbells, the panic hook. Everything named `pxl_*` today that is not
   one of those is on its way into the rings.
+- **The terms of folding the exports into the rings (2026-09-14).**
+  1. The Rust does not bend to JavaScript. Assembling and taking apart
+     what crosses is the shell's job, in XTP; the kernel reads a packet
+     where it lies and writes one where it is asked to. serde for the
+     RPC is avoided — tolerated only as a stopgap that says so.
+  2. The RPC is most likely XTP-shaped, and the fold is tried in that
+     shape first: a ring entry names an op and a packet in shared memory
+     (its offset and length), not a dozen scalar arguments laid out per
+     op.
+  3. The exchange is interrupts over shared memory. An export that
+     remains is a primitive that hands over the turn — the tick, the
+     drain — never a typed call per operation.
+  4. What goes over the network, and in what format, stays the shell's
+     to lead for now. It is a grey zone, not decided.
+
+  **The message, as built (2026-09-14).** What a frame
+  (`@xpute/core/ipc/frame.ts`) needs once the transport is shared memory:
+  four words — `tag`, `cmd | flags`, `result`, `packet` — and an XTP
+  packet in the ring's own arena, its length in its header. The frame's
+  args/body split, its spill and its worker id are gone (the packet is a
+  tree, the arena holds any size, one ring joins two sides); `RES` tells a
+  reply from a signal on the completion ring, and `ACKREQ` asks for a
+  reply. The producer rewinds its arena when it finds the ring empty, so
+  nothing is allocated per message; a full ring or arena is EAGAIN, a
+  packet larger than the arena EMSGSIZE. A command is a number, `major <<
+  8 | minor` (`@xpute/core/ipc/cmd.ts`), the minors below 0x10 being
+  CREATE/READ/UPDATE/DELETE; what the majors are is pxl's
+  (`@pxl/shared/spec/cmd.ts`, one table the glue and the module both
+  read, each command's packet listed beside its number). The chunk
+  commands and every signal the scheduler raises travel this way now; the
+  rest of the `pxl_*` table is still bindgen, and moves family by family.
+  The frame itself stays as it was, for the worker boundary.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for
