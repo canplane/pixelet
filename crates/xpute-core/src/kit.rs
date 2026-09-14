@@ -1,4 +1,4 @@
 //! Small pure functions and tables.
 
-pub mod math;
+pub mod fdlibm;
 pub mod srgb;
