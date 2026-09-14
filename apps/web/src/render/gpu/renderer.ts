@@ -25,6 +25,7 @@ import { SKY_SHADER } from "./sky_shader.ts";
 import { DecorPass } from "./decor.ts";
 import { SkinnedPass } from "./skinned.ts";
 import { PuckPass } from "./puck.ts";
+import { BadgePass } from "./badges.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -78,6 +79,8 @@ export class GpuRenderer {
   readonly skinned: SkinnedPass;
   /** The location puck (puck.ts). */
   private readonly puck: PuckPass;
+  /** The badges (badges.ts), a pass of their own that reads the depth. */
+  readonly badges: BadgePass;
   /** Each block's vertex and index counts, as its upload said. */
   private readonly counts = new Map<u32, [u32, u32]>();
   private readonly frame_buffer: GPUBuffer;
@@ -92,7 +95,7 @@ export class GpuRenderer {
   /** The sky's uniforms, likewise. */
   readonly sky: FrameUniforms = new Float32Array(new ArrayBuffer(SKY_UNIFORM_FLOATS * 4));
   /** What the last frame drew, for the ledger. */
-  stat = { draws: 0, decor_draws: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0 };
+  stat = { draws: 0, decor_draws: 0, badges: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0 };
 
   private constructor(readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, private readonly pxl: PxlExports) {
     const context = canvas.getContext("webgpu");
@@ -156,6 +159,7 @@ export class GpuRenderer {
     this.decor = new DecorPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.skinned = new SkinnedPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.puck = new PuckPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
+    this.badges = new BadgePass(device, this.format, DEPTH_FORMAT);
   }
 
   /** A renderer over a device, or null where there is no WebGPU: the app
@@ -193,7 +197,7 @@ export class GpuRenderer {
     this.canvas.width = width;
     this.canvas.height = height;
     this.depth?.destroy();
-    this.depth = this.device.createTexture({ label: "depth", size: [width, height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    this.depth = this.device.createTexture({ label: "depth", size: [width, height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
   }
 
   /** Takes the module's lists and draws the frame: the blocks it names
@@ -248,8 +252,9 @@ export class GpuRenderer {
     if (uniforms.length > 0) this.device.queue.writeBuffer(this.draws_buffer, 0, mem as ArrayBuffer, row[6], uniforms.byteLength);
 
     const encoder = this.device.createCommandEncoder();
+    const color = this.context.getCurrentTexture().createView();
     const pass = encoder.beginRenderPass({
-      colorAttachments: [{ view: this.context.getCurrentTexture().createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }],
+      colorAttachments: [{ view: color, loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }],
       depthStencilAttachment: { view: this.depth.createView(), depthLoadOp: "clear", depthClearValue: 1, depthStoreOp: "store" },
     });
     pass.setPipeline(this.sky_pipeline);
@@ -268,6 +273,7 @@ export class GpuRenderer {
     }
     this.decor.draw_ghosts(pass, draws, uniforms, this.buffers);
     pass.end();
+    this.stat.badges = this.badges.draw(encoder, color, this.depth, draws, uniforms, this.buffers);
     this.device.queue.submit([encoder.finish()]);
   }
 

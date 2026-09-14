@@ -365,6 +365,10 @@ impl Models {
         self.actors.get_mut(id as usize)?.as_mut()
     }
 
+    pub fn actor_ref(&self, id: u32) -> Option<&Actor> {
+        self.actors.get(id as usize)?.as_ref()
+    }
+
     /// Starts `clip` from its beginning, fading over `fade_s` from what
     /// played before; a clip already playing is left alone.
     pub fn play(&mut self, id: u32, clip: u32, fade_s: f32) {

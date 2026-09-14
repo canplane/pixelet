@@ -1055,6 +1055,42 @@ pub extern "C" fn pxl_build_now(id: u32) {
     after(s);
 }
 
+// ---- The billboards (crates/pxl-core/src/billboard.rs) ----
+
+/// A billboard set drawn in `order`: its id.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_new(order: u32) -> u32 {
+    state().sched.billboards.new_set(order)
+}
+
+/// A set's instances: `count` of 10 floats at `lane`, relative to its anchor.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_write(set: u32, count: u32, lane: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    // SAFETY: the glue's lane of count * 10 floats.
+    unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane as usize) };
+}
+
+/// Stands a set at (x, y, z) in units.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_place(set: u32, x: f64, y: f64, z: f64) {
+    state().sched.billboards.place(set, [x, y, z]);
+}
+
+/// Stands a set `lift` units above an actor.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_follow(set: u32, actor: u32, lift: f64) {
+    state().sched.billboards.follow(set, actor, lift);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_billboards_remove(set: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.billboards.remove(&mut world, &mut sched.draw, set);
+}
+
 // ---- The location puck (crates/pxl-core/src/marker.rs) ----
 
 /// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre

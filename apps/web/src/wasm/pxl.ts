@@ -90,6 +90,11 @@ export type PxlExports = {
   pxl_ghost_box(x: number, y: number, z: number, size: number, value: u32, rgb: u32, coplanar: u32): void;
   pxl_ghost_decor(x: number, y: number, z: number, group: u32, rotation: number): void;
   pxl_ghost_clear(): void;
+  pxl_billboards_new(order: u32): u32;
+  pxl_billboards_write(set: u32, count: u32, lane: u32): void;
+  pxl_billboards_place(set: u32, x: number, y: number, z: number): void;
+  pxl_billboards_follow(set: u32, actor: u32, lift: number): void;
+  pxl_billboards_remove(set: u32): void;
   pxl_puck_zone(x: number, y: number, z: number, count: u32, lane: u32, snap_dist: number, fog_far: number): void;
   pxl_puck_beacon(offset_x: number, offset_y: number, night: u32): void;
   pxl_puck_clear(): void;

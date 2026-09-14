@@ -15,6 +15,8 @@ import type { RootState } from "@react-three/fiber";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { light_cfg } from "@/module/world/environment/config.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
+import { billboard_sheet } from "@/module/world/billboard/sheet.ts";
 import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/decor/asset_store.ts";
 import type { DecorModel } from "./decor.ts";
 import { GpuRenderer } from "./renderer.ts";
@@ -150,10 +152,22 @@ export function gpu_frame(state: RootState, root: THREE.Matrix4): void {
   const gpu = gpu_renderer;
   if (!gpu) return;
   sync_decor_models(gpu);
+  gpu.badges.sync_sheet(billboard_sheet);
   const dpr = state.viewport.dpr;
   gpu.resize(state.size.width * dpr, state.size.height * dpr);
   const cam = state.camera as THREE.PerspectiveCamera;
   cam.updateMatrixWorld();
+  // The badges take the view and the projection apart: their size is
+  // measured in view space (billboard/field.ts).
+  const badges = gpu.badges;
+  badges.view.set($m.copy(cam.matrixWorldInverse).multiply(root).elements);
+  badges.proj.set($m.copy($gl_to_wgpu).multiply(cam.projectionMatrix).elements);
+  badges.px_k = state.size.height / (2 * Math.tan((cam.fov * Math.PI) / 360));
+  badges.fade_start = fade_start_u();
+  badges.fade_end = fade_end_u();
+  badges.near = cam.near;
+  badges.far = cam.far;
+  badges.cell = LOD_CELL_PER_DISTANCE.value;
   $m.copy($gl_to_wgpu).multiply(cam.projectionMatrix).multiply(cam.matrixWorldInverse).multiply(root);
   const u = gpu.uniforms;
   u.set($m.elements, 0);

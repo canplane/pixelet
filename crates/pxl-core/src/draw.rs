@@ -47,6 +47,9 @@ pub const PIPELINE_SKINNED: u32 = 5;
 /// uniform's fourth float its spin.
 pub const PIPELINE_PUCK_ZONE: u32 = 6;
 pub const PIPELINE_PUCK_BEACON: u32 = 7;
+/// The badges (billboard.rs): (the block's handle, the count, 0, uniform,
+/// pipeline), translated to the placement's origin.
+pub const PIPELINE_BADGE: u32 = 8;
 /// Words a rewrite record holds: the handle, and the block's address and
 /// length, whose bytes replace the buffer's.
 pub const REWRITE_WORDS: usize = 3;

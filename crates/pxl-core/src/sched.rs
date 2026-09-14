@@ -14,6 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::billboard::Billboards;
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::draw::{DrawList, PIPELINE_CHUNK};
@@ -251,6 +252,8 @@ pub struct Scheduler {
     pub models: Models,
     /// The location puck (marker.rs).
     pub markers: Markers,
+    /// The billboards (billboard.rs).
+    pub billboards: Billboards,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -319,6 +322,7 @@ impl Scheduler {
             ghost: Ghost::default(),
             models: Models::default(),
             markers: Markers::default(),
+            billboards: Billboards::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -797,6 +801,7 @@ impl Scheduler {
         self.ghost.draw(&mut self.draw, frame.origin);
         self.models.draw(&mut self.draw, frame.origin);
         self.markers.draw(&mut self.draw, frame.origin);
+        self.billboards.draw(&mut self.draw, &self.models, frame.origin);
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;

@@ -30,7 +30,7 @@
  * custom skin is tracked separately, not blocking on it.
  */
 
-import { memo, type MutableRefObject, useEffect, useLayoutEffect, useRef } from "react";
+import { memo, type MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
@@ -168,6 +168,8 @@ const Walker = memo(function Walker(props: WalkerProps) {
   // none of its meshes.
   const gpu = useGpuDrawsChunks();
   const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: THREE.Texture } | null>(null);
+  /** The actor again, as state, for what renders against it: the bubble. */
+  const [actor, set_actor] = useState<u32 | null>(null);
   useEffect(() => {
     const p = CORE_PXL;
     if (!p || !gpu) return;
@@ -177,11 +179,13 @@ const Walker = memo(function Walker(props: WalkerProps) {
       const actor = p.pxl_actor_new(model.model);
       if (actor < 0) return;
       actor_ref.current = { actor, model, skin };
+      set_actor(actor);
     });
     return () => {
       alive = false;
       if (actor_ref.current) p.pxl_actor_remove(actor_ref.current.actor);
       actor_ref.current = null;
+      set_actor(null);
     };
   }, [gpu, variant]);
   useEffect(() => {
@@ -415,7 +419,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
   return character_root
     ? (
       <primitive object={character_root}>
-        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} />}
+        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} actor={gpu ? actor : null} />}
       </primitive>
     )
     : null;
