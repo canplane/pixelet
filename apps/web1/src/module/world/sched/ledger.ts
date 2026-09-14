@@ -1,0 +1,521 @@
+// @pxl/web/module/world/sched/ledger.ts
+
+/**
+ * Read-only instrument for the schedulers: records where time and work go so
+ * it can be seen. Never read back into a scheduling decision — the
+ * observation→execution edge is one-directional on purpose
+ * (issue/20260909-cooperative-scheduler-and-task-ledger.md).
+ *
+ * Two record types, one instrument:
+ * - TaskRecord — one finished unit of deferred work (a fetch_scheduler.ts
+ *   demand today; a CPU task later). The *shape* is meant to stay stable
+ *   across the WASM/worker migration: `transport_ms` is 0 while a task body
+ *   runs inline, and holds the postMessage + transfer cost once it runs in a
+ *   worker.
+ * - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory,
+ *   queue pressure). Only accrues while frames actually render
+ *   (the tick runs only when asked), which is correct: idle means nothing to sample.
+ *
+ * The per-frame CPU breakdown is the tick's phases (sched/tick.ts) plus
+ * core_tick's recheck/commit split inside the visible phase; there is no
+ * per-task-category CPU rollup. Readers: the overlay (ledger_overlay.tsx) and
+ * the text report (log.ts), both through summary.ts, and the Chrome-trace
+ * export (trace.ts).
+ */
+
+import type { Phases } from "./demand.ts";
+
+export type Outcome = "ok" | "aborted" | "error";
+
+export type TaskRecord = {
+  key: string;
+  category: string;
+  priority: number;
+  /** monotonic ms (performance.now) at enqueue / first run / settle. */
+  enqueue_ms: number;
+  start_ms: number | null;
+  end_ms: number;
+  /** 0 while inline; worker hop cost once a task body runs off-thread. */
+  transport_ms: number;
+  /** whatever split the demand's own run() reported (terrain: net vs decode).
+   * Absent when it reported none — the run is then one opaque step. */
+  phases?: Phases;
+  outcome: Outcome;
+  /** Why it failed, when `outcome` is "error": the HTTP status where there
+   * was one, otherwise the error's name and the start of its message. The
+   * count alone could not say whether twelve failures were one cause or
+   * twelve. */
+  error?: string;
+};
+
+/** One rendered frame. Lean on purpose — the live half of the factor set in
+ * the discussion doc; latency percentiles, decode bandwidth and upload cost
+ * are derived from TaskRecords or added later, not crammed in here. */
+/** tag → [draws, triangles], for one frame's render. */
+export type DrawCensus = Record<string, [number, number]>;
+
+export type FrameSample = {
+  /** monotonic ms (performance.now) at record time. */
+  t: number;
+  /** rAF interval in ms — pacing, read against `frame_ms`. */
+  dt_ms: number;
+  /** The display's measured frame interval when this frame was scheduled
+   * (sched/tick.ts) — what `dt_ms` has to beat, and not 16.7 on a fast
+   * display. */
+  frame_ms: number;
+  /** The view had held still long enough that the tick took the large,
+   * throughput budget rather than the smooth one. A long dt on such a frame
+   * was chosen, not suffered. */
+  settled: boolean;
+  /** The whole tick (sched/tick.ts), every phase; does not include the
+   * gl.render call that runs after it. */
+  sched_ms: number;
+  /** What the tick was allowed this frame — derived, so it moves. */
+  budget_ms: number;
+  /** sched_ms broken down by phase, in the tick's own order. */
+  phases: Record<string, number>;
+  /** The module's tick (the TICK interrupt), inside the visible phase — its
+   * builds, commits and reclaim under the frame's budget. The renderer's
+   * encode and submit are inside `task_ms` below; what the GPU then takes
+   * is `gpu_ms`, from its timestamps. */
+  cpu: { tick_ms: number };
+  /**
+   * The whole rAF task: from the scheduler pass starting to the JS stack
+   * emptying, so it covers every phase of the tick *and* the renderer's
+   * encode and submit. Measured with a microtask, the one vantage point
+   * that sees everything the frame ran.
+   *
+   * `dt_ms - task_ms` is then everything outside the main thread's own task —
+   * vsync wait, compositor, GPU, GC between frames. That split is the whole
+   * point: a 6s frame with a 13ms scheduler pass says nothing until you know
+   * which side of this line the missing time is on.
+   */
+  task_ms: number;
+  /** From a submit to the queue reporting the work done
+   * (render/gpu/renderer.ts): lags a frame or two, and includes the wait for
+   * the GPU to be free. 0 before the renderer exists. */
+  gpu_ms: number;
+  // GPU ask — the WebGPU renderer's stat, the fill-rate input
+  draw_calls: number;
+  triangles: number;
+  /** GPU buffers held, and what they hold in MiB — their deltas across
+   * frames are the upload churn. */
+  buffers: number;
+  buffer_mb: number;
+  /** What the frame is drawn into, in MiB: the depth buffer, the
+   * multisampled targets, the shadow map, the texture pack's layers. */
+  textures_mb: { depth: number; msaa: number; shadow: number; layers: number };
+  /** draw_calls and triangles split by pipeline — render/gpu/renderer.ts's
+   * census. */
+  census: DrawCensus;
+  /** The WebGPU canvas's width*height — the raw fill-rate primitive. */
+  px: number;
+  /** core_tick's per-frame LOD counts, the module's census. Here rather than in a separate
+   * session-peak object so the ring carries the *shape* of a spike, not only
+   * how high it got. */
+  lod: {
+    chunks: number;
+    in_frustum: number;
+    pending: number;
+    settling: number;
+    blend_active: number;
+    /** Pending chunks outside the frustum — releases waiting to run. They
+     * sort last by design, so this is where starvation would show first, and
+     * what it would cost is memory: a hidden chunk's mesh stays in the pool
+     * until its release commits. */
+    offscreen_pending: number;
+    /** The longest any pending release has waited, and the longest any
+     * pending on-screen chunk has. */
+    oldest_release_ms: number;
+    oldest_visible_ms: number;
+    /** How far the byte budget has pulled the LOD ladder in: 0 is the
+     * ladder as the view asks for it, 2 one tier coarser. */
+    pressure: number;
+  };
+  /** Nodes made and dropped for the chunks the module mounted and
+   * unmounted since the previous sample, and layouts it applied. */
+  mounts: { added: number; removed: number; layouts: number };
+  /** used JS heap in MiB — Chrome only, 0 where unavailable. Its delta
+   * across frames is allocation churn. */
+  heap_mb: number;
+  // retained-payload footprint — the "crash factor" (terrain/config.ts:
+  // r=3 ≈ 197MB decoded crashed an iPhone 13 mini). Counts, not bytes: the
+  // overlay multiplies tile_pages by a documented per-page estimate. The gap
+  // to heap_mb is the rest of the JS heap.
+  tile_pages: number;
+  poi_count: number;
+  /** The core pool (core_pool.ts): MiB lent out, MiB free inside regions
+   * already reserved, and its cumulative acquire counts — served from a
+   * reserved region, or having to reserve another. Counters rather than a
+   * share, because a share is only meaningful over a window: summary.ts
+   * takes it as a difference between a window's first and last frames. */
+  pool: { live_mb: number; idle_mb: number; hits: number; misses: number };
+  /** The module's builds this frame: `scans` chunks whose runs were made
+   * (the direct path counted with the scans), `bakes` tiers baked. Both
+   * land in the mesh section, so these price a frame's pool traffic
+   * directly instead of inferring it from Δheap. */
+  work: { scans: number; bakes: number };
+  // network pressure — fetch_scheduler queued + in-flight, per category
+  q_terrain: number;
+  q_poi: number;
+};
+
+/** One long animation frame (LoAF, >50ms). Carries LoAF's own attribution so
+ * a stutter pins to script (CPU) vs render/style-layout without guessing —
+ * the CPU-vs-GPU split rule 4 in the discussion doc needs. */
+export type LongFrameRecord = {
+  /** which observer produced it — LoAF is richer but is unsupported outside
+   * Chromium-with-the-flag, so `longtask` is the fallback that actually fires
+   * in the browsers this gets run in. */
+  source: "loaf" | "longtask";
+  t: number;
+  duration_ms: number;
+  /** time past 50ms the frame blocked the event loop. */
+  blocking_ms: number;
+  /** summed <script> entry durations — the CPU half. */
+  script_ms: number;
+  /** startTime + duration - renderStart — the render/style/layout half; 0 if
+   * the browser didn't report renderStart. */
+  render_ms: number;
+};
+
+/**
+ * Recording is **exhaustive for the session** — every task and every rendered
+ * frame, from load until the tab goes away. It was a rolling window (240
+ * frames, ~4s) and that was simply wrong: the one thing this instrument
+ * exists to capture is a stall, and a stall had already been overwritten by
+ * the time anyone pulled a report or a trace. An export taken seconds after a
+ * two-second freeze showed an idle scene, which reads as "it didn't happen".
+ *
+ * The cost that was being optimised away is not real: a FrameSample is about
+ * 200 bytes, so a ten-minute session at 60fps is ~7MB. The caps below are
+ * pure safety valves against an unattended tab left running for hours, not a
+ * retention policy — hitting one sets `truncated`, so an export can say so
+ * rather than quietly lying by omission the way the ring did.
+ */
+const TASK_LIMIT = 200_000;
+const FRAME_LIMIT = 500_000; // ~2.3 hours at 60fps
+const LONG_FRAME_LIMIT = 50_000;
+
+const task_ring: TaskRecord[] = [];
+const frame_ring: FrameSample[] = [];
+const long_frame_ring: LongFrameRecord[] = [];
+
+let truncated = false;
+
+/** True once any limit was hit and recording stopped being exhaustive. */
+export function ledger_truncated(): boolean {
+  return truncated;
+}
+
+/**
+ * Live consumer for records as they land — log.ts's console stream today.
+ * One sink, not a list: the instrument has a single output mode at a time,
+ * and a subscriber list would invite the ledger drifting into a general
+ * event bus, which is not what it is.
+ */
+export type LedgerSink = {
+  task?: (rec: TaskRecord) => void;
+  frame?: (s: FrameSample) => void;
+  long_frame?: (l: LongFrameRecord) => void;
+};
+
+let sink: LedgerSink | null = null;
+
+export function ledger_set_sink(s: LedgerSink | null): void {
+  sink = s;
+}
+
+/**
+ * Explicit recording window.
+ *
+ * Recording begins at load, so a session always covers "from the start", but
+ * it is a *bounded* window with a stop and a restart rather than an ambient
+ * stream. Stopping freezes the data so an export is stable while it is being
+ * read; restarting clears and begins a fresh window. Without a boundary there
+ * was no way to say what an export actually covered — which is how a capture
+ * that did contain a zoom-out could be read as if it hadn't.
+ */
+let recording = true;
+let started_at = performance.now();
+let stopped_at: number | null = null;
+
+export type RecordingState = {
+  recording: boolean;
+  /** ms of wall time the window spans; live while recording. */
+  elapsed_ms: number;
+  tasks: number;
+  frames: number;
+  long_frames: number;
+  truncated: boolean;
+};
+
+export function ledger_recording_state(): RecordingState {
+  return {
+    recording,
+    elapsed_ms: (stopped_at ?? performance.now()) - started_at,
+    tasks: task_ring.length,
+    frames: frame_ring.length,
+    long_frames: long_frame_ring.length,
+    truncated,
+  };
+}
+
+/** Clears everything and opens a fresh window. */
+export function ledger_recording_start(): void {
+  task_ring.length = 0;
+  frame_ring.length = 0;
+  long_frame_ring.length = 0;
+  worst_frames.length = 0;
+  for (const k of Object.keys(frame_peak) as (keyof FramePeak)[]) frame_peak[k] = 0;
+  truncated = false;
+  started_at = performance.now();
+  stopped_at = null;
+  recording = true;
+}
+
+/** Freezes the window; exports taken afterwards see exactly this data. */
+export function ledger_recording_stop(): void {
+  if (!recording) return;
+  recording = false;
+  stopped_at = performance.now();
+}
+
+export function ledger_record(rec: TaskRecord): void {
+  if (!recording) return;
+  if (task_ring.length >= TASK_LIMIT) truncated = true;
+  else task_ring.push(rec);
+  sink?.task?.(rec);
+}
+
+/**
+ * The window's worst-seen values, kept as frames land so the report never
+ * scans the ring for them. Reset
+ * with the window, like everything else here, so a peak and the frames it
+ * came from always describe the same stretch of time.
+ */
+export type FramePeak = {
+  dt_ms: number;
+  sched_ms: number;
+  tick_ms: number;
+  draw_calls: number;
+  triangles: number;
+  heap_mb: number;
+  q_terrain: number;
+  q_poi: number;
+  chunks: number;
+  in_frustum: number;
+  pending: number;
+  offscreen_pending: number;
+  oldest_release_ms: number;
+  oldest_visible_ms: number;
+  settling: number;
+  blend_active: number;
+  pressure: number;
+};
+
+const frame_peak: FramePeak = {
+  dt_ms: 0,
+  sched_ms: 0,
+  tick_ms: 0,
+  draw_calls: 0,
+  triangles: 0,
+  heap_mb: 0,
+  q_terrain: 0,
+  q_poi: 0,
+  chunks: 0,
+  in_frustum: 0,
+  pending: 0,
+  offscreen_pending: 0,
+  oldest_release_ms: 0,
+  oldest_visible_ms: 0,
+  settling: 0,
+  blend_active: 0,
+  pressure: 0,
+};
+
+/** Copy of the window's worst-seen frame values. */
+export function ledger_frame_peak(): FramePeak {
+  return { ...frame_peak };
+}
+
+/**
+ * The window's worst frames by dt, kept whole rather than reduced to a peak,
+ * so the report can ask *what else* a stall frame was doing without sorting
+ * the whole ring. Each entry keeps the frame and the one before it, because
+ * geometry/texture/heap only mean anything as deltas.
+ */
+export type WorstFrame = { sample: FrameSample; prev: FrameSample | null };
+
+const WORST_CAP = 12;
+const worst_frames: WorstFrame[] = [];
+
+/** Window worst frames, slowest first. */
+export function ledger_worst_frames(): readonly WorstFrame[] {
+  return worst_frames.slice();
+}
+
+export function ledger_record_frame(s: FrameSample): void {
+  if (!recording) return;
+  const prev = frame_ring.length > 0 ? frame_ring[frame_ring.length - 1] : null;
+  if (worst_frames.length < WORST_CAP || s.dt_ms > worst_frames[worst_frames.length - 1].sample.dt_ms) {
+    worst_frames.push({ sample: s, prev });
+    worst_frames.sort((a, b) => b.sample.dt_ms - a.sample.dt_ms);
+    if (worst_frames.length > WORST_CAP) worst_frames.length = WORST_CAP;
+  }
+
+  if (frame_ring.length >= FRAME_LIMIT) truncated = true;
+  else frame_ring.push(s);
+
+  const p = frame_peak;
+  if (s.dt_ms > p.dt_ms) p.dt_ms = s.dt_ms;
+  if (s.sched_ms > p.sched_ms) p.sched_ms = s.sched_ms;
+  if (s.cpu.tick_ms > p.tick_ms) p.tick_ms = s.cpu.tick_ms;
+  if (s.draw_calls > p.draw_calls) p.draw_calls = s.draw_calls;
+  if (s.triangles > p.triangles) p.triangles = s.triangles;
+  if (s.heap_mb > p.heap_mb) p.heap_mb = s.heap_mb;
+  if (s.q_terrain > p.q_terrain) p.q_terrain = s.q_terrain;
+  if (s.q_poi > p.q_poi) p.q_poi = s.q_poi;
+  if (s.lod.chunks > p.chunks) p.chunks = s.lod.chunks;
+  if (s.lod.in_frustum > p.in_frustum) p.in_frustum = s.lod.in_frustum;
+  if (s.lod.pending > p.pending) p.pending = s.lod.pending;
+  if (s.lod.offscreen_pending > p.offscreen_pending) p.offscreen_pending = s.lod.offscreen_pending;
+  if (s.lod.oldest_release_ms > p.oldest_release_ms) p.oldest_release_ms = s.lod.oldest_release_ms;
+  if (s.lod.oldest_visible_ms > p.oldest_visible_ms) p.oldest_visible_ms = s.lod.oldest_visible_ms;
+  if (s.lod.settling > p.settling) p.settling = s.lod.settling;
+  if (s.lod.blend_active > p.blend_active) p.blend_active = s.lod.blend_active;
+  if (s.lod.pressure > p.pressure) p.pressure = s.lod.pressure;
+
+  sink?.frame?.(s);
+}
+
+/** Copy of the task buffer, newest last. */
+export function ledger_snapshot(): readonly TaskRecord[] {
+  return task_ring.slice();
+}
+
+/** The frame sample just recorded, so a late-arriving measurement (task_ms,
+ * which is only known once the rAF task's stack empties) can be written into
+ * the frame it belongs to instead of being attributed to the next one. */
+export function ledger_last_frame(): FrameSample | null {
+  return frame_ring.length > 0 ? frame_ring[frame_ring.length - 1] : null;
+}
+
+/** First index in a ring, ordered by `at`, whose record is at or after `t`. */
+function first_at<T>(ring: readonly T[], t: number, at: (rec: T) => number): number {
+  let lo = 0;
+  let hi = ring.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (at(ring[mid]) < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Frames recorded at or after `t`, newest last — a live reader's window,
+ * so it costs the tail it reads and not the whole recording. */
+export function ledger_frames_since(t: number): readonly FrameSample[] {
+  return frame_ring.slice(first_at(frame_ring, t, (f) => f.t));
+}
+
+/** Tasks settled at or after `t`. A task is recorded as it settles, so the
+ * ring is in `end_ms` order. */
+export function ledger_tasks_since(t: number): readonly TaskRecord[] {
+  return task_ring.slice(first_at(task_ring, t, (rec) => rec.end_ms));
+}
+
+/** Long frames starting at or after `t`. Filtered rather than searched: two
+ * observers feed this ring, so it is not strictly in time order, and it is
+ * short. */
+export function ledger_long_frames_since(t: number): readonly LongFrameRecord[] {
+  return long_frame_ring.filter((l) => l.t >= t);
+}
+
+/** Copy of the frame buffer, newest last. */
+export function ledger_frames_snapshot(): readonly FrameSample[] {
+  return frame_ring.slice();
+}
+
+/** Copy of the long-frame buffer, newest last. */
+export function ledger_long_frames_snapshot(): readonly LongFrameRecord[] {
+  return long_frame_ring.slice();
+}
+
+type LoafEntry = PerformanceEntry & {
+  blockingDuration: number;
+  renderStart: number;
+  scripts: { duration: number }[];
+};
+
+let observers_installed = false;
+
+/**
+ * Wires the LoAF `PerformanceObserver` into the long-frame ring. Idempotent;
+ * a no-op where the browser lacks `long-animation-frames` (Safari / iOS
+ * WKWebView today — which is exactly why the shipped monitor cannot lean on
+ * this and it stays a dev instrument). Call once from the dev overlay.
+ */
+export function ledger_install_observers(): void {
+  if (observers_installed) return;
+  if (typeof PerformanceObserver === "undefined") return;
+  if (!PerformanceObserver.supportedEntryTypes?.includes("long-animation-frames")) return;
+  observers_installed = true;
+
+  const obs = new PerformanceObserver((list) => {
+    for (const raw of list.getEntries()) {
+      const e = raw as LoafEntry;
+      const script_ms = e.scripts?.reduce((sum, s) => sum + s.duration, 0) ?? 0;
+      const render_ms = e.renderStart > 0 ? Math.max(0, e.startTime + e.duration - e.renderStart) : 0;
+      const rec: LongFrameRecord = {
+        source: "loaf",
+        t: e.startTime,
+        duration_ms: e.duration,
+        blocking_ms: e.blockingDuration ?? 0,
+        script_ms,
+        render_ms,
+      };
+      if (!recording) continue;
+      if (long_frame_ring.length >= LONG_FRAME_LIMIT) truncated = true;
+      else long_frame_ring.push(rec);
+      sink?.long_frame?.(rec);
+    }
+  });
+  obs.observe({ type: "long-animation-frames", buffered: true } as PerformanceObserverInit);
+}
+
+let longtask_installed = false;
+
+/**
+ * `longtask` is the fallback for everywhere LoAF is missing — it reports far
+ * less (a duration and an attribution container, no script/render split) but
+ * it actually fires, and a >50ms task is exactly the event worth catching.
+ * Installed alongside LoAF rather than instead of it; both feed one ring and
+ * each record says which observer it came from.
+ */
+export function ledger_install_longtask_observer(): void {
+  if (longtask_installed) return;
+  if (typeof PerformanceObserver === "undefined") return;
+  if (!PerformanceObserver.supportedEntryTypes?.includes("longtask")) return;
+  longtask_installed = true;
+
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) {
+      if (!recording) continue;
+      if (long_frame_ring.length >= LONG_FRAME_LIMIT) {
+        truncated = true;
+        continue;
+      }
+      const rec: LongFrameRecord = {
+        source: "longtask",
+        t: e.startTime,
+        duration_ms: e.duration,
+        blocking_ms: Math.max(0, e.duration - 50),
+        script_ms: 0,
+        render_ms: 0,
+      };
+      long_frame_ring.push(rec);
+      sink?.long_frame?.(rec);
+    }
+  }).observe({ type: "longtask", buffered: true } as PerformanceObserverInit);
+}

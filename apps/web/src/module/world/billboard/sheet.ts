@@ -2,18 +2,7 @@
 
 import { BillboardAtlas } from "./atlas.ts";
 
-/**
- * Draw order among billboard sets (crates/pxl/core/src/world/billboard.rs), for
- * the case two billboards land on the same pixels at the same depth. Depth
- * testing settles everything else; this only settles ties, and the tie is
- * between a badge that labels a fixed place and a bubble somebody is saying
- * right now. The bubble wins — it is transient and the badge will still be
- * there afterwards.
- */
-export const BILLBOARD_ORDER = {
-  poi: 0,
-  chat: 1,
-} as const;
+export { BILLBOARD_ORDER } from "./order.ts";
 
 /**
  * The one sheet every billboard draws into — POI badges and the chat

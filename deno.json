@@ -14,7 +14,9 @@
   // caches that carry their own package.json — Vite's deps optimizer cache
   // in particular gets misread as a rogue workspace member ("Config file
   // must be a member of the workspace") since it's nested under apps/web.
-  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
+  // apps/web1 is the client as it stood before the kernel took it over,
+  // folder for folder: what a translation is read against, never built.
+  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/", "apps/web1/"],
 
   "tasks": {
     "dev": "sh -c \"(deno task dev:api) & (deno task dev:web) & wait\"",
@@ -49,7 +51,7 @@
     // paths only; nothing is found by name and deleted.
     "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/api/dist apps/web/dist && deno task check",
 
-    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:pair",
+    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:pair && deno task check:spec",
     "check:api": "deno task --cwd apps/api check",
     "check:web": "deno task --cwd apps/web check",
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
@@ -62,6 +64,10 @@
     // TypeScript writes are what the Rust tests read (script/pair.ts).
     "check:pair": "deno run -A script/pair.ts",
     "vector": "deno run -A script/pair.ts --write",
+    // The specs are JSON; the TypeScript and the Rust that carry them are
+    // written from it (script/spec.ts), and the gate fails on a stale one.
+    "check:spec": "deno run -A script/spec.ts",
+    "spec": "deno run -A script/spec.ts --write",
 
     "test": "deno task test:web && deno task test:api && deno task test:shared && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",

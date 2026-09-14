@@ -1,0 +1,24 @@
+{
+  "$doc": [
+    "The actor tier's own knowledge of the characters, which the palette does",
+    "not carry: which clip is a group's move, and which variant a player starts",
+    "as. Heights are the palette rows' `size`."
+  ],
+  "MOVE_CLIP": {
+    "$doc": ["Clip name for the catch-up/preview move — Kenney doesn't name this", "\"walk\" consistently across packs (person: \"sprint\", pet: \"run\")."],
+    "person": "sprint",
+    "pet": "run"
+  },
+  "PERSON_GENDER_PREFIXES": {
+    "$doc": [
+      "Split by gender (not one flat list) so the settings UI can show two",
+      "separate rows instead of one row a user has to scan by label text to tell",
+      "apart — display names live in locale files",
+      "(palette_modal.character.persons.<key>)."
+    ],
+    "female": "female-",
+    "male": "male-"
+  },
+  "DEFAULT_PERSON_VARIANT_KEY": "female-2",
+  "DEFAULT_PET_VARIANT_KEY": "chick"
+}

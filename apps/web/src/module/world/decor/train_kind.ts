@@ -1,35 +1,21 @@
 // @pxl/web/module/world/decor/train_kind.ts
 
 /**
- * A DecorKind's placement rules for occasional trains on rail lines — see
- * tree_kind.ts's own doc comment for why this file stays asset-free.
- *
- * RAIL_MAIN only (not RAIL_SUBWAY — that's underground, wrong context for
- * a surface-scattered prop). Same "align_transport" reasoning as
- * car_kind.ts applies: a train lying across the rail sideways would read
- * as derailed.
+ * A DecorKind for occasional trains on rail lines, from kind.json — see
+ * tree_kind.ts for why this file stays asset-free.
  */
 
-import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
-import { type DecorEligibility, type DecorKindSeed, type DecorRules, eligibility_of } from "./scatter.ts";
+import { type DecorEligibility, type DecorKindSeed, type DecorRules, eligibility_of, rules_of } from "./scatter.ts";
+import { decor_kinds } from "./kind.ts";
 
-const TRAIN_KIND_TAG = 0x7ba1_5eed_0004_dec0n;
-
-// Very sparse, deliberately — trains are meant to read as occasional, not
-// as a train sitting on every visible stretch of track.
-const TRAIN_DENSITY = 0.004;
-
-// The palette's model rows for "train"; train_decor.ts asserts the two agree.
-const TRAIN_VARIANT_COUNT = 4;
+const SPEC = decor_kinds.train;
 
 export const TRAIN_KIND: DecorKindSeed = {
-  tag: TRAIN_KIND_TAG,
-  density: TRAIN_DENSITY,
-  variant_count: TRAIN_VARIANT_COUNT,
-  orientation: "align_transport",
+  tag: SPEC.tag,
+  density: SPEC.density,
+  variant_count: SPEC.variant_count,
+  orientation: SPEC.orientation,
 };
 
-/** Only the transport channel matters — same reasoning as
- * car_kind.ts's own is_car_eligible. */
-export const TRAIN_RULES: DecorRules = { land: "any", water: "any", structure: "any", transport: [cube_types.transport.RAIL_MAIN] };
+export const TRAIN_RULES: DecorRules = rules_of(SPEC.rules);
 export const is_train_eligible: DecorEligibility = eligibility_of(TRAIN_RULES);

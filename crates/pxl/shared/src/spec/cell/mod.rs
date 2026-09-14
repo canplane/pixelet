@@ -10,6 +10,7 @@ use crate::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 
 pub mod color;
 pub mod cube;
+pub mod cube_type;
 pub mod decor;
 pub mod r#type;
 

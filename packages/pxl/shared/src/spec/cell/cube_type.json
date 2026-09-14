@@ -1,0 +1,147 @@
+{
+  "channels": [
+    {
+      "name": "common",
+      "entries": [
+        {
+          "name": "VOID",
+          "value": 0,
+          "doc": [
+            "unset — no data painted at this cell for this channel; also the",
+            "object-placement sparse tree's own absence marker (a cell with",
+            "genuinely no entry at all reads back as this same 0, since a sparse",
+            "tree's own \"nothing stored here\" and a dense raster's own \"nothing",
+            "painted here\" are the same concept either way)."
+          ]
+        },
+        {
+          "name": "AIR",
+          "value": 128,
+          "doc": [
+            "explicit object-layer air: retain this leaf, erase lower layers —",
+            "a real, present leaf, unlike VOID above. Only ever a real value",
+            "within the object-placement encoding (mod.ts) — no baked terrain",
+            "channel below can ever actually hold this byte, it's registered",
+            "here purely as a shared constant."
+          ]
+        },
+        {
+          "name": "UNKNOWN",
+          "value": 255,
+          "doc": [
+            "missing / invalid / unresolved data"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "land",
+      "entries": [
+        { "name": "BARE", "value": 1, "doc": ["bare ground"] },
+        {
+          "name": "SEA",
+          "value": 129,
+          "doc": [
+            "sea water (MSB-partitioned)"
+          ]
+        },
+        { "section": "natural" },
+        {
+          "name": "GREEN_DEEP",
+          "value": 10,
+          "doc": [
+            "deep green / forest / mountain"
+          ]
+        },
+        {
+          "name": "GREEN_LIGHT",
+          "value": 11,
+          "doc": [
+            "light green / park / grass"
+          ]
+        },
+        { "name": "SAND", "value": 12, "doc": ["sand / rock"] },
+        { "section": "landuse" },
+        { "name": "RESIDENTIAL", "value": 20, "doc": ["residential area"] },
+        { "name": "COMMERCIAL", "value": 21, "doc": ["commercial area"] },
+        { "name": "INDUSTRIAL", "value": 22, "doc": ["industrial area"] },
+        { "name": "SPORTS", "value": 23, "doc": ["sports area"] },
+        { "name": "EDUCATION", "value": 24, "doc": ["education area"] },
+        { "name": "MEDICAL", "value": 25, "doc": ["medical area"] },
+        { "name": "PUBLIC", "value": 26, "doc": ["public area"] },
+        { "section": "aeroway areas" },
+        { "name": "APRON", "value": 30, "doc": ["apron"] },
+        { "name": "HELIPAD", "value": 31, "doc": ["helipad"] }
+      ]
+    },
+    {
+      "name": "water",
+      "entries": [
+        { "name": "RIVER", "value": 1, "doc": ["flowing water"] },
+        { "name": "LAKE", "value": 2, "doc": ["still water"] },
+        { "name": "WETLAND", "value": 3, "doc": ["wetland"] }
+      ]
+    },
+    {
+      "name": "structure",
+      "entries": [
+        { "section": "buildings" },
+        { "name": "BUILDING", "value": 1, "doc": ["generic building"] },
+        {
+          "name": "BUILDING_STATION",
+          "value": 2,
+          "doc": [
+            "station / terminal building"
+          ]
+        },
+        { "name": "BUILDING_EDUCATION", "value": 3, "doc": ["education building"] },
+        { "name": "BUILDING_MEDICAL", "value": 4, "doc": ["medical building"] },
+        { "name": "BUILDING_PUBLIC", "value": 5, "doc": ["public building"] }
+      ]
+    },
+    {
+      "name": "transport",
+      "entries": [
+        { "section": "roads" },
+        { "name": "ROAD_DEFAULT", "value": 1, "doc": ["default road"] },
+        { "name": "ROAD_MOTORWAY", "value": 2, "doc": ["motorway"] },
+        { "name": "ROAD_PRIMARY", "value": 3, "doc": ["primary road"] },
+        { "name": "ROAD_SECONDARY", "value": 4, "doc": ["secondary road"] },
+        { "name": "PEDESTRIAN", "value": 5, "doc": ["pedestrian path"] },
+        { "name": "PARKING", "value": 6, "doc": ["parking area"] },
+        { "section": "rails" },
+        { "name": "RAIL_MAIN", "value": 10, "doc": ["main rail"] },
+        { "name": "RAIL_SUBWAY", "value": 11, "doc": ["subway rail"] },
+        { "section": "aeroway lines" },
+        { "name": "RUNWAY", "value": 20, "doc": ["runway"] },
+        { "name": "TAXIWAY", "value": 21, "doc": ["taxiway"] }
+      ]
+    },
+    {
+      "name": "block",
+      "note": [
+        "Flat user-painted colors only — no sentinels of its own anymore.",
+        "cube_types.common.VOID (sparse-tree absence) and .AIR (explicit erase)",
+        "already cover every non-color case a placed cube's own byte can mean;",
+        "every real key here is a real, pickable color."
+      ],
+      "entries": [
+        { "name": "white", "value": 130 },
+        { "name": "grey", "value": 131 },
+        { "name": "dark_grey", "value": 132 },
+        { "name": "black", "value": 133 },
+        { "name": "red", "value": 134 },
+        { "name": "orange", "value": 135 },
+        { "name": "brown", "value": 136 },
+        { "name": "yellow", "value": 137 },
+        { "name": "green", "value": 138 },
+        { "name": "dark_green", "value": 139 },
+        { "name": "cyan", "value": 140 },
+        { "name": "blue", "value": 141 },
+        { "name": "violet", "value": 142 },
+        { "name": "magenta", "value": 143 },
+        { "name": "pink", "value": 144 }
+      ]
+    }
+  ]
+}
