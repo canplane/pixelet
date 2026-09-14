@@ -46,6 +46,11 @@ pub fn set_entropy(f: fn() -> u64) {
     ENTROPY.with(|e| e.set(Some(f)));
 }
 
+/// A draw from the host's entropy, or none when none is installed.
+pub fn entropy() -> Option<u64> {
+    ENTROPY.with(|e| e.get()).map(|f| f())
+}
+
 // ============ Seed Derivation ============
 
 const SEED_SALT: u64 = 0x9e3779b97f4a7c15;

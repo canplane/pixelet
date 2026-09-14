@@ -29,7 +29,7 @@
 // needs any more fails as loudly as a missing pair.
 
 import { walk } from "@std/fs/walk";
-import { dirname, join, relative } from "@std/path";
+import { basename, dirname, join, relative } from "@std/path";
 
 type Tree = {
   /** The TypeScript tree, the source. */
@@ -45,7 +45,7 @@ type Tree = {
 
 const TREES: Tree[] = [
   { ts: "packages/xpute/core/src", rs: "crates/xpute/core/src", required: [""], vector: "crates/xpute/core/vector" },
-  { ts: "packages/pxl/shared/src", rs: "crates/pxl/shared/src", required: ["spec/space"], vector: "crates/pxl/shared/vector" },
+  { ts: "packages/pxl/shared/src", rs: "crates/pxl/shared/src", required: [""], vector: "crates/pxl/shared/vector" },
 ];
 
 const EXEMPT_PATH = "script/pair.exempt.json";
@@ -190,7 +190,7 @@ async function check_tree(tree: Tree): Promise<void> {
   }
   for (const f of rs_all) {
     const ts = f.replace(/\.rs$/, ".ts");
-    if (f === "lib.rs" || ts_src.includes(ts) || (f.endsWith(".test.rs") && ts_src.includes(ts.replace(/\.test\.ts$/, ".ts")))) continue;
+    if (f === "lib.rs" || ts_src.includes(ts) || (f.endsWith(".test.rs") && (ts_src.includes(ts.replace(/\.test\.ts$/, ".ts")) || ts_test.includes(ts)))) continue;
     // A directory's module file where TypeScript has no mod.ts: the
     // language's own, allowed when it only declares the tree.
     if (/(^|\/)mod\.rs$/.test(f) || (await exists(join(ts_dir, f.replace(/\.rs$/, ""))))) {
@@ -225,7 +225,24 @@ async function check_tree(tree: Tree): Promise<void> {
   }
   for (const t of ts_test) {
     const src = t.replace(/\.test\.ts$/, ".ts");
-    if (!paired.has(src) && required(src) && !ts_src.includes(src)) fail(`${tree.ts}/${t}`, `${tree.ts}/${t} tests nothing paired`);
+    if (ts_src.includes(src) || !required(src)) continue;
+    // A test named for no module (record.test.ts beside record/'s files) is
+    // paired all the same: its tests in the `.test.rs` at its path, which a
+    // module in the directory takes in by `#[path]`.
+    const rs_test = t.replace(/\.test\.ts$/, ".test.rs");
+    if (!rs_all.includes(rs_test)) {
+      fail(`${tree.ts}/${t}`, `${tree.ts}/${t} has no pair at ${tree.rs}/${rs_test}`);
+      continue;
+    }
+    const dir = dirname(rs_test) === "." ? "" : `${dirname(rs_test)}/`;
+    const siblings = rs_all.filter((r) => r.startsWith(dir) && !r.slice(dir.length).includes("/") && !r.endsWith(".test.rs"));
+    const taken = (await Promise.all(siblings.map((r) => Deno.readTextFile(join(rs_dir, r))))).some((body) => body.includes(`#[path = "${basename(rs_test)}"]`));
+    if (!taken) fail(`${tree.rs}/${rs_test}`, `${tree.rs}/${rs_test} is taken in by no module beside it (\`#[path = "${basename(rs_test)}"]\`)`);
+    const tests = rust_items(await Deno.readTextFile(join(rs_dir, rs_test))).tests;
+    const source = await Deno.readTextFile(join(ts_dir, t));
+    for (const m of source.matchAll(/Deno\.test\(\s*(["'`])((?:\\.|(?!\1).)*)\1/g)) {
+      if (!tests.has(slug(m[2]))) fail(`${tree.ts}/${t}#${m[2]}`, `${tree.rs}/${rs_test} lacks \`#[test] fn ${slug(m[2])}\` (${tree.ts}/${t}: "${m[2]}")`);
+    }
   }
 
   // Vectors: what the generators write is what is committed, and read.

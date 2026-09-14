@@ -134,11 +134,13 @@ pub fn is_pid_b64url_16(pid: Option<&str>, pid_bin: &Bytes) -> bool {
 
 pub type UUID = Bytes; // 16 bytes
 
-/// Generate UUID v4 (random), from the entropy `kit/rng` has (the host's,
-/// once installed; see `rng::seed64`).
+/// Generate UUID v4 (random), from the host's entropy. Without one installed
+/// it refuses, as `crypto.getRandomValues` missing throws there: `seed64`'s
+/// fallback is a counter, and a UUID from it would repeat every run.
 pub fn generate_uuid() -> UUID {
     let mut bytes: UUID = TypedArray::new(16);
-    let (a, b) = (rng::seed64().to_le_bytes(), rng::seed64().to_le_bytes());
+    let draw = || rng::entropy().unwrap_or_else(|| panic!("UUID: no entropy source installed (rng::set_entropy)"));
+    let (a, b) = (draw().to_le_bytes(), draw().to_le_bytes());
     bytes.as_mut_slice()[..8].copy_from_slice(&a);
     bytes.as_mut_slice()[8..].copy_from_slice(&b);
 

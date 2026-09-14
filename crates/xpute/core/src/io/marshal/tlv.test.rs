@@ -55,4 +55,7 @@ fn tlv_computes_what_the_typescript_computes() {
     let read: Vec<String> = TLVReader::new(packet).read_all().unwrap().iter().map(show).collect();
     let want: Vec<&str> = (0..v.len("read")).map(|j| v.s(&format!("read.{j}"))).collect();
     assert_eq!(read, want);
+
+    let huge = TLVReader::new(crate::kit::encoding::hex_to_bytes(v.s("huge.packet"))).read_all();
+    assert_eq!(huge.map(|_| "ok".to_string()).unwrap_or_else(|e| format!("errno:{}", e.errno as i32)), v.s("huge.read"));
 }

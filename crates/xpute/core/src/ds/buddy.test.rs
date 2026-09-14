@@ -269,7 +269,7 @@ fn buddy_hands_out_what_the_typescript_hands_out() {
     })
     .unwrap();
     let mut live: Vec<Block> = Vec::new();
-    v.each("", |k| {
+    v.each("steps", |k| {
         if v.s(&format!("{k}.op")) == "release" {
             let (at, backed) = (v.u32(&format!("{k}.at")), v.bool(&format!("{k}.backed")));
             let bytes = v.u32(&format!("{k}.bytes"));
@@ -314,4 +314,17 @@ fn buddy_hands_out_what_the_typescript_hands_out() {
             live.push(b);
         }
     });
+}
+
+#[test]
+fn buddy_a_region_of_one_minimum_block_still_hands_out_handles() {
+    let v = crate::vector::Vector::load(VECTOR);
+    let mut tiny = BuddyAllocator::new(BuddyOptions {
+        min_block_bytes: Some(1 << 8),
+        region_bytes: Some(1 << 8),
+        ..Default::default()
+    })
+    .unwrap();
+    let b = tiny.acquire(100).unwrap();
+    assert_eq!(tiny.handle_at(&b.buf, b.byte_offset, 100).unwrap(), v.u32("tiny_handle"));
 }

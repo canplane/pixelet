@@ -45,6 +45,13 @@ packets.4.shallow.1	138:number:3
 malformed.truncated_header	errno:-74
 malformed.bad_magic	errno:-74
 malformed.truncated_payload	errno:-74
+huge.0.packet	585450000000000010000000b9000000ffffffff000000006162000000000000
+huge.0.read	errno:-74
+huge.1.packet	585450000000000010000000b8000000ffffffff000000000500000000000000
+huge.1.read	errno:-74
+align.0	ok:2147483648
+align.1	ok:4294967288
+align.2	errno:-75
 caps.0	errno:-75
 caps.1	errno:-75
 caps.2	errno:-75

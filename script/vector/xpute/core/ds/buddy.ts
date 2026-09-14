@@ -2,7 +2,8 @@
 //
 // A seeded sequence of acquires and releases over a backed pool — spills,
 // plain regions past the backing, evictions — and the offset, handle and
-// stat after each, for crates/xpute/core/src/ds/buddy.test.rs.
+// stat after each, for crates/xpute/core/src/ds/buddy.test.rs; and the
+// handle of a block in a pool whose region is one minimum block.
 
 import { type Block, BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 import { seeded } from "../../../../vector.ts";
@@ -47,5 +48,7 @@ export function vectors() {
       });
     }
   }
-  return steps;
+  const tiny = new BuddyAllocator({ min_block_bytes: 1 << 8, region_bytes: 1 << 8 });
+  const b = tiny.acquire(100);
+  return { steps, tiny_handle: tiny.handle_at(b.buf, b.byte_offset, 100) };
 }

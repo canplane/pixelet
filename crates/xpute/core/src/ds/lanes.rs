@@ -78,7 +78,7 @@ impl Lanes {
     /// the previous occupant left, so the caller writes every lane it reads.
     pub fn push(&mut self) -> Result<u32, MarshalError> {
         if self._len >= self._cap {
-            self.grow((self._cap * 2).max(1))?;
+            self.grow(self._cap.saturating_mul(2).max(1))?;
         }
         let i = self._len;
         self._len += 1;

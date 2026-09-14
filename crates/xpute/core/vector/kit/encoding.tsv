@@ -56,3 +56,8 @@ invalid.2.s	ab=
 invalid.2.is	false
 invalid.3.s	ok-_
 invalid.3.is	true
+bad_hex.0	throws
+bad_hex.1	throws
+bad_hex.2	throws
+bad_hex.3	throws
+bad_hex.4	ok:ab

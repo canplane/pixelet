@@ -148,6 +148,9 @@ point.2	0x3fefdc0d66859854
 direction.0	0x3fd09173e4a81bb4
 direction.1	0x3fed7cd692568be5
 direction.2	0x3fd2880488a5fef4
+nan_w_point.0	0x4010000000000000
+nan_w_point.1	0xc000000000000000
+nan_w_point.2	0x4020000000000000
 clip_w	0x4045cc229240ec87
 planes.0	0x3fe7b6fae73fcde1
 planes.1	0x3fda649eb60b00cd

@@ -429,6 +429,9 @@ pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
     }
 
     let mask = unit - 1;
+    if nbyte > u32::MAX - mask {
+        return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("ALIGN: {nbyte} does not align within u32")), None));
+    }
     Ok((nbyte + mask) & !mask)
 }
 

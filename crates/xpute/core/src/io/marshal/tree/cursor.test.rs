@@ -91,6 +91,14 @@ fn the_cursor_reads_what_the_typescript_reads() {
     assert_eq!(refused(&good[..20]), v.s("malformed.truncated_header"));
     assert_eq!(refused(&format!("00{}", &good[2..])), v.s("malformed.bad_magic"));
     assert_eq!(refused(&good[..40]), v.s("malformed.truncated_payload"));
+    v.each("huge", |k| assert_eq!(refused(v.s(&format!("{k}.packet"))), v.s(&format!("{k}.read")), "{k}"));
+    for (j, n) in [0x7ffffff9u32, 0xfffffff8, 0xfffffff9].into_iter().enumerate() {
+        let got = match crate::io::marshal::tree::spec::ALIGN(n, 8) {
+            Ok(a) => format!("ok:{a}"),
+            Err(e) => format!("errno:{}", e.errno as i32),
+        };
+        assert_eq!(got, v.s(&format!("align.{j}")), "ALIGN({n})");
+    }
 
     let at_cap = |s: &str, cap: u32| {
         let mut t = TreeView::new();

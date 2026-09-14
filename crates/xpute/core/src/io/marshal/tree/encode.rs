@@ -176,7 +176,7 @@ impl TreeEncoder {
 
         st.base = ALIGN(st.base, align_sz)?;
 
-        if payload_sz > self.max_cap - st.base {
+        if payload_sz as i64 > self.max_cap as i64 - st.base as i64 {
             return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("required packet size exceeds max cap ({})", self.max_cap)), None));
         }
         st.lim = st.base + payload_sz;
@@ -249,30 +249,40 @@ impl TreeEncoder {
         let type_ = node.type_;
         let Some(val) = node.val else { return Ok(()) };
 
+        // A DataView setter refuses the other family (a bigint to setUint8, a
+        // number to setBigUint64) with a TypeError; the kinds are not mixed.
+        let mismatch = || MarshalError::new(Errno::EINVAL, Some(&format!("scalar 0x{:x} given the other numeric family at {}", type_ as u8, st.base)), None);
         let number = || match val {
-            Numeric::Number(v) => v,
-            Numeric::BigInt(v) => v as f64,
+            Numeric::Number(v) => Ok(v),
+            Numeric::BigInt(_) => Err(mismatch()),
         };
         let bigint = || match val {
-            Numeric::BigInt(v) => v,
-            Numeric::Number(v) => v as i128,
+            Numeric::BigInt(v) => Ok(v),
+            Numeric::Number(_) => Err(mismatch()),
         };
         // A typed-array store's conversion: the fraction dropped, modulo 2^32.
         let int = |v: f64| if v.is_finite() { (v.trunc() % 4_294_967_296.0) as i64 } else { 0 };
 
         let (elem_sz, payload): (AlignUnit, Vec<u8>) = match type_ {
-            ScalarType::U8 => (1, (int(number()) as u8).to_le_bytes().to_vec()),
-            ScalarType::I8 => (1, (int(number()) as i8).to_le_bytes().to_vec()),
-            ScalarType::U16 => (2, (int(number()) as u16).to_le_bytes().to_vec()),
-            ScalarType::I16 => (2, (int(number()) as i16).to_le_bytes().to_vec()),
-            ScalarType::U32 => (4, (int(number()) as u32).to_le_bytes().to_vec()),
-            ScalarType::I32 => (4, (int(number()) as i32).to_le_bytes().to_vec()),
-            ScalarType::U64 => (8, (bigint() as u64).to_le_bytes().to_vec()),
-            ScalarType::I64 => (8, (bigint() as i64).to_le_bytes().to_vec()),
-            ScalarType::F32 => (4, (number() as f32).to_le_bytes().to_vec()),
-            ScalarType::F64 => (8, number().to_le_bytes().to_vec()),
+            ScalarType::U8 => (1, (int(number()?) as u8).to_le_bytes().to_vec()),
+            ScalarType::I8 => (1, (int(number()?) as i8).to_le_bytes().to_vec()),
+            ScalarType::U16 => (2, (int(number()?) as u16).to_le_bytes().to_vec()),
+            ScalarType::I16 => (2, (int(number()?) as i16).to_le_bytes().to_vec()),
+            ScalarType::U32 => (4, (int(number()?) as u32).to_le_bytes().to_vec()),
+            ScalarType::I32 => (4, (int(number()?) as i32).to_le_bytes().to_vec()),
+            ScalarType::U64 => (8, (bigint()? as u64).to_le_bytes().to_vec()),
+            ScalarType::I64 => (8, (bigint()? as i64).to_le_bytes().to_vec()),
+            ScalarType::F32 => (4, (number()? as f32).to_le_bytes().to_vec()),
+            ScalarType::F64 => (8, number()?.to_le_bytes().to_vec()),
 
-            ScalarType::BOOL => (1, vec![if number() != 0.0 { 1 } else { 0 }]),
+            // BOOL(val): truthiness, of either family — NaN and 0n are false.
+            ScalarType::BOOL => (
+                1,
+                vec![match val {
+                    Numeric::Number(v) => (v != 0.0 && !v.is_nan()) as u8,
+                    Numeric::BigInt(v) => (v != 0) as u8,
+                }],
+            ),
         };
 
         st.base = ALIGN(st.base, elem_sz)?;
@@ -315,7 +325,7 @@ impl TreeEncoder {
                 len = arr.length() as u32;
                 payload_sz = len * arr.kind.bytes_per_element() as u32;
 
-                if payload_sz > self.max_cap - payload_start {
+                if payload_sz as i64 > self.max_cap as i64 - payload_start as i64 {
                     return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("required packet size exceeds max cap ({})", self.max_cap)), None));
                 }
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
@@ -330,9 +340,9 @@ impl TreeEncoder {
                 }
                 let arr = TypedArray::<u8>::of(arr).unwrap();
                 len = arr.length() as u32;
-                payload_sz = (len + 7) >> 3;
+                payload_sz = ((len as u64 + 7) >> 3) as u32;
 
-                if payload_sz > self.max_cap - payload_start {
+                if payload_sz as i64 > self.max_cap as i64 - payload_start as i64 {
                     return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("required packet size exceeds max cap ({})", self.max_cap)), None));
                 }
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
@@ -362,19 +372,22 @@ impl TreeEncoder {
                 let units = s.encode_utf16().count() as u32;
                 let min_needed = units;
 
-                if units > ((self.max_cap - payload_start) >> 2) {
+                // `>>>` there: a negative room reads as its u32, which wrapping_sub is.
+                if units > (self.max_cap.wrapping_sub(payload_start) >> 2) {
                     return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("required packet size exceeds max cap ({})", self.max_cap)), None));
                 }
                 let max_needed = units * 4;
 
-                if (self.buf.byte_length() as u32) - payload_start < min_needed {
+                // Signed, as the TypeScript's doubles are: the payload may start
+                // past the buffer's end, which the growth below is for.
+                if self.buf.byte_length() as i64 - (payload_start as i64) < min_needed as i64 {
                     self._ensure(payload_start + min_needed)?;
                 }
 
                 // encodeInto writes every character only when the tail holds
                 // all of the string's UTF-8; otherwise the worst case is reserved.
                 let data = encoding::te.encode(s);
-                if data.length() as u32 > (self.buf.byte_length() as u32) - payload_start {
+                if data.length() as i64 > self.buf.byte_length() as i64 - payload_start as i64 {
                     self._ensure(payload_start + max_needed)?;
                 }
 

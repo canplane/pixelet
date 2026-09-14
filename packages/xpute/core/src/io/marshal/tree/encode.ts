@@ -308,7 +308,7 @@ export class TreeEncoder {
       case SequenceType.BITSET: {
         const arr = val as U8Array;
         len = arr.length;
-        payload_sz = (len + 7) >>> 3;
+        payload_sz = Math.floor((len + 7) / 8);
 
         // bit packing: bit i -> byte[i >> 3], bit position (i & 7), LSB-first within each byte
         set_payload = (): void => {

@@ -416,7 +416,9 @@ impl TLVReader {
     // ---- Reader bounds ----
 
     fn _need(&self, n: u32, what: &str) -> Result<(), MarshalError> {
-        if self._stream.off as u32 + n > self._end {
+        // In u64: `n` is a length read off the wire, and the sum past 2^32
+        // would wrap under the end rather than exceed it.
+        if self._stream.off as u64 + n as u64 > self._end as u64 {
             return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("TLV: truncated {what} at {}", self._stream.off)), None));
         }
         Ok(())

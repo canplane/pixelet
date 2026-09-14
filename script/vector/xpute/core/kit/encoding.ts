@@ -15,5 +15,12 @@ export function vectors() {
     }),
     texts: texts.map((t) => ({ t, utf8: bytes_to_hex(te.encode(t)), back: td.decode(te.encode(t)) === t })),
     invalid: ["ab+c", "ab/c", "ab=", "ok-_"].map((s) => ({ s, is: is_b64url(s) })),
+    bad_hex: ["1g", "zz", "0G", " 1", "aB"].map((s) => {
+      try {
+        return `ok:${bytes_to_hex(hex_to_bytes(s))}`;
+      } catch {
+        return "throws";
+      }
+    }),
   };
 }

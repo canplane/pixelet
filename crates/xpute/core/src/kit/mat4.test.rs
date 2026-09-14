@@ -104,6 +104,12 @@ fn mat4_computes_what_the_typescript_computes() {
     let mut d = Vec3::default();
     mat4_transform_direction(&mut d, &look, 1.0, 2.0, 3.0);
     exact("direction", &[d.x, d.y, d.z]);
+    let mut nan_w = mat4();
+    mat4_translation(&mut nan_w, 1.0, 2.0, 3.0);
+    nan_w[15] = f64::NAN;
+    let mut q = Vec3::default();
+    mat4_transform_point(&mut q, &nan_w, 3.0, -4.0, 5.0);
+    exact("nan_w_point", &[q.x, q.y, q.z]);
     let (w, want) = (mat4_clip_w(&vp, 3.0, -4.0, 5.0), v.f64("clip_w"));
     assert!((w - want).abs() < 1e-12, "clip_w: {w} vs {want}");
     let mut planes = [0.0; 24];

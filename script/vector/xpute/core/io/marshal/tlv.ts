@@ -2,10 +2,11 @@
 //
 // What TLVWriter writes for its explicit writers and write_all's
 // dispatch, and what TLVReader reads back, for
-// crates/xpute/core/src/io/marshal/tlv.test.rs.
+// crates/xpute/core/src/io/marshal/tlv.test.rs. A string whose length word
+// is 2^32 - 1 is refused, not wrapped under the end.
 
 import { TLVReader, TLVWriter } from "@xpute/core/io/marshal/tlv.ts";
-import { bytes_to_hex } from "@xpute/core/kit/encoding.ts";
+import { bytes_to_hex, hex_to_bytes } from "@xpute/core/kit/encoding.ts";
 
 export function vectors() {
   const w = new TLVWriter(4);
@@ -18,5 +19,12 @@ export function vectors() {
     if (typeof v === "number") return `number:${Number.isNaN(v) ? "NaN" : v}`;
     return `${typeof v}:${v}`;
   });
-  return { packet: bytes_to_hex(packet), read };
+  const huge = "10ffffffff616200";
+  let huge_len = "ok";
+  try {
+    new TLVReader(hex_to_bytes(huge)).read_all();
+  } catch (e) {
+    huge_len = `errno:${(e as { errno?: number }).errno}`;
+  }
+  return { packet: bytes_to_hex(packet), read, huge: { packet: huge, read: huge_len } };
 }

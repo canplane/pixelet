@@ -61,7 +61,9 @@ pub fn tx_seq(tx_id: u32) -> u32 {
     tx_id & SEQ_MASK
 }
 
-pub fn align8(n: u32) -> u32 {
+/// In u64, as the TypeScript's is in doubles: a size near 2^32 must not wrap
+/// to a small offset that every "does it fit" check then passes.
+pub fn align8(n: u64) -> u64 {
     (n + 7) & !7
 }
 
@@ -144,14 +146,18 @@ impl Frame {
     /// body goes: in the frame when it fits, otherwise in a spill of its own.
     /// Returns the offset to write the body at, or BODY_IN_SPILL.
     pub fn lay_out(&self, args_bytes: u32, body_bytes: u32) -> u32 {
-        let body_offset = align8(FRAME_HEADER_BYTES + args_bytes);
-        if body_offset as usize > self.buf.byte_length() {
+        let body_offset = align8(FRAME_HEADER_BYTES as u64 + args_bytes as u64);
+        if body_offset > self.buf.byte_length() as u64 {
             panic!("ipc: args of {args_bytes} bytes do not fit a {}-byte frame", self.buf.byte_length());
         }
-        let in_frame = (body_offset + body_bytes) as usize <= self.buf.byte_length();
+        let in_frame = body_offset + body_bytes as u64 <= self.buf.byte_length() as u64;
         self.words.put(3, args_bytes);
-        self.words.put(4, if in_frame { body_offset } else { BODY_IN_SPILL });
+        self.words.put(4, if in_frame { body_offset as u32 } else { BODY_IN_SPILL });
         self.words.put(5, body_bytes);
         self.words[4]
     }
 }
+
+#[cfg(test)]
+#[path = "frame.test.rs"]
+mod test;

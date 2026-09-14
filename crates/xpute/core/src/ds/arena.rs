@@ -74,8 +74,10 @@ impl<T> Arena<T> {
 
     /// Allocate one object from the arena.
     pub fn alloc(&mut self) -> Result<&mut T, MarshalError> {
+        // Saturating: the TypeScript's doubling is in doubles, so a size past
+        // u32 reaches max_cap's refusal instead of wrapping under it.
         if self._len >= self._cap {
-            self._grow((self._cap * 2).max(1))?;
+            self._grow(self._cap.saturating_mul(2).max(1))?;
         }
 
         let i = self._len as usize;
@@ -85,9 +87,9 @@ impl<T> Arena<T> {
 
     /// Ensure space for cnt additional allocations without growing.
     pub fn reserve(&mut self, cnt: u32) -> Result<(), MarshalError> {
-        let req = self._len + cnt;
+        let req = self._len.saturating_add(cnt);
         if req > self._cap {
-            self._grow((self._cap * 2).max(req))?;
+            self._grow(self._cap.saturating_mul(2).max(req))?;
         }
         Ok(())
     }
@@ -220,7 +222,7 @@ impl<T: AnyElement> Vector<T> {
     /// - extends len to idx + 1 if idx is beyond the current logical end
     pub fn set(&mut self, idx: u32, v: T) -> Result<(), MarshalError> {
         if idx >= self._cap {
-            self._grow((self._cap * 2).max(idx + 1))?;
+            self._grow(self._cap.saturating_mul(2).max(idx.saturating_add(1)))?;
         }
 
         self.mem.put(idx as usize, v);
@@ -233,7 +235,7 @@ impl<T: AnyElement> Vector<T> {
     /// Push one primitive value into scratch. Returns the written index.
     pub fn push(&mut self, v: T) -> Result<u32, MarshalError> {
         if self._len >= self._cap {
-            self._grow((self._cap * 2).max(1))?;
+            self._grow(self._cap.saturating_mul(2).max(1))?;
         }
 
         let i = self._len;
@@ -244,9 +246,9 @@ impl<T: AnyElement> Vector<T> {
 
     /// Ensure space for cnt additional pushes without growing.
     pub fn reserve(&mut self, cnt: u32) -> Result<(), MarshalError> {
-        let req = self._len + cnt;
+        let req = self._len.saturating_add(cnt);
         if req > self._cap {
-            self._grow((self._cap * 2).max(req))?;
+            self._grow(self._cap.saturating_mul(2).max(req))?;
         }
         Ok(())
     }

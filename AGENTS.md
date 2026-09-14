@@ -60,10 +60,15 @@ Two boundaries matter, and both are easy to erode by accident:
   `@xpute/core`'s counterpart and `crates/pxl/shared` is `@pxl/shared`'s,
   each the same tree file for file, export for export and test for test
   (`deno task check:pair`; a difference the languages force is listed with
-  its reason in `script/pair.exempt.json`). The TypeScript side is the
-  source and is read-only in that relation: a Rust module that needs one
-  thing of a TypeScript file is that whole file, at that path. `crates/pxl/core`
-  is the only crate that knows what a chunk is.
+  its reason in `script/pair.exempt.json`). The check runs one way: the
+  Rust may carry more. The TypeScript side is the source and changes only
+  where it is found wrong: a Rust module that needs one thing of a
+  TypeScript file is that whole file, at that path. The same holds when an
+  upper layer moves into the module: every TypeScript file it references
+  comes over whole, at its path, if its `.rs` is not there yet. What was
+  checked and where the two still differ is in
+  [issue/20260914-where-the-pair-differs.md](./issue/20260914-where-the-pair-differs.md).
+  `crates/pxl/core` is the only crate that knows what a chunk is.
 - **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between

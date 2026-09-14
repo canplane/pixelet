@@ -1,0 +1,93 @@
+// pxl_shared/spec/cell/color.rs
+//
+// The colour of every cube type: what a cube *is* to the eye when no
+// texture is drawn over it — the minimap, the coarse tiers and the
+// texture-pack-off path all read this, and the shipped palette carries it
+// as each row's `color`. A texture pack decorates these; it does not
+// replace them, which is why this table lives with the type numbering in
+// spec/cell rather than beside the pack's images.
+//
+// `default` is the TypeScript module's default export, the colour file
+// cube.rs builds its colours from.
+
+#![allow(non_upper_case_globals)]
+
+use super::r#type::{ColorJsonEntry, ColorJsonFile, ColorJsonMeta};
+
+const fn e(hex: &'static str) -> ColorJsonEntry {
+    ColorJsonEntry { hex, note: None }
+}
+
+pub const default: ColorJsonFile = ColorJsonFile {
+    _meta: Some(ColorJsonMeta {
+        description: None,
+        source: Some("land/water/structure/transport: OpenStreetMap Carto; block: hand-picked"),
+    }),
+    channels: &[
+        (
+            "land",
+            &[
+                ("BARE", e("#EEE5DC")),
+                ("SEA", e("#AAD3DF")),
+                ("GREEN_DEEP", e("#ADD19E")),
+                ("GREEN_LIGHT", e("#C8FACC")),
+                ("SAND", e("#F5E9C6")),
+                ("RESIDENTIAL", e("#E0DFDF")),
+                ("COMMERCIAL", e("#F2DAD9")),
+                ("INDUSTRIAL", e("#EBDBE8")),
+                ("SPORTS", e("#88E0BE")),
+                ("EDUCATION", e("#FFFFE5")),
+                ("MEDICAL", e("#FFFFE5")),
+                ("PUBLIC", e("#FFFFE5")),
+                ("APRON", e("#DADAE0")),
+                ("HELIPAD", e("#BBBBCC")),
+            ],
+        ),
+        ("water", &[("RIVER", e("#AAD3DF")), ("LAKE", e("#AAD3DF")), ("WETLAND", e("#AAD3DF"))]),
+        (
+            "structure",
+            &[
+                ("BUILDING", e("#D9D0C9")),
+                ("BUILDING_STATION", e("#C4B6AB")),
+                ("BUILDING_MEDICAL", e("#D9D0C9")),
+                ("BUILDING_EDUCATION", e("#D9D0C9")),
+                ("BUILDING_PUBLIC", e("#D9D0C9")),
+            ],
+        ),
+        (
+            "transport",
+            &[
+                ("ROAD_DEFAULT", e("#FFFFFF")),
+                ("ROAD_MOTORWAY", e("#E892A2")),
+                ("ROAD_PRIMARY", e("#FCD6A4")),
+                ("ROAD_SECONDARY", e("#F7FABF")),
+                ("PEDESTRIAN", e("#DDDDE8")),
+                ("PARKING", e("#EEEEEE")),
+                ("RAIL_MAIN", e("#707070")),
+                ("RAIL_SUBWAY", e("#999999")),
+                ("RUNWAY", e("#BBBBCC")),
+                ("TAXIWAY", e("#BBBBCC")),
+            ],
+        ),
+        (
+            "block",
+            &[
+                ("white", e("#f7f7f7")),
+                ("grey", e("#8d8d8d")),
+                ("dark_grey", e("#3f3f3f")),
+                ("black", e("#191919")),
+                ("red", e("#b01313")),
+                ("pink", e("#ff8787")),
+                ("brown", e("#572b00")),
+                ("orange", e("#d44e14")),
+                ("yellow", e("#ffe611")),
+                ("green", e("#60dc1e")),
+                ("dark_green", e("#206700")),
+                ("cyan", e("#008c94")),
+                ("blue", e("#004791")),
+                ("violet", e("#57039f")),
+                ("magenta", e("#c9036d")),
+            ],
+        ),
+    ],
+};

@@ -336,7 +336,9 @@ export const ALIGN = (nbyte: u32, unit: AlignUnit): u32 => {
   if ((unit & (unit - 1)) || unit > WORD_SZ) throw new MarshalError(Errno.EINVAL, `ALIGN: bad unit ${unit}`);
 
   const mask = unit - 1;
-  return (nbyte + mask) & ~mask;
+  // `&` works in int32: past 2^31 the aligned size came out negative.
+  if (nbyte > 0xffffffff - mask) throw new MarshalError(Errno.EOVERFLOW, `ALIGN: ${nbyte} does not align within u32`);
+  return ((nbyte + mask) & ~mask) >>> 0;
 };
 
 // ---- Node Layout ----

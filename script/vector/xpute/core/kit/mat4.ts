@@ -17,6 +17,10 @@ export function vectors() {
   const up = m.mat4_look_at(m.mat4(), { x: 0, y: 0, z: 10 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
   const vp = m.mat4_mul(m.mat4(), persp, look);
   const p = m.mat4_transform_point({ x: 0, y: 0, z: 0 }, vp, 3, -4, 5);
+  // A NaN w row: `|| 1` takes NaN as falsy and divides by 1.
+  const nan_w = m.mat4_translation(m.mat4(), 1, 2, 3);
+  nan_w[15] = NaN;
+  const q = m.mat4_transform_point({ x: 0, y: 0, z: 0 }, nan_w, 3, -4, 5);
   const d = m.mat4_transform_direction({ x: 0, y: 0, z: 0 }, look, 1, 2, 3);
   return {
     rotation_z: B(r),
@@ -30,6 +34,7 @@ export function vectors() {
     singular: B(m.mat4_invert(m.mat4(), new Float64Array(16))),
     point: [p.x, p.y, p.z].map(f64_bits),
     direction: [d.x, d.y, d.z].map(f64_bits),
+    nan_w_point: [q.x, q.y, q.z].map(f64_bits),
     clip_w: f64_bits(m.mat4_clip_w(vp, 3, -4, 5)),
     planes: B(m.mat4_frustum_planes(new Float64Array(24), vp)),
   };

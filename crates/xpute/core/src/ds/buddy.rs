@@ -811,7 +811,8 @@ impl BuddyAllocator {
             return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("pool: region {i} does not fit a handle")), None));
         }
         let page = (byte_offset - self._regions[i as usize].as_ref().unwrap().base) >> self._min_shift;
-        Ok(((i as u32) << (self._order_bits + self._max_order)) | (self._order_of(bytes) << self._max_order) | page)
+        // In u64: the region's shift is 32 when it can only be region 0.
+        Ok((((i as u64) << (self._order_bits + self._max_order)) as u32) | (self._order_of(bytes) << self._max_order) | page)
     }
 
     /// Where the block a handle names starts.

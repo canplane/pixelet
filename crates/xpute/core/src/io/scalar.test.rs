@@ -26,11 +26,7 @@ fn scalar_computes_what_the_typescript_computes() {
     assert_eq!(bytes_to_hex(&buf), v.s("written"));
     assert_eq!(tell(&st), v.i32("tell"));
     assert_eq!(pack96(1, 2, 3).to_string(), v.s("pack96"));
-    // scalar.ts's unpack96 takes each limb through Number(), which rounds a
-    // value past 2^53 before U32 truncates it, so its low limbs come out 0.
-    // The TypeScript is the one that is wrong; the high limb still agrees.
-    assert_eq!(unpack96((1u128 << 90) + 12345), [12345, 0, v.u32("unpack96.2")]);
-    assert_eq!((v.u32("unpack96.0"), v.u32("unpack96.1")), (0, 0), "scalar.ts's unpack96 was fixed; hold all three limbs to it");
+    assert_eq!(unpack96((1u128 << 90) + 12345), [v.u32("unpack96.0"), v.u32("unpack96.1"), v.u32("unpack96.2")]);
     assert_eq!(pack128(0xffffffffffffffff, 7).to_string(), v.s("pack128"));
     assert_eq!(unpack128((5u128 << 64) + 9), [v.u64("unpack128.0"), v.u64("unpack128.1")]);
     // Reading back what was written.

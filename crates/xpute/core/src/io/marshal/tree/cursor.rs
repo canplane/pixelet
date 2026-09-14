@@ -91,6 +91,32 @@ impl Cursor {
         }
     }
 
+    /// `get<T>()` for a typed-array leaf. The TypeScript's cast is unchecked
+    /// and a wrong guess surfaces later as a wrong type; a read of another
+    /// node here is EBADMSG.
+    pub fn get_array<T: AnyElement>(&self) -> Result<TypedArray<T>, MarshalError> {
+        match self.get()? {
+            NodeValue::Array(a) => TypedArray::of(&a).ok_or_else(|| MarshalError::new(Errno::EBADMSG, Some(&format!("expected a {:?} array, got {:?}", T::KIND, a.kind)), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a {:?} array, got type 0x{:x}", T::KIND, self.type_())), None)),
+        }
+    }
+
+    /// `get<string>()`, checked as `get_array` is.
+    pub fn get_str(&self) -> Result<String, MarshalError> {
+        match self.get()? {
+            NodeValue::Str(s) => Ok(s),
+            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a string, got type 0x{:x}", self.type_())), None)),
+        }
+    }
+
+    /// `get<number>()`, checked as `get_array` is.
+    pub fn get_number(&self) -> Result<f64, MarshalError> {
+        match self.get()? {
+            NodeValue::Number(x) => Ok(x),
+            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a number, got type 0x{:x}", self.type_())), None)),
+        }
+    }
+
     /// Reads the current node at full depth.
     pub fn get_deep(&self) -> Result<NodeValue, MarshalError> {
         match self {
@@ -371,11 +397,12 @@ impl NodeCursor {
         let [len, _] = GET_WORD(&self.pkt, self.base, &mut reg);
         let payload_start = self.base + WORD_SZ;
 
-        let payload_sz = (len + 7) >> 3;
+        // A wire length: u64, so a count near 2^32 cannot wrap to a small size.
+        let payload_sz = (len as u64 + 7) >> 3;
         if payload_start > self.pkt.byte_length() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
         }
-        if payload_sz > self.pkt.byte_length() as u32 - payload_start {
+        if payload_sz > (self.pkt.byte_length() as u32 - payload_start) as u64 {
             return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
         }
 
@@ -399,7 +426,7 @@ impl NodeCursor {
         if payload_start > self.pkt.byte_length() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
         }
-        if nbyte + 1 > self.pkt.byte_length() as u32 - payload_start {
+        if nbyte as u64 + 1 > (self.pkt.byte_length() as u32 - payload_start) as u64 {
             return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
         }
         if self.pkt[(payload_start + nbyte) as usize] != 0 {

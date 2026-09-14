@@ -3,9 +3,11 @@
 // Packets the TypeScript encoder wrote and what its cursor reads from them
 // — deep, and shallow at every child — the malformed packets it refuses,
 // and the encoder's answer at a cap tight enough to refuse a string, for
-// crates/xpute/core/src/io/marshal/tree/cursor.test.rs.
+// crates/xpute/core/src/io/marshal/tree/cursor.test.rs. Also a string and a
+// bitset whose length word is 2^32 - 1, and ALIGN at the top of u32.
 
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import { ALIGN } from "@xpute/core/io/marshal/tree/spec.ts";
 import { bytes_to_hex } from "@xpute/core/kit/encoding.ts";
 
 /** A value as one line: what both sides print a read value as. */
@@ -68,9 +70,24 @@ export function vectors() {
       return `errno:${(e as { errno?: number }).errno}`;
     }
   };
+  // The length word sits at the root's base, right after the 16-byte header.
+  const huge_len = (t: TreeView) => {
+    const hex = bytes_to_hex(new TreeEncoder().encode(t));
+    return hex.slice(0, 32) + "ffffffff" + hex.slice(40);
+  };
+  const huge = [huge_len(new TreeView().str("ab")), huge_len(new TreeView().bitset(new Uint8Array([1, 0, 1])))].map((packet) => ({ packet, read: errno_of(read_all(packet)) }));
+  const align = [0x7ffffff9, 0xfffffff8, 0xfffffff9].map((n) => {
+    try {
+      return `ok:${ALIGN(n, 8)}`;
+    } catch (e) {
+      return `errno:${(e as { errno?: number }).errno}`;
+    }
+  });
   return {
     packets,
     malformed,
+    huge,
+    align,
     caps: [24, 32, 40, 48].map((cap) => at_cap("abcdefgh", cap)),
     caps_utf8: [24, 32, 40].map((cap) => at_cap("한글한", cap)),
   };

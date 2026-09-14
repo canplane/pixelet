@@ -728,30 +728,39 @@ fn write_mem<T: NumberElement>(mem: &SparseTreeMemory<T>, buf: &U8Array) -> u32 
     off
 }
 
+/// `ALIGN(nbyte, WORD_SZ)` for a size that may not fit u32, refusing as
+/// ALIGN does.
+fn aligned_word(nbyte: u64) -> u64 {
+    match u32::try_from(nbyte) {
+        Ok(n) => ALIGN(n, WORD_SZ).unwrap_or_else(|e| panic!("{e}")) as u64,
+        Err(_) => panic!("ALIGN: {nbyte} does not align within u32"),
+    }
+}
+
 pub fn decode<T: NumberElement>(buf64: &U64Array) -> SparseTreeMemory<T> {
     let buf: U8Array = TypedArray::over(buf64.buffer().clone(), buf64.byte_offset(), buf64.byte_length());
     read_mem::<T>(&buf).0
 }
 
 fn read_mem<T: NumberElement>(buf: &U8Array) -> (SparseTreeMemory<T>, u32) {
-    let mut off: u32 = 0;
-
+    // The sizes are the blob's word times an element, and the blob may be
+    // anything: they are summed in u64 so a large count cannot wrap back
+    // under the buffer's length.
     let mut reg = WORD_REG;
-    let [used, _] = GET_WORD(buf, off, &mut reg);
-    off += WORD_SZ;
+    let [used, _] = GET_WORD(buf, 0, &mut reg);
+    let mut off = WORD_SZ as u64;
 
-    let heap_off = off;
-    let heap_nbyte = used << 2;
-    off += ALIGN(heap_nbyte, WORD_SZ).unwrap();
+    let heap_off = off as u32;
+    off += aligned_word(used as u64 * 4);
 
     let data_off = off;
     let data_bpe = T::BYTES_PER_ELEMENT as u32;
-    let data_nbyte = used * data_bpe;
-    off += ALIGN(data_nbyte, WORD_SZ).unwrap();
+    off += aligned_word(used as u64 * data_bpe as u64);
 
-    if off as usize > buf.byte_length() {
+    if off > buf.byte_length() as u64 {
         panic!("sparse_tree: truncated buffer");
     }
+    let (data_off, off) = (data_off as u32, off as u32);
 
     let buffer: ArrayBuffer = buf.buffer().clone();
     let heap: U32Array = TypedArray::over(buffer.clone(), buf.byte_offset() + heap_off as usize, used as usize);

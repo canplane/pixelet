@@ -22,3 +22,5 @@ read.19	number:NaN
 read.20	bigint:-9223372036854775808
 read.21	string:s
 read.22	bytes:01
+huge.packet	10ffffffff616200
+huge.read	errno:-74

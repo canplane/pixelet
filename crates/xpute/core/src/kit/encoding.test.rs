@@ -31,6 +31,12 @@ fn encoding_computes_what_the_typescript_computes() {
         assert_eq!(bytes_to_hex(&te.encode(t)), text(&v, &format!("{k}.utf8")), "{k}.utf8");
         assert_eq!(td.decode(&te.encode(t)) == t, v.bool(&format!("{k}.back")), "{k}.back");
     });
+    // A throw there is a panic here.
+    v.each("bad_hex", |k| {
+        let s = ["1g", "zz", "0G", " 1", "aB"][k.rsplit('.').next().unwrap().parse::<usize>().unwrap()];
+        let got = std::panic::catch_unwind(|| bytes_to_hex(&hex_to_bytes(s))).map_or("throws".to_string(), |h| format!("ok:{h}"));
+        assert_eq!(got, v.s(k), "hex_to_bytes({s:?})");
+    });
     v.each("invalid", |k| {
         assert_eq!(is_b64url(v.s(&format!("{k}.s"))), v.bool(&format!("{k}.is")), "{k}");
     });

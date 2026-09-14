@@ -92,3 +92,11 @@ fn sparse_tree_computes_what_the_typescript_computes() {
         assert_eq!(hex, v.s(&format!("{k}.encoded")), "{k}.encoded");
     });
 }
+
+#[test]
+#[should_panic(expected = "does not align within u32")]
+fn sparse_tree_decode_refuses_a_blob_whose_count_overflows_u32_rather_than_wrapping_under_it() {
+    let blob: U64Array = TypedArray::new(4);
+    blob.put(0, 0xffff_ffff);
+    let _ = decode::<u16>(&blob, SparseTreeLayout { dim: 3, min: -3, max: 3 }, None);
+}

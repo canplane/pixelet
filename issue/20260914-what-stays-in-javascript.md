@@ -62,9 +62,11 @@ arrived and hands the time back. What that decides about the boundary:
   (`script/pair.ts`, in `deno task check`) that fails when a file, an
   export or a test on one side has no pair on the other, and vectors the
   TypeScript writes and the Rust must reproduce bit for bit. A piece both
-  runtimes need is not a duplicate to move to one side; a difference is
-  allowed only where the languages differ, and every such difference is
-  listed with its reason. The tree is mirrored as it is, however it might
+  runtimes need is not a duplicate to move to one side. The check runs one
+  way: what the TypeScript has, the Rust has, and a TypeScript export left
+  out is listed with its reason. The Rust may carry more — the kernel is
+  where the work is going, and a TypeScript twin of a kernel-only piece is
+  written the day something in the shell needs it, not before. The tree is mirrored as it is, however it might
   be better arranged — arranging comes later, on both sides at once.
 - **Bit for bit, except where the TypeScript cannot be.** Two exceptions
   came out of the first vectors. `Math.sin`, `exp`, `log` and the rest are

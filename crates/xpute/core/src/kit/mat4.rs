@@ -111,9 +111,9 @@ pub fn mat4_perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64, far: f
     out
 }
 
-/// `x || 1` on a length: 1 where the length is 0.
+/// `x || 1` on a length: 1 where the length is 0 or NaN, both falsy.
 fn or_one(l: f64) -> f64 {
-    if l == 0.0 {
+    if l == 0.0 || l.is_nan() {
         1.0
     } else {
         l
