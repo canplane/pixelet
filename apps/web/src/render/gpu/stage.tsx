@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useRef } from "react";
-import * as THREE from "three";
 
 import { mat4, mat4_invert, mat4_mul } from "@xpute/core/kit/mat4.ts";
 
@@ -18,7 +17,6 @@ import { fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts
 import { billboard_sheet } from "@/module/world/billboard/sheet.ts";
 import { view } from "@/module/world/view.ts";
 import { decor_bundle_assets, type DecorBundleAssets } from "@/module/world/decor/asset_store.ts";
-import type { DecorModel } from "./decor.ts";
 import { GpuRenderer } from "./renderer.ts";
 
 /** The one renderer, once its device has answered. */
@@ -40,65 +38,21 @@ const GL_TO_WGPU = new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0, 0, 0,
 const $m = mat4();
 const $proj = mat4();
 
-/** decor/asset_store.ts's models and skins by group, as the renderer wants
- * them, rebuilt when the assets change. */
+/** decor/asset_store.ts's models and skins by group, told to the renderer
+ * when the assets change. */
 let decor_assets_seen: readonly DecorBundleAssets[] | null = null;
-const decor_models = new Map<THREE.BufferGeometry, Omit<DecorModel, "skin">>();
-
-function decor_model(geometry: THREE.BufferGeometry | null, material: THREE.MeshStandardMaterial | null): DecorModel | null {
-  const skin = material?.map?.image as DecorModel["skin"] | undefined;
-  if (!geometry || !skin) return null;
-  let lanes = decor_models.get(geometry);
-  if (!lanes) {
-    const p = geometry.getAttribute("position");
-    const nrm = geometry.getAttribute("normal");
-    const uv = geometry.getAttribute("uv");
-    const count = p.count;
-    const position = new Float32Array(count * 3);
-    const normal = new Float32Array(count * 3);
-    const uvs = new Float32Array(count * 2);
-    for (let i = 0; i < count; i++) {
-      position[i * 3] = p.getX(i);
-      position[i * 3 + 1] = p.getY(i);
-      position[i * 3 + 2] = p.getZ(i);
-      if (nrm) {
-        normal[i * 3] = nrm.getX(i);
-        normal[i * 3 + 1] = nrm.getY(i);
-        normal[i * 3 + 2] = nrm.getZ(i);
-      }
-      if (uv) {
-        uvs[i * 2] = uv.getX(i);
-        uvs[i * 2 + 1] = uv.getY(i);
-      }
-    }
-    const idx = geometry.getIndex();
-    const index = new Uint32Array(idx ? idx.count : count);
-    for (let i = 0; i < index.length; i++) index[i] = idx ? idx.getX(i) : i;
-    lanes = { position, normal, uv: uvs, index };
-    decor_models.set(geometry, lanes);
-  }
-  return { ...lanes, skin };
-}
 
 function sync_decor_models(gpu: GpuRenderer): void {
   const assets = decor_bundle_assets();
   if (assets === decor_assets_seen) return;
   decor_assets_seen = assets;
-  const models: (DecorModel | null)[] = [];
-  const by_skin = new Map<unknown, DecorModel | null>();
-  for (const { geometries, materials } of assets) {
-    geometries.forEach((geometry, v) => {
-      const key = geometry && materials[v] ? `${geometry.uuid}:${materials[v]!.uuid}` : null;
-      if (key !== null && by_skin.has(key)) {
-        models.push(by_skin.get(key)!);
-        return;
-      }
-      const m = decor_model(geometry, materials[v]);
-      if (key !== null) by_skin.set(key, m);
-      models.push(m);
+  const pxl = CORE_PXL!;
+  let group = 0;
+  for (const { models, skins } of assets) {
+    models.forEach((model, v) => {
+      gpu.decor.set_model(group++, model ? pxl.pxl_model_handle(model.model) : 0, skins[v]);
     });
   }
-  gpu.decor.set_models(models);
 }
 
 /**

@@ -7,11 +7,11 @@
  * whether it is on screen, which tiers it shows and how a blend weighs them,
  * what to build and when, what to give back. What stays here is what the
  * decisions act on and the sources they are made from: the tiers and decor
- * blocks the module handed over, decor's contribution to decor/field.ts,
- * and the subscriptions that say a chunk's sources changed.
+ * blocks the module handed over, and the subscriptions that say a chunk's
+ * sources changed.
  *
  * A mesh has exactly one owner at a time — the tier cache, the layout, or
- * both through a count — and a layout's meshes are attached in the call that
+ * both through a count — and a layout takes its hold in the call that
  * applies it, so a layout never names a mesh nothing owns. That rule came
  * out of three reference-counting bugs under React's deferred mounts (the
  * git history around chunk_stage.tsx), and is why this is a plain object.
@@ -24,8 +24,6 @@ import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { Terrain } from "@pxl/shared/bake/format.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
-import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/module/world/decor/field.ts";
-import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/module/world/decor/asset_store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
 import { register_tile_interest, useTileStore } from "@/module/world/terrain/store.ts";
 import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
@@ -121,10 +119,6 @@ useSettingsStore.subscribe(() => {
 register_tile_interest(() => true, (page_idx) => {
   for (const node of chunk_nodes.values()) if (node.page_idx === page_idx) node.on_source_change();
 });
-subscribe_decor_assets(() => {
-  for (const node of chunk_nodes.values()) node.on_decor_assets();
-});
-
 // ---- Layout ----
 
 /**
@@ -179,11 +173,11 @@ export type ChunkNodeDeps = {
 export class ChunkNode {
   /** The page this chunk belongs to, for the page's own mount diff. */
   readonly page_idx: IVec;
-  /** This chunk's own absolute lattice origin — its identity in
-   * decor/field.ts, and the offset chunk-local instances are placed at. */
+  /** This chunk's own absolute lattice origin. */
   readonly base_i: IVec;
 
-  private readonly object_key: IVec;
+  /** The object store's key for this chunk's column. */
+  readonly object_key: IVec;
   /** The module's id for this chunk. */
   private readonly id: u32;
 
@@ -208,16 +202,8 @@ export class ChunkNode {
   private objects_revision: number;
   private decor_revision: number;
   private show_decor: boolean;
-  private bundle_assets: readonly DecorBundleAssets[];
 
   private readonly unsubscribes: (() => void)[] = [];
-
-  /** What this chunk last told decor/field.ts. `dirty` forces the next sync
-   * through even when neither of the other two moved — a rebuilt layout is
-   * the same chunk showing the same tier, with different instances in it. */
-  private decor_shown = false;
-  private decor_role: ChunkLodRole = "primary";
-  private decor_dirty = true;
 
   private disposed = false;
 
@@ -233,7 +219,6 @@ export class ChunkNode {
     this.objects_revision = object_column_revision(this.object_key);
     this.decor_revision = decor_column_revision(this.object_key);
     this.show_decor = useSettingsStore.getState().show_decor;
-    this.bundle_assets = decor_bundle_assets();
 
     // Direct store subscriptions rather than hooks: a node is not a
     // component, and a placement should not have to travel through a render
@@ -274,7 +259,6 @@ export class ChunkNode {
     for (const off of this.unsubscribes) off();
     if (tell_module) CORE_BUILD.remove(this.id);
     chunk_nodes.delete(this.id);
-    decor_field.clear_chunk(this.base_i);
     for (const bucket of this.layout.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(this.layout.decor);
     this.layout = { ...this.layout, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false };
@@ -310,7 +294,6 @@ export class ChunkNode {
 
   on_visible(on: boolean): void {
     this.shown = on;
-    this.sync_decor();
   }
 
   /** The module hands a step's decor over only where it believes this node
@@ -391,7 +374,6 @@ export class ChunkNode {
    * on, since an instance is drawn or it is not. */
   on_blend(primary: number, secondary: number, decor_secondary: boolean): void {
     this.blend = { primary, secondary, decor_secondary };
-    this.sync_decor(decor_secondary ? "secondary" : "primary");
   }
 
   // ---- source changes ----
@@ -423,21 +405,6 @@ export class ChunkNode {
     this.clear_decor_cache();
     this.tell_source();
     CORE_BUILD.build_now(this.id);
-  }
-
-  /**
-   * Decor models finish loading well after the first chunks are built, and
-   * a node that never heard about it drew no decor for the rest of its
-   * life. The instances are the same; what this chunk contributes to
-   * decor/field.ts — a geometry and a skin per variant — is not.
-   */
-  on_decor_assets(): void {
-    if (this.disposed) return;
-    const assets = decor_bundle_assets();
-    if (this.bundle_assets === assets) return;
-    this.bundle_assets = assets;
-    this.decor_dirty = true;
-    this.sync_decor();
   }
 
   /**
@@ -492,12 +459,6 @@ export class ChunkNode {
     for (const bucket of next.buckets) retain_built_mesh(bucket.cubes);
     retain_decor_pair(next.decor);
     this.layout = next;
-    this.decor_dirty = true;
-    if (this.blend !== null) {
-      this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
-    } else {
-      this.sync_decor();
-    }
     for (const bucket of previous.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(previous.decor);
     if (import.meta.env.DEV) node_counts.rebuilt++;
@@ -508,43 +469,6 @@ export class ChunkNode {
     const previous = this.layout.decor;
     retain_decor_pair(decor);
     this.layout = { ...this.layout, decor };
-    this.decor_dirty = true;
-    if (this.blend !== null) this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
-    else this.sync_decor();
     release_decor_pair(previous);
-  }
-
-  /**
-   * Tells decor/field.ts what this chunk shows right now, if that changed:
-   * whether the chunk is on screen, which tier it shows, and whether its
-   * instances were rebuilt. Nothing else is this chunk's business.
-   */
-  private sync_decor(want_role: ChunkLodRole = this.decor_role): void {
-    const shown = this.shown;
-    const role: ChunkLodRole = this.layout.decor.secondary !== null ? want_role : "primary";
-    if (!this.decor_dirty && shown === this.decor_shown && role === this.decor_role) return;
-    this.decor_dirty = false;
-    this.decor_shown = shown;
-    this.decor_role = role;
-    if (!shown) {
-      decor_field.clear_chunk(this.base_i);
-      return;
-    }
-    const source = role === "secondary" ? this.layout.decor.secondary : this.layout.decor.primary;
-    const contribution: Map<string, DecorVariantContribution> = new Map();
-    // The block's groups are every bundle's variants in bundle order, the
-    // order the kinds were taught (decor_registry.ts).
-    let group = 0;
-    for (const { bundle, geometries, materials } of this.bundle_assets) {
-      geometries.forEach((geometry, variant) => {
-        const material = materials[variant];
-        const instances = source?.groups[group++] ?? null;
-        // A variant whose model or skin is still in flight contributes
-        // nothing; the arrival re-syncs this chunk and lands here.
-        if (!geometry || !material || !instances) return;
-        contribution.set(variant_key(bundle.kind, variant), { geometry, material, instances });
-      });
-    }
-    decor_field.set_chunk(this.base_i, contribution as DecorContribution);
   }
 }

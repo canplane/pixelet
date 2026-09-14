@@ -1,52 +1,46 @@
 // @pxl/web/module/world/decor/asset_store.ts
 
 /**
- * Every decor kind's loaded models, as a plain module store.
+ * Every decor kind's loaded models and skins, as a plain module store.
  *
  * These used to load through a React hook whose result reached the chunk
- * pipeline as a prop: useAllDecorBundleAssets -> ChunkStage -> PageChunks ->
- * new ChunkNode(). That put React on the path of a fact nothing about React
- * is needed to know — "this model has arrived" — and a node already
- * constructed never heard it, because the effect that would have delivered
- * it only created nodes that did not exist yet. Chunks built before the
- * models finished loading stayed decor-free for their whole lives, so decor
- * appeared or did not depending on whether the browser cache beat the first
- * chunk build.
+ * pipeline as a prop, and a node already constructed never heard it —
+ * chunks built before the models finished loading stayed decor-free for
+ * their whole lives. Here arrival is a change like any other: each model
+ * or skin that lands is a bump on the world change log's decor-asset
+ * topic, and whoever draws the decor re-reads the snapshot at the tick's
+ * pump.
  *
- * Here arrival is a change like any other: each model or skin that lands is
- * a bump on the world change log's decor-asset topic, and a ChunkNode hears
- * it the way it hears tiles and the object store — at the tick's pump.
- * Nothing has to be told twice.
- *
- * Kept out of instanced_model.ts on purpose: this module reaches
- * decor_registry.ts and store.ts — the app's state — and
- * instanced_model.ts is geometry imported directly by tests.
+ * A model is registered with the module as it arrives (render/gpu/
+ * model_asset.ts), so the core holds its triangles for the eraser's hit
+ * test (crates/pxl-core/src/raycast.rs) and the renderer draws its
+ * instances from the same lanes; the group it is drawn as is its
+ * variant's place across every kind, in registry order.
  */
 
 import { useSyncExternalStore } from "react";
-import * as THREE from "three";
 
-import { useSettingsStore } from "@/app/setting/store.ts";
-import { rim_cfg } from "@/module/world/environment/config.ts";
-import { set_rim_intensity } from "@/module/world/render/lit_gltf_material.ts";
-import { load_gltf, load_texture } from "@/module/world/gltf_cache.ts";
-import { make_lit_gltf_material } from "@/module/world/render/lit_gltf_material.ts";
-import { type DecorVariantAsset, merge_scene_geometry } from "./instanced_model.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
+
+import { load_gltf, load_image } from "@/render/gltf/load.ts";
+import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
+import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
-import type { DecorKindBundle } from "./decor_layer.ts";
+import type { DecorKindBundle, DecorVariantAsset } from "./decor_layer.ts";
 import { DECOR_BUNDLES } from "./decor_registry.ts";
 
 export type DecorBundleAssets = {
   bundle: DecorKindBundle;
-  geometries: readonly (THREE.BufferGeometry | null)[];
-  materials: readonly (THREE.MeshStandardMaterial | null)[];
+  /** The module's model a variant is, null while it loads. */
+  models: readonly (ModelHandle | null)[];
+  skins: readonly (ImageBitmap | null)[];
 };
 
 /** Keyed by URL, not by variant: two kinds may name the same model or the
- * same skin, and both should reach one THREE object. */
-const geometry_by_url = new Map<string, THREE.BufferGeometry | null>();
-const material_by_url = new Map<string, THREE.MeshStandardMaterial | null>();
+ * same skin, and both should reach one object. */
+const model_by_url = new Map<string, ModelHandle | null>();
+const skin_by_url = new Map<string, ImageBitmap | null>();
 
 /** Rebuilt whole on every arrival so a consumer can tell "changed" by
  * identity, the way a revision number would. Arrivals are a few dozen
@@ -56,53 +50,41 @@ let snapshot: readonly DecorBundleAssets[] = build_snapshot();
 function build_snapshot(): readonly DecorBundleAssets[] {
   return DECOR_BUNDLES.map((bundle) => ({
     bundle,
-    geometries: bundle.variants.map((variant) => geometry_by_url.get(variant.model_url) ?? null),
-    materials: bundle.variants.map((variant) => material_by_url.get(variant.skin_url) ?? null),
+    models: bundle.variants.map((variant) => model_by_url.get(variant.model_url) ?? null),
+    skins: bundle.variants.map((variant) => skin_by_url.get(variant.skin_url) ?? null),
   }));
 }
 
 function publish(url: string): void {
   snapshot = build_snapshot();
+  // The group each variant is drawn as, told to the module for its hit test.
+  const p = CORE_PXL;
+  if (p) {
+    let group: u32 = 0;
+    for (const { models } of snapshot) {
+      for (const model of models) {
+        if (model) p.pxl_decor_model(group, model.model);
+        group++;
+      }
+    }
+  }
   bump_world(WorldTopic.DECOR_ASSET, fnv1a64_str(url));
 }
 
-function rim_intensity(): number {
-  return useSettingsStore.getState().show_rim_light ? rim_cfg.INTENSITY : 0;
-}
-
 function load_variant(variant: DecorVariantAsset): void {
-  if (!geometry_by_url.has(variant.model_url)) {
-    geometry_by_url.set(variant.model_url, null);
+  if (!model_by_url.has(variant.model_url)) {
+    model_by_url.set(variant.model_url, null);
     load_gltf(variant.model_url).then((gltf) => {
-      geometry_by_url.set(variant.model_url, merge_scene_geometry(gltf.scene));
+      const p = CORE_PXL;
+      if (!p) return;
+      model_by_url.set(variant.model_url, register_model(p, gltf, null));
       publish(variant.model_url);
     });
   }
-  if (!material_by_url.has(variant.skin_url)) {
-    material_by_url.set(variant.skin_url, null);
-    load_texture(variant.skin_url).then((texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.flipY = false;
-      // Per skin rather than one key for every decor material.
-      //
-      // The shared key was there because the compiled program is identical
-      // for all of them, which is true of the shader source and not of what
-      // three.js does with it: a material that finds a program already
-      // cached under the key never compiles, so its onBeforeCompile never
-      // runs and — the part that matters — it inherits whatever defines the
-      // first material to compile had. make_lit_gltf_material sets
-      // `emissive: 0xffffff` with an emissiveMap to modulate it, so a
-      // program without USE_EMISSIVEMAP renders that white literally, which
-      // is exactly what a white model is.
-      //
-      // Confirmed by the symptom stopping. The cost is one compiled program
-      // per skin rather than one in total, which at five skins is nothing —
-      // and the sharing it gave up was mostly illusory, since three.js keys
-      // programs by the standard parameters too and these materials would
-      // have shared one anyway.
-      const material = make_lit_gltf_material(texture, `decor-mesh:${variant.skin_url}`);
-      set_rim_intensity(material, rim_intensity());
-      material_by_url.set(variant.skin_url, material);
+  if (!skin_by_url.has(variant.skin_url)) {
+    skin_by_url.set(variant.skin_url, null);
+    load_image(variant.skin_url).then((image) => {
+      skin_by_url.set(variant.skin_url, image);
       publish(variant.skin_url);
     });
   }
@@ -111,17 +93,6 @@ function load_variant(variant: DecorVariantAsset): void {
 for (const bundle of DECOR_BUNDLES) {
   for (const variant of bundle.variants) load_variant(variant);
 }
-
-// One subscription for every decor material there will ever be, rather than
-// one per consumer: the material objects are shared across every chunk that
-// draws that variant, so the uniform is written once here no matter how many
-// chunks are on screen.
-useSettingsStore.subscribe(() => {
-  const intensity = rim_intensity();
-  for (const material of material_by_url.values()) {
-    if (material) set_rim_intensity(material, intensity);
-  }
-});
 
 /** What is loaded right now, one entry per decor kind. A variant still in
  * flight reads as null, which is how a consumer knows to leave it out. */

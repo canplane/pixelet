@@ -74,6 +74,8 @@ struct State {
     /// doubles the glue reads.
     raycast: Raycast,
     hit: [f64; HIT_WORDS],
+    /// The last decor hit: chunk id, band, packed position, distance.
+    decor_hit: [f64; 4],
     draw_row: [u32; 10],
     model_block: u32,
 }
@@ -131,6 +133,7 @@ fn state() -> &'static mut State {
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
                 hit: [0.0; HIT_WORDS],
+                decor_hit: [0.0; 4],
                 draw_row: [0; 10],
                 model_block: 0,
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
@@ -1213,8 +1216,10 @@ pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32
 #[no_mangle]
 pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
     let s = state();
+    let mem = s.volumes.as_ref().expect("pxl_volume_pools before any model").mem();
     let sched = &mut s.sched;
-    sched.models.seal(&mut sched.draw, model, scale);
+    // SAFETY: the model's block is in the volumes' memory.
+    unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
 }
 
 #[no_mangle]
@@ -1391,6 +1396,40 @@ pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz
 #[no_mangle]
 pub extern "C" fn pxl_raycast_at() -> u32 {
     state().hit.as_ptr() as u32
+}
+
+/// The nearest placed decor instance the ray strikes within `max_dist`
+/// (crates/pxl-core/src/raycast.rs's hit_decor), the ray as pxl_raycast
+/// takes it: 1 when one was, its chunk id, band, packed position and
+/// distance written at pxl_raycast_decor_at.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_raycast_decor(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
+    let s = state();
+    let hit = {
+        let (world, _, sched) = raycast_of(s);
+        pxl_core::raycast::hit_decor(&world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
+    };
+    let Some(h) = hit else { return 0 };
+    s.decor_hit = [h.chunk as f64, h.band as f64, h.pos as f64, h.t];
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_raycast_decor_at() -> u32 {
+    state().decor_hit.as_ptr() as u32
+}
+
+/// The renderer's handle for a model's mesh block, 0 before it is sealed.
+#[no_mangle]
+pub extern "C" fn pxl_model_handle(model: u32) -> u32 {
+    state().sched.models.mesh(model).map_or(0, |m| m.handle)
+}
+
+/// The model decor group `group` is drawn with, for the hit test.
+#[no_mangle]
+pub extern "C" fn pxl_decor_model(group: u32, model: u32) {
+    state().sched.decor_model(group, model);
 }
 
 fn raycast_of(s: &mut State) -> (World<'_>, &mut Raycast, &mut Scheduler) {

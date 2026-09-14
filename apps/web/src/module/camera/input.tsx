@@ -1,7 +1,6 @@
 // @pxl/web/module/camera/input.tsx
 
 import { useEffect, useRef } from "react";
-import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
@@ -48,26 +47,17 @@ type PointerPos = { x: f64; y: f64 };
 
 const $origin = { x: 0, y: 0, z: 0 };
 const $direction = { x: 0, y: 0, z: 0 };
-/** The pointer's ray in the view frame, for the decor hit test three still
- * runs (decor_hit.ts) — the one thing here that is three's. */
-const $raycaster = new THREE.Raycaster();
-const $v = new THREE.Vector3();
-const $root = new THREE.Matrix4();
 
 /**
- * Which OccupiedEntry `hit` actually struck, decor included — tries a real
- * mesh raycast against baked decor first (decor_hit.ts's raycast_decor,
- * bounded by hit.t: decor sitting on solid ground can only be the right
- * answer when it's genuinely closer along the ray than whatever the
- * abstract voxel raycast already found there), falling back to ray.ts's
- * own solid-object AABB resolution otherwise. The decor test is three's
- * still, so the ray is put back in the view frame for it.
+ * Which OccupiedEntry `hit` actually struck, decor included — tries the
+ * module's mesh raycast against the placed decor first (decor_hit.ts's
+ * raycast_decor, bounded by hit.t: decor sitting on solid ground can only be
+ * the right answer when it's genuinely closer along the ray than whatever
+ * the voxel raycast already found there), falling back to ray.ts's own
+ * solid-object AABB resolution otherwise.
  */
 function resolve_hit_target(hit: WorldHit, map_origin: IVec): OccupiedEntry | null {
-  // The same ray in the view frame, where three's decor meshes stand.
-  $raycaster.ray.origin.set(view.eye.x, view.eye.y, view.eye.z);
-  $raycaster.ray.direction.copy($v.set($direction.x, $direction.y, $direction.z).transformDirection($root.fromArray(view.root)));
-  const decor_id = raycast_decor($raycaster, hit.t);
+  const decor_id = raycast_decor($origin, $direction, map_origin, hit.t);
   if (decor_id) {
     const decor = get_placed_object(decor_id);
     if (decor) return decor;

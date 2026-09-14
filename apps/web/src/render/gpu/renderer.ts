@@ -26,6 +26,7 @@ import { DecorPass } from "./decor.ts";
 import { SkinnedPass } from "./skinned.ts";
 import { PuckPass } from "./puck.ts";
 import { BadgePass } from "./badges.ts";
+import { PreviewCase } from "./preview.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -99,6 +100,8 @@ export class GpuRenderer {
   private readonly puck: PuckPass;
   /** The badges (badges.ts), a pass of their own that reads the depth. */
   readonly badges: BadgePass;
+  /** The display cases open (preview.ts), drawn after the world each frame. */
+  private readonly previews = new Set<PreviewCase>();
   /** Each block's vertex and index counts, as its upload said. */
   private readonly counts = new Map<u32, [u32, u32]>();
   private readonly frame_buffer: GPUBuffer;
@@ -222,6 +225,17 @@ export class GpuRenderer {
     this.depth = this.device.createTexture({ label: "depth", size: [width, height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
   }
 
+  /** A display case over `canvas`, drawn each frame until closed. */
+  open_preview(canvas: HTMLCanvasElement): PreviewCase {
+    const preview = new PreviewCase(this.device, canvas, this.format);
+    this.previews.add(preview);
+    return preview;
+  }
+
+  close_preview(preview: PreviewCase): void {
+    this.previews.delete(preview);
+  }
+
   /** Takes the module's lists and draws the frame: the blocks it names
    * uploaded and freed, then every draw with its uniforms. */
   frame(): void {
@@ -285,7 +299,7 @@ export class GpuRenderer {
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bind_group);
     this.draw_meshes(pass, draws, (p) => p === PIPELINE_CHUNK);
-    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
+    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers, this.counts);
     this.skinned.draw(pass, draws, uniforms, this.buffers, this.counts);
     this.puck.draw_beacon(pass, draws, uniforms);
     this.puck.draw_zone(pass, draws, uniforms, this.buffers);
@@ -293,9 +307,10 @@ export class GpuRenderer {
     for (const p of [PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR]) {
       if (!this.draw_meshes(pass, draws, (q) => q === p, true)) continue;
     }
-    this.decor.draw_ghosts(pass, draws, uniforms, this.buffers);
+    this.decor.draw_ghosts(pass, draws, uniforms, this.buffers, this.counts);
     pass.end();
     this.stat.badges = this.badges.draw(encoder, color, this.depth, draws, uniforms, this.buffers);
+    for (const preview of this.previews) preview.draw(encoder, this.uniforms, draws, uniforms, this.buffers, this.counts);
     this.device.queue.submit([encoder.finish()]);
     const submitted = performance.now();
     this.device.queue.onSubmittedWorkDone().then(() => {

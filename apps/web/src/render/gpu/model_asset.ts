@@ -1,63 +1,85 @@
 // @pxl/web/render/gpu/model_asset.ts
 
 /**
- * A loaded glTF handed to the module as a model (crates/pxl-core/src/model.rs):
- * the one place a parsed asset becomes the core's lanes, so a companion, a
- * decor kind or an asset a player brings all enter the world the same way.
- * The parse itself is still three-stdlib's GLTFLoader (gltf_cache.ts); only
- * this file reads its output, and it goes when the parser does.
+ * A parsed glTF (render/gltf/gltf.ts) handed to the module as a model
+ * (crates/pxl-core/src/model.rs): the one place a parsed asset becomes the
+ * core's lanes, so a companion, a decor kind or an asset a player brings
+ * all enter the world the same way.
  *
- * What is read: every skinned mesh of the scene, merged onto the first one's
- * skeleton, its vertices put through its bind matrix — the space the inverse
- * bind matrices expect — or, with no skin, every mesh baked through its node
- * transform onto one joint at rest. Each joint's parent, rest pose, the
- * transform above it when its parent is not a joint, and its inverse bind
- * matrix; each clip's channels on joints, by the node name its track binds.
- * The height the model is scaled to is measured as use_character_model.ts
- * measured it, the scene's box at rest.
+ * A skinned model's joints are its skins' joint nodes, every primitive
+ * merged onto that one list: its vertices are in the skin's space, as the
+ * spec has them, and a joint's palette entry is its global transform times
+ * its inverse bind matrix. A model with no skin is animated by its nodes
+ * instead, so every node in the scene is a joint with an identity inverse
+ * bind, and a mesh's vertices ride the joint of the node that holds it —
+ * which is what plays a pet's walk, where each part is a node of its own.
+ * A root joint whose parent is not a joint carries that parent's transform
+ * above it. Each clip's channels on joints go over by node.
+ *
+ * The height the model is scaled to is measured over its vertices at
+ * rest, through their nodes, as the box three drew around the scene.
  */
 
-import * as THREE from "three";
-
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import { type Mat4, mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { type Gltf, scene_nodes, world_matrices } from "@/render/gltf/gltf.ts";
 
 export type ModelHandle = {
   model: u32;
   /** Clip index by the name the glTF gives it. */
   clips: ReadonlyMap<string, u32>;
+  /** Triangles, for the ledger. */
+  triangles: u32;
 };
 
-const PATHS: Record<string, u32> = { position: 0, quaternion: 1, scale: 2 };
+const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+const $p = { x: 0, y: 0, z: 0 };
 
-const $m = new THREE.Matrix4();
-const $n = new THREE.Matrix3();
-const $v = new THREE.Vector3();
+/** Registers `gltf` as a model standing `height_u` tall, or at its own
+ * size when null; null when it has no mesh or the pool refused its block. */
+export function register_model(pxl: PxlExports, gltf: Gltf, height_u: f64 | null): ModelHandle | null {
+  const order = scene_nodes(gltf);
+  const worlds = world_matrices(gltf);
+  const skinned = gltf.skins.length > 0 && order.some((n) => gltf.nodes[n].skin >= 0 && gltf.nodes[n].mesh >= 0);
 
-/** Registers `scene` and `animations` as a model standing `height_u` tall;
- * null when it has no mesh or the pool refused its block. */
-export function register_model(pxl: PxlExports, scene: THREE.Object3D, animations: readonly THREE.AnimationClip[], height_u: f64): ModelHandle | null {
-  scene.updateMatrixWorld(true);
-  const skinned: THREE.SkinnedMesh[] = [];
-  const plain: THREE.Mesh[] = [];
-  scene.traverse((node) => {
-    if ((node as THREE.SkinnedMesh).isSkinnedMesh) skinned.push(node as THREE.SkinnedMesh);
-    else if ((node as THREE.Mesh).isMesh) plain.push(node as THREE.Mesh);
-  });
-  const meshes: THREE.Mesh[] = skinned.length > 0 ? skinned : plain;
-  if (meshes.length === 0) return null;
-  const bones: THREE.Bone[] = skinned.length > 0 ? skinned[0].skeleton.bones : [];
-  const joint_cnt = Math.max(1, bones.length);
+  // The joints: the skins' joint nodes in first-seen order, or every node.
+  const joint_nodes: u32[] = [];
+  const joint_of = new Map<u32, u32>();
+  const add_joint = (node: u32) => {
+    if (joint_of.has(node)) return;
+    joint_of.set(node, joint_nodes.length);
+    joint_nodes.push(node);
+  };
+  if (skinned) {
+    for (const n of order) {
+      const node = gltf.nodes[n];
+      if (node.skin >= 0 && node.mesh >= 0) { for (const j of gltf.skins[node.skin].joints) add_joint(j); }
+    }
+  } else {
+    for (const n of order) add_joint(n);
+  }
+  const joint_cnt = Math.max(1, joint_nodes.length);
 
+  // The meshes: every primitive of every node that holds one, skinned or
+  // not as the model is.
+  const parts: { node: u32; prim: number; mesh: number }[] = [];
   let vertex_cnt = 0;
   let index_cnt = 0;
-  for (const mesh of meshes) {
-    const g = mesh.geometry;
-    vertex_cnt += g.getAttribute("position").count;
-    index_cnt += g.getIndex()?.count ?? g.getAttribute("position").count;
+  for (const n of order) {
+    const node = gltf.nodes[n];
+    if (node.mesh < 0) continue;
+    if (skinned && node.skin < 0) continue;
+    gltf.meshes[node.mesh].forEach((prim, k) => {
+      parts.push({ node: n, prim: k, mesh: node.mesh });
+      vertex_cnt += prim.position.length / 3;
+      index_cnt += prim.index.length;
+    });
   }
+  if (vertex_cnt === 0) return null;
+
   const id = pxl.pxl_model_new(vertex_cnt, index_cnt, joint_cnt);
   if (id < 0) return null;
   const model = id as u32;
@@ -66,103 +88,108 @@ export function register_model(pxl: PxlExports, scene: THREE.Object3D, animation
   const floats = new Float32Array(pxl.memory.buffer, block, vertex_cnt * 16 + index_cnt);
   const lane = (k: u32) => k * vertex_cnt;
 
+  let lo = Infinity, hi = -Infinity;
   let v0 = 0;
   let i0 = 0;
-  for (const mesh of meshes) {
-    const g = mesh.geometry;
-    const pos = g.getAttribute("position");
-    const nrm = g.getAttribute("normal");
-    const uv = g.getAttribute("uv");
-    const sk_idx = g.getAttribute("skinIndex");
-    const sk_w = g.getAttribute("skinWeight");
-    const is_skinned = (mesh as THREE.SkinnedMesh).isSkinnedMesh;
-    // Into the space the joints' inverse bind matrices expect: a skinned
-    // mesh's bind matrix, a plain mesh's own node transform.
-    $m.copy(is_skinned ? (mesh as THREE.SkinnedMesh).bindMatrix : mesh.matrixWorld);
-    $n.getNormalMatrix($m);
-    const remap = is_skinned ? (mesh as THREE.SkinnedMesh).skeleton.bones.map((b) => Math.max(0, bones.indexOf(b))) : null;
-    for (let i = 0; i < pos.count; i++) {
+  for (const part of parts) {
+    const node = gltf.nodes[part.node];
+    const prim = gltf.meshes[part.mesh][part.prim];
+    const count = prim.position.length / 3;
+    // A skinned vertex is in the skin's space already, and its joints are
+    // the skin's; an unskinned one is the node's, whose joint places it.
+    const remap = skinned && node.skin >= 0 ? gltf.skins[node.skin].joints.map((j) => joint_of.get(j) ?? 0) : null;
+    const own_joint = joint_of.get(part.node) ?? 0;
+    const world: Mat4 = worlds[part.node];
+    for (let i = 0; i < count; i++) {
       const v = v0 + i;
-      $v.fromBufferAttribute(pos, i).applyMatrix4($m);
-      floats[lane(0) + v * 3] = $v.x;
-      floats[lane(0) + v * 3 + 1] = $v.y;
-      floats[lane(0) + v * 3 + 2] = $v.z;
-      if (nrm) $v.fromBufferAttribute(nrm, i).applyMatrix3($n).normalize();
-      else $v.set(0, 1, 0);
-      floats[lane(3) + v * 3] = $v.x;
-      floats[lane(3) + v * 3 + 1] = $v.y;
-      floats[lane(3) + v * 3 + 2] = $v.z;
-      floats[lane(6) + v * 2] = uv ? uv.getX(i) : 0;
-      floats[lane(6) + v * 2 + 1] = uv ? uv.getY(i) : 0;
-      for (let c = 0; c < 4; c++) {
-        words[lane(8) + v * 4 + c] = remap && sk_idx ? remap[sk_idx.getComponent(i, c)] ?? 0 : 0;
-        floats[lane(12) + v * 4 + c] = sk_w ? sk_w.getComponent(i, c) : (c === 0 ? 1 : 0);
+      const x = prim.position[i * 3], y = prim.position[i * 3 + 1], z = prim.position[i * 3 + 2];
+      floats[lane(0) + v * 3] = x;
+      floats[lane(0) + v * 3 + 1] = y;
+      floats[lane(0) + v * 3 + 2] = z;
+      if (prim.normal) {
+        floats[lane(3) + v * 3] = prim.normal[i * 3];
+        floats[lane(3) + v * 3 + 1] = prim.normal[i * 3 + 1];
+        floats[lane(3) + v * 3 + 2] = prim.normal[i * 3 + 2];
+      } else {
+        floats[lane(3) + v * 3] = 0;
+        floats[lane(3) + v * 3 + 1] = 1;
+        floats[lane(3) + v * 3 + 2] = 0;
       }
+      floats[lane(6) + v * 2] = prim.uv ? prim.uv[i * 2] : 0;
+      floats[lane(6) + v * 2 + 1] = prim.uv ? prim.uv[i * 2 + 1] : 0;
+      for (let c = 0; c < 4; c++) {
+        if (remap && prim.joints) {
+          words[lane(8) + v * 4 + c] = remap[prim.joints[i * 4 + c]] ?? 0;
+          floats[lane(12) + v * 4 + c] = prim.weights ? prim.weights[i * 4 + c] : (c === 0 ? 1 : 0);
+        } else {
+          words[lane(8) + v * 4 + c] = c === 0 ? own_joint : 0;
+          floats[lane(12) + v * 4 + c] = c === 0 ? 1 : 0;
+        }
+      }
+      // The height, measured where the vertex stands at rest.
+      const at = remap ? $p : mat4_transform_point($p, world, x, y, z);
+      if (remap) {
+        at.x = x;
+        at.y = y;
+        at.z = z;
+      }
+      if (at.y < lo) lo = at.y;
+      if (at.y > hi) hi = at.y;
     }
-    const index = g.getIndex();
-    const n = index ? index.count : pos.count;
-    for (let i = 0; i < n; i++) words[lane(16) + i0 + i] = v0 + (index ? index.getX(i) : i);
-    v0 += pos.count;
-    i0 += n;
+    for (let i = 0; i < prim.index.length; i++) words[lane(16) + i0 + i] = v0 + prim.index[i];
+    v0 += count;
+    i0 += prim.index.length;
   }
 
   // Joints: parent, rest pose, what stands above a root, inverse bind.
   const row = FIXED_ALLOC.take(Float32Array, 42);
-  const identity = new THREE.Matrix4();
+  const inverse_bind_of = new Map<u32, Float32Array>();
+  if (skinned) {
+    for (const skin of gltf.skins) skin.joints.forEach((j, k) => inverse_bind_of.set(j, skin.inverse_bind.subarray(k * 16, k * 16 + 16)));
+  }
   for (let j = 0; j < joint_cnt; j++) {
-    const bone = bones[j];
-    if (!bone) {
+    const n = joint_nodes[j];
+    if (n === undefined) {
       row.set([0, 0, 0, 0, 0, 0, 1, 1, 1, 1], 0);
-      row.set(identity.elements, 10);
-      row.set(identity.elements, 26);
+      row.set(IDENTITY, 10);
+      row.set(IDENTITY, 26);
       pxl.pxl_model_joint(model, j, -1, row.byteOffset);
       continue;
     }
-    const parent = bone.parent ? bones.indexOf(bone.parent as THREE.Bone) : -1;
-    row.set([bone.position.x, bone.position.y, bone.position.z, bone.quaternion.x, bone.quaternion.y, bone.quaternion.z, bone.quaternion.w, bone.scale.x, bone.scale.y, bone.scale.z], 0);
-    row.set(parent < 0 && bone.parent ? bone.parent.matrixWorld.elements : identity.elements, 10);
-    row.set(skinned[0].skeleton.boneInverses[j].elements, 26);
+    const node = gltf.nodes[n];
+    const parent_node = node.parent;
+    const parent = parent_node >= 0 ? joint_of.get(parent_node) ?? -1 : -1;
+    row.set([...node.translation, ...node.rotation, ...node.scale], 0);
+    // A root joint under a node that is not one carries that node's world
+    // transform; a scene root carries nothing.
+    if (parent < 0 && parent_node >= 0) row.set(worlds[parent_node], 10);
+    else row.set(IDENTITY, 10);
+    row.set(inverse_bind_of.get(n) ?? IDENTITY, 26);
     pxl.pxl_model_joint(model, j, parent, row.byteOffset);
   }
   FIXED_ALLOC.give(row);
 
   // Clips: the channels on joints.
   const clips = new Map<string, u32>();
-  const by_name = new Map<string, u32>();
-  bones.forEach((b, j) => {
-    by_name.set(b.name, j);
-    by_name.set(THREE.PropertyBinding.sanitizeNodeName(b.name), j);
-  });
-  for (const clip of animations) {
-    const c = pxl.pxl_model_clip(model, clip.duration);
-    clips.set(clip.name, c);
-    for (const track of clip.tracks) {
-      const parsed = THREE.PropertyBinding.parseTrackName(track.name);
-      const joint = by_name.get(parsed.nodeName);
-      const path = PATHS[parsed.propertyName];
-      if (joint === undefined || path === undefined) continue;
-      const width = path === 1 ? 4 : 3;
-      const keys = track.times.length;
-      let values = track.values as Float32Array;
-      // Cubic spline keys carry in-tangent, value, out-tangent: the value.
-      if (values.length === keys * width * 3) {
-        const mid = new Float32Array(keys * width);
-        for (let k = 0; k < keys; k++) mid.set(values.subarray(k * width * 3 + width, k * width * 3 + width * 2), k * width);
-        values = mid;
-      }
+  for (const anim of gltf.animations) {
+    const c = pxl.pxl_model_clip(model, anim.duration);
+    clips.set(anim.name, c);
+    for (const channel of anim.channels) {
+      const joint = joint_of.get(channel.node);
+      if (joint === undefined) continue;
+      const width = channel.path === 1 ? 4 : 3;
+      const keys = channel.times.length;
       const times_lane = FIXED_ALLOC.take(Float32Array, keys);
       const values_lane = FIXED_ALLOC.take(Float32Array, keys * width);
-      times_lane.set(track.times);
-      values_lane.set(values.subarray(0, keys * width));
-      const step = track.getInterpolation() === THREE.InterpolateDiscrete ? 1 : 0;
-      pxl.pxl_model_channel(model, c, joint, path, step, keys, times_lane.byteOffset, values_lane.byteOffset);
+      times_lane.set(channel.times);
+      values_lane.set(channel.values.subarray(0, keys * width));
+      pxl.pxl_model_channel(model, c, joint, channel.path, channel.step ? 1 : 0, keys, times_lane.byteOffset, values_lane.byteOffset);
       FIXED_ALLOC.give(times_lane);
       FIXED_ALLOC.give(values_lane);
     }
   }
 
-  const box = new THREE.Box3().setFromObject(scene);
-  const raw = box.max.y - box.min.y;
-  pxl.pxl_model_seal(model, raw > 0 ? height_u / raw : 1);
-  return { model, clips };
+  const raw = hi - lo;
+  pxl.pxl_model_seal(model, height_u !== null && raw > 0 ? height_u / raw : 1);
+  return { model, clips, triangles: index_cnt / 3 };
 }

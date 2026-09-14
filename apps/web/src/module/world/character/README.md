@@ -9,13 +9,13 @@ person/pet uses), and renaming the folder to the engine's own tier name would
 make it read as a different thing from that settings surface when it's the
 same one.
 
-**What makes something an Actor, not one of the other tiers:** a full,
-unbaked GLTF scene graph cloned per instance (not merged/instanced the way
-decor's static population is — see `instanced_model.ts`'s own doc comment for
-that split), with position/animation driven imperatively in a step of the frame's
-tick (`sched/tick.ts`, the interaction phase) via refs rather than React
-state/props, at "a few, individually distinct"
-instance count. `companion.tsx`'s `Walker` (person + pet) is the only
+**What makes something an Actor, not one of the other tiers:** one of the
+module's actors (crates/pxl-core/src/model.rs) — a model played by its own
+clips, its joint palette written each tick — rather than an instance of a
+static model the way decor's population is, with position and animation
+driven imperatively in a step of the frame's tick (`sched/tick.ts`, the
+interaction phase) via refs rather than React state/props, at "a few,
+individually distinct" instance count. `companion.tsx`'s `Walker` (person + pet) is the only
 instance today.
 
 `chat_bubble.tsx` lives here too — it's not itself an Actor (it's a

@@ -148,7 +148,7 @@ export function HoverCursor() {
   // (it's about to dig into the terrain itself, not remove something placed
   // on it), so that case falls through to null here and gets its own VOID
   // marker color below instead. decor_id-carrying cases (decor mode, or an
-  // eraser hovering a decor entry) never reach this — decor_geometry below
+  // eraser hovering a decor entry) never reach this — decor_model below
   // gives them their own real silhouette+texture instead of a color swatch.
   //
   // Carving bare terrain resolves the same way. What the eraser removes
@@ -177,8 +177,8 @@ export function HoverCursor() {
   const decor_id = activeTool === "decor" ? ui_decor_id : hovered_object?.kind === "decor" ? hovered_object.decor_id : null;
   const decor_bundle = decor_id ? decor_bundle_for(decor_id) : null;
   const decor_assets = decor_assets_for(decor_bundle, useDecorAssets());
-  const decor_geometries = decor_assets?.geometries ?? EMPTY_ASSETS;
-  const decor_materials = decor_assets?.materials ?? EMPTY_ASSETS;
+  const decor_models = decor_assets?.models ?? EMPTY_ASSETS;
+  const decor_skins = decor_assets?.skins ?? EMPTY_ASSETS;
 
   // The exact `i` a real placement/hover resolves to — user_decor_pick is
   // pure and keyed only on this, so calling it here predicts (for a
@@ -186,12 +186,12 @@ export function HoverCursor() {
   // real variant/heading a real render would use, not an arbitrary stand-in.
   const decor_pick_i = activeTool === "decor" ? hovered?.i ?? null : hovered_object?.kind === "decor" ? hovered_object.i : null;
   const decor_pick = decor_bundle && decor_pick_i !== null ? user_decor_pick(decor_pick_i, decor_bundle.variants.length) : null;
-  const decor_geometry = decor_pick ? decor_geometries[decor_pick.variant] ?? null : null;
-  const decor_map = decor_pick ? decor_materials[decor_pick.variant]?.map ?? null : null;
-  // Both must be ready — an untextured white silhouette (geometry loaded,
-  // texture not yet) would read as a real rendering glitch, not a loading
-  // state, so this falls back to the flat box ghost until both resolve.
-  const is_decor_ghost = decor_geometry !== null && decor_map !== null;
+  const decor_model = decor_pick ? decor_models[decor_pick.variant] ?? null : null;
+  const decor_skin = decor_pick ? decor_skins[decor_pick.variant] ?? null : null;
+  // Both must be ready — an untextured white silhouette (model loaded, skin
+  // not yet) would read as a real rendering glitch, not a loading state, so
+  // this falls back to the flat box ghost until both resolve.
+  const is_decor_ghost = decor_model !== null && decor_skin !== null;
 
   // Without a texture the ghost falls back to the thing's own swatch, which
   // is the same question for a placed cube and for terrain — whether the

@@ -32,7 +32,6 @@ import { useAnchorRegistry } from "@/module/world/anchor/context.tsx";
 import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
 import { CORE_BUILD, FRAME } from "@/render/layer/pipeline/core_build.ts";
 import { world_wakers, WorldTopic } from "@/module/world/change.ts";
-import { decor_field } from "@/module/world/decor/field.ts";
 import { tile_pages } from "@/module/world/terrain/store.ts";
 import { poi_pages } from "@/module/world/poi/store.ts";
 import { fetch_pending_count } from "@/module/world/sched/fetch_scheduler.ts";
@@ -125,16 +124,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   const anchor_registry = useAnchorRegistry();
   const lead = useRef({ x: 0, y: 0, z: 0 }).current;
 
-  // Decor hangs off the anchor root rather than off any one chunk or page:
-  // it is one field for the whole world (decor/field.ts), and the root is the
-  // node whose frame every anchor group is already expressed in.
-  useLayoutEffect(() => {
-    anchor_registry.root.add(decor_field.group);
-    return () => {
-      anchor_registry.root.remove(decor_field.group);
-    };
-  }, [anchor_registry]);
-
   // What the visible phase measured, handed to the report phase below. A
   // ref rather than state: it is written and read inside one tick.
   const visible_pass = useRef<
@@ -215,13 +204,6 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     lod_build_stats.scan_count = built.scans + built.direct;
     lod_build_stats.direct_count = built.direct;
     lod_build_stats.build_count = built.bakes;
-    // After the commits, so a chunk's terrain and its decor reach the screen
-    // in the same frame — the ready-state desync the 2026-09-05 unification
-    // fixed, kept fixed now that decor is contributed rather than mounted.
-    decor_field.update(origin);
-    // The field is the eraser's hit test only; the WebGPU renderer draws
-    // decor from the module's blocks.
-    decor_field.group.visible = false;
     gpu_frame(state.viewport.dpr);
     if (draw) state.invalidate();
     if (import.meta.env.DEV) {

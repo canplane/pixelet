@@ -43,6 +43,18 @@ struct Clip {
     channels: Vec<Channel>,
 }
 
+/// Where a model's mesh is and how big, for a hit test (raycast.rs).
+#[derive(Clone, Copy)]
+pub struct MeshRef {
+    pub at: usize,
+    /// The renderer's buffer, once sealed.
+    pub handle: u32,
+    pub vertex_cnt: u32,
+    pub index_cnt: u32,
+    pub radius: f32,
+    pub scale: f32,
+}
+
 pub struct Model {
     at: usize,
     bytes: u32,
@@ -60,6 +72,9 @@ pub struct Model {
     order: Vec<u32>,
     /// What the mesh is scaled by to stand as tall as the glue measured.
     scale: f32,
+    /// How far a vertex reaches from the model's origin, unscaled: a
+    /// bounding sphere for a hit test to reject by.
+    radius: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -223,6 +238,7 @@ impl Models {
             clips: Vec::new(),
             order: Vec::new(),
             scale: 1.0,
+            radius: 0.0,
         };
         let id = match self.models.iter().position(|m| m.is_none()) {
             Some(k) => {
@@ -275,10 +291,15 @@ impl Models {
 
     /// The model is complete: its block goes to the GPU and its joints are
     /// ordered parent first.
-    pub fn seal(&mut self, draw: &mut DrawList, model: u32, scale: f32) {
+    ///
+    /// # Safety
+    /// `mem` is the memory the model's block was written in.
+    pub unsafe fn seal(&mut self, draw: &mut DrawList, mem: *const u8, model: u32, scale: f32) {
         let Some(Some(m)) = self.models.get_mut(model as usize) else { return };
         m.scale = scale;
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
+        let positions = core::slice::from_raw_parts(mem.add(m.at) as *const f32, m.vertex_cnt as usize * 3);
+        m.radius = positions.chunks_exact(3).map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
         let n = m.parent.len();
         let mut placed = vec![false; n];
         m.order.clear();
@@ -301,6 +322,20 @@ impl Models {
                 }
             }
         }
+    }
+
+    /// A model's mesh, for a hit test: where its block is, its counts, its
+    /// reach from the origin and its scale.
+    pub fn mesh(&self, model: u32) -> Option<MeshRef> {
+        let m = self.models.get(model as usize)?.as_ref()?;
+        Some(MeshRef {
+            at: m.at,
+            handle: m.handle,
+            vertex_cnt: m.vertex_cnt,
+            index_cnt: m.index_cnt,
+            radius: m.radius,
+            scale: m.scale,
+        })
     }
 
     /// Lets a model go, and every actor of it.
