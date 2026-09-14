@@ -135,7 +135,7 @@ export type BuildStat = {
 
 /** A packet of one branch, its children written by `fill` — what a message
  * carries (@pxl/shared/spec/cmd.ts). */
-function packet(fill: (b: BranchView) => void): U8Array {
+export function packet(fill: (b: BranchView) => void): U8Array {
   return encoder.encode(new TreeView().branch(fill));
 }
 
@@ -228,6 +228,19 @@ export class CoreBuild {
       }
       cq.advance();
     }
+  }
+
+  /** Sends a command that asks for no reply. It is applied at the module's
+   * next drain, tick or read, in the order it was sent. */
+  send(tag: u32, cmd: Cmd, pkt: U8Array | null = null): void {
+    this.submit(tag, cmd, pkt);
+  }
+
+  /** Applies every command sent so far, now, without handing out what they
+   * made: for a caller about to read what it changed, and safe inside a
+   * sink, since no sink runs. */
+  settle(): void {
+    this.pxl.pxl_drain();
   }
 
   /**

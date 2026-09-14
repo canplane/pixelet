@@ -97,6 +97,19 @@ arrived and hands the time back. What that decides about the boundary:
   (314 ns for a fourteen-double reply) are. At a pointer's rate that is
   under 50 µs a second, and what it points at is BACKLOG P1's "XTP encoder
   without per-leaf objects", not the ring.
+
+  The writes followed: an object leaf, a chunk's reindex and clearing the
+  store (`OBJECT_*`), what a leaf's state paints as (`STATE_UPDATE`), and
+  the tables taught once — the terrain's materials as one packet
+  (`TERRAIN_UPDATE`, where there were 1,024 calls) and every decor kind
+  with its rules as one (`DECOR_KIND_UPDATE`, where there was a call per
+  kind, rule and allowed type). A drain now applies every submission
+  waiting and holds back only what they make, in the module and in order,
+  until the completion ring has room; so the read exports still standing
+  (the object store's lanes, the reference paints) apply what waits first
+  and see every write sent before them, and the glue's `settle` does the
+  same without handing out a signal, for the reindex whose change log it
+  reads next.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

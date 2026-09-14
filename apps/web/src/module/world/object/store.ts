@@ -57,7 +57,8 @@ import {
 } from "@pxl/shared/spec/cell/mod.ts";
 import { FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
-import { CORE_BUILD } from "@/wasm/core_build.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { bump_world, request_world_tick, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import { TO_XY } from "@pxl/shared/spec/space/xy.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
@@ -447,7 +448,9 @@ const placed_snapshots = new Map<string, OccupiedEntry | null>();
 function reindex_chunk(base: IVec): void {
   const log = world_changes;
   const from = log.head;
-  pxl().pxl_object_reindex(base);
+  CORE_BUILD.send(0, Cmd.OBJECT_REINDEX, packet((p) => p.u64(BigInt.asUintN(64, base))));
+  // The change log is read below, so the reindex is applied now.
+  CORE_BUILD.settle();
   for (let c = from; c < log.head; c++) {
     const i = log.slot(c);
     if (log.topic[i] !== WorldTopic.OBJECT_CELL) continue;
@@ -823,7 +826,7 @@ function load(): void {
     if (raw) decode_objects(raw);
   } catch {
     // An unreadable blob starts the world empty, as a missing one does.
-    pxl().pxl_object_clear();
+    CORE_BUILD.send(0, Cmd.OBJECT_DELETE);
   }
 }
 
@@ -898,7 +901,7 @@ function write_object_value(i: IVec, f: FVec, size: f64, val: number): void {
   const level = Math.round(Math.log2(size));
   const at = lower(coord);
   const base = at.key;
-  pxl().pxl_object_write(base, at.band, at.x, at.y, at.z, level, val);
+  CORE_BUILD.send(0, Cmd.OBJECT_UPDATE, packet((p) => p.u64(BigInt.asUintN(64, base)).i32(at.band).u32(at.x).u32(at.y).u32(at.z).i32(level).u32(val)));
   if (restoring) return;
   save();
   reindex_chunk(base);

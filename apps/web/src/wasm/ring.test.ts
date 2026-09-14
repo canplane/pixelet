@@ -28,10 +28,11 @@ Deno.test("rings - the glue submits, one drain replies to each in order, and a f
   assertEquals(p.pxl_drain(), n);
   assertEquals(sq.len, 0);
 
-  // The completion ring is now full: new submissions wait in theirs.
+  // The completion ring is now full: new submissions are applied, and what
+  // they make waits in the module for room.
   for (let k = 0; k < 5; k++) sq.push(1000 + k, UNNUMBERED);
   assertEquals(p.pxl_drain(), 0, "nothing completes into a full ring");
-  assertEquals(sq.len, 5, "and nothing is dropped");
+  assertEquals(sq.len, 0, "they are applied; their replies wait in the module, and nothing is dropped");
 
   for (let k = 0; k < n; k++) {
     const at = cq.peek();

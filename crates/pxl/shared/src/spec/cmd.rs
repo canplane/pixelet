@@ -25,6 +25,24 @@ pub enum Major {
     RUNS = 0x05,
     DECOR = 0x06,
     RAY = 0x07,
+    OBJECT = 0x08,
+    STATE = 0x09,
+    TERRAIN = 0x0a,
+    DECOR_KIND = 0x0b,
+}
+
+/// An object store's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ObjectMinor {
+    REINDEX = 0x10,
+}
+
+/// A decor kind's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum DecorKindMinor {
+    MODEL = 0x10,
 }
 
 /// A chunk's own verbs, past the four every subject has.
@@ -63,6 +81,31 @@ pub enum Cmd {
     /// [hide: [column u64, band i32, pos u32] | null, carve: [column u64,
     /// lx f32, ly f32, lz f32, size f32] | null]
     EDIT_UPDATE = 0x0303,
+    /// [key u64, band_z i32, x u32, y u32, z u32, level i32, value u32] — one
+    /// leaf; the chunk's entries are not re-derived until OBJECT_REINDEX
+    OBJECT_UPDATE = 0x0803,
+    /// no packet — the whole store emptied
+    OBJECT_DELETE = 0x0804,
+    /// [key u64] — the chunk's entries and cells re-derived, and the change
+    /// recorded in the change log: the column in both topics, every cell
+    /// whose entries changed
+    OBJECT_REINDEX = 0x0810,
+    /// [state u32, kind u32 (1 solid, 2 air, 3 decor), material u32 (packed
+    /// 0xCC_RRGGBB), layer u32] — what a leaf's state paints as
+    STATE_UPDATE = 0x0903,
+    /// [base: [r u32, g u32, b u32, layer u32, class u32], channels: [land,
+    /// water, structure, transport: [class u32, rgb u8[768], has_color u8[256],
+    /// layer u8[256], has_layer u8[256]]]] — every table a cell's material is
+    /// read from, whole
+    TERRAIN_UPDATE = 0x0a03,
+    /// [kinds: [[tag u64, density f64, variant_count u32, align_transport
+    /// bool, extent f64, decor_value i32 (-1 none), rules: [land, water,
+    /// structure, transport: [mode u32 (0 any, 1 void, 2 one of), types u8[]]]]]]
+    /// — every decor kind, in group order, replacing what was taught
+    DECOR_KIND_UPDATE = 0x0b03,
+    /// [group u32, model u32] — the model a decor group is drawn with, for the
+    /// hit test
+    DECOR_KIND_MODEL = 0x0b10,
 
     // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
     //
@@ -98,7 +141,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 17] = [
+    const ALL: [Cmd; 24] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -107,6 +150,13 @@ impl Cmd {
         Cmd::PAGE_CREATE,
         Cmd::PAGE_DELETE,
         Cmd::EDIT_UPDATE,
+        Cmd::OBJECT_UPDATE,
+        Cmd::OBJECT_DELETE,
+        Cmd::OBJECT_REINDEX,
+        Cmd::STATE_UPDATE,
+        Cmd::TERRAIN_UPDATE,
+        Cmd::DECOR_KIND_UPDATE,
+        Cmd::DECOR_KIND_MODEL,
         Cmd::CHUNK_VISIBLE,
         Cmd::CHUNK_LAYOUT,
         Cmd::CHUNK_BLEND,
@@ -143,6 +193,13 @@ mod test {
             (PAGE_CREATE, Major::PAGE as u32, Minor::CREATE as u32),
             (PAGE_DELETE, Major::PAGE as u32, Minor::DELETE as u32),
             (EDIT_UPDATE, Major::EDIT as u32, Minor::UPDATE as u32),
+            (OBJECT_UPDATE, Major::OBJECT as u32, Minor::UPDATE as u32),
+            (OBJECT_DELETE, Major::OBJECT as u32, Minor::DELETE as u32),
+            (OBJECT_REINDEX, Major::OBJECT as u32, ObjectMinor::REINDEX as u32),
+            (STATE_UPDATE, Major::STATE as u32, Minor::UPDATE as u32),
+            (TERRAIN_UPDATE, Major::TERRAIN as u32, Minor::UPDATE as u32),
+            (DECOR_KIND_UPDATE, Major::DECOR_KIND as u32, Minor::UPDATE as u32),
+            (DECOR_KIND_MODEL, Major::DECOR_KIND as u32, DecorKindMinor::MODEL as u32),
             (TIER_CREATE, Major::TIER as u32, Minor::CREATE as u32),
             (TIER_DELETE, Major::TIER as u32, Minor::DELETE as u32),
             (RUNS_UPDATE, Major::RUNS as u32, Minor::UPDATE as u32),

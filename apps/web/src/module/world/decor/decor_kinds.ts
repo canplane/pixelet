@@ -48,7 +48,8 @@ import { shipped_palette } from "@pxl/shared/record/mod.ts";
 
 import { asset_url } from "@/lib/env/route.ts";
 import { type LodStep, TARGET_CELL_PX } from "@/module/world/lod.ts";
-import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 
 import { DECOR_RULE_CHANNELS, type DecorEligibility, type DecorKindSeed, type DecorRules } from "./scatter.ts";
 
@@ -166,27 +167,31 @@ export function kind_extent(bundle: DecorKindBundle): f64 {
  * decor_registry.ts, with the registry's own list.
  */
 export function teach_decor_kinds(bundles: readonly DecorKindBundle[]): void {
-  const pxl = CORE_PXL;
-  if (pxl === null) return;
-  pxl.pxl_decor_forget();
-  for (const bundle of bundles) {
-    const tag = BigInt.asUintN(64, bundle.seed.tag);
-    const kind = pxl.pxl_decor_kind(
-      Number(tag & 0xffffffffn),
-      Number(tag >> 32n),
-      bundle.seed.density,
-      bundle.seed.variant_count,
-      bundle.seed.orientation === "align_transport" ? 1 : 0,
-      kind_extent(bundle),
-      bundle.decor_id ? decor_num_id(bundle.decor_id) : -1,
-    );
-    DECOR_RULE_CHANNELS.forEach((channel, ch) => {
-      const rule = bundle.rules[channel];
-      if (rule === "any") return;
-      pxl.pxl_decor_rule(kind, ch, rule === "void" ? 1 : 2);
-      if (rule !== "void") { for (const t of rule) pxl.pxl_decor_allow(kind, ch, t); }
-    });
-  }
+  CORE_BUILD.send(
+    0,
+    Cmd.DECOR_KIND_UPDATE,
+    packet((p) =>
+      p.branch((kinds) => {
+        for (const bundle of bundles) {
+          kinds.branch((k) =>
+            k.u64(BigInt.asUintN(64, bundle.seed.tag))
+              .f64(bundle.seed.density)
+              .u32(bundle.seed.variant_count)
+              .bool(bundle.seed.orientation === "align_transport")
+              .f64(kind_extent(bundle))
+              .i32(bundle.decor_id ? decor_num_id(bundle.decor_id) : -1)
+              .branch((rules) => {
+                for (const channel of DECOR_RULE_CHANNELS) {
+                  const rule = bundle.rules[channel];
+                  const mode = rule === "any" ? 0 : rule === "void" ? 1 : 2;
+                  rules.branch((r) => r.u32(mode).u8_array(Uint8Array.from(mode === 2 ? rule as readonly number[] : [])));
+                }
+              })
+          );
+        }
+      })
+    ),
+  );
 }
 
 // Seeded purely by the placed object's own absolute position — unlike

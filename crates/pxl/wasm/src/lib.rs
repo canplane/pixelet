@@ -161,6 +161,14 @@ extern "C" {
     fn pxl_now() -> f64;
 }
 
+/// The state after every submission waiting is applied: what a read export
+/// takes, so a read sees each command sent before it.
+fn settled() -> &'static mut State {
+    let s = state();
+    drain(s);
+    s
+}
+
 fn state() -> &'static mut State {
     // SAFETY: the module runs on one thread and no export re-enters another,
     // so no two references to the state are live at once.
@@ -572,41 +580,13 @@ pub extern "C" fn pxl_scan_begin_volume(id: u32) -> u32 {
 // The glue teaches the materials (base, channel, type); reading and
 // painting a chunk by hand, and the lanes read back, are reference only.
 
-/// The material every terrain cell starts from: bare land.
-#[no_mangle]
-pub extern "C" fn pxl_terrain_base(r: u32, g: u32, b: u32, layer: u32, class: u32) {
-    let t = &mut state().terrain;
-    t.base_rgb = [r as u8, g as u8, b as u8];
-    t.base_layer = layer as u8;
-    t.base_class = class as u8;
-}
-
-/// The material class channel `ch` paints (0 land, 1 water, 2 structure,
-/// 3 transport).
-#[no_mangle]
-pub extern "C" fn pxl_terrain_channel(ch: u32, class: u32) {
-    state().terrain.channels[ch as usize].class = class as u8;
-}
-
-/// What type `type_id` of channel `ch` looks like: its colour, if it has
-/// one, and its texture-array layer, if it has one.
-#[no_mangle]
-pub extern "C" fn pxl_terrain_type(ch: u32, type_id: u32, r: u32, g: u32, b: u32, has_color: u32, layer: u32, has_layer: u32) {
-    let c = &mut state().terrain.channels[ch as usize];
-    let t = type_id as usize;
-    c.rgb[t] = [r as u8, g as u8, b as u8];
-    c.has_color[t] = has_color != 0;
-    c.layer[t] = layer as u8;
-    c.has_layer[t] = has_layer != 0;
-}
-
 /// Reads the chunk at page cell (tx0, ty0) of the page whose ground lanes
 /// (land, water, structure, transport; a type byte a cell) and padded
 /// elevation raster are at the addresses given: its cells' materials and
 /// tops, for pxl_terrain_paint and the lanes below. Returns the floor.
 #[no_mangle]
 pub extern "C" fn pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u32, transport_at: u32, ele_at: u32, tx0: u32, ty0: u32, show_structures: u32) -> i32 {
-    let s = state();
+    let s = settled();
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
     assert!(tx0 + CHUNK_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
@@ -631,7 +611,7 @@ pub extern "C" fn pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u3
 /// floor. 0 when a band could not be made.
 #[no_mangle]
 pub extern "C" fn pxl_terrain_paint(volume: u32) -> u32 {
-    let s = state();
+    let s = settled();
     let v = opened(&mut s.volumes);
     s.chunk.paint(v, &mut s.pools, volume as usize - 1) as u32
 }
@@ -660,12 +640,8 @@ pub extern "C" fn pxl_terrain_ele_at() -> u32 {
 // finest-tier steps, and the level. What comes back is lanes to take views
 // over, valid until the next write or reindex. The store is the glue's
 // (module/world/object/store.ts); pxl_object_paint is reference only.
-
-/// Writes one leaf; the entries are not re-derived until pxl_object_reindex.
-#[no_mangle]
-pub extern "C" fn pxl_object_write(key: u64, band_z: i32, x: u32, y: u32, z: u32, level: i32, value: u32) {
-    state().objects.write(key, band_z, [x, y, z], level, value);
-}
+// Writes are commands in the rings; a read here applies what waits first,
+// so it sees every write sent before it.
 
 /// module/world/change.ts's WorldTopic numbers the store bumps, and the
 /// log's shape.
@@ -678,9 +654,7 @@ pub const JOURNAL_CAPACITY: u32 = 4096;
 /// Re-derives the chunk's entries and cells, and records the change: the
 /// column in both of its topics, and every cell whose entries changed, by
 /// its corner.
-#[no_mangle]
-pub extern "C" fn pxl_object_reindex(key: u64) {
-    let s = state();
+fn reindex_object(s: &mut State, key: u64) {
     s.objects.reindex(key);
     s.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
     s.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
@@ -724,14 +698,14 @@ pub extern "C" fn pxl_change_revision(topic: u32, key: u64) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn pxl_object_read(key: u64, band_z: i32, x: u32, y: u32, z: u32) -> u32 {
-    state().objects.read(key, band_z, [x, y, z])
+    settled().objects.read(key, band_z, [x, y, z])
 }
 
 /// The chunk's entry lanes as a row — count, then the addresses of the
 /// band, position and state lanes — or 0 where there is no chunk.
 #[no_mangle]
 pub extern "C" fn pxl_object_chunk(key: u64) -> u32 {
-    let s = state();
+    let s = settled();
     match s.objects.chunk_lanes(key) {
         Some(lanes) => {
             s.object_row = [lanes.count, lanes.band_at as u32, lanes.pos_at as u32, lanes.state_at as u32];
@@ -745,7 +719,7 @@ pub extern "C" fn pxl_object_chunk(key: u64) -> u32 {
 /// many occupy it — or 0 where the cell holds none.
 #[no_mangle]
 pub extern "C" fn pxl_object_cell(key: u64, cx: u32, cy: u32, cz: i32) -> u32 {
-    let s = state();
+    let s = settled();
     match s.objects.cell(key, cx, cy, cz) {
         Some(rec) => {
             s.object_row = [rec.start, rec.count, rec.solid, 0];
@@ -757,38 +731,20 @@ pub extern "C" fn pxl_object_cell(key: u64, cx: u32, cy: u32, cz: i32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn pxl_object_chunks() -> u32 {
-    state().objects.chunk_count() as u32
+    settled().objects.chunk_count() as u32
 }
 
 #[no_mangle]
 pub extern "C" fn pxl_object_chunk_key(i: u32) -> u64 {
-    state().objects.chunk_key(i as usize)
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_object_clear() {
-    state().objects.clear();
+    settled().objects.chunk_key(i as usize)
 }
 
 /// Chunks, bands and cells held, as a row.
 #[no_mangle]
 pub extern "C" fn pxl_object_stat() -> u32 {
-    let s = state();
+    let s = settled();
     s.object_row = [s.objects.chunk_count() as u32, s.objects.band_count() as u32, s.objects.cell_count() as u32, 0];
     s.object_row.as_ptr() as u32
-}
-
-/// Teaches what a state paints as: 1 a solid of `material` (packed
-/// 0xCC_RRGGBB) on `layer`, 2 air, 3 decor, which paints nothing.
-#[no_mangle]
-pub extern "C" fn pxl_object_kind(state_id: u32, kind: u32, material: u32, layer: u32) {
-    let kind = match kind {
-        1 => Kind::Solid,
-        2 => Kind::Air,
-        3 => Kind::Decor,
-        _ => Kind::Untaught,
-    };
-    state().painter.teach(state_id, kind, material, layer as u8);
 }
 
 /// Paints the column `key` into `volume`, leaving out the entry at
@@ -797,7 +753,7 @@ pub extern "C" fn pxl_object_kind(state_id: u32, kind: u32, material: u32, layer
 /// voxel was painted; bit 1: a paint was refused.
 #[no_mangle]
 pub extern "C" fn pxl_object_paint(volume: u32, key: u64, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: f64, ly: f64, lz: f64, size: f64) -> u32 {
-    let s = state();
+    let s = settled();
     let v = opened(&mut s.volumes);
     let hide = if hide != 0 { Some((hide_band, hide_pos)) } else { None };
     let carve = if carve != 0 { Some(Carve { lx, ly, lz, size }) } else { None };
@@ -868,10 +824,6 @@ pub extern "C" fn pxl_ring_cq() -> u32 {
 #[no_mangle]
 pub extern "C" fn pxl_frame_at() -> u32 {
     state().frame.as_ptr() as u32
-}
-
-fn key(lo: u32, hi: u32) -> u64 {
-    lo as u64 | ((hi as u64) << 32)
 }
 
 /// A packet of one branch, its children written by `f`.
@@ -1009,12 +961,21 @@ fn i32_at(b: &BranchCursor, i: u32) -> Result<i32, MarshalError> {
     Ok(b.at(i)?.get_number()? as i32)
 }
 
-fn f32_at(b: &BranchCursor, i: u32) -> Result<f64, MarshalError> {
+fn number_at(b: &BranchCursor, i: u32) -> Result<f64, MarshalError> {
     b.at(i)?.get_number()
 }
 
 fn u64_at(b: &BranchCursor, i: u32) -> Result<u64, MarshalError> {
     Ok(b.at(i)?.get_bigint()? as u64)
+}
+
+/// A u8 lane of exactly `len` elements.
+fn bytes_at(b: &BranchCursor, i: u32, len: usize) -> Result<xpute_core::kit::array::U8Array, MarshalError> {
+    let a = b.at(i)?.get_array::<u8>()?;
+    if len != usize::MAX && a.length() != len {
+        return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a lane of {} bytes, not {len}", a.length())), None));
+    }
+    Ok(a)
 }
 
 fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
@@ -1038,6 +999,93 @@ fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
 /// as the command's replies with its errno.
 fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<(i32, Option<U8Array>)>, MarshalError> {
     let Some(cmd) = Cmd::of(number) else { return Ok(None) };
+    match cmd {
+        Cmd::OBJECT_UPDATE => {
+            let f = fields(pkt)?;
+            s.objects
+                .write(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?], i32_at(&f, 5)?, u32_at(&f, 6)?);
+            return Ok(Some((0, None)));
+        }
+        Cmd::OBJECT_DELETE => {
+            s.objects.clear();
+            return Ok(Some((0, None)));
+        }
+        Cmd::OBJECT_REINDEX => {
+            let key = u64_at(&fields(pkt)?, 0)?;
+            reindex_object(s, key);
+            return Ok(Some((0, None)));
+        }
+        Cmd::STATE_UPDATE => {
+            let f = fields(pkt)?;
+            let kind = match u32_at(&f, 1)? {
+                1 => Kind::Solid,
+                2 => Kind::Air,
+                3 => Kind::Decor,
+                _ => Kind::Untaught,
+            };
+            s.painter.teach(u32_at(&f, 0)?, kind, u32_at(&f, 2)?, u32_at(&f, 3)? as u8);
+            return Ok(Some((0, None)));
+        }
+        Cmd::TERRAIN_UPDATE => {
+            let f = fields(pkt)?;
+            let base = f.at(0)?.as_branch()?;
+            let channels = f.at(1)?.as_branch()?;
+            let t = &mut s.terrain;
+            t.base_rgb = [u32_at(&base, 0)? as u8, u32_at(&base, 1)? as u8, u32_at(&base, 2)? as u8];
+            t.base_layer = u32_at(&base, 3)? as u8;
+            t.base_class = u32_at(&base, 4)? as u8;
+            for (ch, dst) in t.channels.iter_mut().enumerate() {
+                let c = channels.at(ch as u32)?.as_branch()?;
+                let (rgb, has_color, layer, has_layer) = (bytes_at(&c, 1, 768)?, bytes_at(&c, 2, 256)?, bytes_at(&c, 3, 256)?, bytes_at(&c, 4, 256)?);
+                dst.class = u32_at(&c, 0)? as u8;
+                for k in 0..256 {
+                    dst.rgb[k] = [rgb[k * 3], rgb[k * 3 + 1], rgb[k * 3 + 2]];
+                    dst.has_color[k] = has_color[k] != 0;
+                    dst.layer[k] = layer[k];
+                    dst.has_layer[k] = has_layer[k] != 0;
+                }
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::DECOR_KIND_UPDATE => {
+            let kinds = fields(pkt)?.at(0)?.as_branch()?;
+            s.sched.decor_forget();
+            for k in kinds.iter() {
+                let k = k?.as_branch()?;
+                let value = i32_at(&k, 5)?;
+                let idx = s.sched.decor_kind(DecorKind {
+                    tag: u64_at(&k, 0)?,
+                    density: number_at(&k, 1)?,
+                    variant_count: u32_at(&k, 2)?,
+                    align_transport: bool_at(&k, 3)?,
+                    extent: number_at(&k, 4)?,
+                    decor_value: (value >= 0).then_some(value as u32),
+                    rules: [DecorRule::Any; 4],
+                });
+                let rules = k.at(6)?.as_branch()?;
+                for ch in 0..4 {
+                    let r = rules.at(ch)?.as_branch()?;
+                    match u32_at(&r, 0)? {
+                        0 => {}
+                        1 => s.sched.decor_rule(idx, ch as usize, DecorRule::Void),
+                        _ => {
+                            s.sched.decor_rule(idx, ch as usize, DecorRule::OneOf([0; 4]));
+                            for &t in bytes_at(&r, 1, usize::MAX)?.as_slice() {
+                                s.sched.decor_allow(idx, ch as usize, t);
+                            }
+                        }
+                    }
+                }
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::DECOR_KIND_MODEL => {
+            let f = fields(pkt)?;
+            s.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
+            return Ok(Some((0, None)));
+        }
+        _ => {}
+    }
     let Parts {
         mut world, events, sched, raycast, ..
     } = parts(s);
@@ -1082,10 +1130,10 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 Some(c) => Some((
                     u64_at(&c, 0)?,
                     Carve {
-                        lx: f32_at(&c, 1)?,
-                        ly: f32_at(&c, 2)?,
-                        lz: f32_at(&c, 3)?,
-                        size: f32_at(&c, 4)?,
+                        lx: number_at(&c, 1)?,
+                        ly: number_at(&c, 2)?,
+                        lz: number_at(&c, 3)?,
+                        size: number_at(&c, 4)?,
                     },
                 )),
             };
@@ -1131,6 +1179,9 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 })),
             )));
         }
+        Cmd::OBJECT_UPDATE | Cmd::OBJECT_DELETE | Cmd::OBJECT_REINDEX | Cmd::STATE_UPDATE | Cmd::TERRAIN_UPDATE | Cmd::DECOR_KIND_UPDATE | Cmd::DECOR_KIND_MODEL => {
+            unreachable!("applied before the parts are taken")
+        }
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
@@ -1138,14 +1189,15 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
     Ok(Some((0, None)))
 }
 
-/// Applies every submission waiting, as far as the completion ring has room
-/// for what they make: a submission left behind waits for the next call,
-/// and nothing is dropped. Replies to what asks (`ACKREQ`), and to what
-/// failed — a command nobody numbers, a packet that does not read — since a
-/// command's effect is otherwise its signals.
+/// Applies every submission waiting. What they make goes into the completion
+/// ring as far as it has room; the rest waits in the module, in order, for
+/// the next call — nothing is dropped, and nothing sent waits to be applied,
+/// which is what lets a read see every write before it. Replies to what asks
+/// (`ACKREQ`), and to what failed — a command nobody numbers, a packet that
+/// does not read — since a command's effect is otherwise its signals.
 fn drain(s: &mut State) -> u32 {
     let mut posted = flush(s);
-    while s.cq.len() < s.cq.capacity && s.events.is_empty() && s.replies.is_empty() {
+    loop {
         let at = s.sq.peek();
         if at < 0 {
             break;
@@ -1584,57 +1636,10 @@ pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
     after(s);
 }
 
-/// Forgets every decor kind taught, so the glue can teach the list again
-/// (a module of it re-evaluated by the dev server) without the groups
-/// doubling.
-#[no_mangle]
-pub extern "C" fn pxl_decor_forget() {
-    state().sched.decor_forget();
-}
-
-/// Teaches a decor kind, in group order: its tag, density, variant count,
-/// whether it aligns to transport, its extent in units, and the object
-/// store's value a placed one carries (-1 for none). Its index.
-#[no_mangle]
-pub extern "C" fn pxl_decor_kind(tag_lo: u32, tag_hi: u32, density: f64, variant_count: u32, align_transport: u32, extent: f64, decor_value: i32) -> u32 {
-    state().sched.decor_kind(DecorKind {
-        tag: key(tag_lo, tag_hi),
-        density,
-        variant_count,
-        align_transport: align_transport != 0,
-        extent,
-        decor_value: (decor_value >= 0).then_some(decor_value as u32),
-        rules: [DecorRule::Any; 4],
-    })
-}
-
-/// A kind's rule on a channel (land 0, water 1, structure 2, transport 3):
-/// 0 any type, 1 void only, 2 one of the types `pxl_decor_allow` adds.
-#[no_mangle]
-pub extern "C" fn pxl_decor_rule(kind: u32, channel: u32, mode: u32) {
-    let rule = match mode {
-        0 => DecorRule::Any,
-        1 => DecorRule::Void,
-        _ => DecorRule::OneOf([0; 4]),
-    };
-    state().sched.decor_rule(kind, channel as usize & 3, rule);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_decor_allow(kind: u32, channel: u32, t: u32) {
-    state().sched.decor_allow(kind, channel as usize & 3, t as u8);
-}
-
 /// The renderer's handle for a model's mesh block, 0 before it is sealed.
 #[no_mangle]
 pub extern "C" fn pxl_model_handle(model: u32) -> u32 {
     state().sched.models.mesh(model).map_or(0, |m| m.handle)
-}
-
-/// The model decor group `group` is drawn with, for the hit test.
-#[no_mangle]
-pub extern "C" fn pxl_decor_model(group: u32, model: u32) {
-    state().sched.decor_model(group, model);
 }
 
 /// The builder alone over the `order_len` ids at `order_at`, for the tests

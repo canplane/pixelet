@@ -26,6 +26,8 @@ import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { load_gltf, load_image } from "@/render/gltf/load.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { bump_world, world_changes, world_wakers, WorldTopic } from "@/module/world/change.ts";
 import type { DecorKindBundle, DecorVariantAsset } from "./decor_kinds.ts";
 import { DECOR_BUNDLES } from "./decor_registry.ts";
@@ -58,14 +60,11 @@ function build_snapshot(): readonly DecorBundleAssets[] {
 function publish(url: string): void {
   snapshot = build_snapshot();
   // The group each variant is drawn as, told to the module for its hit test.
-  const p = CORE_PXL;
-  if (p) {
-    let group: u32 = 0;
-    for (const { models } of snapshot) {
-      for (const model of models) {
-        if (model) p.pxl_decor_model(group, model.model);
-        group++;
-      }
+  let group: u32 = 0;
+  for (const { models } of snapshot) {
+    for (const model of models) {
+      if (model) CORE_BUILD.send(0, Cmd.DECOR_KIND_MODEL, packet((p) => p.u32(group).u32(model.model)));
+      group++;
     }
   }
   bump_world(WorldTopic.DECOR_ASSET, fnv1a64_str(url));
