@@ -26,7 +26,6 @@ import { Interrupt } from "@xpute/core/ipc/cmd.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 
-import type { LodStep } from "@/module/world/lod.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
 import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_carve, decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
@@ -34,6 +33,9 @@ import { CORE_POOL, CORE_PXL, CORE_RING } from "@/wasm/core_pool.ts";
 import { type CoreRing, packet } from "@/wasm/core_ring.ts";
 
 export { packet };
+
+/** A tier's step as the kernel numbers it (crates/pxl/core/src/module/world/lod.rs's LodStep). */
+type LodStep = u32;
 
 /** Hands one baked mesh's block back to the core pool. Every view into it is
  * dead afterwards. */
