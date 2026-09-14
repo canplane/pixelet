@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { SectionTitle } from "@/app/setting/setting_row.tsx";
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { PUBLISHED_VERSION } from "@/lib/env/route.ts";
-import { OBJECT_STORAGE_VERSION } from "@/module/world/object/store.ts";
+import { useKernel } from "@/wasm/kernel.ts";
 
 const env_label: string = APP_ENV.charAt(0).toUpperCase() + APP_ENV.slice(1);
 
@@ -19,6 +19,7 @@ function build_label(): string {
 
 export function AboutSection() {
   const { t } = useTranslation();
+  const object_storage_version = useKernel((s) => s.object_storage_version);
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
@@ -37,7 +38,7 @@ export function AboutSection() {
           {`${BUILD_NUMBER} · ${BUILD_ID} · ${build_label()}`}
           {` · ${PUBLISHED_TILES ? `Terrain ${PUBLISHED_VERSION.terrain}` : "Live terrain"}`}
           {` · ${PUBLISHED_TILES ? `POI ${PUBLISHED_VERSION.poi}` : "Live POI"}`}
-          {` · Object v${OBJECT_STORAGE_VERSION}`}
+          {` · Object v${object_storage_version}`}
         </span>
       </div>
     </div>
