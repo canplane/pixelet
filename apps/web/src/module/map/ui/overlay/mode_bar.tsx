@@ -10,7 +10,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text_field.tsx";
 import { useAppContext } from "@/app/provider/app_context.ts";
-import { useUiStore } from "@/app/store/ui_store.ts";
+import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 import { type DecorId, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/module/world/object/size.ts";
 import { cube_swatch_style } from "./cube_swatch.ts";
@@ -48,7 +48,7 @@ const FLYOUT_HOLD_MS = 150;
 const FLYOUT_AXIS_PX = 12;
 
 function use_size_flyout(on_activate: () => void) {
-  const set_object_size = useUiStore((state) => state.set_object_size);
+  const set_object_size = (size: f64) => kernel_action({ type: "set_object_size", size });
 
   const [menu_open, set_menu_open] = useState(false);
   const [drag_index, set_drag_index] = useState<number | null>(null);
@@ -189,10 +189,10 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
 
 function ColorSwatchButton({ id }: { id: PlaceableCubeId }) {
   const { t } = useTranslation();
-  const activeTool = useUiStore((state) => state.activeTool);
-  const object_color_id = useUiStore((state) => state.object_color_id);
-  const object_size = useUiStore((state) => state.object_size);
-  const select_cube = useUiStore((state) => state.select_cube);
+  const activeTool = useKernel((s) => s.ui.active_tool);
+  const object_color_id = useKernel((s) => s.ui.object_color_id);
+  const object_size = useKernel((s) => s.ui.object_size);
+  const select_cube = (cube: PlaceableCubeId) => kernel_action({ type: "select_cube", id: cube });
 
   const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => select_cube(id));
   const tiers = size_tiers_for(id);
@@ -225,9 +225,9 @@ function ColorSwatchButton({ id }: { id: PlaceableCubeId }) {
 // is fixed, object/size.ts), so this stays a plain tap button.
 function DecorIconButton({ id }: { id: DecorId }) {
   const { t } = useTranslation();
-  const activeTool = useUiStore((state) => state.activeTool);
-  const decor_id = useUiStore((state) => state.decor_id);
-  const select_decor = useUiStore((state) => state.select_decor);
+  const activeTool = useKernel((s) => s.ui.active_tool);
+  const decor_id = useKernel((s) => s.ui.decor_id);
+  const select_decor = (decor: DecorId) => kernel_action({ type: "select_decor", id: decor });
   const Icon = DECOR_ICONS[id];
   const active = activeTool === "decor" && decor_id === id;
 
@@ -260,10 +260,10 @@ export function ModeBar() {
   const { t } = useTranslation();
   const { ui } = useAppContext();
   const [mode, set_mode] = useState<ModeId>("palette");
-  const activeTool = useUiStore((state) => state.activeTool);
-  const set_activeTool = useUiStore((state) => state.set_activeTool);
-  const recent_picks = useUiStore((state) => state.recent_picks);
-  const append_chat_line = useUiStore((state) => state.append_chat_line);
+  const activeTool = useKernel((s) => s.ui.active_tool);
+  const set_activeTool = (tool: "pointer" | "eraser") => kernel_action({ type: "set_active_tool", tool });
+  const recent_picks = useKernel((s) => s.ui.recent_picks);
+  const append_chat_line = (text: string) => kernel_action({ type: "append_chat_line", text });
   const [message_text, set_message_text] = useState("");
   const [is_sending, set_is_sending] = useState(false);
   const input_ref = useRef<HTMLInputElement | null>(null);
@@ -508,7 +508,7 @@ export function ModeBar() {
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {recent_picks.map((pick) => pick.kind === "object" ? <ColorSwatchButton key={`object:${pick.id}`} id={pick.id} /> : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />)}
+                    {recent_picks.map((pick) => pick.kind === "object" ? <ColorSwatchButton key={`object:${pick.id}`} id={pick.id as PlaceableCubeId} /> : <DecorIconButton key={`decor:${pick.id}`} id={pick.id as DecorId} />)}
                   </div>
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />

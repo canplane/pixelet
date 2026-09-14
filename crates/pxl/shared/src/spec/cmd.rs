@@ -255,6 +255,7 @@ pub enum LoadMinor {
 pub enum WorldMinor {
     LANES = 0x10,
     ACTION = 0x11,
+    SHEET = 0x12,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -591,6 +592,11 @@ pub enum Cmd {
     WORLD_LANES = 0x1b10,
     /// tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not
     WORLD_ACTION = 0x1b11,
+    /// tag call · [generation u32] → [whole bool, size u32, generation u32, entries: [[x u32,
+    /// y u32, w u32, h u32, kind u32 (0 place, 1 cluster, 2 bubble), icon str, color str, text
+    /// str (a bubble's lines joined by \n), logical_w f64, box_h f64]]] — the badge sheet's
+    /// flush: every live entry when the sheet was replaced, else the entries drawn since
+    WORLD_SHEET = 0x1b12,
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
     INPUT_UPDATE = 0x1c03,
     /// [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
@@ -638,7 +644,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 116] = [
+    const ALL: [Cmd; 117] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -738,6 +744,7 @@ impl Cmd {
         Cmd::WORLD_READ,
         Cmd::WORLD_LANES,
         Cmd::WORLD_ACTION,
+        Cmd::WORLD_SHEET,
         Cmd::INPUT_UPDATE,
         Cmd::INPUT_POINTER,
         Cmd::INPUT_WHEEL,
@@ -870,6 +877,7 @@ mod test {
             (WORLD_READ, Major::WORLD as u32, Minor::READ as u32),
             (WORLD_LANES, Major::WORLD as u32, WorldMinor::LANES as u32),
             (WORLD_ACTION, Major::WORLD as u32, WorldMinor::ACTION as u32),
+            (WORLD_SHEET, Major::WORLD as u32, WorldMinor::SHEET as u32),
             (INPUT_UPDATE, Major::INPUT as u32, Minor::UPDATE as u32),
             (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
             (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),

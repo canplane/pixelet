@@ -601,6 +601,10 @@
         {
           "name": "ACTION",
           "value": 17
+        },
+        {
+          "name": "SHEET",
+          "value": 18
         }
       ]
     },
@@ -1448,6 +1452,16 @@
           "value": 6929,
           "doc": [
             "tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not"
+          ]
+        },
+        {
+          "name": "WORLD_SHEET",
+          "value": 6930,
+          "doc": [
+            "tag call · [generation u32] → [whole bool, size u32, generation u32, entries: [[x u32,",
+            "y u32, w u32, h u32, kind u32 (0 place, 1 cluster, 2 bubble), icon str, color str, text",
+            "str (a bubble's lines joined by \\n), logical_w f64, box_h f64]]] — the badge sheet's",
+            "flush: every live entry when the sheet was replaced, else the entries drawn since"
           ]
         },
         {

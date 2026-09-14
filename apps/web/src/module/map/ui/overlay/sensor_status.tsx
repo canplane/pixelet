@@ -3,59 +3,39 @@
 import { Compass, Locate } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { DevicePoseStatus, useDeviceLocationStore, useDeviceOrientationStore } from "@/module/device/pose/store.ts";
-import { useDeviceOrientation } from "@/module/device/pose/use_device_orientation.ts";
-import { useGeolocation } from "@/module/device/pose/use_geolocation.ts";
+import { kernel_action, type PoseStatus, useKernel } from "@/wasm/kernel.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 
-function status_class(status: DevicePoseStatus): string {
+function status_class(status: PoseStatus): string {
   switch (status) {
-    case DevicePoseStatus.READY:
+    case "ready":
       return "text-emerald-500";
-    case DevicePoseStatus.LOADING:
+    case "loading":
       return "text-amber-400 animate-pulse";
-    case DevicePoseStatus.ERROR:
+    case "error":
       return "text-red-400";
-    case DevicePoseStatus.IDLE:
+    case "idle":
     default:
       return "text-[#5B4636]/30";
   }
 }
 
 // DeviceOrientationEvent.requestPermission() only runs inside a direct user
-// gesture on iOS Safari; use_device_orientation.ts deliberately doesn't
-// auto-start there, so this control is the only route to that permission.
+// gesture on iOS Safari, and the kernel deliberately doesn't auto-start it
+// there, so this control is the only route to that permission.
 export function SensorStatus() {
   const { t } = useTranslation();
 
-  const location_status = useDeviceLocationStore((state) => state.status);
-  const orientation_status = useDeviceOrientationStore((state) => state.status);
+  const location_status = useKernel((s) => s.location.status);
+  const orientation_status = useKernel((s) => s.orientation.status);
 
-  const { request_orientation } = useDeviceOrientation();
-  const { start_watching } = useGeolocation();
-
-  const can_request: boolean = location_status !== DevicePoseStatus.READY ||
-    orientation_status !== DevicePoseStatus.READY;
-
-  function on_click() {
-    // Orientation first, synchronously: Safari consumes the gesture's user
-    // activation, so a requestPermission() reached after an await can be
-    // rejected for coming from outside it.
-    request_orientation().catch((err) => console.error("[sensor_status] orientation request failed:", err));
-    start_watching();
-  }
+  const can_request: boolean = location_status !== "ready" || orientation_status !== "ready";
 
   const icons = (
     <>
-      <Locate
-        className={cn("w-3.5 h-3.5 transition-colors duration-500", status_class(location_status))}
-        strokeWidth={2.5}
-      />
-      <Compass
-        className={cn("w-3.5 h-3.5 transition-colors duration-500", status_class(orientation_status))}
-        strokeWidth={2.5}
-      />
+      <Locate className={cn("w-3.5 h-3.5 transition-colors duration-500", status_class(location_status))} strokeWidth={2.5} />
+      <Compass className={cn("w-3.5 h-3.5 transition-colors duration-500", status_class(orientation_status))} strokeWidth={2.5} />
     </>
   );
 
@@ -64,7 +44,7 @@ export function SensorStatus() {
   return (
     <button
       type="button"
-      onClick={on_click}
+      onClick={() => kernel_action({ type: "enable_sensors" })}
       className="flex items-center gap-2 -m-2 p-2 cursor-pointer pointer-events-auto"
       title={t("map.sensors.enable")}
       aria-label={t("map.sensors.enable")}
