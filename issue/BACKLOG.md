@@ -89,7 +89,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the TypeScript walk of the world, the ray LRU with its layer
      revisions, and the temporary composite for a drawn build. The
      TypeScript composite and the chunk walk stay as the references.
-     What is left outside the module, and the line it moves to — JavaScript
+     Before the moves, the audit after the move
+     ([20260914-the-audit-after-the-move.md](./20260914-the-audit-after-the-move.md)):
+     what the port got wrong against three's picture (four regressions
+     fixed and deployed as b9), then safety, hot paths, duplication, dead
+     code, comments and tests, worked in six steps with the gate green
+     after each. What is left outside the module, and the line it moves to — JavaScript
      keeps what the browser provides, interrupts, I/O and the UI, and
      nothing that holds or decides the world's state
      ([20260914-what-stays-in-javascript.md](./20260914-what-stays-in-javascript.md))
