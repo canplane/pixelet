@@ -32,6 +32,10 @@ export const enum Major {
 /** An object store's own verb. */
 export const enum ObjectMinor {
   REINDEX = 0x10,
+  LANES = 0x11,
+  CELL = 0x12,
+  COLUMNS = 0x13,
+  STAT = 0x14,
 }
 
 /** A decor kind's own verb. */
@@ -131,4 +135,19 @@ export const enum Cmd {
   /** tag call · [ray f64[9]] → [hit f64[14]: material class, normal ×3,
    * point ×3, t, box min ×3, box max ×3] */
   RAY_READ = 0x0702,
+  /** tag call · [key u64, band_z i32, x u32, y u32, z u32] → result: the
+   * state stored at the leaf, VOID where nothing is */
+  OBJECT_READ = 0x0802,
+  /** tag call · [key u64] → result: the chunk's entry count, 0 where it
+   * holds none; with entries, [band_at u32, pos_at u32, state_at u32] — the
+   * addresses of its lanes, valid until the next write or reindex */
+  OBJECT_LANES = 0x0811,
+  /** tag call · [key u64, cx u32, cy u32, cz i32] → result 1 where the cell
+   * holds entries, 0 where not; with them, [start u32, count u32, solid u32] */
+  OBJECT_CELL = 0x0812,
+  /** tag call · no packet → [keys u64[]]: the columns holding objects, in
+   * the store's order */
+  OBJECT_COLUMNS = 0x0813,
+  /** tag call · no packet → [chunks u32, bands u32, cells u32] */
+  OBJECT_STAT = 0x0814,
 }

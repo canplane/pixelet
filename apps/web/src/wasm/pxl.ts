@@ -63,12 +63,6 @@ export type PxlExports = {
   pxl_terrain_material_at(): u32;
   pxl_terrain_layer_at(): u32;
   pxl_terrain_ele_at(): u32;
-  pxl_object_read(key: bigint, band_z: i32, x: u32, y: u32, z: u32): u32;
-  pxl_object_chunk(key: bigint): u32;
-  pxl_object_cell(key: bigint, cx: u32, cy: u32, cz: i32): u32;
-  pxl_object_chunks(): u32;
-  pxl_object_chunk_key(i: u32): bigint;
-  pxl_object_stat(): u32;
   pxl_column_runs(id: u32, cx: u32, cy: u32): u32;
   pxl_column_runs_at(): u32;
   pxl_ring_sq(): u32;

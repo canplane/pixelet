@@ -82,7 +82,6 @@ struct State {
     /// The object store, its painter, and the rows its lookups answer in.
     objects: Store,
     painter: Painter,
-    object_row: [u32; 4],
     /// The raycast's column, and the row naming its lanes.
     column: ColumnRuns,
     column_row: [u32; 4],
@@ -191,7 +190,6 @@ fn state() -> &'static mut State {
                 chunk: ChunkSample::default(),
                 objects: Store::new(),
                 painter: Painter::new(),
-                object_row: [0; 4],
                 column: ColumnRuns::new(),
                 column_row: [0; 4],
                 sq: new_ring(RING_CAPACITY),
@@ -640,8 +638,9 @@ pub extern "C" fn pxl_terrain_ele_at() -> u32 {
 // finest-tier steps, and the level. What comes back is lanes to take views
 // over, valid until the next write or reindex. The store is the glue's
 // (module/world/object/store.ts); pxl_object_paint is reference only.
-// Writes are commands in the rings; a read here applies what waits first,
-// so it sees every write sent before it.
+// Writes and reads alike are commands in the rings (pxl_shared::spec::cmd's
+// OBJECT_*); the reference paint below applies what waits first, so it sees
+// every write sent before it.
 
 /// module/world/change.ts's WorldTopic numbers the store bumps, and the
 /// log's shape.
@@ -694,57 +693,6 @@ pub extern "C" fn pxl_change_forget(topic: u32, key: u64) {
 #[no_mangle]
 pub extern "C" fn pxl_change_revision(topic: u32, key: u64) -> u32 {
     state().changes.revision_of(topic, key as i64)
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_object_read(key: u64, band_z: i32, x: u32, y: u32, z: u32) -> u32 {
-    settled().objects.read(key, band_z, [x, y, z])
-}
-
-/// The chunk's entry lanes as a row — count, then the addresses of the
-/// band, position and state lanes — or 0 where there is no chunk.
-#[no_mangle]
-pub extern "C" fn pxl_object_chunk(key: u64) -> u32 {
-    let s = settled();
-    match s.objects.chunk_lanes(key) {
-        Some(lanes) => {
-            s.object_row = [lanes.count, lanes.band_at as u32, lanes.pos_at as u32, lanes.state_at as u32];
-            s.object_row.as_ptr() as u32
-        }
-        None => 0,
-    }
-}
-
-/// The run of a chunk's entries in one cell as a row — start, count, how
-/// many occupy it — or 0 where the cell holds none.
-#[no_mangle]
-pub extern "C" fn pxl_object_cell(key: u64, cx: u32, cy: u32, cz: i32) -> u32 {
-    let s = settled();
-    match s.objects.cell(key, cx, cy, cz) {
-        Some(rec) => {
-            s.object_row = [rec.start, rec.count, rec.solid, 0];
-            s.object_row.as_ptr() as u32
-        }
-        None => 0,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_object_chunks() -> u32 {
-    settled().objects.chunk_count() as u32
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_object_chunk_key(i: u32) -> u64 {
-    settled().objects.chunk_key(i as usize)
-}
-
-/// Chunks, bands and cells held, as a row.
-#[no_mangle]
-pub extern "C" fn pxl_object_stat() -> u32 {
-    let s = settled();
-    s.object_row = [s.objects.chunk_count() as u32, s.objects.band_count() as u32, s.objects.cell_count() as u32, 0];
-    s.object_row.as_ptr() as u32
 }
 
 /// Paints the column `key` into `volume`, leaving out the entry at
@@ -1084,6 +1032,51 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             s.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
             return Ok(Some((0, None)));
         }
+        Cmd::OBJECT_READ => {
+            let f = fields(pkt)?;
+            let state = s.objects.read(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?]);
+            return Ok(Some((state as i32, None)));
+        }
+        Cmd::OBJECT_LANES => {
+            let key = u64_at(&fields(pkt)?, 0)?;
+            let Some(lanes) = s.objects.chunk_lanes(key) else { return Ok(Some((0, None))) };
+            let reply = packet(&mut |b| {
+                b.u32(Some(lanes.band_at as u32)).u32(Some(lanes.pos_at as u32)).u32(Some(lanes.state_at as u32));
+            });
+            return Ok(Some((lanes.count as i32, Some(reply))));
+        }
+        Cmd::OBJECT_CELL => {
+            let f = fields(pkt)?;
+            let Some(rec) = s.objects.cell(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?) else {
+                return Ok(Some((0, None)));
+            };
+            return Ok(Some((
+                1,
+                Some(packet(&mut |b| {
+                    b.u32(Some(rec.start)).u32(Some(rec.count)).u32(Some(rec.solid));
+                })),
+            )));
+        }
+        Cmd::OBJECT_COLUMNS => {
+            let keys: Vec<u64> = (0..s.objects.chunk_count()).map(|i| s.objects.chunk_key(i)).collect();
+            let keys = xpute_core::kit::array::U64Array::from(&keys);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u64_array(Some(&keys));
+                })),
+            )));
+        }
+        Cmd::OBJECT_STAT => {
+            let o = &s.objects;
+            let (chunks, bands, cells) = (o.chunk_count() as u32, o.band_count() as u32, o.cell_count() as u32);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(chunks)).u32(Some(bands)).u32(Some(cells));
+                })),
+            )));
+        }
         _ => {}
     }
     let Parts {
@@ -1179,7 +1172,18 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 })),
             )));
         }
-        Cmd::OBJECT_UPDATE | Cmd::OBJECT_DELETE | Cmd::OBJECT_REINDEX | Cmd::STATE_UPDATE | Cmd::TERRAIN_UPDATE | Cmd::DECOR_KIND_UPDATE | Cmd::DECOR_KIND_MODEL => {
+        Cmd::OBJECT_UPDATE
+        | Cmd::OBJECT_DELETE
+        | Cmd::OBJECT_REINDEX
+        | Cmd::STATE_UPDATE
+        | Cmd::TERRAIN_UPDATE
+        | Cmd::DECOR_KIND_UPDATE
+        | Cmd::DECOR_KIND_MODEL
+        | Cmd::OBJECT_READ
+        | Cmd::OBJECT_LANES
+        | Cmd::OBJECT_CELL
+        | Cmd::OBJECT_COLUMNS
+        | Cmd::OBJECT_STAT => {
             unreachable!("applied before the parts are taken")
         }
         // Signals: the kernel raises these, and a shell submitting one is

@@ -345,7 +345,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     convention, and building it twice is the cost to avoid.
 - **XTP encoder without per-leaf objects.** A node object per leaf and a
   closure per scalar at encode; mechanical, format-unchanged, bake-side
-  only. With the above, not on its own.
+  only. With the above, not on its own. Measured since on the rings
+  (2026-09-14, [experiment/20260914-xtp-by-fixed-shape.md](./experiment/20260914-xtp-by-fixed-shape.md)):
+  a ray query is 709 ns through TreeView and TreeReader and 215 ns with the
+  request written by shape; the request's encode is 492 ns against 54, a
+  reply's read 303 ns against 5. The shape of it is a writer and reader
+  per command generated from `@pxl/shared/spec/cmd.ts`, over XTP, for both
+  sides — the schema on the format, which also checks the packets' types.
 
 - **Placed objects come back moved after a reload.** Found 2026-09-14: a
   wall of fifteen cubes (five along X, three up Z) reloads as thirteen

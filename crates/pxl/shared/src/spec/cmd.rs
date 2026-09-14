@@ -36,6 +36,10 @@ pub enum Major {
 #[repr(u32)]
 pub enum ObjectMinor {
     REINDEX = 0x10,
+    LANES = 0x11,
+    CELL = 0x12,
+    COLUMNS = 0x13,
+    STAT = 0x14,
 }
 
 /// A decor kind's own verb.
@@ -138,10 +142,25 @@ pub enum Cmd {
     /// tag call · [ray f64[9]] → [hit f64[14]: material class, normal ×3,
     /// point ×3, t, box min ×3, box max ×3]
     RAY_READ = 0x0702,
+    /// tag call · [key u64, band_z i32, x u32, y u32, z u32] → result: the
+    /// state stored at the leaf, VOID where nothing is
+    OBJECT_READ = 0x0802,
+    /// tag call · [key u64] → result: the chunk's entry count, 0 where it
+    /// holds none; with entries, [band_at u32, pos_at u32, state_at u32] — the
+    /// addresses of its lanes, valid until the next write or reindex
+    OBJECT_LANES = 0x0811,
+    /// tag call · [key u64, cx u32, cy u32, cz i32] → result 1 where the cell
+    /// holds entries, 0 where not; with them, [start u32, count u32, solid u32]
+    OBJECT_CELL = 0x0812,
+    /// tag call · no packet → [keys u64[]]: the columns holding objects, in
+    /// the store's order
+    OBJECT_COLUMNS = 0x0813,
+    /// tag call · no packet → [chunks u32, bands u32, cells u32]
+    OBJECT_STAT = 0x0814,
 }
 
 impl Cmd {
-    const ALL: [Cmd; 24] = [
+    const ALL: [Cmd; 29] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -166,6 +185,11 @@ impl Cmd {
         Cmd::DECOR_CREATE,
         Cmd::DECOR_READ,
         Cmd::RAY_READ,
+        Cmd::OBJECT_READ,
+        Cmd::OBJECT_LANES,
+        Cmd::OBJECT_CELL,
+        Cmd::OBJECT_COLUMNS,
+        Cmd::OBJECT_STAT,
     ];
 
     /// The command a message's number names, or none for one nobody numbers.
@@ -206,6 +230,11 @@ mod test {
             (DECOR_CREATE, Major::DECOR as u32, Minor::CREATE as u32),
             (DECOR_READ, Major::DECOR as u32, Minor::READ as u32),
             (RAY_READ, Major::RAY as u32, Minor::READ as u32),
+            (OBJECT_READ, Major::OBJECT as u32, Minor::READ as u32),
+            (OBJECT_LANES, Major::OBJECT as u32, ObjectMinor::LANES as u32),
+            (OBJECT_CELL, Major::OBJECT as u32, ObjectMinor::CELL as u32),
+            (OBJECT_COLUMNS, Major::OBJECT as u32, ObjectMinor::COLUMNS as u32),
+            (OBJECT_STAT, Major::OBJECT as u32, ObjectMinor::STAT as u32),
         ];
         for (c, major, minor) in parts {
             assert_eq!(c as u32, cmd(major, minor), "{c:?}");

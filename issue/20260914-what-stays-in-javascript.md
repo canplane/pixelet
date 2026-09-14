@@ -110,6 +110,15 @@ arrived and hands the time back. What that decides about the boundary:
   and see every write sent before them, and the glue's `settle` does the
   same without handing out a signal, for the reindex whose change log it
   reads next.
+
+  Then the object store's reads became queries too (`OBJECT_READ`, `_LANES`,
+  `_CELL`, `_COLUMNS`, `_STAT`), answered in the result word where one
+  number is the answer and in a reply packet where it is not. A lane
+  still crosses as its address: `OBJECT_LANES` replies with where the
+  chunk's band, position and state lanes are, and the glue views them in
+  place until the next write. What still applies the waiting submissions
+  before it reads is only the reference paints (`pxl_terrain_read`,
+  `pxl_terrain_paint`, `pxl_object_paint`), which the tests call.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for
