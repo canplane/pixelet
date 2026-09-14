@@ -89,11 +89,21 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the TypeScript walk of the world, the ray LRU with its layer
      revisions, and the temporary composite for a drawn build. The
      TypeScript composite and the chunk walk stay as the references.
-     What is left outside the module: the elevation sample the hover's
-     corner takes (world_hover_pvf3 over terrain/elevation.ts) — a read of
-     the module's terrain when the hover cursor is rewritten — the view's
-     damping steps, the POI index and placement, the sources (the page
-     tables, the object store's persistence, the assets) and the UI.
+     What is left outside the module, and the line it moves to — JavaScript
+     keeps what the browser provides, interrupts, I/O and the UI, and
+     nothing that holds or decides the world's state
+     ([20260914-what-stays-in-javascript.md](./20260914-what-stays-in-javascript.md))
+     — in the order each unlocks the next: the view with PVF3 (the orbit
+     camera, the root frame, the damping, map_center, the range anchor;
+     pointer events as commands, the frame written by the module), page
+     demand and residency with an XTP reader in xpute-core (the module
+     says which page it wants, the glue lands the bytes, the module reads
+     them where they lie), the POI index and placement, the object
+     store's persistence (the record the module's, the write I/O). The
+     crates are cut by layer on the way — `pxl-render` next, the
+     renderer's contract (draw list, block layouts, shaders, pipeline
+     records) that six world modules fill and nothing in it reads back;
+     `pxl-shared` when PVF3 and the reader give it a contract to be.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission
@@ -134,7 +144,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      byte budget in P1. Settled on the way, 2026-09-13: the module imports
      the core memory, and the map's first 32 MB is the module section —
      its stack, data and heap, where a wasm32 linker puts them, behind a
-     bump allocator (crates/xpute-core/src/ds/arena.rs) since the memory never
+     bump allocator (crates/xpute-core/src/ds/fixed_heap.rs) since the memory never
      grows; the module states its size and the client checks the map
      against it at instantiation. The same day, the buddy over every
      section's range moved into the module (crates/xpute-core/src/ds/buddy.rs,

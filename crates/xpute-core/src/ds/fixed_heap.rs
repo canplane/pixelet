@@ -1,6 +1,8 @@
 //! A heap over a fixed range of a linear memory, handed out in power-of-two
 //! size classes: the allocator for a module whose memory is imported and
-//! never grows. The default allocator asks for pages when it runs out and
+//! never grows. Not @xpute/core's arena (a bump pointer with mark and
+//! rewind, for scratch with an order); this is what a `Vec` inside the
+//! module allocates from. The default allocator asks for pages when it runs out and
 //! would fail at its first request past the initial size; this one owns
 //! the range its `Range` names and nothing else.
 //!
@@ -10,13 +12,13 @@
 //! behind on its way up unless it happens to be the last. A freed block
 //! goes on its class's list and the next request of that class takes it,
 //! so the heap's use is bounded by the high-water mark of each vector, at
-//! most doubled by the rounding. Exhausting the arena is a bug in the
+//! most doubled by the rounding. Exhausting the heap is a bug in the
 //! sizing, not a runtime condition: the request returns null and the
 //! allocation traps.
 //!
 //! The state is reset whenever the module is instantiated: with the memory
 //! imported the linker cannot assume it zeroed, so every static, the
-//! arena's included, is written by the data segments at instantiation
+//! heap's included, is written by the data segments at instantiation
 //! (verified — a second instance over a memory the first left mid-job
 //! starts clean).
 
@@ -28,7 +30,7 @@ use core::marker::PhantomData;
 const MIN_SHIFT: usize = 4;
 const CLASSES: usize = 32 - MIN_SHIFT;
 
-/// Where an arena's range lies: from `base()` (read once, at the first
+/// Where a heap's range lies: from `base()` (read once, at the first
 /// request — a linker symbol's address, or a buffer's) up to `END`.
 pub trait Range {
     fn base() -> usize;
@@ -42,18 +44,18 @@ struct Heap {
     free: [usize; CLASSES],
 }
 
-pub struct Arena<R: Range> {
+pub struct FixedHeap<R: Range> {
     heap: UnsafeCell<Heap>,
     range: PhantomData<R>,
 }
 
-// SAFETY: the arena serves one thread — a module instantiated once per
+// SAFETY: the heap serves one thread — a module instantiated once per
 // memory, which is what the imported-memory design guarantees.
-unsafe impl<R: Range> Sync for Arena<R> {}
+unsafe impl<R: Range> Sync for FixedHeap<R> {}
 
-impl<R: Range> Arena<R> {
+impl<R: Range> FixedHeap<R> {
     pub const fn new() -> Self {
-        Arena {
+        FixedHeap {
             heap: UnsafeCell::new(Heap { top: 0, free: [0; CLASSES] }),
             range: PhantomData,
         }
@@ -71,7 +73,7 @@ impl<R: Range> Arena<R> {
     }
 }
 
-impl<R: Range> Default for Arena<R> {
+impl<R: Range> Default for FixedHeap<R> {
     fn default() -> Self {
         Self::new()
     }
@@ -82,7 +84,7 @@ fn class_of(layout: Layout) -> usize {
     (usize::BITS - (bytes - 1).leading_zeros()) as usize - MIN_SHIFT
 }
 
-unsafe impl<R: Range> GlobalAlloc for Arena<R> {
+unsafe impl<R: Range> GlobalAlloc for FixedHeap<R> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let h = &mut *self.heap.get();
         if h.top == 0 {
@@ -145,20 +147,20 @@ mod tests {
 
     #[test]
     fn a_freed_block_serves_the_next_request_of_its_class() {
-        let arena: Arena<Whole> = Arena::new();
+        let heap: FixedHeap<Whole> = FixedHeap::new();
         let layout = Layout::from_size_align(100, 8).unwrap();
         unsafe {
-            let a = arena.alloc(layout);
+            let a = heap.alloc(layout);
             assert_eq!(a as usize, Whole::base());
-            let b = arena.alloc(layout);
+            let b = heap.alloc(layout);
             assert_eq!(b as usize, a as usize + 128, "a class rounds up to its power of two");
-            arena.dealloc(a, layout);
-            assert_eq!(arena.alloc(layout), a);
+            heap.dealloc(a, layout);
+            assert_eq!(heap.alloc(layout), a);
             // A realloc within the class keeps the block; past it, moves.
-            assert_eq!(arena.realloc(b, layout, 120), b);
-            let c = arena.realloc(b, layout, 200);
+            assert_eq!(heap.realloc(b, layout, 120), b);
+            let c = heap.realloc(b, layout, 200);
             assert_ne!(c, b);
         }
-        assert_eq!(arena.used(), 128 * 2 + 256);
+        assert_eq!(heap.used(), 128 * 2 + 256);
     }
 }
