@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useUiStore } from "@/app/store/ui_store.ts";
+
+import { useKernel } from "@/wasm/kernel.ts";
 
 // Layered text-shadow, not -webkit-text-stroke: the stroke property renders
 // inconsistently across engines and can clip thin glyph strokes at small sizes.
@@ -12,10 +13,10 @@ const TEXT_OUTLINE_SHADOW = "-1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0
 
 export function DummyChatText() {
   const { t } = useTranslation();
-  const chatLines = useUiStore((state) => state.chatLines);
+  const chat_lines = useKernel((s) => s.ui.chat_lines);
   const [hovered, setHovered] = useState(false);
 
-  if (chatLines.length === 0) return null;
+  if (chat_lines.length === 0) return null;
 
   return (
     // pointer-events-auto against the map's default — needed for this group to receive hover.
@@ -24,11 +25,11 @@ export function DummyChatText() {
       onMouseLeave={() => setHovered(false)}
       className="pointer-events-auto max-w-[min(320px,calc(100vw-2rem))] flex flex-col items-start gap-1"
     >
-      {chatLines.map((line, i) => (
+      {chat_lines.map((line, i) => (
         <div
           key={line.id}
           className="flex items-baseline gap-1.5 max-w-full transition-opacity duration-200"
-          style={{ opacity: hovered ? 0.95 : 0.23 + 0.47 * ((i + 1) / chatLines.length) }}
+          style={{ opacity: hovered ? 0.95 : 0.23 + 0.47 * ((i + 1) / chat_lines.length) }}
         >
           <span className="text-orange-400 text-xs font-medium shrink-0" style={{ textShadow: TEXT_OUTLINE_SHADOW }}>
             {t("map.chat.self_label")}

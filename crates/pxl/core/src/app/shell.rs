@@ -8,6 +8,7 @@
 
 use pxl_shared::spec::cell::decor_ids;
 use pxl_shared::spec::space::adapter::epsg4326;
+use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
 use crate::app::setting::schema::{SettingValue, SETTING_KEYS};
@@ -15,10 +16,10 @@ use crate::app::setting::store::use_settings_store;
 use crate::app::store::ui_store::{use_ui_store, ActiveTool, RecentPick};
 use crate::global::Global;
 use crate::json::{parse, Json};
-use crate::module::camera::store::use_camera_store;
+use crate::module::camera::store::{use_camera_store, CameraStatus};
 use crate::module::device::pose::store::{use_device_location_store, use_device_orientation_store, DevicePoseStatus};
-use crate::module::device::pose::use_device_orientation::request_orientation;
-use crate::module::device::pose::use_geolocation::start_watching;
+use crate::module::device::pose::use_device_orientation::{orientation_subscribe, orientation_unsubscribe, request_orientation, OrientationPlatform};
+use crate::module::device::pose::use_geolocation::{geolocation_subscribe, geolocation_unsubscribe, start_watching};
 use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::use_map_store;
 use crate::module::map::ui::control::compass::{compass_reset, show_compass};
@@ -28,11 +29,16 @@ use crate::module::world::character::store::use_companion_load_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::view::view;
 use crate::module::world::sched::log::{ledger_report_text, ledger_set_logging, ledger_window_start};
-use crate::module::world::terrain::elevation::ground_or_raw;
-use crate::module::world::world::world_platform;
+use crate::module::world::terrain::elevation::{get_ele, ground_or_raw};
+use crate::module::world::environment::theme::themes;
+use crate::module::world::environment::theme_clock::use_theme_key;
+use crate::module::world::world::{set_world_platform, world_platform, Platform};
 
 struct Shell {
     language: String,
+    /// A search jump that landed on a page with no terrain yet: re-grounded
+    /// the moment that page's tile arrives, while the map is still there.
+    go_to: Option<PVF3>,
     /// A report asked for, handed over with the next snapshot.
     report: Option<String>,
 }
@@ -42,6 +48,7 @@ static SHELL: Global<Shell> = Global::new();
 fn shell() -> &'static mut Shell {
     SHELL.get(|| Shell {
         language: "en".to_string(),
+        go_to: None,
         report: None,
     })
 }
@@ -142,8 +149,13 @@ pub fn ui_snapshot_json() -> String {
     let mut out = String::with_capacity(2048);
     out.push('{');
     out.push_str(&format!(
-        "\"map\":{{\"has_center\":{},\"status\":{},\"is_off_center\":{}}},",
+        "\"map\":{{\"has_center\":{},\"center_lonlat\":{},\"status\":{},\"is_off_center\":{}}},",
         map.map_center.is_some(),
+        map.map_center.map_or("null".to_string(), |c| {
+            let mut g = [0.0; 3];
+            epsg4326::unproject(&mut g, c.i, c.f);
+            format!("[{},{}]", num(g[0]), num(g[1]))
+        }),
         quote(map.map_status.as_str()),
         nav.is_off_center
     ));
@@ -185,6 +197,7 @@ pub fn ui_snapshot_json() -> String {
         quote(&bar.label)
     ));
     out.push_str(&format!("\"compass\":{{\"show\":{}}},", show_compass()));
+    out.push_str(&format!("\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, quote(themes(use_theme_key()).fog)));
     out.push_str(&format!("\"report\":{}", opt_str(shell().report.take().as_deref())));
     out.push('}');
     out
@@ -290,7 +303,14 @@ pub fn ui_action(text: &str) -> bool {
             let (Some(lon), Some(lat)) = (f64_of(&action, "lon"), f64_of(&action, "lat")) else { return false };
             let mut target = PVF3::default();
             epsg4326::project(&mut target, &[lon, lat, 0.0]);
-            use_map_store().set_map_center(ground_or_raw(&target));
+            // The user drove the camera: GPS stops overriding it.
+            use_camera_store().set_is_follow_mode(false);
+            let grounded = ground_or_raw(&target);
+            use_map_store().set_map_center(grounded);
+            // A jump usually lands on a page nothing has loaded yet, where the
+            // ground falls back to the raw coordinate: grounded again once the
+            // page's tile arrives, rather than left under the terrain.
+            shell().go_to = (grounded == target).then_some(target);
         }
         "set_language" => {
             let Some(lang) = str_of(&action, "lang") else { return false };
@@ -303,6 +323,24 @@ pub fn ui_action(text: &str) -> bool {
             request_orientation(platform.orientation);
             start_watching(platform.geolocation);
         }
+        "sensors_subscribe" => {
+            // Sent before the first frame, which is what tells the kernel the
+            // platform otherwise: the action carries it.
+            let platform = Platform {
+                geolocation: bool_of(&action, "geolocation").unwrap_or(false),
+                orientation: OrientationPlatform {
+                    supported: bool_of(&action, "orientation").unwrap_or(false),
+                    needs_permission: bool_of(&action, "needs_permission").unwrap_or(false),
+                },
+            };
+            set_world_platform(platform);
+            geolocation_subscribe(platform.geolocation);
+            orientation_subscribe(platform.orientation);
+        }
+        "sensors_unsubscribe" => {
+            geolocation_unsubscribe();
+            orientation_unsubscribe();
+        }
         "ledger_report" => shell().report = Some(ledger_report_text()),
         "ledger_logging" => {
             let Some(on) = bool_of(&action, "on") else { return false };
@@ -313,4 +351,17 @@ pub fn ui_action(text: &str) -> bool {
     }
     request_world_tick();
     true
+}
+
+/// The shell's turn: a pending search jump re-grounded once its page's terrain
+/// has arrived, if the map is still on that page.
+pub fn shell_step() {
+    let Some(target) = shell().go_to else { return };
+    if get_ele(target.i, target.f).is_none() {
+        return;
+    }
+    shell().go_to = None;
+    if use_map_store().map_center.is_some_and(|c| L3_IDX(c.i) == L3_IDX(target.i)) {
+        use_map_store().set_map_center(ground_or_raw(&target));
+    }
 }

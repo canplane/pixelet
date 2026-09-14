@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { CharacterPreview } from "@/module/world/character/character_preview.tsx";
-import { useSettingsStore } from "@/app/setting/store.ts";
+import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/module/world/character/variant.ts";
 
 // Moved out of app/setting/section/ (2026-09-07): person/pet variant is a
@@ -108,9 +108,9 @@ function PetPicker(props: PetPickerProps) {
  * DecorGridButton, which close it) since browsing/comparing several variants
  * is the expected flow, not "equip once then go place it." */
 export function CharacterPicker() {
-  const person_variant_key = useSettingsStore((state) => state.person_variant_key);
-  const pet_variant_key = useSettingsStore((state) => state.pet_variant_key);
-  const set_setting = useSettingsStore((state) => state.set_setting);
+  const person_variant_key = useKernel((s) => String(s.settings.person_variant_key ?? ""));
+  const pet_variant_key = useKernel((s) => String(s.settings.pet_variant_key ?? ""));
+  const set_setting = (key: string, value: string) => kernel_action({ type: "set_setting", key, value });
 
   // Opens on whichever gender the current selection already belongs to,
   // not always "female" — so a male variant picked earlier doesn't look
