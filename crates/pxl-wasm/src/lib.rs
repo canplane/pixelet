@@ -2,7 +2,7 @@
 //!
 //! No wasm-bindgen. What crosses is integers and addresses into the core
 //! memory, which the module imports and shares with the client (build.rs,
-//! fixed_heap.rs): a run set is baked where it lies, and the mesh is written into
+//! arena.rs): a run set is baked where it lies, and the mesh is written into
 //! the block the client acquired for it, so nothing is copied across the
 //! boundary. The boundary is the same shape the command frame already is,
 //! and a thread that instantiates the module needs the memory and nothing
@@ -42,7 +42,7 @@ extern "C" {
 /// longer fits a pool region — takes under 10 MB of the 31 the heap has.
 struct ModuleHeap;
 
-impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
+impl xpute_core::ds::arena::Range for ModuleHeap {
     fn base() -> usize {
         core::ptr::addr_of!(__heap_base) as usize
     }
@@ -50,13 +50,13 @@ impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
 }
 
 #[global_allocator]
-static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds::fixed_heap::FixedHeap::new();
+static ALLOC: xpute_core::ds::arena::Arena<ModuleHeap> = xpute_core::ds::arena::Arena::new();
 
 struct State {
     ctx: BakeContext,
     /// The open bake's run set: its address in the memory, and its shape.
     input: (usize, u32, u32),
-    /// vertex_cnt, index_cnt, the six counters, then the heap's use.
+    /// vertex_cnt, index_cnt, the six counters, then the arena's use.
     result: [u32; 9],
     scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.

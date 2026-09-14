@@ -134,7 +134,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      byte budget in P1. Settled on the way, 2026-09-13: the module imports
      the core memory, and the map's first 32 MB is the module section —
      its stack, data and heap, where a wasm32 linker puts them, behind a
-     bump allocator (crates/xpute-core/src/ds/fixed_heap.rs) since the memory never
+     bump allocator (crates/xpute-core/src/ds/arena.rs) since the memory never
      grows; the module states its size and the client checks the map
      against it at instantiation. The same day, the buddy over every
      section's range moved into the module (crates/xpute-core/src/ds/buddy.rs,
