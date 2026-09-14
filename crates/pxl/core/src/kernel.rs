@@ -124,3 +124,18 @@ pub fn reindex_object(k: &mut Kernel, key: u64) {
         k.changes.bump(TOPIC_OBJECT_CELL, corner as i64);
     }
 }
+
+/// The kernel's world and its scheduler, borrowed together for a call that
+/// builds, draws or reads the volumes; None before the volumes are opened.
+pub fn with_world<R>(f: impl FnOnce(&mut crate::world::build::World, &mut crate::world::sched::Scheduler) -> R) -> Option<R> {
+    let k = kernel();
+    let volumes = k.volumes.as_mut()?;
+    let mut world = crate::world::build::World {
+        volumes,
+        pools: &mut k.pools,
+        materials: &k.terrain,
+        store: &k.objects,
+        painter: &mut k.painter,
+    };
+    Some(f(&mut world, &mut k.sched))
+}

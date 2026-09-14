@@ -50,3 +50,51 @@ pub fn set_handheld(handheld: bool) {
 pub fn handheld() -> bool {
     *HANDHELD.get(|| false)
 }
+
+static MEASURE: Global<fn(font: &str, text: &str) -> f64> = Global::new();
+
+fn measure_nothing(_: &str, text: &str) -> f64 {
+    text.chars().count() as f64 * 7.0
+}
+
+/// Installs a canvas context's `measureText`: the width `text` takes in `font`.
+pub fn set_measure_text(measure: fn(font: &str, text: &str) -> f64) {
+    MEASURE.set(measure);
+}
+
+/// `ctx.font = font; ctx.measureText(text).width`.
+pub fn measure_text(font: &str, text: &str) -> f64 {
+    (MEASURE.get(|| measure_nothing))(font, text)
+}
+
+/// The local wall clock: `Date.now()`, and the local hour and the local day's
+/// start as a `Date` reads them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LocalTime {
+    pub unix_ms: f64,
+    pub hours: f64,
+    pub minutes: f64,
+    pub seconds: f64,
+    /// The local midnight that began today, in unix ms.
+    pub day_start_ms: f64,
+}
+
+static LOCAL_TIME: Global<fn() -> LocalTime> = Global::new();
+
+fn no_time() -> LocalTime {
+    LocalTime::default()
+}
+
+/// Installs the host's local wall clock.
+pub fn set_local_time(clock: fn() -> LocalTime) {
+    LOCAL_TIME.set(clock);
+}
+
+pub fn local_time() -> LocalTime {
+    (LOCAL_TIME.get(|| no_time))()
+}
+
+/// `Date.now()`.
+pub fn wall_now() -> f64 {
+    local_time().unix_ms
+}

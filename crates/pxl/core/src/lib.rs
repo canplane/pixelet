@@ -12,6 +12,7 @@ pub mod app;
 pub mod bake;
 pub mod global;
 pub mod host;
+pub mod json;
 pub mod kernel;
 /// apps/web/src/lib, inline so the directory is not taken for the crate root.
 pub mod lib {
