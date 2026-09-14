@@ -2,7 +2,7 @@
 
 /**
  * The LOD criterion as the glue's side of it: the ladder the chunks climb
- * is the module's (crates/pxl-core/src/world/lod.rs, the same numbers), and
+ * is the module's (crates/pxl/core/src/world/lod.rs, the same numbers), and
  * what stays here is what keeps step with it outside the module — the
  * badge tiers' shift over the cube tiers, the billboards' fade range, the
  * badge occlusion's cell per distance, decor's target cell — and
@@ -53,7 +53,7 @@ export const TARGET_CELL_PX: f64 = px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_F
 let LOD_THRESHOLDS: f64[] = [];
 
 function recompute_thresholds(viewport_h: f64, fov_deg: f64, pressure: u32): void {
-  // The module's pressure (crates/pxl-core/src/world/lod.rs): every
+  // The module's pressure (crates/pxl/core/src/world/lod.rs): every
   // threshold at 2^(-pressure/2), so the badges climb the rungs the cubes
   // are on and the occlusion tolerance assumes the cell actually drawn.
   const k = (px_per_unit(viewport_h, fov_deg) / TARGET_CELL_PX) * Math.pow(2, -pressure / 2);

@@ -2,7 +2,7 @@
 
 /**
  * The dev gizmos through WebGPU: the module's line segments
- * (crates/pxl-core/src/world/debug.rs) drawn as one line list over everything
+ * (crates/pxl/core/src/world/debug.rs) drawn as one line list over everything
  * (shader/debug.wgsl); the labels are DOM (marker/debug_gizmos.tsx).
  */
 

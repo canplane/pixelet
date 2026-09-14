@@ -7,7 +7,7 @@
  * whole-world walk), and every query is scoped to a cell or chunk (never a
  * scan over every placed object anywhere).
  *
- * The records are the module's (crates/pxl-core/src/world/object.rs): one per
+ * The records are the module's (crates/pxl/core/src/world/object.rs): one per
  * L2 chunk column holding user objects — a palette, and one sparse octree
  * per 64³ band whose leaves are palette indices — and, derived from them a
  * chunk at a time, the chunk's entries as three lanes and an index of the

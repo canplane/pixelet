@@ -19,28 +19,28 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   a frame, port and link; the read direction as a change log; the core
   memory's sections. In order:
   1. **The mesher in Rust.** The first Rust. Ported 2026-09-13 as a
-     line-for-line translation — crates/pxl-core's mesher behind
-     crates/pxl-wasm's numeric exports, no wasm-bindgen, over the core
+     line-for-line translation — crates/pxl/core's mesher behind
+     crates/pxl/wasm's numeric exports, no wasm-bindgen, over the core
      memory the module imports (a run set baked where it lies, the mesh
      written into its block) — stepped on the main thread as
      `bake_path: wasm`, the default since the phone reading
      ([experiment/20260913-mesher-in-rust/](./experiment/20260913-mesher-in-rust/)),
      and held byte for byte to the TypeScript bake at every tier by
      wasm_bake.test.ts. The whole-chunk scan followed the same day
-     (crates/pxl-core/src/bake/scan.rs, wasm_scan.test.ts byte for byte against
+     (crates/pxl/core/src/bake/scan.rs, wasm_scan.test.ts byte for byte against
      voxel_scan.ts; 1.9x on V8), reading the composite's bands where the
      compositor left them. The terrain layer followed
-     (crates/pxl-core/src/bake/terrain.rs: the bicubic sample, the water recess,
+     (crates/pxl/core/src/bake/terrain.rs: the bicubic sample, the water recess,
      the channels' override, held cell for cell to the TypeScript adapter by
      terrain.test.ts; paint 1.8x and the direct path 2.8x on V8), reading a
      page's lanes where the client keeps them and painting the module's own
      volume. Then the object store and, with it, the object layer's paint
-     (crates/pxl-core/src/{sparse_tree,object}.rs, held entry for entry and
+     (crates/pxl/core/src/{sparse_tree,object}.rs, held entry for entry and
      voxel for voxel to the TypeScript by store_reference.test.ts), the
      direct path's writer (the scan's scratch, the terrain's runs written
      inside the module) and the raycast's column walk (the scan's own,
      read as lanes). Then the chunks' builds themselves (2026-09-14,
-     crates/pxl-core/src/world/build.rs, held byte for byte to the TypeScript
+     crates/pxl/core/src/world/build.rs, held byte for byte to the TypeScript
      pipeline by core_build.test.ts): the node says which tiers it lacks,
      and the module makes the runs — the direct way, or by composing terrain
      and objects into a volume and scanning it — bakes the tiers under the
@@ -54,11 +54,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      memory: a block the pool refuses leaves the work where it is. The
      TypeScript scan, mesher and volume readers stay only as the references
      the tests hold the module to. Then the scheduler (2026-09-14,
-     crates/pxl-core/src/{sched,lod}.rs): the chunk table, the frustum test,
+     crates/pxl/core/src/{sched,lod}.rs): the chunk table, the frustum test,
      the LOD criterion and its blends, the priority order, the commits, the
      tier cache and the retain budget's reclaim, over a frame the glue
      writes where the module reads it; the node is a sink for what the
-     module decides. Then the world's change log (crates/xpute-core/src/ipc/change.rs):
+     module decides. Then the world's change log (crates/xpute/core/src/ipc/change.rs):
      the journal and the revisions are the module's, read as views; the
      object store bumps its column and cell topics inside its reindex, and
      the sources still in TypeScript — the page tables, decor's assets, the
@@ -68,7 +68,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      (held to module/world/frame/range.ts's in_range_chunks by
      core_sched.test.ts); the stage makes a node and an anchor holder for a
      chunk the module mounts, and drops them when it unmounts. Then decor's
-     build (2026-09-14, crates/pxl-core/src/world/decor.rs, held instance for
+     build (2026-09-14, crates/pxl/core/src/world/decor.rs, held instance for
      instance to decor_kinds.ts's build_decor_instances by
      core_decor.test.ts — the scatter's streams bit for bit, splitmix64
      drawn as JavaScript rounds it): the kinds are taught with their rules
@@ -79,7 +79,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      `pxl_decor_now` and tells the layout again with the cubes left
      attached, and the block goes with the tier's eviction. The node holds
      blocks; the field reads their groups as views. Then the raycast
-     (2026-09-14, crates/pxl-core/src/world/raycast.rs, held box for box and face
+     (2026-09-14, crates/pxl/core/src/world/raycast.rs, held box for box and face
      for face to camera/ray.ts's chunk walk over chunk_raycast.ts by
      core_raycast.test.ts): the chunk DDA, the cell DDA and the slab test
      over the scan's column walk, and compositor.ts's little cache of
@@ -114,8 +114,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      memory and the cooperative scheduler, nothing bindgen-shaped, and
      the `pxl_*` export table folds into the rings. Before the moves, the
      kits are mirrored whole: `packages/xpute/core/src` ↔
-     `crates/xpute-core/src` and `packages/pxl/shared/src/spec/space` ↔
-     `crates/pxl-shared/src/spec/space`, the same tree, file for file and
+     `crates/xpute/core/src` and `packages/pxl/shared/src/spec/space` ↔
+     `crates/pxl/shared/src/spec/space`, the same tree, file for file and
      export for export, held by `script/pair.ts` in `deno task check`
      (files, exports, tests, and the vectors the TypeScript writes for the
      Rust to reproduce); language differences are exempted by name with a
@@ -130,7 +130,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      linear memory with a drain export as the doorbell — the submission
      ring is built here, where the boundary first exists
      ([boundaries, "Rings"](./20260913-boundaries-commands-and-what-comes-back-from-april.md)).
-     Built 2026-09-14 (crates/xpute-core/src/ipc/ring.rs, @xpute/core/ipc/ring.ts):
+     Built 2026-09-14 (crates/xpute/core/src/ipc/ring.rs, @xpute/core/ipc/ring.ts):
      a submission ring and a completion ring, a pair in the module's heap,
      64-byte entries; `pxl_tick` is the doorbell and the glue reads the
      completions when it returns. The chunks' builds are the first commands
@@ -165,14 +165,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      byte budget in P1. Settled on the way, 2026-09-13: the module imports
      the core memory, and the map's first 32 MB is the module section —
      its stack, data and heap, where a wasm32 linker puts them, behind a
-     bump allocator (crates/xpute-core/src/ds/fixed_heap.rs) since the memory never
+     bump allocator (crates/xpute/core/src/ds/fixed_heap.rs) since the memory never
      grows; the module states its size and the client checks the map
      against it at instantiation. The same day, the buddy over every
-     section's range moved into the module (crates/xpute-core/src/ds/buddy.rs,
+     section's range moved into the module (crates/xpute/core/src/ds/buddy.rs,
      held to the TypeScript pool's addresses request for request by
      core_pool.test.ts): the module is instantiated before the map is cut,
      and the TypeScript pool names blocks through it. Then the volume
-     (crates/pxl-core/src/bake/volume.rs): bands are the module's, taken from the
+     (crates/pxl/core/src/bake/volume.rs): bands are the module's, taken from the
      fixed section for the sixteen standing stores and the mesh section past
      them, every paint a call into it, and readers get views; the Rust scan
      opens a volume by id. Then the terrain layer's reading of a page, and
@@ -203,7 +203,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      also shows and the renderer removes: three's `updateMatrixWorld` over
      2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
      world (tree 281k, car 99k triangles a frame; P3 below). The renderer
-     is through (2026-09-14, render/gpu, crates/pxl-core/src/{draw,ghost,
+     is through (2026-09-14, render/gpu, crates/pxl/core/src/{draw,ghost,
      model,marker,billboard,environment,debug}.rs): the module lists what
      to upload, free and draw, and a WebGPU canvas executes it with no
      decision of its own — the sky, the chunks (three's Lambert in WGSL),
@@ -231,7 +231,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      to be taken is in
      [20260911-taa-tried-and-closed.md](./20260911-taa-tried-and-closed.md).
      The shaders and the pipelines are the crate's (2026-09-14,
-     crates/pxl-core/src/render/shader.rs and shader/*.wgsl): every pipeline a
+     crates/pxl/core/src/render/shader.rs and shader/*.wgsl): every pipeline a
      record of words — shaders, vertex lanes, bind group layouts,
      primitive, depth and blend state — that render/gpu/pipeline.ts turns
      into a descriptor, the passes owning no literal; `cargo test`
@@ -414,7 +414,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   reset.
 
 - **The scheduler's port, read against the TypeScript it replaced.**
-  Read line for line on 2026-09-14 after the move (crates/pxl-core/src/world/sched.rs
+  Read line for line on 2026-09-14 after the move (crates/pxl/core/src/world/sched.rs
   against 9ff57fe's chunk_node.ts, chunk_stage.tsx, chunk_table.ts,
   priority.ts). Fixed: the reclaim walked the order backwards and gave back
   the nearest off-screen chunk first (core_sched.test.ts now pins farthest

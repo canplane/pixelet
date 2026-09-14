@@ -2,7 +2,7 @@
 
 /**
  * What the module is taught about the objects' states
- * (crates/pxl-core/src/world/object.rs): every placeable cube's material,
+ * (crates/pxl/core/src/world/object.rs): every placeable cube's material,
  * AIR, and the decor kinds. Once, before any page is told.
  */
 

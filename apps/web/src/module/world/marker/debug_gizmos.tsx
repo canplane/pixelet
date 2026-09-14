@@ -6,7 +6,7 @@
  * base and centre corners, and the two frames' gyro rings — one fixed to
  * the screen whatever the azimuth, one turning with the map so its vertex
  * points north — as line segments the module holds and the renderer draws
- * over everything (crates/pxl-core/src/world/debug.rs, render/gpu/debug.ts),
+ * over everything (crates/pxl/core/src/world/debug.rs, render/gpu/debug.ts),
  * with labels as DOM over the canvas, projected through the view each
  * frame. The map's part is rebuilt when the map moves, the frames' part
  * when the view does; both go to the module as one set.

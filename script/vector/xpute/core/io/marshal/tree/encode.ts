@@ -1,7 +1,7 @@
 // script/vector/xpute/core/io/marshal/tree/encode.ts
 //
 // What the TypeScript encoder writes for a fixed set of trees, as hex: the
-// Rust encoder must write the same bytes (crates/xpute-core/src/io/marshal/tree/encode.rs).
+// Rust encoder must write the same bytes (crates/xpute/core/src/io/marshal/tree/encode.rs).
 
 import { TreeEncoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 import { bytes_to_hex } from "@xpute/core/kit/encoding.ts";

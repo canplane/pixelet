@@ -2,7 +2,7 @@
 
 /**
  * The environment's inputs, handed to the module
- * (crates/pxl-core/src/world/environment.rs): the time of day's theme when it
+ * (crates/pxl/core/src/world/environment.rs): the time of day's theme when it
  * changes, and each tick where the map is and what the wall clock says. The
  * module places the sun and the moon, eases the light, the fog and the sky
  * toward the theme, and writes what the renderer draws them with.
@@ -29,7 +29,7 @@ import { set_sky_radius } from "@/render/gpu/stage.tsx";
 const { FOG_NEAR, FOG_FAR, FAR_CLIP } = render_cfg;
 const { MAX_DIST } = camera_cfg.view;
 
-/** crates/pxl-core/src/world/environment.rs's THEME_FLOATS. */
+/** crates/pxl/core/src/world/environment.rs's THEME_FLOATS. */
 const THEME_FLOATS = 34;
 
 // Same Seoul coordinate use_map_bootstrap.ts seeds map_center with before a

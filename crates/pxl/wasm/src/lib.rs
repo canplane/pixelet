@@ -846,7 +846,7 @@ pub extern "C" fn pxl_column_runs_at() -> u32 {
 
 // ---- Rings ----
 //
-// Commands and their effects cross in rings (crates/xpute-core/src/ipc/ring.rs);
+// Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs);
 // a query that needs its answer now stays a call. The glue pushes into the
 // submission ring, rings `pxl_drain` once a tick, and reads the completion
 // ring when the call returns.
@@ -1132,7 +1132,7 @@ pub extern "C" fn pxl_build_now(id: u32) {
     after(s);
 }
 
-// ---- The billboards (crates/pxl-core/src/world/billboard.rs) ----
+// ---- The billboards (crates/pxl/core/src/world/billboard.rs) ----
 
 /// A billboard set drawn in `order`: its id.
 #[no_mangle]
@@ -1168,7 +1168,7 @@ pub extern "C" fn pxl_billboards_remove(set: u32) {
     sched.billboards.remove(&mut world, &mut sched.draw, set);
 }
 
-// ---- The shaders and the pipelines (crates/pxl-core/src/render/shader.rs) ----
+// ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
 
 /// Shader `kind`'s WGSL: a row of two words, its address and its length
 /// in bytes; zero length for a kind that is not one.
@@ -1207,7 +1207,7 @@ pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
     TABLE.as_ptr()
 }
 
-// ---- The dev gizmos (crates/pxl-core/src/world/debug.rs) ----
+// ---- The dev gizmos (crates/pxl/core/src/world/debug.rs) ----
 
 /// The gizmos' segments: `vertex_cnt` vertices of 6 floats at `lane`,
 /// relative to an origin at (x, y, z) in units.
@@ -1219,7 +1219,7 @@ pub extern "C" fn pxl_debug_set(x: f64, y: f64, z: f64, vertex_cnt: u32, lane: u
     unsafe { sched.debug.set(&mut world, &mut sched.draw, [x, y, z], vertex_cnt, lane as usize) };
 }
 
-// ---- The environment (crates/pxl-core/src/world/environment.rs) ----
+// ---- The environment (crates/pxl/core/src/world/environment.rs) ----
 
 /// The theme the environment eases toward: THEME_FLOATS floats at `lane`.
 #[no_mangle]
@@ -1252,7 +1252,7 @@ pub extern "C" fn pxl_env_at() -> u32 {
     state().sched.environment.out.as_ptr() as u32
 }
 
-// ---- The location puck (crates/pxl-core/src/world/marker.rs) ----
+// ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
 
 /// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre
 /// relative to the zone's, and which edges border the ring), about a centre
@@ -1278,7 +1278,7 @@ pub extern "C" fn pxl_puck_clear() {
     sched.markers.clear(&mut world, &mut sched.draw);
 }
 
-// ---- Models and actors (crates/pxl-core/src/world/model.rs) ----
+// ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
 
 /// A model's mesh block for `vertex_cnt` vertices, `index_cnt` indices and
 /// `joint_cnt` joints: its id, or -1 when the pool refused; the block's
@@ -1403,7 +1403,7 @@ pub extern "C" fn pxl_ghost_clear() {
     sched.ghost.clear(&mut world, &mut sched.draw);
 }
 
-/// Hands the renderer's lists over (crates/pxl-core/src/render/draw.rs): a row of
+/// Hands the renderer's lists over (crates/pxl/core/src/render/draw.rs): a row of
 /// ten words — the uploads' address and count, the frees', the draws', the
 /// uniforms', the rewrites' — valid until the next call. Uploads and frees are what
 /// accumulated since the last call; the draws are the last tick's.
@@ -1474,7 +1474,7 @@ pub extern "C" fn pxl_decor_allow(kind: u32, channel: u32, t: u32) {
 /// normal, the point, t, the box's min and max — 14.
 pub const HIT_WORDS: usize = 14;
 
-/// The world's raycast (crates/pxl-core/src/world/raycast.rs): the ray from
+/// The world's raycast (crates/pxl/core/src/world/raycast.rs): the ray from
 /// (ox, oy, oz) along (dx, dy, dz), relative to the map origin at
 /// (origin_x, origin_y) in units, within `max_dist`. 1 when something was
 /// struck, the hit written at pxl_raycast_at. Applies the submissions
@@ -1513,7 +1513,7 @@ pub extern "C" fn pxl_raycast_at() -> u32 {
 }
 
 /// The nearest placed decor instance the ray strikes within `max_dist`
-/// (crates/pxl-core/src/world/raycast.rs's hit_decor), the ray as pxl_raycast
+/// (crates/pxl/core/src/world/raycast.rs's hit_decor), the ray as pxl_raycast
 /// takes it: 1 when one was, its chunk id, band, packed position and
 /// distance written at pxl_raycast_decor_at.
 #[no_mangle]

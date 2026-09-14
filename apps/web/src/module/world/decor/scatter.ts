@@ -31,7 +31,7 @@ export type DecorEligibility = (land: u32, water: u32, structure: u32, transport
 export type DecorChannelRule = "any" | "void" | readonly u32[];
 
 /** A kind's rule per ground channel, declared so the module can be taught
- * the same rule (crates/pxl-core/src/world/decor.rs) and `eligibility_of` derives
+ * the same rule (crates/pxl/core/src/world/decor.rs) and `eligibility_of` derives
  * the predicate the TypeScript reference reads. */
 export type DecorRules = {
   land: DecorChannelRule;

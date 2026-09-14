@@ -13,7 +13,7 @@
  * chunks are meshed from — and returns whichever box the ray actually
  * struck first, regardless of whether it came from terrain or an object.
  *
- * The walk is the module's (crates/pxl-core/src/world/raycast.rs): every chunk
+ * The walk is the module's (crates/pxl/core/src/world/raycast.rs): every chunk
  * the ray's own XY projection crosses within max_dist, a cell DDA within
  * each, over composites it keeps between hovers — the cursor doesn't
  * teleport between frames, so the same chunks come up again — each valid
@@ -245,7 +245,7 @@ export function world_struck_corner(hit: WorldHit, size: f64, map_origin: IVec):
  * it never paints a voxel of its own (reference/object_layer.ts's
  * paint() skips "decor" entries) and has its own hit test over the
  * module's blocks and triangles (decor_hit.ts's raycast_decor, over
- * crates/pxl-core/src/world/raycast.rs's hit_decor, called from
+ * crates/pxl/core/src/world/raycast.rs's hit_decor, called from
  * camera/input.tsx alongside this function). Linear scan over the same
  * small objects list every other object operation already walks — not the
  * raycast itself, just

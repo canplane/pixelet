@@ -2,7 +2,7 @@
 
 /**
  * The glue's half of the chunks' scheduling and builds, which run in the
- * module (crates/pxl-core/src/{sched,build}.rs): commands into the
+ * module (crates/pxl/core/src/{sched,build}.rs): commands into the
  * submission ring, the frame written where the module reads it, one
  * `pxl_tick` a frame, and the completion ring read when it returns.
  *
@@ -36,7 +36,7 @@ export function release_chunk_mesh(mesh: { block: MeshBlock["block"] }): void {
   CORE_POOL.release(mesh.block);
 }
 
-/** crates/pxl-wasm/src/lib.rs's op numbers. */
+/** crates/pxl/wasm/src/lib.rs's op numbers. */
 const OP_CHUNK_ADD = 1;
 const OP_CHUNK_REMOVE = 2;
 const OP_CHUNK_SOURCE = 3;
@@ -53,7 +53,7 @@ const OP_MOUNT = 22;
 const OP_UNMOUNT = 23;
 const OP_DECOR = 24;
 
-/** crates/pxl-wasm/src/lib.rs's frame block: doubles, in this order. */
+/** crates/pxl/wasm/src/lib.rs's frame block: doubles, in this order. */
 export const FRAME_WORDS = 62;
 export const FRAME = {
   root: 0,

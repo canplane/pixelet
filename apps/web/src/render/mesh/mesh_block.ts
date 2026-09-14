@@ -2,7 +2,7 @@
 
 /**
  * A chunk mesh's block as the mesher lays it out
- * (crates/pxl-core/src/bake/mesher.rs, and reference/chunk_mesher.ts held
+ * (crates/pxl/core/src/bake/mesher.rs, and reference/chunk_mesher.ts held
  * to it): every lane of a baked mesh in one block, in this fixed order,
  * then the visibility lane, then the index lane. They share a lifetime
  * exactly (the whole mesh dies at once, when its owner does), so one
@@ -30,7 +30,7 @@ export type MeshBlock = {
  * One baked chunk mesh's lanes — position/normal are the real chunk-local
  * vertices every box's own faces actually sit at; the rest are per-vertex
  * material/shading inputs the chunk shader reads directly
- * (crates/pxl-core/src/render/shader/chunk.wgsl; `local_pos`/`box_scale`
+ * (crates/pxl/core/src/render/shader/chunk.wgsl; `local_pos`/`box_scale`
  * replace what an instanced approach would reconstruct from an instance
  * matrix). `visibility` is deliberately NOT included here: the mesher only
  * ever bakes real geometry, never a per-role default (chunk_bucket.ts's

@@ -1,13 +1,13 @@
 // @pxl/web/render/gpu/decor.ts
 
 /**
- * Decor through WebGPU: the module's decor draws (crates/pxl-core/src/render/draw.rs)
+ * Decor through WebGPU: the module's decor draws (crates/pxl/core/src/render/draw.rs)
  * executed as instanced draws of each variant's model, the instances read
  * straight out of the decor block the module built (decor.rs's layout) as
  * it lies on the GPU: the block is the instance buffer, the chunk's
  * translation is its uniform, and the module says which block a chunk shows.
  *
- * A model is the module's (crates/pxl-core/src/world/model.rs), registered by
+ * A model is the module's (crates/pxl/core/src/world/model.rs), registered by
  * decor/asset_store.ts and drawn from the same block the module holds its
  * triangles in for the hit test — the vertex lanes of model_asset.ts's
  * layout, and the indices past them. The skins are the glue's, as the
