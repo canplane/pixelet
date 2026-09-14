@@ -26,6 +26,7 @@
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
+import type { U32Array } from "@xpute/core/kit/array.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { DecorPass } from "./decor.ts";
@@ -39,6 +40,8 @@ import { DEPTH_CLEAR, DEPTH_FORMAT } from "./depth.ts";
 import { ShadowPass } from "./shadow.ts";
 import { MipBuilder } from "./mips.ts";
 import { type FrameLayout, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY, PipelineBuilder, type PipelineRecord, read_frame_layout } from "./pipeline.ts";
+import { CORE_BUILD } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 /** draw.rs's records, in words and floats. */
 const UPLOAD_WORDS = 5;
@@ -138,7 +141,6 @@ export class GpuRenderer {
   /** The module's draw row, at a fixed address: one view, made on the
    * first take rather than by a take of its own, which would drop the
    * uploads waiting for the renderer. */
-  private draw_row: Uint32Array | null = null;
   private width = 0;
   private height = 0;
   /** The frame's uniforms, written by the glue before `frame`. */
@@ -163,7 +165,7 @@ export class GpuRenderer {
     this.sample_count = options.msaa ? 4 : 1;
     const samples = this.sample_count;
     this.pipelines = new PipelineBuilder(device, pxl);
-    this.frame_at = read_frame_layout(pxl);
+    this.frame_at = read_frame_layout();
     this.uniforms = new Float32Array(new ArrayBuffer(this.frame_at.floats * 4));
     this.mips = new MipBuilder(device, this.pipelines);
     this.shadow = new ShadowPass(device, this.frame_at);
@@ -287,12 +289,10 @@ export class GpuRenderer {
     if (!this.depth) return;
     const pxl = this.pxl;
     const mem = pxl.memory.buffer;
-    // Every command sent this frame is applied before its lists are taken,
-    // so what a phase after the module's tick sent (a billboard, the dev
-    // gizmos) is drawn in the frame that sent it.
-    pxl.pxl_drain();
-    const at = pxl.pxl_draw_take();
-    const row = this.draw_row ??= new Uint32Array(mem, at, 10);
+    // The take is a query, so every command sent this frame is applied
+    // before the lists are taken: what a phase after the module's tick sent
+    // (a billboard, the dev gizmos) is drawn in the frame that sent it.
+    const row = CORE_BUILD.call(Cmd.DRAW_READ, null, (_, reply) => Uint32Array.from(reply!.at(0).get<U32Array>()));
     const rewrites = new Uint32Array(mem, row[8], row[9] * REWRITE_WORDS);
     const uploads = new Uint32Array(mem, row[0], row[1] * UPLOAD_WORDS);
     const frees = new Uint32Array(mem, row[2], row[3]);

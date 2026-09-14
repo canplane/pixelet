@@ -163,9 +163,11 @@ export class CoreBuild {
     this.sq = new Ring(pxl.memory.buffer, pxl.pxl_ring_sq());
     this.cq = new Ring(pxl.memory.buffer, pxl.pxl_ring_cq());
     this.order = FIXED_ALLOC.take(Uint32Array, 1024);
-    this.frame = new Float64Array(pxl.memory.buffer, pxl.pxl_frame_at(), FRAME_WORDS);
-    this.census_row = new Float64Array(pxl.memory.buffer, pxl.pxl_census(), 13);
-    this.stat_row = new Uint32Array(pxl.memory.buffer, pxl.pxl_build_stat(), 11);
+    const buf = pxl.memory.buffer;
+    this.frame = this.call(Cmd.FRAME_READ, null, (_, reply) => new Float64Array(buf, reply!.at(0).get<number>(), FRAME_WORDS));
+    const [census_at, stat_at] = this.call(Cmd.CHUNK_READ, null, (_, reply) => [reply!.at(0).get<number>(), reply!.at(1).get<number>()]);
+    this.census_row = new Float64Array(buf, census_at, 13);
+    this.stat_row = new Uint32Array(buf, stat_at, 11);
   }
 
   /** Makes room in the submission ring: applies what waits, and hands out

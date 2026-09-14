@@ -95,8 +95,7 @@ export function gpu_frame(dpr: number): void {
   // The light, the fog and the sky's colours and directions are the
   // module's (crates/pxl/core/src/world/environment.rs), laid out as these
   // uniforms take them.
-  const pxl = CORE_PXL!;
-  env_view ??= new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);
+  env_view ??= new Float32Array(CORE_PXL!.memory.buffer, CORE_BUILD.call(Cmd.ENV_LANES, null, (_, reply) => reply!.at(0).get<number>()), ENV_FLOATS);
   const env = env_view;
   u.set(env.subarray(0, 24), at.env);
   u.set(env.subarray(ENV_OTHER_LIGHT, ENV_OTHER_LIGHT + 8), at.other);

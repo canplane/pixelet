@@ -14,9 +14,12 @@
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
+import type { U32Array } from "@xpute/core/kit/array.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { DEPTH_FORMAT } from "./depth.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 /** shader.rs's pipeline ids past draw.rs's. */
 export const PIPELINE_CHUNK_DEPTH = 10;
@@ -119,8 +122,8 @@ export type FrameLayout = {
   other: u32;
 };
 
-export function read_frame_layout(pxl: PxlExports): FrameLayout {
-  const t = new Uint32Array(pxl.memory.buffer, pxl.pxl_frame_uniform_at(), 14);
+export function read_frame_layout(): FrameLayout {
+  const t = CORE_BUILD.call(Cmd.FRAME_READ, null, (_, reply) => Uint32Array.from(reply!.at(1).get<U32Array>()));
   return {
     floats: t[0],
     view_proj: t[1],
@@ -156,10 +159,9 @@ export class PipelineBuilder {
   record(id: u32): PipelineRecord {
     let r = this.records.get(id);
     if (!r) {
-      const pxl = this.pxl;
-      const row = new Uint32Array(pxl.memory.buffer, pxl.pxl_pipeline(id), 2);
-      if (row[1] === 0) throw new Error(`gpu: no pipeline ${id}`);
-      r = read_record(new Uint32Array(pxl.memory.buffer, row[0], row[1]));
+      const words = CORE_BUILD.call(Cmd.SHADER_PIPELINE, packet((p) => p.u32(id)), (_, reply) => Uint32Array.from(reply!.at(0).get<U32Array>()));
+      if (words.length === 0) throw new Error(`gpu: no pipeline ${id}`);
+      r = read_record(words);
       this.records.set(id, r);
     }
     return r;
@@ -169,9 +171,9 @@ export class PipelineBuilder {
     let m = this.modules.get(kind);
     if (!m) {
       const pxl = this.pxl;
-      const row = new Uint32Array(pxl.memory.buffer, pxl.pxl_shader(kind), 2);
-      if (row[1] === 0) throw new Error(`gpu: no shader ${kind}`);
-      const code = new TextDecoder().decode(new Uint8Array(pxl.memory.buffer, row[0], row[1]));
+      const [at, bytes] = CORE_BUILD.call(Cmd.SHADER_READ, packet((p) => p.u32(kind)), (length, reply) => [reply?.at(0).get<number>() ?? 0, length]);
+      if (bytes === 0) throw new Error(`gpu: no shader ${kind}`);
+      const code = new TextDecoder().decode(new Uint8Array(pxl.memory.buffer, at, bytes));
       m = this.device.createShaderModule({ label: `shader/${kind}`, code });
       this.modules.set(kind, m);
     }

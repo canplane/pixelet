@@ -157,6 +157,18 @@ arrived and hands the time back. What that decides about the boundary:
   or shapes that knows the domain. What the domain needs goes through
   that pipe as commands; an export named for a frame, a census or a shader
   is a passage opened for one purpose, and is on its way into the rings.
+
+  The addresses went next: where the frame block, the census, the build
+  stat, the environment's output and the change log's lanes are, the frame
+  uniform's layout, a shader's WGSL and a pipeline's record, each asked
+  once as a query (`FRAME_READ`, `CHUNK_READ`, `ENV_LANES`, `CHANGE_LANES`,
+  `SHADER_READ`, `SHADER_PIPELINE`); and the renderer's lists, taken once a
+  frame (`DRAW_READ`), a query that drains first, so what a late phase sent
+  is still drawn in its frame. The shell's exports are then the pipe — the
+  memory, the two rings' addresses, `pxl_drain`, `pxl_tick` — beside
+  `pxl_module_bytes`, the one number the memory's map is checked against
+  before any ring exists, the pool the core pool's kernel is, and the
+  reference paths the tests drive.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

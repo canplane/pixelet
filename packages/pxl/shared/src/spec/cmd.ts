@@ -35,6 +35,9 @@ export const enum Major {
   ENV = 0x11,
   MODEL = 0x12,
   CHANGE = 0x13,
+  FRAME = 0x14,
+  DRAW = 0x15,
+  SHADER = 0x16,
 }
 
 /** The hover ghost's own verbs. */
@@ -67,9 +70,20 @@ export const enum ModelMinor {
   SEAL = 0x13,
 }
 
-/** The environment's own verb. */
+/** The environment's own verbs. */
 export const enum EnvMinor {
   OBSERVE = 0x10,
+  LANES = 0x11,
+}
+
+/** The change log's own verb. */
+export const enum ChangeMinor {
+  LANES = 0x10,
+}
+
+/** The shaders' own verb. */
+export const enum ShaderMinor {
+  PIPELINE = 0x10,
 }
 
 /** An object store's own verb. */
@@ -233,6 +247,34 @@ export const enum Cmd {
   /** tag call · [lat f64, lon f64, day_start_ms f64] → [sunrise f64, sunset
    * f64], in hours after the day's start */
   ENV_READ = 0x1102,
+
+  // ---- where the lanes the shell reads in place are ----
+  //
+  // Asked once, or once a frame for the draw lists: the answer is addresses
+  // in the module's memory, which never grows.
+
+  /** tag call · no packet → [frame_at u32 (FRAME_WORDS doubles the glue
+   * writes before a tick), uniform u32[14]: the frame uniform's floats,
+   * then where each field starts] */
+  FRAME_READ = 0x1402,
+  /** tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
+   * words)] */
+  CHUNK_READ = 0x0102,
+  /** tag call · no packet → [out_at u32]: the environment's ENV_FLOATS */
+  ENV_LANES = 0x1111,
+  /** tag call · no packet → [topic_at u32, key_at u32, revision_at u32,
+   * head_at u32, ticks_at u32, capacity u32]: the change log's lanes */
+  CHANGE_LANES = 0x1310,
+  /** tag call · no packet → [row u32[10]]: the renderer's lists taken — the
+   * uploads' address and count, the frees', the draws', the uniforms', the
+   * rewrites' — valid until the next take */
+  DRAW_READ = 0x1502,
+  /** tag call · [kind u32] → result: the WGSL's length in bytes, 0 for a
+   * kind that is not one; with one, [at u32] */
+  SHADER_READ = 0x1602,
+  /** tag call · [id u32] → [record u32[]]: the pipeline's record, empty for
+   * an id that is not one */
+  SHADER_PIPELINE = 0x1610,
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //

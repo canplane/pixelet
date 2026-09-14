@@ -94,7 +94,6 @@ struct State {
     sched: Scheduler,
     /// The world's change log (module/world/change.ts's topics).
     changes: ChangeLog,
-    change_row: [u32; 6],
     /// The frame the glue writes before each tick (FRAME_WORDS doubles).
     frame: [f64; FRAME_WORDS],
     census: [f64; 13],
@@ -105,11 +104,6 @@ struct State {
     build_stat: [u32; 11],
     /// The world's raycast and its kept composites.
     raycast: Raycast,
-    draw_row: [u32; 10],
-    /// The last shader or pipeline asked for: where its words sit, and how
-    /// many (shader.rs).
-    shader_row: [u32; 2],
-    pipeline: Vec<u32>,
 }
 
 /// Messages each ring holds: a page mounting is 64 chunks a frame, each
@@ -195,16 +189,12 @@ fn state() -> &'static mut State {
                 cq: new_ring(RING_CAPACITY),
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
-                draw_row: [0; 10],
-                shader_row: [0; 2],
-                pipeline: Vec::new(),
                 changes: ChangeLog::new(ChangeLogOptions {
                     topics: WORLD_TOPICS,
                     capacity: JOURNAL_CAPACITY,
                     keys_per_topic: None,
                     alloc: None,
                 }),
-                change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
                 census: [0.0; 13],
                 events: std::collections::VecDeque::new(),
@@ -667,17 +657,6 @@ fn reindex_object(s: &mut State, key: u64) {
 
 // ---- The change log ----
 
-/// The log's lanes as a row of six words: the topic (u16), key (u64) and
-/// revision (u32) lanes, the head word, the ticks (u32 a topic), and the
-/// capacity.
-#[no_mangle]
-pub extern "C" fn pxl_change_lanes() -> *const u32 {
-    let s = state();
-    let l = s.changes.lanes();
-    s.change_row = [l[0] as u32, l[1] as u32, l[2] as u32, l[3] as u32, l[4] as u32, s.changes.capacity];
-    s.change_row.as_ptr()
-}
-
 /// Paints the column `key` into `volume`, leaving out the entry at
 /// (hide_band, hide_pos) when `hide` is set and adding the carve preview
 /// at a corner relative to the column's base when `carve` is. Bit 0: a
@@ -750,11 +729,6 @@ pub extern "C" fn pxl_ring_sq() -> u32 {
 #[no_mangle]
 pub extern "C" fn pxl_ring_cq() -> u32 {
     ring_address(&state().cq)
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_frame_at() -> u32 {
-    state().frame.as_ptr() as u32
 }
 
 /// A packet of one branch, its children written by `f`.
@@ -1042,6 +1016,79 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             };
             return Ok(Some((revision as i32, None)));
         }
+        Cmd::FRAME_READ => {
+            let mut uniform = [pxl_core::render::shader::FRAME_FLOATS; 14];
+            uniform[1..].copy_from_slice(&pxl_core::render::shader::FRAME_AT);
+            let (frame_at, uniform) = (s.frame.as_ptr() as u32, xpute_core::kit::array::U32Array::from(&uniform));
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(frame_at)).u32_array(Some(&uniform));
+                })),
+            )));
+        }
+        Cmd::CHUNK_READ => {
+            let (census_at, stat_at) = (s.census.as_ptr() as u32, s.build_stat.as_ptr() as u32);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(census_at)).u32(Some(stat_at));
+                })),
+            )));
+        }
+        Cmd::ENV_LANES => {
+            let out_at = s.sched.environment.out.as_ptr() as u32;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(out_at));
+                })),
+            )));
+        }
+        Cmd::CHANGE_LANES => {
+            let l = s.changes.lanes();
+            let capacity = s.changes.capacity;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(l[0] as u32))
+                        .u32(Some(l[1] as u32))
+                        .u32(Some(l[2] as u32))
+                        .u32(Some(l[3] as u32))
+                        .u32(Some(l[4] as u32))
+                        .u32(Some(capacity));
+                })),
+            )));
+        }
+        Cmd::DRAW_READ => {
+            let lanes = s.sched.draw.take();
+            let row = xpute_core::kit::array::U32Array::from(&lanes.map(|v| v as u32));
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32_array(Some(&row));
+                })),
+            )));
+        }
+        Cmd::SHADER_READ => {
+            let src = pxl_core::render::shader::source(u32_at(&fields(pkt)?, 0)?);
+            let at = src.as_ptr() as u32;
+            return Ok(Some((
+                src.len() as i32,
+                Some(packet(&mut |b| {
+                    b.u32(Some(at));
+                })),
+            )));
+        }
+        Cmd::SHADER_PIPELINE => {
+            let record = xpute_core::kit::array::U32Array::from(&pxl_core::render::shader::pipeline(u32_at(&fields(pkt)?, 0)?));
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32_array(Some(&record));
+                })),
+            )));
+        }
         Cmd::MODEL_SEAL => {
             let scale = number_at(&fields(pkt)?, 0)? as f32;
             let mem = opened(&mut s.volumes).mem();
@@ -1205,7 +1252,14 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::MODEL_SEAL
         | Cmd::CHANGE_UPDATE
         | Cmd::CHANGE_READ
-        | Cmd::CHANGE_DELETE => {
+        | Cmd::CHANGE_DELETE
+        | Cmd::FRAME_READ
+        | Cmd::CHUNK_READ
+        | Cmd::ENV_LANES
+        | Cmd::CHANGE_LANES
+        | Cmd::DRAW_READ
+        | Cmd::SHADER_READ
+        | Cmd::SHADER_PIPELINE => {
             unreachable!("applied before the parts are taken")
         }
         Cmd::GHOST_BOX => {
@@ -1524,70 +1578,13 @@ pub extern "C" fn pxl_tick() -> u32 {
 
 // ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
 
-/// Shader `kind`'s WGSL: a row of two words, its address and its length
-/// in bytes; zero length for a kind that is not one.
-#[no_mangle]
-pub extern "C" fn pxl_shader(kind: u32) -> *const u32 {
-    let s = state();
-    let src = pxl_core::render::shader::source(kind);
-    s.shader_row = [src.as_ptr() as u32, src.len() as u32];
-    s.shader_row.as_ptr()
-}
-
-/// Pipeline `id`'s record: a row of two words, its address and its length
-/// in words, valid until the next call; zero length for an id that is not
-/// one.
-#[no_mangle]
-pub extern "C" fn pxl_pipeline(id: u32) -> *const u32 {
-    let s = state();
-    s.pipeline = pxl_core::render::shader::pipeline(id);
-    s.shader_row = [s.pipeline.as_ptr() as u32, s.pipeline.len() as u32];
-    s.shader_row.as_ptr()
-}
-
-/// The frame uniform's layout: the floats it holds, then where each field
-/// starts, in shader.rs's FRAME_AT order.
-#[no_mangle]
-pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
-    static TABLE: [u32; 14] = {
-        let mut t = [pxl_core::render::shader::FRAME_FLOATS; 14];
-        let mut k = 0;
-        while k < 13 {
-            t[k + 1] = pxl_core::render::shader::FRAME_AT[k];
-            k += 1;
-        }
-        t
-    };
-    TABLE.as_ptr()
-}
-
 // ---- The dev gizmos (crates/pxl/core/src/world/debug.rs) ----
 
 // ---- The environment (crates/pxl/core/src/world/environment.rs) ----
 
-/// Where the environment's ENV_FLOATS output floats sit.
-#[no_mangle]
-pub extern "C" fn pxl_env_at() -> u32 {
-    state().sched.environment.out.as_ptr() as u32
-}
-
 // ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
 
 // ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
-
-/// Hands the renderer's lists over (crates/pxl/core/src/render/draw.rs): a row of
-/// ten words — the uploads' address and count, the frees', the draws', the
-/// uniforms', the rewrites' — valid until the next call. Uploads and frees are what
-/// accumulated since the last call; the draws are the last tick's.
-#[no_mangle]
-pub extern "C" fn pxl_draw_take() -> *const u32 {
-    let s = state();
-    let lanes = s.sched.draw.take();
-    for (k, v) in lanes.iter().enumerate() {
-        s.draw_row[k] = *v as u32;
-    }
-    s.draw_row.as_ptr()
-}
 
 /// The builder alone over the `order_len` ids at `order_at`, for the tests
 /// that hold a build to the TypeScript pipeline: no scheduler.
@@ -1601,21 +1598,4 @@ pub extern "C" fn pxl_build_tick(order_at: u32, order_len: u32, budget_ms: f64) 
     sched.builder.tick(&mut world, &order, budget_ms, &now, &mut |e| events.push_back(Event::Build(e)));
     flush(s);
     after(s);
-}
-
-/// Runs made the direct way, scans, bakes and refused blocks so far, the
-/// bakes' six counters (pxl_bake_finish's), and the module heap's use, as a
-/// row of eleven.
-#[no_mangle]
-pub extern "C" fn pxl_build_stat() -> *const u32 {
-    state().build_stat.as_ptr()
-}
-
-/// The scheduler's census as thirteen doubles: chunks, in the frustum,
-/// settling, blending, pending, pending off screen, the oldest visible and
-/// release waits in ms, committed this tick, released so far, and the bytes
-/// retained on and off screen.
-#[no_mangle]
-pub extern "C" fn pxl_census() -> *const f64 {
-    state().census.as_ptr()
 }

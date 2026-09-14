@@ -56,7 +56,7 @@ export class ModuleChangeLog implements ChangeJournal {
 
   constructor(private readonly pxl: PxlExports, topics: u32) {
     const buf = pxl.memory.buffer;
-    const row = new Uint32Array(buf, pxl.pxl_change_lanes(), 6);
+    const row = CORE_BUILD.call(Cmd.CHANGE_LANES, null, (_, reply) => Array.from({ length: 6 }, (_, k) => reply!.at(k).get<number>()));
     this.topics = topics;
     this.capacity = row[5];
     this.topic = new Uint16Array(buf, row[0], this.capacity);
