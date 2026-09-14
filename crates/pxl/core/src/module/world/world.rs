@@ -126,6 +126,7 @@ pub fn world_boot() {
 pub fn world_turn(platform: Platform) {
     world_boot();
     map_bootstrap_step();
+    crate::app::shell::shell_step();
     geolocation_step(platform.geolocation);
     orientation_watchdog_step(platform.orientation);
     tile_fetcher_step();
@@ -148,6 +149,11 @@ pub fn world_turn(platform: Platform) {
 
 static TICK_STATE: Global<TickState> = Global::new();
 static PLATFORM: Global<Option<Platform>> = Global::new();
+
+/// Tells the kernel the platform before its first frame.
+pub fn set_world_platform(platform: Platform) {
+    *PLATFORM.get(|| None) = Some(platform);
+}
 
 /// The platform as the last frame was told it.
 pub fn world_platform() -> Platform {

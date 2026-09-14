@@ -1,19 +1,16 @@
 // @pxl/web/module/camera/use_camera_busy_interaction_style.ts
 
 import { cn } from "@/shared/lib/util/cn.ts";
-import { CameraStatus, useCameraStore } from "./store.ts";
+import { useKernel } from "@/wasm/kernel.ts";
 
 /**
  * The standard "dim and stop responding to touch while the camera is busy"
- * treatment for map overlay chrome (top_overlays.tsx, bottom_overlays.tsx) —
- * pulled out of both since they had it copy-pasted identically. Both also
- * gate a nested element's own pointer-events on the raw boolean directly
- * (rather than through this className), so it's returned alongside the
- * className instead of folded away.
+ * treatment for map overlay chrome (top_overlays.tsx, bottom_overlays.tsx).
+ * Both also gate a nested element's own pointer-events on the raw boolean
+ * directly, so it's returned alongside the className instead of folded away.
  */
 export function use_camera_busy_interaction_style(): { is_camera_busy: boolean; interaction_style: string } {
-  const camera_status = useCameraStore((state) => state.camera_status);
-  const is_camera_busy = camera_status !== CameraStatus.IDLE;
+  const is_camera_busy = useKernel((s) => s.camera_busy);
 
   const interaction_style = cn(
     // Not transition-all: these containers position from --vv-top/--vv-bottom,

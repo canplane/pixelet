@@ -1082,6 +1082,38 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let applied = pxl_core::app::shell::ui_action(&fields(pkt)?.at(0)?.get_str()?);
             return Ok(Some((applied as i32, None)));
         }
+        Cmd::WORLD_SHEET => {
+            use pxl_core::module::world::billboard::atlas::DrawSpec;
+            let generation = u32_at(&fields(pkt)?, 0)?;
+            let atlas = pxl_core::module::world::billboard::sheet::billboard_sheet();
+            let flush = atlas.flush(generation);
+            let slots = if flush.whole { atlas.live() } else { flush.dirty.clone() };
+            let rows: Vec<_> = slots
+                .iter()
+                .filter_map(|&slot| {
+                    let rect = atlas.slot_rect(slot);
+                    atlas.slot_draw(slot).map(|draw| match draw {
+                        DrawSpec::PoiBadge { icon, color, name, logical_w } => (rect, 0u32, icon.to_string(), color.to_string(), name.clone(), *logical_w, 0.0),
+                        DrawSpec::Cluster { label, logical_w } => (rect, 1u32, String::new(), String::new(), label.clone(), *logical_w, 0.0),
+                        DrawSpec::Bubble { lines, box_w, box_h } => (rect, 2u32, String::new(), String::new(), lines.join("\n"), *box_w, *box_h),
+                    })
+                })
+                .collect();
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.bool(Some(flush.whole)).u32(Some(flush.size)).u32(Some(flush.generation));
+                    b.branch(Some(&mut |e| {
+                        for (rect, kind, icon, color, text, logical_w, box_h) in &rows {
+                            e.branch(Some(&mut |r| {
+                                r.u32(Some(rect[0])).u32(Some(rect[1])).u32(Some(rect[2])).u32(Some(rect[3])).u32(Some(*kind));
+                                r.str(Some(icon.as_str())).str(Some(color.as_str())).str(Some(text.as_str())).f64(Some(*logical_w)).f64(Some(*box_h));
+                            }));
+                        }
+                    }));
+                })),
+            )));
+        }
         Cmd::INPUT_UPDATE => {
             let f = fields(pkt)?;
             pxl_core::module::camera::input::camera_input_rect(pxl_core::module::camera::input::Rect {
@@ -1623,7 +1655,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE | Cmd::WORLD_LANES | Cmd::WORLD_ACTION | Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
+        Cmd::WORLD_CREATE | Cmd::WORLD_LANES | Cmd::WORLD_ACTION | Cmd::WORLD_SHEET | Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
     Ok(Some((0, None)))

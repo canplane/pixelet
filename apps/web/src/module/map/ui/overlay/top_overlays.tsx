@@ -6,11 +6,10 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { useAppContext } from "@/app/provider/app_context.ts";
 import { use_camera_busy_interaction_style } from "@/module/camera/use_camera_busy_interaction_style.ts";
-import { useMapStore } from "@/module/map/store.ts";
+import { useKernel } from "@/wasm/kernel.ts";
 import { CurrentAddress } from "./current_address.tsx";
 import { SensorStatus } from "./sensor_status.tsx";
 import { DummyChatText } from "./dummy_chat_text.tsx";
-import { useReverseGeocode } from "./use_reverse_geocode.ts";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale_bar.tsx";
 import { TrackingButton } from "@/module/map/ui/control/tracking_button.tsx";
@@ -21,8 +20,7 @@ export function TopOverlays() {
   const { ui } = useAppContext();
   const { t } = useTranslation();
 
-  const map_center = useMapStore((state) => state.map_center);
-  const { label: address_label } = useReverseGeocode(map_center);
+  const address_label = useKernel((s) => s.address.label);
 
   return (
     <>

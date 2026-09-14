@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { type SettingKey, SETTINGS, settings_in, type SettingSection, type ToggleKey } from "./schema.ts";
 import { SectionTitle, SettingRadioRow, SettingRow } from "./setting_row.tsx";
-import { useSettingsStore } from "./store.ts";
+import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
   display: Eye,
@@ -42,9 +42,9 @@ function SettingControl(props: { name: SettingKey }) {
   const { name } = props;
   const { t } = useTranslation();
   const setting = SETTINGS[name];
-  const value = useSettingsStore((state) => state[name]);
-  const set_setting = useSettingsStore((state) => state.set_setting);
-  const toggle_setting = useSettingsStore((state) => state.toggle_setting);
+  const value = useKernel((s) => s.settings[name]);
+  const set_setting = (key: string, option: string) => kernel_action({ type: "set_setting", key, value: option });
+  const toggle_setting = (key: string) => kernel_action({ type: "toggle_setting", key });
   const base = `settings.${setting.section}.${name}`;
 
   switch (setting.kind) {

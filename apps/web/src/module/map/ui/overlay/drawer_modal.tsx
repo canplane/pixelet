@@ -7,7 +7,7 @@ import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { decor_ids, type DecorId, is_terrain_style_cube, placeable_cube_ids, type PlaceableCubeId, terrain_style_cube_source } from "@pxl/shared/spec/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
-import { useUiStore } from "@/app/store/ui_store.ts";
+import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
@@ -54,8 +54,8 @@ function cube_label(t: (key: string) => string, id: PlaceableCubeId): string {
 
 function CubeSwatchButton({ id, onPick }: { id: PlaceableCubeId; onPick: (id: PlaceableCubeId) => void }) {
   const { t } = useTranslation();
-  const activeTool = useUiStore((state) => state.activeTool);
-  const object_color_id = useUiStore((state) => state.object_color_id);
+  const activeTool = useKernel((s) => s.ui.active_tool);
+  const object_color_id = useKernel((s) => s.ui.object_color_id);
   const active = activeTool === "object" && object_color_id === id;
   const label = cube_label(t, id);
 
@@ -82,8 +82,8 @@ function CubeSwatchButton({ id, onPick }: { id: PlaceableCubeId; onPick: (id: Pl
 
 function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) => void }) {
   const { t } = useTranslation();
-  const activeTool = useUiStore((state) => state.activeTool);
-  const decor_id = useUiStore((state) => state.decor_id);
+  const activeTool = useKernel((s) => s.ui.active_tool);
+  const decor_id = useKernel((s) => s.ui.decor_id);
   const active = activeTool === "decor" && decor_id === id;
   const Icon = DECOR_ICONS[id];
 
@@ -121,8 +121,8 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
 export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
   const { open, onOpenChange } = props;
   const { t } = useTranslation();
-  const select_cube = useUiStore((state) => state.select_cube);
-  const select_decor = useUiStore((state) => state.select_decor);
+  const select_cube = (id: PlaceableCubeId) => kernel_action({ type: "select_cube", id });
+  const select_decor = (id: DecorId) => kernel_action({ type: "select_decor", id });
 
   const sections = group_by_section(placeable_cube_ids);
 

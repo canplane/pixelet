@@ -4,21 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
-import type { PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { TextField } from "@/shared/ui/text_field.tsx";
-import { useMapStore } from "@/module/map/store.ts";
-import { useCameraStore } from "@/module/camera/store.ts";
-import { ground_or_raw } from "@/module/world/terrain/elevation.ts";
-import { register_tile_interest } from "@/module/world/terrain/store.ts";
 import { resolve_poi_theme } from "@/module/world/poi/poi_theme.ts";
 import { assemble_label } from "@/module/world/geocode/label.ts";
 import { fetch_search, type SearchResult } from "@/module/world/search/repository.ts";
-import { fetch_sync } from "@/module/world/sched/fetch_scheduler.ts";
+import { kernel_action, kernel_snapshot } from "@/wasm/kernel.ts";
 
 // Debounced like use_reverse_geocode.ts's own DEBOUNCE_MS, but shorter:
 // that one waits for panning to *settle* on a new page; this waits for
@@ -26,23 +18,11 @@ import { fetch_sync } from "@/module/world/sched/fetch_scheduler.ts";
 // search box.
 const DEBOUNCE_MS = 300;
 
-const CATEGORY = "search";
-// The most latency-sensitive fetch in the app — a typed query with the user
-// staring at an empty result list — so it outranks even geocode (-5) and
-// every streaming category. Single-slot, so it never occupies more than one
-// of fetch_scheduler.ts's quota slots.
-const PRIORITY = -10;
-
 export type SearchModalProps = {
   type: "search";
 };
 
 type LonLat = { lon: number; lat: number };
-
-function map_center_to_near(map_center: PVF3): LonLat {
-  const g = epsg4326.unproject([0, 0], map_center.i, map_center.f);
-  return { lon: g[0], lat: g[1] };
-}
 
 const EARTH_RADIUS_M = 6378137;
 const DEG_TO_RAD = Math.PI / 180;
@@ -159,81 +139,36 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     if (q.length === 0) {
       set_results([]);
       set_loading(false);
-      fetch_sync(CATEGORY, []); // drop whatever the last keystroke left in flight
       return;
     }
 
     set_loading(true);
-
-    const timer = setTimeout(() => {
-      // A one-item wishlist: the next keystroke's query supersedes this one
-      // and fetch_scheduler.ts's own yield aborts it — the latest-wins
-      // behaviour this used to hand-roll with an AbortController, now
-      // sharing one quota (and the ledger) with terrain/POI/geocode. Errors
-      // are the scheduler's to log and classify.
-      fetch_sync(CATEGORY, [{
-        key: `${CATEGORY}:${q}`,
-        category: CATEGORY,
-        priority: PRIORITY,
-        run: async (signal) => {
-          try {
-            const map_center = useMapStore.getState().map_center;
-            const near = map_center ? map_center_to_near(map_center) : undefined;
-            const found = await fetch_search(q, { near, signal });
-            set_origin(near ?? null);
-            set_results(found);
-          } finally {
-            if (!signal.aborted) set_loading(false);
-          }
-        },
-      }]);
+    // Latest wins: the next keystroke's query aborts this one.
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const center = kernel_snapshot().map.center_lonlat;
+        const near = center ? { lon: center[0], lat: center[1] } : undefined;
+        const found = await fetch_search(q, { near, signal: controller.signal });
+        set_origin(near ?? null);
+        set_results(found);
+      } catch (err) {
+        if (!controller.signal.aborted) console.error("[search]", err);
+      } finally {
+        if (!controller.signal.aborted) set_loading(false);
+      }
     }, DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
-      fetch_sync(CATEGORY, []);
+      controller.abort();
     };
   }, [query]);
 
   function select(result: SearchResult) {
-    // Same "user drove the camera, stop overriding it with GPS" rule
-    // camera/input.tsx's own drag handlers already apply — a search jump
-    // is exactly that kind of explicit user intent.
-    useCameraStore.getState().set_is_follow_mode(false);
-
-    // epsg4326.project alone leaves Z at whatever the raw projection gives
-    // it (effectively 0), not real terrain height — ground_or_raw's own
-    // doc comment names this exact bug for the GPS recenter button before
-    // it was fixed to call this; without it the camera ends up buried
-    // under the actual ground mesh at the jump target.
-    //
-    // Unlike pan/GPS-recenter's own ground_or_raw calls, a search jump can
-    // land on a page nothing has ever loaded before, so the terrain tile
-    // usually isn't there yet — ground_or_raw silently falls back to the
-    // raw (unelevated) coordinate in that case (`grounded === target`
-    // catches exactly that fallback, since it returns the same reference
-    // rather than a newly-built grounded one). Re-ground once, the moment
-    // that page's tile actually arrives, rather than leaving the camera
-    // stuck underground until some unrelated interaction re-triggers a
-    // ground snap.
-    const target = epsg4326.project({ i: 0n, f: 0n }, [result.lon, result.lat]);
-    const page_idx = L3_IDX(target.i);
-    const grounded = ground_or_raw(target);
-    useMapStore.getState().set_map_center(grounded);
-
-    if (grounded === target) {
-      const unregister = register_tile_interest(
-        (p) => p === page_idx,
-        () => {
-          unregister();
-          const current = useMapStore.getState().map_center;
-          if (current !== null && L3_IDX(current.i) === page_idx) {
-            useMapStore.getState().set_map_center(ground_or_raw(target));
-          }
-        },
-      );
-    }
-
+    // The kernel grounds the jump, stops follow mode, and grounds it again
+    // once the target page's terrain arrives (app/shell.rs's go_to).
+    kernel_action({ type: "go_to", lon: result.lon, lat: result.lat });
     onOpenChange(false);
   }
 

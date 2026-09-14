@@ -205,6 +205,7 @@ export const enum LoadMinor {
 export const enum WorldMinor {
   LANES = 0x10,
   ACTION = 0x11,
+  SHEET = 0x12,
 }
 
 export const enum Cmd {
@@ -549,6 +550,11 @@ export const enum Cmd {
   WORLD_LANES = 0x1b10,
   /** tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not */
   WORLD_ACTION = 0x1b11,
+  /** tag call · [generation u32] → [whole bool, size u32, generation u32, entries: [[x u32,
+   * y u32, w u32, h u32, kind u32 (0 place, 1 cluster, 2 bubble), icon str, color str, text
+   * str (a bubble's lines joined by \n), logical_w f64, box_h f64]]] — the badge sheet's
+   * flush: every live entry when the sheet was replaced, else the entries drawn since */
+  WORLD_SHEET = 0x1b12,
   /** [left f64, top f64, width f64, height f64] — the canvas's client rect */
   INPUT_UPDATE = 0x1c03,
   /** [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,

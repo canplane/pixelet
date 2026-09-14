@@ -2,63 +2,18 @@
 
 import { useTranslation } from "react-i18next";
 
-import { useCameraStore } from "@/module/camera/store.ts";
-import { camera_cfg } from "@/module/camera/config.ts";
-import { useMapStore } from "@/module/map/store.ts";
-
-import * as epsg3857 from "@pxl/shared/spec/space/adapter/3857.ts";
-import type { G3857 } from "@pxl/shared/spec/space/adapter/3857.ts";
-
-import type { f64 } from "@xpute/core/kit/word.ts";
+import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
 
-const { FOV } = camera_cfg.projection;
-const { DEFAULT_DIST } = camera_cfg.view;
-
-const SCALE_BAR_MAX_WIDTH_PX = 56;
 const SCALE_BAR_TICK_PX = 6;
 const SCALE_BAR_PAD_PX = 3;
 
-function round_to_nice_scale(raw: f64): f64 {
-  if (!(raw > 0)) return 0;
-
-  const exponent: f64 = Math.floor(Math.log10(raw));
-  const base: f64 = 10 ** exponent;
-  const fraction: f64 = raw / base;
-
-  const nice_fraction: f64 = fraction < 1.5 ? 1 : fraction < 3.5 ? 2 : fraction < 7.5 ? 5 : 10;
-  return nice_fraction * base;
-}
-
-const G3857_SCRATCH: G3857 = [0, 0, 0];
-
 export function MapScaleBar() {
   const { t } = useTranslation();
-  const view_state = useCameraStore((state) => state.view_state);
-  const reset_dist = useCameraStore.getState().reset_dist;
-  const map_center = useMapStore((state) => state.map_center);
-
-  const { dist } = view_state;
-
-  const screen_height = globalThis.innerHeight ?? 800;
-  const fov_rad = (FOV * Math.PI) / 180;
-  const visible_u = 2 * Math.tan(fov_rad / 2) * dist;
-  // `dist` is in canonical "u" units, not meters — the conversion below is
-  // required. A ratio of two Vector3.distanceTo() results can't catch a
-  // missing conversion since both sides would already be in u units.
-  const visible_planar_m = visible_u / epsg3857.U_PER_M;
-  const planar_m_per_px = visible_planar_m / screen_height;
-  const mercator_scale = map_center !== null ? epsg3857.Z_SCALE(epsg3857.unproject(G3857_SCRATCH, map_center.i, map_center.f)[1]) : 1;
-  const real_m_per_px = planar_m_per_px / mercator_scale;
-
-  const total_meters: f64 = round_to_nice_scale(SCALE_BAR_MAX_WIDTH_PX * real_m_per_px);
-  const bar_width_px: f64 = real_m_per_px > 0 ? total_meters / real_m_per_px : 0;
-
-  const is_default_zoom: boolean = Math.abs(dist - DEFAULT_DIST) < 1;
-
-  const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
+  const { bar_width_px, is_default_zoom, label } = useKernel((s) => s.scale_bar);
+  const reset_dist = () => kernel_action({ type: "reset_dist" });
 
   return (
     // layout={false}: MotionContainer's motion.div defaults to layout={true},
