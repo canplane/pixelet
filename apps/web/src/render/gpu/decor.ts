@@ -4,21 +4,21 @@
  * Decor through WebGPU: the module's decor draws (crates/pxl-core/src/draw.rs)
  * executed as instanced draws of each variant's model, the instances read
  * straight out of the decor block the module built (decor.rs's layout) as
- * it lies on the GPU. What decor/field.ts did for three — a matrix per
- * instance in a buffer per variant, runs per chunk, compaction, rebasing —
- * has nothing to do here: the block is the instance buffer, the chunk's
+ * it lies on the GPU: the block is the instance buffer, the chunk's
  * translation is its uniform, and the module says which block a chunk shows.
  *
- * The models and skins are the glue's, as the texture pack is: loaded by
- * decor/asset_store.ts and handed over by group — every bundle's variants in
- * bundle order, the order the kinds were taught.
+ * A model is the module's (crates/pxl-core/src/model.rs), registered by
+ * decor/asset_store.ts and drawn from the same block the module holds its
+ * triangles in for the hit test — the vertex lanes of model_asset.ts's
+ * layout, and the indices past them. The skins are the glue's, as the
+ * texture pack is, handed over by group: every bundle's variants in bundle
+ * order, the order the kinds were taught.
  *
  * The shader is make_lit_gltf_material's recipe: the skin under three's
  * Lambert (albedo over pi) for the sun, the ambient and the hemisphere, the
  * skin again as the emissive floor, fog, and the grade. An instance is its
  * position, its spin about Z after the glTF Y-up to Z-up turn, and its
- * scale, composed as instanced_model.ts's compose_instance_matrix did; a
- * hidden one is sent outside the clip volume.
+ * scale; a hidden one is sent outside the clip volume.
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
@@ -35,21 +35,14 @@ const PIPELINE_GHOST_DECOR = 4;
  * word, the instance count, the opacity, padding. */
 const DRAW_UNIFORM_BYTES = 32;
 
-export type DecorModel = {
-  position: Float32Array<ArrayBuffer>;
-  normal: Float32Array<ArrayBuffer>;
-  uv: Float32Array<ArrayBuffer>;
-  index: Uint32Array<ArrayBuffer>;
-  skin: ImageBitmap | HTMLImageElement | HTMLCanvasElement;
-};
+/** model_asset.ts's words a vertex: position, normal, uv, joints, weights. */
+const MODEL_VERTEX_WORDS = 16;
 
 type GpuModel = {
-  position: GPUBuffer;
-  normal: GPUBuffer;
-  uv: GPUBuffer;
-  index: GPUBuffer;
+  /** The module's mesh block, and its counts. */
+  buffer: GPUBuffer;
+  vertex_cnt: u32;
   index_cnt: u32;
-  skin: GPUTexture;
   skin_group: GPUBindGroup;
 };
 
@@ -163,7 +156,10 @@ export class DecorPass {
   private draw_group: GPUBindGroup;
   private draw_scratch: ArrayBuffer;
   private models: (GpuModel | null)[] = [];
-  private sources: readonly (DecorModel | null)[] = [];
+  /** By group: the model's handle and the skin, as told. */
+  private readonly handles: u32[] = [];
+  private readonly skins: (ImageBitmap | null)[] = [];
+  private readonly skin_groups = new WeakMap<ImageBitmap, GPUBindGroup>();
   private readonly block_groups = new WeakMap<GPUBuffer, GPUBindGroup>();
 
   constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer) {
@@ -225,41 +221,51 @@ export class DecorPass {
     return this.device.createBindGroup({ layout: this.draw_layout, entries: [{ binding: 0, resource: { buffer: this.draw_buffer, size: DRAW_UNIFORM_BYTES } }] });
   }
 
-  /** The models by group, as the assets stand; a group still loading is null. */
-  set_models(sources: readonly (DecorModel | null)[]): void {
-    for (let g = 0; g < sources.length; g++) {
-      if (sources[g] === (this.sources[g] ?? null)) continue;
-      this.models[g] = sources[g] ? this.upload(sources[g]!) : null;
-    }
-    this.sources = sources;
+  /** Triangles one instance of `group` draws; 0 while it loads. */
+  triangles_of(group: u32): u32 {
+    const m = this.models[group];
+    return m ? m.index_cnt / 3 : 0;
   }
 
-  private upload(m: DecorModel): GpuModel {
-    const d = this.device;
-    const buffer = (data: ArrayBufferView<ArrayBuffer>, usage: GPUBufferUsageFlags) => {
-      const b = d.createBuffer({ size: Math.max(4, (data.byteLength + 3) & ~3), usage: usage | GPUBufferUsage.COPY_DST });
-      d.queue.writeBuffer(b, 0, data);
-      return b;
-    };
-    const w = m.skin.width;
-    const h = m.skin.height;
-    const skin = d.createTexture({ size: [w, h], format: "rgba8unorm-srgb", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-    d.queue.copyExternalImageToTexture({ source: m.skin }, { texture: skin }, [w, h]);
-    return {
-      position: buffer(m.position, GPUBufferUsage.VERTEX),
-      normal: buffer(m.normal, GPUBufferUsage.VERTEX),
-      uv: buffer(m.uv, GPUBufferUsage.VERTEX),
-      index: buffer(m.index, GPUBufferUsage.INDEX),
-      index_cnt: m.index.length,
-      skin,
-      skin_group: d.createBindGroup({ layout: this.skin_layout, entries: [{ binding: 0, resource: skin.createView() }, { binding: 1, resource: this.sampler }] }),
-    };
+  /** A group's model, by the handle of the module's mesh block, and its
+   * skin; either still loading is 0 or null, and the group draws nothing. */
+  set_model(group: u32, handle: u32, skin: ImageBitmap | null): void {
+    this.handles[group] = handle;
+    this.skins[group] = skin;
+    this.models[group] = null;
+  }
+
+  /** The group's model as the renderer holds it now, made on first use once
+   * the block is uploaded and the skin here. */
+  private model_of(group: u32, buffers: ReadonlyMap<u32, GPUBuffer>, counts: ReadonlyMap<u32, [u32, u32]>): GpuModel | null {
+    const m = this.models[group];
+    if (m) return m;
+    const handle = this.handles[group];
+    const skin = this.skins[group];
+    const buffer = handle ? buffers.get(handle) : undefined;
+    const count = handle ? counts.get(handle) : undefined;
+    if (!buffer || !count || !skin) return null;
+    let skin_group = this.skin_groups.get(skin);
+    if (!skin_group) {
+      const d = this.device;
+      const texture = d.createTexture({
+        size: [skin.width, skin.height],
+        format: "rgba8unorm-srgb",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      d.queue.copyExternalImageToTexture({ source: skin }, { texture }, [skin.width, skin.height]);
+      skin_group = d.createBindGroup({ layout: this.skin_layout, entries: [{ binding: 0, resource: texture.createView() }, { binding: 1, resource: this.sampler }] });
+      this.skin_groups.set(skin, skin_group);
+    }
+    const made: GpuModel = { buffer, vertex_cnt: count[0], index_cnt: count[1], skin_group };
+    this.models[group] = made;
+    return made;
   }
 
   /** Writes every decor draw's uniforms, ghosts included, and draws the
    * opaque ones into the open pass: one write a frame, since a later write
    * to the same buffer before the submit would stand for every draw. */
-  draw(pass: GPURenderPassEncoder, draws: Uint32Array, uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>): u32 {
+  draw(pass: GPURenderPassEncoder, draws: Uint32Array, uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>, counts: ReadonlyMap<u32, [u32, u32]>): u32 {
     const is_decor = (p: u32) => p === PIPELINE_DECOR || p === PIPELINE_GHOST_DECOR;
     let n = 0;
     for (let k = 0; k < draws.length; k += DRAW_WORDS) if (is_decor(draws[k + 4])) n++;
@@ -287,16 +293,16 @@ export class DecorPass {
       slot++;
     }
     this.device.queue.writeBuffer(this.draw_buffer, 0, this.draw_scratch, 0, n * this.stride);
-    return this.draw_pipeline(pass, draws, buffers, PIPELINE_DECOR, this.pipeline);
+    return this.draw_pipeline(pass, draws, buffers, counts, PIPELINE_DECOR, this.pipeline);
   }
 
   /** The ghost's decor draw, blended, after everything opaque; its uniforms
    * were written by `draw`. */
-  draw_ghosts(pass: GPURenderPassEncoder, draws: Uint32Array, _uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>): u32 {
-    return this.draw_pipeline(pass, draws, buffers, PIPELINE_GHOST_DECOR, this.ghost_pipeline);
+  draw_ghosts(pass: GPURenderPassEncoder, draws: Uint32Array, _uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>, counts: ReadonlyMap<u32, [u32, u32]>): u32 {
+    return this.draw_pipeline(pass, draws, buffers, counts, PIPELINE_GHOST_DECOR, this.ghost_pipeline);
   }
 
-  private draw_pipeline(pass: GPURenderPassEncoder, draws: Uint32Array, buffers: ReadonlyMap<u32, GPUBuffer>, which: u32, pipeline: GPURenderPipeline): u32 {
+  private draw_pipeline(pass: GPURenderPassEncoder, draws: Uint32Array, buffers: ReadonlyMap<u32, GPUBuffer>, counts: ReadonlyMap<u32, [u32, u32]>, which: u32, pipeline: GPURenderPipeline): u32 {
     let slot = 0;
     let drawn = 0;
     for (let k = 0; k < draws.length; k += DRAW_WORDS) {
@@ -304,7 +310,7 @@ export class DecorPass {
       if (p !== PIPELINE_DECOR && p !== PIPELINE_GHOST_DECOR) continue;
       const offset = slot++ * this.stride;
       if (p !== which) continue;
-      const model = this.models[draws[k + 1]];
+      const model = this.model_of(draws[k + 1], buffers, counts);
       const block = buffers.get(draws[k]);
       if (!model || !block) continue;
       if (drawn === 0) {
@@ -319,10 +325,11 @@ export class DecorPass {
       pass.setBindGroup(1, this.draw_group, [offset]);
       pass.setBindGroup(2, model.skin_group);
       pass.setBindGroup(3, block_group);
-      pass.setVertexBuffer(0, model.position);
-      pass.setVertexBuffer(1, model.normal);
-      pass.setVertexBuffer(2, model.uv);
-      pass.setIndexBuffer(model.index, "uint32");
+      const vc = model.vertex_cnt;
+      pass.setVertexBuffer(0, model.buffer, 0, vc * 12);
+      pass.setVertexBuffer(1, model.buffer, vc * 12, vc * 12);
+      pass.setVertexBuffer(2, model.buffer, vc * 24, vc * 8);
+      pass.setIndexBuffer(model.buffer, "uint32", vc * MODEL_VERTEX_WORDS * 4, model.index_cnt * 4);
       pass.drawIndexed(model.index_cnt, draws[k + 2]);
       drawn++;
     }

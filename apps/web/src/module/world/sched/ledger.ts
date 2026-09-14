@@ -14,7 +14,7 @@
  *   worker.
  * - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory,
  *   queue pressure). Only accrues while frames actually render
- *   (`frameloop="demand"`), which is correct: idle means nothing to sample.
+ *   (the tick runs only when asked), which is correct: idle means nothing to sample.
  *
  * The per-frame CPU breakdown is the tick's phases (sched/tick.ts) plus
  * chunk_stage's recheck/commit split inside the visible phase; there is no
@@ -24,7 +24,6 @@
  */
 
 import type { Phases } from "./demand.ts";
-import type { DrawCensus } from "./draw_census.ts";
 
 export type Outcome = "ok" | "aborted" | "error";
 
@@ -52,6 +51,9 @@ export type TaskRecord = {
 /** One rendered frame. Lean on purpose — the live half of the factor set in
  * the discussion doc; latency percentiles, decode bandwidth and upload cost
  * are derived from TaskRecords or added later, not crammed in here. */
+/** tag → [draws, triangles], for one frame's render. */
+export type DrawCensus = Record<string, [number, number]>;
+
 export type FrameSample = {
   /** monotonic ms (performance.now) at record time. */
   t: number;
@@ -89,24 +91,22 @@ export type FrameSample = {
    * which side of this line the missing time is on.
    */
   task_ms: number;
-  /** GPU wall time for this frame from EXT_disjoint_timer_query_webgl2; 0 when
-   * unsupported or not yet resolved. Lags a few frames (gpu_timer.ts). */
+  /** From a submit to the queue reporting the work done
+   * (render/gpu/renderer.ts): lags a frame or two, and includes the wait for
+   * the GPU to be free. 0 before the renderer exists. */
   gpu_ms: number;
-  // GPU ask — renderer.info, the fill-rate inputs
+  // GPU ask — the WebGPU renderer's stat, the fill-rate input
   draw_calls: number;
   triangles: number;
-  geometries: number;
-  textures: number;
-  /** draw_calls and triangles split by what was drawn — draw_census.ts.
-   * Lags a frame like the totals: it is the render that ran after the
-   * previous tick. */
+  /** GPU buffers held, and what they hold in MiB — their deltas across
+   * frames are the upload churn. */
+  buffers: number;
+  buffer_mb: number;
+  /** draw_calls and triangles split by pipeline — render/gpu/renderer.ts's
+   * census. */
   census: DrawCensus;
-  /** drawingBuffer width*height — the raw fill-rate primitive. Multiply by
-   * fx_passes for effective per-frame shaded pixels. */
+  /** The WebGPU canvas's width*height — the raw fill-rate primitive. */
   px: number;
-  /** active full-screen passes (post-fx stack + shadow map) — the multiplier
-   * on px. Kept separate from px so the sample stays a truthful primitive. */
-  fx_passes: number;
   /** chunk_stage's own per-frame LOD counts. Here rather than in a separate
    * session-peak object so the ring carries the *shape* of a spike, not only
    * how high it got. */
@@ -134,8 +134,8 @@ export type FrameSample = {
   heap_mb: number;
   // retained-payload footprint — the "crash factor" (terrain/config.ts:
   // r=3 ≈ 197MB decoded crashed an iPhone 13 mini). Counts, not bytes: the
-  // overlay multiplies tile_pages by a documented per-page estimate, same
-  // as px×fx_passes. The gap to heap_mb is geometry/texture/JS overhead.
+  // overlay multiplies tile_pages by a documented per-page estimate. The gap
+  // to heap_mb is the rest of the JS heap.
   tile_pages: number;
   poi_count: number;
   /** The core pool (core_pool.ts): MiB lent out, MiB free inside regions

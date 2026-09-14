@@ -316,3 +316,193 @@ mod tests {
         assert!(ray_aabb(&[0.5, 0.5, -5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).is_none());
     }
 }
+
+// ---- the decor ----
+
+/// What a ray struck among the decor shown: the chunk it stands in, the
+/// entry's band and packed position in that column, and how far along.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DecorHit {
+    pub chunk: u32,
+    pub band: u32,
+    pub pos: u32,
+    pub t: f64,
+}
+
+/// How far past a chunk's own square an instance standing in it can
+/// reach, in units: a generous bound on the models' size, only for
+/// skipping chunks the ray never comes near.
+const DECOR_REACH: f64 = 16.0;
+
+/// The nearest placed decor instance the ray strikes within `max_dist`,
+/// over the decor every on-screen chunk shows, model triangle by triangle
+/// after a bounding sphere. Procedural instances — the ones with no entry —
+/// are passed over, as the eraser has nothing to remove there; hidden
+/// ones are tested, since the hidden one is what the eraser is over.
+pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: [f64; 3], d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
+    let mem = world.volumes.mem();
+    let mut best: Option<DecorHit> = None;
+    let mut limit = max_dist;
+    for (id, base_x, base_y, decor) in sched.shown_decor() {
+        let tx = base_x - origin[0];
+        let ty = base_y - origin[1];
+        if !ray_meets_square(&o, &d, tx - DECOR_REACH, ty - DECOR_REACH, tx + CHUNK_W + DECOR_REACH, ty + CHUNK_W + DECOR_REACH, limit) {
+            continue;
+        }
+        // SAFETY: the block the scheduler wrote at `at`, of the groups it
+        // recorded; every lane read is inside its group's run.
+        let words = unsafe { core::slice::from_raw_parts(mem.add(decor.at as usize) as *const u32, decor.bytes as usize / 4) };
+        for (g, &(offset, count)) in decor.groups.iter().enumerate() {
+            let Some(Some(model)) = sched.decor_models.get(g) else { continue };
+            let Some(mesh) = sched.models.mesh(*model) else { continue };
+            let (offset, count) = (offset as usize, count as usize);
+            let lane = |k: usize, i: usize| f32::from_bits(words[offset + k * count + i]) as f64;
+            let band_at = offset + 5 * count + count.div_ceil(4);
+            // SAFETY: the model's block, positions first and the indices
+            // past the vertex words.
+            let (positions, indices) = unsafe {
+                (
+                    core::slice::from_raw_parts(mem.add(mesh.at) as *const f32, mesh.vertex_cnt as usize * 3),
+                    core::slice::from_raw_parts(
+                        (mem.add(mesh.at) as *const u32).add(mesh.vertex_cnt as usize * crate::model::MODEL_VERTEX_WORDS as usize),
+                        mesh.index_cnt as usize,
+                    ),
+                )
+            };
+            for i in 0..count {
+                let band = words[band_at + i];
+                if band == crate::decor::NO_ENTRY {
+                    continue;
+                }
+                let c = [tx + lane(0, i), ty + lane(1, i), lane(2, i)];
+                let spin = lane(3, i);
+                let s = lane(4, i) * mesh.scale as f64;
+                let r = mesh.radius as f64 * s;
+                let p = [o[0] - c[0], o[1] - c[1], o[2] - c[2]];
+                if !ray_meets_sphere(&p, &d, r, limit) {
+                    continue;
+                }
+                // Into the model's own frame: the spin undone, then the
+                // quarter turn about X that stood it up, then the scale.
+                let (sn, cs) = (-spin).sin_cos();
+                let unturn = |v: [f64; 3]| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
+                let to_model = |v: [f64; 3]| {
+                    let u = unturn(v);
+                    [u[0] / s, u[2] / s, -u[1] / s]
+                };
+                let (mo, md) = (to_model(p), to_model(d));
+                for tri in indices.chunks_exact(3) {
+                    let a = &positions[tri[0] as usize * 3..tri[0] as usize * 3 + 3];
+                    let b = &positions[tri[1] as usize * 3..tri[1] as usize * 3 + 3];
+                    let cc = &positions[tri[2] as usize * 3..tri[2] as usize * 3 + 3];
+                    if let Some(t) = ray_triangle(&mo, &md, a, b, cc) {
+                        if t < limit {
+                            limit = t;
+                            best = Some(DecorHit {
+                                chunk: id,
+                                band,
+                                pos: words[band_at + count + i],
+                                t,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    best
+}
+
+/// Whether the ray crosses the square [x0, x1] × [y0, y1] at any height
+/// within `limit`.
+fn ray_meets_square(o: &[f64; 3], d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
+    let mut t0 = 0.0f64;
+    let mut t1 = limit;
+    for (p, v, lo, hi) in [(o[0], d[0], x0, x1), (o[1], d[1], y0, y1)] {
+        if v.abs() < 1e-12 {
+            if p < lo || p > hi {
+                return false;
+            }
+            continue;
+        }
+        let (mut a, mut b) = ((lo - p) / v, (hi - p) / v);
+        if a > b {
+            core::mem::swap(&mut a, &mut b);
+        }
+        t0 = t0.max(a);
+        t1 = t1.min(b);
+        if t0 > t1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Whether the ray from `p` (relative to the sphere's centre) comes within
+/// `r` of it before `limit`.
+fn ray_meets_sphere(p: &[f64; 3], d: &[f64; 3], r: f64, limit: f64) -> bool {
+    let b = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
+    let c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - r * r;
+    if c <= 0.0 {
+        return true;
+    }
+    let disc = b * b - c;
+    if disc < 0.0 {
+        return false;
+    }
+    let t = -b - disc.sqrt();
+    t >= 0.0 && t <= limit
+}
+
+/// Möller–Trumbore, both sides: the distance along `d` to the triangle.
+fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
+    let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
+    let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
+    let p = [d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0]];
+    let det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+    if det.abs() < 1e-12 {
+        return None;
+    }
+    let inv = 1.0 / det;
+    let s = [o[0] - a[0] as f64, o[1] - a[1] as f64, o[2] - a[2] as f64];
+    let u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) * inv;
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+    let q = [s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0]];
+    let v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * inv;
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+    let t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
+    (t > 0.0).then_some(t)
+}
+
+#[cfg(test)]
+mod decor_tests {
+    use super::*;
+
+    #[test]
+    fn a_ray_down_the_z_axis_meets_the_triangle_under_it_at_its_height() {
+        let t = ray_triangle(&[0.2, 0.2, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]);
+        assert!(t.is_some_and(|t| (t - 4.0).abs() < 1e-12), "{t:?}");
+        // From the other side too, and not beside it.
+        assert!(ray_triangle(&[0.2, 0.2, -5.0], &[0.0, 0.0, 1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]).is_some());
+        assert!(ray_triangle(&[0.8, 0.8, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]).is_none());
+    }
+
+    #[test]
+    fn a_square_is_met_only_where_the_ray_passes_over_it() {
+        let d = [0.7071, 0.7071, -0.3];
+        assert!(ray_meets_square(&[0.0, 0.0, 10.0], &d, 5.0, 5.0, 20.0, 20.0, 100.0));
+        assert!(!ray_meets_square(&[0.0, 0.0, 10.0], &d, 5.0, 5.0, 20.0, 20.0, 3.0));
+        assert!(!ray_meets_square(&[0.0, 0.0, 10.0], &d, -20.0, 5.0, -5.0, 20.0, 100.0));
+    }
+
+    #[test]
+    fn a_sphere_is_met_within_reach_and_missed_past_it() {
+        assert!(ray_meets_sphere(&[-10.0, 0.5, 0.0], &[1.0, 0.0, 0.0], 1.0, 100.0));
+        assert!(!ray_meets_sphere(&[-10.0, 2.0, 0.0], &[1.0, 0.0, 0.0], 1.0, 100.0));
+        assert!(!ray_meets_sphere(&[-10.0, 0.5, 0.0], &[1.0, 0.0, 0.0], 1.0, 5.0));
+    }
+}

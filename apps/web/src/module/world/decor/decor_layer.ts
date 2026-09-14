@@ -111,7 +111,6 @@ import { type LodStep, TARGET_CELL_PX } from "@/render/lod.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 
 import { DECOR_RULE_CHANNELS, type DecorEligibility, type DecorKindSeed, type DecorRules, scatter_decor_candidates } from "./scatter.ts";
-import type { DecorVariantAsset } from "./instanced_model.ts";
 import { type DecorInstances, HIDDEN_FLAG, instances_push, instances_reset, instances_take, NO_ENTRY } from "./instance.ts";
 
 // Fixed, arbitrary — the one thing every DecorKind's own placement
@@ -160,6 +159,14 @@ export function decor_density(extent_u: f64, lod_step: LodStep): f64 {
   return projected_px < DECOR_GONE_PX ? 0 : 1;
 }
 
+/** One variant of a kind: its model and the skin it is drawn with. */
+export type DecorVariantAsset = {
+  model_url: string;
+  /** Not necessarily shared across a kind's other variants: a kind's
+   * variants may come from different packs with different colormaps. */
+  skin_url: string;
+};
+
 export type DecorKindBundle = {
   /** The kind's name — the bank key's prefix, and so the draw census's tag. */
   kind: string;
@@ -169,8 +176,8 @@ export type DecorKindBundle = {
   rules: DecorRules;
   is_eligible: DecorEligibility;
   /** One entry per variant_count, filled by `bind_palette` from the
-   * palette's rows for this kind — see instanced_model.ts's own doc comment
-   * on why each variant carries its own skin rather than the whole kind
+   * palette's rows for this kind — each variant carries its own skin rather
+   * than the whole kind
    * sharing one: a kind's variants can (and for trees, do) span more than
    * one Kenney pack, each with its own colormap atlas. */
   variants: readonly DecorVariantAsset[];

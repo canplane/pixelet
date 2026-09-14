@@ -125,110 +125,16 @@ export const rim_cfg = {
 } as const;
 
 /**
- * Real shadow-map tuning (environment.tsx's sun/moon DirectionalLights,
- * gated by app/setting/store.ts's show_shadow_map). Opt-in rather than
- * on by default, since it was previously pulled once for a mobile-perf
- * tradeoff before coming back with manual shadow.needsUpdate throttling
- * instead of per-frame autoUpdate.
- *
- * FRUSTUM_HALF_EXTENT=200 (400-unit box, ~5.1 texels/cell on the sun's
- * 2048-texel map) is the coverage/sharpness middle ground: actually-rendered
- * chunk geometry extends out to ~940 world units from the anchor the shadow
- * frustum recenters on, and a narrower frustum only covers a small fraction
- * of that near/mid-range geometry, while a much wider one craters texel
- * density instead.
- *
- * SUN_NORMAL_BIAS/MOON_NORMAL_BIAS are DERIVED from FRUSTUM_HALF_EXTENT (via
- * BIAS_TEXELS below) rather than separately-tuned constants. normalBias is a
- * world-unit push along the surface normal meant to be "about one texel's
- * worth," so a fixed value tuned for one frustum size becomes wrong (too
- * small → self-shadow acne, too big → "peter-panning," the shadow visibly
- * detaching from its own caster's base) the moment FRUSTUM_HALF_EXTENT
- * changes, since texel size (frustum_span / map_size) moves with it. Keeping
- * it as a ratio means retuning FRUSTUM_HALF_EXTENT later can't silently
- * reintroduce that drift.
- *
- * Known limitation carried over from the original, not yet re-solved: the
- * frustum's own hard edge can read as a flat dark patch at its boundary
- * (PCF sampling clamps there instead of falling back to "unshadowed"). The
- * original fix faded the shadow contribution to zero before the edge inside
- * a custom terrain shader chunk; that shader no longer exists as its own
- * thing post-unification (chunk_stage.tsx's shared instance shader), so this
- * fade hasn't been ported yet.
- */
-const FRUSTUM_HALF_EXTENT = 200;
-const SUN_MAP_SIZE = 2048;
-const MOON_MAP_SIZE = 1024;
-
-// A fixed normalBias's screen-space error grows as the light gets lower
-// (~1/tan(elevation) worth of ground-plane shift for the same world-unit
-// push), so a value that looks fine on one caster reads as an obviously
-// detached gap on another once the sun sits lower — no per-object texel
-// budget can paper over that. The actual fix is chunk_stage.tsx's
-// create_material() setting material.shadowSide = THREE.BackSide: the
-// shadow map stores the caster's FAR-side depth instead of its own lit
-// surface, so a receiver test no longer needs any push at all to dodge
-// self-shadow acne. BIAS_TEXELS can sit at 0 as long as that shadowSide flip
-// stays in place.
-const BIAS_TEXELS = 0;
-
-export const shadow_cfg = {
-  FRUSTUM_HALF_EXTENT,
-  SUN_MAP_SIZE,
-  MOON_MAP_SIZE,
-  SUN_CAMERA_FAR: 2400,
-  MOON_CAMERA_FAR: 1200,
-  SUN_BIAS: 0,
-  SUN_NORMAL_BIAS: ((FRUSTUM_HALF_EXTENT * 2) / SUN_MAP_SIZE) * BIAS_TEXELS,
-  MOON_BIAS: 0,
-  MOON_NORMAL_BIAS: ((FRUSTUM_HALF_EXTENT * 2) / MOON_MAP_SIZE) * BIAS_TEXELS,
-  // SHADOW_UPDATE_ANGLE_RAD's own reasoning (environment.tsx): re-rendering
-  // a full 2048/1024-texel shadow map every frame for a light that only
-  // drifts ~0.0042deg/s (a 24-real-hour sweep) is pure waste — only refresh
-  // once the light direction has actually drifted past this angle since its
-  // last render.
-  UPDATE_ANGLE_DEG: 0.05,
-} as const;
-
-/**
- * Post-processing tuning: a screen-space contact-AO pass to ground blocky
- * cells/buildings against each other, bloom and god rays off the sun, and
- * a punchier color grade than the flat/raw scene output. All numbers here
- * are cosmetic dials — tune freely, nothing downstream depends on these
- * values.
+ * The canvas's resolution and the colour grade over everything. The vignette
+ * waits for a pass of its own (render/gpu/grade.ts); the rest of the post
+ * stack three ran — contact AO, bloom, god rays, SMAA — comes back through
+ * WebGPU with its memory measured (issue/BACKLOG.md), and its tuning is on
+ * archive/20260914-three-draw-paths. All numbers here are cosmetic dials.
  */
 export const post_cfg = {
   /** The canvas draws at the device's pixel ratio clamped to this
    * (scene.tsx's dpr comment on why the cap, and why it is not a cost). */
   DPR: [1, 2] as [number, number],
-  /** SMAA runs on a display whose dpr is under this; at the cap the
-   * resolution does the job (scene.tsx's AutoSmaa). */
-  SMAA_BELOW_DPR: 2,
-  AO: {
-    // halfRes + "performance" quality keeps this cheap enough to not add to
-    // the existing close-zoom frame cost — see the LOD/chunk-density note in
-    // terrain/chunk.tsx for why near-camera cost is already the tight budget.
-    QUALITY: "performance",
-    HALF_RES: true,
-    // Kept to ~1 cell-neighborhood so a riser only shadows its own base. A
-    // wider radius has every small LOD-step riser sampling occlusion from
-    // several neighboring risers up the same slope, outlining every real
-    // edge — on a terraced hillside that reads as contour-line banding, not
-    // soft ambient shadow. INTENSITY is scaled down to match, so the
-    // narrower radius doesn't just concentrate the same darkening.
-    RADIUS: 1.5,
-    INTENSITY: 1.2,
-    DISTANCE_FALLOFF: 1,
-    // warm/dark tint instead of pure black — reads as a contact shadow
-    // rather than a rendering artifact.
-    COLOR: "#1a1006",
-  },
-  BLOOM: {
-    INTENSITY: 0.6,
-    LUMINANCE_THRESHOLD: 0.85,
-    LUMINANCE_SMOOTHING: 0.2,
-    MIPMAP_BLUR: true,
-  },
   GRADE: {
     SATURATION: 0.18,
     CONTRAST: 0.08,
@@ -237,13 +143,5 @@ export const post_cfg = {
   VIGNETTE: {
     DARKNESS: 0.45,
     OFFSET: 0.3,
-  },
-  GOD_RAYS: {
-    SAMPLES: 60,
-    DENSITY: 0.96,
-    DECAY: 0.9,
-    WEIGHT: 0.4,
-    EXPOSURE: 0.6,
-    CLAMP_MAX: 1,
   },
 } as const;

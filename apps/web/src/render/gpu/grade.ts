@@ -1,10 +1,10 @@
 // @pxl/web/render/gpu/grade.ts
 
 /**
- * The colour grade scene.tsx's post stack put over everything, as a WGSL
- * function each pass calls on its linear colour before the sRGB encode:
- * postprocessing's BrightnessContrast and HueSaturation at post_cfg's
- * values, in the order the stack ran them. The vignette (a 4.5 % darken at
+ * The colour grade over everything, as a WGSL function each pass calls on
+ * its linear colour before the sRGB encode: a brightness and contrast
+ * step then a saturation step at post_cfg's values, the formulas of the
+ * post stack three ran (archive/20260914-three-draw-paths). The vignette (a 4.5 % darken at
  * the corners) waits for a pass of its own.
  */
 

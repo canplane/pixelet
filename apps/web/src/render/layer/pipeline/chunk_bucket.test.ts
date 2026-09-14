@@ -1,7 +1,8 @@
 // @pxl/web/render/layer/pipeline/chunk_bucket.test.ts
 
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
-import * as THREE from "three";
+
+import { mat4, mat4_frustum_planes, mat4_look_at, mat4_mul, mat4_perspective } from "@xpute/core/kit/mat4.ts";
 
 import { alloc_chunk_volume, fill_chunk_column, release_chunk_volume } from "./volume.ts";
 import { MaterialClass, NO_LAYER } from "./voxel.ts";
@@ -12,15 +13,26 @@ import type { BakedChunkMesh } from "./chunk_mesher.ts";
 
 const LAND = { material_class: MaterialClass.LAND, r: 10, g: 20, b: 30, layer_idx: NO_LAYER } as const;
 
-/** Builds a real, renderer-facing BufferGeometry from one baked mesh — the
- * same attribute wiring chunk_stage.tsx's own create_geometry does — so a
- * test can hand it to THREE's own frustum/bounding-volume machinery, same
- * as this file always has. */
-function geometry_of(built: BakedChunkMesh): THREE.BufferGeometry {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(built.position, 3));
-  geo.setIndex(new THREE.BufferAttribute(built.index, 1));
-  return geo;
+/** The frustum of a camera at `eye` looking at `target`, Z up, as its six
+ * planes: what the module tests a chunk's bounds against. */
+function frustum_of(eye: [number, number, number], target: [number, number, number], fov_deg: number, near: number, far: number): Float64Array {
+  const view = mat4_look_at(mat4(), { x: eye[0], y: eye[1], z: eye[2] }, { x: target[0], y: target[1], z: target[2] }, { x: 0, y: 0, z: 1 });
+  const proj = mat4_perspective(mat4(), (fov_deg * Math.PI) / 180, 1, near, far);
+  return mat4_frustum_planes(new Float64Array(24), mat4_mul(mat4(), proj, view));
+}
+
+function frustum_meets_sphere(planes: Float64Array, x: number, y: number, z: number, r: number): boolean {
+  for (let k = 0; k < 24; k += 4) if (planes[k] * x + planes[k + 1] * y + planes[k + 2] * z + planes[k + 3] < -r) return false;
+  return true;
+}
+
+/** A box meets the frustum unless one plane has the whole box behind it. */
+function frustum_meets_box(planes: Float64Array, min: [number, number, number], max: [number, number, number]): boolean {
+  for (let k = 0; k < 24; k += 4) {
+    const px = planes[k] > 0 ? max[0] : min[0], py = planes[k + 1] > 0 ? max[1] : min[1], pz = planes[k + 2] > 0 ? max[2] : min[2];
+    if (planes[k] * px + planes[k + 1] * py + planes[k + 2] * pz + planes[k + 3] < 0) return false;
+  }
+  return true;
 }
 
 Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
@@ -44,29 +56,14 @@ Deno.test("chunk bucket - LOD1 builds usable frustum bounds", () => {
     max_z: 1,
   });
 
-  const geometry = geometry_of(buckets[0].cubes);
-  const material = new THREE.MeshBasicMaterial();
-  const mesh = new THREE.Mesh(geometry, material);
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  assertEquals(geometry.boundingBox!.min.toArray(), [1, 2, 0]);
-  assertEquals(geometry.boundingBox!.max.toArray(), [50, 3, 1]);
-
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
-  camera.position.set(25, 2.5, 80);
-  camera.lookAt(25, 2.5, 0);
-  camera.updateMatrixWorld(true);
-  camera.updateProjectionMatrix();
-  const projection_view = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-  const frustum = new THREE.Frustum().setFromProjectionMatrix(projection_view);
-  mesh.updateMatrixWorld(true);
-  assert(frustum.intersectsObject(mesh));
-  mesh.position.x = 1000;
-  mesh.updateMatrixWorld(true);
-  assertEquals(frustum.intersectsObject(mesh), false);
-
-  geometry.dispose();
-  material.dispose();
+  // The bounds as a sphere, where a camera above sees it and a thousand
+  // units aside does not.
+  const b = chunk_bounds(buckets)!;
+  const centre: [number, number, number] = [(b.min_x + b.max_x) / 2, (b.min_y + b.max_y) / 2, (b.min_z + b.max_z) / 2];
+  const radius = Math.hypot(b.max_x - centre[0], b.max_y - centre[1], b.max_z - centre[2]);
+  const frustum = frustum_of([25, 2.5, 80], [25, 2.5, 0], 60, 0.1, 200);
+  assert(frustum_meets_sphere(frustum, centre[0], centre[1], centre[2], radius));
+  assertEquals(frustum_meets_sphere(frustum, centre[0] + 1000, centre[1], centre[2], radius), false);
 });
 
 Deno.test("chunk bucket - bounds include signed Z and a second (e.g. object) bucket's own mesh", () => {
@@ -110,20 +107,9 @@ Deno.test("chunk bucket - measured bounds survive a low-polar frustum that rejec
   const bounds = chunk_bounds([build_chunk_bucket(column_runs, 1, "primary")]);
   assert(bounds !== null);
 
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
-  camera.position.set(32, -100, 200.5);
-  camera.lookAt(32, 32, 200.5);
-  camera.updateMatrixWorld(true);
-  camera.updateProjectionMatrix();
-  const projection_view = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-  const frustum = new THREE.Frustum().setFromProjectionMatrix(projection_view);
-  const measured = new THREE.Box3(
-    new THREE.Vector3(bounds.min_x, bounds.min_y, bounds.min_z),
-    new THREE.Vector3(bounds.max_x, bounds.max_y, bounds.max_z),
-  );
-
-  assert(frustum.intersectsBox(measured));
-  assertEquals(frustum.intersectsSphere(new THREE.Sphere(new THREE.Vector3(32, 32, 0), 48)), false);
+  const frustum = frustum_of([32, -100, 200.5], [32, 32, 200.5], 50, 0.1, 500);
+  assert(frustum_meets_box(frustum, [bounds.min_x, bounds.min_y, bounds.min_z], [bounds.max_x, bounds.max_y, bounds.max_z]));
+  assertEquals(frustum_meets_sphere(frustum, 32, 32, 0, 48), false);
 });
 
 Deno.test("chunk bucket - a fully-covered coarse cell draws one unshrunk box per Z bucket", () => {

@@ -18,7 +18,7 @@
  */
 
 import { CORE_BUILD } from "@/render/layer/pipeline/core_build.ts";
-import { poi_field_stats, poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
+import { poi_place_stats } from "@/module/world/poi/poi_layer.tsx";
 import { tick_step_stats, tick_step_stats_reset } from "@/module/world/sched/tick.ts";
 import { fetch_counts, MAX_INFLIGHT } from "@/module/world/sched/fetch_scheduler.ts";
 import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
@@ -73,15 +73,15 @@ function signed(n: number): string {
 }
 
 /** `prev` is the frame immediately before this one in the ring, when known —
- * geometry/texture/heap only mean something as deltas. A frame that stalls
+ * buffers/heap only mean something as deltas. A frame that stalls
  * with no mounts and a small scheduler pass has to be spending the time on
  * something it *created*, and this is where that shows up. */
 function frame_line(s: FrameSample, prev?: FrameSample): string {
-  const d = prev ? `  Δgeom ${signed(s.geometries - prev.geometries)} Δtex ${signed(s.textures - prev.textures)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB` : "";
+  const d = prev ? `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB` : "";
   return `[${lpad(n1(s.t), 9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(Math.max(0, s.dt_ms - s.task_ms))}` +
     `  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${s.settled ? " still" : ""} ` +
     `(rck ${n1(s.cpu.recheck_ms)} cmt ${n1(s.cpu.commit_ms)})  ` +
-    `draws ${s.draw_calls} tris ${Math.round(s.triangles / 1000)}k  geom ${s.geometries}  heap ${s.heap_mb}MB  ` +
+    `draws ${s.draw_calls} tris ${Math.round(s.triangles / 1000)}k  buf ${s.buffers}  heap ${s.heap_mb}MB  ` +
     `mount +${s.mounts.added}/-${s.mounts.removed} rerender ${s.mounts.rendered}${d}`;
 }
 
@@ -193,7 +193,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  dt      ${spread_text(f.dt)} ms   missed ${f.missed} (${share(f.missed, f.moving)}% of moving frames)`,
     `  task    p50 ${n1(f.task.p50)}  p95 ${n1(f.task.p95)} ms   (main thread's own rAF task)`,
     `  offthd  p50 ${n1(f.offthread.p50)}  p95 ${n1(f.offthread.p95)} ms   (vsync/compositor/GPU/GC)`,
-    `  gpu     p50 ${n1(f.gpu.p50)}  p95 ${n1(f.gpu.p95)} ms${last.gpu_ms === 0 ? "   (timer unsupported or unresolved)" : ""}`,
+    `  gpu     p50 ${n1(f.gpu.p50)}  p95 ${n1(f.gpu.p95)} ms${last.gpu_ms === 0 ? "   (no renderer yet)" : ""}`,
     `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
       Object.entries(f.phases).map(([k, v]) => `${k} ${n1(v.p95)}`).join("  ")
     }`,
@@ -202,7 +202,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     // hide which step is not yielding: a cooperative scheduler is only as
     // cooperative as its longest step.
     `  steps   ${steps_text()}   (ms per frame, max)`,
-    `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  tex ${last.textures}  fill ${(last.px / 1e6).toFixed(1)}Mpx x${last.fx_passes}`,
+    `  gpu     draws ${last.draw_calls}  tris ${Math.round(last.triangles / 1000)}k  buffers ${last.buffers} ${last.buffer_mb}MB  fill ${(last.px / 1e6).toFixed(1)}Mpx`,
     `  by tag  mean ${census_text(f.census)}   (draws/tris per frame)`,
     `          last ${census_text(census_rows(last.census))}`,
     `  mem     heap ${last.heap_mb}MB (${signed(f.heap_delta)})  tiles ${last.tile_pages} (~${last.tile_pages * TILE_DECODED_MB}MB)  poi ${last.poi_count}`,
@@ -218,12 +218,6 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  wait    place ${n1(poi_place_stats.wait_ms)} ms over ${poi_place_stats.frames} frames (max ${n1(poi_place_stats.max_wait_ms)} ms, ${poi_place_stats.max_frames} frames)   index ${
       n1(index.wait_ms)
     } ms over ${index.frames} frames (max ${n1(index.max_wait_ms)} ms, ${index.max_frames} frames)`,
-    `  field   ${
-      (() => {
-        const f = poi_field_stats();
-        return `${f.live} live of ${f.slots} slots, ${f.visible} visible, ${f.mapped} mapped, group ${f.mounted ? "mounted" : "NOT mounted"}`;
-      })()
-    }`,
     `  split   sync ${n1(poi_place_stats.sync_ms)} ms (max since load ${n1(poi_place_stats.max_sync_ms)})   badge ${c.badge_metrics} measured / ${c.badge_builds} built ${
       n1(c.badge_ms)
     }ms total, ${poi_badge_count()} cached`,

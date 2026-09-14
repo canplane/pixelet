@@ -26,6 +26,8 @@ import { DecorPass } from "./decor.ts";
 import { SkinnedPass } from "./skinned.ts";
 import { PuckPass } from "./puck.ts";
 import { BadgePass } from "./badges.ts";
+import { PreviewCase } from "./preview.ts";
+import { DebugPass } from "./debug.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -36,6 +38,26 @@ const UNIFORM_FLOATS = 8;
 const PIPELINE_CHUNK = 0;
 const PIPELINE_GHOST_BOX = 2;
 const PIPELINE_GHOST_BOX_COPLANAR = 3;
+const PIPELINE_DECOR = 1;
+const PIPELINE_GHOST_DECOR = 4;
+const PIPELINE_SKINNED = 5;
+const PIPELINE_PUCK_ZONE = 6;
+const PIPELINE_PUCK_BEACON = 7;
+const PIPELINE_BADGE = 8;
+const PIPELINE_DEBUG = 9;
+/** draw.rs's pipelines, by id, as the ledger names them. */
+const PIPELINE_NAMES: Record<number, string> = {
+  [PIPELINE_CHUNK]: "chunk",
+  [PIPELINE_DECOR]: "decor",
+  [PIPELINE_GHOST_BOX]: "ghost",
+  [PIPELINE_GHOST_BOX_COPLANAR]: "ghost",
+  [PIPELINE_GHOST_DECOR]: "ghost",
+  [PIPELINE_SKINNED]: "actor",
+  [PIPELINE_PUCK_ZONE]: "puck",
+  [PIPELINE_PUCK_BEACON]: "puck",
+  [PIPELINE_BADGE]: "billboard",
+  [PIPELINE_DEBUG]: "debug",
+};
 
 /** Straight alpha over what is drawn, for the ghost. */
 const ALPHA_BLEND: GPUBlendState = {
@@ -81,6 +103,10 @@ export class GpuRenderer {
   private readonly puck: PuckPass;
   /** The badges (badges.ts), a pass of their own that reads the depth. */
   readonly badges: BadgePass;
+  /** The dev gizmos (debug.ts), over everything. */
+  private readonly debug: DebugPass;
+  /** The display cases open (preview.ts), drawn after the world each frame. */
+  private readonly previews = new Set<PreviewCase>();
   /** Each block's vertex and index counts, as its upload said. */
   private readonly counts = new Map<u32, [u32, u32]>();
   private readonly frame_buffer: GPUBuffer;
@@ -94,8 +120,12 @@ export class GpuRenderer {
   readonly uniforms: FrameUniforms = new Float32Array(new ArrayBuffer(FRAME_UNIFORM_FLOATS * 4));
   /** The sky's uniforms, likewise. */
   readonly sky: FrameUniforms = new Float32Array(new ArrayBuffer(SKY_UNIFORM_FLOATS * 4));
-  /** What the last frame drew, for the ledger. */
-  stat = { draws: 0, decor_draws: 0, badges: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0 };
+  /** What the last frame drew, for the ledger. `gpu_ms` is from the submit
+   * to the queue reporting the work done, so it lags a frame or two and
+   * includes the wait for the GPU to be free. */
+  stat = { draws: 0, triangles: 0, decor_draws: 0, badges: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0, gpu_ms: 0 };
+  /** Draws and triangles by pipeline, for the ledger; filled in dev only. */
+  census: Record<string, [number, number]> = {};
 
   private constructor(readonly device: GPUDevice, readonly canvas: HTMLCanvasElement, private readonly pxl: PxlExports) {
     const context = canvas.getContext("webgpu");
@@ -160,6 +190,7 @@ export class GpuRenderer {
     this.skinned = new SkinnedPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.puck = new PuckPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.badges = new BadgePass(device, this.format, DEPTH_FORMAT);
+    this.debug = new DebugPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
   }
 
   /** A renderer over a device, or null where there is no WebGPU: the app
@@ -198,6 +229,17 @@ export class GpuRenderer {
     this.canvas.height = height;
     this.depth?.destroy();
     this.depth = this.device.createTexture({ label: "depth", size: [width, height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+  }
+
+  /** A display case over `canvas`, drawn each frame until closed. */
+  open_preview(canvas: HTMLCanvasElement): PreviewCase {
+    const preview = new PreviewCase(this.device, canvas, this.format);
+    this.previews.add(preview);
+    return preview;
+  }
+
+  close_preview(preview: PreviewCase): void {
+    this.previews.delete(preview);
   }
 
   /** Takes the module's lists and draws the frame: the blocks it names
@@ -263,7 +305,7 @@ export class GpuRenderer {
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bind_group);
     this.draw_meshes(pass, draws, (p) => p === PIPELINE_CHUNK);
-    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
+    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers, this.counts);
     this.skinned.draw(pass, draws, uniforms, this.buffers, this.counts);
     this.puck.draw_beacon(pass, draws, uniforms);
     this.puck.draw_zone(pass, draws, uniforms, this.buffers);
@@ -271,10 +313,57 @@ export class GpuRenderer {
     for (const p of [PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR]) {
       if (!this.draw_meshes(pass, draws, (q) => q === p, true)) continue;
     }
-    this.decor.draw_ghosts(pass, draws, uniforms, this.buffers);
+    this.decor.draw_ghosts(pass, draws, uniforms, this.buffers, this.counts);
+    this.debug.draw(pass, draws, uniforms, this.buffers);
     pass.end();
     this.stat.badges = this.badges.draw(encoder, color, this.depth, draws, uniforms, this.buffers);
+    for (const preview of this.previews) preview.draw(encoder, this.uniforms, draws, uniforms, this.buffers, this.counts);
     this.device.queue.submit([encoder.finish()]);
+    const submitted = performance.now();
+    this.device.queue.onSubmittedWorkDone().then(() => {
+      this.stat.gpu_ms = performance.now() - submitted;
+    });
+    if (import.meta.env.DEV) this.take_census(draws);
+  }
+
+  /** Draws and triangles by pipeline, this frame. */
+  private take_census(draws: Uint32Array): void {
+    const census: Record<string, [number, number]> = {};
+    let triangles = 0;
+    for (let k = 0; k < draws.length; k += DRAW_WORDS) {
+      const [a, b, c, pipeline] = [draws[k], draws[k + 1], draws[k + 2], draws[k + 4]];
+      let tris = 0;
+      switch (pipeline) {
+        case PIPELINE_CHUNK:
+        case PIPELINE_GHOST_BOX:
+        case PIPELINE_GHOST_BOX_COPLANAR:
+          tris = c / 3;
+          break;
+        case PIPELINE_DECOR:
+        case PIPELINE_GHOST_DECOR:
+          tris = this.decor.triangles_of(b) * c;
+          break;
+        case PIPELINE_SKINNED:
+          tris = (this.counts.get(a)?.[1] ?? 0) / 3;
+          break;
+        case PIPELINE_PUCK_ZONE:
+          tris = 12 * b;
+          break;
+        case PIPELINE_PUCK_BEACON:
+          tris = 8;
+          break;
+        case PIPELINE_BADGE:
+          tris = 2 * b;
+          break;
+      }
+      const name = PIPELINE_NAMES[pipeline] ?? `pipeline${pipeline}`;
+      const row = census[name] ??= [0, 0];
+      row[0]++;
+      row[1] += tris;
+      triangles += tris;
+    }
+    this.census = census;
+    this.stat.triangles = triangles;
   }
 
   /** Every mesh draw whose pipeline `which` accepts; with `own_pipeline`,

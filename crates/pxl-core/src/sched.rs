@@ -16,8 +16,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::billboard::Billboards;
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
+use crate::debug::DebugLines;
 use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::draw::{DrawList, PIPELINE_CHUNK};
+use crate::environment::Environment;
 use crate::ghost::Ghost;
 use crate::lod::{Ladder, COARSEST};
 use crate::marker::Markers;
@@ -170,11 +172,14 @@ struct Tier {
 
 /// A decor block the glue holds: its step and bytes, the renderer's handle,
 /// and each group's lanes (DecorBuild::group_layout).
-struct Decor {
+pub struct Decor {
     step: u32,
-    bytes: u32,
+    /// Where the block is in the memory, and its size.
+    pub at: u32,
+    pub bytes: u32,
     handle: u32,
-    groups: Vec<(u32, u32)>,
+    /// Each group's first lane word in the block and its count.
+    pub groups: Vec<(u32, u32)>,
 }
 
 struct Slot {
@@ -254,6 +259,13 @@ pub struct Scheduler {
     pub markers: Markers,
     /// The billboards (billboard.rs).
     pub billboards: Billboards,
+    /// The model each decor group is drawn with, by group, once the glue
+    /// registered it: what a hit test reads the triangles of.
+    pub decor_models: Vec<Option<u32>>,
+    /// The sun, the moon, the light and the sky (environment.rs).
+    pub environment: Environment,
+    /// The dev gizmos (debug.rs).
+    pub debug: DebugLines,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -323,6 +335,9 @@ impl Scheduler {
             models: Models::default(),
             markers: Markers::default(),
             billboards: Billboards::default(),
+            decor_models: Vec::new(),
+            environment: Environment::default(),
+            debug: DebugLines::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -579,6 +594,7 @@ impl Scheduler {
             let handle = self.draw.upload(at as u32, bytes, 0, 0);
             self.slots[i].decor.push(Decor {
                 step,
+                at: at as u32,
                 bytes,
                 handle,
                 groups: built.group_layout(),
@@ -587,6 +603,28 @@ impl Scheduler {
             emit(Event::Decor { id, step, at: at as u32, bytes });
         }
         true
+    }
+
+    /// The model decor group `group` is drawn with.
+    pub fn decor_model(&mut self, group: u32, model: u32) {
+        let g = group as usize;
+        if self.decor_models.len() <= g {
+            self.decor_models.resize(g + 1, None);
+        }
+        self.decor_models[g] = Some(model);
+    }
+
+    /// Every on-screen chunk's decor as shown this frame — the block of the
+    /// tier decor takes in its layout — with the chunk's id and base, in
+    /// units: what a hit test walks.
+    pub fn shown_decor(&self) -> impl Iterator<Item = (u32, f64, f64, &Decor)> {
+        self.slots.iter().filter(|s| s.has(IN_FRUSTUM) && s.layout_ready).filter_map(|s| {
+            let decor_step = match s.told {
+                Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+                _ => s.layout_primary,
+            };
+            s.decor.iter().find(|d| d.step == decor_step).map(|d| (s.id, s.base_x, s.base_y, d))
+        })
     }
 
     /// A page's terrain tile arrived, or left.
@@ -759,7 +797,7 @@ impl Scheduler {
 
         self.reclaim(world, &order, emit);
         self.models.tick(world, &mut self.draw, frame.delta_s as f32);
-        let animating = self.markers.tick(&frame);
+        let animating = self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
 
         let mut c = Census { committed, ..Census::default() };
@@ -802,6 +840,7 @@ impl Scheduler {
         self.models.draw(&mut self.draw, frame.origin);
         self.markers.draw(&mut self.draw, frame.origin);
         self.billboards.draw(&mut self.draw, &self.models, frame.origin);
+        self.debug.draw(&mut self.draw, frame.origin);
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;

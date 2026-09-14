@@ -16,8 +16,8 @@
  * every consumer reads the same store value, so they can't diverge.
  *
  * Also now location-aware: get_theme_key() needs the real sunrise/sunset
- * for wherever the map is centered (get_sunrise_sunset, itself needing
- * lat/lon), so each tick reads useMapStore's current map_center directly
+ * for wherever the map is centered (the module's environment,
+ * crates/pxl-core/src/environment.rs, itself needing lat/lon), so each tick reads useMapStore's current map_center directly
  * via getState() rather than a React subscription — this module is a plain
  * singleton outside any component tree, and the interval only needs
  * whatever map_center happens to be *at tick time*, not to re-run the
@@ -30,7 +30,7 @@ import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 
 import { useMapStore } from "@/module/map/store.ts";
-import { get_sunrise_sunset } from "./celestial_position.ts";
+import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { get_theme_key, type WorldThemeKey } from "./theme.ts";
 
 const THEME_CHECK_INTERVAL_MS = 60_000;
@@ -49,7 +49,12 @@ function compute_theme_key(): WorldThemeKey {
   const map_center = useMapStore.getState().map_center;
   const [lon, lat] = map_center ? epsg4326.unproject(latlon_scratch, map_center.i, map_center.f) : [FALLBACK_LON, FALLBACK_LAT];
   const now = new Date();
-  const { sunrise_hour, sunset_hour } = get_sunrise_sunset(lat, lon, now);
+  const day_start = new Date(now);
+  day_start.setHours(0, 0, 0, 0);
+  let sunrise_hour = 6, sunset_hour = 18;
+  if (CORE_PXL) {
+    [sunrise_hour, sunset_hour] = new Float64Array(CORE_PXL.memory.buffer, CORE_PXL.pxl_env_daylight(lat, lon, day_start.getTime()), 2);
+  }
   return get_theme_key(current_hour(now), sunrise_hour, sunset_hour);
 }
 

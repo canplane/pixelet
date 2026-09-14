@@ -6,42 +6,34 @@
  * Every decision about a chunk is the module's (crates/pxl-core/src/sched.rs):
  * whether it is on screen, which tiers it shows and how a blend weighs them,
  * what to build and when, what to give back. What stays here is what the
- * decisions act on and the sources they are made from: the `THREE.Group` and
- * the meshes attached to it, the tiers and decor blocks the module handed
- * over, decor's contribution to decor/field.ts, and the subscriptions that
- * say a chunk's sources changed.
+ * decisions act on and the sources they are made from: the tiers and decor
+ * blocks the module handed over, and the subscriptions that say a chunk's
+ * sources changed.
  *
  * A mesh has exactly one owner at a time — the tier cache, the layout, or
- * both through a count — and a layout's meshes are attached in the call that
+ * both through a count — and a layout takes its hold in the call that
  * applies it, so a layout never names a mesh nothing owns. That rule came
  * out of three reference-counting bugs under React's deferred mounts (the
  * git history around chunk_stage.tsx), and is why this is a plain object.
  */
 
-import * as THREE from "three";
-
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { CELL_SHAMT, CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
+import type { u32 } from "@xpute/core/kit/word.ts";
+import { CELL_SHAMT } from "@pxl/shared/bake/constant.ts";
 import { FROM_L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { Terrain } from "@pxl/shared/bake/format.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
-import { decor_field, type DecorContribution, type DecorVariantContribution, variant_key } from "@/module/world/decor/field.ts";
-import { decor_bundle_assets, type DecorBundleAssets, subscribe_decor_assets } from "@/module/world/decor/asset_store.ts";
 import { decor_column_revision, object_column_of, object_column_revision, subscribe_decor_column, subscribe_object_column } from "@/module/world/object/store.ts";
-import { chunk_material, create_geometry, VISIBLE_ATTR } from "@/module/world/render/chunk_material.ts";
 import { register_tile_interest, useTileStore } from "@/module/world/terrain/store.ts";
-import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, mesh_bounds, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
+import { bucket_from_baked, type BuiltChunkBucket, type ChunkLodRole, type ChunkOffsets, release_built_mesh, retain_built_mesh } from "@/render/layer/pipeline/chunk_bucket.ts";
 import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
 import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
 import { CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
-import { gpu_draws_chunks } from "@/render/gpu/stage.tsx";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
 import type { LodStep } from "@/render/lod.ts";
-import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@/render/lod_visibility.ts";
 
 /**
  * How much built work chunks may keep *while off screen*: run sets and
@@ -58,8 +50,6 @@ import { apply_visibility, type ChunkMeshRegistry, type MountedLodMesh } from "@
  * (2026-09-14).
  */
 export const RETAIN_BUDGET_BYTES: u32 = Math.floor(CORE_SECTIONS.mesh.bytes / 2);
-
-const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN * U_PER_CELL;
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----
 
@@ -120,26 +110,15 @@ export function chunk_retention(): ChunkRetention {
  * settings change and a decor asset arrival reach every node. The
  * per-column subscriptions stay per node: the store already routes those.
  */
-let gpu_chunks_seen = useSettingsStore.getState().gpu_chunks;
-useSettingsStore.subscribe((state) => {
+useSettingsStore.subscribe(() => {
   for (const node of chunk_nodes.values()) {
     node.on_source_change();
     node.on_decor_change();
-  }
-  // The chunks change hands between three and the WebGPU renderer: every
-  // node attaches its layout again, or detaches it.
-  if (state.gpu_chunks !== gpu_chunks_seen) {
-    gpu_chunks_seen = state.gpu_chunks;
-    for (const node of chunk_nodes.values()) node.reattach();
   }
 });
 register_tile_interest(() => true, (page_idx) => {
   for (const node of chunk_nodes.values()) if (node.page_idx === page_idx) node.on_source_change();
 });
-subscribe_decor_assets(() => {
-  for (const node of chunk_nodes.values()) node.on_decor_assets();
-});
-
 // ---- Layout ----
 
 /**
@@ -183,18 +162,6 @@ function blend_hash(key: string): u32 {
   return hash >>> 0;
 }
 
-/** Shared placeholder a mesh holds after its geometry is disposed — never
- * uploaded, never mutated. */
-const EMPTY_GEOMETRY = new THREE.BufferGeometry();
-
-/** One attached cube mesh: the scene object, the mesh data behind it, and
- * the registry entry the LOD blend flips. Created and destroyed as one. */
-type AttachedCubes = {
-  mesh: THREE.Mesh;
-  bucket: BuiltChunkBucket;
-  mounted: MountedLodMesh | null;
-};
-
 export type ChunkNodeDeps = {
   page_idx: IVec;
   offset: ChunkOffsets;
@@ -204,16 +171,13 @@ export type ChunkNodeDeps = {
 };
 
 export class ChunkNode {
-  /** This chunk's own scene node, positioned at its page-local origin. */
-  readonly group: THREE.Group;
   /** The page this chunk belongs to, for the page's own mount diff. */
   readonly page_idx: IVec;
-  /** This chunk's own absolute lattice origin — its identity in
-   * decor/field.ts, and the offset chunk-local instances are placed at. */
+  /** This chunk's own absolute lattice origin. */
   readonly base_i: IVec;
 
-  private readonly object_key: IVec;
-  private readonly registry: ChunkMeshRegistry = { meshes: new Set() };
+  /** The object store's key for this chunk's column. */
+  readonly object_key: IVec;
   /** The module's id for this chunk. */
   private readonly id: u32;
 
@@ -238,17 +202,8 @@ export class ChunkNode {
   private objects_revision: number;
   private decor_revision: number;
   private show_decor: boolean;
-  private bundle_assets: readonly DecorBundleAssets[];
 
-  private attached_cubes: AttachedCubes[] = [];
   private readonly unsubscribes: (() => void)[] = [];
-
-  /** What this chunk last told decor/field.ts. `dirty` forces the next sync
-   * through even when neither of the other two moved — a rebuilt layout is
-   * the same chunk showing the same tier, with different instances in it. */
-  private decor_shown = false;
-  private decor_role: ChunkLodRole = "primary";
-  private decor_dirty = true;
 
   private disposed = false;
 
@@ -259,17 +214,11 @@ export class ChunkNode {
     this.object_key = object_column_of(page_idx, page_off);
     this.base_i = ivec.add(FROM_L3_IDX(page_idx), page_off);
 
-    this.group = new THREE.Group();
-    this.group.name = `chunk/${offset.key}`;
-    this.group.position.set(offset.base_x * U_PER_CELL, offset.base_y * U_PER_CELL, 0);
-    this.group.visible = false;
-
     this.tile = useTileStore.getState().get_tile(page_idx);
     this.show_structures = useSettingsStore.getState().show_structures;
     this.objects_revision = object_column_revision(this.object_key);
     this.decor_revision = decor_column_revision(this.object_key);
     this.show_decor = useSettingsStore.getState().show_decor;
-    this.bundle_assets = decor_bundle_assets();
 
     // Direct store subscriptions rather than hooks: a node is not a
     // component, and a placement should not have to travel through a render
@@ -310,14 +259,11 @@ export class ChunkNode {
     for (const off of this.unsubscribes) off();
     if (tell_module) CORE_BUILD.remove(this.id);
     chunk_nodes.delete(this.id);
-    decor_field.clear_chunk(this.base_i);
-    this.detach_all();
     for (const bucket of this.layout.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(this.layout.decor);
     this.layout = { ...this.layout, buckets: [], decor: EMPTY_DECOR_PAIR, ready: false };
     this.release_bucket_cache();
     this.clear_decor_cache();
-    this.group.removeFromParent();
     if (import.meta.env.DEV) node_counts.removed++;
   }
 
@@ -348,8 +294,6 @@ export class ChunkNode {
 
   on_visible(on: boolean): void {
     this.shown = on;
-    this.group.visible = on;
-    this.sync_decor();
   }
 
   /** The module hands a step's decor over only where it believes this node
@@ -430,8 +374,6 @@ export class ChunkNode {
    * on, since an instance is drawn or it is not. */
   on_blend(primary: number, secondary: number, decor_secondary: boolean): void {
     this.blend = { primary, secondary, decor_secondary };
-    apply_visibility(this.registry, { primary, secondary });
-    this.sync_decor(decor_secondary ? "secondary" : "primary");
   }
 
   // ---- source changes ----
@@ -463,21 +405,6 @@ export class ChunkNode {
     this.clear_decor_cache();
     this.tell_source();
     CORE_BUILD.build_now(this.id);
-  }
-
-  /**
-   * Decor models finish loading well after the first chunks are built, and
-   * a node that never heard about it drew no decor for the rest of its
-   * life. The instances are the same; what this chunk contributes to
-   * decor/field.ts — a geometry and a skin per variant — is not.
-   */
-  on_decor_assets(): void {
-    if (this.disposed) return;
-    const assets = decor_bundle_assets();
-    if (this.bundle_assets === assets) return;
-    this.bundle_assets = assets;
-    this.decor_dirty = true;
-    this.sync_decor();
   }
 
   /**
@@ -532,18 +459,6 @@ export class ChunkNode {
     for (const bucket of next.buckets) retain_built_mesh(bucket.cubes);
     retain_decor_pair(next.decor);
     this.layout = next;
-    this.detach_all();
-    // Three draws the cubes only while the WebGPU renderer does not; the
-    // buckets are held either way, for the raycast's bounds and the day
-    // the setting flips back.
-    if (!gpu_draws_chunks()) { for (const bucket of next.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket); }
-    this.decor_dirty = true;
-    if (this.blend !== null) {
-      apply_visibility(this.registry, this.blend);
-      this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
-    } else {
-      this.sync_decor();
-    }
     for (const bucket of previous.buckets) release_built_mesh(bucket.cubes);
     release_decor_pair(previous.decor);
     if (import.meta.env.DEV) node_counts.rebuilt++;
@@ -554,97 +469,6 @@ export class ChunkNode {
     const previous = this.layout.decor;
     retain_decor_pair(decor);
     this.layout = { ...this.layout, decor };
-    this.decor_dirty = true;
-    if (this.blend !== null) this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
-    else this.sync_decor();
     release_decor_pair(previous);
-  }
-
-  /** Attaches the layout's cubes again, or not: whichever renderer draws
-   * the chunks now (render/gpu/stage.tsx). */
-  reattach(): void {
-    if (this.disposed) return;
-    this.detach_all();
-    if (!gpu_draws_chunks()) { for (const bucket of this.layout.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket); }
-    if (this.blend !== null) apply_visibility(this.registry, this.blend);
-  }
-
-  private attach_cubes(bucket: BuiltChunkBucket): void {
-    const built = bucket.cubes;
-    const geometry = create_geometry(built);
-    const mesh = new THREE.Mesh(geometry, chunk_material());
-    // Unconditional: the real cost is gated at the renderer level by the
-    // Canvas's own `shadows` prop.
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.name = `${bucket.role}/lod/${bucket.lod_step}`;
-    built.visibility.fill(bucket.role === "primary" ? 1 : 0);
-
-    // Not geometry.computeBoundingBox(): mesh_bounds' direct scan over the
-    // baked positions is exact and far cheaper on a rebuild storm.
-    const bounds = mesh_bounds(built);
-    if (bounds) {
-      geometry.boundingBox = new THREE.Box3(new THREE.Vector3(bounds.min_x, bounds.min_y, bounds.min_z), new THREE.Vector3(bounds.max_x, bounds.max_y, bounds.max_z));
-      const center = geometry.boundingBox.getCenter(new THREE.Vector3());
-      geometry.boundingSphere = new THREE.Sphere(center, center.distanceTo(geometry.boundingBox.max));
-    } else {
-      geometry.boundingBox = new THREE.Box3();
-      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0), 0);
-    }
-
-    const attribute = geometry.getAttribute(VISIBLE_ATTR);
-    let mounted: MountedLodMesh | null = null;
-    if (attribute instanceof THREE.BufferAttribute) {
-      attribute.needsUpdate = true;
-      mounted = { built, role: bucket.role, attribute };
-      this.registry.meshes.add(mounted);
-    }
-    this.group.add(mesh);
-    this.attached_cubes.push({ mesh, bucket, mounted });
-  }
-
-  /**
-   * Tells decor/field.ts what this chunk shows right now, if that changed:
-   * whether the chunk is on screen, which tier it shows, and whether its
-   * instances were rebuilt. Nothing else is this chunk's business.
-   */
-  private sync_decor(want_role: ChunkLodRole = this.decor_role): void {
-    const shown = this.shown;
-    const role: ChunkLodRole = this.layout.decor.secondary !== null ? want_role : "primary";
-    if (!this.decor_dirty && shown === this.decor_shown && role === this.decor_role) return;
-    this.decor_dirty = false;
-    this.decor_shown = shown;
-    this.decor_role = role;
-    if (!shown) {
-      decor_field.clear_chunk(this.base_i);
-      return;
-    }
-    const source = role === "secondary" ? this.layout.decor.secondary : this.layout.decor.primary;
-    const contribution: Map<string, DecorVariantContribution> = new Map();
-    // The block's groups are every bundle's variants in bundle order, the
-    // order the kinds were taught (decor_registry.ts).
-    let group = 0;
-    for (const { bundle, geometries, materials } of this.bundle_assets) {
-      geometries.forEach((geometry, variant) => {
-        const material = materials[variant];
-        const instances = source?.groups[group++] ?? null;
-        // A variant whose model or skin is still in flight contributes
-        // nothing; the arrival re-syncs this chunk and lands here.
-        if (!geometry || !material || !instances) return;
-        contribution.set(variant_key(bundle.kind, variant), { geometry, material, instances });
-      });
-    }
-    decor_field.set_chunk(this.base_i, contribution as DecorContribution);
-  }
-
-  private detach_all(): void {
-    if (this.attached_cubes.length === 0) return;
-    for (const entry of this.attached_cubes) {
-      if (entry.mounted) this.registry.meshes.delete(entry.mounted);
-      this.group.remove(entry.mesh);
-      entry.mesh.geometry.dispose();
-      entry.mesh.geometry = EMPTY_GEOMETRY;
-    }
-    this.attached_cubes = [];
   }
 }

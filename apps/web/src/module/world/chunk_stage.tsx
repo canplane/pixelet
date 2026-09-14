@@ -20,38 +20,29 @@
  * (and its own same-day follow-up) for the fuller account.
  */
 
-import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useThree } from "@react-three/fiber";
-import * as THREE from "three";
+import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { FROM_L3_IDX, L4_BASE, L4_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useMapStore } from "@/module/map/store.ts";
-import { useAnchorRegistry } from "@/module/world/anchor/context.tsx";
 
 import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
 import { CORE_BUILD, FRAME } from "@/render/layer/pipeline/core_build.ts";
-import type { AnchorRegistry } from "@/module/world/anchor/registry.ts";
 import { world_wakers, WorldTopic } from "@/module/world/change.ts";
-import { decor_field } from "@/module/world/decor/field.ts";
 import { tile_pages } from "@/module/world/terrain/store.ts";
 import { poi_pages } from "@/module/world/poi/store.ts";
 import { fetch_pending_count } from "@/module/world/sched/fetch_scheduler.ts";
-import { draw_census_install, draw_census_take } from "@/module/world/sched/draw_census.ts";
-import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } from "@/module/world/sched/gpu_timer.ts";
 import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/ledger.ts";
 import { HARD_SLACK_MS, useTick } from "@/module/world/sched/tick.ts";
 import { lead_point } from "@/module/world/sched/priority.ts";
-import { gpu_draws_chunks, gpu_frame } from "@/render/gpu/stage.tsx";
-import { useFrameRefs } from "@/module/world/frame/context.tsx";
+import { gpu_frame, gpu_renderer } from "@/render/gpu/stage.tsx";
+import { view, view_resize } from "@/module/world/view.ts";
 import { range_anchor_of, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
-import { post_cfg, render_cfg } from "@/module/world/environment/config.ts";
+import { render_cfg } from "@/module/world/environment/config.ts";
 import { set_lod_projection } from "@/render/lod.ts";
 import { core_pool_stat } from "@/render/layer/pipeline/core_pool.ts";
-import { update_frustum } from "@/render/chunk_lod.ts";
 
 /* The per-pass budgets that used to sit here — a soft allowance per pass and
  * a 16ms hard ceiling each — are gone. Both passes now draw on the one
@@ -66,21 +57,11 @@ import { update_frustum } from "@/render/chunk_lod.ts";
  * catches a stutter, since a reading taken by hand during one lands a frame
  * or two after the storm has passed. */
 
-/* The render itself is not timed by wrapping gl.render: the post-processing
- * composer is always on and renders past the wrapper, which read 0. The
- * whole rAF task, measured from a microtask below, is what covers it. */
+/* The render itself is not timed by wrapping the renderer's frame: the
+ * whole rAF task, measured from a microtask below, is what covers it and
+ * everything else the frame ran. */
 /** Previous frame's whole-rAF-task duration; see FrameSample.task_ms. */
 let last_task_ms = 0;
-
-/* Draw counts are read with `gl.info.autoReset` turned off and reset once
- * per frame instead (see LodSchedulerProvider's effect). three.js otherwise
- * clears info at the start of every `render()`, and the post-processing
- * composer issues several per frame — the last being a fullscreen quad — so
- * reading `gl.info.render` from useFrame reported that quad (`draws 1,
- * tris 1`) while the scene was drawing hundreds. It read plausibly enough to
- * survive this whole session until it was checked against a screenshot.
- * Resetting per frame accumulates every pass, which is the number actually
- * wanted: what this frame costs in draw calls, post stack included. */
 
 const MB = 1_048_576;
 
@@ -121,45 +102,9 @@ function lod_census(): { in_frustum: u32; settling: u32; blend_active: u32; offs
   };
 }
 
-/**
- * The anchor groups the mounted chunks hang under, one a page: an L4 anchor
- * group from the registry, and a holder at the page's base inside it. Made
- * with a page's first chunk and let go with its last. The module decides
- * which chunks exist (crates/pxl-core/src/sched.rs, the range mount); this
- * only gives each a place in the scene.
- */
-type PageHolder = { holder: THREE.Group; anchor_idx: IVec; count: u32 };
-const page_holders = new Map<IVec, PageHolder>();
-const mounted_page = new Map<u32, IVec>();
-
-function mount_chunk(registry: AnchorRegistry, id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
-  let page = page_holders.get(page_idx);
-  if (!page) {
-    const page_base = FROM_L3_IDX(page_idx);
-    const anchor_idx = L4_IDX(page_base);
-    const holder = new THREE.Group();
-    holder.name = `chunk-stage-page/${ivec.repr(page_idx)}`;
-    const local = ivec.sub(page_base, L4_BASE(page_base));
-    holder.position.set(ivec.to_real(ivec.X(local)), ivec.to_real(ivec.Y(local)), ivec.to_real(ivec.Z(local)));
-    registry.link(anchor_idx).add(holder);
-    page = { holder, anchor_idx, count: 0 };
-    page_holders.set(page_idx, page);
-  }
-  page.count++;
-  mounted_page.set(id, page_idx);
-  const node = new ChunkNode({ page_idx, offset: { key: `${base_x},${base_y}`, base_x, base_y }, id });
-  page.holder.add(node.group);
-}
-
-function unmount_chunk(registry: AnchorRegistry, id: u32): void {
-  const page_idx = mounted_page.get(id);
-  if (page_idx === undefined) return;
-  mounted_page.delete(id);
-  const page = page_holders.get(page_idx)!;
-  if (--page.count > 0) return;
-  page.holder.removeFromParent();
-  registry.unlink(page.anchor_idx);
-  page_holders.delete(page_idx);
+/** The module's mounts: a node for each chunk it mounts, gone with it. */
+function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
+  new ChunkNode({ page_idx, offset: { key: `${base_x},${base_y}`, base_x, base_y }, id });
 }
 
 /**
@@ -175,44 +120,7 @@ function unmount_chunk(registry: AnchorRegistry, id: u32): void {
  * longer exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const frustum = useMemo(() => new THREE.Frustum(), []);
-  const { gl } = useThree();
-  const anchor_registry = useAnchorRegistry();
-  const { local_world_frame_ref } = useFrameRefs();
-  const lead = useMemo(() => new THREE.Vector3(), []);
-
-  // Decor hangs off the anchor root rather than off any one chunk or page:
-  // it is one field for the whole world (decor/field.ts), and the root is the
-  // node whose frame every anchor group is already expressed in.
-  useLayoutEffect(() => {
-    anchor_registry.root.add(decor_field.group);
-    return () => {
-      anchor_registry.root.remove(decor_field.group);
-    };
-  }, [anchor_registry]);
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    return draw_census_install(gl);
-  }, [gl]);
-
-  // GPU timing needs the live context; harmless when the extension is absent.
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const ctx = gl.getContext();
-    if (ctx instanceof WebGL2RenderingContext) gpu_timer_attach(ctx);
-  }, [gl]);
-
-  // Accumulate renderer.info across every pass of a frame rather than letting
-  // each render() clear it — see the note above frame draw counts.
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    gl.info.autoReset = false;
-    return () => {
-      gl.info.autoReset = true;
-    };
-  }, [gl]);
-  const projection = useMemo(() => new THREE.Matrix4(), []);
+  const lead = useRef({ x: 0, y: 0, z: 0 }).current;
 
   // What the visible phase measured, handed to the report phase below. A
   // ref rather than state: it is written and read inside one tick.
@@ -226,60 +134,53 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   >(null);
 
   useTick("visible", ({ state, delta, budget }) => {
-    if (import.meta.env.DEV) gpu_timer_begin();
     visible_pass.current = null;
-    update_frustum(frustum, state.camera, projection);
+    view_resize(state.size.width, state.size.height);
     // The tier criterion is a screen-space one (render/lod.ts), and the
     // other layers that read it (decor, badges) read it from here; the
     // module takes the same projection through the frame.
-    set_lod_projection(state.size.height, (state.camera as THREE.PerspectiveCamera).fov);
+    set_lod_projection(view.height, view.fov);
 
     // Where the camera is heading — see sched/priority.ts. The module orders
     // the work by it; the tier each chunk picks still comes from the camera
     // as drawn.
     const target = useMapStore.getState().map_center;
-    const local_frame = local_world_frame_ref.current;
-    const origin = anchor_registry.cur_map_origin;
-    if (target && local_frame) {
+    const origin = view.origin;
+    if (target) {
       const local = ivec.sub(target.i, origin);
       lead_point(
         lead,
-        state.camera.position,
+        view.eye,
         ivec.to_real(ivec.X(local)) + fvec.to_real(fvec.X(target.f)),
         ivec.to_real(ivec.Y(local)) + fvec.to_real(fvec.Y(target.f)),
         ivec.to_real(ivec.Z(local)) + fvec.to_real(fvec.Z(target.f)),
-        local_frame.matrixWorld,
+        view.root,
       );
     } else {
-      lead.copy(state.camera.position);
+      lead.x = view.eye.x;
+      lead.y = view.eye.y;
+      lead.z = view.eye.z;
     }
 
     // The frame, written where the module reads it (core_build.ts's FRAME),
     // then the module's pass over every chunk: measure, recheck, commit,
     // build and reclaim, under what is left of the budget. One matrix for
-    // every chunk: the anchor root's, the frame every chunk group is a pure
+    // every chunk: the root frame's, which every chunk is a pure
     // translation inside.
     const f = CORE_BUILD.frame;
-    f.set(anchor_registry.root.matrixWorld.elements, FRAME.root);
+    f.set(view.root, FRAME.root);
     f[FRAME.origin] = ivec.to_real(ivec.X(origin));
     f[FRAME.origin + 1] = ivec.to_real(ivec.Y(origin));
     f[FRAME.origin + 2] = ivec.to_real(ivec.Z(origin));
-    for (let p = 0; p < 6; p++) {
-      const plane = frustum.planes[p];
-      f[FRAME.planes + p * 4] = plane.normal.x;
-      f[FRAME.planes + p * 4 + 1] = plane.normal.y;
-      f[FRAME.planes + p * 4 + 2] = plane.normal.z;
-      f[FRAME.planes + p * 4 + 3] = plane.constant;
-    }
-    const cam = state.camera.position;
-    f[FRAME.camera] = cam.x;
-    f[FRAME.camera + 1] = cam.y;
-    f[FRAME.camera + 2] = cam.z;
+    f.set(view.planes, FRAME.planes);
+    f[FRAME.camera] = view.eye.x;
+    f[FRAME.camera + 1] = view.eye.y;
+    f[FRAME.camera + 2] = view.eye.z;
     f[FRAME.lead] = lead.x;
     f[FRAME.lead + 1] = lead.y;
     f[FRAME.lead + 2] = lead.z;
-    f[FRAME.viewport_h] = state.size.height;
-    f[FRAME.fov_deg] = (state.camera as THREE.PerspectiveCamera).fov;
+    f[FRAME.viewport_h] = view.height;
+    f[FRAME.fov_deg] = view.fov;
     f[FRAME.delta_s] = delta;
     f[FRAME.budget_ms] = budget.remaining();
     f[FRAME.hard_slack_ms] = HARD_SLACK_MS;
@@ -301,14 +202,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     lod_build_stats.scan_count = built.scans + built.direct;
     lod_build_stats.direct_count = built.direct;
     lod_build_stats.build_count = built.bakes;
-    // After the commits, so a chunk's terrain and its decor reach the screen
-    // in the same frame — the ready-state desync the 2026-09-05 unification
-    // fixed, kept fixed now that decor is contributed rather than mounted.
-    decor_field.update(origin);
-    // The field stays for the eraser's hit test while the WebGPU renderer
-    // draws decor from the module's blocks.
-    decor_field.group.visible = !gpu_draws_chunks();
-    gpu_frame(state, anchor_registry.root.matrixWorld);
+    gpu_frame(state.viewport.dpr);
     if (draw) state.invalidate();
     if (import.meta.env.DEV) {
       const c = CORE_BUILD.census();
@@ -318,18 +212,11 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
 
   // The ledger, after every other phase has run, so `sched_ms` is the whole
   // tick and not this component's share of it.
-  useTick("report", ({ state, delta, budget, phase_ms, frame_ms: display_ms, settled }) => {
+  useTick("report", ({ delta, budget, phase_ms, frame_ms: display_ms, settled }) => {
     if (!import.meta.env.DEV) return;
     const pass = visible_pass.current;
     if (!pass) {
       // No chunks this frame — a search jump empties the stage for a moment.
-      // What the visible phase opened still has to be closed: skipping the
-      // reset let draw counts pile up across every such frame and land on
-      // the next one (a 152M-triangle "frame" in the ledger), and skipping
-      // the query end left the GPU timer open into the next begin.
-      state.gl.info.reset();
-      draw_census_take();
-      queueMicrotask(gpu_timer_end);
       return;
     }
     const { pending_total, committed, recheck_ms, commit_ms } = pass;
@@ -344,11 +231,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
       const perf_memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
       let poi_count = 0;
       for (const resident of poi_pages.handles) poi_count += resident.page.len;
-      const fx = useSettingsStore.getState();
-      // 0 on the dev `no_post` path: nothing but the scene itself.
-      const fx_passes = fx.render_path === "no_post" ? 0 : 1 + // color-grade + vignette, always on (fused)
-        (fx.show_ao ? 1 : 0) + (fx.show_bloom ? 1 : 0) + (fx.show_god_rays ? 1 : 0) + (fx.show_shadow_map ? 1 : 0) +
-        (state.viewport.dpr < post_cfg.SMAA_BELOW_DPR ? 1 : 0); // scene.tsx's AutoSmaa
+      const gpu = gpu_renderer;
       // Reads and clears in one step, so the next frame starts from zero
       // without a separate reset pass to forget.
       const node_work = take_node_counts();
@@ -362,18 +245,17 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         phases: { ...phase_ms },
         cpu: { recheck_ms, commit_ms },
         // Filled by the microtask below, which runs once the rAF task's JS
-        // stack empties — i.e. after every other useFrame subscriber and after
-        // the composer's render. Carries the previous frame's value here and
+        // stack empties — i.e. after every other step and the render.
+        // Carries the previous frame's value here and
         // is corrected in place a moment later.
         task_ms: last_task_ms,
-        gpu_ms: gpu_timer_last_ms(),
-        draw_calls: state.gl.info.render.calls,
-        triangles: state.gl.info.render.triangles,
-        geometries: state.gl.info.memory.geometries,
-        textures: state.gl.info.memory.textures,
-        census: draw_census_take(),
-        px: state.gl.domElement.width * state.gl.domElement.height,
-        fx_passes,
+        gpu_ms: gpu?.stat.gpu_ms ?? 0,
+        draw_calls: gpu?.stat.draws ?? 0,
+        triangles: gpu?.stat.triangles ?? 0,
+        buffers: gpu?.stat.buffers ?? 0,
+        buffer_mb: gpu ? Math.round(gpu.stat.bytes / MB) : 0,
+        census: gpu?.census ?? {},
+        px: gpu ? gpu.canvas.width * gpu.canvas.height : 0,
         mounts: { added: node_work.added, removed: node_work.removed, rendered: node_work.rebuilt },
         lod: {
           chunks: chunk_nodes.size,
@@ -388,15 +270,10 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
         q_terrain: fetch_pending_count("terrain"),
         q_poi: fetch_pending_count("poi"),
       });
-      // Start the next frame's draw-count accumulation (autoReset is off).
-      state.gl.info.reset();
-
-      // Close the GPU query and measure the whole rAF task once the stack
-      // empties. A microtask is the only vantage point that sees the render:
-      // the post-processing composer renders through its own useFrame.
+      // Measure the whole rAF task once the stack empties: a microtask is
+      // the vantage point that sees everything the frame ran.
       const sample = ledger_last_frame();
       queueMicrotask(() => {
-        gpu_timer_end();
         last_task_ms = performance.now() - frame_t0;
         if (sample) sample.task_ms = last_task_ms;
       });
@@ -416,11 +293,10 @@ export type ChunkStageProps = Record<string, never>;
  * them and every ChunkNode subscribes to it directly.
  */
 export const ChunkStage = memo((_: ChunkStageProps) => {
-  const anchor_registry = useAnchorRegistry();
   useLayoutEffect(() => {
     CORE_BUILD.mounts = {
-      on_mount: (id, page_idx, base_x, base_y) => mount_chunk(anchor_registry, id, page_idx, base_x, base_y),
-      on_unmount: (id) => unmount_chunk(anchor_registry, id),
+      on_mount: (id, page_idx, base_x, base_y) => mount_chunk(id, page_idx, base_x, base_y),
+      on_unmount: () => {},
     };
     for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, true);
     const off = world_wakers.subscribe_topic(WorldTopic.TERRAIN_PAGE, (key) => {
@@ -439,7 +315,7 @@ export const ChunkStage = memo((_: ChunkStageProps) => {
       off();
       for (const page_idx of tile_pages.keys()) CORE_BUILD.page(page_idx, false);
     };
-  }, [anchor_registry]);
+  }, []);
   return null;
 });
 ChunkStage.displayName = "ChunkStage";

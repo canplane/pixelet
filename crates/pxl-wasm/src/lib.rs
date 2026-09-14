@@ -74,6 +74,8 @@ struct State {
     /// doubles the glue reads.
     raycast: Raycast,
     hit: [f64; HIT_WORDS],
+    /// The last decor hit: chunk id, band, packed position, distance.
+    decor_hit: [f64; 4],
     draw_row: [u32; 10],
     model_block: u32,
 }
@@ -131,6 +133,7 @@ fn state() -> &'static mut State {
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
                 hit: [0.0; HIT_WORDS],
+                decor_hit: [0.0; 4],
                 draw_row: [0; 10],
                 model_block: 0,
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
@@ -1091,6 +1094,51 @@ pub extern "C" fn pxl_billboards_remove(set: u32) {
     sched.billboards.remove(&mut world, &mut sched.draw, set);
 }
 
+// ---- The dev gizmos (crates/pxl-core/src/debug.rs) ----
+
+/// The gizmos' segments: `vertex_cnt` vertices of 6 floats at `lane`,
+/// relative to an origin at (x, y, z) in units.
+#[no_mangle]
+pub extern "C" fn pxl_debug_set(x: f64, y: f64, z: f64, vertex_cnt: u32, lane: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    // SAFETY: the glue's lane of vertex_cnt * 6 floats.
+    unsafe { sched.debug.set(&mut world, &mut sched.draw, [x, y, z], vertex_cnt, lane as usize) };
+}
+
+// ---- The environment (crates/pxl-core/src/environment.rs) ----
+
+/// The theme the environment eases toward: THEME_FLOATS floats at `lane`.
+#[no_mangle]
+pub extern "C" fn pxl_env_theme(lane: u32) {
+    let s = state();
+    let mut theme = [0.0f32; pxl_core::environment::THEME_FLOATS];
+    // SAFETY: the glue's lane of THEME_FLOATS floats in the memory.
+    unsafe { core::ptr::copy_nonoverlapping(lane as usize as *const f32, theme.as_mut_ptr(), theme.len()) };
+    s.sched.environment.set_theme(&theme);
+}
+
+/// The observer, in degrees, and the wall clock, in Unix milliseconds.
+#[no_mangle]
+pub extern "C" fn pxl_env_observe(lat: f64, lon: f64, unix_ms: f64) {
+    state().sched.environment.observe(lat, lon, unix_ms);
+}
+
+/// Sunrise and sunset for the local day from `day_start_ms`, in hours
+/// after it: where the two f64s sit.
+#[no_mangle]
+pub extern "C" fn pxl_env_daylight(lat: f64, lon: f64, day_start_ms: f64) -> u32 {
+    let env = &mut state().sched.environment;
+    env.daylight(lat, lon, day_start_ms);
+    env.daylight.as_ptr() as u32
+}
+
+/// Where the environment's ENV_FLOATS output floats sit.
+#[no_mangle]
+pub extern "C" fn pxl_env_at() -> u32 {
+    state().sched.environment.out.as_ptr() as u32
+}
+
 // ---- The location puck (crates/pxl-core/src/marker.rs) ----
 
 /// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre
@@ -1180,8 +1228,10 @@ pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32
 #[no_mangle]
 pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
     let s = state();
+    let mem = s.volumes.as_ref().expect("pxl_volume_pools before any model").mem();
     let sched = &mut s.sched;
-    sched.models.seal(&mut sched.draw, model, scale);
+    // SAFETY: the model's block is in the volumes' memory.
+    unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
 }
 
 #[no_mangle]
@@ -1358,6 +1408,40 @@ pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz
 #[no_mangle]
 pub extern "C" fn pxl_raycast_at() -> u32 {
     state().hit.as_ptr() as u32
+}
+
+/// The nearest placed decor instance the ray strikes within `max_dist`
+/// (crates/pxl-core/src/raycast.rs's hit_decor), the ray as pxl_raycast
+/// takes it: 1 when one was, its chunk id, band, packed position and
+/// distance written at pxl_raycast_decor_at.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_raycast_decor(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
+    let s = state();
+    let hit = {
+        let (world, _, sched) = raycast_of(s);
+        pxl_core::raycast::hit_decor(&world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
+    };
+    let Some(h) = hit else { return 0 };
+    s.decor_hit = [h.chunk as f64, h.band as f64, h.pos as f64, h.t];
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_raycast_decor_at() -> u32 {
+    state().decor_hit.as_ptr() as u32
+}
+
+/// The renderer's handle for a model's mesh block, 0 before it is sealed.
+#[no_mangle]
+pub extern "C" fn pxl_model_handle(model: u32) -> u32 {
+    state().sched.models.mesh(model).map_or(0, |m| m.handle)
+}
+
+/// The model decor group `group` is drawn with, for the hit test.
+#[no_mangle]
+pub extern "C" fn pxl_decor_model(group: u32, model: u32) {
+    state().sched.decor_model(group, model);
 }
 
 fn raycast_of(s: &mut State) -> (World<'_>, &mut Raycast, &mut Scheduler) {

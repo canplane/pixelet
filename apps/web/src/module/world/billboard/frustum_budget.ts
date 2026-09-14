@@ -42,21 +42,15 @@
  * one being looked at.
  */
 
-import * as THREE from "three";
-import type { Camera } from "three";
-
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import { mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 import { GridIndex, NO_ROOM, PLACED } from "@xpute/core/ds/grid_index.ts";
-import { update_frustum } from "@/render/chunk_lod.ts";
+import { view, view_sees_sphere } from "@/module/world/view.ts";
 import { distance_fade_far } from "./distance_fade.ts";
 import type { BillboardBatch } from "./batch.ts";
 
-const $scratch_matrix = new THREE.Matrix4();
-const $frustum = new THREE.Frustum();
-const $local_pos = new THREE.Vector3();
-const $sphere = new THREE.Sphere();
-const $camera_pos = new THREE.Vector3();
-const $ndc = new THREE.Vector3();
+const $pos = { x: 0, y: 0, z: 0 };
+const $ndc = { x: 0, y: 0, z: 0 };
 
 /** Candidates the last pass could neither draw nor attribute to something
  * drawn — the budget or the grid ran out. Nonzero means the map is quietly
@@ -78,7 +72,7 @@ const $screen = new GridIndex(MAX_VIEWPORT_PX, MAX_VIEWPORT_PX, 512);
  * How far around its anchor a billboard can reach, as a fraction of its own
  * distance from the camera.
  *
- * A fraction rather than a world length because use_distance_fade holds a
+ * A fraction rather than a world length because the badge shader holds a
  * billboard at a roughly constant *screen* size, so its world extent grows
  * with distance. This is that angular size with room to spare — generous on
  * purpose, since the cost of keeping one badge too many is one sprite and
@@ -97,9 +91,6 @@ const ANCHOR_REACH: f64 = 0.08;
  */
 const MIN_LEGIBLE_FAR: f64 = 0.12;
 
-/** `local_world_frame`: the live group whose matrixWorld carries every
- * transform from `local_x/y/z` to true world space (see
- * frame/context.tsx's useFrameRefs, `local_world_frame_ref.current`). */
 /**
  * The candidates that survive the frustum, the budget and the collision
  * pass, as indices into `batch` written to `out`.
@@ -107,23 +98,13 @@ const MIN_LEGIBLE_FAR: f64 = 0.12;
  * Indices rather than items: this pass never learns what a candidate *is*,
  * which is what lets POI badges, chat bubbles and actors share it while
  * storing entirely different things. The caller maps `batch.src[out[i]]`
- * back to its own data.
- *
- * `local_world_frame`: the live group whose matrixWorld carries every
- * transform from the batch's local coordinates to true world space (see
- * frame/context.tsx's useFrameRefs, `local_world_frame_ref.current`).
+ * back to its own data. The batch's coordinates are in the root frame
+ * (module/world/view.ts), and the view as it stands is what they are
+ * measured against.
  */
-export function select_visible_billboards(
-  batch: BillboardBatch,
-  local_world_frame: THREE.Object3D,
-  camera: Camera,
-  max_count: u32,
-  viewport_w: f64,
-  viewport_h: f64,
-  out: Uint32Array,
-): u32 {
-  const n = select_begin(batch, local_world_frame, camera, viewport_w, viewport_h);
-  return select_place(batch, camera, max_count, viewport_w, viewport_h, out, n);
+export function select_visible_billboards(batch: BillboardBatch, max_count: u32, viewport_w: f64, viewport_h: f64, out: Uint32Array): u32 {
+  const n = select_begin(batch, viewport_w, viewport_h);
+  return select_place(batch, max_count, viewport_w, viewport_h, out, n);
 }
 
 /** The selection's cursor, so a placement job can run the greedy pass a
@@ -137,40 +118,27 @@ let $kept: u32 = 0;
  * The frustum pass and the sort — one unit. Returns how many candidates
  * survived, which is what `select_place` walks.
  */
-export function select_begin(
-  batch: BillboardBatch,
-  local_world_frame: THREE.Object3D,
-  camera: Camera,
-  viewport_w: f64,
-  viewport_h: f64,
-): u32 {
+export function select_begin(batch: BillboardBatch, viewport_w: f64, viewport_h: f64): u32 {
   dropped = 0;
   // Hoisted for the whole pass. Safe because nothing here pushes, and a
   // lane's backing store is only replaced by growth (batch.ts).
   const { local_x, local_y, local_z, world_x, world_y, world_z, d2, order, tiebreak, absorbed } = batch;
 
-  update_frustum($frustum, camera, $scratch_matrix);
-  // getWorldPosition, not camera.position: the two agree today because the
-  // camera hangs off the scene root, but the frustum above is world-space
-  // and a distance measured from a local offset would rank by the wrong
-  // origin the moment anything parents the camera.
-  camera.getWorldPosition($camera_pos);
+  const eye = view.eye;
 
   let n: u32 = 0;
   for (let i: u32 = 0; i < batch.count; i++) {
-    // localToWorld gives the point the frustum test needs, the point the
-    // distance is measured from, and the point the screen box is projected
-    // from — done once rather than three times, and kept in the lanes so the
-    // placement pass below does not redo it.
-    $local_pos.set(local_x[i], local_y[i], local_z[i]);
-    local_world_frame.localToWorld($local_pos);
-    const dist2 = $local_pos.distanceToSquared($camera_pos);
-    $sphere.set($local_pos, Math.sqrt(dist2) * ANCHOR_REACH);
-    if (!$frustum.intersectsSphere($sphere)) continue;
+    // Through the root gives the point the frustum test needs, the point
+    // the distance is measured from, and the point the screen box is
+    // projected from — done once rather than three times, and kept in the
+    // lanes so the placement pass below does not redo it.
+    mat4_transform_point($pos, view.root, local_x[i], local_y[i], local_z[i]);
+    const dist2 = ($pos.x - eye.x) ** 2 + ($pos.y - eye.y) ** 2 + ($pos.z - eye.z) ** 2;
+    if (!view_sees_sphere($pos.x, $pos.y, $pos.z, Math.sqrt(dist2) * ANCHOR_REACH)) continue;
 
-    world_x[i] = $local_pos.x;
-    world_y[i] = $local_pos.y;
-    world_z[i] = $local_pos.z;
+    world_x[i] = $pos.x;
+    world_y[i] = $pos.y;
+    world_z[i] = $pos.z;
     d2[i] = dist2;
     absorbed[i] = 0;
     order[n++] = i;
@@ -214,7 +182,6 @@ export function select_begin(
  */
 export function select_place(
   batch: BillboardBatch,
-  camera: Camera,
   max_count: u32,
   viewport_w: f64,
   viewport_h: f64,
@@ -247,7 +214,7 @@ export function select_place(
     // layer is looking at.
     if (far < MIN_LEGIBLE_FAR) continue;
 
-    $ndc.set(world_x[i], world_y[i], world_z[i]).project(camera);
+    mat4_transform_point($ndc, view.view_proj, world_x[i], world_y[i], world_z[i]);
     const sx = ($ndc.x * 0.5 + 0.5) * viewport_w;
     const sy = (-$ndc.y * 0.5 + 0.5) * viewport_h;
 

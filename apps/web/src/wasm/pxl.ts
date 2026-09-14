@@ -97,6 +97,11 @@ export type PxlExports = {
   pxl_billboards_remove(set: u32): void;
   pxl_puck_zone(x: number, y: number, z: number, count: u32, lane: u32, snap_dist: number, fog_far: number): void;
   pxl_puck_beacon(offset_x: number, offset_y: number, night: u32): void;
+  pxl_debug_set(x: number, y: number, z: number, vertex_cnt: u32, lane: u32): void;
+  pxl_env_theme(lane: u32): void;
+  pxl_env_observe(lat: number, lon: number, unix_ms: number): void;
+  pxl_env_at(): u32;
+  pxl_env_daylight(lat: number, lon: number, day_start_ms: number): u32;
   pxl_puck_clear(): void;
   pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32): number;
   pxl_model_block(): u32;
@@ -105,6 +110,10 @@ export type PxlExports = {
   pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32): void;
   pxl_model_seal(model: u32, scale: number): void;
   pxl_model_remove(model: u32): void;
+  pxl_model_handle(model: u32): u32;
+  pxl_decor_model(group: u32, model: u32): void;
+  pxl_raycast_decor(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;
+  pxl_raycast_decor_at(): u32;
   pxl_actor_new(model: u32): number;
   pxl_actor_place(actor: u32, x: number, y: number, z: number, rotation_z: number, visible: u32): void;
   pxl_actor_play(actor: u32, clip: u32, fade_s: number): void;

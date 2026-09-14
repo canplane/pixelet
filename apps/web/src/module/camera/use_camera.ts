@@ -1,31 +1,27 @@
 // @pxl/web/module/camera/use_camera.ts
 
 import { useEffect, useRef } from "react";
-import { invalidate, useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
 
-import type { V3 } from "@pxl/shared/spec/space/v3.ts";
-
 import { useCameraStore } from "./store.ts";
 import { camera_cfg } from "./config.ts";
-import { render_cfg } from "@/module/world/environment/config.ts";
-import { damp_alpha, orbit_local_offset } from "./orbit.ts";
+import { damp_alpha } from "./orbit.ts";
 import { climb_polar } from "./terrain_gate.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
+import { request_world_tick as invalidate } from "@/module/world/change.ts";
+import { view, view_compose } from "@/module/world/view.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
 
-const { FAR_CLIP } = render_cfg;
-
-// frameloop="demand" (scene.tsx) only renders another frame when something
-// calls invalidate() — this damping loop is the main thing driving that
-// while the camera is settling after a drag/zoom, and needs to stop asking
-// for more once it's close enough that a further frame wouldn't look any
-// different, or it would invalidate forever and defeat "demand" entirely.
+// The tick runs another frame only when something asks (sched/tick.ts) —
+// this damping loop is the main thing asking while the camera is settling
+// after a drag/zoom, and needs to stop once it's close enough that a
+// further frame wouldn't look any different, or it would ask forever and
+// the view would never be idle.
 // world units for dist, radians for polar — both small enough that the
 // remaining error is sub-pixel at any zoom level in view.
 const DIST_EPS: f64 = 0.001;
@@ -43,29 +39,16 @@ const CLIMB_RISE_DAMP: f64 = 20;
 const CLIMB_RELAX_DAMP: f64 = 5;
 const CLIMB_EPS: f64 = 0.0005;
 
-/** Native Z-up direction for the web world renderer. */
-export const CAMERA_UP: V3 = [0, 0, 1];
-
+/** Damps the eye's distance and pitch toward the controls and writes them
+ * into the view (module/world/view.ts). */
 export function useCamera() {
-  const { camera } = useThree();
-
-  /** Applies one-time camera runtime defaults for the Z-up scene. */
-  useEffect((): void => {
-    camera.up.set(...CAMERA_UP);
-    camera.far = FAR_CLIP;
-    camera.updateProjectionMatrix();
-  }, [camera]);
-
   const view_state = useCameraStore((state) => state.view_state);
 
-  // frameloop="demand": a useFrame callback only runs when a frame is
-  // actually being rendered, so on its own this damping loop could never
-  // notice view_state changing while the canvas is sitting idle (nothing
-  // left invalidating). This effect is what wakes it back up — it fires
-  // whenever view_state changes for any reason (drag, wheel, reset_dist/
-  // reset_azimuth, ...), independent of whatever the render loop happens to
-  // be doing, since React effects run on their own regardless of
-  // frameloop mode.
+  // A step only runs when a frame is asked for, so on its own this damping
+  // loop could never notice view_state changing while the canvas is sitting
+  // idle. This effect is what wakes it back up — it fires whenever view_state
+  // changes for any reason (drag, wheel, reset_dist/reset_azimuth, ...),
+  // independent of whatever the frame loop happens to be doing.
   useEffect(() => {
     invalidate();
   }, [view_state]);
@@ -127,12 +110,10 @@ export function useCamera() {
     // The offset lags the control, so a pitch steepening toward vertical can
     // still be carrying a climb from a shallower one.
     const view_polar = clamp(polar.current + shown_climb.current, MIN_POLAR, MAX_POLAR);
-    const { horiz_dist, vert_dist } = orbit_local_offset(dist.current, view_polar);
-
-    const pos: V3 = [0, -horiz_dist, vert_dist];
-
-    camera.position.set(pos[0], pos[1], pos[2]);
-    camera.lookAt(0, 0, 0);
-    camera.updateMatrixWorld();
+    if (view.dist !== dist.current || view.polar !== view_polar) {
+      view.dist = dist.current;
+      view.polar = view_polar;
+      view_compose();
+    }
   }, "camera");
 }

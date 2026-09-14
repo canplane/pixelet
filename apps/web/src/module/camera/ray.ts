@@ -17,15 +17,15 @@
  * the ray's own XY projection crosses within max_dist, a cell DDA within
  * each, over composites it keeps between hovers — the cursor doesn't
  * teleport between frames, so the same chunks come up again — each valid
- * for the sources its chunk was last told. What stays here is the ray in
- * the local world frame, the interact radius, and what a hit means for a
- * placement: the corner a new cube takes, the voxel the eraser digs, and
- * which placed object a hit resolves to.
+ * for the sources its chunk was last told. What stays here is the interact
+ * radius, and what a hit means for a placement: the corner a new cube
+ * takes, the voxel the eraser digs, and which placed object a hit resolves
+ * to. The ray itself is the view's (module/world/view.ts), in the root
+ * frame the chunks are placed in.
  */
 
-import * as THREE from "three";
-
 import type { f64 } from "@xpute/core/kit/word.ts";
+import type { Vec3 } from "@xpute/core/kit/mat4.ts";
 
 import { type IVec, ivec, projection, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";
@@ -39,31 +39,11 @@ import { get_objects_near, type OccupiedEntry } from "@/module/world/object/stor
 import { MaterialClass } from "@/render/layer/pipeline/voxel.ts";
 import { ray_hit_world, type WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
 
-const $origin = new THREE.Vector3();
-const $dir = new THREE.Vector3();
-const $m = new THREE.Matrix4();
-
 export type { WorldHit } from "@/render/layer/pipeline/chunk_raycast.ts";
 
 const INTERACT_RADIUS_CELL: f64 = 32 / U_PER_CELL - .707;
 const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
 const INTERACT_RADIUS2_U: f64 = INTERACT_RADIUS_U * INTERACT_RADIUS_U;
-
-export function to_local_world_ray(out: THREE.Ray, ray: THREE.Ray, world_frame: THREE.Group | null, local_world_frame: THREE.Group | null): THREE.Ray {
-  $m.identity();
-
-  if (local_world_frame) {
-    $m.copy(local_world_frame.matrixWorld);
-  } else if (world_frame) {
-    $m.copy(world_frame.matrixWorld);
-  }
-
-  $m.invert();
-
-  $origin.copy(ray.origin).applyMatrix4($m);
-  $dir.copy(ray.direction).transformDirection($m).normalize();
-  return out.copy(ray).set($origin, $dir);
-}
 
 export function in_interact_radius(a: PVF3, b: PVF3): boolean {
   const dx: f64 = pvf3.to_real(pvf3.X(a)) - pvf3.to_real(pvf3.X(b));
@@ -313,19 +293,13 @@ export type PickResult = {
   hit: WorldHit;
 };
 
-/** Single raycast entry point — see this file's own doc comment. */
-export function ray_pick(
-  out: THREE.Ray,
-  ray: THREE.Ray,
-  world_frame: THREE.Group | null,
-  local_world_frame: THREE.Group | null,
-  map_center: PVF3 | null,
-): PickResult | null {
+/** Single raycast entry point — see this file's own doc comment. The ray
+ * is in the root frame. */
+export function ray_pick(origin: Vec3, direction: Vec3, map_center: PVF3 | null): PickResult | null {
   if (!map_center) return null;
   const map_origin = get_local_world_origin(map_center);
 
-  const local_ray = to_local_world_ray(out, ray, world_frame, local_world_frame);
-  const hit = ray_hit_world(local_ray, map_origin, INTERACT_RADIUS_U * 1.5);
+  const hit = ray_hit_world({ origin, direction }, map_origin, INTERACT_RADIUS_U * 1.5);
   if (!hit) return null;
 
   const probe: PVF3 = local_world_to_canonical({ i: 0n, f: 0n }, hit.hit_point, map_origin);

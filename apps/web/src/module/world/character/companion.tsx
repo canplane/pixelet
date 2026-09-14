@@ -18,11 +18,10 @@
  * counter-rotating azimuth — a nav-app "you" marker, map spinning under it.
  * See FOLLOW_LERP_K below and use_follow_mode.ts.
  *
- * Position/facing math lives in path.ts (no `three` import at all, so it
- * stays valid if this renderer is ever replaced); this file is the thin
- * Three.js-specific glue that reads that math and writes it into transforms.
- * Model loading/texturing/scaling is shared with the settings variant
- * picker's preview via use_character_model.ts.
+ * Position/facing math lives in path.ts; this file is the thin glue that
+ * reads that math and tells the module's actor where to stand. The model
+ * is registered once per variant (render/gpu/model_asset.ts) and shared
+ * with the settings variant picker's preview.
  *
  * Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
  * both CC0, both real glTF. Their flat toy-block color palette doesn't match
@@ -30,8 +29,7 @@
  * custom skin is tracked separately, not blocking on it.
  */
 
-import { memo, type MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
-import * as THREE from "three";
+import { memo, type MutableRefObject, useEffect, useRef, useState } from "react";
 
 import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
@@ -40,10 +38,7 @@ import { get_surface_z_at_local } from "../surface_height.ts";
 import { objects_revision } from "../object/store.ts";
 import { register_tile_interest } from "../terrain/store.ts";
 import { heading_to, init_settle_tracker, sample_walk_plan, type SettleTracker, update_settle_tracker, type Vec2, type WalkPlan } from "./path.ts";
-import { useCharacterModel } from "./use_character_model.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
-import { rim_cfg } from "@/module/world/environment/config.ts";
-import { set_rim_intensity } from "@/module/world/render/lit_gltf_material.ts";
 import { useCameraStore } from "@/module/camera/store.ts";
 import { camera_cfg } from "@/module/camera/config.ts";
 import { damp_alpha } from "@/module/camera/orbit.ts";
@@ -52,9 +47,10 @@ import { ChatBubble } from "./chat_bubble.tsx";
 import { type CharacterVariant, find_person_variant, find_pet_variant } from "@/module/world/character/variant.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { load_gltf, load_texture } from "@/module/world/gltf_cache.ts";
+import { load_gltf, load_image } from "@/render/gltf/load.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
-import { gpu_renderer, useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
+import { gpu_renderer } from "@/render/gpu/stage.tsx";
+import { view } from "@/module/world/view.ts";
 import { type ModelHandle, register_model } from "@/render/gpu/model_asset.ts";
 
 /** A variant's model in the module, registered once per model and height
@@ -64,7 +60,7 @@ function model_for(variant: CharacterVariant): Promise<ModelHandle | null> {
   const key = `${variant.model_url}|${variant.height_u}`;
   let entry = model_handles.get(key);
   if (!entry) {
-    entry = load_gltf(variant.model_url).then((gltf) => (CORE_PXL ? register_model(CORE_PXL, gltf.scene, gltf.animations, variant.height_u) : null));
+    entry = load_gltf(variant.model_url).then((gltf) => (CORE_PXL ? register_model(CORE_PXL, gltf, variant.height_u) : null));
     model_handles.set(key, entry);
   }
   return entry;
@@ -122,13 +118,6 @@ const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
 const IDLE_CLIP = "idle";
 
-// Scratch for reading the parent frame's current world rotation (follow-mode
-// facing) — reused every frame, never held across the await-free useFrame
-// body. Two Walker instances share these, but their useFrame callbacks run
-// sequentially on one thread and consume the value before yielding.
-const $parent_quat = new THREE.Quaternion();
-const $parent_euler = new THREE.Euler();
-
 type WalkerProps = {
   /** Mutated in place by Companion every render, never replaced — Walker
    * reads .current fresh each frame instead of taking these as reactive
@@ -159,22 +148,17 @@ type WalkerProps = {
 
 const Walker = memo(function Walker(props: WalkerProps) {
   const { origin_ref, map_origin_ref, target_ref, target_z_ref, variant, show_chat_bubble, role } = props;
-  const { root: character_root, material: character_material, actions } = useCharacterModel(variant.model_url, variant.skin_url, variant.height_u);
-
-  // Through the WebGPU renderer the walker is an actor of the module
-  // (crates/pxl-core/src/model.rs): what follows still decides where it
-  // stands, which way it faces and which clip it plays, and tells the actor;
-  // three keeps the group only for that and for the chat bubble, and draws
-  // none of its meshes.
-  const gpu = useGpuDrawsChunks();
-  const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: THREE.Texture } | null>(null);
+  // The walker is an actor of the module (crates/pxl-core/src/model.rs):
+  // what follows decides where it stands, which way it faces and which clip
+  // it plays, and tells the actor. Its pose here is the walk's own state.
+  const actor_ref = useRef<{ actor: u32; model: ModelHandle; skin: ImageBitmap } | null>(null);
   /** The actor again, as state, for what renders against it: the bubble. */
   const [actor, set_actor] = useState<u32 | null>(null);
   useEffect(() => {
     const p = CORE_PXL;
-    if (!p || !gpu) return;
+    if (!p) return;
     let alive = true;
-    Promise.all([model_for(variant), load_texture(variant.skin_url)]).then(([model, skin]) => {
+    Promise.all([model_for(variant), load_image(variant.skin_url)]).then(([model, skin]) => {
       if (!alive || !model) return;
       const actor = p.pxl_actor_new(model.model);
       if (actor < 0) return;
@@ -187,23 +171,10 @@ const Walker = memo(function Walker(props: WalkerProps) {
       actor_ref.current = null;
       set_actor(null);
     };
-  }, [gpu, variant]);
-  useEffect(() => {
-    character_root?.traverse((node) => {
-      if ((node as THREE.Mesh).isMesh) node.visible = !gpu;
-    });
-  }, [character_root, gpu]);
+  }, [variant]);
+  /** Where the walker stands in the root frame and which way it faces. */
+  const pose = useRef({ x: 0, y: 0, z: 0, rotation_z: 0 }).current;
   const actor_clip_ref = useRef<string | null>(null);
-
-  // Same live show_rim_light wiring decor/asset_store.ts does for decor's
-  // materials — use_character_model.ts
-  // itself doesn't know this setting (matching instanced_model.ts's own
-  // reason for the same split), so whichever real render path needs it live
-  // owns the subscription instead.
-  const show_rim_light = useSettingsStore((state) => state.show_rim_light);
-  useEffect(() => {
-    if (character_material) set_rim_intensity(character_material, show_rim_light ? rim_cfg.INTENSITY : 0);
-  }, [character_material, show_rim_light]);
 
   // Rare toggle, so subscribing (and the re-render it costs) is fine — unlike
   // map_center, this doesn't churn per frame.
@@ -212,8 +183,8 @@ const Walker = memo(function Walker(props: WalkerProps) {
 
   useEffect(() => {
     const set_ready = role === "person" ? useCompanionLoadStore.getState().set_person_ready : useCompanionLoadStore.getState().set_pet_ready;
-    set_ready(character_root !== null);
-  }, [character_root, role]);
+    set_ready(actor !== null);
+  }, [actor, role]);
 
   const walk_plan_ref = useRef<WalkPlan | null>(null);
   const settle_ref = useRef<SettleTracker>(init_settle_tracker(target_ref.current, 0));
@@ -224,24 +195,24 @@ const Walker = memo(function Walker(props: WalkerProps) {
   // there is not a reason for it to keep turning to track the viewer; only
   // its very first pose should ever be camera-relative.
   const initial_facing_done_ref = useRef(false);
-  const current_clip_ref = useRef<string | null>(null);
-  const cam_world_pos = useRef(new THREE.Vector3()).current;
 
-  // One-time placement at the *current* target, once the model exists. Not
-  // via useFrame: target_ref.current can already be thousands of units away
-  // from the group's default (0,0,0) — the coordinate system's own origin,
-  // not "near the camera" — since it's map_center's offset within its
-  // enclosing L4 tile. Walking there at any sane pace would take far too
-  // long; only *subsequent* moves should animate.
-  const placed_for_ref = useRef<THREE.Group | null>(null);
-  useLayoutEffect(() => {
-    if (!character_root || placed_for_ref.current === character_root) return;
-    character_root.position.set(target_ref.current.x, target_ref.current.y, 0);
-    placed_for_ref.current = character_root;
+  // One-time placement at the *current* target, once the actor exists:
+  // target_ref.current can already be thousands of units away from the
+  // pose's default (0,0,0) — the coordinate system's own origin, not "near
+  // the camera" — since it's map_center's offset within its enclosing L4
+  // tile. Walking there at any sane pace would take far too long; only
+  // *subsequent* moves should animate.
+  const placed_for_ref = useRef<u32 | null>(null);
+  useEffect(() => {
+    if (actor === null || placed_for_ref.current === actor) return;
+    pose.x = target_ref.current.x;
+    pose.y = target_ref.current.y;
+    pose.z = 0;
+    placed_for_ref.current = actor;
     // target_ref deliberately not read reactively here: this is a one-time
     // initial placement, not a live binding — subsequent moves go through
-    // the settle-tracked catch-up walk in useFrame below.
-  }, [character_root]);
+    // the settle-tracked catch-up walk in the step below.
+  }, [actor]);
 
   // Tracks the last map_origin this loop saw, to snap (not glide) across an
   // L4 rebase — target_ref jumps ~4096u then, and use_frame_translation snaps
@@ -258,7 +229,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
   useEffect(() => register_tile_interest(() => true, () => tile_revision_ref.current++), []);
 
   useTick("interaction", ({ state, delta }) => {
-    if (!character_root) return;
+    if (actor === null) return;
 
     const now: f64 = state.clock.getElapsedTime();
     const origin_page_idx_xy = origin_ref.current;
@@ -285,18 +256,14 @@ const Walker = memo(function Walker(props: WalkerProps) {
         py = target.y;
       } else {
         const a: f64 = damp_alpha(FOLLOW_LERP_K, delta);
-        px = character_root.position.x + (target.x - character_root.position.x) * a;
-        py = character_root.position.y + (target.y - character_root.position.y) * a;
+        px = pose.x + (target.x - pose.x) * a;
+        py = pose.y + (target.y - pose.y) * a;
       }
 
       // Back to the camera, held there while the map spins underneath —
-      // counter-rotate whatever azimuth the parent frame currently carries
-      // so the walker's final world facing stays FOLLOW_FACING.
-      if (character_root.parent) {
-        character_root.parent.getWorldQuaternion($parent_quat);
-        $parent_euler.setFromQuaternion($parent_quat, "ZYX");
-        character_root.rotation.z = FOLLOW_FACING - $parent_euler.z;
-      }
+      // counter-rotate the azimuth the root frame currently carries so the
+      // walker's final facing stays FOLLOW_FACING.
+      pose.rotation_z = FOLLOW_FACING - view.azimuth;
 
       if (Math.hypot(target.x - px, target.y - py) > FOLLOW_WALK_EPS) {
         follow_walk_until_ref.current = now + FOLLOW_WALK_LINGER_S;
@@ -322,7 +289,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
       settle_ref.current = tracker;
       if (just_settled) {
         walk_plan_ref.current = {
-          start: { x: character_root.position.x, y: character_root.position.y },
+          start: { x: pose.x, y: pose.y },
           target: tracker.settled,
           start_time: now,
           duration: CATCHUP_DURATION_S,
@@ -333,7 +300,7 @@ const Walker = memo(function Walker(props: WalkerProps) {
       }
 
       const plan = walk_plan_ref.current;
-      const step = plan ? sample_walk_plan(plan, now) : { x: character_root.position.x, y: character_root.position.y, heading: null, arrived: true };
+      const step = plan ? sample_walk_plan(plan, now) : { x: pose.x, y: pose.y, heading: null, arrived: true };
       if (step.arrived) walk_plan_ref.current = null;
 
       px = step.x;
@@ -346,16 +313,14 @@ const Walker = memo(function Walker(props: WalkerProps) {
       // idle frames, not as azimuth changes), and never once a walk has
       // happened, at which point arriving just holds whatever heading that
       // walk left it on (rotation.z is simply left untouched in that case).
-      // use_character_model's up-axis wrapping maps the model's native
-      // forward to +Y in this group's frame, hence the +PI/2 offset from a
-      // raw heading to the actual object rotation.
+      // The Y-up to Z-up turn the actor stands with maps the model's native
+      // forward to +Y, hence the +PI/2 offset from a raw heading to the
+      // actor's turn about Z.
       if (is_walking) {
-        character_root.rotation.z = step.heading! + Math.PI / 2;
-      } else if (!initial_facing_done_ref.current && character_root.parent) {
-        state.camera.getWorldPosition(cam_world_pos);
-        character_root.parent.worldToLocal(cam_world_pos);
-        const heading = heading_to({ x: step.x, y: step.y }, { x: cam_world_pos.x, y: cam_world_pos.y });
-        character_root.rotation.z = heading + Math.PI / 2;
+        pose.rotation_z = step.heading! + Math.PI / 2;
+      } else if (!initial_facing_done_ref.current) {
+        const heading = heading_to({ x: step.x, y: step.y }, { x: view.eye_local.x, y: view.eye_local.y });
+        pose.rotation_z = heading + Math.PI / 2;
         initial_facing_done_ref.current = true;
       }
     }
@@ -379,7 +344,9 @@ const Walker = memo(function Walker(props: WalkerProps) {
       s.tiles = tile_revision_ref.current;
       s.z = get_surface_z_at_local(origin_page_idx_xy, map_origin_ref.current, px, py, target_z_ref.current);
     }
-    character_root.position.set(px, py, s.z ?? character_root.position.z);
+    pose.x = px;
+    pose.y = py;
+    if (s.z !== null) pose.z = s.z;
 
     const held = actor_ref.current;
     if (held && CORE_PXL) {
@@ -388,8 +355,8 @@ const Walker = memo(function Walker(props: WalkerProps) {
         held.actor,
         ivec.to_real(ivec.X(mo)) + px,
         ivec.to_real(ivec.Y(mo)) + py,
-        ivec.to_real(ivec.Z(mo)) + character_root.position.z,
-        character_root.rotation.z,
+        ivec.to_real(ivec.Z(mo)) + pose.z,
+        pose.rotation_z,
         1,
       );
       const clip = is_walking ? variant.move_clip : IDLE_CLIP;
@@ -398,31 +365,16 @@ const Walker = memo(function Walker(props: WalkerProps) {
         if (index !== undefined) CORE_PXL.pxl_actor_play(held.actor, index, actor_clip_ref.current === null ? 0 : 0.2);
         actor_clip_ref.current = clip;
       }
-      gpu_renderer?.skinned.set_skin(held.model.model, held.skin.image as ImageBitmap);
+      gpu_renderer?.skinned.set_skin(held.model.model, held.skin);
     }
 
-    // Crossfade only on an actual state change, not every frame.
-    const desired_clip = is_walking ? variant.move_clip : IDLE_CLIP;
-    if (current_clip_ref.current !== desired_clip) {
-      actions[current_clip_ref.current ?? ""]?.fadeOut(0.2);
-      actions[desired_clip]?.reset().fadeIn(0.2).play();
-      current_clip_ref.current = desired_clip;
-    }
-
-    // frameloop="demand" (see scene.tsx / LocationPuck's own use of this):
-    // nothing else invalidates on its own while this loop and the clip's
-    // internal mixer keep animating, so this component must ask for the
-    // next frame itself for as long as it's mounted.
+    // Nothing else asks for frames on its own while this loop keeps
+    // animating, so this component must ask for the next frame itself for
+    // as long as it's mounted.
     state.invalidate();
   }, "companion");
 
-  return character_root
-    ? (
-      <primitive object={character_root}>
-        {show_chat_bubble && <ChatBubble anchor_z={variant.height_u} actor={gpu ? actor : null} />}
-      </primitive>
-    )
-    : null;
+  return actor !== null && show_chat_bubble ? <ChatBubble anchor_z={variant.height_u} actor={actor} /> : null;
 });
 
 type CompanionProps = {

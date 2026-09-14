@@ -44,7 +44,7 @@ asset                   the shipped models and texture pack; data, not code — 
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
 apps/api                Hono server + the Overture/DEM bake pipeline
-apps/web                Vite + React 19 + React Three Fiber client
+apps/web                Vite + React 19 client, drawing through WebGPU
 ```
 
 Two boundaries matter, and both are easy to erode by accident:
@@ -77,23 +77,25 @@ and working (place, erase, stack, raycast, persist). The chat/social half is a U
 shell wired to nothing. UI polish here does not imply feature completeness; check
 current code before characterizing any part of the product surface.
 
-**The WASM/WebGPU move is the priority, taken from the smallest separable
-piece outward.** The destination — a Rust core compiled to WASM, drawing
-through WebGPU, three.js gone, iOS 26 and iPhone 11 as the floor
+**The WASM/WebGPU move is the priority, and the renderer is through it.**
+The destination — a Rust core compiled to WASM, drawing through WebGPU,
+three.js gone, iOS 26 and iPhone 11 as the floor
 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
-— is scheduled, and the order is P0 in
-[issue/BACKLOG.md](./issue/BACKLOG.md): a piece is first cut out behind a
-boundary that carries typed arrays, still in TypeScript, and only then does
-what sits behind the boundary become Rust. Until a piece's turn, the client is TypeScript with Three.js
-used directly, unwrapped, and the state is already in the shape the move
-wants: lanes in one linear memory, one tick, records. Build the next thing in
-that shape; don't port a piece ahead of the list, and don't propose keeping a
-WebGL path or supporting pre-WebGPU devices — that question is closed.
+— is where the client stands since 2026-09-14: the core builds, decides
+and lists what to draw, and `apps/web/src/render/gpu/` executes the list
+and decides nothing. What is still TypeScript is glue and the pieces not
+yet moved, listed in P0 of [issue/BACKLOG.md](./issue/BACKLOG.md): a piece
+is first cut out behind a boundary that carries typed arrays, still in
+TypeScript, and only then does what sits behind the boundary become Rust.
+The state is already in the shape the move wants: lanes in one linear
+memory, one tick, records. Build the next thing in that shape; don't port
+a piece ahead of the list, and don't propose keeping a WebGL path or
+supporting pre-WebGPU devices — that question is closed.
 
-**That doesn't license implementation-shaped architecture.** The client is
-going to be rewritten — by whoever ends up doing it, on whatever timeline —
-so building in TypeScript/Three.js now is a language/runtime choice, not
-licence to let a Three.js or React quirk decide a core design. Pick the structurally correct shape for the problem (matching
+**That doesn't license implementation-shaped architecture.** What is still
+TypeScript is going to move — by whoever ends up doing it, on whatever
+timeline — so building in TypeScript now is a language/runtime choice, not
+licence to let a React quirk decide a core design. Pick the structurally correct shape for the problem (matching
 real prior art where one exists, e.g. Minecraft's own chunk model for
 grid-content rendering) even in TS, so a later rewrite carries the design
 over rather than rediscovering it. Two failure modes to avoid, both hit in
@@ -313,9 +315,9 @@ just don't treat them as authority.
   and if a predicted fix turns out not to work, revert it rather than leaving it
   in.
 - **Don't propose measuring what is going to be replaced.** Instrumenting
-  code the plan already retires — the three.js and React glue before the
-  WebGPU renderer, today — decides nothing before it leaves and only lengthens
-  the milestone. Measure what survives the move, or what a decision in front
+  code the plan already retires — the React glue a piece leaves behind on its
+  way into the core, today — decides nothing before it leaves and only
+  lengthens the milestone. Measure what survives the move, or what a decision in front
   of us actually turns on; otherwise say what is known and move on.
 - **"Revert" means leave no trace.** Restore the exact prior text — no comment
   explaining what was tried, no `// removed: ...` marker, no doc note about the

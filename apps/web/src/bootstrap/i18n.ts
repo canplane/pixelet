@@ -41,7 +41,7 @@ function with_dev<T>(base: T, dev: unknown): T {
 let booted = false;
 
 /**
- * Initializes i18next for the app. Sits alongside bootstrap_three() rather
+ * Initializes i18next for the app. Called from bootstrap_app() rather
  * than running as a side effect of importing a module, so that every
  * one-time global setup happens in one place, in a defined order, inside
  * main.tsx's error handling — a side-effect import runs at module-eval time,

@@ -59,8 +59,8 @@ function frame_args(f: FrameSample): Record<string, unknown> {
     commit_ms: +f.cpu.commit_ms.toFixed(2),
     triangles: f.triangles,
     ...Object.fromEntries(Object.entries(f.census).map(([tag, [, tris]]) => [`tris_${tag}`, tris])),
-    geometries: f.geometries,
-    textures: f.textures,
+    buffers: f.buffers,
+    buffer_mb: f.buffer_mb,
     mounted: f.mounts.added,
     unmounted: f.mounts.removed,
     rerendered: f.mounts.rendered,
@@ -80,7 +80,7 @@ function frame_args(f: FrameSample): Record<string, unknown> {
     lod_oldest_release_ms: Math.round(f.lod.oldest_release_ms),
     lod_oldest_visible_ms: Math.round(f.lod.oldest_visible_ms),
     draw_calls: f.draw_calls,
-    fill_mpx: +((f.px * f.fx_passes) / 1e6).toFixed(2),
+    fill_mpx: +(f.px / 1e6).toFixed(2),
     q_terrain: f.q_terrain,
     q_poi: f.q_poi,
   };
@@ -169,7 +169,7 @@ export function ledger_trace_json(): string {
         tid: TID_WORST,
         args: {
           ...frame_args(f),
-          d_geometries: prev ? f.geometries - prev.geometries : null,
+          d_buffers: prev ? f.buffers - prev.buffers : null,
           d_heap_mb: prev ? f.heap_mb - prev.heap_mb : null,
         },
       });
