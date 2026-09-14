@@ -1,0 +1,477 @@
+// pxl_core/render/gltf/gltf.rs
+
+//! A glTF 2.0 parser for what the shipped models use: a GLB container or a
+//! JSON document with its buffers already in hand; nodes with TRS or a matrix;
+//! meshes of triangle primitives with positions, normals, texture coordinates,
+//! joints and weights; skins with inverse bind matrices; and animations of
+//! translation, rotation and scale with linear, step or cubic spline keys.
+//! Images and materials are read only far enough to say which texture a
+//! primitive paints with, since every model here is skinned from a swatch the
+//! palette names rather than the file's own image.
+//!
+//! Nothing here is Y-up or Z-up: the vertices, poses and keys come out as the
+//! file holds them, in the file's own frame, and whoever registers the model
+//! (render/gpu/model_asset.rs) decides how it stands.
+
+use std::collections::HashMap;
+
+use xpute_core::kit::mat4::{mat4, mat4_mul, Mat4};
+
+use crate::json::{parse, Json};
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfPrimitive {
+    pub position: Vec<f32>,
+    pub normal: Option<Vec<f32>>,
+    pub uv: Option<Vec<f32>>,
+    /// Four joint indices a vertex, into the mesh's skin; None when unskinned.
+    pub joints: Option<Vec<u16>>,
+    pub weights: Option<Vec<f32>>,
+    /// Triangle list; generated as 0..n when the primitive has none.
+    pub index: Vec<u32>,
+    pub material: i32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfNode {
+    pub name: String,
+    pub parent: i32,
+    pub children: Vec<u32>,
+    pub mesh: i32,
+    pub skin: i32,
+    /// The node's own transform, column-major.
+    pub local: Mat4,
+    pub translation: [f64; 3],
+    pub rotation: [f64; 4],
+    pub scale: [f64; 3],
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfSkin {
+    pub joints: Vec<u32>,
+    /// Sixteen floats a joint, column-major; identity when the file gives none.
+    pub inverse_bind: Vec<f32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GltfPath {
+    Translation = 0,
+    Rotation = 1,
+    Scale = 2,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfChannel {
+    pub node: u32,
+    pub path: GltfPath,
+    /// LINEAR or CUBICSPLINE keys interpolate; STEP holds.
+    pub step: bool,
+    pub times: Vec<f32>,
+    /// `times.len()` keys of 3 or 4 floats; a cubic spline's tangents are
+    /// already dropped, leaving the values.
+    pub values: Vec<f32>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfAnimation {
+    pub name: String,
+    pub duration: f64,
+    pub channels: Vec<GltfChannel>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gltf {
+    pub nodes: Vec<GltfNode>,
+    pub meshes: Vec<Vec<GltfPrimitive>>,
+    pub skins: Vec<GltfSkin>,
+    pub animations: Vec<GltfAnimation>,
+    /// The default scene's root nodes.
+    pub roots: Vec<u32>,
+}
+
+const GLB_MAGIC: u32 = 0x4654_6c67;
+const CHUNK_JSON: u32 = 0x4e4f_534a;
+const CHUNK_BIN: u32 = 0x004e_4942;
+
+fn component_size(t: u32) -> usize {
+    match t {
+        5120 | 5121 => 1,
+        5122 | 5123 => 2,
+        _ => 4,
+    }
+}
+
+fn type_size(t: &str) -> usize {
+    match t {
+        "SCALAR" => 1,
+        "VEC2" => 2,
+        "VEC3" => 3,
+        "VEC4" | "MAT2" => 4,
+        "MAT3" => 9,
+        "MAT4" => 16,
+        _ => 1,
+    }
+}
+
+fn u32_le(b: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
+}
+
+/// Parses a `.glb`, or a `.gltf` document whose buffers are `external_buffers`.
+pub fn parse_gltf(bytes: &[u8], external_buffers: &[&[u8]]) -> Result<Gltf, String> {
+    if bytes.len() >= 12 && u32_le(bytes, 0) == GLB_MAGIC {
+        let length = (u32_le(bytes, 8) as usize).min(bytes.len());
+        let mut at = 12;
+        let mut text: Option<&str> = None;
+        let mut bin: Option<&[u8]> = None;
+        while at + 8 <= length {
+            let chunk_length = u32_le(bytes, at) as usize;
+            let chunk_type = u32_le(bytes, at + 4);
+            let end = (at + 8 + chunk_length).min(bytes.len());
+            let data = &bytes[at + 8..end];
+            if chunk_type == CHUNK_JSON {
+                text = core::str::from_utf8(data).ok();
+            } else if chunk_type == CHUNK_BIN && bin.is_none() {
+                bin = Some(data);
+            }
+            at += 8 + chunk_length;
+        }
+        let text = text.ok_or("gltf: a GLB without a JSON chunk")?;
+        let json = parse(text).ok_or("gltf: the JSON chunk does not parse")?;
+        let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
+        buffers.extend_from_slice(external_buffers);
+        read_document(&json, &buffers)
+    } else {
+        let text = core::str::from_utf8(bytes).map_err(|_| "gltf: not UTF-8")?;
+        let json = parse(text).ok_or("gltf: the document does not parse")?;
+        read_document(&json, external_buffers)
+    }
+}
+
+fn num(v: Option<&Json>) -> Option<f64> {
+    v.and_then(Json::as_f64)
+}
+
+fn arr(v: Option<&Json>) -> &[Json] {
+    v.and_then(Json::as_array).unwrap_or(&[])
+}
+
+fn floats<const N: usize>(v: Option<&Json>, default: [f64; N]) -> [f64; N] {
+    let a = arr(v);
+    if a.len() < N {
+        return default;
+    }
+    core::array::from_fn(|i| a[i].as_f64().unwrap_or(default[i]))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum As {
+    F32,
+    U32,
+    U16,
+}
+
+enum Elements {
+    F32(Vec<f32>),
+    U32(Vec<u32>),
+    U16(Vec<u16>),
+}
+
+struct Reader<'a> {
+    json: &'a Json,
+    buffers: &'a [&'a [u8]],
+    cache: HashMap<(usize, As), Vec<f64>>,
+}
+
+impl Reader<'_> {
+    /// An accessor's elements, tightly packed, as numbers.
+    fn values(&mut self, index: usize) -> Result<Vec<f64>, String> {
+        let a = &arr(self.json.get("accessors"))[index];
+        let count = num(a.get("count")).unwrap_or(0.0) as usize;
+        let width = type_size(a.get("type").and_then(Json::as_str).unwrap_or("SCALAR"));
+        let mut out = vec![0.0; count * width];
+        if let Some(bv_index) = num(a.get("bufferView")) {
+            let bv = &arr(self.json.get("bufferViews"))[bv_index as usize];
+            let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
+            let buffer = *self.buffers.get(buffer_index).ok_or_else(|| format!("gltf: buffer {buffer_index} not provided"))?;
+            let component_type = num(a.get("componentType")).unwrap_or(5126.0) as u32;
+            let comp = component_size(component_type);
+            let stride = num(bv.get("byteStride")).map_or(comp * width, |s| s as usize);
+            let base = num(bv.get("byteOffset")).unwrap_or(0.0) as usize + num(a.get("byteOffset")).unwrap_or(0.0) as usize;
+            let norm = a.get("normalized") == Some(&Json::Bool(true));
+            for e in 0..count {
+                for c in 0..width {
+                    let at = base + e * stride + c * comp;
+                    let v = match component_type {
+                        5120 => {
+                            let v = buffer[at] as i8 as f64;
+                            if norm {
+                                (v / 127.0).max(-1.0)
+                            } else {
+                                v
+                            }
+                        }
+                        5121 => {
+                            let v = buffer[at] as f64;
+                            if norm {
+                                v / 255.0
+                            } else {
+                                v
+                            }
+                        }
+                        5122 => {
+                            let v = i16::from_le_bytes([buffer[at], buffer[at + 1]]) as f64;
+                            if norm {
+                                (v / 32767.0).max(-1.0)
+                            } else {
+                                v
+                            }
+                        }
+                        5123 => {
+                            let v = u16::from_le_bytes([buffer[at], buffer[at + 1]]) as f64;
+                            if norm {
+                                v / 65535.0
+                            } else {
+                                v
+                            }
+                        }
+                        5125 => u32_le(buffer, at) as f64,
+                        _ => f32::from_le_bytes([buffer[at], buffer[at + 1], buffer[at + 2], buffer[at + 3]]) as f64,
+                    };
+                    out[e * width + c] = v;
+                }
+            }
+        }
+        // Sparse accessors are not in the shipped models; a sparse one reads as
+        // its dense base, which the spec allows to be all zero.
+        Ok(out)
+    }
+
+    fn read(&mut self, index: usize, as_: As) -> Result<Elements, String> {
+        let values = match self.cache.get(&(index, as_)) {
+            Some(v) => v.clone(),
+            None => {
+                let v = self.values(index)?;
+                self.cache.insert((index, as_), v.clone());
+                v
+            }
+        };
+        Ok(match as_ {
+            As::F32 => Elements::F32(values.into_iter().map(|v| v as f32).collect()),
+            As::U32 => Elements::U32(values.into_iter().map(|v| v as u32).collect()),
+            As::U16 => Elements::U16(values.into_iter().map(|v| v as u16).collect()),
+        })
+    }
+
+    fn f32s(&mut self, index: usize) -> Result<Vec<f32>, String> {
+        match self.read(index, As::F32)? {
+            Elements::F32(v) => Ok(v),
+            _ => unreachable!(),
+        }
+    }
+
+    fn u32s(&mut self, index: usize) -> Result<Vec<u32>, String> {
+        match self.read(index, As::U32)? {
+            Elements::U32(v) => Ok(v),
+            _ => unreachable!(),
+        }
+    }
+
+    fn u16s(&mut self, index: usize) -> Result<Vec<u16>, String> {
+        match self.read(index, As::U16)? {
+            Elements::U16(v) => Ok(v),
+            _ => unreachable!(),
+        }
+    }
+}
+
+fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
+    let mut r = Reader { json, buffers, cache: HashMap::new() };
+
+    let mut meshes = Vec::new();
+    for m in arr(json.get("meshes")) {
+        let mut prims = Vec::new();
+        for p in arr(m.get("primitives")) {
+            let attributes = p.get("attributes");
+            let attr = |name: &str| attributes.and_then(|a| num(a.get(name))).map(|v| v as usize);
+            if num(p.get("mode")).unwrap_or(4.0) != 4.0 {
+                continue;
+            }
+            let Some(position_at) = attr("POSITION") else { continue };
+            let position = r.f32s(position_at)?;
+            let count = position.len() / 3;
+            let index = match num(p.get("indices")) {
+                Some(i) => r.u32s(i as usize)?,
+                None => (0..count as u32).collect(),
+            };
+            prims.push(GltfPrimitive {
+                normal: attr("NORMAL").map(|i| r.f32s(i)).transpose()?,
+                uv: attr("TEXCOORD_0").map(|i| r.f32s(i)).transpose()?,
+                joints: attr("JOINTS_0").map(|i| r.u16s(i)).transpose()?,
+                weights: attr("WEIGHTS_0").map(|i| r.f32s(i)).transpose()?,
+                position,
+                index,
+                material: num(p.get("material")).map_or(-1, |v| v as i32),
+            });
+        }
+        meshes.push(prims);
+    }
+
+    let raw_nodes = arr(json.get("nodes"));
+    let mut parents = vec![-1i32; raw_nodes.len()];
+    for (i, n) in raw_nodes.iter().enumerate() {
+        for c in arr(n.get("children")) {
+            if let Some(c) = c.as_f64() {
+                parents[c as usize] = i as i32;
+            }
+        }
+    }
+    let nodes = raw_nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| {
+            let translation = floats(n.get("translation"), [0.0; 3]);
+            let rotation = floats(n.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
+            let scale = floats(n.get("scale"), [1.0; 3]);
+            let mut local = mat4();
+            if n.get("matrix").is_some() {
+                local = floats(n.get("matrix"), local);
+            } else {
+                compose_trs(&mut local, &translation, &rotation, &scale);
+            }
+            GltfNode {
+                name: n.get("name").and_then(Json::as_str).unwrap_or("").to_string(),
+                parent: parents[i],
+                children: arr(n.get("children")).iter().filter_map(Json::as_f64).map(|c| c as u32).collect(),
+                mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
+                skin: num(n.get("skin")).map_or(-1, |v| v as i32),
+                local,
+                translation,
+                rotation,
+                scale,
+            }
+        })
+        .collect();
+
+    let mut skins = Vec::new();
+    for s in arr(json.get("skins")) {
+        let joints: Vec<u32> = arr(s.get("joints")).iter().filter_map(Json::as_f64).map(|j| j as u32).collect();
+        let inverse_bind = match num(s.get("inverseBindMatrices")) {
+            Some(i) => r.f32s(i as usize)?,
+            None => joints.iter().flat_map(|_| [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]).collect(),
+        };
+        skins.push(GltfSkin { joints, inverse_bind });
+    }
+
+    let mut animations = Vec::new();
+    for (k, a) in arr(json.get("animations")).iter().enumerate() {
+        let mut duration = 0.0f64;
+        let mut channels = Vec::new();
+        for c in arr(a.get("channels")) {
+            let Some(target) = c.get("target") else { continue };
+            let Some(node) = num(target.get("node")) else { continue };
+            let path = match target.get("path").and_then(Json::as_str) {
+                Some("translation") => GltfPath::Translation,
+                Some("rotation") => GltfPath::Rotation,
+                Some("scale") => GltfPath::Scale,
+                _ => continue,
+            };
+            let sampler = &arr(a.get("samplers"))[num(c.get("sampler")).unwrap_or(0.0) as usize];
+            let times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
+            let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)?;
+            let width = if path == GltfPath::Rotation { 4 } else { 3 };
+            let interpolation = sampler.get("interpolation").and_then(Json::as_str).unwrap_or("LINEAR");
+            if interpolation == "CUBICSPLINE" {
+                // In-tangent, value, out-tangent per key: the value.
+                values = (0..times.len()).flat_map(|t| values[t * width * 3 + width..t * width * 3 + width * 2].to_vec()).collect();
+            }
+            if let Some(&last) = times.last() {
+                duration = duration.max(last as f64);
+            }
+            values.truncate(times.len() * width);
+            channels.push(GltfChannel {
+                node: node as u32,
+                path,
+                step: interpolation == "STEP",
+                times,
+                values,
+            });
+        }
+        animations.push(GltfAnimation {
+            name: a.get("name").and_then(Json::as_str).map_or_else(|| format!("animation_{k}"), str::to_string),
+            duration,
+            channels,
+        });
+    }
+
+    let scene_index = num(json.get("scene")).unwrap_or(0.0) as usize;
+    let scene = arr(json.get("scenes")).get(scene_index);
+    let roots = match scene.and_then(|s| s.get("nodes")) {
+        Some(n) => arr(Some(n)).iter().filter_map(Json::as_f64).map(|v| v as u32).collect(),
+        None => (0..raw_nodes.len() as u32).filter(|&i| parents[i as usize] < 0).collect(),
+    };
+    Ok(Gltf { nodes, meshes, skins, animations, roots })
+}
+
+/// T × R × S, column-major, from a translation, a unit quaternion and a scale.
+pub fn compose_trs<'a>(out: &'a mut Mat4, t: &[f64; 3], q: &[f64; 4], s: &[f64; 3]) -> &'a mut Mat4 {
+    let [x, y, z, w] = *q;
+    let (xx, yy, zz, xy, xz, yz, wx, wy, wz) = (x * x, y * y, z * z, x * y, x * z, y * z, w * x, w * y, w * z);
+    *out = [
+        (1.0 - 2.0 * (yy + zz)) * s[0],
+        2.0 * (xy + wz) * s[0],
+        2.0 * (xz - wy) * s[0],
+        0.0,
+        2.0 * (xy - wz) * s[1],
+        (1.0 - 2.0 * (xx + zz)) * s[1],
+        2.0 * (yz + wx) * s[1],
+        0.0,
+        2.0 * (xz + wy) * s[2],
+        2.0 * (yz - wx) * s[2],
+        (1.0 - 2.0 * (xx + yy)) * s[2],
+        0.0,
+        t[0],
+        t[1],
+        t[2],
+        1.0,
+    ];
+    out
+}
+
+/// Every node's world matrix at rest, parents before children.
+pub fn world_matrices(gltf: &Gltf) -> Vec<Mat4> {
+    fn visit(gltf: &Gltf, out: &mut [Mat4], i: usize, parent: Option<Mat4>) {
+        match parent {
+            Some(p) => {
+                let mut m = mat4();
+                mat4_mul(&mut m, &p, &gltf.nodes[i].local);
+                out[i] = m;
+            }
+            None => out[i] = gltf.nodes[i].local,
+        }
+        let here = out[i];
+        for &c in &gltf.nodes[i].children {
+            visit(gltf, out, c as usize, Some(here));
+        }
+    }
+    let mut out = vec![mat4(); gltf.nodes.len()];
+    for &r in &gltf.roots {
+        visit(gltf, &mut out, r as usize, None);
+    }
+    out
+}
+
+/// The nodes reachable from the scene's roots, parents before children.
+pub fn scene_nodes(gltf: &Gltf) -> Vec<u32> {
+    fn visit(gltf: &Gltf, out: &mut Vec<u32>, i: u32) {
+        out.push(i);
+        for &c in &gltf.nodes[i as usize].children {
+            visit(gltf, out, c);
+        }
+    }
+    let mut out = Vec::new();
+    for &r in &gltf.roots {
+        visit(gltf, &mut out, r);
+    }
+    out
+}

@@ -5,4 +5,5 @@ pub mod geometry;
 pub mod material;
 pub mod size;
 pub mod store;
+pub mod teach;
 pub mod tex;
