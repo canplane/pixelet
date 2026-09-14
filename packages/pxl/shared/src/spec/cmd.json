@@ -571,6 +571,10 @@
         {
           "name": "GEOCODE",
           "value": 16
+        },
+        {
+          "name": "SEARCH",
+          "value": 17
         }
       ]
     },
@@ -1563,6 +1567,13 @@
           "value": 7696,
           "doc": [
             "[page u64, body str | null] — a reverse geocode's answer; null for a 404"
+          ]
+        },
+        {
+          "name": "FETCH_SEARCH",
+          "value": 7697,
+          "doc": [
+            "[query str, body str | null] — a forward search's response body"
           ]
         },
         {

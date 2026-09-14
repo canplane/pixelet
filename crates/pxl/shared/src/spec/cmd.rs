@@ -240,6 +240,7 @@ pub enum SensorMinor {
 #[repr(u32)]
 pub enum FetchMinor {
     GEOCODE = 0x10,
+    SEARCH = 0x11,
 }
 
 /// A load's own verb.
@@ -633,6 +634,8 @@ pub enum Cmd {
     FETCH_UPDATE = 0x1e03,
     /// [page u64, body str | null] — a reverse geocode's answer; null for a 404
     FETCH_GEOCODE = 0x1e10,
+    /// [query str, body str | null] — a forward search's response body
+    FETCH_SEARCH = 0x1e11,
     /// tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]]
     LOAD_READ = 0x1f02,
     /// [url str, bytes u8[]] — a model's bytes
@@ -644,7 +647,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 117] = [
+    const ALL: [Cmd; 118] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -758,6 +761,7 @@ impl Cmd {
         Cmd::FETCH_READ,
         Cmd::FETCH_UPDATE,
         Cmd::FETCH_GEOCODE,
+        Cmd::FETCH_SEARCH,
         Cmd::LOAD_READ,
         Cmd::LOAD_UPDATE,
         Cmd::LOAD_IMAGE,
@@ -891,6 +895,7 @@ mod test {
             (FETCH_READ, Major::FETCH as u32, Minor::READ as u32),
             (FETCH_UPDATE, Major::FETCH as u32, Minor::UPDATE as u32),
             (FETCH_GEOCODE, Major::FETCH as u32, FetchMinor::GEOCODE as u32),
+            (FETCH_SEARCH, Major::FETCH as u32, FetchMinor::SEARCH as u32),
             (LOAD_READ, Major::LOAD as u32, Minor::READ as u32),
             (LOAD_UPDATE, Major::LOAD as u32, Minor::UPDATE as u32),
             (LOAD_IMAGE, Major::LOAD as u32, LoadMinor::IMAGE as u32),

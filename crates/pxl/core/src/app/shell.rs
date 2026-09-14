@@ -24,6 +24,7 @@ use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::use_map_store;
 use crate::module::map::ui::control::compass::{compass_reset, show_compass};
 use crate::module::map::ui::control::scale_bar::scale_bar;
+use crate::module::map::ui::overlay::search_modal::{search_close, search_query, search_rows};
 use crate::module::map::ui::overlay::use_reverse_geocode::use_reverse_geocode;
 use crate::module::world::character::character_preview::{preview_close, preview_open, preview_rows};
 use crate::module::world::character::store::use_companion_load_store;
@@ -202,6 +203,25 @@ pub fn ui_snapshot_json() -> String {
     out.push_str(&format!("\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, quote(themes(use_theme_key()).fog)));
     let previews: Vec<String> = preview_rows().into_iter().map(|(id, model, skin)| format!("{{\"id\":{id},\"model\":{model},\"skin\":{skin}}}")).collect();
     out.push_str(&format!("\"previews\":[{}],\"object_storage_version\":{},", previews.join(","), OBJECT_STORAGE_VERSION));
+    let (search_loading, rows) = search_rows(&shell().language);
+    let rows: Vec<String> = rows
+        .iter()
+        .map(|r| {
+            format!(
+                "{{\"gers_id\":{},\"kind\":{},\"name\":{},\"subtitle\":{},\"distance\":{},\"icon\":{},\"color\":{},\"lon\":{},\"lat\":{}}}",
+                quote(&r.gers_id),
+                quote(r.kind),
+                quote(&r.name),
+                quote(&r.subtitle),
+                opt_str(r.distance.as_deref()),
+                quote(&r.icon),
+                quote(&r.color),
+                num(r.lon),
+                num(r.lat)
+            )
+        })
+        .collect();
+    out.push_str(&format!("\"search\":{{\"loading\":{},\"results\":[{}]}},", search_loading, rows.join(",")));
     out.push_str(&format!("\"report\":{}", opt_str(shell().report.take().as_deref())));
     out.push('}');
     out
@@ -355,6 +375,11 @@ pub fn ui_action(text: &str) -> bool {
             let Some(id) = f64_of(&action, "id") else { return false };
             preview_close(id as u32);
         }
+        "search_query" => {
+            let Some(query) = str_of(&action, "query") else { return false };
+            search_query(query);
+        }
+        "search_close" => search_close(),
         "ledger_report" => shell().report = Some(ledger_report_text()),
         "ledger_logging" => {
             let Some(on) = bool_of(&action, "on") else { return false };

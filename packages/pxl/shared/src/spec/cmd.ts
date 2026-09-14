@@ -194,6 +194,7 @@ export const enum SensorMinor {
 /** A fetch's own verb. */
 export const enum FetchMinor {
   GEOCODE = 0x10,
+  SEARCH = 0x11,
 }
 
 /** A load's own verb. */
@@ -591,6 +592,8 @@ export const enum Cmd {
   FETCH_UPDATE = 0x1e03,
   /** [page u64, body str | null] — a reverse geocode's answer; null for a 404 */
   FETCH_GEOCODE = 0x1e10,
+  /** [query str, body str | null] — a forward search's response body */
+  FETCH_SEARCH = 0x1e11,
   /** tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]] */
   LOAD_READ = 0x1f02,
   /** [url str, bytes u8[]] — a model's bytes */

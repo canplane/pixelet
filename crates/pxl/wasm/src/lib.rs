@@ -1235,6 +1235,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                         "terrain" => pxl_core::module::world::terrain::tile_repository::tile_url(page),
                         "poi" => pxl_core::module::world::poi::repository::poi_url(page),
                         "geocode" => pxl_core::module::world::geocode::repository::geocode_url(page),
+                        "search" => pxl_core::module::map::ui::overlay::search_modal::search_request_url(page),
                         _ => String::new(),
                     };
                     (d.key.clone(), d.category.clone(), url)
@@ -1283,6 +1284,9 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 let p = p?.as_branch()?;
                 phases.push((p.at(0)?.get_str()?, number_at(&p, 1)?));
             }
+            if let (false, Some(query)) = (outcome == Outcome::Ok, key.strip_prefix("search:")) {
+                pxl_core::module::map::ui::overlay::search_modal::search_failed(query, outcome == Outcome::Aborted);
+            }
             if let (false, Some(page)) = (outcome == Outcome::Ok, key.strip_prefix("geocode:").and_then(|p| p.parse::<u64>().ok())) {
                 pxl_core::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_failed(page, outcome == Outcome::Aborted);
             }
@@ -1297,6 +1301,16 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 None => None,
             };
             pxl_core::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_arrived(page, body.as_deref());
+            return Ok(Some((0, None)));
+        }
+        Cmd::FETCH_SEARCH => {
+            let f = fields(pkt)?;
+            let query = f.at(0)?.get_str()?;
+            let body = match f.at(1)?.opt() {
+                Some(c) => Some(c.get_str()?),
+                None => None,
+            };
+            pxl_core::module::map::ui::overlay::search_modal::search_arrived(&query, body.as_deref());
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_READ => {
@@ -1655,7 +1669,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE | Cmd::WORLD_LANES | Cmd::WORLD_ACTION | Cmd::WORLD_SHEET | Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
+        Cmd::WORLD_CREATE | Cmd::WORLD_LANES | Cmd::WORLD_ACTION | Cmd::WORLD_SHEET | Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::FETCH_SEARCH | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
     Ok(Some((0, None)))
