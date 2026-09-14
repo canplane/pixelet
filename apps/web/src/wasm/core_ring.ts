@@ -2,7 +2,7 @@
 
 /**
  * The shell's end of the rings (crates/pxl/wasm/src/lib.rs): commands into
- * the submission ring, the kernel rung with `pxl_drain`, and the completion
+ * the submission ring, the kernel rung with the DRAIN interrupt, and the completion
  * ring read — replies to the calls waiting on them, signals to whoever
  * hears them.
  *
@@ -16,11 +16,12 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import { Errno } from "@xpute/core/sys/errno.ts";
 import type { U8Array } from "@xpute/core/kit/array.ts";
 import { FrameFlag } from "@xpute/core/ipc/frame.ts";
+import { Interrupt } from "@xpute/core/ipc/cmd.ts";
 import { Ring } from "@xpute/core/ipc/ring.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 import type { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import type { PxlExports } from "@/wasm/pxl.ts";
+import { BOOT, boot_block, type PxlExports } from "@/wasm/pxl.ts";
 
 /** A packet of one branch, its children written by `fill` — what a message
  * carries (@pxl/shared/spec/cmd.ts). */
@@ -48,14 +49,20 @@ export class CoreRing {
   signal: SignalListener | null = null;
 
   constructor(private readonly pxl: PxlExports) {
-    this.sq = new Ring(pxl.memory.buffer, pxl.pxl_ring_sq());
-    this.cq = new Ring(pxl.memory.buffer, pxl.pxl_ring_cq());
+    const boot = boot_block(pxl);
+    this.sq = new Ring(pxl.memory.buffer, boot[BOOT.sq]);
+    this.cq = new Ring(pxl.memory.buffer, boot[BOOT.cq]);
+  }
+
+  /** Rings the kernel to apply what waits: how many messages that posted. */
+  drain(): number {
+    return this.pxl.interrupt(Interrupt.DRAIN);
   }
 
   /** Makes room in the submission ring: applies what waits, and hands out
    * what that made. */
   pump(): void {
-    this.pxl.pxl_drain();
+    this.drain();
     this.read();
   }
 
@@ -63,7 +70,7 @@ export class CoreRing {
    * ring is being read under this call — only the drain, since reading it
    * again here would hand the same message out twice. */
   turn(): void {
-    if (this.reading > 0) this.pxl.pxl_drain();
+    if (this.reading > 0) this.drain();
     else this.pump();
   }
 
@@ -77,7 +84,7 @@ export class CoreRing {
    * made: for a caller about to read what it changed, and safe inside a
    * listener, since none runs. */
   settle(): void {
-    this.pxl.pxl_drain();
+    this.drain();
   }
 
   /**
@@ -97,12 +104,12 @@ export class CoreRing {
         // Inside a listener the ring is being read under this call: the
         // reply is found where it lies, ahead of the head, and left for that
         // read.
-        this.pxl.pxl_drain();
+        this.drain();
         this.take_ahead(tag);
       }
       while (out === null) {
         if (this.reading > 0) throw new Error(`[wasm/core_ring] command 0x${cmd.toString(16)} asked inside a listener found the completion ring full`);
-        const posted = this.pxl.pxl_drain();
+        const posted = this.drain();
         this.read();
         if (out === null && posted === 0 && this.sq.len === 0) throw new Error(`[wasm/core_ring] command 0x${cmd.toString(16)} was never replied to`);
       }

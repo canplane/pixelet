@@ -8,7 +8,7 @@ import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
 import { LOD_STEP_BY_LEVEL } from "@/module/world/lod.ts";
-import type { PxlExports } from "@/wasm/pxl.ts";
+import { BOOT, boot_block, type PxlExports } from "@/wasm/pxl.ts";
 import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "@/render/mesh/voxel.ts";
 import { type MeshRun, pack_column_runs, release_column_runs } from "@/reference/voxel_scan.ts";
 import { bake_chunk_mesh, BakeContext, type BakedChunkMesh } from "@/reference/chunk_mesher.ts";
@@ -252,7 +252,7 @@ Deno.test("wasm bake - a dense chunk at every tier stays well inside the module'
 
 Deno.test("wasm bake - the module keeps what the map reserves for it, and its heap stays inside", async () => {
   const exports = await pxl();
-  assertEquals(exports.pxl_module_bytes(), MODULE_SECTION.bytes);
+  assertEquals(boot_block(exports)[BOOT.module_bytes], MODULE_SECTION.bytes);
   const ctx = core_context();
   const baker = new WasmBaker(exports, CORE_POOL, ctx);
   const set = pack_column_runs(scene(2, false));

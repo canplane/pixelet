@@ -156,6 +156,14 @@ export const enum ChunkMinor {
   TICK = 0x16,
 }
 
+/** What a step answers: BAKE_STEP's and SCAN_STEP's result. */
+export const enum StepResult {
+  WORKING = 0,
+  /** Wanting a block, whose size the reply carries. */
+  NEED_BLOCK = 1,
+  DONE = 2,
+}
+
 export const enum Cmd {
   /** Replies with its packet's first child, a u32, or 0 — the rings' own
    * test. */
@@ -352,7 +360,7 @@ export const enum Cmd {
   // does to hold the module to the TypeScript pipeline it replaced; the live
   // build composes, bakes and scans inside the scheduler. One bake and one
   // scan are open at a time, so neither names a subject. A step's result is
-  // 0 working, 1 wanting a block, 2 done.
+  // a StepResult.
 
   /** tag call · no packet → result: a volume with no bands, its id (never 0) */
   VOLUME_CREATE = 0x1801,

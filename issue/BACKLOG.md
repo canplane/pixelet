@@ -134,7 +134,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      a submission ring and a completion ring, a pair in the module's heap,
      64-byte entries; `pxl_tick` is the doorbell and the glue reads the
      completions when it returns. The chunks' builds are the first commands
-     on them.
+     on them. The whole export table folded into them on 2026-09-14 and
+     2026-09-15, family by family, until the module's exports were a boot
+     block and a doorbell (`boot`, `interrupt`)
+     ([what-stays-in-javascript](./20260914-what-stays-in-javascript.md)).
      **Carried into the port, not fixed in TypeScript first** — an audit
      of the mesher, scan and volume on 2026-09-13 found these, and each is
      what Rust's types or an algorithm rewrite resolve on the way, so

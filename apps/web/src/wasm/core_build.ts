@@ -4,7 +4,7 @@
  * The glue's half of the chunks' scheduling and builds, which run in the
  * module (crates/pxl/core/src/{sched,build}.rs): commands into the
  * submission ring, the frame written where the module reads it, one
- * `pxl_tick` a frame, and the completion ring read when it returns.
+ * TICK interrupt a frame, and the completion ring read when it returns.
  *
  * A chunk here is an id and a sink. The node says what the chunk is made of;
  * the module decides whether it is on screen, which tiers it shows and how a
@@ -22,6 +22,7 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { U8Array } from "@xpute/core/kit/array.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
+import { Interrupt } from "@xpute/core/ipc/cmd.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 
@@ -280,11 +281,11 @@ export class CoreBuild {
    * applied, the scheduler's pass, and what came of it handed to the sinks.
    * Whether the canvas has something new to draw. */
   tick(): boolean {
-    const draw = (this.pxl.pxl_tick() & 1) !== 0;
+    const draw = (this.pxl.interrupt(Interrupt.TICK) & 1) !== 0;
     this.ring.read();
     // What the completion ring had no room for, until it is dry: a tick
     // that finds events still waiting does nothing.
-    while (this.pxl.pxl_drain() > 0) this.ring.read();
+    while (this.ring.drain() > 0) this.ring.read();
     return draw;
   }
 

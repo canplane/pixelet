@@ -192,6 +192,16 @@ pub enum ChunkMinor {
     TICK = 0x16,
 }
 
+/// What a step answers: BAKE_STEP's and SCAN_STEP's result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum StepResult {
+    WORKING = 0,
+    /// Wanting a block, whose size the reply carries.
+    NEED_BLOCK = 1,
+    DONE = 2,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Cmd {
@@ -384,7 +394,7 @@ pub enum Cmd {
     // does to hold the module to the TypeScript pipeline it replaced; the
     // live build composes, bakes and scans inside the scheduler. One bake and
     // one scan are open at a time, so neither names a subject. A step's
-    // result is 0 working, 1 wanting a block, 2 done.
+    // result is a StepResult.
     /// tag call · no packet → result: a volume with no bands, its id (never 0)
     VOLUME_CREATE = 0x1801,
     /// tag call · [volume u32] → result: its band count; with bands, [rows

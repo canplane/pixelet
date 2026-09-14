@@ -1,12 +1,13 @@
-//! The one WebAssembly module: pxl-core behind numeric exports.
+//! The one WebAssembly module: pxl-core behind a boot block and a doorbell.
 //!
-//! No wasm-bindgen. What crosses is integers and addresses into the core
-//! memory, which the module imports and shares with the client (build.rs,
-//! fixed_heap.rs): a run set is baked where it lies, and the mesh is written into
-//! the block the client acquired for it, so nothing is copied across the
-//! boundary. The boundary is the same shape the command frame already is,
-//! and a thread that instantiates the module needs the memory and nothing
-//! else.
+//! No wasm-bindgen. The shell reads the boot block once (`boot`), and
+//! everything after crosses in the rings in the core memory, which the
+//! module imports and shares with the client (build.rs, fixed_heap.rs): a
+//! command and its packet in, its reply and the kernel's signals out, and
+//! `interrupt` to hand over the turn. A run set is baked where it lies
+//! and a mesh is written into a block of the memory, so nothing is copied
+//! across the boundary, and a thread that instantiates the module needs the
+//! memory and nothing else.
 //!
 //! One bake is open at a time, as with the TypeScript context; the module is
 //! single-threaded, so the state is a plain global.
@@ -23,10 +24,11 @@ use pxl_core::world::object::{Carve, Kind, Painter, Store};
 use pxl_core::world::pool::Pool;
 use pxl_core::world::raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
-use pxl_shared::spec::cmd::Cmd;
+use pxl_shared::spec::cmd::{Cmd, StepResult};
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::io::marshal::tree::{encoder, BranchCursor, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
+use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
 use xpute_core::kit::array::ArrayBuffer;
@@ -101,6 +103,8 @@ struct State {
     /// and packet, flushed before any event.
     replies: std::collections::VecDeque<(u32, u32, i32, Option<U8Array>)>,
     build_stat: [u32; 11],
+    /// The block `boot` hands out.
+    boot: [u32; BOOT_WORDS],
     /// The world's raycast and its kept composites.
     raycast: Raycast,
 }
@@ -147,9 +151,11 @@ extern "C" {
     /// The client's: told a panic's message before the trap, since the trap
     /// itself carries none — `panic = "abort"` and no hook would leave only
     /// "unreachable" in the console.
-    fn pxl_panic(ptr: *const u8, len: usize);
+    #[link_name = "panic"]
+    fn host_panic(ptr: *const u8, len: usize);
     /// The client's clock, in milliseconds: what a tick's budget is spent against.
-    fn pxl_now() -> f64;
+    #[link_name = "now"]
+    fn host_now() -> f64;
 }
 
 fn state() -> &'static mut State {
@@ -159,7 +165,7 @@ fn state() -> &'static mut State {
         (*STATE.0.get()).get_or_insert_with(|| {
             std::panic::set_hook(Box::new(|info| {
                 let text = info.to_string();
-                pxl_panic(text.as_ptr(), text.len());
+                host_panic(text.as_ptr(), text.len());
             }));
             State {
                 ctx: BakeContext::new(),
@@ -190,15 +196,11 @@ fn state() -> &'static mut State {
                 events: std::collections::VecDeque::new(),
                 replies: std::collections::VecDeque::new(),
                 build_stat: [0; 11],
+                boot: [0; BOOT_WORDS],
             }
         })
     }
 }
-
-/// What a step reports: BAKE_STEP's and SCAN_STEP's result.
-pub const STEP_WORKING: u32 = 0;
-pub const STEP_NEED_MESH: u32 = 1;
-pub const STEP_DONE: u32 = 2;
 
 fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
     // SAFETY: the client points the bake at a run set in a pool block, which
@@ -208,13 +210,6 @@ fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
         let raw = core::slice::from_raw_parts(at as *const u8, run_set_bytes(count, span) as usize);
         RunSet::carve(raw, count, span)
     }
-}
-
-/// The section the module keeps for itself at the front of the memory, for
-/// the client to check its map against.
-#[no_mangle]
-pub extern "C" fn pxl_module_bytes() -> u32 {
-    MODULE_BYTES as u32
 }
 
 /// Words a band takes in the table the scan reads (a volume of the module's
@@ -304,8 +299,8 @@ fn reindex_object(s: &mut State, key: u64) {
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
 // ring's arena, which the kernel reads where it lies. The glue assembles
 // what it submits and takes apart what completes; nothing here is shaped
-// for it. The glue pushes into the submission ring, rings `pxl_drain` or
-// `pxl_tick`, and reads the completion ring when the call returns.
+// for it. The glue pushes into the submission ring, rings `interrupt`
+// (DRAIN or TICK), and reads the completion ring when the call returns.
 
 /// Doubles in the frame block, in the order sched::Frame names them: the
 /// root matrix (16), the origin (3), the planes (24), the camera (3), the
@@ -315,14 +310,34 @@ fn reindex_object(s: &mut State, key: u64) {
 /// whether decor is scattered.
 pub const FRAME_WORDS: usize = 62;
 
+/// Words in the boot block: the section the module keeps for itself at the
+/// front of the memory, which the shell checks its map against before
+/// anything else; then where the submission ring and the completion ring
+/// are.
+pub const BOOT_WORDS: usize = 3;
+
+/// The boot block's address: what the shell reads once, before any ring.
 #[no_mangle]
-pub extern "C" fn pxl_ring_sq() -> u32 {
-    ring_address(&state().sq)
+pub extern "C" fn boot() -> *const u32 {
+    let s = state();
+    let boot = [MODULE_BYTES as u32, ring_address(&s.sq), ring_address(&s.cq)];
+    s.boot = boot;
+    s.boot.as_ptr()
 }
 
+/// The doorbell. The vector says what the turn is for
+/// (xpute_core::ipc::cmd::Interrupt): DRAIN applies the submissions waiting
+/// and answers how many messages it posted; TICK drains, then runs the
+/// scheduler's pass, and answers 1 when the canvas has something new to
+/// draw. A vector nobody numbers answers u32::MAX.
 #[no_mangle]
-pub extern "C" fn pxl_ring_cq() -> u32 {
-    ring_address(&state().cq)
+pub extern "C" fn interrupt(vector: u32) -> u32 {
+    let s = state();
+    match vector {
+        v if v == Interrupt::DRAIN as u32 => drain(s),
+        v if v == Interrupt::TICK as u32 => tick(s),
+        _ => u32::MAX,
+    }
 }
 
 /// A packet of one branch, its children written by `f`.
@@ -440,7 +455,7 @@ fn flush(s: &mut State) -> u32 {
 
 fn now() -> f64 {
     // SAFETY: the import is the client's clock and reads nothing of ours.
-    unsafe { pxl_now() }
+    unsafe { host_now() }
 }
 
 /// A packet's branch of children, refused when the command needs one and
@@ -869,14 +884,14 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::BAKE_STEP => {
             return Ok(Some(match s.ctx.step(&input_view(s.input)) {
-                Step::Working => (STEP_WORKING as i32, None),
+                Step::Working => (StepResult::WORKING as i32, None),
                 Step::NeedMesh(words) => (
-                    STEP_NEED_MESH as i32,
+                    StepResult::NEED_BLOCK as i32,
                     Some(packet(&mut |b| {
                         b.u32(Some(words));
                     })),
                 ),
-                Step::Done => (STEP_DONE as i32, None),
+                Step::Done => (StepResult::DONE as i32, None),
             }));
         }
         Cmd::BAKE_MESH => {
@@ -924,14 +939,14 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::SCAN_STEP => {
             return Ok(Some(match s.scan.step(&band_views(s.bands)) {
-                ScanStep::Working => (STEP_WORKING as i32, None),
+                ScanStep::Working => (StepResult::WORKING as i32, None),
                 ScanStep::NeedSet(bytes) => (
-                    STEP_NEED_MESH as i32,
+                    StepResult::NEED_BLOCK as i32,
                     Some(packet(&mut |b| {
                         b.u32(Some(bytes));
                     })),
                 ),
-                ScanStep::Done => (STEP_DONE as i32, None),
+                ScanStep::Done => (StepResult::DONE as i32, None),
             }));
         }
         Cmd::SCAN_SET => {
@@ -1386,12 +1401,6 @@ fn drain(s: &mut State) -> u32 {
     posted
 }
 
-/// The doorbell without a tick: applies the submissions waiting.
-#[no_mangle]
-pub extern "C" fn pxl_drain() -> u32 {
-    drain(state())
-}
-
 /// The state split into what a build, a tick or a raycast borrows at once:
 /// the world the core reads and writes, and the parts that drive it.
 struct Parts<'a> {
@@ -1450,13 +1459,10 @@ fn after(s: &mut State) {
     ];
 }
 
-/// The frame's one call: applies the submissions waiting, then the
-/// scheduler's pass over every chunk with the frame the glue wrote at
-/// FRAME_READ's address. Bit 0: the canvas has something new to draw. The glue reads
-/// the completion ring when this returns.
-#[no_mangle]
-pub extern "C" fn pxl_tick() -> u32 {
-    let s = state();
+/// The frame's turn (Interrupt::TICK): applies the submissions waiting, then
+/// the scheduler's pass over every chunk with the frame the glue wrote at
+/// FRAME_READ's address. 1 when the canvas has something new to draw.
+fn tick(s: &mut State) -> u32 {
     drain(s);
     // Events the ring had no room for are posted first; a tick on top of
     // them would only queue more. The glue reads the ring dry and drains

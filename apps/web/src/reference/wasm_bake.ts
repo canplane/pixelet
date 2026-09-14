@@ -12,10 +12,10 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
-import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { Cmd, StepResult } from "@pxl/shared/spec/cmd.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
-import { type PxlExports, STEP_DONE, STEP_NEED_MESH } from "@/wasm/pxl.ts";
+import type { PxlExports } from "@/wasm/pxl.ts";
 import { CORE_RING } from "@/wasm/core_pool.ts";
 import { type CoreRing, packet } from "@/wasm/core_ring.ts";
 import type { ColumnRunSet } from "@/reference/column_run.ts";
@@ -102,10 +102,10 @@ export class WasmBaker {
     if (cursor.done) return true;
     let words: u32 = 0;
     const at = ring().call(Cmd.BAKE_STEP, null, (step, reply) => {
-      if (step === STEP_NEED_MESH) words = reply!.at(0).get<number>();
+      if (step === StepResult.NEED_BLOCK) words = reply!.at(0).get<number>();
       return step;
     });
-    if (at === STEP_NEED_MESH) {
+    if (at === StepResult.NEED_BLOCK) {
       const block = this.mesh_block(cursor, words);
       if (block === null) return false;
       cursor.block = block;
@@ -113,7 +113,7 @@ export class WasmBaker {
       return false;
     }
     cursor.starved = false;
-    if (at !== STEP_DONE) return false;
+    if (at !== StepResult.DONE) return false;
     const result = new Uint32Array(this.pxl.memory.buffer, ring().call(Cmd.BAKE_FINISH, null, (at) => at >>> 0), RESULT_WORDS);
     const vertex_cnt = result[0], index_cnt = result[1];
     // A mesh of nothing was never asked for; it gets the empty block the

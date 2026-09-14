@@ -194,9 +194,14 @@ arrived and hands the time back. What that decides about the boundary:
   is whole when anything imports it; one left in the submission ring
   took a slot the rings' own test counted on.
 
-  The shell's exports are then the pipe — the memory, the two rings'
-  addresses, `pxl_drain`, `pxl_tick` — and `pxl_module_bytes`, the one
-  number the memory's map is checked against before any ring exists.
+  Then the pipe itself was cut to two (2026-09-15): `boot`, the
+  address of a block read once — the section the module keeps, which the
+  memory's map is checked against before any ring exists, and where the
+  two rings are — and `interrupt(vector)`, the doorbell, whose one
+  argument says what the turn is for (`@xpute/core/ipc/cmd.ts`'s
+  `Interrupt`: DRAIN, TICK). The vectors are the kit's, since handing over
+  a turn is mechanism; what a step answers moved beside the commands it
+  answers (`StepResult`).
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

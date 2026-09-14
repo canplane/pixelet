@@ -26,21 +26,26 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 
-/** What the module exports. Every address is into the memory it was
- * instantiated over. */
+/** What the module exports: the boot block and the doorbell. Every address
+ * is into the memory it was instantiated over. */
 export type PxlExports = {
   memory: WebAssembly.Memory;
-  pxl_module_bytes(): u32;
-  pxl_ring_sq(): u32;
-  pxl_ring_cq(): u32;
-  pxl_drain(): u32;
-  pxl_tick(): u32;
+  /** The boot block's address. */
+  boot(): u32;
+  /** Hands the kernel the turn for `vector` (@xpute/core/ipc/cmd.ts's
+   * Interrupt). */
+  interrupt(vector: u32): u32;
 };
 
-/** A step's result, BAKE_STEP's and SCAN_STEP's (@pxl/shared/spec/cmd.ts). */
-export const STEP_WORKING: u32 = 0;
-export const STEP_NEED_MESH: u32 = 1;
-export const STEP_DONE: u32 = 2;
+/** crates/pxl/wasm/src/lib.rs's boot block, word by word: the section the
+ * module keeps, and where the submission and completion rings are. */
+export const BOOT = { module_bytes: 0, sq: 1, cq: 2 } as const;
+const BOOT_WORDS = 3;
+
+/** The boot block, read in place. */
+export function boot_block(pxl: PxlExports): Uint32Array {
+  return new Uint32Array(pxl.memory.buffer, pxl.boot(), BOOT_WORDS);
+}
 
 const PXL_WASM_URL = new URL("./pxl.wasm", import.meta.url);
 
@@ -55,15 +60,15 @@ export async function instantiate_pxl(memory: WebAssembly.Memory, module_bytes: 
     env: {
       memory,
       // A panic's message, before the trap: what "unreachable" would otherwise hide.
-      pxl_panic: (ptr: u32, len: u32) => console.error(`[pxl] ${new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len))}`),
+      panic: (ptr: u32, len: u32) => console.error(`[pxl] ${new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len))}`),
       // The clock a tick's budget is spent against.
-      pxl_now: () => performance.now(),
+      now: () => performance.now(),
     },
   });
-  const exports = instance.exports as unknown as PxlExports;
-  const keeps = exports.pxl_module_bytes();
+  const exports: PxlExports = { ...(instance.exports as unknown as PxlExports), memory };
+  const keeps = boot_block(exports)[BOOT.module_bytes];
   if (keeps !== module_bytes) {
     throw new Error(`pxl: the module keeps ${keeps} bytes of the memory and the map reserves ${module_bytes}`);
   }
-  return { ...exports, memory };
+  return exports;
 }

@@ -221,9 +221,9 @@ The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
 A chunk's build runs in the Rust core (`crates/pxl/core`, compiled by
-`crates/pxl/wasm` into one module with numeric exports and no bindgen, which
+`crates/pxl/wasm` into one module whose exports are a boot block and a doorbell, no bindgen, which
 imports the core memory): the node sends which tiers it lacks through a
-submission ring, the stage calls `pxl_tick` once a frame with the pending
+submission ring, the stage rings the tick interrupt once a frame with the pending
 chunks in priority order and what is left of the budget, and the module makes
 the runs — straight from the terrain for a coarse tier with nothing placed,
 else by composing terrain and objects into a volume and scanning it — and
