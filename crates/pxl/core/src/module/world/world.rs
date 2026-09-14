@@ -49,7 +49,8 @@ use crate::module::world::object::teach::teach_objects;
 use crate::module::world::poi::poi_layer::{poi_index_step, poi_layer_watch_step, poi_place_tick_step};
 use crate::module::world::poi::use_poi_fetcher::poi_fetcher_step;
 use crate::module::world::sched::fetch_scheduler::fetch_pump;
-use crate::module::world::sched::tick::{on_tick, TickContext, CONTENT, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickState, CONTENT, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use crate::module::world::change::take_tick_request;
 use crate::module::world::terrain::teach::teach_terrain;
 use crate::module::world::terrain::use_ground_snap_sync::ground_snap_sync_step;
 use crate::module::world::terrain::use_tile_fetcher::tile_fetcher_step;
@@ -143,4 +144,33 @@ pub fn world_turn(platform: Platform) {
     reverse_geocode_step();
     toast_controller_step();
     fetch_pump();
+}
+
+static TICK_STATE: Global<TickState> = Global::new();
+static PLATFORM: Global<Option<Platform>> = Global::new();
+
+/// The platform as the last frame was told it.
+pub fn world_platform() -> Platform {
+    PLATFORM.get(|| None).unwrap_or(Platform {
+        geolocation: false,
+        orientation: OrientationPlatform {
+            supported: false,
+            needs_permission: false,
+        },
+    })
+}
+
+/// The shell's frame: the effects' turn, then the tick's phases, and the fetches
+/// they asked for. Whether a frame after this one was asked for.
+pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Platform) -> bool {
+    *PLATFORM.get(|| None) = Some(platform);
+    world_turn(platform);
+    let state = TICK_STATE.get(TickState::default);
+    state.width = width;
+    state.height = height;
+    state.dpr = dpr;
+    state.elapsed_s += delta;
+    let report = run_tick(state, delta);
+    fetch_pump();
+    report.invalidated | take_tick_request()
 }
