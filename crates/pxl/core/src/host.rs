@@ -38,3 +38,15 @@ pub fn storage_get(key: &str) -> Option<String> {
 pub fn storage_set(key: &str, value: &str) {
     (storage().set)(key, value)
 }
+
+static HANDHELD: Global<bool> = Global::new();
+
+/// Installs whether the device is a phone or a tablet (shared/lib/browser/handheld).
+pub fn set_handheld(handheld: bool) {
+    HANDHELD.set(handheld);
+}
+
+/// `HANDHELD`.
+pub fn handheld() -> bool {
+    *HANDHELD.get(|| false)
+}

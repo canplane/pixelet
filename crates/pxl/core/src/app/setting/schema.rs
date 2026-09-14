@@ -1,0 +1,135 @@
+// pxl_core/app/setting/schema.rs
+
+//! Every setting the app has, declared once in schema.json: its default, its
+//! kind, and where the settings sheet shows it. The store (store.rs) reads the
+//! defaults from here and the sheet renders rows from the same spec.
+//!
+//! The values are the fallback layer of a two-layer model, the way an editor
+//! keeps a default settings file under the user's own: what the app reads is
+//! the defaults with the user's overrides on top, and only the overrides are
+//! stored. See store.rs for why that matters.
+
+use super::schema_spec::SETTINGS as S;
+use crate::host::handheld;
+
+/// Rough per-frame cost, shown as a badge on the row.
+pub type SettingCost = &'static str;
+/// The sheet's sections, in the order they are shown (schema.json).
+pub type SettingSection = &'static str;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingKind {
+    Toggle,
+    Choice,
+    Text,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SettingValue {
+    Toggle(bool),
+    Text(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct Setting {
+    pub key: &'static str,
+    pub kind: SettingKind,
+    pub default: SettingValue,
+    pub section: SettingSection,
+    pub cost: Option<SettingCost>,
+    pub dev: bool,
+    pub options: &'static [&'static str],
+}
+
+/// What terrain does to the camera (camera/terrain_gate.rs); schema.json says each.
+pub use super::schema_spec::CAMERA_TERRAIN_MODES;
+pub type CameraTerrainMode = &'static str;
+
+pub type SettingKey = &'static str;
+
+fn toggle(key: &'static str, default: bool, section: &'static str, cost: Option<&'static str>, dev: bool) -> Setting {
+    Setting {
+        key,
+        kind: SettingKind::Toggle,
+        default: SettingValue::Toggle(default),
+        section,
+        cost,
+        dev,
+        options: &[],
+    }
+}
+
+fn text(key: &'static str, default: &'static str, section: &'static str) -> Setting {
+    Setting {
+        key,
+        kind: SettingKind::Text,
+        default: SettingValue::Text(default.to_string()),
+        section,
+        cost: None,
+        dev: false,
+        options: &[],
+    }
+}
+
+/// Every setting, as schema.json declares it, with a handheld device's own
+/// default applied where one is given, in declaration order.
+#[allow(non_snake_case)]
+pub fn SETTINGS() -> Vec<Setting> {
+    let hh = handheld();
+    vec![
+        toggle("show_poi", S::show_poi::default, S::show_poi::section, Some(S::show_poi::cost), false),
+        toggle("show_decor", S::show_decor::default, S::show_decor::section, Some(S::show_decor::cost), false),
+        toggle("show_structures", S::show_structures::default, S::show_structures::section, None, S::show_structures::dev),
+        toggle("lock_camera_tilt", S::lock_camera_tilt::default, S::lock_camera_tilt::section, None, false),
+        Setting {
+            key: "camera_terrain",
+            kind: SettingKind::Choice,
+            default: SettingValue::Text(S::camera_terrain::default.to_string()),
+            section: S::camera_terrain::section,
+            cost: None,
+            dev: false,
+            options: S::camera_terrain::options,
+        },
+        toggle("ground_snap", S::ground_snap::default, S::ground_snap::section, None, S::ground_snap::dev),
+        toggle("enable_terrain_carving", S::enable_terrain_carving::default, S::enable_terrain_carving::section, None, false),
+        toggle("show_edge_shade", S::show_edge_shade::default, S::show_edge_shade::section, Some(S::show_edge_shade::cost), false),
+        toggle("show_rim_light", S::show_rim_light::default, S::show_rim_light::section, Some(S::show_rim_light::cost), false),
+        toggle("show_shadow_map", S::show_shadow_map::default, S::show_shadow_map::section, Some(S::show_shadow_map::cost), false),
+        toggle("texture_pack", S::texture_pack::default, S::texture_pack::section, Some(S::texture_pack::cost), false),
+        toggle("msaa", if hh { S::msaa::handheld_default } else { S::msaa::default }, S::msaa::section, Some(S::msaa::cost), false),
+        toggle("show_debug_objects", S::show_debug_objects::default, S::show_debug_objects::section, None, S::show_debug_objects::dev),
+        toggle("show_ledger", S::show_ledger::default, S::show_ledger::section, None, S::show_ledger::dev),
+        toggle("pixel_dither", S::pixel_dither::default, S::pixel_dither::section, None, S::pixel_dither::dev),
+        text("person_variant_key", S::person_variant_key::default, S::person_variant_key::section),
+        text("pet_variant_key", S::pet_variant_key::default, S::pet_variant_key::section),
+    ]
+}
+
+/// `SETTING_KEYS`.
+#[allow(non_snake_case)]
+pub fn SETTING_KEYS() -> Vec<SettingKey> {
+    SETTINGS().iter().map(|s| s.key).collect()
+}
+
+/// The fallback layer: every setting at its declared default.
+#[allow(non_snake_case)]
+pub fn DEFAULT_SETTINGS() -> Vec<(SettingKey, SettingValue)> {
+    SETTINGS().into_iter().map(|s| (s.key, s.default)).collect()
+}
+
+/// The settings shown under a section, in declaration order.
+pub fn settings_in(section: &str) -> Vec<SettingKey> {
+    SETTINGS().iter().filter(|s| s.section == section).map(|s| s.key).collect()
+}
+
+/// Whether `value` is something `key` may hold — what a stored override is
+/// checked against before it is trusted.
+pub fn is_valid_setting(key: &str, value: &SettingValue) -> bool {
+    let Some(setting) = SETTINGS().into_iter().find(|s| s.key == key) else { return false };
+    match (setting.kind, value) {
+        (SettingKind::Toggle, SettingValue::Toggle(_)) => true,
+        (SettingKind::Choice, SettingValue::Text(v)) => setting.options.contains(&v.as_str()),
+        (SettingKind::Text, SettingValue::Text(_)) => true,
+        _ => false,
+    }
+}
