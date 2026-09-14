@@ -16,6 +16,16 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { carver } from "@xpute/core/ds/typed_alloc.ts";
 
+/** A tier as the module hands it over and the glue holds it: the block in
+ * the mesh section and the counts its lanes are read by. The renderer
+ * uploads the block whole by its address and reads no lane; the lanes are
+ * carved (below) only where something reads them — the reference tests. */
+export type MeshBlock = {
+  block: Block;
+  vertex_cnt: u32;
+  index_cnt: u32;
+};
+
 /**
  * One baked chunk mesh's lanes — position/normal are the real chunk-local
  * vertices every box's own faces actually sit at; the rest are per-vertex

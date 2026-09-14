@@ -13,7 +13,9 @@
  * canvas read back for an upload, a fetch body); those appear as the
  * difference between this report and the timeline.
  *
- * Installed by the ledger overlay in dev, read with `__pxl_alloc_report()`.
+ * Installed from the console in dev with `__pxl_alloc_probe()`, read with
+ * `__pxl_alloc_report()`: never by default, since the wrapping is a cost
+ * on the frames the ledger measures.
  * The wrappers cost a stack capture per allocation over the threshold,
  * which is why small ones are counted without a site.
  */

@@ -15,16 +15,26 @@ Deno.test("lod_step_at - the ladder follows the projection: twice the viewport h
   // The default is the reference projection, where the first handoff is 192u.
   assertEquals(lod_step_at(300, 1), 2);
   try {
-    set_lod_projection(2 * 1080, 50);
+    set_lod_projection(2 * 1080, 50, 0);
     assertEquals(lod_step_at(300, 1), 1);
   } finally {
-    set_lod_projection(1080, 50);
+    set_lod_projection(1080, 50, 0);
   }
   assertEquals(lod_step_at(300, 1), 2);
 });
 
+Deno.test("lod_step_at - two steps of the module's pressure are one rung coarser", () => {
+  set_lod_projection(1080, 50, 2);
+  try {
+    assertEquals(lod_step_at(150, 1), 2);
+    assertEquals(lod_step_at(300, 1), 4);
+  } finally {
+    set_lod_projection(1080, 50, 0);
+  }
+});
+
 Deno.test("lod_step_at - the rungs are the module's: 192, 384, 768, 1536 at the reference, 64 past the last", () => {
-  set_lod_projection(1080, 50);
+  set_lod_projection(1080, 50, 0);
   assertEquals(lod_step_at(THRESHOLD_0 - 1, 1), 1);
   assertEquals(lod_step_at(THRESHOLD_0 + 1, 1), 2);
   assertEquals(lod_step_at(THRESHOLD_1 + 1, 1), 4);
@@ -34,7 +44,7 @@ Deno.test("lod_step_at - the rungs are the module's: 192, 384, 768, 1536 at the 
 });
 
 Deno.test("lod_step_at - a badge climbs the cube ladder: same handoff, same hysteresis, the badge tier a fixed shift above", () => {
-  set_lod_projection(1080, 50);
+  set_lod_projection(1080, 50, 0);
   // Just past the first handoff both go coarse together.
   const past = lod_step_at(200, 1);
   assertEquals(past, 2);

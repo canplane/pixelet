@@ -52,8 +52,6 @@ const ALPHA_BLEND: GPUBlendState = {
   alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
 };
 
-export type VertexLane = { stride: u32; step: u32 };
-
 /** A pipeline record read into its parts. */
 export type PipelineRecord = {
   shader: u32;
@@ -116,10 +114,13 @@ export type FrameLayout = {
   shadow_texel: u32;
   vignette: u32;
   light_view_proj: u32;
+  /** The second light's run: other_dir through other_color
+   * (environment.rs's ENV_OTHER_LIGHT). */
+  other: u32;
 };
 
 export function read_frame_layout(pxl: PxlExports): FrameLayout {
-  const t = new Uint32Array(pxl.memory.buffer, pxl.pxl_frame_uniform_at(), 13);
+  const t = new Uint32Array(pxl.memory.buffer, pxl.pxl_frame_uniform_at(), 14);
   return {
     floats: t[0],
     view_proj: t[1],
@@ -134,6 +135,7 @@ export function read_frame_layout(pxl: PxlExports): FrameLayout {
     shadow_texel: t[10],
     vignette: t[11],
     light_view_proj: t[12],
+    other: t[13],
   };
 }
 

@@ -8,9 +8,8 @@
  * (`checkpoint/20260107-float`'s `entities/geo/ui/pois/poi-item.tsx`) —
  * still deliberately short of that version in a few ways:
  *
- * - No click-to-select (`map/store.ts`'s `selected_poi` exists but nothing
- *   writes to it), no hover state (that version's own lift/glow/expand-on-
- *   hover needs raycasting against sprites, not wired here).
+ * - No click-to-select and no hover state: a badge is not hit-tested
+ *   here (it would be a ray against the module's billboard set).
  * - No day/night theme variant on the badge itself.
  * - No two-tier LOD: that version rendered its FULL dataset (10,000+) as a
  *   cheap custom-shader instanced-dot background layer, promoting only the
@@ -202,18 +201,9 @@ type PoiPick = {
   local_x: f64;
   local_y: f64;
   local_z: f64;
-  /** The lattice node this badge is, as tier and *absolute* address. It is
-   * the badge's identity: stable while the cell is populated at that tier,
-   * and unmoved by the camera, by which member happens to be nearest, or by
-   * the frame origin. Keying on a POI instead meant a new sprite, material
-   * and CanvasTexture every time the nearest one changed, which is a
-   * browser-owned object created and destroyed per camera nudge. */
-  key: string;
   /** The place the badge names: its page and its record there. */
   page: PoiPage;
   rec: u32;
-  anchor_i: IVec;
-  anchor_f: bigint;
   /** How many places this badge stands for, itself included. Above one it is
    * drawn as a count rather than as any of them: nothing here is a
    * representative, and `poi` survives only to key the list. */
@@ -598,16 +588,8 @@ function pick_of(node: u32, absorbed_extra: u32, map_origin: IVec): PoiPick {
     local_x: lx,
     local_y: ly,
     local_z: lz,
-    // From the absolute address, never from the node's own coordinates.
-    // Those are relative to the frame origin, which jumps 4096u on an L4
-    // crossing — so the same physical cell would take a new identity every
-    // time the origin moved, and every badge on screen would remount at
-    // once. The anchor does not move, only the name for it would have.
-    key: `${shamt}:${anchor.i}`,
     page: poi_page($nodes.first[node]),
     rec: poi_rec($nodes.first[node]),
-    anchor_i: anchor.i,
-    anchor_f: anchor.f,
     members: $nodes.members[node] + absorbed_extra,
     slot: NO_SLOT,
     logical_w: 0,

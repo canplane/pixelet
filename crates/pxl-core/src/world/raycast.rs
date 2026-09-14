@@ -12,13 +12,12 @@
 //! frames, so the same chunks come up again and again.
 
 use crate::bake::scan::{BandView, ColumnRuns};
-use crate::bake::terrain::CHUNK_SPAN;
 use crate::bake::voxel::{unpack_sub_cell_fraction, SUB_CELL_NONE};
+use crate::space::constant::{CHUNK_SPAN, U_PER_CELL};
 use crate::world::build::World;
 use crate::world::sched::Scheduler;
 
-/// bake/constant.ts's U_PER_CELL.
-const U_PER_CELL: f64 = 1.0;
+/// A chunk's side, in units.
 const CHUNK_W: f64 = CHUNK_SPAN as f64 * U_PER_CELL;
 /// A hover ray crosses at most a few chunks at the interact radius.
 const MAX_ENTRIES: usize = 4;
@@ -49,6 +48,7 @@ pub struct Raycast {
     entries: Vec<Entry>,
     tick: u32,
     column: ColumnRuns,
+    bands: Vec<BandView<'static>>,
 }
 
 struct Slab {
@@ -113,6 +113,61 @@ fn run_box(cx: u32, cy: u32, runs: &ColumnRuns, i: usize) -> ([f64; 3], [f64; 3]
     (min, [min[0] + sz, min[1] + sz, min[2] + sz])
 }
 
+/// A walk over a square grid of `size` a side from (ox, oy) along
+/// (dx, dy), one cell at a time in the order the ray crosses them
+/// (Amanatides–Woo): the chunk grid and then the cell grid of a chunk.
+struct GridWalk {
+    x: f64,
+    y: f64,
+    step_x: f64,
+    step_y: f64,
+    t_delta_x: f64,
+    t_delta_y: f64,
+    t_max_x: f64,
+    t_max_y: f64,
+}
+
+impl GridWalk {
+    fn new(ox: f64, oy: f64, dx: f64, dy: f64, size: f64) -> GridWalk {
+        let x = (ox / size).floor();
+        let y = (oy / size).floor();
+        let axis = |d: f64, c: f64, o: f64| {
+            if d.abs() < 1e-9 {
+                (f64::INFINITY, f64::INFINITY)
+            } else {
+                (size / d.abs(), ((if d > 0.0 { c + 1.0 } else { c }) * size - o) / d)
+            }
+        };
+        let (t_delta_x, t_max_x) = axis(dx, x, ox);
+        let (t_delta_y, t_max_y) = axis(dy, y, oy);
+        GridWalk {
+            x,
+            y,
+            step_x: if dx > 0.0 { 1.0 } else { -1.0 },
+            step_y: if dy > 0.0 { 1.0 } else { -1.0 },
+            t_delta_x,
+            t_delta_y,
+            t_max_x,
+            t_max_y,
+        }
+    }
+
+    /// The distance along the ray to the edge of the cell it is in.
+    fn next_t(&self) -> f64 {
+        self.t_max_x.min(self.t_max_y)
+    }
+
+    fn advance(&mut self) {
+        if self.t_max_x < self.t_max_y {
+            self.x += self.step_x;
+            self.t_max_x += self.t_delta_x;
+        } else {
+            self.y += self.step_y;
+            self.t_max_y += self.t_delta_y;
+        }
+    }
+}
+
 impl Raycast {
     /// The nearest box within `max_dist` along the ray from `o` in
     /// direction `d`, both relative to `origin` (the map origin, in units)
@@ -124,37 +179,16 @@ impl Raycast {
         if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
             return self.test_chunk(world, sched, origin, &o, &d, (o[0] / CHUNK_W).floor(), (o[1] / CHUNK_W).floor(), max_dist);
         }
-        let mut gx = (o[0] / CHUNK_W).floor();
-        let mut gy = (o[1] / CHUNK_W).floor();
-        let step_x = if dx > 0.0 { 1.0 } else { -1.0 };
-        let step_y = if dy > 0.0 { 1.0 } else { -1.0 };
-        let t_delta_x = if dx.abs() < 1e-9 { f64::INFINITY } else { CHUNK_W / dx.abs() };
-        let t_delta_y = if dy.abs() < 1e-9 { f64::INFINITY } else { CHUNK_W / dy.abs() };
-        let mut t_max_x = if dx.abs() < 1e-9 {
-            f64::INFINITY
-        } else {
-            ((if dx > 0.0 { gx + 1.0 } else { gx }) * CHUNK_W - o[0]) / dx
-        };
-        let mut t_max_y = if dy.abs() < 1e-9 {
-            f64::INFINITY
-        } else {
-            ((if dy > 0.0 { gy + 1.0 } else { gy }) * CHUNK_W - o[1]) / dy
-        };
+        let mut walk = GridWalk::new(o[0], o[1], dx, dy, CHUNK_W);
         let max_chunks = (max_dist / CHUNK_W).ceil() as usize + 2;
         for _ in 0..max_chunks {
-            if let Some(hit) = self.test_chunk(world, sched, origin, &o, &d, gx, gy, max_dist) {
+            if let Some(hit) = self.test_chunk(world, sched, origin, &o, &d, walk.x, walk.y, max_dist) {
                 return Some(hit);
             }
-            if t_max_x.min(t_max_y) > max_dist {
+            if walk.next_t() > max_dist {
                 break;
             }
-            if t_max_x < t_max_y {
-                gx += step_x;
-                t_max_x += t_delta_x;
-            } else {
-                gy += step_y;
-                t_max_y += t_delta_y;
-            }
+            walk.advance();
         }
         None
     }
@@ -219,16 +253,15 @@ impl Raycast {
     /// space: chunk_raycast.ts's ray_hit_chunk.
     #[allow(clippy::too_many_arguments)]
     fn hit_chunk(&mut self, world: &mut World, volume: usize, o: &[f64; 3], d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
-        let bands: Vec<BandView> = (0..world.volumes.band_count(volume))
-            // SAFETY: the composite is sealed and held until released here or kept.
-            .map(|i| unsafe { world.volumes.band_view(volume, i) })
-            .collect();
+        // SAFETY: the composite is sealed and held until released here or kept.
+        unsafe { world.volumes.band_views(volume, &mut self.bands) };
+        let (bands, column) = (&self.bands, &mut self.column);
         let (ox, oy) = (o[0] - chunk_ox, o[1] - chunk_oy);
         let (dx, dy) = (d[0], d[1]);
         let span = CHUNK_SPAN as f64;
 
         let test_cell = |column: &mut ColumnRuns, cx: u32, cy: u32| -> Option<Hit> {
-            let n = column.walk(&bands, cx, cy);
+            let n = column.walk(bands, cx, cy);
             let mut best: Option<(Slab, u8, [f64; 3], [f64; 3])> = None;
             for i in 0..n {
                 let (mut min, mut max) = run_box(cx, cy, column, i);
@@ -265,39 +298,19 @@ impl Raycast {
             if cx < 0.0 || cx >= span || cy < 0.0 || cy >= span {
                 return None;
             }
-            return test_cell(&mut self.column, cx as u32, cy as u32);
+            return test_cell(column, cx as u32, cy as u32);
         }
 
-        let mut cell_x = (ox / U_PER_CELL).floor();
-        let mut cell_y = (oy / U_PER_CELL).floor();
-        let step_x = if dx > 0.0 { 1.0 } else { -1.0 };
-        let step_y = if dy > 0.0 { 1.0 } else { -1.0 };
-        let t_delta_x = if dx.abs() < 1e-9 { f64::INFINITY } else { U_PER_CELL / dx.abs() };
-        let t_delta_y = if dy.abs() < 1e-9 { f64::INFINITY } else { U_PER_CELL / dy.abs() };
-        let mut t_max_x = if dx.abs() < 1e-9 {
-            f64::INFINITY
-        } else {
-            ((if dx > 0.0 { cell_x + 1.0 } else { cell_x }) * U_PER_CELL - ox) / dx
-        };
-        let mut t_max_y = if dy.abs() < 1e-9 {
-            f64::INFINITY
-        } else {
-            ((if dy > 0.0 { cell_y + 1.0 } else { cell_y }) * U_PER_CELL - oy) / dy
-        };
+        let mut walk = GridWalk::new(ox, oy, dx, dy, U_PER_CELL);
         let max_cells = (max_dist.min(CHUNK_W * 1.5) / U_PER_CELL).ceil() as usize + 2;
         for _ in 0..max_cells {
+            let (cell_x, cell_y) = (walk.x, walk.y);
             if cell_x >= 0.0 && cell_x < span && cell_y >= 0.0 && cell_y < span {
-                if let Some(found) = test_cell(&mut self.column, cell_x as u32, cell_y as u32) {
+                if let Some(found) = test_cell(column, cell_x as u32, cell_y as u32) {
                     return Some(found);
                 }
             }
-            if t_max_x < t_max_y {
-                cell_x += step_x;
-                t_max_x += t_delta_x;
-            } else {
-                cell_y += step_y;
-                t_max_y += t_delta_y;
-            }
+            walk.advance();
         }
         None
     }
@@ -493,7 +506,7 @@ mod decor_tests {
 
     #[test]
     fn a_square_is_met_only_where_the_ray_passes_over_it() {
-        let d = [0.7071, 0.7071, -0.3];
+        let d = [0.6, 0.6, -0.3];
         assert!(ray_meets_square(&[0.0, 0.0, 10.0], &d, 5.0, 5.0, 20.0, 20.0, 100.0));
         assert!(!ray_meets_square(&[0.0, 0.0, 10.0], &d, 5.0, 5.0, 20.0, 20.0, 3.0));
         assert!(!ray_meets_square(&[0.0, 0.0, 10.0], &d, -20.0, 5.0, -5.0, 20.0, 100.0));

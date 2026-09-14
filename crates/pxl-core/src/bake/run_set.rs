@@ -35,11 +35,9 @@ pub fn run_set_bytes(count: u32, span: u32) -> u32 {
 
 impl<'a> RunSet<'a> {
     /// Carves the lanes out of `bytes`, which must start 4-aligned and hold
-    /// at least `run_set_bytes(count, span)`.
-    ///
-    /// # Safety
-    /// `bytes` must be aligned to 4 at its start.
-    pub unsafe fn carve(bytes: &'a [u8], count: u32, span: u32) -> RunSet<'a> {
+    /// at least `run_set_bytes(count, span)`; both are checked, so a wrong
+    /// block is a panic and never a misread.
+    pub fn carve(bytes: &'a [u8], count: u32, span: u32) -> RunSet<'a> {
         let need = run_set_bytes(count, span) as usize;
         assert!(bytes.len() >= need, "run set of {} bytes shorter than {}", bytes.len(), need);
         assert!((bytes.as_ptr() as usize).is_multiple_of(4), "run set not 4-aligned");
@@ -47,17 +45,20 @@ impl<'a> RunSet<'a> {
         let n = count as usize;
         let cols = (span * span + 1) as usize;
         let mut at = 0usize;
-        let mut words = |len: usize| {
+        // SAFETY: every span below lies inside `bytes` — the length was
+        // checked against the layout's total — and the word lanes start
+        // 4-aligned, as the base was checked to.
+        let mut words = |len: usize| unsafe {
             let p = base.add(at);
             at += len * 4;
             p
         };
-        let start = core::slice::from_raw_parts(words(cols) as *const u32, cols);
-        let z0 = core::slice::from_raw_parts(words(n) as *const i32, n);
-        let z1 = core::slice::from_raw_parts(words(n) as *const i32, n);
-        let layer_taps = core::slice::from_raw_parts(words(n) as *const u32, n);
+        let start = unsafe { core::slice::from_raw_parts(words(cols) as *const u32, cols) };
+        let z0 = unsafe { core::slice::from_raw_parts(words(n) as *const i32, n) };
+        let z1 = unsafe { core::slice::from_raw_parts(words(n) as *const i32, n) };
+        let layer_taps = unsafe { core::slice::from_raw_parts(words(n) as *const u32, n) };
         let mut bytes_at = at;
-        let mut lane = || {
+        let mut lane = || unsafe {
             let s = core::slice::from_raw_parts(base.add(bytes_at), n);
             bytes_at += n;
             s
@@ -105,6 +106,28 @@ pub struct OwnedRunSet {
 }
 
 impl OwnedRunSet {
+    /// Empties every lane, keeping their capacity.
+    pub fn clear(&mut self) {
+        self.start.clear();
+        self.z0.clear();
+        self.z1.clear();
+        self.layer_taps.clear();
+        for lane in [
+            &mut self.r,
+            &mut self.g,
+            &mut self.b,
+            &mut self.material_class,
+            &mut self.sub_ox,
+            &mut self.sub_oy,
+            &mut self.sub_oz,
+            &mut self.sub_sx,
+            &mut self.sub_sy,
+            &mut self.sub_sz,
+        ] {
+            lane.clear();
+        }
+    }
+
     pub fn view(&self) -> RunSet<'_> {
         RunSet {
             count: self.z0.len() as u32,

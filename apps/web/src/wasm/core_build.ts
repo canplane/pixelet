@@ -26,13 +26,13 @@ import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
-import { type BakedChunkMesh, carve_baked_mesh } from "@/render/mesh/mesh_block.ts";
+import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_carve, decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
 import { CORE_POOL, CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
 
 /** Hands one baked mesh's block back to the core pool. Every view into it is
  * dead afterwards. */
-export function release_chunk_mesh(mesh: BakedChunkMesh): void {
+export function release_chunk_mesh(mesh: { block: MeshBlock["block"] }): void {
   CORE_POOL.release(mesh.block);
 }
 
@@ -85,21 +85,25 @@ export type MountListener = {
   on_unmount(id: u32): void;
 };
 
-/** What a chunk is told. */
+/** What a chunk is told. The module draws from its own lists; what the
+ * sink holds is the blocks, for as long as the module names them. */
 export type ChunkBuildSink = {
-  /** Tier `step`, built from the sources of `generation`; the mesh is the
-   * sink's to keep or release. */
-  on_tier(generation: u32, step: LodStep, mesh: BakedChunkMesh): void;
+  /** Tier `step`, built from the sources of `generation`; the block is the
+   * sink's to keep until the module evicts the step, or to release at once
+   * when it is stale. */
+  on_tier(generation: u32, step: LodStep, mesh: MeshBlock): void;
   /** The bytes the chunk's runs hold now. */
   on_runs(bytes: u32): void;
-  /** Show the chunk's group, or hide it. */
-  on_visible(on: boolean): void;
-  /** Show this layout, whose tiers the sink holds; not ready is nothing. */
+  /** Whether the chunk is on screen: what the module decided, told for a
+   * reader that wants it (the reference tests); the draws follow it. */
+  on_visible?(on: boolean): void;
+  /** The layout the module shows, whose tiers the sink holds; not ready is
+   * nothing. */
   on_layout(primary: LodStep, secondary: LodStep | null, ready: boolean): void;
-  /** Weigh the layout's two tiers so, and give decor the secondary's. */
-  on_blend(primary: number, secondary: number, decor_secondary: boolean): void;
-  /** Let go of a tier and the decor at its step; a layout showing them
-   * keeps its own hold. */
+  /** The layout's blend, as `on_visible`: the draws carry it. */
+  on_blend?(primary: number, secondary: number, decor_secondary: boolean): void;
+  /** Let go of a tier and the decor at its step: the module no longer
+   * names them. */
   on_evict(step: LodStep): void;
   /** The chunk's decor at `step`, the sink's to keep or release; a layout
    * comes after the decor of every tier in it. */
@@ -172,6 +176,8 @@ export class CoreBuild {
     this.cq = new Ring(pxl.memory.buffer, pxl.pxl_ring_cq());
     this.order = FIXED_ALLOC.take(Uint32Array, 1024);
     this.frame = new Float64Array(pxl.memory.buffer, pxl.pxl_frame_at(), FRAME_WORDS);
+    this.census_row = new Float64Array(pxl.memory.buffer, pxl.pxl_census(), 13);
+    this.stat_row = new Uint32Array(pxl.memory.buffer, pxl.pxl_build_stat(), 11);
   }
 
   /** Makes room in the submission ring: applies what waits, and hands out
@@ -205,7 +211,7 @@ export class CoreBuild {
       }
       const sink = this.sinks.get(id);
       if (op === OP_TIER) {
-        const mesh = carve_baked_mesh(CORE_POOL.adopt(w[a + 2], w[a + 3]), w[a + 4], w[a + 5]);
+        const mesh: MeshBlock = { block: CORE_POOL.adopt(w[a + 2], w[a + 3]), vertex_cnt: w[a + 4], index_cnt: w[a + 5] };
         if (sink) sink.on_tier(w[a], w[a + 1] as LodStep, mesh);
         else release_chunk_mesh(mesh);
       } else if (op === OP_DECOR) {
@@ -214,9 +220,9 @@ export class CoreBuild {
         else decor_block_release(decor);
       } else if (sink) {
         if (op === OP_RUNS) sink.on_runs(w[a]);
-        else if (op === OP_VISIBLE) sink.on_visible(w[a] !== 0);
+        else if (op === OP_VISIBLE) sink.on_visible?.(w[a] !== 0);
         else if (op === OP_LAYOUT) sink.on_layout(w[a] as LodStep, w[a + 1] === 0 ? null : w[a + 1] as LodStep, w[a + 2] !== 0);
-        else if (op === OP_BLEND) sink.on_blend(f32_of(w[a]), f32_of(w[a + 1]), w[a + 2] !== 0);
+        else if (op === OP_BLEND) sink.on_blend?.(f32_of(w[a]), f32_of(w[a + 1]), w[a + 2] !== 0);
         else if (op === OP_EVICT) sink.on_evict(w[a] as LodStep);
       }
       this.cq.advance();
@@ -350,40 +356,62 @@ export class CoreBuild {
     this.read();
   }
 
+  /** The census and the build stat are rows at fixed addresses, read
+   * several times a frame: one view and one object each, filled on every
+   * read — a caller keeps the numbers, never the object. */
+  private readonly census_row: Float64Array;
+  private readonly census_out: Census = {
+    chunks: 0,
+    in_frustum: 0,
+    settling: 0,
+    blend_active: 0,
+    pending: 0,
+    offscreen_pending: 0,
+    oldest_visible_ms: 0,
+    oldest_release_ms: 0,
+    committed: 0,
+    released: 0,
+    retained_on: 0,
+    retained_off: 0,
+    pressure: 0,
+  };
+  private readonly stat_row: Uint32Array;
+  private readonly stat_out: BuildStat = { direct: 0, scans: 0, bakes: 0, starved: 0, total_runs: 0, culled: 0, faces_possible: 0, faces_kept: 0, coarse_total: 0, coarse_low_fill: 0, heap_used: 0 };
+
   census(): Census {
-    const c = new Float64Array(this.pxl.memory.buffer, this.pxl.pxl_census(), 13);
-    return {
-      chunks: c[0],
-      in_frustum: c[1],
-      settling: c[2],
-      blend_active: c[3],
-      pending: c[4],
-      offscreen_pending: c[5],
-      oldest_visible_ms: c[6],
-      oldest_release_ms: c[7],
-      committed: c[8],
-      released: c[9],
-      retained_on: c[10],
-      retained_off: c[11],
-      pressure: c[12],
-    };
+    const c = this.census_row;
+    const o = this.census_out;
+    o.chunks = c[0];
+    o.in_frustum = c[1];
+    o.settling = c[2];
+    o.blend_active = c[3];
+    o.pending = c[4];
+    o.offscreen_pending = c[5];
+    o.oldest_visible_ms = c[6];
+    o.oldest_release_ms = c[7];
+    o.committed = c[8];
+    o.released = c[9];
+    o.retained_on = c[10];
+    o.retained_off = c[11];
+    o.pressure = c[12];
+    return o;
   }
 
   stat(): BuildStat {
-    const s = new Uint32Array(this.pxl.memory.buffer, this.pxl.pxl_build_stat(), 11);
-    return {
-      direct: s[0],
-      scans: s[1],
-      bakes: s[2],
-      starved: s[3],
-      total_runs: s[4],
-      culled: s[5],
-      faces_possible: s[6],
-      faces_kept: s[7],
-      coarse_total: s[8],
-      coarse_low_fill: s[9],
-      heap_used: s[10],
-    };
+    const s = this.stat_row;
+    const o = this.stat_out;
+    o.direct = s[0];
+    o.scans = s[1];
+    o.bakes = s[2];
+    o.starved = s[3];
+    o.total_runs = s[4];
+    o.culled = s[5];
+    o.faces_possible = s[6];
+    o.faces_kept = s[7];
+    o.coarse_total = s[8];
+    o.coarse_low_fill = s[9];
+    o.heap_used = s[10];
+    return o;
   }
 
   /** How often a band came from the module's stores rather than being

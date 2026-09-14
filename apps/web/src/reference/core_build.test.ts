@@ -20,7 +20,7 @@ import { page } from "@/reference/page_fixture.ts";
 import { paint_typescript, runs_typescript } from "@/reference/terrain_layer.ts";
 import { ObjectWorldLayer } from "@/reference/object_layer.ts";
 import { bake_chunk_mesh, BakeContext, type BakedChunkMesh } from "@/reference/chunk_mesher.ts";
-import { carve_visibility } from "@/render/mesh/mesh_block.ts";
+import { carve_baked_mesh, carve_visibility, type MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/wasm/core_build.ts";
 import { decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
 import { CORE_POOL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
@@ -78,7 +78,9 @@ type Heard = { tiers: { generation: u32; step: LodStep; mesh: BakedChunkMesh }[]
 function chunk(): { id: u32; heard: Heard } {
   const heard: Heard = { tiers: [], runs: [] };
   const sink = {
-    on_tier: (generation: u32, step: LodStep, mesh: BakedChunkMesh) => heard.tiers.push({ generation, step, mesh }),
+    // The module hands the block over; the lanes are carved here, where
+    // they are compared.
+    on_tier: (generation: u32, step: LodStep, mesh: MeshBlock) => heard.tiers.push({ generation, step, mesh: carve_baked_mesh(mesh.block, mesh.vertex_cnt, mesh.index_cnt) }),
     on_runs: (b: u32) => heard.runs.push(b),
     on_visible: () => {},
     on_layout: () => {},

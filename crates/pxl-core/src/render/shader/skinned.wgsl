@@ -34,23 +34,16 @@ struct VertexOut {
   @location(2) world_pos: vec3f,
 };
 
-fn place(v: vec3f) -> vec3f {
-  let up = vec3f(v.x, -v.z, v.y);
-  let c = cos(draw.rotation);
-  let s = sin(draw.rotation);
-  return vec3f(up.x * c - up.y * s, up.x * s + up.y * c, up.z);
-}
-
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
   let m = palette[v.joints.x] * v.weights.x + palette[v.joints.y] * v.weights.y + palette[v.joints.z] * v.weights.z + palette[v.joints.w] * v.weights.w;
   let p = (m * vec4f(v.position, 1.0)).xyz * draw.scale;
   let n = (m * vec4f(v.normal, 0.0)).xyz;
-  let world = place(p) + draw.translation;
+  let world = place_up(p, draw.rotation) + draw.translation;
   var o: VertexOut;
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.uv = v.uv;
-  o.normal = place(n);
+  o.normal = place_up(n, draw.rotation);
   o.world_pos = world;
   return o;
 }
@@ -59,6 +52,6 @@ fn vs(v: VertexIn) -> VertexOut {
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n));
+  let color = shade(albedo, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n));
   return vec4f(finish(color, i.clip.xy), draw.opacity);
 }

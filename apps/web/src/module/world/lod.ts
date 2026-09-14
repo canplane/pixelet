@@ -52,8 +52,11 @@ export const TARGET_CELL_PX: f64 = px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_F
  * projection; each is twice the one before, because each tier's cell is. */
 let LOD_THRESHOLDS: f64[] = [];
 
-function recompute_thresholds(viewport_h: f64, fov_deg: f64): void {
-  const k = px_per_unit(viewport_h, fov_deg) / TARGET_CELL_PX;
+function recompute_thresholds(viewport_h: f64, fov_deg: f64, pressure: u32): void {
+  // The module's pressure (crates/pxl-core/src/world/lod.rs): every
+  // threshold at 2^(-pressure/2), so the badges climb the rungs the cubes
+  // are on and the occlusion tolerance assumes the cell actually drawn.
+  const k = (px_per_unit(viewport_h, fov_deg) / TARGET_CELL_PX) * Math.pow(2, -pressure / 2);
   LOD_THRESHOLDS = LOD_STEP_BY_LEVEL.slice(0, -1).map((step) => step * U_PER_CELL * k);
   threshold_0 = LOD_THRESHOLDS[0];
   LOD_CELL_PER_DISTANCE.value = 2 / LOD_THRESHOLDS[0];
@@ -115,7 +118,8 @@ export function fade_end_u(): f64 {
 
 let projection_h: f64 = REFERENCE_VIEWPORT_H;
 let projection_fov: f64 = REFERENCE_FOV_DEG;
-recompute_thresholds(projection_h, projection_fov);
+let projection_pressure: u32 = 0;
+recompute_thresholds(projection_h, projection_fov, projection_pressure);
 
 /**
  * Tells the ladder what it is projecting onto. Called once a frame by the
@@ -127,11 +131,12 @@ recompute_thresholds(projection_h, projection_fov);
  * here (issue/20260911-taa-tried-and-closed.md), while which tier to
  * show is a question about how large a cell looks.
  */
-export function set_lod_projection(viewport_h: f64, fov_deg: f64): void {
-  if (viewport_h === projection_h && fov_deg === projection_fov) return;
+export function set_lod_projection(viewport_h: f64, fov_deg: f64, pressure: u32): void {
+  if (viewport_h === projection_h && fov_deg === projection_fov && pressure === projection_pressure) return;
   projection_h = viewport_h;
   projection_fov = fov_deg;
-  recompute_thresholds(viewport_h, fov_deg);
+  projection_pressure = pressure;
+  recompute_thresholds(viewport_h, fov_deg, pressure);
 }
 
 /**
@@ -155,10 +160,6 @@ const BLEND_BAND_FRACTION: f64 = 0.05;
  * for nothing.
  */
 const BLEND_ELIGIBLE_THRESHOLDS: u32 = 3;
-
-function clamp01(x: f64): f64 {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
-}
 
 // Internal sampling uses 1/2/4/8/16/32/64 L1 blocks inside one chunk.
 //

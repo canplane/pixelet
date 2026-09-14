@@ -250,6 +250,3 @@ export function core_pool_stat(): Readonly<BuddyStat> {
 export function core_sections_stat(): { name: SectionName; bytes: u32; stat: Readonly<BuddyStat> }[] {
   return (["fixed", "page", "mesh"] as const).map((name) => ({ name, bytes: CORE_SECTIONS[name].bytes, stat: CORE_SECTIONS[name].pool.stat }));
 }
-
-/** The reservation's size, for the budgets drawn against it. */
-export const CORE_MEMORY_BYTES: u32 = CORE_MEMORY?.buffer.byteLength ?? CORE_REGIONS * REGION_BYTES;

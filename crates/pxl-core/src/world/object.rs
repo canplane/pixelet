@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::bake::terrain::js_round;
 use crate::bake::volume::{Cell, Volumes, Voxel};
 use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
+use crate::space::constant::U_PER_CELL;
 use crate::space::sparse_tree::Tree;
 use xpute_core::ds::buddy::Pool;
 
@@ -29,15 +30,12 @@ pub const BAND_SHAMT: u32 = 6;
 pub const BAND_CELLS: u32 = 1 << BAND_SHAMT;
 /// Levels in a band's tree.
 pub const DEP: u32 = (CELL_LEVEL - MIN_LEVEL) as u32 + BAND_SHAMT;
-/// Finest-tier steps along one side of a cell, and of a band.
-const CELL_STEPS: u32 = 1 << (-MIN_LEVEL);
-pub const BAND_STEPS: u32 = 1 << DEP;
-/// One finest-tier step, and one band's height, in world units.
-const STEP_UNITS: f64 = 0.125;
+/// Finest-tier steps along one side of a cell, and one such step in
+/// world units.
+pub const CELL_STEPS: u32 = 1 << (-MIN_LEVEL);
+pub const STEP_UNITS: f64 = 1.0 / CELL_STEPS as f64;
+/// One band's height, in world units.
 const BAND_UNITS: f64 = BAND_CELLS as f64;
-/// A cell in world units — bake/constant.ts's U_PER_CELL.
-const U_PER_CELL: f64 = 1.0;
-
 /// An entry's packed position: nine bits an axis in finest-tier steps,
 /// then its level above the finest in four.
 pub const POS_BITS: u32 = 9;
@@ -45,6 +43,16 @@ const POS_MASK: u32 = (1 << POS_BITS) - 1;
 
 pub fn pack_pos(x: u32, y: u32, z: u32, level: i32) -> u32 {
     x | (y << POS_BITS) | (z << (2 * POS_BITS)) | (((level - MIN_LEVEL) as u32) << (3 * POS_BITS))
+}
+
+/// The packed position's parts: x, y, z in finest-tier steps, and the level.
+pub fn unpack_pos(pos: u32) -> (u32, u32, u32, i32) {
+    (
+        pos & POS_MASK,
+        (pos >> POS_BITS) & POS_MASK,
+        (pos >> (2 * POS_BITS)) & POS_MASK,
+        (pos >> (3 * POS_BITS)) as i32 + MIN_LEVEL,
+    )
 }
 
 /// cell/mod.ts's sentinels: the absence a zeroed leaf reads as, the
@@ -286,9 +294,7 @@ impl Store {
     }
 
     fn cell_of(key: u64, band: i32, pos: u32) -> CellKey {
-        let x = pos & POS_MASK;
-        let y = (pos >> POS_BITS) & POS_MASK;
-        let z = (pos >> (2 * POS_BITS)) & POS_MASK;
+        let (x, y, z, _) = unpack_pos(pos);
         (key, band * BAND_CELLS as i32 + (z / CELL_STEPS) as i32, ((y / CELL_STEPS) << BAND_SHAMT) | (x / CELL_STEPS))
     }
 
@@ -314,20 +320,27 @@ impl Store {
         }
     }
 
+    /// The entries are sorted by cell, so each cell's record is summed
+    /// whole and written once.
     fn index_cells(&mut self, cpos: usize) {
-        let mut last: Option<CellKey> = None;
+        let mut open: Option<(CellKey, CellRec)> = None;
         for k in 0..self.chunks[cpos].e_band.len() {
             let chunk = &self.chunks[cpos];
             let cell = Self::cell_of(chunk.key, chunk.e_band[k], chunk.e_pos[k]);
             let solid = (chunk.e_state[k] != AIR) as u32;
-            if last != Some(cell) {
-                last = Some(cell);
+            if open.is_none_or(|(c, _)| c != cell) {
+                if let Some((c, rec)) = open.take() {
+                    self.cells.insert(c, rec);
+                }
                 self.touch(cell);
-                self.cells.insert(cell, CellRec { start: k as u32, count: 0, solid: 0 });
+                open = Some((cell, CellRec { start: k as u32, count: 0, solid: 0 }));
             }
-            let rec = self.cells.get_mut(&cell).expect("the cell just indexed");
+            let rec = &mut open.as_mut().expect("the cell just opened").1;
             rec.count += 1;
             rec.solid += solid;
+        }
+        if let Some((c, rec)) = open {
+            self.cells.insert(c, rec);
         }
     }
 
@@ -431,8 +444,13 @@ impl Painter {
         }
     }
 
-    /// Teaches what `state` paints as.
+    /// Teaches what `state` paints as. A state is what a leaf's palette
+    /// index resolves to, so a state past a leaf's width is a bug in the
+    /// catalogue and not taught, rather than sizing the tables to it.
     pub fn teach(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
+        if state >= u16::MAX as u32 {
+            return;
+        }
         let i = state as usize;
         if i >= self.kinds.len() {
             self.kinds.resize(i + 1, Kind::Untaught);

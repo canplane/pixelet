@@ -25,7 +25,7 @@ import { poi_index_stats } from "@/module/world/poi/poi_index.ts";
 import { badge_atlas, poi_badge_build_stats, poi_badge_count } from "@/module/world/poi/poi_badge.ts";
 import { billboard_dropped } from "@/module/world/billboard/frustum_budget.ts";
 import { CORE_MEMORY, core_pool_stat, core_sections_stat, MODULE_SECTION } from "@/wasm/core_pool.ts";
-import { chunk_retention, lod_build_stats, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
+import { chunk_retention, RETAIN_BUDGET_BYTES } from "@/module/world/chunk_node.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
 import { category_info } from "./category.ts";
 import {
@@ -79,9 +79,9 @@ function frame_line(s: FrameSample, prev?: FrameSample): string {
   const d = prev ? `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB` : "";
   return `[${lpad(n1(s.t), 9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(Math.max(0, s.dt_ms - s.task_ms))}` +
     `  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${s.settled ? " still" : ""} ` +
-    `(rck ${n1(s.cpu.recheck_ms)} cmt ${n1(s.cpu.commit_ms)})  ` +
+    `(tick ${n1(s.cpu.tick_ms)})  ` +
     `draws ${s.draw_calls} tris ${Math.round(s.triangles / 1000)}k  buf ${s.buffers}  heap ${s.heap_mb}MB  ` +
-    `mount +${s.mounts.added}/-${s.mounts.removed} rerender ${s.mounts.rendered}${d}`;
+    `mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
 }
 
 function long_frame_line(l: LongFrameRecord): string {
@@ -105,10 +105,6 @@ function counters() {
     coarse_low_fill: CORE_BUILD.stat().coarse_low_fill,
     bands_reused: CORE_BUILD.band_stat().reused,
     bands_allocated: CORE_BUILD.band_stat().allocated,
-    build_ms: lod_build_stats.build_ms,
-    build_runs: lod_build_stats.build_runs,
-    scan_ms: lod_build_stats.scan_ms,
-    scan_count: lod_build_stats.scan_count,
     built_direct: CORE_BUILD.stat().direct,
     built_scans: CORE_BUILD.stat().scans,
     built_bakes: CORE_BUILD.stat().bakes,
@@ -185,7 +181,6 @@ function frames_section(frames: readonly FrameSample[]): string[] {
   const index = poi_index_stats();
   const retain = chunk_retention();
   const bands = c.bands_reused + c.bands_allocated;
-  const per = (total: number, n: number) => (n > 0 ? n1(total / n) : "-");
 
   return [
     `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.frame_ms)} ms`,
@@ -196,7 +191,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
       Object.entries(f.phases).map(([k, v]) => `${k} ${n1(v.p95)}`).join("  ")
     }`,
-    `  cpu     rck p95 ${n1(f.recheck.p95)}  cmt p95 ${n1(f.commit.p95)} ms`,
+    `  cpu     tick p95 ${n1(f.tick.p95)} ms   (the module's tick inside the visible phase)`,
     // Per step, so a phase that costs more than its steps should does not
     // hide which step is not yielding: a cooperative scheduler is only as
     // cooperative as its longest step.
@@ -231,7 +226,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     // (core_pool.ts); only what is reserved past it is ever handed back.
     `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  reserved ${Math.round(core_pool_stat().reserved_bytes / 1048576)}MB (core ${
       Math.round((CORE_MEMORY?.buffer.byteLength ?? 0) / 1048576)
-    }MB kept)  hit ${f.pool_hit_pct ?? "-"}%  biggest ${Math.round(core_pool_stat().max_block_bytes / 1048576)}MB   window scans ${f.work.scans} bakes ${f.work.bakes} runs ${f.work.runs}`,
+    }MB kept)  hit ${f.pool_hit_pct ?? "-"}%  biggest ${Math.round(core_pool_stat().max_block_bytes / 1048576)}MB   window scans ${f.work.scans} bakes ${f.work.bakes}`,
     // Each section against its own range: the fixed one refuses past it, the
     // others spill to plain regions the collector can take back — a spill or
     // a refusal here is the memory map's own signal, per kind.
@@ -249,12 +244,8 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  fetch   queued ${fetch_counts().queued} running ${fetch_counts().running} of ${MAX_INFLIGHT}`,
     // The builds run in the module under the tick; what they did this window.
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block`,
-    `  per     commit/bake ${f.commit_per_bake === null ? "-" : n1(f.commit_per_bake)}ms  build/krun ${per(c.build_ms, c.build_runs / 1000)}ms  scan/chunk ${
-      per(c.scan_ms, c.scan_count)
-    }ms   (workload-normalised; comparable across sessions)`,
-    `  rate    ${n1(f.per_s.bakes)} bakes/s  ${n1(f.per_s.scans)} scans/s  ${Math.round(f.per_s.runs / 1000)}k runs/s   while backlog ${n1(f.backlog_per_s.bakes)} bakes/s  ${
-      n1(f.backlog_per_s.scans)
-    } scans/s over ${n1(f.backlog_s)}s`,
+    `  per     tick/bake ${f.tick_per_bake === null ? "-" : n1(f.tick_per_bake)}ms   (workload-normalised; comparable across sessions)`,
+    `  rate    ${n1(f.per_s.bakes)} bakes/s  ${n1(f.per_s.scans)} scans/s   while backlog ${n1(f.backlog_per_s.bakes)} bakes/s  ${n1(f.backlog_per_s.scans)} scans/s over ${n1(f.backlog_s)}s`,
     `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the core pool`,
     `  retain  nodes ${retain.nodes}  runsets ${retain.run_sets} (${retain.run_set_mb}MB)  tiers ${retain.tiers}  decor ${retain.decor_steps} steps / ${retain.decor_instances} instances   kept on-screen ${
       Math.round(CORE_BUILD.census().retained_on / 1048576)
@@ -263,7 +254,7 @@ function frames_section(frames: readonly FrameSample[]): string[] {
     `  wait    releases ${last.lod.offscreen_pending} pending, oldest ${Math.round(last.lod.oldest_release_ms)} ms${starved(last.lod.oldest_release_ms)}   on-screen oldest ${
       Math.round(last.lod.oldest_visible_ms)
     } ms${starved(last.lod.oldest_visible_ms)}`,
-    `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} rerender ${last.mounts.rendered}   window total +${f.mounts.added}/-${f.mounts.removed}`,
+    `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} layouts ${last.mounts.layouts}   window total +${f.mounts.added}/-${f.mounts.removed}`,
     `  queue   terrain ${last.q_terrain}  poi ${last.q_poi}`,
   ];
 }
@@ -274,7 +265,7 @@ function peak_section(): string[] {
   const p = ledger_frame_peak();
   return [
     `peak (window)`,
-    `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  rck ${n1(p.recheck_ms)}  cmt ${n1(p.commit_ms)} ms`,
+    `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  tick ${n1(p.tick_ms)} ms`,
     `  draws ${p.draw_calls}  tris ${Math.round(p.triangles / 1000)}k  heap ${p.heap_mb}MB  queue t${p.q_terrain}/p${p.q_poi}`,
     `  lod chunks ${p.chunks}  in-frustum ${p.in_frustum}  pending ${p.pending}  settling ${p.settling}  blending ${p.blend_active}  pressure ${p.pressure}`,
     `  wait releases ${p.offscreen_pending} pending, oldest ${Math.round(p.oldest_release_ms)} ms${starved(p.oldest_release_ms)}   on-screen oldest ${Math.round(p.oldest_visible_ms)} ms${

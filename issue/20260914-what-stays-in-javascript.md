@@ -60,7 +60,12 @@ each unlocks:
    module as it reads the environment. PVF3 enters the crate here, as the
    coordinate type (`space/pvf3.rs`, the pair of
    `@pxl/shared/spec/space/pvf3`): the glue stops composing coordinates
-   and reads doubles for the controls that show one. The three hand copies
+   and reads doubles for the controls that show one. "The pair of" is
+   the rule for the kits: what both runtimes need at all — `@xpute/core`
+   and `xpute-core`, PVF3 and `space/pvf3.rs`, the XTP codec — is kept
+   twice, one copy per runtime, symmetric; a move adds the Rust copy and
+   never takes the TypeScript one away while anything there still reads
+   it. The three hand copies
    of the lattice word's packing in the crate today (sched.rs, decor.rs,
    the wasm crate) are the first thing it replaces.
 2. **Page demand and residency, with an XTP reader.** Which pages the

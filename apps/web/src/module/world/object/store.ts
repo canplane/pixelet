@@ -827,9 +827,42 @@ function load(): void {
   }
 }
 
+/**
+ * The store is written whole — every entry walked, encoded and handed to
+ * localStorage, which writes synchronously — so a write is not paid on
+ * the frame that placed something: the save is put off a moment and a
+ * burst of writes (a drawn build's table, a quick run of placements) is
+ * one save. What is pending is flushed when the page hides, which is the
+ * last moment a tab on a phone is sure to get. Persistence as such is the
+ * module's to take over (issue/20260914-what-stays-in-javascript.md).
+ */
+const SAVE_DELAY_MS = 300;
+let save_timer: ReturnType<typeof setTimeout> | null = null;
+
 function save(): void {
   if (typeof localStorage === "undefined") return;
+  // Off the page (the tests), where no frame is at stake, the write is
+  // immediate and leaves no timer behind.
+  if (typeof requestAnimationFrame !== "function") {
+    localStorage.setItem(STORAGE_KEY, encode_objects());
+    return;
+  }
+  if (save_timer !== null) return;
+  save_timer = setTimeout(flush_save, SAVE_DELAY_MS);
+}
+
+function flush_save(): void {
+  if (save_timer === null) return;
+  clearTimeout(save_timer);
+  save_timer = null;
   localStorage.setItem(STORAGE_KEY, encode_objects());
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flush_save();
+  });
+  globalThis.addEventListener("pagehide", flush_save);
 }
 
 load();

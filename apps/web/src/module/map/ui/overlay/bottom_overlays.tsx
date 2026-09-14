@@ -14,8 +14,6 @@ export function BottomOverlays() {
 
   return (
     <>
-      <div className={cn("absolute bottom-8 left-8 z-50", interaction_style)} />
-
       <div
         // iOS delivers visualViewport events inconsistently (streamed while the
         // keyboard opens, or as one final value if it was already up), so only

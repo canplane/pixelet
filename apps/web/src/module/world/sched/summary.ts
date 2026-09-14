@@ -65,10 +65,10 @@ export function summarize_frames(frames: readonly FrameSample[]) {
   const sum = (pick: (f: FrameSample) => number) => frames.reduce((a, f) => a + pick(f), 0);
   const seconds = Math.max(1e-3, (last.t - first.t) / 1000);
   const moving = frames.filter((f) => !f.settled);
-  const work = { scans: sum((f) => f.work.scans), bakes: sum((f) => f.work.bakes), runs: sum((f) => f.work.runs) };
+  const work = { scans: sum((f) => f.work.scans), bakes: sum((f) => f.work.bakes) };
   const backlog = frames.filter((f) => f.lod.pending > 0);
   const backlog_s = Math.max(1e-3, backlog.reduce((a, f) => a + f.dt_ms, 0) / 1000);
-  const commit_ms = sum((f) => f.cpu.commit_ms);
+  const tick_ms = sum((f) => f.cpu.tick_ms);
   const pool_hits = last.pool.hits - first.pool.hits;
   const pool_acquires = pool_hits + last.pool.misses - first.pool.misses;
 
@@ -84,13 +84,12 @@ export function summarize_frames(frames: readonly FrameSample[]) {
     offthread: of((f) => Math.max(0, f.dt_ms - f.task_ms)),
     gpu: of((f) => f.gpu_ms),
     sched: of((f) => f.sched_ms),
-    recheck: of((f) => f.cpu.recheck_ms),
-    commit: of((f) => f.cpu.commit_ms),
+    tick: of((f) => f.cpu.tick_ms),
     phases: Object.fromEntries(Object.keys(last.phases).map((k) => [k, of((f) => f.phases[k] ?? 0)])) as Record<string, Spread>,
     work,
     /** Throughput over the whole window. The last frame's counts only say
      * whether something ran, not how fast the backlog is draining. */
-    per_s: { scans: work.scans / seconds, bakes: work.bakes / seconds, runs: work.runs / seconds },
+    per_s: { scans: work.scans / seconds, bakes: work.bakes / seconds },
     /** Throughput while there was a backlog to drain. `per_s` divides by the
      * whole window, idle stretches included, so two sessions of different
      * length could not be compared on it; this can. */
@@ -102,7 +101,7 @@ export function summarize_frames(frames: readonly FrameSample[]) {
     /** What one bake cost the commit pass — comparable across sessions where
      * the absolute commit time is not, because it mixes in how much work the
      * window happened to contain. */
-    commit_per_bake: work.bakes > 0 ? commit_ms / work.bakes : null,
+    tick_per_bake: work.bakes > 0 ? tick_ms / work.bakes : null,
     mounts: { added: sum((f) => f.mounts.added), removed: sum((f) => f.mounts.removed) },
     /** Share of the window's pool acquires served from a region already
      * reserved; null when the window acquired nothing. */

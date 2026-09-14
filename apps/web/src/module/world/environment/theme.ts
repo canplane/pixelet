@@ -10,7 +10,6 @@ export const enum WorldThemeKey {
 }
 
 export type WorldTheme = {
-  background: string;
   fog: string;
   sky: {
     colors: {
@@ -24,15 +23,10 @@ export type WorldTheme = {
     hemisphere: { sky: string; ground: string; intensity: number };
     directional: { color: string; intensity: number };
   };
-  grid: {
-    cell: string;
-    major: string;
-  };
 };
 
 export const themes: Record<WorldThemeKey, WorldTheme> = {
   [WorldThemeKey.MORNING]: {
-    background: "#f6efe6",
     fog: "#e9dccb",
     sky: {
       colors: {
@@ -50,11 +44,9 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
       // near 62% of the original, a ratio morning/day/evening share.
       directional: { color: "#ffd9a8", intensity: 0.45 },
     },
-    grid: { cell: "#ddd2c4", major: "#c5b6a4" },
   },
 
   [WorldThemeKey.DAY]: {
-    background: "#dff1ff",
     fog: "#c8def0",
     sky: {
       colors: {
@@ -70,11 +62,9 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
       // strength, in step with the other daylight themes.
       directional: { color: "#fff8ef", intensity: 0.50 },
     },
-    grid: { cell: "#c7d4df", major: "#9fb0bf" },
   },
 
   [WorldThemeKey.EVENING]: {
-    background: "#3c2318",
     fog: "#c9865f",
     sky: {
       colors: {
@@ -92,11 +82,9 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
       // (0.15, 0.20) instead of a small step then a big one.
       directional: { color: "#ffc29d", intensity: 0.35 },
     },
-    grid: { cell: "#8c5a3d", major: "#5e3927" },
   },
 
   [WorldThemeKey.NIGHT]: {
-    background: "#0f172a",
     fog: "#1e293b",
     sky: {
       colors: {
@@ -113,7 +101,6 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
       // present at all, not toned down from an already-low baseline.
       directional: { color: "#5a6d8d", intensity: 0.15 },
     },
-    grid: { cell: "#314258", major: "#223247" },
   },
 };
 

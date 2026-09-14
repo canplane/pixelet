@@ -36,14 +36,14 @@ macro_rules! wgsl {
 /// A shader's WGSL; empty for a kind that is not one.
 pub fn source(kind: u32) -> &'static str {
     match kind {
-        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "chunk"),
-        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "decor"),
-        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "skinned"),
+        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "faces", "chunk"),
+        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "place", "decor"),
+        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "place", "skinned"),
         SHADER_PUCK_ZONE => wgsl!("frame", "grade", "shade", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "shade", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "shade", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("grade", "depth", "badge_depth", "badge"),
         SHADER_BADGE_MSAA => wgsl!("grade", "depth", "badge_depth_msaa", "badge"),
-        SHADER_SKY => wgsl!("grade", "sky"),
+        SHADER_SKY => wgsl!("frame", "grade", "shade", "sky"),
         SHADER_DEBUG => wgsl!("frame", "grade", "debug"),
         SHADER_MIPS => wgsl!("mips"),
         _ => "",
@@ -51,16 +51,17 @@ pub fn source(kind: u32) -> &'static str {
 }
 
 /// Floats the frame uniform (frame.wgsl's Frame) holds.
-pub const FRAME_FLOATS: u32 = 68;
+pub const FRAME_FLOATS: u32 = 76;
 /// Where each field of the frame uniform starts, in floats, in this order:
 /// view_proj, camera_pos, edge_strength, the environment's run (sun_dir
 /// through fog_color, environment.rs's output as it is), low_spec,
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
-/// vignette, light_view_proj. The glue reads the table rather than
-/// counting; the test below holds it to the struct.
-pub const FRAME_AT: [u32; 12] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52];
+/// vignette, light_view_proj, the second light's run (other_dir through
+/// other_color, environment.rs's ENV_OTHER_LIGHT). The glue reads the
+/// table rather than counting; the test below holds it to the struct.
+pub const FRAME_AT: [u32; 13] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 68];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 12] = [
+const FRAME_FIELDS: [&str; 13] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -73,6 +74,7 @@ const FRAME_FIELDS: [&str; 12] = [
     "shadow_texel",
     "vignette",
     "light_view_proj",
+    "other_dir",
 ];
 
 /// The pipelines, by id: draw.rs's ten, which a draw names, then the ones
@@ -330,7 +332,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, FRAME_DEPTH]]), group(&SKIN)],
+            &[group(&[[0, BOTH, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, FRAME_DEPTH]]), group(&SKIN)],
         ),
         // The gizmos: a line list over everything, no depth test.
         crate::render::draw::PIPELINE_DEBUG => record(
@@ -346,7 +348,8 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(), &chunk_groups()),
         PIPELINE_DECOR_DEPTH => record(depth_only(SHADER_DECOR), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_DEPTH => record(depth_only(SHADER_SKINNED), &model_lanes(true), &model_groups()),
-        // The sky: one triangle over the screen, first, writing no depth.
+        // The sky: one triangle over the screen, first, writing no depth;
+        // the frame beside its own uniform, for the vignette.
         PIPELINE_SKY => record(
             Head {
                 depth_compare: ALWAYS,
@@ -354,7 +357,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_SKY, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(FRAGMENT)],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM]])],
         ),
         // A mip level from the one above: no depth, one sample, into the
         // texture's own format.
@@ -374,9 +377,12 @@ pub fn pipeline(id: u32) -> Vec<u32> {
 
 /// A vertex buffer as a record has it: its stride, its step mode, and its
 /// attributes as (location, offset, format).
+#[cfg(test)]
 pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
 
-/// A record read back into its parts, as the glue reads it.
+/// A record read back into its parts, as the glue reads it: what the
+/// tests check each pipeline's words against its shader by.
+#[cfg(test)]
 pub struct Record {
     pub shader: u32,
     pub shader_msaa: u32,
@@ -394,6 +400,7 @@ pub struct Record {
     pub groups: Vec<Vec<(u32, u32, u32)>>,
 }
 
+#[cfg(test)]
 impl Record {
     pub fn read(words: &[u32]) -> Record {
         let mut at = 11;
@@ -463,6 +470,46 @@ mod tests {
         }
     }
 
+    /// The shader's face bits are the mesher's: each named constant in
+    /// faces.wgsl equals the mesher's, and the lateral groups sit at
+    /// consecutive bits from their base in the order the shader multiplies
+    /// by.
+    #[test]
+    fn the_face_bits_are_the_meshers() {
+        use crate::bake::mesher as m;
+        let (module, _) = compile(SHADER_CHUNK);
+        let value = |name: &str| -> u32 {
+            let (_, c) = module
+                .constants
+                .iter()
+                .find(|(_, c)| c.name.as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("faces.wgsl has {name}"));
+            match module.global_expressions[c.init] {
+                naga::Expression::Literal(naga::Literal::U32(v)) => v,
+                ref other => panic!("{name} is a literal, not {other:?}"),
+            }
+        };
+        for (name, base, group) in [
+            ("FACE_BASE", m::FACE_PX, [m::FACE_PX, m::FACE_NX, m::FACE_PY, m::FACE_NY]),
+            ("RISES_BASE", m::RISES_PX, [m::RISES_PX, m::RISES_NX, m::RISES_PY, m::RISES_NY]),
+            ("DIPS_BASE", m::DIPS_PX, [m::DIPS_PX, m::DIPS_NX, m::DIPS_PY, m::DIPS_NY]),
+            ("CREASE_BASE", m::CREASE_PX, [m::CREASE_PX, m::CREASE_NX, m::CREASE_PY, m::CREASE_NY]),
+        ] {
+            assert_eq!(value(name), base, "{name}");
+            assert_eq!(group, [base, base * 2, base * 4, base * 8], "{name}'s laterals in the shader's order");
+        }
+        for (name, bit) in [
+            ("DIAG_PP", m::DIAG_PP),
+            ("DIAG_PN", m::DIAG_PN),
+            ("DIAG_NP", m::DIAG_NP),
+            ("DIAG_NN", m::DIAG_NN),
+            ("CAP_PZ", m::CAP_PZ),
+            ("CAP_NZ", m::CAP_NZ),
+        ] {
+            assert_eq!(value(name), bit, "{name}");
+        }
+    }
+
     #[test]
     fn frame_layout_matches_the_struct() {
         let (module, _) = compile(SHADER_CHUNK);
@@ -476,6 +523,7 @@ mod tests {
         // The environment's run is contiguous from sun_dir, as environment.rs
         // writes it: 24 floats to the end of fog_color's padding.
         assert_eq!(offsets["fog_color"], offsets["sun_dir"] + 20);
+        assert_eq!(offsets["other_color"], offsets["other_dir"] + 4);
     }
 
     /// The vertex format a location's argument type asks for.

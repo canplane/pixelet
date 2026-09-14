@@ -26,6 +26,8 @@ export let gpu_renderer: GpuRenderer | null = null;
 
 /** The sky dome's radius in environment.tsx, which the sky's rays meet. */
 let sky_radius = 1;
+/** The environment's output, at a fixed address in the module: one view. */
+let env_view: Float32Array | null = null;
 export function set_sky_radius(r: number): void {
   sky_radius = r;
 }
@@ -33,7 +35,9 @@ export function set_sky_radius(r: number): void {
 const EDGE_STRENGTH = 0.3;
 const EDGE_WIDTH = 0.03;
 /** crates/pxl-core/src/world/environment.rs's ENV_FLOATS. */
-const ENV_FLOATS = 48;
+const ENV_FLOATS = 56;
+/** Where the second light starts in it (ENV_OTHER_LIGHT). */
+const ENV_OTHER_LIGHT = 48;
 
 const $m = mat4();
 const $light_target = { x: 0, y: 0, z: 0 };
@@ -91,8 +95,10 @@ export function gpu_frame(dpr: number): void {
   // module's (crates/pxl-core/src/world/environment.rs), laid out as these
   // uniforms take them.
   const pxl = CORE_PXL!;
-  const env = new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);
+  env_view ??= new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);
+  const env = env_view;
   u.set(env.subarray(0, 24), at.env);
+  u.set(env.subarray(ENV_OTHER_LIGHT, ENV_OTHER_LIGHT + 8), at.other);
   u[at.low_spec] = settings.texture_pack ? 0 : 1;
   u[at.edge_width] = EDGE_WIDTH;
   u[at.rim_intensity] = settings.show_rim_light ? rim_cfg.INTENSITY : 0;

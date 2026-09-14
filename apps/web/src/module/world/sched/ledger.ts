@@ -74,10 +74,11 @@ export type FrameSample = {
   budget_ms: number;
   /** sched_ms broken down by phase, in the tick's own order. */
   phases: Record<string, number>;
-  /** core_tick's recheck and commit passes, inside the visible phase. The
-   * renderer's own submit is inside `task_ms` below; what the GPU then
-   * takes is `gpu_ms`, from its timestamps. */
-  cpu: { recheck_ms: number; commit_ms: number };
+  /** The module's tick (`pxl_tick`), inside the visible phase — its
+   * builds, commits and reclaim under the frame's budget. The renderer's
+   * encode and submit are inside `task_ms` below; what the GPU then takes
+   * is `gpu_ms`, from its timestamps. */
+  cpu: { tick_ms: number };
   /**
    * The whole rAF task: from the scheduler pass starting to the JS stack
    * emptying, so it covers every phase of the tick *and* the renderer's
@@ -131,9 +132,9 @@ export type FrameSample = {
      * ladder as the view asks for it, 2 one tier coarser. */
     pressure: number;
   };
-  /** chunks that React mounted / unmounted since the previous sample —
-   * the un-budgeted work that lands outside sched_ms. */
-  mounts: { added: number; removed: number; rendered: number };
+  /** Nodes made and dropped for the chunks the module mounted and
+   * unmounted since the previous sample, and layouts it applied. */
+  mounts: { added: number; removed: number; layouts: number };
   /** used JS heap in MiB — Chrome only, 0 where unavailable. Its delta
    * across frames is allocation churn. */
   heap_mb: number;
@@ -149,11 +150,11 @@ export type FrameSample = {
    * share, because a share is only meaningful over a window: summary.ts
    * takes it as a difference between a window's first and last frames. */
   pool: { live_mb: number; idle_mb: number; hits: number; misses: number };
-  /** chunk work started this frame: `scans` chunks scanned into a
-   * column-run set, `bakes` meshes baked, `runs` the runs those scans
-   * produced. Both land in the core pool, so these price a committing
-   * frame's pool traffic directly instead of inferring it from Δheap. */
-  work: { scans: number; bakes: number; runs: number };
+  /** The module's builds this frame: `scans` chunks whose runs were made
+   * (the direct path counted with the scans), `bakes` tiers baked. Both
+   * land in the mesh section, so these price a frame's pool traffic
+   * directly instead of inferring it from Δheap. */
+  work: { scans: number; bakes: number };
   // network pressure — fetch_scheduler queued + in-flight, per category
   q_terrain: number;
   q_poi: number;
@@ -296,8 +297,7 @@ export function ledger_record(rec: TaskRecord): void {
 export type FramePeak = {
   dt_ms: number;
   sched_ms: number;
-  recheck_ms: number;
-  commit_ms: number;
+  tick_ms: number;
   draw_calls: number;
   triangles: number;
   heap_mb: number;
@@ -317,8 +317,7 @@ export type FramePeak = {
 const frame_peak: FramePeak = {
   dt_ms: 0,
   sched_ms: 0,
-  recheck_ms: 0,
-  commit_ms: 0,
+  tick_ms: 0,
   draw_calls: 0,
   triangles: 0,
   heap_mb: 0,
@@ -371,8 +370,7 @@ export function ledger_record_frame(s: FrameSample): void {
   const p = frame_peak;
   if (s.dt_ms > p.dt_ms) p.dt_ms = s.dt_ms;
   if (s.sched_ms > p.sched_ms) p.sched_ms = s.sched_ms;
-  if (s.cpu.recheck_ms > p.recheck_ms) p.recheck_ms = s.cpu.recheck_ms;
-  if (s.cpu.commit_ms > p.commit_ms) p.commit_ms = s.cpu.commit_ms;
+  if (s.cpu.tick_ms > p.tick_ms) p.tick_ms = s.cpu.tick_ms;
   if (s.draw_calls > p.draw_calls) p.draw_calls = s.draw_calls;
   if (s.triangles > p.triangles) p.triangles = s.triangles;
   if (s.heap_mb > p.heap_mb) p.heap_mb = s.heap_mb;

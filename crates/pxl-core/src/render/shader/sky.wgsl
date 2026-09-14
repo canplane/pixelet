@@ -4,8 +4,9 @@
 // the direction from the origin to the point a pixel's ray meets it; that
 // point is found here by intersecting the ray with the same sphere, so the
 // colours land where they did. The gradient, stars, clouds, sun and moon
-// are that shader's, line for line; the output is graded and encoded to
-// sRGB, as the post stack did.
+// are that shader's, line for line; the output is graded, vignetted and
+// encoded to sRGB, as the post stack did over the whole screen — the frame
+// uniform is bound for the vignette alone.
 
 struct Sky {
   inv_view_proj: mat4x4f,
@@ -25,7 +26,7 @@ struct Sky {
   _p2: f32,
 };
 
-@group(0) @binding(0) var<uniform> sky: Sky;
+@group(0) @binding(1) var<uniform> sky: Sky;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -128,5 +129,5 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   }
 
   color += (hash(v.clip.xy) - 0.5) * (1.0 / 255.0);
-  return vec4f(to_srgb(grade(color)), 1.0);
+  return vec4f(finish(color, v.clip.xy), 1.0);
 }

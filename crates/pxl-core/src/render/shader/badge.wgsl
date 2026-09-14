@@ -29,9 +29,8 @@ struct Badge {
   near: f32,
   far: f32,
   cell: f32,
-  _p0: f32,
-  _p1: f32,
-  _p2: f32,
+  vignette: f32,
+  viewport: vec2f,
 };
 
 @group(0) @binding(0) var<uniform> badge: Badge;
@@ -128,7 +127,9 @@ fn fs(i: VertexOut) -> FragOut {
     discard;
   }
   var o: FragOut;
-  o.color = vec4f(to_srgb(grade(texel.rgb)), texel.a * i.opacity);
+  // Vignetted as the world under it is: the post stack darkened the whole
+  // screen, badges included.
+  o.color = vec4f(to_srgb(grade(texel.rgb) * vignette_of(i.clip.xy, badge.viewport, badge.vignette)), texel.a * i.opacity);
   o.depth = i.upright_z;
   return o;
 }

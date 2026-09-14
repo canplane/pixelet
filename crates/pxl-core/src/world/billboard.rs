@@ -7,7 +7,7 @@
 //! the core holds the instances as a block and lists each set's draw,
 //! placed against the frame's origin, in the order the sets draw in.
 
-use crate::render::draw::{DrawList, PIPELINE_BADGE};
+use crate::render::draw::{DrawList, Held, PIPELINE_BADGE};
 use crate::world::build::World;
 use crate::world::model::Models;
 
@@ -28,9 +28,7 @@ struct Set {
     /// the same depth goes to the later one.
     order: u32,
     anchor: Anchor,
-    at: usize,
-    bytes: u32,
-    handle: u32,
+    held: Held,
     count: u32,
 }
 
@@ -45,9 +43,7 @@ impl Billboards {
         let set = Set {
             order,
             anchor: Anchor::At([0.0; 3]),
-            at: 0,
-            bytes: 0,
-            handle: 0,
+            held: Held::default(),
             count: 0,
         };
         match self.sets.iter().position(Option::is_none) {
@@ -69,32 +65,10 @@ impl Billboards {
     /// `lane` addresses count * BILLBOARD_FLOATS f32s in the memory.
     pub unsafe fn write(&mut self, world: &mut World, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
         let Some(Some(s)) = self.sets.get_mut(id as usize) else { return };
-        let need = (count as usize * BILLBOARD_FLOATS * 4).max(4) as u32;
-        let pool = world.volumes.mesh_pool();
-        if need > s.bytes {
-            if s.bytes > 0 {
-                draw.free(s.handle);
-                world.pools[pool].release(s.at, s.bytes);
-                s.bytes = 0;
-                s.handle = 0;
-            }
-            // Room to grow into: a placement's count wobbles by a few.
-            let bytes = need.next_power_of_two();
-            let Some(at) = world.pools[pool].acquire(bytes) else {
-                s.count = 0;
-                return;
-            };
-            s.at = at;
-            s.bytes = bytes;
-        }
-        let mem = world.volumes.mem();
-        core::ptr::copy_nonoverlapping(mem.add(lane), mem.add(s.at), count as usize * BILLBOARD_FLOATS * 4);
-        s.count = count;
-        if s.handle == 0 {
-            s.handle = draw.upload(s.at as u32, s.bytes, 0, 0);
-        } else {
-            draw.rewrite(s.handle, s.at as u32, need);
-        }
+        let pool = &mut world.pools[world.volumes.mesh_pool()];
+        let len = (count as usize * BILLBOARD_FLOATS * 4) as u32;
+        let written = s.held.write(draw, pool, world.volumes.mem(), lane, len);
+        s.count = if written { count } else { 0 };
     }
 
     /// Stands a set at `origin`, in units.
@@ -113,11 +87,8 @@ impl Billboards {
 
     pub fn remove(&mut self, world: &mut World, draw: &mut DrawList, id: u32) {
         let Some(slot) = self.sets.get_mut(id as usize) else { return };
-        if let Some(s) = slot.take() {
-            if s.bytes > 0 {
-                draw.free(s.handle);
-                world.pools[world.volumes.mesh_pool()].release(s.at, s.bytes);
-            }
+        if let Some(mut s) = slot.take() {
+            s.held.free(draw, &mut world.pools[world.volumes.mesh_pool()]);
         }
     }
 
@@ -127,7 +98,7 @@ impl Billboards {
         let mut shown: Vec<(u32, u32, [f64; 3])> = Vec::new();
         for (i, s) in self.sets.iter().enumerate() {
             let Some(s) = s else { continue };
-            if s.count == 0 || s.handle == 0 {
+            if s.count == 0 || s.held.handle == 0 {
                 continue;
             }
             let at = match s.anchor {
@@ -142,8 +113,8 @@ impl Billboards {
         shown.sort_by_key(|&(order, i, _)| (order, i));
         for (_, i, at) in shown {
             let s = self.sets[i as usize].as_ref().unwrap();
-            let t = [(at[0] - origin[0]) as f32, (at[1] - origin[1]) as f32, (at[2] - origin[2]) as f32];
-            draw.draw_as(PIPELINE_BADGE, s.handle, s.count, 0, t, 0.0, 1.0);
+            let t = DrawList::translation(at, origin);
+            draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, t, 0.0, 1.0);
         }
     }
 }

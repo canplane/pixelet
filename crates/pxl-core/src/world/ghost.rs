@@ -102,7 +102,7 @@ impl Ghost {
     /// The ghost's draw this frame, placed against the frame's origin.
     pub fn draw(&self, draw: &mut DrawList, origin: [f64; 3]) {
         let Some(h) = &self.held else { return };
-        let t = [(self.at[0] - origin[0]) as f32, (self.at[1] - origin[1]) as f32, (self.at[2] - origin[2]) as f32];
+        let t = DrawList::translation(self.at, origin);
         match h.shape {
             Shape::Box { coplanar, .. } => {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };

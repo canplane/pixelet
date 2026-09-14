@@ -135,6 +135,10 @@ export class GpuRenderer {
   private bind_group: GPUBindGroup;
   private depth: GPUTexture | null = null;
   private readonly buffers = new Map<u32, GPUBuffer>();
+  /** The module's draw row, at a fixed address: one view, made on the
+   * first take rather than by a take of its own, which would drop the
+   * uploads waiting for the renderer. */
+  private draw_row: Uint32Array | null = null;
   private width = 0;
   private height = 0;
   /** The frame's uniforms, written by the glue before `frame`. */
@@ -175,13 +179,13 @@ export class GpuRenderer {
       [PIPELINE_GHOST_BOX]: this.pipelines.build(PIPELINE_GHOST_BOX, "ghost/box", this.format, samples).pipeline,
       [PIPELINE_GHOST_BOX_COPLANAR]: this.pipelines.build(PIPELINE_GHOST_BOX_COPLANAR, "ghost/box/coplanar", this.format, samples).pipeline,
     };
+    this.frame_buffer = device.createBuffer({ label: "frame", size: this.frame_at.floats * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const sky = this.pipelines.build(PIPELINE_SKY, "sky", this.format, samples);
     this.sky_pipeline = sky.pipeline;
     this.sky_buffer = device.createBuffer({ label: "sky", size: SKY_UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.sky_bind_group = device.createBindGroup({ layout: sky.layouts[0], entries: [{ binding: 0, resource: { buffer: this.sky_buffer } }] });
+    this.sky_bind_group = device.createBindGroup({ layout: sky.layouts[0], entries: [{ binding: 0, resource: { buffer: this.frame_buffer } }, { binding: 1, resource: { buffer: this.sky_buffer } }] });
     this.layers = create_layer_textures(device, this.mips);
     this.stat.texture_bytes.layers = this.layers.bytes;
-    this.frame_buffer = device.createBuffer({ label: "frame", size: this.frame_at.floats * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws_buffer = device.createBuffer({ label: "draws", size: 256 * UNIFORM_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.bind_group = this.make_bind_group(this.frame_buffer);
     this.light_bind_group = this.make_bind_group(this.shadow.light_frame, true);
@@ -283,7 +287,8 @@ export class GpuRenderer {
     if (!this.depth) return;
     const pxl = this.pxl;
     const mem = pxl.memory.buffer;
-    const row = new Uint32Array(mem, pxl.pxl_draw_take(), 10);
+    const at = pxl.pxl_draw_take();
+    const row = this.draw_row ??= new Uint32Array(mem, at, 10);
     const rewrites = new Uint32Array(mem, row[8], row[9] * REWRITE_WORDS);
     const uploads = new Uint32Array(mem, row[0], row[1] * UPLOAD_WORDS);
     const frees = new Uint32Array(mem, row[2], row[3]);
@@ -366,7 +371,7 @@ export class GpuRenderer {
     this.decor.draw_ghosts(pass, draws, uniforms, this.buffers, this.counts);
     this.debug.draw(pass, draws, uniforms, this.buffers);
     pass.end();
-    this.stat.badges = this.badges.draw(encoder, color, resolve, this.depth, draws, uniforms, this.buffers);
+    this.stat.badges = this.badges.draw(encoder, color, resolve, this.depth, [this.width, this.height], draws, uniforms, this.buffers);
     for (const preview of this.previews) preview.draw(encoder, this.uniforms, draws, uniforms, this.buffers, this.counts);
     // The frame's end, on a pass of its own that draws nothing, so the two
     // timestamps bracket every pass of the frame.

@@ -11,6 +11,8 @@
 //! is what it is lives in the TypeScript, which other layers still read and
 //! this is held to (sched.test via the module).
 
+use crate::space::constant::U_PER_CELL;
+
 /// The tiers, finest first: cells folded per side.
 pub const LOD_STEPS: [u32; 7] = [1, 2, 4, 8, 16, 32, 64];
 pub const COARSEST: u32 = 64;
@@ -21,9 +23,6 @@ const REFERENCE_FOV_DEG: f64 = 50.0;
 const REFERENCE_THRESHOLD_0: f64 = 192.0;
 const BLEND_BAND_FRACTION: f64 = 0.05;
 const BLEND_ELIGIBLE_THRESHOLDS: usize = 3;
-/// bake/constant.ts's U_PER_CELL.
-const U_PER_CELL: f64 = 1.0;
-
 fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * (fov_deg * core::f64::consts::PI / 360.0).tan())
 }

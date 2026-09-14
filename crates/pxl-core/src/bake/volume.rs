@@ -20,7 +20,8 @@
 use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
 use xpute_core::ds::buddy::Pool;
 
-pub const BAND_SPAN: u32 = 64;
+/// A band is a chunk's span on every axis.
+pub const BAND_SPAN: u32 = crate::space::constant::CHUNK_SPAN;
 const BAND_MASK: u32 = BAND_SPAN - 1;
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 pub const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;
@@ -323,6 +324,11 @@ impl Volumes {
     /// False when a band could not be made.
     pub fn set_voxel(&mut self, pools: &mut [Pool], id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
+        // A column past the band would index the next block in the pool:
+        // refused rather than written.
+        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+            return false;
+        }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, local_z) = Self::locate(z);
         let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
@@ -357,6 +363,9 @@ impl Volumes {
     /// layer.
     pub fn append_sub_voxel(&mut self, pools: &mut [Pool], id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
+        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+            return false;
+        }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, _) = Self::locate(z);
         let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
@@ -369,6 +378,9 @@ impl Volumes {
     /// Paints one solid column across as many whole bands as it needs.
     pub fn fill_column(&mut self, pools: &mut [Pool], id: usize, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
         let (cx, cy) = column;
+        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+            return false;
+        }
         let Voxel { material, layer_idx, .. } = v;
         if z1 < z0 {
             return true;
@@ -458,6 +470,19 @@ impl Volumes {
                 layer_idx: core::slice::from_raw_parts(at(row[8]), n),
                 sub: core::slice::from_raw_parts(at(row[9]) as *const u32, n),
             },
+        }
+    }
+
+    /// Every band of volume `id` into `out`, cleared first: the scan and
+    /// the raycast walk a volume by its bands many times a tick, so the
+    /// list is theirs to keep, not built anew each walk.
+    ///
+    /// # Safety
+    /// As `band_view`: valid until the volume is painted again or released.
+    pub unsafe fn band_views(&mut self, id: usize, out: &mut Vec<crate::bake::scan::BandView<'static>>) {
+        out.clear();
+        for i in 0..self.band_count(id) {
+            out.push(self.band_view(id, i));
         }
     }
 

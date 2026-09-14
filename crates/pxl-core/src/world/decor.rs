@@ -13,8 +13,10 @@
 //! A kind is drawn on a tier only where it is at least two of the tier's
 //! cells across; why, and every other rule, is the TypeScript's.
 
-use crate::bake::terrain::{ChunkSample, PageView, CHUNK_SPAN, PAGE_CELL_SPAN};
-use crate::world::object::{Store, POS_BITS};
+use crate::bake::terrain::{ChunkSample, PageView};
+use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
+use crate::space::ivec::gather;
+use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 
 /// decor_kinds.ts's DECOR_MASTER_SEED is written with 80 bits; every use
 /// takes it modulo 2^64 (kit/rng.ts's derive_seed_u64 masks the XOR), so
@@ -26,18 +28,16 @@ const ALIGN_NEIGHBOR_RADIUS: u32 = 3;
 /// NO_ENTRY: a procedural instance resolves to no stored entry.
 pub const NO_ENTRY: u32 = 0xffff_ffff;
 pub const HIDDEN_FLAG: u8 = 1;
-/// bake/constant.ts's U_PER_CELL.
-const U_PER_CELL: f64 = 1.0;
-
-fn mix64(x: u64) -> u64 {
-    let mut z = x.wrapping_add(SEED_SALT);
+/// splitmix64's finaliser.
+fn mix64(z: u64) -> u64 {
+    let mut z = z;
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     z ^ (z >> 31)
 }
 
 fn derive_seed(base: u64, tag: u64) -> u64 {
-    mix64(base ^ tag)
+    mix64((base ^ tag).wrapping_add(SEED_SALT))
 }
 
 /// kit/rng.ts's make_rng: splitmix64, and a draw is `U32(Number(z))` — the
@@ -48,11 +48,7 @@ struct Rng(u64);
 impl Rng {
     fn next(&mut self) -> u32 {
         self.0 = self.0.wrapping_add(SEED_SALT);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        z ^= z >> 31;
-        ((z as f64) % 4_294_967_296.0) as u32
+        (mix64(self.0) as f64 % 4_294_967_296.0) as u32
     }
 
     fn unit(&mut self) -> f64 {
@@ -171,11 +167,6 @@ pub struct Chunk<'a> {
     pub hide: Option<(i32, u32)>,
 }
 
-/// pvf3/ivec.ts's gather.
-fn gather(x: i64, y: i64, z: i64) -> u64 {
-    ((x as u64 & 0xff_ffff) << 40) | ((y as u64 & 0xff_ffff) << 16) | (z as u64 & 0xffff)
-}
-
 impl DecorBuild {
     /// Builds every kind's instances for a chunk at `step`, the sample
     /// already read for it (its elevations).
@@ -183,7 +174,14 @@ impl DecorBuild {
         let mut groups: Vec<Vec<Instance>> = Vec::new();
         let page_seed = derive_seed(MASTER_SEED, chunk.page_idx);
         let lanes = store.chunk_lanes(chunk.key);
+        // A chunk with no entry has no cell to look up: most chunks.
+        let has_entries = lanes.as_ref().is_some_and(|l| l.count > 0);
         for kind in kinds {
+            // A kind with no variant has no group to fill and no variant to
+            // pick below; the groups are the kinds' variants in order.
+            if kind.variant_count == 0 {
+                continue;
+            }
             let mut by_variant: Vec<Vec<Instance>> = vec![Vec::new(); kind.variant_count as usize];
 
             // Placed instances first, in the store's entry order.
@@ -202,19 +200,22 @@ impl DecorBuild {
                         continue;
                     }
                     let pos = poss[k];
-                    let (x, y, z) = (pos & 511, (pos >> POS_BITS) & 511, (pos >> (2 * POS_BITS)) & 511);
-                    let level = (pos >> (3 * POS_BITS)) as i32 - 3;
+                    let (x, y, z, level) = unpack_pos(pos);
                     let size = 2f64.powi(level);
-                    let corner = gather(chunk.key_x + (x / 8) as i64, chunk.key_y + (y / 8) as i64, bands[k] as i64 * 64 + (z / 8) as i64);
+                    let corner = gather(
+                        chunk.key_x + (x / CELL_STEPS) as i64,
+                        chunk.key_y + (y / CELL_STEPS) as i64,
+                        bands[k] as i64 * BAND_CELLS as i64 + (z / CELL_STEPS) as i64,
+                    );
                     let mut rng = Rng(derive_seed(MASTER_SEED, corner));
                     let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
                     let rotation = rng.unit() * core::f64::consts::PI * 2.0;
                     let hidden = chunk.hide == Some((bands[k], pos));
                     let h = size / 2.0;
                     by_variant[variant as usize].push(Instance {
-                        x: (x as f64 * 0.125 + h) as f32,
-                        y: (y as f64 * 0.125 + h) as f32,
-                        z: (bands[k] as f64 * 64.0 + z as f64 * 0.125) as f32,
+                        x: (x as f64 * STEP_UNITS + h) as f32,
+                        y: (y as f64 * STEP_UNITS + h) as f32,
+                        z: (bands[k] as f64 * BAND_CELLS as f64 + z as f64 * STEP_UNITS) as f32,
                         rotation: rotation as f32,
                         scale: 1.0,
                         flags: if hidden { HIDDEN_FLAG } else { 0 },
@@ -250,7 +251,7 @@ impl DecorBuild {
                         };
                         let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
                         let ele = sample.ele[(dy * CHUNK_SPAN + dx) as usize] as i32;
-                        if store.cell(chunk.key, dx, dy, ele).is_some_and(|c| c.solid > 0) {
+                        if has_entries && store.cell(chunk.key, dx, dy, ele).is_some_and(|c| c.solid > 0) {
                             continue;
                         }
                         by_variant[variant as usize].push(Instance {

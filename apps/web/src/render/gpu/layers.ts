@@ -62,7 +62,10 @@ export function create_layer_textures(device: GPUDevice, mips: MipBuilder): Laye
   mips.build(side, 0, LAYER_CNT);
   load_sheet(device, top, "top", mips);
   load_sheet(device, side, "side", mips);
-  const sampler = device.createSampler({ addressModeU: "repeat", addressModeV: "repeat", magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
+  // Anisotropic at the four three's arrays were filtered at: the ground is
+  // mostly seen at a grazing angle, where an isotropic mip blurs the tile
+  // along the view.
+  const sampler = device.createSampler({ addressModeU: "repeat", addressModeV: "repeat", magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 4 });
   // A chain is the sum of the levels' texels: under four thirds of the first.
   let bytes = 0;
   for (let level = 0; level < levels; level++) bytes += (LAYER_TEX_SZ >> level) ** 2 * 4 * LAYER_CNT * 2;

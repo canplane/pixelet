@@ -10,17 +10,11 @@ struct VertexOut {
   @location(0) normal: vec3f,
 };
 
-fn spin(v: vec3f) -> vec3f {
-  let c = cos(draw.fourth);
-  let s = sin(draw.fourth);
-  return vec3f(v.x * c - v.y * s, v.x * s + v.y * c, v.z);
-}
-
 @vertex
 fn vs(@location(0) position: vec3f, @location(1) normal: vec3f) -> VertexOut {
   var o: VertexOut;
-  o.clip = frame.view_proj * vec4f(spin(position) + draw.translation, 1.0);
-  o.normal = spin(normal);
+  o.clip = frame.view_proj * vec4f(spin_z(position, draw.fourth) + draw.translation, 1.0);
+  o.normal = spin_z(normal, draw.fourth);
   return o;
 }
 
@@ -31,6 +25,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let n = normalize(i.normal);
   // Mostly metal, which three lit with no environment to reflect: a little
   // diffuse under the lights, and the emissive glow.
-  let lit = colour * (frame.sun_color * max(dot(n, frame.sun_dir), 0.0) + frame.ambient) / 3.14159265 * 0.2;
+  let lit = colour * (frame.sun_color * max(dot(n, frame.sun_dir), 0.0) + frame.other_color * max(dot(n, frame.other_dir), 0.0) + frame.ambient) / PI * 0.2;
   return vec4f(finish(lit + colour * glow, i.clip.xy), 1.0);
 }

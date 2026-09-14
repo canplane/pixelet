@@ -1,7 +1,9 @@
 // The frame's uniform as every pass declares it, at group 0 binding 0: the
 // view, the camera, the environment's run (environment.rs's output, sun_dir
 // through fog_color), the effects' strengths, and the light's view for the
-// shadow. The layout is shader.rs's FRAME_AT to name; the glue fills it.
+// shadow, and the second light — the dimmer of the sun and the moon, which
+// casts no shadow. The layout is shader.rs's FRAME_AT to name; the glue
+// fills it.
 
 struct Frame {
   view_proj: mat4x4f,
@@ -27,6 +29,10 @@ struct Frame {
   _p1: f32,
   _p2: f32,
   light_view_proj: mat4x4f,
+  other_dir: vec3f,
+  _p3: f32,
+  other_color: vec3f,
+  _p4: f32,
 };
 
 @group(0) @binding(0) var<uniform> frame: Frame;

@@ -13,6 +13,8 @@ import { useSettingsStore } from "@/app/setting/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick as invalidate } from "@/module/world/change.ts";
 import { view, view_compose } from "@/module/world/frame/view.ts";
+import { useMapStore } from "@/module/map/store.ts";
+import { tile_pages } from "@/module/world/terrain/store.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
@@ -41,6 +43,28 @@ const CLIMB_EPS: f64 = 0.0005;
 
 /** Damps the eye's distance and pitch toward the controls and writes them
  * into the view (module/world/frame/view.ts). */
+/** climb_polar's answer for the last inputs: the climb samples the terrain
+ * twice through the page tables and BigInt page math, and every ticked
+ * frame asked it again with the view at rest. The answer changes only with
+ * the view, the map centre, or a page arriving — the page table's revision
+ * moves for the last, which is also when ground not known yet becomes
+ * known. */
+const climb_memo = { dist: NaN, polar: NaN, azimuth: NaN, centre: null as unknown, revision: -1, polar_out: NaN };
+function climb_polar_memo(dist: f64, polar: f64, azimuth: f64): f64 {
+  const m = climb_memo;
+  const centre = useMapStore.getState().map_center;
+  const revision = tile_pages.revision;
+  if (dist === m.dist && polar === m.polar && azimuth === m.azimuth && centre === m.centre && revision === m.revision) return m.polar_out;
+  const out = climb_polar(dist, polar, azimuth);
+  m.dist = dist;
+  m.polar = polar;
+  m.azimuth = azimuth;
+  m.centre = centre;
+  m.revision = revision;
+  m.polar_out = out;
+  return out;
+}
+
 export function useCamera() {
   const view_state = useCameraStore((state) => state.view_state);
 
@@ -99,7 +123,7 @@ export function useCamera() {
     // does not have — rotation gets one lag, at the same rate, in
     // use_view_frame.ts. Outside climb mode the offset is zero and the
     // drawn pitch is exactly the damped control.
-    const want_climb: f64 = useSettingsStore.getState().camera_terrain === "climb" ? climb_polar(dist.current, polar.current, view_state.azimuth) - polar.current : 0;
+    const want_climb: f64 = useSettingsStore.getState().camera_terrain === "climb" ? climb_polar_memo(dist.current, polar.current, view_state.azimuth) - polar.current : 0;
     const climb_k = want_climb < shown_climb.current ? CLIMB_RISE_DAMP : CLIMB_RELAX_DAMP;
     shown_climb.current += (want_climb - shown_climb.current) * damp_alpha(climb_k, delta);
     if (Math.abs(want_climb - shown_climb.current) > CLIMB_EPS) {
