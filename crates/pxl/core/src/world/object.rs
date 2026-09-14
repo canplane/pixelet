@@ -15,11 +15,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use pxl_shared::spec::space::pvf3::{ivec, Ivec};
+use pxl_shared::spec::space::sparse_tree::mem;
+use pxl_shared::spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
+
 use crate::bake::terrain::js_round;
 use crate::bake::volume::{Cell, Volumes, Voxel};
 use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::U_PER_CELL;
-use crate::space::sparse_tree::Tree;
 use crate::world::pool::Pool;
 
 /// OBJECT_LAYOUT's finest and coarsest levels: an eighth of a cell, and a
@@ -28,8 +31,13 @@ pub const MIN_LEVEL: i32 = -3;
 pub const CELL_LEVEL: i32 = 0;
 pub const BAND_SHAMT: u32 = 6;
 pub const BAND_CELLS: u32 = 1 << BAND_SHAMT;
-/// Levels in a band's tree.
-pub const DEP: u32 = (CELL_LEVEL - MIN_LEVEL) as u32 + BAND_SHAMT;
+/// A band's tree: OBJECT_LAYOUT's levels, reaching six above the cell to
+/// the band's 64 cells.
+const BAND_LAYOUT: SparseTreeLayout = SparseTreeLayout {
+    dim: 3,
+    min: MIN_LEVEL,
+    max: CELL_LEVEL + BAND_SHAMT as i32,
+};
 /// Finest-tier steps along one side of a cell, and one such step in
 /// world units.
 pub const CELL_STEPS: u32 = 1 << (-MIN_LEVEL);
@@ -43,6 +51,18 @@ const POS_MASK: u32 = (1 << POS_BITS) - 1;
 
 pub fn pack_pos(x: u32, y: u32, z: u32, level: i32) -> u32 {
     x | (y << POS_BITS) | (z << (2 * POS_BITS)) | (((level - MIN_LEVEL) as u32) << (3 * POS_BITS))
+}
+
+/// A lattice position in a band, as its tree's key.
+fn band_key(at: [u32; 3]) -> u64 {
+    ivec::gather(at[0] as i64, at[1] as i64, at[2] as i64)
+}
+
+/// Whether every leaf of a band's tree reads VOID.
+fn band_is_empty(tree: &SparseTree<u16>) -> bool {
+    let mut empty = true;
+    sparse_tree::walk(tree, &mut |_, _, _, _, idx| empty &= idx == 0);
+    empty
 }
 
 /// The packed position's parts: x, y, z in finest-tier steps, and the level.
@@ -98,7 +118,7 @@ pub struct Store {
     /// one's place — which is the order the persisted form lists them in.
     chunks: Vec<Chunk>,
     chunk_at: BTreeMap<u64, u32>,
-    bands: BTreeMap<(u64, i32), Tree>,
+    bands: BTreeMap<(u64, i32), SparseTree<u16>>,
     cells: BTreeMap<CellKey, CellRec>,
     /// Cells whose entries changed since the client last took them, as
     /// band-local (cx, cy) and absolute cell Z rows.
@@ -174,7 +194,7 @@ impl Store {
         if self.bands.contains_key(&(key, z)) {
             return;
         }
-        self.bands.insert((key, z), Tree::new(DEP));
+        self.bands.insert((key, z), sparse_tree::alloc::<u16>(BAND_LAYOUT, 64, None));
         let chunk = &mut self.chunks[cpos];
         chunk.band_min = chunk.band_min.min(z);
         chunk.band_max = chunk.band_max.max(z);
@@ -184,7 +204,9 @@ impl Store {
     /// chunk when nothing is left in it.
     fn close_band(&mut self, cpos: usize, z: i32) {
         let key = self.chunks[cpos].key;
-        self.bands.remove(&(key, z));
+        if let Some(mut tree) = self.bands.remove(&(key, z)) {
+            sparse_tree::free(&mut tree);
+        }
         let chunk = &self.chunks[cpos];
         let mut lo = i32::MAX;
         let mut hi = i32::MIN;
@@ -219,7 +241,7 @@ impl Store {
     pub fn read(&self, key: u64, z: i32, at: [u32; 3]) -> u32 {
         let Some(&cpos) = self.chunk_at.get(&key) else { return VOID };
         let Some(tree) = self.bands.get(&(key, z)) else { return VOID };
-        self.chunks[cpos as usize].palette[tree.get(at) as usize]
+        self.chunks[cpos as usize].palette[mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0) as usize]
     }
 
     /// Writes `state` as one leaf of `level` at a lattice position of band
@@ -241,9 +263,9 @@ impl Store {
         }
         let idx = self.palette_index(cpos, state);
         let tree = self.bands.get_mut(&(key, z)).expect("the band just opened");
-        tree.set(at, idx, (level - MIN_LEVEL) as u32);
-        tree.compact();
-        if tree.is_empty() {
+        mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), idx, level, 0);
+        sparse_tree::compact(tree);
+        if band_is_empty(tree) {
             self.close_band(cpos, z);
         }
     }
@@ -267,19 +289,19 @@ impl Store {
         chunk.e_state.clear();
         for bz in chunk.band_min..=chunk.band_max {
             let Some(tree) = self.bands.get(&(chunk.key, bz)) else { continue };
-            tree.walk(|x, y, z, u, idx| {
+            sparse_tree::walk(tree, &mut |x, y, z, level, idx| {
+                let (x, y, z) = (x as u32, y as u32, z as u32);
                 let val = chunk.palette[idx as usize];
                 if val == VOID || val == UNKNOWN {
                     return;
                 }
-                let level = u as i32 + MIN_LEVEL;
                 if level <= CELL_LEVEL {
                     chunk.e_band.push(bz);
                     chunk.e_pos.push(pack_pos(x, y, z, level));
                     chunk.e_state.push(val);
                     return;
                 }
-                let span = 1 << u;
+                let span = 1u32 << (level - MIN_LEVEL);
                 for dz in (0..span).step_by(CELL_STEPS as usize) {
                     for dy in (0..span).step_by(CELL_STEPS as usize) {
                         for dx in (0..span).step_by(CELL_STEPS as usize) {

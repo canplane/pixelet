@@ -77,6 +77,16 @@ Each is pinned by a vector now, so both sides answer the same.
 - **`kit/encoding.rs` `generate_uuid`** drew from `seed64`, whose fallback
   without host entropy is a counter: the same UUIDs every run. It refuses
   without an entropy source, as a missing `crypto.getRandomValues` does.
+- **`spec/space/sparse_tree/mem.rs` `compact`** wrapped the tree's
+  allocator in a new forwarder on every call, and a compacted tree held
+  the last call's forwarder, so the layers stacked: a band churned at a
+  constant size went from 46 µs a write to 1.7 ms over 20,000 writes. The
+  TypeScript hands the one allocator object on; the memory now holds it
+  shared (`SharedAlloc`) and a compact clones the handle. Found folding
+  pxl-core's own band tree onto this one (2026-09-15, the old one on
+  `archive/20260915-core-sparse-tree`): the same leaves after each of
+  3,000 random writes, and 6.7 µs a write on a band of a player's size
+  against the specialised tree's 4.6.
 
 ## Different because the languages are, and kept
 
