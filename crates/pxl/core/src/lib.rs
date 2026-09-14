@@ -8,7 +8,9 @@
 //! byte-for-byte agreement with it until the TypeScript is gone
 //! (apps/web/src/reference/wasm_bake.test.ts).
 
+pub mod app;
 pub mod bake;
+pub mod module;
 pub mod render;
 pub mod space;
 pub mod world;

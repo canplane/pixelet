@@ -18,6 +18,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { shipped_palette } from "@pxl/shared/record/shipped.ts";
 import { asset_url } from "@/lib/env/route.ts";
+import { DEFAULT_PERSON_VARIANT_KEY as PERSON_KEY, DEFAULT_PET_VARIANT_KEY as PET_KEY, MOVE_CLIP, PERSON_GENDER_PREFIXES } from "./variant_spec.ts";
 
 export type CharacterVariant = {
   key: string;
@@ -45,14 +46,14 @@ function variants_of(group: string, move_clip: string): CharacterVariant[] {
   }));
 }
 
-const PERSON_VARIANTS = variants_of("person", "sprint");
+const PERSON_VARIANTS = variants_of("person", MOVE_CLIP.person);
 
-export const PERSON_VARIANTS_FEMALE: readonly CharacterVariant[] = PERSON_VARIANTS.filter((v) => v.key.startsWith("female-"));
-export const PERSON_VARIANTS_MALE: readonly CharacterVariant[] = PERSON_VARIANTS.filter((v) => v.key.startsWith("male-"));
-export const PET_VARIANTS: readonly CharacterVariant[] = variants_of("pet", "run");
+export const PERSON_VARIANTS_FEMALE: readonly CharacterVariant[] = PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES.female));
+export const PERSON_VARIANTS_MALE: readonly CharacterVariant[] = PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES.male));
+export const PET_VARIANTS: readonly CharacterVariant[] = variants_of("pet", MOVE_CLIP.pet);
 
-export const DEFAULT_PERSON_VARIANT_KEY: string = "female-2";
-export const DEFAULT_PET_VARIANT_KEY: string = "chick";
+export const DEFAULT_PERSON_VARIANT_KEY: string = PERSON_KEY;
+export const DEFAULT_PET_VARIANT_KEY: string = PET_KEY;
 
 export function find_person_variant(key: string): CharacterVariant {
   return PERSON_VARIANTS_FEMALE.find((v) => v.key === key) ?? PERSON_VARIANTS_MALE.find((v) => v.key === key) ?? PERSON_VARIANTS_FEMALE[0];

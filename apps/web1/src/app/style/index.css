@@ -1,0 +1,170 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@import "./fonts.css";
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply w-full h-full m-0 p-0 overflow-hidden;
+
+    font-family:
+      /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+      /* 2. Hangul coverage, and the whole face everywhere else. "Inter" used to sit ahead of this for Latin on Windows/Android; nothing ever loaded it — fonts.css declares only Pretendard now — so it resolved for whoever happened to have Inter installed locally and was skipped by everyone else. */
+      "Pretendard Variable", /* 3. System default, in case no webfont loads */ system-ui, sans-serif;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    /* SF Pro reads best slightly tightened */
+    letter-spacing: -0.01em;
+    @apply bg-background text-foreground antialiased;
+
+    /* This is an app surface, not a document. A long press here is aiming at
+       a control — the size flyout, the tracking button, a swatch — and the
+       browser answers the same gesture with its own affordances: the iOS
+       callout menu, a text selection, a drag ghost. None of them have
+       anything to offer over a map, and all of them interrupt the gesture
+       that was actually intended.
+
+       Set once at the root rather than per control, because it is a property
+       of the whole surface and the alternative is remembering it on every
+       new button. Distinct from touch-action, which governs scrolling and
+       genuinely does differ per element (see mode_bar.tsx's swatches). */
+    -webkit-touch-callout: none;
+    @apply select-none;
+  }
+
+  /* -webkit-user-drag does not inherit, so it has to be stated broadly. Safe
+     here only because nothing in this app uses native drag and drop — no
+     dragstart handlers, no dataTransfer, nothing draggable on purpose. */
+  * {
+    -webkit-user-drag: none;
+  }
+
+  /* Wherever a caret goes, selection has to work again. Safari will not
+     select inside a field whose ancestor is user-select:none, so this is
+     load-bearing rather than defensive. */
+  input,
+  textarea,
+  [contenteditable] {
+    @apply select-text;
+  }
+}
+
+/* Animation physics: the point is that scale overshoots past 1 and settles back */
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@theme inline {
+  --animate-spin-slow: var(--animate-spin-slow);
+  --animate-bounce-in: var(--animate-bounce-in);
+
+  /* Radius system */
+  /* Nested radius, for elements sitting inside a rounded parent */
+  --radius-inner: calc(var(--radius) - 1.25rem); /* 40px - 20px = 20px */
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Color system mapping */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --animate-spin-slow: spin 1s linear infinite;
+  --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  --radius: 1.25rem;
+
+  --background: oklch(0.98 0.01 80);
+  --foreground: oklch(0.25 0.02 80);
+  --card: oklch(0.99 0.005 80 / 0.4);
+  --card-foreground: oklch(0.25 0.02 80);
+  --popover: oklch(0.99 0.005 80 / 0.8);
+  --popover-foreground: oklch(0.25 0.02 80);
+
+  --primary: oklch(0.35 0.05 70); /* tree-bark brown */
+  --primary-foreground: oklch(0.98 0.01 80);
+  --secondary: oklch(0.95 0.02 80 / 0.5);
+  --secondary-foreground: oklch(0.35 0.05 70);
+  --muted: oklch(0.95 0.02 80 / 0.5);
+  --muted-foreground: oklch(0.5 0.02 80);
+  --accent: oklch(0.92 0.03 80 / 0.6); /* warm accent */
+  --accent-foreground: oklch(0.35 0.05 70);
+  --destructive: oklch(0.577 0.245 27.325);
+
+  --border: oklch(0.25 0.02 80 / 0.1); /* slightly darker than the background so edges stay legible */
+  --input: oklch(
+    0.85 0.02 80
+  ); /* opaque and clearly darker than --background (0.98) — white/10% here was nearly invisible (an off Switch's track needs to read against a near-white surface, not just tint it) */
+  --ring: oklch(0.709 0.01 56.259 / 0.5);
+
+  --chart-1: oklch(0.7 0.12 30); /* apple red */
+  --chart-2: oklch(0.75 0.1 140); /* sprout green */
+  --chart-3: oklch(0.65 0.12 250); /* sea blue */
+  --chart-4: oklch(0.8 0.14 85); /* orange gold */
+  --chart-5: oklch(0.6 0.1 320); /* grape purple */
+
+  --sidebar: oklch(0.985 0.001 106.423 / 0.8);
+  --sidebar-foreground: oklch(0.147 0.004 49.25);
+  --sidebar-primary: oklch(0.216 0.006 56.043);
+  --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
+  --sidebar-accent: oklch(0.97 0.001 106.424 / 0.5);
+  --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
+  --sidebar-border: oklch(0.923 0.003 48.717 / 0.2);
+  --sidebar-ring: oklch(0.709 0.01 56.259);
+}
