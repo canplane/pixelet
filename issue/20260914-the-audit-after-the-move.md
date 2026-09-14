@@ -70,15 +70,16 @@ mapping (the composer never tone-mapped), reversed-Z.
   hides; a burst of writes is one save. Immediate off the page (the tests).
 - ~~**B4**~~ The allocation probe is installed only from the console
   (`__pxl_alloc_probe()`), never by default.
-- **B5** `Builder::tick_capped`'s `seen.contains` is O(n²) over the pending
-  list; a `bands` Vec per scan step; seven Vecs a tick in the scheduler;
-  `ask()`'s and `reclaim`'s Vecs; the raycast's Vec per chunk and
-  `band.check()` per DDA cell. Scratch on the owners; holders first. **Do.**
-- **B6** The mesher walks a run's column four times in `run_face_mask`
-  (two suffice, same bits); the coarse tier is packed into `CoarseLanes`
-  then copied whole into an `OwnedRunSet`; `emit_box` and
-  `write_lone_box` write the same six faces. The byte-for-byte bake test
-  guards it. **Do.**
+- ~~**B5**~~ `tick_capped` compares against the two holders instead of a
+  seen list; the scan job's and the raycast's bands are kept on their
+  owners (`Volumes::band_views` fills them); the scheduler's tick keeps
+  its seven lists as `Scratch`; `ask` counts into its pair, `reclaim`
+  collects the evicted steps as a bitmask. `band.check()` is per walk of a
+  column, not per cell, and stays.
+- ~~**B6**~~ `run_face_mask` walks its own column twice (`column_covers`
+  gives "anything there" and "terrain there" in one walk); the coarse
+  tier is packed straight into the `OwnedRunSet`; `write_box` is the one
+  face writer. The bake test held.
 - ~~**B7**~~ The env, the draw row, the census and the build stat are one
   view each, and `census()`/`stat()` fill one object each. `take_census`
   keeps a fresh object a frame on purpose: the ledger's ring holds it.
@@ -89,20 +90,24 @@ mapping (the composer never tone-mapped), reversed-Z.
   is gone; `carve_baked_mesh`/`carve_visibility` serve the reference tests
   only. The visibility lane in the block goes with the mesher's layout.
 - ~~**B9**~~ The POI index's `page_idx` / `abs_i` / `abs_f` lanes are gone.
-- **B10** Decor's build does a `store.cell()` lookup for each of 4096 cells
-  per kind; `object.rs` inserts then gets; `build.rs`'s `advance` looks a
-  chunk up three or four times. **Do.**
+- ~~**B10**~~ Decor looks a cell up only in a chunk with entries;
+  `index_cells` sums each cell's record and writes it once. `build.rs`'s
+  two or three `BTreeMap` lookups per advance sit beside a multi-millisecond
+  scan or bake step and are left.
 
 ## C. Duplication, to one home
 
-- **C1** The lattice word's pack/unpack four times (sched, decor, wasm,
-  inline), the packed position's unpack three times → `space/ivec.rs`,
-  the first commit of the PVF3 move. **Do.**
-- **C2** `U_PER_CELL` five times, the 64-cell span seven ways, the page
-  constants twice → one source each. **Do.**
-- **C3** WGSL: the Y-up→Z-up `place` three times → `place.wgsl`; `PI`
-  twice; chunk.wgsl's face-bit literals separate from mesher.rs's
-  constants → a generated `const` preamble in `source()`. **Do.**
+Not in scope: `packages/xpute/core` and `crates/xpute-core` are the same
+kit twice on purpose, one for each runtime, and stay symmetric; so is
+PVF3 once `space/pvf3.rs` exists, and any piece both runtimes need at
+all. A piece that is in both is not a duplicate to move to one side.
+
+- ~~**C1**~~ `space/ivec.rs`: `lanes` / `gather` and their XY halves;
+  `object::unpack_pos` for the packed position.
+- ~~**C2**~~ `space/constant.rs`: the cell, chunk and page constants once.
+- ~~**C3**~~ `place.wgsl` (`place_up`, `spin_z`) for decor, the actors and
+  the beacon; `PI` once in grade.wgsl; `faces.wgsl` names the face bits
+  and a naga test reads its constants back against the mesher's.
 - **C4** TS: `DRAW_WORDS` / `UNIFORM_FLOATS` / pipeline ids restated in
   seven passes, the same draw-list walk twelve times, lane binding three
   times, the dynamic uniform buffer's growth twice → a layout table read
@@ -116,11 +121,12 @@ mapping (the composer never tone-mapped), reversed-Z.
   disagree), degrees/radians at seven sites, the Seoul fallback three
   times, the DPR clamp three times, canonical→local three times, the
   badges' `RENDER_SCALE` rationale twice. **Do.**
-- **C7** pxl-wasm builds `World { .. }` three times and `volumes.expect`
-  eight times; `mix64` and `Rng::next` are the same splitmix; the 2-D DDA
-  twice in raycast.rs; the frame's point transform twice; "against the
-  origin" six times; grow-and-upload three times (billboard, debug,
-  marker). **Do.**
+- ~~**C7**~~ pxl-wasm splits the state once (`parts`) and opens the
+  volumes once (`opened`); `mix64` is the one finaliser; `GridWalk` is
+  the one DDA; `Frame::world_of` the one transform;
+  `DrawList::translation` the one "against the origin"; `Held` the one
+  grow-and-upload, for the badges and the gizmos — the puck's block is
+  replaced at its exact size and keeps its own path.
 - **C8** The ledger's formatting helpers (MB rounding twelve times, n1/r1,
   the long-frame literal, the phase-key formatter). **Do.**
 
@@ -142,18 +148,17 @@ mapping (the composer never tone-mapped), reversed-Z.
   (the reference tests observe it), `use_reverse_geocode`'s `loading` and
   `cell_node.stats()` (small, left for the POI move).
 - ~~**D3**~~ immer's `enableMapSet()` is out of main.tsx.
-- **D4** Dead `pub` in the crates (`ring::ARG_WORDS` / `at`,
-  `buddy::region_bytes`, `sparse_tree::dep`, `object::BAND_STEPS`,
-  `shader::Record` outside tests), six `too_many_arguments` allows on
-  extern fns the lint does not fire on, `static_mut_refs` → an
-  `UnsafeCell` newtype. **Do.**
+- ~~**D4**~~ `BAND_STEPS` gone, `Record` / `Buffer` test-only, the six
+  dead allows gone, the state in an `UnsafeCell` cell. `ring::ARG_WORDS`
+  / `Ring::at`, `region_bytes` and `Tree::dep` stay: each is the pair of
+  a public thing on the TypeScript side (`RING_ARG_WORDS`, the ring over
+  given words, `BuddyAllocator.region_bytes`, the tree's layout).
 - **D5** The orphan files and the scaffolding (`manage_foo`, `dev_route`,
   `use_app_init`, `app.store.ts`, `use_timer`, the pagination pair,
   `minimap_atlas`, `lib/env/mod.ts`). **Hold** — some are templates for
   modules to come; unrelated to the move.
-- **D6** Exports nothing calls (`pxl_heap_used`, `pxl_scan_begin`,
-  `pxl_model_remove`); `pxl_build_tick` and `OP_CHUNK_WANT` serve tests
-  only. Delete the first, mark the second. **Do.**
+- ~~**D6**~~ The three uncalled exports are gone from the crate and from
+  `pxl.ts`; `pxl_build_tick` and `OP_CHUNK_WANT` say they are the tests'.
 
 ## E. The binding's shape
 
@@ -162,8 +167,10 @@ mapping (the composer never tone-mapped), reversed-Z.
   sentinels 0 / id+1 / −1 / `u32::MAX`; `pxl_bake_step` +
   `pxl_bake_mesh_words` stepping twice to read a size. **Hold** — the view
   and page moves rewrite the export set; settle the conventions then, once.
-- **E4** Lines 193–802 of lib.rs (~35 exports) serve only `reference/` and
-  the object store — mark the block. **Do.**
+- ~~**E4**~~ lib.rs's sections say which exports are reference only (the
+  bake and scan steps, the hand-driven volumes and terrain,
+  `pxl_object_paint`, the raycast's column) — the live ones are
+  interleaved, so the mark is per section, not one block.
 
 ## F. Comments and names the word sweep missed
 

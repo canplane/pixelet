@@ -36,11 +36,11 @@ macro_rules! wgsl {
 /// A shader's WGSL; empty for a kind that is not one.
 pub fn source(kind: u32) -> &'static str {
     match kind {
-        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "chunk"),
-        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "decor"),
-        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "skinned"),
+        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "faces", "chunk"),
+        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "place", "decor"),
+        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "place", "skinned"),
         SHADER_PUCK_ZONE => wgsl!("frame", "grade", "shade", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "shade", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "shade", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("grade", "depth", "badge_depth", "badge"),
         SHADER_BADGE_MSAA => wgsl!("grade", "depth", "badge_depth_msaa", "badge"),
         SHADER_SKY => wgsl!("frame", "grade", "shade", "sky"),
@@ -377,9 +377,12 @@ pub fn pipeline(id: u32) -> Vec<u32> {
 
 /// A vertex buffer as a record has it: its stride, its step mode, and its
 /// attributes as (location, offset, format).
+#[cfg(test)]
 pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
 
-/// A record read back into its parts, as the glue reads it.
+/// A record read back into its parts, as the glue reads it: what the
+/// tests check each pipeline's words against its shader by.
+#[cfg(test)]
 pub struct Record {
     pub shader: u32,
     pub shader_msaa: u32,
@@ -397,6 +400,7 @@ pub struct Record {
     pub groups: Vec<Vec<(u32, u32, u32)>>,
 }
 
+#[cfg(test)]
 impl Record {
     pub fn read(words: &[u32]) -> Record {
         let mut at = 11;
@@ -463,6 +467,46 @@ mod tests {
             let stages: Vec<_> = module.entry_points.iter().map(|e| (e.name.clone(), e.stage)).collect();
             assert!(stages.contains(&("vs".into(), ShaderStage::Vertex)), "shader {kind} has vs");
             assert!(stages.contains(&("fs".into(), ShaderStage::Fragment)), "shader {kind} has fs");
+        }
+    }
+
+    /// The shader's face bits are the mesher's: each named constant in
+    /// faces.wgsl equals the mesher's, and the lateral groups sit at
+    /// consecutive bits from their base in the order the shader multiplies
+    /// by.
+    #[test]
+    fn the_face_bits_are_the_meshers() {
+        use crate::bake::mesher as m;
+        let (module, _) = compile(SHADER_CHUNK);
+        let value = |name: &str| -> u32 {
+            let (_, c) = module
+                .constants
+                .iter()
+                .find(|(_, c)| c.name.as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("faces.wgsl has {name}"));
+            match module.global_expressions[c.init] {
+                naga::Expression::Literal(naga::Literal::U32(v)) => v,
+                ref other => panic!("{name} is a literal, not {other:?}"),
+            }
+        };
+        for (name, base, group) in [
+            ("FACE_BASE", m::FACE_PX, [m::FACE_PX, m::FACE_NX, m::FACE_PY, m::FACE_NY]),
+            ("RISES_BASE", m::RISES_PX, [m::RISES_PX, m::RISES_NX, m::RISES_PY, m::RISES_NY]),
+            ("DIPS_BASE", m::DIPS_PX, [m::DIPS_PX, m::DIPS_NX, m::DIPS_PY, m::DIPS_NY]),
+            ("CREASE_BASE", m::CREASE_PX, [m::CREASE_PX, m::CREASE_NX, m::CREASE_PY, m::CREASE_NY]),
+        ] {
+            assert_eq!(value(name), base, "{name}");
+            assert_eq!(group, [base, base * 2, base * 4, base * 8], "{name}'s laterals in the shader's order");
+        }
+        for (name, bit) in [
+            ("DIAG_PP", m::DIAG_PP),
+            ("DIAG_PN", m::DIAG_PN),
+            ("DIAG_NP", m::DIAG_NP),
+            ("DIAG_NN", m::DIAG_NN),
+            ("CAP_PZ", m::CAP_PZ),
+            ("CAP_NZ", m::CAP_NZ),
+        ] {
+            assert_eq!(value(name), bit, "{name}");
         }
     }
 

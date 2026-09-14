@@ -22,12 +22,11 @@
 //! volume on a hover and reads the answer once.
 
 use crate::bake::run_set::run_set_bytes;
+use crate::bake::volume::{BAND_SPAN, BAND_VOXELS};
 use crate::bake::voxel::{MATERIAL_OBJECT, SUB_CELL_NONE};
 
 /// Cells on a band's side; a chunk is one column of bands.
-pub const BAND_SPAN: u32 = 64;
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
-const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;
 const COLUMN_CNT: usize = BAND_SPAN2;
 const SCAN_ROWS_PER_STEP: u32 = 8;
 

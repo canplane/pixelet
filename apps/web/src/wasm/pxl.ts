@@ -31,14 +31,12 @@ import type { i32, u32 } from "@xpute/core/kit/word.ts";
 export type PxlExports = {
   memory: WebAssembly.Memory;
   pxl_module_bytes(): u32;
-  pxl_heap_used(): u32;
   pxl_bake_begin(at: u32, count: u32, span: u32, lod_step: u32): u32;
   pxl_bake_step(): u32;
   pxl_bake_mesh_words(): u32;
   pxl_bake_mesh(at: u32, words: u32): void;
   pxl_bake_finish(): u32;
   pxl_bake_abort(): void;
-  pxl_scan_begin(bands_at: u32, count: u32): u32;
   pxl_scan_step(): u32;
   pxl_scan_set_bytes(): u32;
   pxl_scan_set(at: u32, bytes: u32): void;
@@ -112,7 +110,6 @@ export type PxlExports = {
   pxl_model_clip(model: u32, duration: number): u32;
   pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32): void;
   pxl_model_seal(model: u32, scale: number): void;
-  pxl_model_remove(model: u32): void;
   pxl_model_handle(model: u32): u32;
   pxl_decor_model(group: u32, model: u32): void;
   pxl_raycast_decor(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;

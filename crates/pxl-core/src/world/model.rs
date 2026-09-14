@@ -507,7 +507,7 @@ impl Models {
             if m.handle == 0 {
                 continue;
             }
-            let t = [(a.at[0] - origin[0]) as f32, (a.at[1] - origin[1]) as f32, (a.at[2] - origin[2]) as f32];
+            let t = DrawList::translation(a.at, origin);
             draw.draw_scaled(PIPELINE_SKINNED, m.handle, a.palette_handle, a.model, t, a.rotation_z, 1.0, m.scale);
         }
     }

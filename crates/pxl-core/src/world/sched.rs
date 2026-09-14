@@ -16,18 +16,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::bake::terrain::ChunkSample;
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
+use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
+use crate::space::ivec::{gather_xy, lanes_xy};
 use crate::world::billboard::Billboards;
 use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::world::debug::DebugLines;
 use crate::world::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::world::environment::Environment;
 use crate::world::ghost::Ghost;
-use crate::world::lod::{Ladder, COARSEST};
+use crate::world::lod::{Ladder, COARSEST, LOD_STEPS};
 use crate::world::marker::Markers;
 use crate::world::model::Models;
 
-/// A chunk's side, in world units.
-const CHUNK_WORLD_SPAN: f64 = 64.0;
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
 /// How often every chunk is rechecked, whatever is moving.
@@ -110,6 +110,20 @@ pub struct Frame {
     pub range_hysteresis: f64,
     /// Whether procedural decor is scattered at all (the setting).
     pub show_decor: bool,
+}
+
+impl Frame {
+    /// Where `at`, in the map's units, is in the world the camera is
+    /// written in: against the origin, then through the anchor root.
+    pub fn world_of(&self, at: [f64; 3]) -> [f64; 3] {
+        let m = &self.root;
+        let (lx, ly, lz) = (at[0] - self.origin[0], at[1] - self.origin[1], at[2] - self.origin[2]);
+        [
+            m[0] * lx + m[4] * ly + m[8] * lz + m[12],
+            m[1] * lx + m[5] * ly + m[9] * lz + m[13],
+            m[2] * lx + m[6] * ly + m[10] * lz + m[14],
+        ]
+    }
 }
 
 /// What the glue is told.
@@ -318,6 +332,20 @@ pub struct Scheduler {
     /// When the pressure last moved, and when a block was last refused.
     pressure_at: f64,
     refused_at: f64,
+    /// The tick's lists, kept for their capacity: a tick over a thousand
+    /// chunks fills six of them.
+    scratch: Scratch,
+}
+
+#[derive(Default)]
+struct Scratch {
+    order: Vec<usize>,
+    keys: Vec<Keyed>,
+    visible: Vec<usize>,
+    offscreen: Vec<usize>,
+    eligible: Vec<usize>,
+    still: Vec<u32>,
+    landed: Vec<u32>,
 }
 
 impl Default for Scheduler {
@@ -344,6 +372,16 @@ fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &
         }
     }
     ran
+}
+
+/// An evict for every step in `steps`, a set of the steps as bits — each
+/// is a power of two (LOD_STEPS) — finest first.
+fn emit_evicts(id: u32, steps: u32, emit: &mut impl FnMut(Event)) {
+    for &step in &LOD_STEPS {
+        if steps & step != 0 {
+            emit(Event::Evict { id, step });
+        }
+    }
 }
 
 impl Scheduler {
@@ -376,6 +414,7 @@ impl Scheduler {
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
             refused_seen: 0,
+            scratch: Scratch::default(),
             refused_last: false,
             pressure_at: f64::NEG_INFINITY,
             refused_at: f64::NEG_INFINITY,
@@ -724,7 +763,7 @@ impl Scheduler {
             }
             for cy in 0..PAGE_CHUNK_AXIS {
                 for cx in 0..PAGE_CHUNK_AXIS {
-                    let (bx, by) = (cx * CHUNK_SPAN_CELLS, cy * CHUNK_SPAN_CELLS);
+                    let (bx, by) = (cx * CHUNK_SPAN, cy * CHUNK_SPAN);
                     if self.mounted.contains_key(&(page, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
                         continue;
                     }
@@ -737,7 +776,7 @@ impl Scheduler {
                     self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
                     let (px, py) = lanes_xy(page);
                     let (wx, wy) = ((px << PAGE_SHAMT) + bx as i64, (py << PAGE_SHAMT) + by as i64);
-                    let base = ((wx as u64 & 0xff_ffff) << 40) | ((wy as u64 & 0xff_ffff) << 16);
+                    let base = gather_xy(wx, wy);
                     emit(Event::Mount { id, page, base_x: bx, base_y: by });
                     self.add(id, base, wx as f64, wy as f64, bx, by, blend_hash(page, bx, by));
                     self.mounted.insert((page, bx, by), id);
@@ -768,12 +807,23 @@ impl Scheduler {
 
         self.mount(world, &frame, emit);
         self.refresh(&frame, emit);
-        let order = self.order(t0);
+        let mut sc = core::mem::take(&mut self.scratch);
+        self.order(t0, &mut sc.order, &mut sc.keys);
+        let Scratch {
+            order,
+            visible,
+            offscreen,
+            eligible,
+            still,
+            landed,
+            ..
+        } = &mut sc;
 
         // The pending lists from the flags as the frame found them, before
         // the recheck moves them, as the stage's pass had it.
-        let (mut visible, mut offscreen) = (Vec::new(), Vec::new());
-        for &i in &order {
+        visible.clear();
+        offscreen.clear();
+        for &i in order.iter() {
             let s = &self.slots[i];
             if s.has(PENDING) {
                 if s.has(IN_FRUSTUM) {
@@ -784,8 +834,9 @@ impl Scheduler {
             }
         }
 
-        let eligible: Vec<usize> = order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (BLEND_ACTIVE | SETTLING) != 0).collect();
-        let rechecked = under_budget(&eligible, u32::MAX, deadline, hard, now, |i| {
+        eligible.clear();
+        eligible.extend(order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (BLEND_ACTIVE | SETTLING) != 0));
+        let rechecked = under_budget(eligible, u32::MAX, deadline, hard, now, |i| {
             self.recheck(world, i, t0, &frame, emit);
             true
         });
@@ -799,28 +850,29 @@ impl Scheduler {
         // the pool is the same until reclaim, and the decor is scattered
         // before its block is asked for.
         let starved = self.builder.stat.starved;
-        let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| {
+        let mut committed = under_budget(visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| {
             self.builder.stat.starved == starved && self.commit(world, i, emit)
         });
         let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
-        committed += under_budget(&offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
+        committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
         // The builds, visible pending first in order, with what is left; the
         // chunks a tier landed on are committed after.
-        let still: Vec<u32> = visible.iter().filter(|&&i| self.slots[i].has(PENDING)).map(|&i| self.slots[i].id).collect();
-        let mut landed: Vec<u32> = Vec::new();
+        still.clear();
+        still.extend(visible.iter().filter(|&&i| self.slots[i].has(PENDING)).map(|&i| self.slots[i].id));
+        landed.clear();
         let budget = (deadline - now()).max(0.0);
         {
             let (slots, index, ron, roff, draw) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw);
             let mem = world_mem(world);
-            self.builder.tick_capped(world, &still, budget, MAX_COMMITS_PER_FRAME, now, &mut |e| {
+            self.builder.tick_capped(world, still, budget, MAX_COMMITS_PER_FRAME, now, &mut |e| {
                 if let BuildEvent::Tier { id, .. } = e {
                     landed.push(id);
                 }
                 self_record(slots, index, mem, ron, roff, draw, e, emit);
             });
         }
-        for id in landed {
+        for &id in landed.iter() {
             if let Some(&i) = self.index.get(&id) {
                 if self.commit(world, i, emit) {
                     committed += 1;
@@ -828,7 +880,8 @@ impl Scheduler {
             }
         }
 
-        let freed = self.reclaim(world, &order, emit);
+        let freed = self.reclaim(world, order, emit);
+        self.scratch = sc;
         self.press(world, t0, freed);
         let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
@@ -880,7 +933,7 @@ impl Scheduler {
                 continue;
             }
             let (wp, ws) = s.told.map_or((1.0, 0.0), |t| (t.0, t.1));
-            let translation = [(s.base_x - frame.origin[0]) as f32, (s.base_y - frame.origin[1]) as f32, (-frame.origin[2]) as f32];
+            let translation = DrawList::translation([s.base_x, s.base_y, 0.0], frame.origin);
             for (step, visible) in [(s.layout_primary, wp), (s.layout_secondary, ws)] {
                 if step == 0 {
                     continue;
@@ -934,25 +987,23 @@ impl Scheduler {
 
     /// Every slot in priority order (`priority`), the keys aged once rather
     /// than in the comparator.
-    fn order(&self, now: f64) -> Vec<usize> {
+    /// Every slot's index by priority into `idx`, the keys through `keys`.
+    fn order(&self, now: f64, idx: &mut Vec<usize>, keys: &mut Vec<Keyed>) {
         let holders = self.builder.holders();
-        let keys: Vec<Keyed> = self
-            .slots
-            .iter()
-            .map(|s| {
-                Priority {
-                    holds: holders.contains(&Some(s.id)),
-                    in_frustum: s.has(IN_FRUSTUM),
-                    empty: s.has(EMPTY),
-                    lead_distance2: s.lead_distance2,
-                    pending_since: s.pending_since,
-                }
-                .keyed(now)
-            })
-            .collect();
-        let mut idx: Vec<usize> = (0..self.slots.len()).collect();
+        keys.clear();
+        keys.extend(self.slots.iter().map(|s| {
+            Priority {
+                holds: holders.contains(&Some(s.id)),
+                in_frustum: s.has(IN_FRUSTUM),
+                empty: s.has(EMPTY),
+                lead_distance2: s.lead_distance2,
+                pending_since: s.pending_since,
+            }
+            .keyed(now)
+        }));
+        idx.clear();
+        idx.extend(0..self.slots.len());
         idx.sort_by(|&a, &b| priority_keyed(&keys[a], &keys[b]));
-        idx
     }
 
     fn set_pending(&mut self, i: usize, pending: bool, request: i32, now: f64) {
@@ -1045,10 +1096,14 @@ impl Scheduler {
     fn ask(&mut self, world: &mut World, i: usize, primary: u32, secondary: u32) -> bool {
         let s = &self.slots[i];
         let steps = if secondary == 0 || secondary == primary { [primary, 0] } else { [primary, secondary] };
-        let missing: Vec<u32> = steps.iter().copied().filter(|&st| st != 0 && s.tier(st).is_none()).collect();
-        let want = [missing.first().copied().unwrap_or(0), missing.get(1).copied().unwrap_or(0)];
+        let mut want = [0; 2];
+        let mut n = 0;
+        for st in steps.into_iter().filter(|&st| st != 0 && s.tier(st).is_none()) {
+            want[n] = st;
+            n += 1;
+        }
         self.builder.want(world, s.id, want);
-        missing.is_empty()
+        n == 0
     }
 
     fn apply_layout(&mut self, i: usize, primary: u32, secondary: u32, ready: bool, emit: &mut impl FnMut(Event)) {
@@ -1175,20 +1230,16 @@ impl Scheduler {
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
-            let mut steps: Vec<u32> = Vec::new();
+            let mut steps = 0;
             for t in s.tiers.drain(..) {
                 self.draw.free(t.handle);
-                steps.push(t.step);
+                steps |= t.step;
             }
             for d in s.decor.drain(..) {
                 self.draw.free(d.handle);
-                if !steps.contains(&d.step) {
-                    steps.push(d.step);
-                }
+                steps |= d.step;
             }
-            for step in steps {
-                emit(Event::Evict { id, step });
-            }
+            emit_evicts(id, steps, emit);
             self.account(i, before);
             freed += 1;
         }
@@ -1219,13 +1270,13 @@ impl Scheduler {
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
-            let mut steps: Vec<u32> = Vec::new();
+            let mut steps = 0;
             let draw = &mut self.draw;
             s.tiers.retain(|t| {
                 let keep = t.step == p || t.step == q;
                 if !keep {
                     draw.free(t.handle);
-                    steps.push(t.step);
+                    steps |= t.step;
                 }
                 keep
             });
@@ -1233,15 +1284,11 @@ impl Scheduler {
                 let keep = d.step == p || d.step == q;
                 if !keep {
                     draw.free(d.handle);
-                    if !steps.contains(&d.step) {
-                        steps.push(d.step);
-                    }
+                    steps |= d.step;
                 }
                 keep
             });
-            for step in steps {
-                emit(Event::Evict { id, step });
-            }
+            emit_evicts(id, steps, emit);
             self.account(i, before);
             freed += 1;
         }
@@ -1279,13 +1326,6 @@ fn mesh_pressed(world: &World) -> bool {
 
 /// Ids the module gives the chunks it mounts, apart from any the glue adds.
 const MOUNT_ID_BASE: u32 = 1 << 31;
-/// A page's side in cells and units, its chunks on a side, a chunk's side
-/// in cells, and the lattice shift from a page index to its base.
-const PAGE_SPAN: f64 = 1024.0;
-const PAGE_CHUNK_AXIS: u32 = 16;
-const CHUNK_SPAN_CELLS: u32 = 64;
-const PAGE_SHAMT: u32 = 10;
-
 /// Whether two frames look at the world the same way: what a recheck's
 /// answer depends on, not the budget or the elapsed time.
 fn same_view(a: &Frame, b: &Frame) -> bool {
@@ -1300,17 +1340,6 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.anchor == b.anchor
         && a.render_dist == b.render_dist
         && a.show_decor == b.show_decor
-}
-
-/// A lattice word's X and Y lanes, signed: pvf3/ivec.ts's layout, X in the
-/// top 24 bits, Y in the next 24, Z in the low 16.
-fn lanes_xy(v: u64) -> (i64, i64) {
-    ((v as i64) >> 40, ((v << 24) as i64) >> 40)
-}
-
-/// The lattice word of (x, y, 0).
-fn gather_xy(x: i64, y: i64) -> u64 {
-    ((x as u64 & 0xff_ffff) << 40) | ((y as u64 & 0xff_ffff) << 16)
 }
 
 /// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over the
@@ -1373,13 +1402,7 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
 /// Where a slot is from a frame: on screen, its world centre, and its two
 /// squared distances.
 fn measure(frame: &Frame, s: &Slot) -> (bool, [f64; 3], f64, f64) {
-    let m = &frame.root;
-    let lx = s.base_x - frame.origin[0] + s.bc[0];
-    let ly = s.base_y - frame.origin[1] + s.bc[1];
-    let lz = s.bc[2] - frame.origin[2];
-    let x = m[0] * lx + m[4] * ly + m[8] * lz + m[12];
-    let y = m[1] * lx + m[5] * ly + m[9] * lz + m[13];
-    let z = m[2] * lx + m[6] * ly + m[10] * lz + m[14];
+    let [x, y, z] = frame.world_of([s.base_x + s.bc[0], s.base_y + s.bc[1], s.bc[2]]);
     let c = frame.camera;
     let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);
     let l = frame.lead;

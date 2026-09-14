@@ -12,6 +12,8 @@
 //! cancels an upload not yet taken: the block is the glue's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
+use xpute_core::ds::buddy::Pool;
+
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.
 pub const UPLOAD_WORDS: usize = 5;
@@ -127,6 +129,12 @@ impl DrawList {
         self.uniforms.clear();
     }
 
+    /// A draw's translation: where `at` is against the frame's `origin`,
+    /// narrowed once the difference is small.
+    pub fn translation(at: [f64; 3], origin: [f64; 3]) -> [f32; 3] {
+        [(at[0] - origin[0]) as f32, (at[1] - origin[1]) as f32, (at[2] - origin[2]) as f32]
+    }
+
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_scaled(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32, scale: f32) {
@@ -207,5 +215,52 @@ mod tests {
         d.draw(PIPELINE_CHUNK, b, 2, 3, [1.0, 2.0, 3.0], 1.0, 1.0);
         let lanes = d.take();
         assert_eq!((lanes[5], lanes[7]), (1, 1));
+    }
+}
+
+/// A block of the mesh section the renderer holds a copy of, written whole
+/// each time by whoever owns it — the badges, the gizmos: grown to the
+/// next power of two when the write outgrows it, since a placement's count
+/// wobbles by a few; uploaded once, rewritten after.
+#[derive(Default)]
+pub struct Held {
+    pub at: usize,
+    pub bytes: u32,
+    pub handle: u32,
+}
+
+impl Held {
+    /// Copies `len` bytes at `lane` of `mem` into the block, growing it
+    /// from `pool` first when it must; false when the pool refused, the
+    /// block then gone.
+    ///
+    /// # Safety
+    /// `lane` addresses `len` bytes in `mem`, which the pool's blocks are in.
+    pub unsafe fn write(&mut self, draw: &mut DrawList, pool: &mut Pool, mem: *mut u8, lane: usize, len: u32) -> bool {
+        let need = len.max(4);
+        if need > self.bytes {
+            self.free(draw, pool);
+            let bytes = need.next_power_of_two();
+            let Some(at) = pool.acquire(bytes) else { return false };
+            self.at = at;
+            self.bytes = bytes;
+        }
+        core::ptr::copy_nonoverlapping(mem.add(lane), mem.add(self.at), len as usize);
+        if self.handle == 0 {
+            self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
+        } else {
+            draw.rewrite(self.handle, self.at as u32, need);
+        }
+        true
+    }
+
+    /// Lets the block go, on the renderer and in the pool.
+    pub fn free(&mut self, draw: &mut DrawList, pool: &mut Pool) {
+        if self.bytes > 0 {
+            draw.free(self.handle);
+            pool.release(self.at, self.bytes);
+            self.bytes = 0;
+            self.handle = 0;
+        }
     }
 }

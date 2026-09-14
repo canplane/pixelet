@@ -14,8 +14,10 @@
 use pxl_core::bake::mesher::{BakeContext, Step};
 use pxl_core::bake::run_set::{run_set_bytes, RunSet};
 use pxl_core::bake::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
-use pxl_core::bake::terrain::{ChunkSample, Materials, PageView, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_core::bake::terrain::{ChunkSample, Materials, PageView, ELE_PADDED_SPAN};
 use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
+use pxl_core::space::ivec::{gather, lanes_xy};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind, Painter, Store};
@@ -118,7 +120,16 @@ fn new_ring(capacity: u32) -> Ring {
     unsafe { Ring::init(words.as_mut_ptr(), capacity) }
 }
 
-static mut STATE: Option<State> = None;
+/// The module's one state, made on first use. A cell rather than a
+/// `static mut`, whose references the compiler now warns of: the module
+/// is single-threaded and no export re-enters another, which is what
+/// `state()` promises.
+struct Global(core::cell::UnsafeCell<Option<State>>);
+
+// SAFETY: the module runs on one thread; see `state`.
+unsafe impl Sync for Global {}
+
+static STATE: Global = Global(core::cell::UnsafeCell::new(None));
 
 extern "C" {
     /// The client's: told a panic's message before the trap, since the trap
@@ -129,11 +140,11 @@ extern "C" {
     fn pxl_now() -> f64;
 }
 
-#[allow(static_mut_refs)]
 fn state() -> &'static mut State {
-    // SAFETY: the module runs on one thread and no export re-enters another.
+    // SAFETY: the module runs on one thread and no export re-enters another,
+    // so no two references to the state are live at once.
     unsafe {
-        STATE.get_or_insert_with(|| {
+        (*STATE.0.get()).get_or_insert_with(|| {
             std::panic::set_hook(Box::new(|info| {
                 let text = info.to_string();
                 pxl_panic(text.as_ptr(), text.len());
@@ -189,6 +200,12 @@ fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
         RunSet::carve(raw, count, span)
     }
 }
+
+// ---- The bake and the scan, a step at a time ----
+//
+// Reference only: apps/web/src/reference/ drives the bake and the scan by
+// these to hold the module to the TypeScript pipeline it replaced. The
+// live build runs inside the scheduler (pxl_tick) and never crosses here.
 
 /// Opens a bake at `lod_step` of the run set of `count` runs over `span`²
 /// columns at address `at`, in column_run.ts's layout. 0 when a bake is
@@ -260,12 +277,6 @@ pub extern "C" fn pxl_bake_abort() {
     state().ctx.abort();
 }
 
-/// How much of the module's heap has been cut, for the ledger.
-#[no_mangle]
-pub extern "C" fn pxl_heap_used() -> u32 {
-    ALLOC.used() as u32
-}
-
 /// The section the module keeps for itself at the front of the memory, for
 /// the client to check its map against.
 #[no_mangle]
@@ -289,7 +300,7 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
         table
             .chunks_exact(BAND_WORDS)
             .map(|w| {
-                let voxels = (pxl_core::bake::scan::BAND_SPAN * pxl_core::bake::scan::BAND_SPAN * pxl_core::bake::scan::BAND_SPAN) as usize;
+                let voxels = pxl_core::bake::volume::BAND_VOXELS;
                 let extras = w[4] as usize;
                 BandView {
                     band_z: w[0] as i32,
@@ -307,18 +318,6 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
             })
             .collect()
     }
-}
-
-/// Opens a scan of the `count` bands described at `at`, ascending by
-/// band_z. 0 when a scan is already open.
-#[no_mangle]
-pub extern "C" fn pxl_scan_begin(at: u32, count: u32) -> u32 {
-    let s = state();
-    if s.scan.is_open() {
-        return 0;
-    }
-    s.bands = (at as usize, count);
-    s.scan.begin(&band_views(s.bands)) as u32
 }
 
 /// One step of the open scan: STEP_WORKING, STEP_NEED_MESH — here the run
@@ -362,6 +361,8 @@ pub extern "C" fn pxl_scan_abort() {
     state().scan.abort();
 }
 
+// ---- Pools ----
+
 /// A pool over `bytes` bytes of the memory at `start` — a section of the
 /// map — cut in regions of `region_bytes` with blocks of at least
 /// `min_block_bytes`: its id, for the calls below. The client's
@@ -404,8 +405,20 @@ pub extern "C" fn pxl_pool_stat(id: u32) -> *const u32 {
 }
 
 fn volumes() -> &'static mut Volumes {
-    state().volumes.as_mut().expect("pxl_volume_pools before any volume")
+    opened(&mut state().volumes)
 }
+
+/// The volumes once `pxl_volume_pools` made them; by the field, so the
+/// state's other fields stay borrowable beside them.
+fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
+    volumes.as_mut().expect("pxl_volume_pools before any volume")
+}
+
+// ---- Volumes ----
+//
+// The glue sets the pools and reads the stat; the rest — opening, painting
+// and reading a volume by hand, and scanning one — is reference only, as
+// the bake above. The live build composes its volumes itself.
 
 /// Which pools volumes draw on: the standing band stores from `fixed`,
 /// the rest and the sub-cell lanes from `mesh` (ids from pxl_pool_new).
@@ -428,7 +441,7 @@ pub extern "C" fn pxl_volume_open() -> u32 {
 #[no_mangle]
 pub extern "C" fn pxl_volume_fill_column(id: u32, cx: u32, cy: u32, z0: i32, z1: i32, material: u32, layer_idx: u32) -> u32 {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     v.fill_column(
         &mut s.pools,
         id as usize - 1,
@@ -448,7 +461,7 @@ pub extern "C" fn pxl_volume_fill_column(id: u32, cx: u32, cy: u32, z0: i32, z1:
 #[no_mangle]
 pub extern "C" fn pxl_volume_set_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32) -> u32 {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     v.set_voxel(
         &mut s.pools,
         id as usize - 1,
@@ -465,7 +478,7 @@ pub extern "C" fn pxl_volume_set_voxel(id: u32, cx: u32, cy: u32, z: i32, materi
 #[no_mangle]
 pub extern "C" fn pxl_volume_append_sub_voxel(id: u32, cx: u32, cy: u32, z: i32, material: u32, layer_idx: u32, sub: u32) -> u32 {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     v.append_sub_voxel(
         &mut s.pools,
         id as usize - 1,
@@ -487,7 +500,7 @@ pub extern "C" fn pxl_volume_seal(id: u32) {
 #[no_mangle]
 pub extern "C" fn pxl_volume_release(id: u32) {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     v.release(&mut s.pools, id as usize - 1);
 }
 
@@ -518,7 +531,7 @@ pub extern "C" fn pxl_scan_begin_volume(id: u32) -> u32 {
     if s.scan.is_open() {
         return 0;
     }
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     let count = v.band_count(id as usize - 1);
     s.scan_rows.clear();
     for i in 0..count {
@@ -527,6 +540,11 @@ pub extern "C" fn pxl_scan_begin_volume(id: u32) -> u32 {
     s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
     s.scan.begin(&band_views(s.bands)) as u32
 }
+
+// ---- Terrain ----
+//
+// The glue teaches the materials (base, channel, type); reading and
+// painting a chunk by hand, and the lanes read back, are reference only.
 
 /// The material every terrain cell starts from: bare land.
 #[no_mangle]
@@ -588,7 +606,7 @@ pub extern "C" fn pxl_terrain_read(land_at: u32, water_at: u32, structure_at: u3
 #[no_mangle]
 pub extern "C" fn pxl_terrain_paint(volume: u32) -> u32 {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     s.chunk.paint(v, &mut s.pools, volume as usize - 1) as u32
 }
 
@@ -614,7 +632,8 @@ pub extern "C" fn pxl_terrain_ele_at() -> u32 {
 // The client lowers a coordinate before it crosses: the chunk's key (an
 // IVec, passed as it is), the band's Z, the band-local lattice position in
 // finest-tier steps, and the level. What comes back is lanes to take views
-// over, valid until the next write or reindex.
+// over, valid until the next write or reindex. The store is the glue's
+// (module/world/object/store.ts); pxl_object_paint is reference only.
 
 /// Writes one leaf; the entries are not re-derived until pxl_object_reindex.
 #[no_mangle]
@@ -629,16 +648,6 @@ pub const TOPIC_DECOR_COLUMN: u16 = 1;
 pub const TOPIC_OBJECT_CELL: u16 = 2;
 pub const WORLD_TOPICS: usize = 6;
 pub const JOURNAL_CAPACITY: usize = 4096;
-
-/// A lattice word's X and Y lanes, signed: pvf3/ivec.ts's layout, X in the
-/// top 24 bits, Y in the next 24, Z in the low 16.
-fn lanes_xy(v: u64) -> (i64, i64) {
-    ((v as i64) >> 40, ((v << 24) as i64) >> 40)
-}
-
-fn gather(x: i64, y: i64, z: i64) -> u64 {
-    ((x as u64 & 0xff_ffff) << 40) | ((y as u64 & 0xff_ffff) << 16) | (z as u64 & 0xffff)
-}
 
 /// Re-derives the chunk's entries and cells, and records the change: the
 /// column in both of its topics, and every cell whose entries changed, by
@@ -761,10 +770,9 @@ pub extern "C" fn pxl_object_kind(state_id: u32, kind: u32, material: u32, layer
 /// at a corner relative to the column's base when `carve` is. Bit 0: a
 /// voxel was painted; bit 1: a paint was refused.
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "C" fn pxl_object_paint(volume: u32, key: u64, hide: u32, hide_band: i32, hide_pos: u32, carve: u32, lx: f64, ly: f64, lz: f64, size: f64) -> u32 {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     let hide = if hide != 0 { Some((hide_band, hide_pos)) } else { None };
     let carve = if carve != 0 { Some(Carve { lx, ly, lz, size }) } else { None };
     let made = s.painter.paint(&s.objects, v, &mut s.pools, volume as usize - 1, key, hide, carve);
@@ -772,6 +780,9 @@ pub extern "C" fn pxl_object_paint(volume: u32, key: u64, hide: u32, hide_band: 
 }
 
 // ---- The raycast's column ----
+//
+// Reference only (reference/chunk_raycast.ts); the live raycast is
+// pxl_raycast below.
 
 /// Walks column (cx, cy) of the module's volume `id` into lanes: how many
 /// runs, at the addresses pxl_column_runs_at names — z0, z1 (i32), the
@@ -780,7 +791,7 @@ pub extern "C" fn pxl_object_paint(volume: u32, key: u64, hide: u32, hide_band: 
 #[no_mangle]
 pub extern "C" fn pxl_column_runs(id: u32, cx: u32, cy: u32) -> u32 {
     let s = state();
-    let v = s.volumes.as_mut().expect("pxl_volume_pools before any volume");
+    let v = opened(&mut s.volumes);
     let count = v.band_count(id as usize - 1);
     let mut rows: Vec<[u32; VOLUME_BAND_WORDS]> = Vec::with_capacity(count);
     for i in 0..count {
@@ -913,29 +924,21 @@ fn now() -> f64 {
 /// with ENOSYS.
 fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
     let a = &sub[ARGS..];
-    let volumes = s.volumes.as_mut().expect("pxl_volume_pools before any build");
-    let mut world = World {
-        volumes,
-        pools: &mut s.pools,
-        materials: &s.terrain,
-        store: &s.objects,
-        painter: &mut s.painter,
-    };
-    let events = &mut s.events;
+    let Parts { mut world, events, sched, .. } = parts(s);
     let mut emit = |e: Event| events.push_back(e);
     match sub[OP] & 0xffff {
         OP_NOP => return Some(a[0]),
-        OP_CHUNK_ADD => s.sched.add(a[0], key(a[1], a[2]), a[5] as i32 as f64, a[6] as i32 as f64, a[3], a[4], a[7]),
-        OP_CHUNK_REMOVE => s.sched.remove(&mut world, a[0], &mut emit),
+        OP_CHUNK_ADD => sched.add(a[0], key(a[1], a[2]), a[5] as i32 as f64, a[6] as i32 as f64, a[3], a[4], a[7]),
+        OP_CHUNK_REMOVE => sched.remove(&mut world, a[0], &mut emit),
         OP_CHUNK_SOURCE => {
             let page = (a[1] != 0).then(|| PageLanes {
                 ground: [a[3] as usize, a[4] as usize, a[5] as usize, a[6] as usize],
                 ele: a[7] as usize,
             });
-            s.sched.source(&mut world, a[0], page, a[2] != 0, &mut emit);
+            sched.source(&mut world, a[0], page, a[2] != 0, &mut emit);
         }
-        OP_CHUNK_WANT => s.sched.builder.want(&mut world, a[0], [a[1], a[2]]),
-        OP_PAGE => s.sched.page(key(a[0], a[1]), a[2] != 0),
+        OP_CHUNK_WANT => sched.builder.want(&mut world, a[0], [a[1], a[2]]),
+        OP_PAGE => sched.page(key(a[0], a[1]), a[2] != 0),
         OP_EDITS => {
             let f = |w: u32| f32::from_bits(w) as f64;
             let hide = (a[0] != 0).then(|| (key(a[1], a[2]), a[3] as i32, a[4]));
@@ -950,7 +953,7 @@ fn apply(s: &mut State, sub: &Entry) -> Option<u32> {
                     },
                 )
             });
-            s.sched.builder.set_edits(hide, carve);
+            sched.builder.set_edits(hide, carve);
         }
         _ => return None,
     }
@@ -987,18 +990,28 @@ pub extern "C" fn pxl_drain() -> u32 {
     drain(state())
 }
 
-fn world_of(s: &mut State) -> (World<'_>, &mut std::collections::VecDeque<Event>, &mut Scheduler) {
-    (
-        World {
-            volumes: s.volumes.as_mut().expect("pxl_volume_pools before any build"),
+/// The state split into what a build, a tick or a raycast borrows at once:
+/// the world the core reads and writes, and the parts that drive it.
+struct Parts<'a> {
+    world: World<'a>,
+    events: &'a mut std::collections::VecDeque<Event>,
+    sched: &'a mut Scheduler,
+    raycast: &'a mut Raycast,
+}
+
+fn parts(s: &mut State) -> Parts<'_> {
+    Parts {
+        world: World {
+            volumes: opened(&mut s.volumes),
             pools: &mut s.pools,
             materials: &s.terrain,
             store: &s.objects,
             painter: &mut s.painter,
         },
-        &mut s.events,
-        &mut s.sched,
-    )
+        events: &mut s.events,
+        sched: &mut s.sched,
+        raycast: &mut s.raycast,
+    }
 }
 
 fn after(s: &mut State) {
@@ -1068,7 +1081,7 @@ pub extern "C" fn pxl_tick() -> u32 {
     frame.render_dist = f[59];
     frame.range_hysteresis = f[60];
     frame.show_decor = f[61] != 0.0;
-    let (mut world, events, sched) = world_of(s);
+    let Parts { mut world, events, sched, .. } = parts(s);
     let draw = sched.tick(&mut world, frame, &now, &mut |e| events.push_back(e));
     flush(s);
     after(s);
@@ -1081,7 +1094,7 @@ pub extern "C" fn pxl_tick() -> u32 {
 pub extern "C" fn pxl_build_now(id: u32) {
     let s = state();
     drain(s);
-    let (mut world, events, sched) = world_of(s);
+    let Parts { mut world, events, sched, .. } = parts(s);
     sched.build_now(&mut world, id, &now, &mut |e| events.push_back(e));
     flush(s);
     after(s);
@@ -1099,7 +1112,7 @@ pub extern "C" fn pxl_billboards_new(order: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn pxl_billboards_write(set: u32, count: u32, lane: u32) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     // SAFETY: the glue's lane of count * 10 floats.
     unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane as usize) };
 }
@@ -1119,7 +1132,7 @@ pub extern "C" fn pxl_billboards_follow(set: u32, actor: u32, lift: f64) {
 #[no_mangle]
 pub extern "C" fn pxl_billboards_remove(set: u32) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.billboards.remove(&mut world, &mut sched.draw, set);
 }
 
@@ -1169,7 +1182,7 @@ pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
 #[no_mangle]
 pub extern "C" fn pxl_debug_set(x: f64, y: f64, z: f64, vertex_cnt: u32, lane: u32) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     // SAFETY: the glue's lane of vertex_cnt * 6 floats.
     unsafe { sched.debug.set(&mut world, &mut sched.draw, [x, y, z], vertex_cnt, lane as usize) };
 }
@@ -1214,10 +1227,9 @@ pub extern "C" fn pxl_env_at() -> u32 {
 /// at (x, y, z) in units; the beacon jumps rather than eases past
 /// `snap_dist`, and nothing is drawn past `fog_far` of the camera.
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "C" fn pxl_puck_zone(x: f64, y: f64, z: f64, count: u32, lane: u32, snap_dist: f64, fog_far: f64) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     // SAFETY: the glue's lane of count * 7 floats.
     unsafe { sched.markers.set_zone(&mut world, &mut sched.draw, [x, y, z], count, lane as usize, snap_dist, fog_far) };
 }
@@ -1230,7 +1242,7 @@ pub extern "C" fn pxl_puck_beacon(offset_x: f64, offset_y: f64, night: u32) {
 #[no_mangle]
 pub extern "C" fn pxl_puck_clear() {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.markers.clear(&mut world, &mut sched.draw);
 }
 
@@ -1242,7 +1254,7 @@ pub extern "C" fn pxl_puck_clear() {
 #[no_mangle]
 pub extern "C" fn pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> i32 {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     match sched.models.new_model(&mut world, vertex_cnt, index_cnt, joint_cnt) {
         Some((id, at)) => {
             s.model_block = at as u32;
@@ -1281,7 +1293,6 @@ pub extern "C" fn pxl_model_clip(model: u32, duration: f32) -> u32 {
 /// A channel of a clip: `path` 0 translation, 1 rotation, 2 scale; the keys'
 /// times and values in the glue's lanes.
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32) {
     let s = state();
     // SAFETY: the glue's lanes, of the lengths the path gives.
@@ -1296,24 +1307,17 @@ pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32
 #[no_mangle]
 pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
     let s = state();
-    let mem = s.volumes.as_ref().expect("pxl_volume_pools before any model").mem();
+    let mem = opened(&mut s.volumes).mem();
     let sched = &mut s.sched;
     // SAFETY: the model's block is in the volumes' memory.
     unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_model_remove(model: u32) {
-    let s = state();
-    let (mut world, _, sched) = world_of(s);
-    sched.models.remove_model(&mut world, &mut sched.draw, model);
 }
 
 /// An actor of `model`: its id, or -1.
 #[no_mangle]
 pub extern "C" fn pxl_actor_new(model: u32) -> i32 {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32)
 }
 
@@ -1335,7 +1339,7 @@ pub extern "C" fn pxl_actor_play(actor: u32, clip: u32, fade_s: f32) {
 #[no_mangle]
 pub extern "C" fn pxl_actor_remove(actor: u32) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.models.remove_actor(&mut world, &mut sched.draw, actor);
 }
 
@@ -1344,10 +1348,9 @@ pub extern "C" fn pxl_actor_remove(actor: u32) {
 /// nothing, as `rgb` (0xRRGGBB) untextured; `coplanar` when it sits in a
 /// surface rather than clear of one.
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "C" fn pxl_ghost_box(x: f64, y: f64, z: f64, size: f64, value: u32, rgb: u32, coplanar: u32) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.ghost.set_box(&mut world, &mut sched.draw, [x, y, z], size, value, rgb, coplanar != 0);
 }
 
@@ -1357,14 +1360,14 @@ pub extern "C" fn pxl_ghost_box(x: f64, y: f64, z: f64, size: f64, value: u32, r
 #[no_mangle]
 pub extern "C" fn pxl_ghost_decor(x: f64, y: f64, z: f64, group: u32, rotation: f64) {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.ghost.set_decor(&mut world, &mut sched.draw, [x, y, z], group, rotation as f32);
 }
 
 #[no_mangle]
 pub extern "C" fn pxl_ghost_clear() {
     let s = state();
-    let (mut world, _, sched) = world_of(s);
+    let Parts { mut world, sched, .. } = parts(s);
     sched.ghost.clear(&mut world, &mut sched.draw);
 }
 
@@ -1388,7 +1391,7 @@ pub extern "C" fn pxl_draw_take() -> *const u32 {
 pub extern "C" fn pxl_decor_now(id: u32, show_decor: u32) {
     let s = state();
     drain(s);
-    let (mut world, events, sched) = world_of(s);
+    let Parts { mut world, events, sched, .. } = parts(s);
     sched.decor_now(&mut world, id, show_decor != 0, &mut |e| events.push_back(e));
     flush(s);
     after(s);
@@ -1445,12 +1448,11 @@ pub const HIT_WORDS: usize = 14;
 /// struck, the hit written at pxl_raycast_at. Applies the submissions
 /// waiting first, so a placement just made is what the ray tests.
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "C" fn pxl_raycast(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
     let s = state();
     drain(s);
     let hit = {
-        let (mut world, raycast, sched) = raycast_of(s);
+        let Parts { mut world, raycast, sched, .. } = parts(s);
         raycast.hit(&mut world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
     };
     let Some(h) = hit else { return 0 };
@@ -1483,11 +1485,10 @@ pub extern "C" fn pxl_raycast_at() -> u32 {
 /// takes it: 1 when one was, its chunk id, band, packed position and
 /// distance written at pxl_raycast_decor_at.
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "C" fn pxl_raycast_decor(origin_x: f64, origin_y: f64, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, max_dist: f64) -> u32 {
     let s = state();
     let hit = {
-        let (world, _, sched) = raycast_of(s);
+        let Parts { world, sched, .. } = parts(s);
         pxl_core::world::raycast::hit_decor(&world, sched, [origin_x, origin_y], [ox, oy, oz], [dx, dy, dz], max_dist)
     };
     let Some(h) = hit else { return 0 };
@@ -1512,20 +1513,6 @@ pub extern "C" fn pxl_decor_model(group: u32, model: u32) {
     state().sched.decor_model(group, model);
 }
 
-fn raycast_of(s: &mut State) -> (World<'_>, &mut Raycast, &mut Scheduler) {
-    (
-        World {
-            volumes: s.volumes.as_mut().expect("pxl_volume_pools before any build"),
-            pools: &mut s.pools,
-            materials: &s.terrain,
-            store: &s.objects,
-            painter: &mut s.painter,
-        },
-        &mut s.raycast,
-        &mut s.sched,
-    )
-}
-
 /// The builder alone over the `order_len` ids at `order_at`, for the tests
 /// that hold a build to the TypeScript pipeline: no scheduler.
 #[no_mangle]
@@ -1534,7 +1521,7 @@ pub extern "C" fn pxl_build_tick(order_at: u32, order_len: u32, budget_ms: f64) 
     drain(s);
     // SAFETY: the caller's lane of ids.
     let order: Vec<u32> = unsafe { core::slice::from_raw_parts(order_at as usize as *const u32, order_len as usize) }.to_vec();
-    let (mut world, events, sched) = world_of(s);
+    let Parts { mut world, events, sched, .. } = parts(s);
     sched.builder.tick(&mut world, &order, budget_ms, &now, &mut |e| events.push_back(Event::Build(e)));
     flush(s);
     after(s);

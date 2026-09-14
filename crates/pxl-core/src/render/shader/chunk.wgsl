@@ -89,10 +89,7 @@ fn face_bit(faces: u32, bit: u32) -> bool {
   return (faces & bit) != 0u;
 }
 
-// FACE_P/N per axis: 1,2 = +-X   4,8 = +-Y   16,32 = +-Z
-// RISES/DIPS per lateral: 64.. = rises   1024.. = dips
-// DIAG: 16384 = ++   32768 = +-   65536 = -+   131072 = --
-// CREASE per lateral: 262144..   CAP: 4194304 = above   8388608 = below
+// A lateral's bit from its group's base (faces.wgsl): +X, -X, +Y, -Y.
 fn lateral_bit(x_axis: bool, positive: bool, base: u32) -> u32 {
   var k: u32;
   if (x_axis) {
@@ -129,26 +126,26 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
   }
   var d = 1e9;
   if (!is_side) {
-    let rise_or_dip = select(1024u, 64u, pz);
-    d = min(d, crease_dist(dist_to_edge.x, face_bit(faces, lateral_bit(true, px, 262144u)), face_bit(faces, lateral_bit(true, px, rise_or_dip))));
-    d = min(d, crease_dist(dist_to_edge.y, face_bit(faces, lateral_bit(false, py, 262144u)), face_bit(faces, lateral_bit(false, py, rise_or_dip))));
+    let rise_or_dip = select(DIPS_BASE, RISES_BASE, pz);
+    d = min(d, crease_dist(dist_to_edge.x, face_bit(faces, lateral_bit(true, px, CREASE_BASE)), face_bit(faces, lateral_bit(true, px, rise_or_dip))));
+    d = min(d, crease_dist(dist_to_edge.y, face_bit(faces, lateral_bit(false, py, CREASE_BASE)), face_bit(faces, lateral_bit(false, py, rise_or_dip))));
   } else {
-    let own = lateral_bit(x_dom, n_positive, 1u);
-    d = min(d, crease_dist(dist_to_edge.z, !face_bit(faces, select(8388608u, 4194304u, pz)), face_bit(faces, own * select(1024u, 64u, pz))));
+    let own = lateral_bit(x_dom, n_positive, FACE_BASE);
+    d = min(d, crease_dist(dist_to_edge.z, !face_bit(faces, select(CAP_NZ, CAP_PZ, pz)), face_bit(faces, own * select(DIPS_BASE, RISES_BASE, pz))));
     let sx = select(px, n_positive, x_dom);
     let sy = select(n_positive, py, x_dom);
     var diag: u32;
     if (sx) {
-      diag = select(32768u, 16384u, sy);
+      diag = select(DIAG_PN, DIAG_PP, sy);
     } else {
-      diag = select(131072u, 65536u, sy);
+      diag = select(DIAG_NN, DIAG_NP, sy);
     }
     let horiz = select(dist_to_edge.x, dist_to_edge.y, x_dom);
     var horiz_convex: bool;
     if (x_dom) {
-      horiz_convex = face_bit(faces, lateral_bit(false, py, 262144u));
+      horiz_convex = face_bit(faces, lateral_bit(false, py, CREASE_BASE));
     } else {
-      horiz_convex = face_bit(faces, lateral_bit(true, px, 262144u));
+      horiz_convex = face_bit(faces, lateral_bit(true, px, CREASE_BASE));
     }
     d = min(d, crease_dist(horiz, horiz_convex, face_bit(faces, diag)));
   }

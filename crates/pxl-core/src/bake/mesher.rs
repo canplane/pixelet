@@ -17,12 +17,12 @@
 
 use crate::bake::run_set::{OwnedRunSet, RunSet};
 use crate::bake::voxel::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
+use crate::space::constant::{CHUNK_SPAN, U_PER_CELL};
 use xpute_core::kit::fdlibm;
 use xpute_core::kit::srgb::SRGB_TO_LINEAR;
 
-/// Cells to a block, and the widest span a bake is handed.
-const U_PER_CELL: f64 = 1.0;
-const MAX_BAKE_SPAN: usize = 64;
+/// The widest span a bake is handed.
+const MAX_BAKE_SPAN: usize = CHUNK_SPAN as usize;
 
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
@@ -46,33 +46,33 @@ const FACE_CORNER: [f64; 72] = [
     -0.5, -0.5, -0.5,  -0.5,  0.5, -0.5,   0.5,  0.5, -0.5,   0.5, -0.5, -0.5,
 ];
 
-const FACE_PX: u32 = 1 << 0;
-const FACE_NX: u32 = 1 << 1;
-const FACE_PY: u32 = 1 << 2;
-const FACE_NY: u32 = 1 << 3;
+pub const FACE_PX: u32 = 1 << 0;
+pub const FACE_NX: u32 = 1 << 1;
+pub const FACE_PY: u32 = 1 << 2;
+pub const FACE_NY: u32 = 1 << 3;
 const FACE_PZ: u32 = 1 << 4;
 const FACE_NZ: u32 = 1 << 5;
 const ALL_FACES: u32 = (1 << 6) - 1;
 const OPEN_BOTTOM_FACES: u32 = ALL_FACES & !FACE_NZ;
-const RISES_PX: u32 = 1 << 6;
-const RISES_NX: u32 = 1 << 7;
-const RISES_PY: u32 = 1 << 8;
-const RISES_NY: u32 = 1 << 9;
-const DIPS_PX: u32 = 1 << 10;
-const DIPS_NX: u32 = 1 << 11;
-const DIPS_PY: u32 = 1 << 12;
-const DIPS_NY: u32 = 1 << 13;
-const DIAG_PP: u32 = 1 << 14;
-const DIAG_PN: u32 = 1 << 15;
-const DIAG_NP: u32 = 1 << 16;
-const DIAG_NN: u32 = 1 << 17;
-const CREASE_PX: u32 = 1 << 18;
-const CREASE_NX: u32 = 1 << 19;
-const CREASE_PY: u32 = 1 << 20;
-const CREASE_NY: u32 = 1 << 21;
+pub const RISES_PX: u32 = 1 << 6;
+pub const RISES_NX: u32 = 1 << 7;
+pub const RISES_PY: u32 = 1 << 8;
+pub const RISES_NY: u32 = 1 << 9;
+pub const DIPS_PX: u32 = 1 << 10;
+pub const DIPS_NX: u32 = 1 << 11;
+pub const DIPS_PY: u32 = 1 << 12;
+pub const DIPS_NY: u32 = 1 << 13;
+pub const DIAG_PP: u32 = 1 << 14;
+pub const DIAG_PN: u32 = 1 << 15;
+pub const DIAG_NP: u32 = 1 << 16;
+pub const DIAG_NN: u32 = 1 << 17;
+pub const CREASE_PX: u32 = 1 << 18;
+pub const CREASE_NX: u32 = 1 << 19;
+pub const CREASE_PY: u32 = 1 << 20;
+pub const CREASE_NY: u32 = 1 << 21;
 const ALL_CREASES: u32 = CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY;
-const CAP_PZ: u32 = 1 << 22;
-const CAP_NZ: u32 = 1 << 23;
+pub const CAP_PZ: u32 = 1 << 22;
+pub const CAP_NZ: u32 = 1 << 23;
 
 const X_SEAM_BITS: u32 = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX;
 const Y_SEAM_BITS: u32 = FACE_PY | CREASE_PY | RISES_PY | DIPS_PY;
@@ -85,8 +85,6 @@ const RISES_ABOVE: u32 = 2;
 const DIPS_BELOW: u32 = 4;
 const ABUTS_SIDE: u32 = 8;
 const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
-
-const INSET_SET: u32 = 1 << 16;
 
 const BAKE_ROWS_PER_STEP: u32 = 8;
 const BAKE_BOXES_PER_STEP: usize = 512;
@@ -158,26 +156,6 @@ struct ZBucketAccum {
     tap_cnt: u32,
 }
 
-/// The coarse tier's runs while they are packed, one lane per field.
-#[derive(Default)]
-struct CoarseLanes {
-    z0: Vec<i32>,
-    z1: Vec<i32>,
-    rgb: Vec<u32>,
-    layer_taps: Vec<u32>,
-    sub: Vec<u32>,
-}
-
-impl CoarseLanes {
-    fn clear(&mut self) {
-        self.z0.clear();
-        self.z1.clear();
-        self.rgb.clear();
-        self.layer_taps.clear();
-        self.sub.clear();
-    }
-}
-
 struct FineBake {
     span: u32,
     xy_scale: u32,
@@ -207,8 +185,8 @@ pub struct BakeContext {
     merge_run: Vec<Option<u32>>,
     merge_mask: Vec<u32>,
     buckets: Vec<ZBucketAccum>,
-    co: CoarseLanes,
-    co_start: Vec<u32>,
+    /// The coarse tier's run set, packed a cell at a time straight into
+    /// the run set's own fields; the fine bake then reads it as any set.
     coarse: OwnedRunSet,
     /// Every word a mesh uses is written by the emit before it is read,
     /// except the visibility lane, which the renderer owns — so the target
@@ -236,8 +214,6 @@ impl BakeContext {
             merge_run: vec![None; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
             merge_mask: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
             buckets: Vec::with_capacity(1 << 12),
-            co: CoarseLanes::default(),
-            co_start: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN + 1],
             coarse: OwnedRunSet::default(),
             mesh: None,
             mesh_words: 0,
@@ -518,47 +494,13 @@ impl BakeContext {
         (near & !FROM_FAR_BITS) | (far_x & (X_SEAM_BITS | DIAG_PN)) | (far_y & (Y_SEAM_BITS | DIAG_NP)) | (far_xy & DIAG_PP)
     }
 
-    /// Writes one box's faces. Positions are summed in f64 and narrowed once,
-    /// as a Float32Array store narrows them.
+    /// Writes one box's faces into the bake's mesh.
     fn emit_box(&mut self, vertex_total: u32, min: [f64; 3], size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
-        let vt = vertex_total as usize;
-        let lane = |k: usize| k * vt;
-        let (position, normal, local_pos, box_scale, color, layer_taps, face_lane) = (lane(0), lane(3), lane(6), lane(9), lane(12), lane(15), lane(19));
-        let index = lane((F32_PER_VERTEX + VIS_F32_PER_VERTEX) as usize);
-        let centre = [min[0] + size[0] * 0.5, min[1] + size[1] * 0.5, min[2] + size[2] * 0.5];
         let target = self.mesh.expect("emit with no mesh provided");
         // SAFETY: provide_mesh's contract — the range is the caller's, valid
         // and untouched until the bake closes.
         let m = unsafe { core::slice::from_raw_parts_mut(target.ptr, target.words) };
-        for f in 0..FULL_FACE_CNT as usize {
-            if faces & (1 << f) == 0 {
-                continue;
-            }
-            let n = &FACE_NORMAL[f * 3..f * 3 + 3];
-            let base_v = self.v_cnt;
-            for c in 0..4 {
-                let k = (f * 4 + c) * 3;
-                let l = &FACE_CORNER[k..k + 3];
-                let vi = self.v_cnt as usize;
-                self.v_cnt += 1;
-                let (po, lo) = (vi * 3, vi * 4);
-                for a in 0..3 {
-                    m[position + po + a] = f32_word(centre[a] + l[a] * size[a]);
-                    m[normal + po + a] = f32_word(n[a]);
-                    m[local_pos + po + a] = f32_word(l[a]);
-                    m[box_scale + po + a] = f32_word(size[a]);
-                    m[color + po + a] = f32_word(rgb[a]);
-                }
-                for (t, tap) in taps.iter().enumerate() {
-                    m[layer_taps + lo + t] = f32_word(*tap as f64);
-                }
-                m[face_lane + vi] = f32_word(faces as f64);
-            }
-            for d in [0, 1, 2, 0, 2, 3] {
-                m[index + self.i_cnt as usize] = base_v + d;
-                self.i_cnt += 1;
-            }
-        }
+        write_box(m, vertex_total, &mut self.v_cnt, &mut self.i_cnt, min, size, rgb, taps, faces);
     }
 
     fn step_coarse(&mut self, b: &mut CoarseBake, set: &RunSet) -> bool {
@@ -573,7 +515,8 @@ impl BakeContext {
             // chunk's buckets ran to megabytes and, doubling as they grew,
             // past the module's heap (b3, 2026-09-13).
             if b.row == 0 {
-                self.co.clear();
+                self.coarse.clear();
+                self.coarse.span = res;
             }
             let row_end = res.min(b.row + coarse_rows_per_step(lod_step));
             for by in b.row..row_end {
@@ -591,7 +534,7 @@ impl BakeContext {
                             }
                         }
                     }
-                    self.co_start[(by * res + bx) as usize] = self.co.z0.len() as u32;
+                    self.coarse.start.push(self.coarse.z0.len() as u32);
                     self.pack_coarse_cell(start, cnt, lod_step);
                     self.buckets.truncate(start as usize);
                 }
@@ -600,8 +543,7 @@ impl BakeContext {
             if row_end < res {
                 return false;
             }
-            self.co_start[(res * res) as usize] = self.co.z0.len() as u32;
-            self.fill_coarse_set(res);
+            self.coarse.start.push(self.coarse.z0.len() as u32);
             b.fine = Some(self.begin_fine(res, lod_step));
             b.phase = 2;
             return false;
@@ -614,49 +556,6 @@ impl BakeContext {
         let done = self.step_fine(fine, &coarse.view());
         self.coarse = coarse;
         done
-    }
-
-    /// Copies the packed lanes into the coarse tier's run set, in the run
-    /// set's own byte fields.
-    fn fill_coarse_set(&mut self, res: u32) {
-        let (co, out) = (&self.co, &mut self.coarse);
-        let len = co.z0.len();
-        out.span = res;
-        out.start.clear();
-        out.start.extend_from_slice(&self.co_start[..(res * res + 1) as usize]);
-        out.z0.clone_from(&co.z0);
-        out.z1.clone_from(&co.z1);
-        out.layer_taps.clone_from(&co.layer_taps);
-        for lane in [
-            &mut out.r,
-            &mut out.g,
-            &mut out.b,
-            &mut out.material_class,
-            &mut out.sub_ox,
-            &mut out.sub_oy,
-            &mut out.sub_oz,
-            &mut out.sub_sx,
-            &mut out.sub_sy,
-            &mut out.sub_sz,
-        ] {
-            lane.clear();
-            lane.resize(len, 0);
-        }
-        for i in 0..len {
-            let rgb = co.rgb[i];
-            out.r[i] = (rgb >> 16) as u8;
-            out.g[i] = (rgb >> 8) as u8;
-            out.b[i] = rgb as u8;
-            out.material_class[i] = MATERIAL_LAND;
-            let sub = co.sub[i];
-            let (inset, scale) = (sub as u8, (sub >> 8) as u8);
-            out.sub_sz[i] = if sub & INSET_SET == 0 { SUB_CELL_NONE } else { scale.max(1) };
-            out.sub_sx[i] = scale;
-            out.sub_sy[i] = scale;
-            out.sub_ox[i] = inset;
-            out.sub_oy[i] = inset;
-            out.sub_oz[i] = inset;
-        }
     }
 
     fn find_or_create_bucket(&mut self, start: u32, cnt: u32, bz: i32) -> u32 {
@@ -718,13 +617,15 @@ impl BakeContext {
                 self.counters.coarse_low_fill += 1;
             }
             let linear = fdlibm::cbrt(fill);
-            let sub = if linear >= 1.0 { 0 } else { pack_inset(linear) };
+            // A full cell is a plain run; a sparse one is inset, scaled by
+            // the cube root of its fill about its centre on every axis.
+            let inset = (linear < 1.0).then(|| pack_inset(linear));
             let n = acc.surfaces.max(1) as f64;
-            let rgb = (to_u8(acc.sr / n) << 16) | (to_u8(acc.sg / n) << 8) | to_u8(acc.sb / n);
+            let rgb = [to_u8(acc.sr / n) as u8, to_u8(acc.sg / n) as u8, to_u8(acc.sb / n) as u8];
             let taps = bucket_taps(&acc);
-            let co = &mut self.co;
-            if let Some(o) = open.filter(|_| sub & INSET_SET == 0 && bucket_lo == last_top + 1) {
-                if co.rgb[o] == rgb && co.layer_taps[o] == taps && co.sub[o] & INSET_SET == 0 {
+            let co = &mut self.coarse;
+            if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
+                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_sz[o] == SUB_CELL_NONE {
                     co.z1[o] = bucket_hi;
                     last_top = bucket_hi;
                     continue;
@@ -733,9 +634,18 @@ impl BakeContext {
             open = Some(co.z0.len());
             co.z0.push(bucket_lo);
             co.z1.push(bucket_hi);
-            co.rgb.push(rgb);
+            co.r.push(rgb[0]);
+            co.g.push(rgb[1]);
+            co.b.push(rgb[2]);
             co.layer_taps.push(taps);
-            co.sub.push(sub);
+            co.material_class.push(MATERIAL_LAND);
+            let (offset, scale) = inset.unwrap_or((0, 0));
+            co.sub_sz.push(if inset.is_none() { SUB_CELL_NONE } else { scale.max(1) });
+            co.sub_sx.push(scale);
+            co.sub_sy.push(scale);
+            co.sub_ox.push(offset);
+            co.sub_oy.push(offset);
+            co.sub_oz.push(offset);
             last_top = bucket_hi;
         }
     }
@@ -753,37 +663,49 @@ pub const LONE_BOX_INDICES: u32 = 36;
 /// bake writes: what the hover ghost is drawn from, so it is lit, textured
 /// and edge-shaded as a placed cube is. `rgb` is sRGB bytes.
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) {
-    let vt = LONE_BOX_VERTICES as usize;
+    let linear = [SRGB_TO_LINEAR[rgb[0] as usize], SRGB_TO_LINEAR[rgb[1] as usize], SRGB_TO_LINEAR[rgb[2] as usize]];
+    let (mut v, mut i) = (0, 0);
+    write_box(m, LONE_BOX_VERTICES, &mut v, &mut i, [0.0; 3], [size; 3], linear, [layer as u32; 4], LONE_BOX_FACES);
+}
+
+/// Writes the faces in `faces` of one box into mesh `m` laid out for
+/// `vertex_total` vertices, at the vertex and index counts given, which it
+/// advances. Positions are summed in f64 and narrowed once, as a
+/// Float32Array store narrows them.
+#[allow(clippy::too_many_arguments)]
+fn write_box(m: &mut [u32], vertex_total: u32, v_cnt: &mut u32, i_cnt: &mut u32, min: [f64; 3], size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
+    let vt = vertex_total as usize;
     let lane = |k: usize| k * vt;
     let (position, normal, local_pos, box_scale, color, layer_taps, face_lane) = (lane(0), lane(3), lane(6), lane(9), lane(12), lane(15), lane(19));
     let index = lane((F32_PER_VERTEX + VIS_F32_PER_VERTEX) as usize);
-    let linear = [SRGB_TO_LINEAR[rgb[0] as usize], SRGB_TO_LINEAR[rgb[1] as usize], SRGB_TO_LINEAR[rgb[2] as usize]];
-    let centre = size * 0.5;
-    let mut v = 0usize;
-    let mut i = 0usize;
+    let centre = [min[0] + size[0] * 0.5, min[1] + size[1] * 0.5, min[2] + size[2] * 0.5];
     for f in 0..FULL_FACE_CNT as usize {
+        if faces & (1 << f) == 0 {
+            continue;
+        }
         let n = &FACE_NORMAL[f * 3..f * 3 + 3];
-        let base = v as u32;
+        let base_v = *v_cnt;
         for c in 0..4 {
             let k = (f * 4 + c) * 3;
             let l = &FACE_CORNER[k..k + 3];
-            let (po, lo) = (v * 3, v * 4);
+            let vi = *v_cnt as usize;
+            *v_cnt += 1;
+            let (po, lo) = (vi * 3, vi * 4);
             for a in 0..3 {
-                m[position + po + a] = f32_word(centre + l[a] * size);
+                m[position + po + a] = f32_word(centre[a] + l[a] * size[a]);
                 m[normal + po + a] = f32_word(n[a]);
                 m[local_pos + po + a] = f32_word(l[a]);
-                m[box_scale + po + a] = f32_word(size);
-                m[color + po + a] = f32_word(linear[a]);
+                m[box_scale + po + a] = f32_word(size[a]);
+                m[color + po + a] = f32_word(rgb[a]);
             }
-            for t in 0..4 {
-                m[layer_taps + lo + t] = f32_word(layer as f64);
+            for (t, tap) in taps.iter().enumerate() {
+                m[layer_taps + lo + t] = f32_word(*tap as f64);
             }
-            m[face_lane + v] = f32_word(LONE_BOX_FACES as f64);
-            v += 1;
+            m[face_lane + vi] = f32_word(faces as f64);
         }
         for d in [0, 1, 2, 0, 2, 3] {
-            m[index + i] = base + d;
-            i += 1;
+            m[index + *i_cnt as usize] = base_v + d;
+            *i_cnt += 1;
         }
     }
 }
@@ -792,7 +714,8 @@ fn f32_word(v: f64) -> u32 {
     (v as f32).to_bits()
 }
 
-fn column_spans_range(set: &RunSet, col: u32, z0: i32, z1: i32, skip_objects: bool) -> bool {
+/// Whether one whole-cell run of column `col` spans all of z0..=z1.
+fn column_spans_range(set: &RunSet, col: u32, z0: i32, z1: i32) -> bool {
     let end = set.start[col as usize + 1] as usize;
     for i in set.start[col as usize] as usize..end {
         if set.z0[i] > z0 {
@@ -801,14 +724,32 @@ fn column_spans_range(set: &RunSet, col: u32, z0: i32, z1: i32, skip_objects: bo
         if set.sub_sz[i] != SUB_CELL_NONE {
             continue;
         }
-        if skip_objects && set.material_class[i] == MATERIAL_OBJECT {
-            continue;
-        }
         if set.z1[i] >= z1 {
             return true;
         }
     }
     false
+}
+
+/// Whether a whole-cell run of column `col` covers `z`, and whether one
+/// that is not an object does, in one walk.
+fn column_covers(set: &RunSet, col: u32, z: i32) -> (bool, bool) {
+    let (mut any, mut terrain) = (false, false);
+    let end = set.start[col as usize + 1] as usize;
+    for i in set.start[col as usize] as usize..end {
+        if set.z0[i] > z {
+            break;
+        }
+        if set.sub_sz[i] != SUB_CELL_NONE || set.z1[i] < z {
+            continue;
+        }
+        any = true;
+        if set.material_class[i] != MATERIAL_OBJECT {
+            terrain = true;
+            break;
+        }
+    }
+    (any, terrain)
 }
 
 fn neighbour_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
@@ -880,16 +821,20 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mut mask = mask_all;
     let col = cy * span + cx;
     let (z0, z1) = (set.z0[i], set.z1[i]);
-    if column_spans_range(set, col, z1 + 1, z1 + 1, true) {
+    // The cell above and the cell below: terrain there hides the face,
+    // anything there caps it.
+    let (above_any, above_terrain) = column_covers(set, col, z1 + 1);
+    let (below_any, below_terrain) = column_covers(set, col, z0 - 1);
+    if above_terrain {
         mask &= !FACE_PZ;
     }
-    if mask & FACE_NZ != 0 && column_spans_range(set, col, z0 - 1, z0 - 1, true) {
+    if below_terrain {
         mask &= !FACE_NZ;
     }
-    if column_spans_range(set, col, z1 + 1, z1 + 1, false) {
+    if above_any {
         mask |= CAP_PZ;
     }
-    if column_spans_range(set, col, z0 - 1, z0 - 1, false) {
+    if below_any {
         mask |= CAP_NZ;
     }
     if cx + 1 < span {
@@ -904,16 +849,16 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     if cy > 0 {
         mask = side_bits(mask, neighbour_relation(set, col - span, z0, z1), FACE_NY, CREASE_NY, RISES_NY, DIPS_NY);
     }
-    if cx + 1 < span && cy + 1 < span && wants_diagonal(mask, FACE_PX, FACE_PY) && column_spans_range(set, col + span + 1, z0, z1, false) {
+    if cx + 1 < span && cy + 1 < span && wants_diagonal(mask, FACE_PX, FACE_PY) && column_spans_range(set, col + span + 1, z0, z1) {
         mask |= DIAG_PP;
     }
-    if cx + 1 < span && cy > 0 && wants_diagonal(mask, FACE_PX, FACE_NY) && column_spans_range(set, col - span + 1, z0, z1, false) {
+    if cx + 1 < span && cy > 0 && wants_diagonal(mask, FACE_PX, FACE_NY) && column_spans_range(set, col - span + 1, z0, z1) {
         mask |= DIAG_PN;
     }
-    if cx > 0 && cy + 1 < span && wants_diagonal(mask, FACE_NX, FACE_PY) && column_spans_range(set, col + span - 1, z0, z1, false) {
+    if cx > 0 && cy + 1 < span && wants_diagonal(mask, FACE_NX, FACE_PY) && column_spans_range(set, col + span - 1, z0, z1) {
         mask |= DIAG_NP;
     }
-    if cx > 0 && cy > 0 && wants_diagonal(mask, FACE_NX, FACE_NY) && column_spans_range(set, col - span - 1, z0, z1, false) {
+    if cx > 0 && cy > 0 && wants_diagonal(mask, FACE_NX, FACE_NY) && column_spans_range(set, col - span - 1, z0, z1) {
         mask |= DIAG_NN;
     }
     mask
@@ -978,8 +923,10 @@ fn to_u8(v: f64) -> u32 {
     v.round().clamp(0.0, 255.0) as u32
 }
 
-fn pack_inset(linear: f64) -> u32 {
-    pack_sub_cell_fraction((1.0 - linear) * 0.5) | (pack_sub_cell_fraction(linear) << 8) | INSET_SET
+/// A sparse cell's (inset, scale) as sub-cell fractions: a box of `linear`
+/// a side, centred.
+fn pack_inset(linear: f64) -> (u8, u8) {
+    (pack_sub_cell_fraction((1.0 - linear) * 0.5) as u8, pack_sub_cell_fraction(linear) as u8)
 }
 
 fn coarse_rows_per_step(lod_step: u32) -> u32 {

@@ -20,7 +20,8 @@
 use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
 use xpute_core::ds::buddy::Pool;
 
-pub const BAND_SPAN: u32 = 64;
+/// A band is a chunk's span on every axis.
+pub const BAND_SPAN: u32 = crate::space::constant::CHUNK_SPAN;
 const BAND_MASK: u32 = BAND_SPAN - 1;
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 pub const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;
@@ -469,6 +470,19 @@ impl Volumes {
                 layer_idx: core::slice::from_raw_parts(at(row[8]), n),
                 sub: core::slice::from_raw_parts(at(row[9]) as *const u32, n),
             },
+        }
+    }
+
+    /// Every band of volume `id` into `out`, cleared first: the scan and
+    /// the raycast walk a volume by its bands many times a tick, so the
+    /// list is theirs to keep, not built anew each walk.
+    ///
+    /// # Safety
+    /// As `band_view`: valid until the volume is painted again or released.
+    pub unsafe fn band_views(&mut self, id: usize, out: &mut Vec<crate::bake::scan::BandView<'static>>) {
+        out.clear();
+        for i in 0..self.band_count(id) {
+            out.push(self.band_view(id, i));
         }
     }
 

@@ -106,6 +106,28 @@ pub struct OwnedRunSet {
 }
 
 impl OwnedRunSet {
+    /// Empties every lane, keeping their capacity.
+    pub fn clear(&mut self) {
+        self.start.clear();
+        self.z0.clear();
+        self.z1.clear();
+        self.layer_taps.clear();
+        for lane in [
+            &mut self.r,
+            &mut self.g,
+            &mut self.b,
+            &mut self.material_class,
+            &mut self.sub_ox,
+            &mut self.sub_oy,
+            &mut self.sub_oz,
+            &mut self.sub_sx,
+            &mut self.sub_sy,
+            &mut self.sub_sz,
+        ] {
+            lane.clear();
+        }
+    }
+
     pub fn view(&self) -> RunSet<'_> {
         RunSet {
             count: self.z0.len() as u32,

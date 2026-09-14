@@ -118,15 +118,7 @@ impl Markers {
         }
         // Drawn within the fog's far edge of the camera, as the three puck
         // hid itself past it: the beacon's place through the anchor root.
-        let local = [
-            p.centre[0] + shown[0] - frame.origin[0],
-            p.centre[1] + shown[1] - frame.origin[1],
-            p.centre[2] + BEACON_Z_BIAS - frame.origin[2],
-        ];
-        let m = &frame.root;
-        let x = m[0] * local[0] + m[4] * local[1] + m[8] * local[2] + m[12];
-        let y = m[1] * local[0] + m[5] * local[1] + m[9] * local[2] + m[13];
-        let z = m[2] * local[0] + m[6] * local[1] + m[10] * local[2] + m[14];
+        let [x, y, z] = frame.world_of([p.centre[0] + shown[0], p.centre[1] + shown[1], p.centre[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
         p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < p.fog_far * p.fog_far;
         p.visible
@@ -137,7 +129,7 @@ impl Markers {
         if !p.visible || p.handle == 0 {
             return;
         }
-        let centre = [(p.centre[0] - origin[0]) as f32, (p.centre[1] - origin[1]) as f32, (p.centre[2] - origin[2]) as f32];
+        let centre = DrawList::translation(p.centre, origin);
         draw.draw_as(PIPELINE_PUCK_ZONE, p.handle, p.count, 0, centre, 0.0, 1.0);
         let shown = p.shown.unwrap_or(p.target);
         let beacon = [

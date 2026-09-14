@@ -38,15 +38,6 @@ fn lane(k: u32, i: u32) -> f32 {
   return bitcast<f32>(block[draw.offset + k * draw.count + i]);
 }
 
-// glTF is Y-up: a quarter turn about X, (x, y, z) to (x, -z, y), then the
-// instance's spin about Z.
-fn place(v: vec3f, spin: f32) -> vec3f {
-  let up = vec3f(v.x, -v.z, v.y);
-  let c = cos(spin);
-  let s = sin(spin);
-  return vec3f(up.x * c - up.y * s, up.x * s + up.y * c, up.z);
-}
-
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
   let n = draw.count;
@@ -59,10 +50,10 @@ fn vs(v: VertexIn) -> VertexOut {
   let at = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i));
   let spin = lane(3u, v.i);
   let scale = lane(4u, v.i);
-  let world = place(v.position * scale, spin) + at + draw.translation;
+  let world = place_up(v.position * scale, spin) + at + draw.translation;
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.uv = v.uv;
-  o.normal = place(v.normal, spin);
+  o.normal = place_up(v.normal, spin);
   o.world_pos = world;
   return o;
 }
