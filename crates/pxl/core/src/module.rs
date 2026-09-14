@@ -4,4 +4,5 @@
 // runs them.
 
 pub mod camera;
+pub mod map;
 pub mod world;
