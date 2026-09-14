@@ -74,6 +74,7 @@ struct State {
     /// doubles the glue reads.
     raycast: Raycast,
     hit: [f64; HIT_WORDS],
+    draw_row: [u32; 8],
 }
 
 /// Entries each ring holds: a page mounting is 64 chunks a frame, each
@@ -129,6 +130,7 @@ fn state() -> &'static mut State {
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
                 hit: [0.0; HIT_WORDS],
+                draw_row: [0; 8],
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
@@ -1049,6 +1051,20 @@ pub extern "C" fn pxl_build_now(id: u32) {
     sched.build_now(&mut world, id, &now, &mut |e| events.push_back(e));
     flush(s);
     after(s);
+}
+
+/// Hands the renderer's lists over (crates/pxl-core/src/draw.rs): a row of
+/// eight words — the uploads' address and count, the frees', the draws',
+/// the uniforms' — valid until the next call. Uploads and frees are what
+/// accumulated since the last call; the draws are the last tick's.
+#[no_mangle]
+pub extern "C" fn pxl_draw_take() -> *const u32 {
+    let s = state();
+    let lanes = s.sched.draw.take();
+    for (k, v) in lanes.iter().enumerate() {
+        s.draw_row[k] = *v as u32;
+    }
+    s.draw_row.as_ptr()
 }
 
 /// Rebuilds chunk `id`'s decor for the layout it shows, now, after the

@@ -29,6 +29,7 @@ import { useGroundSnapSync } from "@/module/world/terrain/use_ground_snap_sync.t
 import { Overlays } from "./ui/overlay/overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
 
+import { GpuCanvas } from "@/render/gpu/stage.tsx";
 import { ToastController } from "./ui/toast/toast_controller.tsx";
 import { LedgerOverlay } from "@/module/world/sched/ledger_overlay.tsx";
 
@@ -374,6 +375,8 @@ export function MapScene() {
             </EffectComposer>
           )}
         </Canvas>
+        {/* The WebGPU renderer's canvas, over three's until three goes. */}
+        <GpuCanvas />
       </div>
 
       {/* HTML overlay portal */}

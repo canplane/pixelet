@@ -86,6 +86,7 @@ export type PxlExports = {
   pxl_tick(): u32;
   pxl_build_now(id: u32): void;
   pxl_decor_now(id: u32, show_decor: u32): void;
+  pxl_draw_take(): u32;
   pxl_raycast(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;
   pxl_raycast_at(): u32;
   pxl_decor_forget(): void;

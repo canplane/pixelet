@@ -140,6 +140,11 @@ export const SETTINGS = {
    * no depth pass (badges then draw through terrain). A measurement knob;
    * `full` is the only path the app ships. */
   render_path: choice("debug", RENDER_PATHS, "full", { dev: true }),
+  /** The chunks drawn by the WebGPU renderer (render/gpu) from the
+   * module's draw list, over three's canvas, rather than as three meshes.
+   * The first piece of the renderer that replaces three; off draws them
+   * the old way for a side-by-side. */
+  gpu_chunks: toggle("debug", true, { dev: true }),
 
   // ---- character: picked in the drawer, not the sheet.
   person_variant_key: text("character", DEFAULT_PERSON_VARIANT_KEY),
