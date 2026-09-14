@@ -6,7 +6,7 @@
  * What this replaces was ten `useFrame` subscribers, each running in the
  * order React happened to mount them, each doing its own work with no idea
  * how much the others had already spent. Two of them carried a budget —
- * chunk_stage's recheck and commit passes — and those two budgets were
+ * the chunk stage's recheck and commit passes — and those two budgets were
  * independent, so a frame could legally spend both in full before anything
  * else ran. The rest ran unbudgeted, including one step measured at 22 ms.
  *

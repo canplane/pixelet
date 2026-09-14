@@ -17,7 +17,7 @@
  *   (the tick runs only when asked), which is correct: idle means nothing to sample.
  *
  * The per-frame CPU breakdown is the tick's phases (sched/tick.ts) plus
- * chunk_stage's recheck/commit split inside the visible phase; there is no
+ * core_tick's recheck/commit split inside the visible phase; there is no
  * per-task-category CPU rollup. Readers: the overlay (ledger_overlay.tsx) and
  * the text report (log.ts), both through summary.ts, and the Chrome-trace
  * export (trace.ts).
@@ -74,7 +74,7 @@ export type FrameSample = {
   budget_ms: number;
   /** sched_ms broken down by phase, in the tick's own order. */
   phases: Record<string, number>;
-  /** chunk_stage's recheck and commit passes, inside the visible phase. The
+  /** core_tick's recheck and commit passes, inside the visible phase. The
    * render is not here: the post-processing composer (always on — color
    * grade is fused into it) renders past any gl.render wrapper, so a render
    * timer read 0. `task_ms` below is what covers it. */
@@ -110,7 +110,7 @@ export type FrameSample = {
   census: DrawCensus;
   /** The WebGPU canvas's width*height — the raw fill-rate primitive. */
   px: number;
-  /** chunk_stage's own per-frame LOD counts. Here rather than in a separate
+  /** core_tick's per-frame LOD counts, the module's census. Here rather than in a separate
    * session-peak object so the ring carries the *shape* of a spike, not only
    * how high it got. */
   lod: {

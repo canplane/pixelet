@@ -168,7 +168,7 @@ export function CameraInput({ element }: { element: HTMLCanvasElement | null }) 
   // Raw pointermove fires far more often than the render loop (same reason
   // request_hover_update below exists) — do_pan/do_rotate/update_pinch all
   // write to zustand stores (set_map_center/set_view_state), and each write
-  // fans out through reactive subscribers (chunk_stage.tsx's LOD system
+  // fans out through reactive subscribers (the world's tick, core_tick.tsx,
   // among them). Profiled: without this, on_pointer_move dominated a whole
   // trace's CPU time during a drag. last_x/y and did_drag's tap-vs-drag
   // threshold still update on every raw event below (cheap ref writes, no

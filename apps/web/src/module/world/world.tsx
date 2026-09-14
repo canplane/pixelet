@@ -37,7 +37,7 @@ import { PoiLayer } from "./poi/poi_layer.tsx";
 // CHUNK_STAGE_LAYERS lives in module/world/stack.ts (not inline here) so
 // camera/ray.ts's own raycast can composite the exact same layer stack
 // instead of a second, possibly-drifting registration.
-import { ChunkStage, LodSchedulerProvider } from "./chunk_stage.tsx";
+import { ChunkMounts, CoreTick } from "./core_tick.tsx";
 // The layers teach the module their tables when imported; the chunks it
 // builds read them.
 import "./stack.ts";
@@ -78,9 +78,9 @@ export function World() {
 
   return (
     <>
-      <LodSchedulerProvider>
-        <ChunkStage />
-      </LodSchedulerProvider>
+      <CoreTick>
+        <ChunkMounts />
+      </CoreTick>
 
       <HoverCursor />
       <LocationPuck device_coord={device_coord} />

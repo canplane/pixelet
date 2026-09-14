@@ -1,23 +1,15 @@
-// @pxl/web/module/world/chunk_stage.tsx
+// @pxl/web/module/world/core_tick.tsx
 
 /**
- * Unified terrain/object/decor renderer.
- *
- * One Chunk component represents one renderer-owned L2 XY column and all
- * occupied signed 64-high L2 bands beneath it — AND, as of 2026-09-05, every
- * decor kind's own instances for that same column too. A temporary dense
- * signed-Z field is composited synchronously, converted to a baked mesh, and
- * immediately returned to the scratch pool. In-frustum chunks retain a
- * 36 KiB top-surface summary for coarse LOD rebuilds, never the dense bands.
- *
- * Decor used to be a fully separate, independently-scheduled component tree
- * (decor_layer.ts's own ChunkDecor/PageDecor/DecorLayer, one registrant per
- * (chunk, decor kind) in the shared scheduler below) — retired
- * once Chunk absorbed decor's own build into its own commit(), the fix for
- * the documented terrain/decor ready-state desync (decor could render a
- * frame before its own co-located terrain). See decor_layer.ts's own top
- * doc comment and issue/20260905-tier1-geometry-baking-implemented.md
- * (and its own same-day follow-up) for the fuller account.
+ * The world's turn of the tick: the glue between the module
+ * (crates/pxl-core, behind render/layer/pipeline/core_build.ts) and the
+ * page, with no decision of its own. In the visible phase it writes the
+ * frame the module reads — the view, the frustum, the budget, the range
+ * anchor, the settings — ticks the module once, makes a node for each
+ * chunk the module mounts, and has the renderer draw the module's lists
+ * (render/gpu/stage.tsx). In the report phase it hands the frame's numbers
+ * to the ledger. ChunkMounts tells the module which pages have a terrain
+ * tile, which is what it mounts chunks from.
  */
 
 import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
@@ -109,18 +101,12 @@ function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
 }
 
 /**
- * Runs the scheduler's passes over lod_scheduler's lanes — mounted once
- * above ChunkStage (world.tsx). A ChunkNode is the only kind of slot now:
- * decor used to register its own ChunkDecor per (chunk, decor kind) here
- * too, competing for this same budget as an independent component with its
- * own `ready` state; as of 2026-09-05 a node builds decor alongside its own
- * cube content in one commit() instead (see decor_layer.ts's own top doc
- * comment). Everything here — the passes, the frustum, the dev stats — used
- * to live inside ChunkStage itself; none of it is terrain-specific, so it
- * moved out rather than ChunkStage keeping ownership of something it no
- * longer exclusively uses.
+ * The tick's visible and report phases, mounted once above ChunkMounts
+ * (world.tsx). Decor is not a registrant of its own: the module builds a
+ * tier's decor beside the tier (crates/pxl-core/src/sched.rs), which is
+ * what ended the terrain/decor ready-state desync of 2026-09-05.
  */
-export function LodSchedulerProvider({ children }: { children: ReactNode }) {
+export function CoreTick({ children }: { children: ReactNode }) {
   const lead = useRef({ x: 0, y: 0, z: 0 }).current;
 
   // What the visible phase measured, handed to the report phase below. A
@@ -290,7 +276,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export type ChunkStageProps = Record<string, never>;
+export type ChunkMountsProps = Record<string, never>;
 
 /**
  * Tells the module which pages have a terrain tile, and makes and drops the
@@ -299,7 +285,7 @@ export type ChunkStageProps = Record<string, never>;
  * into the frame. Decor models are not passed in: decor/asset_store.ts owns
  * them and every ChunkNode subscribes to it directly.
  */
-export const ChunkStage = memo((_: ChunkStageProps) => {
+export const ChunkMounts = memo((_: ChunkMountsProps) => {
   useLayoutEffect(() => {
     CORE_BUILD.mounts = {
       on_mount: (id, page_idx, base_x, base_y) => mount_chunk(id, page_idx, base_x, base_y),
@@ -314,7 +300,7 @@ export const ChunkStage = memo((_: ChunkStageProps) => {
       const page_idx = BigInt.asUintN(64, key);
       CORE_BUILD.page(page_idx, tile_pages.has(page_idx));
     });
-    // The stage leaving takes its pages out of the range, and the module
+    // The mounts leaving take their pages out of the range, and the module
     // unmounts their chunks on the next tick. Nothing is disposed here: a
     // StrictMode replay puts every page back before that tick, and the
     // module then has nothing to unmount and nothing to mount again.
@@ -325,4 +311,4 @@ export const ChunkStage = memo((_: ChunkStageProps) => {
   }, []);
   return null;
 });
-ChunkStage.displayName = "ChunkStage";
+ChunkMounts.displayName = "ChunkMounts";

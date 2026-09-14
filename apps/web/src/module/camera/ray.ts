@@ -4,7 +4,7 @@
  * Single raycast entry point for the whole world — terrain (any face: top
  * or a cliff/wall side) and placed objects (any size, including sub-cell)
  * alike, since both are painted into the exact same sectioned per-column voxel
- * field (render/layer/pipeline/volume.ts) chunk_stage.tsx renders from. This
+ * field (render/layer/pipeline/volume.ts) the module meshes from. This
  * used to be two+ separate systems (a 2D heightfield march for terrain
  * tops, a second DDA for terrain walls, and a third real-AABB pass over the
  * raw PlacedObject[] for objects) that could each find a different answer
@@ -240,7 +240,7 @@ export function world_struck_corner(hit: WorldHit, size: f64, map_origin: IVec):
  * is MaterialClass.OBJECT — whichever placed object's own real AABB
  * (object_aabb — full precision, including sub-cell) overlaps the hit box.
  * The sectioned voxel field itself carries no object identity
- * (chunk_stage.tsx never needs it, only color/material), so this is a small
+ * (the mesher never needs it, only color/material), so this is a small
  * secondary lookup, not the raycast itself. Decor is never resolved here —
  * it never paints a voxel of its own (render/layer/object/adapter.ts's
  * paint() skips "decor" entries) and has its own real-mesh hit-test now
