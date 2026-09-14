@@ -25,7 +25,9 @@ use crate::module::map::store::use_map_store;
 use crate::module::map::ui::control::compass::{compass_reset, show_compass};
 use crate::module::map::ui::control::scale_bar::scale_bar;
 use crate::module::map::ui::overlay::use_reverse_geocode::use_reverse_geocode;
+use crate::module::world::character::character_preview::{preview_close, preview_open, preview_rows};
 use crate::module::world::character::store::use_companion_load_store;
+use crate::module::world::object::store::OBJECT_STORAGE_VERSION;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::view::view;
 use crate::module::world::sched::log::{ledger_report_text, ledger_set_logging, ledger_window_start};
@@ -198,6 +200,8 @@ pub fn ui_snapshot_json() -> String {
     ));
     out.push_str(&format!("\"compass\":{{\"show\":{}}},", show_compass()));
     out.push_str(&format!("\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, quote(themes(use_theme_key()).fog)));
+    let previews: Vec<String> = preview_rows().into_iter().map(|(id, model, skin)| format!("{{\"id\":{id},\"model\":{model},\"skin\":{skin}}}")).collect();
+    out.push_str(&format!("\"previews\":[{}],\"object_storage_version\":{},", previews.join(","), OBJECT_STORAGE_VERSION));
     out.push_str(&format!("\"report\":{}", opt_str(shell().report.take().as_deref())));
     out.push('}');
     out
@@ -340,6 +344,16 @@ pub fn ui_action(text: &str) -> bool {
         "sensors_unsubscribe" => {
             geolocation_unsubscribe();
             orientation_unsubscribe();
+        }
+        "preview_open" => {
+            let (Some(id), Some(key)) = (f64_of(&action, "id"), str_of(&action, "key")) else { return false };
+            if !preview_open(id as u32, key) {
+                return false;
+            }
+        }
+        "preview_close" => {
+            let Some(id) = f64_of(&action, "id") else { return false };
+            preview_close(id as u32);
         }
         "ledger_report" => shell().report = Some(ledger_report_text()),
         "ledger_logging" => {

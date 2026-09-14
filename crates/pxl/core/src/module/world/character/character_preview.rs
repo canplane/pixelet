@@ -1,0 +1,143 @@
+// pxl_core/module/world/character/character_preview.rs
+
+//! Small display cases for the variant picker — one character playing its idle
+//! clip while slowly spinning in place, so a pick can actually be seen before
+//! committing to it. Deliberately separate from companion.rs's walker: no
+//! map_center, no ground-following, no catch-up walk — a display case, not a
+//! world entity.
+//!
+//! The case's drawing is the renderer's (render/gpu/preview.ts): an actor stood
+//! far below the world, where nothing looks, drawn into the case's own canvas
+//! alone each frame. The model is registered once more for the cases, so the
+//! walker's own draws of the same variant are not mistaken for it, at one unit
+//! tall: the case compares silhouettes side by side, not relative scale.
+
+use std::collections::HashMap;
+
+use super::variant::{CharacterVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS};
+use crate::global::Global;
+use crate::kernel::{kernel, with_world};
+use crate::module::world::change::request_world_tick;
+use crate::module::world::sched::tick::TickContext;
+use crate::render::gltf::load::{load_gltf, load_image};
+use crate::render::gpu::model_asset::{register_model, ModelHandle};
+
+const SPIN_RATE_RAD_S: f64 = 0.6;
+const IDLE_CLIP: &str = "idle";
+/// How far below the world origin a case's actor stands: past any terrain, and
+/// past the fog, so the world never draws it.
+const CASE_DEPTH_U: f64 = 100_000.0;
+
+struct Case {
+    id: u32,
+    variant: &'static CharacterVariant,
+    actor: Option<u32>,
+    model: Option<ModelHandle>,
+    skin: Option<u32>,
+    spin: f64,
+}
+
+struct Cases {
+    cases: Vec<Case>,
+    /// The cases' own registration of a model, one unit tall, by URL.
+    models: HashMap<String, Option<ModelHandle>>,
+}
+
+static CASES: Global<Cases> = Global::new();
+
+fn cases() -> &'static mut Cases {
+    CASES.get(|| Cases {
+        cases: Vec::new(),
+        models: HashMap::new(),
+    })
+}
+
+fn variant_of(key: &str) -> Option<&'static CharacterVariant> {
+    PET_VARIANTS()
+        .iter()
+        .chain(PERSON_VARIANTS_FEMALE())
+        .chain(PERSON_VARIANTS_MALE())
+        .find(|v| v.key == key)
+}
+
+/// Opens case `id` over the variant named `key`; a case already open under
+/// `id` is replaced.
+pub fn preview_open(id: u32, key: &str) -> bool {
+    preview_close(id);
+    let Some(variant) = variant_of(key) else { return false };
+    cases().cases.push(Case {
+        id,
+        variant,
+        actor: None,
+        model: None,
+        skin: None,
+        spin: 0.0,
+    });
+    request_world_tick();
+    true
+}
+
+/// Closes case `id`, and its actor with it.
+pub fn preview_close(id: u32) {
+    let c = cases();
+    let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return };
+    let case = c.cases.remove(pos);
+    if let Some(actor) = case.actor {
+        with_world(|world, sched| sched.models.remove_actor(world, &mut sched.draw, actor));
+    }
+}
+
+/// The cases' turn: each acquires its model, skin and actor once they have
+/// arrived, and turns on its own clock — the world's tick runs only when asked,
+/// and an open case is what asks.
+pub fn preview_step(ctx: &mut TickContext) {
+    let c = cases();
+    if c.cases.is_empty() {
+        return;
+    }
+    for case in &mut c.cases {
+        if case.model.is_none() {
+            let url = &case.variant.model_url;
+            case.model = match c.models.get(url) {
+                Some(handle) => handle.clone(),
+                None => load_gltf(url).and_then(|gltf| {
+                    let handle = register_model(&gltf, Some(1.0));
+                    c.models.insert(url.clone(), handle.clone());
+                    handle
+                }),
+            };
+        }
+        if case.skin.is_none() {
+            case.skin = load_image(&case.variant.skin_url);
+        }
+        if case.actor.is_none() {
+            if let (Some(model), Some(_)) = (&case.model, case.skin) {
+                let id = model.model;
+                case.actor = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, id)).flatten();
+                if let (Some(actor), Some(&idle)) = (case.actor, model.clips.get(IDLE_CLIP)) {
+                    kernel().sched.models.play(actor, idle, 0.0);
+                }
+            }
+        }
+        let Some(actor) = case.actor else { continue };
+        case.spin += SPIN_RATE_RAD_S * ctx.delta;
+        if let Some(a) = kernel().sched.models.actor(actor) {
+            a.at = [0.0, 0.0, -CASE_DEPTH_U];
+            a.rotation_z = case.spin as f32;
+            a.visible = true;
+        }
+    }
+    ctx.invalidate();
+}
+
+/// The open cases that can be drawn: (case, model, skin image).
+pub fn preview_rows() -> Vec<(u32, u32, u32)> {
+    cases()
+        .cases
+        .iter()
+        .filter_map(|case| match (&case.model, case.skin, case.actor) {
+            (Some(model), Some(skin), Some(_)) => Some((case.id, model.model, skin)),
+            _ => None,
+        })
+        .collect()
+}

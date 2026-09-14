@@ -115,6 +115,7 @@ pub fn world_boot() {
     on_tick(INTERACTION, view_rotation_step, "view_rotation");
     on_tick(INTERACTION, view_translation_step, "view_translation");
     on_tick(INTERACTION, companion_tick, "companion");
+    on_tick(INTERACTION, crate::module::world::character::character_preview::preview_step, "preview");
     on_tick(VISIBLE, core_tick_visible_step, "chunks");
     on_tick(CONTENT, poi_index_step, "poi_index");
     on_tick(CONTENT, poi_place_tick_step, "poi_place");

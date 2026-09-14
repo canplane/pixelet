@@ -52,6 +52,8 @@ export type UiSnapshot = {
   address: { label: string | null; loading: boolean };
   scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean; label: string };
   compass: { show: boolean };
+  previews: { id: number; model: number; skin: number }[];
+  object_storage_version: number;
   report: string | null;
 };
 
@@ -69,6 +71,8 @@ const INITIAL: UiSnapshot = {
   address: { label: null, loading: false },
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true, label: "" },
   compass: { show: false },
+  previews: [],
+  object_storage_version: 0,
   report: null,
 };
 
