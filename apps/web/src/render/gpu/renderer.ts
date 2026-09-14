@@ -30,6 +30,14 @@ const UPLOAD_WORDS = 5;
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
 const PIPELINE_CHUNK = 0;
+const PIPELINE_GHOST_BOX = 2;
+const PIPELINE_GHOST_BOX_COPLANAR = 3;
+
+/** Straight alpha over what is drawn, for the ghost. */
+const ALPHA_BLEND: GPUBlendState = {
+  color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+  alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+};
 
 /** chunk_mesher.ts's lanes, floats a vertex: position, normal, local_pos,
  * box_scale, rgb, layer_taps, faces; then the visibility lane; then the
@@ -52,6 +60,10 @@ export class GpuRenderer {
   private readonly context: GPUCanvasContext;
   private readonly format: GPUTextureFormat;
   private readonly pipeline: GPURenderPipeline;
+  /** The ghost box through the chunk shader: blended, writing no depth,
+   * biased toward the eye as hover_cursor.tsx's polygon offsets were —
+   * slightly clear of a surface, strongly in one. */
+  private readonly ghost_pipelines: Record<number, GPURenderPipeline>;
   private readonly sky_pipeline: GPURenderPipeline;
   private readonly sky_buffer: GPUBuffer;
   private readonly sky_bind_group: GPUBindGroup;
@@ -103,6 +115,19 @@ export class GpuRenderer {
       primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
       depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less" },
     });
+    const ghost = (label: string, bias: number, slope: number) =>
+      device.createRenderPipeline({
+        label,
+        layout: device.createPipelineLayout({ bindGroupLayouts: [this.bind_layout] }),
+        vertex: { module, entryPoint: "vs", buffers: vertex_buffers },
+        fragment: { module, entryPoint: "fs", targets: [{ format: this.format, blend: ALPHA_BLEND }] },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less", depthBias: bias, depthBiasSlopeScale: slope },
+      });
+    this.ghost_pipelines = {
+      [PIPELINE_GHOST_BOX]: ghost("ghost/box", -1, -1),
+      [PIPELINE_GHOST_BOX_COPLANAR]: ghost("ghost/box/coplanar", -8, -2),
+    };
     // The sky: one triangle over the screen, first, writing no depth.
     const sky_module = device.createShaderModule({ label: "sky", code: SKY_SHADER });
     this.sky_pipeline = device.createRenderPipeline({
@@ -214,11 +239,31 @@ export class GpuRenderer {
     pass.draw(3);
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bind_group);
+    this.draw_meshes(pass, draws, (p) => p === PIPELINE_CHUNK);
+    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
+    // What is blended goes last, over everything opaque.
+    for (const p of [PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR]) {
+      if (!this.draw_meshes(pass, draws, (q) => q === p, true)) continue;
+    }
+    this.decor.draw_ghosts(pass, draws, uniforms, this.buffers);
+    pass.end();
+    this.device.queue.submit([encoder.finish()]);
+  }
+
+  /** Every mesh draw whose pipeline `which` accepts; with `own_pipeline`,
+   * each switches to its ghost pipeline first. Whether any was drawn. */
+  private draw_meshes(pass: GPURenderPassEncoder, draws: Uint32Array, which: (p: u32) => boolean, own_pipeline = false): boolean {
+    let any = false;
     for (let k = 0; k < draws.length; k += DRAW_WORDS) {
       const [handle, vertex_cnt, index_cnt, uniform, pipeline] = [draws[k], draws[k + 1], draws[k + 2], draws[k + 3], draws[k + 4]];
-      if (pipeline !== PIPELINE_CHUNK) continue;
+      if (!which(pipeline)) continue;
       const buffer = this.buffers.get(handle);
       if (!buffer) continue;
+      if (own_pipeline && !any) {
+        pass.setPipeline(this.ghost_pipelines[pipeline]);
+        pass.setBindGroup(0, this.bind_group);
+      }
+      any = true;
       let offset = 0;
       LANE_FLOATS.forEach((floats, slot) => {
         pass.setVertexBuffer(slot, buffer, offset);
@@ -227,8 +272,6 @@ export class GpuRenderer {
       pass.setIndexBuffer(buffer, "uint32", vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) * 4, index_cnt * 4);
       pass.drawIndexed(index_cnt, 1, 0, 0, uniform);
     }
-    this.stat.decor_draws = this.decor.draw(pass, draws, uniforms, this.buffers);
-    pass.end();
-    this.device.queue.submit([encoder.finish()]);
+    return any;
   }
 }

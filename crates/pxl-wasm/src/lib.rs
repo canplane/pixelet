@@ -1053,6 +1053,35 @@ pub extern "C" fn pxl_build_now(id: u32) {
     after(s);
 }
 
+/// The hover ghost as a box of `size` units with its min corner at (x, y,
+/// z) in units, painted as object value `value` paints or, where that paints
+/// nothing, as `rgb` (0xRRGGBB) untextured; `coplanar` when it sits in a
+/// surface rather than clear of one.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_ghost_box(x: f64, y: f64, z: f64, size: f64, value: u32, rgb: u32, coplanar: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.ghost.set_box(&mut world, &mut sched.draw, [x, y, z], size, value, rgb, coplanar != 0);
+}
+
+/// The hover ghost as one instance of decor group `group` (every kind's
+/// variants in teaching order), its base at (x, y, z) in units, turned
+/// `rotation` about Z.
+#[no_mangle]
+pub extern "C" fn pxl_ghost_decor(x: f64, y: f64, z: f64, group: u32, rotation: f64) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.ghost.set_decor(&mut world, &mut sched.draw, [x, y, z], group, rotation as f32);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_ghost_clear() {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.ghost.clear(&mut world, &mut sched.draw);
+}
+
 /// Hands the renderer's lists over (crates/pxl-core/src/draw.rs): a row of
 /// eight words — the uploads' address and count, the frees', the draws',
 /// the uniforms' — valid until the next call. Uploads and frees are what

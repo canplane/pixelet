@@ -13,6 +13,7 @@ pub mod build;
 pub mod change;
 pub mod decor;
 pub mod draw;
+pub mod ghost;
 pub mod lod;
 pub mod mesher;
 pub mod object;

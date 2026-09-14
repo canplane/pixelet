@@ -30,8 +30,9 @@ import { GRADE_WGSL } from "./grade.ts";
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
 const PIPELINE_DECOR = 1;
+const PIPELINE_GHOST_DECOR = 4;
 /** A decor draw's dynamic uniform: translation (3), the group's first lane
- * word, the instance count, padding. */
+ * word, the instance count, the opacity, padding. */
 const DRAW_UNIFORM_BYTES = 32;
 
 export type DecorModel = {
@@ -75,7 +76,7 @@ struct Draw {
   translation: vec3f,
   offset: u32,
   count: u32,
-  _p0: u32,
+  opacity: f32,
   _p1: u32,
   _p2: u32,
 };
@@ -144,12 +145,14 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var color = albedo * (sun + frame.ambient + hemi) / 3.14159265 + albedo * ${light_cfg.FLOOR};
   let fog = clamp((i.view_depth - frame.fog_near) / (frame.fog_far - frame.fog_near), 0.0, 1.0);
   color = mix(color, frame.fog_color, fog);
-  return vec4f(to_srgb(grade(color)), 1.0);
+  return vec4f(to_srgb(grade(color)), draw.opacity);
 }
 `;
 
 export class DecorPass {
   private readonly pipeline: GPURenderPipeline;
+  /** The ghost instance: blended, both sides, writing no depth. */
+  private readonly ghost_pipeline: GPURenderPipeline;
   private readonly frame_group: GPUBindGroup;
   private readonly draw_layout: GPUBindGroupLayout;
   private readonly skin_layout: GPUBindGroupLayout;
@@ -165,7 +168,7 @@ export class DecorPass {
 
   constructor(private readonly device: GPUDevice, format: GPUTextureFormat, depth_format: GPUTextureFormat, frame_buffer: GPUBuffer) {
     const frame_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
-    this.draw_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform", hasDynamicOffset: true } }] });
+    this.draw_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform", hasDynamicOffset: true } }] });
     this.skin_layout = device.createBindGroupLayout({
       entries: [
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: {} },
@@ -174,21 +177,41 @@ export class DecorPass {
     });
     this.block_layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } }] });
     const module = device.createShaderModule({ label: "decor", code: DECOR_SHADER });
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.block_layout] });
+    const vertex: GPUVertexState = {
+      module,
+      entryPoint: "vs",
+      buffers: [
+        { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
+        { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
+        { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
+      ],
+    };
     this.pipeline = device.createRenderPipeline({
       label: "decor",
-      layout: device.createPipelineLayout({ bindGroupLayouts: [frame_layout, this.draw_layout, this.skin_layout, this.block_layout] }),
-      vertex: {
-        module,
-        entryPoint: "vs",
-        buffers: [
-          { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
-          { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
-          { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
-        ],
-      },
+      layout,
+      vertex,
       fragment: { module, entryPoint: "fs", targets: [{ format }] },
       primitive: { topology: "triangle-list", cullMode: "none" },
       depthStencil: { format: depth_format, depthWriteEnabled: true, depthCompare: "less" },
+    });
+    this.ghost_pipeline = device.createRenderPipeline({
+      label: "decor/ghost",
+      layout,
+      vertex,
+      fragment: {
+        module,
+        entryPoint: "fs",
+        targets: [{
+          format,
+          blend: {
+            color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+            alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+          },
+        }],
+      },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: { format: depth_format, depthWriteEnabled: false, depthCompare: "less", depthBias: -1, depthBiasSlopeScale: -1 },
     });
     this.frame_group = device.createBindGroup({ layout: frame_layout, entries: [{ binding: 0, resource: { buffer: frame_buffer } }] });
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "repeat", addressModeV: "repeat" });
@@ -233,10 +256,13 @@ export class DecorPass {
     };
   }
 
-  /** Draws the frame's decor draws into the open pass. */
+  /** Writes every decor draw's uniforms, ghosts included, and draws the
+   * opaque ones into the open pass: one write a frame, since a later write
+   * to the same buffer before the submit would stand for every draw. */
   draw(pass: GPURenderPassEncoder, draws: Uint32Array, uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>): u32 {
+    const is_decor = (p: u32) => p === PIPELINE_DECOR || p === PIPELINE_GHOST_DECOR;
     let n = 0;
-    for (let k = 0; k < draws.length; k += DRAW_WORDS) if (draws[k + 4] === PIPELINE_DECOR) n++;
+    for (let k = 0; k < draws.length; k += DRAW_WORDS) if (is_decor(draws[k + 4])) n++;
     if (n === 0) return 0;
     if (n * this.stride > this.draw_buffer.size) {
       this.draw_buffer.destroy();
@@ -249,7 +275,7 @@ export class DecorPass {
     const u = new Uint32Array(this.draw_scratch);
     let slot = 0;
     for (let k = 0; k < draws.length; k += DRAW_WORDS) {
-      if (draws[k + 4] !== PIPELINE_DECOR) continue;
+      if (!is_decor(draws[k + 4])) continue;
       const at = (slot * this.stride) >> 2;
       const uniform = draws[k + 3] * UNIFORM_FLOATS;
       f[at] = uniforms[uniform];
@@ -257,20 +283,34 @@ export class DecorPass {
       f[at + 2] = uniforms[uniform + 2];
       u[at + 3] = uniforms[uniform + 3];
       u[at + 4] = draws[k + 2];
+      f[at + 5] = uniforms[uniform + 4];
       slot++;
     }
     this.device.queue.writeBuffer(this.draw_buffer, 0, this.draw_scratch, 0, n * this.stride);
+    return this.draw_pipeline(pass, draws, buffers, PIPELINE_DECOR, this.pipeline);
+  }
 
-    pass.setPipeline(this.pipeline);
-    pass.setBindGroup(0, this.frame_group);
-    slot = 0;
+  /** The ghost's decor draw, blended, after everything opaque; its uniforms
+   * were written by `draw`. */
+  draw_ghosts(pass: GPURenderPassEncoder, draws: Uint32Array, _uniforms: Float32Array, buffers: ReadonlyMap<u32, GPUBuffer>): u32 {
+    return this.draw_pipeline(pass, draws, buffers, PIPELINE_GHOST_DECOR, this.ghost_pipeline);
+  }
+
+  private draw_pipeline(pass: GPURenderPassEncoder, draws: Uint32Array, buffers: ReadonlyMap<u32, GPUBuffer>, which: u32, pipeline: GPURenderPipeline): u32 {
+    let slot = 0;
     let drawn = 0;
     for (let k = 0; k < draws.length; k += DRAW_WORDS) {
-      if (draws[k + 4] !== PIPELINE_DECOR) continue;
+      const p = draws[k + 4];
+      if (p !== PIPELINE_DECOR && p !== PIPELINE_GHOST_DECOR) continue;
       const offset = slot++ * this.stride;
+      if (p !== which) continue;
       const model = this.models[draws[k + 1]];
       const block = buffers.get(draws[k]);
       if (!model || !block) continue;
+      if (drawn === 0) {
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, this.frame_group);
+      }
       let block_group = this.block_groups.get(block);
       if (!block_group) {
         block_group = this.device.createBindGroup({ layout: this.block_layout, entries: [{ binding: 0, resource: { buffer: block } }] });

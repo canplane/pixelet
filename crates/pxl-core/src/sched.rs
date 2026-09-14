@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::draw::{DrawList, PIPELINE_CHUNK};
+use crate::ghost::Ghost;
 use crate::lod::{Ladder, COARSEST};
 use crate::terrain::ChunkSample;
 
@@ -242,6 +243,8 @@ pub struct Scheduler {
     pub builder: Builder,
     /// What the renderer uploads, frees and draws (draw.rs).
     pub draw: DrawList,
+    /// The hover ghost (ghost.rs).
+    pub ghost: Ghost,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -307,6 +310,7 @@ impl Scheduler {
         Scheduler {
             builder: Builder::new(),
             draw: DrawList::default(),
+            ghost: Ghost::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -780,6 +784,7 @@ impl Scheduler {
     /// the camera is written in.
     fn draw_frame(&mut self, frame: &Frame) {
         self.draw.begin_frame();
+        self.ghost.draw(&mut self.draw, frame.origin);
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;

@@ -31,6 +31,12 @@ pub const UNIFORM_FLOATS: usize = 8;
 /// first lane word in place of the visibility.
 pub const PIPELINE_CHUNK: u32 = 0;
 pub const PIPELINE_DECOR: u32 = 1;
+/// The hover ghost: a box through the chunk shader, or one decor instance
+/// through decor's, half transparent; the box biased toward the eye, more so
+/// when it sits in a surface rather than clear of one.
+pub const PIPELINE_GHOST_BOX: u32 = 2;
+pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 3;
+pub const PIPELINE_GHOST_DECOR: u32 = 4;
 
 #[derive(Default)]
 pub struct DrawList {
@@ -82,6 +88,14 @@ impl DrawList {
     pub fn begin_frame(&mut self) {
         self.draws.clear();
         self.uniforms.clear();
+    }
+
+    /// A draw whose record names a pipeline other than the chunk's.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_as(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32) {
+        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, 0.0, 0.0, 0.0]);
+        self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
     #[allow(clippy::too_many_arguments)]
