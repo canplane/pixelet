@@ -1091,6 +1091,39 @@ pub extern "C" fn pxl_billboards_remove(set: u32) {
     sched.billboards.remove(&mut world, &mut sched.draw, set);
 }
 
+// ---- The environment (crates/pxl-core/src/environment.rs) ----
+
+/// The theme the environment eases toward: THEME_FLOATS floats at `lane`.
+#[no_mangle]
+pub extern "C" fn pxl_env_theme(lane: u32) {
+    let s = state();
+    let mut theme = [0.0f32; pxl_core::environment::THEME_FLOATS];
+    // SAFETY: the glue's lane of THEME_FLOATS floats in the memory.
+    unsafe { core::ptr::copy_nonoverlapping(lane as usize as *const f32, theme.as_mut_ptr(), theme.len()) };
+    s.sched.environment.set_theme(&theme);
+}
+
+/// The observer, in degrees, and the wall clock, in Unix milliseconds.
+#[no_mangle]
+pub extern "C" fn pxl_env_observe(lat: f64, lon: f64, unix_ms: f64) {
+    state().sched.environment.observe(lat, lon, unix_ms);
+}
+
+/// Sunrise and sunset for the local day from `day_start_ms`, in hours
+/// after it: where the two f64s sit.
+#[no_mangle]
+pub extern "C" fn pxl_env_daylight(lat: f64, lon: f64, day_start_ms: f64) -> u32 {
+    let env = &mut state().sched.environment;
+    env.daylight(lat, lon, day_start_ms);
+    env.daylight.as_ptr() as u32
+}
+
+/// Where the environment's ENV_FLOATS output floats sit.
+#[no_mangle]
+pub extern "C" fn pxl_env_at() -> u32 {
+    state().sched.environment.out.as_ptr() as u32
+}
+
 // ---- The location puck (crates/pxl-core/src/marker.rs) ----
 
 /// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre

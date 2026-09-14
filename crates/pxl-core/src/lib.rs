@@ -14,6 +14,7 @@ pub mod build;
 pub mod change;
 pub mod decor;
 pub mod draw;
+pub mod environment;
 pub mod ghost;
 pub mod lod;
 pub mod marker;

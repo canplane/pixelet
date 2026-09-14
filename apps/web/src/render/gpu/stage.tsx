@@ -1,9 +1,8 @@
 // @pxl/web/render/gpu/stage.tsx
 
 /**
- * The WebGPU canvas, and the frame's uniforms read off what three still
- * owns — the camera, the lights, the fog, the sky's colours and directions
- * — until it goes. Everything is drawn here; three's canvas above it,
+ * The WebGPU canvas, and the frame's uniforms: the camera read off what
+ * three still owns until it goes, the environment from the module. Everything is drawn here; three's canvas above it,
  * cleared transparent, draws only the dev gizmos.
  */
 
@@ -12,7 +11,6 @@ import * as THREE from "three";
 import type { RootState } from "@react-three/fiber";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
-import { light_cfg } from "@/module/world/environment/config.ts";
 import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
 import { fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE } from "@/render/lod.ts";
 import { billboard_sheet } from "@/module/world/billboard/sheet.ts";
@@ -31,36 +29,14 @@ export function set_sky_radius(r: number): void {
 
 const EDGE_STRENGTH = 0.3;
 const EDGE_WIDTH = 0.03;
+/** crates/pxl-core/src/environment.rs's ENV_FLOATS. */
+const ENV_FLOATS = 48;
 
 const $m = new THREE.Matrix4();
 /** GL clip z is [-1, 1]; WebGPU's is [0, 1]. */
 const $gl_to_wgpu = new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 const $v = new THREE.Vector3();
 const $sky = new THREE.Matrix4();
-
-type Lights = { sun: THREE.DirectionalLight | null; ambient: THREE.AmbientLight | null; hemi: THREE.HemisphereLight | null; seen: number };
-const lights: Lights = { sun: null, ambient: null, hemi: null, seen: -1 };
-
-/** The scene's lights, looked up when the scene's children change. */
-function find_lights(scene: THREE.Scene): Lights {
-  if (lights.seen === scene.children.length) return lights;
-  lights.seen = scene.children.length;
-  lights.sun = null;
-  lights.ambient = null;
-  lights.hemi = null;
-  for (const o of scene.children) {
-    if (o instanceof THREE.DirectionalLight && (lights.sun === null || o.intensity > lights.sun.intensity)) lights.sun = o;
-    else if (o instanceof THREE.AmbientLight) lights.ambient = o;
-    else if (o instanceof THREE.HemisphereLight) lights.hemi = o;
-  }
-  return lights;
-}
-
-function put(u: Float32Array, at: number, c: THREE.Color, k: number): void {
-  u[at] = c.r * k;
-  u[at + 1] = c.g * k;
-  u[at + 2] = c.b * k;
-}
 
 /** decor/asset_store.ts's models and skins by group, as the renderer wants
  * them, rebuilt when the assets change. */
@@ -158,38 +134,14 @@ export function gpu_frame(state: RootState, root: THREE.Matrix4): void {
   u[18] = $v.z;
   const settings = useSettingsStore.getState();
   u[19] = settings.show_edge_shade ? EDGE_STRENGTH : 0;
-  const l = find_lights(state.scene);
-  if (l.sun) {
-    // The light's direction in the root's frame: the world direction, the
-    // root's rotation undone.
-    $v.copy(l.sun.position).sub(l.sun.target.position).normalize().transformDirection($m.copy(root).invert());
-    u[20] = $v.x;
-    u[21] = $v.y;
-    u[22] = $v.z;
-    put(u, 24, l.sun.color, l.sun.intensity);
-  } else {
-    u[20] = 0;
-    u[21] = 0;
-    u[22] = 1;
-    u[24] = u[25] = u[26] = 0;
-  }
+  // The light, the fog and the sky's colours and directions are the
+  // module's (crates/pxl-core/src/environment.rs), laid out as these
+  // uniforms take them from their twentieth float.
+  const pxl = CORE_PXL!;
+  const env = new Float32Array(pxl.memory.buffer, pxl.pxl_env_at(), ENV_FLOATS);
+  u.set(env.subarray(0, 24), 20);
   u[23] = settings.texture_pack ? 0 : 1;
-  const fog = state.scene.fog instanceof THREE.Fog ? state.scene.fog : null;
-  u[27] = fog ? fog.near : 1e9;
-  u[31] = fog ? fog.far : 2e9;
-  if (l.ambient) put(u, 28, l.ambient.color, l.ambient.intensity);
-  else u[28] = u[29] = u[30] = 0;
-  if (l.hemi) {
-    put(u, 32, l.hemi.color, l.hemi.intensity);
-    put(u, 36, l.hemi.groundColor, l.hemi.intensity);
-  } else {
-    u[32] = u[33] = u[34] = 0;
-    u[36] = u[37] = u[38] = 0;
-  }
-  u[35] = light_cfg.FLOOR;
   u[39] = EDGE_WIDTH;
-  if (fog) put(u, 40, fog.color, 1);
-  else u[40] = u[41] = u[42] = 0;
 
   // The sky, in three's world frame, where the dome stood.
   const sky = gpu.sky;
@@ -200,25 +152,7 @@ export function gpu_frame(state: RootState, root: THREE.Matrix4): void {
   sky[17] = $v.y;
   sky[18] = $v.z;
   sky[19] = sky_radius;
-  const dome = state.scene.getObjectByName("sky") as THREE.Mesh | undefined;
-  const su = (dome?.material as THREE.ShaderMaterial | undefined)?.uniforms;
-  if (su) {
-    const c3 = (at: number, c: THREE.Color | THREE.Vector3) => {
-      const v = c as { r?: number; x?: number; g?: number; y?: number; b?: number; z?: number };
-      sky[at] = v.r ?? v.x ?? 0;
-      sky[at + 1] = v.g ?? v.y ?? 0;
-      sky[at + 2] = v.b ?? v.z ?? 0;
-    };
-    c3(20, su.u_sky_top.value);
-    sky[23] = su.u_time.value;
-    c3(24, su.u_sky_middle.value);
-    sky[27] = su.u_star_intensity.value;
-    c3(28, su.u_sky_horizon.value);
-    sky[31] = su.u_sky_az.value;
-    c3(32, su.u_sun_dir.value);
-    c3(36, su.u_sun_glow.value);
-    c3(40, su.u_moon_dir.value);
-  }
+  sky.set(env.subarray(24, 48), 20);
   gpu.frame();
 }
 

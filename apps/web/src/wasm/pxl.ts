@@ -97,6 +97,10 @@ export type PxlExports = {
   pxl_billboards_remove(set: u32): void;
   pxl_puck_zone(x: number, y: number, z: number, count: u32, lane: u32, snap_dist: number, fog_far: number): void;
   pxl_puck_beacon(offset_x: number, offset_y: number, night: u32): void;
+  pxl_env_theme(lane: u32): void;
+  pxl_env_observe(lat: number, lon: number, unix_ms: number): void;
+  pxl_env_at(): u32;
+  pxl_env_daylight(lat: number, lon: number, day_start_ms: number): u32;
   pxl_puck_clear(): void;
   pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32): number;
   pxl_model_block(): u32;

@@ -107,8 +107,6 @@ export const SETTINGS = {
   show_edge_shade: toggle("lighting", true, { cost: "low" }),
   /** A uniform on an already-compiled shader term; not a pass. */
   show_rim_light: toggle("lighting", true, { cost: "low" }),
-  /** A shadow-camera depth pass per casting light. */
-  show_shadow_map: toggle("lighting", false, { cost: "high", dev: true }),
 
   // ---- quality.
   /** Ground colour from the art pack (four sampler2DArray taps per fragment)

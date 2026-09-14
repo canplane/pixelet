@@ -66,10 +66,6 @@
       "show_rim_light": {
         "label": "Rim Light",
         "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
-      },
-      "show_shadow_map": {
-        "label": "Shadows",
-        "description": "Renders real-time dynamic shadows based on the positions of the Sun and Moon."
       }
     },
     "quality": {

@@ -66,10 +66,6 @@
       "show_rim_light": {
         "label": "림 라이트",
         "description": "오브젝트 실루엣에 얇은 하이라이트를 추가하여 배경과 선명하게 분리합니다."
-      },
-      "show_shadow_map": {
-        "label": "그림자",
-        "description": "태양과 달의 위치에 따라 실시간으로 변화하는 그림자를 구현합니다."
       }
     },
     "quality": {

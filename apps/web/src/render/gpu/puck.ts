@@ -14,6 +14,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 
 import { marker_colors } from "@/module/world/marker/style.ts";
 import { GRADE_WGSL } from "./grade.ts";
+import { linear_rgb as linear } from "./color.ts";
 
 const DRAW_WORDS = 5;
 const UNIFORM_FLOATS = 8;
@@ -26,15 +27,6 @@ const BEACON_RADIUS = 0.3;
 const BEACON_DAY = "#ff1493";
 const BEACON_NIGHT = "#00f2ff";
 
-/** An sRGB hex colour in linear light, as THREE.Color holds it. */
-function linear(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  const c = (v: number) => {
-    const s = v / 255;
-    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  return [c((n >> 16) & 255), c((n >> 8) & 255), c(n & 255)];
-}
 const wgsl_vec3 = (c: [number, number, number]) => `vec3f(${c.map((v) => v.toFixed(6)).join(", ")})`;
 
 const FRAME_WGSL = /* wgsl */ `

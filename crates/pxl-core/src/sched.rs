@@ -18,6 +18,7 @@ use crate::billboard::Billboards;
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::draw::{DrawList, PIPELINE_CHUNK};
+use crate::environment::Environment;
 use crate::ghost::Ghost;
 use crate::lod::{Ladder, COARSEST};
 use crate::marker::Markers;
@@ -254,6 +255,8 @@ pub struct Scheduler {
     pub markers: Markers,
     /// The billboards (billboard.rs).
     pub billboards: Billboards,
+    /// The sun, the moon, the light and the sky (environment.rs).
+    pub environment: Environment,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -323,6 +326,7 @@ impl Scheduler {
             models: Models::default(),
             markers: Markers::default(),
             billboards: Billboards::default(),
+            environment: Environment::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -759,7 +763,7 @@ impl Scheduler {
 
         self.reclaim(world, &order, emit);
         self.models.tick(world, &mut self.draw, frame.delta_s as f32);
-        let animating = self.markers.tick(&frame);
+        let animating = self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
 
         let mut c = Census { committed, ..Census::default() };

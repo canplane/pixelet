@@ -119,7 +119,7 @@ export const themes: Record<WorldThemeKey, WorldTheme> = {
 
 /**
  * Theme derived from the current hour and the real sunrise/sunset for
- * wherever the map is centered (celestial_position.ts's get_sunrise_sunset)
+ * wherever the map is centered (crates/pxl-core/src/environment.rs)
  * — replaces a fixed 05:00/21:00 split that didn't track season or
  * location. MORNING/DAY/EVENING still split the daylight span the same way
  * the old fixed version did (37.5% / 37.5% / 25%, matching its old
