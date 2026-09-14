@@ -953,6 +953,300 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 })),
             )));
         }
+        Cmd::WORLD_UPDATE => {
+            let f = fields(pkt)?;
+            let platform = pxl_core::module::world::world::Platform {
+                geolocation: bool_at(&f, 4)?,
+                orientation: pxl_core::module::device::pose::use_device_orientation::OrientationPlatform {
+                    supported: bool_at(&f, 5)?,
+                    needs_permission: bool_at(&f, 6)?,
+                },
+            };
+            let asked = pxl_core::module::world::world::world_frame(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?, number_at(&f, 3)?, platform);
+            return Ok(Some((asked as i32, None)));
+        }
+        Cmd::WORLD_READ => {
+            use pxl_core::module::device::pose::use_device_orientation::{take_orientation_commands, OrientationCommand};
+            use pxl_core::module::device::pose::use_geolocation::{take_geolocation_commands, GeolocationCommand};
+            use pxl_core::module::map::ui::toast::toast_controller::{take_toast_commands, ToastCommand, ToastTone};
+            let toasts = take_toast_commands();
+            let geo: Vec<u32> = take_geolocation_commands()
+                .into_iter()
+                .map(|c| match c {
+                    GeolocationCommand::Start => 0,
+                    GeolocationCommand::Stop => 1,
+                })
+                .collect();
+            let ori: Vec<u32> = take_orientation_commands()
+                .into_iter()
+                .map(|c| match c {
+                    OrientationCommand::Listen => 0,
+                    OrientationCommand::RequestPermission => 1,
+                    OrientationCommand::Remove => 2,
+                })
+                .collect();
+            let log = pxl_core::module::world::sched::log::take_log_lines();
+            let draw = pxl_core::module::world::core_tick::take_draw();
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.branch(Some(&mut |t| {
+                        for c in &toasts {
+                            t.branch(Some(&mut |e| match c {
+                                ToastCommand::Show(spec) => {
+                                    let tone = match spec.tone {
+                                        ToastTone::Loading => 0,
+                                        ToastTone::Error => 1,
+                                        ToastTone::Success => 2,
+                                    };
+                                    e.bool(Some(true)).str(Some(spec.id)).str(Some(spec.message_key.as_str())).u32(Some(tone));
+                                }
+                                ToastCommand::Dismiss(id) => {
+                                    e.bool(Some(false)).str(Some(id)).str(Some("")).u32(Some(0));
+                                }
+                            }));
+                        }
+                    }));
+                    b.branch(Some(&mut |g| {
+                        for c in &geo {
+                            g.u32(Some(*c));
+                        }
+                    }));
+                    b.branch(Some(&mut |o| {
+                        for c in &ori {
+                            o.u32(Some(*c));
+                        }
+                    }));
+                    b.branch(Some(&mut |l| {
+                        for line in &log {
+                            l.str(Some(line.as_str()));
+                        }
+                    }));
+                    b.bool(Some(draw));
+                })),
+            )));
+        }
+        Cmd::INPUT_UPDATE => {
+            let f = fields(pkt)?;
+            pxl_core::module::camera::input::camera_input_rect(pxl_core::module::camera::input::Rect {
+                left: number_at(&f, 0)?,
+                top: number_at(&f, 1)?,
+                width: number_at(&f, 2)?,
+                height: number_at(&f, 3)?,
+            });
+            return Ok(Some((0, None)));
+        }
+        Cmd::INPUT_POINTER => {
+            use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, PointerKind};
+            let f = fields(pkt)?;
+            let kind = match u32_at(&f, 1)? {
+                1 => PointerKind::Touch,
+                2 => PointerKind::Pen,
+                _ => PointerKind::Mouse,
+            };
+            let (id, button, x, y) = (i32_at(&f, 2)?, i32_at(&f, 3)?, number_at(&f, 4)?, number_at(&f, 5)?);
+            match u32_at(&f, 0)? {
+                0 => camera_pointer_down(kind, id, button, x, y),
+                1 => camera_pointer_move(kind, id, x, y),
+                2 => camera_pointer_up(kind, id),
+                _ => camera_pointer_out(),
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::INPUT_WHEEL => {
+            pxl_core::module::camera::input::camera_wheel(number_at(&fields(pkt)?, 0)?);
+            return Ok(Some((0, None)));
+        }
+        Cmd::SENSOR_UPDATE => {
+            let f = fields(pkt)?;
+            let opt = |v: f64| (!v.is_nan()).then_some(v);
+            pxl_core::module::device::pose::use_geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
+            return Ok(Some((0, None)));
+        }
+        Cmd::SENSOR_ERROR => {
+            use pxl_core::module::device::pose::use_geolocation::{geolocation_error, GeolocationErrorCode};
+            let code = match u32_at(&fields(pkt)?, 0)? {
+                1 => GeolocationErrorCode::PermissionDenied,
+                2 => GeolocationErrorCode::PositionUnavailable,
+                3 => GeolocationErrorCode::Timeout,
+                _ => GeolocationErrorCode::Other,
+            };
+            geolocation_error(code);
+            return Ok(Some((0, None)));
+        }
+        Cmd::SENSOR_ORIENTATION => {
+            let f = fields(pkt)?;
+            let opt = |v: f64| (!v.is_nan()).then_some(v);
+            pxl_core::module::device::pose::use_device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
+            return Ok(Some((0, None)));
+        }
+        Cmd::SENSOR_PERMISSION => {
+            let f = fields(pkt)?;
+            let (granted, failed) = (bool_at(&f, 1)?, bool_at(&f, 2)?);
+            let platform = pxl_core::module::world::world::world_platform();
+            match (u32_at(&f, 0)?, granted) {
+                (0, true) => pxl_core::module::device::pose::use_geolocation::geolocation_permission_granted(platform.geolocation),
+                (0, false) => {}
+                _ => pxl_core::module::device::pose::use_device_orientation::orientation_permission(granted, failed),
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::SENSOR_VISIBILITY => {
+            let visible = bool_at(&fields(pkt)?, 0)?;
+            let platform = pxl_core::module::world::world::world_platform();
+            pxl_core::module::device::pose::use_geolocation::geolocation_visibility(visible, platform.geolocation);
+            if visible {
+                pxl_core::module::device::pose::use_device_orientation::orientation_visible();
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::PAGE_TERRAIN => {
+            use pxl_core::module::world::terrain::tile_repository::{open_terrain, TerrainLanes};
+            let f = fields(pkt)?;
+            let page = u64_at(&f, 0)?;
+            let lanes = TerrainLanes {
+                ground: [u32_at(&f, 1)? as usize, u32_at(&f, 2)? as usize, u32_at(&f, 3)? as usize, u32_at(&f, 4)? as usize],
+                ele: u32_at(&f, 5)? as usize,
+            };
+            let mut blocks = Vec::new();
+            for b in f.at(6)?.as_branch()?.iter() {
+                let b = b?.as_branch()?;
+                blocks.push((u32_at(&b, 0)? as usize, u32_at(&b, 1)?));
+            }
+            // SAFETY: the shell copied the page's lanes into blocks of the page
+            // section and holds them for as long as the page is resident.
+            let terrain = unsafe { open_terrain(lanes) };
+            pxl_core::module::world::terrain::resident::into_core(page, blocks, bool_at(&f, 7)?);
+            pxl_core::module::world::terrain::store::use_tile_store().set_tile(page, pxl_shared::bake::format::Tile { terrain });
+            return Ok(Some((0, None)));
+        }
+        Cmd::PAGE_POI => {
+            use pxl_core::module::world::poi::repository::{empty_page, open_poi_page};
+            let f = fields(pkt)?;
+            let page = u64_at(&f, 0)?;
+            let resident = match branch_at(&f, 1)? {
+                // SAFETY: the shell copied the packet into this block of the page
+                // section and holds it for this page alone until it is released.
+                Some(b) => unsafe { open_poi_page(u32_at(&b, 0)? as usize, u32_at(&b, 1)?)? },
+                None => empty_page()?,
+            };
+            pxl_core::module::world::poi::store::set_pois(page, resident);
+            return Ok(Some((0, None)));
+        }
+        Cmd::FETCH_READ => {
+            use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
+            let started = fetch_take_started();
+            let aborts = fetch_take_aborts();
+            let mut releases = pxl_core::module::world::terrain::resident::take_due_releases();
+            releases.extend(pxl_core::module::world::poi::store::take_released_blocks());
+            let rows: Vec<(String, String, String)> = started
+                .into_iter()
+                .map(|d| {
+                    let page = d.key.split_once(':').map_or(d.key.as_str(), |(_, p)| p);
+                    let url = match d.category.as_str() {
+                        "terrain" => pxl_core::module::world::terrain::tile_repository::tile_url(page),
+                        "poi" => pxl_core::module::world::poi::repository::poi_url(page),
+                        "geocode" => pxl_core::module::world::geocode::repository::geocode_url(page),
+                        _ => String::new(),
+                    };
+                    (d.key.clone(), d.category.clone(), url)
+                })
+                .collect();
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.branch(Some(&mut |s| {
+                        for (key, category, url) in &rows {
+                            s.branch(Some(&mut |r| {
+                                r.str(Some(key.as_str())).str(Some(category.as_str())).str(Some(url.as_str()));
+                            }));
+                        }
+                    }));
+                    b.branch(Some(&mut |a| {
+                        for key in &aborts {
+                            a.str(Some(key.as_str()));
+                        }
+                    }));
+                    b.branch(Some(&mut |r| {
+                        for (at, bytes) in &releases {
+                            r.branch(Some(&mut |e| {
+                                e.u32(Some(*at as u32)).u32(Some(*bytes));
+                            }));
+                        }
+                    }));
+                })),
+            )));
+        }
+        Cmd::FETCH_UPDATE => {
+            use pxl_core::module::world::sched::ledger::Outcome;
+            let f = fields(pkt)?;
+            let key = f.at(0)?.get_str()?;
+            let outcome = match u32_at(&f, 1)? {
+                0 => Outcome::Ok,
+                1 => Outcome::Aborted,
+                _ => Outcome::Error,
+            };
+            let error = match f.at(2)?.opt() {
+                Some(c) => Some(c.get_str()?),
+                None => None,
+            };
+            let mut phases = Vec::new();
+            for p in f.at(3)?.as_branch()?.iter() {
+                let p = p?.as_branch()?;
+                phases.push((p.at(0)?.get_str()?, number_at(&p, 1)?));
+            }
+            if let (false, Some(page)) = (outcome == Outcome::Ok, key.strip_prefix("geocode:").and_then(|p| p.parse::<u64>().ok())) {
+                pxl_core::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_failed(page, outcome == Outcome::Aborted);
+            }
+            pxl_core::module::world::sched::fetch_scheduler::fetch_settle(&key, outcome, (!phases.is_empty()).then_some(phases), error);
+            return Ok(Some((0, None)));
+        }
+        Cmd::FETCH_GEOCODE => {
+            let f = fields(pkt)?;
+            let page = u64_at(&f, 0)?;
+            let body = match f.at(1)?.opt() {
+                Some(c) => Some(c.get_str()?),
+                None => None,
+            };
+            pxl_core::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_arrived(page, body.as_deref());
+            return Ok(Some((0, None)));
+        }
+        Cmd::LOAD_READ => {
+            use pxl_core::render::gltf::load::{take_load_requests, LoadKind};
+            let requests = take_load_requests();
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.branch(Some(&mut |r| {
+                        for q in &requests {
+                            let kind = match q.kind {
+                                LoadKind::Gltf => 0,
+                                LoadKind::Image => 1,
+                            };
+                            r.branch(Some(&mut |e| {
+                                e.u32(Some(kind)).str(Some(q.url.as_str()));
+                            }));
+                        }
+                    }));
+                })),
+            )));
+        }
+        Cmd::LOAD_UPDATE => {
+            let f = fields(pkt)?;
+            let url = f.at(0)?.get_str()?;
+            let bytes = bytes_at(&f, 1, usize::MAX)?;
+            pxl_core::render::gltf::load::gltf_arrived(&url, bytes.as_slice());
+            return Ok(Some((0, None)));
+        }
+        Cmd::LOAD_IMAGE => {
+            let f = fields(pkt)?;
+            pxl_core::render::gltf::load::image_arrived(&f.at(0)?.get_str()?, u32_at(&f, 1)?);
+            return Ok(Some((0, None)));
+        }
+        Cmd::LOAD_DELETE => {
+            pxl_core::render::gltf::load::load_rejected(&fields(pkt)?.at(0)?.get_str()?);
+            return Ok(Some((0, None)));
+        }
         _ => {}
     }
     let Parts {
@@ -1272,6 +1566,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
+        // Applied before the world is borrowed, above.
+        Cmd::WORLD_UPDATE | Cmd::WORLD_READ | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::PAGE_TERRAIN | Cmd::PAGE_POI | Cmd::FETCH_READ | Cmd::FETCH_UPDATE | Cmd::FETCH_GEOCODE | Cmd::LOAD_READ | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE => return Ok(None),
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
     Ok(Some((0, None)))
