@@ -144,6 +144,7 @@ pub fn world_turn(platform: Platform) {
     // holds its own last-known coordinate across a transient null.
     location_puck_step(use_map_navigation().device_coord);
     reverse_geocode_step();
+    crate::module::map::ui::overlay::search_modal::search_step();
     toast_controller_step();
     fetch_pump();
 }
