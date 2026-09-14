@@ -26,7 +26,9 @@ import { BILLBOARD_ORDER } from "../billboard/sheet.ts";
 import { NO_SLOT } from "../billboard/atlas.ts";
 import { billboard_sheet } from "../billboard/sheet.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10
@@ -141,9 +143,6 @@ export type ChatBubbleProps = {
   actor: u32 | null;
 };
 
-/** Floats a billboard instance takes (crates/pxl/core/src/world/billboard.rs). */
-const BILLBOARD_FLOATS = 10;
-
 export function ChatBubble(props: ChatBubbleProps) {
   const { anchor_z, actor } = props;
   const chatLines = useUiStore((state) => state.chatLines);
@@ -189,15 +188,14 @@ function useBubbleSet(actor: u32 | null, text: string | null, tip_z: f64): void 
   const [held, set_held] = useState<{ set: u32; slot: u32; layout: BubbleLayout } | null>(null);
 
   useEffect(() => {
-    const p = CORE_PXL;
-    if (!p || actor === null || text === null) return;
+    if (!CORE_PXL || actor === null || text === null) return;
     const layout = layout_bubble(text);
     const slot = billboard_sheet.add(layout.box_w * RENDER_SCALE, layout.logical_h * RENDER_SCALE, (ctx) => draw_bubble(ctx, layout));
     if (slot === NO_SLOT) return;
-    const set = p.pxl_billboards_new(BILLBOARD_ORDER.chat);
+    const set = CORE_BUILD.call(Cmd.BILLBOARD_CREATE, packet((b) => b.u32(BILLBOARD_ORDER.chat)), (id) => id);
     set_held({ set, slot, layout });
     return () => {
-      p.pxl_billboards_remove(set);
+      CORE_BUILD.send(set, Cmd.BILLBOARD_DELETE);
       billboard_sheet.release(slot);
       set_held(null);
     };
@@ -205,19 +203,16 @@ function useBubbleSet(actor: u32 | null, text: string | null, tip_z: f64): void 
 
   const written = useRef<{ held: typeof held; tip_z: f64; generation: u32 }>({ held: null, tip_z: 0, generation: 0 });
   useTick("cosmetic", () => {
-    const p = CORE_PXL;
     const w = written.current;
-    if (!p || !held || actor === null) return;
+    if (!CORE_PXL || !held || actor === null) return;
     if (w.held === held && w.tip_z === tip_z && w.generation === billboard_sheet.sheet_generation) return;
     w.held = held;
     w.tip_z = tip_z;
     w.generation = billboard_sheet.sheet_generation;
     const { set, slot, layout } = held;
-    const lane = FIXED_ALLOC.take(Float32Array, BILLBOARD_FLOATS);
     // The tail tip is the anchor, at the bottom of the sprite.
-    lane.set([0, 0, 0, layout.box_w, layout.logical_h, billboard_sheet.u0(slot), billboard_sheet.v0(slot), billboard_sheet.u1(slot), billboard_sheet.v1(slot), 1]);
-    p.pxl_billboards_follow(set, actor, tip_z);
-    p.pxl_billboards_write(set, 1, lane.byteOffset);
-    FIXED_ALLOC.give(lane);
+    const lane = Float32Array.of(0, 0, 0, layout.box_w, layout.logical_h, billboard_sheet.u0(slot), billboard_sheet.v0(slot), billboard_sheet.u1(slot), billboard_sheet.v1(slot), 1);
+    CORE_BUILD.send(set, Cmd.BILLBOARD_FOLLOW, packet((b) => b.u32(actor).f64(tip_z)));
+    CORE_BUILD.send(set, Cmd.BILLBOARD_UPDATE, packet((b) => b.f32_array(lane)));
   }, "chat_bubble");
 }

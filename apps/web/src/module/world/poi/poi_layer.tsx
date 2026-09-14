@@ -63,6 +63,8 @@ import { BADGE_SHAMT_OVER_CUBE, fade_end_u, get_lod_level, lod_step_at, LOD_STEP
 import { usePoiStore } from "./store.ts";
 import { type FrameBudget, useTick } from "@/module/world/sched/tick.ts";
 import { CORE_ALLOC, CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { view } from "@/module/world/frame/view.ts";
 
 /**
@@ -310,7 +312,7 @@ function poi_place_step(
     wanted = false;
     last_start = now;
     if (!map_center || !show_poi) {
-      if (CORE_PXL) CORE_PXL.pxl_billboards_write(badge_set(CORE_PXL), 0, 0);
+      if (CORE_PXL) CORE_BUILD.send(badge_set(), Cmd.BILLBOARD_UPDATE, packet((b) => b.f32_array(new Float32Array(0))));
       invalidate();
       return true;
     }
@@ -508,8 +510,8 @@ function build_stage(j: PlaceJob): void {
 const BADGE_FLOATS = 10;
 let $badge_set: u32 | null = null;
 /** The core's billboard set the badges are, made on first use. */
-function badge_set(pxl: NonNullable<typeof CORE_PXL>): u32 {
-  if ($badge_set === null) $badge_set = pxl.pxl_billboards_new(BILLBOARD_ORDER.poi);
+function badge_set(): u32 {
+  if ($badge_set === null) $badge_set = CORE_BUILD.call(Cmd.BILLBOARD_CREATE, packet((b) => b.u32(BILLBOARD_ORDER.poi)), (id) => id);
   return $badge_set;
 }
 
@@ -536,9 +538,9 @@ function commit_stage(j: PlaceJob, now: f64): void {
     lane[o + 9] = BADGE_LOGICAL_H > 0 ? BADGE_CENTER_Y / BADGE_LOGICAL_H : 1;
   }
   if (CORE_PXL) {
-    const set = badge_set(CORE_PXL), origin = j.map_origin;
-    CORE_PXL.pxl_billboards_place(set, ivec.to_real(ivec.X(origin)), ivec.to_real(ivec.Y(origin)), ivec.to_real(ivec.Z(origin)));
-    CORE_PXL.pxl_billboards_write(set, count, lane.byteOffset);
+    const set = badge_set(), origin = j.map_origin;
+    CORE_BUILD.send(set, Cmd.BILLBOARD_PLACE, packet((b) => b.f64(ivec.to_real(ivec.X(origin))).f64(ivec.to_real(ivec.Y(origin))).f64(ivec.to_real(ivec.Z(origin)))));
+    CORE_BUILD.send(set, Cmd.BILLBOARD_UPDATE, packet((b) => b.f32_array(lane.subarray(0, count * BADGE_FLOATS))));
   }
   FIXED_ALLOC.give(lane);
   // What changed has to ask for the frame that shows it.

@@ -27,6 +27,39 @@ export const enum Major {
   STATE = 0x09,
   TERRAIN = 0x0a,
   DECOR_KIND = 0x0b,
+  GHOST = 0x0c,
+  PUCK = 0x0d,
+  BILLBOARD = 0x0e,
+  ACTOR = 0x0f,
+  DEBUG = 0x10,
+  ENV = 0x11,
+}
+
+/** The hover ghost's own verbs. */
+export const enum GhostMinor {
+  BOX = 0x10,
+  DECOR = 0x11,
+}
+
+/** The location puck's own verb. */
+export const enum PuckMinor {
+  BEACON = 0x10,
+}
+
+/** A billboard set's own verbs. */
+export const enum BillboardMinor {
+  PLACE = 0x10,
+  FOLLOW = 0x11,
+}
+
+/** An actor's own verb. */
+export const enum ActorMinor {
+  PLAY = 0x10,
+}
+
+/** The environment's own verb. */
+export const enum EnvMinor {
+  OBSERVE = 0x10,
 }
 
 /** An object store's own verb. */
@@ -101,6 +134,53 @@ export const enum Cmd {
   /** [group u32, model u32] — the model a decor group is drawn with, for the
    * hit test */
   DECOR_KIND_MODEL = 0x0b10,
+
+  // ---- the scene: what is drawn beside the chunks ----
+  //
+  // A lane of floats crosses in the packet, not by address: the glue's
+  // scratch is given back as soon as the command is sent, and the command
+  // is applied later.
+
+  /** [x f64, y f64, z f64, size f64, value u32, rgb u32, coplanar bool] — the
+   * hover ghost as a box, its min corner at (x, y, z) */
+  GHOST_BOX = 0x0c10,
+  /** [x f64, y f64, z f64, group u32, rotation f64] — the hover ghost as one
+   * instance of a decor group */
+  GHOST_DECOR = 0x0c11,
+  /** no packet — the ghost gone */
+  GHOST_DELETE = 0x0c04,
+  /** [x f64, y f64, z f64, zone f32[7 an instance], snap_dist f64, fog_far
+   * f64] — the puck's zone about its centre */
+  PUCK_UPDATE = 0x0d03,
+  /** [offset_x f64, offset_y f64, night bool] */
+  PUCK_BEACON = 0x0d10,
+  /** no packet — the puck gone */
+  PUCK_DELETE = 0x0d04,
+  /** tag call · [order u32] → result: the set's id */
+  BILLBOARD_CREATE = 0x0e01,
+  /** tag set · [instances f32[10 an instance]], relative to its anchor */
+  BILLBOARD_UPDATE = 0x0e03,
+  /** tag set · [x f64, y f64, z f64] — stood at a point */
+  BILLBOARD_PLACE = 0x0e10,
+  /** tag set · [actor u32, lift f64] — stood above an actor */
+  BILLBOARD_FOLLOW = 0x0e11,
+  /** tag set · no packet */
+  BILLBOARD_DELETE = 0x0e04,
+  /** tag call · [model u32] → result: the actor's id, or -1 */
+  ACTOR_CREATE = 0x0f01,
+  /** tag actor · [x f64, y f64, z f64, rotation_z f64, visible bool] */
+  ACTOR_UPDATE = 0x0f03,
+  /** tag actor · [clip u32, fade_s f32] */
+  ACTOR_PLAY = 0x0f10,
+  /** tag actor · no packet */
+  ACTOR_DELETE = 0x0f04,
+  /** [x f64, y f64, z f64, vertices f32[6 a vertex]] — the dev gizmos'
+   * segments about an origin */
+  DEBUG_UPDATE = 0x1003,
+  /** [theme f32[34]] — the theme the environment eases toward */
+  ENV_UPDATE = 0x1103,
+  /** [lat f64, lon f64, unix_ms f64] — the observer and the wall clock */
+  ENV_OBSERVE = 0x1110,
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //

@@ -119,6 +119,19 @@ arrived and hands the time back. What that decides about the boundary:
   place until the next write. What still applies the waiting submissions
   before it reads is only the reference paints (`pxl_terrain_read`,
   `pxl_terrain_paint`, `pxl_object_paint`), which the tests call.
+
+  Then the scene beside the chunks: the hover ghost, the location puck,
+  the billboard sets, the actors, the dev gizmos and the environment's
+  theme and observer (`GHOST_*`, `PUCK_*`, `BILLBOARD_*`, `ACTOR_*`,
+  `DEBUG_UPDATE`, `ENV_*`). Two things this family decided. A lane of
+  floats — a billboard's instances, the puck's zone, the gizmos' vertices,
+  a theme — crosses inside the packet, not as an address: the glue's
+  scratch went back to its allocator the moment the call returned, and a
+  command is applied later, so an address would name memory already
+  reused. And the renderer drains before it takes the lists, so what a
+  phase after the module's tick sends (the chat bubble, the gizmos, a POI
+  placement) is still drawn in the frame that sent it, as the direct calls
+  were.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for

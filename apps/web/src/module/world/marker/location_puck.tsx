@@ -16,6 +16,8 @@ import { get_ele } from "../terrain/elevation.ts";
 import { WorldThemeKey } from "../environment/theme.ts";
 import { useThemeKey } from "../environment/theme_clock.ts";
 import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { request_world_tick } from "../change.ts";
 
 const { FOG_FAR } = render_cfg;
@@ -125,10 +127,9 @@ export function LocationPuck(props: LocationPuckProps) {
   // where the beacon should stand; the core holds the zone, eases, spins and
   // bobs the beacon, and draws both.
   useLayoutEffect(() => {
-    const p = CORE_PXL;
-    if (!p) return;
+    if (!CORE_PXL) return;
     if (!has_ground) {
-      p.pxl_puck_clear();
+      CORE_BUILD.send(0, Cmd.PUCK_DELETE);
       return;
     }
     const v: V3 = $v.current;
@@ -145,14 +146,14 @@ export function LocationPuck(props: LocationPuckProps) {
       center3n(v, U_PER_CELL, v);
       lane.set([v[0], v[1], v[2], borders[0], borders[1], borders[2], borders[3]], i * 7);
     }
-    p.pxl_puck_zone(center_pos[0], center_pos[1], center_pos[2], ZONE_SAMPLES.length, lane.byteOffset, ZONE_RADIUS_CELL * U_PER_CELL, FOG_FAR);
+    CORE_BUILD.send(0, Cmd.PUCK_UPDATE, packet((b) => b.f64(center_pos[0]).f64(center_pos[1]).f64(center_pos[2]).f32_array(lane).f64(ZONE_RADIUS_CELL * U_PER_CELL).f64(FOG_FAR)));
     FIXED_ALLOC.give(lane);
     request_world_tick();
   }, [has_ground, center_pos, recompute_tick]);
   useEffect(() => {
-    CORE_PXL?.pxl_puck_beacon(beacon_offset[0], beacon_offset[1], is_night ? 1 : 0);
+    if (CORE_PXL) CORE_BUILD.send(0, Cmd.PUCK_BEACON, packet((b) => b.f64(beacon_offset[0]).f64(beacon_offset[1]).bool(is_night)));
   }, [beacon_offset, is_night, center_pos]);
-  useEffect(() => () => CORE_PXL?.pxl_puck_clear(), []);
+  useEffect(() => () => CORE_BUILD.send(0, Cmd.PUCK_DELETE), []);
 
   return null;
 }

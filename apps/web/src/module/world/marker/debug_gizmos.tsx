@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64 } from "@xpute/core/kit/word.ts";
 import { type Mat4, mat4_clip_w, mat4_transform_point } from "@xpute/core/kit/mat4.ts";
 import { type IVec, ivec, projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { L1_IDX_IN_L4, L3_BASE, L3_CENTER } from "@pxl/shared/spec/space/indexer.ts";
@@ -27,14 +27,15 @@ import { register_tile_interest } from "@/module/world/terrain/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { request_world_tick } from "@/module/world/change.ts";
 import { view } from "@/module/world/frame/view.ts";
-import { CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_PXL } from "@/wasm/core_pool.ts";
+import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 const COLOR: V3 = [0, 0, 0];
 const DASH: f64 = 0.3;
 const GAP: f64 = 0.2;
 /** Half the cross a point is drawn as, in units. */
 const POINT_HALF: f64 = 0.15;
-const VERTEX_FLOATS = 6;
 const RING_RADIUS: f64 = 4;
 const RING_SEGMENTS = 64;
 
@@ -189,7 +190,7 @@ export function DebugGizmos(props: DebugGizmosProps) {
   const built_for = useRef<{ map: Sketch | null; key: string }>({ map: null, key: "" });
 
   // Gone with the layer.
-  useEffect(() => () => CORE_PXL?.pxl_debug_set(0, 0, 0, 0, 0), []);
+  useEffect(() => () => CORE_BUILD.send(0, Cmd.DEBUG_UPDATE, packet((b) => b.f64(0).f64(0).f64(0).f32_array(new Float32Array(0)))), []);
 
   const refs = useRef<(HTMLDivElement | null)[]>([]);
   const $p = useRef({ x: 0, y: 0, z: 0 }).current;
@@ -204,11 +205,8 @@ export function DebugGizmos(props: DebugGizmosProps) {
       s.append(map_sketch);
       sketch_frames(s);
       drawn.current = s;
-      const count: u32 = s.vertices.length / VERTEX_FLOATS;
-      const lane = FIXED_ALLOC.take(Float32Array, Math.max(VERTEX_FLOATS, s.vertices.length));
-      lane.set(s.vertices);
-      p.pxl_debug_set(ivec.to_real(ivec.X(map_origin)), ivec.to_real(ivec.Y(map_origin)), ivec.to_real(ivec.Z(map_origin)), count, lane.byteOffset);
-      FIXED_ALLOC.give(lane);
+      const vertices = Float32Array.from(s.vertices);
+      CORE_BUILD.send(0, Cmd.DEBUG_UPDATE, packet((b) => b.f64(ivec.to_real(ivec.X(map_origin))).f64(ivec.to_real(ivec.Y(map_origin))).f64(ivec.to_real(ivec.Z(map_origin))).f32_array(vertices)));
       request_world_tick();
       const texts = s.labels.map((l) => l.text);
       if (texts.join("\n") !== label_texts.join("\n")) set_label_texts(texts);

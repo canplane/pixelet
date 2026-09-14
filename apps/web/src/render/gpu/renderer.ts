@@ -287,6 +287,10 @@ export class GpuRenderer {
     if (!this.depth) return;
     const pxl = this.pxl;
     const mem = pxl.memory.buffer;
+    // Every command sent this frame is applied before its lists are taken,
+    // so what a phase after the module's tick sent (a billboard, the dev
+    // gizmos) is drawn in the frame that sent it.
+    pxl.pxl_drain();
     const at = pxl.pxl_draw_take();
     const row = this.draw_row ??= new Uint32Array(mem, at, 10);
     const rewrites = new Uint32Array(mem, row[8], row[9] * REWRITE_WORDS);

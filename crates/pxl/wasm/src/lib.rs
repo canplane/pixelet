@@ -917,6 +917,20 @@ fn u64_at(b: &BranchCursor, i: u32) -> Result<u64, MarshalError> {
     Ok(b.at(i)?.get_bigint()? as u64)
 }
 
+/// A lane of floats whose length is a whole number of `stride`s — for a
+/// theme, exactly `stride`.
+fn floats_at(b: &BranchCursor, i: u32, stride: usize) -> Result<xpute_core::kit::array::F32Array, MarshalError> {
+    let a = b.at(i)?.get_array::<f32>()?;
+    if !a.length().is_multiple_of(stride) {
+        return Err(MarshalError::new(
+            Errno::EBADMSG,
+            Some(&format!("a lane of {} floats is not whole instances of {stride}", a.length())),
+            None,
+        ));
+    }
+    Ok(a)
+}
+
 /// A u8 lane of exactly `len` elements.
 fn bytes_at(b: &BranchCursor, i: u32, len: usize) -> Result<xpute_core::kit::array::U8Array, MarshalError> {
     let a = b.at(i)?.get_array::<u8>()?;
@@ -1186,6 +1200,92 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::OBJECT_STAT => {
             unreachable!("applied before the parts are taken")
         }
+        Cmd::GHOST_BOX => {
+            let f = fields(pkt)?;
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            sched.ghost.set_box(&mut world, &mut sched.draw, at, number_at(&f, 3)?, u32_at(&f, 4)?, u32_at(&f, 5)?, bool_at(&f, 6)?);
+        }
+        Cmd::GHOST_DECOR => {
+            let f = fields(pkt)?;
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            sched.ghost.set_decor(&mut world, &mut sched.draw, at, u32_at(&f, 3)?, number_at(&f, 4)? as f32);
+        }
+        Cmd::GHOST_DELETE => sched.ghost.clear(&mut world, &mut sched.draw),
+        Cmd::PUCK_UPDATE => {
+            let f = fields(pkt)?;
+            let zone = floats_at(&f, 3, 7)?;
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            // SAFETY: the zone's floats, in the arena, until this message is advanced past.
+            unsafe {
+                sched.markers.set_zone(
+                    &mut world,
+                    &mut sched.draw,
+                    at,
+                    zone.length() as u32 / 7,
+                    zone.as_slice().as_ptr() as usize,
+                    number_at(&f, 4)?,
+                    number_at(&f, 5)?,
+                )
+            };
+        }
+        Cmd::PUCK_BEACON => {
+            let f = fields(pkt)?;
+            sched.markers.set_beacon([number_at(&f, 0)?, number_at(&f, 1)?], bool_at(&f, 2)?);
+        }
+        Cmd::PUCK_DELETE => sched.markers.clear(&mut world, &mut sched.draw),
+        Cmd::BILLBOARD_CREATE => {
+            let order = u32_at(&fields(pkt)?, 0)?;
+            return Ok(Some((sched.billboards.new_set(order) as i32, None)));
+        }
+        Cmd::BILLBOARD_UPDATE => {
+            let lane = floats_at(&fields(pkt)?, 0, 10)?;
+            // SAFETY: the instances' floats, in the arena, until this message is advanced past.
+            unsafe { sched.billboards.write(&mut world, &mut sched.draw, tag, lane.length() as u32 / 10, lane.as_slice().as_ptr() as usize) };
+        }
+        Cmd::BILLBOARD_PLACE => {
+            let f = fields(pkt)?;
+            sched.billboards.place(tag, [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?]);
+        }
+        Cmd::BILLBOARD_FOLLOW => {
+            let f = fields(pkt)?;
+            sched.billboards.follow(tag, u32_at(&f, 0)?, number_at(&f, 1)?);
+        }
+        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut world, &mut sched.draw, tag),
+        Cmd::ACTOR_CREATE => {
+            let model = u32_at(&fields(pkt)?, 0)?;
+            return Ok(Some((sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32), None)));
+        }
+        Cmd::ACTOR_UPDATE => {
+            let f = fields(pkt)?;
+            let (at, rotation_z, visible) = ([number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?], number_at(&f, 3)?, bool_at(&f, 4)?);
+            if let Some(a) = sched.models.actor(tag) {
+                a.at = at;
+                a.rotation_z = rotation_z as f32;
+                a.visible = visible;
+            }
+        }
+        Cmd::ACTOR_PLAY => {
+            let f = fields(pkt)?;
+            sched.models.play(tag, u32_at(&f, 0)?, number_at(&f, 1)? as f32);
+        }
+        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut world, &mut sched.draw, tag),
+        Cmd::DEBUG_UPDATE => {
+            let f = fields(pkt)?;
+            let vertices = floats_at(&f, 3, 6)?;
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            // SAFETY: the vertices' floats, in the arena, until this message is advanced past.
+            unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
+        }
+        Cmd::ENV_UPDATE => {
+            let lane = floats_at(&fields(pkt)?, 0, pxl_core::world::environment::THEME_FLOATS)?;
+            let theme = <[f32; pxl_core::world::environment::THEME_FLOATS]>::try_from(lane.as_slice())
+                .map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a theme of {} floats", lane.length())), None))?;
+            sched.environment.set_theme(&theme);
+        }
+        Cmd::ENV_OBSERVE => {
+            let f = fields(pkt)?;
+            sched.environment.observe(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
+        }
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
@@ -1345,40 +1445,6 @@ pub extern "C" fn pxl_build_now(id: u32) {
 
 // ---- The billboards (crates/pxl/core/src/world/billboard.rs) ----
 
-/// A billboard set drawn in `order`: its id.
-#[no_mangle]
-pub extern "C" fn pxl_billboards_new(order: u32) -> u32 {
-    state().sched.billboards.new_set(order)
-}
-
-/// A set's instances: `count` of 10 floats at `lane`, relative to its anchor.
-#[no_mangle]
-pub extern "C" fn pxl_billboards_write(set: u32, count: u32, lane: u32) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    // SAFETY: the glue's lane of count * 10 floats.
-    unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane as usize) };
-}
-
-/// Stands a set at (x, y, z) in units.
-#[no_mangle]
-pub extern "C" fn pxl_billboards_place(set: u32, x: f64, y: f64, z: f64) {
-    state().sched.billboards.place(set, [x, y, z]);
-}
-
-/// Stands a set `lift` units above an actor.
-#[no_mangle]
-pub extern "C" fn pxl_billboards_follow(set: u32, actor: u32, lift: f64) {
-    state().sched.billboards.follow(set, actor, lift);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_billboards_remove(set: u32) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.billboards.remove(&mut world, &mut sched.draw, set);
-}
-
 // ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
 
 /// Shader `kind`'s WGSL: a row of two words, its address and its length
@@ -1420,33 +1486,7 @@ pub extern "C" fn pxl_frame_uniform_at() -> *const u32 {
 
 // ---- The dev gizmos (crates/pxl/core/src/world/debug.rs) ----
 
-/// The gizmos' segments: `vertex_cnt` vertices of 6 floats at `lane`,
-/// relative to an origin at (x, y, z) in units.
-#[no_mangle]
-pub extern "C" fn pxl_debug_set(x: f64, y: f64, z: f64, vertex_cnt: u32, lane: u32) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    // SAFETY: the glue's lane of vertex_cnt * 6 floats.
-    unsafe { sched.debug.set(&mut world, &mut sched.draw, [x, y, z], vertex_cnt, lane as usize) };
-}
-
 // ---- The environment (crates/pxl/core/src/world/environment.rs) ----
-
-/// The theme the environment eases toward: THEME_FLOATS floats at `lane`.
-#[no_mangle]
-pub extern "C" fn pxl_env_theme(lane: u32) {
-    let s = state();
-    let mut theme = [0.0f32; pxl_core::world::environment::THEME_FLOATS];
-    // SAFETY: the glue's lane of THEME_FLOATS floats in the memory.
-    unsafe { core::ptr::copy_nonoverlapping(lane as usize as *const f32, theme.as_mut_ptr(), theme.len()) };
-    s.sched.environment.set_theme(&theme);
-}
-
-/// The observer, in degrees, and the wall clock, in Unix milliseconds.
-#[no_mangle]
-pub extern "C" fn pxl_env_observe(lat: f64, lon: f64, unix_ms: f64) {
-    state().sched.environment.observe(lat, lon, unix_ms);
-}
 
 /// Sunrise and sunset for the local day from `day_start_ms`, in hours
 /// after it: where the two f64s sit.
@@ -1464,30 +1504,6 @@ pub extern "C" fn pxl_env_at() -> u32 {
 }
 
 // ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
-
-/// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre
-/// relative to the zone's, and which edges border the ring), about a centre
-/// at (x, y, z) in units; the beacon jumps rather than eases past
-/// `snap_dist`, and nothing is drawn past `fog_far` of the camera.
-#[no_mangle]
-pub extern "C" fn pxl_puck_zone(x: f64, y: f64, z: f64, count: u32, lane: u32, snap_dist: f64, fog_far: f64) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    // SAFETY: the glue's lane of count * 7 floats.
-    unsafe { sched.markers.set_zone(&mut world, &mut sched.draw, [x, y, z], count, lane as usize, snap_dist, fog_far) };
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_puck_beacon(offset_x: f64, offset_y: f64, night: u32) {
-    state().sched.markers.set_beacon([offset_x, offset_y], night != 0);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_puck_clear() {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.markers.clear(&mut world, &mut sched.draw);
-}
 
 // ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
 
@@ -1554,64 +1570,6 @@ pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
     let sched = &mut s.sched;
     // SAFETY: the model's block is in the volumes' memory.
     unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
-}
-
-/// An actor of `model`: its id, or -1.
-#[no_mangle]
-pub extern "C" fn pxl_actor_new(model: u32) -> i32 {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32)
-}
-
-/// Where the actor stands, in units, its turn about Z, and whether it is drawn.
-#[no_mangle]
-pub extern "C" fn pxl_actor_place(actor: u32, x: f64, y: f64, z: f64, rotation_z: f64, visible: u32) {
-    if let Some(a) = state().sched.models.actor(actor) {
-        a.at = [x, y, z];
-        a.rotation_z = rotation_z as f32;
-        a.visible = visible != 0;
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_actor_play(actor: u32, clip: u32, fade_s: f32) {
-    state().sched.models.play(actor, clip, fade_s);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_actor_remove(actor: u32) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.models.remove_actor(&mut world, &mut sched.draw, actor);
-}
-
-/// The hover ghost as a box of `size` units with its min corner at (x, y,
-/// z) in units, painted as object value `value` paints or, where that paints
-/// nothing, as `rgb` (0xRRGGBB) untextured; `coplanar` when it sits in a
-/// surface rather than clear of one.
-#[no_mangle]
-pub extern "C" fn pxl_ghost_box(x: f64, y: f64, z: f64, size: f64, value: u32, rgb: u32, coplanar: u32) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.ghost.set_box(&mut world, &mut sched.draw, [x, y, z], size, value, rgb, coplanar != 0);
-}
-
-/// The hover ghost as one instance of decor group `group` (every kind's
-/// variants in teaching order), its base at (x, y, z) in units, turned
-/// `rotation` about Z.
-#[no_mangle]
-pub extern "C" fn pxl_ghost_decor(x: f64, y: f64, z: f64, group: u32, rotation: f64) {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.ghost.set_decor(&mut world, &mut sched.draw, [x, y, z], group, rotation as f32);
-}
-
-#[no_mangle]
-pub extern "C" fn pxl_ghost_clear() {
-    let s = state();
-    let Parts { mut world, sched, .. } = parts(s);
-    sched.ghost.clear(&mut world, &mut sched.draw);
 }
 
 /// Hands the renderer's lists over (crates/pxl/core/src/render/draw.rs): a row of
