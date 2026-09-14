@@ -22,7 +22,7 @@
  */
 
 import { useEffect } from "react";
-import { invalidate, useThree } from "@react-three/fiber";
+import { request_world_tick as invalidate } from "@/module/world/change.ts";
 
 import type { f64, i32, u32 } from "@xpute/core/kit/word.ts";
 import { FROM_L3_IDX, SPAN_CENTER } from "@pxl/shared/spec/space/indexer.ts";
@@ -295,7 +295,7 @@ export function poi_place_request(): void {
 }
 
 /** True while a placement is pending or running — the tick must keep
- * coming, since under frameloop="demand" nothing else may be asking. */
+ * coming, since nothing else may be asking. */
 function poi_place_busy(): boolean {
   return wanted || job !== null;
 }
@@ -552,7 +552,7 @@ function commit_stage(j: PlaceJob, now: f64): void {
     CORE_PXL.pxl_billboards_write(set, count, lane.byteOffset);
   }
   FIXED_ALLOC.give(lane);
-  // frameloop="demand": what changed has to ask for the frame that shows it.
+  // What changed has to ask for the frame that shows it.
   invalidate();
 
   poi_place_stats.absorbed = j.absorbed;
@@ -640,7 +640,6 @@ export function PoiLayer() {
   // view_state: a pure rotate/zoom changes what's in frustum without
   // changing map_center.
   const view_state = useCameraStore((state) => state.view_state);
-  const { size } = useThree();
 
   // Every input a placement depends on asks for one; the step throttles.
   // The view and the centre change every frame of a drag, and asking is a
@@ -650,7 +649,7 @@ export function PoiLayer() {
   useEffect(() => {
     poi_place_request();
     invalidate();
-  }, [view_state, map_center, poi_revision, show_poi, size.width, size.height]);
+  }, [view_state, map_center, poi_revision, show_poi]);
 
   // One subscription for the whole layer, not one per mounted badge. Terrain
   // arriving is what grounds an entry indexed before its tile did, and the
@@ -670,7 +669,7 @@ export function PoiLayer() {
   // phase, and while that runs the previous build keeps answering — so a
   // placement can land against an index a few pages behind. The step that
   // finishes a rebuild is the moment to place again, and the tick must keep
-  // coming until it does: under frameloop="demand" nothing else may be asking.
+  // coming until it does: nothing else may be asking.
   useTick("content", ({ state, budget }) => {
     if (poi_index_sweep(budget)) poi_place_request();
     if (poi_index_stats().sweeping > 0) state.invalidate();

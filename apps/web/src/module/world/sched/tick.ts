@@ -10,8 +10,8 @@
  * independent, so a frame could legally spend both in full before anything
  * else ran. The rest ran unbudgeted, including one step measured at 22 ms.
  *
- * Here there is one tick, called from one `useFrame`, and it runs its phases
- * in a fixed order against one budget. The order *is* the priority:
+ * Here there is one tick, run once per animation frame the world asked
+ * for, and it runs its phases in a fixed order against one budget. The order *is* the priority:
  *
  *   interaction   camera, frame rebasing, the puck — what the hand is doing.
  *                 Not budgeted, and must stay O(1): the budget clock is
@@ -51,7 +51,8 @@
  */
 
 import { useLayoutEffect, useRef } from "react";
-import { type RootState, useFrame, useThree } from "@react-three/fiber";
+
+import { post_cfg } from "@/module/world/environment/config.ts";
 
 import { type BudgetOpts, type PassStats, run_under_budget } from "./frame_budget.ts";
 import { ledger_last_frame } from "./ledger.ts";
@@ -60,8 +61,19 @@ import { bind_tick_request, world_wakers } from "@/module/world/change.ts";
 export type Phase = "interaction" | "visible" | "content" | "cosmetic" | "report";
 export const PHASES: readonly Phase[] = ["interaction", "visible", "content", "cosmetic", "report"];
 
+/** What a step may ask of the frame: another frame, the viewport, the clock. */
+export type TickState = {
+  /** Asks for a frame after this one: the tick runs only when something
+   * asked, so a step that changes something over time asks for the next. */
+  invalidate(): void;
+  /** The viewport in CSS pixels, and the device pixels each one is. */
+  size: { width: number; height: number };
+  viewport: { dpr: number };
+  clock: { getElapsedTime(): number };
+};
+
 export type TickContext = {
-  state: RootState;
+  state: TickState;
   delta: number;
   /** Decided after the interaction phase; steps there must not read it. */
   budget: FrameBudget;
@@ -89,7 +101,7 @@ export type TickStep = (ctx: TickContext) => void;
  * it would feed an overrun back into a bigger budget. The fast edge of the
  * distribution is the refresh interval: with vsync, gaps come in multiples
  * of it, and the smallest common one is it. Gaps past MAX_FRAME_GAP_MS are
- * not frames at all — under frameloop="demand" an idle canvas draws nothing,
+ * not frames at all — an idle canvas draws nothing,
  * and the gap before the next frame can be seconds.
  *
  * Only gaps between two moving frames count, and the percentile is the
@@ -294,7 +306,7 @@ function run_phase(phase: Phase, ctx: TickContext): void {
   ctx.phase_ms[phase] = performance.now() - t0;
 }
 
-export function run_tick(state: RootState, delta: number): TickReport {
+export function run_tick(state: TickState, delta: number): TickReport {
   const t0 = performance.now();
   observe_render_cost();
   const phase_ms: Record<Phase, number> = { interaction: 0, visible: 0, content: 0, cosmetic: 0, report: 0 };
@@ -327,13 +339,55 @@ export function run_tick(state: RootState, delta: number): TickReport {
   return last_report;
 }
 
-/** The one `useFrame` in the world. Mount once, inside the Canvas, before
- * anything that registers a step. */
-export function TickDriver() {
-  const invalidate = useThree((s) => s.invalidate);
-  useLayoutEffect(() => bind_tick_request(() => invalidate()), [invalidate]);
-  useFrame((state, delta) => {
-    run_tick(state, delta);
-  });
+/**
+ * The one frame loop in the world: an animation frame runs the tick, and
+ * only when something asked for one — a gesture, a damping step still
+ * settling, a build with more to commit, the module's own view_dirty. A
+ * frame nobody asked for is skipped, so an idle view costs nothing. Mount
+ * once, before anything that registers a step, over `element`, whose size
+ * is the viewport's.
+ */
+export function TickDriver({ element }: { element: HTMLElement | null }) {
+  useLayoutEffect(() => {
+    if (!element) return;
+    const state: TickState = {
+      invalidate,
+      size: { width: Math.max(1, element.clientWidth), height: Math.max(1, element.clientHeight) },
+      viewport: { dpr: Math.min(post_cfg.DPR[1], Math.max(post_cfg.DPR[0], globalThis.devicePixelRatio || 1)) },
+      clock: { getElapsedTime: () => (performance.now() - clock_start) / 1000 },
+    };
+    const clock_start = performance.now();
+    let pending = 0;
+    let last = performance.now();
+    let alive = true;
+    function invalidate(): void {
+      if (pending || !alive) return;
+      pending = requestAnimationFrame(frame);
+    }
+    function frame(now: number): void {
+      pending = 0;
+      if (!alive) return;
+      // A step's ask during the tick lands after it: the frame it asks for
+      // is the next one.
+      const delta = Math.min(0.1, Math.max(0, (now - last) / 1000));
+      last = now;
+      run_tick(state, delta);
+    }
+    const observer = new ResizeObserver(() => {
+      state.size.width = Math.max(1, element.clientWidth);
+      state.size.height = Math.max(1, element.clientHeight);
+      state.viewport.dpr = Math.min(post_cfg.DPR[1], Math.max(post_cfg.DPR[0], globalThis.devicePixelRatio || 1));
+      invalidate();
+    });
+    observer.observe(element);
+    const unbind = bind_tick_request(invalidate);
+    invalidate();
+    return () => {
+      alive = false;
+      if (pending) cancelAnimationFrame(pending);
+      observer.disconnect();
+      unbind();
+    };
+  }, [element]);
   return null;
 }

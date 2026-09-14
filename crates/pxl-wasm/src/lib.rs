@@ -1094,6 +1094,18 @@ pub extern "C" fn pxl_billboards_remove(set: u32) {
     sched.billboards.remove(&mut world, &mut sched.draw, set);
 }
 
+// ---- The dev gizmos (crates/pxl-core/src/debug.rs) ----
+
+/// The gizmos' segments: `vertex_cnt` vertices of 6 floats at `lane`,
+/// relative to an origin at (x, y, z) in units.
+#[no_mangle]
+pub extern "C" fn pxl_debug_set(x: f64, y: f64, z: f64, vertex_cnt: u32, lane: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    // SAFETY: the glue's lane of vertex_cnt * 6 floats.
+    unsafe { sched.debug.set(&mut world, &mut sched.draw, [x, y, z], vertex_cnt, lane as usize) };
+}
+
 // ---- The environment (crates/pxl-core/src/environment.rs) ----
 
 /// The theme the environment eases toward: THEME_FLOATS floats at `lane`.

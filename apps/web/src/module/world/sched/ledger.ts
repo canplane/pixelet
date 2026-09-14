@@ -14,7 +14,7 @@
  *   worker.
  * - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory,
  *   queue pressure). Only accrues while frames actually render
- *   (`frameloop="demand"`), which is correct: idle means nothing to sample.
+ *   (the tick runs only when asked), which is correct: idle means nothing to sample.
  *
  * The per-frame CPU breakdown is the tick's phases (sched/tick.ts) plus
  * chunk_stage's recheck/commit split inside the visible phase; there is no

@@ -27,7 +27,6 @@ import { fvec, type IVec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useMapStore } from "@/module/map/store.ts";
-import { useAnchorRegistry } from "@/module/world/anchor/context.tsx";
 
 import { chunk_nodes, ChunkNode, lod_build_stats, RETAIN_BUDGET_BYTES, take_node_counts } from "@/module/world/chunk_node.ts";
 import { CORE_BUILD, FRAME } from "@/render/layer/pipeline/core_build.ts";
@@ -121,7 +120,6 @@ function mount_chunk(id: u32, page_idx: IVec, base_x: u32, base_y: u32): void {
  * longer exclusively uses.
  */
 export function LodSchedulerProvider({ children }: { children: ReactNode }) {
-  const anchor_registry = useAnchorRegistry();
   const lead = useRef({ x: 0, y: 0, z: 0 }).current;
 
   // What the visible phase measured, handed to the report phase below. A
@@ -147,7 +145,7 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // the work by it; the tier each chunk picks still comes from the camera
     // as drawn.
     const target = useMapStore.getState().map_center;
-    const origin = anchor_registry.cur_map_origin;
+    const origin = view.origin;
     if (target) {
       const local = ivec.sub(target.i, origin);
       lead_point(

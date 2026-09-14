@@ -27,6 +27,7 @@ import { SkinnedPass } from "./skinned.ts";
 import { PuckPass } from "./puck.ts";
 import { BadgePass } from "./badges.ts";
 import { PreviewCase } from "./preview.ts";
+import { DebugPass } from "./debug.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -43,6 +44,7 @@ const PIPELINE_SKINNED = 5;
 const PIPELINE_PUCK_ZONE = 6;
 const PIPELINE_PUCK_BEACON = 7;
 const PIPELINE_BADGE = 8;
+const PIPELINE_DEBUG = 9;
 /** draw.rs's pipelines, by id, as the ledger names them. */
 const PIPELINE_NAMES: Record<number, string> = {
   [PIPELINE_CHUNK]: "chunk",
@@ -54,6 +56,7 @@ const PIPELINE_NAMES: Record<number, string> = {
   [PIPELINE_PUCK_ZONE]: "puck",
   [PIPELINE_PUCK_BEACON]: "puck",
   [PIPELINE_BADGE]: "billboard",
+  [PIPELINE_DEBUG]: "debug",
 };
 
 /** Straight alpha over what is drawn, for the ghost. */
@@ -100,6 +103,8 @@ export class GpuRenderer {
   private readonly puck: PuckPass;
   /** The badges (badges.ts), a pass of their own that reads the depth. */
   readonly badges: BadgePass;
+  /** The dev gizmos (debug.ts), over everything. */
+  private readonly debug: DebugPass;
   /** The display cases open (preview.ts), drawn after the world each frame. */
   private readonly previews = new Set<PreviewCase>();
   /** Each block's vertex and index counts, as its upload said. */
@@ -185,6 +190,7 @@ export class GpuRenderer {
     this.skinned = new SkinnedPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.puck = new PuckPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
     this.badges = new BadgePass(device, this.format, DEPTH_FORMAT);
+    this.debug = new DebugPass(device, this.format, DEPTH_FORMAT, this.frame_buffer);
   }
 
   /** A renderer over a device, or null where there is no WebGPU: the app
@@ -308,6 +314,7 @@ export class GpuRenderer {
       if (!this.draw_meshes(pass, draws, (q) => q === p, true)) continue;
     }
     this.decor.draw_ghosts(pass, draws, uniforms, this.buffers, this.counts);
+    this.debug.draw(pass, draws, uniforms, this.buffers);
     pass.end();
     this.stat.badges = this.badges.draw(encoder, color, this.depth, draws, uniforms, this.buffers);
     for (const preview of this.previews) preview.draw(encoder, this.uniforms, draws, uniforms, this.buffers, this.counts);

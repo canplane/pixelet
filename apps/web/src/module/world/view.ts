@@ -36,6 +36,8 @@ import {
   type Vec3,
 } from "@xpute/core/kit/mat4.ts";
 
+import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+
 import { camera_cfg } from "@/module/camera/config.ts";
 import { render_cfg } from "@/module/world/environment/config.ts";
 import { orbit_local_offset } from "@/module/camera/orbit.ts";
@@ -61,6 +63,9 @@ export const view = {
   tx: 0,
   ty: 0,
   tz: 0,
+  /** The map origin the root frame is relative to — the floating origin,
+   * as rebased by the translation step. */
+  origin: 0n as IVec,
 
   // ---- the viewport ----
   width: 1,

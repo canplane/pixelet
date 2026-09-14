@@ -3,8 +3,7 @@
 /**
  * The WebGPU canvas, and the frame's uniforms: the camera and the root
  * frame from the view (module/world/view.ts), the environment from the
- * module. Everything is drawn here; three's canvas above it, cleared
- * transparent, draws only the dev gizmos.
+ * module. Everything is drawn here.
  */
 
 import { useEffect, useRef } from "react";
@@ -105,11 +104,13 @@ export function gpu_frame(dpr: number): void {
   gpu.frame();
 }
 
-/** The canvas under three's; the renderer once the device answers. */
-export function GpuCanvas() {
+/** The canvas, and the renderer once the device answers. `on_canvas` is
+ * told the element when it mounts, for the frame loop and the pointer. */
+export function GpuCanvas({ on_canvas }: { on_canvas: (canvas: HTMLCanvasElement | null) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
+    on_canvas(canvas);
     if (!canvas || CORE_PXL === null) return;
     let alive = true;
     GpuRenderer.create(canvas, CORE_PXL).then((r) => {
@@ -123,7 +124,8 @@ export function GpuCanvas() {
     return () => {
       alive = false;
       gpu_renderer = null;
+      on_canvas(null);
     };
-  }, []);
-  return <canvas ref={ref} className="absolute inset-0 h-full w-full" style={{ pointerEvents: "none", zIndex: 0 }} />;
+  }, [on_canvas]);
+  return <canvas ref={ref} className="absolute inset-0 h-full w-full touch-none" />;
 }

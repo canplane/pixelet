@@ -1,7 +1,6 @@
 // @pxl/web/module/camera/use_camera.ts
 
 import { useEffect, useRef } from "react";
-import { invalidate } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { clamp } from "@xpute/core/kit/math.ts";
@@ -12,16 +11,17 @@ import { damp_alpha } from "./orbit.ts";
 import { climb_polar } from "./terrain_gate.ts";
 import { useSettingsStore } from "@/app/setting/store.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
+import { request_world_tick as invalidate } from "@/module/world/change.ts";
 import { view, view_compose } from "@/module/world/view.ts";
 
 const { MIN_DIST, MAX_DIST, MIN_POLAR, MAX_POLAR } = camera_cfg.view;
 const { CAM_DAMP } = camera_cfg.smooth;
 
-// frameloop="demand" (scene.tsx) only renders another frame when something
-// calls invalidate() — this damping loop is the main thing driving that
-// while the camera is settling after a drag/zoom, and needs to stop asking
-// for more once it's close enough that a further frame wouldn't look any
-// different, or it would invalidate forever and defeat "demand" entirely.
+// The tick runs another frame only when something asks (sched/tick.ts) —
+// this damping loop is the main thing asking while the camera is settling
+// after a drag/zoom, and needs to stop once it's close enough that a
+// further frame wouldn't look any different, or it would ask forever and
+// the view would never be idle.
 // world units for dist, radians for polar — both small enough that the
 // remaining error is sub-pixel at any zoom level in view.
 const DIST_EPS: f64 = 0.001;
@@ -44,14 +44,11 @@ const CLIMB_EPS: f64 = 0.0005;
 export function useCamera() {
   const view_state = useCameraStore((state) => state.view_state);
 
-  // frameloop="demand": a useFrame callback only runs when a frame is
-  // actually being rendered, so on its own this damping loop could never
-  // notice view_state changing while the canvas is sitting idle (nothing
-  // left invalidating). This effect is what wakes it back up — it fires
-  // whenever view_state changes for any reason (drag, wheel, reset_dist/
-  // reset_azimuth, ...), independent of whatever the render loop happens to
-  // be doing, since React effects run on their own regardless of
-  // frameloop mode.
+  // A step only runs when a frame is asked for, so on its own this damping
+  // loop could never notice view_state changing while the canvas is sitting
+  // idle. This effect is what wakes it back up — it fires whenever view_state
+  // changes for any reason (drag, wheel, reset_dist/reset_azimuth, ...),
+  // independent of whatever the frame loop happens to be doing.
   useEffect(() => {
     invalidate();
   }, [view_state]);

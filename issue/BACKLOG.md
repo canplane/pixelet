@@ -89,13 +89,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      the TypeScript walk of the world, the ray LRU with its layer
      revisions, and the temporary composite for a drawn build. The
      TypeScript composite and the chunk walk stay as the references.
-     What is left outside the module: the scene — three.js meshes and
-     instanced decor fed from the module's blocks, and decor's hit test
-     against those meshes (decor_hit.ts) — the elevation sample the hover's
-     corner takes (world_hover_pvf3 over terrain/elevation.ts), the sources
-     (the page tables, the object store's persistence, the assets) and the
-     UI. The scene and decor's hit test go with three; the elevation sample
-     is a read of the module's terrain when the hover cursor is rewritten.
+     What is left outside the module: the elevation sample the hover's
+     corner takes (world_hover_pvf3 over terrain/elevation.ts) — a read of
+     the module's terrain when the hover cursor is rewritten — the view's
+     damping steps, the POI index and placement, the sources (the page
+     tables, the object store's persistence, the assets) and the UI.
      XTP packets land aligned (8 bytes, 16 for SIMD) and are read through
      checked casts. The glue and the core talk through rings in the core's
      linear memory with a drain export as the doorbell — the submission
@@ -174,18 +172,34 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      also shows and the renderer removes: three's `updateMatrixWorld` over
      2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
      world (tree 281k, car 99k triangles a frame; P3 below). The renderer
-     is started (2026-09-14, render/gpu, crates/pxl-core/src/{draw,ghost}.rs):
-     the module lists what to upload, free and draw, and a WebGPU canvas under
-     three's executes it with no decision of its own. Through it so far, in
-     one pass and one depth: the sky, the chunks (chunk_material.ts's shader
-     in WGSL, three's Lambert), decor (the module's blocks read as instance
-     storage) and the hover ghost (a lone box in the mesher's layout, or one
-     decor instance, blended last) — which ended the ghost faults recorded
-     here since the object store moved. Behind the dev setting `gpu_chunks`
-     (on). Next, in order: the companions (glTF, skinned), the location
-     puck, the badges and their depth trick, then three and R3F out; the
-     post effects — rim light, shadows, the vignette, MSAA, mipmaps — after,
-     with what each costs in memory measured. For the frame-based pass
+     is through (2026-09-14, render/gpu, crates/pxl-core/src/{draw,ghost,
+     model,marker,billboard,environment,debug}.rs): the module lists what
+     to upload, free and draw, and a WebGPU canvas executes it with no
+     decision of its own — the sky, the chunks (three's Lambert in WGSL),
+     decor as instanced draws of the module's blocks, the hover ghost
+     (which ended the ghost faults recorded here since the object store
+     moved), the companions as actors of the module with their palettes
+     written each tick, the location puck, the billboards (badges and the
+     chat bubble, over one sheet, with the depth trick asked of this
+     frame's depth), the environment (sun, moon, light and sky from the
+     clock and the theme), the dev gizmos. The view — camera and root frame
+     — is doubles of our own (module/world/view.ts), the models are read by
+     a parser of our own (render/gltf), decor's eraser hit test is the
+     module's over its blocks and triangles, the picker's preview is a
+     display case of the renderer, and the frame loop is the tick's own
+     (sched/tick.ts). Three, R3F, drei and postprocessing are out; the
+     retired paths are on archive/20260914-three-draw-paths. Next: the
+     post effects — rim light, shadows, the vignette, MSAA, mipmaps — with
+     what each costs in memory measured, and the shaders and pipeline
+     definitions moved into the crate as their one source, validated by
+     naga in `cargo test` (the WGSL is text the GPU process compiles either
+     way; what the move buys is one source for the lanes' layouts and the
+     constants, not concealment). Fighting on far coplanar faces and in the
+     blend bands: reversed-Z (`depth32float`, the compare turned) when the
+     post effects are measured. Open, minor: one POI page
+     (6362873910329344) read as a truncated packet on one machine under
+     dev:remote, the fetched bytes whole in the console — into_core's view
+     the suspect, not reproduced elsewhere. For the frame-based pass
      after it, at least considered: work that is data-parallel per element
      and whose result only goes to the screen, moved into compute — culling
      into an indirect draw buffer (`drawIndirect`) in place of a listed draw

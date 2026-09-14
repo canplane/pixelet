@@ -1,11 +1,9 @@
 // @pxl/web/module/world/sched/tick.test.ts
 
 import { assert, assertEquals } from "@std/assert";
-import type { RootState } from "@react-three/fiber";
+import { FrameBudget, on_tick, PHASES, run_tick, type TickState } from "./tick.ts";
 
-import { FrameBudget, on_tick, PHASES, run_tick } from "./tick.ts";
-
-const state = {} as RootState;
+const state: TickState = { invalidate: () => {}, size: { width: 1, height: 1 }, viewport: { dpr: 1 }, clock: { getElapsedTime: () => 0 } };
 
 function burn(ms: number): void {
   const end = performance.now() + ms;
@@ -162,7 +160,7 @@ Deno.test("tick - the budget follows the display's measured frame, not an assume
     const at_60 = at(1 / 60);
     const at_165 = at(1 / 165);
     assert(at_165 < at_60, `165 Hz got ${at_165} ms, 60 Hz got ${at_60} ms`);
-    // An idle gap under frameloop="demand" is not a frame and moves nothing.
+    // An idle gap is not a frame and moves nothing.
     const idle = run_tick(state, 3).budget_ms;
     assertEquals(idle, at_165);
     at(1 / 60); // leave the window as the other tests expect it

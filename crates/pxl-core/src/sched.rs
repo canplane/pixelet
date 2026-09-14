@@ -16,6 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::billboard::Billboards;
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
+use crate::debug::DebugLines;
 use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::draw::{DrawList, PIPELINE_CHUNK};
 use crate::environment::Environment;
@@ -263,6 +264,8 @@ pub struct Scheduler {
     pub decor_models: Vec<Option<u32>>,
     /// The sun, the moon, the light and the sky (environment.rs).
     pub environment: Environment,
+    /// The dev gizmos (debug.rs).
+    pub debug: DebugLines,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -334,6 +337,7 @@ impl Scheduler {
             billboards: Billboards::default(),
             decor_models: Vec::new(),
             environment: Environment::default(),
+            debug: DebugLines::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -836,6 +840,7 @@ impl Scheduler {
         self.models.draw(&mut self.draw, frame.origin);
         self.markers.draw(&mut self.draw, frame.origin);
         self.billboards.draw(&mut self.draw, &self.models, frame.origin);
+        self.debug.draw(&mut self.draw, frame.origin);
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;

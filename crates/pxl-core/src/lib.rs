@@ -12,6 +12,7 @@ pub mod billboard;
 pub mod buddy;
 pub mod build;
 pub mod change;
+pub mod debug;
 pub mod decor;
 pub mod draw;
 pub mod environment;

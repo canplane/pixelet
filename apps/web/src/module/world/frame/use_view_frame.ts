@@ -3,13 +3,11 @@
 /**
  * The root frame's two damped halves (module/world/view.ts): its turn
  * about Z toward the controls' azimuth, and its translation toward putting
- * the map centre at the origin — rebasing the anchor registry in the same
- * step the translation snaps, so anchors and the frame never disagree about
- * the origin for a tick.
+ * the map centre at the origin — the view's origin rebased in the same
+ * step the translation snaps, so nothing reads the two apart for a tick.
  */
 
 import { useEffect, useRef } from "react";
-import { invalidate } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { wrap } from "@xpute/core/kit/math.ts";
@@ -18,13 +16,14 @@ import { fvec, type IVec, ivec, type PVF3 } from "@pxl/shared/spec/space/pvf3/mo
 import { useCameraStore } from "@/module/camera/store.ts";
 import { camera_cfg } from "@/module/camera/config.ts";
 import { damp_alpha } from "@/module/camera/orbit.ts";
-import type { AnchorRegistry } from "@/module/world/anchor/registry.ts";
+import { request_world_tick as invalidate } from "@/module/world/change.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
 import { view, view_compose } from "@/module/world/view.ts";
 
 const { ROT_DAMP, POS_DAMP } = camera_cfg.smooth;
 
-// see use_camera.ts's DIST_EPS/POLAR_EPS comment — same frameloop="demand" reasoning.
+// see use_camera.ts's DIST_EPS/POLAR_EPS comment — the same reasoning about
+// asking for frames.
 const AZIMUTH_EPS: f64 = 0.0001;
 const POS_EPS: f64 = 0.0005;
 
@@ -34,7 +33,7 @@ export function useViewRotation(): void {
 
   // wakes the loop back up when azimuth changes while the canvas is idle —
   // see use_camera.ts's matching effect for why this can't just rely on the
-  // step below noticing on its own under frameloop="demand".
+  // step below noticing on its own.
   useEffect(() => {
     invalidate();
   }, [azimuth]);
@@ -63,12 +62,10 @@ export function useViewRotation(): void {
 type UseViewTranslationProps = {
   map_center: PVF3 | null;
   map_origin: IVec;
-  /** Rebased alongside the frame, in the same step. */
-  registry: AnchorRegistry;
 };
 
 export function useViewTranslation(props: UseViewTranslationProps): void {
-  const { map_center, map_origin, registry } = props;
+  const { map_center, map_origin } = props;
   const prev_map_origin = useRef<IVec>(map_origin);
   const did_init = useRef(false);
 
@@ -85,9 +82,7 @@ export function useViewTranslation(props: UseViewTranslationProps): void {
     const did_rebase: boolean = prev_map_origin.current !== map_origin;
     prev_map_origin.current = map_origin;
 
-    if (did_rebase && registry.cur_map_origin !== map_origin) {
-      registry.shift_map_origin(map_origin);
-    }
+    if (did_rebase) view.origin = map_origin;
 
     const local_i: IVec = ivec.sub(map_center.i, map_origin);
 
@@ -97,6 +92,7 @@ export function useViewTranslation(props: UseViewTranslationProps): void {
 
     if (!did_init.current || did_rebase) {
       did_init.current = true;
+      view.origin = map_origin;
       view.tx = tx;
       view.ty = ty;
       view.tz = tz;

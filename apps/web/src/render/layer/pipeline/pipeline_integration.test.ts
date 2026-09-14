@@ -1,7 +1,6 @@
 // @pxl/web/render/layer/pipeline/pipeline_integration.test.ts
 
 import { assertEquals } from "@std/assert";
-import * as THREE from "three";
 
 import { alloc_chunk_volume, band_material, band_voxel_idx, chunk_band_zs, fill_chunk_column, get_chunk_band, set_chunk_voxel } from "./volume.ts";
 import { MaterialClass, NO_LAYER } from "./voxel.ts";
@@ -17,18 +16,25 @@ const KEY: ChunkKey = { page_idx: 0n, page_off: 0n };
 const LAND = { material_class: MaterialClass.LAND, r: 10, g: 20, b: 30, layer_idx: NO_LAYER } as const;
 const OBJECT = { material_class: MaterialClass.OBJECT, r: 200, g: 100, b: 50, layer_idx: NO_LAYER } as const;
 
-/** Real bounding box/sphere off a baked mesh's own vertex positions — same
- * attribute wiring chunk_stage.tsx's own create_geometry does. */
-function bounds_of(built: BakedChunkMesh): { box: THREE.Box3; sphere: THREE.Sphere } {
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(built.position, 3));
-  geometry.setIndex(new THREE.BufferAttribute(built.index, 1));
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  const box = geometry.boundingBox!.clone();
-  const sphere = geometry.boundingSphere!.clone();
-  geometry.dispose();
-  return { box, sphere };
+type Bounds = { min: [number, number, number]; max: [number, number, number]; center: [number, number, number]; radius: number };
+
+/** Real bounding box and sphere off a baked mesh's own vertex positions. */
+function bounds_of(built: BakedChunkMesh): Bounds {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < built.vertex_cnt; i++) {
+    for (let k = 0; k < 3; k++) {
+      const v = built.position[i * 3 + k];
+      if (v < min[k]) min[k] = v;
+      if (v > max[k]) max[k] = v;
+    }
+  }
+  const center: [number, number, number] = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  let radius = 0;
+  for (let i = 0; i < built.vertex_cnt; i++) {
+    radius = Math.max(radius, Math.hypot(built.position[i * 3] - center[0], built.position[i * 3 + 1] - center[1], built.position[i * 3 + 2] - center[2]));
+  }
+  return { min, max, center, radius };
 }
 
 /** Splits one bake_chunk_mesh output back into its terrain-only vs
@@ -92,31 +98,31 @@ Deno.test("pipeline - composition, signed-band meshing, bounds, and raycast shar
 
   const object_bounds = bounds_of(split.terrain);
   const terrain_bounds = bounds_of(split.object);
-  assertEquals(terrain_bounds.box.getCenter(new THREE.Vector3()).toArray(), [2.5, 3.5, 0.5]);
-  assertEquals(object_bounds.box.getCenter(new THREE.Vector3()).toArray(), [2.5, 3.75, 21]);
-  assertEquals(terrain_bounds.box.min.toArray(), [2, 3, -18]);
-  assertEquals(terrain_bounds.box.max.toArray(), [3, 4, 19]);
-  assertEquals(object_bounds.box.min.toArray(), [2.25, 3.5, 20.75]);
-  assertEquals(object_bounds.box.max.toArray(), [2.75, 4, 21.25]);
-  assertEquals(Number.isFinite(terrain_bounds.sphere.radius) && terrain_bounds.sphere.radius > 0, true);
-  assertEquals(Number.isFinite(object_bounds.sphere.radius) && object_bounds.sphere.radius > 0, true);
+  assertEquals(terrain_bounds.center, [2.5, 3.5, 0.5]);
+  assertEquals(object_bounds.center, [2.5, 3.75, 21]);
+  assertEquals(terrain_bounds.min, [2, 3, -18]);
+  assertEquals(terrain_bounds.max, [3, 4, 19]);
+  assertEquals(object_bounds.min, [2.25, 3.5, 20.75]);
+  assertEquals(object_bounds.max, [2.75, 4, 21.25]);
+  assertEquals(Number.isFinite(terrain_bounds.radius) && terrain_bounds.radius > 0, true);
+  assertEquals(Number.isFinite(object_bounds.radius) && object_bounds.radius > 0, true);
 
   // ray_hit_chunk still reads the live volume directly (merge_column_runs
   // per column, on demand) — a separate, unrelated-to-column_runs path, so
   // it has to agree with build_chunk_instances' own boxes independently.
-  const down = ray_hit_chunk(new THREE.Ray(new THREE.Vector3(2.5, 3.75, 30), new THREE.Vector3(0, 0, -1)), volume, 0, 0, 100)!;
+  const down = ray_hit_chunk({ origin: { x: 2.5, y: 3.75, z: 30 }, direction: { x: 0, y: 0, z: -1 } }, volume, 0, 0, 100)!;
   assertEquals(down.material_class, MaterialClass.OBJECT);
   assertEquals(down.face_normal, [0, 0, 1]);
   assertEquals(down.hit_point, [2.5, 3.75, 21.25]);
-  assertEquals(down.box_min, object_bounds.box.min.toArray());
-  assertEquals(down.box_max, object_bounds.box.max.toArray());
+  assertEquals(down.box_min, object_bounds.min);
+  assertEquals(down.box_max, object_bounds.max);
 
-  const side = ray_hit_chunk(new THREE.Ray(new THREE.Vector3(10, 3.25, 17), new THREE.Vector3(-1, 0, 0)), volume, 0, 0, 100)!;
+  const side = ray_hit_chunk({ origin: { x: 10, y: 3.25, z: 17 }, direction: { x: -1, y: 0, z: 0 } }, volume, 0, 0, 100)!;
   assertEquals(side.material_class, MaterialClass.LAND);
   assertEquals(side.face_normal, [1, 0, 0]);
   assertEquals(side.hit_point, [3, 3.25, 17]);
-  assertEquals(side.box_min, terrain_bounds.box.min.toArray());
-  assertEquals(side.box_max, terrain_bounds.box.max.toArray());
+  assertEquals(side.box_min, terrain_bounds.min);
+  assertEquals(side.box_max, terrain_bounds.max);
 });
 
 Deno.test("pipeline - one dense band stores direct 5-byte materials without a palette", () => {

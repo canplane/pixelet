@@ -1,7 +1,6 @@
 // @pxl/web/module/camera/input.tsx
 
 import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
@@ -142,13 +141,11 @@ function handle_tap(hovered: PVF3): void {
   }
 }
 
-export function CameraInput() {
-  const { gl, size } = useThree();
-
+export function CameraInput({ element }: { element: HTMLCanvasElement | null }) {
   /** Radians of pitch per pixel of vertical drag. Negative because dy grows
    * downward and dragging up is the natural "tilt toward the horizon". */
   function tilt_gain(): f64 {
-    return -(MAX_POLAR - MIN_POLAR) / (TILT_SWEEP_FRACTION * size.height);
+    return -(MAX_POLAR - MIN_POLAR) / (TILT_SWEEP_FRACTION * view.height);
   }
 
   const drag_mode = useRef<DragMode>(DragMode.NONE);
@@ -229,13 +226,14 @@ export function CameraInput() {
   const set_is_follow_mode = useCameraStore.getState().set_is_follow_mode;
 
   function update_rect() {
-    rect_ref.current = gl.domElement.getBoundingClientRect();
+    rect_ref.current = element?.getBoundingClientRect() ?? null;
   }
 
   function update_pointer(client_x: f64, client_y: f64) {
     let rect = rect_ref.current;
     if (!rect) {
-      rect = gl.domElement.getBoundingClientRect();
+      if (!element) return;
+      rect = element.getBoundingClientRect();
       rect_ref.current = rect;
     }
     pointer_x.current = ((client_x - rect.left) / rect.width) * 2 - 1;
@@ -249,7 +247,7 @@ export function CameraInput() {
     if (!map_center) return;
 
     const view_h: f64 = 2 * view_state.dist * Math.tan((FOV * Math.PI) / 360);
-    const units_per_px: f64 = view_h / size.height;
+    const units_per_px: f64 = view_h / view.height;
 
     const lx: f64 = -dx * units_per_px;
     const ly: f64 = dy * units_per_px;
@@ -721,11 +719,8 @@ export function CameraInput() {
   }
 
   useEffect(() => {
-    const el = gl.domElement;
-
-    // prevent the browser's native touch scroll/pinch-zoom from fighting with our
-    // own pan/pinch handling.
-    el.style.touchAction = "none";
+    const el = element;
+    if (!el) return;
 
     function on_context_menu(e: MouseEvent) {
       e.preventDefault();
@@ -761,7 +756,7 @@ export function CameraInput() {
       window.removeEventListener("pointerup", on_pointer_up);
       window.removeEventListener("pointercancel", on_pointer_up);
     };
-  }, [gl]);
+  }, [element]);
 
   return null;
 }

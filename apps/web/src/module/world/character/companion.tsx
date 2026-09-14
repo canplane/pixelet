@@ -368,10 +368,9 @@ const Walker = memo(function Walker(props: WalkerProps) {
       gpu_renderer?.skinned.set_skin(held.model.model, held.skin);
     }
 
-    // frameloop="demand" (see scene.tsx / LocationPuck's own use of this):
-    // nothing else invalidates on its own while this loop and the clip's
-    // internal mixer keep animating, so this component must ask for the
-    // next frame itself for as long as it's mounted.
+    // Nothing else asks for frames on its own while this loop keeps
+    // animating, so this component must ask for the next frame itself for
+    // as long as it's mounted.
     state.invalidate();
   }, "companion");
 
