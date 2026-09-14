@@ -173,18 +173,19 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      refusals show again. What the profile
      also shows and the renderer removes: three's `updateMatrixWorld` over
      2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
-     world (tree 281k, car 99k triangles a frame; P3 below). Next:
-     whatever else stands before the
-     renderer; then the renderer, starting with the hover cursor. The cursor goes first because it is
-     where the two sides already disagree: since the object store moved
-     into the module, the eraser's half-transparent ghost over a placed
-     cube shows late or not at all while the hide itself lands (decor's
-     ghost is unaffected; the build before the move, 9ff57fe, is fine) —
-     suspected to be ordering across the boundary, not chased in three.js.
-     With the same move its side textures lie on their side on some walls,
-     which 9ff57fe does not do either. Both go with drawing the ghost
-     through the chunk pipeline — one box through the mesher and the chunk
-     material with an opacity — so it cannot diverge from what it previews.
+     world (tree 281k, car 99k triangles a frame; P3 below). The renderer
+     is started (2026-09-14, render/gpu, crates/pxl-core/src/{draw,ghost}.rs):
+     the module lists what to upload, free and draw, and a WebGPU canvas under
+     three's executes it with no decision of its own. Through it so far, in
+     one pass and one depth: the sky, the chunks (chunk_material.ts's shader
+     in WGSL, three's Lambert), decor (the module's blocks read as instance
+     storage) and the hover ghost (a lone box in the mesher's layout, or one
+     decor instance, blended last) — which ended the ghost faults recorded
+     here since the object store moved. Behind the dev setting `gpu_chunks`
+     (on). Next, in order: the companions (glTF, skinned), the location
+     puck, the badges and their depth trick, then three and R3F out; the
+     post effects — rim light, shadows, the vignette, MSAA, mipmaps — after,
+     with what each costs in memory measured.
 
 ## P1
 
