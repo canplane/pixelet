@@ -19,3 +19,5 @@ pub mod sched;
 pub mod search;
 pub mod surface_height;
 pub mod terrain;
+#[allow(clippy::module_inception)]
+pub mod world;
