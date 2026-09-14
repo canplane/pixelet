@@ -185,7 +185,15 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      (on). Next, in order: the companions (glTF, skinned), the location
      puck, the badges and their depth trick, then three and R3F out; the
      post effects — rim light, shadows, the vignette, MSAA, mipmaps — after,
-     with what each costs in memory measured.
+     with what each costs in memory measured. For the frame-based pass
+     after it, at least considered: work that is data-parallel per element
+     and whose result only goes to the screen, moved into compute — culling
+     into an indirect draw buffer (`drawIndirect`) in place of a listed draw
+     a chunk, decor instances filtered by tier and range, and a chunk's face
+     culling. What the CPU has to read back stays the module's: a readback
+     arrives frames late, and WGSL has no 64-bit type for the coordinates,
+     no allocation and no I/O. The mesher's face culling is the open
+     question, since the raycast and the caches read what it produces.
 
 ## P1
 
