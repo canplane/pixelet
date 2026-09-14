@@ -23,6 +23,7 @@ import { useMapStore } from "@/module/map/store.ts";
 import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import type { G4326 } from "@pxl/shared/spec/space/adapter/4326.ts";
 import { useTick } from "@/module/world/sched/tick.ts";
+import { gpu_draws_chunks, set_sky_radius } from "@/render/gpu/stage.tsx";
 
 const { FOG_NEAR, FOG_FAR, FAR_CLIP } = render_cfg;
 const { MAX_DIST } = camera_cfg.view;
@@ -60,6 +61,7 @@ const FALLBACK_LON = 126.978;
 // out the MAX_DIST margin clips the dome exactly where a wide-shot camera
 // is most likely to be looking.
 const SKY_DOME_SCALE = (FAR_CLIP - MAX_DIST) * 0.9;
+set_sky_radius(SKY_DOME_SCALE);
 
 // GodRaysEffect (scene.tsx's EffectComposer) needs a real, occludable scene
 // Mesh to sample as its light source — get_sun_position's own real position
@@ -478,7 +480,14 @@ export function MapEnvironment(props: MapEnvironmentProps) {
     star_intensity.current = THREE.MathUtils.lerp(star_intensity.current, is_night ? 1 : 0, lerp_factor);
 
     // ---- 1. Fog interpolation ----
-    if (scene.background instanceof THREE.Color) {
+    // Where the WebGPU renderer draws the sky, three clears to nothing and
+    // draws no dome; the uniforms below still move, and it reads them.
+    const gpu_sky = gpu_draws_chunks();
+    const dome = sky_material_ref.current ? scene.getObjectByName("sky") : undefined;
+    if (dome) dome.visible = !gpu_sky;
+    if (gpu_sky) {
+      scene.background = null;
+    } else if (scene.background instanceof THREE.Color) {
       scene.background.lerp(bg_color, lerp_factor);
     } else {
       scene.background = bg_color.clone();

@@ -21,6 +21,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 
 import type { PxlExports } from "@/wasm/pxl.ts";
 import { CHUNK_SHADER } from "./chunk_shader.ts";
+import { SKY_SHADER } from "./sky_shader.ts";
 import { create_layer_textures, type LayerTextures } from "./layers.ts";
 
 /** draw.rs's records, in words and floats. */
@@ -39,6 +40,8 @@ const VIS_F32_PER_VERTEX = 1;
 /** Floats the frame uniform holds (chunk_shader.ts's Frame). */
 export const FRAME_UNIFORM_FLOATS = 16 + 4 * 8;
 const FRAME_UNIFORM_BYTES = FRAME_UNIFORM_FLOATS * 4;
+/** Floats the sky uniform holds (sky_shader.ts's Sky). */
+export const SKY_UNIFORM_FLOATS = 16 + 4 * 7;
 
 const DEPTH_FORMAT: GPUTextureFormat = "depth24plus";
 
@@ -48,6 +51,9 @@ export class GpuRenderer {
   private readonly context: GPUCanvasContext;
   private readonly format: GPUTextureFormat;
   private readonly pipeline: GPURenderPipeline;
+  private readonly sky_pipeline: GPURenderPipeline;
+  private readonly sky_buffer: GPUBuffer;
+  private readonly sky_bind_group: GPUBindGroup;
   private readonly bind_layout: GPUBindGroupLayout;
   private readonly layers: LayerTextures;
   private readonly frame_buffer: GPUBuffer;
@@ -59,6 +65,8 @@ export class GpuRenderer {
   private height = 0;
   /** The frame's uniforms, written by the glue before `frame`. */
   readonly uniforms: FrameUniforms = new Float32Array(new ArrayBuffer(FRAME_UNIFORM_FLOATS * 4));
+  /** The sky's uniforms, likewise. */
+  readonly sky: FrameUniforms = new Float32Array(new ArrayBuffer(SKY_UNIFORM_FLOATS * 4));
   /** What the last frame drew, for the ledger. */
   stat = { draws: 0, uploads: 0, frees: 0, buffers: 0, bytes: 0 };
 
@@ -92,6 +100,18 @@ export class GpuRenderer {
       primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
       depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less" },
     });
+    // The sky: one triangle over the screen, first, writing no depth.
+    const sky_module = device.createShaderModule({ label: "sky", code: SKY_SHADER });
+    this.sky_pipeline = device.createRenderPipeline({
+      label: "sky",
+      layout: "auto",
+      vertex: { module: sky_module, entryPoint: "vs" },
+      fragment: { module: sky_module, entryPoint: "fs", targets: [{ format: this.format }] },
+      primitive: { topology: "triangle-list" },
+      depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+    });
+    this.sky_buffer = device.createBuffer({ label: "sky", size: SKY_UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sky_bind_group = device.createBindGroup({ layout: this.sky_pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.sky_buffer } }] });
     this.layers = create_layer_textures(device);
     this.frame_buffer = device.createBuffer({ label: "frame", size: FRAME_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws_buffer = device.createBuffer({ label: "draws", size: 256 * UNIFORM_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -170,6 +190,7 @@ export class GpuRenderer {
     this.stat.draws = draws.length / DRAW_WORDS;
 
     this.device.queue.writeBuffer(this.frame_buffer, 0, this.uniforms);
+    this.device.queue.writeBuffer(this.sky_buffer, 0, this.sky);
     if (uniforms.byteLength > this.draws_buffer.size) {
       this.draws_buffer.destroy();
       this.draws_buffer = this.device.createBuffer({ label: "draws", size: uniforms.byteLength * 2, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -182,6 +203,9 @@ export class GpuRenderer {
       colorAttachments: [{ view: this.context.getCurrentTexture().createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }],
       depthStencilAttachment: { view: this.depth.createView(), depthLoadOp: "clear", depthClearValue: 1, depthStoreOp: "store" },
     });
+    pass.setPipeline(this.sky_pipeline);
+    pass.setBindGroup(0, this.sky_bind_group);
+    pass.draw(3);
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bind_group);
     for (let k = 0; k < draws.length; k += DRAW_WORDS) {

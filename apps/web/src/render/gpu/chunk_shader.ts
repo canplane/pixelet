@@ -7,11 +7,15 @@
  * Every rule here is that file's — the real-size tile UV from a box's own
  * corner and scale, the edge shading from the mesher's face bits, the
  * screen-space dither a blend is punched with — with the lighting three
- * did for us written out: a directional sun, an ambient, a hemisphere,
- * the emissive floor, linear fog, ACES tone mapping and the sRGB encode.
+ * did for us written out: three's physically based Lambert (the albedo over
+ * pi) under the sun, the ambient and the hemisphere, the emissive floor,
+ * linear fog, and the post stack's grade and sRGB encode. No tone mapping:
+ * three applies it only when drawing to the screen, and the shipped path
+ * drew into the composer's target.
  */
 
 import { NO_LAYER } from "@/render/layer/pipeline/voxel.ts";
+import { GRADE_WGSL } from "./grade.ts";
 
 export const CHUNK_SHADER: string = /* wgsl */ `
 struct Frame {
@@ -189,20 +193,7 @@ fn sample_tap(layer: f32, is_side: bool, uv: vec2f, fallback: vec3f) -> vec3f {
   return select(tex, fallback, layer > ${NO_LAYER}.0 - 0.5);
 }
 
-fn aces(x: vec3f) -> vec3f {
-  let a = 2.51;
-  let b = 0.03;
-  let c = 2.43;
-  let d = 0.59;
-  let e = 0.14;
-  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3f(0.0), vec3f(1.0));
-}
-
-fn to_srgb(c: vec3f) -> vec3f {
-  let lo = c * 12.92;
-  let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055;
-  return select(hi, lo, c <= vec3f(0.0031308));
-}
+${GRADE_WGSL}
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
@@ -222,15 +213,16 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var base = select(taps, i.rgb, frame.low_spec > 0.5);
   base = base * mix(1.0, 1.0 - frame.edge_strength, edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
 
-  // three's standard material, roughness 1, metalness 0: Lambert under the
-  // sun, the ambient and the hemisphere, plus the emissive floor.
+  // three's standard material, roughness 1, metalness 0: the Lambert BRDF
+  // is the albedo over pi, for the direct sun and for the ambient and
+  // hemisphere irradiance alike; the emissive floor is added as it is.
   let n = normalize(i.normal);
   let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0);
   let hemi = mix(frame.hemi_ground, frame.hemi_sky, n.z * 0.5 + 0.5);
-  var color = base * (sun + frame.ambient + hemi) + base * frame.floor;
+  var color = base * (sun + frame.ambient + hemi) / 3.14159265 + base * frame.floor;
 
   let fog = clamp((i.view_depth - frame.fog_near) / (frame.fog_far - frame.fog_near), 0.0, 1.0);
   color = mix(color, frame.fog_color, fog);
-  return vec4f(to_srgb(aces(color)), d.opacity);
+  return vec4f(to_srgb(grade(color)), d.opacity);
 }
 `;

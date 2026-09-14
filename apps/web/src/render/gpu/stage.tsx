@@ -2,13 +2,13 @@
 
 /**
  * The WebGPU canvas beside three's, and the frame's uniforms read off
- * what three still owns — the camera, the lights, the fog — until it goes.
- * The canvas sits over three's, cleared transparent and passing pointer
- * events through, so what it draws shows on top of what three draws; the
- * order flips once the sky and everything under it have moved.
+ * what three still owns — the camera, the lights, the fog, the sky's
+ * colours and directions — until it goes. The canvas sits under three's:
+ * it draws the sky and the chunks, and three, cleared transparent, draws
+ * what has not moved yet over them, without the terrain's depth.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import type { RootState } from "@react-three/fiber";
 
@@ -19,10 +19,30 @@ import { GpuRenderer } from "./renderer.ts";
 
 /** The one renderer, once its device has answered. */
 export let gpu_renderer: GpuRenderer | null = null;
+const renderer_listeners = new Set<() => void>();
 
-/** Whether the chunks are drawn here rather than by three. */
+/** Whether the sky and the chunks are drawn here rather than by three. */
 export function gpu_draws_chunks(): boolean {
   return gpu_renderer !== null && useSettingsStore.getState().gpu_chunks;
+}
+
+/** gpu_draws_chunks for a component: the renderer arriving or the setting
+ * flipping re-renders it. */
+export function useGpuDrawsChunks(): boolean {
+  return useSyncExternalStore((on_change) => {
+    renderer_listeners.add(on_change);
+    const off = useSettingsStore.subscribe(on_change);
+    return () => {
+      renderer_listeners.delete(on_change);
+      off();
+    };
+  }, gpu_draws_chunks);
+}
+
+/** The sky dome's radius in environment.tsx, which the sky's rays meet. */
+let sky_radius = 1;
+export function set_sky_radius(r: number): void {
+  sky_radius = r;
 }
 
 const EDGE_STRENGTH = 0.3;
@@ -32,6 +52,7 @@ const $m = new THREE.Matrix4();
 /** GL clip z is [-1, 1]; WebGPU's is [0, 1]. */
 const $gl_to_wgpu = new THREE.Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 const $v = new THREE.Vector3();
+const $sky = new THREE.Matrix4();
 
 type Lights = { sun: THREE.DirectionalLight | null; ambient: THREE.AmbientLight | null; hemi: THREE.HemisphereLight | null; seen: number };
 const lights: Lights = { sun: null, ambient: null, hemi: null, seen: -1 };
@@ -111,10 +132,39 @@ export function gpu_frame(state: RootState, root: THREE.Matrix4): void {
   u[39] = EDGE_WIDTH;
   if (fog) put(u, 40, fog.color, 1);
   else u[40] = u[41] = u[42] = 0;
+
+  // The sky, in three's world frame, where the dome stood.
+  const sky = gpu.sky;
+  $sky.copy($gl_to_wgpu).multiply(cam.projectionMatrix).multiply(cam.matrixWorldInverse).invert();
+  sky.set($sky.elements, 0);
+  $v.setFromMatrixPosition(cam.matrixWorld);
+  sky[16] = $v.x;
+  sky[17] = $v.y;
+  sky[18] = $v.z;
+  sky[19] = sky_radius;
+  const dome = state.scene.getObjectByName("sky") as THREE.Mesh | undefined;
+  const su = (dome?.material as THREE.ShaderMaterial | undefined)?.uniforms;
+  if (su) {
+    const c3 = (at: number, c: THREE.Color | THREE.Vector3) => {
+      const v = c as { r?: number; x?: number; g?: number; y?: number; b?: number; z?: number };
+      sky[at] = v.r ?? v.x ?? 0;
+      sky[at + 1] = v.g ?? v.y ?? 0;
+      sky[at + 2] = v.b ?? v.z ?? 0;
+    };
+    c3(20, su.u_sky_top.value);
+    sky[23] = su.u_time.value;
+    c3(24, su.u_sky_middle.value);
+    sky[27] = su.u_star_intensity.value;
+    c3(28, su.u_sky_horizon.value);
+    sky[31] = su.u_sky_az.value;
+    c3(32, su.u_sun_dir.value);
+    c3(36, su.u_sun_glow.value);
+    c3(40, su.u_moon_dir.value);
+  }
   gpu.frame();
 }
 
-/** The canvas over three's; the renderer once the device answers. */
+/** The canvas under three's; the renderer once the device answers. */
 export function GpuCanvas() {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -128,11 +178,13 @@ export function GpuCanvas() {
         return;
       }
       gpu_renderer = r;
+      for (const on_change of renderer_listeners) on_change();
     });
     return () => {
       alive = false;
       gpu_renderer = null;
+      for (const on_change of renderer_listeners) on_change();
     };
   }, []);
-  return <canvas ref={ref} className="absolute inset-0 h-full w-full" style={{ pointerEvents: "none" }} />;
+  return <canvas ref={ref} className="absolute inset-0 h-full w-full" style={{ pointerEvents: "none", zIndex: 0 }} />;
 }
