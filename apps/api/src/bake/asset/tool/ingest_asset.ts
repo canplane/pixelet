@@ -32,7 +32,6 @@
 
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Buffer } from "node:buffer";
 import sharp from "npm:sharp@0.33";
 
 import { render_rust_table, render_table, type Sheet } from "../table.ts";
