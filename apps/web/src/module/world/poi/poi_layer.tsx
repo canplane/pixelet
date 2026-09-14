@@ -66,7 +66,8 @@ import { NO_SLOT } from "../billboard/atlas.ts";
 import { BADGE_SHAMT_OVER_CUBE, fade_end_u, get_lod_level, lod_step_at, LOD_STEP_BY_LEVEL, type LodStep } from "@/render/lod.ts";
 import { usePoiStore } from "./store.ts";
 import { type FrameBudget, useTick } from "@/module/world/sched/tick.ts";
-import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { CORE_ALLOC, CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
+import { gpu_draws_chunks, useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
 
 /**
  * A rail, not the mechanism.
@@ -337,6 +338,7 @@ function poi_place_step(
     if (!map_center || !show_poi) {
       $field.begin();
       $field.end();
+      if (CORE_PXL) CORE_PXL.pxl_billboards_write(badge_set(CORE_PXL), 0, 0);
       invalidate();
       return true;
     }
@@ -551,17 +553,51 @@ function build_stage(j: PlaceJob): void {
   if (j.k >= j.kept) j.stage = COMMIT;
 }
 
-/** Writes the whole placement into the field in one step. */
+/** Floats a badge takes in the core's block (crates/pxl-core/src/billboard.rs). */
+const BADGE_FLOATS = 10;
+let $badge_set: u32 | null = null;
+/** The core's billboard set the badges are, made on first use. */
+function badge_set(pxl: NonNullable<typeof CORE_PXL>): u32 {
+  if ($badge_set === null) $badge_set = pxl.pxl_billboards_new(BILLBOARD_ORDER.poi);
+  return $badge_set;
+}
+
+/** Writes the whole placement in one step: into the field, or through the
+ * WebGPU renderer into the core, which holds the badges against the
+ * placement's origin until the next commit. */
 function commit_stage(j: PlaceJob, now: f64): void {
+  const gpu = gpu_draws_chunks() && CORE_PXL !== null;
   $field.begin();
+  const lane = gpu ? FIXED_ALLOC.take(Float32Array, Math.max(1, j.picks.length) * BADGE_FLOATS) : null;
+  let count: u32 = 0;
   for (const pick of j.picks) {
     // NO_SLOT when the atlas is full. Nothing is drawn for it this pass,
     // which is the honest answer — the alternative is a rectangle
     // belonging to some other badge.
     if (pick.slot === NO_SLOT) continue;
-    $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas, pick.slot, pick.logical_w, BADGE_LOGICAL_H, BADGE_CENTER_Y);
+    if (lane) {
+      const s = pick.slot, o = count++ * BADGE_FLOATS;
+      lane[o] = pick.local_x;
+      lane[o + 1] = pick.local_y;
+      lane[o + 2] = pick.local_z;
+      lane[o + 3] = pick.logical_w;
+      lane[o + 4] = BADGE_LOGICAL_H;
+      lane[o + 5] = badge_atlas.u0(s);
+      lane[o + 6] = badge_atlas.v0(s);
+      lane[o + 7] = badge_atlas.u1(s);
+      lane[o + 8] = badge_atlas.v1(s);
+      lane[o + 9] = BADGE_LOGICAL_H > 0 ? BADGE_CENTER_Y / BADGE_LOGICAL_H : 1;
+    } else {
+      $field.push(pick.local_x, pick.local_y, pick.local_z, badge_atlas, pick.slot, pick.logical_w, BADGE_LOGICAL_H, BADGE_CENTER_Y);
+    }
   }
   $field.end();
+  if (CORE_PXL) {
+    const set = badge_set(CORE_PXL), origin = j.map_origin;
+    CORE_PXL.pxl_billboards_place(set, ivec.to_real(ivec.X(origin)), ivec.to_real(ivec.Y(origin)), ivec.to_real(ivec.Z(origin)));
+    CORE_PXL.pxl_billboards_write(set, count, lane ? lane.byteOffset : 0);
+  }
+  if (lane) FIXED_ALLOC.give(lane);
   // frameloop="demand": what changed has to ask for the frame that shows it.
   invalidate();
 
@@ -652,6 +688,7 @@ export function PoiLayer() {
   const view_state = useCameraStore((state) => state.view_state);
   const { local_world_frame_ref } = useFrameRefs();
   const { size } = useThree();
+  const gpu = useGpuDrawsChunks();
 
   // Every input a placement depends on asks for one; the step throttles.
   // The view and the centre change every frame of a drag, and asking is a
@@ -661,7 +698,7 @@ export function PoiLayer() {
   useEffect(() => {
     poi_place_request();
     invalidate();
-  }, [view_state, map_center, poi_revision, show_poi, size.width, size.height]);
+  }, [view_state, map_center, poi_revision, show_poi, size.width, size.height, gpu]);
 
   // One subscription for the whole layer, not one per mounted badge. Terrain
   // arriving is what grounds an entry indexed before its tile did, and the
@@ -698,6 +735,7 @@ export function PoiLayer() {
   // then the sheet's dirty rectangles up to the GPU — the one place the
   // renderer is in hand.
   useTick("cosmetic", ({ state }) => {
+    if (gpu_draws_chunks()) return;
     $field.update(state.camera, state.size.height);
     badge_atlas.flush(state.gl);
   }, "poi_field");

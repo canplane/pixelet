@@ -444,6 +444,15 @@ impl Painter {
         self.layers[i] = layer;
     }
 
+    /// What `state` paints as: its packed material and layer, or none when
+    /// it paints nothing (untaught, air, decor).
+    pub fn material_of(&self, state: u32) -> Option<(u32, u8)> {
+        match self.kind(state) {
+            Kind::Solid => Some((self.materials[state as usize], self.layers[state as usize])),
+            _ => None,
+        }
+    }
+
     fn kind(&self, state: u32) -> Kind {
         self.kinds.get(state as usize).copied().unwrap_or(Kind::Untaught)
     }

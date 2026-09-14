@@ -219,6 +219,8 @@ export class BillboardAtlas {
    * is handed is already translated to the entry's own origin. */
   private readonly draws: ((ctx: CanvasRenderingContext2D) => void)[] = [];
 
+  /** Counts the sheet's replacements, for a mirror that is not three's. */
+  private generation: u32 = 0;
   private live: u32 = 0;
   private used_px: u32 = 0;
   private repacks: u32 = 0;
@@ -352,6 +354,39 @@ export class BillboardAtlas {
     return n;
   }
 
+  /**
+   * `flush` for a renderer that is not three: `whole` when the sheet was
+   * replaced since the mirror's `generation`, else `part` per dirty entry,
+   * redrawn into the scratch at its origin for the same reason `flush`
+   * redraws it — reading a rectangle out of the sheet reads back all of it
+   * on WebKit. Returns the generation the mirror is now at.
+   */
+  flush_into(generation: u32, whole: (canvas: HTMLCanvasElement, size: u32) => void, part: (scratch: HTMLCanvasElement, w: u32, h: u32, x: u32, y: u32) => void): u32 {
+    if (generation !== this.generation) {
+      whole(this.canvas, this.size);
+    } else {
+      if (this.dirty.length > 0 && !this.scratch) {
+        this.scratch = document.createElement("canvas");
+        this.scratch_ctx = this.scratch.getContext("2d")!;
+      }
+      for (const slot of this.dirty) {
+        const scratch = this.scratch!, ctx = this.scratch_ctx!;
+        const w = this.w.mem[slot], h = this.h.mem[slot];
+        if (scratch.width < w || scratch.height < h) {
+          scratch.width = Math.max(scratch.width, w);
+          scratch.height = Math.max(scratch.height, h);
+        }
+        ctx.clearRect(0, 0, w, h);
+        this.paint_into(ctx, slot, 0, 0);
+        part(scratch, w, h, this.x.mem[slot], this.y.mem[slot]);
+        this.uploads++;
+      }
+    }
+    for (const slot of this.dirty) this.is_dirty.mem[slot] = 0;
+    this.dirty.length = 0;
+    return this.generation;
+  }
+
   /** Returns a slot's space to the pool. The pixels are left alone: the
    * only thing that made them visible was a UV pointing at them. */
   release(slot: u32): void {
@@ -359,6 +394,11 @@ export class BillboardAtlas {
     this.state.mem[slot] = FREE;
     this.live--;
     this.used_px -= this.w.mem[slot] * this.h.mem[slot];
+  }
+
+  /** Changes when the sheet is replaced, which moves every rectangle. */
+  get sheet_generation(): u32 {
+    return this.generation;
   }
 
   stats(): AtlasStats {
@@ -528,6 +568,7 @@ export class BillboardAtlas {
     for (let slot = 0; slot < this.state.len; slot++) if (this.state.mem[slot] === FREE) this.state.mem[slot] = UNUSED;
     this.used_px = 0;
     this.repacks++;
+    this.generation++;
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       this.x.mem[slot] = plan.xs[i];

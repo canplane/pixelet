@@ -34,7 +34,8 @@ import type { PoiPage } from "@pxl/shared/bake/format.ts";
 
 import { CORE_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
-import { BillboardAtlas, NO_SLOT } from "../billboard/atlas.ts";
+import { NO_SLOT } from "../billboard/atlas.ts";
+import { billboard_sheet } from "../billboard/sheet.ts";
 import { FONT_FAMILY, FONT_WEIGHT_REGULAR } from "../billboard/canvas_scale.ts";
 import { resolve_poi_theme } from "./poi_theme.ts";
 
@@ -73,9 +74,10 @@ const DOT_BORDER = 1;
  * One sheet for every badge this layer draws, places and clusters alike.
  *
  * Shared so a single instanced draw is possible: two quads sampling
- * different textures cannot batch, whatever else is true of them.
+ * different textures cannot batch, whatever else is true of them. It is
+ * billboard/sheet.ts's, which the chat bubble draws into too.
  */
-export const badge_atlas = new BillboardAtlas();
+export const badge_atlas = billboard_sheet;
 
 const PILL_H = ICON_SIZE + PAD_Y;
 const PILL_R = PILL_H / 2;

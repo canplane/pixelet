@@ -45,6 +45,7 @@ import { gpu_timer_attach, gpu_timer_begin, gpu_timer_end, gpu_timer_last_ms } f
 import { ledger_last_frame, ledger_record_frame } from "@/module/world/sched/ledger.ts";
 import { HARD_SLACK_MS, useTick } from "@/module/world/sched/tick.ts";
 import { lead_point } from "@/module/world/sched/priority.ts";
+import { gpu_draws_chunks, gpu_frame } from "@/render/gpu/stage.tsx";
 import { useFrameRefs } from "@/module/world/frame/context.tsx";
 import { range_anchor_of, RANGE_HYSTERESIS } from "@/render/chunk_range.ts";
 import { post_cfg, render_cfg } from "@/module/world/environment/config.ts";
@@ -304,6 +305,10 @@ export function LodSchedulerProvider({ children }: { children: ReactNode }) {
     // in the same frame — the ready-state desync the 2026-09-05 unification
     // fixed, kept fixed now that decor is contributed rather than mounted.
     decor_field.update(origin);
+    // The field stays for the eraser's hit test while the WebGPU renderer
+    // draws decor from the module's blocks.
+    decor_field.group.visible = !gpu_draws_chunks();
+    gpu_frame(state, anchor_registry.root.matrixWorld);
     if (draw) state.invalidate();
     if (import.meta.env.DEV) {
       const c = CORE_BUILD.census();

@@ -74,6 +74,8 @@ struct State {
     /// doubles the glue reads.
     raycast: Raycast,
     hit: [f64; HIT_WORDS],
+    draw_row: [u32; 10],
+    model_block: u32,
 }
 
 /// Entries each ring holds: a page mounting is 64 chunks a frame, each
@@ -129,6 +131,8 @@ fn state() -> &'static mut State {
                 sched: Scheduler::new(),
                 raycast: Raycast::default(),
                 hit: [0.0; HIT_WORDS],
+                draw_row: [0; 10],
+                model_block: 0,
                 changes: ChangeLog::new(WORLD_TOPICS, JOURNAL_CAPACITY),
                 change_row: [0; 6],
                 frame: [0.0; FRAME_WORDS],
@@ -1049,6 +1053,215 @@ pub extern "C" fn pxl_build_now(id: u32) {
     sched.build_now(&mut world, id, &now, &mut |e| events.push_back(e));
     flush(s);
     after(s);
+}
+
+// ---- The billboards (crates/pxl-core/src/billboard.rs) ----
+
+/// A billboard set drawn in `order`: its id.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_new(order: u32) -> u32 {
+    state().sched.billboards.new_set(order)
+}
+
+/// A set's instances: `count` of 10 floats at `lane`, relative to its anchor.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_write(set: u32, count: u32, lane: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    // SAFETY: the glue's lane of count * 10 floats.
+    unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane as usize) };
+}
+
+/// Stands a set at (x, y, z) in units.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_place(set: u32, x: f64, y: f64, z: f64) {
+    state().sched.billboards.place(set, [x, y, z]);
+}
+
+/// Stands a set `lift` units above an actor.
+#[no_mangle]
+pub extern "C" fn pxl_billboards_follow(set: u32, actor: u32, lift: f64) {
+    state().sched.billboards.follow(set, actor, lift);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_billboards_remove(set: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.billboards.remove(&mut world, &mut sched.draw, set);
+}
+
+// ---- The location puck (crates/pxl-core/src/marker.rs) ----
+
+/// The puck's zone: `count` instances of 7 floats at `lane` (a box's centre
+/// relative to the zone's, and which edges border the ring), about a centre
+/// at (x, y, z) in units; the beacon jumps rather than eases past
+/// `snap_dist`, and nothing is drawn past `fog_far` of the camera.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_puck_zone(x: f64, y: f64, z: f64, count: u32, lane: u32, snap_dist: f64, fog_far: f64) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    // SAFETY: the glue's lane of count * 7 floats.
+    unsafe { sched.markers.set_zone(&mut world, &mut sched.draw, [x, y, z], count, lane as usize, snap_dist, fog_far) };
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_puck_beacon(offset_x: f64, offset_y: f64, night: u32) {
+    state().sched.markers.set_beacon([offset_x, offset_y], night != 0);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_puck_clear() {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.markers.clear(&mut world, &mut sched.draw);
+}
+
+// ---- Models and actors (crates/pxl-core/src/model.rs) ----
+
+/// A model's mesh block for `vertex_cnt` vertices, `index_cnt` indices and
+/// `joint_cnt` joints: its id, or -1 when the pool refused; the block's
+/// address at pxl_model_block.
+#[no_mangle]
+pub extern "C" fn pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> i32 {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    match sched.models.new_model(&mut world, vertex_cnt, index_cnt, joint_cnt) {
+        Some((id, at)) => {
+            s.model_block = at as u32;
+            id as i32
+        }
+        None => -1,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_model_block() -> u32 {
+    state().model_block
+}
+
+/// Joint `joint` of `model`, from 42 floats at `at`: the rest pose (10),
+/// the transform above a root (16) and the inverse bind matrix (16).
+#[no_mangle]
+pub extern "C" fn pxl_model_joint(model: u32, joint: u32, parent: i32, at: u32) {
+    let s = state();
+    // SAFETY: the glue's lane of 42 floats.
+    let f = unsafe { core::slice::from_raw_parts(at as usize as *const f32, 42) };
+    let mut rest = [0.0; 10];
+    rest.copy_from_slice(&f[0..10]);
+    let mut pre = [0.0; 16];
+    pre.copy_from_slice(&f[10..26]);
+    let mut ib = [0.0; 16];
+    ib.copy_from_slice(&f[26..42]);
+    s.sched.models.joint(model, joint, parent, rest, pre, ib);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_model_clip(model: u32, duration: f32) -> u32 {
+    state().sched.models.clip(model, duration)
+}
+
+/// A channel of a clip: `path` 0 translation, 1 rotation, 2 scale; the keys'
+/// times and values in the glue's lanes.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32) {
+    let s = state();
+    // SAFETY: the glue's lanes, of the lengths the path gives.
+    unsafe {
+        s.sched
+            .models
+            .channel(core::ptr::null(), model, clip, joint, path as u8, step != 0, key_cnt, times_at as usize, values_at as usize)
+    };
+}
+
+/// The model is complete; `scale` stands it as tall as the glue measured.
+#[no_mangle]
+pub extern "C" fn pxl_model_seal(model: u32, scale: f32) {
+    let s = state();
+    let sched = &mut s.sched;
+    sched.models.seal(&mut sched.draw, model, scale);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_model_remove(model: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.models.remove_model(&mut world, &mut sched.draw, model);
+}
+
+/// An actor of `model`: its id, or -1.
+#[no_mangle]
+pub extern "C" fn pxl_actor_new(model: u32) -> i32 {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32)
+}
+
+/// Where the actor stands, in units, its turn about Z, and whether it is drawn.
+#[no_mangle]
+pub extern "C" fn pxl_actor_place(actor: u32, x: f64, y: f64, z: f64, rotation_z: f64, visible: u32) {
+    if let Some(a) = state().sched.models.actor(actor) {
+        a.at = [x, y, z];
+        a.rotation_z = rotation_z as f32;
+        a.visible = visible != 0;
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_actor_play(actor: u32, clip: u32, fade_s: f32) {
+    state().sched.models.play(actor, clip, fade_s);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_actor_remove(actor: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.models.remove_actor(&mut world, &mut sched.draw, actor);
+}
+
+/// The hover ghost as a box of `size` units with its min corner at (x, y,
+/// z) in units, painted as object value `value` paints or, where that paints
+/// nothing, as `rgb` (0xRRGGBB) untextured; `coplanar` when it sits in a
+/// surface rather than clear of one.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn pxl_ghost_box(x: f64, y: f64, z: f64, size: f64, value: u32, rgb: u32, coplanar: u32) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.ghost.set_box(&mut world, &mut sched.draw, [x, y, z], size, value, rgb, coplanar != 0);
+}
+
+/// The hover ghost as one instance of decor group `group` (every kind's
+/// variants in teaching order), its base at (x, y, z) in units, turned
+/// `rotation` about Z.
+#[no_mangle]
+pub extern "C" fn pxl_ghost_decor(x: f64, y: f64, z: f64, group: u32, rotation: f64) {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.ghost.set_decor(&mut world, &mut sched.draw, [x, y, z], group, rotation as f32);
+}
+
+#[no_mangle]
+pub extern "C" fn pxl_ghost_clear() {
+    let s = state();
+    let (mut world, _, sched) = world_of(s);
+    sched.ghost.clear(&mut world, &mut sched.draw);
+}
+
+/// Hands the renderer's lists over (crates/pxl-core/src/draw.rs): a row of
+/// ten words — the uploads' address and count, the frees', the draws', the
+/// uniforms', the rewrites' — valid until the next call. Uploads and frees are what
+/// accumulated since the last call; the draws are the last tick's.
+#[no_mangle]
+pub extern "C" fn pxl_draw_take() -> *const u32 {
+    let s = state();
+    let lanes = s.sched.draw.take();
+    for (k, v) in lanes.iter().enumerate() {
+        s.draw_row[k] = *v as u32;
+    }
+    s.draw_row.as_ptr()
 }
 
 /// Rebuilds chunk `id`'s decor for the layout it shows, now, after the

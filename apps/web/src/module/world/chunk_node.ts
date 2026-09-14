@@ -37,6 +37,7 @@ import type { BakedChunkMesh } from "@/render/layer/pipeline/chunk_mesher.ts";
 import { CORE_BUILD, release_chunk_mesh } from "@/render/layer/pipeline/core_build.ts";
 import { decor_block_release, decor_block_retain, type DecorBlock } from "@/render/layer/pipeline/decor_block.ts";
 import { CORE_SECTIONS } from "@/render/layer/pipeline/core_pool.ts";
+import { gpu_draws_chunks } from "@/render/gpu/stage.tsx";
 import { lod_build_stats } from "@/module/world/lod_build_stat.ts";
 export { lod_build_stats };
 import type { LodStep } from "@/render/lod.ts";
@@ -119,10 +120,17 @@ export function chunk_retention(): ChunkRetention {
  * settings change and a decor asset arrival reach every node. The
  * per-column subscriptions stay per node: the store already routes those.
  */
-useSettingsStore.subscribe(() => {
+let gpu_chunks_seen = useSettingsStore.getState().gpu_chunks;
+useSettingsStore.subscribe((state) => {
   for (const node of chunk_nodes.values()) {
     node.on_source_change();
     node.on_decor_change();
+  }
+  // The chunks change hands between three and the WebGPU renderer: every
+  // node attaches its layout again, or detaches it.
+  if (state.gpu_chunks !== gpu_chunks_seen) {
+    gpu_chunks_seen = state.gpu_chunks;
+    for (const node of chunk_nodes.values()) node.reattach();
   }
 });
 register_tile_interest(() => true, (page_idx) => {
@@ -525,7 +533,10 @@ export class ChunkNode {
     retain_decor_pair(next.decor);
     this.layout = next;
     this.detach_all();
-    for (const bucket of next.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket);
+    // Three draws the cubes only while the WebGPU renderer does not; the
+    // buckets are held either way, for the raycast's bounds and the day
+    // the setting flips back.
+    if (!gpu_draws_chunks()) { for (const bucket of next.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket); }
     this.decor_dirty = true;
     if (this.blend !== null) {
       apply_visibility(this.registry, this.blend);
@@ -547,6 +558,15 @@ export class ChunkNode {
     if (this.blend !== null) this.sync_decor(this.blend.decor_secondary ? "secondary" : "primary");
     else this.sync_decor();
     release_decor_pair(previous);
+  }
+
+  /** Attaches the layout's cubes again, or not: whichever renderer draws
+   * the chunks now (render/gpu/stage.tsx). */
+  reattach(): void {
+    if (this.disposed) return;
+    this.detach_all();
+    if (!gpu_draws_chunks()) { for (const bucket of this.layout.buckets) if (bucket.cubes.vertex_cnt > 0) this.attach_cubes(bucket); }
+    if (this.blend !== null) apply_visibility(this.registry, this.blend);
   }
 
   private attach_cubes(bucket: BuiltChunkBucket): void {

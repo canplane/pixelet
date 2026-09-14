@@ -8,12 +8,17 @@
 //! byte-for-byte agreement with it until the TypeScript is gone
 //! (apps/web/src/render/layer/pipeline/wasm_bake.test.ts).
 
+pub mod billboard;
 pub mod buddy;
 pub mod build;
 pub mod change;
 pub mod decor;
+pub mod draw;
+pub mod ghost;
 pub mod lod;
+pub mod marker;
 pub mod mesher;
+pub mod model;
 pub mod object;
 pub mod raycast;
 pub mod ring;

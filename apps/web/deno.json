@@ -56,6 +56,7 @@
       "./@types/index.d.ts",
 
       "npm:vite/client",
+      "npm:@webgpu/types@^0.1.69",
       "npm:@types/react@^19",
       "npm:@types/react-dom@^19"
     ]

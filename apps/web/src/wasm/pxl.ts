@@ -86,6 +86,29 @@ export type PxlExports = {
   pxl_tick(): u32;
   pxl_build_now(id: u32): void;
   pxl_decor_now(id: u32, show_decor: u32): void;
+  pxl_draw_take(): u32;
+  pxl_ghost_box(x: number, y: number, z: number, size: number, value: u32, rgb: u32, coplanar: u32): void;
+  pxl_ghost_decor(x: number, y: number, z: number, group: u32, rotation: number): void;
+  pxl_ghost_clear(): void;
+  pxl_billboards_new(order: u32): u32;
+  pxl_billboards_write(set: u32, count: u32, lane: u32): void;
+  pxl_billboards_place(set: u32, x: number, y: number, z: number): void;
+  pxl_billboards_follow(set: u32, actor: u32, lift: number): void;
+  pxl_billboards_remove(set: u32): void;
+  pxl_puck_zone(x: number, y: number, z: number, count: u32, lane: u32, snap_dist: number, fog_far: number): void;
+  pxl_puck_beacon(offset_x: number, offset_y: number, night: u32): void;
+  pxl_puck_clear(): void;
+  pxl_model_new(vertex_cnt: u32, index_cnt: u32, joint_cnt: u32): number;
+  pxl_model_block(): u32;
+  pxl_model_joint(model: u32, joint: u32, parent: number, at: u32): void;
+  pxl_model_clip(model: u32, duration: number): u32;
+  pxl_model_channel(model: u32, clip: u32, joint: u32, path: u32, step: u32, key_cnt: u32, times_at: u32, values_at: u32): void;
+  pxl_model_seal(model: u32, scale: number): void;
+  pxl_model_remove(model: u32): void;
+  pxl_actor_new(model: u32): number;
+  pxl_actor_place(actor: u32, x: number, y: number, z: number, rotation_z: number, visible: u32): void;
+  pxl_actor_play(actor: u32, clip: u32, fade_s: number): void;
+  pxl_actor_remove(actor: u32): void;
   pxl_raycast(origin_x: number, origin_y: number, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, max_dist: number): u32;
   pxl_raycast_at(): u32;
   pxl_decor_forget(): void;
@@ -113,7 +136,10 @@ const PXL_WASM_URL = new URL("./pxl.wasm", import.meta.url);
 /** Instantiates the module over `memory`, whose first `module_bytes` are
  * the map's module section. */
 export async function instantiate_pxl(memory: WebAssembly.Memory, module_bytes: u32): Promise<PxlExports> {
-  const bytes = await (await fetch(PXL_WASM_URL)).arrayBuffer();
+  // Not from the HTTP cache in development: the dev server rebuilds the
+  // module under the same URL, and a cached one silently runs yesterday's
+  // core under today's glue.
+  const bytes = await (await fetch(PXL_WASM_URL, import.meta.env?.DEV ? { cache: "no-store" } : undefined)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: {
       memory,

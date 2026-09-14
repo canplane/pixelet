@@ -29,6 +29,7 @@ import { useGroundSnapSync } from "@/module/world/terrain/use_ground_snap_sync.t
 import { Overlays } from "./ui/overlay/overlays.tsx";
 import { MapHTMLPortal } from "./portal/html_portal.tsx";
 
+import { GpuCanvas, useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
 import { ToastController } from "./ui/toast/toast_controller.tsx";
 import { LedgerOverlay } from "@/module/world/sched/ledger_overlay.tsx";
 
@@ -138,7 +139,11 @@ export function MapScene() {
   // the canvas; the scene depth pass goes with it, and MainCameraLink has
   // nothing to link.
   const render_path = useSettingsStore((state) => state.render_path);
-  const with_post = render_path !== "no_post";
+  // Under the WebGPU renderer's canvas three's is transparent, and the post
+  // stack has no terrain in its input to act on: none until what it acts
+  // on has moved.
+  const gpu = useGpuDrawsChunks();
+  const with_post = render_path !== "no_post" && !gpu;
   // Half-float only when a pass needs values past one. The composer's
   // default is half-float always, which doubles every target it owns — the
   // multisampled buffer above all — and nothing in the shipped stack
@@ -164,7 +169,10 @@ export function MapScene() {
           backgroundColor: theme.fog,
         }}
       >
+        {/* The WebGPU renderer's canvas, under three's until three goes. */}
+        <GpuCanvas />
         <Canvas
+          style={{ position: "relative", zIndex: 1 }}
           // The device's own pixel ratio, capped at 2. This is not a cost
           // the user is asked about, because it is not an extra cost: [1, 2]
           // is r3f's clamp(window.devicePixelRatio, 1, 2), so a dpr-1 laptop
@@ -191,7 +199,9 @@ export function MapScene() {
           gl={{
             antialias: false,
             powerPreference: "high-performance",
-            alpha: false,
+            // Transparent where nothing of three's is drawn, so the WebGPU
+            // canvas under it shows through.
+            alpha: true,
             stencil: false,
             depth: true,
           }}
@@ -248,7 +258,7 @@ export function MapScene() {
           // queues drain.
           frameloop="demand"
         >
-          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_god_rays, show_shadow_map, render_path]} />
+          <DevRenderToggleInvalidator deps={[show_ao, show_bloom, show_god_rays, show_shadow_map, render_path, gpu]} />
           {
             /* The one useFrame in this Canvas. Every per-frame subscriber in
               the world registers a step into a phase of this tick instead

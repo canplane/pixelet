@@ -16,14 +16,18 @@
  * anyway.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { wrap_text } from "../billboard/canvas_text.ts";
 import { FONT_FAMILY, FONT_WEIGHT_BOLD } from "../billboard/canvas_scale.ts";
 import { Billboard, BILLBOARD_ORDER, type BuiltBillboard } from "../billboard/billboard.tsx";
 import { make_canvas_texture } from "../billboard/canvas_texture.ts";
+import { NO_SLOT } from "../billboard/atlas.ts";
+import { billboard_sheet } from "../billboard/sheet.ts";
+import { useTick } from "@/module/world/sched/tick.ts";
+import { CORE_PXL, FIXED_ALLOC } from "@/render/layer/pipeline/core_pool.ts";
 
 // A new chat line shows for this long, then the bubble disappears — chat
 // itself has no such expiry (dummy_chat_text.tsx's log keeps up to 10
@@ -77,20 +81,23 @@ function fill_notched_rect(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.fillRect(x, y + notch, w, Math.max(0, h - notch * 2));
 }
 
-function build_bubble_canvas(text: string): BuiltBillboard {
+/** A message laid out: its wrapped lines and the bubble's logical size. */
+type BubbleLayout = { lines: string[]; box_w: f64; box_h: f64; logical_h: f64 };
+
+function layout_bubble(text: string): BubbleLayout {
   const measure_ctx = document.createElement("canvas").getContext("2d")!;
   measure_ctx.font = FONT;
   const lines = wrap_text(measure_ctx, text, MAX_TEXT_WIDTH_PX);
   const text_w = Math.ceil(Math.max(...lines.map((line) => measure_ctx.measureText(line).width)));
-
   const box_w = text_w + PADDING_X * 2;
   const box_h = lines.length * LINE_H + PADDING_Y * 2;
-  const logical_h = box_h + TAIL_H;
+  return { lines, box_w, box_h, logical_h: box_h + TAIL_H };
+}
 
-  const canvas = document.createElement("canvas");
-  canvas.width = box_w * RENDER_SCALE;
-  canvas.height = logical_h * RENDER_SCALE;
-  const ctx = canvas.getContext("2d")!;
+/** Draws the bubble with its top-left at the context's origin, in real
+ * pixels RENDER_SCALE to the logical one. */
+function draw_bubble(ctx: CanvasRenderingContext2D, layout: BubbleLayout): void {
+  const { lines, box_w, box_h } = layout;
   ctx.imageSmoothingEnabled = false;
   // Every draw call below stays in the same logical (box_w/box_h) units —
   // this scales the whole coordinate system up to the canvas's real pixel
@@ -123,6 +130,15 @@ function build_bubble_canvas(text: string): BuiltBillboard {
   lines.forEach((line, i) => {
     ctx.fillText(line, box_w / 2, PADDING_Y + LINE_H * (i + 0.5));
   });
+}
+
+function build_bubble_canvas(text: string): BuiltBillboard {
+  const layout = layout_bubble(text);
+  const { box_w, logical_h } = layout;
+  const canvas = document.createElement("canvas");
+  canvas.width = box_w * RENDER_SCALE;
+  canvas.height = logical_h * RENDER_SCALE;
+  draw_bubble(canvas.getContext("2d")!, layout);
 
   // The whole bubble: unlike a POI badge's anchor dot, every part of this
   // is message rather than marker.
@@ -135,10 +151,17 @@ export type ChatBubbleProps = {
    * above this and positions by its tail tip, not its center, so callers
    * don't need to know anything about the bubble's own current height. */
   anchor_z: f64;
+  /** The character's actor when the WebGPU renderer draws it: the bubble is
+   * then a billboard set of the module standing on the actor
+   * (crates/pxl-core/src/billboard.rs), drawn from the shared sheet. */
+  actor: u32 | null;
 };
 
+/** Floats a billboard instance takes (crates/pxl-core/src/billboard.rs). */
+const BILLBOARD_FLOATS = 10;
+
 export function ChatBubble(props: ChatBubbleProps) {
-  const { anchor_z } = props;
+  const { anchor_z, actor } = props;
   const chatLines = useUiStore((state) => state.chatLines);
   const last = chatLines.length > 0 ? chatLines[chatLines.length - 1] : null;
 
@@ -167,13 +190,62 @@ export function ChatBubble(props: ChatBubbleProps) {
     return () => clearTimeout(timer);
   }, [last]);
 
-  const built = useMemo(() => (visible_line ? build_bubble_canvas(visible_line.text) : null), [visible_line]);
+  const tip_z = anchor_z + HEAD_CLEARANCE_U;
+  const gpu_bubble = useGpuBubble(actor, visible_line?.text ?? null, tip_z);
+
+  const built = useMemo(() => (visible_line && actor === null ? build_bubble_canvas(visible_line.text) : null), [visible_line, actor]);
   // A bubble's canvas is rebuilt per distinct message rather than cached, so
   // its texture is this component's to release — unlike a POI badge, which
   // is held by id and disposed when the badge is evicted.
   useEffect(() => () => built?.texture.dispose(), [built]);
 
+  if (gpu_bubble) return null;
   // tip_z is the tail's fixed bottom edge (Billboard's own base_z).
-  const tip_z = anchor_z + HEAD_CLEARANCE_U;
   return <Billboard built={built} base_z={tip_z} render_order={BILLBOARD_ORDER.chat} />;
+}
+
+/**
+ * The bubble through the WebGPU renderer: drawn into the shared sheet, and
+ * one instance of a billboard set that follows `actor` at `tip_z` — its
+ * tail tip, the anchor — so the module places it wherever the actor stands
+ * each tick. The instance is written again when the sheet is replaced,
+ * which moves its rectangle. Whether this path is the one drawing.
+ */
+function useGpuBubble(actor: u32 | null, text: string | null, tip_z: f64): boolean {
+  const [held, set_held] = useState<{ set: u32; slot: u32; layout: BubbleLayout } | null>(null);
+
+  useEffect(() => {
+    const p = CORE_PXL;
+    if (!p || actor === null || text === null) return;
+    const layout = layout_bubble(text);
+    const slot = billboard_sheet.add(layout.box_w * RENDER_SCALE, layout.logical_h * RENDER_SCALE, (ctx) => draw_bubble(ctx, layout));
+    if (slot === NO_SLOT) return;
+    const set = p.pxl_billboards_new(BILLBOARD_ORDER.chat);
+    set_held({ set, slot, layout });
+    return () => {
+      p.pxl_billboards_remove(set);
+      billboard_sheet.release(slot);
+      set_held(null);
+    };
+  }, [actor, text]);
+
+  const written = useRef<{ held: typeof held; tip_z: f64; generation: u32 }>({ held: null, tip_z: 0, generation: 0 });
+  useTick("cosmetic", () => {
+    const p = CORE_PXL;
+    const w = written.current;
+    if (!p || !held || actor === null) return;
+    if (w.held === held && w.tip_z === tip_z && w.generation === billboard_sheet.sheet_generation) return;
+    w.held = held;
+    w.tip_z = tip_z;
+    w.generation = billboard_sheet.sheet_generation;
+    const { set, slot, layout } = held;
+    const lane = FIXED_ALLOC.take(Float32Array, BILLBOARD_FLOATS);
+    // The tail tip is the anchor, at the bottom of the sprite.
+    lane.set([0, 0, 0, layout.box_w, layout.logical_h, billboard_sheet.u0(slot), billboard_sheet.v0(slot), billboard_sheet.u1(slot), billboard_sheet.v1(slot), 1]);
+    p.pxl_billboards_follow(set, actor, tip_z);
+    p.pxl_billboards_write(set, 1, lane.byteOffset);
+    FIXED_ALLOC.give(lane);
+  }, "chat_bubble");
+
+  return actor !== null;
 }

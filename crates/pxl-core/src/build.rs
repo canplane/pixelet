@@ -6,9 +6,8 @@
 //! page's lanes and the settings that change what they paint), and which
 //! tiers it still lacks; each tick it hands over the order to take them in
 //! and a budget. A chunk's runs come the direct way — one run a column
-//! from the terrain, when every tier it lacks is coarse and no object
-//! stands in its column — or by painting the terrain and the objects into a
-//! volume and scanning it. Its tiers are baked from those runs, one bake
+//! from the terrain, when no object stands in its column — or by painting
+//! the terrain and the objects into a volume and scanning it. Its tiers are baked from those runs, one bake
 //! and one scan open in the whole world at a time, as before. What comes
 //! out is events: a tier's mesh in a block of the mesh section, handed over
 //! whole, and what the chunk's runs hold, for the retain budget.
@@ -25,10 +24,6 @@ use crate::run_set::RunSet;
 use crate::scan::{BandView, ScanContext, ScanStep};
 use crate::terrain::{ChunkSample, Materials, PageView, CHANNELS, CHUNK_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use crate::volume::Volumes;
-
-/// The finest tier the direct path serves: past it, placed cubes carving the
-/// terrain and sub-cell objects would show, and only the scan sees them.
-pub const DIRECT_RUNS_MIN_STEP: u32 = 8;
 
 /// What the glue is told.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +54,8 @@ struct Runs {
     at: usize,
     bytes: u32,
     count: u32,
+    /// Made the direct way, which is cheap to make again.
+    direct: bool,
 }
 
 struct Chunk {
@@ -349,7 +346,15 @@ impl Builder {
         let c = &self.chunks[&id];
         let Some(page) = c.page else { return Progress::Blocked };
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
-        if !holding && c.wanted().all(|s| s >= DIRECT_RUNS_MIN_STEP) && !self.has_objects(world, c.base) {
+        // A column with nothing placed is one run of terrain, floor to top,
+        // whichever way it is made: the direct runs and the scan bake the
+        // same mesh at every tier (core_build.test.ts), and the scan's
+        // exactness — a cube carving the terrain, a sub-cell object — is
+        // only ever about what is placed. The direct path used to stop at
+        // step 8 on the principle that the fine tiers keep the voxel
+        // pipeline; a zoom-in then scanned every chunk in view, about
+        // 25 a second, most of them empty of objects (2026-09-14).
+        if !holding && !self.has_objects(world, c.base) {
             return self.direct_runs(world, id, page, emit);
         }
         if !holding {
@@ -385,7 +390,7 @@ impl Builder {
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(world.pools, job.volume);
                 self.stat.scans += 1;
-                self.keep_runs(id, Runs { at, bytes, count }, emit);
+                self.keep_runs(id, Runs { at, bytes, count, direct: false }, emit);
                 Progress::Busy
             }
         }
@@ -455,7 +460,7 @@ impl Builder {
         unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
-        self.keep_runs(id, Runs { at, bytes, count }, emit);
+        self.keep_runs(id, Runs { at, bytes, count, direct: true }, emit);
         Progress::Busy
     }
 
@@ -514,6 +519,17 @@ impl Builder {
                 for w in c.want.iter_mut() {
                     if *w == job.step {
                         *w = 0;
+                    }
+                }
+                // Direct runs are not worth keeping past the last tier
+                // wanted: a chunk's worth is 0.15 ms to make again, and a
+                // thousand of them held is a hundred megabytes of small
+                // blocks the fine tiers' large ones then fail to find room
+                // among (2026-09-14). A scan's runs stay: those cost the scan.
+                if c.wanted().next().is_none() {
+                    if let Some(r) = c.runs.take_if(|r| r.direct) {
+                        world.pools[pool].release(r.at, r.bytes);
+                        emit(Event::Runs { id, bytes: 0 });
                     }
                 }
                 emit(Event::Tier {

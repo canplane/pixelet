@@ -14,9 +14,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::billboard::Billboards;
 use crate::build::{Builder, Event as BuildEvent, PageLanes, World};
 use crate::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::draw::{DrawList, PIPELINE_CHUNK};
+use crate::ghost::Ghost;
 use crate::lod::{Ladder, COARSEST};
+use crate::marker::Markers;
+use crate::model::Models;
 use crate::terrain::ChunkSample;
 
 /// A chunk's side, in world units.
@@ -25,9 +30,15 @@ const CHUNK_WORLD_SPAN: f64 = 64.0;
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
 /// How often every chunk is rechecked, whatever is moving.
 const RECHECK_INTERVAL_S: f64 = 0.15;
-/// Layouts applied per frame on screen, and releases off it.
+/// Layouts applied per frame on screen, and releases off it — more of the
+/// latter after a frame that had a block refused: a release is cheap, and
+/// what an off-screen chunk still shows is what the refused block needs
+/// room among. A zoom-in leaves a thousand chunks showing their last
+/// layout off screen; at two a frame that is eight seconds of the fine
+/// tiers finding no room (2026-09-14).
 const MAX_COMMITS_PER_FRAME: u32 = 8;
 const MAX_RELEASES_PER_FRAME: u32 = 2;
+const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 /// Off-screen chunks that may give their built work back in one frame, and
 /// how many more when a block was refused this frame: a refusal is a build
 /// on screen going nowhere, and the pool has no spill to fall back on.
@@ -150,6 +161,20 @@ struct Tier {
     step: u32,
     bytes: u32,
     bounds: Option<Bounds>,
+    /// The renderer's name for the block, and the counts its lanes are
+    /// read by.
+    handle: u32,
+    vertex_cnt: u32,
+    index_cnt: u32,
+}
+
+/// A decor block the glue holds: its step and bytes, the renderer's handle,
+/// and each group's lanes (DecorBuild::group_layout).
+struct Decor {
+    step: u32,
+    bytes: u32,
+    handle: u32,
+    groups: Vec<(u32, u32)>,
 }
 
 struct Slot {
@@ -168,8 +193,8 @@ struct Slot {
     runs_bytes: u32,
     /// The tiers the glue holds, oldest built first.
     tiers: Vec<Tier>,
-    /// The decor blocks the glue holds: a step and its bytes.
-    decor: Vec<(u32, u32)>,
+    /// The decor blocks the glue holds.
+    decor: Vec<Decor>,
     layout_primary: u32,
     layout_secondary: u32,
     layout_ready: bool,
@@ -192,7 +217,7 @@ impl Slot {
     }
 
     fn retained(&self) -> f64 {
-        self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>() + self.decor.iter().map(|d| d.1 as f64).sum::<f64>()
+        self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>() + self.decor.iter().map(|d| d.bytes as f64).sum::<f64>()
     }
 
     fn tier(&self, step: u32) -> Option<&Tier> {
@@ -219,6 +244,16 @@ pub struct Census {
 
 pub struct Scheduler {
     pub builder: Builder,
+    /// What the renderer uploads, frees and draws (draw.rs).
+    pub draw: DrawList,
+    /// The hover ghost (ghost.rs).
+    pub ghost: Ghost,
+    /// Models and the actors that play them (model.rs).
+    pub models: Models,
+    /// The location puck (marker.rs).
+    pub markers: Markers,
+    /// The billboards (billboard.rs).
+    pub billboards: Billboards,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
@@ -247,8 +282,10 @@ pub struct Scheduler {
     decor_kinds: Vec<DecorKind>,
     decor_sample: ChunkSample,
     /// The builder's refusals as of the last reclaim, so a refusal since
-    /// is pressure now.
+    /// is pressure now; and whether the last pass saw one, for the next
+    /// frame's release cap.
     refused_seen: u32,
+    refused_last: bool,
 }
 
 impl Default for Scheduler {
@@ -281,6 +318,11 @@ impl Scheduler {
     pub fn new() -> Scheduler {
         Scheduler {
             builder: Builder::new(),
+            draw: DrawList::default(),
+            ghost: Ghost::default(),
+            models: Models::default(),
+            markers: Markers::default(),
+            billboards: Billboards::default(),
             slots: Vec::new(),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
@@ -299,6 +341,7 @@ impl Scheduler {
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
             refused_seen: 0,
+            refused_last: false,
         }
     }
 
@@ -400,6 +443,12 @@ impl Scheduler {
         } else {
             self.retained_off -= before;
         }
+        for t in &self.slots[i].tiers {
+            self.draw.free(t.handle);
+        }
+        for d in &self.slots[i].decor {
+            self.draw.free(d.handle);
+        }
         self.slots.swap_remove(i);
         if i < self.slots.len() {
             self.index.insert(self.slots[i].id, i);
@@ -415,6 +464,12 @@ impl Scheduler {
         let before = self.slots[i].retained();
         self.builder.source(world, id, page, show_structures, &mut |e| emit(Event::Build(e)));
         let s = &mut self.slots[i];
+        for t in &s.tiers {
+            self.draw.free(t.handle);
+        }
+        for d in &s.decor {
+            self.draw.free(d.handle);
+        }
         s.tiers.clear();
         s.decor.clear();
         s.runs_bytes = 0;
@@ -436,8 +491,8 @@ impl Scheduler {
         let (p, s2) = (self.slots[i].layout_primary, self.slots[i].layout_secondary);
         if !self.ask(world, i, p, s2) {
             let mem = world_mem(world);
-            let (slots, index, ron, roff) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off);
-            self.builder.tick(world, &[id], f64::INFINITY, now, &mut |e| self_record(slots, index, mem, ron, roff, e, emit));
+            let (slots, index, ron, roff, draw) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw);
+            self.builder.tick(world, &[id], f64::INFINITY, now, &mut |e| self_record(slots, index, mem, ron, roff, draw, e, emit));
         }
         if self.ask(world, i, p, s2) && self.ensure_decor(world, i, [p, s2], emit) {
             self.trim(i, [p, s2], emit);
@@ -459,7 +514,9 @@ impl Scheduler {
         }
         let Some(&i) = self.index.get(&id) else { return };
         let before = self.slots[i].retained();
-        self.slots[i].decor.clear();
+        for d in self.slots[i].decor.drain(..) {
+            self.draw.free(d.handle);
+        }
         self.account(i, before);
         if !self.slots[i].layout_ready {
             return;
@@ -485,7 +542,7 @@ impl Scheduler {
         let page_idx = gather_xy(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT);
         let mut sampled = false;
         for step in steps {
-            if step == 0 || self.slots[i].decor.iter().any(|d| d.0 == step) {
+            if step == 0 || self.slots[i].decor.iter().any(|d| d.step == step) {
                 continue;
             }
             let view = Builder::page_view(world, page);
@@ -519,7 +576,13 @@ impl Scheduler {
             // once handed over.
             unsafe { built.write(world.volumes.mem().add(at)) };
             let before = self.slots[i].retained();
-            self.slots[i].decor.push((step, bytes));
+            let handle = self.draw.upload(at as u32, bytes, 0, 0);
+            self.slots[i].decor.push(Decor {
+                step,
+                bytes,
+                handle,
+                groups: built.group_layout(),
+            });
             self.account(i, before);
             emit(Event::Decor { id, step, at: at as u32, bytes });
         }
@@ -668,7 +731,8 @@ impl Scheduler {
 
         let pending_total = (visible.len() + offscreen.len()) as u32;
         let mut committed = under_budget(&visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
-        committed += under_budget(&offscreen, MAX_RELEASES_PER_FRAME, deadline, hard, now, |i| self.commit(world, i, emit));
+        let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
+        committed += under_budget(&offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
         // The builds, visible pending first in order, with what is left; the
         // chunks a tier landed on are committed after.
@@ -676,13 +740,13 @@ impl Scheduler {
         let mut landed: Vec<u32> = Vec::new();
         let budget = (deadline - now()).max(0.0);
         {
-            let (slots, index, ron, roff) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off);
+            let (slots, index, ron, roff, draw) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw);
             let mem = world_mem(world);
             self.builder.tick_capped(world, &still, budget, MAX_COMMITS_PER_FRAME, now, &mut |e| {
                 if let BuildEvent::Tier { id, .. } = e {
                     landed.push(id);
                 }
-                self_record(slots, index, mem, ron, roff, e, emit);
+                self_record(slots, index, mem, ron, roff, draw, e, emit);
             });
         }
         for id in landed {
@@ -694,6 +758,9 @@ impl Scheduler {
         }
 
         self.reclaim(world, &order, emit);
+        self.models.tick(world, &mut self.draw, frame.delta_s as f32);
+        let animating = self.markers.tick(&frame);
+        self.draw_frame(&frame);
 
         let mut c = Census { committed, ..Census::default() };
         c.chunks = self.slots.len() as u32;
@@ -723,7 +790,48 @@ impl Scheduler {
         c.retained_off = self.retained_off;
         let blending = c.blend_active > 0;
         self.census = c;
-        committed > 0 || pending_total > committed || blending || self.view_dirty
+        committed > 0 || pending_total > committed || blending || self.view_dirty || animating
+    }
+
+    /// This frame's draws: every chunk on screen with a layout, its tiers at
+    /// the weights the blend decided, placed where the chunk is in the frame
+    /// the camera is written in.
+    fn draw_frame(&mut self, frame: &Frame) {
+        self.draw.begin_frame();
+        self.ghost.draw(&mut self.draw, frame.origin);
+        self.models.draw(&mut self.draw, frame.origin);
+        self.markers.draw(&mut self.draw, frame.origin);
+        self.billboards.draw(&mut self.draw, &self.models, frame.origin);
+        for s in &self.slots {
+            if !s.has(IN_FRUSTUM) || !s.layout_ready {
+                continue;
+            }
+            let (wp, ws) = s.told.map_or((1.0, 0.0), |t| (t.0, t.1));
+            let translation = [(s.base_x - frame.origin[0]) as f32, (s.base_y - frame.origin[1]) as f32, (-frame.origin[2]) as f32];
+            for (step, visible) in [(s.layout_primary, wp), (s.layout_secondary, ws)] {
+                if step == 0 {
+                    continue;
+                }
+                let Some(t) = s.tier(step) else { continue };
+                if t.vertex_cnt == 0 {
+                    continue;
+                }
+                self.draw.draw(PIPELINE_CHUNK, t.handle, t.vertex_cnt, t.index_cnt, translation, visible, 1.0);
+            }
+            // Decor takes whichever tier the blend says the chunk is mostly
+            // on: an instance is drawn or it is not.
+            let decor_step = match s.told {
+                Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+                _ => s.layout_primary,
+            };
+            if let Some(d) = s.decor.iter().find(|d| d.step == decor_step) {
+                for (group, &(offset, count)) in d.groups.iter().enumerate() {
+                    if count > 0 {
+                        self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
+                    }
+                }
+            }
+        }
     }
 
     /// Where every chunk is and whether it is on screen, from the anchor
@@ -922,8 +1030,15 @@ impl Scheduler {
                 k += 1;
                 continue;
             }
-            s.tiers.remove(k);
-            s.decor.retain(|d| d.0 != st);
+            let gone = s.tiers.remove(k);
+            self.draw.free(gone.handle);
+            let draw = &mut self.draw;
+            s.decor.retain(|d| {
+                if d.step == st {
+                    draw.free(d.handle);
+                }
+                d.step != st
+            });
             emit(Event::Evict { id: s.id, step: st });
         }
         self.account(i, before);
@@ -967,6 +1082,7 @@ impl Scheduler {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
         let refused = self.builder.stat.starved != self.refused_seen;
         self.refused_seen = self.builder.stat.starved;
+        self.refused_last = refused;
         let pressed = |world: &World| {
             let p = &world.pools[world.volumes.mesh_pool()];
             p.stat.live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
@@ -986,10 +1102,15 @@ impl Scheduler {
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
-            let mut steps: Vec<u32> = s.tiers.drain(..).map(|t| t.step).collect();
-            for (step, _) in s.decor.drain(..) {
-                if !steps.contains(&step) {
-                    steps.push(step);
+            let mut steps: Vec<u32> = Vec::new();
+            for t in s.tiers.drain(..) {
+                self.draw.free(t.handle);
+                steps.push(t.step);
+            }
+            for d in s.decor.drain(..) {
+                self.draw.free(d.handle);
+                if !steps.contains(&d.step) {
+                    steps.push(d.step);
                 }
             }
             for step in steps {
@@ -1026,17 +1147,22 @@ impl Scheduler {
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
             let mut steps: Vec<u32> = Vec::new();
+            let draw = &mut self.draw;
             s.tiers.retain(|t| {
                 let keep = t.step == p || t.step == q;
                 if !keep {
+                    draw.free(t.handle);
                     steps.push(t.step);
                 }
                 keep
             });
             s.decor.retain(|d| {
-                let keep = d.0 == p || d.0 == q;
-                if !keep && !steps.contains(&d.0) {
-                    steps.push(d.0);
+                let keep = d.step == p || d.step == q;
+                if !keep {
+                    draw.free(d.handle);
+                    if !steps.contains(&d.step) {
+                        steps.push(d.step);
+                    }
                 }
                 keep
             });
@@ -1176,9 +1302,18 @@ fn world_mem(world: &World) -> *const u8 {
 
 /// Records what a build handed over on the slot it belongs to, and passes
 /// it on.
-fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8, retained_on: &mut f64, retained_off: &mut f64, e: BuildEvent, emit: &mut impl FnMut(Event)) {
+#[allow(clippy::too_many_arguments)]
+fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8, retained_on: &mut f64, retained_off: &mut f64, draw: &mut DrawList, e: BuildEvent, emit: &mut impl FnMut(Event)) {
     match e {
-        BuildEvent::Tier { id, step, at, bytes, vertex_cnt, .. } => {
+        BuildEvent::Tier {
+            id,
+            step,
+            at,
+            bytes,
+            vertex_cnt,
+            index_cnt,
+            ..
+        } => {
             if let Some(&i) = index.get(&id) {
                 let s = &mut slots[i];
                 if s.tier(step).is_none() {
@@ -1198,7 +1333,16 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                         }
                         b
                     });
-                    s.tiers.push(Tier { step, bytes, bounds });
+                    // A mesh of nothing has no block and is never drawn.
+                    let handle = if vertex_cnt > 0 { draw.upload(at, bytes, vertex_cnt, index_cnt) } else { 0 };
+                    s.tiers.push(Tier {
+                        step,
+                        bytes,
+                        bounds,
+                        handle,
+                        vertex_cnt,
+                        index_cnt,
+                    });
                     let on = s.has(IN_FRUSTUM);
                     if on {
                         *retained_on += bytes as f64

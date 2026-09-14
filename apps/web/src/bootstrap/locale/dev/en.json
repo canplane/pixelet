@@ -23,6 +23,10 @@
         "label": "Scheduler Ledger",
         "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler, with the report, trace and console-log buttons."
       },
+      "gpu_chunks": {
+        "label": "Chunks through WebGPU",
+        "description": "Draws the chunk meshes with the WebGPU renderer from the module's draw list, over three's canvas. Off draws them as three meshes, for a side-by-side."
+      },
       "pixel_dither": {
         "label": "LOD cross-fade (per pixel)",
         "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."

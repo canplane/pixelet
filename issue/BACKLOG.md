@@ -158,26 +158,42 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
      one React commit — had no counterpart in the module, and each was a
      stall; the module has its own now. **Before the renderer, the
      performance pass the profile of 2026-09-14 points at** (measured with
-     the ledger, dev build, desktop): the fine tiers' throughput — a
-     zoom-in scans about 25 chunks a second, compose, scan and bake at
-     ~40 ms a chunk, `BakeContext::step` the largest Rust entry — and the
-     refusals a zoom-in still meets (414 in one, the 2–4 MB blocks of fine
-     meshes against a section fragmented by run sets and tiers: a
-     large-block region, or a reclaim that coalesces). What the profile
+     the ledger, dev build, desktop). Taken the same day, on the module's
+     own counters: a chunk with nothing placed takes the direct path at
+     every tier, since its runs are the same either way (pinned by
+     core_build.test.ts) — a zoom-in scanned every chunk in view, about 25
+     a second, most of them empty of objects; direct runs go with the last
+     tier wanted rather than filling the section with small blocks; and a
+     frame that had a block refused releases off-screen layouts at 64 a
+     frame rather than 2, since what they still show is the room the
+     refused block needs. A zoom-in over a thousand chunks settles in a
+     second with under a hundred refusals, from six seconds and counting.
+     Left for the frame-based pass after the renderer: `BakeContext::step`
+     itself (face masks and the mesh write), and a large-block region if
+     refusals show again. What the profile
      also shows and the renderer removes: three's `updateMatrixWorld` over
      2,500 groups (1.9 s of 27), and decor drawn for the whole loaded
-     world (tree 281k, car 99k triangles a frame; P3 below). Next:
-     whatever else stands before the
-     renderer; then the renderer, starting with the hover cursor. The cursor goes first because it is
-     where the two sides already disagree: since the object store moved
-     into the module, the eraser's half-transparent ghost over a placed
-     cube shows late or not at all while the hide itself lands (decor's
-     ghost is unaffected; the build before the move, 9ff57fe, is fine) —
-     suspected to be ordering across the boundary, not chased in three.js.
-     With the same move its side textures lie on their side on some walls,
-     which 9ff57fe does not do either. Both go with drawing the ghost
-     through the chunk pipeline — one box through the mesher and the chunk
-     material with an opacity — so it cannot diverge from what it previews.
+     world (tree 281k, car 99k triangles a frame; P3 below). The renderer
+     is started (2026-09-14, render/gpu, crates/pxl-core/src/{draw,ghost}.rs):
+     the module lists what to upload, free and draw, and a WebGPU canvas under
+     three's executes it with no decision of its own. Through it so far, in
+     one pass and one depth: the sky, the chunks (chunk_material.ts's shader
+     in WGSL, three's Lambert), decor (the module's blocks read as instance
+     storage) and the hover ghost (a lone box in the mesher's layout, or one
+     decor instance, blended last) — which ended the ghost faults recorded
+     here since the object store moved. Behind the dev setting `gpu_chunks`
+     (on). Next, in order: the companions (glTF, skinned), the location
+     puck, the badges and their depth trick, then three and R3F out; the
+     post effects — rim light, shadows, the vignette, MSAA, mipmaps — after,
+     with what each costs in memory measured. For the frame-based pass
+     after it, at least considered: work that is data-parallel per element
+     and whose result only goes to the screen, moved into compute — culling
+     into an indirect draw buffer (`drawIndirect`) in place of a listed draw
+     a chunk, decor instances filtered by tier and range, and a chunk's face
+     culling. What the CPU has to read back stays the module's: a readback
+     arrives frames late, and WGSL has no 64-bit type for the coordinates,
+     no allocation and no I/O. The mesher's face culling is the open
+     question, since the raycast and the caches read what it produces.
 
 ## P1
 

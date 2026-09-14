@@ -741,6 +741,53 @@ impl BakeContext {
     }
 }
 
+/// Faces and edges of a box standing alone: every face, and every lateral
+/// edge a crease (the CREASE bits), so each edge shades as a silhouette.
+pub const LONE_BOX_FACES: u32 = 0b11_1111 | (0b1111 << 18);
+/// A lone box's vertex and index counts.
+pub const LONE_BOX_VERTICES: u32 = 24;
+pub const LONE_BOX_INDICES: u32 = 36;
+
+/// Writes one box with nothing around it into a mesh block of
+/// mesh_words(LONE_BOX_VERTICES, LONE_BOX_INDICES) words, in the layout a
+/// bake writes: what the hover ghost is drawn from, so it is lit, textured
+/// and edge-shaded as a placed cube is. `rgb` is sRGB bytes.
+pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) {
+    let vt = LONE_BOX_VERTICES as usize;
+    let lane = |k: usize| k * vt;
+    let (position, normal, local_pos, box_scale, color, layer_taps, face_lane) = (lane(0), lane(3), lane(6), lane(9), lane(12), lane(15), lane(19));
+    let index = lane((F32_PER_VERTEX + VIS_F32_PER_VERTEX) as usize);
+    let linear = [SRGB_TO_LINEAR[rgb[0] as usize], SRGB_TO_LINEAR[rgb[1] as usize], SRGB_TO_LINEAR[rgb[2] as usize]];
+    let centre = size * 0.5;
+    let mut v = 0usize;
+    let mut i = 0usize;
+    for f in 0..FULL_FACE_CNT as usize {
+        let n = &FACE_NORMAL[f * 3..f * 3 + 3];
+        let base = v as u32;
+        for c in 0..4 {
+            let k = (f * 4 + c) * 3;
+            let l = &FACE_CORNER[k..k + 3];
+            let (po, lo) = (v * 3, v * 4);
+            for a in 0..3 {
+                m[position + po + a] = f32_word(centre + l[a] * size);
+                m[normal + po + a] = f32_word(n[a]);
+                m[local_pos + po + a] = f32_word(l[a]);
+                m[box_scale + po + a] = f32_word(size);
+                m[color + po + a] = f32_word(linear[a]);
+            }
+            for t in 0..4 {
+                m[layer_taps + lo + t] = f32_word(layer as f64);
+            }
+            m[face_lane + v] = f32_word(LONE_BOX_FACES as f64);
+            v += 1;
+        }
+        for d in [0, 1, 2, 0, 2, 3] {
+            m[index + i] = base + d;
+            i += 1;
+        }
+    }
+}
+
 fn f32_word(v: f64) -> u32 {
     (v as f32).to_bits()
 }

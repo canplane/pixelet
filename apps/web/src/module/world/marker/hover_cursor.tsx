@@ -26,9 +26,14 @@ import { decor_assets_for, useDecorAssets } from "../decor/asset_store.ts";
 import { AnchorNode } from "../anchor/node.tsx";
 import { marker_colors } from "./style.ts";
 import { shown_ground } from "@pxl/shared/bake/ground.ts";
-import { placeable_cube_hex, terrain_style_cube_for } from "@pxl/shared/spec/cell/mod.ts";
+import { placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for } from "@pxl/shared/spec/cell/mod.ts";
 import { get_ground_type } from "../terrain/elevation.ts";
 import { light_cfg } from "@/module/world/environment/config.ts";
+import { fvec, ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
+import { CORE_PXL } from "@/render/layer/pipeline/core_pool.ts";
+import { useGpuDrawsChunks } from "@/render/gpu/stage.tsx";
+import { DECOR_BUNDLES } from "../decor/decor_registry.ts";
+import { request_world_tick } from "../change.ts";
 
 // Flat, no border: a bordered box only reads cleanly on a primitive with
 // per-face UVs mapped 0-1 (this one's own previous implementation) — an
@@ -385,6 +390,34 @@ export function HoverCursor() {
   // carved hole beat the depth test against the ground around it, and its
   // far edges drew as lines running out across the surface.
   const coplanar_with_terrain = !use_object_style;
+
+  // Through the WebGPU renderer the ghost is the core's (crates/pxl-core/
+  // src/ghost.rs): a box written in the mesher's layout and drawn by the
+  // chunk shader, or one decor instance drawn by decor's, half transparent.
+  // Everything above still decides which ghost and where; nothing below is
+  // drawn by three.
+  const gpu = useGpuDrawsChunks();
+  const decor_group = decor_bundle && decor_pick ? DECOR_BUNDLES.slice(0, DECOR_BUNDLES.indexOf(decor_bundle)).reduce((n, b) => n + b.variants.length, 0) + decor_pick.variant : -1;
+  const ghost_x = hovered ? ivec.to_real(ivec.X(hovered.i)) + fvec.to_real(fvec.X(hovered.f)) : 0;
+  const ghost_y = hovered ? ivec.to_real(ivec.Y(hovered.i)) + fvec.to_real(fvec.Y(hovered.f)) : 0;
+  const ghost_z = hovered ? ivec.to_real(ivec.Z(hovered.i)) + fvec.to_real(fvec.Z(hovered.f)) : 0;
+  const ghost_value = color_id && texture_pack ? placeable_cube_num_id(color_id) : 0;
+  const ghost_rgb = parseInt((swatch ?? fallback).slice(1), 16);
+  const show_ghost = gpu && hovered !== null && !blocked;
+  useEffect(() => {
+    const p = CORE_PXL;
+    if (!p || !gpu) return;
+    if (!show_ghost) {
+      p.pxl_ghost_clear();
+    } else if (is_decor_ghost && decor_pick && decor_group >= 0) {
+      p.pxl_ghost_decor(ghost_x + preview_size / 2, ghost_y + preview_size / 2, ghost_z, decor_group, decor_pick.rotation);
+    } else {
+      p.pxl_ghost_box(ghost_x, ghost_y, ghost_z, current_scale, ghost_value, ghost_rgb, coplanar_with_terrain ? 1 : 0);
+    }
+    request_world_tick();
+  }, [gpu, show_ghost, is_decor_ghost, decor_group, decor_pick?.rotation, ghost_x, ghost_y, ghost_z, preview_size, current_scale, ghost_value, ghost_rgb, coplanar_with_terrain]);
+  useEffect(() => () => CORE_PXL?.pxl_ghost_clear(), []);
+  if (gpu) return null;
 
   if (!hovered || blocked) return null;
 
