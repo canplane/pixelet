@@ -20,11 +20,8 @@
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { Errno } from "@xpute/core/sys/errno.ts";
 import type { U8Array } from "@xpute/core/kit/array.ts";
-import { FrameFlag } from "@xpute/core/ipc/frame.ts";
-import { Ring } from "@xpute/core/ipc/ring.ts";
-import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { GROUND_CH_KEYS, type Terrain } from "@pxl/shared/bake/format.ts";
 
@@ -32,7 +29,10 @@ import type { LodStep } from "@/module/world/lod.ts";
 import type { PxlExports } from "@/wasm/pxl.ts";
 import type { MeshBlock } from "@/render/mesh/mesh_block.ts";
 import { decor_block_carve, decor_block_release, type DecorBlock } from "@/render/mesh/decor_block.ts";
-import { CORE_POOL, CORE_PXL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_POOL, CORE_PXL, CORE_RING, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { type CoreRing, packet } from "@/wasm/core_ring.ts";
+
+export { packet };
 
 /** Hands one baked mesh's block back to the core pool. Every view into it is
  * dead afterwards. */
@@ -133,25 +133,9 @@ export type BuildStat = {
   heap_used: u32;
 };
 
-/** A packet of one branch, its children written by `fill` — what a message
- * carries (@pxl/shared/spec/cmd.ts). */
-export function packet(fill: (b: BranchView) => void): U8Array {
-  return encoder.encode(new TreeView().branch(fill));
-}
-
 export class CoreBuild {
-  private readonly sq: Ring;
-  private readonly cq: Ring;
   private readonly sinks = new Map<u32, ChunkBuildSink>();
   private next_id: u32 = 1;
-  /** The calls waiting on their replies, by tag; and the replies a call
-   * made inside a sink read ahead of the completion ring's head, which the
-   * read under it then passes over. */
-  private next_call: u32 = 0;
-  private readonly waiting = new Map<u32, (result: number, f: BranchCursor | null) => void>();
-  private readonly taken = new Set<u32>();
-  /** How deep in `read` this is: a sink runs inside it. */
-  private reading = 0;
   /** Who makes and drops the nodes of mounted chunks. */
   mounts: MountListener | null = null;
   private order: Uint32Array;
@@ -159,13 +143,12 @@ export class CoreBuild {
   readonly frame: Float64Array;
   private warned_unreachable = false;
 
-  constructor(private readonly pxl: PxlExports) {
-    this.sq = new Ring(pxl.memory.buffer, pxl.pxl_ring_sq());
-    this.cq = new Ring(pxl.memory.buffer, pxl.pxl_ring_cq());
+  constructor(private readonly pxl: PxlExports, private readonly ring: CoreRing) {
+    ring.signal = (id, cmd, f) => this.signal(id, cmd, f);
     this.order = FIXED_ALLOC.take(Uint32Array, 1024);
     const buf = pxl.memory.buffer;
-    this.frame = this.call(Cmd.FRAME_READ, null, (_, reply) => new Float64Array(buf, reply!.at(0).get<number>(), FRAME_WORDS));
-    const [census_at, stat_at] = this.call(Cmd.CHUNK_READ, null, (_, reply) => [reply!.at(0).get<number>(), reply!.at(1).get<number>()]);
+    this.frame = ring.call(Cmd.FRAME_READ, null, (_, reply) => new Float64Array(buf, reply!.at(0).get<number>(), FRAME_WORDS));
+    const [census_at, stat_at] = ring.call(Cmd.CHUNK_READ, null, (_, reply) => [reply!.at(0).get<number>(), reply!.at(1).get<number>()]);
     this.census_row = new Float64Array(buf, census_at, 13);
     this.stat_row = new Uint32Array(buf, stat_at, 11);
   }
@@ -173,145 +156,53 @@ export class CoreBuild {
   /** Makes room in the submission ring: applies what waits, and hands out
    * what that made. */
   pump(): void {
-    this.pxl.pxl_drain();
-    this.read();
+    this.ring.pump();
   }
 
-  /** Hands the module the turn: a pump, or inside a sink — where the ring
-   * is being read under this call — only the drain, since reading it again
-   * here would hand the same message out twice. */
-  private turn(): void {
-    if (this.reading > 0) this.pxl.pxl_drain();
-    else this.pump();
-  }
-
-  private submit(tag: u32, cmd: Cmd, pkt: U8Array | null = null, flags: u32 = 0): void {
-    for (;;) {
-      const errno = this.sq.push(tag, cmd, flags, pkt);
-      if (errno === Errno.OK) return;
-      if (errno !== Errno.EAGAIN) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} refused by the ring: ${errno}`);
-      this.turn();
-    }
-  }
-
-  private read(): void {
-    this.reading++;
-    try {
-      this.read_ring();
-    } finally {
-      this.reading--;
-    }
-  }
-
-  private read_ring(): void {
-    const cq = this.cq;
-    for (let at = cq.peek(); at >= 0; at = cq.peek()) {
-      const id = cq.tag(at);
-      const cmd = cq.cmd(at) as Cmd;
-      const pkt = cq.packet(at);
-      const f: BranchCursor | null = pkt ? new TreeReader(pkt).read_branch() : null;
-      if (cq.flags(at) & FrameFlag.RES) {
-        const waiting = this.waiting.get(id);
-        if (this.taken.delete(id)) {
-          // Read already, by the call that asked, from inside a sink.
-        } else if (waiting !== undefined) {
-          waiting(cq.result(at), f);
-        } else if (cq.result(at) < 0) {
-          console.warn(`[wasm/core_build] command 0x${cmd.toString(16)} failed: errno ${cq.result(at)}`);
-        }
-        cq.advance();
-        continue;
-      }
-      const u32_at = (i: u32) => f!.at(i).get<number>();
-      if (cmd === Cmd.CHUNK_CREATE) {
-        this.mounts?.on_mount(id, f!.at(0).get<bigint>(), u32_at(1), u32_at(2));
-        cq.advance();
-        continue;
-      }
-      if (cmd === Cmd.CHUNK_DELETE) {
-        this.sinks.get(id)?.on_unmount?.();
-        this.sinks.delete(id);
-        this.mounts?.on_unmount(id);
-        cq.advance();
-        continue;
-      }
-      const sink = this.sinks.get(id);
-      if (cmd === Cmd.TIER_CREATE) {
-        const mesh: MeshBlock = { block: CORE_POOL.adopt(u32_at(2), u32_at(3)), vertex_cnt: u32_at(4), index_cnt: u32_at(5) };
-        if (sink) sink.on_tier(u32_at(0), u32_at(1) as LodStep, mesh);
-        else release_chunk_mesh(mesh);
-      } else if (cmd === Cmd.DECOR_CREATE) {
-        const decor = decor_block_carve(CORE_POOL.adopt(u32_at(1), u32_at(2)));
-        if (sink) sink.on_decor(u32_at(0) as LodStep, decor);
-        else decor_block_release(decor);
-      } else if (sink) {
-        if (cmd === Cmd.RUNS_UPDATE) sink.on_runs(u32_at(0));
-        else if (cmd === Cmd.CHUNK_VISIBLE) sink.on_visible?.(f!.at(0).get<boolean>());
-        else if (cmd === Cmd.CHUNK_LAYOUT) sink.on_layout(u32_at(0) as LodStep, u32_at(1) === 0 ? null : u32_at(1) as LodStep, f!.at(2).get<boolean>());
-        else if (cmd === Cmd.CHUNK_BLEND) sink.on_blend?.(u32_at(0), u32_at(1), f!.at(2).get<boolean>());
-        else if (cmd === Cmd.TIER_DELETE) sink.on_evict(u32_at(0) as LodStep);
-      }
-      cq.advance();
-    }
-  }
-
-  /** Sends a command that asks for no reply. It is applied at the module's
-   * next drain, tick or read, in the order it was sent. */
-  send(tag: u32, cmd: Cmd, pkt: U8Array | null = null): void {
-    this.submit(tag, cmd, pkt);
-  }
-
-  /** Applies every command sent so far, now, without handing out what they
-   * made: for a caller about to read what it changed, and safe inside a
-   * sink, since no sink runs. */
-  settle(): void {
-    this.pxl.pxl_drain();
-  }
-
-  /**
-   * A query answered in the turn it is asked: submitted with ACKREQ behind
-   * whatever waits — so a placement just sent is what it sees — and the
-   * kernel rung until the reply comes back, the signals before it handed
-   * out as `read` always does. `take` reads the reply; its packet is valid
-   * only inside it.
-   */
-  call<T>(cmd: Cmd, pkt: U8Array | null, take: (result: number, reply: BranchCursor | null) => T): T {
-    const tag = this.next_call = (this.next_call + 1) >>> 0;
-    let out: { value: T } | null = null;
-    this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
-    try {
-      this.submit(tag, cmd, pkt, FrameFlag.ACKREQ);
-      if (this.reading > 0) {
-        // Inside a sink the ring is being read under this call: the reply is
-        // found where it lies, ahead of the head, and left for that read.
-        this.pxl.pxl_drain();
-        this.take_ahead(tag);
-      }
-      while (out === null) {
-        if (this.reading > 0) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} asked inside a sink found the completion ring full`);
-        const posted = this.pxl.pxl_drain();
-        this.read();
-        if (out === null && posted === 0 && this.sq.len === 0) throw new Error(`[wasm/core_build] command 0x${cmd.toString(16)} was never replied to`);
-      }
-    } finally {
-      this.waiting.delete(tag);
-    }
-    return (out as { value: T }).value;
-  }
-
-  /** The reply to `tag`, read where it waits in the completion ring. A
-   * message not yet consumed keeps the arena from rewinding, so its packet
-   * stays whole. */
-  private take_ahead(tag: u32): void {
-    const cq = this.cq;
-    for (let pos = cq.head; pos !== cq.tail; pos = (pos + 1) >>> 0) {
-      const at = cq.entry_at(pos);
-      if ((cq.flags(at) & FrameFlag.RES) === 0 || cq.tag(at) !== tag) continue;
-      const pkt = cq.packet(at);
-      this.waiting.get(tag)!(cq.result(at), pkt ? new TreeReader(pkt).read_branch() : null);
-      this.taken.add(tag);
+  /** A chunk's signal: its mount and unmount, and what its sink is told. */
+  private signal(id: u32, cmd: Cmd, f: BranchCursor | null): void {
+    const u32_at = (i: u32) => f!.at(i).get<number>();
+    if (cmd === Cmd.CHUNK_CREATE) {
+      this.mounts?.on_mount(id, f!.at(0).get<bigint>(), u32_at(1), u32_at(2));
       return;
     }
+    if (cmd === Cmd.CHUNK_DELETE) {
+      this.sinks.get(id)?.on_unmount?.();
+      this.sinks.delete(id);
+      this.mounts?.on_unmount(id);
+      return;
+    }
+    const sink = this.sinks.get(id);
+    if (cmd === Cmd.TIER_CREATE) {
+      const mesh: MeshBlock = { block: CORE_POOL.adopt(u32_at(2), u32_at(3)), vertex_cnt: u32_at(4), index_cnt: u32_at(5) };
+      if (sink) sink.on_tier(u32_at(0), u32_at(1) as LodStep, mesh);
+      else release_chunk_mesh(mesh);
+    } else if (cmd === Cmd.DECOR_CREATE) {
+      const decor = decor_block_carve(CORE_POOL.adopt(u32_at(1), u32_at(2)));
+      if (sink) sink.on_decor(u32_at(0) as LodStep, decor);
+      else decor_block_release(decor);
+    } else if (sink) {
+      if (cmd === Cmd.RUNS_UPDATE) sink.on_runs(u32_at(0));
+      else if (cmd === Cmd.CHUNK_VISIBLE) sink.on_visible?.(f!.at(0).get<boolean>());
+      else if (cmd === Cmd.CHUNK_LAYOUT) sink.on_layout(u32_at(0) as LodStep, u32_at(1) === 0 ? null : u32_at(1) as LodStep, f!.at(2).get<boolean>());
+      else if (cmd === Cmd.CHUNK_BLEND) sink.on_blend?.(u32_at(0), u32_at(1), f!.at(2).get<boolean>());
+      else if (cmd === Cmd.TIER_DELETE) sink.on_evict(u32_at(0) as LodStep);
+    }
+  }
+
+  /** The ring's send (core_ring.ts). */
+  send(tag: u32, cmd: Cmd, pkt: U8Array | null = null): void {
+    this.ring.send(tag, cmd, pkt);
+  }
+
+  /** The ring's settle (core_ring.ts). */
+  settle(): void {
+    this.ring.settle();
+  }
+
+  /** The ring's call (core_ring.ts). */
+  call<T>(cmd: Cmd, pkt: U8Array | null, take: (result: number, reply: BranchCursor | null) => T): T {
+    return this.ring.call(cmd, pkt, take);
   }
 
   /** A new chunk whose column's base is `base` — its X and Y in units
@@ -321,7 +212,7 @@ export class CoreBuild {
     const id = this.next_id++;
     this.sinks.set(id, sink);
     const b = BigInt.asUintN(64, base);
-    this.submit(id, Cmd.CHUNK_CREATE, packet((p) => p.u64(b).u32(tx0).u32(ty0).i32(base_x | 0).i32(base_y | 0).u32(stable_hash >>> 0)));
+    this.ring.send(id, Cmd.CHUNK_CREATE, packet((p) => p.u64(b).u32(tx0).u32(ty0).i32(base_x | 0).i32(base_y | 0).u32(stable_hash >>> 0)));
     return id;
   }
 
@@ -333,12 +224,12 @@ export class CoreBuild {
   /** Whether page `page_idx` has a terrain tile chunks can be mounted from. */
   page(page_idx: bigint, present: boolean): void {
     const b = BigInt.asUintN(64, page_idx);
-    this.submit(0, present ? Cmd.PAGE_CREATE : Cmd.PAGE_DELETE, packet((p) => p.u64(b)));
+    this.ring.send(0, present ? Cmd.PAGE_CREATE : Cmd.PAGE_DELETE, packet((p) => p.u64(b)));
   }
 
   /** Drops the chunk and its work; nothing more reaches its sink. */
   remove(id: u32): void {
-    this.submit(id, Cmd.CHUNK_DELETE);
+    this.ring.send(id, Cmd.CHUNK_DELETE);
     this.sinks.delete(id);
   }
 
@@ -355,7 +246,7 @@ export class CoreBuild {
       console.warn(`[render/chunk] chunk ${id}'s page lies outside the core memory; its chunks cannot be built`);
     }
     const g = page?.ground;
-    this.submit(
+    this.ring.send(
       id,
       Cmd.CHUNK_UPDATE,
       packet((p) =>
@@ -369,14 +260,14 @@ export class CoreBuild {
   /** The builder's ask, past the scheduler — for the tests that hold a
    * build to the TypeScript pipeline, with `build_tick`. */
   want(id: u32, first: LodStep | null, second: LodStep | null): void {
-    this.submit(id, Cmd.CHUNK_WANT, packet((p) => p.u32(first ?? 0).u32(second ?? 0)));
+    this.ring.send(id, Cmd.CHUNK_WANT, packet((p) => p.u32(first ?? 0).u32(second ?? 0)));
   }
 
   /** The drawn build's edits: the hidden entry by its column, band and
    * packed position, and the carve preview by its column and its corner
    * relative to it. */
   edits(hide: { column: bigint; band: number; pos: u32 } | null, carve: { column: bigint; lx: number; ly: number; lz: number; size: number } | null): void {
-    this.submit(
+    this.ring.send(
       0,
       Cmd.EDIT_UPDATE,
       packet((p) =>
@@ -391,10 +282,10 @@ export class CoreBuild {
    * Whether the canvas has something new to draw. */
   tick(): boolean {
     const draw = (this.pxl.pxl_tick() & 1) !== 0;
-    this.read();
+    this.ring.read();
     // What the completion ring had no room for, until it is dry: a tick
     // that finds events still waiting does nothing.
-    while (this.pxl.pxl_drain() > 0) this.read();
+    while (this.pxl.pxl_drain() > 0) this.ring.read();
     return draw;
   }
 
@@ -402,7 +293,7 @@ export class CoreBuild {
    * made: a placement shows in the frame it was made. */
   build_now(id: u32): void {
     this.send(id, Cmd.CHUNK_BUILD);
-    this.turn();
+    this.ring.turn();
   }
 
   /** Rebuilds chunk `id`'s decor for the layout it shows, now, and tells
@@ -410,7 +301,7 @@ export class CoreBuild {
    * as it stands, since the frame is written only before a tick. */
   decor_now(id: u32, show_decor: boolean): void {
     this.send(id, Cmd.CHUNK_DECOR, packet((p) => p.bool(show_decor)));
-    this.turn();
+    this.ring.turn();
   }
 
   /** The builder alone over `ids`, for the tests: no scheduler. */
@@ -421,7 +312,7 @@ export class CoreBuild {
     }
     for (let i = 0; i < ids.length; i++) this.order[i] = ids[i];
     this.pxl.pxl_build_tick(this.order.byteOffset, ids.length, budget_ms);
-    this.read();
+    this.ring.read();
   }
 
   /** The census and the build stat are rows at fixed addresses, read
@@ -498,8 +389,8 @@ function reaches(pxl: PxlExports, terrain: Terrain): boolean {
 }
 
 function core(): CoreBuild {
-  if (CORE_PXL === null) throw new Error("render: the chunks build in the module, which needs the core memory");
-  return new CoreBuild(CORE_PXL);
+  if (CORE_PXL === null || CORE_RING === null) throw new Error("render: the chunks build in the module, which needs the core memory");
+  return new CoreBuild(CORE_PXL, CORE_RING);
 }
 
 /** The one channel to the module's builds. */

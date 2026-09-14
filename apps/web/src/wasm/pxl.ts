@@ -42,11 +42,6 @@ export type PxlExports = {
   pxl_scan_set(at: u32, bytes: u32): void;
   pxl_scan_finish(): u32;
   pxl_scan_abort(): void;
-  pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): u32;
-  pxl_pool_acquire(id: u32, bytes: u32): u32;
-  pxl_pool_release(id: u32, at: u32, bytes: u32): u32;
-  pxl_pool_is_free(id: u32, at: u32, bytes: u32): u32;
-  pxl_pool_stat(id: u32): u32;
   pxl_volume_pools(fixed: u32, mesh: u32): void;
   pxl_volume_open(): u32;
   pxl_volume_fill_column(id: u32, cx: u32, cy: u32, z0: i32, z1: i32, material: u32, layer_idx: u32): u32;

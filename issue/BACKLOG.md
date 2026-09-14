@@ -352,6 +352,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   reply's read 303 ns against 5. The shape of it is a writer and reader
   per command generated from `@pxl/shared/spec/cmd.ts`, over XTP, for both
   sides — the schema on the format, which also checks the packets' types.
+  The pools raised it (2026-09-15): a block acquired and released is
+  1,752 ns through the rings against 202 through the exports, a three-word
+  packet 488 ns of it each way, on a path that runs per block.
 
 - **Placed objects come back moved after a reload.** Found 2026-09-14: a
   wall of fifteen cubes (five along X, three up Z) reloads as thirteen

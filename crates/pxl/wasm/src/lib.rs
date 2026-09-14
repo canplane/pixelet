@@ -70,7 +70,7 @@ struct State {
     scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.
     bands: (usize, u32),
-    /// The pools over the memory's sections, by the id pxl_pool_new gave.
+    /// The pools over the memory's sections, by the id POOL_CREATE replied.
     pools: Vec<Pool>,
     /// The volumes, once pxl_volume_pools has said which pools they draw on.
     volumes: Option<Volumes>,
@@ -380,50 +380,6 @@ pub extern "C" fn pxl_scan_abort() {
     state().scan.abort();
 }
 
-// ---- Pools ----
-
-/// A pool over `bytes` bytes of the memory at `start` — a section of the
-/// map — cut in regions of `region_bytes` with blocks of at least
-/// `min_block_bytes`: its id, for the calls below. The client's
-/// BuddyAllocator delegates its backed range here and keeps what it does
-/// past it (buddy.ts).
-#[no_mangle]
-pub extern "C" fn pxl_pool_new(start: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32) -> u32 {
-    let s = state();
-    // SAFETY: the memory is the module's own linear memory, addressed from
-    // 0, and the client keeps the range for this pool alone.
-    let pool = unsafe { Pool::new(core::ptr::null_mut(), start as usize + bytes as usize, start as usize, bytes as usize, region_bytes, min_block_bytes) };
-    s.pools.push(pool);
-    s.pools.len() as u32 - 1
-}
-
-/// Borrows at least `bytes` from pool `id`: the block's address, or 0 when
-/// the range is used up or the request is larger than a region.
-#[no_mangle]
-pub extern "C" fn pxl_pool_acquire(id: u32, bytes: u32) -> u32 {
-    state().pools[id as usize].acquire(bytes).map_or(0, |at| at as u32)
-}
-
-/// Returns the block of `bytes` at `at` to pool `id`: 1, or 0 for a block
-/// the pool does not hold or holds already.
-#[no_mangle]
-pub extern "C" fn pxl_pool_release(id: u32, at: u32, bytes: u32) -> u32 {
-    state().pools[id as usize].release(at as usize, bytes) as u32
-}
-
-/// Whether the block of `bytes` at `at` is free in pool `id`.
-#[no_mangle]
-pub extern "C" fn pxl_pool_is_free(id: u32, at: u32, bytes: u32) -> u32 {
-    state().pools[id as usize].is_free(at as usize, bytes) as u32
-}
-
-/// The address of pool `id`'s stat: twelve words in BuddyStat's first
-/// twelve fields' order, as PoolKernel's stat.
-#[no_mangle]
-pub extern "C" fn pxl_pool_stat(id: u32) -> *const u32 {
-    state().pools[id as usize].stat_words()
-}
-
 fn volumes() -> &'static mut Volumes {
     opened(&mut state().volumes)
 }
@@ -441,7 +397,7 @@ fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
 // the bake above. The live build composes its volumes itself.
 
 /// Which pools volumes draw on: the standing band stores from `fixed`,
-/// the rest and the sub-cell lanes from `mesh` (ids from pxl_pool_new).
+/// the rest and the sub-cell lanes from `mesh` (ids from POOL_CREATE).
 #[no_mangle]
 pub extern "C" fn pxl_volume_pools(fixed: u32, mesh: u32) {
     let s = state();
@@ -906,6 +862,12 @@ fn branch_at(b: &BranchCursor, i: u32) -> Result<Option<BranchCursor>, MarshalEr
     b.at(i)?.opt().map(|c| c.as_branch()).transpose()
 }
 
+/// The pool a packet's first child names.
+fn pool_at<'a>(s: &'a mut State, f: &BranchCursor) -> Result<&'a mut Pool, MarshalError> {
+    let id = u32_at(f, 0)?;
+    s.pools.get_mut(id as usize).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some(&format!("no pool {id}")), None))
+}
+
 /// A ray as a query's packet carries it: the map origin, the origin, the
 /// direction and the distance.
 fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
@@ -1142,6 +1104,41 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 })),
             )));
         }
+        Cmd::POOL_CREATE => {
+            let f = fields(pkt)?;
+            let (start, bytes) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)? as usize);
+            // SAFETY: the memory is the module's own linear memory, addressed
+            // from 0, and the shell keeps the range for this pool alone.
+            let pool = unsafe { Pool::new(core::ptr::null_mut(), start + bytes, start, bytes, u32_at(&f, 2)?, u32_at(&f, 3)?) };
+            s.pools.push(pool);
+            return Ok(Some((s.pools.len() as i32 - 1, None)));
+        }
+        Cmd::POOL_READ => {
+            let f = fields(pkt)?;
+            return Ok(Some((pool_at(s, &f)?.stat_words() as usize as i32, None)));
+        }
+        Cmd::POOL_ACQUIRE => {
+            let f = fields(pkt)?;
+            let bytes = u32_at(&f, 1)?;
+            return Ok(Some((pool_at(s, &f)?.acquire(bytes).map_or(0, |at| at as i32), None)));
+        }
+        Cmd::POOL_RELEASE => {
+            let f = fields(pkt)?;
+            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
+            if !pool_at(s, &f)?.release(at, bytes) {
+                return Err(MarshalError::new(
+                    Errno::EINVAL,
+                    Some(&format!("a {bytes}B block at {at} its pool does not hold, or holds already")),
+                    None,
+                ));
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::POOL_FREE => {
+            let f = fields(pkt)?;
+            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
+            return Ok(Some((pool_at(s, &f)?.is_free(at, bytes) as i32, None)));
+        }
         _ => {}
     }
     let Parts {
@@ -1259,7 +1256,12 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::CHANGE_LANES
         | Cmd::DRAW_READ
         | Cmd::SHADER_READ
-        | Cmd::SHADER_PIPELINE => {
+        | Cmd::SHADER_PIPELINE
+        | Cmd::POOL_CREATE
+        | Cmd::POOL_READ
+        | Cmd::POOL_ACQUIRE
+        | Cmd::POOL_RELEASE
+        | Cmd::POOL_FREE => {
             unreachable!("applied before the parts are taken")
         }
         Cmd::GHOST_BOX => {

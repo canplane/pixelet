@@ -59,8 +59,10 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { type AddressedAlloc, buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
 import { BuddyAllocator, type BuddyStat, type PoolKernel } from "@xpute/core/ds/buddy.ts";
+import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { instantiate_pxl, type PxlExports } from "@/wasm/pxl.ts";
+import { CoreRing, packet } from "@/wasm/core_ring.ts";
 
 const REGION_BYTES = 1 << 26;
 const WASM_PAGE = 1 << 16;
@@ -129,15 +131,29 @@ export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { o
  */
 export const CORE_PXL: PxlExports | null = CORE_MEMORY === null ? null : await instantiate_pxl(CORE_MEMORY, MODULE_BYTES);
 
-/** A section's kernel: pool `id` in the module, over `[offset, offset + bytes)`. */
-function kernel_of(pxl: PxlExports, offset: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): PoolKernel & { id: u32 } {
-  const id = pxl.pxl_pool_new(offset, bytes, region_bytes, min_block_bytes);
+/** The rings to the module, made with it: the sections' pools are asked
+ * for their blocks through them. */
+export const CORE_RING: CoreRing | null = CORE_PXL === null ? null : new CoreRing(CORE_PXL);
+
+/**
+ * A section's kernel: pool `id` in the module, over `[offset, offset +
+ * bytes)`. A release is sent rather than asked: whatever could hand the
+ * block out again — an acquire, a tick — drains first, so the release is
+ * applied before it; and one the pool refuses comes back as the ring's
+ * failure, said in the console, where an answer here would cost a turn on
+ * every block given back.
+ */
+function kernel_of(ring: CoreRing, memory: ArrayBuffer, offset: u32, bytes: u32, region_bytes: u32, min_block_bytes: u32): PoolKernel & { id: u32 } {
+  const id = ring.call(Cmd.POOL_CREATE, packet((p) => p.u32(offset).u32(bytes).u32(region_bytes).u32(min_block_bytes)), (result) => result);
   return {
     id,
-    acquire: (bytes) => pxl.pxl_pool_acquire(id, bytes),
-    release: (at, bytes) => pxl.pxl_pool_release(id, at, bytes) !== 0,
-    is_free: (at, bytes) => pxl.pxl_pool_is_free(id, at, bytes) !== 0,
-    stat: () => new Uint32Array(pxl.memory.buffer, pxl.pxl_pool_stat(id), 12),
+    acquire: (n) => ring.call(Cmd.POOL_ACQUIRE, packet((p) => p.u32(id).u32(n)), (at) => at >>> 0),
+    release: (at, n) => {
+      ring.send(0, Cmd.POOL_RELEASE, packet((p) => p.u32(id).u32(at).u32(n)));
+      return true;
+    },
+    is_free: (at, n) => ring.call(Cmd.POOL_FREE, packet((p) => p.u32(id).u32(at).u32(n)), (free) => free === 1),
+    stat: () => new Uint32Array(memory, ring.call(Cmd.POOL_READ, packet((p) => p.u32(id)), (at) => at >>> 0), 12),
   };
 }
 
@@ -181,7 +197,7 @@ function lay_out(memory: WebAssembly.Memory | null): Record<SectionName, Section
       bytes -= MODULE_BYTES;
       region_bytes = FIXED_REGION_BYTES;
     }
-    const kernel = CORE_PXL !== null ? kernel_of(CORE_PXL, offset, bytes, region_bytes, 1 << 12) : null;
+    const kernel = CORE_RING !== null && backing !== null ? kernel_of(CORE_RING, backing, offset, bytes, region_bytes, 1 << 12) : null;
     const pool = new BuddyAllocator({
       min_block_bytes: 1 << 12,
       region_bytes,

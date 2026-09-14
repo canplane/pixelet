@@ -38,6 +38,7 @@ export const enum Major {
   FRAME = 0x14,
   DRAW = 0x15,
   SHADER = 0x16,
+  POOL = 0x17,
 }
 
 /** The hover ghost's own verbs. */
@@ -84,6 +85,13 @@ export const enum ChangeMinor {
 /** The shaders' own verb. */
 export const enum ShaderMinor {
   PIPELINE = 0x10,
+}
+
+/** A pool's own verbs. */
+export const enum PoolMinor {
+  ACQUIRE = 0x10,
+  RELEASE = 0x11,
+  FREE = 0x12,
 }
 
 /** An object store's own verb. */
@@ -275,6 +283,30 @@ export const enum Cmd {
   /** tag call · [id u32] → [record u32[]]: the pipeline's record, empty for
    * an id that is not one */
   SHADER_PIPELINE = 0x1610,
+
+  // ---- the memory's pools ----
+  //
+  // Mechanism rather than the world's: numbered here while this is the one
+  // table. The pool a command is about is its packet's first child, so a
+  // release can be asked about as well as sent.
+
+  /** tag call · [start u32, bytes u32, region_bytes u32, min_block_bytes
+   * u32] → result: the pool's id — over `bytes` of the memory at `start`, a
+   * section of the map, whose range the shell keeps for it alone */
+  POOL_CREATE = 0x1701,
+  /** tag call · [pool u32] → result: where its stat is, twelve words in
+   * BuddyStat's first twelve fields' order, valid until the next
+   * POOL_CREATE */
+  POOL_READ = 0x1702,
+  /** tag call · [pool u32, bytes u32] → result: the block's address, 0 when
+   * the range is used up or the request is larger than a region */
+  POOL_ACQUIRE = 0x1710,
+  /** [pool u32, at u32, bytes u32] — the block returned; EINVAL for one the
+   * pool does not hold or holds already */
+  POOL_RELEASE = 0x1711,
+  /** tag call · [pool u32, at u32, bytes u32] → result: 1 where the block is
+   * free, 0 where not */
+  POOL_FREE = 0x1712,
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //

@@ -164,11 +164,26 @@ arrived and hands the time back. What that decides about the boundary:
   once as a query (`FRAME_READ`, `CHUNK_READ`, `ENV_LANES`, `CHANGE_LANES`,
   `SHADER_READ`, `SHADER_PIPELINE`); and the renderer's lists, taken once a
   frame (`DRAW_READ`), a query that drains first, so what a late phase sent
-  is still drawn in its frame. The shell's exports are then the pipe — the
-  memory, the two rings' addresses, `pxl_drain`, `pxl_tick` — beside
-  `pxl_module_bytes`, the one number the memory's map is checked against
-  before any ring exists, the pool the core pool's kernel is, and the
-  reference paths the tests drive.
+  is still drawn in its frame.
+
+  Then the pools (`POOL_*`, 2026-09-15). The map is cut before anything
+  that builds a chunk exists, so the rings' shell end became its own
+  piece (`wasm/core_ring.ts`), made with the module, and the sections'
+  pools are created and asked for their blocks through it; the builds
+  hear their signals through the same one. An acquire is a query; a
+  release is sent, not asked — whatever could hand the block out again,
+  an acquire or a tick, drains first — and one the pool refuses comes
+  back as the ring's failure reply. Measured on V8: a block acquired and
+  released cost 202 ns through the exports and 1,752 ns through the rings
+  (1,943 ns with the release asked too), and one three-word packet built
+  through `TreeView` alone is 488 ns — the encoder again, as the
+  experiment found, now on a path that runs per block rather than per
+  frame ([XTP by fixed shape](./experiment/20260914-xtp-by-fixed-shape.md)).
+
+  The shell's exports are then the pipe — the memory, the two rings'
+  addresses, `pxl_drain`, `pxl_tick` — beside `pxl_module_bytes`, the one
+  number the memory's map is checked against before any ring exists, and
+  the reference paths the tests drive.
 - **The kits are the same kit twice.** `@xpute/core` and `@pxl/shared`'s
   space are what a host and the module both stand on, and the module
   cannot import TypeScript. So each is kept in both languages, file for
