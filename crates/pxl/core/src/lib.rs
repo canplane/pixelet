@@ -10,6 +10,9 @@
 
 pub mod app;
 pub mod bake;
+pub mod global;
+pub mod host;
+pub mod kernel;
 pub mod module;
 pub mod render;
 pub mod space;
