@@ -67,7 +67,14 @@ pub struct Environment {
     moon: [f64; 3],
     moon_intensity: f64,
     stars: f64,
+    /// The sky's clock, seconds of wall time since the first observation:
+    /// the clouds drift and the stars twinkle by it whether or not the
+    /// tick runs, and a tick's delta — clamped, and asked for every two
+    /// seconds at rest — would run them at a fraction of the speed. From
+    /// the first observation rather than the epoch, so that it survives
+    /// the f32 the shader reads.
     time: f64,
+    first_ms: Option<f64>,
     pub out: [f32; ENV_FLOATS],
     /// The last `daylight` asked for: sunrise and sunset, in hours after the
     /// start of the local day.
@@ -89,6 +96,7 @@ impl Default for Environment {
             moon_intensity: 0.0,
             stars: 0.0,
             time: 0.0,
+            first_ms: None,
             out: [0.0; ENV_FLOATS],
             daylight: [6.0, 18.0],
         }
@@ -110,6 +118,8 @@ impl Environment {
         self.lat = lat;
         self.lon = lon;
         self.days = unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
+        let first = *self.first_ms.get_or_insert(unix_ms);
+        self.time = (unix_ms - first) / 1000.0;
     }
 
     /// Sunrise and sunset for the local day starting at `day_start_ms` (Unix
@@ -170,7 +180,6 @@ impl Environment {
         for k in 0..THEME_FLOATS {
             self.current[k] += (self.target[k] - self.current[k]) * a as f32;
         }
-        self.time += frame.delta_s;
         self.write(frame);
         (self.stars - star_target).abs() > SETTLE_EPS
     }

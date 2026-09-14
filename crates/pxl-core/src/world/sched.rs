@@ -583,7 +583,9 @@ impl Scheduler {
             if step == 0 || self.slots[i].decor.iter().any(|d| d.step == step) {
                 continue;
             }
-            let view = Builder::page_view(world, page);
+            // SAFETY: the chunk's page, as its source named it, resident
+            // while the chunk is.
+            let view = unsafe { Builder::page_view(world, page) };
             // The elevations are the scatter's; a tier no kind is drawn on,
             // or decor switched off, stands only the placed entries, which
             // carry their own height.

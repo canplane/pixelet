@@ -184,6 +184,11 @@ impl DecorBuild {
         let page_seed = derive_seed(MASTER_SEED, chunk.page_idx);
         let lanes = store.chunk_lanes(chunk.key);
         for kind in kinds {
+            // A kind with no variant has no group to fill and no variant to
+            // pick below; the groups are the kinds' variants in order.
+            if kind.variant_count == 0 {
+                continue;
+            }
             let mut by_variant: Vec<Vec<Instance>> = vec![Vec::new(); kind.variant_count as usize];
 
             // Placed instances first, in the store's entry order.

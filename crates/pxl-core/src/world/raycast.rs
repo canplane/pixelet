@@ -493,7 +493,7 @@ mod decor_tests {
 
     #[test]
     fn a_square_is_met_only_where_the_ray_passes_over_it() {
-        let d = [0.7071, 0.7071, -0.3];
+        let d = [0.6, 0.6, -0.3];
         assert!(ray_meets_square(&[0.0, 0.0, 10.0], &d, 5.0, 5.0, 20.0, 20.0, 100.0));
         assert!(!ray_meets_square(&[0.0, 0.0, 10.0], &d, 5.0, 5.0, 20.0, 20.0, 3.0));
         assert!(!ray_meets_square(&[0.0, 0.0, 10.0], &d, -20.0, 5.0, -5.0, 20.0, 100.0));

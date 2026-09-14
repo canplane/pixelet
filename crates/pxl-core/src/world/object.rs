@@ -431,8 +431,13 @@ impl Painter {
         }
     }
 
-    /// Teaches what `state` paints as.
+    /// Teaches what `state` paints as. A state is what a leaf's palette
+    /// index resolves to, so a state past a leaf's width is a bug in the
+    /// catalogue and not taught, rather than sizing the tables to it.
     pub fn teach(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
+        if state >= u16::MAX as u32 {
+            return;
+        }
         let i = state as usize;
         if i >= self.kinds.len() {
             self.kinds.resize(i + 1, Kind::Untaught);

@@ -125,8 +125,9 @@ export function CoreTick({ children }: { children: ReactNode }) {
     view_resize(state.size.width, state.size.height);
     // The tier criterion is a screen-space one (module/world/lod.ts), and the
     // other layers that read it (decor, badges) read it from here; the
-    // module takes the same projection through the frame.
-    set_lod_projection(view.height, view.fov);
+    // module takes the same projection through the frame, and its pressure
+    // — the byte budget paid in LOD — comes back through the census.
+    set_lod_projection(view.height, view.fov, CORE_BUILD.census().pressure);
 
     // Where the camera is heading — see sched/priority.ts. The module orders
     // the work by it; the tier each chunk picks still comes from the camera

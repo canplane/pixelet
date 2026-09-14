@@ -395,6 +395,8 @@ impl Builder {
             }
             match self.compose(world, id, page, true) {
                 Some(volume) => {
+                    // SAFETY: the volume was just composed and is held by the
+                    // scan job until the scan finishes.
                     let bands: Vec<BandView> = (0..world.volumes.band_count(volume)).map(|i| unsafe { world.volumes.band_view(volume, i) }).collect();
                     assert!(self.scan.begin(&bands), "a scan open with no job naming it");
                     self.scan_job = Some(ScanJob { id, volume });
@@ -406,6 +408,7 @@ impl Builder {
             }
         }
         let volume = self.scan_job.as_ref().unwrap().volume;
+        // SAFETY: the scan job's volume, held until the scan finishes.
         let bands: Vec<BandView> = (0..world.volumes.band_count(volume)).map(|i| unsafe { world.volumes.band_view(volume, i) }).collect();
         match self.scan.step(&bands) {
             ScanStep::Working => Progress::Busy,
@@ -432,17 +435,19 @@ impl Builder {
         world.store.chunk_lanes(base).is_some_and(|l| l.count > 0) || matches!(self.carve, Some((k, _)) if k == base)
     }
 
-    pub fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
+    /// The page's lanes as slices.
+    ///
+    /// # Safety
+    /// `page` names lanes of a page's fixed shape inside the world's memory,
+    /// resident for as long as the view is read: what the glue promises
+    /// when it tells a chunk its source.
+    pub unsafe fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
         let mem = world.volumes.mem();
         let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
         let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-        // SAFETY: the glue names a page's lanes only while the page is
-        // resident, and a page's shape is fixed.
-        unsafe {
-            PageView {
-                ground: page.ground.map(|at| core::slice::from_raw_parts(mem.add(at), cells)),
-                ele: core::slice::from_raw_parts(mem.add(page.ele) as *const i16, samples),
-            }
+        PageView {
+            ground: page.ground.map(|at| core::slice::from_raw_parts(mem.add(at), cells)),
+            ele: core::slice::from_raw_parts(mem.add(page.ele) as *const i16, samples),
         }
     }
 
@@ -452,7 +457,10 @@ impl Builder {
     fn compose(&mut self, world: &mut World, id: u32, page: PageLanes, edits: bool) -> Option<usize> {
         let c = &self.chunks[&id];
         let (base, tx0, ty0, show) = (c.base, c.tx0, c.ty0, c.show_structures);
-        self.sample.read(&Self::page_view(world, page), world.materials, tx0, ty0, show);
+        // SAFETY: the chunk's page, as its source named it, resident while
+        // the chunk is.
+        let view = unsafe { Self::page_view(world, page) };
+        self.sample.read(&view, world.materials, tx0, ty0, show);
         let volume = world.volumes.open();
         let mut ok = self.sample.paint(world.volumes, world.pools, volume);
         if ok {
@@ -471,7 +479,10 @@ impl Builder {
     fn direct_runs(&mut self, world: &mut World, id: u32, page: PageLanes, emit: &mut impl FnMut(Event)) -> Progress {
         let c = &self.chunks[&id];
         let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
-        self.sample.read(&Self::page_view(world, page), world.materials, tx0, ty0, show);
+        // SAFETY: the chunk's page, as its source named it, resident while
+        // the chunk is.
+        let view = unsafe { Self::page_view(world, page) };
+        self.sample.read(&view, world.materials, tx0, ty0, show);
         assert!(self.direct.begin_direct(), "the direct writer left open");
         let floor = self.sample.floor;
         for i in 0..(CHUNK_SPAN * CHUNK_SPAN) as usize {

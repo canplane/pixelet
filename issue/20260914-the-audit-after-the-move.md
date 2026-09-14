@@ -28,35 +28,35 @@ mapping (the composer never tone-mapped), reversed-Z.
 
 ## A. Safety and correctness — first
 
-- **A1** `bake/volume.rs` `set_voxel` / `fill_column` / `append_sub_voxel`
-  do not check `cx, cy` against the band's span: a bad glue value writes
-  into the next pool block silently. Early return. **Do.**
-- **A2** Glue inputs that trap the module: pool and volume ids indexed
-  unchecked, channel / type / topic ranges, `pxl_object_kind`'s id sizing a
-  `resize` (a large id allocates gigabytes), decor `variant_count == 0`
-  underflowing, `Builder::add`'s `assert!`. Bounds checks, return 0 or
-  ignore. **Do.**
-- **A3** `RunSet::carve` is `unsafe fn` but sound; `Builder::page_view` is
-  a safe fn over glue addresses; two `band_view` calls without a SAFETY
-  line. **Do.**
-- **A4** The badge ladder and the occlusion tolerance (`module/world/lod.ts`)
-  ignore the scheduler's pressure: under the byte budget badges gather on
-  a different rung than the cubes and can be hidden by coarse boxes. Scale
-  the glue's thresholds by the census's pressure. **Do.**
-- **A5** The sky's time is tick time — clamped to 0.1 s a frame, ticked
-  every 2 s at rest — so clouds and twinkle crawl at a twentieth speed
-  while idle. Use the frame's clock. **Do.**
-- **A6** The texture pack's sampler has no anisotropy; three's arrays had 4.
-  **Do.**
+- ~~**A1**~~ `bake/volume.rs` `set_voxel` / `fill_column` / `append_sub_voxel`
+  did not check `cx, cy` against the band's span: a bad glue value wrote
+  into the next pool block silently. They refuse it now.
+- ~~**A2**~~ Two glue inputs that could not be a bug of the module's are
+  bounded: an object state past a leaf's width is not taught (it sized a
+  `resize` to the id — gigabytes for a large one), and a decor kind with
+  no variants contributes no group instead of underflowing. The rest —
+  pool and volume ids, channel / type / topic indices, `Builder::add`'s
+  assert — are indices the glue derives from constants; a wrong one is a
+  bug, and the module traps on bugs by design (fixed_heap.rs says the
+  same of its arena). Left as traps.
+- ~~**A3**~~ `RunSet::carve` is a safe fn (it checks both preconditions);
+  `Builder::page_view` is `unsafe fn` with its contract, its three callers
+  say why they hold it; the two `band_view` calls carry their SAFETY.
+- ~~**A4**~~ The glue's ladder takes the module's pressure through the
+  census: badges climb the rungs the cubes are on, and the occlusion
+  tolerance assumes the cell actually drawn.
+- ~~**A5**~~ The sky's clock is wall time since the first observation
+  (`observe` is told the clock every tick), not the tick's clamped delta.
+- ~~**A6**~~ The texture pack's sampler is anisotropic at 4.
 - **A7** The beacon's specular and its point light, the zone's side-face
   border orientation, the gizmos' screen-sized points and the
   `anchor_center` marker. **Hold** — cosmetic, and reproducing three's
   material is not a goal.
 - **A8** CUBICSPLINE channels collapsed, `matrix` joints at identity. No
   shipped asset has either. **Hold** until an asset does.
-- **A9** `cargo test` and `cargo clippy --all-targets` fail at the
-  workspace root: pxl-wasm's test binary cannot link natively, and a test
-  constant approximates `FRAC_1_SQRT_2`. **Do.**
+- ~~**A9**~~ `cargo test` and `cargo clippy --all-targets` pass at the
+  workspace root: pxl-wasm has no test target, and the test constant is
+  one clippy does not read as a named one.
 
 ## B. Hot paths
 

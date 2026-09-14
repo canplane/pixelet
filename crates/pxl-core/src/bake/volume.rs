@@ -323,6 +323,11 @@ impl Volumes {
     /// False when a band could not be made.
     pub fn set_voxel(&mut self, pools: &mut [Pool], id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
+        // A column past the band would index the next block in the pool:
+        // refused rather than written.
+        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+            return false;
+        }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, local_z) = Self::locate(z);
         let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
@@ -357,6 +362,9 @@ impl Volumes {
     /// layer.
     pub fn append_sub_voxel(&mut self, pools: &mut [Pool], id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
+        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+            return false;
+        }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, _) = Self::locate(z);
         let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
@@ -369,6 +377,9 @@ impl Volumes {
     /// Paints one solid column across as many whole bands as it needs.
     pub fn fill_column(&mut self, pools: &mut [Pool], id: usize, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
         let (cx, cy) = column;
+        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+            return false;
+        }
         let Voxel { material, layer_idx, .. } = v;
         if z1 < z0 {
             return true;
