@@ -128,11 +128,7 @@ const CELL: f64 = 640;
 type Lanes = {
   index: SpatialHash;
   page_ref: (PoiPage | null)[];
-  page_idx: BigUint64Array;
   rec: Uint32Array;
-  /** Flat anchor, absolute, split into its two BigInt lanes. */
-  abs_i: BigInt64Array;
-  abs_f: BigInt64Array;
   /** Local render-frame position, which is what was indexed — grounded, so
    * pos_z is the real terrain surface rather than the bake's flat zero. */
   pos_x: Float64Array;
@@ -174,10 +170,7 @@ function make_lanes(): Lanes {
   return {
     index: new SpatialHash(CAPACITY, BUCKETS, CELL, CORE_ALLOC),
     page_ref: new Array(CAPACITY).fill(null),
-    page_idx: CORE_ALLOC.take(BigUint64Array, CAPACITY),
     rec: CORE_ALLOC.take(Uint32Array, CAPACITY),
-    abs_i: CORE_ALLOC.take(BigInt64Array, CAPACITY),
-    abs_f: CORE_ALLOC.take(BigInt64Array, CAPACITY),
     pos_x: CORE_ALLOC.take(Float64Array, CAPACITY),
     pos_y: CORE_ALLOC.take(Float64Array, CAPACITY),
     pos_z: CORE_ALLOC.take(Float64Array, CAPACITY),
@@ -418,10 +411,7 @@ function sweep_unit(j: Job): void {
 
     const i = lanes.count++;
     lanes.page_ref[i] = pois;
-    lanes.page_idx[i] = page.page_idx;
     lanes.rec[i] = r;
-    lanes.abs_i[i] = absolute.i;
-    lanes.abs_f[i] = absolute.f;
     lanes.pos_x[i] = x;
     lanes.pos_y[i] = y;
     lanes.pos_z[i] = z;
@@ -512,15 +502,6 @@ export function poi_page(i: u32): PoiPage {
 }
 export function poi_rec(i: u32): u32 {
   return live.rec[i];
-}
-export function poi_page_at(i: u32): IVec {
-  return live.page_idx[i];
-}
-export function poi_abs_i(i: u32): bigint {
-  return live.abs_i[i];
-}
-export function poi_abs_f(i: u32): bigint {
-  return live.abs_f[i];
 }
 export function poi_x(i: u32): f64 {
   return live.pos_x[i];

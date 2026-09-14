@@ -90,6 +90,7 @@ function Row(props: { k: string; v: string; warn?: boolean }) {
 type LedgerGlobals = typeof globalThis & {
   __pxl_ledger_trace?: () => string;
   __pxl_ledger_log?: () => Promise<string>;
+  __pxl_alloc_probe?: () => void;
   __pxl_alloc_report?: () => string;
   __pxl_alloc_reset?: () => void;
 };
@@ -108,12 +109,17 @@ export function LedgerOverlay() {
     const w = globalThis as LedgerGlobals;
     w.__pxl_ledger_trace = ledger_trace_download;
     w.__pxl_ledger_log = ledger_report_to_console;
-    alloc_probe_install();
+    // The probe wraps every typed-array constructor in a Proxy and captures
+    // a stack past 64 KB, which is a cost on the very frames the ledger
+    // measures: installed only when asked from the console, never by
+    // default.
+    w.__pxl_alloc_probe = alloc_probe_install;
     w.__pxl_alloc_report = alloc_probe_report;
     w.__pxl_alloc_reset = alloc_probe_reset;
     return () => {
       delete w.__pxl_ledger_trace;
       delete w.__pxl_ledger_log;
+      delete w.__pxl_alloc_probe;
       delete w.__pxl_alloc_report;
       delete w.__pxl_alloc_reset;
     };

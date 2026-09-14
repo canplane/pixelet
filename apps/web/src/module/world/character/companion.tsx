@@ -367,11 +367,8 @@ const Walker = memo(function Walker(props: WalkerProps) {
       }
       gpu_renderer?.skinned.set_skin(held.model.model, held.skin);
     }
-
-    // Nothing else asks for frames on its own while this loop keeps
-    // animating, so this component must ask for the next frame itself for
-    // as long as it's mounted.
-    state.invalidate();
+    // The next frame is the module's to ask for: an actor playing a clip
+    // keeps the tick awake (model.rs), and nothing here moves otherwise.
   }, "companion");
 
   return actor !== null && show_chat_bubble ? <ChatBubble anchor_z={variant.height_u} actor={actor} /> : null;

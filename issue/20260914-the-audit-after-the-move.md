@@ -60,19 +60,16 @@ mapping (the composer never tone-mapped), reversed-Z.
 
 ## B. Hot paths
 
-- **B1** `companion.tsx` calls `invalidate()` every tick unconditionally,
-  so the idle-frame path never happens (which is why pressure relieved on
-  still frames). The module's draw bit says when an actor animates. **Do.**
-- **B2** Climb mode runs `climb_polar` → BigInt page math → two bicubic
-  samples every frame, moved or not. Memoise on (dist, polar, azimuth,
-  map_center, tile revision). **Do.**
-- **B3** `object/store.ts` re-encodes the whole store to `localStorage` on
-  every placement. Debounce to the report phase until persistence moves.
-  **Do.**
-- **B4** `alloc_probe` is installed in DEV whether or not the panel shows:
-  every typed-array construction through a Proxy, a stack capture past
-  64 KB — it distorts the frames the ledger measures. Behind a toggle.
-  **Do.**
+- ~~**B1**~~ The module says when an actor animates (`Models::tick`
+  returns it, folded into the tick's draw bit); the companion no longer
+  asks for frames itself. An actor playing a clip still means a frame a
+  tick — that is what an animated companion is — but the module decides.
+- ~~**B2**~~ `climb_polar` is memoised on the view, the map centre and the
+  page table's revision.
+- ~~**B3**~~ The store's save is put off 300 ms and flushed when the page
+  hides; a burst of writes is one save. Immediate off the page (the tests).
+- ~~**B4**~~ The allocation probe is installed only from the console
+  (`__pxl_alloc_probe()`), never by default.
 - **B5** `Builder::tick_capped`'s `seen.contains` is O(n²) over the pending
   list; a `bands` Vec per scan step; seven Vecs a tick in the scheduler;
   `ask()`'s and `reclaim`'s Vecs; the raycast's Vec per chunk and
@@ -82,17 +79,15 @@ mapping (the composer never tone-mapped), reversed-Z.
   then copied whole into an `OwnedRunSet`; `emit_box` and
   `write_lone_box` write the same six faces. The byte-for-byte bake test
   guards it. **Do.**
-- **B7** The renderer and the stage rebuild views over fixed module
-  addresses every frame (env, draw row, census, stat); `census()` twice a
-  frame, `stat()` ten times in the ledger; `take_census` objects retained
-  by the ledger ring for the session. **Do.**
+- ~~**B7**~~ The env, the draw row, the census and the build stat are one
+  view each, and `census()`/`stat()` fill one object each. `take_census`
+  keeps a fresh object a frame on purpose: the ledger's ring holds it.
 - **B8** Every tier event carves nine mesh lanes and fills the visibility
   lane; the renderer uploads the block by address and reads no lane. The
   node's cache becomes `{block, counts, rc}`; `visibility`, `role`,
   `carve_visibility`, `mesh_bounds` go; the 4 B/vertex visibility lane in
   the block goes the next time the mesher's layout is touched. **Do.**
-- **B9** The POI index's `page_idx` / `abs_i` / `abs_f` lanes (~3 MB, three
-  BigInt stores a record) are read by nothing. Delete. **Do.**
+- ~~**B9**~~ The POI index's `page_idx` / `abs_i` / `abs_f` lanes are gone.
 - **B10** Decor's build does a `store.cell()` lookup for each of 4096 cells
   per kind; `object.rs` inserts then gets; `build.rs`'s `advance` looks a
   chunk up three or four times. **Do.**

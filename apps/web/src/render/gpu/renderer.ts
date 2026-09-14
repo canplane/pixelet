@@ -135,6 +135,10 @@ export class GpuRenderer {
   private bind_group: GPUBindGroup;
   private depth: GPUTexture | null = null;
   private readonly buffers = new Map<u32, GPUBuffer>();
+  /** The module's draw row, at a fixed address: one view, made on the
+   * first take rather than by a take of its own, which would drop the
+   * uploads waiting for the renderer. */
+  private draw_row: Uint32Array | null = null;
   private width = 0;
   private height = 0;
   /** The frame's uniforms, written by the glue before `frame`. */
@@ -283,7 +287,8 @@ export class GpuRenderer {
     if (!this.depth) return;
     const pxl = this.pxl;
     const mem = pxl.memory.buffer;
-    const row = new Uint32Array(mem, pxl.pxl_draw_take(), 10);
+    const at = pxl.pxl_draw_take();
+    const row = this.draw_row ??= new Uint32Array(mem, at, 10);
     const rewrites = new Uint32Array(mem, row[8], row[9] * REWRITE_WORDS);
     const uploads = new Uint32Array(mem, row[0], row[1] * UPLOAD_WORDS);
     const frees = new Uint32Array(mem, row[2], row[3]);

@@ -427,10 +427,15 @@ impl Models {
     }
 
     /// Advances every actor by `dt` seconds and writes its joint palette.
-    pub fn tick(&mut self, world: &mut World, draw: &mut DrawList, dt: f32) {
+    /// Advances every actor's clips and writes the palettes; whether any
+    /// actor is playing a clip of some length, which is what asks for the
+    /// next frame — nothing else says an actor moved.
+    pub fn tick(&mut self, world: &mut World, draw: &mut DrawList, dt: f32) -> bool {
         let mem = world.volumes.mem();
+        let mut animating = false;
         for a in self.actors.iter_mut().flatten() {
             let Some(Some(m)) = self.models.get(a.model as usize) else { continue };
+            animating |= a.current.is_some_and(|p| m.clips.get(p.clip as usize).is_some_and(|c| c.duration > 0.0));
             let wrap = |p: &mut Playing| {
                 p.time += dt;
                 if let Some(c) = m.clips.get(p.clip as usize) {
@@ -489,6 +494,7 @@ impl Models {
             }
             draw.rewrite(a.palette_handle, a.palette_at as u32, a.palette_bytes);
         }
+        animating
     }
 
     /// Every visible actor's draw, placed against the frame's origin.

@@ -830,8 +830,7 @@ impl Scheduler {
 
         let freed = self.reclaim(world, &order, emit);
         self.press(world, t0, freed);
-        self.models.tick(world, &mut self.draw, frame.delta_s as f32);
-        let animating = self.markers.tick(&frame) | self.environment.tick(&frame);
+        let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
 
         let mut c = Census { committed, ..Census::default() };
