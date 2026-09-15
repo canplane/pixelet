@@ -54,7 +54,9 @@ impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
     fn base() -> usize {
         core::ptr::addr_of!(__heap_base) as usize
     }
-    const END: usize = MODULE_BYTES as usize;
+    fn end() -> usize {
+        MODULE_BYTES as usize
+    }
 }
 
 #[global_allocator]
