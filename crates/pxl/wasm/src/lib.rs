@@ -1174,6 +1174,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             pxl_core::module::device::pose::use_geolocation::geolocation_visibility(visible, platform.geolocation);
             if visible {
                 pxl_core::module::device::pose::use_device_orientation::orientation_visible();
+            } else {
+                pxl_core::module::world::object::store::flush_save();
             }
             return Ok(Some((0, None)));
         }

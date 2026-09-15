@@ -161,6 +161,7 @@ pub fn world_turn(platform: Platform) {
     reverse_geocode_step();
     crate::module::map::ui::overlay::search_modal::search_step();
     toast_controller_step();
+    crate::module::world::object::store::flush_save_if_due();
     fetch_pump();
 }
 
