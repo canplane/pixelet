@@ -17,6 +17,22 @@ when its fix lands.
   `object/store.ts:843-867` saved 300 ms after a write and flushed on
   `visibilitychange` hidden and `pagehide`.
 
+- ~~**P2**~~ Found on the running client (2026-09-16), not in the reading:
+  a pan stopped drawing new ground while the camera still moved. The ledger
+  report named it: terrain pages refused with "the page section is full"
+  while 14 pages were resident. A response body was a block of the page
+  section (`fetch.rs`'s `fetch_body`), 4.2 MB rounded to an 8 MB buddy block,
+  up to six in flight, and `RESIDENT_PAGES` counts only a page's lanes; with
+  the lanes' 1 MB blocks spread over the section no 8 MB piece was left, the
+  page was refused, and its chunks had nothing to build from. In the
+  checkpoint a body was the shell's `ArrayBuffer`. Bodies are blocks of the
+  mesh section now, a POI body excepted, which a POI page keeps as itself.
+  A simulated pan (sixty steps north-east from Seoul) refused 8 pages before
+  and none during the pan after.
+  Left as it is: a jump (a search result) releases every page it leaves
+  behind a one-second quarantine (`resident.rs`) while the next pages
+  arrive, and the first few are refused and fetched again a moment later.
+
 ## H. Residue of the heap work
 
 - **H1** `wasm/src/lib.rs:1903-1904` installs `ALLOC_PROBE` and
@@ -102,7 +118,7 @@ when its fix lands.
   deltas clamped to 0.1 s (`world.rs:198`); `companion.tsx:235` read wall
   seconds. The settle delay, the walk plan and the linger stretch over
   idle gaps.
-- **B21** `chunk_node.rs:171,202,240-245` knows a page's tile by
+- ~~**B21**~~ `chunk_node.rs:171,202,240-245` knows a page's tile by
   `*const Tile as usize`, and `page_table.rs:25,34,74-98` holds tiles by
   value in a `Vec`: a push that reallocates rebuilds every chunk, a
   `swap_remove` rebuilds the moved page's, and a set in place is missed.
