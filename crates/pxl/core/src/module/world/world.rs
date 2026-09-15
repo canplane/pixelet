@@ -47,10 +47,8 @@ use crate::module::world::marker::debug_gizmos::debug_gizmos_step;
 use crate::module::world::marker::hover_cursor::hover_cursor_step;
 use crate::module::world::marker::location_puck::location_puck_step;
 use crate::module::world::object::teach::teach_objects;
-use crate::module::world::poi::poi_layer::{poi_index_step, poi_layer_watch_step, poi_place_tick_step};
-use crate::module::world::poi::use_poi_fetcher::poi_fetcher_step;
 use crate::module::world::sched::fetch_scheduler::{fetch_pump, set_fetch_credits};
-use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, CONTENT, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
 use crate::module::world::change::take_tick_request;
 use crate::module::world::terrain::teach::teach_terrain;
 use crate::module::world::terrain::use_ground_snap_sync::ground_snap_sync_step;
@@ -122,8 +120,6 @@ pub fn world_boot() {
     on_tick(INTERACTION, companion_tick, "companion");
     on_tick(INTERACTION, crate::module::world::character::character_preview::preview_step, "preview");
     on_tick(VISIBLE, core_tick_visible_step, "chunks");
-    on_tick(CONTENT, poi_index_step, "poi_index");
-    on_tick(CONTENT, poi_place_tick_step, "poi_place");
     on_tick(COSMETIC, debug_gizmos_tick, "debug_gizmos");
     on_tick(REPORT, core_tick_report_step, "ledger");
 }
@@ -137,14 +133,11 @@ pub fn world_turn(platform: Platform) {
     orientation_watchdog_step(platform.orientation);
     let a = crate::probe::mark();
     tile_fetcher_step();
-    let a = crate::probe::add(20, a);
-    poi_fetcher_step();
-    crate::probe::add(21, a);
+    crate::probe::add(20, a);
     let (a, t) = (crate::probe::mark(), crate::probe::top());
     ground_snap_sync_step();
     follow_mode_step();
     theme_clock_step();
-    poi_layer_watch_step();
     let (a, t) = (crate::probe::add(30, a), crate::probe::add_bytes(30, t));
     decor_asset_step();
     crate::probe::add(29, a);

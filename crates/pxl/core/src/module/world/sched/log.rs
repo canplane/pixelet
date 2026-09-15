@@ -28,9 +28,9 @@ use crate::kernel::kernel;
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 use crate::module::world::billboard::frustum_budget::billboard_dropped;
 use crate::module::world::chunk_node::{chunk_retention, RETAIN_BUDGET_BYTES};
-use crate::module::world::poi::poi_badge::{badge_atlas, poi_badge_build_stats, poi_badge_count};
-use crate::module::world::poi::poi_index::poi_index_stats;
-use crate::module::world::poi::poi_layer::poi_place_stats;
+use crate::module::world::poi::poi_badge::badge_atlas;
+use crate::module::world::poi::poi_index::PoiIndexStats;
+use crate::module::world::poi::poi_layer::PoiPlaceStats;
 
 const RECENT_TASKS: usize = 20;
 const MB: f64 = 1_048_576.0;
@@ -177,7 +177,6 @@ fn counters() -> Counters {
     let st = k.sched.builder.stat;
     let c = k.sched.builder.bake_context().counters;
     let bands = k.volumes.as_ref().map_or([0; 2], |v| [v.stat.allocated, v.stat.reused]);
-    let badge = poi_badge_build_stats();
     let atlas = badge_atlas().stats();
     Counters {
         faces_kept: c.faces_kept as f64,
@@ -192,13 +191,13 @@ fn counters() -> Counters {
         built_scans: st.scans as f64,
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
-        badge_metrics: badge.metrics as f64,
-        badge_builds: badge.builds as f64,
-        badge_ms: badge.ms,
-        place_runs: poi_place_stats().runs as f64,
+        badge_metrics: 0.0,
+        badge_builds: 0.0,
+        badge_ms: 0.0,
+        place_runs: 0.0,
         atlas_repacks: atlas.repacks as f64,
         atlas_uploads: atlas.uploads as f64,
-        index_rebuilds: poi_index_stats().rebuilds as f64,
+        index_rebuilds: 0.0,
     }
 }
 
@@ -322,9 +321,9 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
     let last = &f.last;
     let c = window_counters();
     let atlas = badge_atlas().stats();
-    let index = poi_index_stats();
-    let place = poi_place_stats();
-    let badge_count = poi_badge_count();
+    let index = PoiIndexStats::default();
+    let place = PoiPlaceStats::default();
+    let badge_count = 0;
     let retain = chunk_retention();
     let bands = c.bands_reused + c.bands_allocated;
     let host = &log().host;

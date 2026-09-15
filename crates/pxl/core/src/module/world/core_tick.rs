@@ -19,7 +19,6 @@ use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::lod::set_lod_projection;
-use crate::module::world::poi::store::poi_pages;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
 use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
@@ -190,7 +189,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
     let node_work = take_node_counts();
-    let poi_count: f64 = poi_pages().entries().map(|(_, resident)| resident.page.len as f64).sum();
+    let poi_count: f64 = 0.0;
     let host = c.host.clone();
     ledger_record_frame(FrameSample {
         t: now(),
