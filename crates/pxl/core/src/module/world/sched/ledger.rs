@@ -16,7 +16,8 @@
 //! Readers: the overlay and the text report (log.rs), both through
 //! summary.rs, and the Chrome-trace export (trace.rs).
 
-use super::demand::Phases;
+use super::demand::{DemandKey, ErrorText, Phases};
+use super::tick::PHASES;
 use crate::global::{now, Global};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,8 +39,8 @@ impl Outcome {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskRecord {
-    pub key: String,
-    pub category: String,
+    pub key: DemandKey,
+    pub category: &'static str,
     pub priority: f64,
     /// monotonic ms at enqueue / first run / settle.
     pub enqueue_ms: f64,
@@ -54,11 +55,15 @@ pub struct TaskRecord {
     /// Why it failed, when `outcome` is Error: the HTTP status where there was
     /// one, otherwise the error's name and the start of its message. The count
     /// alone could not say whether twelve failures were one cause or twelve.
-    pub error: Option<String>,
+    pub error: Option<ErrorText>,
 }
 
-/// tag → (draws, triangles), for one frame's render.
-pub type DrawCensus = Vec<(String, (f64, f64))>;
+/// (draws, triangles) by the pipeline a draw names (render/draw.rs), for one
+/// frame's render.
+pub type DrawCensus = [(f64, f64); CENSUS_TAGS.len()];
+
+/// A census entry's tag: the pipeline at its index.
+pub const CENSUS_TAGS: [&str; 10] = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CpuSample {
@@ -116,8 +121,9 @@ pub struct WorkSample {
 }
 
 /// One rendered frame. Lean on purpose — latency percentiles, decode bandwidth
-/// and upload cost are derived from TaskRecords or added later.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// and upload cost are derived from TaskRecords or added later. Plain numbers,
+/// so the ring holds it in place.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
     /// monotonic ms at record time.
     pub t: f64,
@@ -133,8 +139,8 @@ pub struct FrameSample {
     pub sched_ms: f64,
     /// What the tick was allowed this frame — derived, so it moves.
     pub budget_ms: f64,
-    /// sched_ms broken down by phase, in the tick's own order.
-    pub phases: Vec<(String, f64)>,
+    /// sched_ms broken down by phase, in the tick's own order, as PHASES names them.
+    pub phases: [f64; PHASES.len()],
     pub cpu: CpuSample,
     /// The whole rAF task: from the scheduler pass starting to the JS stack
     /// emptying, so it covers every phase of the tick *and* the renderer's
@@ -190,16 +196,45 @@ pub struct LongFrameRecord {
     pub render_ms: f64,
 }
 
-/// Recording is **exhaustive for the session** — every task and every rendered
-/// frame, from load until the tab goes away. It was a rolling window and that
-/// was simply wrong: the one thing this instrument exists to capture is a
-/// stall, and a stall had already been overwritten by the time anyone pulled a
-/// report or a trace. The caps below are pure safety valves against an
-/// unattended tab left running for hours, not a retention policy — hitting one
-/// sets `truncated`, so an export can say so.
-const TASK_LIMIT: usize = 200_000;
-const FRAME_LIMIT: usize = 500_000; // ~2.3 hours at 60fps
-const LONG_FRAME_LIMIT: usize = 50_000;
+/// The rings keep the last minute: a record older than WINDOW_MS is dropped as
+/// a new one lands, so what the ledger holds is bounded by the display's rate,
+/// not by how long the tab has been open. A report or a trace covers the minute
+/// before it was taken. The rings are lanes of the fixed section at the
+/// capacities below — a minute at 60 Hz is 3,600 frames, about 2 MB of samples
+/// — so a faster display, or a minute of more tasks than a pan asks for, fills
+/// its lane before the minute passes; filling one sets `truncated`.
+pub const WINDOW_MS: f64 = 60_000.0;
+const TASK_LIMIT: usize = 2_048;
+const FRAME_LIMIT: usize = 4_096;
+const LONG_FRAME_LIMIT: usize = 1_024;
+
+/// Steps `head` past the records at the front of `ring[*head..]` older than
+/// `cutoff`; how many to drop from the front now — the head, once the dropped
+/// part is the larger half, so a drop is a step of the head and not a shift of
+/// every record.
+fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
+    while *head < ring.len() && t(&ring[*head]) < cutoff {
+        *head += 1;
+    }
+    if *head > 0 && *head * 2 >= ring.len() {
+        core::mem::take(head)
+    } else {
+        0
+    }
+}
+
+/// `rec` onto a lane ring past its trim; when the lane is full the records the
+/// window already dropped make room first, and past that the ring is truncated.
+fn land<T>(ring: &mut Vec<T>, cap: usize, head: &mut usize, rec: T) -> bool {
+    if ring.len() == cap && *head > 0 {
+        ring.drain(..core::mem::take(head));
+    }
+    if ring.len() == cap {
+        return false;
+    }
+    ring.push(rec);
+    true
+}
 
 /// Live consumer for records as they land — log.rs's console stream. One sink,
 /// not a list: the instrument has a single output mode at a time.
@@ -210,8 +245,9 @@ pub struct LedgerSink {
     pub long_frame: Option<fn(&LongFrameRecord)>,
 }
 
-/// The window's worst-seen values, kept as frames land so the report never
-/// scans the ring for them. Reset with the window.
+/// The worst-seen values since recording started, kept as frames land so the
+/// report never scans the ring for them — and past the minute the ring keeps,
+/// so a stall noticed late is still on record. Reset with the recording.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramePeak {
     pub dt_ms: f64,
@@ -233,9 +269,9 @@ pub struct FramePeak {
     pub pressure: f64,
 }
 
-/// The window's worst frames by dt, kept whole with the frame before each,
-/// because geometry/texture/heap only mean anything as deltas.
-#[derive(Clone, Debug, PartialEq)]
+/// The worst frames by dt since recording started, kept whole with the frame
+/// before each, because geometry/texture/heap only mean anything as deltas.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorstFrame {
     pub sample: FrameSample,
     pub prev: Option<FrameSample>,
@@ -258,6 +294,11 @@ struct Ledger {
     task_ring: Vec<TaskRecord>,
     frame_ring: Vec<FrameSample>,
     long_frame_ring: Vec<LongFrameRecord>,
+    /// Where each ring's live window starts: records before it are past the
+    /// minute and wait for `trim` to drop them.
+    task_head: usize,
+    frame_head: usize,
+    long_frame_head: usize,
     truncated: bool,
     sink: LedgerSink,
     /// Explicit recording window: stopping freezes the data so an export is
@@ -266,6 +307,7 @@ struct Ledger {
     started_at: f64,
     stopped_at: Option<f64>,
     frame_peak: FramePeak,
+    /// Slowest first.
     worst_frames: Vec<WorstFrame>,
 }
 
@@ -273,16 +315,19 @@ static LEDGER: Global<Ledger> = Global::new();
 
 fn ledger() -> &'static mut Ledger {
     LEDGER.get(|| Ledger {
-        task_ring: Vec::new(),
-        frame_ring: Vec::new(),
-        long_frame_ring: Vec::new(),
+        task_ring: Vec::with_capacity(TASK_LIMIT),
+        frame_ring: Vec::with_capacity(FRAME_LIMIT),
+        long_frame_ring: Vec::with_capacity(LONG_FRAME_LIMIT),
+        task_head: 0,
+        frame_head: 0,
+        long_frame_head: 0,
         truncated: false,
         sink: LedgerSink::default(),
         recording: true,
         started_at: now(),
         stopped_at: None,
         frame_peak: FramePeak::default(),
-        worst_frames: Vec::new(),
+        worst_frames: Vec::with_capacity(WORST_CAP),
     })
 }
 
@@ -300,9 +345,9 @@ pub fn ledger_recording_state() -> RecordingState {
     RecordingState {
         recording: l.recording,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
-        tasks: l.task_ring.len(),
-        frames: l.frame_ring.len(),
-        long_frames: l.long_frame_ring.len(),
+        tasks: l.task_ring.len() - l.task_head,
+        frames: l.frame_ring.len() - l.frame_head,
+        long_frames: l.long_frame_ring.len() - l.long_frame_head,
         truncated: l.truncated,
     }
 }
@@ -313,6 +358,7 @@ pub fn ledger_recording_start() {
     l.task_ring.clear();
     l.frame_ring.clear();
     l.long_frame_ring.clear();
+    (l.task_head, l.frame_head, l.long_frame_head) = (0, 0, 0);
     l.worst_frames.clear();
     l.frame_peak = FramePeak::default();
     l.truncated = false;
@@ -339,10 +385,10 @@ pub fn ledger_record(rec: TaskRecord) {
     if let Some(task) = l.sink.task {
         task(&rec);
     }
-    if l.task_ring.len() >= TASK_LIMIT {
+    let dropped = trim(l.task_ring.as_slice(), &mut l.task_head, rec.end_ms - WINDOW_MS, |r| r.end_ms);
+    l.task_ring.drain(..dropped);
+    if !land(&mut l.task_ring, TASK_LIMIT, &mut l.task_head, rec) {
         l.truncated = true;
-    } else {
-        l.task_ring.push(rec);
     }
 }
 
@@ -352,8 +398,8 @@ pub fn ledger_frame_peak() -> FramePeak {
 }
 
 /// Window worst frames, slowest first.
-pub fn ledger_worst_frames() -> Vec<WorstFrame> {
-    ledger().worst_frames.clone()
+pub fn ledger_worst_frames() -> &'static [WorstFrame] {
+    ledger().worst_frames.as_slice()
 }
 
 pub fn ledger_record_frame(s: FrameSample) {
@@ -361,11 +407,17 @@ pub fn ledger_record_frame(s: FrameSample) {
     if !l.recording {
         return;
     }
-    let prev = l.frame_ring.last().cloned();
-    if l.worst_frames.len() < WORST_CAP || l.worst_frames.last().is_some_and(|w| s.dt_ms > w.sample.dt_ms) {
-        l.worst_frames.push(WorstFrame { sample: s.clone(), prev });
-        l.worst_frames.sort_by(|a, b| b.sample.dt_ms.total_cmp(&a.sample.dt_ms));
-        l.worst_frames.truncate(WORST_CAP);
+    let worst = &mut l.worst_frames;
+    let at = worst.as_slice().partition_point(|w| w.sample.dt_ms >= s.dt_ms);
+    if at < WORST_CAP {
+        worst.truncate(WORST_CAP - 1);
+        worst.insert(
+            at.min(worst.len()),
+            WorstFrame {
+                sample: s,
+                prev: l.frame_ring.last().copied(),
+            },
+        );
     }
 
     let p = &mut l.frame_peak;
@@ -390,10 +442,10 @@ pub fn ledger_record_frame(s: FrameSample) {
     if let Some(frame) = l.sink.frame {
         frame(&s);
     }
-    if l.frame_ring.len() >= FRAME_LIMIT {
+    let dropped = trim(l.frame_ring.as_slice(), &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
+    l.frame_ring.drain(..dropped);
+    if !land(&mut l.frame_ring, FRAME_LIMIT, &mut l.frame_head, s) {
         l.truncated = true;
-    } else {
-        l.frame_ring.push(s);
     }
 }
 
@@ -404,19 +456,21 @@ pub fn ledger_record_long_frame(rec: LongFrameRecord) {
     if !l.recording {
         return;
     }
-    if l.long_frame_ring.len() >= LONG_FRAME_LIMIT {
+    let dropped = trim(l.long_frame_ring.as_slice(), &mut l.long_frame_head, rec.t - WINDOW_MS, |r| r.t);
+    l.long_frame_ring.drain(..dropped);
+    if !land(&mut l.long_frame_ring, LONG_FRAME_LIMIT, &mut l.long_frame_head, rec) {
         l.truncated = true;
         return;
     }
-    l.long_frame_ring.push(rec);
     if let Some(long_frame) = l.sink.long_frame {
         long_frame(&rec);
     }
 }
 
-/// Copy of the task buffer, newest last.
-pub fn ledger_snapshot() -> Vec<TaskRecord> {
-    ledger().task_ring.clone()
+/// The task window, newest last.
+pub fn ledger_snapshot() -> &'static [TaskRecord] {
+    let l = ledger();
+    &l.task_ring.as_slice()[l.task_head..]
 }
 
 /// The frame sample just recorded, so a late-arriving measurement (task_ms,
@@ -434,14 +488,16 @@ fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
 /// Frames recorded at or after `t`, newest last — a live reader's window, so
 /// it costs the tail it reads and not the whole recording.
 pub fn ledger_frames_since(t: f64) -> &'static [FrameSample] {
-    let ring = &ledger().frame_ring;
+    let l = ledger();
+    let ring = &l.frame_ring.as_slice()[l.frame_head..];
     &ring[first_at(ring, t, |f| f.t)..]
 }
 
 /// Tasks settled at or after `t`. A task is recorded as it settles, so the
 /// ring is in `end_ms` order.
 pub fn ledger_tasks_since(t: f64) -> &'static [TaskRecord] {
-    let ring = &ledger().task_ring;
+    let l = ledger();
+    let ring = &l.task_ring.as_slice()[l.task_head..];
     &ring[first_at(ring, t, |r| r.end_ms)..]
 }
 
@@ -449,15 +505,18 @@ pub fn ledger_tasks_since(t: f64) -> &'static [TaskRecord] {
 /// observers feed this ring, so it is not strictly in time order, and it is
 /// short.
 pub fn ledger_long_frames_since(t: f64) -> Vec<LongFrameRecord> {
-    ledger().long_frame_ring.iter().filter(|l| l.t >= t).copied().collect()
+    let l = ledger();
+    l.long_frame_ring.as_slice()[l.long_frame_head..].iter().filter(|r| r.t >= t).copied().collect()
 }
 
-/// The frame buffer, newest last.
+/// The frame window, newest last.
 pub fn ledger_frames_snapshot() -> &'static [FrameSample] {
-    &ledger().frame_ring
+    let l = ledger();
+    &l.frame_ring.as_slice()[l.frame_head..]
 }
 
-/// The long-frame buffer, newest last.
+/// The long-frame window, newest last.
 pub fn ledger_long_frames_snapshot() -> &'static [LongFrameRecord] {
-    &ledger().long_frame_ring
+    let l = ledger();
+    &l.long_frame_ring.as_slice()[l.long_frame_head..]
 }

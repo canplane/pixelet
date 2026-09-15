@@ -4,8 +4,11 @@
 WASM + SharedArrayBuffer + preemptive-threading + offscreen-WebGPU direction was
 stopped, and what shape a restart should take instead.
 
-**Status: parked.** Not rejected on principle — re-evaluated when the project
-leaves the MVP milestone.
+**Status: superseded** by
+[20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md)
+— the core is WASM on one cooperative thread; see "Status 2026-09-13" at
+the end. "What a restart should look like" below is the July answer, not
+the current one.
 
 ---
 

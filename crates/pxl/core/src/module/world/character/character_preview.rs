@@ -131,13 +131,10 @@ pub fn preview_step(ctx: &mut TickContext) {
 }
 
 /// The open cases that can be drawn: (case, model, skin image).
-pub fn preview_rows() -> Vec<(u32, u32, u32)> {
-    cases()
-        .cases
-        .iter()
-        .filter_map(|case| match (&case.model, case.skin, case.actor) {
-            (Some(model), Some(skin), Some(_)) => Some((case.id, model.model, skin)),
-            _ => None,
-        })
-        .collect()
+pub fn preview_rows() -> impl Iterator<Item = (u32, u32, u32)> {
+    let c: &'static _ = cases();
+    c.cases.iter().filter_map(|case| match (&case.model, case.skin, case.actor) {
+        (Some(model), Some(skin), Some(_)) => Some((case.id, model.model, skin)),
+        _ => None,
+    })
 }

@@ -59,13 +59,6 @@ pub fn release_block(at: usize, bytes: u32) {
     }
 }
 
-static MESH_SECTION_BYTES: Global<f64> = Global::new();
-
-/// The mesh section's size, as the shell cut it.
-pub fn set_mesh_section_bytes(bytes: f64) {
-    *MESH_SECTION_BYTES.get(|| 0.0) = bytes;
-}
-
 /// How much built work chunks may keep *while off screen*: run sets and cached
 /// tiers, both in the mesh section and sized in bytes. Leaving the frustum used
 /// to drop all of it on the first release, and a rotation or a zoom in and out
@@ -78,7 +71,7 @@ pub fn set_mesh_section_bytes(bytes: f64) {
 /// and refused the fine tiers' blocks 88,000 times in a minute (2026-09-14).
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    (*MESH_SECTION_BYTES.get(|| 0.0) / 2.0).floor()
+    crate::memory::map().map_or(0.0, |m| (m.mesh.bytes / 2) as f64)
 }
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----

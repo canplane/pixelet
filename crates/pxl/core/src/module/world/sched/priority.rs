@@ -39,3 +39,7 @@ pub fn lead_point(eye: &Vec3, target_local_x: f64, target_local_y: f64, target_l
         z: eye.z + e[2] * target_local_x + e[6] * target_local_y + e[10] * target_local_z + e[14],
     }
 }
+
+#[cfg(test)]
+#[path = "priority.test.rs"]
+mod test;

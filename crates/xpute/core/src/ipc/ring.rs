@@ -180,6 +180,37 @@ impl Ring {
         Errno::OK
     }
 
+    /// Writes one message at the tail, its packet written in place by `write`:
+    /// handed what is left of the arena, it answers the packet's length, or
+    /// none when the packet did not fit. EAGAIN, and nothing written, when the
+    /// ring is full or the packet did not fit what is left; EMSGSIZE when it
+    /// did not fit an arena with nothing in it.
+    pub fn push_in_place(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: impl FnOnce(&mut [u8]) -> Option<u32>) -> Errno {
+        if self.len() >= self.capacity {
+            return Errno::EAGAIN;
+        }
+        let w = self.words.as_mut_slice();
+        if w[2] == w[1] {
+            w[4] = 0;
+        }
+        let start = (self.arena_at + w[4]) as usize;
+        let end = (self.arena_at + self.arena_bytes) as usize;
+        let bytes = self.u8.as_mut_slice();
+        let Some(n) = write(&mut bytes[start..end]) else {
+            return if w[4] == 0 { Errno::EMSGSIZE } else { Errno::EAGAIN };
+        };
+        let need = (n as usize).div_ceil(8) * 8;
+        bytes[start + n as usize..start + need].fill(0);
+        w[4] += need as u32;
+        let at = self.entry_at(w[2]) as usize;
+        w[at + RING_TAG as usize] = tag;
+        w[at + RING_CMD as usize] = (cmd & 0xffff) | ((flags & 0xffff) << 16);
+        w[at + RING_RESULT as usize] = result as u32;
+        w[at + RING_PACKET as usize] = start as u32;
+        w[2] = w[2].wrapping_add(1);
+        Errno::OK
+    }
+
     // ---- consumer ----
 
     /// Where the message at the head starts in `words`, or -1 when empty.

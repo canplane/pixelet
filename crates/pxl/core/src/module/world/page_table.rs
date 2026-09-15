@@ -119,3 +119,7 @@ impl<T> PageTable<T> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "page_table.test.rs"]
+mod test;

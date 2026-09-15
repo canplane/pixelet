@@ -13,7 +13,6 @@ use pxl_shared::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::GROUND_CH_KEYS;
 
 use super::config_spec;
-use crate::global::Global;
 
 /// What one resident page takes of the page section: its ground lanes and its
 /// elevation block, each rounded up to the buddy's power of two.
@@ -25,21 +24,13 @@ fn page_block_bytes() -> u32 {
     GROUND_CH_KEYS.len() as u32 * pow2_ceil(PAGE_CELL_SPAN * PAGE_CELL_SPAN) + pow2_ceil(ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2)
 }
 
-static PAGE_SECTION_BYTES: Global<u32> = Global::new();
-
-/// The shell's memory map: the page section's size (wasm/core_pool).
-pub fn set_page_section_bytes(bytes: u32) {
-    PAGE_SECTION_BYTES.set(bytes);
-}
-
 /// How many pages stay decoded: the nearest this many, and the rest are
-/// dropped. Never more than the core memory's page section holds, less the
-/// margin: a page past the section spills where the kernel cannot read it,
-/// and its chunks are never built — so the count is bounded here by
-/// construction rather than trusted to agree with the memory map.
+/// dropped. Never more than the page section holds (crate::memory), less
+/// the margin: a page the section refuses is a page whose chunks are never
+/// built — so the count is bounded here by construction.
 #[allow(non_snake_case)]
 pub fn RESIDENT_PAGES() -> u32 {
-    let section = *PAGE_SECTION_BYTES.get(|| u32::MAX);
+    let section = crate::memory::map().map_or(u32::MAX, |m| m.page.bytes);
     config_spec::RESIDENT_PAGES_CAP.min((section / page_block_bytes()).saturating_sub(config_spec::PAGE_MARGIN))
 }
 

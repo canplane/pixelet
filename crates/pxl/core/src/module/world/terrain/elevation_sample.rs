@@ -170,3 +170,7 @@ pub fn dense_ele_region<'a>(page_ele: &[i16], tx0: u32, ty0: u32, span: u32, gro
     }
     out
 }
+
+#[cfg(test)]
+#[path = "elevation_sample.test.rs"]
+mod test;

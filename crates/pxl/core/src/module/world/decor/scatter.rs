@@ -12,7 +12,7 @@
 use pxl_shared::bake::constant::PAGE_CELL_SPAN;
 use pxl_shared::bake::format::Ground;
 use pxl_shared::spec::cell::cube_types;
-use xpute_core::kit::rng::{derive_seed_u64, make_rng, u32_to_unit};
+use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 /// What a channel's type must be for a kind to stand on the cell: anything,
 /// nothing painted, or one of a list of types.
@@ -217,7 +217,8 @@ pub fn scatter_decor_candidates(ground: &Ground, tx0: u32, ty0: u32, span: u32, 
 
             // 16 bits per axis comfortably covers PAGE_CELL_SPAN (1024, 10 bits).
             let cell_tag = ((cell_x as u64) << 16) | cell_y as u64;
-            let mut rng = make_rng(Some(derive_seed_u64(kind_seed, cell_tag)));
+            let mut stream = SplitMix64::new(derive_seed_u64(kind_seed, cell_tag));
+            let mut rng = || stream.next_u32();
 
             if u32_to_unit(rng()) >= kind.density * density_scale {
                 continue;
@@ -241,3 +242,7 @@ pub fn scatter_decor_candidates(ground: &Ground, tx0: u32, ty0: u32, span: u32, 
 
     out
 }
+
+#[cfg(test)]
+#[path = "scatter.test.rs"]
+mod test;

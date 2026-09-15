@@ -109,7 +109,7 @@ pub mod SETTINGS {
         pub const cost: &str = "low";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
-    /// The sun's shadow map (render/gpu/shadow.ts): the world drawn once more
+    /// The sun's shadow map (crates/pxl/core/src/render/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
     pub mod show_shadow_map {

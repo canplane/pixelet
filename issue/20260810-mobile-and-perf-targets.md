@@ -222,8 +222,10 @@ reading code and guessing.
   read in place), and everything that used to run inside React's commit —
   the scan, the bake, the commit — is a step of one frame budget
   ([20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)).
-  An iPhone 13 mini reads dt p50 17 ms on a 16 ms display with 13% missed;
-  the one unit that still cannot be cut is the bake, decided for a worker.
+  An iPhone 13 mini reads dt p50 17 ms on a 16 ms display with 13% missed.
+  The bake steps under the budget, in the module; a worker for it was
+  measured and not taken
+  ([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)).
 - **The reload after wandering** — the client's state is one fixed 256 MB
   memory on a handheld and the retained meshes sit under a budget
   ([20260912-what-to-render-when.md](./20260912-what-to-render-when.md));

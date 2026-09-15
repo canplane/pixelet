@@ -12,15 +12,16 @@
 //! decision about them. Why each rule is what it is lives in the TypeScript
 //! it came from; the history there is the reasoning here.
 
-use std::collections::{BTreeMap, BTreeSet};
+use core::fmt::Write;
 
 use crate::bake::terrain::ChunkSample;
+use std::collections::BTreeMap;
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
 use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
 use crate::world::billboard::Billboards;
-use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World};
+use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World, MAX_CHUNKS};
 use crate::world::debug::DebugLines;
-use crate::world::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::world::decor::{decor_groups, density as decor_density, Chunk as DecorChunk, DecorBuild, DecorScratch, Kind as DecorKind, Rule as DecorRule};
 use crate::world::environment::Environment;
 use crate::world::ghost::Ghost;
 use crate::world::lod::{Ladder, COARSEST, LOD_STEPS};
@@ -178,13 +179,16 @@ pub enum Event {
     },
 }
 
-#[derive(Clone, Copy)]
+/// Pages with a terrain tile at once: the resident pages, and room past them.
+const MAX_PAGES: usize = 1024;
+
+#[derive(Clone, Copy, Default)]
 struct Bounds {
     min: [f32; 3],
     max: [f32; 3],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct Tier {
     step: u32,
     bytes: u32,
@@ -196,18 +200,29 @@ struct Tier {
     index_cnt: u32,
 }
 
-/// A decor block the glue holds: its step and bytes, the renderer's handle,
-/// and each group's lanes (DecorBuild::group_layout).
+/// A decor block the glue holds: its step and bytes, and the renderer's
+/// handle. Each group's lanes are where the block's own header says.
+#[derive(Clone, Copy, Default)]
 pub struct Decor {
     step: u32,
     /// Where the block is in the memory, and its size.
     pub at: u32,
     pub bytes: u32,
     handle: u32,
-    /// Each group's first lane word in the block and its count.
-    pub groups: Vec<(u32, u32)>,
 }
 
+impl Decor {
+    /// Each group's first lane word in the block and its count
+    /// (decor.rs's decor_groups), the block read in `mem`.
+    fn groups(&self, mem: *const u8) -> impl Iterator<Item = (u32, u32)> {
+        // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
+        // for as long as this decor is.
+        let words: &[u32] = unsafe { core::slice::from_raw_parts(mem.add(self.at as usize) as *const u32, self.bytes as usize / 4) };
+        decor_groups(words)
+    }
+}
+
+#[derive(Clone)]
 struct Slot {
     id: u32,
     base_x: f64,
@@ -314,16 +329,22 @@ pub struct Scheduler {
     retained_off: f64,
     pub census: Census,
     /// The pages with a terrain tile, which chunks are mounted from.
-    pages: BTreeSet<u64>,
+    /// In ascending order, which is the order chunks are mounted in.
+    pages: Vec<u64>,
     pages_revision: u32,
     /// The chunks the module mounted, by page and page-local base.
     mounted: BTreeMap<(u64, u32, u32), u32>,
+    /// The mounted chunks a pass finds leaving, before they are let go.
+    gone: Vec<((u64, u32, u32), u32)>,
     next_mount_id: u32,
     mounted_for: Option<([f64; 2], f64, f64, u32)>,
     /// The decor kinds, in the order the glue taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
     decor_sample: ChunkSample,
+    /// Where a decor build gathers its instances, made at the first build:
+    /// the scheduler is made before the sections are.
+    decor_scratch: Option<DecorScratch>,
     /// The builder's refusals as of the last reclaim, so a refusal since
     /// is pressure now; and whether the last pass saw one, for the next
     /// frame's release cap.
@@ -337,7 +358,6 @@ pub struct Scheduler {
     scratch: Scratch,
 }
 
-#[derive(Default)]
 struct Scratch {
     order: Vec<usize>,
     keys: Vec<Keyed>,
@@ -346,6 +366,20 @@ struct Scratch {
     eligible: Vec<usize>,
     still: Vec<u32>,
     landed: Vec<u32>,
+}
+
+impl Default for Scratch {
+    fn default() -> Self {
+        Scratch {
+            order: Vec::with_capacity(MAX_CHUNKS),
+            keys: Vec::with_capacity(MAX_CHUNKS),
+            visible: Vec::with_capacity(MAX_CHUNKS),
+            offscreen: Vec::with_capacity(MAX_CHUNKS),
+            eligible: Vec::with_capacity(MAX_CHUNKS),
+            still: Vec::with_capacity(MAX_CHUNKS),
+            landed: Vec::with_capacity(MAX_CHUNKS),
+        }
+    }
 }
 
 impl Default for Scheduler {
@@ -396,7 +430,7 @@ impl Scheduler {
             decor_models: Vec::new(),
             environment: Environment::default(),
             debug: DebugLines::default(),
-            slots: Vec::new(),
+            slots: Vec::with_capacity(MAX_CHUNKS),
             index: BTreeMap::new(),
             by_base: BTreeMap::new(),
             ladder: Ladder::default(),
@@ -406,13 +440,15 @@ impl Scheduler {
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
-            pages: BTreeSet::new(),
+            pages: Vec::with_capacity(MAX_PAGES),
             pages_revision: 0,
             mounted: BTreeMap::new(),
+            gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
             mounted_for: None,
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
+            decor_scratch: None,
             refused_seen: 0,
             scratch: Scratch::default(),
             refused_last: false,
@@ -500,6 +536,7 @@ impl Scheduler {
         }
         self.index.insert(id, self.slots.len());
         self.by_base.insert((base_x as i64, base_y as i64), id);
+        assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
         self.slots.push(slot);
         self.view_dirty = true;
     }
@@ -520,10 +557,10 @@ impl Scheduler {
         } else {
             self.retained_off -= before;
         }
-        for t in &self.slots[i].tiers {
+        for t in self.slots[i].tiers.iter() {
             self.draw.free(t.handle);
         }
-        for d in &self.slots[i].decor {
+        for d in self.slots[i].decor.iter() {
             self.draw.free(d.handle);
         }
         self.slots.swap_remove(i);
@@ -541,10 +578,10 @@ impl Scheduler {
         let before = self.slots[i].retained();
         self.builder.source(world, id, page, show_structures, &mut |e| emit(Event::Build(e)));
         let s = &mut self.slots[i];
-        for t in &s.tiers {
+        for t in s.tiers.iter() {
             self.draw.free(t.handle);
         }
-        for d in &s.decor {
+        for d in s.decor.iter() {
             self.draw.free(d.handle);
         }
         s.tiers.clear();
@@ -591,7 +628,7 @@ impl Scheduler {
         }
         let Some(&i) = self.index.get(&id) else { return };
         let before = self.slots[i].retained();
-        for d in self.slots[i].decor.drain(..) {
+        for d in core::mem::take(&mut self.slots[i].decor) {
             self.draw.free(d.handle);
         }
         self.account(i, before);
@@ -624,7 +661,9 @@ impl Scheduler {
             }
             // SAFETY: the chunk's page, as its source named it, resident
             // while the chunk is.
+            let a = crate::probe::mark();
             let view = unsafe { Builder::page_view(world, page) };
+            crate::probe::add(17, a);
             // The elevations are the scatter's; a tier no kind is drawn on,
             // or decor switched off, stands only the placed entries, which
             // carry their own height.
@@ -644,8 +683,11 @@ impl Scheduler {
                 show_decor,
                 hide: self.builder.hide_in(base),
             };
-            let built = DecorBuild::build(&self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
+            let a = crate::probe::mark();
+            let scratch = self.decor_scratch.get_or_insert_with(DecorScratch::new);
+            let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
+            let a = crate::probe::add(18, a);
             let pool = world.volumes.mesh_pool();
             let Some(at) = world.pools[pool].acquire(bytes) else {
                 self.builder.stat.starved += 1;
@@ -655,17 +697,20 @@ impl Scheduler {
             // SAFETY: a block of the bytes the build asked for, the glue's
             // once handed over.
             unsafe { built.write(world.volumes.mem().add(at)) };
+            let a = crate::probe::add(19, a);
             let before = self.slots[i].retained();
             let handle = self.draw.upload(at as u32, bytes, 0, 0);
+            let a = crate::probe::add(24, a);
             self.slots[i].decor.push(Decor {
                 step,
                 at: at as u32,
                 bytes,
                 handle,
-                groups: built.group_layout(),
             });
             self.account(i, before);
+            let a = crate::probe::add(25, a);
             emit(Event::Decor { id, step, at: at as u32, bytes });
+            crate::probe::add(26, a);
         }
         true
     }
@@ -694,7 +739,18 @@ impl Scheduler {
 
     /// A page's terrain tile arrived, or left.
     pub fn page(&mut self, page: u64, present: bool) {
-        let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
+        let changed = match (self.pages.binary_search(&page), present) {
+            (Err(at), true) => {
+                assert!(self.pages.len() < MAX_PAGES, "more than {MAX_PAGES} pages with a tile");
+                self.pages.insert(at, page);
+                true
+            }
+            (Ok(at), false) => {
+                self.pages.remove(at);
+                true
+            }
+            _ => false,
+        };
         if changed {
             self.pages_revision = self.pages_revision.wrapping_add(1);
             self.view_dirty = true;
@@ -736,27 +792,26 @@ impl Scheduler {
         };
 
         // Leave: every mounted chunk past the keep radius or on a page that left.
-        let gone: Vec<((u64, u32, u32), u32)> = self
-            .mounted
-            .iter()
-            .filter(|(&(page, bx, by), _)| {
-                if !self.pages.contains(&page) {
-                    return true;
-                }
+        self.gone.clear();
+        for (&(page, bx, by), &id) in self.mounted.iter() {
+            let leaving = self.pages.binary_search(&page).is_err() || {
                 let (x0, y0) = page_origin(page);
                 rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > keep2
-            })
-            .map(|(&k, &id)| (k, id))
-            .collect();
-        for (k, id) in gone {
+            };
+            if leaving {
+                self.gone.push(((page, bx, by), id));
+            }
+        }
+        for g in 0..self.gone.len() {
+            let (k, id) = self.gone[g];
             self.mounted.remove(&k);
             self.remove(world, id, emit);
             emit(Event::Unmount { id });
         }
 
         // Enter: every chunk within the radius on a page with a tile.
-        let pages: Vec<u64> = self.pages.iter().copied().collect();
-        for page in pages {
+        for p in 0..self.pages.len() {
+            let page = self.pages[p];
             let (x0, y0) = page_origin(page);
             if rect(x0, y0, PAGE_SPAN) > keep2 {
                 continue;
@@ -805,10 +860,14 @@ impl Scheduler {
             self.recheck_elapsed = 0.0;
         }
 
+        let a = crate::probe::mark();
         self.mount(world, &frame, emit);
+        let a = crate::probe::add(0, a);
         self.refresh(&frame, emit);
+        let a = crate::probe::add(1, a);
         let mut sc = core::mem::take(&mut self.scratch);
         self.order(t0, &mut sc.order, &mut sc.keys);
+        let a = crate::probe::add(2, a);
         let Scratch {
             order,
             visible,
@@ -827,9 +886,9 @@ impl Scheduler {
             let s = &self.slots[i];
             if s.has(PENDING) {
                 if s.has(IN_FRUSTUM) {
-                    visible.push(i)
+                    visible.push(i);
                 } else {
-                    offscreen.push(i)
+                    offscreen.push(i);
                 }
             }
         }
@@ -844,6 +903,7 @@ impl Scheduler {
             self.view_dirty = false;
         }
 
+        let a = crate::probe::add(3, a);
         let pending_total = (visible.len() + offscreen.len()) as u32;
         // A commit on screen may build decor, and a block refused ends the
         // commits this tick as it ends the builds (Builder::tick_capped):
@@ -856,6 +916,7 @@ impl Scheduler {
         let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
         committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
+        let a = crate::probe::add(4, a);
         // The builds, visible pending first in order, with what is left; the
         // chunks a tier landed on are committed after.
         still.clear();
@@ -872,6 +933,7 @@ impl Scheduler {
                 self_record(slots, index, mem, ron, roff, draw, e, emit);
             });
         }
+        let a = crate::probe::add(5, a);
         for &id in landed.iter() {
             if let Some(&i) = self.index.get(&id) {
                 if self.commit(world, i, emit) {
@@ -880,11 +942,16 @@ impl Scheduler {
             }
         }
 
+        let a = crate::probe::add(6, a);
         let freed = self.reclaim(world, order, emit);
         self.scratch = sc;
+        let a = crate::probe::add(7, a);
         self.press(world, t0, freed);
+        let a = crate::probe::add(8, a);
         let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
-        self.draw_frame(&frame);
+        let a = crate::probe::add(9, a);
+        self.draw_frame(&frame, world_mem(world));
+        crate::probe::add(10, a);
 
         let mut c = Census { committed, ..Census::default() };
         c.chunks = self.slots.len() as u32;
@@ -921,7 +988,7 @@ impl Scheduler {
     /// This frame's draws: every chunk on screen with a layout, its tiers at
     /// the weights the blend decided, placed where the chunk is in the frame
     /// the camera is written in.
-    fn draw_frame(&mut self, frame: &Frame) {
+    fn draw_frame(&mut self, frame: &Frame, mem: *const u8) {
         self.draw.begin_frame();
         self.ghost.draw(&mut self.draw, frame.origin);
         self.models.draw(&mut self.draw, frame.origin);
@@ -951,7 +1018,7 @@ impl Scheduler {
                 _ => s.layout_primary,
             };
             if let Some(d) = s.decor.iter().find(|d| d.step == decor_step) {
-                for (group, &(offset, count)) in d.groups.iter().enumerate() {
+                for (group, (offset, count)) in d.groups(mem).enumerate() {
                     if count > 0 {
                         self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
                     }
@@ -1003,7 +1070,9 @@ impl Scheduler {
         }));
         idx.clear();
         idx.extend(0..self.slots.len());
-        idx.sort_by(|&a, &b| priority_keyed(&keys[a], &keys[b]));
+        // Ties broken by the slot, which is the order a stable sort keeps: the
+        // same order, with no merge buffer taken each tick.
+        idx.sort_unstable_by(|&a, &b| priority_keyed(&keys[a], &keys[b]).then(a.cmp(&b)));
     }
 
     fn set_pending(&mut self, i: usize, pending: bool, request: i32, now: f64) {
@@ -1195,11 +1264,18 @@ impl Scheduler {
         if s.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].releases) {
             return false;
         }
-        if !self.ask(world, i, p, q) || !self.ensure_decor(world, i, [p, q], emit) {
+        let a = crate::probe::mark();
+        let asked = self.ask(world, i, p, q);
+        let a = crate::probe::add(13, a);
+        if !asked || !self.ensure_decor(world, i, [p, q], emit) {
+            crate::probe::add(14, a);
             return false;
         }
+        let a = crate::probe::add(14, a);
         self.trim(i, [p, q], emit);
+        let a = crate::probe::add(15, a);
         self.apply_layout(i, p, q, true, emit);
+        crate::probe::add(16, a);
         self.set_pending(i, false, RELEASE_REQUEST, 0.0);
         true
     }
@@ -1231,11 +1307,11 @@ impl Scheduler {
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
             let mut steps = 0;
-            for t in s.tiers.drain(..) {
+            for t in core::mem::take(&mut s.tiers) {
                 self.draw.free(t.handle);
                 steps |= t.step;
             }
-            for d in s.decor.drain(..) {
+            for d in core::mem::take(&mut s.decor) {
                 self.draw.free(d.handle);
                 steps |= d.step;
             }
@@ -1345,13 +1421,20 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 /// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over the
 /// key chunk_node.ts named it by, `<page index>:<base x>,<base y>`.
 fn blend_hash(page: u64, bx: u32, by: u32) -> u32 {
-    let key = format!("{}:{},{}", page, bx, by);
-    let mut h: u32 = 2166136261;
-    for b in key.bytes() {
-        h ^= b as u32;
-        h = h.wrapping_mul(16777619);
+    /// FNV-1a over what is written, as it is written.
+    struct Fnv(u32);
+    impl Write for Fnv {
+        fn write_str(&mut self, s: &str) -> core::fmt::Result {
+            for b in s.bytes() {
+                self.0 ^= b as u32;
+                self.0 = self.0.wrapping_mul(16777619);
+            }
+            Ok(())
+        }
     }
-    h
+    let mut h = Fnv(2166136261);
+    let _ = write!(h, "{page}:{bx},{by}");
+    h.0
 }
 
 /// What a chunk's place in the order is decided by.

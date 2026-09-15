@@ -1,7 +1,7 @@
 // @pxl/web/../script/build_wasm.ts
 //
 // Builds the Rust core's module (crates/pxl/wasm) and puts it where
-// src/wasm/pxl.ts loads it from. Run by every task that loads the module —
+// src/wasm/module.ts loads it from. Run by every task that loads the module —
 // dev, build, test — so a checkout never runs against a stale or missing
 // one; cargo's own cache makes a run with nothing changed cost a second.
 //
@@ -11,7 +11,7 @@
 const CRATES = new URL("../../../crates/", import.meta.url);
 const TARGET = "wasm32-unknown-unknown";
 const BUILT = new URL(`target/${TARGET}/release/pxl_wasm.wasm`, CRATES);
-const OUT = new URL("../src/wasm/pxl.wasm", import.meta.url);
+const OUT = new URL("../src/wasm/kernel.wasm", import.meta.url);
 
 const cargo = new Deno.Command("cargo", {
   args: ["build", "--release", "--package", "pxl-wasm", "--target", TARGET],
@@ -30,4 +30,4 @@ try {
 if (!status.success) Deno.exit(status.code);
 
 await Deno.copyFile(BUILT, OUT);
-console.log(`[build_wasm] ${(await Deno.stat(OUT)).size} bytes -> src/wasm/pxl.wasm`);
+console.log(`[build_wasm] ${(await Deno.stat(OUT)).size} bytes -> src/wasm/kernel.wasm`);

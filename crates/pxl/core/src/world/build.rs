@@ -17,6 +17,10 @@
 
 use std::collections::BTreeMap;
 
+/// Chunks held at once: the mount radius and its hysteresis cover about
+/// three thousand, and the glue's own chunks come on top.
+pub const MAX_CHUNKS: usize = 4096;
+
 use crate::bake::mesher::{mesh_words, BakeContext, Step};
 use crate::bake::run_set::RunSet;
 use crate::bake::scan::{BandView, ScanContext, ScanStep};
@@ -51,6 +55,7 @@ pub struct PageLanes {
     pub ele: usize,
 }
 
+#[derive(Clone, Copy)]
 struct Runs {
     at: usize,
     bytes: u32,
@@ -59,6 +64,7 @@ struct Runs {
     direct: bool,
 }
 
+#[derive(Clone, Copy)]
 struct Chunk {
     /// The column's base, the key the object store files it under.
     base: u64,

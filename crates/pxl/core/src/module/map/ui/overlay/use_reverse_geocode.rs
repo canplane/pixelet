@@ -14,8 +14,8 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 use crate::global::{now, Global};
 use crate::module::map::store::use_map_store;
-use crate::module::world::geocode::label::assemble_label;
-use crate::module::world::geocode::repository::{parse_geocode, GeocodePart};
+use crate::module::world::geocode::label::{assemble_label, Label};
+use crate::module::world::geocode::repository::{parse_geocode, PartTable, Rows};
 use crate::module::world::sched::demand::Demand;
 use crate::module::world::sched::fetch_scheduler::{fetch_sync, page_key};
 
@@ -30,8 +30,15 @@ pub const CATEGORY: &str = "geocode";
 // only ever one of it in flight.
 const PRIORITY: f64 = -5.0;
 
+/// What one answer can hold: a division chain is a handful of parts, each
+/// with its translations.
+const PARTS: usize = 32;
+const NAMES: usize = 1024;
+
 struct Geocode {
-    parts: Option<Vec<GeocodePart>>,
+    /// The last answer, read in place.
+    table: PartTable,
+    parts: Option<Rows>,
     loading: bool,
     /// The page a request has been submitted for, not the page a label was
     /// received for. It exists to stop the same page being asked about twice,
@@ -45,6 +52,7 @@ static GEOCODE: Global<Geocode> = Global::new();
 
 fn geocode() -> &'static mut Geocode {
     GEOCODE.get(|| Geocode {
+        table: PartTable::new(PARTS, NAMES),
         parts: None,
         loading: false,
         submitted_page: None,
@@ -73,7 +81,7 @@ pub fn reverse_geocode_step() {
         CATEGORY,
         &[Demand {
             key: page_key(CATEGORY, page),
-            category: CATEGORY.to_string(),
+            category: CATEGORY,
             priority: PRIORITY,
         }],
     );
@@ -83,7 +91,7 @@ pub fn reverse_geocode_step() {
 /// Divisions coverage).
 pub fn reverse_geocode_arrived(page_idx: IVec, body: Option<&str>) {
     let g = geocode();
-    g.parts = body.and_then(parse_geocode).map(|r| r.parts);
+    g.parts = body.and_then(|body| parse_geocode(&mut g.table, body));
     let _ = page_idx;
     g.loading = false;
 }
@@ -102,17 +110,17 @@ pub fn reverse_geocode_failed(page_idx: IVec, aborted: bool) {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct ReverseGeocodeResult {
-    pub label: Option<String>,
+#[derive(Clone, Debug)]
+pub struct ReverseGeocodeResult<'a> {
+    pub label: Option<Label<'a>>,
     pub loading: bool,
 }
 
 /// The label against `language`, and whether a request is in flight.
-pub fn use_reverse_geocode(language: &str) -> ReverseGeocodeResult {
-    let g = geocode();
+pub fn use_reverse_geocode(language: &str) -> ReverseGeocodeResult<'static> {
+    let g: &'static _ = geocode();
     ReverseGeocodeResult {
-        label: g.parts.as_ref().map(|parts| assemble_label(parts, language)),
+        label: g.parts.map(|parts| assemble_label(&g.table, parts, language)),
         loading: g.loading,
     }
 }

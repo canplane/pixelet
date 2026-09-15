@@ -4,7 +4,7 @@
 //! them for the shell (`__APP_ENV__`, `virtual:pxl-build`,
 //! `__PUBLISHED_TILES__`), and the shell hands them over once at boot.
 
-use super::route::{tile_base, TileKind};
+use super::route::{tile_base, TileBase, TileKind};
 use crate::global::Global;
 
 #[derive(Clone, Debug, Default)]
@@ -66,16 +66,16 @@ pub fn PUBLISHED_TILES() -> bool {
 }
 
 #[allow(non_snake_case)]
-pub fn TILE_BASE_URL() -> String {
+pub fn TILE_BASE_URL() -> TileBase {
     tile_base(TileKind::terrain, PUBLISHED_TILES())
 }
 
 #[allow(non_snake_case)]
-pub fn POI_TILE_BASE_URL() -> String {
+pub fn POI_TILE_BASE_URL() -> TileBase {
     tile_base(TileKind::poi, PUBLISHED_TILES())
 }
 
 #[allow(non_snake_case)]
-pub fn GEOCODE_TILE_BASE_URL() -> String {
+pub fn GEOCODE_TILE_BASE_URL() -> TileBase {
     tile_base(TileKind::geocode, PUBLISHED_TILES())
 }

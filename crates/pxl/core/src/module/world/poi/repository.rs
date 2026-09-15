@@ -1,24 +1,25 @@
 // pxl_core/module/world/poi/repository.rs
 
-//! A resident POI page: the packet the shell fetched, copied into a block of
-//! the core memory's page section, and the page opened over it. The lanes the
-//! index reads are views into that block, so the block lives exactly as long
-//! as the page is resident (store.rs gives it back with the page). The empty
-//! page — a 404 from the static bake, or a page with nothing on it — is one
-//! shared packet nothing releases.
+//! A resident POI page: the packet the shell fetched into the block of the
+//! page section the kernel gave its body (module/world/fetch.rs), and the page
+//! opened over it. The lanes the index reads are views into that block, so
+//! the block lives exactly as long as the page is resident (store.rs gives it
+//! back with the page). The empty page — a 404 from the static bake, or a page
+//! with nothing on it — is one shared packet nothing releases.
 //!
-//! The transport is the shell's: the pre-baked static set when one is
-//! configured, the live API otherwise, and a 404 from the static set resolves
-//! to the empty page with no extra round trip.
+//! Where a page is fetched from: the pre-baked static set when one is
+//! configured, the live API otherwise; a 404 from the static set resolves to
+//! the empty page with no extra round trip.
 
 use pxl_shared::bake::format::{encode_empty_poi_page, PoiPage};
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
 use xpute_core::sys::error::MarshalError;
 
 use crate::lib::env::config::POI_TILE_BASE_URL;
+use crate::lib::env::route::{Joined, TileBase};
 
-pub fn poi_url(key: &str) -> String {
-    format!("{}/{key}", POI_TILE_BASE_URL())
+pub fn poi_url(key: &str) -> Joined<'_, TileBase> {
+    Joined(POI_TILE_BASE_URL(), key)
 }
 
 /// A block of the page section: its address and size.
@@ -37,11 +38,11 @@ pub fn empty_page() -> Result<ResidentPoiPage, MarshalError> {
     })
 }
 
-/// Opens the page the shell copied into `block`.
+/// Opens the page fetched into the block at `at`.
 ///
 /// # Safety
-/// `block` is a block of the kernel's memory the shell holds for this page
-/// alone, `bytes` long, until the page is released.
+/// The block is one of the page section's, held for this page alone, `bytes`
+/// long, until the page is released.
 pub unsafe fn open_poi_page(at: usize, bytes: u32) -> Result<ResidentPoiPage, MarshalError> {
     // SAFETY: the caller's contract above.
     let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, bytes as usize) };

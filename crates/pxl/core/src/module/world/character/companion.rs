@@ -46,18 +46,22 @@ use crate::render::gltf::load::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
 
 /// A variant's model in the scheduler, registered once per model and height
-/// whoever asks first; None inside while it failed.
-static MODEL_HANDLES: Global<HashMap<String, Option<ModelHandle>>> = Global::new();
+/// whoever asks first; None inside while it failed. By URL, then by height's
+/// bits, so a walker asking every turn while its model is away looks up by
+/// what it already holds.
+type ModelHandles = HashMap<String, Vec<(u64, Option<ModelHandle>)>>;
+
+static MODEL_HANDLES: Global<ModelHandles> = Global::new();
 
 fn model_for(variant: &CharacterVariant) -> Option<ModelHandle> {
     let handles = MODEL_HANDLES.get(HashMap::new);
-    let key = format!("{}|{}", variant.model_url, variant.height_u);
-    if let Some(entry) = handles.get(&key) {
+    let height = variant.height_u.to_bits();
+    if let Some((_, entry)) = handles.get(variant.model_url.as_str()).and_then(|by_height| by_height.iter().find(|(h, _)| *h == height)) {
         return entry.clone();
     }
     let gltf = load_gltf(&variant.model_url)?;
     let handle = register_model(&gltf, Some(variant.height_u));
-    handles.insert(key, handle.clone());
+    handles.entry(variant.model_url.clone()).or_default().push((height, handle.clone()));
     handle
 }
 
@@ -374,7 +378,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
 /// Which skin each live companion model is drawn with: (model, image handle),
 /// for the shell's skinned pass.
-pub fn companion_skins() -> Vec<(u32, u32)> {
-    let c = COMPANION.get(|| Companion { person: None, pet: None });
-    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin)).collect()
+pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
+    let c: &'static _ = COMPANION.get(|| Companion { person: None, pet: None });
+    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
