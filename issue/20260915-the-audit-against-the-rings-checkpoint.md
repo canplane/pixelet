@@ -118,9 +118,10 @@ when its fix lands.
   `truncate` never grows (`gltf.rs:401`); a CUBICSPLINE slice panics on a
   short output (`gltf.rs:396`). The TypeScript's subarrays clamped.
   Malformed assets only.
-- **B25** `gltf.rs:193,260-274` caches accessors as `Vec<f64>`, cloned and
-  converted per read; integer casts saturate where typed arrays wrapped; a
-  JSON chunk that is not UTF-8 reads as missing (`:133,139`).
+- **B25** ~~`gltf.rs:193,260-274` caches accessors as `Vec<f64>`, cloned and
+  converted per read~~ (each accessor is read once, straight into its
+  lane's type); integer casts saturate where typed arrays wrapped; a JSON
+  chunk that is not UTF-8 reads as missing (`:133,139`).
 - **B26** `renderer.rs:867-889` resizes a surface's targets after
   `SETTLE_TURNS` turns at the new size; `renderer.ts:242-268` in the frame.
 - **B27** `render/gpu/decor.rs:98-104,116` uploads a texture per group;
@@ -138,6 +139,63 @@ when its fix lands.
   the parse.
 - **X2** `json_string` in `setting/store.rs`, `ui_store.rs` and
   `sched/trace.rs`; xpute has `Quoted`.
+
+## The heap all of it runs in
+
+Found after the audit, the first time the dev client ran on it: loading the
+models trapped over and over on an allocation failure, in `Reader::read`
+under `gltf_arrived`.
+
+The module heap is xpute's `FixedHeap` over `__heap_base` to `MODULE_BYTES`:
+32 MB less the 1 MB stack and the data, about 31 MB, in power-of-two size
+classes, a freed block reused only by a request of its own class. In the
+checkpoint it held the chunk builds' scratch and the build tables (the
+sizing comment in `pxl-wasm`'s `lib.rs` is against those). The glTF parse
+and the documents it keeps, the ledger, and the rest of what moved in with
+the client now share it.
+
+What is reserved at its worst case the first time it is touched, sizes from
+`-Zprint-type-sizes` on wasm32:
+
+| Where | Lane | Elements × bytes | Class taken |
+|---|---|---|---|
+| `ledger.rs:318-330` | frame ring | 4096 × 528 | 4 MB |
+| | task ring | 2048 × 192 | 512 KB |
+| | long frame ring | 1024 × 48 | 64 KB |
+| | worst frames | 12 × 1056 | 16 KB |
+| `world/decor.rs:158-159` | instances | 65536 × 32 | 2 MB |
+| | groups | 65536 × 2 | 128 KB |
+| `world/sched.rs:433` | slots | 4096 × 160 | 1 MB |
+| ~~`world/sched.rs:374-380`~~ | ~~tick scratch, seven lists~~ | ~~4096 × 4…32~~ | ~~224 KB~~ — and again every tick: the tick's `mem::take` made a fresh reserved one and dropped it (`sched.rs:868,947`). Empty by default now; the one put back keeps what it grew to. |
+| `world/sched.rs:443,446` | pages, gone | 1024 × 8, 4096 × 24 | 136 KB |
+
+About 8 MB. The parse read each accessor into `f64`s, kept a copy in its
+cache, cloned that copy for the read and converted the clone: 28 bytes a
+float element at the read, and 8 kept for every accessor until the parse
+ended. It reads 4 (2 for joints) now.
+
+### Measured
+
+The dev client with only the terrain fetch let out, `FixedHeap` counting the
+bytes it has handed out and, per size class, the blocks cut and held; the
+shell printing them each turn.
+
+- After boot and `WORLD_CREATE` the top is at 5.2 MB: 3.5 MB of the heap.
+- After the first turn, before any page has arrived: 26.6 MB live of 26.8 MB
+  cut, 0.2 MB idle on the free lists. What fills the heap is use, not
+  fragmentation.
+- 25 MB of it is 57 blocks: 30 of 256 KB, 25 of 512 KB, one of 1 MB, one of
+  4 MB. By their sizes (not traced to their owners one by one):
+  - the POI index, about 20 MB: two `Lanes` at `CAPACITY` 65536
+    (`poi_index.rs:73,119-136`), each eleven lanes reserved at that capacity
+    and a `SpatialHash` of nine capacity lanes over 131071 buckets, and `seen`
+    at the same capacity — the 256 KB and 512 KB blocks;
+  - the ledger's frame ring, 4096 × 528 B: the 4 MB block;
+  - the scheduler's slots, 4096 × 160 B: the 1 MB block.
+- As pages arrive, live grows about 20 KB a turn, the tick's small blocks
+  (128 B to 1 KB), with one more 512 KB and one more 1 MB block; idle stays
+  under 1 MB. After 33 turns: 28.6 MB live, the top at 31.2 MB of 32, and the
+  next large request traps.
 
 ## Read and found equal
 
