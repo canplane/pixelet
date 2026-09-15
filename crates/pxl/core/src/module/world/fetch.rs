@@ -133,7 +133,7 @@ pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), err
         }
         _ => {
             release(block);
-            (Outcome::Error, error.map(ErrorText::of))
+            (Outcome::Error, error.map(ErrorText::from))
         }
     };
     if outcome != Outcome::Ok {

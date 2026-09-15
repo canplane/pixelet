@@ -1,6 +1,5 @@
 {
   "crates/xpute/core/src/ds/fixed_heap.rs": "The module's own heap (a GlobalAlloc over a fixed range): JavaScript has a garbage collector, a WebAssembly module has this. No TypeScript to mirror.",
-  "crates/xpute/core/src/kit/text.rs": "Text written into bytes the caller holds and strings kept inline at a fixed capacity: a JavaScript string is the runtime's to allocate, a module with no heap has these. No TypeScript to mirror.",
   "crates/xpute/core/src/kit/fdlibm.rs": "JavaScript's Math builtins, as FreeBSD msun computes them, so a result is the same bits on every toolchain: the pair of a runtime global, not of a file.",
   "crates/xpute/core/src/kit/json.rs": "JSON.stringify and JSON.parse of a flat string map, the host's JSON for the records' tags, and JSON read where it lies for a module with no heap: the pair of a runtime global, not of a file.",
   "crates/xpute/core/src/sys/console.rs": "JavaScript's console global; the host installs one.",

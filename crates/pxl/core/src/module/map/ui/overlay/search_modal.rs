@@ -16,7 +16,6 @@ use crate::module::world::geocode::label::{assemble_label, primary_lang, Label};
 use crate::module::world::poi::poi_theme::resolve_poi_theme;
 use crate::module::world::sched::demand::{demand_key, Demand, DemandKey};
 use xpute_core::kit::hash::fnv1a64_str;
-use xpute_core::kit::text::FixStr;
 use crate::module::world::sched::fetch_scheduler::fetch_sync;
 use crate::module::world::search::repository::{parse_search, search_url, SearchKind, SearchTable, SearchUrl};
 
@@ -34,10 +33,7 @@ const PRIORITY: f64 = -10.0;
 
 const EARTH_RADIUS_M: f64 = 6_378_137.0;
 
-/// A query as typed, at most: what an action's text field carries.
-const QUERY_BYTES: usize = 1024;
-
-type Query = FixStr<QUERY_BYTES>;
+type Query = String;
 
 struct Search {
     query: Query,
@@ -72,7 +68,7 @@ fn search() -> &'static mut Search {
 /// flight.
 pub fn search_query(query: &str) {
     let s = search();
-    s.query.set(query);
+    s.query = query.to_string();
     s.typed_at = now();
     if query.trim().is_empty() {
         s.results.clear();
@@ -102,8 +98,8 @@ pub fn search_close() {
 /// The next query's supersedes this one, and the scheduler's yield aborts it.
 pub fn search_step() {
     let s = search();
-    let q = Query::of(s.query.trim());
-    if q.is_empty() || s.submitted == Some(q) || now() - s.typed_at < DEBOUNCE_MS {
+    let q: Query = s.query.trim().to_string();
+    if q.is_empty() || s.submitted.as_ref() == Some(&q) || now() - s.typed_at < DEBOUNCE_MS {
         return;
     }
     s.near = use_map_store().map_center.map(|c| {
@@ -210,7 +206,7 @@ impl fmt::Display for Distance {
 }
 
 /// One result as the sheet shows it, borrowed from the results.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SearchRow<'a> {
     pub gers_id: &'a str,
     pub kind: &'static str,
@@ -232,13 +228,13 @@ pub fn search_rows(language: &str, mut row: impl FnMut(SearchRow<'_>)) -> bool {
     let t = &s.results.parts;
     for divisions in [true, false] {
         for r in s.results.results().iter().filter(|r| matches!(r.kind, SearchKind::Division) == divisions) {
-            let theme = resolve_poi_theme(t.text(r.category));
+            let theme = resolve_poi_theme(&r.category);
             row(SearchRow {
-                gers_id: t.text(r.gers_id),
+                gers_id: &r.gers_id,
                 kind: if divisions { "division" } else { "poi" },
                 // A division's multilingual name against the UI language,
                 // falling back to the given name; a POI has no `common`.
-                name: t.name_in(r.common, r.name, &lang),
+                name: t.name_in(r.common, &r.name, &lang),
                 subtitle: assemble_label(t, r.context, &lang),
                 distance: s.origin.map(|o| Distance(ground_distance_m(o, (r.lon, r.lat)))),
                 icon: theme.icon,

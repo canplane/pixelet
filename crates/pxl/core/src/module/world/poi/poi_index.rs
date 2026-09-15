@@ -33,7 +33,6 @@ use xpute_core::ds::spatial_hash::SpatialHash;
 use super::poi_badge::evict_poi_badges;
 use super::store::poi_pages;
 use crate::global::{now, Global};
-use crate::memory::{FixedAlloc, FixedVec, InlineVec};
 use crate::module::world::billboard::distance_fade::fade_end_u;
 use crate::module::world::sched::tick::FrameBudget;
 use crate::module::world::terrain::elevation::with_ele;
@@ -65,7 +64,6 @@ fn page_radius() -> i64 {
 /// The widest sweep a job has room for. The reach follows the viewport's
 /// height; four pages hold a disc over four times the reference one.
 const PAGE_RADIUS_MAX: i64 = 4;
-const PAGES_MAX: usize = ((2 * PAGE_RADIUS_MAX + 1) * (2 * PAGE_RADIUS_MAX + 1)) as usize;
 
 /// Capacity is the design, not a guess at the data: a fixed ceiling is what
 /// keeps the live object count independent of how much world has been
@@ -93,27 +91,27 @@ const CELL: f64 = 640.0;
 /// in that page's lanes.
 struct Lanes {
     index: SpatialHash,
-    page_idx: FixedVec<IVec>,
-    rec: FixedVec<u32>,
+    page_idx: Vec<IVec>,
+    rec: Vec<u32>,
     /// Local render-frame position, which is what was indexed — grounded.
-    pos_x: FixedVec<f64>,
-    pos_y: FixedVec<f64>,
-    pos_z: FixedVec<f64>,
+    pos_x: Vec<f64>,
+    pos_y: Vec<f64>,
+    pos_z: Vec<f64>,
     /// 0 while this entry's terrain had not arrived when it was indexed.
     /// Indexed anyway so a query still finds it, but not drawable: the
     /// alternative is drawing it at the bake's z=0, which is underground.
-    grounded_ok: FixedVec<u8>,
+    grounded_ok: Vec<u8>,
     /// The POI's cell, as signed integers relative to the frame origin: the
     /// implicit tree. A node at tier k is `cell >> k` on each axis, so a tier
     /// change costs a shift rather than a rebuild. Integers, exact, since the
     /// frame origin is L4-aligned and every tier's span divides 4096.
-    cell_x: FixedVec<i32>,
-    cell_y: FixedVec<i32>,
-    cell_z: FixedVec<i32>,
+    cell_x: Vec<i32>,
+    cell_y: Vec<i32>,
+    cell_z: Vec<i32>,
     /// The id hash's low 32 bits as a fraction: a stable, even tie-break.
-    tiebreak: FixedVec<f64>,
+    tiebreak: Vec<f64>,
     /// The cube-ladder level the record's badge last showed, or NO_TIER.
-    tier: FixedVec<u8>,
+    tier: Vec<u8>,
     dropped: u32,
 }
 
@@ -121,18 +119,18 @@ impl Lanes {
     fn new() -> Lanes {
         let n = CAPACITY as usize;
         Lanes {
-            index: SpatialHash::new(CAPACITY, BUCKETS, CELL, Some(Box::new(FixedAlloc))),
-            page_idx: FixedVec::new(n),
-            rec: FixedVec::new(n),
-            pos_x: FixedVec::new(n),
-            pos_y: FixedVec::new(n),
-            pos_z: FixedVec::new(n),
-            grounded_ok: FixedVec::new(n),
-            cell_x: FixedVec::new(n),
-            cell_y: FixedVec::new(n),
-            cell_z: FixedVec::new(n),
-            tiebreak: FixedVec::new(n),
-            tier: FixedVec::new(n),
+            index: SpatialHash::new(CAPACITY, BUCKETS, CELL, None),
+            page_idx: Vec::with_capacity(n),
+            rec: Vec::with_capacity(n),
+            pos_x: Vec::with_capacity(n),
+            pos_y: Vec::with_capacity(n),
+            pos_z: Vec::with_capacity(n),
+            grounded_ok: Vec::with_capacity(n),
+            cell_x: Vec::with_capacity(n),
+            cell_y: Vec::with_capacity(n),
+            cell_z: Vec::with_capacity(n),
+            tiebreak: Vec::with_capacity(n),
+            tier: Vec::with_capacity(n),
             dropped: 0,
         }
     }
@@ -175,7 +173,7 @@ struct Job {
     map_origin: IVec,
     cx: f64,
     cy: f64,
-    pages: InlineVec<(IVec, i64, i64), PAGES_MAX>,
+    pages: Vec<(IVec, i64, i64)>,
     next: usize,
     rec: u32,
     built: bool,
@@ -238,7 +236,7 @@ fn index() -> &'static mut PoiIndex {
         max_wait_ms: 0.0,
         last_frames: 0,
         max_frames: 0,
-        seen: IndexedMap::new(I64Keys, CAPACITY, Some(Box::new(FixedAlloc))),
+        seen: IndexedMap::new(I64Keys, CAPACITY, None),
     })
 }
 
@@ -272,7 +270,7 @@ pub fn sync_poi_index(map_center: &PVF3, map_origin: IVec, to_local: ToLocal, fl
     }
 
     let radius = page_radius();
-    let mut pages = InlineVec::new();
+    let mut pages = Vec::new();
     for dy in -radius..=radius {
         for dx in -radius..=radius {
             pages.push((TO_XY(ivec::add(center_page, ivec::gather(dx, dy, 0))), dx, dy));

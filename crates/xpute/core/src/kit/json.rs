@@ -531,6 +531,51 @@ impl Iterator for JsonChars<'_> {
     }
 }
 
+// ============ Writing in place ============
+
+/// What `T` displays as, written as a JSON string: quoted, with a quote, a
+/// backslash and every control character escaped — `JSON.stringify(String(v))`
+/// with the control characters other than \n, \r and \t as `\u00XX`.
+#[derive(Clone, Copy, Debug)]
+pub struct Quoted<T>(pub T);
+
+impl<T: core::fmt::Display> core::fmt::Display for Quoted<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        use core::fmt::Write;
+        f.write_char('"')?;
+        let mut escape = Escape(f);
+        write!(escape, "{}", self.0)?;
+        f.write_char('"')
+    }
+}
+
+struct Escape<'a, 'b>(&'a mut core::fmt::Formatter<'b>);
+
+impl core::fmt::Write for Escape<'_, '_> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let mut plain = 0;
+        for (i, c) in s.char_indices() {
+            let escaped = match c {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                c if (c as u32) < 0x20 => "",
+                _ => continue,
+            };
+            self.0.write_str(&s[plain..i])?;
+            if escaped.is_empty() {
+                write!(self.0, "\\u{:04x}", c as u32)?;
+            } else {
+                self.0.write_str(escaped)?;
+            }
+            plain = i + c.len_utf8();
+        }
+        self.0.write_str(&s[plain..])
+    }
+}
+
 #[cfg(test)]
 #[path = "json.test.rs"]
 mod test;

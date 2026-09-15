@@ -10,7 +10,6 @@ use core::fmt;
 use xpute_core::kit::json::{read_json, JsonKind, JsonValue};
 
 use crate::lib::env::route::SEARCH_URL;
-use crate::memory::{FixedVec, Span};
 use crate::module::world::geocode::repository::{PartTable, Rows};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,14 +18,13 @@ pub enum SearchKind {
     Division,
 }
 
-/// One matched place, WGS84 lon/lat — mirrors the API's own SearchResult,
-/// its text in its table.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// One matched place, WGS84 lon/lat — mirrors the API's own SearchResult.
+#[derive(Clone, Debug, PartialEq)]
 pub struct SearchResult {
-    pub gers_id: Span,
+    pub gers_id: String,
     pub kind: SearchKind,
-    pub name: Span,
-    pub category: Span,
+    pub name: String,
+    pub category: String,
     /// Mirrors GeocodePart's own `common` — populated for a division, always
     /// empty for a POI.
     pub common: Rows,
@@ -43,20 +41,19 @@ pub struct SearchResult {
 const RESULTS: usize = 64;
 const PARTS: usize = 1024;
 const NAMES: usize = 8192;
-const TEXT_BYTES: usize = 1 << 18;
 
-/// One response read in place: its results, and the parts, names and text
-/// they hold, in lanes cleared before the next.
+/// One response: its results, and the parts and names they hold, cleared
+/// before the next.
 pub struct SearchTable {
     pub parts: PartTable,
-    results: FixedVec<SearchResult>,
+    results: Vec<SearchResult>,
 }
 
 impl SearchTable {
     pub fn new() -> SearchTable {
         SearchTable {
-            parts: PartTable::new(PARTS, NAMES, TEXT_BYTES),
-            results: FixedVec::new(RESULTS),
+            parts: PartTable::new(PARTS, NAMES),
+            results: Vec::with_capacity(RESULTS),
         }
     }
 
@@ -66,7 +63,7 @@ impl SearchTable {
     }
 
     pub fn results(&self) -> &[SearchResult] {
-        self.results.as_slice()
+        &self.results
     }
 }
 
@@ -123,17 +120,13 @@ impl fmt::Display for SearchUrl<'_> {
     }
 }
 
-/// One result as the JSON carries it; none where it does not read or the
-/// table is full.
+/// One result as the JSON carries it; none where it does not read.
 fn read_result(t: &mut PartTable, r: JsonValue) -> Option<SearchResult> {
     let (lon, lat) = (r.get("lon")?.as_f64()?, r.get("lat")?.as_f64()?);
     let kind = if r.get("kind")?.as_str()?.eq_str("division") { SearchKind::Division } else { SearchKind::Poi };
-    let gers_id = t.push_text(r.get("gers_id")?.as_str()?)?;
-    let name = t.push_text(r.get("name")?.as_str()?)?;
-    let category = match r.get("category").and_then(|c| c.as_str()) {
-        Some(c) => t.push_text(c)?,
-        None => Span::default(),
-    };
+    let gers_id = r.get("gers_id")?.as_str()?.to_string();
+    let name = r.get("name")?.as_str()?.to_string();
+    let category = r.get("category").and_then(|c| c.as_str()).map(|c| c.to_string()).unwrap_or_default();
     Some(SearchResult {
         gers_id,
         kind,
@@ -153,10 +146,11 @@ pub fn parse_search(table: &mut SearchTable, body: &str) -> bool {
     table.clear();
     let Some(root) = read_json(body).filter(|r| r.kind() == JsonKind::Array) else { return false };
     for r in root.items() {
-        let Some(result) = read_result(&mut table.parts, r) else { continue };
-        if !table.results.push(result) {
+        if table.results.len() == RESULTS {
             break;
         }
+        let Some(result) = read_result(&mut table.parts, r) else { continue };
+        table.results.push(result);
     }
     true
 }

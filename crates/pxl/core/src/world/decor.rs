@@ -14,7 +14,6 @@
 //! cells across; why, and every other rule, is the TypeScript's.
 
 use crate::bake::terrain::{ChunkSample, PageView};
-use crate::memory::FixedVec;
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 use pxl_shared::spec::space::pvf3::ivec::gather;
@@ -146,9 +145,9 @@ const DECOR_INSTANCES: usize = 1 << 16;
 /// they are laid into its block group by group: lanes of the fixed section
 /// the scheduler keeps, so a build takes nothing of its own.
 pub struct DecorScratch {
-    instances: FixedVec<Instance>,
+    instances: Vec<Instance>,
     /// The group each instance is in.
-    groups: FixedVec<u16>,
+    groups: Vec<u16>,
     counts: [u32; DECOR_GROUPS],
     group_count: usize,
 }
@@ -156,8 +155,8 @@ pub struct DecorScratch {
 impl DecorScratch {
     pub fn new() -> DecorScratch {
         DecorScratch {
-            instances: FixedVec::new(DECOR_INSTANCES),
-            groups: FixedVec::new(DECOR_INSTANCES),
+            instances: Vec::with_capacity(DECOR_INSTANCES),
+            groups: Vec::with_capacity(DECOR_INSTANCES),
             counts: [0; DECOR_GROUPS],
             group_count: 0,
         }
@@ -171,7 +170,8 @@ impl DecorScratch {
     }
 
     fn push(&mut self, group: usize, instance: Instance) {
-        if self.instances.push(instance) {
+        if self.instances.len() < DECOR_INSTANCES {
+            self.instances.push(instance);
             self.groups.push(group as u16);
             self.counts[group] += 1;
         }

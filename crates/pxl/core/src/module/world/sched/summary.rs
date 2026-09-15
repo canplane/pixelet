@@ -226,7 +226,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
             Outcome::Aborted => g.aborted += 1,
             Outcome::Error => {
                 g.error += 1;
-                let reason = rec.error.map_or_else(|| "unrecorded".to_string(), |e| e.to_string());
+                let reason = rec.error.as_deref().unwrap_or("unrecorded").to_string();
                 match g.reasons.iter_mut().find(|(r, _)| *r == reason) {
                     Some(r) => r.1 += 1,
                     None => g.reasons.push((reason, 1)),

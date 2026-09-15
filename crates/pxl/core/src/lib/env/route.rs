@@ -5,7 +5,6 @@
 use core::fmt::{self, Write};
 
 pub use pxl_shared::bake::published::{BakeKind as TileKind, PUBLISHED_VERSION};
-use xpute_core::kit::text::FixStr;
 
 /// Everything the server answers. The app routes on paths of its own, so a
 /// relay tells a deep link from a server request by this root alone.
@@ -52,7 +51,7 @@ impl<B: fmt::Display> fmt::Display for Joined<'_, B> {
 }
 
 /// A URL kept inline: every route the app has is well inside it.
-pub type Url = FixStr<256>;
+pub type Url = String;
 
 /// A content-addressed asset — a model, a texture — by its bucket key
 /// (`asset/<sha256>`, the shipped palette's `model_key`/`skin_key`). No

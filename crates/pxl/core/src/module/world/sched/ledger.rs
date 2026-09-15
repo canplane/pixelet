@@ -19,7 +19,6 @@
 use super::demand::{DemandKey, ErrorText, Phases};
 use super::tick::PHASES;
 use crate::global::{now, Global};
-use crate::memory::FixedVec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -38,7 +37,7 @@ impl Outcome {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TaskRecord {
     pub key: DemandKey,
     pub category: &'static str,
@@ -226,11 +225,15 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
 
 /// `rec` onto a lane ring past its trim; when the lane is full the records the
 /// window already dropped make room first, and past that the ring is truncated.
-fn land<T: Copy>(ring: &mut FixedVec<T>, head: &mut usize, rec: T) -> bool {
-    if ring.len() == ring.capacity() && *head > 0 {
-        ring.drain_front(core::mem::take(head));
+fn land<T>(ring: &mut Vec<T>, cap: usize, head: &mut usize, rec: T) -> bool {
+    if ring.len() == cap && *head > 0 {
+        ring.drain(..core::mem::take(head));
     }
-    ring.push(rec)
+    if ring.len() == cap {
+        return false;
+    }
+    ring.push(rec);
+    true
 }
 
 /// Live consumer for records as they land — log.rs's console stream. One sink,
@@ -288,9 +291,9 @@ pub struct RecordingState {
 }
 
 struct Ledger {
-    task_ring: FixedVec<TaskRecord>,
-    frame_ring: FixedVec<FrameSample>,
-    long_frame_ring: FixedVec<LongFrameRecord>,
+    task_ring: Vec<TaskRecord>,
+    frame_ring: Vec<FrameSample>,
+    long_frame_ring: Vec<LongFrameRecord>,
     /// Where each ring's live window starts: records before it are past the
     /// minute and wait for `trim` to drop them.
     task_head: usize,
@@ -305,16 +308,16 @@ struct Ledger {
     stopped_at: Option<f64>,
     frame_peak: FramePeak,
     /// Slowest first.
-    worst_frames: FixedVec<WorstFrame>,
+    worst_frames: Vec<WorstFrame>,
 }
 
 static LEDGER: Global<Ledger> = Global::new();
 
 fn ledger() -> &'static mut Ledger {
     LEDGER.get(|| Ledger {
-        task_ring: FixedVec::new(TASK_LIMIT),
-        frame_ring: FixedVec::new(FRAME_LIMIT),
-        long_frame_ring: FixedVec::new(LONG_FRAME_LIMIT),
+        task_ring: Vec::with_capacity(TASK_LIMIT),
+        frame_ring: Vec::with_capacity(FRAME_LIMIT),
+        long_frame_ring: Vec::with_capacity(LONG_FRAME_LIMIT),
         task_head: 0,
         frame_head: 0,
         long_frame_head: 0,
@@ -324,7 +327,7 @@ fn ledger() -> &'static mut Ledger {
         started_at: now(),
         stopped_at: None,
         frame_peak: FramePeak::default(),
-        worst_frames: FixedVec::new(WORST_CAP),
+        worst_frames: Vec::with_capacity(WORST_CAP),
     })
 }
 
@@ -383,8 +386,8 @@ pub fn ledger_record(rec: TaskRecord) {
         task(&rec);
     }
     let dropped = trim(l.task_ring.as_slice(), &mut l.task_head, rec.end_ms - WINDOW_MS, |r| r.end_ms);
-    l.task_ring.drain_front(dropped);
-    if !land(&mut l.task_ring, &mut l.task_head, rec) {
+    l.task_ring.drain(..dropped);
+    if !land(&mut l.task_ring, TASK_LIMIT, &mut l.task_head, rec) {
         l.truncated = true;
     }
 }
@@ -440,8 +443,8 @@ pub fn ledger_record_frame(s: FrameSample) {
         frame(&s);
     }
     let dropped = trim(l.frame_ring.as_slice(), &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
-    l.frame_ring.drain_front(dropped);
-    if !land(&mut l.frame_ring, &mut l.frame_head, s) {
+    l.frame_ring.drain(..dropped);
+    if !land(&mut l.frame_ring, FRAME_LIMIT, &mut l.frame_head, s) {
         l.truncated = true;
     }
 }
@@ -454,8 +457,8 @@ pub fn ledger_record_long_frame(rec: LongFrameRecord) {
         return;
     }
     let dropped = trim(l.long_frame_ring.as_slice(), &mut l.long_frame_head, rec.t - WINDOW_MS, |r| r.t);
-    l.long_frame_ring.drain_front(dropped);
-    if !land(&mut l.long_frame_ring, &mut l.long_frame_head, rec) {
+    l.long_frame_ring.drain(..dropped);
+    if !land(&mut l.long_frame_ring, LONG_FRAME_LIMIT, &mut l.long_frame_head, rec) {
         l.truncated = true;
         return;
     }

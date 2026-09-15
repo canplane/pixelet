@@ -12,14 +12,13 @@ use pxl_shared::spec::cell::decor_ids;
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
-use xpute_core::kit::text::Quoted;
+use xpute_core::kit::json::Quoted;
 
 use crate::app::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::app::setting::store::use_settings_store;
 use crate::app::store::ui_store::{use_ui_store, ActiveTool, RecentPick};
 use crate::global::Global;
 use xpute_core::kit::json::{read_json, JsonValue};
-use xpute_core::kit::text::FixStr;
 use crate::module::camera::store::{use_camera_store, CameraStatus};
 use crate::module::device::pose::store::{use_device_location_store, use_device_orientation_store, DevicePoseStatus};
 use crate::module::device::pose::use_device_orientation::{orientation_subscribe, orientation_unsubscribe, request_orientation, OrientationPlatform};
@@ -124,7 +123,7 @@ fn search_row_json<W: Write>(out: &mut W, first: bool, r: &SearchRow) -> fmt::Re
         Quoted(r.gers_id),
         Quoted(r.kind),
         Quoted(r.name),
-        Quoted(r.subtitle),
+        Quoted(&r.subtitle),
         Or(r.distance.map(Quoted)),
         Quoted(r.icon),
         Quoted(r.color),
@@ -247,13 +246,10 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     write!(out, "\"report\":{}}}", Or(shell().report.take().as_deref().map(Quoted)))
 }
 
-/// A string field of an action, its escapes decoded into a string of `N`
-/// bytes on the stack; none where it is missing, not a string, or longer.
-fn text_of<const N: usize>(action: &JsonValue, key: &str) -> Option<FixStr<N>> {
-    let s = action.get(key)?.as_str()?;
-    let mut out = FixStr::new();
-    write!(out, "{s}").ok()?;
-    Some(out)
+/// A string field of an action, its escapes decoded; none where it is
+/// missing or not a string.
+fn text_of(action: &JsonValue, key: &str) -> Option<String> {
+    Some(action.get(key)?.as_str()?.to_string())
 }
 
 fn f64_of(action: &JsonValue, key: &str) -> Option<f64> {
@@ -299,10 +295,10 @@ fn tracking_action() {
 /// not read.
 pub fn ui_action(text: &str) -> bool {
     let Some(action) = read_json(text) else { return false };
-    let Some(kind) = text_of::<64>(&action, "type") else { return false };
+    let Some(kind) = text_of(&action, "type") else { return false };
     match kind.as_str() {
         "set_setting" => {
-            let (Some(key), Some(value)) = (text_of::<64>(&action, "key"), action.get("value")) else { return false };
+            let (Some(key), Some(value)) = (text_of(&action, "key"), action.get("value")) else { return false };
             let value = match (value.as_bool(), value.as_str()) {
                 (Some(b), _) => SettingValue::Toggle(b),
                 (_, Some(s)) => SettingValue::Text(s.to_string()),
@@ -311,11 +307,11 @@ pub fn ui_action(text: &str) -> bool {
             use_settings_store().set_setting(&key, value);
         }
         "toggle_setting" => {
-            let Some(key) = text_of::<64>(&action, "key") else { return false };
+            let Some(key) = text_of(&action, "key") else { return false };
             use_settings_store().toggle_setting(&key);
         }
         "set_active_tool" => {
-            let Some(tool) = text_of::<64>(&action, "tool").and_then(|t| active_tool_of(&t)) else { return false };
+            let Some(tool) = text_of(&action, "tool").and_then(|t| active_tool_of(&t)) else { return false };
             use_ui_store().set_active_tool(tool);
         }
         "set_object_size" => {
@@ -323,15 +319,15 @@ pub fn ui_action(text: &str) -> bool {
             use_ui_store().set_object_size(size);
         }
         "select_cube" => {
-            let Some(id) = text_of::<64>(&action, "id") else { return false };
+            let Some(id) = text_of(&action, "id") else { return false };
             use_ui_store().select_cube(&id);
         }
         "select_decor" => {
-            let Some(id) = text_of::<64>(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else { return false };
+            let Some(id) = text_of(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else { return false };
             use_ui_store().select_decor(id);
         }
         "append_chat_line" => {
-            let Some(text) = text_of::<1024>(&action, "text") else { return false };
+            let Some(text) = text_of(&action, "text") else { return false };
             use_ui_store().append_chat_line(&text);
         }
         "set_is_follow_mode" => {
@@ -358,7 +354,7 @@ pub fn ui_action(text: &str) -> bool {
             shell().go_to = (grounded == target).then_some(target);
         }
         "set_language" => {
-            let Some(lang) = text_of::<64>(&action, "lang") else { return false };
+            let Some(lang) = text_of(&action, "lang") else { return false };
             shell().language = lang.to_string();
         }
         "enable_sensors" => {
@@ -387,7 +383,7 @@ pub fn ui_action(text: &str) -> bool {
             orientation_unsubscribe();
         }
         "preview_open" => {
-            let (Some(id), Some(key)) = (f64_of(&action, "id"), text_of::<64>(&action, "key")) else { return false };
+            let (Some(id), Some(key)) = (f64_of(&action, "id"), text_of(&action, "key")) else { return false };
             if !preview_open(id as u32, &key) {
                 return false;
             }
@@ -397,7 +393,7 @@ pub fn ui_action(text: &str) -> bool {
             preview_close(id as u32);
         }
         "search_query" => {
-            let Some(query) = text_of::<1024>(&action, "query") else { return false };
+            let Some(query) = text_of(&action, "query") else { return false };
             search_query(&query);
         }
         "search_close" => search_close(),

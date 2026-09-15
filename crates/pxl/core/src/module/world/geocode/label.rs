@@ -7,7 +7,6 @@
 
 use core::fmt;
 
-use xpute_core::kit::text::FixStr;
 
 use super::repository::{PartTable, Rows};
 
@@ -20,8 +19,8 @@ const BROAD_TO_NARROW_LANGS: [&str; 3] = ["ko", "ja", "zh"];
 
 /// A language tag's primary subtag, lowercased: "ko-KR" reads as "ko". The
 /// tags are ASCII (BCP 47), and none the UI has is longer than a few letters.
-pub fn primary_lang(language: &str) -> FixStr<8> {
-    let mut lang = FixStr::new();
+pub fn primary_lang(language: &str) -> String {
+    let mut lang = String::new();
     for c in language.split('-').next().unwrap_or("").chars() {
         lang.push(c.to_ascii_lowercase());
     }
@@ -32,11 +31,11 @@ pub fn primary_lang(language: &str) -> FixStr<8> {
 /// language (typically the UI language), written where it is displayed — the
 /// join order and separator flip per BROAD_TO_NARROW_LANGS, the per-part name
 /// resolves against the language regardless.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Label<'a> {
     table: &'a PartTable,
     parts: Rows,
-    lang: FixStr<8>,
+    lang: String,
 }
 
 pub fn assemble_label<'a>(table: &'a PartTable, parts: Rows, language: &str) -> Label<'a> {

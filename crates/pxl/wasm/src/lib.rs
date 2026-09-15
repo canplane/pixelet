@@ -34,7 +34,6 @@ use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
 use xpute_core::kit::array::ArrayBuffer;
 use xpute_core::kit::array::U8Array;
-use xpute_core::kit::text::Text;
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
 
@@ -320,13 +319,6 @@ unsafe impl<const N: usize> Sync for Scratch<N> {}
 /// command's result once it is known.
 static REPLY: Scratch<REPLY_BYTES> = Scratch(core::cell::UnsafeCell::new([0; REPLY_BYTES]));
 
-/// Bytes the UI snapshot may take: a search's rows and a ledger report are
-/// the most of it.
-const SNAPSHOT_BYTES: usize = 1 << 18;
-
-/// Where the UI snapshot is written each turn, to be compared and posted.
-static SNAPSHOT: Scratch<SNAPSHOT_BYTES> = Scratch(core::cell::UnsafeCell::new([0; SNAPSHOT_BYTES]));
-
 /// A reply's packet of `count` children written by `f` into the reply
 /// scratch: its length, for `apply` to answer with.
 fn reply(count: u32, f: impl FnOnce(&mut PacketWriter)) -> Option<u32> {
@@ -495,9 +487,8 @@ fn post_shell(s: &mut State) {
             e.str(Some(line.as_str()));
         });
     }
-    // SAFETY: see Scratch.
-    let mut text = Text::new(unsafe { &mut *SNAPSHOT.0.get() });
-    pxl_core::app::shell::ui_snapshot_json(&mut text).expect("a UI snapshot larger than its scratch");
+    let mut text = String::new();
+    pxl_core::app::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
     let ui = text.as_str();
     let hash = xpute_core::kit::hash::fnv1a64_str(ui);
     if hash != s.snapshot {

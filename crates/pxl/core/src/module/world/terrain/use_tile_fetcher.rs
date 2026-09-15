@@ -18,14 +18,10 @@ use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::{use_map_store, MapStatus};
 use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
-use crate::memory::InlineVec;
 use crate::module::world::sched::demand::{demand_key, Demand};
 use crate::module::world::sched::fetch_scheduler::{fetch_pending_count, fetch_revision, fetch_running, fetch_sync, page_key};
 
 pub const CATEGORY: &str = "terrain";
-
-/// A wishlist, or an eviction, at most: the scheduler holds fewer demands.
-const DEMANDS: usize = 256;
 
 // The device's own page, when it's outside the fetch range, still has to load
 // so the user marker can ground itself — but it's genuinely far, so it queues
@@ -40,9 +36,9 @@ const OCEAN_RETRY_MS: f64 = 2_000.0;
 /// set, nearest first, plus the device page when it falls outside that set.
 /// The scheduler dedups against what it already holds, so this is rebuilt in
 /// full on every run.
-fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> InlineVec<Demand, DEMANDS> {
+fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> Vec<Demand> {
     let store = use_tile_store();
-    let mut demands = InlineVec::new();
+    let mut demands = Vec::new();
     let mut add = |page_idx: IVec, priority: f64| {
         if store.get_tile(page_idx).is_some() {
             return;
@@ -83,7 +79,7 @@ fn cleanup_far_tiles(anchor: IVec, pinned_page_idx: Option<IVec>) {
     ocean_retain(|p| Some(p) == pinned_page_idx || holds(p));
     // Collected first: clearing moves the table's last page into the hole.
     // What a run leaves uncollected, the next one takes.
-    let mut evict: InlineVec<IVec, DEMANDS> = InlineVec::new();
+    let mut evict: Vec<IVec> = Vec::new();
     evict.extend(tile_pages().keys().filter(|&p| Some(p) != pinned_page_idx && !holds(p)));
     for page_idx in evict {
         release_terrain(page_idx, QUARANTINE_MS);

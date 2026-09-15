@@ -11,7 +11,7 @@ use crate::module::world::sched::ledger::{ledger_recording_start, ledger_snapsho
 
 fn d(key: &str, category: &'static str, priority: f64) -> Demand {
     Demand {
-        key: DemandKey::of(key),
+        key: DemandKey::from(key),
         category,
         priority,
     }
@@ -47,8 +47,8 @@ fn fetch_scheduler_a_started_demand_goes_out_under_the_name_and_category_it_was_
     fetch_sync("search", std::slice::from_ref(&x));
     fetch_pump();
     let mut out = Vec::new();
-    fetch_take_started(|d| out.push(*d));
-    assert_eq!(out, vec![x]);
+    fetch_take_started(|d| out.push(d.clone()));
+    assert_eq!(out, vec![x.clone()]);
     fetch_settle(&x.key, Outcome::Ok, None, None);
     assert_eq!(fetch_pending_count("search"), 0);
 }
@@ -69,7 +69,7 @@ fn fetch_scheduler_starts_no_more_than_the_credits_the_central_scheduler_granted
 fn fetch_scheduler_an_aborted_demand_goes_out_under_its_name_and_settles_under_it() {
     let _g = fresh();
     let (keep, drop) = (d("yield:keep", "yield", 0.0), d("yield:drop", "yield", 1.0));
-    fetch_sync("yield", &[keep, drop]);
+    fetch_sync("yield", &[keep.clone(), drop.clone()]);
     assert_eq!(started().len(), 2);
     fetch_sync("yield", std::slice::from_ref(&keep));
     assert_eq!(aborts(), vec![drop.key.to_string()]);
@@ -85,7 +85,7 @@ fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     ledger_recording_start();
     let cat = "ledger";
     let (done, killed) = (d("ledger:ok", cat, 0.0), d("ledger:killed", cat, 1.0));
-    fetch_sync(cat, &[done, killed]);
+    fetch_sync(cat, &[done.clone(), killed.clone()]);
     started();
     fetch_settle(&done.key, Outcome::Ok, None, None);
     fetch_sync(cat, std::slice::from_ref(&done)); // drops `killed`

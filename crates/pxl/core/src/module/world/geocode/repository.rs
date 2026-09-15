@@ -6,18 +6,15 @@
 //! failure, so a 404 resolves straight to none. Reverse geocoding is
 //! page-keyed like everything else this app bakes, not per exact coordinate.
 //!
-//! A response is read where it lies into a table of lanes — parts, their
-//! names and the text of both — cleared before the next, so an answer builds
-//! nothing on a heap.
+//! A response is read into a table — parts and their names — cleared before
+//! the next.
 
 use core::ops::Range;
 
 use xpute_core::kit::json::{read_json, JsonKind, JsonValue};
-use xpute_core::kit::text::FixStr;
 
 use crate::lib::env::config::GEOCODE_TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
-use crate::memory::{FixedVec, Span, TextLane};
 
 /// A run of a table's rows: the first, and how many.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -36,90 +33,73 @@ impl Rows {
 /// name is Overture's local-language `names.primary`, and `common` the rows of
 /// a language-tag-keyed subset of `names.common`, present only when Overture
 /// had a translation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GeocodePart {
-    pub name: Span,
+    pub name: String,
     pub common: Rows,
 }
 
 /// A translated name, by its language tag.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommonName {
-    pub lang: FixStr<16>,
-    pub name: Span,
+    pub lang: String,
+    pub name: String,
 }
 
-/// Parts and the names and text they hold.
+/// Parts and the names they hold.
 pub struct PartTable {
-    text: TextLane,
-    names: FixedVec<CommonName>,
-    parts: FixedVec<GeocodePart>,
+    names: Vec<CommonName>,
+    parts: Vec<GeocodePart>,
 }
 
 impl PartTable {
-    pub fn new(parts: usize, names: usize, text_bytes: usize) -> PartTable {
+    pub fn new(parts: usize, names: usize) -> PartTable {
         PartTable {
-            text: TextLane::new(text_bytes),
-            names: FixedVec::new(names),
-            parts: FixedVec::new(parts),
+            names: Vec::with_capacity(names),
+            parts: Vec::with_capacity(parts),
         }
     }
 
     pub fn clear(&mut self) {
-        self.text.clear();
         self.names.clear();
         self.parts.clear();
     }
 
-    pub fn text(&self, span: Span) -> &str {
-        self.text.get(span)
-    }
-
-    /// Text appended to the table's lane.
-    pub fn push_text(&mut self, v: impl core::fmt::Display) -> Option<Span> {
-        self.text.push(v)
-    }
-
     pub fn parts(&self, rows: Rows) -> &[GeocodePart] {
-        &self.parts.as_slice()[rows.range()]
+        &self.parts[rows.range()]
     }
 
     // Overture's own names.primary is always the local-language (Korean) form —
     // for a `lang` UI can't find in `common`, falling back to `name` means "show
     // the Korean name" rather than an empty part.
     /// The name among `common` for `lang`, else `primary`.
-    pub fn name_in(&self, common: Rows, primary: Span, lang: &str) -> &str {
-        self.names.as_slice()[common.range()].iter().find(|c| c.lang == lang).map_or(self.text(primary), |c| self.text(c.name))
+    pub fn name_in<'a>(&'a self, common: Rows, primary: &'a str, lang: &str) -> &'a str {
+        self.names[common.range()].iter().find(|c| c.lang == lang).map_or(primary, |c| c.name.as_str())
     }
 
-    pub fn name_of(&self, part: &GeocodePart, lang: &str) -> &str {
-        self.name_in(part.common, part.name, lang)
+    pub fn name_of<'a>(&'a self, part: &'a GeocodePart, lang: &str) -> &'a str {
+        self.name_in(part.common, &part.name, lang)
     }
 
-    /// A `names.common` object as rows. A tag too long to be one, or a name
-    /// past what the table holds, is left out: the primary name stands in.
+    /// A `names.common` object as rows.
     pub fn read_common(&mut self, value: Option<JsonValue>) -> Rows {
         let first = self.names.len() as u32;
         if let Some(object) = value.filter(|v| v.kind() == JsonKind::Object) {
             for (key, v) in object.fields() {
-                let mut lang = FixStr::new();
-                let (Some(s), Ok(())) = (v.as_str(), core::fmt::Write::write_fmt(&mut lang, format_args!("{key}"))) else { continue };
-                let Some(name) = self.text.push(s) else { break };
-                if !self.names.push(CommonName { lang, name }) {
-                    break;
-                }
+                let Some(s) = v.as_str() else { continue };
+                self.names.push(CommonName { lang: key.to_string(), name: s.to_string() });
             }
         }
         Rows { first, count: self.names.len() as u32 - first }
     }
 
-    /// A part as the JSON carries it; none where it does not read or the
-    /// table is full.
+    /// A part as the JSON carries it; none where it does not read.
     pub fn read_part(&mut self, value: JsonValue) -> Option<GeocodePart> {
-        let name = self.text.push(value.get("name")?.as_str()?)?;
+        let name = value.get("name")?.as_str()?.to_string();
         let common = self.read_common(value.get("common"));
         let part = GeocodePart { name, common };
-        self.parts.push(part).then_some(part)
+        self.parts.push(part.clone());
+        Some(part)
     }
 
     /// An array of parts as rows, in order; the ones that do not read left out.

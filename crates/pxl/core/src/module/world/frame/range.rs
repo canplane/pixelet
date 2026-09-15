@@ -7,7 +7,6 @@ use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
 
-use crate::memory::InlineVec;
 
 const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
@@ -113,7 +112,7 @@ pub fn pages_in_radius(anchor: IVec, radius: f64) -> Pages {
 pub const PAGES_IN_RADIUS: usize = 256;
 
 /// A set of pages, nearest first, kept inline.
-pub type Pages = InlineVec<PageAt, PAGES_IN_RADIUS>;
+pub type Pages = Vec<PageAt>;
 
 /// The pages a view holds: the nearest `count` of those whose square comes
 /// within `radius`, nearest first.

@@ -53,7 +53,7 @@ fn sched() -> &'static mut Scheduler {
         credits: 0,
         categories: [""; CATEGORIES],
         category_count: 0,
-        names: [(0, DemandKey::new()); NAMES],
+        names: core::array::from_fn(|_| (0, DemandKey::new())),
         name_count: 0,
     })
 }
@@ -80,13 +80,13 @@ fn key_of(s: &mut Scheduler, name: &DemandKey) -> Option<u64> {
     if s.name_count == NAMES {
         return None;
     }
-    s.names[s.name_count] = (key, *name);
+    s.names[s.name_count] = (key, name.clone());
     s.name_count += 1;
     Some(key)
 }
 
 fn name_of(s: &Scheduler, key: u64) -> DemandKey {
-    s.names[..s.name_count].iter().find(|(k, _)| *k == key).map(|(_, n)| *n).unwrap_or_default()
+    s.names[..s.name_count].iter().find(|(k, _)| *k == key).map(|(_, n)| n.clone()).unwrap_or_default()
 }
 
 /// The key a name is held under, only when it is that name's.
@@ -100,7 +100,7 @@ fn forget_names(s: &mut Scheduler) {
     for i in 0..s.name_count {
         let (key, _) = s.names[i];
         if s.queue.holds(key) || s.queue.aborted().contains(&key) {
-            s.names[kept] = s.names[i];
+            s.names.swap(kept, i);
             kept += 1;
         }
     }
@@ -145,15 +145,12 @@ pub fn error_reason(name: &str, message: &str) -> ErrorText {
         let digits = &message[start + 5..];
         let boundary_before = start == 0 || !bytes[start - 1].is_ascii_alphanumeric();
         if boundary_before && digits.len() >= 3 && digits.as_bytes()[..3].iter().all(u8::is_ascii_digit) && digits.as_bytes().get(3).is_none_or(|c| !c.is_ascii_alphanumeric()) {
-            out.set(&message[start..start + 8]);
-            return out;
+            return message[start..start + 8].to_string();
         }
         at = start + 5;
     }
     for c in name.chars().chain(": ".chars()).chain(message.chars()).take(80) {
-        if !out.push(c) {
-            break;
-        }
+        out.push(c);
     }
     out
 }
@@ -165,7 +162,7 @@ pub fn fetch_settle(key: &str, outcome: Outcome, phases: Option<Phases>, error: 
     // The slot may already be gone: a reset aborts and forgets in one step.
     let Some(settled) = held_key(s, key).and_then(|k| s.queue.settle(k)) else { return };
     ledger_record(TaskRecord {
-        key: DemandKey::of(key),
+        key: DemandKey::from(key),
         category: s.categories[settled.demand.category as usize],
         priority: settled.demand.priority,
         enqueue_ms: settled.enqueue_ms,

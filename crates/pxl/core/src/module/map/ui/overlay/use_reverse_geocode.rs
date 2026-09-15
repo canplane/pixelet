@@ -34,7 +34,6 @@ const PRIORITY: f64 = -5.0;
 /// with its translations.
 const PARTS: usize = 32;
 const NAMES: usize = 1024;
-const TEXT_BYTES: usize = 1 << 16;
 
 struct Geocode {
     /// The last answer, read in place.
@@ -53,7 +52,7 @@ static GEOCODE: Global<Geocode> = Global::new();
 
 fn geocode() -> &'static mut Geocode {
     GEOCODE.get(|| Geocode {
-        table: PartTable::new(PARTS, NAMES, TEXT_BYTES),
+        table: PartTable::new(PARTS, NAMES),
         parts: None,
         loading: false,
         submitted_page: None,
@@ -111,7 +110,7 @@ pub fn reverse_geocode_failed(page_idx: IVec, aborted: bool) {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ReverseGeocodeResult<'a> {
     pub label: Option<Label<'a>>,
     pub loading: bool,

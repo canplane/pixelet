@@ -14,10 +14,10 @@ fn a_search_response_is_read_into_its_table_with_each_result_s_context_and_names
     assert!(parse_search(&mut t, body));
     let r = t.results();
     assert_eq!(r.len(), 2, "a result without its point is left out");
-    assert_eq!((t.parts.text(r[0].gers_id), r[0].kind), ("a", SearchKind::Division));
-    assert_eq!(t.parts.name_in(r[0].common, r[0].name, "en"), "Seoul");
-    assert_eq!(t.parts.name_in(r[0].common, r[0].name, "ja"), "서울", "a language with no translation falls back to the name");
-    assert_eq!((t.parts.text(r[1].name), t.parts.text(r[1].category), r[1].lon), ("Cafe \"Q\"", "cafe", 127.1));
+    assert_eq!((r[0].gers_id.as_str(), r[0].kind), ("a", SearchKind::Division));
+    assert_eq!(t.parts.name_in(r[0].common, &r[0].name, "en"), "Seoul");
+    assert_eq!(t.parts.name_in(r[0].common, &r[0].name, "ja"), "서울", "a language with no translation falls back to the name");
+    assert_eq!((r[1].name.as_str(), r[1].category.as_str(), r[1].lon), ("Cafe \"Q\"", "cafe", 127.1));
     assert_eq!(assemble_label(&t.parts, r[1].context, "en-US").to_string(), "Gangnam-gu, 서울");
     assert_eq!(assemble_label(&t.parts, r[1].context, "ko").to_string(), "서울 강남구");
 

@@ -15,7 +15,7 @@
 //! A block the pool refuses leaves the work where it is until a later tick;
 //! nothing is copied to a place the core cannot see.
 
-use crate::memory::LaneMap;
+use std::collections::BTreeMap;
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
 /// three thousand, and the glue's own chunks come on top.
@@ -136,7 +136,7 @@ pub struct BuildStat {
 }
 
 pub struct Builder {
-    chunks: LaneMap<u32, Chunk>,
+    chunks: BTreeMap<u32, Chunk>,
     scan: ScanContext,
     direct: ScanContext,
     bake: BakeContext,
@@ -161,7 +161,7 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            chunks: LaneMap::new(MAX_CHUNKS),
+            chunks: BTreeMap::new(),
             scan: ScanContext::new(),
             direct: ScanContext::new(),
             bake: BakeContext::new(),

@@ -15,7 +15,7 @@
 use core::fmt::Write;
 
 use crate::bake::terrain::ChunkSample;
-use crate::memory::{FixedVec, InlineVec, LaneMap};
+use std::collections::BTreeMap;
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
 use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
 use crate::world::billboard::Billboards;
@@ -181,8 +181,6 @@ pub enum Event {
 
 /// Pages with a terrain tile at once: the resident pages, and room past them.
 const MAX_PAGES: usize = 1024;
-/// Tiers, or decor blocks, a slot holds: one a step at most.
-const STEP_SLOTS: usize = LOD_STEPS.len();
 
 #[derive(Clone, Copy, Default)]
 struct Bounds {
@@ -224,7 +222,7 @@ impl Decor {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Slot {
     id: u32,
     base_x: f64,
@@ -240,9 +238,9 @@ struct Slot {
     request: i32,
     runs_bytes: u32,
     /// The tiers the glue holds, oldest built first.
-    tiers: InlineVec<Tier, STEP_SLOTS>,
+    tiers: Vec<Tier>,
     /// The decor blocks the glue holds.
-    decor: InlineVec<Decor, STEP_SLOTS>,
+    decor: Vec<Decor>,
     layout_primary: u32,
     layout_secondary: u32,
     layout_ready: bool,
@@ -314,10 +312,10 @@ pub struct Scheduler {
     pub environment: Environment,
     /// The dev gizmos (debug.rs).
     pub debug: DebugLines,
-    slots: FixedVec<Slot>,
-    index: LaneMap<u32, usize>,
+    slots: Vec<Slot>,
+    index: BTreeMap<u32, usize>,
     /// The chunk at a base, in units, for the raycast's walk.
-    by_base: LaneMap<(i64, i64), u32>,
+    by_base: BTreeMap<(i64, i64), u32>,
     ladder: Ladder,
     recheck_elapsed: f64,
     frame: Option<Frame>,
@@ -332,12 +330,12 @@ pub struct Scheduler {
     pub census: Census,
     /// The pages with a terrain tile, which chunks are mounted from.
     /// In ascending order, which is the order chunks are mounted in.
-    pages: FixedVec<u64>,
+    pages: Vec<u64>,
     pages_revision: u32,
     /// The chunks the module mounted, by page and page-local base.
-    mounted: LaneMap<(u64, u32, u32), u32>,
+    mounted: BTreeMap<(u64, u32, u32), u32>,
     /// The mounted chunks a pass finds leaving, before they are let go.
-    gone: FixedVec<((u64, u32, u32), u32)>,
+    gone: Vec<((u64, u32, u32), u32)>,
     next_mount_id: u32,
     mounted_for: Option<([f64; 2], f64, f64, u32)>,
     /// The decor kinds, in the order the glue taught them — the order of
@@ -361,25 +359,25 @@ pub struct Scheduler {
 }
 
 struct Scratch {
-    order: FixedVec<usize>,
-    keys: FixedVec<Keyed>,
-    visible: FixedVec<usize>,
-    offscreen: FixedVec<usize>,
-    eligible: FixedVec<usize>,
-    still: FixedVec<u32>,
-    landed: FixedVec<u32>,
+    order: Vec<usize>,
+    keys: Vec<Keyed>,
+    visible: Vec<usize>,
+    offscreen: Vec<usize>,
+    eligible: Vec<usize>,
+    still: Vec<u32>,
+    landed: Vec<u32>,
 }
 
 impl Default for Scratch {
     fn default() -> Self {
         Scratch {
-            order: FixedVec::new(MAX_CHUNKS),
-            keys: FixedVec::new(MAX_CHUNKS),
-            visible: FixedVec::new(MAX_CHUNKS),
-            offscreen: FixedVec::new(MAX_CHUNKS),
-            eligible: FixedVec::new(MAX_CHUNKS),
-            still: FixedVec::new(MAX_CHUNKS),
-            landed: FixedVec::new(MAX_CHUNKS),
+            order: Vec::with_capacity(MAX_CHUNKS),
+            keys: Vec::with_capacity(MAX_CHUNKS),
+            visible: Vec::with_capacity(MAX_CHUNKS),
+            offscreen: Vec::with_capacity(MAX_CHUNKS),
+            eligible: Vec::with_capacity(MAX_CHUNKS),
+            still: Vec::with_capacity(MAX_CHUNKS),
+            landed: Vec::with_capacity(MAX_CHUNKS),
         }
     }
 }
@@ -432,9 +430,9 @@ impl Scheduler {
             decor_models: Vec::new(),
             environment: Environment::default(),
             debug: DebugLines::default(),
-            slots: FixedVec::new(MAX_CHUNKS),
-            index: LaneMap::new(MAX_CHUNKS),
-            by_base: LaneMap::new(MAX_CHUNKS),
+            slots: Vec::with_capacity(MAX_CHUNKS),
+            index: BTreeMap::new(),
+            by_base: BTreeMap::new(),
             ladder: Ladder::default(),
             recheck_elapsed: RECHECK_INTERVAL_S,
             frame: None,
@@ -442,10 +440,10 @@ impl Scheduler {
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
-            pages: FixedVec::new(MAX_PAGES),
+            pages: Vec::with_capacity(MAX_PAGES),
             pages_revision: 0,
-            mounted: LaneMap::new(MAX_CHUNKS),
-            gone: FixedVec::new(MAX_CHUNKS),
+            mounted: BTreeMap::new(),
+            gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
             mounted_for: None,
             decor_kinds: Vec::new(),
@@ -520,8 +518,8 @@ impl Scheduler {
             pending_since: -1.0,
             request: 0,
             runs_bytes: 0,
-            tiers: InlineVec::new(),
-            decor: InlineVec::new(),
+            tiers: Vec::new(),
+            decor: Vec::new(),
             layout_primary: COARSEST,
             layout_secondary: 0,
             layout_ready: false,
@@ -538,7 +536,8 @@ impl Scheduler {
         }
         self.index.insert(id, self.slots.len());
         self.by_base.insert((base_x as i64, base_y as i64), id);
-        assert!(self.slots.push(slot), "more than {MAX_CHUNKS} chunks held");
+        assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
+        self.slots.push(slot);
         self.view_dirty = true;
     }
 
@@ -629,7 +628,7 @@ impl Scheduler {
         }
         let Some(&i) = self.index.get(&id) else { return };
         let before = self.slots[i].retained();
-        for d in self.slots[i].decor.take() {
+        for d in core::mem::take(&mut self.slots[i].decor) {
             self.draw.free(d.handle);
         }
         self.account(i, before);
@@ -742,7 +741,8 @@ impl Scheduler {
     pub fn page(&mut self, page: u64, present: bool) {
         let changed = match (self.pages.binary_search(&page), present) {
             (Err(at), true) => {
-                assert!(self.pages.insert(at, page), "more than {MAX_PAGES} pages with a tile");
+                assert!(self.pages.len() < MAX_PAGES, "more than {MAX_PAGES} pages with a tile");
+                self.pages.insert(at, page);
                 true
             }
             (Ok(at), false) => {
@@ -1055,7 +1055,7 @@ impl Scheduler {
     /// Every slot in priority order (`priority`), the keys aged once rather
     /// than in the comparator.
     /// Every slot's index by priority into `idx`, the keys through `keys`.
-    fn order(&self, now: f64, idx: &mut FixedVec<usize>, keys: &mut FixedVec<Keyed>) {
+    fn order(&self, now: f64, idx: &mut Vec<usize>, keys: &mut Vec<Keyed>) {
         let holders = self.builder.holders();
         keys.clear();
         keys.extend(self.slots.iter().map(|s| {
@@ -1307,11 +1307,11 @@ impl Scheduler {
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
             let mut steps = 0;
-            for t in s.tiers.take() {
+            for t in core::mem::take(&mut s.tiers) {
                 self.draw.free(t.handle);
                 steps |= t.step;
             }
-            for d in s.decor.take() {
+            for d in core::mem::take(&mut s.decor) {
                 self.draw.free(d.handle);
                 steps |= d.step;
             }
@@ -1511,7 +1511,7 @@ fn world_mem(world: &World) -> *const u8 {
 /// Records what a build handed over on the slot it belongs to, and passes
 /// it on.
 #[allow(clippy::too_many_arguments)]
-fn self_record(slots: &mut [Slot], index: &LaneMap<u32, usize>, mem: *const u8, retained_on: &mut f64, retained_off: &mut f64, draw: &mut DrawList, e: BuildEvent, emit: &mut impl FnMut(Event)) {
+fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8, retained_on: &mut f64, retained_off: &mut f64, draw: &mut DrawList, e: BuildEvent, emit: &mut impl FnMut(Event)) {
     match e {
         BuildEvent::Tier {
             id,

@@ -18,7 +18,6 @@ use super::decor_kinds::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
 use crate::global::Global;
 use crate::kernel::kernel;
-use crate::memory::InlineVec;
 use crate::module::world::change::{bump_world, DECOR_ASSET};
 use crate::render::gltf::load::{load_failed, load_gltf, load_image, load_revision};
 use crate::render::gpu::model_asset::register_model;
@@ -26,13 +25,13 @@ use crate::render::gpu::model_asset::register_model;
 /// Variants a kind has room for; the palette's largest kind has nine.
 const VARIANTS: usize = 16;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct DecorBundleAssets {
     pub bundle: &'static DecorKindBundle,
     /// The scheduler's model a variant is, None while it loads.
-    pub models: InlineVec<Option<u32>, VARIANTS>,
+    pub models: Vec<Option<u32>>,
     /// The shell's image handle a variant is skinned with, None while it loads.
-    pub skins: InlineVec<Option<u32>, VARIANTS>,
+    pub skins: Vec<Option<u32>>,
 }
 
 struct Store {
@@ -80,9 +79,8 @@ fn store() -> &'static mut Store {
         let entry = |bundle: &'static DecorKindBundle| {
             let n = bundle.variants.len();
             assert!(n <= VARIANTS, "decor: {} has {n} variants, room for {VARIANTS}", bundle.kind);
-            let mut none = InlineVec::new();
-            none.extend((0..n).map(|_| None));
-            DecorBundleAssets { bundle, models: none, skins: none }
+            let none = vec![None; n];
+            DecorBundleAssets { bundle, models: none.clone(), skins: none }
         };
         Store {
             entries: DECOR_BUNDLES().map(entry),
