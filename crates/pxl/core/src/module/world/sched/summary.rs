@@ -8,7 +8,8 @@
 //! display did not have. Both now format what this returns, so a number on
 //! the panel and the same number in a pasted report agree.
 
-use super::ledger::{DrawCensus, FrameSample, Outcome, TaskRecord};
+use super::ledger::{DrawCensus, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
+use super::tick::PHASES;
 use super::tick::HARD_SLACK_MS;
 
 /// Percentile over an already-sorted array; 0 for an empty one.
@@ -63,7 +64,7 @@ fn spread(mut values: Vec<f64>) -> Spread {
 }
 
 /// [tag, draws, triangles], heaviest first.
-pub type CensusRow = (String, f64, f64);
+pub type CensusRow = (&'static str, f64, f64);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FrameSummary {
@@ -127,11 +128,7 @@ pub fn summarize_frames(frames: &[FrameSample]) -> Option<FrameSummary> {
         gpu: of(&|f| f.gpu_ms, &all),
         sched: of(&|f| f.sched_ms, &all),
         tick: of(&|f| f.cpu.tick_ms, &all),
-        phases: last
-            .phases
-            .iter()
-            .map(|(k, _)| (k.clone(), spread(frames.iter().map(|f| f.phases.iter().find(|(p, _)| p == k).map_or(0.0, |(_, v)| *v)).collect())))
-            .collect(),
+        phases: PHASES.iter().enumerate().map(|(k, name)| (name.to_string(), spread(frames.iter().map(|f| f.phases[k]).collect()))).collect(),
         work,
         per_s: (work.0 / seconds, work.1 / seconds),
         backlog_s,
@@ -141,32 +138,29 @@ pub fn summarize_frames(frames: &[FrameSample]) -> Option<FrameSummary> {
         pool_hit_pct: (pool_acquires > 0.0).then(|| ((pool_hits / pool_acquires) * 100.0 + 0.5).floor()),
         census: census_mean(frames),
         heap_delta: last.heap_mb - first.heap_mb,
-        last: last.clone(),
+        last: *last,
     })
 }
 
 fn census_mean(frames: &[FrameSample]) -> Vec<CensusRow> {
-    let mut sums: Vec<(String, f64, f64)> = Vec::new();
+    let mut sums: DrawCensus = Default::default();
     for f in frames {
-        for (tag, (draws, tris)) in &f.census {
-            match sums.iter_mut().find(|(t, _, _)| t == tag) {
-                Some(s) => {
-                    s.1 += draws;
-                    s.2 += tris;
-                }
-                None => sums.push((tag.clone(), *draws, *tris)),
-            }
+        for (s, (draws, tris)) in sums.iter_mut().zip(&f.census) {
+            s.0 += draws;
+            s.1 += tris;
         }
     }
-    let n = frames.len() as f64;
-    let mut rows: Vec<CensusRow> = sums.into_iter().map(|(tag, d, t)| (tag, d / n, t / n)).collect();
-    rows.sort_by(|a, b| b.2.total_cmp(&a.2));
-    rows
+    let n = frames.len().max(1) as f64;
+    for s in &mut sums {
+        *s = (s.0 / n, s.1 / n);
+    }
+    census_rows(&sums)
 }
 
-/// One census as rows, heaviest first — the last frame's, say.
+/// One census as rows, heaviest first, the pipelines that drew nothing left
+/// out — the last frame's, say.
 pub fn census_rows(census: &DrawCensus) -> Vec<CensusRow> {
-    let mut rows: Vec<CensusRow> = census.iter().map(|(tag, (d, t))| (tag.clone(), *d, *t)).collect();
+    let mut rows: Vec<CensusRow> = CENSUS_TAGS.iter().zip(census).filter(|(_, (d, _))| *d > 0.0).map(|(tag, (d, t))| (*tag, *d, *t)).collect();
     rows.sort_by(|a, b| b.2.total_cmp(&a.2));
     rows
 }
@@ -212,7 +206,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
             Some(p) => &mut by[p],
             None => {
                 by.push(Group {
-                    cat: rec.category.clone(),
+                    cat: rec.category.to_string(),
                     lat: Vec::new(),
                     ok: 0,
                     aborted: 0,
@@ -232,7 +226,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
             Outcome::Aborted => g.aborted += 1,
             Outcome::Error => {
                 g.error += 1;
-                let reason = rec.error.clone().unwrap_or_else(|| "unrecorded".to_string());
+                let reason = rec.error.map_or_else(|| "unrecorded".to_string(), |e| e.to_string());
                 match g.reasons.iter_mut().find(|(r, _)| *r == reason) {
                     Some(r) => r.1 += 1,
                     None => g.reasons.push((reason, 1)),
@@ -241,10 +235,10 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
         }
         if let Some(phases) = &rec.phases {
             g.phase_n += 1;
-            for (k, v) in phases {
+            for (k, v) in phases.iter() {
                 match g.phase_sum.iter_mut().find(|(p, _)| p == k) {
                     Some(s) => s.1 += v,
-                    None => g.phase_sum.push((k.clone(), *v)),
+                    None => g.phase_sum.push((k.to_string(), v)),
                 }
             }
         }

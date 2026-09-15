@@ -12,60 +12,62 @@
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order.
 
-use std::collections::HashMap;
-
 use xpute_core::kit::hash::fnv1a64_str;
 
 use super::decor_kinds::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
 use crate::global::Global;
 use crate::kernel::kernel;
+use crate::memory::InlineVec;
 use crate::module::world::change::{bump_world, DECOR_ASSET};
 use crate::render::gltf::load::{load_failed, load_gltf, load_image, load_revision};
-use crate::render::gpu::model_asset::{register_model, ModelHandle};
+use crate::render::gpu::model_asset::register_model;
 
-#[derive(Clone, Debug, PartialEq)]
+/// Variants a kind has room for; the palette's largest kind has nine.
+const VARIANTS: usize = 16;
+
+#[derive(Clone, Copy)]
 pub struct DecorBundleAssets {
     pub bundle: &'static DecorKindBundle,
     /// The scheduler's model a variant is, None while it loads.
-    pub models: Vec<Option<ModelHandle>>,
+    pub models: InlineVec<Option<u32>, VARIANTS>,
     /// The shell's image handle a variant is skinned with, None while it loads.
-    pub skins: Vec<Option<u32>>,
+    pub skins: InlineVec<Option<u32>, VARIANTS>,
 }
 
 struct Store {
-    /// Keyed by URL, not by variant: two kinds may name the same model or the
-    /// same skin, and both should reach one object.
-    model_by_url: HashMap<String, Option<ModelHandle>>,
-    skin_by_url: HashMap<String, Option<u32>>,
-    /// Rebuilt whole on every arrival; its revision moves with it.
-    snapshot: Vec<DecorBundleAssets>,
+    /// One entry per kind, in registry order, written in place as its
+    /// variants' assets arrive: the snapshot is the store itself.
+    entries: [DecorBundleAssets; 4],
     revision: u32,
     load_revision: u32,
 }
 
 static STORE: Global<Store> = Global::new();
 
-fn build_snapshot(s: &Store) -> Vec<DecorBundleAssets> {
-    DECOR_BUNDLES()
-        .into_iter()
-        .map(|bundle| DecorBundleAssets {
-            bundle,
-            models: bundle.variants.iter().map(|v| s.model_by_url.get(&v.model_url).cloned().flatten()).collect(),
-            skins: bundle.variants.iter().map(|v| s.skin_by_url.get(&v.skin_url).copied().flatten()).collect(),
-        })
-        .collect()
+/// Writes what arrived for `url` into every variant naming it, across every
+/// kind: two kinds may name the same model or the same skin, and both should
+/// reach one object.
+fn settle(entries: &mut [DecorBundleAssets], url: &str, value: u32, skin: bool) {
+    for entry in entries {
+        for (v, variant) in entry.bundle.variants.iter().enumerate() {
+            match skin {
+                true if variant.skin_url == url => entry.skins[v] = Some(value),
+                false if variant.model_url == url => entry.models[v] = Some(value),
+                _ => {}
+            }
+        }
+    }
 }
 
 fn publish(s: &mut Store, url: &str) {
-    s.snapshot = build_snapshot(s);
     s.revision += 1;
     // The group each variant is drawn as, told to the scheduler for its hit test.
     let mut group = 0u32;
-    for entry in &s.snapshot {
+    for entry in &s.entries {
         for model in &entry.models {
             if let Some(m) = model {
-                kernel().sched.decor_model(group, m.model);
+                kernel().sched.decor_model(group, *m);
             }
             group += 1;
         }
@@ -75,15 +77,18 @@ fn publish(s: &mut Store, url: &str) {
 
 fn store() -> &'static mut Store {
     STORE.get(|| {
-        let mut s = Store {
-            model_by_url: HashMap::new(),
-            skin_by_url: HashMap::new(),
-            snapshot: Vec::new(),
+        let entry = |bundle: &'static DecorKindBundle| {
+            let n = bundle.variants.len();
+            assert!(n <= VARIANTS, "decor: {} has {n} variants, room for {VARIANTS}", bundle.kind);
+            let mut none = InlineVec::new();
+            none.extend((0..n).map(|_| None));
+            DecorBundleAssets { bundle, models: none, skins: none }
+        };
+        Store {
+            entries: DECOR_BUNDLES().map(entry),
             revision: 0,
             load_revision: u32::MAX,
-        };
-        s.snapshot = build_snapshot(&s);
-        s
+        }
     })
 }
 
@@ -96,23 +101,19 @@ pub fn decor_asset_step() {
         return;
     }
     s.load_revision = revision;
-    for bundle in DECOR_BUNDLES() {
-        for variant in &bundle.variants {
-            if !matches!(s.model_by_url.get(&variant.model_url), Some(Some(_))) && !load_failed(&variant.model_url) {
-                if let Some(gltf) = load_gltf(&variant.model_url) {
-                    let handle = register_model(&gltf, None);
-                    s.model_by_url.insert(variant.model_url.clone(), handle);
+    for b in 0..s.entries.len() {
+        let bundle = s.entries[b].bundle;
+        for (v, variant) in bundle.variants.iter().enumerate() {
+            if s.entries[b].models[v].is_none() && !load_failed(&variant.model_url) {
+                if let Some(handle) = load_gltf(&variant.model_url).and_then(|gltf| register_model(&gltf, None)) {
+                    settle(&mut s.entries, &variant.model_url, handle.model, false);
                     publish(s, &variant.model_url);
-                } else {
-                    s.model_by_url.entry(variant.model_url.clone()).or_insert(None);
                 }
             }
-            if !matches!(s.skin_by_url.get(&variant.skin_url), Some(Some(_))) && !load_failed(&variant.skin_url) {
+            if s.entries[b].skins[v].is_none() && !load_failed(&variant.skin_url) {
                 if let Some(image) = load_image(&variant.skin_url) {
-                    s.skin_by_url.insert(variant.skin_url.clone(), Some(image));
+                    settle(&mut s.entries, &variant.skin_url, image, true);
                     publish(s, &variant.skin_url);
-                } else {
-                    s.skin_by_url.entry(variant.skin_url.clone()).or_insert(None);
                 }
             }
         }
@@ -122,7 +123,7 @@ pub fn decor_asset_step() {
 /// What is loaded right now, one entry per decor kind. A variant still in
 /// flight reads as None, which is how a consumer knows to leave it out.
 pub fn decor_bundle_assets() -> &'static [DecorBundleAssets] {
-    &store().snapshot
+    &store().entries
 }
 
 /// Moves on every arrival.

@@ -33,6 +33,7 @@ use xpute_core::ds::spatial_hash::SpatialHash;
 use super::poi_badge::evict_poi_badges;
 use super::store::poi_pages;
 use crate::global::{now, Global};
+use crate::memory::{FixedAlloc, FixedVec, InlineVec};
 use crate::module::world::billboard::distance_fade::fade_end_u;
 use crate::module::world::sched::tick::FrameBudget;
 use crate::module::world::terrain::elevation::with_ele;
@@ -58,8 +59,13 @@ const PAGE_U: f64 = L3_RANGE as f64;
 /// every resident page: sweeping all of them would put the whole resident
 /// world through a structure whose capacity is meant to be constant.
 fn page_radius() -> i64 {
-    (residency() / PAGE_U).ceil() as i64
+    ((residency() / PAGE_U).ceil() as i64).min(PAGE_RADIUS_MAX)
 }
+
+/// The widest sweep a job has room for. The reach follows the viewport's
+/// height; four pages hold a disc over four times the reference one.
+const PAGE_RADIUS_MAX: i64 = 4;
+const PAGES_MAX: usize = ((2 * PAGE_RADIUS_MAX + 1) * (2 * PAGE_RADIUS_MAX + 1)) as usize;
 
 /// Capacity is the design, not a guess at the data: a fixed ceiling is what
 /// keeps the live object count independent of how much world has been
@@ -87,28 +93,27 @@ const CELL: f64 = 640.0;
 /// in that page's lanes.
 struct Lanes {
     index: SpatialHash,
-    page_idx: Vec<IVec>,
-    rec: Vec<u32>,
+    page_idx: FixedVec<IVec>,
+    rec: FixedVec<u32>,
     /// Local render-frame position, which is what was indexed — grounded.
-    pos_x: Vec<f64>,
-    pos_y: Vec<f64>,
-    pos_z: Vec<f64>,
+    pos_x: FixedVec<f64>,
+    pos_y: FixedVec<f64>,
+    pos_z: FixedVec<f64>,
     /// 0 while this entry's terrain had not arrived when it was indexed.
     /// Indexed anyway so a query still finds it, but not drawable: the
     /// alternative is drawing it at the bake's z=0, which is underground.
-    grounded_ok: Vec<u8>,
+    grounded_ok: FixedVec<u8>,
     /// The POI's cell, as signed integers relative to the frame origin: the
     /// implicit tree. A node at tier k is `cell >> k` on each axis, so a tier
     /// change costs a shift rather than a rebuild. Integers, exact, since the
     /// frame origin is L4-aligned and every tier's span divides 4096.
-    cell_x: Vec<i32>,
-    cell_y: Vec<i32>,
-    cell_z: Vec<i32>,
+    cell_x: FixedVec<i32>,
+    cell_y: FixedVec<i32>,
+    cell_z: FixedVec<i32>,
     /// The id hash's low 32 bits as a fraction: a stable, even tie-break.
-    tiebreak: Vec<f64>,
+    tiebreak: FixedVec<f64>,
     /// The cube-ladder level the record's badge last showed, or NO_TIER.
-    tier: Vec<u8>,
-    count: u32,
+    tier: FixedVec<u8>,
     dropped: u32,
 }
 
@@ -116,21 +121,39 @@ impl Lanes {
     fn new() -> Lanes {
         let n = CAPACITY as usize;
         Lanes {
-            index: SpatialHash::new(CAPACITY, BUCKETS, CELL, None),
-            page_idx: vec![0; n],
-            rec: vec![0; n],
-            pos_x: vec![0.0; n],
-            pos_y: vec![0.0; n],
-            pos_z: vec![0.0; n],
-            grounded_ok: vec![0; n],
-            cell_x: vec![0; n],
-            cell_y: vec![0; n],
-            cell_z: vec![0; n],
-            tiebreak: vec![0.0; n],
-            tier: vec![0; n],
-            count: 0,
+            index: SpatialHash::new(CAPACITY, BUCKETS, CELL, Some(Box::new(FixedAlloc))),
+            page_idx: FixedVec::new(n),
+            rec: FixedVec::new(n),
+            pos_x: FixedVec::new(n),
+            pos_y: FixedVec::new(n),
+            pos_z: FixedVec::new(n),
+            grounded_ok: FixedVec::new(n),
+            cell_x: FixedVec::new(n),
+            cell_y: FixedVec::new(n),
+            cell_z: FixedVec::new(n),
+            tiebreak: FixedVec::new(n),
+            tier: FixedVec::new(n),
             dropped: 0,
         }
+    }
+
+    fn count(&self) -> u32 {
+        self.rec.len() as u32
+    }
+
+    fn clear(&mut self) {
+        self.page_idx.clear();
+        self.rec.clear();
+        self.pos_x.clear();
+        self.pos_y.clear();
+        self.pos_z.clear();
+        self.grounded_ok.clear();
+        self.cell_x.clear();
+        self.cell_y.clear();
+        self.cell_z.clear();
+        self.tiebreak.clear();
+        self.tier.clear();
+        self.dropped = 0;
     }
 }
 
@@ -152,7 +175,7 @@ struct Job {
     map_origin: IVec,
     cx: f64,
     cy: f64,
-    pages: Vec<(IVec, i64, i64)>,
+    pages: InlineVec<(IVec, i64, i64), PAGES_MAX>,
     next: usize,
     rec: u32,
     built: bool,
@@ -215,7 +238,7 @@ fn index() -> &'static mut PoiIndex {
         max_wait_ms: 0.0,
         last_frames: 0,
         max_frames: 0,
-        seen: IndexedMap::new(I64Keys, 1 << 12, None),
+        seen: IndexedMap::new(I64Keys, CAPACITY, Some(Box::new(FixedAlloc))),
     })
 }
 
@@ -249,7 +272,7 @@ pub fn sync_poi_index(map_center: &PVF3, map_origin: IVec, to_local: ToLocal, fl
     }
 
     let radius = page_radius();
-    let mut pages = Vec::new();
+    let mut pages = InlineVec::new();
     for dy in -radius..=radius {
         for dx in -radius..=radius {
             pages.push((TO_XY(ivec::add(center_page, ivec::gather(dx, dy, 0))), dx, dy));
@@ -277,7 +300,7 @@ pub fn sync_poi_index(map_center: &PVF3, map_origin: IVec, to_local: ToLocal, fl
         };
         gx * gx + gy * gy
     };
-    pages.sort_by(|a, b| page_gap2(a).total_cmp(&page_gap2(b)));
+    pages.sort_unstable_by(|a, b| page_gap2(a).total_cmp(&page_gap2(b)));
     let r = residency();
     x.job = Some(Job {
         pages_revision,
@@ -300,8 +323,7 @@ pub fn sync_poi_index(map_center: &PVF3, map_origin: IVec, to_local: ToLocal, fl
     // baked into both. Deduping once per rebuild rather than per tick is the
     // whole rearrangement.
     x.seen.clear();
-    x.back.count = 0;
-    x.back.dropped = 0;
+    x.back.clear();
     x.back.index.begin();
     false
 }
@@ -343,11 +365,13 @@ fn sweep_unit(x: &mut PoiIndex) {
         if x.seen.find(id_hash as i64) >= 0 {
             continue;
         }
-        x.seen.insert(id_hash as i64);
-        if lanes.count >= CAPACITY {
+        // Refused before it is seen: `seen` is sized to the capacity over an
+        // allocator that gives nothing back, so it must never have to grow.
+        if lanes.count() >= CAPACITY {
             lanes.dropped += 1;
             continue;
         }
+        x.seen.insert(id_hash as i64);
 
         // Grounded here rather than per tick, which is the whole point of doing
         // it at build time — and what makes the index isotropic: the query is a
@@ -360,26 +384,24 @@ fn sweep_unit(x: &mut PoiIndex) {
         // and its tier depends on its distance, so the snap belongs to the tick.
         let absolute = grounded.unwrap_or(flat);
         let [lx, ly, lz] = (j.to_local)(&absolute, j.map_origin);
-        if !lanes.index.insert(lanes.count, lx, ly, lz) {
+        if !lanes.index.insert(lanes.count(), lx, ly, lz) {
             lanes.dropped += 1;
             continue;
         }
 
-        let i = lanes.count as usize;
-        lanes.count += 1;
-        lanes.page_idx[i] = page_idx;
-        lanes.rec[i] = r;
-        lanes.pos_x[i] = lx;
-        lanes.pos_y[i] = ly;
-        lanes.pos_z[i] = lz;
+        lanes.page_idx.push(page_idx);
+        lanes.rec.push(r);
+        lanes.pos_x.push(lx);
+        lanes.pos_y.push(ly);
+        lanes.pos_z.push(lz);
         // Exact: both are integer lattice addresses, so this is a lattice
         // difference and not a rounded one.
-        lanes.cell_x[i] = (ivec::X(absolute.i) - ivec::X(j.map_origin)) as i32;
-        lanes.cell_y[i] = (ivec::Y(absolute.i) - ivec::Y(j.map_origin)) as i32;
-        lanes.cell_z[i] = (ivec::Z(absolute.i) - ivec::Z(j.map_origin)) as i32;
-        lanes.grounded_ok[i] = grounded.is_some() as u8;
-        lanes.tiebreak[i] = (id_hash & 0xffff_ffff) as f64 / 4_294_967_296.0;
-        lanes.tier[i] = NO_TIER as u8;
+        lanes.cell_x.push((ivec::X(absolute.i) - ivec::X(j.map_origin)) as i32);
+        lanes.cell_y.push((ivec::Y(absolute.i) - ivec::Y(j.map_origin)) as i32);
+        lanes.cell_z.push((ivec::Z(absolute.i) - ivec::Z(j.map_origin)) as i32);
+        lanes.grounded_ok.push(grounded.is_some() as u8);
+        lanes.tiebreak.push((id_hash & 0xffff_ffff) as f64 / 4_294_967_296.0);
+        lanes.tier.push(NO_TIER as u8);
     }
     j.rec = end;
     if j.rec >= pois.len {
@@ -519,7 +541,7 @@ pub fn invalidate_poi_index() {
 pub fn poi_index_stats() -> PoiIndexStats {
     let x = index();
     PoiIndexStats {
-        indexed: x.live.count,
+        indexed: x.live.count(),
         dropped: x.live.dropped,
         rebuilds: x.rebuilds,
         sweeping: x.job.as_ref().map_or(0, |j| (j.pages.len() - j.next) as u32 + if j.built { 0 } else { 1 }),

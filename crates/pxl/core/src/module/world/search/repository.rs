@@ -5,9 +5,13 @@
 //! one world feature that genuinely requires a reachable server at request
 //! time, not just at ingest/bake time. The request is the shell's.
 
-use crate::json::{parse, Json};
+use core::fmt;
+
+use xpute_core::kit::json::{read_json, JsonKind, JsonValue};
+
 use crate::lib::env::route::SEARCH_URL;
-use crate::module::world::geocode::repository::{geocode_part_of, GeocodePart};
+use crate::memory::{FixedVec, Span};
+use crate::module::world::geocode::repository::{PartTable, Rows};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchKind {
@@ -15,68 +19,148 @@ pub enum SearchKind {
     Division,
 }
 
-/// One matched place, WGS84 lon/lat — mirrors the API's own SearchResult.
-#[derive(Clone, Debug, PartialEq)]
+/// One matched place, WGS84 lon/lat — mirrors the API's own SearchResult,
+/// its text in its table.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SearchResult {
-    pub gers_id: String,
+    pub gers_id: Span,
     pub kind: SearchKind,
-    pub name: String,
-    pub category: String,
+    pub name: Span,
+    pub category: Span,
     /// Mirrors GeocodePart's own `common` — populated for a division, always
-    /// none for a POI.
-    pub common: Option<Vec<(String, String)>>,
+    /// empty for a POI.
+    pub common: Rows,
     /// The broader divisions (region/county) containing this result's own
     /// point — assembled via geocode/label.rs, same as the current-address
     /// overlay. Populated for both kinds: it is what tells two same-named
     /// results apart.
-    pub context: Vec<GeocodePart>,
+    pub context: Rows,
     pub lon: f64,
     pub lat: f64,
 }
 
-/// `URLSearchParams`' encoding of one value.
-fn form_encode(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for b in value.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => out.push(b as char),
-            b' ' => out.push('+'),
-            _ => out.push_str(&format!("%{b:02X}")),
+/// The most a response holds: the API answers at most 50.
+const RESULTS: usize = 64;
+const PARTS: usize = 1024;
+const NAMES: usize = 8192;
+const TEXT_BYTES: usize = 1 << 18;
+
+/// One response read in place: its results, and the parts, names and text
+/// they hold, in lanes cleared before the next.
+pub struct SearchTable {
+    pub parts: PartTable,
+    results: FixedVec<SearchResult>,
+}
+
+impl SearchTable {
+    pub fn new() -> SearchTable {
+        SearchTable {
+            parts: PartTable::new(PARTS, NAMES, TEXT_BYTES),
+            results: FixedVec::new(RESULTS),
         }
     }
-    out
-}
 
-/// The request's URL: the query, and the point to search near.
-pub fn search_url(query: &str, near: Option<(f64, f64)>) -> String {
-    let mut url = format!("{SEARCH_URL}?q={}", form_encode(query));
-    if let Some((lon, lat)) = near {
-        url.push_str(&format!("&near={}", form_encode(&format!("{lon},{lat}"))));
+    pub fn clear(&mut self) {
+        self.parts.clear();
+        self.results.clear();
     }
-    url
+
+    pub fn results(&self) -> &[SearchResult] {
+        self.results.as_slice()
+    }
 }
 
-/// A response body, as `res.json()` read it.
-pub fn parse_search(body: &str) -> Option<Vec<SearchResult>> {
-    let root = parse(body)?;
-    Some(
-        root.as_array()?
-            .iter()
-            .filter_map(|r| {
-                Some(SearchResult {
-                    gers_id: r.get("gers_id")?.as_str()?.to_string(),
-                    kind: if r.get("kind")?.as_str()? == "division" { SearchKind::Division } else { SearchKind::Poi },
-                    name: r.get("name")?.as_str()?.to_string(),
-                    category: r.get("category").and_then(Json::as_str).unwrap_or("").to_string(),
-                    common: r
-                        .get("common")
-                        .and_then(Json::as_object)
-                        .map(|fields| fields.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()),
-                    context: r.get("context").and_then(Json::as_array).map(|parts| parts.iter().filter_map(geocode_part_of).collect()).unwrap_or_default(),
-                    lon: r.get("lon")?.as_f64()?,
-                    lat: r.get("lat")?.as_f64()?,
-                })
-            })
-            .collect(),
-    )
+impl Default for SearchTable {
+    fn default() -> Self {
+        SearchTable::new()
+    }
 }
+
+/// `URLSearchParams`' encoding of what a value displays as, byte by byte.
+struct FormEncoded<T>(T);
+
+struct FormWrite<'a, 'b>(&'a mut fmt::Formatter<'b>);
+
+impl fmt::Write for FormWrite<'_, '_> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for b in s.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => self.0.write_char(b as char)?,
+                b' ' => self.0.write_char('+')?,
+                _ => write!(self.0, "%{b:02X}")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for FormEncoded<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use fmt::Write;
+        write!(FormWrite(f), "{}", self.0)
+    }
+}
+
+/// The request's URL: the query, and the point to search near — written
+/// where the URL is written.
+#[derive(Clone, Copy)]
+pub struct SearchUrl<'a> {
+    query: &'a str,
+    near: Option<(f64, f64)>,
+}
+
+pub fn search_url(query: &str, near: Option<(f64, f64)>) -> SearchUrl<'_> {
+    SearchUrl { query, near }
+}
+
+impl fmt::Display for SearchUrl<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{SEARCH_URL}?q={}", FormEncoded(self.query))?;
+        if let Some((lon, lat)) = self.near {
+            write!(f, "&near={}", FormEncoded(format_args!("{lon},{lat}")))?;
+        }
+        Ok(())
+    }
+}
+
+/// One result as the JSON carries it; none where it does not read or the
+/// table is full.
+fn read_result(t: &mut PartTable, r: JsonValue) -> Option<SearchResult> {
+    let (lon, lat) = (r.get("lon")?.as_f64()?, r.get("lat")?.as_f64()?);
+    let kind = if r.get("kind")?.as_str()?.eq_str("division") { SearchKind::Division } else { SearchKind::Poi };
+    let gers_id = t.push_text(r.get("gers_id")?.as_str()?)?;
+    let name = t.push_text(r.get("name")?.as_str()?)?;
+    let category = match r.get("category").and_then(|c| c.as_str()) {
+        Some(c) => t.push_text(c)?,
+        None => Span::default(),
+    };
+    Some(SearchResult {
+        gers_id,
+        kind,
+        name,
+        category,
+        common: t.read_common(r.get("common")),
+        context: t.read_parts(r.get("context")),
+        lon,
+        lat,
+    })
+}
+
+/// A response body, as `res.json()` read it, into `table` cleared first;
+/// false where it does not read. Results past what the table holds are left
+/// out.
+pub fn parse_search(table: &mut SearchTable, body: &str) -> bool {
+    table.clear();
+    let Some(root) = read_json(body).filter(|r| r.kind() == JsonKind::Array) else { return false };
+    for r in root.items() {
+        let Some(result) = read_result(&mut table.parts, r) else { continue };
+        if !table.results.push(result) {
+            break;
+        }
+    }
+    true
+}
+
+#[cfg(test)]
+#[path = "repository.test.rs"]
+mod test;

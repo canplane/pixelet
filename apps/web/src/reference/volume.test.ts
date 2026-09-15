@@ -2,9 +2,9 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { CORE_POOL } from "@/wasm/core_pool.ts";
+import { CORE_POOL } from "@/reference/core_pool.ts";
 import { alloc_chunk_volume, band_voxel_idx, get_chunk_band, L2_BAND_VOXEL_CNT, release_chunk_volume, set_chunk_voxel } from "@/reference/volume.ts";
-import { MaterialClass, NO_LAYER } from "@/render/mesh/voxel.ts";
+import { MaterialClass, NO_LAYER } from "@/reference/mesh/voxel.ts";
 
 const STONE = { material_class: MaterialClass.OBJECT, r: 9, g: 9, b: 9, layer_idx: NO_LAYER };
 

@@ -15,12 +15,12 @@ import type { Block } from "@xpute/core/ds/buddy.ts";
 import { Cmd, StepResult } from "@pxl/shared/spec/cmd.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
-import type { PxlExports } from "@/wasm/pxl.ts";
-import { CORE_RING } from "@/wasm/core_pool.ts";
+import type { KernelExports } from "@/wasm/module.ts";
+import { CORE_RING } from "@/wasm/core_memory.ts";
 import { type CoreRing, packet } from "@/wasm/core_ring.ts";
 import type { ColumnRunSet } from "@/reference/column_run.ts";
 import type { BakeContext } from "@/reference/chunk_mesher.ts";
-import { baked_mesh_bytes, type BakedChunkMesh, carve_baked_mesh } from "@/render/mesh/mesh_block.ts";
+import { baked_mesh_bytes, type BakedChunkMesh, carve_baked_mesh } from "@/reference/mesh/mesh_block.ts";
 
 /** What one bake added to its context's counters. */
 type BakeCounters = {
@@ -73,7 +73,7 @@ export class WasmBaker {
 
   /** `ctx` is where the counters go and `pool` where the meshes do — the
    * same two the stepped path bakes with. */
-  constructor(readonly pxl: PxlExports, private readonly pool: MeshPool, private readonly ctx: BakeContext) {}
+  constructor(readonly pxl: KernelExports, private readonly pool: MeshPool, private readonly ctx: BakeContext) {}
 
   is_open(): boolean {
     return this.open !== null;

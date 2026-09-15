@@ -5,7 +5,11 @@
 // whether it came from reverse geocoding a page or from a search result's own
 // `context`, so both share one answer instead of two copies drifting apart.
 
-use super::repository::GeocodePart;
+use core::fmt;
+
+use xpute_core::kit::text::FixStr;
+
+use super::repository::{PartTable, Rows};
 
 // Broad-to-narrow ("강남구 역삼1동") is a Korean/Japanese/Chinese address
 // convention, not a property of the place itself — the same pattern shows up
@@ -14,23 +18,55 @@ use super::repository::GeocodePart;
 // the server, if a future UI language needs the same convention.
 const BROAD_TO_NARROW_LANGS: [&str; 3] = ["ko", "ja", "zh"];
 
-// Overture's own names.primary is always the local-language (Korean) form —
-// for a `lang` UI can't find in `common`, falling back to `name` means "show
-// the Korean name" rather than an empty part.
-pub fn display_part_name<'a>(part: &'a GeocodePart, lang: &str) -> &'a str {
-    part.common.as_ref().and_then(|c| c.iter().find(|(k, _)| k == lang)).map_or(part.name.as_str(), |(_, v)| v.as_str())
+/// A language tag's primary subtag, lowercased: "ko-KR" reads as "ko". The
+/// tags are ASCII (BCP 47), and none the UI has is longer than a few letters.
+pub fn primary_lang(language: &str) -> FixStr<8> {
+    let mut lang = FixStr::new();
+    for c in language.split('-').next().unwrap_or("").chars() {
+        lang.push(c.to_ascii_lowercase());
+    }
+    lang
 }
 
-/// Joins a broad-to-narrow GeocodePart chain into one display string against
-/// `language` (typically the UI language) — the join order and separator flip
-/// per BROAD_TO_NARROW_LANGS, the per-part name resolves against `language`
-/// regardless.
-pub fn assemble_label(parts: &[GeocodePart], language: &str) -> String {
-    let lang = language.split('-').next().unwrap_or("").to_lowercase();
-    let names: Vec<&str> = parts.iter().map(|p| display_part_name(p, &lang)).collect();
-    if BROAD_TO_NARROW_LANGS.contains(&lang.as_str()) {
-        names.join(" ")
-    } else {
-        names.into_iter().rev().collect::<Vec<_>>().join(", ")
+/// A broad-to-narrow GeocodePart chain as one display string against a
+/// language (typically the UI language), written where it is displayed — the
+/// join order and separator flip per BROAD_TO_NARROW_LANGS, the per-part name
+/// resolves against the language regardless.
+#[derive(Clone, Copy)]
+pub struct Label<'a> {
+    table: &'a PartTable,
+    parts: Rows,
+    lang: FixStr<8>,
+}
+
+pub fn assemble_label<'a>(table: &'a PartTable, parts: Rows, language: &str) -> Label<'a> {
+    Label { table, parts, lang: primary_lang(language) }
+}
+
+impl fmt::Display for Label<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let names = self.table.parts(self.parts).iter().map(|p| self.table.name_of(p, &self.lang));
+        if BROAD_TO_NARROW_LANGS.contains(&self.lang.as_str()) {
+            for (i, name) in names.enumerate() {
+                if i > 0 {
+                    f.write_str(" ")?;
+                }
+                f.write_str(name)?;
+            }
+        } else {
+            for (i, name) in names.rev().enumerate() {
+                if i > 0 {
+                    f.write_str(", ")?;
+                }
+                f.write_str(name)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for Label<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", format_args!("{self}"))
     }
 }

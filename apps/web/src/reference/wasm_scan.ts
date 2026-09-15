@@ -15,8 +15,8 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { Block } from "@xpute/core/ds/buddy.ts";
 import { Cmd, StepResult } from "@pxl/shared/spec/cmd.ts";
 
-import type { PxlExports } from "@/wasm/pxl.ts";
-import { CORE_RING } from "@/wasm/core_pool.ts";
+import type { KernelExports } from "@/wasm/module.ts";
+import { CORE_RING } from "@/wasm/core_memory.ts";
 import { type CoreRing, packet } from "@/wasm/core_ring.ts";
 import { carve_column_run_set, type ColumnRunSet } from "@/reference/column_run.ts";
 import { type ChunkVolume, L2_BAND_CELL_SPAN } from "@/reference/volume.ts";
@@ -35,7 +35,7 @@ function ring(): CoreRing {
 
 export class WasmScanner {
   private open: WasmScanCursor | null = null;
-  constructor(private readonly pxl: PxlExports, private readonly pool: MeshPool) {}
+  constructor(private readonly pxl: KernelExports, private readonly pool: MeshPool) {}
 
   is_open(): boolean {
     return this.open !== null;

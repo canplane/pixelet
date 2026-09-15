@@ -1,16 +1,24 @@
 // @pxl/web/wasm/kernel.ts
 
 /**
- * The shell's driver of the kernel (crates/pxl/core behind crates/pxl/wasm):
- * the page's interrupts in, the kernel's asks out, and nothing decided here.
+ * The central scheduler's driver of the kernel (crates/pxl/core behind
+ * crates/pxl/wasm), and the devices it runs for it: nothing decided here.
  *
- * Each frame is the frame's turn (WORLD_UPDATE) — the effects, then the
- * tick's phases — and then what the turn asks of the shell: toasts, the
- * sensors' watches, console lines, the UI's snapshot and the models' skins
- * (WORLD_READ); the fetches to start and cancel and the page blocks to give
- * back (FETCH_READ); the models and images to load (LOAD_READ); and the
- * renderer's frame, laid out from the kernel's lanes. What arrives later — a
- * response, a sensor fix, a pointer — is sent in and asks for the next frame.
+ * Each animation frame is one strobe (WORLD_UPDATE) carrying the grant
+ * (@xpute/core/sched/quantum.ts) and the I/O credits. In that turn the kernel
+ * applies what waits on the submission ring, runs its tick, draws its
+ * canvases through the host's WebGPU (wasm/gpu.ts), and leaves on the
+ * completion ring what it asks of the host — toasts, the sensors' watches,
+ * console lines, the UI's snapshot when it changed, the fetches to start and
+ * cancel, the loads, and last the turn's report — which the host reads before
+ * the strobe returns. What arrives later — a response, a sensor fix, a
+ * pointer — is submitted and asks for the next frame.
+ *
+ * A canvas is the kernel's once handed over (`open_surface`): the page lays it
+ * out, and nothing here draws in it.
+ *
+ * A fetch is HTTP and nothing more: the kernel names the URL, gives room for
+ * the body in its own memory, and decides what the status and the bytes mean.
  *
  * The UI is a display and an interrupt source: it renders `useKernel`'s
  * snapshot and applies `kernel_action`s.
@@ -19,17 +27,17 @@
 import { useLayoutEffect, useSyncExternalStore } from "react";
 import i18next from "i18next";
 
+import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
-import type { Block } from "@xpute/core/ds/buddy.ts";
+import { Quantum } from "@xpute/core/sched/quantum.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
-import { decode_terrain, type Terrain } from "@pxl/shared/bake/format.ts";
 
-import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES, TILE_BASE_URL } from "@/lib/env/config.ts";
+import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
-import { CORE_SECTIONS, PAGE_POOL, PAGE_SECTION_BYTES } from "@/wasm/core_pool.ts";
-import { type DecorModelRow, gpu_frame, type ModelSkinRow } from "@/render/gpu/stage.tsx";
-import { KERNEL_SHEET } from "@/render/gpu/badge_sheet.ts";
+import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { acquire_device, bind_surface, register_image, unbind_surface } from "@/wasm/gpu.ts";
+import { boot_block, quantum_policy } from "@/wasm/module.ts";
 
 // ---- the snapshot the UI renders (crates/pxl/core/src/app/shell.rs) ----
 
@@ -120,12 +128,11 @@ export function useKernel<T>(select: (s: UiSnapshot) => T): T {
 
 export type KernelAction = { type: string; [key: string]: unknown };
 
-/** Applies one UI action in the kernel, and reads what it asked of the shell
- * at once — a sensor permission has to be asked inside the gesture that led
- * to it. Whether the action read. */
+/** Applies one UI action in the kernel. What it asks of the host is heard
+ * inside the call — a sensor permission has to be asked inside the gesture
+ * that led to it. Whether the action read. */
 export function kernel_action(action: KernelAction): boolean {
   const applied = CORE_BUILD.call(Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))), (result) => result === 1);
-  read_world();
   request_frame();
   return applied;
 }
@@ -149,44 +156,69 @@ function emit_toast(e: ToastEvent): void {
   for (const listener of toast_listeners) listener(e);
 }
 
-// ---- the turn ----
+// ---- what the kernel asks: the completion ring's signals ----
 
-type WorldTurn = { draw: boolean; decor: DecorModelRow[]; skins: ModelSkinRow[] };
+let last_report = { asked: false, used_ms: 0, settled: true };
 
-let last_turn: WorldTurn = { draw: false, decor: [], skins: [] };
+/** crates/pxl/wasm/src/lib.rs's sensor numbers. */
+const GEOLOCATION = 0;
 
-function read_world(): WorldTurn {
-  last_turn = CORE_BUILD.call(Cmd.WORLD_READ, null, (_, reply) => {
-    const [toasts, geo, orientation, log, draw, ui, decor, skins] = reply!.get<[BranchCursor, BranchCursor, BranchCursor, BranchCursor, boolean, string, BranchCursor, BranchCursor]>();
-    for (const t of toasts.get<BranchCursor[]>()) {
-      const [show, id, message_key, tone] = t.get<[boolean, string, string, number]>();
+function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
+  switch (cmd) {
+    case Cmd.WORLD_TOAST: {
+      const [show, id, message_key, tone] = f!.get<[boolean, string, string, number]>();
       emit_toast(show ? { show: true, id, message_key, tone } : { show: false, id });
+      return;
     }
-    for (const c of geo.get<number[]>()) geolocation_command(c);
-    for (const c of orientation.get<number[]>()) orientation_command(c);
-    for (const line of log.get<string[]>()) console.log(line);
-    set_snapshot(ui);
-    return {
-      draw,
-      decor: decor.get<BranchCursor[]>().map((r) => {
-        const [group, mesh, skin] = r.get<[number, number, number]>();
-        return { group, mesh, skin };
-      }),
-      skins: skins.get<BranchCursor[]>().map((r) => {
-        const [model, skin] = r.get<[number, number]>();
-        return { model, skin };
-      }),
-    };
-  });
-  return last_turn;
+    case Cmd.WORLD_LOG:
+      console.log(f!.at(0).get<string>());
+      return;
+    case Cmd.WORLD_SNAPSHOT:
+      set_snapshot(f!.at(0).get<string>());
+      return;
+    case Cmd.WORLD_UPDATE: {
+      const [asked, used_ms, settled] = f!.get<[boolean, number, boolean]>();
+      last_report = { asked, used_ms, settled };
+      return;
+    }
+    case Cmd.SENSOR_CREATE:
+      if (f!.at(0).get<number>() === GEOLOCATION) geolocation_start();
+      else orientation_listen();
+      return;
+    case Cmd.SENSOR_DELETE:
+      if (f!.at(0).get<number>() === GEOLOCATION) geolocation_stop();
+      else orientation_remove();
+      return;
+    case Cmd.SENSOR_PERMISSION:
+      orientation_request_permission();
+      return;
+    case Cmd.FETCH_CREATE: {
+      const [key, url] = f!.get<[string, string]>();
+      void run_fetch(key, url);
+      return;
+    }
+    case Cmd.FETCH_DELETE:
+      running.get(f!.at(0).get<string>())?.abort();
+      return;
+    case Cmd.LOAD_CREATE: {
+      const [kind, url] = f!.get<[number, string]>();
+      void (kind === 0 ? load_model(url) : load_image(url));
+      return;
+    }
+  }
+  console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
+
+CORE_BUILD.shell = on_signal;
+
+// ---- the turn ----
 
 type Driver = { element: HTMLElement; last: number };
 
 let driver: Driver | null = null;
 let pending = 0;
 
-/** Asks for a frame: the next animation frame runs the kernel's turn. */
+/** Asks for a frame: the next animation frame strobes the kernel. */
 export function request_frame(): void {
   if (pending || driver === null) return;
   pending = requestAnimationFrame(frame);
@@ -203,10 +235,18 @@ function orientation_needs_permission(): boolean {
   return orientation_supported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
 }
 
-/** The canvas's resolution: the device's pixels, clamped to [1, 2]. */
 function dpr(): number {
-  return Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
+  return globalThis.devicePixelRatio || 1;
 }
+
+/** The central scheduler's grant for each of the kernel's turns, sized by
+ * the quantum the kernel declared at boot. */
+const quantum = new Quantum(quantum_policy(boot_block(CORE_KERNEL)));
+
+/** Fetches the kernel may have in flight at once: a browser opens about six
+ * connections to an origin, and matching that keeps the kernel's queue — not
+ * the socket pool — as what orders the work. */
+const NET_CREDITS = 6;
 
 function frame(now: number): void {
   pending = 0;
@@ -216,174 +256,113 @@ function frame(now: number): void {
   d.last = now;
   const width = Math.max(1, d.element.clientWidth);
   const height = Math.max(1, d.element.clientHeight);
-  const asked = CORE_BUILD.call(
+  const grant = quantum.grant();
+  const t0 = performance.now();
+  CORE_BUILD.strobe(
     Cmd.WORLD_UPDATE,
-    packet((b) => b.f64(width).f64(height).f64(dpr()).f64(delta).bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())),
-    (result) => result === 1,
+    packet((b) =>
+      b.f64(width).f64(height).f64(dpr()).f64(delta).bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
+        .f64(grant.slice_ms).f64(grant.batch_ms).f64(grant.frame_ms).u32(NET_CREDITS)
+    ),
   );
-  const turn = read_world();
-  run_fetches();
-  run_loads();
-  gpu_frame(dpr(), KERNEL_SHEET, turn.decor, turn.skins, image_of);
-  if (asked || turn.draw) request_frame();
+  quantum.observe({ delta_s: delta, turn_ms: performance.now() - t0, used_ms: last_report.used_ms, interactive: !last_report.settled });
+  if (last_report.asked) request_frame();
 }
 
-// ---- fetches (crates/pxl/core/src/module/world/sched/fetch_scheduler.rs) ----
+// ---- surfaces: the canvases the kernel draws (crates/pxl/core/src/render/gpu/surface.rs) ----
+
+/** What a surface shows: surface.rs's ROLE_WORLD and ROLE_CASE. */
+export const SURFACE_WORLD = 0;
+export const SURFACE_CASE = 1;
+
+export type OpenSurface = { handle: u32; close: () => void };
+
+/** Hands `canvas` to the kernel to draw `role` into, and follows its layout
+ * box in device pixels. The handle is 0 when the kernel has no surface left,
+ * and then nothing is drawn in it.
+ *
+ * The box is the layout's, not the bounding rectangle: a rectangle includes
+ * transforms, so a canvas mounted inside a drawer that is sliding or scaling in
+ * would report a size it only passes through, and no resize follows a
+ * transform. Where the observer reports device pixels they are exact; where it
+ * does not (Safari), the CSS box times the pixel ratio stands in, and a zoom —
+ * which changes the ratio and not the box — is caught by the window's resize. */
+export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface {
+  const handle = CORE_BUILD.call(Cmd.SURFACE_CREATE, packet((b) => b.u32(role)), (result) => result >>> 0);
+  if (handle === 0) return { handle, close: () => {} };
+  bind_surface(handle, canvas);
+  const send = (width: number, height: number) => {
+    CORE_BUILD.send(0, Cmd.SURFACE_UPDATE, packet((b) => b.u32(handle).u32(width).u32(height).f64(dpr())));
+    request_frame();
+  };
+  const send_box = () => send(Math.round(canvas.clientWidth * dpr()), Math.round(canvas.clientHeight * dpr()));
+  const observer = new ResizeObserver((entries) => {
+    const entry = entries[entries.length - 1];
+    const exact = entry.devicePixelContentBoxSize?.[0];
+    if (exact) send(exact.inlineSize, exact.blockSize);
+    else send_box();
+  });
+  try {
+    observer.observe(canvas, { box: "device-pixel-content-box" });
+  } catch {
+    observer.observe(canvas);
+  }
+  globalThis.addEventListener("resize", send_box);
+  return {
+    handle,
+    close: () => {
+      globalThis.removeEventListener("resize", send_box);
+      observer.disconnect();
+      CORE_BUILD.call(Cmd.SURFACE_DELETE, packet((b) => b.u32(handle)), (result) => result);
+      unbind_surface(handle);
+    },
+  };
+}
+
+// ---- fetches: HTTP for the kernel (crates/pxl/core/src/module/world/fetch.rs) ----
 
 const running = new Map<string, AbortController>();
 
-type TerrainAt = { lanes: [number, number, number, number, number]; blocks: Block[] };
-
-function copy_lane(src: ArrayBufferView, blocks: Block[]): number {
-  const block = PAGE_POOL.acquire(src.byteLength);
-  blocks.push(block);
-  new Uint8Array(block.buf, block.byte_offset, src.byteLength).set(new Uint8Array(src.buffer, src.byteOffset, src.byteLength));
-  return block.byte_offset;
-}
-
-/** A decoded page copied into the page section, lane by lane: the response
- * is dropped and one memory holds the kernel's data. */
-function copy_terrain(src: Terrain): TerrainAt {
-  const blocks: Block[] = [];
-  const g = src.ground;
-  const lanes: TerrainAt["lanes"] = [copy_lane(g.land, blocks), copy_lane(g.water, blocks), copy_lane(g.structure, blocks), copy_lane(g.transport, blocks), copy_lane(src.ele, blocks)];
-  return { lanes, blocks };
-}
-
-function send_terrain(page: bigint, t: TerrainAt, own: boolean): void {
-  const [land, water, structure, transport, ele] = t.lanes;
-  CORE_BUILD.send(
-    0,
-    Cmd.PAGE_TERRAIN,
-    packet((b) =>
-      b.u64(BigInt.asUintN(64, page)).u32(land).u32(water).u32(structure).u32(transport).u32(ele)
-        .branch((bs) => {
-          for (const block of t.blocks) bs.branch((e) => e.u32(block.byte_offset).u32(block.bytes));
-        })
-        .bool(own)
-    ),
-  );
-}
-
-/** The one shared open-ocean page: a 404 from the published bake means
- * "nothing but water here", and every such page aliases one copy that no page
- * owns. A failure is not cached, so a transient error does not poison every
- * ocean page for the session. */
-let ocean: Promise<TerrainAt> | null = null;
-
-function ocean_terrain(): Promise<TerrainAt> {
-  ocean ??= fetch(`${TILE_BASE_URL}/_ocean`)
-    .then(async (res) => {
-      if (!res.ok) throw new Error(`[tile/_ocean] http ${res.status}`);
-      return copy_terrain(decode_terrain(new Uint8Array(await res.arrayBuffer())));
-    })
-    .catch((err) => {
-      ocean = null;
-      throw err;
-    });
-  return ocean;
-}
-
-function release_blocks(blocks: readonly Block[]): void {
-  for (const block of blocks) PAGE_POOL.release(block);
-}
-
-async function run_demand(key: string, category: string, url: string): Promise<void> {
+/** Runs one fetch the kernel started: the response's bytes written into the
+ * room the kernel gives them, and the status reported. */
+async function run_fetch(key: string, url: string): Promise<void> {
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
-  const subject = key.slice(key.indexOf(":") + 1);
-  const page = category === "search" ? 0n : BigInt(subject);
-  const phases: [string, number][] = [];
   let outcome = 0;
+  let status = 0;
+  let at = 0;
+  let bytes = 0;
   let error: string | null = null;
+  let net_ms = 0;
   try {
     const t0 = performance.now();
     const res = await fetch(url, { signal });
-    if (category === "terrain") {
-      if (res.status === 404 && PUBLISHED_TILES) {
-        const t = await ocean_terrain();
-        send_terrain(page, { lanes: t.lanes, blocks: [] }, false);
-      } else {
-        if (!res.ok) throw new Error(`[tile/${page}] http ${res.status}`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        const t1 = performance.now();
-        const decoded = decode_terrain(bytes);
-        const t2 = performance.now();
-        const t = copy_terrain(decoded);
-        phases.push(["net_ms", t1 - t0], ["decode_ms", t2 - t1], ["adopt_ms", performance.now() - t2], ["bytes", bytes.byteLength]);
-        if (signal.aborted) release_blocks(t.blocks);
-        else send_terrain(page, t, true);
-      }
-    } else if (category === "poi") {
-      if (res.status === 404 && PUBLISHED_TILES) {
-        CORE_BUILD.send(0, Cmd.PAGE_POI, packet((b) => b.u64(BigInt.asUintN(64, page)).branch(null)));
-      } else {
-        if (!res.ok) throw new Error(`[poi/${page}] http ${res.status}`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        const t1 = performance.now();
-        const block = PAGE_POOL.acquire(bytes.byteLength);
-        new Uint8Array(block.buf, block.byte_offset, bytes.byteLength).set(bytes);
-        phases.push(["net_ms", t1 - t0], ["parse_ms", performance.now() - t1], ["bytes", bytes.byteLength]);
-        if (signal.aborted) release_blocks([block]);
-        else CORE_BUILD.send(0, Cmd.PAGE_POI, packet((b) => b.u64(BigInt.asUintN(64, page)).branch((e) => e.u32(block.byte_offset).u32(bytes.byteLength))));
-      }
-    } else if (category === "search") {
-      if (!res.ok) throw new Error(`[search] http ${res.status}`);
-      const body = await res.text();
-      CORE_BUILD.send(0, Cmd.FETCH_SEARCH, packet((b) => b.str(key.slice(key.indexOf(":") + 1)).str(body)));
-    } else if (category === "geocode") {
-      if (res.status === 404) {
-        CORE_BUILD.send(0, Cmd.FETCH_GEOCODE, packet((b) => b.u64(BigInt.asUintN(64, page)).str(null)));
-      } else {
-        if (!res.ok) throw new Error(`[geocode/${page}] http ${res.status}`);
-        const body = await res.text();
-        CORE_BUILD.send(0, Cmd.FETCH_GEOCODE, packet((b) => b.u64(BigInt.asUintN(64, page)).str(body)));
-      }
+    const body = new Uint8Array(await res.arrayBuffer());
+    net_ms = performance.now() - t0;
+    status = res.status;
+    if (body.byteLength > 0) {
+      at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str(key).u32(body.byteLength)), (result) => result >>> 0);
+      if (at === 0) throw new Error(`no room for a body of ${body.byteLength} bytes`);
+      new Uint8Array(CORE_KERNEL.memory.buffer, at, body.byteLength).set(body);
+      bytes = body.byteLength;
     }
   } catch (err) {
     outcome = signal.aborted ? 1 : 2;
     if (!signal.aborted) error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
   } finally {
     running.delete(key);
-    CORE_BUILD.send(
-      0,
-      Cmd.FETCH_UPDATE,
-      packet((b) =>
-        b.str(key).u32(outcome).str(error).branch((ps) => {
-          for (const [name, value] of phases) ps.branch((p) => p.str(name).f64(value));
-        })
-      ),
-    );
+    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(outcome).u32(status).u32(at).u32(bytes).str(error).f64(net_ms)));
+    // Applied now, so the body's room is the kernel's again before the next
+    // response asks for its own.
+    CORE_BUILD.settle();
     request_frame();
   }
 }
 
-function run_fetches(): void {
-  const started: [string, string, string][] = [];
-  let aborts: string[] = [];
-  CORE_BUILD.call(Cmd.FETCH_READ, null, (_, reply) => {
-    const [s, a, r] = reply!.get<[BranchCursor, BranchCursor, BranchCursor]>();
-    for (const row of s.get<BranchCursor[]>()) started.push(row.get<[string, string, string]>());
-    aborts = a.get<string[]>();
-    for (const row of r.get<BranchCursor[]>()) {
-      const [at, bytes] = row.get<[number, number]>();
-      PAGE_POOL.release(PAGE_POOL.adopt(at, bytes));
-    }
-  });
-  for (const key of aborts) running.get(key)?.abort();
-  for (const [key, category, url] of started) void run_demand(key, category, url);
-}
-
 // ---- loads (crates/pxl/core/src/render/gltf/load.rs) ----
 
-const images = new Map<number, ImageBitmap>();
 let next_image = 1;
-
-/** An image the kernel names by the handle it was given. */
-export function image_of(handle: number): ImageBitmap | null {
-  return images.get(handle) ?? null;
-}
 
 async function load_model(url: string): Promise<void> {
   try {
@@ -398,15 +377,15 @@ async function load_model(url: string): Promise<void> {
   request_frame();
 }
 
-/** A skin, as the renderer uploads it: the file's own pixels, top row first,
- * no colour conversion and no premultiplied alpha. */
+/** An image, as the kernel's renderer uploads it: the file's own pixels, top
+ * row first, no colour conversion and no premultiplied alpha. */
 async function load_image(url: string): Promise<void> {
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`image: ${url} ${res.status}`);
     const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
     const handle = next_image++;
-    images.set(handle, image);
+    register_image(handle, image);
     CORE_BUILD.send(0, Cmd.LOAD_IMAGE, packet((b) => b.str(url).u32(handle)));
   } catch (err) {
     console.error(`[kernel] ${err instanceof Error ? err.message : String(err)}`);
@@ -415,21 +394,16 @@ async function load_image(url: string): Promise<void> {
   request_frame();
 }
 
-function run_loads(): void {
-  const requests = CORE_BUILD.call(Cmd.LOAD_READ, null, (_, reply) => reply!.get<[BranchCursor]>()[0].get<BranchCursor[]>().map((r) => r.get<[number, string]>()));
-  for (const [kind, url] of requests) void (kind === 0 ? load_model(url) : load_image(url));
-}
-
 // ---- sensors (crates/pxl/core/src/module/device/pose) ----
 
 let geolocation_watch: number | null = null;
 
-function geolocation_command(c: number): void {
-  if (c === 1) {
-    if (geolocation_watch !== null) navigator.geolocation.clearWatch(geolocation_watch);
-    geolocation_watch = null;
-    return;
-  }
+function geolocation_stop(): void {
+  if (geolocation_watch !== null) navigator.geolocation.clearWatch(geolocation_watch);
+  geolocation_watch = null;
+}
+
+function geolocation_start(): void {
   if (geolocation_watch !== null || !("geolocation" in navigator)) return;
   geolocation_watch = navigator.geolocation.watchPosition(
     (pos) => {
@@ -440,8 +414,7 @@ function geolocation_command(c: number): void {
     (err) => {
       // The dead watch is cleared, not just forgotten: it keeps calling back,
       // and a later start would race it.
-      if (geolocation_watch !== null) navigator.geolocation.clearWatch(geolocation_watch);
-      geolocation_watch = null;
+      geolocation_stop();
       const code = err.code === err.PERMISSION_DENIED ? 1 : err.code === err.POSITION_UNAVAILABLE ? 2 : err.code === err.TIMEOUT ? 3 : 0;
       CORE_BUILD.send(0, Cmd.SENSOR_ERROR, packet((b) => b.u32(code)));
       request_frame();
@@ -464,27 +437,29 @@ function listen_orientation(name: string): void {
   globalThis.addEventListener(name, on_orientation, true);
 }
 
-function orientation_command(c: number): void {
-  if (c === 0) {
-    listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
-  } else if (c === 1) {
-    (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!().then(
-      (permission) => {
-        const granted = permission === "granted";
-        if (granted) listen_orientation("deviceorientation");
-        CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(granted).bool(false)));
-        request_frame();
-      },
-      (err) => {
-        console.error("[kernel] orientation permission error:", err);
-        CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(false).bool(true)));
-        request_frame();
-      },
-    );
-  } else {
-    if (orientation_event !== null) globalThis.removeEventListener(orientation_event, on_orientation, true);
-    orientation_event = null;
-  }
+function orientation_listen(): void {
+  listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
+}
+
+function orientation_request_permission(): void {
+  (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!().then(
+    (permission) => {
+      const granted = permission === "granted";
+      if (granted) listen_orientation("deviceorientation");
+      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(granted).bool(false)));
+      request_frame();
+    },
+    (err) => {
+      console.error("[kernel] orientation permission error:", err);
+      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(false).bool(true)));
+      request_frame();
+    },
+  );
+}
+
+function orientation_remove(): void {
+  if (orientation_event !== null) globalThis.removeEventListener(orientation_event, on_orientation, true);
+  orientation_event = null;
 }
 
 // ---- the page's interrupts ----
@@ -599,8 +574,28 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
 
 // ---- boot ----
 
+/** Asks for a device and tells the kernel when one answers, and again after
+ * one is lost. */
+function gpu_boot(): void {
+  const lost = () => {
+    CORE_BUILD.send(0, Cmd.GPU_DELETE);
+    gpu_boot();
+    request_frame();
+  };
+  void acquire_device(lost).then((info) => {
+    if (info === null) {
+      console.error("[gpu] no WebGPU on this device; nothing can be drawn");
+      return;
+    }
+    CORE_BUILD.send(0, Cmd.GPU_CREATE, packet((b) => b.u32(info.align).bool(info.timestamps)));
+    request_frame();
+  });
+}
+
+gpu_boot();
+
 CORE_BUILD.call(
   Cmd.WORLD_CREATE,
-  packet((b) => b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD).u32(PAGE_SECTION_BYTES).f64(CORE_SECTIONS.mesh.bytes)),
+  packet((b) => b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)),
   (result) => result,
 );

@@ -146,6 +146,14 @@
         {
           "name": "LOAD",
           "value": 31
+        },
+        {
+          "name": "GPU",
+          "value": 32
+        },
+        {
+          "name": "SURFACE",
+          "value": 33
         }
       ]
     },
@@ -244,10 +252,6 @@
         {
           "name": "OBSERVE",
           "value": 16
-        },
-        {
-          "name": "LANES",
-          "value": 17
         }
       ]
     },
@@ -260,19 +264,6 @@
       "entries": [
         {
           "name": "LANES",
-          "value": 16
-        }
-      ]
-    },
-    {
-      "name": "ShaderMinor",
-      "doc": [
-        "The shaders' own verb."
-      ],
-      "format": "hex2",
-      "entries": [
-        {
-          "name": "PIPELINE",
           "value": 16
         }
       ]
@@ -320,10 +311,6 @@
         {
           "name": "SEAL",
           "value": 19
-        },
-        {
-          "name": "POOLS",
-          "value": 20
         },
         {
           "name": "STAT",
@@ -503,23 +490,6 @@
       ]
     },
     {
-      "name": "PageMinor",
-      "doc": [
-        "A page's own verb: its terrain, decoded where the kernel reads it."
-      ],
-      "format": "hex2",
-      "entries": [
-        {
-          "name": "TERRAIN",
-          "value": 16
-        },
-        {
-          "name": "POI",
-          "value": 17
-        }
-      ]
-    },
-    {
       "name": "InputMinor",
       "doc": [
         "The pointer's own verbs."
@@ -564,17 +534,13 @@
     {
       "name": "FetchMinor",
       "doc": [
-        "A fetch's own verb."
+        "A fetch's own verb: room for a response's body."
       ],
       "format": "hex2",
       "entries": [
         {
-          "name": "GEOCODE",
+          "name": "BODY",
           "value": 16
-        },
-        {
-          "name": "SEARCH",
-          "value": 17
         }
       ]
     },
@@ -599,16 +565,20 @@
       "format": "hex2",
       "entries": [
         {
-          "name": "LANES",
-          "value": 16
-        },
-        {
           "name": "ACTION",
           "value": 17
         },
         {
-          "name": "SHEET",
-          "value": 18
+          "name": "TOAST",
+          "value": 19
+        },
+        {
+          "name": "LOG",
+          "value": 20
+        },
+        {
+          "name": "SNAPSHOT",
+          "value": 21
         }
       ]
     },
@@ -1003,13 +973,6 @@
           ]
         },
         {
-          "name": "ENV_LANES",
-          "value": 4369,
-          "doc": [
-            "tag call · no packet → [out_at u32]: the environment's ENV_FLOATS"
-          ]
-        },
-        {
           "name": "CHANGE_LANES",
           "value": 4880,
           "doc": [
@@ -1018,45 +981,12 @@
           ]
         },
         {
-          "name": "DRAW_READ",
-          "value": 5378,
-          "doc": [
-            "tag call · no packet → [row u32[10]]: the renderer's lists taken — the",
-            "uploads' address and count, the frees', the draws', the uniforms', the",
-            "rewrites' — valid until the next take"
-          ]
-        },
-        {
-          "name": "SHADER_READ",
-          "value": 5634,
-          "doc": [
-            "tag call · [kind u32] → result: the WGSL's length in bytes, 0 for a",
-            "kind that is not one; with one, [at u32]"
-          ]
-        },
-        {
-          "name": "SHADER_PIPELINE",
-          "value": 5648,
-          "doc": [
-            "tag call · [id u32] → [record u32[]]: the pipeline's record, empty for",
-            "an id that is not one"
-          ]
-        },
-        {
           "section": "the memory's pools",
           "doc": [
             "Mechanism rather than the world's: numbered here while this is the one",
             "table. The pool a command is about is its packet's first child, so a",
-            "release can be asked about as well as sent."
-          ]
-        },
-        {
-          "name": "POOL_CREATE",
-          "value": 5889,
-          "doc": [
-            "tag call · [start u32, bytes u32, region_bytes u32, min_block_bytes",
-            "u32] → result: the pool's id — over `bytes` of the memory at `start`, a",
-            "section of the map, whose range the shell keeps for it alone"
+            "release can be asked about as well as sent. The pools are the kernel's",
+            "sections, made at boot: fixed 0, page 1, mesh 2 (pxl_core::memory)."
           ]
         },
         {
@@ -1064,8 +994,7 @@
           "value": 5890,
           "doc": [
             "tag call · [pool u32] → result: where its stat is, twelve words in",
-            "BuddyStat's first twelve fields' order, valid until the next",
-            "POOL_CREATE"
+            "BuddyStat's first twelve fields' order, at a fixed address"
           ]
         },
         {
@@ -1157,14 +1086,6 @@
           "value": 6163,
           "doc": [
             "[volume u32] — closed to painting, its overflow sorted by column"
-          ]
-        },
-        {
-          "name": "VOLUME_POOLS",
-          "value": 6164,
-          "doc": [
-            "[fixed u32, mesh u32] — the pools volumes draw on: the standing band",
-            "stores from `fixed`, the rest from `mesh`; before any tick"
           ]
         },
         {
@@ -1420,8 +1341,8 @@
           "value": 6913,
           "doc": [
             "[app_env str, build_time str, build_id str, build_number str, published_tiles bool,",
-            "handheld bool, page_section_bytes u32, mesh_section_bytes f64] — the shell's boot:",
-            "what the bundler defined and the memory map; the object store loaded"
+            "handheld bool] — the shell's boot: what the bundler defined and the device; the",
+            "object store loaded"
           ]
         },
         {
@@ -1429,26 +1350,13 @@
           "value": 6915,
           "doc": [
             "[width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,",
-            "orientation_permission bool] — the effects' turn, then the tick's phases; the",
-            "viewport in CSS pixels → result: 1 when a frame after this one was asked for"
-          ]
-        },
-        {
-          "name": "WORLD_READ",
-          "value": 6914,
-          "doc": [
-            "tag call · no packet → [toasts: [[show bool, id str, message_key str, tone u32",
-            "(0 loading, 1 error, 2 success)]], geolocation u32[] (0 start, 1 stop), orientation",
-            "u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool, ui str",
-            "(app/shell.rs's snapshot), decor: [[group u32, mesh u32, skin f64 (-1 none)]], skins:",
-            "[[model u32, skin u32]]] — what the turn asks of the shell"
-          ]
-        },
-        {
-          "name": "WORLD_LANES",
-          "value": 6928,
-          "doc": [
-            "tag call · no packet → [stage_at u32]: render/gpu/stage.rs's STAGE_WORDS doubles"
+            "orientation_permission bool, slice_ms f64, batch_ms f64, frame_ms f64, credits u32]",
+            "— the central scheduler's strobe: the effects' turn, then the tick's phases on the",
+            "grant, the fetches within the credits; the viewport in CSS pixels. The turn leaves",
+            "its signals on the completion ring, drawn by the kernel, and last this command's own",
+            "as a signal: [asked bool, used_ms f64, settled bool, draws u32] — a turn after this one",
+            "was asked for, what the tick spent, whether it ran on the batch quantum, and the",
+            "draws it listed"
           ]
         },
         {
@@ -1456,16 +1364,6 @@
           "value": 6929,
           "doc": [
             "tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not"
-          ]
-        },
-        {
-          "name": "WORLD_SHEET",
-          "value": 6930,
-          "doc": [
-            "tag call · [generation u32] → [whole bool, size u32, generation u32, entries: [[x u32,",
-            "y u32, w u32, h u32, kind u32 (0 place, 1 cluster, 2 bubble), icon str, color str, text",
-            "str (a bubble's lines joined by \\n), logical_w f64, box_h f64]]] — the badge sheet's",
-            "flush: every live entry when the sheet was replaced, else the entries drawn since"
           ]
         },
         {
@@ -1518,7 +1416,8 @@
           "name": "SENSOR_PERMISSION",
           "value": 7442,
           "doc": [
-            "[sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]"
+            "[sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]; as a signal,",
+            "[sensor u32] — ask the user's permission, inside the gesture the action came from"
           ]
         },
         {
@@ -1529,58 +1428,21 @@
           ]
         },
         {
-          "name": "PAGE_TERRAIN",
-          "value": 528,
+          "name": "FETCH_BODY",
+          "value": 7696,
           "doc": [
-            "[page u64, land u32, water u32, structure u32, transport u32, ele u32 (addresses),",
-            "blocks: [[at u32, bytes u32]], own bool] — a page's terrain, copied into the page",
-            "section; `own` false for the shared ocean page no one page owns"
-          ]
-        },
-        {
-          "name": "PAGE_POI",
-          "value": 529,
-          "doc": [
-            "[page u64, block: [at u32, bytes u32] | null] — a page's POI packet, copied into the page",
-            "section; null for the shared empty page"
-          ]
-        },
-        {
-          "name": "FETCH_READ",
-          "value": 7682,
-          "doc": [
-            "tag call · no packet → [started: [[key str, category str, url str]], aborts: [key",
-            "str], releases: [[at u32, bytes u32]]] — the demands to run, the ones to cancel, and",
-            "the page blocks the kernel let go"
+            "tag call · [key str, bytes u32] → result: the address of room for the response's",
+            "body in the page section, 0 refused — the shell writes the bytes there and nothing",
+            "else"
           ]
         },
         {
           "name": "FETCH_UPDATE",
           "value": 7683,
           "doc": [
-            "[key str, outcome u32 (0 ok, 1 aborted, 2 error), error str | null, phases: [[name",
-            "str, value f64]]] — a started demand settled"
-          ]
-        },
-        {
-          "name": "FETCH_GEOCODE",
-          "value": 7696,
-          "doc": [
-            "[page u64, body str | null] — a reverse geocode's answer; null for a 404"
-          ]
-        },
-        {
-          "name": "FETCH_SEARCH",
-          "value": 7697,
-          "doc": [
-            "[query str, body str | null] — a forward search's response body"
-          ]
-        },
-        {
-          "name": "LOAD_READ",
-          "value": 7938,
-          "doc": [
-            "tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]]"
+            "[key str, outcome u32 (0 ok, 1 aborted, 2 error), status u32, body_at u32, body_bytes",
+            "u32 (0 for none), error str | null, net_ms f64] — a started fetch finished; what the",
+            "status and the body mean is the kernel's"
           ]
         },
         {
@@ -1602,6 +1464,105 @@
           "value": 7940,
           "doc": [
             "[url str] — a load failed"
+          ]
+        },
+        {
+          "name": "GPU_CREATE",
+          "value": 8193,
+          "doc": [
+            "[min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's",
+            "renderer is made on it (render/gpu/renderer.rs)"
+          ]
+        },
+        {
+          "name": "GPU_DELETE",
+          "value": 8196,
+          "doc": [
+            "no packet — the device went away, and every object on it"
+          ]
+        },
+        {
+          "name": "SURFACE_CREATE",
+          "value": 8449,
+          "doc": [
+            "tag call · [role u32 (0 world, 1 case)] → result: the surface's handle, 0 refused — a",
+            "canvas the shell hands over, drawn by the kernel alone from then on"
+          ]
+        },
+        {
+          "name": "SURFACE_UPDATE",
+          "value": 8451,
+          "doc": [
+            "[surface u32, width u32, height u32, device_pixel_ratio f64] — the canvas's layout box in",
+            "device pixels, transforms aside; the buffer it is drawn into is the kernel's"
+          ]
+        },
+        {
+          "name": "SURFACE_DELETE",
+          "value": 8452,
+          "doc": [
+            "tag call · [surface u32] — the canvas is going; what it held on the device is let go",
+            "before the call returns"
+          ]
+        },
+        {
+          "section": "the turn's signals: kernel → shell, left on the completion ring by a strobe or an action"
+        },
+        {
+          "name": "WORLD_TOAST",
+          "value": 6931,
+          "doc": [
+            "[show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a",
+            "toast shown or dismissed"
+          ]
+        },
+        {
+          "name": "WORLD_LOG",
+          "value": 6932,
+          "doc": [
+            "[line str] — a console line"
+          ]
+        },
+        {
+          "name": "WORLD_SNAPSHOT",
+          "value": 6933,
+          "doc": [
+            "[ui str] — app/shell.rs's snapshot, when it changed"
+          ]
+        },
+        {
+          "name": "SENSOR_CREATE",
+          "value": 7425,
+          "doc": [
+            "[sensor u32 (0 geolocation, 1 orientation)] — start watching"
+          ]
+        },
+        {
+          "name": "SENSOR_DELETE",
+          "value": 7428,
+          "doc": [
+            "[sensor u32] — stop watching"
+          ]
+        },
+        {
+          "name": "FETCH_CREATE",
+          "value": 7681,
+          "doc": [
+            "[key str, url str] — a fetch the scheduler started"
+          ]
+        },
+        {
+          "name": "FETCH_DELETE",
+          "value": 7684,
+          "doc": [
+            "[key str] — a fetch yield aborted; the shell settles it as aborted"
+          ]
+        },
+        {
+          "name": "LOAD_CREATE",
+          "value": 7937,
+          "doc": [
+            "[kind u32 (0 glTF, 1 image), url str] — a model or an image to load"
           ]
         }
       ]

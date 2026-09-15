@@ -10,10 +10,10 @@
 import { assertEquals } from "@std/assert";
 
 import { alloc_chunk_volume, fill_chunk_column, release_chunk_volume } from "@/reference/volume.ts";
-import { MaterialClass, NO_LAYER } from "@/render/mesh/voxel.ts";
+import { MaterialClass, NO_LAYER } from "@/reference/mesh/voxel.ts";
 import { fill_column_runs, release_column_runs, scan_all_column_runs } from "@/reference/voxel_scan.ts";
 import { bake_chunk_mesh } from "@/reference/chunk_mesher.ts";
-import { release_chunk_mesh } from "@/wasm/core_build.ts";
+import { release_chunk_mesh } from "@/reference/core_pool.ts";
 import { CORE_BAKE } from "@/reference/chunk_bake.ts";
 
 const SPAN = 64;

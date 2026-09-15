@@ -35,9 +35,9 @@ import type { U32Array } from "@xpute/core/kit/array.ts";
 import { CHUNK_CELL_SPAN, U_PER_CELL } from "@pxl/shared/bake/constant.ts";
 
 import type { LodStep } from "@/module/world/lod.ts";
-import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "@/render/mesh/voxel.ts";
+import { MaterialClass, NO_LAYER, pack_sub_cell_fraction, SUB_CELL_NONE, unpack_sub_cell_fraction, unpack_sub_cell_size } from "@/reference/mesh/voxel.ts";
 import { carve_column_run_set, column_run_set_bytes, type ColumnRunSet } from "@/reference/column_run.ts";
-import { baked_mesh_bytes, type BakedChunkMesh, carve_baked_mesh } from "@/render/mesh/mesh_block.ts";
+import { baked_mesh_bytes, type BakedChunkMesh, carve_baked_mesh } from "@/reference/mesh/mesh_block.ts";
 
 export type { BakedChunkMesh };
 

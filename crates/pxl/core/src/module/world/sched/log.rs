@@ -15,13 +15,14 @@
 //! console itself is the shell's: lines are handed over by `take_log_lines`.
 
 use super::category::category_info;
-use super::fetch_scheduler::{fetch_counts, MAX_INFLIGHT};
+use super::fetch_scheduler::{fetch_counts, fetch_credits};
 use super::ledger::{
     ledger_frame_peak, ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_recording_start, ledger_set_sink, ledger_snapshot, ledger_worst_frames, FrameSample, LedgerSink,
     LongFrameRecord, LongFrameSource, TaskRecord,
 };
 use super::summary::{census_rows, missed, overran, summarize_frames, summarize_tasks, tris_text, CensusRow, Spread, STARVED_MS, TILE_DECODED_MB};
-use super::tick::{tick_step_stats, tick_step_stats_reset};
+use super::demand::Phases;
+use super::tick::{tick_step_stats, tick_step_stats_reset, PHASES};
 use crate::global::{now, Global};
 use crate::kernel::kernel;
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
@@ -54,9 +55,9 @@ fn spread_text(s: &Spread) -> String {
     format!("p50 {}  p95 {}  max {}", n1(s.p50), n1(s.p95), n1(s.max))
 }
 
-fn phases_text(phases: Option<&[(String, f64)]>) -> String {
+fn phases_text(phases: Option<&Phases>) -> String {
     let Some(phases) = phases.filter(|p| !p.is_empty()) else { return String::new() };
-    let parts: Vec<String> = phases.iter().map(|(k, v)| format!("{} {}", k.trim_end_matches("_ms"), if k == "bytes" { v.to_string() } else { n1(*v) })).collect();
+    let parts: Vec<String> = phases.iter().map(|(k, v)| format!("{} {}", k.trim_end_matches("_ms"), if k == "bytes" { v.to_string() } else { n1(v) })).collect();
     format!("  [{}]", parts.join(" "))
 }
 
@@ -73,7 +74,7 @@ fn task_line(rec: &TaskRecord) -> String {
         rec.outcome.as_str(),
         n1(total),
         rec.priority,
-        phases_text(rec.phases.as_deref()),
+        phases_text(rec.phases.as_ref()),
         rec.error.as_ref().map_or(String::new(), |e| format!("  [{e}]"))
     )
 }
@@ -270,12 +271,12 @@ fn starved(ms: f64) -> &'static str {
 
 /// Every registered step by mean ms per run, heaviest first.
 fn steps_text() -> String {
-    let mut rows: Vec<_> = tick_step_stats().into_iter().filter(|s| s.count > 0).collect();
+    let mut rows: Vec<_> = tick_step_stats().iter().filter(|s| s.count > 0).collect();
     if rows.is_empty() {
         return "none".to_string();
     }
     rows.sort_by(|a, b| (b.ms / b.count as f64).total_cmp(&(a.ms / a.count as f64)));
-    rows.iter().map(|s| format!("{} {}/{}", s.name, n1(s.ms / s.count as f64), n1(s.max_ms))).collect::<Vec<_>>().join("  ")
+    rows.iter().map(|s| format!("{}/{} {}/{}", PHASES[s.phase], s.name, n1(s.ms / s.count as f64), n1(s.max_ms))).collect::<Vec<_>>().join("  ")
 }
 
 pub fn ledger_logging() -> bool {
@@ -450,7 +451,7 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
                 .collect::<Vec<_>>()
                 .join("   ")
         ),
-        format!("  fetch   queued {} running {} of {}", counts.queued, counts.running, MAX_INFLIGHT),
+        format!("  fetch   queued {} running {} of {}", counts.queued, counts.running, fetch_credits()),
         // The builds run in the kernel under the tick; what they did this window.
         format!("  build   {} direct  {} scans  {} bakes  {} refused a block", c.built_direct, c.built_scans, c.built_bakes, c.built_starved),
         format!("  per     tick/bake {}ms   (workload-normalised; comparable across sessions)", f.tick_per_bake.map_or("-".to_string(), n1)),
@@ -551,7 +552,7 @@ pub fn ledger_report_text() -> String {
     if !frames.is_empty() {
         out.extend(peak_section());
     }
-    out.extend(tasks_section(&tasks));
+    out.extend(tasks_section(tasks));
     out.push(format!("long frames n={}{}", longs.len(), if log().host.loaf_supported { "" } else { " (LoAF unsupported; longtask only)" }));
 
     if !tasks.is_empty() {
@@ -563,7 +564,7 @@ pub fn ledger_report_text() -> String {
     let worst = ledger_worst_frames();
     if !worst.is_empty() {
         out.push(format!("--- worst {} frames in the window ---", worst.len()));
-        for w in &worst {
+        for w in worst {
             out.push(frame_line(&w.sample, w.prev.as_ref()));
         }
     }

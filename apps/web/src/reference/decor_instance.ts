@@ -4,7 +4,7 @@
  * The TypeScript build of a chunk's decor instances for one variant, as
  * lanes — the reference the module's build is held to
  * (core_decor.test.ts); what is drawn comes from the module as a block
- * (render/mesh/decor_block.ts).
+ * (reference/mesh/decor_block.ts).
  *
  * A set has owners, counted, the same `rc` the baked meshes carry
  * (chunk_bucket.ts): the last one out returns the lanes to the pool.
@@ -14,8 +14,8 @@ import type { f64, u32 } from "@xpute/core/kit/word.ts";
 import type { TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 
-import { CORE_ALLOC } from "@/wasm/core_pool.ts";
-import { type DecorInstances, HIDDEN_FLAG, NO_ENTRY } from "@/render/mesh/decor_block.ts";
+import { CORE_ALLOC } from "@/reference/core_pool.ts";
+import { type DecorInstances, HIDDEN_FLAG, NO_ENTRY } from "@/reference/mesh/decor_block.ts";
 
 export { type DecorInstances, HIDDEN_FLAG, NO_ENTRY };
 

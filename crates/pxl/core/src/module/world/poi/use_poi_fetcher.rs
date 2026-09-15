@@ -20,11 +20,15 @@ use crate::app::setting::store::use_settings_store;
 use crate::global::Global;
 use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
+use crate::memory::InlineVec;
 use crate::module::world::sched::demand::Demand;
 use crate::module::world::sched::fetch_scheduler::{fetch_running, fetch_sync, page_key};
 use crate::module::world::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
 
 pub const CATEGORY: &str = "poi";
+
+/// A wishlist, or an eviction, at most: the scheduler holds fewer demands.
+const DEMANDS: usize = 256;
 
 // POI sits one behind terrain at equal page distance — the POI layer grounds
 // each badge against that page's terrain, so fetching POI ahead of the ground
@@ -33,9 +37,11 @@ const PRIORITY_BIAS: f64 = 1.0;
 
 /// Evicts cached pages outside the held set, mirroring terrain's own cleanup.
 fn cleanup_far_pois(anchor: IVec) {
-    let held: Vec<IVec> = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES()).into_iter().map(|p| p.page_idx).collect();
+    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES());
     // Collected first: clearing moves the table's last page into the hole.
-    let evict: Vec<IVec> = poi_pages().keys().filter(|page_idx| !held.contains(page_idx)).collect();
+    // What a run leaves uncollected, the next one takes.
+    let mut evict: InlineVec<IVec, DEMANDS> = InlineVec::new();
+    evict.extend(poi_pages().keys().filter(|&p| !held.iter().any(|h| h.page_idx == p)));
     for page_idx in evict {
         clear_pois(page_idx);
     }
@@ -44,15 +50,15 @@ fn cleanup_far_pois(anchor: IVec) {
 /// One Demand per uncached page within the fetch range — the scheduler dedups
 /// against whatever it's already carrying, so this can be rebuilt in full on
 /// every run.
-fn poi_demands(anchor: IVec) -> Vec<Demand> {
-    let mut demands = Vec::new();
+fn poi_demands(anchor: IVec) -> InlineVec<Demand, DEMANDS> {
+    let mut demands = InlineVec::new();
     let mut add = |page_idx: IVec, dist2: f64| {
         if get_pois(page_idx).is_some() {
             return;
         }
         demands.push(Demand {
             key: page_key(CATEGORY, page_idx),
-            category: CATEGORY.to_string(),
+            category: CATEGORY,
             priority: page_priority(dist2) + PRIORITY_BIAS,
         });
     };

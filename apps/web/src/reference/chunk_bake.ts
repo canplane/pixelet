@@ -12,7 +12,7 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import type { LodStep } from "@/module/world/lod.ts";
 import { bake_chunk_mesh, BakeContext, type BakedChunkMesh } from "@/reference/chunk_mesher.ts";
 import type { ColumnRunSet } from "@/reference/voxel_scan.ts";
-import { CORE_POOL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_POOL, FIXED_ALLOC } from "@/reference/core_pool.ts";
 
 export const CORE_BAKE: BakeContext = new BakeContext(CORE_POOL, FIXED_ALLOC);
 

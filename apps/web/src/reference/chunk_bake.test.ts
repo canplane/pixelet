@@ -5,10 +5,10 @@ import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import { mat4, mat4_frustum_planes, mat4_look_at, mat4_mul, mat4_perspective } from "@xpute/core/kit/mat4.ts";
 
 import { alloc_chunk_volume, fill_chunk_column, release_chunk_volume } from "@/reference/volume.ts";
-import { MaterialClass, NO_LAYER } from "@/render/mesh/voxel.ts";
+import { MaterialClass, NO_LAYER } from "@/reference/mesh/voxel.ts";
 import { scan_all_column_runs } from "@/reference/voxel_scan.ts";
 import { bake_tier, mesh_bounds } from "@/reference/chunk_bake.ts";
-import { carve_visibility } from "@/render/mesh/mesh_block.ts";
+import { carve_visibility } from "@/reference/mesh/mesh_block.ts";
 import { DETACHED_BLOCK } from "@xpute/core/ds/buddy.ts";
 import type { BakedChunkMesh } from "@/reference/chunk_mesher.ts";
 

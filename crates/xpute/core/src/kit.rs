@@ -10,3 +10,4 @@ pub mod json;
 pub mod mat4;
 pub mod math;
 pub mod rng;
+pub mod text;

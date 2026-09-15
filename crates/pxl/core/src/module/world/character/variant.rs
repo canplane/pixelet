@@ -39,8 +39,8 @@ fn variants_of(group: &str, move_clip: &'static str) -> Vec<CharacterVariant> {
         .into_iter()
         .map(|row| CharacterVariant {
             key: palette.name_of(row).unwrap_or_default(),
-            model_url: asset_url(&palette.model_key_of(row).unwrap_or_default()),
-            skin_url: asset_url(&palette.skin_key_of(row).unwrap_or_default()),
+            model_url: asset_url(&palette.model_key_of(row).unwrap_or_default()).to_string(),
+            skin_url: asset_url(&palette.skin_key_of(row).unwrap_or_default()).to_string(),
             height_u: palette.size.get(row as usize) as f64,
             move_clip,
         })

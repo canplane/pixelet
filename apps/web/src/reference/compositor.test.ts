@@ -3,7 +3,7 @@
 import { assertEquals } from "@std/assert";
 
 import { band_material, band_voxel_idx, get_chunk_band, set_chunk_voxel } from "@/reference/volume.ts";
-import { MaterialClass, NO_LAYER } from "@/render/mesh/voxel.ts";
+import { MaterialClass, NO_LAYER } from "@/reference/mesh/voxel.ts";
 import { composite_chunk_layers } from "@/reference/compositor.ts";
 import type { ChunkKey, WorldLayer } from "@/reference/contract.ts";
 

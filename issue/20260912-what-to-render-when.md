@@ -407,7 +407,8 @@ be unmeetable there or be set so high it never fired anywhere else. So bytes
 are accounted by which side of the frustum their node is on — a node
 crossing moves its bytes across — and the budget is drawn on the off-screen
 side alone: a quarter of the core reservation, the currency the crash case
-was measured in. The on-screen side is reported beside it as what it is,
+was measured in (half the mesh section since 2026-09-14,
+[the safety valves](./20260914-the-safety-valves-the-module-did-not-have.md)). The on-screen side is reported beside it as what it is,
 the working set, and if that alone ever looks too large the lever is the
 range, not the cache.
 

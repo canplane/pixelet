@@ -7,7 +7,7 @@
  * hears them.
  *
  * Its own piece rather than the builds' because the pools are cut through
- * it (core_pool.ts): the map is laid out before anything that builds a
+ * it (reference/core_pool.ts): the map is laid out before anything that builds a
  * chunk exists, and a pool's kernel is asked for its blocks the same way
  * a chunk is sent its source.
  */
@@ -21,7 +21,7 @@ import { Ring } from "@xpute/core/ipc/ring.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 import type { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { BOOT, boot_block, type PxlExports } from "@/wasm/pxl.ts";
+import { BOOT, boot_block, type KernelExports } from "@/wasm/module.ts";
 
 /** A packet of one branch, its children written by `fill` — what a message
  * carries (@pxl/shared/spec/cmd.ts). */
@@ -48,7 +48,7 @@ export class CoreRing {
    * raises one before there is a chunk. */
   signal: SignalListener | null = null;
 
-  constructor(private readonly pxl: PxlExports) {
+  constructor(private readonly pxl: KernelExports) {
     const boot = boot_block(pxl);
     this.sq = new Ring(pxl.memory.buffer, boot[BOOT.sq]);
     this.cq = new Ring(pxl.memory.buffer, boot[BOOT.cq]);

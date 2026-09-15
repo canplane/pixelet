@@ -15,7 +15,11 @@
 //! A block the pool refuses leaves the work where it is until a later tick;
 //! nothing is copied to a place the core cannot see.
 
-use std::collections::BTreeMap;
+use crate::memory::LaneMap;
+
+/// Chunks held at once: the mount radius and its hysteresis cover about
+/// three thousand, and the glue's own chunks come on top.
+pub const MAX_CHUNKS: usize = 4096;
 
 use crate::bake::mesher::{mesh_words, BakeContext, Step};
 use crate::bake::run_set::RunSet;
@@ -51,6 +55,7 @@ pub struct PageLanes {
     pub ele: usize,
 }
 
+#[derive(Clone, Copy)]
 struct Runs {
     at: usize,
     bytes: u32,
@@ -59,6 +64,7 @@ struct Runs {
     direct: bool,
 }
 
+#[derive(Clone, Copy)]
 struct Chunk {
     /// The column's base, the key the object store files it under.
     base: u64,
@@ -130,7 +136,7 @@ pub struct BuildStat {
 }
 
 pub struct Builder {
-    chunks: BTreeMap<u32, Chunk>,
+    chunks: LaneMap<u32, Chunk>,
     scan: ScanContext,
     direct: ScanContext,
     bake: BakeContext,
@@ -155,7 +161,7 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            chunks: BTreeMap::new(),
+            chunks: LaneMap::new(MAX_CHUNKS),
             scan: ScanContext::new(),
             direct: ScanContext::new(),
             bake: BakeContext::new(),

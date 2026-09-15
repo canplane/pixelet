@@ -336,3 +336,13 @@ What the line buys is the thing the destination issue asked for
 one implementation of the world, deterministic across toolchains, that a
 native shell runs unchanged — and, on the way, a TypeScript side small
 enough to read in an afternoon.
+
+## Status 2026-09-15
+
+The four moves are done, and past them the world's boot, the stores, the
+sensors, the map, the fetch scheduler and search (e60307c through
+bcb05f6): the shell drives the frame, forwards events, runs fetches and
+loads, paints the badge sheet and executes the draw list. Two things
+above did not happen: `pxl-render` was not cut — the renderer's contract
+is `crates/pxl/core/src/render` — and the object store's persistence is
+not wired: the record is the module's, but nothing calls its save.

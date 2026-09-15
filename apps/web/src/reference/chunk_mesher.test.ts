@@ -5,12 +5,12 @@ import { assert, assertEquals } from "@std/assert";
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 
-import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "@/render/mesh/voxel.ts";
+import { MaterialClass, NO_LAYER, SUB_CELL_NONE } from "@/reference/mesh/voxel.ts";
 import { type MeshRun, pack_column_runs } from "@/reference/voxel_scan.ts";
 import { abort_bake, bake_chunk_mesh, bake_chunk_mesh_coarse, bake_open, BakeContext, type BakedChunkMesh, begin_bake, finish_bake, step_bake } from "@/reference/chunk_mesher.ts";
 import { BuddyAllocator } from "@xpute/core/ds/buddy.ts";
 import { buddy_alloc } from "@xpute/core/ds/typed_alloc.ts";
-import { release_chunk_mesh } from "@/wasm/core_build.ts";
+import { release_chunk_mesh } from "@/reference/core_pool.ts";
 import { CORE_BAKE } from "@/reference/chunk_bake.ts";
 
 function empty_columns(): MeshRun[][] {

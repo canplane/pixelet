@@ -21,9 +21,9 @@ use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::lod::set_lod_projection;
 use crate::module::world::poi::store::poi_pages;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
-use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
+use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
-use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS, PHASES};
+use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::module::world::terrain::store::tile_pages;
 use crate::world::sched::Frame;
 
@@ -40,7 +40,7 @@ pub struct HostFrameStat {
     pub buffers: f64,
     pub buffer_bytes: f64,
     pub textures_mb: TexturesMb,
-    pub census: Vec<(String, (f64, f64))>,
+    pub census: DrawCensus,
     pub px: f64,
     pub heap_mb: f64,
 }
@@ -71,7 +71,13 @@ fn core_tick() -> &'static mut CoreTick {
 
 /// The shell's numbers for the frame just drawn.
 pub fn set_host_frame_stat(stat: HostFrameStat) {
-    core_tick().host = stat;
+    let task_ms = core_tick().host.task_ms;
+    core_tick().host = HostFrameStat { task_ms, ..stat };
+}
+
+/// The whole turn just run: the strobe in, the tick, the draw and submit.
+pub fn set_host_task_ms(task_ms: f64) {
+    core_tick().host.task_ms = task_ms;
 }
 
 /// Whether the last pass left something new to draw; reading clears it.
@@ -161,9 +167,12 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     };
 
     let t0 = now();
+    let a = crate::probe::mark();
     let mut events = Vec::new();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now, &mut |e| events.push(e))).unwrap_or(false);
+    let a = crate::probe::add(11, a);
     run_chunk_events(events);
+    crate::probe::add(12, a);
     if draw {
         c.draw = true;
         ctx.invalidate();
@@ -190,7 +199,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         settled: ctx.settled,
         sched_ms: now() - frame_t0,
         budget_ms: ctx.budget.total_ms,
-        phases: PHASES.iter().zip(ctx.phase_ms).map(|(name, ms): (&&str, f64)| (name.to_string(), ms)).collect(),
+        phases: ctx.phase_ms,
         cpu: CpuSample { tick_ms },
         task_ms: host.task_ms,
         gpu_ms: host.gpu_ms,

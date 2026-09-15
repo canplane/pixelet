@@ -24,9 +24,9 @@ import type { U32Array } from "@xpute/core/kit/array.ts";
 import { CHUNK_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { CORE_MEMORY, CORE_RING } from "@/wasm/core_pool.ts";
+import { CORE_MEMORY, CORE_RING } from "@/wasm/core_memory.ts";
 import { type CoreRing, packet } from "@/wasm/core_ring.ts";
-import { pack_material, pack_sub_cell, unpack_material, type VoxelMaterial } from "@/render/mesh/voxel.ts";
+import { pack_material, pack_sub_cell, unpack_material, type VoxelMaterial } from "@/reference/mesh/voxel.ts";
 
 export const L2_BAND_SHAMT: u32 = 6;
 export const L2_BAND_CELL_SPAN: u32 = CHUNK_CELL_SPAN;

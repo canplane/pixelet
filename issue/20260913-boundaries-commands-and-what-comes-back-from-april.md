@@ -1,5 +1,11 @@
 # Boundaries, commands, and what comes back from April
 
+**Superseded in part, 2026-09-14,** by
+[20260914-what-stays-in-javascript.md](./20260914-what-stays-in-javascript.md):
+the UI and the core are joined by rings, not synchronous calls — a query
+is a submission with `ACKREQ`, and the module's exports are `boot` and
+`interrupt`. The command's shape and where reliability is decided stand.
+
 **2026-09-13** — the move to a Rust core in WASM drawing through WebGPU was
 scheduled today, piece by piece
 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md),

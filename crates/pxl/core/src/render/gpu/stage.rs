@@ -60,9 +60,9 @@ fn stage() -> &'static mut [f64; STAGE_WORDS] {
     STAGE.get(|| [0.0; STAGE_WORDS])
 }
 
-/// The lane's address, for the shell to read in place.
-pub fn stage_address() -> usize {
-    stage().as_ptr() as usize
+/// The lane, for the renderer to lay the frame's uniforms out from.
+pub fn stage_lane() -> &'static [f64; STAGE_WORDS] {
+    stage()
 }
 
 /// Writes the frame's uniforms from the view and the settings as they stand.

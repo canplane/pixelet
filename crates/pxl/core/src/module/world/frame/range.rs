@@ -7,6 +7,8 @@ use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
 
+use crate::memory::InlineVec;
+
 const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
 /// One page's span in world units.
@@ -67,7 +69,7 @@ pub fn page_dist2(anchor: IVec, page_idx: IVec) -> f64 {
     rect_dist2(x0, y0, x0 + PAGE_SPAN, y0 + PAGE_SPAN)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PageAt {
     pub page_idx: IVec,
     pub dist2: f64,
@@ -81,11 +83,11 @@ pub struct PageAt {
 /// the disc reaches it, which happens continuously as the view moves; a
 /// Chebyshev radius around the centre's own page could only change in whole
 /// pages at a time.
-pub fn pages_in_radius(anchor: IVec, radius: f64) -> Vec<PageAt> {
+pub fn pages_in_radius(anchor: IVec, radius: f64) -> Pages {
     let center_page = TO_XY(L3_IDX(anchor));
     let span = (radius / PAGE_SPAN).ceil() as i64 + 1;
     let radius2 = radius * radius;
-    let mut out = Vec::new();
+    let mut out = Pages::new();
     for dy in -span..=span {
         for dx in -span..=span {
             let page_idx = ivec::add(center_page, ivec::gather(dx, dy, 0));
@@ -96,9 +98,22 @@ pub fn pages_in_radius(anchor: IVec, radius: f64) -> Vec<PageAt> {
         }
     }
     // Stable, as Array.prototype.sort is: equal distances keep scan order.
-    out.sort_by(|a, b| a.dist2.total_cmp(&b.dist2));
+    // An insertion sort, over a list a few dozen long.
+    for i in 1..out.len() {
+        let mut j = i;
+        while j > 0 && out[j - 1].dist2.total_cmp(&out[j].dist2).is_gt() {
+            out.swap(j - 1, j);
+            j -= 1;
+        }
+    }
     out
 }
+
+/// Pages a disc can hold here: a radius past four pages comes nowhere near.
+pub const PAGES_IN_RADIUS: usize = 256;
+
+/// A set of pages, nearest first, kept inline.
+pub type Pages = InlineVec<PageAt, PAGES_IN_RADIUS>;
 
 /// The pages a view holds: the nearest `count` of those whose square comes
 /// within `radius`, nearest first.
@@ -115,7 +130,7 @@ pub fn pages_in_radius(anchor: IVec, radius: f64) -> Vec<PageAt> {
 ///
 /// Because membership now changes only when a page crosses the nearest-`count`
 /// ranking, a page being fetched is by construction one worth keeping.
-pub fn pages_to_hold(anchor: IVec, radius: f64, count: u32) -> Vec<PageAt> {
+pub fn pages_to_hold(anchor: IVec, radius: f64, count: u32) -> Pages {
     let mut pages = pages_in_radius(anchor, radius);
     pages.truncate(count as usize);
     pages
@@ -141,3 +156,11 @@ pub fn page_priority(dist2: f64) -> f64 {
 pub fn js_round(x: f64) -> f64 {
     (x + 0.5).floor()
 }
+
+#[cfg(test)]
+#[path = "range.test.rs"]
+mod test;
+
+#[cfg(test)]
+#[path = "view_range.test.rs"]
+mod view_range_test;

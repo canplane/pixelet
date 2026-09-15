@@ -5,15 +5,12 @@ one cooperative scheduler (really two, plus one profiler), driven by a
 read-only instrument that exists so optimization decisions can be made on
 measurement rather than code-reading.
 
-**Status: direction agreed, not built.** The first deliverable is the ledger
-(observability only); the scheduler unification is downstream of what the ledger
-shows and is not pre-committed. This does **not** reopen
-[20260708-concurrency-model.md](./20260708-concurrency-model.md) — everything
-here is main-thread-only, no workers, no WASM, no SAB. Only the WASM/worker
-migration itself is deferred: the scheduling/budget mental model and its
-abstractions are designed now to be identical before and after that migration,
-so the migration is a transport swap under a fixed model, not a redesign (see
-[The abstraction is migration-invariant](#the-abstraction-is-migration-invariant-only-the-executor-changes)).
+**Status: built** — the tick, the ledger and the priority order, since
+moved into the kernel; the worker was built, measured and not taken ("The
+worker's case", below). The sections below are the record in the order it
+happened. Their "main-thread only, no WASM" framing, the guardrail included,
+predates [20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md),
+which put the core in WASM on the same cooperative thread.
 
 ---
 
@@ -891,13 +888,6 @@ longest single step recorded, since the maxima below (64–112 ms) were not
 attributed to a step. If one step is that long, cutting it finer comes
 before the worker.
 
-**Measured 2026-09-13, and not taken.** The longest stepped step on the
-phone was 6.0 ms; while terrain filled in the main-thread task p95 was the
-same on both paths and the stepped path finished more bakes in fewer
-frames. `stepped` stays the default; the numbers and what was not measured
-are in
-[experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md).
-
 What the numbers say about the value. In the steady state, once loading
 is done, the bake barely runs: `visible/chunks` 0.7–2.9 ms a frame, the
 task 2 ms, the frame at the display rate; a worker changes nothing there.
@@ -922,8 +912,15 @@ borrows a slab, fills it, posts it, and copies the result back — the
 "executor swap under a fixed model" this document reserved, with the
 little memory (`sched/slabs.ts`) already holding the ownership record.
 Not everything moves: only what cannot yield and is heavy, which today is
-the bake. Placement and sweep stay cooperative. The same worker hosts the
-WASM bake when it comes.
+the bake. Placement and sweep stay cooperative.
+
+**Measured 2026-09-13, and not taken.** The case above was written before
+the phone reading. The longest stepped step on the phone was 6.0 ms; while
+terrain filled in the main-thread task p95 was the same on both paths and
+the stepped path finished more bakes in fewer frames. The numbers and what
+was not measured are in
+[experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md);
+the worker path was retired with the TypeScript bake on 2026-09-14.
 
 ## Guardrail
 

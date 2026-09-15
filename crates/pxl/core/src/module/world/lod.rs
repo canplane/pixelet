@@ -230,3 +230,7 @@ pub fn get_lod_level(lod_step: LodStep) -> LodLevel {
         _ => 6,
     }
 }
+
+#[cfg(test)]
+#[path = "lod.test.rs"]
+mod test;

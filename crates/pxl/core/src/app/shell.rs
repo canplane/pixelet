@@ -6,16 +6,20 @@
 //! compares whole and hands to React only when it changed — and every control
 //! it has is an action by name, applied here to the stores.
 
+use core::fmt::{self, Write};
+
 use pxl_shared::spec::cell::decor_ids;
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
+use xpute_core::kit::text::Quoted;
 
-use crate::app::setting::schema::{SettingValue, SETTING_KEYS};
+use crate::app::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::app::setting::store::use_settings_store;
 use crate::app::store::ui_store::{use_ui_store, ActiveTool, RecentPick};
 use crate::global::Global;
-use crate::json::{parse, Json};
+use xpute_core::kit::json::{read_json, JsonValue};
+use xpute_core::kit::text::FixStr;
 use crate::module::camera::store::{use_camera_store, CameraStatus};
 use crate::module::device::pose::store::{use_device_location_store, use_device_orientation_store, DevicePoseStatus};
 use crate::module::device::pose::use_device_orientation::{orientation_subscribe, orientation_unsubscribe, request_orientation, OrientationPlatform};
@@ -24,7 +28,7 @@ use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::use_map_store;
 use crate::module::map::ui::control::compass::{compass_reset, show_compass};
 use crate::module::map::ui::control::scale_bar::scale_bar;
-use crate::module::map::ui::overlay::search_modal::{search_close, search_query, search_rows};
+use crate::module::map::ui::overlay::search_modal::{search_close, search_query, search_rows, SearchRow};
 use crate::module::map::ui::overlay::use_reverse_geocode::use_reverse_geocode;
 use crate::module::world::character::character_preview::{preview_close, preview_open, preview_rows};
 use crate::module::world::character::store::use_companion_load_store;
@@ -56,34 +60,29 @@ fn shell() -> &'static mut Shell {
     })
 }
 
-fn quote(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
+/// A number as JSON writes it: `null` for one that is not finite.
+struct Num(f64);
+
+impl fmt::Display for Num {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_finite() {
+            write!(f, "{}", self.0)
+        } else {
+            f.write_str("null")
         }
     }
-    out.push('"');
-    out
 }
 
-fn num(v: f64) -> String {
-    if v.is_finite() {
-        format!("{v}")
-    } else {
-        "null".to_string()
+/// A value, or `null` for none.
+struct Or<T>(Option<T>);
+
+impl<T: fmt::Display> fmt::Display for Or<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            Some(v) => v.fmt(f),
+            None => f.write_str("null"),
+        }
     }
-}
-
-fn opt_str(s: Option<&str>) -> String {
-    s.map_or("null".to_string(), quote)
 }
 
 pub fn active_tool_str(tool: ActiveTool) -> &'static str {
@@ -114,8 +113,29 @@ fn pose_status_str(status: DevicePoseStatus) -> &'static str {
     }
 }
 
-/// The state the UI shows, as one JSON document.
-pub fn ui_snapshot_json() -> String {
+/// One search result as the snapshot's JSON object, a comma before all but the first.
+fn search_row_json<W: Write>(out: &mut W, first: bool, r: &SearchRow) -> fmt::Result {
+    if !first {
+        out.write_char(',')?;
+    }
+    write!(
+        out,
+        "{{\"gers_id\":{},\"kind\":{},\"name\":{},\"subtitle\":{},\"distance\":{},\"icon\":{},\"color\":{},\"lon\":{},\"lat\":{}}}",
+        Quoted(r.gers_id),
+        Quoted(r.kind),
+        Quoted(r.name),
+        Quoted(r.subtitle),
+        Or(r.distance.map(Quoted)),
+        Quoted(r.icon),
+        Quoted(r.color),
+        Num(r.lon),
+        Num(r.lat)
+    )
+}
+
+/// The state the UI shows, as one JSON document written into `out` — the
+/// lane the shell hands over, so a turn builds no string of it.
+pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     let map = use_map_store();
     let nav = use_map_navigation();
     let location = use_device_location_store();
@@ -127,121 +147,122 @@ pub fn ui_snapshot_json() -> String {
     let address = use_reverse_geocode(&shell().language);
     let bar = scale_bar(view().height.max(1.0));
 
-    let recent: Vec<String> = ui
-        .recent_picks
-        .iter()
-        .map(|p| match p {
-            RecentPick::Object(id) => format!("{{\"kind\":\"object\",\"id\":{}}}", quote(id)),
-            RecentPick::Decor(id) => format!("{{\"kind\":\"decor\",\"id\":{}}}", quote(id)),
-        })
-        .collect();
-    let chat: Vec<String> = ui.chat_lines.iter().map(|l| format!("{{\"id\":{},\"text\":{},\"ts\":{}}}", l.id, quote(&l.text), num(l.ts))).collect();
-    let setting_values: Vec<String> = SETTING_KEYS()
-        .into_iter()
-        .filter_map(|key| {
-            settings.get(key).map(|value| {
-                let v = match value {
-                    SettingValue::Toggle(b) => b.to_string(),
-                    SettingValue::Text(t) => quote(&t),
-                };
-                format!("{}:{v}", quote(key))
-            })
-        })
-        .collect();
-
-    let mut out = String::with_capacity(2048);
-    out.push('{');
-    out.push_str(&format!(
-        "\"map\":{{\"has_center\":{},\"center_lonlat\":{},\"status\":{},\"is_off_center\":{}}},",
-        map.map_center.is_some(),
-        map.map_center.map_or("null".to_string(), |c| {
+    write!(out, "{{\"map\":{{\"has_center\":{},\"center_lonlat\":", map.map_center.is_some())?;
+    match map.map_center {
+        Some(c) => {
             let mut g = [0.0; 3];
             epsg4326::unproject(&mut g, c.i, c.f);
-            format!("[{},{}]", num(g[0]), num(g[1]))
-        }),
-        quote(map.map_status.as_str()),
-        nav.is_off_center
-    ));
-    out.push_str(&format!(
-        "\"location\":{{\"status\":{},\"error_key\":{},\"has_location\":{}}},",
-        quote(pose_status_str(location.status)),
-        opt_str(location.error_key.as_deref()),
-        location.location.is_some()
-    ));
-    out.push_str(&format!(
-        "\"orientation\":{{\"status\":{},\"heading\":{}}},",
-        quote(pose_status_str(orientation.status)),
-        orientation.orientation.and_then(|o| o.heading).map_or("null".to_string(), num)
-    ));
-    out.push_str(&format!(
-        "\"view\":{{\"dist\":{},\"azimuth\":{},\"polar\":{}}},\"is_follow_mode\":{},",
-        num(camera.view_state.dist),
-        num(camera.view_state.azimuth),
-        num(camera.view_state.polar),
-        camera.is_follow_mode
-    ));
-    out.push_str(&format!(
-        "\"ui\":{{\"active_tool\":{},\"object_color_id\":{},\"object_size\":{},\"decor_id\":{},\"recent_picks\":[{}],\"chat_lines\":[{}]}},",
-        quote(active_tool_str(ui.active_tool)),
-        quote(&ui.object_color_id),
-        num(ui.object_size),
-        quote(ui.decor_id),
-        recent.join(","),
-        chat.join(",")
-    ));
-    out.push_str(&format!("\"settings\":{{{}}},", setting_values.join(",")));
-    out.push_str(&format!("\"companion\":{{\"person_ready\":{},\"pet_ready\":{}}},", companion.person_ready, companion.pet_ready));
-    out.push_str(&format!("\"address\":{{\"label\":{},\"loading\":{}}},", opt_str(address.label.as_deref()), address.loading));
-    out.push_str(&format!(
-        "\"scale_bar\":{{\"total_meters\":{},\"bar_width_px\":{},\"is_default_zoom\":{},\"label\":{}}},",
-        num(bar.total_meters),
-        num(bar.bar_width_px),
-        bar.is_default_zoom,
-        quote(&bar.label)
-    ));
-    out.push_str(&format!("\"compass\":{{\"show\":{}}},", show_compass()));
-    out.push_str(&format!("\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, quote(themes(use_theme_key()).fog)));
-    let previews: Vec<String> = preview_rows().into_iter().map(|(id, model, skin)| format!("{{\"id\":{id},\"model\":{model},\"skin\":{skin}}}")).collect();
-    out.push_str(&format!("\"previews\":[{}],\"object_storage_version\":{},", previews.join(","), OBJECT_STORAGE_VERSION));
-    let (search_loading, rows) = search_rows(&shell().language);
-    let rows: Vec<String> = rows
-        .iter()
-        .map(|r| {
-            format!(
-                "{{\"gers_id\":{},\"kind\":{},\"name\":{},\"subtitle\":{},\"distance\":{},\"icon\":{},\"color\":{},\"lon\":{},\"lat\":{}}}",
-                quote(&r.gers_id),
-                quote(r.kind),
-                quote(&r.name),
-                quote(&r.subtitle),
-                opt_str(r.distance.as_deref()),
-                quote(&r.icon),
-                quote(&r.color),
-                num(r.lon),
-                num(r.lat)
-            )
-        })
-        .collect();
-    out.push_str(&format!("\"search\":{{\"loading\":{},\"results\":[{}]}},", search_loading, rows.join(",")));
-    out.push_str(&format!("\"report\":{}", opt_str(shell().report.take().as_deref())));
-    out.push('}');
-    out
-}
-
-fn str_of<'a>(action: &'a Json, key: &str) -> Option<&'a str> {
-    action.get(key).and_then(Json::as_str)
-}
-
-fn f64_of(action: &Json, key: &str) -> Option<f64> {
-    action.get(key).and_then(Json::as_f64)
-}
-
-fn bool_of(action: &Json, key: &str) -> Option<bool> {
-    match action.get(key) {
-        Some(Json::Bool(b)) => Some(*b),
-        _ => None,
+            write!(out, "[{},{}]", Num(g[0]), Num(g[1]))?;
+        }
+        None => out.write_str("null")?,
     }
+    write!(out, ",\"status\":{},\"is_off_center\":{}}},", Quoted(map.map_status.as_str()), nav.is_off_center)?;
+    write!(
+        out,
+        "\"location\":{{\"status\":{},\"error_key\":{},\"has_location\":{}}},",
+        Quoted(pose_status_str(location.status)),
+        Or(location.error_key.as_deref().map(Quoted)),
+        location.location.is_some()
+    )?;
+    write!(
+        out,
+        "\"orientation\":{{\"status\":{},\"heading\":{}}},",
+        Quoted(pose_status_str(orientation.status)),
+        Or(orientation.orientation.and_then(|o| o.heading).map(Num))
+    )?;
+    write!(
+        out,
+        "\"view\":{{\"dist\":{},\"azimuth\":{},\"polar\":{}}},\"is_follow_mode\":{},",
+        Num(camera.view_state.dist),
+        Num(camera.view_state.azimuth),
+        Num(camera.view_state.polar),
+        camera.is_follow_mode
+    )?;
+    write!(
+        out,
+        "\"ui\":{{\"active_tool\":{},\"object_color_id\":{},\"object_size\":{},\"decor_id\":{},\"recent_picks\":[",
+        Quoted(active_tool_str(ui.active_tool)),
+        Quoted(&ui.object_color_id),
+        Num(ui.object_size),
+        Quoted(ui.decor_id)
+    )?;
+    for (i, p) in ui.recent_picks.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        match p {
+            RecentPick::Object(id) => write!(out, "{{\"kind\":\"object\",\"id\":{}}}", Quoted(id))?,
+            RecentPick::Decor(id) => write!(out, "{{\"kind\":\"decor\",\"id\":{}}}", Quoted(id))?,
+        }
+    }
+    out.write_str("],\"chat_lines\":[")?;
+    for (i, l) in ui.chat_lines.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        write!(out, "{{\"id\":{},\"text\":{},\"ts\":{}}}", l.id, Quoted(&l.text), Num(l.ts))?;
+    }
+    out.write_str("]},\"settings\":{")?;
+    let mut first = true;
+    for key in SETTING_KEYS() {
+        let Some(value) = settings.value(key) else { continue };
+        if !first {
+            out.write_char(',')?;
+        }
+        first = false;
+        match value {
+            SettingRef::Toggle(b) => write!(out, "{}:{b}", Quoted(key))?,
+            SettingRef::Text(t) => write!(out, "{}:{}", Quoted(key), Quoted(t))?,
+        }
+    }
+    write!(out, "}},\"companion\":{{\"person_ready\":{},\"pet_ready\":{}}},", companion.person_ready, companion.pet_ready)?;
+    write!(out, "\"address\":{{\"label\":{},\"loading\":{}}},", Or(address.label.map(Quoted)), address.loading)?;
+    write!(
+        out,
+        "\"scale_bar\":{{\"total_meters\":{},\"bar_width_px\":{},\"is_default_zoom\":{},\"label\":{}}},",
+        Num(bar.total_meters),
+        Num(bar.bar_width_px),
+        bar.is_default_zoom,
+        Quoted(bar.label)
+    )?;
+    write!(out, "\"compass\":{{\"show\":{}}},", show_compass())?;
+    write!(out, "\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, Quoted(themes(use_theme_key()).fog))?;
+    out.write_str("\"previews\":[")?;
+    for (i, (id, model, skin)) in preview_rows().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        write!(out, "{{\"id\":{id},\"model\":{model},\"skin\":{skin}}}")?;
+    }
+    write!(out, "],\"object_storage_version\":{OBJECT_STORAGE_VERSION},\"search\":{{\"results\":[")?;
+    let (mut rows, mut first) = (Ok(()), true);
+    let loading = search_rows(&shell().language, |r| {
+        if rows.is_ok() {
+            rows = search_row_json(&mut *out, first, &r);
+            first = false;
+        }
+    });
+    rows?;
+    write!(out, "],\"loading\":{loading}}},")?;
+    write!(out, "\"report\":{}}}", Or(shell().report.take().as_deref().map(Quoted)))
 }
 
+/// A string field of an action, its escapes decoded into a string of `N`
+/// bytes on the stack; none where it is missing, not a string, or longer.
+fn text_of<const N: usize>(action: &JsonValue, key: &str) -> Option<FixStr<N>> {
+    let s = action.get(key)?.as_str()?;
+    let mut out = FixStr::new();
+    write!(out, "{s}").ok()?;
+    Some(out)
+}
+
+fn f64_of(action: &JsonValue, key: &str) -> Option<f64> {
+    action.get(key)?.as_f64()
+}
+
+fn bool_of(action: &JsonValue, key: &str) -> Option<bool> {
+    action.get(key)?.as_bool()
+}
 /// The tracking button: back to the device when the map is off it, else
 /// follow mode on — the compass sensor asked for first — or off again.
 fn tracking_action() {
@@ -277,24 +298,24 @@ fn tracking_action() {
 /// Applies one UI action, a JSON object with a `type`. False for one that does
 /// not read.
 pub fn ui_action(text: &str) -> bool {
-    let Some(action) = parse(text) else { return false };
-    let Some(kind) = str_of(&action, "type") else { return false };
-    match kind {
+    let Some(action) = read_json(text) else { return false };
+    let Some(kind) = text_of::<64>(&action, "type") else { return false };
+    match kind.as_str() {
         "set_setting" => {
-            let (Some(key), Some(value)) = (str_of(&action, "key"), action.get("value")) else { return false };
-            let value = match value {
-                Json::Bool(b) => SettingValue::Toggle(*b),
-                Json::String(s) => SettingValue::Text(s.clone()),
+            let (Some(key), Some(value)) = (text_of::<64>(&action, "key"), action.get("value")) else { return false };
+            let value = match (value.as_bool(), value.as_str()) {
+                (Some(b), _) => SettingValue::Toggle(b),
+                (_, Some(s)) => SettingValue::Text(s.to_string()),
                 _ => return false,
             };
-            use_settings_store().set_setting(key, value);
+            use_settings_store().set_setting(&key, value);
         }
         "toggle_setting" => {
-            let Some(key) = str_of(&action, "key") else { return false };
-            use_settings_store().toggle_setting(key);
+            let Some(key) = text_of::<64>(&action, "key") else { return false };
+            use_settings_store().toggle_setting(&key);
         }
         "set_active_tool" => {
-            let Some(tool) = str_of(&action, "tool").and_then(active_tool_of) else { return false };
+            let Some(tool) = text_of::<64>(&action, "tool").and_then(|t| active_tool_of(&t)) else { return false };
             use_ui_store().set_active_tool(tool);
         }
         "set_object_size" => {
@@ -302,16 +323,16 @@ pub fn ui_action(text: &str) -> bool {
             use_ui_store().set_object_size(size);
         }
         "select_cube" => {
-            let Some(id) = str_of(&action, "id") else { return false };
-            use_ui_store().select_cube(id);
+            let Some(id) = text_of::<64>(&action, "id") else { return false };
+            use_ui_store().select_cube(&id);
         }
         "select_decor" => {
-            let Some(id) = str_of(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id)) else { return false };
+            let Some(id) = text_of::<64>(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else { return false };
             use_ui_store().select_decor(id);
         }
         "append_chat_line" => {
-            let Some(text) = str_of(&action, "text") else { return false };
-            use_ui_store().append_chat_line(text);
+            let Some(text) = text_of::<1024>(&action, "text") else { return false };
+            use_ui_store().append_chat_line(&text);
         }
         "set_is_follow_mode" => {
             let Some(on) = bool_of(&action, "on") else { return false };
@@ -337,7 +358,7 @@ pub fn ui_action(text: &str) -> bool {
             shell().go_to = (grounded == target).then_some(target);
         }
         "set_language" => {
-            let Some(lang) = str_of(&action, "lang") else { return false };
+            let Some(lang) = text_of::<64>(&action, "lang") else { return false };
             shell().language = lang.to_string();
         }
         "enable_sensors" => {
@@ -366,8 +387,8 @@ pub fn ui_action(text: &str) -> bool {
             orientation_unsubscribe();
         }
         "preview_open" => {
-            let (Some(id), Some(key)) = (f64_of(&action, "id"), str_of(&action, "key")) else { return false };
-            if !preview_open(id as u32, key) {
+            let (Some(id), Some(key)) = (f64_of(&action, "id"), text_of::<64>(&action, "key")) else { return false };
+            if !preview_open(id as u32, &key) {
                 return false;
             }
         }
@@ -376,8 +397,8 @@ pub fn ui_action(text: &str) -> bool {
             preview_close(id as u32);
         }
         "search_query" => {
-            let Some(query) = str_of(&action, "query") else { return false };
-            search_query(query);
+            let Some(query) = text_of::<1024>(&action, "query") else { return false };
+            search_query(&query);
         }
         "search_close" => search_close(),
         "ledger_report" => shell().report = Some(ledger_report_text()),

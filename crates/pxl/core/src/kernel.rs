@@ -44,9 +44,10 @@ pub struct Kernel {
     pub scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.
     pub bands: (usize, u32),
-    /// The pools over the memory's sections, by the id POOL_CREATE replied.
+    /// The pools over the memory's sections, made at boot, by section
+    /// (crate::memory's FIXED_POOL, PAGE_POOL, MESH_POOL).
     pub pools: Vec<Pool>,
-    /// The volumes, once VOLUME_POOLS has said which pools they draw on.
+    /// The volumes over the fixed and mesh pools, made at boot.
     pub volumes: Option<Volumes>,
     /// The open scan's bands, when it reads a volume of the module's.
     pub scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,

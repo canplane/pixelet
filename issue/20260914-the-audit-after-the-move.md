@@ -68,8 +68,11 @@ mapping (the composer never tone-mapped), reversed-Z.
   page table's revision.
 - ~~**B3**~~ The store's save is put off 300 ms and flushed when the page
   hides; a burst of writes is one save. Immediate off the page (the tests).
+  Lost in the move to the kernel (2026-09-15): nothing calls
+  `flush_save_if_due` and nothing flushes on hide, so nothing is saved.
 - ~~**B4**~~ The allocation probe is installed only from the console
-  (`__pxl_alloc_probe()`), never by default.
+  (`__pxl_alloc_probe()`), never by default. Not carried into the kernel;
+  it is in apps/web1 only.
 - ~~**B5**~~ `tick_capped` compares against the two holders instead of a
   seen list; the scan job's and the raycast's bands are kept on their
   owners (`Volumes::band_views` fills them); the scheduler's tick keeps
@@ -237,3 +240,6 @@ searched again after the module's hit. All four are the moves in
 
 Each step is one commit with the gate green; a ledger capture after 2 and
 3 says what the frame gained.
+
+Steps 5 and 6 were not taken up before the client moved into the kernel
+(2026-09-15); most of the TypeScript their items name is gone.

@@ -12,7 +12,7 @@
   },
 
   "tasks": {
-    // The Rust core's module, from crates/, into src/wasm/pxl.wasm. Every
+    // The Rust core's module, from crates/, into src/wasm/kernel.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build_wasm.ts",
 

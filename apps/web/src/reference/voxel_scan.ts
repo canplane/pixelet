@@ -8,11 +8,11 @@ import type { V3 } from "@pxl/shared/spec/space/v3.ts";
 
 import { Lanes } from "@xpute/core/ds/lanes.ts";
 
-import { CORE_POOL, FIXED_ALLOC } from "@/wasm/core_pool.ts";
+import { CORE_POOL, FIXED_ALLOC } from "@/reference/core_pool.ts";
 import { carve_column_run_set, column_run_set_bytes, type ColumnRunSet } from "@/reference/column_run.ts";
 
 import { band_voxel_idx, type ChunkVolume, get_chunk_band, L2_BAND_CELL_MASK, L2_BAND_CELL_SPAN, ordered_chunk_bands, sub_voxel_range, type SubVoxels, type VoxelBand } from "@/reference/volume.ts";
-import { MaterialClass, SUB_CELL_NONE, unpack_sub_cell_fraction, type VoxelMaterial } from "@/render/mesh/voxel.ts";
+import { MaterialClass, SUB_CELL_NONE, unpack_sub_cell_fraction, type VoxelMaterial } from "@/reference/mesh/voxel.ts";
 
 export type MeshRun = {
   z0: i32;
