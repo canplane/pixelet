@@ -107,8 +107,11 @@ function build_stamp(): Plugin {
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
 const remoteOriginDefault = "https://plei.me";
 
-// anti-HMR
-const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
+// anti-HMR. The shell's kernel glue is here too: kernel.ts boots the device
+// and the world at module load, and its importers are component modules Vite
+// hot-swaps, so a hot update ran that boot again against the one kernel the
+// memory holds — a second device beside the renderer's objects on the first.
+const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/", "/apps/web/src/wasm/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
