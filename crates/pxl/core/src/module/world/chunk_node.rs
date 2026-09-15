@@ -21,8 +21,10 @@ use std::collections::{HashMap, VecDeque};
 use pxl_shared::bake::format::Tile;
 use pxl_shared::spec::space::indexer::FROM_L3_IDX;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
+use pxl_shared::spec::space::xy::TO_XY;
 
 use crate::app::setting::store::use_settings_store;
+use crate::module::world::change::{world_changes, TERRAIN_PAGE};
 use crate::global::{now, Global};
 use crate::kernel::{kernel, with_world};
 use crate::module::world::lod::LodStep;
@@ -167,8 +169,11 @@ pub struct ChunkNode {
     generation: u32,
     /// What this chunk's runs hold in the mesh section, as the scheduler said.
     runs_bytes: u32,
-    /// The tile as last told, by address: None while its page has none.
-    tile: Option<usize>,
+    /// The page's tile as last told, by its revision in the world change log:
+    /// 0 while the page has none. Not by address: the tile store keeps its
+    /// tiles in a vector, and a push that grows it or a clear that moves its
+    /// last tile into the hole moves tiles no one replaced.
+    tile: u32,
     show_structures: bool,
     objects_revision: u32,
     decor_revision: u32,
@@ -185,6 +190,13 @@ fn page_lanes(tile: &Tile) -> PageLanes {
     }
 }
 
+/// The revision the tile store last gave `page_idx`'s tile: moved by every set
+/// and clear of the page, 0 once it has left. A topic's revisions only climb,
+/// so a tile set again after a clear never reads as the one before.
+fn tile_revision(page_idx: IVec) -> u32 {
+    world_changes().revision_of(TERRAIN_PAGE, TO_XY(page_idx) as i64)
+}
+
 impl ChunkNode {
     fn new(id: u32, page_idx: IVec, base_x: u32, base_y: u32) -> ChunkNode {
         let page_off = ivec::gather(base_x as i64, base_y as i64, 0);
@@ -199,7 +211,7 @@ impl ChunkNode {
             decor_cache: HashMap::new(),
             generation: 0,
             runs_bytes: 0,
-            tile: use_tile_store().get_tile(page_idx).map(|t| t as *const Tile as usize),
+            tile: tile_revision(page_idx),
             show_structures: settings.show_structures,
             objects_revision: object_column_revision(object_key),
             decor_revision: decor_column_revision(object_key),
@@ -220,7 +232,7 @@ impl ChunkNode {
 
     /// Tells the scheduler what this chunk is made of now.
     fn tell_source(&mut self, queue: &mut Queue) {
-        let page = self.tile.and_then(|_| use_tile_store().get_tile(self.page_idx)).map(page_lanes);
+        let page = use_tile_store().get_tile(self.page_idx).map(page_lanes);
         let (id, show) = (self.id, self.show_structures);
         with_world(|world, sched| sched.source(world, id, page, show, &mut |e| queue.push_back(e)));
         self.generation += 1;
@@ -237,7 +249,7 @@ impl ChunkNode {
     /// is the SOLID-only revision; a solid change still clears decor's cache,
     /// because a newly placed cube can occlude a scattered decor candidate.
     fn on_source_change(&mut self, queue: &mut Queue) {
-        let tile = use_tile_store().get_tile(self.page_idx).map(|t| t as *const Tile as usize);
+        let tile = tile_revision(self.page_idx);
         let show_structures = use_settings_store().show_structures;
         let objects_revision = object_column_revision(self.object_key);
         if self.tile == tile && self.show_structures == show_structures && self.objects_revision == objects_revision {
