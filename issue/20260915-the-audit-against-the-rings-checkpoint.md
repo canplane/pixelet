@@ -29,9 +29,16 @@ when its fix lands.
   mesh section now, a POI body excepted, which a POI page keeps as itself.
   A simulated pan (sixty steps north-east from Seoul) refused 8 pages before
   and none during the pan after.
-  Left as it is: a jump (a search result) releases every page it leaves
-  behind a one-second quarantine (`resident.rs`) while the next pages
-  arrive, and the first few are refused and fetched again a moment later.
+  Then the jump: a search result leaves every resident page at once, and
+  `resident.rs` held all of them for its one-second quarantine while the
+  next pages arrived, so a jump from Seoul to Busan refused 21 of them. A
+  released page's blocks now go back as soon as the scheduler has no chunk
+  of that page mounted (`Scheduler::page_mounted`), the second only an upper
+  bound; the same jump refused none. A page refused anyway was asked for
+  again only when the view next moved (the wishlist is rebuilt on an anchor
+  change, and the scheduler drops a failed demand), so a jump followed by a
+  still view left a hole; a failed terrain fetch now rebuilds the wishlist
+  once the quarantine has passed.
 
 ## H. Residue of the heap work
 
