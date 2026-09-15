@@ -39,6 +39,14 @@ when its fix lands.
   change, and the scheduler drops a failed demand), so a jump followed by a
   still view left a hole; a failed terrain fetch now rebuilds the wishlist
   once the quarantine has passed.
+  Exercised afterwards on the running client, every network path but POI's
+  (which stays disconnected, BACKLOG) let out: a pan of eighty steps (terrain
+  182 fetched, 0 failed; geocode 15, 0 failed; the module heap's live bytes
+  flat at 9.8 MB), the jump from Seoul to Busan (terrain 122, 0 failed), the
+  companion's model and skin and the decor kinds', and a search (answered in
+  1.8 s; a query superseded or closed sooner is aborted, as designed). No
+  trap and no refusal in any of them. The page ran hidden, so what is drawn
+  on screen was not seen.
 
 ## H. Residue of the heap work
 
