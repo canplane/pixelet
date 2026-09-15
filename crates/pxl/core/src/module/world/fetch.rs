@@ -158,6 +158,7 @@ pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), err
 
 fn failed(category: &str, subject: &str, aborted: bool) {
     match category {
+        use_tile_fetcher::CATEGORY if !aborted => use_tile_fetcher::terrain_failed(),
         search_modal::CATEGORY => search_modal::search_failed(subject, aborted),
         use_reverse_geocode::CATEGORY => {
             if let Ok(page) = subject.parse::<IVec>() {
