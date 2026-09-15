@@ -16,6 +16,7 @@
 use crate::bake::terrain::{ChunkSample, PageView};
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
+use crate::world::pool::Pool;
 use pxl_shared::spec::space::pvf3::ivec::gather;
 use xpute_core::kit::rng::{derive_seed_u64 as derive_seed, u32_to_unit, SplitMix64};
 
@@ -142,45 +143,59 @@ pub const DECOR_GROUPS: usize = 64;
 const DECOR_INSTANCES: usize = 1 << 16;
 
 /// Where a chunk's instances are gathered, in the order they are made, before
-/// they are laid into its block group by group: lanes of the fixed section
-/// the scheduler keeps, so a build takes nothing of its own.
+/// they are laid into its block group by group: two lanes in blocks of the mesh
+/// section, taken once and kept by the scheduler, so a build takes nothing of
+/// its own and the megabytes they are sit outside the module heap.
 pub struct DecorScratch {
-    instances: Vec<Instance>,
+    instances: &'static mut [Instance],
     /// The group each instance is in.
-    groups: Vec<u16>,
+    groups: &'static mut [u16],
+    len: usize,
     counts: [u32; DECOR_GROUPS],
     group_count: usize,
 }
 
 impl DecorScratch {
-    pub fn new() -> DecorScratch {
-        DecorScratch {
-            instances: Vec::with_capacity(DECOR_INSTANCES),
-            groups: Vec::with_capacity(DECOR_INSTANCES),
+    /// Its lanes, taken from `pool`; none when the pool has no room for them.
+    pub fn new(pool: &mut Pool) -> Option<DecorScratch> {
+        let instance_bytes = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
+        let instances = pool.acquire(instance_bytes)?;
+        let Some(groups) = pool.acquire((DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32) else {
+            pool.release(instances, instance_bytes);
+            return None;
+        };
+        // SAFETY: two blocks of the pool this scratch holds alone and never
+        // gives back, each DECOR_INSTANCES of its lane's element and aligned
+        // past it; the elements are plain numbers, and none is read before a
+        // build has written it.
+        let (instances, groups) = unsafe {
+            (
+                core::slice::from_raw_parts_mut(instances as *mut Instance, DECOR_INSTANCES),
+                core::slice::from_raw_parts_mut(groups as *mut u16, DECOR_INSTANCES),
+            )
+        };
+        Some(DecorScratch {
+            instances,
+            groups,
+            len: 0,
             counts: [0; DECOR_GROUPS],
             group_count: 0,
-        }
+        })
     }
 
     fn clear(&mut self) {
-        self.instances.clear();
-        self.groups.clear();
+        self.len = 0;
         self.counts = [0; DECOR_GROUPS];
         self.group_count = 0;
     }
 
     fn push(&mut self, group: usize, instance: Instance) {
-        if self.instances.len() < DECOR_INSTANCES {
-            self.instances.push(instance);
-            self.groups.push(group as u16);
+        if self.len < DECOR_INSTANCES {
+            self.instances[self.len] = instance;
+            self.groups[self.len] = group as u16;
+            self.len += 1;
             self.counts[group] += 1;
         }
-    }
-}
-
-impl Default for DecorScratch {
-    fn default() -> Self {
-        DecorScratch::new()
     }
 }
 
@@ -357,7 +372,7 @@ impl<'s> DecorBuild<'s> {
             k += 7 * n + n.div_ceil(4);
         }
         let mut rank = [0usize; DECOR_GROUPS];
-        for (i, &g) in s.instances.as_slice().iter().zip(s.groups.as_slice()) {
+        for (i, &g) in s.instances[..s.len].iter().zip(&s.groups[..s.len]) {
             let g = g as usize;
             let (n, r, f) = (s.counts[g] as usize, rank[g], first[g]);
             for (lane, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
