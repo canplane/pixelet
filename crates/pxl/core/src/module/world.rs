@@ -7,6 +7,7 @@ pub mod chunk_node;
 pub mod core_tick;
 pub mod decor;
 pub mod environment;
+pub mod fetch;
 pub mod frame;
 pub mod geocode;
 pub mod lod;

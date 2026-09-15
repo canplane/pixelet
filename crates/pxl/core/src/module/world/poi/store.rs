@@ -6,15 +6,15 @@
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 
-use super::repository::{Block, ResidentPoiPage};
+use super::repository::ResidentPoiPage;
 use crate::global::Global;
+use crate::kernel::kernel;
+use crate::memory::PAGE_POOL;
 use crate::module::world::change::POI_PAGE;
 use crate::module::world::page_table::PageTable;
 
 struct PoiStore {
     pages: PageTable<ResidentPoiPage>,
-    /// Blocks of pages that left, for the shell to give back to the page pool.
-    released: Vec<Block>,
 }
 
 static STORE: Global<PoiStore> = Global::new();
@@ -22,7 +22,6 @@ static STORE: Global<PoiStore> = Global::new();
 fn store() -> &'static mut PoiStore {
     STORE.get(|| PoiStore {
         pages: PageTable::new(Some(POI_PAGE)),
-        released: Vec::new(),
     })
 }
 
@@ -53,13 +52,9 @@ pub fn clear_pois(page_idx: IVec) {
     }
 }
 
+/// Gives a page's block back to the page section, with the page.
 fn release(held: ResidentPoiPage) {
-    if let Some(block) = held.block {
-        store().released.push(block);
+    if let (Some((at, bytes)), Some(pool)) = (held.block, kernel().pools.get_mut(PAGE_POOL as usize)) {
+        pool.release(at, bytes);
     }
-}
-
-/// The blocks released since the last take: the shell's to give back.
-pub fn take_released_blocks() -> Vec<Block> {
-    std::mem::take(&mut store().released)
 }

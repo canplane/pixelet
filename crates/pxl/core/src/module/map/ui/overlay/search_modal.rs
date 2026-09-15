@@ -5,16 +5,19 @@
 //! where it is and how far away, as the UI renders them. Always the live API
 //! (search/repository.rs); the request is the shell's.
 
+use core::fmt::{self, Write};
+
 use pxl_shared::spec::space::adapter::epsg4326;
 
 use crate::global::{now, Global};
 use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
-use crate::module::world::geocode::label::assemble_label;
+use crate::module::world::geocode::label::{assemble_label, primary_lang, Label};
 use crate::module::world::poi::poi_theme::resolve_poi_theme;
-use crate::module::world::sched::demand::Demand;
+use crate::module::world::sched::demand::{demand_key, Demand, DemandKey};
+use xpute_core::kit::hash::fnv1a64_str;
 use crate::module::world::sched::fetch_scheduler::fetch_sync;
-use crate::module::world::search::repository::{parse_search, search_url, SearchKind, SearchResult};
+use crate::module::world::search::repository::{parse_search, search_url, SearchKind, SearchTable, SearchUrl};
 
 // Debounced like use_reverse_geocode.rs's own DEBOUNCE_MS, but shorter: that
 // one waits for panning to settle on a new page; this waits for typing to
@@ -30,11 +33,13 @@ const PRIORITY: f64 = -10.0;
 
 const EARTH_RADIUS_M: f64 = 6_378_137.0;
 
+type Query = String;
+
 struct Search {
-    query: String,
+    query: Query,
     typed_at: f64,
     /// The query a request was submitted for.
-    submitted: Option<String>,
+    submitted: Option<Query>,
     /// Where the request ranks from, frozen when it was submitted: the same
     /// point the API ranked against, so the distances shown always agree with
     /// the order they are shown in, and a camera still drifting behind the open
@@ -42,20 +47,20 @@ struct Search {
     near: Option<(f64, f64)>,
     origin: Option<(f64, f64)>,
     loading: bool,
-    results: Vec<SearchResult>,
+    results: SearchTable,
 }
 
 static SEARCH: Global<Search> = Global::new();
 
 fn search() -> &'static mut Search {
     SEARCH.get(|| Search {
-        query: String::new(),
+        query: Query::new(),
         typed_at: 0.0,
         submitted: None,
         near: None,
         origin: None,
         loading: false,
-        results: Vec::new(),
+        results: SearchTable::new(),
     })
 }
 
@@ -93,8 +98,8 @@ pub fn search_close() {
 /// The next query's supersedes this one, and the scheduler's yield aborts it.
 pub fn search_step() {
     let s = search();
-    let q = s.query.trim().to_string();
-    if q.is_empty() || s.submitted.as_deref() == Some(q.as_str()) || now() - s.typed_at < DEBOUNCE_MS {
+    let q: Query = s.query.trim().to_string();
+    if q.is_empty() || s.submitted.as_ref() == Some(&q) || now() - s.typed_at < DEBOUNCE_MS {
         return;
     }
     s.near = use_map_store().map_center.map(|c| {
@@ -105,35 +110,50 @@ pub fn search_step() {
     fetch_sync(
         CATEGORY,
         &[Demand {
-            key: format!("{CATEGORY}:{q}"),
-            category: CATEGORY.to_string(),
+            key: query_key(&q),
+            category: CATEGORY,
             priority: PRIORITY,
         }],
     );
     s.submitted = Some(q);
 }
 
-/// The URL a started search demand is fetched from.
-pub fn search_request_url(query: &str) -> String {
-    search_url(query, search().near)
+/// A query's demand key. The query stands in it as its hash, so a query of
+/// any length is one key; its text is the modal's (`submitted`).
+fn query_key(query: &str) -> DemandKey {
+    demand_key(CATEGORY, format_args!("{:016x}", fnv1a64_str(query)))
 }
 
-/// The shell's answer for `query`: the response body.
-pub fn search_arrived(query: &str, body: Option<&str>) {
+/// Whether a demand's subject is the query submitted last.
+fn is_submitted(s: &Search, subject: &str) -> bool {
+    s.submitted.as_deref().is_some_and(|q| query_key(q) == demand_key(CATEGORY, subject))
+}
+
+/// The URL the submitted search is fetched from.
+pub fn search_request_url() -> SearchUrl<'static> {
+    let s: &'static Search = search();
+    search_url(s.submitted.as_deref().unwrap_or(""), s.near)
+}
+
+/// The shell's answer for the demand whose subject is `subject`: the
+/// response body.
+pub fn search_arrived(subject: &str, body: Option<&str>) {
     let s = search();
-    if s.submitted.as_deref() != Some(query) {
+    if !is_submitted(s, subject) {
         return;
     }
-    s.results = body.and_then(parse_search).unwrap_or_default();
+    if !body.is_some_and(|body| parse_search(&mut s.results, body)) {
+        s.results.clear();
+    }
     s.origin = s.near;
     s.loading = false;
 }
 
 /// The shell's report that the request for `query` failed or was aborted;
 /// loading clears on a real failure, not when superseded.
-pub fn search_failed(query: &str, aborted: bool) {
+pub fn search_failed(subject: &str, aborted: bool) {
     let s = search();
-    if !aborted && s.submitted.as_deref() == Some(query) {
+    if !aborted && is_submitted(s, subject) {
         s.loading = false;
     }
 }
@@ -150,74 +170,79 @@ fn ground_distance_m(a: (f64, f64), b: (f64, f64)) -> f64 {
     2.0 * EARTH_RADIUS_M * h.sqrt().min(1.0).asin()
 }
 
-fn group_thousands(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
+/// A distance as the sheet says it: whole metres under a kilometre, then one
+/// decimal, then whole kilometres grouped by thousands — the precision a
+/// reader can act on at each scale.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Distance(pub f64);
+
+impl fmt::Display for Distance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let m = self.0;
+        if m < 1000.0 {
+            return write!(f, "{}m", m.round());
         }
-        out.push(c);
+        if m < 10000.0 {
+            return write!(f, "{:.1}km", m / 1000.0);
+        }
+        let km = (m / 1000.0).round() as u64;
+        let (mut digits, mut len, mut v) = ([0u8; 20], 0, km);
+        loop {
+            digits[len] = b'0' + (v % 10) as u8;
+            len += 1;
+            v /= 10;
+            if v == 0 {
+                break;
+            }
+        }
+        for k in 0..len {
+            if k > 0 && (len - k).is_multiple_of(3) {
+                f.write_str(",")?;
+            }
+            f.write_char(digits[len - 1 - k] as char)?;
+        }
+        f.write_str("km")
     }
-    out
 }
 
-/// Whole metres under a kilometre, then one decimal, then whole kilometres —
-/// the precision a reader can act on at each scale.
-fn format_distance(m: f64) -> String {
-    if m < 1000.0 {
-        format!("{}m", m.round())
-    } else if m < 10000.0 {
-        format!("{:.1}km", m / 1000.0)
-    } else {
-        format!("{}km", group_thousands((m / 1000.0).round() as u64))
-    }
-}
-
-/// One result as the sheet shows it.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SearchRow {
-    pub gers_id: String,
+/// One result as the sheet shows it, borrowed from the results.
+#[derive(Clone, Debug)]
+pub struct SearchRow<'a> {
+    pub gers_id: &'a str,
     pub kind: &'static str,
-    pub name: String,
+    pub name: &'a str,
     /// Where the point is, resolved from its coordinates; empty with none.
-    pub subtitle: String,
-    pub distance: Option<String>,
-    pub icon: String,
-    pub color: String,
+    pub subtitle: Label<'a>,
+    pub distance: Option<Distance>,
+    pub icon: &'static str,
+    pub color: &'static str,
     pub lon: f64,
     pub lat: f64,
 }
 
-/// Whether a request is in flight, and the rows against `language`: divisions
-/// first, as the backend orders them.
-pub fn search_rows(language: &str) -> (bool, Vec<SearchRow>) {
+/// Each row against `language` handed to `row`, divisions first as the
+/// backend orders them; whether a request is in flight.
+pub fn search_rows(language: &str, mut row: impl FnMut(SearchRow<'_>)) -> bool {
     let s = search();
-    let lang = language.split('-').next().unwrap_or(language).to_lowercase();
-    let mut rows: Vec<SearchRow> = s
-        .results
-        .iter()
-        .map(|r| {
-            // A division's multilingual name against the UI language, falling
-            // back to the given name; a POI has no `common`.
-            let name = r.common.as_ref().and_then(|c| c.iter().find(|(k, _)| *k == lang)).map_or(r.name.clone(), |(_, v)| v.clone());
+    let lang = primary_lang(language);
+    let t = &s.results.parts;
+    for divisions in [true, false] {
+        for r in s.results.results().iter().filter(|r| matches!(r.kind, SearchKind::Division) == divisions) {
             let theme = resolve_poi_theme(&r.category);
-            SearchRow {
-                gers_id: r.gers_id.clone(),
-                kind: match r.kind {
-                    SearchKind::Division => "division",
-                    SearchKind::Poi => "poi",
-                },
-                name,
-                subtitle: if r.context.is_empty() { String::new() } else { assemble_label(&r.context, &lang) },
-                distance: s.origin.map(|o| format_distance(ground_distance_m(o, (r.lon, r.lat)))),
-                icon: theme.icon.to_string(),
-                color: theme.color.to_string(),
+            row(SearchRow {
+                gers_id: &r.gers_id,
+                kind: if divisions { "division" } else { "poi" },
+                // A division's multilingual name against the UI language,
+                // falling back to the given name; a POI has no `common`.
+                name: t.name_in(r.common, &r.name, &lang),
+                subtitle: assemble_label(t, r.context, &lang),
+                distance: s.origin.map(|o| Distance(ground_distance_m(o, (r.lon, r.lat)))),
+                icon: theme.icon,
+                color: theme.color,
                 lon: r.lon,
                 lat: r.lat,
-            }
-        })
-        .collect();
-    rows.sort_by_key(|r| r.kind != "division");
-    (s.loading, rows)
+            });
+        }
+    }
+    s.loading
 }

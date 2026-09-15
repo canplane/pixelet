@@ -49,6 +49,8 @@ export const enum Major {
   SENSOR = 0x1d,
   FETCH = 0x1e,
   LOAD = 0x1f,
+  GPU = 0x20,
+  SURFACE = 0x21,
 }
 
 /** The hover ghost's own verbs. */
@@ -84,17 +86,11 @@ export const enum ModelMinor {
 /** The environment's own verbs. */
 export const enum EnvMinor {
   OBSERVE = 0x10,
-  LANES = 0x11,
 }
 
 /** The change log's own verb. */
 export const enum ChangeMinor {
   LANES = 0x10,
-}
-
-/** The shaders' own verb. */
-export const enum ShaderMinor {
-  PIPELINE = 0x10,
 }
 
 /** A pool's own verbs. */
@@ -110,7 +106,6 @@ export const enum VolumeMinor {
   VOXEL = 0x11,
   SUB_VOXEL = 0x12,
   SEAL = 0x13,
-  POOLS = 0x14,
   STAT = 0x15,
 }
 
@@ -171,12 +166,6 @@ export const enum StepResult {
   DONE = 2,
 }
 
-/** A page's own verb: its terrain, decoded where the kernel reads it. */
-export const enum PageMinor {
-  TERRAIN = 0x10,
-  POI = 0x11,
-}
-
 /** The pointer's own verbs. */
 export const enum InputMinor {
   POINTER = 0x10,
@@ -191,10 +180,9 @@ export const enum SensorMinor {
   VISIBILITY = 0x13,
 }
 
-/** A fetch's own verb. */
+/** A fetch's own verb: room for a response's body. */
 export const enum FetchMinor {
-  GEOCODE = 0x10,
-  SEARCH = 0x11,
+  BODY = 0x10,
 }
 
 /** A load's own verb. */
@@ -204,9 +192,10 @@ export const enum LoadMinor {
 
 /** The world's own verbs. */
 export const enum WorldMinor {
-  LANES = 0x10,
   ACTION = 0x11,
-  SHEET = 0x12,
+  TOAST = 0x13,
+  LOG = 0x14,
+  SNAPSHOT = 0x15,
 }
 
 export const enum Cmd {
@@ -359,35 +348,19 @@ export const enum Cmd {
   /** tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
    * words)] */
   CHUNK_READ = 0x0102,
-  /** tag call · no packet → [out_at u32]: the environment's ENV_FLOATS */
-  ENV_LANES = 0x1111,
   /** tag call · no packet → [topic_at u32, key_at u32, revision_at u32,
    * head_at u32, ticks_at u32, capacity u32]: the change log's lanes */
   CHANGE_LANES = 0x1310,
-  /** tag call · no packet → [row u32[10]]: the renderer's lists taken — the
-   * uploads' address and count, the frees', the draws', the uniforms', the
-   * rewrites' — valid until the next take */
-  DRAW_READ = 0x1502,
-  /** tag call · [kind u32] → result: the WGSL's length in bytes, 0 for a
-   * kind that is not one; with one, [at u32] */
-  SHADER_READ = 0x1602,
-  /** tag call · [id u32] → [record u32[]]: the pipeline's record, empty for
-   * an id that is not one */
-  SHADER_PIPELINE = 0x1610,
 
   // ---- the memory's pools ----
   //
   // Mechanism rather than the world's: numbered here while this is the one
   // table. The pool a command is about is its packet's first child, so a
-  // release can be asked about as well as sent.
+  // release can be asked about as well as sent. The pools are the kernel's
+  // sections, made at boot: fixed 0, page 1, mesh 2 (pxl_core::memory).
 
-  /** tag call · [start u32, bytes u32, region_bytes u32, min_block_bytes
-   * u32] → result: the pool's id — over `bytes` of the memory at `start`, a
-   * section of the map, whose range the shell keeps for it alone */
-  POOL_CREATE = 0x1701,
   /** tag call · [pool u32] → result: where its stat is, twelve words in
-   * BuddyStat's first twelve fields' order, valid until the next
-   * POOL_CREATE */
+   * BuddyStat's first twelve fields' order, at a fixed address */
   POOL_READ = 0x1702,
   /** tag call · [pool u32, bytes u32] → result: the block's address, 0 when
    * the range is used up or the request is larger than a region */
@@ -429,9 +402,6 @@ export const enum Cmd {
   VOLUME_SUB_VOXEL = 0x1812,
   /** [volume u32] — closed to painting, its overflow sorted by column */
   VOLUME_SEAL = 0x1813,
-  /** [fixed u32, mesh u32] — the pools volumes draw on: the standing band
-   * stores from `fixed`, the rest from `mesh`; before any tick */
-  VOLUME_POOLS = 0x1814,
   /** tag call · no packet → result: where the volumes' stat is, three words:
    * allocated, reused, refused */
   VOLUME_STAT = 0x1815,
@@ -534,28 +504,20 @@ export const enum Cmd {
   // ---- the world's turn: the shell's events in, the kernel's asks out ----
 
   /** [app_env str, build_time str, build_id str, build_number str, published_tiles bool,
-   * handheld bool, page_section_bytes u32, mesh_section_bytes f64] — the shell's boot:
-   * what the bundler defined and the memory map; the object store loaded */
+   * handheld bool] — the shell's boot: what the bundler defined and the device; the
+   * object store loaded */
   WORLD_CREATE = 0x1b01,
   /** [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
-   * orientation_permission bool] — the effects' turn, then the tick's phases; the
-   * viewport in CSS pixels → result: 1 when a frame after this one was asked for */
+   * orientation_permission bool, slice_ms f64, batch_ms f64, frame_ms f64, credits u32]
+   * — the central scheduler's strobe: the effects' turn, then the tick's phases on the
+   * grant, the fetches within the credits; the viewport in CSS pixels. The turn leaves
+   * its signals on the completion ring, drawn by the kernel, and last this command's own
+   * as a signal: [asked bool, used_ms f64, settled bool, draws u32] — a turn after this one
+   * was asked for, what the tick spent, whether it ran on the batch quantum, and the
+   * draws it listed */
   WORLD_UPDATE = 0x1b03,
-  /** tag call · no packet → [toasts: [[show bool, id str, message_key str, tone u32
-   * (0 loading, 1 error, 2 success)]], geolocation u32[] (0 start, 1 stop), orientation
-   * u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool, ui str
-   * (app/shell.rs's snapshot), decor: [[group u32, mesh u32, skin f64 (-1 none)]], skins:
-   * [[model u32, skin u32]]] — what the turn asks of the shell */
-  WORLD_READ = 0x1b02,
-  /** tag call · no packet → [stage_at u32]: render/gpu/stage.rs's STAGE_WORDS doubles */
-  WORLD_LANES = 0x1b10,
   /** tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not */
   WORLD_ACTION = 0x1b11,
-  /** tag call · [generation u32] → [whole bool, size u32, generation u32, entries: [[x u32,
-   * y u32, w u32, h u32, kind u32 (0 place, 1 cluster, 2 bubble), icon str, color str, text
-   * str (a bubble's lines joined by \n), logical_w f64, box_h f64]]] — the badge sheet's
-   * flush: every live entry when the sheet was replaced, else the entries drawn since */
-  WORLD_SHEET = 0x1b12,
   /** [left f64, top f64, width f64, height f64] — the canvas's client rect */
   INPUT_UPDATE = 0x1c03,
   /** [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
@@ -572,34 +534,57 @@ export const enum Cmd {
   /** [webkit_compass_heading f64, alpha f64, beta f64, gamma f64] — an orientation
    * event; NaN where the browser gave none */
   SENSOR_ORIENTATION = 0x1d11,
-  /** [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool] */
+  /** [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]; as a signal,
+   * [sensor u32] — ask the user's permission, inside the gesture the action came from */
   SENSOR_PERMISSION = 0x1d12,
   /** [visible bool] — the tab's visibility */
   SENSOR_VISIBILITY = 0x1d13,
-  /** [page u64, land u32, water u32, structure u32, transport u32, ele u32 (addresses),
-   * blocks: [[at u32, bytes u32]], own bool] — a page's terrain, copied into the page
-   * section; `own` false for the shared ocean page no one page owns */
-  PAGE_TERRAIN = 0x0210,
-  /** [page u64, block: [at u32, bytes u32] | null] — a page's POI packet, copied into the page
-   * section; null for the shared empty page */
-  PAGE_POI = 0x0211,
-  /** tag call · no packet → [started: [[key str, category str, url str]], aborts: [key
-   * str], releases: [[at u32, bytes u32]]] — the demands to run, the ones to cancel, and
-   * the page blocks the kernel let go */
-  FETCH_READ = 0x1e02,
-  /** [key str, outcome u32 (0 ok, 1 aborted, 2 error), error str | null, phases: [[name
-   * str, value f64]]] — a started demand settled */
+  /** tag call · [key str, bytes u32] → result: the address of room for the response's
+   * body in the page section, 0 refused — the shell writes the bytes there and nothing
+   * else */
+  FETCH_BODY = 0x1e10,
+  /** [key str, outcome u32 (0 ok, 1 aborted, 2 error), status u32, body_at u32, body_bytes
+   * u32 (0 for none), error str | null, net_ms f64] — a started fetch finished; what the
+   * status and the body mean is the kernel's */
   FETCH_UPDATE = 0x1e03,
-  /** [page u64, body str | null] — a reverse geocode's answer; null for a 404 */
-  FETCH_GEOCODE = 0x1e10,
-  /** [query str, body str | null] — a forward search's response body */
-  FETCH_SEARCH = 0x1e11,
-  /** tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]] */
-  LOAD_READ = 0x1f02,
   /** [url str, bytes u8[]] — a model's bytes */
   LOAD_UPDATE = 0x1f03,
   /** [url str, handle u32] — an image decoded and held by the shell */
   LOAD_IMAGE = 0x1f10,
   /** [url str] — a load failed */
   LOAD_DELETE = 0x1f04,
+  /** [min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's
+   * renderer is made on it (render/gpu/renderer.rs) */
+  GPU_CREATE = 0x2001,
+  /** no packet — the device went away, and every object on it */
+  GPU_DELETE = 0x2004,
+  /** tag call · [role u32 (0 world, 1 case)] → result: the surface's handle, 0 refused — a
+   * canvas the shell hands over, drawn by the kernel alone from then on */
+  SURFACE_CREATE = 0x2101,
+  /** [surface u32, width u32, height u32, device_pixel_ratio f64] — the canvas's layout box in
+   * device pixels, transforms aside; the buffer it is drawn into is the kernel's */
+  SURFACE_UPDATE = 0x2103,
+  /** tag call · [surface u32] — the canvas is going; what it held on the device is let go
+   * before the call returns */
+  SURFACE_DELETE = 0x2104,
+
+  // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or an action ----
+
+  /** [show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a
+   * toast shown or dismissed */
+  WORLD_TOAST = 0x1b13,
+  /** [line str] — a console line */
+  WORLD_LOG = 0x1b14,
+  /** [ui str] — app/shell.rs's snapshot, when it changed */
+  WORLD_SNAPSHOT = 0x1b15,
+  /** [sensor u32 (0 geolocation, 1 orientation)] — start watching */
+  SENSOR_CREATE = 0x1d01,
+  /** [sensor u32] — stop watching */
+  SENSOR_DELETE = 0x1d04,
+  /** [key str, url str] — a fetch the scheduler started */
+  FETCH_CREATE = 0x1e01,
+  /** [key str] — a fetch yield aborted; the shell settles it as aborted */
+  FETCH_DELETE = 0x1e04,
+  /** [kind u32 (0 glTF, 1 image), url str] — a model or an image to load */
+  LOAD_CREATE = 0x1f01,
 }

@@ -119,3 +119,7 @@ pub fn update_settle_tracker(tracker: &SettleTracker, target: Vec2, now: f64, se
         moved,
     }
 }
+
+#[cfg(test)]
+#[path = "path.test.rs"]
+mod test;

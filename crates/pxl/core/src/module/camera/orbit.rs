@@ -63,3 +63,7 @@ pub fn rotate2(x: f64, y: f64, angle: f64) -> Rotated {
 pub fn damp_alpha(k: f64, delta: f64) -> f64 {
     1.0 - fdlibm::exp(-k * delta)
 }
+
+#[cfg(test)]
+#[path = "orbit.test.rs"]
+mod test;

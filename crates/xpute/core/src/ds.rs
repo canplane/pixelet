@@ -5,6 +5,7 @@ pub mod buddy;
 pub mod deque;
 pub mod fixed_heap;
 pub mod grid_index;
+pub mod handle;
 pub mod heap;
 pub mod lanes;
 pub mod lattice_hash;

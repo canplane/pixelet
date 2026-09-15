@@ -157,8 +157,8 @@ disturbing it, since there is then no server-side path at all.
   neighbour of it.
 - **WebGL reach versus a hard cut to WebGPU** is undecided and deliberately
   not decided here. Two renderers is two of everything; one renderer is a
-  reach cost on whatever has not shipped WebGPU. Name it when the exit is
-  scheduled.
+  reach cost on whatever has not shipped WebGPU. Decided below, 2026-09-13:
+  WebGPU only.
 
 ## What would say no
 
@@ -254,17 +254,18 @@ on implementation size, and no estimate would change it. What that line
 was right about is that three.js does work for us that would disappear
 silently, so the renderer is built against a list of it:
 
-- [ ] glTF loading and the model cache (`gltf_cache.ts`, `asset_store`)
-- [ ] texture arrays, and the texture pack's sheet into one
-- [ ] the multisampled target and the composer's chain — sized by the
+- [x] glTF loading and the model cache (`gltf_cache.ts`, `asset_store`)
+- [x] texture arrays, and the texture pack's sheet into one
+- [x] the multisampled target and the composer's chain — sized by the
       formula in the update above, not by a default
-- [ ] the billboard depth pass (`render/scene_depth.ts`,
+- [x] the billboard depth pass (`render/scene_depth.ts`,
       `billboard/anchor_occlusion.ts`'s `gl_FragDepth` from an upright twin)
-- [ ] shadows, the sky and its render order
-- [ ] frustum culling and bounds, instancing, and buffer lifetimes counted
+- [x] shadows, the sky and its render order
+- [x] frustum culling and bounds, instancing, and buffer lifetimes counted
       rather than trusted
 
-Filled when the renderer starts, not before.
+Filled 2026-09-14, when the WebGPU renderer went through (`render/gpu`,
+BACKLOG's record of the move).
 
 ## Recorded 2026-09-13: the web's ceiling, and the core that is not tied to it
 

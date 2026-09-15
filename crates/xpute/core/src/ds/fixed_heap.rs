@@ -37,10 +37,13 @@ pub trait Range {
     const END: usize;
 }
 
-/// Where untouched space starts, and each class's list of freed blocks
-/// (each block's first word is the next).
+/// Where untouched space starts, the requests served so far, and each class's
+/// list of freed blocks (each block's first word is the next). `top` and
+/// `allocs` lead, in that order, so a host reads them as a row (`stat`).
+#[repr(C)]
 struct Heap {
     top: usize,
+    allocs: usize,
     free: [usize; CLASSES],
 }
 
@@ -56,9 +59,22 @@ unsafe impl<R: Range> Sync for FixedHeap<R> {}
 impl<R: Range> FixedHeap<R> {
     pub const fn new() -> Self {
         FixedHeap {
-            heap: UnsafeCell::new(Heap { top: 0, free: [0; CLASSES] }),
+            heap: UnsafeCell::new(Heap { top: 0, allocs: 0, free: [0; CLASSES] }),
             range: PhantomData,
         }
+    }
+
+    /// Requests served since instantiation, reallocations that moved included:
+    /// a span of work that allocates nothing leaves it where it was.
+    pub fn allocs(&self) -> usize {
+        // SAFETY: single-threaded; see the Sync impl.
+        unsafe { (*self.heap.get()).allocs }
+    }
+
+    /// Where the heap's row lies — the top it has cut to (0 before the first
+    /// request) and `allocs`, a word each — for a host to read in place.
+    pub fn stat(&self) -> *const usize {
+        self.heap.get() as *const usize
     }
 
     /// How much of the range has been cut, for a ledger.
@@ -90,6 +106,7 @@ unsafe impl<R: Range> GlobalAlloc for FixedHeap<R> {
         if h.top == 0 {
             h.top = R::base();
         }
+        h.allocs += 1;
         let class = class_of(layout);
         let head = h.free[class];
         if head != 0 {
@@ -162,5 +179,8 @@ mod tests {
             assert_ne!(c, b);
         }
         assert_eq!(heap.used(), 128 * 2 + 256);
+        assert_eq!(heap.allocs(), 4, "three requests and the one move");
+        // SAFETY: the row the heap names, two words.
+        assert_eq!(unsafe { *heap.stat().add(1) }, heap.allocs());
     }
 }

@@ -18,7 +18,7 @@
 //! `{"state":{"overrides":{…}},"version":0}`, so a browser keeps its settings
 //! across the move.
 
-use super::schema::{is_valid_setting, SettingKey, SettingValue, DEFAULT_SETTINGS};
+use super::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
 use crate::global::Global;
 use crate::host::{storage_get, storage_set};
 
@@ -101,27 +101,35 @@ impl SettingsStore {
         }
     }
 
+    /// `state[key]`, where it lies.
+    pub fn value(&self, key: &str) -> Option<SettingRef<'_>> {
+        Some(match key {
+            "show_poi" => SettingRef::Toggle(self.show_poi),
+            "show_decor" => SettingRef::Toggle(self.show_decor),
+            "show_structures" => SettingRef::Toggle(self.show_structures),
+            "lock_camera_tilt" => SettingRef::Toggle(self.lock_camera_tilt),
+            "camera_terrain" => SettingRef::Text(&self.camera_terrain),
+            "ground_snap" => SettingRef::Toggle(self.ground_snap),
+            "enable_terrain_carving" => SettingRef::Toggle(self.enable_terrain_carving),
+            "show_edge_shade" => SettingRef::Toggle(self.show_edge_shade),
+            "show_rim_light" => SettingRef::Toggle(self.show_rim_light),
+            "show_shadow_map" => SettingRef::Toggle(self.show_shadow_map),
+            "texture_pack" => SettingRef::Toggle(self.texture_pack),
+            "msaa" => SettingRef::Toggle(self.msaa),
+            "show_debug_objects" => SettingRef::Toggle(self.show_debug_objects),
+            "show_ledger" => SettingRef::Toggle(self.show_ledger),
+            "pixel_dither" => SettingRef::Toggle(self.pixel_dither),
+            "person_variant_key" => SettingRef::Text(&self.person_variant_key),
+            "pet_variant_key" => SettingRef::Text(&self.pet_variant_key),
+            _ => return None,
+        })
+    }
+
     /// `state[key]`.
     pub fn get(&self, key: &str) -> Option<SettingValue> {
-        Some(match key {
-            "show_poi" => SettingValue::Toggle(self.show_poi),
-            "show_decor" => SettingValue::Toggle(self.show_decor),
-            "show_structures" => SettingValue::Toggle(self.show_structures),
-            "lock_camera_tilt" => SettingValue::Toggle(self.lock_camera_tilt),
-            "camera_terrain" => SettingValue::Text(self.camera_terrain.clone()),
-            "ground_snap" => SettingValue::Toggle(self.ground_snap),
-            "enable_terrain_carving" => SettingValue::Toggle(self.enable_terrain_carving),
-            "show_edge_shade" => SettingValue::Toggle(self.show_edge_shade),
-            "show_rim_light" => SettingValue::Toggle(self.show_rim_light),
-            "show_shadow_map" => SettingValue::Toggle(self.show_shadow_map),
-            "texture_pack" => SettingValue::Toggle(self.texture_pack),
-            "msaa" => SettingValue::Toggle(self.msaa),
-            "show_debug_objects" => SettingValue::Toggle(self.show_debug_objects),
-            "show_ledger" => SettingValue::Toggle(self.show_ledger),
-            "pixel_dither" => SettingValue::Toggle(self.pixel_dither),
-            "person_variant_key" => SettingValue::Text(self.person_variant_key.clone()),
-            "pet_variant_key" => SettingValue::Text(self.pet_variant_key.clone()),
-            _ => return None,
+        self.value(key).map(|v| match v {
+            SettingRef::Toggle(b) => SettingValue::Toggle(b),
+            SettingRef::Text(t) => SettingValue::Text(t.to_string()),
         })
     }
 

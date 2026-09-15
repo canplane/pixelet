@@ -185,8 +185,8 @@ Placement's columns; what is missing is `value` (the variant's palette id)
 and `id`, and the variant is implicit in which lane set a row is in.
 "Emitting" would be packing those lanes with `encode_placements`, and
 nothing reads such a packet today. It is read the moment a placement
-crosses a boundary: the worker, or a server. Until then it is a copy
-nobody opens, so it waits for its first reader, which is the worker.
+crosses a boundary — a server. Until then it is a copy nobody opens, so it
+waits for its first reader.
 
 **The bucket.** Models are Vite assets today, served with the bundle.
 They move to the tiles' bucket under their content hash —
@@ -205,12 +205,6 @@ rows and the user rows together, which `shipped_palette()` stands in for
 now — and a Placement whose `value` is that id draws the model through
 the loader by `model_key`. A day. After the bucket, on whose path it
 stands.
-
-**The worker**, which carries `Placement` rows and mesh spans across its
-boundary in the one form they now have. Its case is made from the
-phone's numbers in
-[20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md),
-"The worker's case".
 
 ## Done 2026-09-13, later: the bucket, and what changed on the way
 
@@ -255,5 +249,5 @@ comes back); and `deno test` no longer has to route around Vite-only
 imports.
 
 What is left of this document's list: the scatter emitting `Placement`
-(waits for the worker), and the ingest route (`POST /api/models`), which
+(waits for a reader across a boundary), and the ingest route (`POST /api/models`), which
 now stands on a path that exists.

@@ -117,3 +117,9 @@ already does.
    spills today, so the null path is exercised by its test until a kernel
    makes the section refuse
 5. The submission ring's `EAGAIN` comes with the ring, at the Rust mesher.
+
+## Status 2026-09-15
+
+The rings are the first two blocks of the fixed section, at fixed offsets
+(`pxl_core::memory`'s `RING_SQ_AT` and `RING_CQ_AT`), taken at boot and
+checked there; the boot block names them. No scratch section was cut.

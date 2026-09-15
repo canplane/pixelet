@@ -95,47 +95,8 @@ pub const PIPELINES: u32 = 15;
 // count, and for each its stride, its step mode, and its attributes as a
 // count and (location, offset, format) each; then the bind group layouts —
 // a count, and for each its entries as a count and (binding, visibility,
-// kind) each.
-pub const TRIANGLES: u32 = 0;
-pub const STRIP: u32 = 1;
-pub const LINES: u32 = 2;
-pub const CULL_NONE: u32 = 0;
-pub const CULL_BACK: u32 = 1;
-/// Depth compares, under reversed Z: nearer is greater. LESS is the shadow
-/// map's, drawn with a plain orthographic depth. NO_DEPTH means the pass has
-/// no depth attachment at all.
-pub const ALWAYS: u32 = 0;
-pub const GREATER: u32 = 1;
-pub const GREATER_EQUAL: u32 = 2;
-pub const LESS: u32 = 3;
-pub const NO_DEPTH: u32 = 4;
-pub const OPAQUE: u32 = 0;
-/// Straight alpha over what is drawn.
-pub const ALPHA: u32 = 1;
-pub const FRAME_SAMPLES: u32 = 0;
-pub const ONE_SAMPLE: u32 = 1;
-pub const PER_VERTEX: u32 = 0;
-pub const F32: u32 = 0;
-pub const F32X2: u32 = 1;
-pub const F32X3: u32 = 2;
-pub const F32X4: u32 = 3;
-pub const U32X4: u32 = 4;
-pub const VERTEX: u32 = 1;
-pub const FRAGMENT: u32 = 2;
-pub const BOTH: u32 = VERTEX | FRAGMENT;
-/// A binding's kind: a uniform buffer, one bound at a dynamic offset, a
-/// read-only storage buffer, a float texture, a float texture array, a
-/// depth texture, a filtering sampler, a comparison sampler, and the
-/// frame's depth — a depth texture multisampled as the frame is.
-pub const UNIFORM: u32 = 0;
-pub const UNIFORM_DYNAMIC: u32 = 1;
-pub const STORAGE: u32 = 2;
-pub const TEXTURE: u32 = 3;
-pub const TEXTURE_ARRAY: u32 = 4;
-pub const DEPTH: u32 = 5;
-pub const SAMPLER: u32 = 6;
-pub const SAMPLER_COMPARISON: u32 = 7;
-pub const FRAME_DEPTH: u32 = 8;
+// kind) each. The codes are the host's too (render/gpu/api.json).
+pub use crate::render::gpu::api_spec::record::*;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()

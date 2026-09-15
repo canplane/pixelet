@@ -12,7 +12,7 @@
   },
 
   "tasks": {
-    // The Rust core's module, from crates/, into src/wasm/pxl.wasm. Every
+    // The Rust core's module, from crates/, into src/wasm/kernel.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build_wasm.ts",
 
@@ -39,10 +39,9 @@
     "deploy": "deno run -A script/deploy.ts",
 
     "check": "deno check src/index.ts",
-    // Pure-logic modules and the reference tests that hold the module to
-    // the TypeScript it replaced (src/reference): none of it touches the
-    // DOM or the GPU, so plain `deno test` works with no browser harness,
-    // over the module built for it. What needs a canvas is verified live.
+    // Pure-logic modules: none of them touches the DOM or the GPU, so plain
+    // `deno test` works with no browser harness, over the module built for
+    // it. What needs a canvas is verified live.
     "test": { "command": "deno test -A src", "dependencies": ["build:wasm"] }
   },
 

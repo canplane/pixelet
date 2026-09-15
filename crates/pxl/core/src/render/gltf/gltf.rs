@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use xpute_core::kit::mat4::{mat4, mat4_mul, Mat4};
 
-use crate::json::{parse, Json};
+use xpute_core::kit::json::{read_json, JsonValue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GltfPrimitive {
@@ -137,31 +137,41 @@ pub fn parse_gltf(bytes: &[u8], external_buffers: &[&[u8]]) -> Result<Gltf, Stri
             at += 8 + chunk_length;
         }
         let text = text.ok_or("gltf: a GLB without a JSON chunk")?;
-        let json = parse(text).ok_or("gltf: the JSON chunk does not parse")?;
+        let json = read_json(text).ok_or("gltf: the JSON chunk does not parse")?;
         let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
         buffers.extend_from_slice(external_buffers);
-        read_document(&json, &buffers)
+        read_document(json, &buffers)
     } else {
         let text = core::str::from_utf8(bytes).map_err(|_| "gltf: not UTF-8")?;
-        let json = parse(text).ok_or("gltf: the document does not parse")?;
-        read_document(&json, external_buffers)
+        let json = read_json(text).ok_or("gltf: the document does not parse")?;
+        read_document(json, external_buffers)
     }
 }
 
-fn num(v: Option<&Json>) -> Option<f64> {
-    v.and_then(Json::as_f64)
+fn num(v: Option<JsonValue>) -> Option<f64> {
+    v?.as_f64()
 }
 
-fn arr(v: Option<&Json>) -> &[Json] {
-    v.and_then(Json::as_array).unwrap_or(&[])
+/// An array's items; nothing for none or for any other value.
+fn arr<'a>(v: Option<JsonValue<'a>>) -> impl Iterator<Item = JsonValue<'a>> {
+    v.into_iter().flat_map(|v| v.items())
 }
 
-fn floats<const N: usize>(v: Option<&Json>, default: [f64; N]) -> [f64; N] {
-    let a = arr(v);
-    if a.len() < N {
+/// A keyword the spec names — a type, a path, an interpolation — which no
+/// escape can make one.
+fn plain<'a>(v: Option<JsonValue<'a>>) -> Option<&'a str> {
+    v?.as_str()?.as_plain()
+}
+
+fn floats<const N: usize>(v: Option<JsonValue>, default: [f64; N]) -> [f64; N] {
+    if arr(v).count() < N {
         return default;
     }
-    core::array::from_fn(|i| a[i].as_f64().unwrap_or(default[i]))
+    let mut out = default;
+    for (o, item) in out.iter_mut().zip(arr(v)) {
+        *o = item.as_f64().unwrap_or(*o);
+    }
+    out
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -178,7 +188,7 @@ enum Elements {
 }
 
 struct Reader<'a> {
-    json: &'a Json,
+    json: JsonValue<'a>,
     buffers: &'a [&'a [u8]],
     cache: HashMap<(usize, As), Vec<f64>>,
 }
@@ -186,19 +196,19 @@ struct Reader<'a> {
 impl Reader<'_> {
     /// An accessor's elements, tightly packed, as numbers.
     fn values(&mut self, index: usize) -> Result<Vec<f64>, String> {
-        let a = &arr(self.json.get("accessors"))[index];
+        let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| format!("gltf: no accessor {index}"))?;
         let count = num(a.get("count")).unwrap_or(0.0) as usize;
-        let width = type_size(a.get("type").and_then(Json::as_str).unwrap_or("SCALAR"));
+        let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
         let mut out = vec![0.0; count * width];
         if let Some(bv_index) = num(a.get("bufferView")) {
-            let bv = &arr(self.json.get("bufferViews"))[bv_index as usize];
+            let bv = self.json.get("bufferViews").and_then(|x| x.at(bv_index as usize)).ok_or_else(|| format!("gltf: no buffer view {bv_index}"))?;
             let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
             let buffer = *self.buffers.get(buffer_index).ok_or_else(|| format!("gltf: buffer {buffer_index} not provided"))?;
             let component_type = num(a.get("componentType")).unwrap_or(5126.0) as u32;
             let comp = component_size(component_type);
             let stride = num(bv.get("byteStride")).map_or(comp * width, |s| s as usize);
             let base = num(bv.get("byteOffset")).unwrap_or(0.0) as usize + num(a.get("byteOffset")).unwrap_or(0.0) as usize;
-            let norm = a.get("normalized") == Some(&Json::Bool(true));
+            let norm = a.get("normalized").and_then(|n| n.as_bool()) == Some(true);
             for e in 0..count {
                 for c in 0..width {
                     let at = base + e * stride + c * comp;
@@ -285,7 +295,7 @@ impl Reader<'_> {
     }
 }
 
-fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
+fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
     let mut r = Reader { json, buffers, cache: HashMap::new() };
 
     let mut meshes = Vec::new();
@@ -317,7 +327,7 @@ fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
         meshes.push(prims);
     }
 
-    let raw_nodes = arr(json.get("nodes"));
+    let raw_nodes: Vec<JsonValue> = arr(json.get("nodes")).collect();
     let mut parents = vec![-1i32; raw_nodes.len()];
     for (i, n) in raw_nodes.iter().enumerate() {
         for c in arr(n.get("children")) {
@@ -340,9 +350,9 @@ fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
                 compose_trs(&mut local, &translation, &rotation, &scale);
             }
             GltfNode {
-                name: n.get("name").and_then(Json::as_str).unwrap_or("").to_string(),
+                name: n.get("name").and_then(|v| v.as_str()).map_or(String::new(), |s| s.to_string()),
                 parent: parents[i],
-                children: arr(n.get("children")).iter().filter_map(Json::as_f64).map(|c| c as u32).collect(),
+                children: arr(n.get("children")).filter_map(|c| c.as_f64()).map(|c| c as u32).collect(),
                 mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
                 skin: num(n.get("skin")).map_or(-1, |v| v as i32),
                 local,
@@ -355,7 +365,7 @@ fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
 
     let mut skins = Vec::new();
     for s in arr(json.get("skins")) {
-        let joints: Vec<u32> = arr(s.get("joints")).iter().filter_map(Json::as_f64).map(|j| j as u32).collect();
+        let joints: Vec<u32> = arr(s.get("joints")).filter_map(|j| j.as_f64()).map(|j| j as u32).collect();
         let inverse_bind = match num(s.get("inverseBindMatrices")) {
             Some(i) => r.f32s(i as usize)?,
             None => joints.iter().flat_map(|_| [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]).collect(),
@@ -364,23 +374,23 @@ fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
     }
 
     let mut animations = Vec::new();
-    for (k, a) in arr(json.get("animations")).iter().enumerate() {
+    for (k, a) in arr(json.get("animations")).enumerate() {
         let mut duration = 0.0f64;
         let mut channels = Vec::new();
         for c in arr(a.get("channels")) {
             let Some(target) = c.get("target") else { continue };
             let Some(node) = num(target.get("node")) else { continue };
-            let path = match target.get("path").and_then(Json::as_str) {
+            let path = match plain(target.get("path")) {
                 Some("translation") => GltfPath::Translation,
                 Some("rotation") => GltfPath::Rotation,
                 Some("scale") => GltfPath::Scale,
                 _ => continue,
             };
-            let sampler = &arr(a.get("samplers"))[num(c.get("sampler")).unwrap_or(0.0) as usize];
+            let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else { continue };
             let times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
             let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)?;
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
-            let interpolation = sampler.get("interpolation").and_then(Json::as_str).unwrap_or("LINEAR");
+            let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
                 // In-tangent, value, out-tangent per key: the value.
                 values = (0..times.len()).flat_map(|t| values[t * width * 3 + width..t * width * 3 + width * 2].to_vec()).collect();
@@ -398,16 +408,16 @@ fn read_document(json: &Json, buffers: &[&[u8]]) -> Result<Gltf, String> {
             });
         }
         animations.push(GltfAnimation {
-            name: a.get("name").and_then(Json::as_str).map_or_else(|| format!("animation_{k}"), str::to_string),
+            name: a.get("name").and_then(|v| v.as_str()).map_or_else(|| format!("animation_{k}"), |s| s.to_string()),
             duration,
             channels,
         });
     }
 
     let scene_index = num(json.get("scene")).unwrap_or(0.0) as usize;
-    let scene = arr(json.get("scenes")).get(scene_index);
+    let scene = json.get("scenes").and_then(|s| s.at(scene_index));
     let roots = match scene.and_then(|s| s.get("nodes")) {
-        Some(n) => arr(Some(n)).iter().filter_map(Json::as_f64).map(|v| v as u32).collect(),
+        Some(n) => arr(Some(n)).filter_map(|v| v.as_f64()).map(|v| v as u32).collect(),
         None => (0..raw_nodes.len() as u32).filter(|&i| parents[i as usize] < 0).collect(),
     };
     Ok(Gltf { nodes, meshes, skins, animations, roots })
@@ -475,3 +485,7 @@ pub fn scene_nodes(gltf: &Gltf) -> Vec<u32> {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "gltf.test.rs"]
+mod test;

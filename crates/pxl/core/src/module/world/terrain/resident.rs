@@ -2,8 +2,8 @@
 
 //! A terrain page, resident in the core memory.
 //!
-//! The shell copies a fetched page's decoded lanes into blocks of the page
-//! section and drops the response: one memory holds the core's data. Per
+//! The kernel copies a fetched page's decoded lanes into blocks of the page
+//! section and drops the body: one memory holds the core's data. Per
 //! lane, not per page — buddy blocks are powers of two, and a whole page would
 //! round up to 8 MiB, while each channel is exactly one 1 MiB block.
 //!
@@ -18,6 +18,8 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
 
 use crate::global::{now, Global};
+use crate::kernel::kernel;
+use crate::memory::PAGE_POOL;
 
 pub const QUARANTINE_MS: f64 = 1000.0;
 
@@ -62,7 +64,7 @@ pub fn release_terrain(page_idx: IVec, quarantine_ms: f64) {
     r.due.extend(blocks.into_iter().map(|b| (due, b)));
 }
 
-/// The blocks whose quarantine has passed: the shell's to give back.
+/// The blocks whose quarantine has passed.
 pub fn take_due_releases() -> Vec<Block> {
     let r = resident();
     let t = now();
@@ -70,3 +72,20 @@ pub fn take_due_releases() -> Vec<Block> {
     r.due = waiting;
     due.into_iter().map(|(_, b)| b).collect()
 }
+
+/// Gives the page section back the blocks whose quarantine has passed.
+pub fn release_due_terrain() {
+    let Some(pool) = kernel().pools.get_mut(PAGE_POOL as usize) else { return };
+    let t = now();
+    resident().due.retain(|&(due, (at, bytes))| {
+        if due > t {
+            return true;
+        }
+        pool.release(at, bytes);
+        false
+    });
+}
+
+#[cfg(test)]
+#[path = "resident.test.rs"]
+mod test;

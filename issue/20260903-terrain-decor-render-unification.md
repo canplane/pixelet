@@ -302,14 +302,13 @@ worth it" when the thing being achieved is this narrow.
 
 ## Why this matters for the eventual Rust/WebGPU port
 
-`AGENTS.md` still says not to volunteer that port — it stays parked, and TS
-
-- Three.js remains the current direction for finishing the MVP. But the MVP
-  is expected to eventually be rewritten regardless, by whoever ends up doing
-  it. The unification decided above is exactly the kind of design choice that
-  should be made for its own correctness now, in TS, so a later rewrite (Rust
-- WebGPU or anything else) carries the design over instead of rediscovering
-  it — not because the port is imminent or being planned here.
+At the time `AGENTS.md` said not to volunteer that port — it was parked,
+and TS + Three.js was the direction for finishing the MVP; the port has
+since become the priority
+([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md)).
+The unification decided above is the kind of design choice that is made
+for its own correctness, so a later rewrite (Rust + WebGPU or anything
+else) carries the design over instead of rediscovering it.
 
 ## Status 2026-09-13
 

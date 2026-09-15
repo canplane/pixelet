@@ -41,18 +41,12 @@ impl<T> Default for Global<T> {
     }
 }
 
-static CLOCK: Global<fn() -> f64> = Global::new();
+pub use xpute_core::sys::clock::{now, set_clock};
 
-fn stopped() -> f64 {
-    0.0
-}
-
-/// Installs the host's clock, in milliseconds: `performance.now()`.
-pub fn set_clock(clock: fn() -> f64) {
-    CLOCK.set(clock);
-}
-
-/// `performance.now()`.
-pub fn now() -> f64 {
-    (CLOCK.get(|| stopped))()
+/// Serializes the native tests that touch the kernel's globals: `cargo test`
+/// runs tests on several threads, and a `Global` is for one.
+#[cfg(test)]
+pub fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }

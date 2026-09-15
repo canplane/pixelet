@@ -1040,3 +1040,7 @@ pub fn remove(id: &str) {
     pvf3::add(&mut abs, &corner, &local_offset(parsed.x, parsed.y, parsed.z));
     write_object_value(abs.i, abs.f, 2f64.powi(parsed.level), VOID);
 }
+
+#[cfg(test)]
+#[path = "store.test.rs"]
+mod test;

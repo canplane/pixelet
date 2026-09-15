@@ -9,15 +9,15 @@ import { Ring } from "@xpute/core/ipc/ring.ts";
 import { Interrupt } from "@xpute/core/ipc/cmd.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { CORE_PXL } from "@/wasm/core_pool.ts";
-import { BOOT, boot_block } from "@/wasm/pxl.ts";
+import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { BOOT, boot_block } from "@/wasm/module.ts";
 
 /** A command crates/pxl/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;
 
 Deno.test("rings - the glue submits, one drain replies to each in order, and a full completion ring holds the rest back", () => {
-  assert(CORE_PXL !== null);
-  const p = CORE_PXL;
+  assert(CORE_KERNEL !== null);
+  const p = CORE_KERNEL;
   const boot = boot_block(p);
   const sq = new Ring(p.memory.buffer, boot[BOOT.sq]);
   const cq = new Ring(p.memory.buffer, boot[BOOT.cq]);

@@ -166,6 +166,11 @@ impl DrawList {
         self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_DECOR]);
     }
 
+    /// The draws the last frame listed.
+    pub fn draw_count(&self) -> u32 {
+        (self.draws.len() / DRAW_WORDS) as u32
+    }
+
     /// Hands the lists to the glue: the lanes' addresses and counts, valid
     /// until the next take. Uploads and frees start fresh; the draws stay
     /// until the next frame writes them.

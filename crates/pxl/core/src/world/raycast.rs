@@ -365,7 +365,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: [f64; 3]
         // SAFETY: the block the scheduler wrote at `at`, of the groups it
         // recorded; every lane read is inside its group's run.
         let words = unsafe { core::slice::from_raw_parts(mem.add(decor.at as usize) as *const u32, decor.bytes as usize / 4) };
-        for (g, &(offset, count)) in decor.groups.iter().enumerate() {
+        for (g, (offset, count)) in crate::world::decor::decor_groups(words).enumerate() {
             let Some(Some(model)) = sched.decor_models.get(g) else { continue };
             let Some(mesh) = sched.models.mesh(*model) else { continue };
             let (offset, count) = (offset as usize, count as usize);

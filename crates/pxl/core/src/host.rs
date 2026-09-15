@@ -98,3 +98,19 @@ pub fn local_time() -> LocalTime {
 pub fn wall_now() -> f64 {
     local_time().unix_ms
 }
+
+static HEAP_USED: Global<fn() -> usize> = Global::new();
+
+fn no_heap() -> usize {
+    0
+}
+
+/// Installs the module's allocator's reading: the bytes its heap reaches to.
+pub fn set_heap_used(used: fn() -> usize) {
+    HEAP_USED.set(used);
+}
+
+/// The bytes the module's heap reaches to; 0 where there is none.
+pub fn heap_used() -> usize {
+    (HEAP_USED.get(|| no_heap))()
+}

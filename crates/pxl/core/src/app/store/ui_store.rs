@@ -4,7 +4,7 @@ use pxl_shared::spec::cell::{decor_ids, placeable_cube_ids, DecorId, PlaceableCu
 
 use crate::global::Global;
 use crate::host::{storage_get, storage_set, wall_now};
-use crate::json::{parse, Json};
+use xpute_core::kit::json::{read_json, JsonStr};
 use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -201,8 +201,8 @@ fn save(s: &UiStore) {
     );
 }
 
-fn decor_id_of(id: &str) -> Option<DecorId> {
-    decor_ids.iter().copied().find(|d| *d == id)
+fn decor_id_of(id: JsonStr) -> Option<DecorId> {
+    decor_ids.iter().copied().find(|d| id.eq_str(d))
 }
 
 // A blind merge is fine for always-valid fields, not here: a persisted id
@@ -211,18 +211,20 @@ fn decor_id_of(id: &str) -> Option<DecorId> {
 // hotbar empty.
 fn load() -> UiStore {
     let mut s = UiStore::fresh();
-    let Some(state) = storage_get(STORAGE_KEY).and_then(|raw| parse(&raw)).and_then(|j| j.get("state").cloned()) else { return s };
+    let Some(raw) = storage_get(STORAGE_KEY) else { return s };
+    let Some(state) = read_json(&raw).and_then(|j| j.get("state")) else { return s };
     let mut picks: Vec<RecentPick> = state
         .get("recent_picks")
-        .and_then(Json::as_array)
         .map(|arr| {
-            arr.iter()
+            arr.items()
                 .filter_map(|p| {
-                    let id = p.get("id")?.as_str()?;
-                    let pick = match p.get("kind")?.as_str()? {
-                        "object" => RecentPick::Object(id.to_string()),
-                        "decor" => RecentPick::Decor(decor_id_of(id)?),
-                        _ => return None,
+                    let (id, kind) = (p.get("id")?.as_str()?, p.get("kind")?.as_str()?);
+                    let pick = if kind.eq_str("object") {
+                        RecentPick::Object(id.to_string())
+                    } else if kind.eq_str("decor") {
+                        RecentPick::Decor(decor_id_of(id)?)
+                    } else {
+                        return None;
                     };
                     is_known_pick(&pick).then_some(pick)
                 })
@@ -241,12 +243,13 @@ fn load() -> UiStore {
         }
     }
     s.recent_picks = picks;
-    if let Some(id) = state.get("object_color_id").and_then(Json::as_str) {
-        if is_known_pick(&RecentPick::Object(id.to_string())) {
+    if let Some(id) = state.get("object_color_id").and_then(|v| v.as_str()) {
+        let pick = RecentPick::Object(id.to_string());
+        if is_known_pick(&pick) {
             s.object_color_id = id.to_string();
         }
     }
-    if let Some(id) = state.get("decor_id").and_then(Json::as_str).and_then(decor_id_of) {
+    if let Some(id) = state.get("decor_id").and_then(|v| v.as_str()).and_then(decor_id_of) {
         s.decor_id = id;
     }
     s

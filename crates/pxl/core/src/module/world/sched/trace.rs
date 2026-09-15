@@ -99,12 +99,12 @@ fn frame_args(f: &FrameSample) -> Vec<(String, String)> {
         field("frame_ms", fixed(f.frame_ms, 2)),
         field("settled", json_number(if f.settled { 1.0 } else { 0.0 })),
     ];
-    for (k, v) in &f.phases {
-        args.push((format!("phase_{k}_ms"), fixed(*v, 2)));
+    for (k, v) in super::tick::PHASES.iter().zip(f.phases) {
+        args.push((format!("phase_{k}_ms"), fixed(v, 2)));
     }
     args.push(field("tick_ms", fixed(f.cpu.tick_ms, 2)));
     args.push(field("triangles", json_number(f.triangles)));
-    for (tag, (_, tris)) in &f.census {
+    for (tag, (_, tris)) in super::ledger::CENSUS_TAGS.iter().zip(&f.census) {
         args.push((format!("tris_{tag}"), json_number(*tris)));
     }
     let t = f.textures_mb;
@@ -146,12 +146,12 @@ pub fn ledger_trace_json() -> String {
 
     // ---- task spans, one thread per category ----
     let mut cat_tid: Vec<(String, u32)> = Vec::new();
-    for rec in &tasks {
+    for rec in tasks {
         let tid = match cat_tid.iter().find(|(c, _)| *c == rec.category) {
             Some((_, tid)) => *tid,
             None => {
                 let tid = TID_TASK_BASE + cat_tid.len() as u32;
-                cat_tid.push((rec.category.clone(), tid));
+                cat_tid.push((rec.category.to_string(), tid));
                 events.push(thread_name(tid, &format!("task: {}", rec.category)));
                 tid
             }
@@ -166,8 +166,8 @@ pub fn ledger_trace_json() -> String {
         if let Some(error) = &rec.error {
             args.push(field("error", json_string(error)));
         }
-        for (k, v) in rec.phases.iter().flatten() {
-            args.push((k.clone(), json_number(*v)));
+        for (k, v) in rec.phases.iter().flat_map(|p| p.iter()) {
+            args.push((k.to_string(), json_number(v)));
         }
         events.push(event(
             &rec.key,
@@ -198,7 +198,7 @@ pub fn ledger_trace_json() -> String {
     let worst = ledger_worst_frames();
     if !worst.is_empty() {
         events.push(thread_name(TID_WORST, "worst frames"));
-        for w in &worst {
+        for w in worst {
             let f = &w.sample;
             let mut args = frame_args(f);
             args.push(field("d_buffers", w.prev.as_ref().map_or("null".to_string(), |p| json_number(f.buffers - p.buffers))));

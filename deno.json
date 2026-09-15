@@ -14,9 +14,7 @@
   // caches that carry their own package.json — Vite's deps optimizer cache
   // in particular gets misread as a rogue workspace member ("Config file
   // must be a member of the workspace") since it's nested under apps/web.
-  // apps/web1 is the client as it stood before the kernel took it over,
-  // folder for folder: what a translation is read against, never built.
-  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/", "apps/web1/"],
+  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
     "dev": "sh -c \"(deno task dev:api) & (deno task dev:web) & wait\"",

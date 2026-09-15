@@ -33,9 +33,11 @@ const PRIORITY_BIAS: f64 = 1.0;
 
 /// Evicts cached pages outside the held set, mirroring terrain's own cleanup.
 fn cleanup_far_pois(anchor: IVec) {
-    let held: Vec<IVec> = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES()).into_iter().map(|p| p.page_idx).collect();
+    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES());
     // Collected first: clearing moves the table's last page into the hole.
-    let evict: Vec<IVec> = poi_pages().keys().filter(|page_idx| !held.contains(page_idx)).collect();
+    // What a run leaves uncollected, the next one takes.
+    let mut evict: Vec<IVec> = Vec::new();
+    evict.extend(poi_pages().keys().filter(|&p| !held.iter().any(|h| h.page_idx == p)));
     for page_idx in evict {
         clear_pois(page_idx);
     }
@@ -52,7 +54,7 @@ fn poi_demands(anchor: IVec) -> Vec<Demand> {
         }
         demands.push(Demand {
             key: page_key(CATEGORY, page_idx),
-            category: CATEGORY.to_string(),
+            category: CATEGORY,
             priority: page_priority(dist2) + PRIORITY_BIAS,
         });
     };

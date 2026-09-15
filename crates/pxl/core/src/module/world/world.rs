@@ -20,9 +20,10 @@
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::xy::TO_XY;
+use xpute_core::sched::quantum::Grant;
 
 use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
+use crate::global::{now, Global};
 use crate::lib::env::config::APP_ENV;
 use crate::module::camera::input::camera_input_step;
 use crate::module::camera::use_camera::camera_step;
@@ -37,7 +38,7 @@ use crate::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_step;
 use crate::module::map::ui::toast::toast_controller::toast_controller_step;
 use crate::module::world::character::companion::{companion_step, CompanionProps};
 use crate::module::world::chunk_node::chunk_nodes_step;
-use crate::module::world::core_tick::{chunk_mounts_step, core_tick_report_step, core_tick_visible_step};
+use crate::module::world::core_tick::{chunk_mounts_step, core_tick_report_step, core_tick_visible_step, set_host_task_ms};
 use crate::module::world::decor::asset_store::decor_asset_step;
 use crate::module::world::environment::theme_clock::theme_clock_step;
 use crate::module::world::frame::coord::get_local_world_origin;
@@ -48,8 +49,8 @@ use crate::module::world::marker::location_puck::location_puck_step;
 use crate::module::world::object::teach::teach_objects;
 use crate::module::world::poi::poi_layer::{poi_index_step, poi_layer_watch_step, poi_place_tick_step};
 use crate::module::world::poi::use_poi_fetcher::poi_fetcher_step;
-use crate::module::world::sched::fetch_scheduler::fetch_pump;
-use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickState, CONTENT, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use crate::module::world::sched::fetch_scheduler::{fetch_pump, set_fetch_credits};
+use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, CONTENT, COSMETIC, INTERACTION, REPORT, VISIBLE};
 use crate::module::world::change::take_tick_request;
 use crate::module::world::terrain::teach::teach_terrain;
 use crate::module::world::terrain::use_ground_snap_sync::ground_snap_sync_step;
@@ -106,8 +107,12 @@ pub fn world_boot() {
         return;
     }
     *booted = true;
+    let (a, t) = (crate::probe::mark(), crate::probe::top());
     teach_terrain();
+    let (a, t) = (crate::probe::add(27, a), crate::probe::add_bytes(27, t));
     teach_objects();
+    crate::probe::add(28, a);
+    crate::probe::add_bytes(28, t);
 
     on_tick(INTERACTION, camera_input_tick, "input");
     on_tick(INTERACTION, camera_step, "camera");
@@ -130,15 +135,25 @@ pub fn world_turn(platform: Platform) {
     crate::app::shell::shell_step();
     geolocation_step(platform.geolocation);
     orientation_watchdog_step(platform.orientation);
+    let a = crate::probe::mark();
     tile_fetcher_step();
+    let a = crate::probe::add(20, a);
     poi_fetcher_step();
+    crate::probe::add(21, a);
+    let (a, t) = (crate::probe::mark(), crate::probe::top());
     ground_snap_sync_step();
     follow_mode_step();
     theme_clock_step();
     poi_layer_watch_step();
+    let (a, t) = (crate::probe::add(30, a), crate::probe::add_bytes(30, t));
     decor_asset_step();
+    crate::probe::add(29, a);
+    crate::probe::add_bytes(29, t);
+    let a = crate::probe::mark();
     chunk_mounts_step();
+    let a = crate::probe::add(22, a);
     chunk_nodes_step();
+    crate::probe::add(23, a);
     hover_cursor_step();
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient null.
@@ -168,18 +183,27 @@ pub fn world_platform() -> Platform {
     })
 }
 
-/// The shell's frame: the effects' turn, then the tick's phases, and the fetches
-/// they asked for. Whether a frame after this one was asked for.
-pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Platform) -> bool {
+/// The turn the central scheduler strobed: the effects, then the tick's phases
+/// on its grant, and the fetches they asked for within its credits. What the
+/// tick spent, and whether a turn after this one was asked for.
+pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Platform, grant: Grant, credits: u32) -> TickReport {
+    let t0 = now();
     *PLATFORM.get(|| None) = Some(platform);
+    set_fetch_credits(credits);
     world_turn(platform);
     let state = TICK_STATE.get(TickState::default);
     state.width = width;
     state.height = height;
     state.dpr = dpr;
     state.elapsed_s += delta;
-    let report = run_tick(state, delta);
+    let (a, t) = (crate::probe::mark(), crate::probe::top());
+    let mut report = run_tick(state, delta, grant);
+    crate::probe::add(31, a);
+    crate::probe::add_bytes(31, t);
     fetch_pump();
     crate::render::gpu::stage::stage_write();
-    report.invalidated | take_tick_request()
+    crate::render::gpu::renderer::render_frame();
+    set_host_task_ms(now() - t0);
+    report.invalidated |= take_tick_request();
+    report
 }

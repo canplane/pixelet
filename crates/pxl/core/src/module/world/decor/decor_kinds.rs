@@ -23,7 +23,7 @@ use pxl_shared::record::palette::PaletteTable;
 use pxl_shared::record::shipped::shipped_palette;
 use pxl_shared::spec::cell::{decor_num_id, DecorId};
 use pxl_shared::spec::space::pvf3::ivec::IVec;
-use xpute_core::kit::rng::{derive_seed_u64, make_rng, u32_to_unit};
+use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use super::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::global::Global;
@@ -116,8 +116,8 @@ pub fn bind_palette(kind: &'static str, seed: DecorKindSeed, rules: DecorRules, 
     let variants = rows
         .iter()
         .map(|&row| DecorVariantAsset {
-            model_url: asset_url(&p.model_key_of(row).unwrap_or_default()),
-            skin_url: asset_url(&p.skin_key_of(row).unwrap_or_default()),
+            model_url: asset_url(&p.model_key_of(row).unwrap_or_default()).to_string(),
+            skin_url: asset_url(&p.skin_key_of(row).unwrap_or_default()).to_string(),
         })
         .collect();
     DecorKindBundle {
@@ -175,7 +175,8 @@ pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
 // real variant/heading a real placement would get — this being pure and keyed
 // only on `i` is exactly what makes that prediction exact rather than a guess.
 pub fn user_decor_pick(i: IVec, variant_count: u32) -> (u32, f64) {
-    let mut rng = make_rng(Some(derive_seed_u64(DECOR_MASTER_SEED, i)));
+    let mut stream = SplitMix64::new(derive_seed_u64(DECOR_MASTER_SEED, i));
+    let mut rng = || stream.next_u32();
     let variant = ((u32_to_unit(rng()) * variant_count as f64).floor() as u32).min(variant_count - 1);
     let rotation = u32_to_unit(rng()) * core::f64::consts::PI * 2.0;
     (variant, rotation)

@@ -51,6 +51,8 @@ pub enum Major {
     SENSOR = 0x1d,
     FETCH = 0x1e,
     LOAD = 0x1f,
+    GPU = 0x20,
+    SURFACE = 0x21,
 }
 
 /// The hover ghost's own verbs.
@@ -98,7 +100,6 @@ pub enum ModelMinor {
 #[repr(u32)]
 pub enum EnvMinor {
     OBSERVE = 0x10,
-    LANES = 0x11,
 }
 
 /// The change log's own verb.
@@ -106,13 +107,6 @@ pub enum EnvMinor {
 #[repr(u32)]
 pub enum ChangeMinor {
     LANES = 0x10,
-}
-
-/// The shaders' own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ShaderMinor {
-    PIPELINE = 0x10,
 }
 
 /// A pool's own verbs.
@@ -132,7 +126,6 @@ pub enum VolumeMinor {
     VOXEL = 0x11,
     SUB_VOXEL = 0x12,
     SEAL = 0x13,
-    POOLS = 0x14,
     STAT = 0x15,
 }
 
@@ -209,14 +202,6 @@ pub enum StepResult {
     DONE = 2,
 }
 
-/// A page's own verb: its terrain, decoded where the kernel reads it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PageMinor {
-    TERRAIN = 0x10,
-    POI = 0x11,
-}
-
 /// The pointer's own verbs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -235,12 +220,11 @@ pub enum SensorMinor {
     VISIBILITY = 0x13,
 }
 
-/// A fetch's own verb.
+/// A fetch's own verb: room for a response's body.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum FetchMinor {
-    GEOCODE = 0x10,
-    SEARCH = 0x11,
+    BODY = 0x10,
 }
 
 /// A load's own verb.
@@ -254,9 +238,10 @@ pub enum LoadMinor {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum WorldMinor {
-    LANES = 0x10,
     ACTION = 0x11,
-    SHEET = 0x12,
+    TOAST = 0x13,
+    LOG = 0x14,
+    SNAPSHOT = 0x15,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -406,34 +391,18 @@ pub enum Cmd {
     /// tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
     /// words)]
     CHUNK_READ = 0x0102,
-    /// tag call · no packet → [out_at u32]: the environment's ENV_FLOATS
-    ENV_LANES = 0x1111,
     /// tag call · no packet → [topic_at u32, key_at u32, revision_at u32,
     /// head_at u32, ticks_at u32, capacity u32]: the change log's lanes
     CHANGE_LANES = 0x1310,
-    /// tag call · no packet → [row u32[10]]: the renderer's lists taken — the
-    /// uploads' address and count, the frees', the draws', the uniforms', the
-    /// rewrites' — valid until the next take
-    DRAW_READ = 0x1502,
-    /// tag call · [kind u32] → result: the WGSL's length in bytes, 0 for a
-    /// kind that is not one; with one, [at u32]
-    SHADER_READ = 0x1602,
-    /// tag call · [id u32] → [record u32[]]: the pipeline's record, empty for
-    /// an id that is not one
-    SHADER_PIPELINE = 0x1610,
 
     // ---- the memory's pools ----
     //
     // Mechanism rather than the world's: numbered here while this is the one
     // table. The pool a command is about is its packet's first child, so a
-    // release can be asked about as well as sent.
-    /// tag call · [start u32, bytes u32, region_bytes u32, min_block_bytes
-    /// u32] → result: the pool's id — over `bytes` of the memory at `start`, a
-    /// section of the map, whose range the shell keeps for it alone
-    POOL_CREATE = 0x1701,
+    // release can be asked about as well as sent. The pools are the kernel's
+    // sections, made at boot: fixed 0, page 1, mesh 2 (pxl_core::memory).
     /// tag call · [pool u32] → result: where its stat is, twelve words in
-    /// BuddyStat's first twelve fields' order, valid until the next
-    /// POOL_CREATE
+    /// BuddyStat's first twelve fields' order, at a fixed address
     POOL_READ = 0x1702,
     /// tag call · [pool u32, bytes u32] → result: the block's address, 0 when
     /// the range is used up or the request is larger than a region
@@ -474,9 +443,6 @@ pub enum Cmd {
     VOLUME_SUB_VOXEL = 0x1812,
     /// [volume u32] — closed to painting, its overflow sorted by column
     VOLUME_SEAL = 0x1813,
-    /// [fixed u32, mesh u32] — the pools volumes draw on: the standing band
-    /// stores from `fixed`, the rest from `mesh`; before any tick
-    VOLUME_POOLS = 0x1814,
     /// tag call · no packet → result: where the volumes' stat is, three words:
     /// allocated, reused, refused
     VOLUME_STAT = 0x1815,
@@ -576,28 +542,20 @@ pub enum Cmd {
 
     // ---- the world's turn: the shell's events in, the kernel's asks out ----
     /// [app_env str, build_time str, build_id str, build_number str, published_tiles bool,
-    /// handheld bool, page_section_bytes u32, mesh_section_bytes f64] — the shell's boot:
-    /// what the bundler defined and the memory map; the object store loaded
+    /// handheld bool] — the shell's boot: what the bundler defined and the device; the
+    /// object store loaded
     WORLD_CREATE = 0x1b01,
     /// [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
-    /// orientation_permission bool] — the effects' turn, then the tick's phases; the
-    /// viewport in CSS pixels → result: 1 when a frame after this one was asked for
+    /// orientation_permission bool, slice_ms f64, batch_ms f64, frame_ms f64, credits u32]
+    /// — the central scheduler's strobe: the effects' turn, then the tick's phases on the
+    /// grant, the fetches within the credits; the viewport in CSS pixels. The turn leaves
+    /// its signals on the completion ring, drawn by the kernel, and last this command's own
+    /// as a signal: [asked bool, used_ms f64, settled bool, draws u32] — a turn after this one
+    /// was asked for, what the tick spent, whether it ran on the batch quantum, and the
+    /// draws it listed
     WORLD_UPDATE = 0x1b03,
-    /// tag call · no packet → [toasts: [[show bool, id str, message_key str, tone u32
-    /// (0 loading, 1 error, 2 success)]], geolocation u32[] (0 start, 1 stop), orientation
-    /// u32[] (0 listen, 1 request permission, 2 remove), log: [line str], draw bool, ui str
-    /// (app/shell.rs's snapshot), decor: [[group u32, mesh u32, skin f64 (-1 none)]], skins:
-    /// [[model u32, skin u32]]] — what the turn asks of the shell
-    WORLD_READ = 0x1b02,
-    /// tag call · no packet → [stage_at u32]: render/gpu/stage.rs's STAGE_WORDS doubles
-    WORLD_LANES = 0x1b10,
     /// tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not
     WORLD_ACTION = 0x1b11,
-    /// tag call · [generation u32] → [whole bool, size u32, generation u32, entries: [[x u32,
-    /// y u32, w u32, h u32, kind u32 (0 place, 1 cluster, 2 bubble), icon str, color str, text
-    /// str (a bubble's lines joined by \n), logical_w f64, box_h f64]]] — the badge sheet's
-    /// flush: every live entry when the sheet was replaced, else the entries drawn since
-    WORLD_SHEET = 0x1b12,
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
     INPUT_UPDATE = 0x1c03,
     /// [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
@@ -614,40 +572,62 @@ pub enum Cmd {
     /// [webkit_compass_heading f64, alpha f64, beta f64, gamma f64] — an orientation
     /// event; NaN where the browser gave none
     SENSOR_ORIENTATION = 0x1d11,
-    /// [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]
+    /// [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]; as a signal,
+    /// [sensor u32] — ask the user's permission, inside the gesture the action came from
     SENSOR_PERMISSION = 0x1d12,
     /// [visible bool] — the tab's visibility
     SENSOR_VISIBILITY = 0x1d13,
-    /// [page u64, land u32, water u32, structure u32, transport u32, ele u32 (addresses),
-    /// blocks: [[at u32, bytes u32]], own bool] — a page's terrain, copied into the page
-    /// section; `own` false for the shared ocean page no one page owns
-    PAGE_TERRAIN = 0x0210,
-    /// [page u64, block: [at u32, bytes u32] | null] — a page's POI packet, copied into the page
-    /// section; null for the shared empty page
-    PAGE_POI = 0x0211,
-    /// tag call · no packet → [started: [[key str, category str, url str]], aborts: [key
-    /// str], releases: [[at u32, bytes u32]]] — the demands to run, the ones to cancel, and
-    /// the page blocks the kernel let go
-    FETCH_READ = 0x1e02,
-    /// [key str, outcome u32 (0 ok, 1 aborted, 2 error), error str | null, phases: [[name
-    /// str, value f64]]] — a started demand settled
+    /// tag call · [key str, bytes u32] → result: the address of room for the response's
+    /// body in the page section, 0 refused — the shell writes the bytes there and nothing
+    /// else
+    FETCH_BODY = 0x1e10,
+    /// [key str, outcome u32 (0 ok, 1 aborted, 2 error), status u32, body_at u32, body_bytes
+    /// u32 (0 for none), error str | null, net_ms f64] — a started fetch finished; what the
+    /// status and the body mean is the kernel's
     FETCH_UPDATE = 0x1e03,
-    /// [page u64, body str | null] — a reverse geocode's answer; null for a 404
-    FETCH_GEOCODE = 0x1e10,
-    /// [query str, body str | null] — a forward search's response body
-    FETCH_SEARCH = 0x1e11,
-    /// tag call · no packet → [requests: [[kind u32 (0 glTF, 1 image), url str]]]
-    LOAD_READ = 0x1f02,
     /// [url str, bytes u8[]] — a model's bytes
     LOAD_UPDATE = 0x1f03,
     /// [url str, handle u32] — an image decoded and held by the shell
     LOAD_IMAGE = 0x1f10,
     /// [url str] — a load failed
     LOAD_DELETE = 0x1f04,
+    /// [min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's
+    /// renderer is made on it (render/gpu/renderer.rs)
+    GPU_CREATE = 0x2001,
+    /// no packet — the device went away, and every object on it
+    GPU_DELETE = 0x2004,
+    /// tag call · [role u32 (0 world, 1 case)] → result: the surface's handle, 0 refused — a
+    /// canvas the shell hands over, drawn by the kernel alone from then on
+    SURFACE_CREATE = 0x2101,
+    /// [surface u32, width u32, height u32, device_pixel_ratio f64] — the canvas's layout box in
+    /// device pixels, transforms aside; the buffer it is drawn into is the kernel's
+    SURFACE_UPDATE = 0x2103,
+    /// tag call · [surface u32] — the canvas is going; what it held on the device is let go
+    /// before the call returns
+    SURFACE_DELETE = 0x2104,
+
+    // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or an action ----
+    /// [show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a
+    /// toast shown or dismissed
+    WORLD_TOAST = 0x1b13,
+    /// [line str] — a console line
+    WORLD_LOG = 0x1b14,
+    /// [ui str] — app/shell.rs's snapshot, when it changed
+    WORLD_SNAPSHOT = 0x1b15,
+    /// [sensor u32 (0 geolocation, 1 orientation)] — start watching
+    SENSOR_CREATE = 0x1d01,
+    /// [sensor u32] — stop watching
+    SENSOR_DELETE = 0x1d04,
+    /// [key str, url str] — a fetch the scheduler started
+    FETCH_CREATE = 0x1e01,
+    /// [key str] — a fetch yield aborted; the shell settles it as aborted
+    FETCH_DELETE = 0x1e04,
+    /// [kind u32 (0 glTF, 1 image), url str] — a model or an image to load
+    LOAD_CREATE = 0x1f01,
 }
 
 impl Cmd {
-    const ALL: [Cmd; 118] = [
+    const ALL: [Cmd; 117] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -695,12 +675,7 @@ impl Cmd {
         Cmd::ENV_READ,
         Cmd::FRAME_READ,
         Cmd::CHUNK_READ,
-        Cmd::ENV_LANES,
         Cmd::CHANGE_LANES,
-        Cmd::DRAW_READ,
-        Cmd::SHADER_READ,
-        Cmd::SHADER_PIPELINE,
-        Cmd::POOL_CREATE,
         Cmd::POOL_READ,
         Cmd::POOL_ACQUIRE,
         Cmd::POOL_RELEASE,
@@ -712,7 +687,6 @@ impl Cmd {
         Cmd::VOLUME_VOXEL,
         Cmd::VOLUME_SUB_VOXEL,
         Cmd::VOLUME_SEAL,
-        Cmd::VOLUME_POOLS,
         Cmd::VOLUME_STAT,
         Cmd::BAKE_CREATE,
         Cmd::BAKE_STEP,
@@ -744,10 +718,7 @@ impl Cmd {
         Cmd::OBJECT_STAT,
         Cmd::WORLD_CREATE,
         Cmd::WORLD_UPDATE,
-        Cmd::WORLD_READ,
-        Cmd::WORLD_LANES,
         Cmd::WORLD_ACTION,
-        Cmd::WORLD_SHEET,
         Cmd::INPUT_UPDATE,
         Cmd::INPUT_POINTER,
         Cmd::INPUT_WHEEL,
@@ -756,16 +727,24 @@ impl Cmd {
         Cmd::SENSOR_ORIENTATION,
         Cmd::SENSOR_PERMISSION,
         Cmd::SENSOR_VISIBILITY,
-        Cmd::PAGE_TERRAIN,
-        Cmd::PAGE_POI,
-        Cmd::FETCH_READ,
+        Cmd::FETCH_BODY,
         Cmd::FETCH_UPDATE,
-        Cmd::FETCH_GEOCODE,
-        Cmd::FETCH_SEARCH,
-        Cmd::LOAD_READ,
         Cmd::LOAD_UPDATE,
         Cmd::LOAD_IMAGE,
         Cmd::LOAD_DELETE,
+        Cmd::GPU_CREATE,
+        Cmd::GPU_DELETE,
+        Cmd::SURFACE_CREATE,
+        Cmd::SURFACE_UPDATE,
+        Cmd::SURFACE_DELETE,
+        Cmd::WORLD_TOAST,
+        Cmd::WORLD_LOG,
+        Cmd::WORLD_SNAPSHOT,
+        Cmd::SENSOR_CREATE,
+        Cmd::SENSOR_DELETE,
+        Cmd::FETCH_CREATE,
+        Cmd::FETCH_DELETE,
+        Cmd::LOAD_CREATE,
     ];
 
     /// The command a message's number names, or none for one nobody numbers.
@@ -829,12 +808,7 @@ mod test {
             (ENV_READ, Major::ENV as u32, Minor::READ as u32),
             (FRAME_READ, Major::FRAME as u32, Minor::READ as u32),
             (CHUNK_READ, Major::CHUNK as u32, Minor::READ as u32),
-            (ENV_LANES, Major::ENV as u32, EnvMinor::LANES as u32),
             (CHANGE_LANES, Major::CHANGE as u32, ChangeMinor::LANES as u32),
-            (DRAW_READ, Major::DRAW as u32, Minor::READ as u32),
-            (SHADER_READ, Major::SHADER as u32, Minor::READ as u32),
-            (SHADER_PIPELINE, Major::SHADER as u32, ShaderMinor::PIPELINE as u32),
-            (POOL_CREATE, Major::POOL as u32, Minor::CREATE as u32),
             (POOL_READ, Major::POOL as u32, Minor::READ as u32),
             (POOL_ACQUIRE, Major::POOL as u32, PoolMinor::ACQUIRE as u32),
             (POOL_RELEASE, Major::POOL as u32, PoolMinor::RELEASE as u32),
@@ -846,7 +820,6 @@ mod test {
             (VOLUME_VOXEL, Major::VOLUME as u32, VolumeMinor::VOXEL as u32),
             (VOLUME_SUB_VOXEL, Major::VOLUME as u32, VolumeMinor::SUB_VOXEL as u32),
             (VOLUME_SEAL, Major::VOLUME as u32, VolumeMinor::SEAL as u32),
-            (VOLUME_POOLS, Major::VOLUME as u32, VolumeMinor::POOLS as u32),
             (VOLUME_STAT, Major::VOLUME as u32, VolumeMinor::STAT as u32),
             (BAKE_CREATE, Major::BAKE as u32, Minor::CREATE as u32),
             (BAKE_STEP, Major::BAKE as u32, BakeMinor::STEP as u32),
@@ -878,10 +851,7 @@ mod test {
             (OBJECT_STAT, Major::OBJECT as u32, ObjectMinor::STAT as u32),
             (WORLD_CREATE, Major::WORLD as u32, Minor::CREATE as u32),
             (WORLD_UPDATE, Major::WORLD as u32, Minor::UPDATE as u32),
-            (WORLD_READ, Major::WORLD as u32, Minor::READ as u32),
-            (WORLD_LANES, Major::WORLD as u32, WorldMinor::LANES as u32),
             (WORLD_ACTION, Major::WORLD as u32, WorldMinor::ACTION as u32),
-            (WORLD_SHEET, Major::WORLD as u32, WorldMinor::SHEET as u32),
             (INPUT_UPDATE, Major::INPUT as u32, Minor::UPDATE as u32),
             (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
             (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),
@@ -890,16 +860,24 @@ mod test {
             (SENSOR_ORIENTATION, Major::SENSOR as u32, SensorMinor::ORIENTATION as u32),
             (SENSOR_PERMISSION, Major::SENSOR as u32, SensorMinor::PERMISSION as u32),
             (SENSOR_VISIBILITY, Major::SENSOR as u32, SensorMinor::VISIBILITY as u32),
-            (PAGE_TERRAIN, Major::PAGE as u32, PageMinor::TERRAIN as u32),
-            (PAGE_POI, Major::PAGE as u32, PageMinor::POI as u32),
-            (FETCH_READ, Major::FETCH as u32, Minor::READ as u32),
+            (FETCH_BODY, Major::FETCH as u32, FetchMinor::BODY as u32),
             (FETCH_UPDATE, Major::FETCH as u32, Minor::UPDATE as u32),
-            (FETCH_GEOCODE, Major::FETCH as u32, FetchMinor::GEOCODE as u32),
-            (FETCH_SEARCH, Major::FETCH as u32, FetchMinor::SEARCH as u32),
-            (LOAD_READ, Major::LOAD as u32, Minor::READ as u32),
             (LOAD_UPDATE, Major::LOAD as u32, Minor::UPDATE as u32),
             (LOAD_IMAGE, Major::LOAD as u32, LoadMinor::IMAGE as u32),
             (LOAD_DELETE, Major::LOAD as u32, Minor::DELETE as u32),
+            (GPU_CREATE, Major::GPU as u32, Minor::CREATE as u32),
+            (GPU_DELETE, Major::GPU as u32, Minor::DELETE as u32),
+            (SURFACE_CREATE, Major::SURFACE as u32, Minor::CREATE as u32),
+            (SURFACE_UPDATE, Major::SURFACE as u32, Minor::UPDATE as u32),
+            (SURFACE_DELETE, Major::SURFACE as u32, Minor::DELETE as u32),
+            (WORLD_TOAST, Major::WORLD as u32, WorldMinor::TOAST as u32),
+            (WORLD_LOG, Major::WORLD as u32, WorldMinor::LOG as u32),
+            (WORLD_SNAPSHOT, Major::WORLD as u32, WorldMinor::SNAPSHOT as u32),
+            (SENSOR_CREATE, Major::SENSOR as u32, Minor::CREATE as u32),
+            (SENSOR_DELETE, Major::SENSOR as u32, Minor::DELETE as u32),
+            (FETCH_CREATE, Major::FETCH as u32, Minor::CREATE as u32),
+            (FETCH_DELETE, Major::FETCH as u32, Minor::DELETE as u32),
+            (LOAD_CREATE, Major::LOAD as u32, Minor::CREATE as u32),
         ];
         for (c, major, minor) in parts {
             assert_eq!(c as u32, cmd(major, minor), "{c:?}");
