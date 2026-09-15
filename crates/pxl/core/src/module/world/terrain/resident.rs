@@ -12,7 +12,10 @@
 //! none should remain. The case that can still hold one is a jump: the page is
 //! evicted in the same pass that moves the view, and its chunks leave after. A
 //! released block is only overwritten when something acquires it again, so
-//! holding the release back for a second covers that with room to spare.
+//! its release waits until the scheduler has no chunk of the page mounted, or a
+//! second at most. Not the second alone: a jump leaves every resident page at
+//! once, and its thirty-two pages held for a second were half the section the
+//! next thirty-two arrived into, which refused the rest.
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
@@ -31,8 +34,8 @@ struct Resident {
     /// here: every open-ocean page aliases one decode, so no single page may
     /// free it.
     owned: Vec<(IVec, Vec<Block>)>,
-    /// Blocks released, and when their quarantine ends.
-    due: Vec<(f64, Block)>,
+    /// Blocks released, when their quarantine ends, and the page they held.
+    due: Vec<(f64, IVec, Block)>,
 }
 
 static RESIDENT: Global<Resident> = Global::new();
@@ -61,24 +64,27 @@ pub fn release_terrain(page_idx: IVec, quarantine_ms: f64) {
     let Some(pos) = r.owned.iter().position(|(p, _)| *p == key) else { return };
     let (_, blocks) = r.owned.swap_remove(pos);
     let due = now() + quarantine_ms;
-    r.due.extend(blocks.into_iter().map(|b| (due, b)));
+    r.due.extend(blocks.into_iter().map(|b| (due, key, b)));
 }
 
 /// The blocks whose quarantine has passed.
 pub fn take_due_releases() -> Vec<Block> {
     let r = resident();
     let t = now();
-    let (due, waiting): (Vec<_>, Vec<_>) = r.due.drain(..).partition(|(at, _)| *at <= t);
+    let (due, waiting): (Vec<_>, Vec<_>) = r.due.drain(..).partition(|(at, _, _)| *at <= t);
     r.due = waiting;
-    due.into_iter().map(|(_, b)| b).collect()
+    due.into_iter().map(|(_, _, b)| b).collect()
 }
 
-/// Gives the page section back the blocks whose quarantine has passed.
+/// Gives the page section back the blocks whose page no chunk has mounted any
+/// more, or whose quarantine has passed.
 pub fn release_due_terrain() {
-    let Some(pool) = kernel().pools.get_mut(PAGE_POOL as usize) else { return };
+    let k = kernel();
+    let Some(pool) = k.pools.get_mut(PAGE_POOL as usize) else { return };
+    let sched = &k.sched;
     let t = now();
-    resident().due.retain(|&(due, (at, bytes))| {
-        if due > t {
+    resident().due.retain(|&(due, page, (at, bytes))| {
+        if due > t && sched.page_mounted(page) {
             return true;
         }
         pool.release(at, bytes);

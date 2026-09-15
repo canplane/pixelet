@@ -755,6 +755,11 @@ impl Scheduler {
         }
     }
 
+    /// Whether a chunk of `page` is still mounted: what reads the page's lanes.
+    pub fn page_mounted(&self, page: u64) -> bool {
+        self.mounted.range((page, 0, 0)..=(page, u32::MAX, u32::MAX)).next().is_some()
+    }
+
     /// module/world/frame/range.ts's rule, a page and a chunk at a time: a chunk
     /// whose square is within the radius of the anchor is mounted, and one
     /// already mounted is kept until it is past the radius and the
