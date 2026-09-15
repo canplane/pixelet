@@ -1,0 +1,167 @@
+# The audit against the rings checkpoint
+
+**2026-09-15** — with the client moved into the kernel and the heap work on
+`wip/kernel-heap` stopped, a read-only audit went over the Rust against the
+last checkpoint, `checkpoint/20260915-rings`: every pair of a checkpoint
+TypeScript file under `apps/web/src` with its `crates/pxl/core` file, the
+xpute and shared crates' deltas, and the pre-existing core crate's diffs.
+Static reading only; nothing was run. Line numbers are as of `eeae374`, the
+Rust side first and the checkpoint's TypeScript second. An item is struck
+when its fix lands.
+
+## P. Broken
+
+- ~~**P1**~~ Placed objects are never saved. `object/store.rs:917-939`: `save`
+  only sets `save_due_ms`; nothing calls `flush_save_if_due` or
+  `flush_save`, and nothing flushes when the page hides. The checkpoint's
+  `object/store.ts:843-867` saved 300 ms after a write and flushed on
+  `visibilitychange` hidden and `pagehide`.
+
+## H. Residue of the heap work
+
+- **H1** `wasm/src/lib.rs:1903-1904` installs `ALLOC_PROBE` and
+  `set_step_timing(true)` unconditionally; xpute `sched/tick.rs:1787-1791`
+  then records allocation counts into `StepStats.ms`, which `log.rs`
+  prints as "ms per frame". `tick.ts:292-304` recorded wall milliseconds,
+  in DEV only.
+- **H2** `probe.rs` and its `probe::mark` / `add` calls in `world.rs`
+  (110-156, 199-202), `core_tick.rs:170-175` and about twenty sites in
+  `world/sched.rs`.
+- **H3** `pub static mut ALLOC_PROBE` in xpute_core `sched/tick.rs:1646`.
+- **H4** `world/decor.rs` `DecorScratch`: past `DECOR_INSTANCES` (65536) an
+  instance is dropped silently; past `DECOR_GROUPS` (64) kinds get no
+  group.
+- **H5** `world/sched.rs` asserts `MAX_CHUNKS` (4096, `build.rs:22`) and
+  `MAX_PAGES` (1024).
+- **H6** `fetch_scheduler.rs` `HELD` (128, `take` truncates), `NAMES` (256)
+  and `CATEGORIES` (16) asserted; `demand.rs` `PHASES_MAX` (6) drops
+  silently; `asset_store` `VARIANTS` (16) asserted.
+- **H7** `ledger.rs:199-209` keeps a one-minute window capped at
+  2048 / 4096 / 1024; `ledger.ts:196-198` kept the session
+  (200k / 500k / 50k).
+- **H8** `wasm/src/lib.rs:192-200` names `VOLUME_POOLS`, a command no
+  longer in `spec/cmd.rs`.
+- **H9** `frame/range.rs:111-115` `PAGES_IN_RADIUS` is unused, and `Pages`
+  is documented as inline while it is a `Vec`.
+- **H10** `render/gpu/pipeline.rs:32-33,78,114` `LAYOUTS` (32) and `BUILT`
+  (48) asserted; `pipeline.ts` kept maps.
+- **H11** `badges.rs:38,291` `SETS` (32) stops drawing sets past it;
+  `render/gpu/decor.rs:29,93` `GROUPS` (64) gives groups past it no model;
+  `skinned.rs:23,77-78` `SKINS` (16) leaves a seventeenth model's actor
+  undrawn; `renderer.rs:149,187-193,271` `Blocks` asserts below 16384
+  blocks over seven fixed-section lanes never given back, and
+  `Scratch::take` (`renderer.rs:132`) expects room in the mesh pool.
+
+## B. Behaviour that differs
+
+- **B1** `fetch_scheduler.rs:160-177` `fetch_settle` records nothing in the
+  ledger when the row is gone; `fetch_scheduler.ts:158-177` recorded every
+  settle.
+- **B2** The fetch pump runs at the end of a turn (`world.rs:164,203`); a
+  settle between turns waits for the next. The checkpoint pumped on every
+  settle.
+- **B3** xpute `run_phase` steps back on a self-unregister;
+  `tick.ts:289` spliced and skipped the next step. The Rust is right.
+- **B4** The quantum is observed after the turn and its grant applies to
+  the next; `tick.ts:329-332` observed before sizing.
+- **B5** The frame is drawn after every phase (`world.rs:204-205`);
+  `core_tick.tsx:187` drew inside the visible phase.
+- **B6** The report step (`core_tick.rs`) and the renderer's census and
+  triangle count (`renderer.rs:821-860`) run in every build, every frame;
+  `core_tick.tsx:198` and `renderer.ts:406` ran them in DEV.
+- **B7** A frame's `task_ms` is the previous turn's (`core_tick.rs:204`,
+  `world.rs:206`); `core_tick.tsx:263-267` corrected it in place.
+- **B8** The world wakers are revision polling in `world_turn`. Outcome
+  equal as read.
+- **B9** `log.rs:238-245` sets the baseline at first use; the first report
+  prints window counters as 0. `log.ts:124` set it at load.
+- **B10** `log.rs`'s retain line drops `decor_instances` (`log.ts:250`).
+- **B11** `category.rs`'s terrain note drops its mobile bottleneck
+  sentence.
+- **B12** `error_reason`: `_` is a word boundary, and 80 characters are
+  counted as chars rather than UTF-16 units.
+- **B13** `camera/input.rs:116,330-333` pairs the two lowest pointer ids;
+  `input.tsx:209,355-358` the two earliest pressed.
+- **B14** `decor/asset_store.rs:95-119` retries a variant only when
+  `load_revision` moves, so a model the pool refused waits for another
+  load.
+- **B15** `use_follow_mode.rs:62-71` sets the grace deadline once;
+  `use_follow_mode.ts:67-84` restarted 12 s on each status change.
+- **B16** `search_modal.rs:69-119` leaves the last query in flight while
+  the next is typed, so its results can show; a failed parse clears the
+  results (`:145-147`, the TypeScript kept them); `{:.1}` rounds a tie to
+  even (1250 m "1.2km", `toFixed` "1.3km"). `search_modal.tsx:192-195`.
+- **B17** `use_reverse_geocode.rs:67-88` submits during a continuous pan;
+  `use_reverse_geocode.ts:55-100` restarted 500 ms on every centre change.
+- **B18** `map/environment.rs:60-64` `tail_ambient`, `mid` and a `Vec`
+  nothing reads.
+- **B19** `character_preview.rs:125` stands the case's actor at
+  `[0, 0, -CASE_DEPTH_U]`; `character_preview.tsx:70-71,95` at the map
+  origin's X and Y, its Z less `CASE_DEPTH_U`.
+- **B20** `companion.rs:207` reads `TickState.elapsed_s`, a sum of turn
+  deltas clamped to 0.1 s (`world.rs:198`); `companion.tsx:235` read wall
+  seconds. The settle delay, the walk plan and the linger stretch over
+  idle gaps.
+- **B21** `chunk_node.rs:171,202,240-245` knows a page's tile by
+  `*const Tile as usize`, and `page_table.rs:25,34,74-98` holds tiles by
+  value in a `Vec`: a push that reallocates rebuilds every chunk, a
+  `swap_remove` rebuilds the moved page's, and a set in place is missed.
+  `chunk_node.ts:295-298` compared the object.
+- **B22** `poi_index.rs:60-66` caps the page radius at 4; `:301` sorts
+  unstably; `:366-372` a record refused at capacity is not seen, so its
+  badge is evicted; `:93,469` a page evicted mid-job is skipped.
+  `poi_index.ts:85-87`.
+- **B23** `poi_layer.rs:547-564` asks for placement on every camera store
+  revision; `poi_layer.tsx:632-635` on the view state.
+- **B24** A channel's values are read as `key_cnt * width` floats by
+  pointer (`model_asset.rs:195`, `world/model.rs:283-290`) from a `Vec`
+  `truncate` never grows (`gltf.rs:401`); a CUBICSPLINE slice panics on a
+  short output (`gltf.rs:396`). The TypeScript's subarrays clamped.
+  Malformed assets only.
+- **B25** `gltf.rs:193,260-274` caches accessors as `Vec<f64>`, cloned and
+  converted per read; integer casts saturate where typed arrays wrapped; a
+  JSON chunk that is not UTF-8 reads as missing (`:133,139`).
+- **B26** `renderer.rs:867-889` resizes a surface's targets after
+  `SETTLE_TURNS` turns at the new size; `renderer.ts:242-268` in the frame.
+- **B27** `render/gpu/decor.rs:98-104,116` uploads a texture per group;
+  `decor.ts:117-128` one per image.
+- **B28** An MSAA change keeps the device and rebuilds the pipelines
+  (`renderer.rs:573-585,927-929`); `stage.tsx:139-165` made a new
+  renderer.
+- **B29** `world.rs:90` shows the debug gizmos where `APP_ENV()` is not
+  production; `world.tsx:97` where `__IS_DEV__`.
+
+## X. xpute has it
+
+- **X1** `setting/store.rs:189-243` parses the overrides by hand beside
+  xpute `read_json`; `\b \f \r` read as letters and a surrogate `\u` stops
+  the parse.
+- **X2** `json_string` in `setting/store.rs`, `ui_store.rs` and
+  `sched/trace.rs`; xpute has `Quoted`.
+
+## Read and found equal
+
+frame_budget, priority, summary, trace, the ledger's worst frames and peak,
+the io queue's order, the pages set, blend_hash, the decor block layout and
+raycast groups, the shared crate, ui_store, search's go-to, layer_table,
+layers, the glTF parse, model_asset's lanes, joints, height and scale, the
+loader's cache, the puck, the shadow, the stage's values, the badges', decor's
+and skinned's uniforms and groups, the renderer's pass order, mesh offsets
+and upload / rewrite / free order.
+
+## Order
+
+One small change a turn, `cargo check` green:
+
+1. P1.
+2. H1–H3.
+3. B21.
+4. B19, B20.
+5. B15–B17.
+6. B22, B23.
+7. B1, B2.
+8. H4–H6, H10, H11.
+9. H7.
+10. X1, X2.
+11. B6, B9–B12, B29, H8, H9, B18.
+12. B13, B14, B24–B28.
