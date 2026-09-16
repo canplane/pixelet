@@ -5,9 +5,10 @@
 //! settings — runs the scheduler's pass once, and applies what it told to the
 //! chunk nodes (chunk_node.rs); the shell's renderer then draws the scheduler's
 //! lists. In the report phase it hands the frame's numbers to the ledger.
-//! `chunk_mounts_step` tells the scheduler which pages have a terrain tile,
+//! `chunk_mounts_step` tells the scheduler which page_idxs have a terrain tile,
 //! which is what it mounts chunks from.
 
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
 
 use super::chunk_node::{chunk_page, run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
@@ -52,7 +53,7 @@ struct CoreTick {
     /// Whether the scheduler's pass left something new to draw.
     draw: bool,
     pages_revision: Option<u32>,
-    pages: Vec<u64>,
+    page_idxs: Vec<IVec>,
 }
 
 static CORE_TICK: Global<CoreTick> = Global::new();
@@ -64,7 +65,7 @@ fn core_tick() -> &'static mut CoreTick {
         host: HostFrameStat::default(),
         draw: false,
         pages_revision: None,
-        pages: Vec::new(),
+        page_idxs: Vec::new(),
     })
 }
 
@@ -241,7 +242,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     });
 }
 
-/// Tells the scheduler which pages have a terrain tile, whenever the set moves.
+/// Tells the scheduler which page_idxs have a terrain tile, whenever the set moves.
 /// Everything else — which chunks, when — is the scheduler's, from the range
 /// anchor the visible pass writes into the frame.
 pub fn chunk_mounts_step() {
@@ -251,12 +252,12 @@ pub fn chunk_mounts_step() {
         return;
     }
     c.pages_revision = Some(revision);
-    let pages: Vec<u64> = tile_pages().keys().collect();
-    for &gone in c.pages.iter().filter(|p| !pages.contains(p)) {
+    let page_idxs: Vec<IVec> = tile_pages().keys().collect();
+    for &gone in c.page_idxs.iter().filter(|p| !page_idxs.contains(p)) {
         chunk_page(gone, false);
     }
-    for &page in &pages {
+    for &page in &page_idxs {
         chunk_page(page, true);
     }
-    c.pages = pages;
+    c.page_idxs = page_idxs;
 }

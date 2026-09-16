@@ -21,7 +21,7 @@ pub fn reground_map_center() {
     let mut probe = PVF3::default();
     pvf3::gather(&mut probe, pvf3::X(&map_center), pvf3::Y(&map_center), 0);
     let (i, f) = (probe.i, probe.f);
-    let Some(grounded) = ground_pivot(&mut probe, i, f) else { return };
+    let Some(grounded) = ground_pivot(&mut probe, &PVF3 { i, f }) else { return };
     if grounded != map_center {
         use_map_store().set_map_center(grounded);
     }

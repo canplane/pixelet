@@ -24,7 +24,7 @@ use pxl_shared::spec::cell::{
     cube_types, decor_id_from_num, decor_num_id, is_terrain_style_cube, object_value_is_air, object_value_is_decor, placeable_cube_id_from_num, placeable_cube_num_id,
     terrain_style_cube_source, DecorId, PlaceableCubeId,
 };
-use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L2_BASE, L2_SHAMT, L3_IDX};
+use pxl_shared::spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L2_SHAMT, L3_IDX};
 use pxl_shared::spec::space::pvf3::fvec::{self, FVec};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
@@ -87,7 +87,7 @@ fn storage_key() -> String {
 // sparse octree per 64³ band — the unified cell format of
 // issue/20260911-decor-identity-orientation-and-one-cell-format.md. What
 // this section does is lower a coordinate to what the kernel keys by — the
-// chunk (L2_BASE of the XY column), the band's Z, and the position within
+// chunk (the L2 index of the XY column), the band's Z, and the position within
 // the band in finest-tier steps, which is the low bits of each lane of the
 // coordinate shifted to the finest level — and read its lanes back.
 
@@ -135,22 +135,26 @@ fn cell_corner(ix: i64, iy: i64, iz: i64) -> PVF3 {
 }
 
 /// The column a cell belongs to, as the key everything about objects is filed
-/// under: L2_BASE of the cell's XY column.
+/// under: the L2 index of the cell's XY column.
+///
+/// An index and not the column's address, so the key's three lanes are one
+/// unit: the band's Z is an L2 index too, and a key whose XY was an address
+/// would be a coordinate on two axes and a count on the third.
 ///
 /// A column, so Z is dropped before the base is taken. The renderer asks for
 /// a column by an XY page index and a page offset built with z = 0, so a key
 /// that kept the cell's own Z put every object above absolute z = 64u (about
 /// 120 m, one L2 span) under a key nothing ever asked for: stored, indexed,
 /// hit-tested and never drawn.
-fn column_of_cell(ix: i64, iy: i64, iz: i64) -> IVec {
-    L2_BASE(TO_XY(cell_corner(ix, iy, iz).i))
+fn col_idx_of_cell(ix: i64, iy: i64, iz: i64) -> IVec {
+    L2_IDX(TO_XY(cell_corner(ix, iy, iz).i))
 }
 
 /// The same key from the renderer's side, a page index and a page offset.
 /// Both are normalised to XY, so a caller cannot reopen the gap above by
 /// handing in an offset that still carries Z.
-pub fn object_column_of(page_idx: IVec, page_off: IVec) -> IVec {
-    L2_BASE(TO_XY(ivec::add(FROM_L3_IDX(TO_XY(page_idx)), TO_XY(page_off))))
+pub fn object_col_idx_of(page_idx: IVec, page_off: IVec) -> IVec {
+    L2_IDX(TO_XY(ivec::add(FROM_L3_IDX(TO_XY(page_idx)), TO_XY(page_off))))
 }
 
 fn band_z_of(iz: i64) -> i32 {
@@ -160,7 +164,7 @@ fn band_z_of(iz: i64) -> i32 {
 /// A coordinate as the kernel keys it: its column, band, and position within
 /// the band in finest-tier steps.
 struct At {
-    key: IVec,
+    col_idx: IVec,
     band: i32,
     x: u32,
     y: u32,
@@ -171,7 +175,7 @@ fn lower(coord: &PVF3) -> At {
     let mut lattice = PVF3::default();
     pvf3::sh(&mut lattice, coord, -OBJECT_LAYOUT.min);
     At {
-        key: L2_BASE(TO_XY(coord.i)),
+        col_idx: L2_IDX(TO_XY(coord.i)),
         band: band_z_of(cell_index(coord)[2]),
         x: (ivec::X(lattice.i) & BAND_STEP_MASK) as u32,
         y: (ivec::Y(lattice.i) & BAND_STEP_MASK) as u32,
@@ -182,13 +186,13 @@ fn lower(coord: &PVF3) -> At {
 /// The state stored at `coord`, VOID where nothing is.
 fn read_state(coord: &PVF3) -> u32 {
     let at = lower(coord);
-    kernel().objects.read(at.key, at.band, [at.x, at.y, at.z])
+    kernel().objects.read(at.col_idx, at.band, [at.x, at.y, at.z])
 }
 
 /// A chunk's entry lanes, valid until the next write or reindex; None where
 /// the chunk holds nothing.
-fn entry_lanes(base: IVec) -> Option<(&'static [i32], &'static [u32], &'static [u32])> {
-    let lanes = kernel().objects.chunk_lanes(base)?;
+fn entry_lanes(col_idx: IVec) -> Option<(&'static [i32], &'static [u32], &'static [u32])> {
+    let lanes = kernel().objects.chunk_lanes(col_idx)?;
     if lanes.count == 0 {
         return None;
     }
@@ -204,8 +208,8 @@ fn entry_lanes(base: IVec) -> Option<(&'static [i32], &'static [u32], &'static [
     }
 }
 
-fn entry_count(base: IVec) -> u32 {
-    kernel().objects.chunk_lanes(base).map_or(0, |l| l.count)
+fn entry_count(col_idx: IVec) -> u32 {
+    kernel().objects.chunk_lanes(col_idx).map_or(0, |l| l.count)
 }
 
 /// Deterministic id for a walked leaf block — encodes exactly what remove()
@@ -338,12 +342,12 @@ impl EntryCursor {
     }
 
     /// An entry given by its absolute corner rather than read from lanes.
-    pub fn load_fixed(&mut self, base: IVec, i: IVec, f: FVec, size: f64, state: u32, id: &str) {
-        self.fixed = Some(Fixed { i, f, id: id.to_string() });
-        let local = ivec::sub(i, base);
-        self.lx = ivec::to_real(ivec::X(local)) + fvec::to_real(fvec::X(f));
-        self.ly = ivec::to_real(ivec::Y(local)) + fvec::to_real(fvec::Y(f));
-        self.lz = ivec::to_real(ivec::Z(local)) + fvec::to_real(fvec::Z(f));
+    pub fn load_fixed(&mut self, col_idx: IVec, at: &PVF3, size: f64, state: u32, id: &str) {
+        self.fixed = Some(Fixed { i: at.i, f: at.f, id: id.to_string() });
+        let local = ivec::sub(at.i, FROM_L2_IDX(col_idx));
+        self.lx = ivec::to_real(ivec::X(local)) + fvec::to_real(fvec::X(at.f));
+        self.ly = ivec::to_real(ivec::Y(local)) + fvec::to_real(fvec::Y(at.f));
+        self.lz = ivec::to_real(ivec::Z(local)) + fvec::to_real(fvec::Z(at.f));
         self.size = size;
         self.state = state;
     }
@@ -434,9 +438,9 @@ struct CellRun {
 /// how many of them really occupy it — every kind but AIR. None where the
 /// cell holds nothing.
 fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
-    let base = column_of_cell(ix, iy, iz);
-    let [cx0, cy0, _] = cell_index(&PVF3 { i: base, f: 0 });
-    let rec = kernel().objects.cell(base, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)?;
+    let col_idx = col_idx_of_cell(ix, iy, iz);
+    let [cx0, cy0, _] = cell_index(&PVF3 { i: FROM_L2_IDX(col_idx), f: 0 });
+    let rec = kernel().objects.cell(col_idx, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)?;
     Some(CellRun {
         start: rec.start,
         count: rec.count,
@@ -451,28 +455,28 @@ pub fn objects_revision() -> u32 {
     log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
 }
 
-fn bump_column(base: IVec, objects: bool, decor: bool) {
+fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
     if objects {
-        bump_world(OBJECT_COLUMN, base);
+        bump_world(OBJECT_COLUMN, col_idx);
     }
     if decor {
-        bump_world(DECOR_COLUMN, base);
+        bump_world(DECOR_COLUMN, col_idx);
     }
 }
 
 /// Re-derives one chunk's entries and cells in the kernel, which records the
 /// change itself — the column in both of its topics and every cell whose
 /// entries changed — and asks for the frame that delivers it.
-fn reindex_chunk(base: IVec) {
-    reindex_object(kernel(), base);
+fn reindex_chunk(col_idx: IVec) {
+    reindex_object(kernel(), col_idx);
     request_world_tick();
 }
 
 /// The string id of the entry `(band, pos)` under column `base` — what a
 /// consumer that kept an instance as lanes asks for when a hit on that
 /// instance has to resolve to a selectable entry.
-pub fn entry_id_of(base: IVec, band: u32, pos: u32) -> String {
-    let [cx0, cy0, _] = cell_index(&PVF3 { i: base, f: 0 });
+pub fn entry_id_of(col_idx: IVec, band: u32, pos: u32) -> String {
+    let [cx0, cy0, _] = cell_index(&PVF3 { i: FROM_L2_IDX(col_idx), f: 0 });
     let mut cursor = EntryCursor::default();
     cursor.at_chunk(cx0, cy0);
     cursor.load(band as i32, pos, 0);
@@ -481,21 +485,21 @@ pub fn entry_id_of(base: IVec, band: u32, pos: u32) -> String {
 
 /// Whether any entry — including the carve preview — is filed under a
 /// column. One lookup; what a coarse build asks before skipping the scan.
-pub fn column_has_entries(base: IVec) -> bool {
-    if entry_count(base) > 0 {
+pub fn col_has_entries(col_idx: IVec) -> bool {
+    if entry_count(col_idx) > 0 {
         return true;
     }
-    store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.column == base)
+    store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.col_idx == col_idx)
 }
 
 /// Every entry of a column. `render` applies the eraser preview's two edits,
 /// the hidden entry left out and the carve preview put in, which only the
 /// drawn build may see (see set_virtual_hide).
-pub fn each_column_entry(base: IVec, visit: &mut dyn FnMut(&EntryCursor), render: bool) {
+pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render: bool) {
     let mut cursor = EntryCursor::default();
     let hide = store_state().virtual_hide_id.clone();
-    if let Some((bands, poss, states)) = entry_lanes(base) {
-        let [cx0, cy0, _] = cell_index(&PVF3 { i: base, f: 0 });
+    if let Some((bands, poss, states)) = entry_lanes(col_idx) {
+        let [cx0, cy0, _] = cell_index(&PVF3 { i: FROM_L2_IDX(col_idx), f: 0 });
         cursor.at_chunk(cx0, cy0);
         for k in 0..bands.len() {
             cursor.load(bands[k], poss[k], states[k]);
@@ -506,8 +510,8 @@ pub fn each_column_entry(base: IVec, visit: &mut dyn FnMut(&EntryCursor), render
         }
     }
     let carve = store_state().virtual_carve_preview.clone();
-    if let Some(carve) = carve.filter(|c| render && c.column == base) {
-        cursor.load_fixed(base, carve.i, carve.f, carve.size, cube_types::common::AIR as u32, &carve.id);
+    if let Some(carve) = carve.filter(|c| render && c.col_idx == col_idx) {
+        cursor.load_fixed(col_idx, &PVF3 { i: carve.i, f: carve.f }, carve.size, cube_types::common::AIR as u32, &carve.id);
         visit(&cursor);
     }
 }
@@ -529,21 +533,21 @@ pub struct ColumnEdits {
     pub size: f64,
 }
 
-pub fn column_render_edits(base: IVec) -> ColumnEdits {
+pub fn col_render_edits(col_idx: IVec) -> ColumnEdits {
     let mut edits = ColumnEdits::default();
     let st = store_state();
     if let Some(hide) = st.virtual_hide_id.as_deref().and_then(parse_leaf_id) {
         if let Some([ix, iy, iz]) = parse_cell_key(&hide.key) {
-            if column_of_cell(ix, iy, iz) == base {
+            if col_idx_of_cell(ix, iy, iz) == col_idx {
                 edits.hide = true;
                 edits.hide_band = band_z_of(iz);
                 edits.hide_pos = pack_pos(hide.x, hide.y, hide.z, hide.level);
             }
         }
     }
-    if let Some(carve) = st.virtual_carve_preview.as_ref().filter(|c| c.column == base) {
+    if let Some(carve) = st.virtual_carve_preview.as_ref().filter(|c| c.col_idx == col_idx) {
         let mut cursor = EntryCursor::default();
-        cursor.load_fixed(base, carve.i, carve.f, carve.size, cube_types::common::AIR as u32, &carve.id);
+        cursor.load_fixed(col_idx, &PVF3 { i: carve.i, f: carve.f }, carve.size, cube_types::common::AIR as u32, &carve.id);
         edits.carve = true;
         edits.lx = cursor.lx;
         edits.ly = cursor.ly;
@@ -555,9 +559,9 @@ pub fn column_render_edits(base: IVec) -> ColumnEdits {
 
 fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor)) {
     let Some(run) = cell_run(ix, iy, iz) else { return };
-    let base = column_of_cell(ix, iy, iz);
-    let Some((bands, poss, states)) = entry_lanes(base) else { return };
-    let [cx0, cy0, _] = cell_index(&PVF3 { i: base, f: 0 });
+    let col_idx = col_idx_of_cell(ix, iy, iz);
+    let Some((bands, poss, states)) = entry_lanes(col_idx) else { return };
+    let [cx0, cy0, _] = cell_index(&PVF3 { i: FROM_L2_IDX(col_idx), f: 0 });
     let mut cursor = EntryCursor::default();
     cursor.at_chunk(cx0, cy0);
     for k in run.start as usize..(run.start + run.count) as usize {
@@ -628,7 +632,7 @@ pub fn get_placed_object(id: &str) -> Option<OccupiedEntry> {
 #[derive(Clone, Debug)]
 struct CarvePreview {
     key: String,
-    column: IVec,
+    col_idx: IVec,
     i: IVec,
     f: FVec,
     size: f64,
@@ -703,7 +707,7 @@ fn bump_for_object(id: &str) {
     let kind = get_placed_object(id).map(|o| o.kind);
     let is_decor = matches!(kind, Some(EntryKind::Decor { .. }));
     let is_solid = matches!(kind, Some(EntryKind::Solid { .. }));
-    bump_column(column_of_cell(ix, iy, iz), !is_decor, !is_solid);
+    bump_col(col_idx_of_cell(ix, iy, iz), !is_decor, !is_solid);
 }
 
 /// The eraser's "dig into bare terrain" preview — the terrain-side twin of
@@ -712,34 +716,34 @@ fn bump_for_object(id: &str) {
 /// never written — same render-only scoping as virtual_hide_id, for the same
 /// reason. `i`/`f`/`size` match what a real place_air() at this hover would
 /// write, so the preview renders identically to what it stands in for.
-pub fn set_virtual_carve_preview(i: IVec, f: FVec, size: f64) {
-    let [ix, iy, iz] = cell_index(&PVF3 { i, f });
+pub fn set_virtual_carve_preview(at: &PVF3, size: f64) {
+    let [ix, iy, iz] = cell_index(at);
     let key = cell_key(ix, iy, iz);
     let st = store_state();
     if st.virtual_carve_preview.as_ref().is_some_and(|c| c.key == key) {
         return;
     }
     let previous = st.virtual_carve_preview.take();
-    let column = column_of_cell(ix, iy, iz);
+    let col_idx = col_idx_of_cell(ix, iy, iz);
     st.virtual_carve_preview = Some(CarvePreview {
         id: format!("virtual-carve:{key}"),
         key,
-        column,
-        i,
-        f,
+        col_idx,
+        i: at.i,
+        f: at.f,
         size,
     });
     send_render_edits();
     if let Some(previous) = previous {
-        bump_column(previous.column, true, false);
+        bump_col(previous.col_idx, true, false);
     }
-    bump_column(column, true, false);
+    bump_col(col_idx, true, false);
 }
 
 pub fn clear_virtual_carve_preview() {
     let Some(carve) = store_state().virtual_carve_preview.take() else { return };
     send_render_edits();
-    bump_column(carve.column, true, false);
+    bump_col(carve.col_idx, true, false);
 }
 
 /// Tells the builds the two edits, before the bumps that rebuild the columns
@@ -748,13 +752,13 @@ fn send_render_edits() {
     let st = store_state();
     let hide = st.virtual_hide_id.as_deref().and_then(parse_leaf_id).and_then(|h| {
         let [ix, iy, iz] = parse_cell_key(&h.key)?;
-        Some((column_of_cell(ix, iy, iz), band_z_of(iz), pack_pos(h.x, h.y, h.z, h.level)))
+        Some((col_idx_of_cell(ix, iy, iz), band_z_of(iz), pack_pos(h.x, h.y, h.z, h.level)))
     });
     let carve = st.virtual_carve_preview.as_ref().map(|c| {
         let mut cursor = EntryCursor::default();
-        cursor.load_fixed(c.column, c.i, c.f, c.size, cube_types::common::AIR as u32, &c.id);
+        cursor.load_fixed(c.col_idx, &PVF3 { i: c.i, f: c.f }, c.size, cube_types::common::AIR as u32, &c.id);
         (
-            c.column,
+            c.col_idx,
             Carve {
                 lx: cursor.lx,
                 ly: cursor.ly,
@@ -767,13 +771,13 @@ fn send_render_edits() {
 }
 
 /// Cube-content revision of a column — a decor-only change never bumps it.
-pub fn object_column_revision(base: IVec) -> u32 {
-    world_changes().revision_of(OBJECT_COLUMN, base as i64)
+pub fn object_col_revision(col_idx: IVec) -> u32 {
+    world_changes().revision_of(OBJECT_COLUMN, col_idx as i64)
 }
 
 /// Decor revision of a column — a solid-only change never bumps it.
-pub fn decor_column_revision(base: IVec) -> u32 {
-    world_changes().revision_of(DECOR_COLUMN, base as i64)
+pub fn decor_col_revision(col_idx: IVec) -> u32 {
+    world_changes().revision_of(DECOR_COLUMN, col_idx as i64)
 }
 
 // ---- Persistence ----
@@ -794,15 +798,15 @@ pub fn decor_column_revision(base: IVec) -> u32 {
 
 /// The columns holding objects, in the kernel's order — for a walk over
 /// everything placed, which is what a save is.
-pub fn object_columns() -> Vec<IVec> {
+pub fn object_cols() -> Vec<IVec> {
     let objects = &kernel().objects;
     (0..objects.chunk_count()).map(|i| objects.chunk_key(i)).collect()
 }
 
 pub fn encode_objects() -> Result<String, MarshalError> {
     let mut by_page: Vec<(IVec, Vec<Placement>)> = Vec::new();
-    for base in object_columns() {
-        let page_idx = TO_XY(L3_IDX(base));
+    for col_idx in object_cols() {
+        let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
         let page_base = FROM_L3_IDX(page_idx);
         let slot = match by_page.iter().position(|(p, _)| *p == page_idx) {
             Some(slot) => slot,
@@ -812,8 +816,8 @@ pub fn encode_objects() -> Result<String, MarshalError> {
             }
         };
         let rows = &mut by_page[slot].1;
-        each_column_entry(
-            base,
+        each_col_entry(
+            col_idx,
             &mut |entry| {
                 let corner = entry.corner();
                 let local = PVF3 {
@@ -879,15 +883,15 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
                 let local = [table.x.get(r) as f64, table.y.get(r) as f64, table.z.get(r) as f64];
                 let mut corner = PVF3::default();
                 local_world_to_canonical(&mut corner, &local, page_base);
-                write_object_value(corner.i, corner.f, table.size.get(r) as f64, table.value.get(r));
+                write_object_value(&corner, table.size.get(r) as f64, table.value.get(r));
             }
             k += 2;
         }
         Ok(())
     })();
     store_state().restoring = false;
-    for base in object_columns() {
-        reindex_chunk(base);
+    for col_idx in object_cols() {
+        reindex_chunk(col_idx);
     }
     result
 }
@@ -902,7 +906,7 @@ pub fn load() {
         }
     }
     // Initial index build — O(total objects), paid once.
-    for base in object_columns() {
+    for base in object_cols() {
         reindex_chunk(base);
     }
 }
@@ -956,17 +960,17 @@ pub fn object_store_stats() -> (u32, u32, u32) {
 /// — once every leaf in it reads back VOID: a redundant place() and a
 /// remove() both write VOID on purpose, and a record carrying no information
 /// would otherwise sit in every save for nothing.
-fn write_object_value(i: IVec, f: FVec, size: f64, val: u32) {
+fn write_object_value(coord: &PVF3, size: f64, val: u32) {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the round only guards against float noise.
     let level = js_round(size.log2()) as i32;
-    let at = lower(&PVF3 { i, f });
-    kernel().objects.write(at.key, at.band, [at.x, at.y, at.z], level, val);
+    let at = lower(coord);
+    kernel().objects.write(at.col_idx, at.band, [at.x, at.y, at.z], level, val);
     if store_state().restoring {
         return;
     }
     save();
-    reindex_chunk(at.key);
+    reindex_chunk(at.col_idx);
 }
 
 /// Whether painting `color_id` at this exact whole cell would actually change
@@ -989,16 +993,16 @@ fn write_object_value(i: IVec, f: FVec, size: f64, val: u32) {
 /// type is a per-column (2.5D) fact while a placement lands in the empty cell
 /// above the surface, so without this every cube stacked on matching ground
 /// read as redundant and was silently dropped.
-fn place_value_is_redundant(i: IVec, f: FVec, size: f64, color_id: &str, show_structures: bool) -> bool {
+fn place_value_is_redundant(at: &PVF3, size: f64, color_id: &str, show_structures: bool) -> bool {
     if size < U_PER_CELL || !is_terrain_style_cube(color_id) {
         return false;
     }
     let source = terrain_style_cube_source(color_id);
-    let shown = shown_ground(|ch| get_ground_type(i, f, ch).unwrap_or(0), show_structures);
+    let shown = shown_ground(|ch| get_ground_type(at, ch).unwrap_or(0), show_structures);
     if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
     }
-    object_value_is_air(read_state(&PVF3 { i, f }))
+    object_value_is_air(read_state(at))
 }
 
 /// Carving a cell (place_air) and then re-painting it with the exact
@@ -1006,19 +1010,19 @@ fn place_value_is_redundant(i: IVec, f: FVec, size: f64, color_id: &str, show_st
 /// nothing: rather than storing a "solid" leaf that only ever repaints what
 /// terrain would already show, this writes VOID — the same absence remove()
 /// itself produces.
-pub fn place(i: IVec, f: FVec, size: f64, color_id: &str, show_structures: bool) {
-    let val = if place_value_is_redundant(i, f, size, color_id, show_structures) {
+pub fn place(at: &PVF3, size: f64, color_id: &str, show_structures: bool) {
+    let val = if place_value_is_redundant(at, size, color_id, show_structures) {
         VOID
     } else {
         placeable_cube_num_id(color_id)
     };
-    write_object_value(i, f, size, val);
+    write_object_value(at, size, val);
 }
 
 /// Same write path as place(), just tagged with a decor kind instead of a
 /// color.
-pub fn place_decor(i: IVec, f: FVec, size: f64, decor_id: &str) {
-    write_object_value(i, f, size, decor_num_id(decor_id));
+pub fn place_decor(at: &PVF3, size: f64, decor_id: &str) {
+    write_object_value(at, size, decor_num_id(decor_id));
 }
 
 /// Eraser's own write path for its "nothing placed here" case — a real,
@@ -1027,8 +1031,8 @@ pub fn place_decor(i: IVec, f: FVec, size: f64, decor_id: &str) {
 /// whatever's underneath (almost always real baked terrain) show through
 /// again; that's no help against terrain itself, which has no object-layer
 /// leaf of its own to delete.
-pub fn place_air(i: IVec, f: FVec, size: f64) {
-    write_object_value(i, f, size, cube_types::common::AIR as u32);
+pub fn place_air(at: &PVF3, size: f64) {
+    write_object_value(at, size, cube_types::common::AIR as u32);
 }
 
 pub fn remove(id: &str) {
@@ -1039,7 +1043,7 @@ pub fn remove(id: &str) {
     let corner = cell_corner(floor_div(ix, CHUNK_CELLS) * CHUNK_CELLS, floor_div(iy, CHUNK_CELLS) * CHUNK_CELLS, floor_div(iz, CHUNK_CELLS) * CHUNK_CELLS);
     let mut abs = PVF3::default();
     pvf3::add(&mut abs, &corner, &local_offset(parsed.x, parsed.y, parsed.z));
-    write_object_value(abs.i, abs.f, 2f64.powi(parsed.level), VOID);
+    write_object_value(&abs, 2f64.powi(parsed.level), VOID);
 }
 
 #[cfg(test)]

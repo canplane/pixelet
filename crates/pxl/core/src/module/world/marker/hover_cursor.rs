@@ -8,8 +8,9 @@
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::spec::cell::{placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for, PlaceableCubeId};
-use pxl_shared::spec::space::pvf3::fvec::{self, FVec};
-use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
+use pxl_shared::spec::space::pvf3::fvec;
+use pxl_shared::spec::space::pvf3::ivec;
+use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
 use super::style::marker_colors;
 use crate::app::setting::store::use_settings_store;
@@ -41,7 +42,7 @@ struct Cursor {
     virtual_hide_target: Option<String>,
     /// The carve preview as last set: its cell and size, compared as words, so
     /// two hover ticks landing in the same cell skip re-running.
-    carve_preview: Option<(IVec, FVec, f64)>,
+    carve_preview: Option<(PVF3, f64)>,
     ghost: Ghost,
 }
 
@@ -118,10 +119,10 @@ pub fn hover_cursor_step() {
     // Terrain's own counterpart: eraser hovering bare terrain has no real leaf
     // to hide, so the carve preview injects a real AIR entry into the build at
     // this hover, so whatever's one voxel below shows through the ghost.
-    let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h.i, h.f, preview_size));
+    let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h, preview_size));
     if c.carve_preview != carve_preview {
         match carve_preview {
-            Some((i, f, size)) => set_virtual_carve_preview(i, f, size),
+            Some((at, size)) => set_virtual_carve_preview(&at, size),
             None => clear_virtual_carve_preview(),
         }
         c.carve_preview = carve_preview;
@@ -131,7 +132,7 @@ pub fn hover_cursor_step() {
     // that looks like one: its terrain-styled id.
     let carved_style_id: Option<PlaceableCubeId> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let shown = shown_ground(|ch| get_ground_type(h.i, h.f, ch).unwrap_or(0), show_structures);
+            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), show_structures);
             terrain_style_cube_for(shown.channel, shown.type_id)
         }
         _ => None,

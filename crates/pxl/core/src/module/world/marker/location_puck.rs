@@ -111,7 +111,7 @@ pub fn location_puck_step(device_coord: Option<PVF3>) {
 
     let mut pos = [0.0; 3];
     projection::unproject(&mut pos, device.i, device.f);
-    if let Some(ele) = get_ele(device.i, device.f) {
+    if let Some(ele) = get_ele(&device) {
         p.last_known_center_z = Some(ele);
     }
     let Some(center_z) = p.last_known_center_z else {
@@ -133,7 +133,7 @@ pub fn location_puck_step(device_coord: Option<PVF3>) {
             // Falls back to flat (center height) rather than 0 when a sample
             // lands on an unloaded neighboring page — absolute 0 would sink or
             // launch that instance away from the rest of the zone.
-            let delta_ele = get_ele(coord.i, coord.f).unwrap_or(center_pos[2]) - center_pos[2];
+            let delta_ele = get_ele(&coord).unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([v[0] as f32, v[1] as f32, v[2] as f32, s.borders[0] as f32, s.borders[1] as f32, s.borders[2] as f32, s.borders[3] as f32]);

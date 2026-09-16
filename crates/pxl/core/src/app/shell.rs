@@ -413,7 +413,7 @@ pub fn ui_action(text: &str) -> bool {
 /// has arrived, if the map is still on that page.
 pub fn shell_step() {
     let Some(target) = shell().go_to else { return };
-    if get_ele(target.i, target.f).is_none() {
+    if get_ele(&target).is_none() {
         return;
     }
     shell().go_to = None;

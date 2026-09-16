@@ -1,13 +1,13 @@
 // pxl_core/module/world/object/store.test.rs
 //
-// store.ts's subscriber test is a revision test here: a column's changes are
+// store.ts's subscriber test is a revision test here: a col_idx's changes are
 // read as its revisions moving, which is what chunk_node.rs follows.
 
 use super::*;
 use crate::global::serial;
 use crate::module::world::object::collision::find_overlapping_object;
 use crate::module::world::object::size::DECOR_SIZE;
-use pxl_shared::spec::space::indexer::{L2_BASE, L2_IDX_IN_L3, L3_IDX};
+use pxl_shared::spec::space::indexer::{L2_IDX, L2_IDX_IN_L3, L3_IDX};
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
 use pxl_shared::spec::space::xy::TO_XY;
 
@@ -26,7 +26,7 @@ fn cell_of(c: &PVF3) -> String {
 fn object_store_place_decor_stores_a_real_decor_entry_not_a_color() {
     let _g = serial();
     let c = corner(100_001, 0, 0);
-    place_decor(c.i, c.f, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, "tree");
     let entries = get_objects_in_cell(&cell_of(&c));
     assert_eq!(entries.len(), 1);
     assert!(matches!(entries[0].kind, EntryKind::Decor { decor_id: "tree" }));
@@ -36,7 +36,7 @@ fn object_store_place_decor_stores_a_real_decor_entry_not_a_color() {
 fn object_store_place_decor_is_retrievable_by_its_own_leaf_id_same_path_a_solid_cube_uses() {
     let _g = serial();
     let c = corner(100_002, 0, 0);
-    place_decor(c.i, c.f, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, "tree");
     let entry = get_objects_in_cell(&cell_of(&c)).remove(0);
     let fetched = get_placed_object(&entry.id).expect("fetched by id");
     assert!(matches!(fetched.kind, EntryKind::Decor { .. }));
@@ -46,7 +46,7 @@ fn object_store_place_decor_is_retrievable_by_its_own_leaf_id_same_path_a_solid_
 fn object_store_place_decor_blocks_a_second_placement_at_the_exact_same_corner() {
     let _g = serial();
     let c = corner(100_003, 0, 0);
-    place_decor(c.i, c.f, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, "tree");
     let blocked = find_overlapping_object(&c, DECOR_SIZE, 0).expect("blocked");
     assert!(matches!(blocked.kind, EntryKind::Decor { .. }));
 }
@@ -55,7 +55,7 @@ fn object_store_place_decor_blocks_a_second_placement_at_the_exact_same_corner()
 fn object_store_place_decor_a_solid_cube_still_blocks_placement_the_same_way_a_decor_entry_does() {
     let _g = serial();
     let c = corner(100_004, 0, 0);
-    place(c.i, c.f, DECOR_SIZE, "red", false);
+    place(&c, DECOR_SIZE, "red", false);
     let blocked = find_overlapping_object(&c, DECOR_SIZE, 0).expect("blocked");
     assert!(matches!(blocked.kind, EntryKind::Solid { .. }));
 }
@@ -64,7 +64,7 @@ fn object_store_place_decor_a_solid_cube_still_blocks_placement_the_same_way_a_d
 fn object_store_remove_erases_a_decor_entry_the_same_way_it_erases_a_solid_cube() {
     let _g = serial();
     let c = corner(100_005, 0, 0);
-    place_decor(c.i, c.f, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, "tree");
     let key = cell_of(&c);
     let entry = get_objects_in_cell(&key).remove(0);
     remove(&entry.id);
@@ -74,24 +74,24 @@ fn object_store_remove_erases_a_decor_entry_the_same_way_it_erases_a_solid_cube(
 
 #[test]
 fn object_store_column_key_an_object_above_one_l2_span_still_belongs_to_its_xy_column() {
-    // The renderer asks for a column by an XY page index and a z = 0 page
+    // The renderer asks for a col_idx by an XY page index and a z = 0 page
     // offset. A cell key that let its own Z through put everything above
     // absolute z = 64u under a key nothing ever queried.
     let _g = serial();
     let (x, y) = (4096 * 3, 4096 * 5);
     let ground = corner(x, y, 10);
     let high = corner(x, y, 200);
-    place(ground.i, ground.f, DECOR_SIZE, "red", false);
-    place(high.i, high.f, DECOR_SIZE, "blue", false);
-    let column = TO_XY(ground.i);
-    let key = object_column_of(L3_IDX(column), L2_IDX_IN_L3(column));
+    place(&ground, DECOR_SIZE, "red", false);
+    place(&high, DECOR_SIZE, "blue", false);
+    let col_idx = TO_XY(ground.i);
+    let key = object_col_idx_of(L3_IDX(col_idx), L2_IDX_IN_L3(col_idx));
     let mut zs = Vec::new();
-    each_column_entry(key, &mut |e| zs.push(ivec::Z(e.corner().i)), false);
+    each_col_entry(key, &mut |e| zs.push(ivec::Z(e.corner().i)), false);
     zs.sort_unstable();
     assert_eq!(zs, vec![10, 200]);
     // The renderer's own spelling of the same key — a page offset it builds
-    // with z = 0 — resolves to the same column.
-    assert_eq!(object_column_of(L3_IDX(column), ivec::gather(0, 0, 0) | L2_IDX_IN_L3(column)), key);
+    // with z = 0 — resolves to the same col_idx.
+    assert_eq!(object_col_idx_of(L3_IDX(col_idx), ivec::gather(0, 0, 0) | L2_IDX_IN_L3(col_idx)), key);
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn object_store_band_tree_a_2_2_2_block_of_one_colour_reads_back_as_eight_cells(
         }
     }
     for c in &corners {
-        place(c.i, c.f, DECOR_SIZE, "red", false);
+        place(&c, DECOR_SIZE, "red", false);
     }
     for c in &corners {
         let found = get_objects_in_cell(&cell_of(c));
@@ -127,7 +127,7 @@ fn object_store_band_tree_clearing_a_chunk_s_last_object_frees_the_chunk() {
     let _g = serial();
     let c = corner(4096 * 9, 4096 * 2, 3);
     let before = object_store_stats().0;
-    place(c.i, c.f, DECOR_SIZE, "blue", false);
+    place(&c, DECOR_SIZE, "blue", false);
     assert_eq!(object_store_stats().0, before + 1);
     let entry = get_objects_in_cell(&cell_of(&c)).remove(0);
     remove(&entry.id);
@@ -139,11 +139,11 @@ fn object_store_entries_a_column_walk_s_chunk_local_corner_agrees_with_the_absol
     let _g = serial();
     let x0 = 4096 * 11 + 70; // not on a chunk boundary
     let c = corner(x0, 4096 * 4 + 5, 130);
-    place(c.i, c.f, DECOR_SIZE, "red", false);
-    let column = TO_XY(c.i);
-    let base = object_column_of(L3_IDX(column), L2_IDX_IN_L3(column));
+    place(&c, DECOR_SIZE, "red", false);
+    let col_idx = TO_XY(c.i);
+    let base = object_col_idx_of(L3_IDX(col_idx), L2_IDX_IN_L3(col_idx));
     let mut seen = 0;
-    each_column_entry(base, &mut |e| {
+    each_col_entry(base, &mut |e| {
         seen += 1;
         assert_eq!(ivec::Z(e.corner().i), 130);
         assert_eq!(e.lx, (x0 % 64) as f64);
@@ -159,13 +159,13 @@ fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_o
     let c = corner(4096 * 13, 0, 2);
     let [ix, iy, iz] = cell_index(&c);
     assert!(!cell_is_occupied(ix, iy, iz));
-    place(c.i, c.f, DECOR_SIZE, "red", false);
+    place(&c, DECOR_SIZE, "red", false);
     assert!(cell_is_occupied(ix, iy, iz));
     let entry = get_objects_in_cell(&cell_key(ix, iy, iz)).remove(0);
     remove(&entry.id);
     assert!(!cell_is_occupied(ix, iy, iz));
     let air = corner(4096 * 13, 0, 5);
-    place_air(air.i, air.f, DECOR_SIZE);
+    place_air(&air, DECOR_SIZE);
     let [ax, ay, az] = cell_index(&air);
     assert!(!cell_is_occupied(ax, ay, az));
 }
@@ -174,16 +174,16 @@ fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_o
 fn object_store_revisions_a_column_s_revisions_move_on_its_own_changes_on_the_right_channel() {
     let _g = serial();
     let c = corner(100_020, 0, 0);
-    let column = L2_BASE(TO_XY(c.i));
-    let elsewhere = L2_BASE(TO_XY(ivec::gather(1_000_000, 1_000_000, 0)));
-    let (objects0, decor0, other0) = (object_column_revision(column), decor_column_revision(column), object_column_revision(elsewhere));
-    place_decor(c.i, c.f, DECOR_SIZE, "tree");
-    assert!(decor_column_revision(column) > decor0, "decor channel moved");
-    assert_eq!(object_column_revision(elsewhere), other0, "another column did not");
-    let objects1 = object_column_revision(column);
+    let col_idx = L2_IDX(TO_XY(c.i));
+    let elsewhere = L2_IDX(TO_XY(ivec::gather(1_000_000, 1_000_000, 0)));
+    let (objects0, decor0, other0) = (object_col_revision(col_idx), decor_col_revision(col_idx), object_col_revision(elsewhere));
+    place_decor(&c, DECOR_SIZE, "tree");
+    assert!(decor_col_revision(col_idx) > decor0, "decor channel moved");
+    assert_eq!(object_col_revision(elsewhere), other0, "another col_idx did not");
+    let objects1 = object_col_revision(col_idx);
     let solid = corner(100_021, 0, 0);
-    place(solid.i, solid.f, DECOR_SIZE, "red", false);
-    assert!(object_column_revision(L2_BASE(TO_XY(solid.i))) > if L2_BASE(TO_XY(solid.i)) == column { objects1 } else { objects0 }, "objects channel moved");
+    place(&solid, DECOR_SIZE, "red", false);
+    assert!(object_col_revision(L2_IDX(TO_XY(solid.i))) > if L2_IDX(TO_XY(solid.i)) == col_idx { objects1 } else { objects0 }, "objects channel moved");
 }
 
 #[test]
@@ -191,9 +191,9 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
     let _g = serial();
     let a = corner(5000, 7000, 12);
     let b = PVF3 { i: ivec::gather(5001, 7000, 12), f: fvec::gather(fvec::from_real(0.25), 0, 0) };
-    place(a.i, a.f, 1.0, "red", false);
-    place(b.i, b.f, 0.25, "blue", false);
-    place_decor(ivec::gather(5000, 7001, 12), 0, DECOR_SIZE, "tree");
+    place(&a, 1.0, "red", false);
+    place(&b, 0.25, "blue", false);
+    place_decor(&PVF3 { i: ivec::gather(5000, 7001, 12), f: 0 }, DECOR_SIZE, "tree");
     let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
     let before: Vec<_> = get_objects_near(&a, 1.0).iter().map(shape).collect();
     assert_eq!(before.len(), 3);

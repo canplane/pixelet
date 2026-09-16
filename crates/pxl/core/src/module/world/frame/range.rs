@@ -7,6 +7,8 @@ use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
 
+use crate::module::world::terrain::slab::KEEP_PAGES;
+
 
 const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
 const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
@@ -74,17 +76,25 @@ pub struct PageAt {
     pub dist2: f64,
 }
 
-/// Every page whose square comes within `radius` of `anchor`, nearest first.
+/// Every page whose square comes within `radius` of `anchor`, nearest first,
+/// and never further than KEEP_PAGES from the anchor's own page.
 ///
 /// The page stays the streaming unit — one query, one bake, one decode, one
-/// cache key, one eviction — and this is the *set* of them, derived from a
-/// distance rather than chosen as a page radius of its own. A page enters when
-/// the disc reaches it, which happens continuously as the view moves; a
-/// Chebyshev radius around the centre's own page could only change in whole
-/// pages at a time.
+/// cache key, one eviction — and this is the *set* of them. Which pages is
+/// still a distance: a page enters when the disc reaches it, which happens
+/// continuously as the view moves, and `radius` past KEEP_DIST is how a page
+/// already being fetched stays wanted while the view drifts.
+///
+/// How far the set can reach is not a distance. The slab holds one record per
+/// page the load radius reaches and addresses it by the page's own coordinate
+/// (terrain/slab.rs), so two pages KEEP_PAGES*2+1 apart are one record. The
+/// disc alone would hand out both: with the anchor on a page boundary it
+/// reaches four pages back and three forward, and those two are exactly a slab
+/// axis apart. So the scan is the block the slab has records for, and the disc
+/// chooses inside it.
 pub fn pages_in_radius(anchor: IVec, radius: f64) -> Pages {
     let center_page = TO_XY(L3_IDX(anchor));
-    let span = (radius / PAGE_SPAN).ceil() as i64 + 1;
+    let span = ((radius / PAGE_SPAN).ceil() as i64 + 1).min(KEEP_PAGES as i64);
     let radius2 = radius * radius;
     let mut out = Pages::new();
     for dy in -span..=span {

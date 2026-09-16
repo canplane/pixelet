@@ -203,7 +203,7 @@ fn handle_tap(hovered: PVF3) {
                 // once the user has opted into that. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
                 // "nothing here on purpose" leaf is the only way to override it.
-                None if use_settings_store().enable_terrain_carving => place_air(hovered.i, hovered.f, object_size),
+                None if use_settings_store().enable_terrain_carving => place_air(&hovered, object_size),
                 None => {}
             }
         }
@@ -213,10 +213,10 @@ fn handle_tap(hovered: PVF3) {
             let map_origin = get_local_world_origin(use_map_store().map_center.as_ref());
             if ui.active_tool == ActiveTool::Decor {
                 if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size, map_origin) {
-                    place_decor(hovered.i, hovered.f, DECOR_SIZE, ui.decor_id);
+                    place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
             } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size, map_origin) {
-                place(hovered.i, hovered.f, object_size, &ui.object_color_id.clone(), use_settings_store().show_structures);
+                place(&hovered, object_size, &ui.object_color_id.clone(), use_settings_store().show_structures);
             }
         }
     }

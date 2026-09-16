@@ -45,7 +45,7 @@ pub struct Kernel {
     /// The open scan's band table: its address, and how many bands.
     pub bands: (usize, u32),
     /// The pools over the memory's sections, made at boot, by section
-    /// (crate::memory's FIXED_POOL, PAGE_POOL, MESH_POOL).
+    /// (crate::memory's FIXED_POOL, MESH_POOL). The terrain slab has none.
     pub pools: Vec<Pool>,
     /// The volumes over the fixed and mesh pools, made at boot.
     pub volumes: Option<Volumes>,

@@ -16,6 +16,8 @@
 //! nothing is copied to a place the core cannot see.
 
 use std::collections::BTreeMap;
+use pxl_shared::spec::space::indexer::L2_IDX;
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
 /// three thousand, and the glue's own chunks come on top. The mount pass stops
@@ -68,8 +70,12 @@ struct Runs {
 
 #[derive(Clone, Copy)]
 struct Chunk {
-    /// The column's base, the key the object store files it under.
-    base: u64,
+    /// The chunk's corner, as an L1 coordinate.
+    base: IVec,
+    /// The column it stands in, as the object store keys it. Derived from the
+    /// corner — a chunk is one L2 span — and kept beside it because the two
+    /// are different units and nothing but this would say so.
+    col_idx: IVec,
     /// Where the chunk starts in its page, in cells.
     tx0: u32,
     ty0: u32,
@@ -147,8 +153,8 @@ pub struct Builder {
     sample: ChunkSample,
     /// The drawn build's two edits: the hidden entry by its column, band
     /// and packed position, and the carve preview by its column.
-    hide: Option<(u64, i32, u32)>,
-    carve: Option<(u64, Carve)>,
+    hide: Option<(IVec, i32, u32)>,
+    carve: Option<(IVec, Carve)>,
     /// The scan job's bands, kept between the scan's steps.
     bands: Vec<BandView<'static>>,
     pub stat: BuildStat,
@@ -177,11 +183,12 @@ impl Builder {
         }
     }
 
-    /// What chunk `id` is made of, for a decor build: its column's base, where
-    /// it starts in its page, and its page's lanes.
-    pub fn source_of(&self, id: u32) -> Option<(u64, u32, u32, PageLanes, bool)> {
+    /// What chunk `id` is made of, for a decor build: its corner, the column
+    /// it stands in as the object store keys it, where it starts in its page,
+    /// and its page's lanes.
+    pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, PageLanes, bool)> {
         let c = self.chunks.get(&id)?;
-        Some((c.base, c.tx0, c.ty0, c.page?, c.show_structures))
+        Some((c.base, c.col_idx, c.tx0, c.ty0, c.page?, c.show_structures))
     }
 
     /// The chunk's composite of the real set — no edits — as a sealed volume
@@ -199,7 +206,7 @@ impl Builder {
     }
 
     /// The hidden entry's band and packed position, when it is in the column `key`.
-    pub fn hide_in(&self, key: u64) -> Option<(i32, u32)> {
+    pub fn hide_in(&self, key: IVec) -> Option<(i32, u32)> {
         self.hide.filter(|h| h.0 == key).map(|h| (h.1, h.2))
     }
 
@@ -214,12 +221,13 @@ impl Builder {
 
     // ---- commands ----
 
-    pub fn add(&mut self, id: u32, base: u64, tx0: u32, ty0: u32) {
+    pub fn add(&mut self, id: u32, base: IVec, tx0: u32, ty0: u32) {
         assert!(tx0 + CHUNK_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
         self.chunks.insert(
             id,
             Chunk {
                 base,
+                col_idx: L2_IDX(base),
                 tx0,
                 ty0,
                 page: None,
@@ -268,7 +276,7 @@ impl Builder {
         }
     }
 
-    pub fn set_edits(&mut self, hide: Option<(u64, i32, u32)>, carve: Option<(u64, Carve)>) {
+    pub fn set_edits(&mut self, hide: Option<(IVec, i32, u32)>, carve: Option<(IVec, Carve)>) {
         self.hide = hide;
         self.carve = carve;
     }
@@ -398,7 +406,7 @@ impl Builder {
         // step 8 on the principle that the fine tiers keep the voxel
         // pipeline; a zoom-in then scanned every chunk in view, about
         // 25 a second, most of them empty of objects (2026-09-14).
-        if !holding && !self.has_objects(world, c.base) {
+        if !holding && !self.has_objects(world, c.col_idx) {
             return self.direct_runs(world, id, page, emit);
         }
         if !holding {
@@ -443,8 +451,8 @@ impl Builder {
         }
     }
 
-    fn has_objects(&self, world: &World, base: u64) -> bool {
-        world.store.chunk_lanes(base).is_some_and(|l| l.count > 0) || matches!(self.carve, Some((k, _)) if k == base)
+    fn has_objects(&self, world: &World, col_idx: IVec) -> bool {
+        world.store.chunk_lanes(col_idx).is_some_and(|l| l.count > 0) || matches!(self.carve, Some((k, _)) if k == col_idx)
     }
 
     /// The page's lanes as slices.
@@ -468,7 +476,7 @@ impl Builder {
     /// and carve; without, the real set — what a raycast tests.
     fn compose(&mut self, world: &mut World, id: u32, page: PageLanes, edits: bool) -> Option<usize> {
         let c = &self.chunks[&id];
-        let (base, tx0, ty0, show) = (c.base, c.tx0, c.ty0, c.show_structures);
+        let (col_idx, tx0, ty0, show) = (c.col_idx, c.tx0, c.ty0, c.show_structures);
         // SAFETY: the chunk's page, as its source named it, resident while
         // the chunk is.
         let view = unsafe { Self::page_view(world, page) };
@@ -476,9 +484,9 @@ impl Builder {
         let volume = world.volumes.open();
         let mut ok = self.sample.paint(world.volumes, world.pools, volume);
         if ok {
-            let hide = self.hide.filter(|h| edits && h.0 == base).map(|h| (h.1, h.2));
-            let carve = self.carve.filter(|c| edits && c.0 == base).map(|c| c.1);
-            ok = !world.painter.paint(world.store, world.volumes, world.pools, volume, base, hide, carve).refused;
+            let hide = self.hide.filter(|h| edits && h.0 == col_idx).map(|h| (h.1, h.2));
+            let carve = self.carve.filter(|c| edits && c.0 == col_idx).map(|c| c.1);
+            ok = !world.painter.paint(world.store, world.volumes, world.pools, volume, col_idx, hide, carve).refused;
         }
         if !ok {
             world.volumes.release(world.pools, volume);

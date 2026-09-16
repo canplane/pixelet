@@ -3,7 +3,6 @@
 use pxl_shared::bake::constant::{PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_shared::bake::format::{GroundChannelKey, Terrain};
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
-use pxl_shared::spec::space::pvf3::fvec::FVec;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
@@ -27,17 +26,17 @@ fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
     }
 }
 
-fn page_cell(i: IVec, f: FVec) -> (u32, u32) {
-    let page_off = PVF3 { i: L1_IDX_IN_L3(i), f };
+fn page_cell(at: &PVF3) -> (u32, u32) {
+    let page_off = PVF3 { i: L1_IDX_IN_L3(at.i), f: at.f };
     let tx = (pvf3::to_real(pvf3::X(&page_off)) / U_PER_CELL).floor() as u32;
     let ty = (pvf3::to_real(pvf3::Y(&page_off)) / U_PER_CELL).floor() as u32;
     (tx, ty)
 }
 
 /// Returns ground height in lattice/render units.
-pub fn get_ele(i: IVec, f: FVec) -> Option<f64> {
-    let tile = use_tile_store().get_tile(L3_IDX(i))?;
-    let (tx, ty) = page_cell(i, f);
+pub fn get_ele(at: &PVF3) -> Option<f64> {
+    let tile = use_tile_store().get_tile(L3_IDX(at.i))?;
+    let (tx, ty) = page_cell(at);
     Some(sample_ele_grounded(&tile.terrain, tx, ty) * U_PER_CELL)
 }
 
@@ -47,9 +46,9 @@ pub fn get_ele(i: IVec, f: FVec) -> Option<f64> {
 /// by object/store.rs's place() to tell whether a terrain-styled pick would
 /// actually change anything — painting "land.GREEN_DEEP" over ground the bake
 /// already recorded as GREEN_DEEP land paints nothing new.
-pub fn get_ground_type(i: IVec, f: FVec, channel: GroundChannelKey) -> Option<u32> {
-    let tile = use_tile_store().get_tile(L3_IDX(i))?;
-    let (tx, ty) = page_cell(i, f);
+pub fn get_ground_type(at: &PVF3, channel: GroundChannelKey) -> Option<u32> {
+    let tile = use_tile_store().get_tile(L3_IDX(at.i))?;
+    let (tx, ty) = page_cell(at);
     Some(tile.terrain.ground.get(channel).get((ty * PAGE_CELL_SPAN + tx) as usize) as u32)
 }
 
@@ -83,13 +82,12 @@ pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) ->
     Some(sample_ele_grounded(&tile.terrain, tx, ty) * U_PER_CELL)
 }
 
-pub fn with_ele(out: &mut PVF3, i: IVec, f: FVec) -> Option<PVF3> {
+pub fn with_ele(out: &mut PVF3, at: &PVF3) -> Option<PVF3> {
     // sample terrain height at the current X/Y position.
-    let ele = get_ele(i, f)?;
+    let ele = get_ele(at)?;
 
     // rebuild absolute PVF3 with ground-relative Z applied.
-    out.i = i;
-    out.f = f;
+    *out = *at;
     let grounded_z = pvf3::Z(out) + pvf3::from_real(ele);
     let (x, y) = (pvf3::X(out), pvf3::Y(out));
     pvf3::gather(out, x, y, grounded_z);
@@ -109,8 +107,8 @@ pub fn with_ele(out: &mut PVF3, i: IVec, f: FVec) -> Option<PVF3> {
 /// camera by the half cell between the two. with_ele itself answers the top
 /// face, which is what standing things (the puck, decor, a place) are
 /// grounded to; this is the one place the camera's own convention is applied.
-pub fn ground_pivot(out: &mut PVF3, i: IVec, f: FVec) -> Option<PVF3> {
-    with_ele(out, i, f)?;
+pub fn ground_pivot(out: &mut PVF3, at: &PVF3) -> Option<PVF3> {
+    with_ele(out, at)?;
     let half_cell_fp = pvf3::from_real(U_PER_CELL / 2.0);
     let (x, y, z) = (pvf3::X(out), pvf3::Y(out), pvf3::Z(out));
     pvf3::gather(out, x, y, z + half_cell_fp);
@@ -130,6 +128,6 @@ pub fn ground_pivot(out: &mut PVF3, i: IVec, f: FVec) -> Option<PVF3> {
 pub fn ground_or_raw(coord: &PVF3) -> PVF3 {
     let mut probe = PVF3::default();
     pvf3::gather(&mut probe, pvf3::X(coord), pvf3::Y(coord), 0);
-    let (i, f) = (probe.i, probe.f);
-    ground_pivot(&mut probe, i, f).unwrap_or(*coord)
+    let flat = probe;
+    ground_pivot(&mut probe, &flat).unwrap_or(*coord)
 }

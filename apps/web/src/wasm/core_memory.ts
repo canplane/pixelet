@@ -25,12 +25,18 @@ import { CoreRing } from "@/wasm/core_ring.ts";
 /** crates/pxl/core/src/memory.rs's REGION_BYTES. */
 export const REGION_BYTES: u32 = 1 << 26;
 
-/** Regions the kernel is given: eight on the desktop, four on a phone — or
- * half where the device will not reserve that much, no fewer than the three
- * the kernel lays out. */
-const CORE_REGIONS: u32 = HANDHELD ? 4 : 8;
+/** The memory the kernel is reserved: a gibibyte on the desktop, half of one
+ * on a phone (crates/pxl/core/src/memory.rs's DESKTOP_BYTES and PHONE_BYTES).
+ * What is in it is the kernel's alone to say; nothing here reads a section.
+ *
+ * There is no smaller reservation to fall back to. The terrain a load radius
+ * reaches is a fixed 196.43 MiB and the kernel lays its map out around it, so
+ * a device that will not reserve this much cannot run the world at all — and
+ * failing here says that, where failing in the map would say the map was
+ * wrong. */
+const CORE_BYTES: u32 = HANDHELD ? 512 << 20 : 1024 << 20;
 
-const memory = reserve_memory([CORE_REGIONS, Math.max(3, Math.ceil(CORE_REGIONS / 2))], REGION_BYTES);
+const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);
 
 /**
  * The one module over it, booted: the kernel has laid the memory out before

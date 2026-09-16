@@ -195,14 +195,14 @@ fn sketch_map(map_center: &PVF3, map_origin: IVec) -> Sketch {
     // it floors to, ground-snapped — a cell, so a box.
     let mut raw_v = [0.0; 3];
     projection::unproject(&mut raw_v, L1_IDX_IN_L4(map_center.i), map_center.f);
-    let gnd_v = [raw_v[0], raw_v[1], get_ele(map_center.i, map_center.f).unwrap_or(0.0)];
+    let gnd_v = [raw_v[0], raw_v[1], get_ele(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
     // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
     projection::unproject(&mut anchor_base_gnd_v, L1_IDX_IN_L4(map_origin), 0);
-    anchor_base_gnd_v[2] = get_ele(map_origin, 0).unwrap_or(0.0);
+    anchor_base_gnd_v[2] = get_ele(&PVF3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
     floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
 
@@ -213,7 +213,7 @@ fn sketch_map(map_center: &PVF3, map_origin: IVec) -> Sketch {
 
     for (corner, label) in [(TO_XY(L3_BASE(map_center.i)), "page_base"), (TO_XY(L3_CENTER(map_center.i)), "page_center")] {
         let mut out = PVF3::default();
-        if let Some(grounded) = with_ele(&mut out, corner, 0) {
+        if let Some(grounded) = with_ele(&mut out, &PVF3 { i: corner, f: 0 }) {
             s.r#box(local_of(&grounded, map_origin), 1.0, Some(label));
         }
     }

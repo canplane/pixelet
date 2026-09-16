@@ -27,7 +27,7 @@ use crate::world::ghost::Ghost;
 use crate::world::lod::{Ladder, COARSEST, LOD_STEPS};
 use crate::world::marker::Markers;
 use crate::world::model::Models;
-use pxl_shared::spec::space::pvf3::ivec;
+use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
@@ -134,7 +134,7 @@ pub enum Event {
     /// A chunk came into range: its page and its page-local base, in units.
     Mount {
         id: u32,
-        page: u64,
+        page_idx: IVec,
         base_x: u32,
         base_y: u32,
     },
@@ -328,14 +328,14 @@ pub struct Scheduler {
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
-    /// The pages with a terrain tile, which chunks are mounted from.
-    /// In ascending order, which is the order chunks are mounted in.
-    pages: Vec<u64>,
-    pages_revision: u32,
+    /// The pages with a terrain tile, which chunks are mounted from. In
+    /// ascending order, which is the order chunks are mounted in.
+    page_idxs: Vec<IVec>,
+    page_idxs_revision: u32,
     /// The chunks the module mounted, by page and page-local base.
-    mounted: BTreeMap<(u64, u32, u32), u32>,
+    mounted: BTreeMap<(IVec, u32, u32), u32>,
     /// The mounted chunks a pass finds leaving, before they are let go.
-    gone: Vec<((u64, u32, u32), u32)>,
+    gone: Vec<((IVec, u32, u32), u32)>,
     next_mount_id: u32,
     mounted_for: Option<([f64; 2], f64, f64, u32)>,
     /// The decor kinds, in the order the glue taught them — the order of
@@ -430,8 +430,8 @@ impl Scheduler {
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
-            pages: Vec::with_capacity(MAX_PAGES),
-            pages_revision: 0,
+            page_idxs: Vec::with_capacity(MAX_PAGES),
+            page_idxs_revision: 0,
             mounted: BTreeMap::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
@@ -488,12 +488,11 @@ impl Scheduler {
 
     // ---- commands ----
 
-    /// A chunk at `base` (its lattice word, and its X and Y in units),
-    /// starting at page cell (tx0, ty0). Its first tier is guessed from the
-    /// last frame, so the first recheck's hysteresis starts from where the
-    /// camera is.
+    /// A chunk at `base`, starting at page cell (tx0, ty0). Its first tier is
+    /// guessed from the last frame, so the first recheck's hysteresis starts
+    /// from where the camera is.
     #[allow(clippy::too_many_arguments)]
-    pub fn add(&mut self, id: u32, base: u64, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: u32) {
+    pub fn add(&mut self, id: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: u32) {
         self.builder.add(id, base, tx0, ty0);
         let mut slot = Slot {
             id,
@@ -640,10 +639,10 @@ impl Scheduler {
     /// A chunk with no page has no decor to build.
     fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], emit: &mut impl FnMut(Event)) -> bool {
         let id = self.slots[i].id;
-        let Some((base, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else { return true };
+        let Some((base, col_idx, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else { return true };
         let show_decor = self.frame.is_some_and(|f| f.show_decor);
-        let (key_x, key_y) = (ivec::X(base), ivec::Y(base));
-        let page_idx = ivec::gather(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT, 0);
+        let (col_x, col_y) = (ivec::X(base), ivec::Y(base));
+        let page_idx = ivec::gather(col_x >> PAGE_SHAMT, col_y >> PAGE_SHAMT, 0);
         let mut sampled = false;
         let pool = world.volumes.mesh_pool();
         if self.decor_scratch.is_none() {
@@ -674,13 +673,13 @@ impl Scheduler {
             let chunk = DecorChunk {
                 page: &view,
                 page_idx,
-                key: base,
-                key_x,
-                key_y,
+                col_idx,
+                col_x,
+                col_y,
                 tx0,
                 ty0,
                 show_decor,
-                hide: self.builder.hide_in(base),
+                hide: self.builder.hide_in(col_idx),
             };
             let a = crate::probe::mark();
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
@@ -736,21 +735,21 @@ impl Scheduler {
     }
 
     /// A page's terrain tile arrived, or left.
-    pub fn page(&mut self, page: u64, present: bool) {
-        let changed = match (self.pages.binary_search(&page), present) {
+    pub fn page(&mut self, page_idx: IVec, present: bool) {
+        let changed = match (self.page_idxs.binary_search(&page_idx), present) {
             (Err(at), true) => {
-                assert!(self.pages.len() < MAX_PAGES, "more than {MAX_PAGES} pages with a tile");
-                self.pages.insert(at, page);
+                assert!(self.page_idxs.len() < MAX_PAGES, "more than {MAX_PAGES} pages with a tile");
+                self.page_idxs.insert(at, page_idx);
                 true
             }
             (Ok(at), false) => {
-                self.pages.remove(at);
+                self.page_idxs.remove(at);
                 true
             }
             _ => false,
         };
         if changed {
-            self.pages_revision = self.pages_revision.wrapping_add(1);
+            self.page_idxs_revision = self.page_idxs_revision.wrapping_add(1);
             self.view_dirty = true;
         }
     }
@@ -761,9 +760,9 @@ impl Scheduler {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }
 
-    /// Whether a chunk of `page` is still mounted: what reads the page's lanes.
-    pub fn page_mounted(&self, page: u64) -> bool {
-        self.mounted.range((page, 0, 0)..=(page, u32::MAX, u32::MAX)).next().is_some()
+    /// Whether a chunk of `page_idx` is still mounted: what reads its lanes.
+    pub fn page_mounted(&self, page_idx: IVec) -> bool {
+        self.mounted.range((page_idx, 0, 0)..=(page_idx, u32::MAX, u32::MAX)).next().is_some()
     }
 
     /// module/world/frame/range.ts's rule, a page and a chunk at a time: a chunk
@@ -772,7 +771,7 @@ impl Scheduler {
     /// hysteresis; a page with no tile, or out past both, mounts nothing.
     fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
-        let key = (anchor, frame.render_dist, frame.range_hysteresis, self.pages_revision);
+        let key = (anchor, frame.render_dist, frame.range_hysteresis, self.page_idxs_revision);
         if self.mounted_for == Some(key) {
             return;
         }
@@ -795,20 +794,20 @@ impl Scheduler {
             };
             dx * dx + dy * dy
         };
-        let page_origin = |page: u64| {
-            let (px, py) = (ivec::X(page), ivec::Y(page));
+        let page_origin = |page_idx: IVec| {
+            let (px, py) = (ivec::X(page_idx), ivec::Y(page_idx));
             ((px << PAGE_SHAMT) as f64 - anchor[0], (py << PAGE_SHAMT) as f64 - anchor[1])
         };
 
-        // Leave: every mounted chunk past the keep radius or on a page that left.
+        // Leave: every mounted chunk past the keep radius or on a page_idx that left.
         self.gone.clear();
-        for (&(page, bx, by), &id) in self.mounted.iter() {
-            let leaving = self.pages.binary_search(&page).is_err() || {
-                let (x0, y0) = page_origin(page);
+        for (&(page_idx, bx, by), &id) in self.mounted.iter() {
+            let leaving = self.page_idxs.binary_search(&page_idx).is_err() || {
+                let (x0, y0) = page_origin(page_idx);
                 rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > keep2
             };
             if leaving {
-                self.gone.push(((page, bx, by), id));
+                self.gone.push(((page_idx, bx, by), id));
             }
         }
         for g in 0..self.gone.len() {
@@ -818,17 +817,17 @@ impl Scheduler {
             emit(Event::Unmount { id });
         }
 
-        // Enter: every chunk within the radius on a page with a tile.
-        for p in 0..self.pages.len() {
-            let page = self.pages[p];
-            let (x0, y0) = page_origin(page);
+        // Enter: every chunk within the radius on a page_idx with a tile.
+        for p in 0..self.page_idxs.len() {
+            let page_idx = self.page_idxs[p];
+            let (x0, y0) = page_origin(page_idx);
             if rect(x0, y0, PAGE_SPAN) > keep2 {
                 continue;
             }
             for cy in 0..PAGE_CHUNK_AXIS {
                 for cx in 0..PAGE_CHUNK_AXIS {
                     let (bx, by) = (cx * CHUNK_SPAN, cy * CHUNK_SPAN);
-                    if self.mounted.contains_key(&(page, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
+                    if self.mounted.contains_key(&(page_idx, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
                         continue;
                     }
                     if mounts >= MAX_MOUNTS_PER_FRAME {
@@ -847,12 +846,12 @@ impl Scheduler {
                     mounts += 1;
                     let id = self.next_mount_id;
                     self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
-                    let (px, py) = (ivec::X(page), ivec::Y(page));
+                    let (px, py) = (ivec::X(page_idx), ivec::Y(page_idx));
                     let (wx, wy) = ((px << PAGE_SHAMT) + bx as i64, (py << PAGE_SHAMT) + by as i64);
                     let base = ivec::gather(wx, wy, 0);
-                    emit(Event::Mount { id, page, base_x: bx, base_y: by });
-                    self.add(id, base, wx as f64, wy as f64, bx, by, blend_hash(page, bx, by));
-                    self.mounted.insert((page, bx, by), id);
+                    emit(Event::Mount { id, page_idx, base_x: bx, base_y: by });
+                    self.add(id, base, wx as f64, wy as f64, bx, by, blend_hash(page_idx, bx, by));
+                    self.mounted.insert((page_idx, bx, by), id);
                 }
             }
         }
@@ -1438,7 +1437,7 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 
 /// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over the
 /// key chunk_node.ts named it by, `<page index>:<base x>,<base y>`.
-fn blend_hash(page: u64, bx: u32, by: u32) -> u32 {
+fn blend_hash(page_idx: IVec, bx: u32, by: u32) -> u32 {
     /// FNV-1a over what is written, as it is written.
     struct Fnv(u32);
     impl Write for Fnv {
@@ -1451,7 +1450,7 @@ fn blend_hash(page: u64, bx: u32, by: u32) -> u32 {
         }
     }
     let mut h = Fnv(2166136261);
-    let _ = write!(h, "{page}:{bx},{by}");
+    let _ = write!(h, "{page_idx}:{bx},{by}");
     h.0
 }
 

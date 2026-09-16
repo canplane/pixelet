@@ -10,7 +10,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
 
 use super::config::{KEEP_DIST, RESIDENT_PAGES};
-use super::resident::{release_due_terrain, release_terrain, QUARANTINE_MS};
+use super::resident::free_slot;
 use super::store::{tile_pages, use_tile_store};
 use super::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY, OCEAN_KEY};
 use crate::global::{now, Global};
@@ -82,7 +82,7 @@ fn cleanup_far_tiles(anchor: IVec, pinned_page_idx: Option<IVec>) {
     let mut evict: Vec<IVec> = Vec::new();
     evict.extend(tile_pages().keys().filter(|&p| Some(p) != pinned_page_idx && !holds(p)));
     for page_idx in evict {
-        release_terrain(page_idx, QUARANTINE_MS);
+        free_slot(page_idx);
         use_tile_store().clear_tile(page_idx);
     }
 }
@@ -93,8 +93,8 @@ struct Fetcher {
     ocean_ask_at: f64,
     /// When a page that failed is asked for again. The wishlist is rebuilt
     /// only when the anchor moves, and the scheduler drops a failed demand, so
-    /// a page refused while the view stood still — the page section full of a
-    /// jump's quarantined pages — would stay a hole until the next pan.
+    /// a page whose fetch failed while the view stood still would stay a hole
+    /// until the next pan.
     retry_at: Option<f64>,
 }
 
@@ -109,12 +109,12 @@ fn fetcher() -> &'static mut Fetcher {
     })
 }
 
-/// A terrain page's fetch failed: the wishlist is rebuilt once the quarantine
-/// that most likely refused it has passed, not at once, which would fetch the
-/// same body again into the same full section.
+/// A terrain page's fetch failed: the wishlist is rebuilt after the same wait
+/// the shared tile takes, not at once, which would ask again into whatever
+/// turned it away.
 pub fn terrain_failed() {
     let f = fetcher();
-    f.retry_at.get_or_insert(now() + QUARANTINE_MS);
+    f.retry_at.get_or_insert(now() + OCEAN_RETRY_MS);
 }
 
 /// Asks for the shared ocean tile while pages wait on it and nothing is asking
@@ -138,7 +138,6 @@ fn ocean_step(f: &mut Fetcher) {
 /// The tile fetcher's turn.
 pub fn tile_fetcher_step() {
     let f = fetcher();
-    release_due_terrain();
     ocean_step(f);
 
     // map_status follows the terrain queue: LOADING while anything terrain is

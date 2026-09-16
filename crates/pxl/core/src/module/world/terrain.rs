@@ -5,6 +5,7 @@ pub mod config_spec;
 pub mod elevation;
 pub mod elevation_sample;
 pub mod resident;
+pub mod slab;
 pub mod store;
 pub mod teach;
 pub mod tile_repository;

@@ -28,7 +28,7 @@ use crate::module::world::change::{world_changes, TERRAIN_PAGE};
 use crate::global::{now, Global};
 use crate::kernel::{kernel, with_world};
 use crate::module::world::lod::LodStep;
-use crate::module::world::object::store::{decor_column_revision, object_column_of, object_column_revision, objects_revision};
+use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, objects_revision};
 use crate::module::world::terrain::store::{tile_pages, use_tile_store};
 use crate::world::build::{Event as BuildEvent, PageLanes};
 use crate::world::sched::Event;
@@ -166,8 +166,8 @@ pub struct ChunkNode {
     pub page_idx: IVec,
     /// This chunk's own absolute lattice origin.
     pub base_i: IVec,
-    /// The object store's key for this chunk's column.
-    pub object_key: IVec,
+    /// The column this chunk stands in, as the object store keys it.
+    pub col_idx: IVec,
     id: u32,
     /// The tiers and the decor blocks the scheduler handed over, by step.
     tiers: HashMap<LodStep, MeshBlock>,
@@ -208,12 +208,12 @@ fn tile_revision(page_idx: IVec) -> u32 {
 impl ChunkNode {
     fn new(id: u32, page_idx: IVec, base_x: u32, base_y: u32) -> ChunkNode {
         let page_off = ivec::gather(base_x as i64, base_y as i64, 0);
-        let object_key = object_column_of(page_idx, page_off);
+        let col_idx = object_col_idx_of(page_idx, page_off);
         let settings = use_settings_store();
         ChunkNode {
             page_idx,
             base_i: ivec::add(FROM_L3_IDX(page_idx), page_off),
-            object_key,
+            col_idx,
             id,
             tiers: HashMap::new(),
             decor_cache: HashMap::new(),
@@ -221,8 +221,8 @@ impl ChunkNode {
             runs_bytes: 0,
             tile: tile_revision(page_idx),
             show_structures: settings.show_structures,
-            objects_revision: object_column_revision(object_key),
-            decor_revision: decor_column_revision(object_key),
+            objects_revision: object_col_revision(col_idx),
+            decor_revision: decor_col_revision(col_idx),
             show_decor: settings.show_decor,
         }
     }
@@ -259,7 +259,7 @@ impl ChunkNode {
     fn on_source_change(&mut self, queue: &mut Queue) {
         let tile = tile_revision(self.page_idx);
         let show_structures = use_settings_store().show_structures;
-        let objects_revision = object_column_revision(self.object_key);
+        let objects_revision = object_col_revision(self.col_idx);
         if self.tile == tile && self.show_structures == show_structures && self.objects_revision == objects_revision {
             return;
         }
@@ -275,7 +275,7 @@ impl ChunkNode {
     /// would reintroduce the needless cube rebuild — visible as a flicker — this
     /// split exists to avoid.
     fn on_decor_change(&mut self, queue: &mut Queue) {
-        let revision = decor_column_revision(self.object_key);
+        let revision = decor_col_revision(self.col_idx);
         let show_decor = use_settings_store().show_decor;
         if revision == self.decor_revision && show_decor == self.show_decor {
             return;
@@ -353,8 +353,8 @@ pub fn run_chunk_events(events: impl IntoIterator<Item = Event>) {
 fn dispatch(e: Event, queue: &mut Queue) {
     let n = nodes();
     match e {
-        Event::Mount { id, page, base_x, base_y } => {
-            let mut node = ChunkNode::new(id, page, base_x, base_y);
+        Event::Mount { id, page_idx, base_x, base_y } => {
+            let mut node = ChunkNode::new(id, page_idx, base_x, base_y);
             node.tell_source(queue);
             n.nodes.insert(id, node);
             node_counts().added += 1;

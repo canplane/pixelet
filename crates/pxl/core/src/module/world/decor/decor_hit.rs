@@ -32,6 +32,6 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
 /// relative to `map_origin`, as the voxel raycast takes it.
 pub fn raycast_decor(origin: Vec3, direction: Vec3, map_origin: IVec, max_dist: f64) -> Option<String> {
     let hit = ray_hit_decor(&RayLike { origin, direction }, map_origin, max_dist + SAME_SURFACE_EPS)?;
-    let (base, ..) = kernel().sched.builder.source_of(hit.chunk)?;
-    Some(entry_id_of(base, hit.band, hit.pos))
+    let (_, col_idx, ..) = kernel().sched.builder.source_of(hit.chunk)?;
+    Some(entry_id_of(col_idx, hit.band, hit.pos))
 }
