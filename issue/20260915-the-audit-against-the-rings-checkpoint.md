@@ -86,9 +86,14 @@ when its fix lands.
   is what terrain's `retry_at` now makes sure of. `PHASES_MAX` leaves out a
   seventh sub-timing, and a run's phases are literals in the code, so it
   costs a line of the report and nothing the world runs on.
-- **H7** `ledger.rs:199-209` keeps a one-minute window capped at
+- **H7** ~~`ledger.rs:199-209` keeps a one-minute window capped at
   2048 / 4096 / 1024; `ledger.ts:196-198` kept the session
-  (200k / 500k / 50k).
+  (200k / 500k / 50k).~~ **Kept as it is**: the shell's rings were the
+  browser's heap and could grow with the tab; these are lanes of the fixed
+  section, and a session's worth at those counts is the memory this same
+  audit spent its turns getting back. What a report answers for is the
+  minute before it was taken, and a lane that fills inside that minute says
+  so through `truncated` rather than dropping the overflow unannounced.
 - **H8** ~~`wasm/src/lib.rs:192-200` names `VOLUME_POOLS`, a command no
   longer in `spec/cmd.rs`.~~ The volumes are cut in `boot`, and the three
   places say so.
@@ -176,10 +181,17 @@ when its fix lands.
   `set_tile` inside React's commit and shows up as `chunk_stage`'s
   `commit_ms`. The kernel has no commit and no `chunk_stage`, so the note
   keeps what a reader can still act on.
-- **B12** `error_reason`: `_` is a word boundary, and 80 characters are
-  counted as chars rather than UTF-16 units.
-- **B13** `camera/input.rs:116,330-333` pairs the two lowest pointer ids;
-  `input.tsx:209,355-358` the two earliest pressed.
+- **B12** ~~`error_reason`: `_` is a word boundary, and 80 characters are
+  counted as chars rather than UTF-16 units.~~ The boundary counts an
+  underscore as a word character, and the eighty are counted in the units the
+  shell measures a string in, a character never cut in half.
+- **B13** ~~`camera/input.rs:116,330-333` pairs the two lowest pointer ids;
+  `input.tsx:209,355-358` the two earliest pressed.~~ **Kept as it is**: both
+  readers of the pair (`begin_pinch`, `update_pinch`) take it in the same
+  order, and the map is keyed by id, so the order cannot flip mid-gesture and
+  turn the twist angle around. With two fingers down the two orders name the
+  same pair; they differ only about which two of three or more to follow,
+  where either is a choice, and the baseline is retaken when a third lifts.
 - **B14** ~~`decor/asset_store.rs:95-119` retries a variant only when
   `load_revision` moves, so a model the pool refused waits for another
   load.~~ A refusal is the mesh pool having no room, which nothing else
@@ -193,8 +205,9 @@ when its fix lands.
   even (1250 m "1.2km", `toFixed` "1.3km"). `search_modal.tsx:192-195`.
 - ~~**B17**~~ `use_reverse_geocode.rs:67-88` submits during a continuous pan;
   `use_reverse_geocode.ts:55-100` restarted 500 ms on every centre change.
-- **B18** `map/environment.rs:60-64` `tail_ambient`, `mid` and a `Vec`
-  nothing reads.
+- **B18** ~~`map/environment.rs:60-64` `tail_ambient`, `mid` and a `Vec`
+  nothing reads.~~ Gone; the writes beside them already put the ambient
+  intensity in the lane.
 - ~~**B19**~~ `character_preview.rs:125` stands the case's actor at
   `[0, 0, -CASE_DEPTH_U]`; `character_preview.tsx:70-71,95` at the map
   origin's X and Y, its Z less `CASE_DEPTH_U`.
@@ -236,9 +249,12 @@ when its fix lands.
   the buffer already made is drawn scaled until the size holds still.
 - **B27** `render/gpu/decor.rs:98-104,116` uploads a texture per group;
   `decor.ts:117-128` one per image.
-- **B28** An MSAA change keeps the device and rebuilds the pipelines
+- **B28** ~~An MSAA change keeps the device and rebuilds the pipelines
   (`renderer.rs:573-585,927-929`); `stage.tsx:139-165` made a new
-  renderer.
+  renderer.~~ **Kept as it is**: a sample count is a pipeline's, and the
+  targets are remade where `targets` sees it changed. Making a renderer
+  again would throw away the device, its buffers and every block listed on
+  it to change one number in a pipeline.
 - **B29** ~~`world.rs:90` shows the debug gizmos where `APP_ENV()` is not
   production; `world.tsx:97` where `__IS_DEV__`.~~ **Kept as it is**: the
   kernel has no bundler flag to read — `APP_ENV` is what the shell's build
@@ -247,9 +263,10 @@ when its fix lands.
 
 ## X. xpute has it
 
-- **X1** `setting/store.rs:189-243` parses the overrides by hand beside
+- **X1** ~~`setting/store.rs:189-243` parses the overrides by hand beside
   xpute `read_json`; `\b \f \r` read as letters and a surrogate `\u` stops
-  the parse.
+  the parse.~~ The overrides are read through `read_json`'s fields, and an
+  escape is decoded by the one reader that knows them all.
 - **X2** `json_string` in `setting/store.rs`, `ui_store.rs` and
   `sched/trace.rs`; xpute has `Quoted`.
 
