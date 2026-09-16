@@ -23,21 +23,21 @@ const PAGE: u32 = 1 << 12;
 /// the wasm32 target's own `-z stack-size`.
 const STACK_BYTES: u32 = 1 << 20;
 
-/// Messages a ring holds, and the bytes of the one frame each of them owns.
-/// A packet is at most a frame; anything larger is bulk and crosses by
-/// address. The frame is the kernel's page (pxl_core::memory::PAGE_BYTES),
-/// which is also the buddy's smallest block, so a frame is one block wherever
-/// one has to come from.
+/// Messages a ring holds, and the bytes of the payload each slot owns. A
+/// packet is at most a slot; anything larger is bulk and crosses by address.
+/// A slot's payload is the kernel's page (pxl_core::memory::PAGE_BYTES), which
+/// is also the buddy's smallest block, so it is one block wherever one has to
+/// come from.
 const RING_CAPACITY: u32 = 2048;
-const RING_FRAME_BYTES: u32 = PAGE;
+const RING_SLOT_BYTES: u32 = PAGE;
 
 /// The descriptors: a header of 8 words and `RING_CAPACITY` messages of 4,
 /// rounded up to a page so each ring begins on one.
 const RING_DESC_BYTES: u32 = (8 + RING_CAPACITY * 4) * 4;
 const RING_DESC_STRIDE: u32 = RING_DESC_BYTES.div_ceil(PAGE) * PAGE;
 
-/// The frames, one a slot.
-const RING_ARENA_STRIDE: u32 = RING_CAPACITY * RING_FRAME_BYTES;
+/// The payloads, one a slot.
+const RING_SLOT_STRIDE: u32 = RING_CAPACITY * RING_SLOT_BYTES;
 
 /// Three rings: submission, completion, and the spill the completion ring
 /// overflows into. Equal, because which way the traffic runs is a question
@@ -46,7 +46,7 @@ const RING_ARENA_STRIDE: u32 = RING_CAPACITY * RING_FRAME_BYTES;
 const RING_COUNT: u32 = 3;
 
 const RING_DESC_AT: u32 = STACK_BYTES;
-const RING_ARENA_AT: u32 = 2 << 20;
+const RING_SLOT_AT: u32 = 2 << 20;
 
 /// Where the linker may start putting `.rodata`, `.data` and `.bss`. A round
 /// number rather than wherever the rings happen to end, so the two ranges grow
@@ -55,8 +55,8 @@ const RING_ARENA_AT: u32 = 2 << 20;
 const GLOBAL_BASE: u32 = 32 << 20;
 
 fn main() {
-    const { assert!(RING_DESC_AT + RING_COUNT * RING_DESC_STRIDE <= RING_ARENA_AT, "the descriptors run into the frames") };
-    const { assert!(RING_ARENA_AT + RING_COUNT * RING_ARENA_STRIDE <= GLOBAL_BASE, "the frames run into the module's data") };
+    const { assert!(RING_DESC_AT + RING_COUNT * RING_DESC_STRIDE <= RING_SLOT_AT, "the descriptors run into the payloads") };
+    const { assert!(RING_SLOT_AT + RING_COUNT * RING_SLOT_STRIDE <= GLOBAL_BASE, "the payloads run into the module's data") };
 
     println!("cargo:rustc-link-arg=--import-memory");
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
@@ -69,14 +69,14 @@ fn main() {
         "\
 /// Messages a ring holds. See build.rs.
 pub const RING_CAPACITY: u32 = {RING_CAPACITY};
-/// The bytes of the one frame each message owns: a packet is at most this.
-pub const RING_FRAME_BYTES: u32 = {RING_FRAME_BYTES};
-/// Where each ring's descriptors and frames are, both at addresses the shell
-/// computes rather than reads.
+/// The bytes of the payload each slot owns: a packet is at most this.
+pub const RING_SLOT_BYTES: u32 = {RING_SLOT_BYTES};
+/// Where each ring's descriptors and payloads are, at addresses that are the
+/// same in every build rather than wherever something handed them out.
 pub const RING_DESC_AT: u32 = {RING_DESC_AT};
 pub const RING_DESC_STRIDE: u32 = {RING_DESC_STRIDE};
-pub const RING_ARENA_AT: u32 = {RING_ARENA_AT};
-pub const RING_ARENA_STRIDE: u32 = {RING_ARENA_STRIDE};
+pub const RING_SLOT_AT: u32 = {RING_SLOT_AT};
+pub const RING_SLOT_STRIDE: u32 = {RING_SLOT_STRIDE};
 /// Where the linker was told its own data may begin, which is what the rings
 /// must stay below and what the module's data begins at.
 pub const GLOBAL_BASE: u32 = {GLOBAL_BASE};

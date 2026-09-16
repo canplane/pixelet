@@ -428,7 +428,7 @@ const fn align(n: u32, unit: u32) -> u32 {
 }
 
 /// A packet of one root branch of leaves, written straight into bytes the
-/// caller holds — a ring's arena — in the layout `TreeEncoder` gives the same
+/// caller holds — a ring slot's payload — in the layout `TreeEncoder` gives the same
 /// children, byte for byte, with no tree built first and nothing allocated.
 /// The children are declared up front, since the branch's table precedes
 /// them. A child that does not fit spoils the packet and `finish` refuses it;

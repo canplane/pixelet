@@ -6,8 +6,8 @@
  * its kernel, laid out once and shared by address.
  *
  * A message is what a frame (frame.ts) needs once the transport is shared
- * memory rather than transfer: no spill, since a packet is as large as a
- * frame allows; no args/body split, since the packet is a tree and a large
+ * memory rather than transfer: no spill, since a packet is as large as a slot
+ * allows; no args/body split, since the packet is a tree and a large
  * body is a leaf of it; no worker id, since one ring joins two sides. What
  * is left is four words:
  *
@@ -23,42 +23,44 @@
  * On the completion ring, `RES` tells a reply from a signal the kernel
  * raised itself. `ACKREQ` on a submission asks for exactly one reply.
  *
- * ## Two areas, not one
+ * ## A slot in two places
  *
- * The descriptors are a header of eight u32 words and `capacity` messages;
- * the packets live in an arena elsewhere in the memory, `capacity` frames of
- * `frame_bytes` each. Which is how every ring this is modelled on is built:
+ * A slot is a descriptor of four words and a payload of `slot_bytes`, and the
+ * two lie apart because one is sixteen bytes and the other is thousands: the
+ * descriptors are a header of eight u32 words and `capacity` of them, and the
+ * payloads are `capacity` runs of `slot_bytes` elsewhere in the memory. Which is how every ring this is modelled on is built:
  * virtio's descriptor table, avail and used are three separate areas, and
  * AF_XDP's rings are one mapping and its UMEM another. The descriptors are
- * kilobytes and the arena is megabytes, so tying the two into one block makes
- * the small one as coarse as the large one.
+ * kilobytes and the payloads are megabytes, so tying the two into one block
+ * makes the small one as coarse as the large one.
  *
  *   0  capacity     a power of two
  *   1  head         position of the next message to consume
  *   2  tail         position of the next message to produce
- *   3  frame_bytes  a power of two, and a multiple of 8
- *   4  arena_at     where the frames begin
+ *   3  slot_bytes   a power of two, and a multiple of 8
+ *   4  slot_base    where the payloads begin
  *   5…7 reserved
  *
- * ## A frame a slot
+ * ## One payload a slot
  *
- * Message `n` writes its packet into frame `n & (capacity - 1)` — the frame
- * of the slot the message itself takes. A slot holds one live message, so its
- * frame is free exactly when it is, and there is no second bookkeeping to
- * keep: no arena cursor, no rewind, no moment at which the producer has to
- * find the ring empty before it can reuse space. AF_XDP's UMEM is the same
- * correspondence — a descriptor and the frame it names.
+ * Message `n` takes slot `n & (capacity - 1)` and writes its packet into that
+ * slot's payload — `entry_at` and `slot_at` answer the same `position`. A slot
+ * holds one live message, so its payload is free exactly when it is, and there
+ * is no second bookkeeping to keep: no cursor over a shared area, no rewind,
+ * no moment at which the producer has to find the ring empty before it can
+ * reuse space. AF_XDP's UMEM is the same correspondence — a descriptor and the
+ * buffer it names.
  *
  * What that buys is one failure mode. A push fails when the ring is full
  * (EAGAIN) and for no other reason, so the producer waits and nothing is
- * dropped. A packet larger than a frame is EMSGSIZE and is refused the same
+ * dropped. A packet larger than a slot is EMSGSIZE and is refused the same
  * way whatever the ring's state — where it once depended on how much of a
- * shared arena happened to be left, so the same packet went through or did
- * not depending on what had been sent before it.
+ * shared area happened to be left, so the same packet went through or did not
+ * depending on what had been sent before it.
  *
  * Positions only grow and are taken modulo the capacity when read, so
  * `tail - head` is what waits. Each side writes only its own words — the
- * producer the tail and its frames, the consumer the head — so the two share
+ * producer the tail and its payloads, the consumer the head — so the two share
  * the ring without a lock. A packet read by the consumer is valid until it
  * advances past the message.
  *
@@ -84,9 +86,9 @@ export function ring_bytes(capacity: u32): u32 {
   return (RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS) * 4;
 }
 
-/** Bytes the arena of a ring of `capacity` frames of `frame_bytes` takes. */
-export function arena_bytes(capacity: u32, frame_bytes: u32): u32 {
-  return capacity * frame_bytes;
+/** Bytes the payloads of a ring of `capacity` slots of `slot_bytes` take. */
+export function slots_bytes(capacity: u32, slot_bytes: u32): u32 {
+  return capacity * slot_bytes;
 }
 
 /** A packet's bytes: its 16-byte header, then the payload its second word
@@ -101,42 +103,42 @@ export class Ring {
    * `entry_at(slot)`. */
   readonly words: Uint32Array;
   readonly capacity: u32;
-  readonly frame_bytes: u32;
+  readonly slot_bytes: u32;
   private readonly mask: u32;
-  /** The frames, `capacity` of them, wherever in the memory they were put. */
-  private readonly arena: U8Array;
-  /** Where the frames begin, for the packet word to name one. */
-  private readonly arena_at: u32;
+  /** The payloads, `capacity` of them, wherever in the memory they were put. */
+  private readonly slots: U8Array;
+  /** Where they begin, for the packet word to name one. */
+  private readonly slot_base: u32;
 
   /** A ring already laid out: its descriptors at byte `at` of `mem`, its
-   * arena where its header says. */
+   * payloads where its header says. */
   constructor(mem: ArrayBufferLike, at: u32) {
     const head = new Uint32Array(mem, at, RING_HEADER_WORDS);
     const capacity = head[0];
     if (capacity === 0 || (capacity & (capacity - 1)) !== 0) throw new Error(`ring: capacity ${capacity} at ${at} is not a power of two`);
     this.capacity = capacity;
-    this.frame_bytes = head[3];
-    this.arena_at = head[4];
+    this.slot_bytes = head[3];
+    this.slot_base = head[4];
     this.mask = capacity - 1;
     this.words = new Uint32Array(mem, at, RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS);
     // The memory a ring lives in is never a SharedArrayBuffer here (the core
     // memory is fixed, not shared), and the packets it hands out are read by
     // the tree reader, which takes an ArrayBuffer view.
-    this.arena = new Uint8Array(mem as ArrayBuffer, this.arena_at, arena_bytes(capacity, this.frame_bytes));
+    this.slots = new Uint8Array(mem as ArrayBuffer, this.slot_base, slots_bytes(capacity, this.slot_bytes));
   }
 
   /** Lays out an empty ring: `capacity` descriptors at byte `at` of `mem`,
-   * and as many frames of `frame_bytes` at `arena_at`. */
-  static init(mem: ArrayBufferLike, at: u32, capacity: u32, arena_at: u32, frame_bytes: u32): Ring {
+   * and as many payloads of `slot_bytes` at `slot_base`. */
+  static init(mem: ArrayBufferLike, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32): Ring {
     if (capacity === 0 || (capacity & (capacity - 1)) !== 0) throw new Error(`ring: capacity ${capacity} is not a power of two`);
-    if (frame_bytes === 0 || (frame_bytes & (frame_bytes - 1)) !== 0 || frame_bytes % 8 !== 0) {
-      throw new Error(`ring: a frame of ${frame_bytes} bytes is not a power of two of whole words`);
+    if (slot_bytes === 0 || (slot_bytes & (slot_bytes - 1)) !== 0 || slot_bytes % 8 !== 0) {
+      throw new Error(`ring: a slot of ${slot_bytes} bytes is not a power of two of whole words`);
     }
     new Uint8Array(mem as ArrayBuffer, at, ring_bytes(capacity)).fill(0);
     const head = new Uint32Array(mem, at, RING_HEADER_WORDS);
     head[0] = capacity;
-    head[3] = frame_bytes;
-    head[4] = arena_at;
+    head[3] = slot_bytes;
+    head[4] = slot_base;
     return new Ring(mem, at);
   }
 
@@ -158,18 +160,18 @@ export class Ring {
     return RING_HEADER_WORDS + ((position & this.mask) >>> 0) * RING_ENTRY_WORDS;
   }
 
-  /** Where the frame of the message at `position` starts in the arena. One
-   * frame a slot, so it is free exactly when the slot is. */
-  private frame_at(position: u32): u32 {
-    return ((position & this.mask) >>> 0) * this.frame_bytes;
+  /** Where the payload of the message at `position` starts, the pair of
+   * `entry_at`: one a slot, so it is free exactly when the slot is. */
+  private slot_at(position: u32): u32 {
+    return ((position & this.mask) >>> 0) * this.slot_bytes;
   }
 
   // ---- producer ----
 
   /**
-   * Writes one message at the tail, its packet copied into the frame of the
+   * Writes one message at the tail, its packet copied into the payload of the
    * slot it takes. EAGAIN, and nothing written, when the ring is full;
-   * EMSGSIZE when the packet is larger than a frame.
+   * EMSGSIZE when the packet is larger than a slot.
    */
   push(tag: u32, cmd: u32, flags: u32 = 0, packet: U8Array | null = null, result: i32 = 0): Errno {
     if (this.len >= this.capacity) return Errno.EAGAIN;
@@ -177,11 +179,11 @@ export class Ring {
     let packet_at = 0;
     if (packet !== null) {
       const need = Math.ceil(packet.byteLength / 8) * 8;
-      if (need > this.frame_bytes) return Errno.EMSGSIZE;
-      const start = this.frame_at(w[2]);
-      this.arena.set(packet, start);
-      this.arena.fill(0, start + packet.byteLength, start + need);
-      packet_at = this.arena_at + start;
+      if (need > this.slot_bytes) return Errno.EMSGSIZE;
+      const start = this.slot_at(w[2]);
+      this.slots.set(packet, start);
+      this.slots.fill(0, start + packet.byteLength, start + need);
+      packet_at = this.slot_base + start;
     }
     const at = this.entry_at(w[2]);
     w[at + RING_TAG] = tag;
@@ -216,16 +218,16 @@ export class Ring {
     return this.words[at + RING_RESULT] | 0;
   }
 
-  /** The message's packet, a view into its frame valid until `advance`, or
-   * null when it has none. EBADMSG when it names bytes outside a frame. */
+  /** The message's packet, a view into its slot valid until `advance`, or
+   * null when it has none. EBADMSG when it names bytes outside a slot. */
   packet(at: u32): U8Array | null {
     const packet_at = this.words[at + RING_PACKET];
     if (packet_at === 0) return null;
-    const off = packet_at - this.arena_at;
-    if (off < 0 || off % this.frame_bytes !== 0 || off + 16 > this.arena.byteLength || packet_bytes(this.arena, off) > this.frame_bytes) {
-      throw new MarshalError(Errno.EBADMSG, `ring: message packet at ${packet_at} lies outside a frame`);
+    const off = packet_at - this.slot_base;
+    if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength || packet_bytes(this.slots, off) > this.slot_bytes) {
+      throw new MarshalError(Errno.EBADMSG, `ring: message packet at ${packet_at} lies outside a slot`);
     }
-    return this.arena.subarray(off, off + packet_bytes(this.arena, off));
+    return this.slots.subarray(off, off + packet_bytes(this.slots, off));
   }
 
   /** Consumes the message at the head. */

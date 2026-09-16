@@ -30,7 +30,7 @@ use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
-use xpute_core::ipc::ring::{arena_bytes, ring_bytes, Ring};
+use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_core::kit::array::ArrayBuffer;
 use xpute_core::kit::array::U8Array;
 use xpute_core::sys::errno::Errno;
@@ -107,11 +107,11 @@ const CQ: u32 = 1;
 const SPILL: u32 = 2;
 
 const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
-const _: () = assert!(arena_bytes(RING_CAPACITY, RING_FRAME_BYTES) == RING_ARENA_STRIDE, "a ring's frames are not its stride");
+const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
 const _: () = assert!(GLOBAL_BASE <= memory::MODULE_CEILING, "the module's data begins past what the map was checked against");
 
 /// The whole memory as one buffer, which is what a ring's two areas are cut
-/// from: the descriptors near the bottom and the frames past them, at
+/// from: the descriptors near the bottom and the slots' payloads past them, at
 /// addresses build.rs fixed rather than anyone hands out.
 ///
 /// # Safety
@@ -125,7 +125,7 @@ fn new_ring(n: u32) -> Ring {
     // SAFETY: the module's own memory; the two ranges are build.rs's and no
     // one else's, the linker included.
     let mem = unsafe { module_memory() };
-    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_ARENA_AT + n * RING_ARENA_STRIDE, RING_FRAME_BYTES)
+    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES)
 }
 
 /// Where a ring's words start in the memory.
@@ -250,7 +250,7 @@ pub use pxl_core::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TO
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
-// ring's arena, which the kernel reads where it lies. The glue assembles
+// ring's slot, which the kernel reads where it lies. The glue assembles
 // what it submits and takes apart what completes; nothing here is shaped
 // for it. The glue pushes into the submission ring, rings `interrupt`
 // (DRAIN or TICK), and reads the completion ring when the call returns.
@@ -321,13 +321,13 @@ pub extern "C" fn interrupt(vector: u32) -> u32 {
     }
 }
 
-/// Bytes a reply's packet may take, which is a ring frame: a packet is at
-/// most a frame, so a reply written past one could never be posted and is
+/// Bytes a reply's packet may take, which is a ring slot's payload: a packet
+/// is at most that, so a reply written past one could never be posted and is
 /// better refused where it is written than where it is pushed. What a command
 /// answers with that cannot be bounded this way — a volume's band rows, the
 /// store's columns, the UI's snapshot — crosses as an address into a block the
 /// kernel holds (`Held`), the way OBJECT_CHUNK's lanes already do.
-const REPLY_BYTES: usize = RING_FRAME_BYTES as usize;
+const REPLY_BYTES: usize = RING_SLOT_BYTES as usize;
 
 /// Bytes the module writes into before it posts them: zeroed statics, so
 /// they lie in the module's data rather than on a heap.
@@ -357,7 +357,7 @@ fn reply(count: u32, f: impl FnOnce(&mut PacketWriter)) -> Option<u32> {
     Some(w.finish().expect("a reply larger than the reply scratch"))
 }
 
-/// A packet's bytes written in place into a ring frame: its length, or none
+/// A packet's bytes written in place into a ring slot: its length, or none
 /// when it did not fit one.
 type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 
@@ -563,7 +563,7 @@ fn post_shell(s: &mut State) {
     let hash = xpute_core::kit::hash::fnv1a64_str(&text);
     if hash != s.snapshot {
         s.snapshot = hash;
-        // The JSON is far past a frame and the shell reads it before the next
+        // The JSON is far past a slot and the shell reads it before the next
         // turn can make another, so it crosses as an address and its bytes.
         // SAFETY: the last snapshot, read by the shell before this one.
         let (at, len) = unsafe { SNAPSHOT.fill(text.len(), |i| text.as_bytes()[i]) };
@@ -1283,7 +1283,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            // A model's bytes are far past a frame, so the shell asks the heap
+            // A model's bytes are far past a slot, so the shell asks the heap
             // for a block (POOL_ACQUIRE), writes them there and names it here;
             // the block is the kernel's to give back once it has read them.
             let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)? as usize);
@@ -1487,7 +1487,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let zone = floats_at(&f, 3, 7)?;
             let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            // SAFETY: the zone's floats, in the arena, until this message is advanced past.
+            // SAFETY: the zone's floats, in the slot, until this message is advanced past.
             unsafe {
                 sched.markers.set_zone(
                     &mut world,
@@ -1511,7 +1511,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::BILLBOARD_UPDATE => {
             let lane = floats_at(&fields(pkt)?, 0, 10)?;
-            // SAFETY: the instances' floats, in the arena, until this message is advanced past.
+            // SAFETY: the instances' floats, in the slot, until this message is advanced past.
             unsafe { sched.billboards.write(&mut world, &mut sched.draw, tag, lane.length() as u32 / 10, lane.as_slice().as_ptr() as usize) };
         }
         Cmd::BILLBOARD_PLACE => {
@@ -1545,7 +1545,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let vertices = floats_at(&f, 3, 6)?;
             let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            // SAFETY: the vertices' floats, in the arena, until this message is advanced past.
+            // SAFETY: the vertices' floats, in the slot, until this message is advanced past.
             unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
         }
         Cmd::ENV_UPDATE => {
@@ -1604,7 +1604,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                     None,
                 ));
             }
-            // SAFETY: the keys' floats, in the arena, until this message is
+            // SAFETY: the keys' floats, in the slot, until this message is
             // advanced past; the channel copies them.
             unsafe {
                 sched.models.channel(

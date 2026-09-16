@@ -1,4 +1,4 @@
-# A frame a slot: what following the ring's own precedents cost
+# A slot and its payload: what following the ring's own precedents cost
 
 **2026-09-17** — [The ring and its precedents](./20260914-the-ring-and-its-precedents.md)
 was written three days ago and already said what the ring should be. Under
@@ -13,51 +13,58 @@ Nothing here is new prior art. It is the prior art on file, applied.
 
 ## What was wrong, three faces of one thing
 
-A ring was one block: a header, `capacity` messages, and a bump arena for the
+A ring was one block: a header, `capacity` messages, and a bump area for the
 packets, all in 1 MiB taken from the heap.
 
-**The arena was not a ring.** Its cursor rewound only when the producer found
+**The shared area was not a ring.** Its cursor rewound only when the producer found
 the ring empty:
 
 ```rust
 if w[2] == w[1] { w[4] = 0; }
 ```
 
-Consuming a message returned no space, so what the arena had to hold was not
+Consuming a message returned no space, so what the area had to hold was not
 what was in flight but everything pushed between two empty moments. And
 `push_in_place` handed the writer whatever was left of it, so the same packet
 went through or did not depending on what had been sent before it — a full
-arena answered EAGAIN, an empty one EMSGSIZE, and neither answer was about the
+area answered EAGAIN, an empty one EMSGSIZE, and neither answer was about the
 packet.
 
-**Two failure modes, disagreeing.** Depth (4,096) and arena (983,008 B) were
+**Two failure modes, disagreeing.** Depth (4,096) and payload area (983,008 B) were
 two numbers that did not know about each other. Which ran out first turned on
 the average packet: `983,008 / 4,096 = 240 B`. Under that the depth bound, over
-it the arena, and nothing in the code said so.
+it the area, and nothing in the code said so.
 
 **The addresses moved.** `ef2d6e2` had the rings take their blocks from the
 heap, so they landed wherever the allocator happened to put them — which is to
 say wherever the code above them last changed.
 
-## A frame a slot
+## A slot and its payload
 
-Message `n` writes into frame `n & (capacity - 1)`: the frame of the slot the
-message itself takes. A slot holds one live message, so its frame is free
-exactly when the slot is.
+Message `n` takes slot `n & (capacity - 1)` and writes into that slot's
+payload. A slot holds one live message, so its payload is free exactly when
+the slot is; `entry_at` and `slot_at` answer the same `position`.
 
-That is AF_XDP's correspondence — a descriptor and the frame it names, the
+That is AF_XDP's correspondence — a descriptor and the buffer it names, the
 UMEM cut into `NUM_FRAMES` chunks of `FRAME_SIZE` with one ring entry each.
 There is no cursor, no rewind, and no moment the producer has to wait for.
 
+**The word is not AF_XDP's.** It calls a chunk a _frame_, because in its trade
+one holds one Ethernet frame; here one holds an XTP packet, and this tree
+already spends `frame` on a message frame (`ipc/frame.rs`), a rendered frame
+and a coordinate frame. A fourth would have been three too many. A slot is
+what the descriptor already numbered, so the payload is the slot's and needs
+no name of its own.
+
 What it buys is **one failure mode**. A push fails when the ring is full and
-for no other reason. A packet past a frame is EMSGSIZE whatever the ring
-holds, so what fits is a property of the packet and is settled where it is
-written rather than where it is pushed.
+for no other reason. A packet past a slot is EMSGSIZE whatever the ring holds,
+so what fits is a property of the packet and is settled where it is written
+rather than where it is pushed.
 
-## Two areas, not one
+## A slot in two places
 
-The descriptors are 36 KiB a ring and the frames are 8 MiB, so keeping them in
-one block made the small one as coarse as the large one. virtio keeps its
+The descriptors are 36 KiB a ring and the payloads are 8 MiB, so keeping them
+in one block made the small one as coarse as the large one. virtio keeps its
 descriptor table, avail ring and used ring in three separate areas; AF_XDP
 keeps its rings in one mapping and its UMEM in another; NVMe programs its
 queue base addresses and its data goes by PRP/SGL. The ratio is the tell:
@@ -68,8 +75,8 @@ here, was   65,536 B         :  983,008 B         1 : 15
 here, now   36 KiB           :  8 MiB             1 : 227
 ```
 
-The header carries where a ring's frames begin (word 4), so a `Ring` is still
-made from one address.
+The header carries where a ring's payloads begin (word 4), so a `Ring` is
+still made from one address.
 
 ## Sizing, from the references rather than from the traffic
 
@@ -84,15 +91,15 @@ What these systems actually reserve:
 | NVMe (depth 1,024)                     | SQ 64 KiB + CQ 16 KiB | host DMA buffers, separate                     |
 
 The descriptor ring is kilobytes everywhere and the memory goes into the data
-area, at MiB scale. 1 MiB a ring, arena included, was small on both counts at
+area, at MiB scale. 1 MiB a ring, payloads included, was small on both counts at
 once.
 
-**The frame is 4 KiB.** AF_XDP's sample and DPDK's mbuf both use 2 KiB, and
-`XSK_UMEM__DEFAULT_FRAME_SIZE` is 4,096. What settles it here is not either of
-those: 4 KiB is the page this kernel already counts in
+**A slot's payload is 4 KiB.** AF_XDP's sample and DPDK's mbuf both use 2 KiB,
+and `XSK_UMEM__DEFAULT_FRAME_SIZE` is 4,096. What settles it here is not
+either of those: 4 KiB is the page this kernel already counts in
 ([the page table the pool did not need](./20260916-the-page-table-the-pool-did-not-need.md))
 and the buddy's smallest block
-([the slab over the buddy](./20260917-the-slab-over-the-buddy.md)), so a frame
+([the slab over the buddy](./20260917-the-slab-over-the-buddy.md)), so a payload
 is one block wherever one has to come from, and "a packet is at most a page,
 and past that it is bulk" is a sentence that can be said without looking at any
 command.
@@ -115,17 +122,17 @@ neither of which was chosen to land there.
   consumer advances. It buys nothing here: consumption is turn-based, so no
   consumer interleaves inside a turn and there is no space for it to hand
   back. The turn boundary is already the reset point.
-- **A shared frame pool, split adaptively.** AF_XDP's UMEM _is_ shared between
+- **A shared buffer pool, split adaptively.** AF_XDP's UMEM _is_ shared between
   RX and TX, so this is the conventional adaptive answer. Two things stop it.
   The free list would have two pushers and two poppers, and splitting it back
   into two SPSC lists fixes the division again; and AF_XDP does not balance
-  either — the application moves frames, so the split stays a decision
+  either — the application moves buffers, so the split stays a decision
   somebody makes. Against that, the thing being optimised is free: an
   untouched page of linear memory costs address space and not RAM, so
   over-provisioning both sides dominates.
 - **Runtime resize.** `io_uring_resize_rings()` exists. It would cost the one
   property the addresses were made constant for.
-- **Keeping the arena and sizing it against the traffic.** Measuring which
+- **Keeping one shared area and sizing it against the traffic.** Measuring which
   packets are big and cutting those is how the 240 B break-even happened in
   the first place.
 
@@ -151,9 +158,9 @@ addr                          bytes          what
 1,048,576    1,085,440         36 KiB        sq    descriptors
 1,085,440    1,122,304         36 KiB        cq    descriptors
 1,122,304    1,159,168         36 KiB        spill descriptors
-2,097,152   10,485,760          8 MiB        sq    frames   2,048 × 4 KiB
-10,485,760  18,874,368          8 MiB        cq    frames
-18,874,368  27,262,976          8 MiB        spill frames
+2,097,152   10,485,760          8 MiB        sq    payloads  2,048 × 4 KiB
+10,485,760  18,874,368          8 MiB        cq    payloads
+18,874,368  27,262,976          8 MiB        spill payloads
 ────────────────────────────────────────────────────────────────────────
 33,554,432                     ~1.75 MiB     .rodata .data .bss   ← --global-base
              67,108,864        ~30 MiB       (room for both to grow)
@@ -188,7 +195,7 @@ gives it up.
 ## What crosses by address now
 
 `FETCH_BODY` already did it — the shell asks for room, writes the body, and
-names the block — so terrain never touched the arena. The rest now matches:
+names the block — so terrain never touched a slot. The rest now matches:
 
 |                  | before                           | now                                 |
 | ---------------- | -------------------------------- | ----------------------------------- |
@@ -197,13 +204,13 @@ names the block — so terrain never touched the arena. The rest now matches:
 | `WORLD_SNAPSHOT` | the UI's JSON as a string        | the same                            |
 | `LOAD_UPDATE`    | a model's bytes inline           | a block the shell asks the heap for |
 
-The reply scratch is one frame, so a reply too large is refused where it is
+The reply scratch is one slot, so a reply too large is refused where it is
 written rather than where it is pushed. `REPLY_BYTES` was 256 KiB — a single
-constant that alone decided how big an arena had to be.
+constant that alone decided how big the shared area had to be.
 
-What stays inline is what the arena is for: the signals, the chunk paint's
+What stays inline is what a slot is for: the signals, the chunk paint's
 1,536 bytes, the URLs, the zone and instance and keyframe lanes the kernel
-reads in place without copying. Those last are the arena doing UMEM's job
+reads in place without copying. Those last are the slot doing UMEM's job
 already, and moving them to blocks would add a round trip to remove a copy
 that is not happening.
 

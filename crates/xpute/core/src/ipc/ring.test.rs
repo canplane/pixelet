@@ -4,12 +4,12 @@ use super::*;
 use crate::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use crate::ipc::frame::FrameFlag;
 
-/// A ring of `capacity` frames of `frame`, its descriptors at 8 and its
-/// frames past them, in a buffer of its own.
-fn ring(capacity: u32, frame: u32) -> Ring {
-    let arena_at = 8 + ring_bytes(capacity);
-    let buf = ArrayBuffer::new((arena_at + arena_bytes(capacity, frame)) as usize);
-    Ring::init(buf, 8, capacity, arena_at, frame)
+/// A ring of `capacity` slots of `slot` bytes, its descriptors at 8 and its
+/// payloads past them, in a buffer of its own.
+fn ring(capacity: u32, slot: u32) -> Ring {
+    let slot_base = 8 + ring_bytes(capacity);
+    let buf = ArrayBuffer::new((slot_base + slots_bytes(capacity, slot)) as usize);
+    Ring::init(buf, 8, capacity, slot_base, slot)
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn ring_messages_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
 }
 
 #[test]
-fn ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a_frame_is_refused_whatever_the_ring_holds() {
+fn ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a_slot_is_refused_whatever_the_ring_holds() {
     use crate::io::marshal::tree::PacketWriter;
     let r = ring(8, 64);
     let write = |n: u32| {
@@ -55,7 +55,7 @@ fn ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a_frame_i
     assert_eq!(r.packet(at).unwrap().unwrap().as_slice(), pushed.as_slice());
 
     // The same packet is refused the same way with a message in the ring and
-    // with none: a frame is a frame, so what fits does not depend on what was
+    // with none: a slot is a slot, so what fits does not depend on what was
     // sent before it.
     let long = "x".repeat(200);
     let too_long = |out: &mut [u8]| {
@@ -77,7 +77,7 @@ fn ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a_frame_i
 }
 
 #[test]
-fn ring_a_frame_a_slot_so_the_frames_run_out_with_the_slots_and_never_before_them() {
+fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_before_them() {
     let r = ring(8, 64);
     let pkt = |n: u32| {
         let mut t = TreeView::new();
@@ -89,9 +89,9 @@ fn ring_a_frame_a_slot_so_the_frames_run_out_with_the_slots_and_never_before_the
     assert_eq!(pkt(1).byte_length(), 56);
 
     for n in 1..=8u32 {
-        assert_eq!(r.push(n, 0x0101, 0, Some(&pkt(n)), 0), Errno::OK, "every slot has a frame of its own");
+        assert_eq!(r.push(n, 0x0101, 0, Some(&pkt(n)), 0), Errno::OK, "every slot has a payload of its own");
     }
-    assert_eq!(r.push(9, 0x0101, 0, Some(&pkt(9)), 0), Errno::EAGAIN, "and the ring fills before the frames do");
+    assert_eq!(r.push(9, 0x0101, 0, Some(&pkt(9)), 0), Errno::EAGAIN, "and the ring fills before the payloads do");
     assert_eq!(r.len(), 8);
 
     for n in 1..=8u32 {
@@ -103,11 +103,11 @@ fn ring_a_frame_a_slot_so_the_frames_run_out_with_the_slots_and_never_before_the
         );
         r.advance();
     }
-    assert_eq!(r.push(9, 0x0101, 0, Some(&pkt(9)), 0), Errno::OK, "a slot freed is a frame freed");
+    assert_eq!(r.push(9, 0x0101, 0, Some(&pkt(9)), 0), Errno::OK, "a slot freed is a payload freed");
 
     assert_eq!(r.push(10, 0x0101, 0, Some(&U8Array::new(72)), 0), Errno::EMSGSIZE);
     let at = r.entry_at(r.tail());
     r.push(11, 0, 0, None, 0);
     r.words.put((at + RING_PACKET) as usize, 4);
-    assert!(r.packet(at).is_err(), "outside a frame");
+    assert!(r.packet(at).is_err(), "outside a slot");
 }
