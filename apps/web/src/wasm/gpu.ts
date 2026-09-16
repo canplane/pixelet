@@ -34,13 +34,22 @@ const images = new Map<u32, ImageBitmap>();
 const utf8 = new TextDecoder();
 
 export type DeviceInfo = { align: u32; timestamps: boolean };
+/** Why the browser answered with no device, in the words of whoever has to
+ * act on it: the ways WebGPU goes missing are fixed in different places and
+ * one sentence for all of them sends the reader to the wrong one. */
+export type NoDevice = { reason: string };
 
-/** The device, once the browser answers; null where there is no WebGPU.
- * `lost` hears it go. */
-export async function acquire_device(lost: () => void): Promise<DeviceInfo | null> {
-  if (!("gpu" in navigator)) return null;
+/** The device, once the browser answers, or why there is none. `lost` hears
+ * it go. */
+export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoDevice> {
+  // `navigator.gpu` is exposed to a secure context and nowhere else, so the
+  // same browser on the same machine has WebGPU at localhost and none at the
+  // dev server's LAN address over http.
+  if (!("gpu" in navigator)) {
+    return { reason: isSecureContext ? "this browser has no navigator.gpu" : `${location.origin} is not a secure context, which is the only place navigator.gpu is exposed` };
+  }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  if (!adapter) return null;
+  if (!adapter) return { reason: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
   d.lost.then((info) => {
