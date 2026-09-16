@@ -49,12 +49,19 @@ pub trait Range {
 pub const MIN_ALLOC_LOG2: usize = 12;
 pub const MIN_ALLOC: usize = 1 << MIN_ALLOC_LOG2;
 
-/// The maximum allocation size, which is the total size of the heap — and so
-/// technically also the largest single allocation, a heap being able to
-/// consist of one, though a real heap has several and the real limit is at
-/// most half. The C sets this to 31 for a two-gigabyte heap; it is the one
-/// value to set, and `SPLIT_BYTES` follows it.
-const MAX_ALLOC_LOG2: usize = 30;
+/// The largest block the tree can describe, which is the C's number and for
+/// the C's reason: two gigabytes is what a 32-bit address space holds a whole
+/// power of two of, so this is the top of the shape rather than a claim about
+/// any memory.
+///
+/// **It is not the size of the range.** The tree begins as a single leaf and
+/// doubles only as far as a request makes it (`lower_bucket_limit`); how much
+/// of it is real is `update_max_ptr`'s answer, and that comes from the range
+/// at runtime. So a smaller heap costs nothing but the levels it never reaches,
+/// and the allocator does not have to be told how large the memory it was given
+/// is — which is the only reason this constant can sit in a crate that knows
+/// nothing about the kernel above it.
+const MAX_ALLOC_LOG2: usize = 31;
 const MAX_ALLOC: usize = 1 << MAX_ALLOC_LOG2;
 
 /// Allocations are done in powers of two from MIN_ALLOC to MAX_ALLOC
@@ -63,7 +70,9 @@ const MAX_ALLOC: usize = 1 << MAX_ALLOC_LOG2;
 const BUCKET_COUNT: usize = MAX_ALLOC_LOG2 - MIN_ALLOC_LOG2 + 1;
 
 /// A bit for every node that can be a parent, which is every node above the
-/// leaves — we only ever ask about parents.
+/// leaves — we only ever ask about parents. 64 KiB at the exponents above, and
+/// the same 64 KiB whatever the device gave, since it is a function of the two
+/// and of nothing else.
 const SPLIT_BYTES: usize = (1 << (BUCKET_COUNT - 1)) / 8;
 
 /// Free lists are circular doubly-linked lists. Every allocation size has one,

@@ -235,8 +235,5 @@ builder walks and has no equally clean place to stop.
 
 - `MOST_SIGNALS` is 64: what one command may raise before `drain` checks again.
   It bounds a command, not a turn, because a tick is not a submission.
-- `MAX_ALLOC` is `1 << 30`, exactly `DESKTOP_BYTES`, with nothing tying them
-  together — carried over from
-  [the slab over the buddy](./20260917-the-slab-over-the-buddy.md).
 - Nothing was run. This is `cargo clippy -D warnings` and `deno task check`,
   both green, and no more than that.
