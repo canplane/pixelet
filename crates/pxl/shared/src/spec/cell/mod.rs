@@ -175,31 +175,48 @@ fn ground_key(channel: &str) -> GroundChannelKey {
     *GROUND_CH_KEYS.iter().find(|k| k.as_str() == channel).unwrap()
 }
 
-// The dense sequence, and it back.
-struct TerrainStyle {
-    /// In assignment order, which is the order the numbering walks.
-    cubes: Vec<PlaceableCube>,
-    to_num: HashMap<TerrainStyleSource, u32>,
-}
+/// Where a stored leaf's value stops being a number of its own and starts
+/// being a terrain-styled cube's `(channel, type)`.
+///
+/// Everything the catalogs number directly sits below this: VOID at 0, AIR at
+/// 128, block at 130..=144, decor at 228, UNKNOWN at 255 — all of one byte,
+/// and the widest of them is the byte. Above it, a terrain-styled cube is the
+/// channel it stands in for and the type within that channel, which is exactly
+/// what it is, so the value can be read back without a table.
+pub const TERRAIN_STYLE_BASE: u32 = 256;
 
-static TERRAIN_STYLE: LazyLock<TerrainStyle> = LazyLock::new(|| {
-    let mut t = TerrainStyle {
-        cubes: Vec::new(),
-        to_num: HashMap::new(),
-    };
+/// Every terrain-styled cube, channel by channel, for the callers that want
+/// the catalog walked. The numbering is no longer this walk's to give out:
+/// counting one out as it was met meant a type inserted into cube_type.json
+/// renumbered every type after it, in every other channel too, and a stored
+/// placement then named a different cube than the one that was placed.
+static TERRAIN_STYLE: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| {
+    let mut cubes = Vec::new();
     for (channel, local_types) in TERRAIN_CHANNELS.iter() {
         for (_, num) in local_types.iter() {
             let source = TerrainStyleSource {
                 channel: ground_key(channel),
                 terrain_num_id: *num as u32,
             };
-            let Some(cube) = cube_of_source(source) else { continue };
-            t.to_num.insert(source, t.cubes.len() as u32 + 1);
-            t.cubes.push(cube);
+            if let Some(cube) = cube_of_source(source) {
+                cubes.push(cube);
+            }
         }
     }
-    t
+    cubes
 });
+
+/// The slot a ground channel is, which is the enum's own order — a bake's
+/// lanes are in it already, so it is a number the format has fixed rather than
+/// one chosen here.
+fn channel_slot(channel: GroundChannelKey) -> u32 {
+    GROUND_CH_KEYS.iter().position(|k| *k == channel).expect("a ground channel") as u32
+}
+
+const _: () = assert!(
+    TERRAIN_STYLE_BASE * (GROUND_CH_KEYS.len() as u32 + 1) <= u16::MAX as u32,
+    "a terrain-styled value has to fit the band tree's leaf (world/object.rs's SparseTree<u16>)"
+);
 
 /// Each channel's numbers back to the name cube_type.json gives them.
 static TYPE_NAME: LazyLock<HashMap<(&'static str, u32), &'static str>> = LazyLock::new(|| {
@@ -288,15 +305,20 @@ pub fn cube_id_of(channel: &str, type_name: &str) -> PlaceableCubeId {
 pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
     match terrain_style_cube_source(cube) {
         None => cube_parts(cube).1,
-        Some(source) => TERRAIN_STYLE.to_num[&source],
+        Some(source) => TERRAIN_STYLE_BASE * (channel_slot(source.channel) + 1) + source.terrain_num_id,
     }
 }
 
 /// The cube a stored leaf value names, or None for a value that names no
 /// cube — VOID, AIR, a decor kind.
 pub fn placeable_cube_of(num_id: u32) -> Option<PlaceableCube> {
-    if let Some(cube) = num_id.checked_sub(1).and_then(|i| TERRAIN_STYLE.cubes.get(i as usize)) {
-        return Some(*cube);
+    if num_id >= TERRAIN_STYLE_BASE {
+        let slot = num_id / TERRAIN_STYLE_BASE - 1;
+        let channel = *GROUND_CH_KEYS.get(slot as usize)?;
+        return cube_of_source(TerrainStyleSource {
+            channel,
+            terrain_num_id: num_id % TERRAIN_STYLE_BASE,
+        });
     }
     u8::try_from(num_id).ok().and_then(cube_types::Block::of).map(PlaceableCube::Block)
 }
@@ -316,7 +338,7 @@ pub fn terrain_style_cube_source(cube: PlaceableCube) -> Option<TerrainStyleSour
 /// and want the cube that looks like it.
 pub fn terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: u32) -> Option<PlaceableCube> {
     let source = TerrainStyleSource { channel, terrain_num_id };
-    TERRAIN_STYLE.to_num.contains_key(&source).then(|| cube_of_source(source)).flatten()
+    cube_of_source(source)
 }
 
 /// The swatch colour the catalog gives it — cube_colors is keyed by channel
@@ -341,7 +363,7 @@ fn placeable_cube_swatch(cube: PlaceableCube) -> Option<Swatch> {
 /// numeric order, then every terrain-styled entry channel by channel.
 pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| {
     let blocks = cube_ids.iter().filter_map(|id| cube_types::Block::of(cube_num_id(id) as u8).map(PlaceableCube::Block));
-    blocks.chain(TERRAIN_STYLE.cubes.iter().copied()).collect()
+    blocks.chain(TERRAIN_STYLE.iter().copied()).collect()
 });
 
 #[cfg(test)]
