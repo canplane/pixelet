@@ -90,7 +90,13 @@ when its fix lands.
   settle.
 - **B2** The fetch pump runs at the end of a turn (`world.rs:164,203`); a
   settle between turns waits for the next. The checkpoint pumped on every
-  settle.
+  settle. **Kept as it is**: xpute's `sched/io.rs` states the rule and what
+  it was measured against — with a pump per submission the category that
+  synced first filled every slot before another had submitted anything, and a
+  page at priority 1 sat 358 ms behind pages at priority 2 (the same
+  measurement the checkpoint's own `schedule_pump` records, which coalesced
+  the pumps of a tick for it). The wait is one frame: the settle arrives as a
+  command, and a command asks for the frame that answers it.
 - **B3** xpute `run_phase` steps back on a self-unregister;
   `tick.ts:289` spliced and skipped the next step. The Rust is right.
 - **B4** The quantum is observed after the turn and its grant applies to
@@ -116,20 +122,20 @@ when its fix lands.
 - **B14** `decor/asset_store.rs:95-119` retries a variant only when
   `load_revision` moves, so a model the pool refused waits for another
   load.
-- **B15** `use_follow_mode.rs:62-71` sets the grace deadline once;
+- ~~**B15**~~ `use_follow_mode.rs:62-71` sets the grace deadline once;
   `use_follow_mode.ts:67-84` restarted 12 s on each status change.
-- **B16** `search_modal.rs:69-119` leaves the last query in flight while
+- ~~**B16**~~ `search_modal.rs:69-119` leaves the last query in flight while
   the next is typed, so its results can show; a failed parse clears the
   results (`:145-147`, the TypeScript kept them); `{:.1}` rounds a tie to
   even (1250 m "1.2km", `toFixed` "1.3km"). `search_modal.tsx:192-195`.
-- **B17** `use_reverse_geocode.rs:67-88` submits during a continuous pan;
+- ~~**B17**~~ `use_reverse_geocode.rs:67-88` submits during a continuous pan;
   `use_reverse_geocode.ts:55-100` restarted 500 ms on every centre change.
 - **B18** `map/environment.rs:60-64` `tail_ambient`, `mid` and a `Vec`
   nothing reads.
-- **B19** `character_preview.rs:125` stands the case's actor at
+- ~~**B19**~~ `character_preview.rs:125` stands the case's actor at
   `[0, 0, -CASE_DEPTH_U]`; `character_preview.tsx:70-71,95` at the map
   origin's X and Y, its Z less `CASE_DEPTH_U`.
-- **B20** `companion.rs:207` reads `TickState.elapsed_s`, a sum of turn
+- ~~**B20**~~ `companion.rs:207` reads `TickState.elapsed_s`, a sum of turn
   deltas clamped to 0.1 s (`world.rs:198`); `companion.tsx:235` read wall
   seconds. The settle delay, the walk plan and the linger stretch over
   idle gaps.
@@ -138,11 +144,14 @@ when its fix lands.
   value in a `Vec`: a push that reallocates rebuilds every chunk, a
   `swap_remove` rebuilds the moved page's, and a set in place is missed.
   `chunk_node.ts:295-298` compared the object.
-- **B22** `poi_index.rs:60-66` caps the page radius at 4; `:301` sorts
+- ~~**B22**~~ `poi_index.rs:60-66` caps the page radius at 4; `:301` sorts
   unstably; `:366-372` a record refused at capacity is not seen, so its
-  badge is evicted; `:93,469` a page evicted mid-job is skipped.
-  `poi_index.ts:85-87`.
-- **B23** `poi_layer.rs:547-564` asks for placement on every camera store
+  badge is evicted (`poi_index.ts:85-87,320,382-384`) — those three fixed.
+  The fourth, `:93,469`, a record naming its page by index and looking it up
+  at use where the checkpoint held the page itself, so a page evicted mid-job
+  is skipped: left to the rewrite that gives every page its own index
+  (BACKLOG), which ends the question instead of patching it.
+- ~~**B23**~~ `poi_layer.rs:547-564` asks for placement on every camera store
   revision; `poi_layer.tsx:632-635` on the view state.
 - **B24** A channel's values are read as `key_cnt * width` floats by
   pointer (`model_asset.rs:195`, `world/model.rs:283-290`) from a `Vec`
