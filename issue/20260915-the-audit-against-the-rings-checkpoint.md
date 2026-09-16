@@ -101,12 +101,22 @@ when its fix lands.
   are fifteen `PIPELINE_*`, every `build` call passes `format::CANVAS`, and a
   count is one or the device's MSAA — thirty keys against `BUILT`'s 48. Only
   a new pipeline can reach the assert, which is what an assert is for.
-- **H11** `badges.rs:38,291` `SETS` (32) stops drawing sets past it;
+- **H11** ~~`badges.rs:38,291` `SETS` (32) stops drawing sets past it;
   `render/gpu/decor.rs:29,93` `GROUPS` (64) gives groups past it no model;
   `skinned.rs:23,77-78` `SKINS` (16) leaves a seventeenth model's actor
   undrawn; `renderer.rs:149,187-193,271` `Blocks` asserts below 16384
   blocks over seven fixed-section lanes never given back, and
-  `Scratch::take` (`renderer.rs:132`) expects room in the mesh pool.
+  `Scratch::take` (`renderer.rs:132`) expects room in the mesh pool.~~ Three
+  of the four are the code's: a billboard set is made in two places
+  (`chat_bubble.rs:121`, `poi_layer.rs:246`) and each makes one, `GROUPS` is
+  the decor registry's four kinds by their variants, and the blocks the draw
+  list names are the chunks (`MAX_CHUNKS`, 4096) and a handful beside them,
+  against 16384 slots that `remove` gives back. `SKINS` was the one that
+  could be pressed: nothing tells the pass a model went away, so the table
+  never freed a slot and the character preview walks more shipped variants
+  (twelve people, twenty-four pets) than it has slots — a seventeenth drew
+  untextured for good. A slot now carries when it was last asked for, and a
+  new model takes the one asked for longest ago.
 
 ## B. Behaviour that differs
 
