@@ -204,7 +204,11 @@ impl Walker {
         if self.held.is_none() {
             return;
         }
-        let now = ctx.state.elapsed_s;
+        // Wall seconds. The settle delay, the catch-up walk and the follow
+        // linger are spans of real time; the tick's elapsed is a sum of deltas
+        // clamped at 0.1 s, which stretches every one of them across a gap
+        // where the world did not tick.
+        let now = crate::global::now() / 1000.0;
         let rebased = map_origin != self.prev_map_origin;
         let (px, py, is_walking);
 
