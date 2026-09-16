@@ -9,6 +9,7 @@ pub mod heap;
 pub mod lanes;
 pub mod lattice_hash;
 pub mod map;
+pub mod slab;
 pub mod spatial_hash;
 pub mod treap_set;
 pub mod typed_alloc;

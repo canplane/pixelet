@@ -55,8 +55,13 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
     }
 }
 
+/// The module's one allocator: a slab of size classes over a buddy of 4 KiB
+/// pages, both over the range above. The buddy is what the sections' blocks
+/// come from; the slab is what a `Vec` or a `String` comes from, and it
+/// borrows and returns whole runs of pages to the same buddy, so neither level
+/// can starve while the other has room.
 #[global_allocator]
-static ALLOC: xpute_core::ds::buddy_tree::BuddyMalloc<ModuleHeap> = xpute_core::ds::buddy_tree::BuddyMalloc::new();
+static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
 
 struct State {
     /// The submission ring (glue → core) and the completion ring (core →
@@ -821,10 +826,10 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::POOL_RELEASE => {
             let f = fields(pkt)?;
             let at = u32_at(&f, 1)? as usize;
+            let bytes = u32_at(&f, 2)? as usize;
             // SAFETY: the caller's — a block this heap gave and has not taken
-            // back. `free` reads the size from the block's own header, so the
-            // packet's third child is no longer read.
-            unsafe { ALLOC.free(at as *mut u8) };
+            // back, at the size it was asked for.
+            unsafe { ALLOC.free(at as *mut u8, bytes) };
             return Ok(Some((0, None)));
         }
         Cmd::POOL_FREE => {
@@ -1959,4 +1964,36 @@ pub extern "C" fn probe_dump() -> *const u8 {
         PROBE_TEXT[..4].copy_from_slice(&(w.0 as u32).to_le_bytes());
         core::ptr::addr_of!(PROBE_TEXT) as *const u8
     }
+}
+
+/// The trace the shell saves, and where it lies.
+///
+/// It is held between the two calls below rather than rebuilt, because the
+/// range handed out has to stay good until the shell has copied the bytes.
+static TRACE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
+static TRACE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+
+/// The ledger's window as Chrome's Trace Event Format, for ui.perfetto.dev:
+/// the address of two words, where the JSON lies in this memory and how long
+/// it is.
+///
+/// A range rather than a message. Recording covers the whole window
+/// (sched/ledger.rs), so a trace is routinely tens of megabytes — past a ring
+/// block, and past what the completion queue is for. The shell reads the two
+/// words, copies the bytes out, and says it is done with `ledger_trace_release`.
+#[no_mangle]
+pub extern "C" fn ledger_trace() -> *const u32 {
+    let text = TRACE_TEXT.get(String::new);
+    *text = pxl_core::module::world::sched::trace::ledger_trace_json();
+    let range = TRACE_RANGE.get(|| [0; 2]);
+    *range = [text.as_ptr() as u32, text.len() as u32];
+    range.as_ptr()
+}
+
+/// Gives back what the last trace took, once the shell has copied it. Tens of
+/// megabytes of the heap otherwise stay held until the next trace is asked
+/// for, on the heap the thing being measured allocates from.
+#[no_mangle]
+pub extern "C" fn ledger_trace_release() {
+    TRACE_TEXT.set(String::new());
 }

@@ -1,30 +1,32 @@
 // pxl_core/memory.rs
 
 //! The kernel's policy over the memory the central scheduler gives it: which
-//! sections there are and how many regions each takes. Cutting the memory
-//! into sections is the mechanism's (xpute_core::sys::memory); what a
-//! section holds, and what "full" means in it, is decided here
+//! sections there are and where each begins. Cutting the memory into sections
+//! is the mechanism's (xpute_core::sys::memory); what a section holds, and
+//! what "full" means in it, is decided here
 //! (issue/20260913-sections-of-the-core-memory-and-what-full-means.md).
 //!
 //! Sections, in address order:
 //!
 //!   module   the module's stack and data, where a wasm32 linker puts them
-//!            (`--stack-first`, then data), and its heap: pxl-wasm's global
-//!            allocator, xpute's FixedHeap, over the rest of the section.
-//!   fixed    what is allocated once and never freed: the rings, the
-//!            renderer's blocks, the volumes' standing band stores. Refuses
-//!            rather than spills, so a shortfall fails at boot. Where inside
-//!            it each of those sits is that section's own affair — the map
-//!            gives it a range and asks nothing more.
+//!            (`--stack-first`, then data). Not the module's heap: that is
+//!            past every fixed section, at HEAP_AT.
+//!   fixed    what is allocated once and never freed: the renderer's blocks
+//!            and whatever else is settled at boot. Where inside it each of
+//!            those sits is that section's own affair — the map gives it a
+//!            range and asks nothing more.
 //!   slab     the resident terrain, one record a page. Not a pool: a page's
 //!            record is its own coordinate reduced modulo the slab's axis
 //!            (module/world/terrain/slab.rs), so nothing here is allocated,
 //!            asked for or refused.
-//!   mesh     chunk meshes, run sets, tier caches, bands — what churns as the
-//!            view moves, and what the reclaim pass answers to.
+//!   heap     everything else, ascending from the page past the slab to the
+//!            end of the memory. One allocator answers all of it — a slab of
+//!            size classes over a buddy of pages (xpute ds/slab.rs over
+//!            ds/buddy_tree.rs) — so a band's lanes, a chunk mesh and a
+//!            `String` all come out of the same range and give back into it.
 //!
 //! Where each lands, at the two memories the shell reserves. Everything but
-//! the mesh is the same on both: the slab is the terrain a load radius
+//! the heap is the same on both: the slab is the terrain a load radius
 //! reaches, not a share of what the device happens to have.
 //!
 //!              offset         end            phone        desktop
@@ -32,17 +34,12 @@
 //!   fixed      32 MiB         64 MiB         32 MiB       32 MiB
 //!   slab       64 MiB         260.432 MiB    196.43 MiB   196.43 MiB
 //!   (no one's) 260.432 MiB    260.434 MiB    1,504 B      1,504 B
-//!   mesh       260.434 MiB    —              251.57 MiB   763.57 MiB
+//!   heap       260.434 MiB    —              251.57 MiB   763.57 MiB
 //!
 //! A section begins on a page (PAGE_BYTES) and ends where its content does;
 //! the next begins on the first page past that. Where a section ends is no
 //! one's business but its own, so the slab is the terrain it holds and not a
 //! byte more, and what is left over is under a page.
-//!
-//! What a section does inside its range is its own affair too. The mesh's pool
-//! cuts 64 MB regions and can only cut whole ones, so the tail of its range
-//! past the last it can cut — 59.57 MiB at that region size — goes unused; that
-//! is the pool's number to answer for, not the map's.
 
 use xpute_core::sys::memory::Section;
 
@@ -55,29 +52,30 @@ use crate::module::world::terrain::slab::SLAB_BYTES;
 pub const PHONE_BYTES: u32 = 512 << 20;
 pub const DESKTOP_BYTES: u32 = 1024 << 20;
 
-/// The unit sections are counted in, and the mesh pool's largest block.
+/// The unit the reservation is rounded down to, and where the fixed sections
+/// are placed. Nothing cuts regions any more — the heap's allocator answers
+/// for its own range — so this is a placement grid and nothing else.
 pub const REGION_BYTES: u32 = 1 << 26;
 
 /// The module's own section, from address 0.
 pub const MODULE_BYTES: u32 = 32 << 20;
 
-/// The fixed section's pool cuts what is left of the first region in 16 MB
-/// regions, so the map stays region-aligned where the pools need it.
+/// The unit the fixed section is counted in, carried in its `Section` for the
+/// boot block to report.
 pub const FIXED_REGION_BYTES: u32 = 16 << 20;
 
-/// The smallest block a section's pool hands out.
-pub const MIN_BLOCK_BYTES: u32 = 1 << 12;
-
-/// What a section begins and ends on. The same 4 KiB as MIN_BLOCK_BYTES, for
-/// the same reason rather than by coincidence: a pool's block lands at
-/// `section start + n * region_bytes + k * MIN_BLOCK_BYTES`, so a section that
-/// begins on a smaller boundary hands out blocks that do not. Nothing asks for
-/// more — a region size is what a pool cuts inside its own range, not where the
-/// range may begin (xpute ds/buddy.rs's `_locate` reads a region's index off
-/// the address relative to the range's start).
+/// What a section begins on, and the smallest block the heap's buddy hands
+/// out — the same 4 KiB as xpute `ds/buddy_tree.rs`'s MIN_ALLOC, for the same
+/// reason rather than by coincidence
+/// (issue/20260916-the-page-table-the-pool-did-not-need.md). A buddy block
+/// lands at `HEAP_AT + k * its own size`, so a heap that begins on a smaller
+/// boundary hands out pages that are not pages.
 pub const PAGE_BYTES: u32 = 1 << 12;
 
-
+const _: () = assert!(
+    PAGE_BYTES as usize == xpute_core::ds::buddy_tree::MIN_ALLOC,
+    "the heap's smallest block is the page the sections are laid out on"
+);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {

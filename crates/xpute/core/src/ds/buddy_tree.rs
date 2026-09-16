@@ -1,27 +1,34 @@
 // xpute_core/ds/buddy_tree.rs
 
 //! evanw/buddy-malloc, line for line, over a range that is given rather than
-//! asked for.
+//! asked for — the kernel's page allocator, with `ds/slab.rs` over it for
+//! everything smaller than a page.
 //!
 //! A buddy allocator that spans a fixed linear address range with a binary
 //! tree tracking free space. `malloc` and `free` are both O(log N) in the
 //! maximum number of allocations.
 //!
-//! The one change is where the memory comes from. The C calls `brk` to have
-//! the kernel make more of its address range usable, and fails the allocation
-//! when the kernel says no. A module's memory is reserved whole before any of
-//! this runs, so `update_max_ptr` asks the range instead of the kernel and
-//! fails in exactly the same place, which leaves everything built on it —
-//! the tree that starts small and doubles, `bucket_limit`, the order the free
-//! lists are filled in — as it was.
+//! Two changes from the C.
 //!
-//! Everything else is the original: the 8-byte header that lets `free` be
-//! told nothing but an address, the linearized tree whose index says both
+//! Where the memory comes from. The C calls `brk` to have the kernel make more
+//! of its address range usable, and fails the allocation when the kernel says
+//! no. A module's memory is reserved whole before any of this runs, so
+//! `update_max_ptr` asks the range instead of the kernel and fails in exactly
+//! the same place, which leaves everything built on it — the tree that starts
+//! small and doubles, `bucket_limit`, the order the free lists are filled in —
+//! as it was.
+//!
+//! The 8-byte header is gone. It exists in the C because `free(void *)` is
+//! told an address and nothing else, so the size has to be written beside the
+//! block. Every caller here is handed the size back — `GlobalAlloc::dealloc`
+//! gets the `Layout` the allocation was made with — so `free` takes it as an
+//! argument and a block is nothing but its bytes.
+//!
+//! Everything else is the original: the linearized tree whose index says both
 //! where a node is and how large, one bit a node pair holding the
 //! exclusive-or of its children's UNUSED flags, and circular doubly-linked
 //! free lists threaded through the free blocks themselves.
 
-use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ptr;
@@ -33,15 +40,14 @@ pub trait Range {
     fn end() -> usize;
 }
 
-/// Every allocation needs an 8-byte header to store the allocation size while
-/// staying 8-byte aligned. The address returned by `malloc` is the address
-/// right after this header.
-const HEADER_SIZE: usize = 8;
-
-/// The minimum allocation size is 16 bytes because we have an 8-byte header
-/// and we need to stay 8-byte aligned.
-const MIN_ALLOC_LOG2: usize = 4;
-const MIN_ALLOC: usize = 1 << MIN_ALLOC_LOG2;
+/// The smallest block, which is the kernel's page: this tree hands out pages
+/// and runs of pages, and `ds/slab.rs` cuts the classes below one. The C sets
+/// this to 4 because its own `free` needs a header in the block and 16 bytes
+/// is the smallest that leaves room for one; nothing here needs a header, and
+/// what sets the number instead is the split bitmap below, which is
+/// `2^(MAX - MIN) / 8` and so pays for every level of resolution in a static.
+pub const MIN_ALLOC_LOG2: usize = 12;
+pub const MIN_ALLOC: usize = 1 << MIN_ALLOC_LOG2;
 
 /// The maximum allocation size, which is the total size of the heap — and so
 /// technically also the largest single allocation, a heap being able to
@@ -180,7 +186,10 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { core::ptr::addr_of!((*self.heap.get()).base_ptr) }
     }
 
-    /// The address a request of `bytes` was given, or null.
+    /// The address a request of `request` bytes was given, or null. The block
+    /// is a power of two of at least MIN_ALLOC bytes, at an offset from the
+    /// range's base that is a multiple of its own size — which is what lets a
+    /// caller find a block's start again by masking the offset.
     ///
     /// # Safety
     /// The range `R` names must be this module's, and nothing else may write
@@ -190,28 +199,14 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).malloc(R::base(), R::end(), request) }
     }
 
-    /// Gives back what `malloc` returned.
+    /// Gives back what `malloc` returned, told the same size it asked for.
     ///
     /// # Safety
-    /// `ptr` is an address this allocator returned and has not taken back.
-    pub unsafe fn free(&self, ptr: *mut u8) {
+    /// `ptr` is an address this allocator returned and has not taken back, and
+    /// `request` is the size it was asked for.
+    pub unsafe fn free(&self, ptr: *mut u8, request: usize) {
         // SAFETY: single-threaded; see the Sync impl.
-        unsafe { (*self.heap.get()).free(ptr) }
-    }
-}
-
-// SAFETY: the allocator hands out blocks of its own range, aligned to
-// MIN_ALLOC and never overlapping while they are out.
-unsafe impl<R: Range> GlobalAlloc for BuddyMalloc<R> {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: the caller's.
-        unsafe { self.malloc(layout.size()) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        // SAFETY: the caller's. The size is in the block's own header, which
-        // is why the layout is not needed.
-        unsafe { self.free(ptr) }
+        unsafe { (*self.heap.get()).free(ptr, request) }
     }
 }
 
@@ -373,7 +368,7 @@ impl Heap {
     fn malloc(&mut self, base: usize, end: usize, request: usize) -> *mut u8 {
         // Make sure an allocation of this size could succeed at all. The limit
         // is hard-coded because of the way the allocator works.
-        if request + HEADER_SIZE > MAX_ALLOC {
+        if request > MAX_ALLOC {
             return ptr::null_mut();
         }
 
@@ -393,7 +388,7 @@ impl Heap {
 
         // The smallest bucket that fits. Whether there is room for it is not
         // checked yet.
-        let original_bucket = Self::bucket_for_request(request + HEADER_SIZE);
+        let original_bucket = Self::bucket_for_request(request);
         let mut bucket = original_bucket;
 
         // Look for a bucket with a non-empty free list at least as large as
@@ -462,26 +457,21 @@ impl Heap {
                 unsafe { self.list_push(bucket, right) };
             }
 
-            // Write the block header — just the size — and return the address
-            // right after it.
-            // SAFETY: the block is at least MIN_ALLOC and is this call's.
-            unsafe { *(ptr as *mut usize) = request };
             self.live += 1 << (MAX_ALLOC_LOG2 - original_bucket);
             self.allocs = self.allocs.wrapping_add(1);
-            return (ptr as usize + HEADER_SIZE) as *mut u8;
+            return ptr as *mut u8;
         }
     }
 
-    fn free(&mut self, ptr: *mut u8) {
+    fn free(&mut self, ptr: *mut u8, request: usize) {
         if ptr.is_null() {
             return;
         }
 
-        // Back off the header to the node's own address, and find the node.
-        let ptr = (ptr as usize - HEADER_SIZE) as *mut List;
-        // SAFETY: the header of a block this allocator returned.
-        let request = unsafe { *(ptr as *const usize) };
-        let mut bucket = Self::bucket_for_request(request + HEADER_SIZE);
+        // The block's own address is the one that was handed out, there being
+        // no header in front of it.
+        let ptr = ptr as *mut List;
+        let mut bucket = Self::bucket_for_request(request);
         self.live -= 1 << (MAX_ALLOC_LOG2 - bucket);
         self.releases = self.releases.wrapping_add(1);
         let mut i = self.node_for_ptr(ptr, bucket);
