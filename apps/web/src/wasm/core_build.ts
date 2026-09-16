@@ -13,7 +13,7 @@ import type { U8Array } from "@xpute/core/kit/array.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import type { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { CORE_RING } from "@/wasm/core_memory.ts";
+import { CORE_RING } from "@/wasm/core_mem.ts";
 import { type CoreRing, packet, type SignalListener } from "@/wasm/core_ring.ts";
 
 export { packet };

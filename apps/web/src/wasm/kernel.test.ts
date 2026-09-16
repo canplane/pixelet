@@ -18,7 +18,7 @@ import { encode_poi_page, encode_terrain } from "@pxl/shared/bake/format.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
-import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { BOOT, boot_block } from "@/wasm/module.ts";
 
 function rng(seed: u32): () => u32 {

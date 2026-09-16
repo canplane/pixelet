@@ -123,11 +123,10 @@ fn frame<W: Write>(out: &mut W, s: &FrameSample) -> fmt::Result {
     }
     write!(
         out,
-        "],\"pool\":{{\"live_mb\":{},\"idle_mb\":{},\"hits\":{},\"misses\":{}}},",
+        "],\"pool\":{{\"used_mb\":{},\"live_mb\":{},\"range_mb\":{}}},",
+        N(s.pool.used_mb),
         N(s.pool.live_mb),
-        N(s.pool.idle_mb),
-        N(s.pool.hits),
-        N(s.pool.misses)
+        N(s.pool.range_mb)
     )?;
     write!(out, "\"mounts\":{{\"added\":{},\"removed\":{},\"layouts\":{}}},", N(s.mounts.added), N(s.mounts.removed), N(s.mounts.layouts))?;
     write!(
@@ -230,7 +229,7 @@ fn frames_summary<W: Write>(out: &mut W, f: &FrameSummary) -> fmt::Result {
     }
     write!(
         out,
-        "],\"work\":[{},{}],\"per_s\":[{},{}],\"backlog_s\":{},\"backlog_per_s\":[{},{}],\"tick_per_bake\":{},\"mounts\":[{},{}],\"pool_hit_pct\":{},\"heap_delta\":{},",
+        "],\"work\":[{},{}],\"per_s\":[{},{}],\"backlog_s\":{},\"backlog_per_s\":[{},{}],\"tick_per_bake\":{},\"mounts\":[{},{}],\"heap_delta\":{},",
         N(f.work.0),
         N(f.work.1),
         N(f.per_s.0),
@@ -241,7 +240,6 @@ fn frames_summary<W: Write>(out: &mut W, f: &FrameSummary) -> fmt::Result {
         Or(f.tick_per_bake.map(N)),
         N(f.mounts.0),
         N(f.mounts.1),
-        Or(f.pool_hit_pct.map(N)),
         N(f.heap_delta)
     )?;
     out.write_str("\"census\":[")?;

@@ -1,9 +1,9 @@
 // pxl_core/module/world/terrain/resident.rs
 
-//! Which page each of the slab's records carries.
+//! Which page each of `.fixed.terrain`'s records carries.
 //!
-//! A page's record is its own coordinate reduced modulo the slab's axis
-//! (slab.rs), so a page arriving takes the record of whichever page shares its
+//! A page's record is its own coordinate reduced modulo the range's axis
+//! (fixed.rs), so a page arriving takes the record of whichever page shares its
 //! residue. Inside the load radius no two pages do, so the page it replaces is
 //! one the view has already left; a jump moves further than the axis and takes
 //! the whole window with it, so the page it replaces is gone with the rest.
@@ -18,13 +18,13 @@
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
 
-use super::slab::{slot_of, SLAB_SLOTS};
+use super::fixed::{slot_of, TERRAIN_SLOTS};
 use crate::global::Global;
 
-static SLOT_PAGE: Global<[Option<IVec>; SLAB_SLOTS as usize]> = Global::new();
+static SLOT_PAGE: Global<[Option<IVec>; TERRAIN_SLOTS as usize]> = Global::new();
 
-fn slot_page() -> &'static mut [Option<IVec>; SLAB_SLOTS as usize] {
-    SLOT_PAGE.get(|| [None; SLAB_SLOTS as usize])
+fn slot_page() -> &'static mut [Option<IVec>; TERRAIN_SLOTS as usize] {
+    SLOT_PAGE.get(|| [None; TERRAIN_SLOTS as usize])
 }
 
 /// Records that `page_idx` now holds its record, and answers with the page the

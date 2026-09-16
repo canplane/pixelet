@@ -21,17 +21,6 @@ pub fn pct(sorted: &[f64], q: f64) -> f64 {
     sorted[((sorted.len() - 1) as f64 * q).floor().min((sorted.len() - 1) as f64) as usize]
 }
 
-/// One decoded terrain page, measured live (~4.03MB) — the multiplier on
-/// tile_pages.
-pub const TILE_DECODED_MB: f64 = 4.0;
-
-/// A pending chunk waiting longer than this is being passed over rather than
-/// queued. Ten seconds is above what a full zoom-out's queue takes to drain
-/// (~7 s against one scan slot), so an ordinary backlog never trips it, and
-/// below the sixteen-second wait that ageing exists to prevent: past it,
-/// ageing is not doing its job.
-pub const STARVED_MS: f64 = 10_000.0;
-
 /// A gap this many display intervals long skipped a vsync.
 const MISSED_INTERVALS: f64 = 1.5;
 
@@ -96,7 +85,6 @@ pub struct FrameSummary {
     pub mounts: (f64, f64),
     /// Share of the window's pool acquires served from a region already
     /// reserved; None when the window acquired nothing.
-    pub pool_hit_pct: Option<f64>,
     /// Per-frame mean draws and triangles by tag, heaviest first.
     pub census: Vec<CensusRow>,
     pub heap_delta: f64,
@@ -114,8 +102,6 @@ pub fn summarize_frames(frames: &[FrameSample]) -> Option<FrameSummary> {
     let backlog: Vec<&FrameSample> = frames.iter().filter(|f| f.lod.pending > 0.0).collect();
     let backlog_s = (backlog.iter().map(|f| f.dt_ms).sum::<f64>() / 1000.0).max(1e-3);
     let tick_ms = sum(&|f| f.cpu.tick_ms);
-    let pool_hits = last.pool.hits - first.pool.hits;
-    let pool_acquires = pool_hits + last.pool.misses - first.pool.misses;
 
     Some(FrameSummary {
         n: frames.len(),
@@ -136,7 +122,6 @@ pub fn summarize_frames(frames: &[FrameSample]) -> Option<FrameSummary> {
         backlog_per_s: (backlog.iter().map(|f| f.work.scans).sum::<f64>() / backlog_s, backlog.iter().map(|f| f.work.bakes).sum::<f64>() / backlog_s),
         tick_per_bake: (work.1 > 0.0).then(|| tick_ms / work.1),
         mounts: (sum(&|f| f.mounts.added), sum(&|f| f.mounts.removed)),
-        pool_hit_pct: (pool_acquires > 0.0).then(|| ((pool_hits / pool_acquires) * 100.0 + 0.5).floor()),
         census: census_mean(frames),
         heap_delta: last.heap_mb - first.heap_mb,
         last: *last,

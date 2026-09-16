@@ -9,7 +9,7 @@ import { Ring } from "@xpute/core/ipc/ring.ts";
 import { Interrupt } from "@xpute/core/ipc/cmd.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { BOOT, boot_block } from "@/wasm/module.ts";
 
 /** A command crates/pxl/wasm/src/lib.rs does not number. */

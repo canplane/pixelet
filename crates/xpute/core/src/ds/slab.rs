@@ -45,17 +45,18 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
 use core::ptr;
 
-use super::buddy_tree::{BuddyMalloc, Range, MIN_ALLOC_LOG2};
+use super::buddy_tree::{BuddyMalloc, Range};
 
 /// The smallest class. Below sixteen bytes a class costs more in run headers
 /// and rounding than it saves, and a free slot has to hold one pointer.
 const MIN_CLASS_LOG2: usize = 4;
 
-/// The largest class is the one below a page: a page or more is the buddy's
-/// own business and is passed down whole.
-const MAX_CLASS_LOG2: usize = MIN_ALLOC_LOG2 - 1;
-
-const CLASS_COUNT: usize = MAX_CLASS_LOG2 - MIN_CLASS_LOG2 + 1;
+/// Classes, sized for any smallest block a 32-bit address space allows rather
+/// than for the range's own: a head is one word, and the classes past
+/// `class_count` are never named. The largest class is the one below the
+/// buddy's smallest block — that block or more is the buddy's own business and
+/// is passed down whole.
+const MAX_CLASSES: usize = 32;
 
 /// The fewest slots a run is cut into. A run's leading slots are spent on its
 /// own header, so a run of two slots would spend half of itself on it; sixteen
@@ -77,55 +78,11 @@ struct Run {
     inuse: u32,
 }
 
+const _: () = assert!(1 << MIN_CLASS_LOG2 >= core::mem::size_of::<*mut u8>(), "a free slot holds the address of the next");
+
 /// `1 << class_log2(c)` is the bytes a slot of class `c` holds.
 const fn class_log2(c: usize) -> usize {
     MIN_CLASS_LOG2 + c
-}
-
-/// `1 << run_log2(c)` is the bytes a run of class `c` borrows from the buddy:
-/// a page, or as much more as MIN_SLOTS_LOG2 asks for.
-const fn run_log2(c: usize) -> usize {
-    let by_slots = class_log2(c) + MIN_SLOTS_LOG2;
-    if by_slots > MIN_ALLOC_LOG2 {
-        by_slots
-    } else {
-        MIN_ALLOC_LOG2
-    }
-}
-
-/// The leading slots a run of class `c` spends on its own header.
-const fn head_slots(c: usize) -> usize {
-    let class = 1usize << class_log2(c);
-    core::mem::size_of::<Run>().div_ceil(class)
-}
-
-/// The slots a run of class `c` is cut into, its header's included.
-const fn slots(c: usize) -> usize {
-    1 << (run_log2(c) - class_log2(c))
-}
-
-const _: () = {
-    assert!(1 << MIN_CLASS_LOG2 >= core::mem::size_of::<*mut u8>(), "a free slot holds the address of the next");
-    let mut c = 0;
-    while c < CLASS_COUNT {
-        assert!(head_slots(c) < slots(c), "a run has a slot to hand out past the ones its header takes");
-        c += 1;
-    }
-};
-
-/// The class a layout falls in, or none where it belongs to the buddy.
-///
-/// A slot of class `c` sits at a multiple of `c` from a run base that is
-/// itself a multiple of its own size, so a class at least as large as the
-/// alignment satisfies it — which is why the alignment is folded into the size
-/// rather than handled apart from it.
-fn class_for(layout: Layout) -> Option<usize> {
-    let need = layout.size().max(layout.align()).max(1);
-    if need > 1 << MAX_CLASS_LOG2 {
-        return None;
-    }
-    let log2 = (need.next_power_of_two().trailing_zeros() as usize).max(MIN_CLASS_LOG2);
-    Some(log2 - MIN_CLASS_LOG2)
 }
 
 /// A slab of size classes over a buddy of pages, as the module's
@@ -134,7 +91,7 @@ pub struct SlabMalloc<R: Range> {
     buddy: BuddyMalloc<R>,
     /// The head of each class's partial list, null where the class has no run
     /// with a free slot.
-    partial: UnsafeCell<[*mut Run; CLASS_COUNT]>,
+    partial: UnsafeCell<[*mut Run; MAX_CLASSES]>,
     /// Requests served, both paths, which is what a per-step probe counts. The
     /// buddy's own counter moves only when a run is borrowed.
     allocs: UnsafeCell<u32>,
@@ -151,10 +108,65 @@ impl<R: Range> Default for SlabMalloc<R> {
 }
 
 impl<R: Range> SlabMalloc<R> {
+    /// The classes this range has: everything from MIN_CLASS_LOG2 up to the
+    /// one below the buddy's smallest block.
+    const CLASS_COUNT: usize = R::MIN_LOG2 - MIN_CLASS_LOG2;
+
+    /// `1 << run_log2(c)` is the bytes a run of class `c` borrows from the
+    /// buddy: one of the buddy's smallest blocks, or as much more as
+    /// MIN_SLOTS_LOG2 asks for.
+    const fn run_log2(c: usize) -> usize {
+        let by_slots = class_log2(c) + MIN_SLOTS_LOG2;
+        if by_slots > R::MIN_LOG2 {
+            by_slots
+        } else {
+            R::MIN_LOG2
+        }
+    }
+
+    /// The leading slots a run of class `c` spends on its own header.
+    const fn head_slots(c: usize) -> usize {
+        core::mem::size_of::<Run>().div_ceil(1usize << class_log2(c))
+    }
+
+    /// The slots a run of class `c` is cut into, its header's included.
+    const fn slots(c: usize) -> usize {
+        1 << (Self::run_log2(c) - class_log2(c))
+    }
+
+    /// Checked once, at `new`: a run has a slot to hand out past the ones its
+    /// header takes, and the classes fit the heads there are.
+    const CHECK: () = {
+        assert!(Self::CLASS_COUNT <= MAX_CLASSES, "a range's smallest block asks for more classes than there are heads");
+        let mut c = 0;
+        while c < Self::CLASS_COUNT {
+            assert!(Self::head_slots(c) < Self::slots(c), "a run has a slot to hand out past the ones its header takes");
+            c += 1;
+        }
+    };
+
+    /// The class a layout falls in, or none where it belongs to the buddy.
+    ///
+    /// A slot of class `c` sits at a multiple of `c` from a run base that is
+    /// itself a multiple of its own size, so a class at least as large as the
+    /// alignment satisfies it — which is why the alignment is folded into the
+    /// size rather than handled apart from it.
+    fn class_for(layout: Layout) -> Option<usize> {
+        let need = layout.size().max(layout.align()).max(1);
+        if need >= 1 << R::MIN_LOG2 {
+            return None;
+        }
+        let log2 = (need.next_power_of_two().trailing_zeros() as usize).max(MIN_CLASS_LOG2);
+        Some(log2 - MIN_CLASS_LOG2)
+    }
+
     pub const fn new() -> SlabMalloc<R> {
+        // Forces the checks above to be evaluated: an associated const is only
+        // checked where it is named.
+        let () = Self::CHECK;
         SlabMalloc {
             buddy: BuddyMalloc::new(),
-            partial: UnsafeCell::new([ptr::null_mut(); CLASS_COUNT]),
+            partial: UnsafeCell::new([ptr::null_mut(); MAX_CLASSES]),
             allocs: UnsafeCell::new(0),
         }
     }
@@ -232,7 +244,7 @@ impl<R: Range> SlabMalloc<R> {
     /// and puts it at the head of the class's partial list. Null where the
     /// buddy has no room.
     unsafe fn open_run(&self, c: usize) -> *mut Run {
-        let run_bytes = 1usize << run_log2(c);
+        let run_bytes = 1usize << Self::run_log2(c);
         // SAFETY: the buddy's own range.
         let at = unsafe { self.buddy.malloc(run_bytes) };
         if at.is_null() {
@@ -242,8 +254,8 @@ impl<R: Range> SlabMalloc<R> {
         let mut next: *mut u8 = ptr::null_mut();
         // From the back, so the list runs forwards through the run and a run's
         // first allocations are its lowest addresses.
-        let mut i = slots(c);
-        while i > head_slots(c) {
+        let mut i = Self::slots(c);
+        while i > Self::head_slots(c) {
             i -= 1;
             let slot = unsafe { at.add(i * class) };
             // SAFETY: the slot is free, and a class is at least one pointer.
@@ -303,11 +315,11 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
         // SAFETY: single-threaded; see the Sync impl.
         let allocs = unsafe { &mut *self.allocs.get() };
 
-        let Some(c) = class_for(layout) else {
+        let Some(c) = Self::class_for(layout) else {
             // A page or more. The buddy places a block at a multiple of its
             // own size from a base that is a page boundary, so it satisfies
             // any alignment up to a page and none past one.
-            if layout.align() > 1 << MIN_ALLOC_LOG2 {
+            if layout.align() > 1 << R::MIN_LOG2 {
                 return ptr::null_mut();
             }
             // SAFETY: the caller's.
@@ -342,12 +354,12 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        let Some(c) = class_for(layout) else {
+        let Some(c) = Self::class_for(layout) else {
             // SAFETY: the caller's — the same size the block was asked for.
             return unsafe { self.buddy.free(ptr, layout.size()) };
         };
 
-        let run_bytes = 1usize << run_log2(c);
+        let run_bytes = 1usize << Self::run_log2(c);
         let base = R::base();
         let run = (base + ((ptr as usize - base) & !(run_bytes - 1))) as *mut Run;
 

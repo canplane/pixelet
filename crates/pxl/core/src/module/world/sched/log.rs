@@ -14,7 +14,7 @@
 //! back-pressured, and full is fatal: `Outbox::post` asserts when the
 //! completion queue and its spill are both full, so a debug line could take
 //! the module down, and the moment logging is turned on is exactly the moment
-//! instrumentation would be competing for arena bytes with the fetch burst it
+//! instrumentation would be competing for ring slots with the fetch burst it
 //! was turned on to watch. This is what every operating system separates —
 //! ftrace and perf mmap their own per-CPU buffers, printk keeps `log_buf` and
 //! is read through /dev/kmsg, eBPF has its own ring — so the stream is a

@@ -4,4 +4,5 @@ pub mod clock;
 pub mod console;
 pub mod errno;
 pub mod error;
-pub mod memory;
+pub mod global;
+pub mod mem;

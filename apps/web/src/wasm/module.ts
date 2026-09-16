@@ -7,9 +7,9 @@
  * read them through the same URL.
  *
  * The module imports its memory: the central scheduler gives it one
- * (core_memory.ts), and booting the module lays out everything inside it —
+ * (core_mem.ts), and booting the module lays out everything inside it —
  * the sections, their pools, the rings — as the kernel's map says
- * (crates/pxl/core/src/memory.rs).
+ * (crates/pxl/core/src/mem.rs).
  *
  * One instance per memory: instantiating writes the module's data segments
  * over the front of it, so a second instance over the same memory would
@@ -55,12 +55,14 @@ export type KernelExports = {
   ledger_trace_release(): void;
 };
 
-/** crates/pxl/wasm/src/lib.rs's boot block, word by word: the section the
- * module keeps; where the submission and completion rings are; then the
- * fixed section, the terrain slab and the mesh section, each its offset,
- * bytes and region size; then the quantum the kernel declares, five words in
- * thousandths. */
-export const BOOT = { module_bytes: 0, sq: 1, cq: 2, slab: 3, heap: 6, quantum: 9, heap_row: 14 } as const;
+/** crates/pxl/wasm/src/lib.rs's boot block, word by word: where the module's
+ * own front ends; where the submission and completion rings are; then `.fixed`
+ * and the heap, each its offset, bytes and page size; then the quantum the
+ * kernel declares, five words in thousandths; then the heap's row. */
+/** Where each thing the kernel reports lies in the boot block. `data_end` is
+ * where the linker stopped, which is everything the module keeps for itself —
+ * the stack, the rings and its own data. */
+export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 14 } as const;
 const BOOT_WORDS = 15;
 
 /** The boot block, read in place. */
@@ -79,9 +81,25 @@ const KERNEL_WASM_URL = new URL("./kernel.wasm", import.meta.url);
 const utf8 = new TextEncoder();
 const utf8_decoder = new TextDecoder();
 
-/** The text at `at`, `len` bytes of UTF-8 in the memory the module shares. */
+/** The `(at, bytes)` pair at `at`: how the kernel names a run of memory it
+ * built and holds, rather than carrying it through a ring slot. */
+export function range_at(memory: WebAssembly.Memory, at: u32): readonly [u32, u32] {
+  const [lies_at, bytes] = new Uint32Array(memory.buffer, at, 2);
+  return [lies_at, bytes];
+}
+
+/** A range's bytes, where they lie. Valid until the kernel is given them back
+ * or writes them again, so a caller that keeps them copies them first.
+ *
+ * The core memory is reserved here and never shared, so the cast holds; what
+ * it buys is a view the platform accepts where an `ArrayBuffer` is asked for. */
+export function bytes_at(memory: WebAssembly.Memory, at: u32, len: u32): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(memory.buffer as ArrayBuffer, at, len);
+}
+
+/** A range's bytes as text, `len` bytes of UTF-8. */
 export function text_at(memory: WebAssembly.Memory, at: u32, len: u32): string {
-  return utf8_decoder.decode(new Uint8Array(memory.buffer, at, len));
+  return utf8_decoder.decode(bytes_at(memory, at, len));
 }
 
 function storage_read(key: string): string | null {
