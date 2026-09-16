@@ -206,35 +206,10 @@ fn counters() -> Counters {
     }
 }
 
-/// One memory section as the shell's pool reports it.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct SectionStat {
-    pub name: String,
-    pub bytes: f64,
-    pub live_bytes: f64,
-    pub backing_used: f64,
-    pub spills: f64,
-    pub refusals: f64,
-}
-
-/// What the report reads of the shell: the memory, its sections, and whether
-/// the browser has long-animation-frame entries.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct HostReportStat {
-    pub core_memory_bytes: f64,
-    pub module_section_bytes: f64,
-    pub module_heap_used: f64,
-    pub reserved_bytes: f64,
-    pub max_block_bytes: f64,
-    pub sections: Vec<SectionStat>,
-    pub loaf_supported: bool,
-}
-
 struct Log {
     baseline: Counters,
     logging: bool,
     lines: Vec<String>,
-    host: HostReportStat,
 }
 
 static LOG: Global<Log> = Global::new();
@@ -244,13 +219,7 @@ fn log() -> &'static mut Log {
         baseline: counters(),
         logging: false,
         lines: Vec::new(),
-        host: HostReportStat::default(),
     })
-}
-
-/// The shell's numbers for the next report.
-pub fn set_host_report_stat(stat: HostReportStat) {
-    log().host = stat;
 }
 
 /// The side counters since the window began.
@@ -331,7 +300,6 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
     let badge_count = 0;
     let retain = chunk_retention();
     let bands = c.bands_reused + c.bands_allocated;
-    let host = &log().host;
     let census = kernel().sched.census;
     let counts = fetch_counts();
 
@@ -421,39 +389,17 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
             if index.sweeping > 0 { format!("  sweeping {} units", index.sweeping) } else { String::new() },
             if index.dropped > 0 { format!("  DROPPED {}", index.dropped) } else { String::new() }
         ),
-        // Idle inside the core reservation is the working budget, kept on
-        // purpose; only what is reserved past it is ever handed back.
+        // The reservation, the module section and each section against its own
+        // range are the shell's own numbers (wasm/core_pool.ts) and are not
+        // the kernel's to state: it was handed them only so it could print
+        // them back, and nothing ever handed them.
         format!(
-            "  pool    live {}MB  idle {}MB  reserved {}MB (core {}MB kept)  hit {}%  biggest {}MB   window scans {} bakes {}",
+            "  pool    live {}MB  idle {}MB  hit {}%   window scans {} bakes {}",
             last.pool.live_mb,
             last.pool.idle_mb,
-            (host.reserved_bytes / MB).round(),
-            (host.core_memory_bytes / MB).round(),
             f.pool_hit_pct.map_or("-".to_string(), |p| p.to_string()),
-            (host.max_block_bytes / MB).round(),
             f.work.0,
             f.work.1
-        ),
-        // Each section against its own range: the fixed one refuses past it,
-        // the others spill to plain regions the collector can take back — a
-        // spill or a refusal here is the memory map's own signal, per kind.
-        format!(
-            "  section module {:.1} heap of {}MB   {}   (live/cut of range)",
-            host.module_heap_used / MB,
-            (host.module_section_bytes / MB).round(),
-            host.sections
-                .iter()
-                .map(|s| format!(
-                    "{} {}/{} of {}MB{}{}",
-                    s.name,
-                    (s.live_bytes / MB).round(),
-                    (s.backing_used / MB).round(),
-                    (s.bytes / MB).round(),
-                    if s.spills > 0.0 { format!(" SPILLED {}", s.spills) } else { String::new() },
-                    if s.refusals > 0.0 { format!(" REFUSED {}", s.refusals) } else { String::new() }
-                ))
-                .collect::<Vec<_>>()
-                .join("   ")
         ),
         format!("  fetch   queued {} running {} of {}", counts.queued, counts.running, fetch_credits()),
         // The builds run in the kernel under the tick; what they did this window.
@@ -565,7 +511,9 @@ pub fn ledger_report_text() -> String {
         out.extend(peak_section());
     }
     out.extend(tasks_section(tasks));
-    out.push(format!("long frames n={}{}", longs.len(), if log().host.loaf_supported { "" } else { " (LoAF unsupported; longtask only)" }));
+    // Whether the browser has long-animation-frame entries at all is the
+    // shell's to know; a count of none reads the same either way here.
+    out.push(format!("long frames n={}", longs.len()));
 
     if !tasks.is_empty() {
         out.push(format!("--- last {} tasks ---", RECENT_TASKS.min(tasks.len())));
