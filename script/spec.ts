@@ -442,6 +442,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string }[] = [
   { json: "crates/pxl/core/src/module/world/character/variant.json", ts: "apps/web/src/module/world/character/variant_spec.ts", rs: "crates/pxl/core/src/module/world/character/variant_spec.rs" },
   { json: "crates/pxl/core/src/module/world/terrain/config.json", ts: "apps/web/src/module/world/terrain/config_spec.ts", rs: "crates/pxl/core/src/module/world/terrain/config_spec.rs" },
   { json: "crates/pxl/core/src/render/gpu/api.json", ts: "apps/web/src/wasm/gpu_spec.ts", rs: "crates/pxl/core/src/render/gpu/api_spec.rs" },
+  { json: "crates/pxl/core/src/memory.json", ts: "apps/web/src/wasm/memory_spec.ts", rs: "crates/pxl/core/src/memory_spec.rs" },
 ];
 
 function is_leaf_wrapper(n: DataNode): n is { $value: DataNode; $doc?: string[]; $type?: string } {

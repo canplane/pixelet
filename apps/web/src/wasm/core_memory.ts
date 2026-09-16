@@ -20,23 +20,23 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { reserve_memory } from "@xpute/core/sys/memory.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
+import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/wasm/memory_spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/wasm/module.ts";
 import { CoreRing } from "@/wasm/core_ring.ts";
 
-/** crates/pxl/core/src/memory.rs's REGION_BYTES: what a device's memory is
- * counted in. Nothing cuts regions any more. */
-export const REGION_BYTES: u32 = 1 << 26;
+export { REGION_BYTES };
 
 /** The memory the kernel is reserved: a gibibyte on the desktop, half of one
- * on a phone (crates/pxl/core/src/memory.rs's DESKTOP_BYTES and PHONE_BYTES).
- * What is in it is the kernel's alone to say; nothing here reads a section.
+ * on a phone. Both are memory.json's, the same file the kernel's map and the
+ * module's linker flags read, so there is no second place to keep them true.
  *
  * There is no smaller reservation to fall back to. The terrain a load radius
  * reaches is a fixed 196.43 MiB and the kernel lays its map out around it, so
  * a device that will not reserve this much cannot run the world at all — and
  * failing here says that, where failing in the map would say the map was
- * wrong. */
-const CORE_BYTES: u32 = HANDHELD ? 512 << 20 : 1024 << 20;
+ * wrong. The module declares PHONE_BYTES as the floor it needs
+ * (`--initial-memory`), so asking for less fails at instantiation too. */
+const CORE_BYTES: u32 = HANDHELD ? PHONE_BYTES : DESKTOP_BYTES;
 
 const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);
 

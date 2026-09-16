@@ -108,7 +108,7 @@ const SPILL: u32 = 2;
 
 const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
 const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
-const _: () = assert!(GLOBAL_BASE <= memory::MODULE_CEILING, "the module's data begins past what the map was checked against");
+const _: () = assert!(RING_SLOT_BYTES == memory::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
 
 /// The whole memory as one buffer, which is what a ring's two areas are cut
 /// from: the descriptors near the bottom and the slots' payloads past them, at

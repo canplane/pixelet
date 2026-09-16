@@ -56,41 +56,22 @@ use xpute_core::sys::memory::Section;
 use crate::global::Global;
 use crate::module::world::terrain::slab::SLAB_BYTES;
 
-/// The memory the shell reserves, which is what the map is cut from. Not read
-/// here — the kernel is handed what it was given — but written down so the two
-/// sides say the same thing, and checked below against what the terrain takes.
-pub const PHONE_BYTES: u32 = 512 << 20;
-pub const DESKTOP_BYTES: u32 = 1024 << 20;
-
-/// The unit the reservation is rounded down to. Nothing cuts regions any more
-/// — the heap's allocator answers for its own range — so this is what a
-/// device's memory is counted in and nothing else.
-pub const REGION_BYTES: u32 = 1 << 26;
-
-/// What the module's own front may take: the stack, the rings and everything
-/// the linker places. **Nothing is laid out at it** — where the module's data
-/// ends is the linker's answer (`__data_end`) and the fixed ranges begin at
-/// the page past it, so a byte of this that goes unused goes to the heap.
-///
-/// It is the figure the static check below is made against. Without one, "does
-/// the terrain still fit a phone" could only be asked at boot on a phone,
-/// because half of it would be a link-time number; with one, the question
-/// splits in two and both halves are cheap: the terrain against this at
-/// compile time, and the linker against this when the module boots.
-pub const MODULE_CEILING: u32 = 64 << 20;
-
-/// What a section begins on, and the smallest block the heap's buddy hands
-/// out — the same 4 KiB as xpute `ds/buddy_tree.rs`'s MIN_ALLOC, for the same
-/// reason rather than by coincidence
-/// (issue/20260916-the-page-table-the-pool-did-not-need.md). A buddy block
-/// lands at the heap's start plus a multiple of its own size, so a heap that
-/// begins on a smaller boundary hands out pages that are not pages.
-pub const PAGE_BYTES: u32 = 1 << 12;
+// The numbers the map is made of are memory.json's, since the shell and the
+// linker read the same ones (memory_spec.rs).
+pub use crate::memory_spec::{DESKTOP_BYTES, MODULE_CEILING, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
 
 const _: () = assert!(
     PAGE_BYTES as usize == xpute_core::ds::buddy_tree::MIN_ALLOC,
     "the heap's smallest block is the page the sections are laid out on"
 );
+
+/// `n` at the page every range in the memory begins on. The one place the
+/// rule is written: a range starts here, the next starts at this past where
+/// this one's content ends, and what is left over is under a page and no
+/// one's.
+pub const fn page_up(n: u32) -> u32 {
+    n.div_ceil(PAGE_BYTES) * PAGE_BYTES
+}
 
 /// `.fixed`'s ranges, in the order they are laid: `.fixed.terrain` and, so
 /// far, nothing else. What a range holds is its own affair — this says how
@@ -103,11 +84,16 @@ const FIXED_RANGES: [u32; 1] = [SLAB_BYTES];
 pub const FIXED_BYTES: u32 = {
     let (mut span, mut i) = (0, 0);
     while i < FIXED_RANGES.len() {
-        span += FIXED_RANGES[i].div_ceil(PAGE_BYTES) * PAGE_BYTES;
+        span += page_up(FIXED_RANGES[i]);
         i += 1;
     }
     span
 };
+
+const _: () = assert!(
+    REGION_BYTES.is_multiple_of(PAGE_BYTES) && MODULE_CEILING.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
+    "a section begins on a page, so every block in it begins on one"
+);
 
 const _: () = assert!(
     MODULE_CEILING + FIXED_BYTES + PAGE_BYTES <= PHONE_BYTES,
@@ -122,7 +108,7 @@ pub struct Map {
 
 /// Where `.fixed` begins: the first page past everything the linker placed.
 pub fn fixed_at(data_end: u32) -> u32 {
-    data_end.div_ceil(PAGE_BYTES) * PAGE_BYTES
+    page_up(data_end)
 }
 
 /// Where the heap begins: the first page past the last fixed range.
