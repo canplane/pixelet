@@ -7,8 +7,7 @@ use crate::module::world::terrain::fixed::TERRAIN_BYTES;
 /// ranges run into the fifth, and the heap needs one past it.
 const MIN_REGIONS: u32 = 6;
 
-/// What a linker might leave behind it. The map is a function of this, so the
-/// tests ask it at both ends of what MODULE_CEILING allows.
+/// What a linker might leave behind it. The map is a function of this.
 const DATA_END: u32 = 32 << 20;
 
 #[test]
@@ -32,7 +31,7 @@ fn every_map_is_the_sections_in_address_order_past_what_the_linker_placed() {
 
 #[test]
 fn the_fixed_ranges_follow_the_linker_wherever_it_stopped() {
-    for data_end in [1, PAGE_BYTES - 1, PAGE_BYTES, PAGE_BYTES + 1, 32 << 20, MODULE_CEILING] {
+    for data_end in [1, PAGE_BYTES - 1, PAGE_BYTES, PAGE_BYTES + 1, GLOBAL_BASE, 40 << 20] {
         let m = lay_out(16 * REGION_BYTES, data_end);
         assert_eq!(m.fixed.offset, data_end.div_ceil(PAGE_BYTES) * PAGE_BYTES, "{data_end}");
         assert!(m.fixed.offset >= data_end, "{data_end}: never over what the linker placed");

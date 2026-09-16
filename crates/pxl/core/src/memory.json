@@ -91,20 +91,24 @@
     ]
   },
 
-  "MODULE_CEILING": {
-    "$value": 67108864,
+  "MIN_HEAP_BYTES": {
+    "$value": 268435456,
     "$type": "u32",
     "$doc": [
-      "What the module's whole front may take: the stack, the rings and everything",
-      "the linker places. **Nothing is laid out at it.** Where the module's data",
-      "ends is the linker's answer (`__data_end`) and the fixed ranges begin at the",
-      "page past it, so a byte of this that goes unused goes to the heap.",
+      "The heap a phone is guaranteed, and so what everything in front of it is",
+      "checked against: the stack, the rings, the module's data and the fixed",
+      "ranges together must leave this much of PHONE_BYTES.",
       "",
-      "It exists so that \"does the terrain still fit a phone\" stays a compile-time",
-      "question. Half of the answer is a link-time number; against a ceiling the",
-      "question splits in two and both halves are cheap — the fixed ranges against",
-      "this when the kernel compiles, and the linker against this when the module",
-      "boots."
+      "Measured from where `.heap` begins, because that is the quantity that",
+      "matters — where the module's data happens to end is only interesting for",
+      "pushing that figure up. Which lets one number stand for the whole front,",
+      "and lets the question be asked twice: at compile time against the lowest",
+      "the heap could possibly start (`--global-base` plus the fixed ranges, both",
+      "constants), so a terrain grown past a phone fails to build; and at boot",
+      "against where it actually started and what the device actually gave.",
+      "",
+      "256 MiB with the terrain at 196.43 leaves the phone 283.04 in practice, so",
+      "there are 27 MiB of headroom over the guarantee."
     ]
   },
 

@@ -43,6 +43,10 @@
 //!   .fixed     ~32.5 MiB      ~228.9 MiB     196.43 MiB   196.43 MiB
 //!   heap       ~228.9 MiB     —              283.08 MiB   795.08 MiB
 //!
+//! What everything in front of the heap is checked against is MIN_HEAP_BYTES —
+//! the heap a phone is guaranteed — asked once at compile time of the lowest
+//! the heap could begin, and once at boot of where it actually began.
+//!
 //! A section begins on a page (PAGE_BYTES) and ends where its content does;
 //! the next begins on the first page past that. Where a section ends is no
 //! one's business but its own, so the terrain is what it holds and not a byte
@@ -56,7 +60,7 @@ use crate::global::Global;
 
 // The numbers the map is made of are memory.json's, since the shell and the
 // linker read the same ones (memory_spec.rs).
-pub use crate::memory_spec::{DESKTOP_BYTES, MODULE_CEILING, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
+pub use crate::memory_spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
 
 const _: () = assert!(
     PAGE_BYTES as usize == xpute_core::ds::buddy_tree::MIN_ALLOC,
@@ -75,13 +79,16 @@ pub const fn page_up(n: u32) -> u32 {
 pub use fixed::BYTES as FIXED_BYTES;
 
 const _: () = assert!(
-    REGION_BYTES.is_multiple_of(PAGE_BYTES) && MODULE_CEILING.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
+    REGION_BYTES.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
     "a section begins on a page, so every block in it begins on one"
 );
 
+/// The lowest `.heap` could possibly begin: the linker cannot end its data
+/// before `--global-base`, and the fixed ranges follow it. Both are constants,
+/// so the guarantee can be asked of them at compile time.
 const _: () = assert!(
-    MODULE_CEILING + FIXED_BYTES + PAGE_BYTES <= PHONE_BYTES,
-    "the phone's memory does not hold the module's front, the fixed ranges and a page of heap past them"
+    GLOBAL_BASE + FIXED_BYTES + MIN_HEAP_BYTES <= PHONE_BYTES,
+    "the phone's memory does not hold the module's front, the fixed ranges and the heap they are budgeted against"
 );
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -115,14 +122,10 @@ pub fn heap_at(data_end: u32) -> u32 {
 /// give rather than what the content needs.
 pub fn lay_out(bytes: u32, data_end: u32) -> Map {
     let regions = bytes / REGION_BYTES;
-    assert!(
-        data_end <= MODULE_CEILING,
-        "the module's own front outgrew what the map was checked against: the linker ended it at {data_end}, past MODULE_CEILING"
-    );
     let heap = heap_at(data_end);
     assert!(
-        heap + PAGE_BYTES <= regions * REGION_BYTES,
-        "the memory is too small for what is fixed in it: {FIXED_BYTES} bytes of fixed ranges past {data_end}, and the heap begins after them"
+        heap + MIN_HEAP_BYTES <= regions * REGION_BYTES,
+        "what is fixed in this memory leaves the heap less than it is budgeted: {FIXED_BYTES} bytes of fixed ranges past {data_end}, and the heap begins at {heap}"
     );
     Map {
         fixed: Section {
