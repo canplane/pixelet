@@ -87,7 +87,13 @@ when its fix lands.
 
 - **B1** `fetch_scheduler.rs:160-177` `fetch_settle` records nothing in the
   ledger when the row is gone; `fetch_scheduler.ts:158-177` recorded every
-  settle.
+  settle. **Not reachable**: read against xpute's `sched/io.rs`, the row is
+  gone in one case only. `sync` removes a row that is QUEUED, and a queued
+  demand has never been handed to the shell (`pump` is what starts one), so
+  no settle can arrive for it; a RUNNING row it no longer wants keeps its row
+  and only takes `abort_sent`, so the shell's settle still finds it and is
+  recorded. `IoQueue::reset` is the one call that drops rows in flight, and
+  its only caller is `fetch_scheduler_reset`, which says it is the tests'.
 - **B2** The fetch pump runs at the end of a turn (`world.rs:164,203`); a
   settle between turns waits for the next. The checkpoint pumped on every
   settle. **Kept as it is**: xpute's `sched/io.rs` states the rule and what
