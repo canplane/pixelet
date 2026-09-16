@@ -474,12 +474,13 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
         ),
         format!("  bands   reused {} / {} ({}%)  ~1.31MB each; a miss borrows from the core pool", c.bands_reused, bands, share(c.bands_reused, bands)),
         format!(
-            "  retain  nodes {}  runsets {} ({}MB)  tiers {}  decor {} steps   kept on-screen {}MB, off-screen {} / {}MB budget",
+            "  retain  nodes {}  runsets {} ({}MB)  tiers {}  decor {} steps {} instances   kept on-screen {}MB, off-screen {} / {}MB budget",
             retain.nodes,
             retain.run_sets,
             retain.run_set_mb,
             retain.tiers,
             retain.decor_steps,
+            retain.decor_instances,
             (census.retained_on / MB).round(),
             (census.retained_off / MB).round(),
             (RETAIN_BUDGET_BYTES() / MB).round()

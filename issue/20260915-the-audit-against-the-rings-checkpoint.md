@@ -138,8 +138,8 @@ when its fix lands.
   measurement the checkpoint's own `schedule_pump` records, which coalesced
   the pumps of a tick for it). The wait is one frame: the settle arrives as a
   command, and a command asks for the frame that answers it.
-- **B3** xpute `run_phase` steps back on a self-unregister;
-  `tick.ts:289` spliced and skipped the next step. The Rust is right.
+- **B3** ~~xpute `run_phase` steps back on a self-unregister;
+  `tick.ts:289` spliced and skipped the next step.~~ The Rust is right.
 - **B4** The quantum is observed after the turn and its grant applies to
   the next; `tick.ts:329-332` observed before sizing.
 - **B5** The frame is drawn after every phase (`world.rs:204-205`);
@@ -149,11 +149,18 @@ when its fix lands.
   `core_tick.tsx:198` and `renderer.ts:406` ran them in DEV.
 - **B7** A frame's `task_ms` is the previous turn's (`core_tick.rs:204`,
   `world.rs:206`); `core_tick.tsx:263-267` corrected it in place.
-- **B8** The world wakers are revision polling in `world_turn`. Outcome
+- **B8** ~~The world wakers are revision polling in `world_turn`.~~ Outcome
   equal as read.
-- **B9** `log.rs:238-245` sets the baseline at first use; the first report
-  prints window counters as 0. `log.ts:124` set it at load.
-- **B10** `log.rs`'s retain line drops `decor_instances` (`log.ts:250`).
+- **B9** ~~`log.rs:238-245` sets the baseline at first use; the first report
+  prints window counters as 0. `log.ts:124` set it at load.~~ **Kept as it
+  is**: the log is touched long before anything asks it for a report —
+  `set_host_report_stat` lands every frame the shell draws and
+  `ledger_record` on every demand that settles — so the baseline is the
+  session's start, and the window is zero only for a report asked for before
+  the first frame.
+- **B10** ~~`log.rs`'s retain line drops `decor_instances` (`log.ts:250`).~~
+  The blocks say how many instances they hold in their own header, so the
+  line counts them without the hand-over carrying a number.
 - **B11** ~~`category.rs`'s terrain note drops its mobile bottleneck
   sentence.~~ **Kept as it is**: the sentence says bottleneck A hangs off
   `set_tile` inside React's commit and shows up as `chunk_stage`'s

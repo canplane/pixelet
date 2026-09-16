@@ -108,6 +108,8 @@ pub struct ChunkRetention {
     pub tiers: u32,
     /// Decor: cached per-step blocks.
     pub decor_steps: u32,
+    /// The instances those blocks hold, which is what they cost to draw.
+    pub decor_instances: u32,
 }
 
 // ---- The live chunks ----
@@ -148,6 +150,12 @@ pub fn chunk_retention() -> ChunkRetention {
         }
         out.tiers += node.tiers.len() as u32;
         out.decor_steps += node.decor_cache.len() as u32;
+        for d in node.decor_cache.values() {
+            // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
+            // for as long as the node holds this decor.
+            let words: &[u32] = unsafe { core::slice::from_raw_parts(d.at as *const u32, d.bytes as usize / 4) };
+            out.decor_instances += crate::world::decor::decor_groups(words).map(|(_, n)| n).sum::<u32>();
+        }
     }
     out.run_set_mb = (run_bytes as f64 / 1_048_576.0).round() as u32;
     out
