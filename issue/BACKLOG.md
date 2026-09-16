@@ -123,8 +123,30 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   projection), which is not the inverse of the page-local offset
   `encode_objects` writes. In since v7.
 
-## P2
-
+- **The POI index with its pages, and POI back on.** Disconnected
+  2026-09-15: the index took about 20 MB of the 32 MB module heap before a
+  record existed — two sets of lanes and a spatial hash reserved at a fixed
+  65536 (`poi_index.rs:68-136`), copied out of the pages the page section
+  already holds — and past its heap the kernel traps rather than refuses
+  ([the heap all of it runs in](./20260915-the-audit-against-the-rings-checkpoint.md)).
+  Terrain is bounded by its section and backs off; POI should be too: each
+  resident page carries its derived lanes (grounded height, cell, tie-break,
+  tier) and a spatial hash of its own in blocks of the page section, a query
+  walks the pages in reach, and the capacity is the resident page count. Then
+  the module heap is sized to what is left in it.
+- **Strings out of the kernel's records.** Most of the kernel's `String`s
+  name something rather than hold text — a task's key is a category and a
+  page, its error a status — and a record holding one cannot sit in a lane of
+  a section, so the ledger's task ring stays on the module heap while its
+  frame ring moved out (2026-09-15,
+  [the heap all of it runs in](./20260915-the-audit-against-the-rings-checkpoint.md)).
+  A name becomes numbers (a category index, a page index, `fnv1a64` of what
+  is not one); text that is data — a query, a place's name, an error's detail
+  — goes as bytes into a UTF-8 lane with an offset lane beside it, the shape of
+  the POI page's strings and of the string-sequence leaf below; what is built
+  to be handed to the shell once (a report, a log line, the snapshot) stays
+  on the heap.
+  
 - **Compression, chosen by traffic.** Recorded 2026-09-13, not scheduled:
   [20260913-compression-by-traffic.md](./20260913-compression-by-traffic.md).
   Brotli q11 takes a third off the baked terrain pages and a fifth off POI

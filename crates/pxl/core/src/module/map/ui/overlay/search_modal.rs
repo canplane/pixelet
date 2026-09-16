@@ -68,6 +68,13 @@ fn search() -> &'static mut Search {
 /// flight.
 pub fn search_query(query: &str) {
     let s = search();
+    if s.query != query {
+        // A keystroke drops whatever is in flight, as the sheet's own cleanup
+        // did: an answer to what was typed before is not an answer to what is
+        // typed now, and it would land on the rows under the new query.
+        s.submitted = None;
+        fetch_sync(CATEGORY, &[]);
+    }
     s.query = query.to_string();
     s.typed_at = now();
     if query.trim().is_empty() {
@@ -142,8 +149,13 @@ pub fn search_arrived(subject: &str, body: Option<&str>) {
     if !is_submitted(s, subject) {
         return;
     }
-    if !body.is_some_and(|body| parse_search(&mut s.results, body)) {
-        s.results.clear();
+    // No body at all is an empty answer; a body that does not parse leaves the
+    // rows alone (parse_search reads before it clears).
+    match body {
+        Some(body) => {
+            parse_search(&mut s.results, body);
+        }
+        None => s.results.clear(),
     }
     s.origin = s.near;
     s.loading = false;
@@ -183,7 +195,10 @@ impl fmt::Display for Distance {
             return write!(f, "{}m", m.round());
         }
         if m < 10000.0 {
-            return write!(f, "{:.1}km", m / 1000.0);
+            // Rounded half away from zero, which is what the sheet has always
+            // shown: Rust's own `{:.1}` takes a tie to even, and 1250 m would
+            // read as 1.2km where every earlier build said 1.3km.
+            return write!(f, "{:.1}km", (m / 100.0).round() / 10.0);
         }
         let km = (m / 1000.0).round() as u64;
         let (mut digits, mut len, mut v) = ([0u8; 20], 0, km);

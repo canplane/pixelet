@@ -921,7 +921,8 @@ fn save() {
     }
 }
 
-/// Saves if the pending save is due: the tick's.
+/// Saves if the pending save is due: the turn's, on the shell's heartbeat when
+/// nothing else asks for one.
 pub fn flush_save_if_due() {
     if store_state().save_due_ms.is_some_and(|due| now() >= due) {
         flush_save();

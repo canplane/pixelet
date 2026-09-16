@@ -28,9 +28,9 @@ use crate::kernel::kernel;
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 use crate::module::world::billboard::frustum_budget::billboard_dropped;
 use crate::module::world::chunk_node::{chunk_retention, RETAIN_BUDGET_BYTES};
-use crate::module::world::poi::poi_badge::{badge_atlas, poi_badge_build_stats, poi_badge_count};
-use crate::module::world::poi::poi_index::poi_index_stats;
-use crate::module::world::poi::poi_layer::poi_place_stats;
+use crate::module::world::poi::poi_badge::badge_atlas;
+use crate::module::world::poi::poi_index::PoiIndexStats;
+use crate::module::world::poi::poi_layer::PoiPlaceStats;
 
 const RECENT_TASKS: usize = 20;
 const MB: f64 = 1_048_576.0;
@@ -137,6 +137,7 @@ pub struct Counters {
     pub built_scans: f64,
     pub built_bakes: f64,
     pub built_starved: f64,
+    pub decor_dropped: f64,
     pub badge_metrics: f64,
     pub badge_builds: f64,
     pub badge_ms: f64,
@@ -161,6 +162,7 @@ impl Counters {
             built_scans: self.built_scans - b.built_scans,
             built_bakes: self.built_bakes - b.built_bakes,
             built_starved: self.built_starved - b.built_starved,
+            decor_dropped: self.decor_dropped - b.decor_dropped,
             badge_metrics: self.badge_metrics - b.badge_metrics,
             badge_builds: self.badge_builds - b.badge_builds,
             badge_ms: self.badge_ms - b.badge_ms,
@@ -177,7 +179,6 @@ fn counters() -> Counters {
     let st = k.sched.builder.stat;
     let c = k.sched.builder.bake_context().counters;
     let bands = k.volumes.as_ref().map_or([0; 2], |v| [v.stat.allocated, v.stat.reused]);
-    let badge = poi_badge_build_stats();
     let atlas = badge_atlas().stats();
     Counters {
         faces_kept: c.faces_kept as f64,
@@ -192,13 +193,14 @@ fn counters() -> Counters {
         built_scans: st.scans as f64,
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
-        badge_metrics: badge.metrics as f64,
-        badge_builds: badge.builds as f64,
-        badge_ms: badge.ms,
-        place_runs: poi_place_stats().runs as f64,
+        decor_dropped: k.sched.decor_dropped() as f64,
+        badge_metrics: 0.0,
+        badge_builds: 0.0,
+        badge_ms: 0.0,
+        place_runs: 0.0,
         atlas_repacks: atlas.repacks as f64,
         atlas_uploads: atlas.uploads as f64,
-        index_rebuilds: poi_index_stats().rebuilds as f64,
+        index_rebuilds: 0.0,
     }
 }
 
@@ -322,9 +324,9 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
     let last = &f.last;
     let c = window_counters();
     let atlas = badge_atlas().stats();
-    let index = poi_index_stats();
-    let place = poi_place_stats();
-    let badge_count = poi_badge_count();
+    let index = PoiIndexStats::default();
+    let place = PoiPlaceStats::default();
+    let badge_count = 0;
     let retain = chunk_retention();
     let bands = c.bands_reused + c.bands_allocated;
     let host = &log().host;
@@ -453,7 +455,14 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
         ),
         format!("  fetch   queued {} running {} of {}", counts.queued, counts.running, fetch_credits()),
         // The builds run in the kernel under the tick; what they did this window.
-        format!("  build   {} direct  {} scans  {} bakes  {} refused a block", c.built_direct, c.built_scans, c.built_bakes, c.built_starved),
+        format!(
+            "  build   {} direct  {} scans  {} bakes  {} refused a block{}",
+            c.built_direct,
+            c.built_scans,
+            c.built_bakes,
+            c.built_starved,
+            if c.decor_dropped > 0.0 { format!("   DECOR DROPPED {}", c.decor_dropped) } else { String::new() }
+        ),
         format!("  per     tick/bake {}ms   (workload-normalised; comparable across sessions)", f.tick_per_bake.map_or("-".to_string(), n1)),
         format!(
             "  rate    {} bakes/s  {} scans/s   while backlog {} bakes/s  {} scans/s over {}s",
@@ -465,12 +474,13 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
         ),
         format!("  bands   reused {} / {} ({}%)  ~1.31MB each; a miss borrows from the core pool", c.bands_reused, bands, share(c.bands_reused, bands)),
         format!(
-            "  retain  nodes {}  runsets {} ({}MB)  tiers {}  decor {} steps   kept on-screen {}MB, off-screen {} / {}MB budget",
+            "  retain  nodes {}  runsets {} ({}MB)  tiers {}  decor {} steps {} instances   kept on-screen {}MB, off-screen {} / {}MB budget",
             retain.nodes,
             retain.run_sets,
             retain.run_set_mb,
             retain.tiers,
             retain.decor_steps,
+            retain.decor_instances,
             (census.retained_on / MB).round(),
             (census.retained_off / MB).round(),
             (RETAIN_BUDGET_BYTES() / MB).round()

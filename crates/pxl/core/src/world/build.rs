@@ -18,7 +18,9 @@
 use std::collections::BTreeMap;
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
-/// three thousand, and the glue's own chunks come on top.
+/// three thousand, and the glue's own chunks come on top. The mount pass stops
+/// at it rather than trapping (`Scheduler::mount`), so `Scheduler::add`'s
+/// assert past it says the caller has a bug, not that the view grew.
 pub const MAX_CHUNKS: usize = 4096;
 
 use crate::bake::mesher::{mesh_words, BakeContext, Step};

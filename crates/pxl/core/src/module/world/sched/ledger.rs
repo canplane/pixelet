@@ -19,6 +19,8 @@
 use super::demand::{DemandKey, ErrorText, Phases};
 use super::tick::PHASES;
 use crate::global::{now, Global};
+use crate::kernel::kernel;
+use crate::memory::FIXED_POOL;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -236,6 +238,41 @@ fn land<T>(ring: &mut Vec<T>, cap: usize, head: &mut usize, rec: T) -> bool {
     true
 }
 
+/// The same over a lane of the fixed section holding `len` records.
+fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
+    if *len == ring.len() && *head > 0 {
+        drop_front(ring, len, core::mem::take(head));
+    }
+    if *len == ring.len() {
+        return false;
+    }
+    ring[*len] = rec;
+    *len += 1;
+    true
+}
+
+/// The first `n` of a lane's `len` records dropped, the rest moved to the front.
+fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
+    ring.copy_within(n..*len, 0);
+    *len -= n;
+}
+
+/// A lane of the fixed section for `cap` records, zeroed; none where there is
+/// no section (a native test), and then nothing is recorded into it. A minute
+/// of frame samples is megabytes, which the module heap is not for.
+fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
+    let bytes = cap * core::mem::size_of::<T>();
+    let Some(at) = kernel().pools.get_mut(FIXED_POOL as usize).and_then(|p| p.acquire(bytes as u32)) else { return &mut [] };
+    // SAFETY: a block of the fixed section this lane holds alone and never
+    // gives back, `bytes` long and aligned past a record's alignment; zeroed,
+    // which is a valid record for the plain numbers, flags and field-less
+    // enums the rings hold.
+    unsafe {
+        core::ptr::write_bytes(at as *mut u8, 0, bytes);
+        core::slice::from_raw_parts_mut(at as *mut T, cap)
+    }
+}
+
 /// Live consumer for records as they land — log.rs's console stream. One sink,
 /// not a list: the instrument has a single output mode at a time.
 #[derive(Clone, Copy, Default)]
@@ -291,9 +328,15 @@ pub struct RecordingState {
 }
 
 struct Ledger {
+    /// The tasks on the module heap: a record carries its key and its error
+    /// as strings.
     task_ring: Vec<TaskRecord>,
-    frame_ring: Vec<FrameSample>,
-    long_frame_ring: Vec<LongFrameRecord>,
+    /// The frames and the long frames in lanes of the fixed section, taken at
+    /// their first record, `*_len` of each in use.
+    frame_ring: &'static mut [FrameSample],
+    frame_len: usize,
+    long_frame_ring: &'static mut [LongFrameRecord],
+    long_frame_len: usize,
     /// Where each ring's live window starts: records before it are past the
     /// minute and wait for `trim` to drop them.
     task_head: usize,
@@ -316,8 +359,10 @@ static LEDGER: Global<Ledger> = Global::new();
 fn ledger() -> &'static mut Ledger {
     LEDGER.get(|| Ledger {
         task_ring: Vec::with_capacity(TASK_LIMIT),
-        frame_ring: Vec::with_capacity(FRAME_LIMIT),
-        long_frame_ring: Vec::with_capacity(LONG_FRAME_LIMIT),
+        frame_ring: &mut [],
+        frame_len: 0,
+        long_frame_ring: &mut [],
+        long_frame_len: 0,
         task_head: 0,
         frame_head: 0,
         long_frame_head: 0,
@@ -346,8 +391,8 @@ pub fn ledger_recording_state() -> RecordingState {
         recording: l.recording,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
         tasks: l.task_ring.len() - l.task_head,
-        frames: l.frame_ring.len() - l.frame_head,
-        long_frames: l.long_frame_ring.len() - l.long_frame_head,
+        frames: l.frame_len - l.frame_head,
+        long_frames: l.long_frame_len - l.long_frame_head,
         truncated: l.truncated,
     }
 }
@@ -356,8 +401,7 @@ pub fn ledger_recording_state() -> RecordingState {
 pub fn ledger_recording_start() {
     let l = ledger();
     l.task_ring.clear();
-    l.frame_ring.clear();
-    l.long_frame_ring.clear();
+    (l.frame_len, l.long_frame_len) = (0, 0);
     (l.task_head, l.frame_head, l.long_frame_head) = (0, 0, 0);
     l.worst_frames.clear();
     l.frame_peak = FramePeak::default();
@@ -415,7 +459,7 @@ pub fn ledger_record_frame(s: FrameSample) {
             at.min(worst.len()),
             WorstFrame {
                 sample: s,
-                prev: l.frame_ring.last().copied(),
+                prev: l.frame_ring[..l.frame_len].last().copied(),
             },
         );
     }
@@ -442,9 +486,12 @@ pub fn ledger_record_frame(s: FrameSample) {
     if let Some(frame) = l.sink.frame {
         frame(&s);
     }
-    let dropped = trim(l.frame_ring.as_slice(), &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
-    l.frame_ring.drain(..dropped);
-    if !land(&mut l.frame_ring, FRAME_LIMIT, &mut l.frame_head, s) {
+    if l.frame_ring.is_empty() {
+        l.frame_ring = fixed_lane(FRAME_LIMIT);
+    }
+    let dropped = trim(&l.frame_ring[..l.frame_len], &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
+    drop_front(l.frame_ring, &mut l.frame_len, dropped);
+    if !land_lane(l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
         l.truncated = true;
     }
 }
@@ -456,9 +503,12 @@ pub fn ledger_record_long_frame(rec: LongFrameRecord) {
     if !l.recording {
         return;
     }
-    let dropped = trim(l.long_frame_ring.as_slice(), &mut l.long_frame_head, rec.t - WINDOW_MS, |r| r.t);
-    l.long_frame_ring.drain(..dropped);
-    if !land(&mut l.long_frame_ring, LONG_FRAME_LIMIT, &mut l.long_frame_head, rec) {
+    if l.long_frame_ring.is_empty() {
+        l.long_frame_ring = fixed_lane(LONG_FRAME_LIMIT);
+    }
+    let dropped = trim(&l.long_frame_ring[..l.long_frame_len], &mut l.long_frame_head, rec.t - WINDOW_MS, |r| r.t);
+    drop_front(l.long_frame_ring, &mut l.long_frame_len, dropped);
+    if !land_lane(l.long_frame_ring, &mut l.long_frame_len, &mut l.long_frame_head, rec) {
         l.truncated = true;
         return;
     }
@@ -477,7 +527,8 @@ pub fn ledger_snapshot() -> &'static [TaskRecord] {
 /// which is only known once the rAF task's stack empties) can be written into
 /// the frame it belongs to instead of being attributed to the next one.
 pub fn ledger_last_frame() -> Option<&'static mut FrameSample> {
-    ledger().frame_ring.last_mut()
+    let l = ledger();
+    l.frame_ring[..l.frame_len].last_mut()
 }
 
 /// First index in a ring, ordered by `at`, whose record is at or after `t`.
@@ -489,7 +540,7 @@ fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
 /// it costs the tail it reads and not the whole recording.
 pub fn ledger_frames_since(t: f64) -> &'static [FrameSample] {
     let l = ledger();
-    let ring = &l.frame_ring.as_slice()[l.frame_head..];
+    let ring = &l.frame_ring[l.frame_head..l.frame_len];
     &ring[first_at(ring, t, |f| f.t)..]
 }
 
@@ -506,17 +557,17 @@ pub fn ledger_tasks_since(t: f64) -> &'static [TaskRecord] {
 /// short.
 pub fn ledger_long_frames_since(t: f64) -> Vec<LongFrameRecord> {
     let l = ledger();
-    l.long_frame_ring.as_slice()[l.long_frame_head..].iter().filter(|r| r.t >= t).copied().collect()
+    l.long_frame_ring[l.long_frame_head..l.long_frame_len].iter().filter(|r| r.t >= t).copied().collect()
 }
 
 /// The frame window, newest last.
 pub fn ledger_frames_snapshot() -> &'static [FrameSample] {
     let l = ledger();
-    &l.frame_ring.as_slice()[l.frame_head..]
+    &l.frame_ring[l.frame_head..l.frame_len]
 }
 
 /// The long-frame window, newest last.
 pub fn ledger_long_frames_snapshot() -> &'static [LongFrameRecord] {
     let l = ledger();
-    &l.long_frame_ring.as_slice()[l.long_frame_head..]
+    &l.long_frame_ring[l.long_frame_head..l.long_frame_len]
 }

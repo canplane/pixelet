@@ -98,14 +98,22 @@ pub fn decor_asset_step() {
     if s.load_revision == revision {
         return;
     }
-    s.load_revision = revision;
+    // A model the mesh pool had no room for, this turn. Nothing else will move
+    // the load revision on its behalf, so the revision is left unconsumed and
+    // the next turn — which may have room — asks again.
+    let mut refused = false;
     for b in 0..s.entries.len() {
         let bundle = s.entries[b].bundle;
         for (v, variant) in bundle.variants.iter().enumerate() {
             if s.entries[b].models[v].is_none() && !load_failed(&variant.model_url) {
-                if let Some(handle) = load_gltf(&variant.model_url).and_then(|gltf| register_model(&gltf, None)) {
-                    settle(&mut s.entries, &variant.model_url, handle.model, false);
-                    publish(s, &variant.model_url);
+                if let Some(gltf) = load_gltf(&variant.model_url) {
+                    match register_model(&gltf, None) {
+                        Some(handle) => {
+                            settle(&mut s.entries, &variant.model_url, handle.model, false);
+                            publish(s, &variant.model_url);
+                        }
+                        None => refused = true,
+                    }
                 }
             }
             if s.entries[b].skins[v].is_none() && !load_failed(&variant.skin_url) {
@@ -115,6 +123,9 @@ pub fn decor_asset_step() {
                 }
             }
         }
+    }
+    if !refused {
+        s.load_revision = revision;
     }
 }
 
