@@ -22,9 +22,7 @@ use pxl_shared::spec::fetch::FetchFail;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
 
 use crate::global::Global;
-use crate::kernel::kernel;
 use crate::lib::env::config::PUBLISHED_TILES;
-use crate::memory::MESH_POOL;
 use crate::module::map::ui::overlay::{search_modal, use_reverse_geocode};
 use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store};
@@ -67,8 +65,7 @@ impl fmt::Display for DemandUrl<'_> {
 /// its section has none.
 pub fn fetch_body(key: u64, bytes: u32) -> u32 {
     let Some(slot) = bodies().iter().position(|(_, b)| b.1 == 0) else { return 0 };
-    let Some(pool) = kernel().pools.get_mut(MESH_POOL as usize) else { return 0 };
-    let Some(at) = pool.acquire(bytes) else { return 0 };
+    let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return 0 };
     bodies()[slot] = (key, (at, bytes));
     at as u32
 }
@@ -84,8 +81,9 @@ fn take_body(key: u64, at: u32, bytes: u32) -> Option<Block> {
 }
 
 fn release(block: Option<Block>) {
-    if let (Some((at, bytes)), Some(pool)) = (block, kernel().pools.get_mut(MESH_POOL as usize)) {
-        pool.release(at, bytes);
+    if let Some((at, bytes)) = block {
+        // SAFETY: a body's block, given room by `fetch_body` and reported once.
+        unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
     }
 }
 
@@ -158,15 +156,7 @@ fn failed(category: Category, subject: u64, aborted: bool) {
 /// an older kernel reading a newer shell still counts the failure apart from
 /// the rest.
 fn fetch_fail_of(fail: u32) -> FetchFail {
-    const KNOWN: [FetchFail; 7] = [
-        FetchFail::Network,
-        FetchFail::Shell,
-        FetchFail::Status,
-        FetchFail::NoRoom,
-        FetchFail::Decode,
-        FetchFail::BadSubject,
-        FetchFail::BadCategory,
-    ];
+    const KNOWN: [FetchFail; 5] = [FetchFail::Network, FetchFail::Shell, FetchFail::Status, FetchFail::NoRoom, FetchFail::Decode];
     KNOWN.into_iter().find(|f| *f as u32 == fail).unwrap_or(FetchFail::Shell)
 }
 

@@ -54,11 +54,8 @@ pub struct DecorBlock {
 /// Hands a block back to the mesh section's pool. Every view into it is dead
 /// afterwards.
 pub fn release_block(at: usize, bytes: u32) {
-    let k = kernel();
-    if let Some(v) = k.volumes.as_ref() {
-        let pool = v.mesh_pool();
-        k.pools[pool].release(at, bytes);
-    }
+    // SAFETY: a block this chunk took and has not given back.
+    unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
 }
 
 /// How much built work chunks may keep *while off screen*: run sets and cached
@@ -73,7 +70,7 @@ pub fn release_block(at: usize, bytes: u32) {
 /// and refused the fine tiers' blocks 88,000 times in a minute (2026-09-14).
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::memory::map().map_or(0.0, |m| (m.mesh.bytes / 2) as f64)
+    crate::memory::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
 }
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----

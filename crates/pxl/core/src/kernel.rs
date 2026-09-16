@@ -13,7 +13,6 @@ use crate::bake::terrain::{ChunkSample, Materials};
 use crate::bake::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
 use crate::global::Global;
 use crate::world::object::{Painter, Store};
-use crate::world::pool::Pool;
 use crate::world::raycast::Raycast;
 use crate::world::sched::Scheduler;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
@@ -44,9 +43,6 @@ pub struct Kernel {
     pub scan: ScanContext,
     /// The open scan's band table: its address, and how many bands.
     pub bands: (usize, u32),
-    /// The pools over the memory's sections, made at boot, by section
-    /// (crate::memory's FIXED_POOL, MESH_POOL). The terrain slab has none.
-    pub pools: Vec<Pool>,
     /// The volumes over the fixed and mesh pools, made at boot.
     pub volumes: Option<Volumes>,
     /// The open scan's bands, when it reads a volume of the module's.
@@ -79,7 +75,6 @@ impl Kernel {
             result: [0; 9],
             scan: ScanContext::new(),
             bands: (0, 0),
-            pools: Vec::new(),
             volumes: None,
             scan_rows: Vec::new(),
             terrain: Materials::default(),
@@ -133,7 +128,6 @@ pub fn with_world<R>(f: impl FnOnce(&mut crate::world::build::World, &mut crate:
     let volumes = k.volumes.as_mut()?;
     let mut world = crate::world::build::World {
         volumes,
-        pools: &mut k.pools,
         materials: &k.terrain,
         store: &k.objects,
         painter: &mut k.painter,

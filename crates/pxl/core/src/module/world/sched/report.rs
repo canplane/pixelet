@@ -12,9 +12,10 @@
 use core::fmt::{self, Write};
 
 use super::ledger::{
-    ledger_frame_peak, ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames, FrameSample, LongFrameRecord, LongFrameSource, TaskRecord,
+    ledger_frame_peak, ledger_frames_since, ledger_frames_snapshot, ledger_long_frames_since, ledger_long_frames_snapshot, ledger_recording_state, ledger_snapshot, ledger_tasks_since,
+    ledger_worst_frames, FrameSample, LongFrameRecord, LongFrameSource, TaskRecord,
 };
-use super::log::window_counters;
+use super::log::{take_log_records, window_counters};
 use super::summary::{summarize_frames, summarize_tasks, FrameSummary, Spread, TaskSummary};
 use crate::global::now;
 use crate::kernel::kernel;
@@ -250,6 +251,119 @@ fn frames_summary<W: Write>(out: &mut W, f: &FrameSummary) -> fmt::Result {
     out.write_str("],\"last\":")?;
     frame(out, &f.last)?;
     out.write_char('}')
+}
+
+/// The gauge panel's numbers, over the last `window_ms` rather than the whole
+/// recording.
+///
+/// The window is the point of this being its own document. The panel repaints
+/// twice a second, and folding every frame since load on each repaint grew
+/// into a sixty-millisecond task two minutes in — the panel became the stall
+/// it was drawing. The report still covers the whole window; this covers what
+/// a person watching is actually looking at.
+pub fn ledger_gauge_json(window_ms: f64) -> String {
+    let mut out = String::new();
+    let _ = gauge(&mut out, window_ms);
+    out
+}
+
+fn gauge<W: Write>(out: &mut W, window_ms: f64) -> fmt::Result {
+    let since = now() - window_ms;
+    let rec = ledger_recording_state();
+    let c = window_counters();
+    let atlas = badge_atlas().stats();
+    // As report(): POI is off until its index lives with its pages, and the
+    // panel keeps its rows rather than losing the place they come back to.
+    let index = PoiIndexStats::default();
+    let place = PoiPlaceStats::default();
+
+    write!(
+        out,
+        "{{\"rec\":{{\"recording\":{},\"elapsed_ms\":{},\"tasks\":{},\"frames\":{},\"long_frames\":{},\"truncated\":{}}},",
+        rec.recording,
+        N(rec.elapsed_ms),
+        rec.tasks,
+        rec.frames,
+        rec.long_frames,
+        rec.truncated
+    )?;
+
+    out.write_str("\"frames\":")?;
+    match summarize_frames(ledger_frames_since(since)) {
+        Some(f) => frames_summary(out, &f)?,
+        None => out.write_str("null")?,
+    }
+
+    out.write_str(",\"tasks\":[")?;
+    for (i, t) in summarize_tasks(ledger_tasks_since(since)).iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        summary(out, t)?;
+    }
+
+    write!(out, "],\"faces\":[{},{}],", N(c.faces_kept), N(c.faces_possible))?;
+    write!(
+        out,
+        "\"atlas\":{{\"size\":{},\"entries\":{},\"shelves\":{},\"used_px\":{}}},",
+        atlas.size, atlas.entries, atlas.shelves, atlas.used_px
+    )?;
+    write!(
+        out,
+        "\"poi\":{{\"ms\":{},\"frames\":{},\"max_frames\":{},\"hits\":{},\"candidates\":{},\"kept\":{},\"indexed\":{},\"dropped\":{}}},",
+        N(place.ms),
+        place.frames,
+        place.max_frames,
+        place.hits,
+        place.candidates,
+        place.kept,
+        index.indexed,
+        index.dropped
+    )?;
+
+    out.write_str("\"longs\":[")?;
+    for (i, l) in ledger_long_frames_since(since).iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        long_frame(out, l)?;
+    }
+    out.write_str("]}")
+}
+
+/// What the live stream kept since the shell last came for it, as the same
+/// records the report carries — so the shell's formatters draw a streamed task
+/// and a reported one with the one piece of code (ledger_report.ts).
+pub fn ledger_log_json() -> String {
+    let (tasks, frames, longs) = take_log_records();
+    let mut out = String::new();
+    let _ = log_records(&mut out, &tasks, &frames, &longs);
+    out
+}
+
+fn log_records<W: Write>(out: &mut W, tasks: &[TaskRecord], frames: &[FrameSample], longs: &[LongFrameRecord]) -> fmt::Result {
+    out.write_str("{\"tasks\":[")?;
+    for (i, r) in tasks.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        task(out, r)?;
+    }
+    out.write_str("],\"frames\":[")?;
+    for (i, f) in frames.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        frame(out, f)?;
+    }
+    out.write_str("],\"longs\":[")?;
+    for (i, l) in longs.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        long_frame(out, l)?;
+    }
+    out.write_str("]}")
 }
 
 /// The whole instrument as one document of numbers, for the shell to read.

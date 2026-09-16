@@ -32,7 +32,6 @@ use crate::bake::terrain::{ChunkSample, Materials, PageView, CHANNELS, ELE_PADDE
 use crate::bake::volume::Volumes;
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use crate::world::object::{Carve, Painter, Store};
-use crate::world::pool::Pool;
 
 /// What the glue is told.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,7 +127,6 @@ enum Progress {
 /// Everything a build reads and writes that is not its own.
 pub struct World<'a> {
     pub volumes: &'a mut Volumes,
-    pub pools: &'a mut [Pool],
     pub materials: &'a Materials,
     pub store: &'a Store,
     pub painter: &'a mut Painter,
@@ -269,7 +267,7 @@ impl Builder {
         c.want = want;
         let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.step));
         if stale {
-            self.abort_bake(world);
+            self.abort_bake();
         }
         if want == [0, 0] {
             self.abort_scan_of(world, id);
@@ -284,11 +282,12 @@ impl Builder {
     fn drop_work(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(Event)) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake(world);
+            self.abort_bake();
         }
         if let Some(c) = self.chunks.get_mut(&id) {
             if let Some(r) = c.runs.take() {
-                world.pools[world.volumes.mesh_pool()].release(r.at, r.bytes);
+                // SAFETY: a block this build took and has not given back.
+                unsafe { crate::bake::volume::give_bytes(r.at, r.bytes as usize) };
                 emit(Event::Runs { id, bytes: 0 });
             }
         }
@@ -297,7 +296,7 @@ impl Builder {
     fn abort_scan_of(&mut self, world: &mut World, id: u32) {
         if let Some(job) = self.scan_job.take_if(|j| j.id == id) {
             self.scan.abort();
-            world.volumes.release(world.pools, job.volume);
+            world.volumes.release(job.volume);
         }
     }
 
@@ -308,19 +307,20 @@ impl Builder {
         self.stat.starved += 1;
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake(world);
+            self.abort_bake();
         }
-        let releases = world.pools[world.volumes.mesh_pool()].releases;
+        let releases = crate::host::heap_releases();
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
     }
 
-    fn abort_bake(&mut self, world: &mut World) {
+    fn abort_bake(&mut self) {
         if let Some(job) = self.bake_job.take() {
             self.bake.abort();
             if let Some((at, bytes)) = job.mesh {
-                world.pools[world.volumes.mesh_pool()].release(at, bytes);
+                // SAFETY: a block this build took and has not given back.
+                unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
             }
         }
     }
@@ -385,7 +385,7 @@ impl Builder {
         if c.wanted().next().is_none() {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].releases) {
+        if c.refused.is_some_and(|r| r == crate::host::heap_releases()) {
             return Progress::Blocked;
         }
         if c.runs.is_none() {
@@ -434,8 +434,7 @@ impl Builder {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => unreachable!("a scan is finished when its set is provided"),
             ScanStep::NeedSet(bytes) => {
-                let pool = world.volumes.mesh_pool();
-                let Some(at) = world.pools[pool].acquire(bytes) else {
+                let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
@@ -443,7 +442,7 @@ impl Builder {
                 unsafe { self.scan.provide_set(world.volumes.mem().add(at), bytes) };
                 let count = self.scan.finish();
                 let job = self.scan_job.take().unwrap();
-                world.volumes.release(world.pools, job.volume);
+                world.volumes.release(job.volume);
                 self.stat.scans += 1;
                 self.keep_runs(id, Runs { at, bytes, count, direct: false }, emit);
                 Progress::Busy
@@ -482,14 +481,14 @@ impl Builder {
         let view = unsafe { Self::page_view(world, page) };
         self.sample.read(&view, world.materials, tx0, ty0, show);
         let volume = world.volumes.open();
-        let mut ok = self.sample.paint(world.volumes, world.pools, volume);
+        let mut ok = self.sample.paint(world.volumes, volume);
         if ok {
             let hide = self.hide.filter(|h| edits && h.0 == col_idx).map(|h| (h.1, h.2));
             let carve = self.carve.filter(|c| edits && c.0 == col_idx).map(|c| c.1);
-            ok = !world.painter.paint(world.store, world.volumes, world.pools, volume, col_idx, hide, carve).refused;
+            ok = !world.painter.paint(world.store, world.volumes, volume, col_idx, hide, carve).refused;
         }
         if !ok {
-            world.volumes.release(world.pools, volume);
+            world.volumes.release(volume);
             return None;
         }
         world.volumes.seal(volume);
@@ -513,8 +512,7 @@ impl Builder {
             }
         }
         let bytes = self.direct.close_direct();
-        let pool = world.volumes.mesh_pool();
-        let Some(at) = world.pools[pool].acquire(bytes) else {
+        let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
             self.direct.abort();
             self.refuse(world, id);
             return Progress::Blocked;
@@ -555,11 +553,10 @@ impl Builder {
                 mesh: None,
             });
         }
-        let pool = world.volumes.mesh_pool();
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                let Some(at) = world.pools[pool].acquire(words * 4) else {
+                let Some(at) = crate::bake::volume::take_bytes(words as usize * 4) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
@@ -591,7 +588,8 @@ impl Builder {
                 // among (2026-09-14). A scan's runs stay: those cost the scan.
                 if c.wanted().next().is_none() {
                     if let Some(r) = c.runs.take_if(|r| r.direct) {
-                        world.pools[pool].release(r.at, r.bytes);
+                        // SAFETY: a block this build took and has not given back.
+                        unsafe { crate::bake::volume::give_bytes(r.at, r.bytes as usize) };
                         emit(Event::Runs { id, bytes: 0 });
                     }
                 }

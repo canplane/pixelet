@@ -106,19 +106,16 @@ fn work_sample(c: &mut CoreTick) -> WorkSample {
     sample
 }
 
-/// The core pools' gauges and their cumulative counters.
+/// The heap's gauges. One allocator now, so `idle` is what the range has not
+/// been reached into rather than what a pool is holding back, and there are no
+/// hits and misses to count — a request is served or it is refused.
 fn pool_sample() -> PoolSample {
-    let mut out = PoolSample::default();
-    for pool in &kernel().pools {
-        let s = pool.stat();
-        out.live_mb += s.live_bytes as f64;
-        out.idle_mb += s.idle_bytes as f64;
-        out.hits += s.hits as f64;
-        out.misses += s.misses as f64;
+    let live = crate::host::heap_live() as f64;
+    PoolSample {
+        live_mb: (live / MB).round(),
+        idle_mb: ((crate::host::heap_bytes() as f64 - live) / MB).round(),
+        ..PoolSample::default()
     }
-    out.live_mb = (out.live_mb / MB).round();
-    out.idle_mb = (out.idle_mb / MB).round();
-    out
 }
 
 /// The visible phase's step: the frame, the scheduler's pass over every chunk,

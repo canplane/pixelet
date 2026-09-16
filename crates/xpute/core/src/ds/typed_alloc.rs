@@ -14,12 +14,8 @@
 //! changing meaning. `HEAP_ALLOC` is `new Ctor(n)` itself and the default
 //! everywhere, so nothing moves until a caller hands in another.
 
-use core::cell::RefCell;
-use std::rc::Rc;
-
 use crate::kit::array::{AnyElement, ArrayBuffer, ArrayBufferView, Kind, TypedArray};
 
-use super::buddy::BuddyAllocator;
 
 pub trait TypedAlloc {
     /// A zeroed view of `length` elements of `kind`: `take` with the
@@ -41,24 +37,6 @@ pub trait TypedAlloc {
     fn give(&mut self, view: &ArrayBufferView);
 }
 
-/// An allocator whose storage can also be named by a number. A lane holds the
-/// handle and a view is made from it when needed — so a record is numbers
-/// only, and the view it was using can be dropped and made again.
-pub trait AddressedAlloc: TypedAlloc {
-    /// The handle of the storage a view `take` returned sits over.
-    fn handle_of(&self, view: &ArrayBufferView) -> u32;
-    /// A view of `length` elements over the storage `handle` names, as a
-    /// view of `kind`; `view_of` types it.
-    fn view_of_kind(&self, kind: Kind, handle: u32, length: u32) -> ArrayBufferView;
-    /// A view of `length` elements over the storage `handle` names.
-    fn view_of<T: AnyElement>(&self, handle: u32, length: u32) -> TypedArray<T>
-    where
-        Self: Sized,
-    {
-        TypedArray::of(&self.view_of_kind(T::KIND, handle, length)).expect("view_of_kind gave a view of another element")
-    }
-}
-
 /// `new ctor(length)` itself.
 #[derive(Clone, Copy, Default)]
 pub struct HeapAlloc;
@@ -77,58 +55,6 @@ impl TypedAlloc for HeapAlloc {
 }
 
 pub const HEAP_ALLOC: HeapAlloc = HeapAlloc;
-
-/// The allocator `buddy_alloc` makes: it holds the pool with whoever else
-/// does, as the TypeScript closure holds it.
-struct BuddyAlloc {
-    pool: Rc<RefCell<BuddyAllocator>>,
-}
-
-impl TypedAlloc for BuddyAlloc {
-    fn take_view(&mut self, kind: Kind, length: u32) -> ArrayBufferView {
-        let bytes = length * kind.bytes_per_element() as u32;
-        let block = self.pool.borrow_mut().acquire(bytes).expect("pool: acquire refused");
-        // A pool block keeps its last borrower's bytes. Zeroed through a byte
-        // view because `fill(0)` throws on the BigInt arrays.
-        TypedArray::<u8>::over(block.buf.clone(), block.byte_offset as usize, bytes as usize).fill(0);
-        ArrayBufferView {
-            buffer: block.buf,
-            byte_offset: block.byte_offset as usize,
-            byte_length: bytes as usize,
-            kind,
-        }
-    }
-
-    fn give(&mut self, view: &ArrayBufferView) {
-        self.pool.borrow_mut().release_at(&view.buffer, view.byte_offset as u32, view.byte_length as u32);
-    }
-}
-
-impl AddressedAlloc for BuddyAlloc {
-    fn handle_of(&self, view: &ArrayBufferView) -> u32 {
-        self.pool.borrow().handle_at(&view.buffer, view.byte_offset as u32, view.byte_length as u32).expect("pool: no handle")
-    }
-
-    fn view_of_kind(&self, kind: Kind, handle: u32, length: u32) -> ArrayBufferView {
-        let (buf, byte_offset) = self.pool.borrow().handle_base(handle);
-        ArrayBufferView {
-            buffer: buf,
-            byte_offset: byte_offset as usize,
-            byte_length: length as usize * kind.bytes_per_element(),
-            kind,
-        }
-    }
-}
-
-/// Views carved from a buddy pool, one block each.
-///
-/// Given back by address rather than by identity: `give` frees whatever block
-/// a view sits over, so a view made again from a handle frees the same block
-/// the original would have. A view's own byte length is the size it was
-/// taken at, which is how the pool recovers the block's order.
-pub fn buddy_alloc(pool: Rc<RefCell<BuddyAllocator>>) -> impl AddressedAlloc {
-    BuddyAlloc { pool }
-}
 
 /// Consecutive typed views over one block, cut in call order from
 /// `byte_offset` on — the shape every "several spans, one allocation"

@@ -1,12 +1,8 @@
 // xpute_core/ds/map.test.rs
 
-use core::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use super::*;
-use crate::ds::buddy::{BuddyAllocator, BuddyOptions};
-use crate::ds::typed_alloc::buddy_alloc;
 
 #[test]
 fn indexedmap_positions_are_dense_and_stable_until_a_removal() {
@@ -36,18 +32,7 @@ fn agrees_with_map<T: KeyTraits>(traits: T, make: impl Fn(u32) -> T::Key)
 where
     T::Key: std::hash::Hash + Eq,
 {
-    let pool = Rc::new(RefCell::new(
-        BuddyAllocator::new(BuddyOptions {
-            min_block_bytes: Some(1 << 12),
-            region_bytes: Some(1 << 20),
-            max_idle_regions: Some(1),
-            poison: Some(false),
-            bypass: Some(false),
-            ..Default::default()
-        })
-        .unwrap(),
-    ));
-    let mut m = IndexedMap::new(traits, 2, Some(Box::new(buddy_alloc(pool))));
+    let mut m = IndexedMap::new(traits, 2, None);
     let mut r: HashMap<T::Key, u32> = HashMap::new();
     let mut live: Vec<T::Key> = Vec::new();
     let mut seed: u32 = 12345;

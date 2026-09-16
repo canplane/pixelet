@@ -88,7 +88,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
     }
 
     with_world(|world, sched| {
-        let (model, block) = sched.models.new_model(world, vertex_cnt, index_cnt, joint_cnt)?;
+        let (model, block) = sched.models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
         let mem = world.volumes.mem();
         let n = (vertex_cnt * 16 + index_cnt) as usize;
         // SAFETY: the model's block is `n` words in the volumes' memory, ours

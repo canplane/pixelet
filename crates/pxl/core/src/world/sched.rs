@@ -247,7 +247,7 @@ struct Slot {
     desired: (u32, u32),
     /// The last blend told, so an unchanged one is not resent.
     told: Option<(f32, f32, bool)>,
-    /// The mesh pool's release count when its decor was last refused a
+    /// The heap's release count when its decor was last refused a
     /// block: not committed again until a block is given back.
     refused: Option<u32>,
 }
@@ -635,7 +635,7 @@ impl Scheduler {
     }
 
     /// Whether the glue holds the decor of every tier in `steps`, building
-    /// and handing over what it lacks: false when the pool refused a block.
+    /// and handing over what it lacks: false when the heap refused a block.
     /// A chunk with no page has no decor to build.
     fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], emit: &mut impl FnMut(Event)) -> bool {
         let id = self.slots[i].id;
@@ -644,12 +644,11 @@ impl Scheduler {
         let (col_x, col_y) = (ivec::X(base), ivec::Y(base));
         let page_idx = ivec::gather(col_x >> PAGE_SHAMT, col_y >> PAGE_SHAMT, 0);
         let mut sampled = false;
-        let pool = world.volumes.mesh_pool();
         if self.decor_scratch.is_none() {
-            self.decor_scratch = DecorScratch::new(&mut world.pools[pool]);
+            self.decor_scratch = DecorScratch::new();
             if self.decor_scratch.is_none() {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(world.pools[pool].releases);
+                self.slots[i].refused = Some(crate::host::heap_releases());
                 return false;
             }
         }
@@ -686,9 +685,9 @@ impl Scheduler {
             let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
             let a = crate::probe::add(18, a);
-            let Some(at) = world.pools[pool].acquire(bytes) else {
+            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(world.pools[pool].releases);
+                self.slots[i].refused = Some(crate::host::heap_releases());
                 return false;
             };
             // SAFETY: a block of the bytes the build asked for, the glue's
@@ -1278,7 +1277,7 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
-        if s.refused.is_some_and(|r| r == world.pools[world.volumes.mesh_pool()].releases) {
+        if s.refused.is_some_and(|r| r == crate::host::heap_releases()) {
             return false;
         }
         let a = crate::probe::mark();
@@ -1411,10 +1410,9 @@ impl Scheduler {
     }
 }
 
-/// Whether the mesh section is live past MESH_PRESSURE.
-fn mesh_pressed(world: &World) -> bool {
-    let p = &world.pools[world.volumes.mesh_pool()];
-    p.stat().live_bytes as f64 > p.range_bytes() as f64 * MESH_PRESSURE
+/// Whether the heap is live past MESH_PRESSURE.
+fn mesh_pressed(_world: &World) -> bool {
+    crate::host::heap_live() as f64 > crate::host::heap_bytes() as f64 * MESH_PRESSURE
 }
 
 /// Ids the module gives the chunks it mounts, apart from any the glue adds.

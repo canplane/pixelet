@@ -1,5 +1,4 @@
 {
-  "crates/xpute/core/src/ds/fixed_heap.rs": "The module's own heap (a GlobalAlloc over a fixed range): JavaScript has a garbage collector, a WebAssembly module has this. No TypeScript to mirror.",
   "crates/xpute/core/src/kit/fdlibm.rs": "JavaScript's Math builtins, as FreeBSD msun computes them, so a result is the same bits on every toolchain: the pair of a runtime global, not of a file.",
   "crates/xpute/core/src/kit/json.rs": "JSON.stringify and JSON.parse of a flat string map, the host's JSON for the records' tags, and JSON read where it lies for a module with no heap: the pair of a runtime global, not of a file.",
   "crates/xpute/core/src/sys/console.rs": "JavaScript's console global; the host installs one.",
@@ -17,5 +16,7 @@
   "packages/xpute/core/src/kit/hash.ts#sha256_hex": "WebCrypto's digest: the host's.",
   "crates/xpute/core/src/vector.rs": "The vectors' reader, test-only; its writer is script/pair.ts, not a file of the kit.",
   "packages/xpute/core/src/sys/memory.ts#reserve_memory": "The central scheduler's reservation of a WebAssembly.Memory: the host's. The module is given its memory and lays out what is inside it.",
-  "packages/xpute/core/src/sys/slab.ts": "The central scheduler's little memory: ArrayBuffers moved between the host's threads by transfer. The host's; the module never holds one."
+  "packages/xpute/core/src/sys/slab.ts": "The central scheduler's little memory: ArrayBuffers moved between the host's threads by transfer. The host's; the module never holds one.",
+  "crates/xpute/core/src/ds/buddy_tree.rs": "evanw/buddy-malloc in Rust: a buddy over one fixed range as a linearized binary tree, with the growth and the per-allocation header taken out. The pair of a C file, not of a TypeScript one — the host has no use for it, since the range it manages is the module's own memory.",
+  "crates/xpute/core/src/ds/slab.rs": "Size classes over ds/buddy_tree.rs, the pair of a level Linux keeps in the kernel: the module's own `#[global_allocator]`, over the one linear memory it was given. The host allocates with `new`, so there is nothing here for it."
 }
