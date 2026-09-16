@@ -1,6 +1,7 @@
 // pxl_core/memory.test.rs
 
 use super::*;
+use crate::module::world::terrain::fixed::TERRAIN_BYTES;
 
 /// The fewest regions a map can be cut from: the module's front and the fixed
 /// ranges run into the fifth, and the heap needs one past it.
