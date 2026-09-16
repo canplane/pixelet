@@ -154,8 +154,11 @@ when its fix lands.
 - **B9** `log.rs:238-245` sets the baseline at first use; the first report
   prints window counters as 0. `log.ts:124` set it at load.
 - **B10** `log.rs`'s retain line drops `decor_instances` (`log.ts:250`).
-- **B11** `category.rs`'s terrain note drops its mobile bottleneck
-  sentence.
+- **B11** ~~`category.rs`'s terrain note drops its mobile bottleneck
+  sentence.~~ **Kept as it is**: the sentence says bottleneck A hangs off
+  `set_tile` inside React's commit and shows up as `chunk_stage`'s
+  `commit_ms`. The kernel has no commit and no `chunk_stage`, so the note
+  keeps what a reader can still act on.
 - **B12** `error_reason`: `_` is a word boundary, and 80 characters are
   counted as chars rather than UTF-16 units.
 - **B13** `camera/input.rs:116,330-333` pairs the two lowest pointer ids;
@@ -210,8 +213,11 @@ when its fix lands.
 - **B28** An MSAA change keeps the device and rebuilds the pipelines
   (`renderer.rs:573-585,927-929`); `stage.tsx:139-165` made a new
   renderer.
-- **B29** `world.rs:90` shows the debug gizmos where `APP_ENV()` is not
-  production; `world.tsx:97` where `__IS_DEV__`.
+- **B29** ~~`world.rs:90` shows the debug gizmos where `APP_ENV()` is not
+  production; `world.tsx:97` where `__IS_DEV__`.~~ **Kept as it is**: the
+  kernel has no bundler flag to read — `APP_ENV` is what the shell's build
+  info hands it — and the gizmos also wait on `show_debug_objects`, which is
+  off until someone turns it on.
 
 ## X. xpute has it
 

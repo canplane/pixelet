@@ -57,11 +57,6 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
     rgb(lane, t.sky.horizon);
     rgb(lane, t.directional.color);
     rgb(lane, t.ambient.color);
-    let tail_ambient = [t.ambient.intensity];
-    let mid = k;
-    let _ = mid;
-    let mut values: Vec<f64> = Vec::with_capacity(THEME_FLOATS);
-    values.extend(tail_ambient);
     // The rest, in order: the hemisphere's sky and ground and intensity, the
     // directional colour and intensity, the night flag, the fog's range and the
     // light floor.
