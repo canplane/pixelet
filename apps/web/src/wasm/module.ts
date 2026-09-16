@@ -7,9 +7,9 @@
  * read them through the same URL.
  *
  * The module imports its memory: the central scheduler gives it one
- * (core_memory.ts), and booting the module lays out everything inside it —
+ * (core_mem.ts), and booting the module lays out everything inside it —
  * the sections, their pools, the rings — as the kernel's map says
- * (crates/pxl/core/src/memory.rs).
+ * (crates/pxl/core/src/mem.rs).
  *
  * One instance per memory: instantiating writes the module's data segments
  * over the front of it, so a second instance over the same memory would

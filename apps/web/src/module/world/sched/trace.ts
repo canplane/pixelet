@@ -17,7 +17,7 @@
  * reads.
  */
 
-import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { bytes_at, range_at } from "@/wasm/module.ts";
 
 export function ledger_trace_download(): void {

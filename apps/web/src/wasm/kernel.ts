@@ -39,7 +39,7 @@ import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
-import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { acquire_device, bind_surface, register_image, unbind_surface } from "@/wasm/gpu.ts";
 import { boot_block, quantum_policy, text_at } from "@/wasm/module.ts";
 

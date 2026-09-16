@@ -1,16 +1,16 @@
-// @pxl/web/wasm/core_memory.ts
+// @pxl/web/wasm/core_mem.ts
 
 /**
  * The central scheduler's big memory, and the kernel booted over it.
  *
  * How much memory the kernel gets is the central scheduler's: one fixed
  * `WebAssembly.Memory`, reserved and handed to the module
- * (@xpute/core/sys/memory.ts). A reservation is committed lazily, so it is
+ * (@xpute/core/sys/mem.ts). A reservation is committed lazily, so it is
  * sized for the peak; JavaScriptCore nonetheless reports the whole of it as
  * the page's JavaScript memory (a Safari heap timeline read it as one
  * ArrayBuffer), which is why a phone gets half.
  *
- * What is where inside it is the kernel's alone (crates/pxl/core/src/memory.rs):
+ * What is where inside it is the kernel's alone (crates/pxl/core/src/mem.rs):
  * the rings sit at addresses its build.rs fixed, the fixed ranges follow
  * whatever the linker placed, and the heap is everything past them. The shell
  * holds no picture of any of it — a block is an address and a length the
@@ -18,16 +18,16 @@
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { reserve_memory } from "@xpute/core/sys/memory.ts";
+import { reserve_memory } from "@xpute/core/sys/mem.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/wasm/memory_spec.ts";
+import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/wasm/mem_spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/wasm/module.ts";
 import { CoreRing } from "@/wasm/core_ring.ts";
 
 export { REGION_BYTES };
 
 /** The memory the kernel is reserved: a gibibyte on the desktop, half of one
- * on a phone. Both are memory.json's, the same file the kernel's map and the
+ * on a phone. Both are mem.json's, the same file the kernel's map and the
  * module's linker flags read, so there is no second place to keep them true.
  *
  * There is no smaller reservation to fall back to. The terrain a load radius

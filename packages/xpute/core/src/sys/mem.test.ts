@@ -1,8 +1,8 @@
-// @xpute/core/sys/memory.test.ts
+// @xpute/core/sys/mem.test.ts
 
 import { assert, assertEquals } from "@std/assert";
 
-import { align_up, nth_at, type Section, SECTION_WORDS, span_of, read_section, write_section } from "./memory.ts";
+import { align_up, nth_at, type Section, SECTION_WORDS, span_of, read_section, write_section } from "./mem.ts";
 
 const PAGE = 1 << 12;
 

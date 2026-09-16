@@ -20,8 +20,8 @@ use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WOR
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use pxl_core::kernel::{kernel, reindex_object, Kernel};
 use pxl_core::global::Global;
-use pxl_core::memory;
-use xpute_core::sys::memory::{write_section, SECTION_WORDS};
+use pxl_core::mem;
+use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind};
@@ -68,7 +68,7 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
         // A pure function of the linker's answer and the map's constants, with
         // no state and no order to be in: the first block is asked for long
         // before anything has laid the memory out.
-        memory::heap_at(data_end()) as usize
+        mem::heap_at(data_end()) as usize
     }
     fn end() -> usize {
         core::arch::wasm32::memory_size(0) * (1 << 16)
@@ -109,7 +109,7 @@ const SPILL: u32 = 2;
 
 const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
 const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
-const _: () = assert!(RING_SLOT_BYTES == memory::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
+const _: () = assert!(RING_SLOT_BYTES == mem::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
 
 /// The whole memory as one buffer, which is what a ring's two areas are cut
 /// from: the descriptors near the bottom and the slots' payloads past them, at
@@ -159,7 +159,7 @@ fn state() -> &'static mut State {
             // the trap.
             unsafe { host_panic(text.as_ptr(), text.len()) };
         }));
-        memory::map().unwrap_or_else(lay_out);
+        mem::map().unwrap_or_else(lay_out);
         State {
             sq: new_ring(SQ),
             outbox: Outbox {
@@ -269,7 +269,7 @@ const BOOT_QUANTUM: usize = 9;
 #[no_mangle]
 pub extern "C" fn boot() -> *const u32 {
     install_host();
-    let map = memory::map().unwrap_or_else(lay_out);
+    let map = mem::map().unwrap_or_else(lay_out);
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
@@ -291,12 +291,12 @@ pub extern "C" fn boot() -> *const u32 {
 /// their contents' own affair; the heap is the one allocator and it knows its
 /// range without being told (`buddy_tree`'s `Range`), so laying out is
 /// recording what the map says and opening the volumes over it.
-fn lay_out() -> memory::Map {
+fn lay_out() -> mem::Map {
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
-    let map = memory::lay_out(given.min(u32::MAX as u64) as u32, data_end());
+    let map = mem::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
     kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
-    memory::set_map(map);
+    mem::set_map(map);
     map
 }
 

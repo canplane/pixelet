@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 
 import { BOUND, fail_text, type FrameSummary, type LongFrame, n1, type Spread, type TaskSummary, tris } from "./ledger_report.ts";
 import { loaf_supported } from "./long_frame.ts";
-import { CORE_KERNEL, CORE_MEMORY } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL, CORE_MEMORY } from "@/wasm/core_mem.ts";
 import { range_at, text_at } from "@/wasm/module.ts";
 
 /** How often the panel repaints. */

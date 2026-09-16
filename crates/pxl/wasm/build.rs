@@ -1,6 +1,6 @@
 // The module imports its memory: the central scheduler gives it one
-// (@xpute/core/sys/memory.ts's reserve_memory), and the kernel lays out
-// everything inside it (pxl_core::memory, over xpute_core::sys::memory).
+// (@xpute/core/sys/mem.ts's reserve_memory), and the kernel lays out
+// everything inside it (pxl_core::mem, over xpute_core::sys::mem).
 //
 // What is below is the front of that memory, and it is here rather than in the
 // source because half of it is linker flags. The rings sit at addresses both
@@ -10,14 +10,14 @@
 // and the addresses the code uses, or the two drift apart silently and the
 // linker writes `.data` over a ring.
 //
-// The numbers themselves are not decided here either. They are memory.json's,
+// The numbers themselves are not decided here either. They are mem.json's,
 // the same file the map and the shell read, included below rather than copied
-// (script/spec.ts writes memory_spec.rs; `deno task check:spec` fails where
+// (script/spec.ts writes mem_spec.rs; `deno task check:spec` fails where
 // what is on disk is not what the JSON writes).
 
 use std::io::Write;
 
-#[path = "../core/src/memory_spec.rs"]
+#[path = "../core/src/mem_spec.rs"]
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PAGE_BYTES, PHONE_BYTES, RING_CAPACITY, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES};
@@ -66,14 +66,14 @@ fn main() {
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
     println!("cargo:rustc-link-arg=--initial-memory={MIN_MEMORY_BYTES}");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../core/src/memory_spec.rs");
+    println!("cargo:rerun-if-changed=../core/src/mem_spec.rs");
 
     let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("ring_layout.rs");
     let mut f = std::fs::File::create(&out).unwrap();
     write!(
         f,
         "\
-/// Messages a ring holds. See build.rs and memory.json.
+/// Messages a ring holds. See build.rs and mem.json.
 pub const RING_CAPACITY: u32 = {RING_CAPACITY};
 /// The bytes of the payload each slot owns: a packet is at most this.
 pub const RING_SLOT_BYTES: u32 = {RING_SLOT_BYTES};

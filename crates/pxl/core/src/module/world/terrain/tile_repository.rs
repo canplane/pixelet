@@ -29,7 +29,7 @@ use crate::module::world::sched::demand::Category;
 use crate::global::{now, Global};
 use crate::lib::env::config::TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
-use crate::memory;
+use crate::mem;
 use crate::module::world::sched::demand::Phases;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
@@ -96,7 +96,7 @@ fn decode(pkt: U8Array) -> Result<Terrain, FetchFail> {
 
 /// The range's base. None under a native test, which lays no memory out.
 fn terrain_base() -> Option<usize> {
-    memory::fixed::terrain_at().map(|at| at as usize)
+    mem::fixed::terrain_at().map(|at| at as usize)
 }
 
 /// A decoded page's lanes, as bytes to be written somewhere.

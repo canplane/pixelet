@@ -5,4 +5,4 @@ pub mod console;
 pub mod errno;
 pub mod error;
 pub mod global;
-pub mod memory;
+pub mod mem;

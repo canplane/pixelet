@@ -14,7 +14,7 @@
  * landing reads exactly as the same task does in the report printed later.
  */
 
-import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { range_at, text_at } from "@/wasm/module.ts";
 import { type Frame, frame_line, long_frame_line, type LongFrame, task_line, type TaskRecord } from "./ledger_report.ts";
 

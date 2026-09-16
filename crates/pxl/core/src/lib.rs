@@ -3,10 +3,6 @@
 //! Nothing here knows about WebAssembly, a browser or a thread — pxl-wasm
 //! is the one crate that does — so the same code runs under `cargo test`
 //! natively and inside the module the client loads.
-//!
-//! Ported a piece at a time from the TypeScript it replaces, and held to
-//! byte-for-byte agreement with it until the TypeScript is gone
-//! (apps/web/src/reference/wasm_bake.test.ts).
 
 pub mod app;
 pub mod bake;
@@ -17,8 +13,8 @@ pub mod kernel;
 pub mod lib {
     pub mod env;
 }
-pub mod memory;
-pub mod memory_spec;
+pub mod mem;
+pub mod mem_spec;
 pub mod module;
 pub mod render;
 pub mod space;
