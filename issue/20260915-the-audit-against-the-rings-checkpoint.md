@@ -142,13 +142,23 @@ when its fix lands.
   `tick.ts:289` spliced and skipped the next step.~~ The Rust is right.
 - **B4** The quantum is observed after the turn and its grant applies to
   the next; `tick.ts:329-332` observed before sizing.
-- **B5** The frame is drawn after every phase (`world.rs:204-205`);
-  `core_tick.tsx:187` drew inside the visible phase.
-- **B6** The report step (`core_tick.rs`) and the renderer's census and
+- **B5** ~~The frame is drawn after every phase (`world.rs:204-205`);
+  `core_tick.tsx:187` drew inside the visible phase.~~ **Kept as it is**: the
+  draw list is whole only once every phase has added to it, so a draw inside
+  one shows a list the phases after it are still writing.
+- **B6** ~~The report step (`core_tick.rs`) and the renderer's census and
   triangle count (`renderer.rs:821-860`) run in every build, every frame;
-  `core_tick.tsx:198` and `renderer.ts:406` ran them in DEV.
-- **B7** A frame's `task_ms` is the previous turn's (`core_tick.rs:204`,
-  `world.rs:206`); `core_tick.tsx:263-267` corrected it in place.
+  `core_tick.tsx:198` and `renderer.ts:406` ran them in DEV.~~ **Kept as it
+  is**: in the shell the report was a development tool beside React's own;
+  in the kernel it is the only account of a frame anyone gets, and a build
+  that leaves it out cannot be asked what it did. What it costs is one pass
+  over a draw list already in hand, into a fixed census, with nothing
+  allocated.
+- **B7** ~~A frame's `task_ms` is the previous turn's (`core_tick.rs:204`,
+  `world.rs:206`); `core_tick.tsx:263-267` corrected it in place.~~
+  `ledger_last_frame` was written for exactly this and had no caller, so
+  `set_host_task_ms` now writes the number into the frame it was measured
+  for.
 - **B8** ~~The world wakers are revision polling in `world_turn`.~~ Outcome
   equal as read.
 - **B9** ~~`log.rs:238-245` sets the baseline at first use; the first report

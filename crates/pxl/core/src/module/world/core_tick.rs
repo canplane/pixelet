@@ -77,6 +77,12 @@ pub fn set_host_frame_stat(stat: HostFrameStat) {
 /// The whole turn just run: the strobe in, the tick, the draw and submit.
 pub fn set_host_task_ms(task_ms: f64) {
     core_tick().host.task_ms = task_ms;
+    // The turn's own task time is only known once the turn is over, by which
+    // point its frame is recorded; without this the number would be read as
+    // the next frame's and every frame would carry the one before it.
+    if let Some(frame) = crate::module::world::sched::ledger::ledger_last_frame() {
+        frame.task_ms = task_ms;
+    }
 }
 
 /// Whether the last pass left something new to draw; reading clears it.
