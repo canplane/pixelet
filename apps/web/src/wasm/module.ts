@@ -60,7 +60,10 @@ export type KernelExports = {
  * fixed section, the terrain slab and the mesh section, each its offset,
  * bytes and region size; then the quantum the kernel declares, five words in
  * thousandths. */
-export const BOOT = { module_bytes: 0, sq: 1, cq: 2, slab: 3, heap: 6, quantum: 9, heap_row: 14 } as const;
+/** Where each thing the kernel reports lies in the boot block. `data_end` is
+ * where the linker stopped, which is everything the module keeps for itself —
+ * the stack, the rings and its own data. */
+export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 14 } as const;
 const BOOT_WORDS = 15;
 
 /** The boot block, read in place. */

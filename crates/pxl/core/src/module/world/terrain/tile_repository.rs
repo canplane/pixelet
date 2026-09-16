@@ -96,7 +96,7 @@ fn decode(pkt: U8Array) -> Result<Terrain, FetchFail> {
 
 /// The slab's base. None under a native test, which lays no memory out.
 fn slab() -> Option<usize> {
-    memory::map().map(|m| m.slab.offset as usize)
+    memory::terrain_at().map(|at| at as usize)
 }
 
 /// A decoded page's lanes, as bytes to be written somewhere.
