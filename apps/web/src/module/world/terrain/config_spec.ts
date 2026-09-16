@@ -7,14 +7,14 @@
 // The page stays the unit of transfer and storage: one PostGIS query and bake
 // on the API side, one ~4MB decode, one key, one eviction. What is derived
 // rather than chosen is *which* pages: every page KEEP_DIST reaches, which is
-// at once what gets fetched, what stays decoded, and what the terrain slab has
-// a record for (terrain/slab.rs). One set, so a page can never be requested
+// at once what gets fetched, what stays decoded, and what `.fixed.terrain` has
+// a record for (terrain/fixed.rs). One set, so a page can never be requested
 // and then dropped from under its own in-flight request.
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 /** How far a page is loaded from. This is the one number the terrain's storage
- * is derived from: the slab's axis is the width of the set this reaches, its
+ * is derived from: the range's axis is the width of the set this reaches, its
  * records are that squared, and its bytes are those records — no count to cap
  * and no margin to keep, since a page's record is its own coordinate and
  * cannot be refused.

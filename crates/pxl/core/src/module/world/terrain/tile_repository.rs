@@ -1,7 +1,7 @@
 // pxl_core/module/world/terrain/tile_repository.rs
 
 //! Terrain transport's kernel half: where a page is fetched from, and a
-//! fetched body decoded and copied lane by lane into the slab, where
+//! fetched body decoded and copied lane by lane into `.fixed.terrain`, where
 //! the kernel reads it (module/world/fetch.rs hands the body over).
 //!
 //! The pre-bake pass skips pure open-ocean pages entirely — about 65% of the
@@ -23,7 +23,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
 
 use super::resident::take_slot;
-use super::slab::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
+use super::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
 use super::store::use_tile_store;
 use crate::module::world::sched::demand::Category;
 use crate::global::{now, Global};
@@ -48,7 +48,7 @@ pub fn ocean_url() -> Joined<TileBase, &'static str> {
     Joined(TILE_BASE_URL(), OCEAN_KEY)
 }
 
-/// A page's lanes in the slab: land, water, structure and transport, each
+/// A page's lanes in the range: land, water, structure and transport, each
 /// PAGE_CELL_SPAN² bytes, and the padded elevation grid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TerrainLanes {
@@ -94,9 +94,9 @@ fn decode(pkt: U8Array) -> Result<Terrain, FetchFail> {
     Ok(t)
 }
 
-/// The slab's base. None under a native test, which lays no memory out.
-fn slab() -> Option<usize> {
-    memory::terrain_at().map(|at| at as usize)
+/// The range's base. None under a native test, which lays no memory out.
+fn terrain_base() -> Option<usize> {
+    memory::fixed::terrain_at().map(|at| at as usize)
 }
 
 /// A decoded page's lanes, as bytes to be written somewhere.
@@ -112,20 +112,20 @@ fn sources(t: &Terrain) -> [&[u8]; 5] {
 fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
     let at = [lanes.ground[0], lanes.ground[1], lanes.ground[2], lanes.ground[3], lanes.ele];
     for (src, &to) in sources(t).iter().zip(at.iter()) {
-        // SAFETY: `to` is the page's room in the slab, the lane's own size, and
+        // SAFETY: `to` is the page's room in the range, the lane's own size, and
         // apart from `src`, which is the decoded body.
         unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), to as *mut u8, src.len()) };
     }
 }
 
-/// Where `page_idx` lies in the slab. Its record is its own coordinate reduced
-/// modulo the slab's axis, so this asks for nothing and cannot be refused.
+/// Where `page_idx` lies in the range. Its record is its own coordinate reduced
+/// modulo the range's axis, so this asks for nothing and cannot be refused.
 fn lanes_of(page_idx: IVec) -> Result<TerrainLanes, FetchFail> {
-    let slab = slab().ok_or(FetchFail::NoRoom)?;
-    let slot = super::slab::slot_of(page_idx);
+    let base = terrain_base().ok_or(FetchFail::NoRoom)?;
+    let slot = super::fixed::slot_of(page_idx);
     Ok(TerrainLanes {
-        ground: [ground_at(slab, slot, 0), ground_at(slab, slot, 1), ground_at(slab, slot, 2), ground_at(slab, slot, 3)],
-        ele: ele_at(slab, slot),
+        ground: [ground_at(base, slot, 0), ground_at(base, slot, 1), ground_at(base, slot, 2), ground_at(base, slot, 3)],
+        ele: ele_at(base, slot),
     })
 }
 
@@ -145,7 +145,7 @@ pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Resul
     if let Some(gone) = take_slot(page_idx) {
         use_tile_store().clear_tile(gone);
     }
-    // SAFETY: the lanes are this page's record in the slab, at the page's lane
+    // SAFETY: the lanes are this page's record in the range, at the page's lane
     // sizes, until another page's coordinate names the same record.
     let terrain = unsafe { open_terrain(lanes) };
     use_tile_store().set_tile(page_idx, Tile { terrain });
@@ -178,8 +178,8 @@ pub fn ocean_page(page_idx: IVec) {
 /// The shared tile's body: written into a record of its own that belongs to no
 /// page and nothing releases, and given to every page waiting on it.
 ///
-/// It is not in the slab. Every open-ocean page reads these same bytes, and a
-/// slab record is one page's; a page whose tile is the shared one leaves its
+/// It is not in the range. Every open-ocean page reads these same bytes, and a
+/// record is one page's; a page whose tile is the shared one leaves its
 /// own record untouched.
 pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
     if ocean().terrain.is_some() {

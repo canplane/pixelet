@@ -55,11 +55,10 @@ export type KernelExports = {
   ledger_trace_release(): void;
 };
 
-/** crates/pxl/wasm/src/lib.rs's boot block, word by word: the section the
- * module keeps; where the submission and completion rings are; then the
- * fixed section, the terrain slab and the mesh section, each its offset,
- * bytes and region size; then the quantum the kernel declares, five words in
- * thousandths. */
+/** crates/pxl/wasm/src/lib.rs's boot block, word by word: where the module's
+ * own front ends; where the submission and completion rings are; then `.fixed`
+ * and the heap, each its offset, bytes and page size; then the quantum the
+ * kernel declares, five words in thousandths; then the heap's row. */
 /** Where each thing the kernel reports lies in the boot block. `data_end` is
  * where the linker stopped, which is everything the module keeps for itself —
  * the stack, the rings and its own data. */

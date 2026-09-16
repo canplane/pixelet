@@ -17,11 +17,8 @@
 //!             says (`__data_end`), not a number chosen in advance.
 //!   .fixed    what the kernel places once and never frees: ranges of a size
 //!             known at compile time, laid end to end from the first page past
-//!             the module's data. `.fixed.terrain` is the only one today — the
-//!             resident terrain, one record a page, addressed by the page's
-//!             own coordinate reduced modulo the set's axis
-//!             (module/world/terrain/slab.rs), so nothing in it is allocated,
-//!             asked for or refused.
+//!             the module's data. Which ranges those are is fixed.rs's, not
+//!             this file's — here it is one span and its width.
 //!   heap      everything left, ascending from the page past the last of the
 //!             fixed ranges to the end of the memory. One allocator answers
 //!             all of it — a slab of size classes over a buddy of pages
@@ -53,8 +50,9 @@
 
 use xpute_core::sys::memory::Section;
 
+pub mod fixed;
+
 use crate::global::Global;
-use crate::module::world::terrain::slab::SLAB_BYTES;
 
 // The numbers the map is made of are memory.json's, since the shell and the
 // linker read the same ones (memory_spec.rs).
@@ -73,22 +71,9 @@ pub const fn page_up(n: u32) -> u32 {
     n.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-/// `.fixed`'s ranges, in the order they are laid: `.fixed.terrain` and, so
-/// far, nothing else. What a range holds is its own affair — this says how
-/// many bytes it takes and nothing more.
-const FIXED_RANGES: [u32; 1] = [SLAB_BYTES];
-
-/// What `.fixed` spans: each range rounded up to a page, since the next begins
-/// on one. The last range's own rounding is in here too, which is what makes
-/// this the offset of the page the heap starts on.
-pub const FIXED_BYTES: u32 = {
-    let (mut span, mut i) = (0, 0);
-    while i < FIXED_RANGES.len() {
-        span += page_up(FIXED_RANGES[i]);
-        i += 1;
-    }
-    span
-};
+/// What `.fixed` spans, which is what the heap begins past. Whose ranges add
+/// up to it is fixed.rs's business.
+pub use fixed::BYTES as FIXED_BYTES;
 
 const _: () = assert!(
     REGION_BYTES.is_multiple_of(PAGE_BYTES) && MODULE_CEILING.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
@@ -119,12 +104,6 @@ pub fn fixed_at(data_end: u32) -> u32 {
 /// anything has laid the memory out.
 pub fn heap_at(data_end: u32) -> u32 {
     fixed_at(data_end) + FIXED_BYTES
-}
-
-/// Where `.fixed.terrain` lies, once the module has laid its memory out: the
-/// first range, so `.fixed`'s own start.
-pub fn terrain_at() -> Option<u32> {
-    map().map(|m| m.fixed.offset)
 }
 
 /// The map over a memory of `bytes`, whose module data the linker ended at

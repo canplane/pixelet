@@ -11,12 +11,12 @@
 
 use super::config_spec;
 
-/// How many pages stay decoded: every record the slab has, which is every
+/// How many pages stay decoded: every record `.fixed.terrain` has, which is every
 /// page the load radius reaches. Not a count to be chosen and not a division
-/// to be measured — the slab is the set (slab.rs).
+/// to be measured — the range is the set (fixed.rs).
 #[allow(non_snake_case)]
 pub fn RESIDENT_PAGES() -> u32 {
-    super::slab::SLAB_SLOTS
+    super::fixed::TERRAIN_SLOTS
 }
 
 /// How far to look when picking those pages.

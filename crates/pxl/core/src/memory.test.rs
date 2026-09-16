@@ -15,7 +15,7 @@ fn the_fixed_ranges_are_what_they_hold_and_nothing_more() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES, DATA_END);
         assert_eq!(m.fixed.bytes, FIXED_BYTES, "{n} regions");
-        assert!(m.fixed.bytes - SLAB_BYTES < PAGE_BYTES, "{n} regions: rounding only");
+        assert!(m.fixed.bytes - TERRAIN_BYTES < PAGE_BYTES, "{n} regions: rounding only");
     }
 }
 
@@ -24,7 +24,7 @@ fn every_map_is_the_sections_in_address_order_past_what_the_linker_placed() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES, DATA_END);
         assert_eq!(m.fixed.offset, DATA_END, "a page boundary already");
-        assert!(m.heap.offset >= m.fixed.offset + SLAB_BYTES, "{n} regions");
+        assert!(m.heap.offset >= m.fixed.offset + TERRAIN_BYTES, "{n} regions");
         assert_eq!(m.heap.offset + m.heap.bytes, n * REGION_BYTES, "{n} regions");
     }
 }
@@ -69,6 +69,6 @@ fn every_section_begins_on_a_page_so_every_block_in_it_does() {
 fn no_section_leaves_more_than_a_page_behind_it() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES, DATA_END);
-        assert!(m.heap.offset - (m.fixed.offset + SLAB_BYTES) < PAGE_BYTES, "{n} regions");
+        assert!(m.heap.offset - (m.fixed.offset + TERRAIN_BYTES) < PAGE_BYTES, "{n} regions");
     }
 }
