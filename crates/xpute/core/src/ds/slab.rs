@@ -96,7 +96,7 @@ const fn run_log2(c: usize) -> usize {
 /// The leading slots a run of class `c` spends on its own header.
 const fn head_slots(c: usize) -> usize {
     let class = 1usize << class_log2(c);
-    (core::mem::size_of::<Run>() + class - 1) / class
+    core::mem::size_of::<Run>().div_ceil(class)
 }
 
 /// The slots a run of class `c` is cut into, its header's included.
@@ -143,6 +143,12 @@ pub struct SlabMalloc<R: Range> {
 // SAFETY: one thread — a module instantiated once per memory, which is what
 // the imported-memory design guarantees.
 unsafe impl<R: Range> Sync for SlabMalloc<R> {}
+
+impl<R: Range> Default for SlabMalloc<R> {
+    fn default() -> SlabMalloc<R> {
+        SlabMalloc::new()
+    }
+}
 
 impl<R: Range> SlabMalloc<R> {
     pub const fn new() -> SlabMalloc<R> {

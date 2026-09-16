@@ -123,6 +123,12 @@ pub struct BuddyMalloc<R: Range> {
 // the imported-memory design guarantees.
 unsafe impl<R: Range> Sync for BuddyMalloc<R> {}
 
+impl<R: Range> Default for BuddyMalloc<R> {
+    fn default() -> BuddyMalloc<R> {
+        BuddyMalloc::new()
+    }
+}
+
 impl<R: Range> BuddyMalloc<R> {
     pub const fn new() -> BuddyMalloc<R> {
         let empty = List {
