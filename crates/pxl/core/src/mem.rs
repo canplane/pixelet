@@ -1,4 +1,4 @@
-// pxl_core/memory.rs
+// pxl_core/mem.rs
 
 //! The kernel's policy over the memory the central scheduler gives it: which
 //! sections there are and where each begins. Cutting the memory into sections
@@ -52,20 +52,15 @@
 //! one's business but its own, so the terrain is what it holds and not a byte
 //! more, and what is left over is under a page.
 
-use xpute_core::sys::memory::{align_up, Section};
+use xpute_core::sys::mem::{align_up, Section};
 
 pub mod fixed;
 
 use crate::global::Global;
 
-// The numbers the map is made of are memory.json's, since the shell and the
-// linker read the same ones (memory_spec.rs).
-pub use crate::memory_spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
-
-const _: () = assert!(
-    PAGE_BYTES as usize == xpute_core::ds::buddy_tree::MIN_ALLOC,
-    "the heap's smallest block is the page the sections are laid out on"
-);
+// The numbers the map is made of are mem.json's, since the shell and the
+// linker read the same ones (mem_spec.rs).
+pub use crate::mem_spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
 
 /// `n` at the page. The kernel's one application of xpute's `align_up`: the
 /// unit every range in this memory begins on is PAGE_BYTES and nothing else,
@@ -155,5 +150,5 @@ pub fn map() -> Option<Map> {
 }
 
 #[cfg(test)]
-#[path = "memory.test.rs"]
+#[path = "mem.test.rs"]
 mod test;

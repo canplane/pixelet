@@ -63,7 +63,33 @@ fn data_end() -> u32 {
 /// what is left is whatever the device gave.
 struct ModuleHeap;
 
+/// The largest block the heap's tree can describe. Two gigabytes is what a
+/// 32-bit address space holds a whole power of two of, so it is the top of the
+/// shape and not a claim about any device: the tree begins as a single leaf and
+/// doubles only as far as a request makes it, and how much of it is real comes
+/// from `end` at runtime.
+const HEAP_MAX_LOG2: usize = 31;
+
+/// The smallest block, which is the page the rest of the memory is counted in
+/// (mem.json's PAGE_BYTES).
+const HEAP_MIN_LOG2: usize = memory_shift(mem::PAGE_BYTES);
+
+const fn memory_shift(bytes: u32) -> usize {
+    assert!(bytes.is_power_of_two());
+    bytes.trailing_zeros() as usize
+}
+
+/// A bit for every node of the tree that can be a parent. The exponents give
+/// the length and the compiler will not derive it for us, so it is written
+/// once here and `BuddyMalloc` checks it against them on the first request.
+const HEAP_SPLIT_BYTES: usize = (1 << (HEAP_MAX_LOG2 - HEAP_MIN_LOG2)) / 8;
+
 impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
+    const MIN_LOG2: usize = HEAP_MIN_LOG2;
+    const MAX_LOG2: usize = HEAP_MAX_LOG2;
+    type Split = [u8; HEAP_SPLIT_BYTES];
+    const SPLIT_INIT: Self::Split = [0; HEAP_SPLIT_BYTES];
+
     fn base() -> usize {
         // A pure function of the linker's answer and the map's constants, with
         // no state and no order to be in: the first block is asked for long
