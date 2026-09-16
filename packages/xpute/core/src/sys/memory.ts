@@ -10,10 +10,11 @@
  * are the script's. Nothing here knows what a range holds either — it is told
  * a base, a unit and a list of sizes.
  *
- * The central scheduler reserves the memory — one fixed `WebAssembly.Memory`,
- * `initial == maximum`, never grown, since a grown memory detaches every view
- * and a resizable buffer is slower to read and refused by WebGPU — and gives
- * it to the kernel. What the ranges are for, and how large each one is, is the
+ * The central scheduler reserves the memory — one `WebAssembly.Memory` with
+ * `initial == maximum`, which nothing grows — and gives it to the kernel. So
+ * `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
+ * stays valid, which is what lets a ring hold its words and a lane be read
+ * where it lies. What the ranges are for, and how large each one is, is the
  * kernel's policy (crates/pxl/core/src/memory.rs).
  */
 
@@ -68,8 +69,9 @@ export function read_section(words: ArrayLike<u32>, at: u32): Section {
 }
 
 /**
- * The central scheduler's reservation: a fixed memory of the first region
- * count in `candidates` the device will reserve.
+ * The central scheduler's reservation: a memory of the first region count in
+ * `candidates` the device will reserve, `initial == maximum` so that what it
+ * hands back never grows and never detaches.
  */
 export function reserve_memory(candidates: readonly u32[], region_bytes: u32): WebAssembly.Memory {
   for (const regions of candidates) {

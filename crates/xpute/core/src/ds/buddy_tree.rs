@@ -12,11 +12,11 @@
 //!
 //! Where the memory comes from. The C calls `brk` to have the kernel make more
 //! of its address range usable, and fails the allocation when the kernel says
-//! no. A module's memory is reserved whole before any of this runs, so
-//! `update_max_ptr` asks the range instead of the kernel and fails in exactly
-//! the same place, which leaves everything built on it — the tree that starts
-//! small and doubles, `bucket_limit`, the order the free lists are filled in —
-//! as it was.
+//! no. Here `update_max_ptr` asks the `Range` instead, and fails in exactly the
+//! same place, which leaves everything built on it — the tree that starts small
+//! and doubles, `bucket_limit`, the order the free lists are filled in — as it
+//! was. The range is asked every time rather than read once, so how far it
+//! reaches is the range's answer and never this file's assumption.
 //!
 //! The 8-byte header is gone. It exists in the C because `free(void *)` is
 //! told an address and nothing else, so the size has to be written beside the

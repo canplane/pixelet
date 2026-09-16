@@ -9,10 +9,11 @@
 //! `n` is are the script's. Nothing here knows what a range holds either — it
 //! is told a base, a unit and a list of sizes.
 //!
-//! The central scheduler reserves the memory — one fixed `WebAssembly.Memory`,
-//! `initial == maximum`, never grown, since a grown memory detaches every view
-//! and a resizable buffer is slower to read and refused by WebGPU — and gives
-//! it to the kernel. What the ranges are for, and how large each one is, is the
+//! The central scheduler reserves the memory — one `WebAssembly.Memory` with
+//! `initial == maximum`, which nothing grows — and gives it to the kernel. So
+//! `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
+//! stays valid, which is what lets a ring hold its words and a lane be read
+//! where it lies. What the ranges are for, and how large each one is, is the
 //! kernel's policy (crates/pxl/core/src/memory.rs).
 
 /// A WebAssembly page.
