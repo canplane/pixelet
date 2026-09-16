@@ -50,15 +50,22 @@ when its fix lands.
 
 ## H. Residue of the heap work
 
-- **H1** `wasm/src/lib.rs:1903-1904` installs `ALLOC_PROBE` and
+- ~~**H1**~~ `wasm/src/lib.rs:1903-1904` installs `ALLOC_PROBE` and
   `set_step_timing(true)` unconditionally; xpute `sched/tick.rs:1787-1791`
   then records allocation counts into `StepStats.ms`, which `log.rs`
   prints as "ms per frame". `tick.ts:292-304` recorded wall milliseconds,
-  in DEV only.
-- **H2** `probe.rs` and its `probe::mark` / `add` calls in `world.rs`
+  in DEV only. The step records wall time again, and the timing starts with
+  the recording window rather than at boot — a clock read either side of
+  every step of every tick, for a number only the report reads.
+- ~~**H2**~~ `probe.rs` and its `probe::mark` / `add` calls in `world.rs`
   (110-156, 199-202), `core_tick.rs:170-175` and about twenty sites in
-  `world/sched.rs`.
-- **H3** `pub static mut ALLOC_PROBE` in xpute_core `sched/tick.rs:1646`.
+  `world/sched.rs`. All gone with H1, along with pxl-wasm's `probe_dump` /
+  `probe_reset` and their 16 KiB static: every one was a measurement added to
+  a counter under a bare number, never a value anything read back, and what
+  they were for is the step table's job and better at it — it names its steps
+  and covers every phase instead of thirty-one hand-placed points.
+- ~~**H3**~~ `pub static mut ALLOC_PROBE` in xpute_core `sched/tick.rs:1646`.
+  Nothing wanted it once H1 stopped recording allocations.
 - **H4** ~~`world/decor.rs` `DecorScratch`: past `DECOR_INSTANCES` (65536) an
   instance is dropped silently; past `DECOR_GROUPS` (64) kinds get no
   group.~~ `DECOR_INSTANCES` is the length of two lanes taken once from the
@@ -293,8 +300,12 @@ when its fix lands.
   xpute `read_json`; `\b \f \r` read as letters and a surrogate `\u` stops
   the parse.~~ The overrides are read through `read_json`'s fields, and an
   escape is decoded by the one reader that knows them all.
-- **X2** `json_string` in `setting/store.rs`, `ui_store.rs` and
-  `sched/trace.rs`; xpute has `Quoted`.
+- ~~**X2**~~ `json_string` in `setting/store.rs`, `ui_store.rs` and
+  `sched/trace.rs`; xpute has `Quoted`. The three had drifted apart — only
+  `trace.rs` spelled `\n`, the other two left it to the `< 0x20` arm as
+  `\u000a` — so one input left the kernel written two ways depending on which
+  copy saw it. `Quoted` escapes `\n`, `\r` and `\t` by name and the rest as
+  `\u00XX`, which is the one of the four that matches `JSON.stringify`.
 
 ## The heap all of it runs in
 
@@ -365,7 +376,8 @@ and upload / rewrite / free order.
 
 ## Order
 
-One small change a turn, `cargo check` green:
+Every item is answered — fixed, or kept as it is with the reason written beside
+it. The list below is the order they were taken in, left as the record of it.
 
 1. P1.
 2. H1–H3.
