@@ -1,5 +1,6 @@
 {
   "marker_colors": {
+    "$type": "rgb",
     "ACTION": {
       "$value": "#4fd1c5",
       "$doc": [

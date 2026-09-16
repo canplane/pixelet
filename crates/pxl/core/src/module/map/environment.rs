@@ -18,7 +18,7 @@ use crate::module::world::change::request_world_tick;
 use crate::module::world::environment::config::{light_cfg, render_cfg};
 use crate::module::world::environment::theme::{themes, WorldThemeKey};
 use crate::module::world::environment::theme_clock::use_theme_key;
-use crate::render::gpu::color::linear_rgb;
+use crate::render::gpu::color::linear_rgb_hex;
 use crate::world::environment::THEME_FLOATS;
 
 // Same Seoul coordinate use_map_bootstrap.rs seeds map_center with before a
@@ -46,7 +46,7 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
     let t = themes(key);
     let mut k = 0;
     let mut rgb = |lane: &mut [f32; THEME_FLOATS], hex: &str| {
-        for v in linear_rgb(hex) {
+        for v in linear_rgb_hex(hex) {
             lane[k] = v as f32;
             k += 1;
         }
@@ -66,14 +66,14 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
         at += 1;
     };
     put(lane, t.ambient.intensity);
-    for v in linear_rgb(t.hemisphere.sky) {
+    for v in linear_rgb_hex(t.hemisphere.sky) {
         put(lane, v);
     }
-    for v in linear_rgb(t.hemisphere.ground) {
+    for v in linear_rgb_hex(t.hemisphere.ground) {
         put(lane, v);
     }
     put(lane, t.hemisphere.intensity);
-    for v in linear_rgb(t.directional.color) {
+    for v in linear_rgb_hex(t.directional.color) {
         put(lane, v);
     }
     put(lane, t.directional.intensity);

@@ -18,13 +18,9 @@ pub struct TerrainLayerMeta {
     pub ch_key: GroundChannelKey,
     pub type_key: &'static str,
     pub type_id: u8,
-    pub hex_color: &'static str,
+    /// Packed `0xRRGGBB`, as the catalog gives it.
+    pub rgb: u32,
     pub layer_index: u32,
-}
-
-fn is_valid_hex(hex: &str) -> bool {
-    let Some(digits) = hex.strip_prefix('#') else { return false };
-    matches!(digits.len(), 3 | 4 | 6 | 8) && digits.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// One array layer per (channel, type) pair, in the catalogue's order.
@@ -39,27 +35,27 @@ fn layer_meta() -> Vec<TerrainLayerMeta> {
         let channel = cube_types::CHANNELS.iter().find(|(name, _)| *name == ch_key.as_str()).map_or(&[][..], |(_, types)| types);
         let Some(colors) = cube_colors.get(ch_key.as_str()) else { continue };
         for &(type_key, type_id) in cube_types::common::ENTRIES.iter().chain(channel.iter()) {
-            if let Some(Some(hex_color)) = colors.get(&(type_id as u32)) {
-                if is_valid_hex(hex_color) {
-                    let layer_index = out.len() as u32;
-                    out.push(TerrainLayerMeta {
-                        ch_key,
-                        type_key,
-                        type_id,
-                        hex_color,
-                        layer_index,
-                    });
-                }
+            // Every swatch the catalog holds is a colour: the generator packs
+            // it from the JSON and refuses anything that is not #RRGGBB, so
+            // there is nothing left here to validate.
+            if let Some(Some(swatch)) = colors.get(&(type_id as u32)) {
+                let layer_index = out.len() as u32;
+                out.push(TerrainLayerMeta {
+                    ch_key,
+                    type_key,
+                    type_id,
+                    rgb: swatch.rgb,
+                    layer_index,
+                });
             }
         }
     }
     out
 }
 
-pub fn hex_to_rgb255(hex: &str) -> [u8; 3] {
-    let h: String = if hex.len() <= 5 { hex[1..4].chars().flat_map(|c| [c, c]).collect() } else { hex[1..7].to_string() };
-    let num = u32::from_str_radix(&h, 16).unwrap_or(0);
-    [((num >> 16) & 255) as u8, ((num >> 8) & 255) as u8, (num & 255) as u8]
+/// A packed `0xRRGGBB` as its three bytes.
+pub fn rgb255(rgb: u32) -> [u8; 3] {
+    [((rgb >> 16) & 255) as u8, ((rgb >> 8) & 255) as u8, (rgb & 255) as u8]
 }
 
 /// Static — cube_colors/cube_types never change at runtime, so this is built
@@ -87,7 +83,7 @@ fn build_flat_color_lookup(meta: &[TerrainLayerMeta]) -> FlatGroundColorLookup {
     let mut out: FlatGroundColorLookup = [None, None, None, None];
     for m in meta {
         let entry = out[channel_slot(m.ch_key)].get_or_insert(FlatChannelLookup { rgb: [0; 768], has: [0; 256] });
-        let [r, g, b] = hex_to_rgb255(m.hex_color);
+        let [r, g, b] = rgb255(m.rgb);
         let t = m.type_id as usize;
         entry.rgb[t * 3] = r;
         entry.rgb[t * 3 + 1] = g;

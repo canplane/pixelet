@@ -220,7 +220,7 @@ fn cube_rows() -> Vec<PaletteEntry> {
                 size: 1.0,
                 license: String::new(),
                 author: String::new(),
-                color: colors.get(&local).copied().flatten().map(str::to_string),
+                color: colors.get(&local).copied().flatten().map(|s| s.hex.to_string()),
                 group: None,
             });
         }

@@ -17,7 +17,7 @@ pub mod r#type;
 pub use cube::{cube_colors, cube_types, CubeColorId};
 pub use decor::{decor_types, DecorId};
 
-use r#type::{Channels, Colors};
+use r#type::{Channels, Colors, Swatch};
 
 // =============================================================================
 // Aggregated Types
@@ -78,6 +78,16 @@ pub fn cube_num_id(id: &str) -> u32 {
 }
 
 pub fn cube_hex(id: &str) -> &'static str {
+    cube_swatch(id).hex
+}
+
+/// The same swatch packed `0xRRGGBB`, for the callers that light or blend with
+/// it rather than write it down.
+pub fn cube_rgb(id: &str) -> u32 {
+    cube_swatch(id).rgb
+}
+
+fn cube_swatch(id: &str) -> Swatch {
     // block carries no sentinels of its own any more — every key is a real color.
     cube_colors.get("block").and_then(|c| c.get(&cube_num_id(id))).copied().flatten().unwrap()
 }
@@ -312,6 +322,17 @@ pub fn terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: u32) ->
 /// The swatch colour the catalog gives it — cube_colors is keyed by channel
 /// and number, so this is the palette's own row, not a second table.
 pub fn placeable_cube_hex(cube: PlaceableCube) -> Option<&'static str> {
+    placeable_cube_swatch(cube).map(|s| s.hex)
+}
+
+/// The same swatch as the one number it is, which is what everything that
+/// lights or blends with a colour wants — and what nothing has to parse text
+/// to find out, the catalog's JSON having been packed by the generator.
+pub fn placeable_cube_rgb(cube: PlaceableCube) -> Option<u32> {
+    placeable_cube_swatch(cube).map(|s| s.rgb)
+}
+
+fn placeable_cube_swatch(cube: PlaceableCube) -> Option<Swatch> {
     let (channel, num) = cube_parts(cube);
     cube_colors.get(channel).and_then(|c| c.get(&num)).copied().flatten()
 }

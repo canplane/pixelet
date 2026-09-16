@@ -3,9 +3,9 @@
 //! A placed cube's material — what the kernel is taught for its kind
 //! (teach.rs).
 
-use pxl_shared::spec::cell::{placeable_cube_hex, placeable_cube_id, terrain_style_cube_source, PlaceableCube};
+use pxl_shared::spec::cell::{placeable_cube_id, placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
 
-use crate::render::gpu::layer_table::{ground_color_lookup, ground_layer_index_lookup, hex_to_rgb255, OBJECT_LAYER_IDX};
+use crate::render::gpu::layer_table::{ground_color_lookup, ground_layer_index_lookup, rgb255, OBJECT_LAYER_IDX};
 use crate::render::mesh::voxel::{MaterialClasses, VoxelMaterial, NO_LAYER};
 
 /// A placed "solid" cube's own real color/layer_idx — either a flat color or,
@@ -31,7 +31,7 @@ pub fn resolve_solid_material(cube: PlaceableCube) -> VoxelMaterial {
             layer_idx: layer.map_or(NO_LAYER, |l| l.index[t] as u32),
         };
     }
-    let [r, g, b] = hex_to_rgb255(placeable_cube_hex(cube).expect("a flat colour carries a swatch"));
+    let [r, g, b] = rgb255(placeable_cube_rgb(cube).expect("a flat colour carries a swatch"));
     VoxelMaterial {
         material_class: MaterialClasses::OBJECT,
         r: r as u32,

@@ -4,6 +4,7 @@
 import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
 
 import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
+import type { Swatch } from "./type.ts";
 import { decor_types, type DecorId } from "./decor.ts";
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
@@ -58,8 +59,18 @@ export function cube_num_id(id: CubeColorId): number {
 }
 
 export function cube_hex(id: CubeColorId): string {
+  return cube_swatch(id).hex;
+}
+
+/** The same swatch packed `0xRRGGBB`, for the callers that light or blend with
+ * it rather than write it down. */
+export function cube_rgb(id: CubeColorId): number {
+  return cube_swatch(id).rgb;
+}
+
+function cube_swatch(id: CubeColorId): Swatch {
   // block carries no sentinels of its own any more — every key is a real color.
-  return cube_colors.block[cube_types.block[id]] as string;
+  return cube_colors.block[cube_types.block[id]] as Swatch;
 }
 
 const NUM_ID_TO_CUBE: readonly CubeColorId[] = (() => {
@@ -243,6 +254,17 @@ export function terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id
 /** The swatch colour the catalog gives it — cube_colors is keyed by channel
  * and number, so this is the palette's own row, not a second table. */
 export function placeable_cube_hex(cube: PlaceableCube): string | null {
+  return placeable_cube_swatch(cube)?.hex ?? null;
+}
+
+/** The same swatch as the one number it is, which is what everything that
+ * lights or blends with a colour wants — and what nothing has to parse text to
+ * find out, the catalog's JSON having been packed by the generator. */
+export function placeable_cube_rgb(cube: PlaceableCube): number | null {
+  return placeable_cube_swatch(cube)?.rgb ?? null;
+}
+
+function placeable_cube_swatch(cube: PlaceableCube): Swatch | null {
   return cube_colors[cube.channel]?.[cube.type] ?? null;
 }
 
