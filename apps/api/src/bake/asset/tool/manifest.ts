@@ -37,7 +37,7 @@ export type Manifest = {
 };
 
 export type WorkItem = {
-  /** e.g. "terrain.top.land.BARE", "terrain.side.SPORTS", "objects.block.white" — for logging only. */
+  /** e.g. "terrain.top.land.bare", "terrain.side.sports", "objects.block.white" — for logging only. */
   label: string;
   url: string;
   file: string;

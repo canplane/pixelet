@@ -1,95 +1,51 @@
 // pxl_core/module/world/terrain/resident.rs
 
-//! A terrain page, resident in the core memory.
+//! Which page each of the slab's records carries.
 //!
-//! The kernel copies a fetched page's decoded lanes into blocks of the page
-//! section and drops the body: one memory holds the core's data. Per
-//! lane, not per page — buddy blocks are powers of two, and a whole page would
-//! round up to 8 MiB, while each channel is exactly one 1 MiB block.
+//! A page's record is its own coordinate reduced modulo the slab's axis
+//! (slab.rs), so a page arriving takes the record of whichever page shares its
+//! residue. Inside the load radius no two pages do, so the page it replaces is
+//! one the view has already left; a jump moves further than the axis and takes
+//! the whole window with it, so the page it replaces is gone with the rest.
+//! Either way the record is overwritten where it lies.
 //!
-//! **Release is quarantined.** Readers of a page are the chunks in its render
-//! radius; an evicted page is past the cleanup radius, one ring further out, so
-//! none should remain. The case that can still hold one is a jump: the page is
-//! evicted in the same pass that moves the view, and its chunks leave after. A
-//! released block is only overwritten when something acquires it again, so
-//! its release waits until the scheduler has no chunk of the page mounted, or a
-//! second at most. Not the second alone: a jump leaves every resident page at
-//! once, and its thirty-two pages held for a second were half the section the
-//! next thirty-two arrived into, which refused the rest.
+//! That leaves one thing to keep: which page a record carries, so the store can
+//! let go of a page whose bytes have been taken from under it. It replaces the
+//! quarantine the pool needed — a released block could be handed to a different
+//! page and written while an old reader still held it, and an address that is a
+//! page's own coordinate cannot be handed to anyone else.
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
 
-use crate::global::{now, Global};
-use crate::kernel::kernel;
-use crate::memory::PAGE_POOL;
+use super::slab::{slot_of, SLAB_SLOTS};
+use crate::global::Global;
 
-pub const QUARANTINE_MS: f64 = 1000.0;
+static SLOT_PAGE: Global<[Option<IVec>; SLAB_SLOTS as usize]> = Global::new();
 
-/// A block of the page section: its address and size.
-pub type Block = (usize, u32);
-
-struct Resident {
-    /// The blocks each resident page owns. The shared ocean page is not in
-    /// here: every open-ocean page aliases one decode, so no single page may
-    /// free it.
-    owned: Vec<(IVec, Vec<Block>)>,
-    /// Blocks released, when their quarantine ends, and the page they held.
-    due: Vec<(f64, IVec, Block)>,
+fn slot_page() -> &'static mut [Option<IVec>; SLAB_SLOTS as usize] {
+    SLOT_PAGE.get(|| [None; SLAB_SLOTS as usize])
 }
 
-static RESIDENT: Global<Resident> = Global::new();
-
-fn resident() -> &'static mut Resident {
-    RESIDENT.get(|| Resident { owned: Vec::new(), due: Vec::new() })
+/// Records that `page_idx` now holds its record, and answers with the page the
+/// record carried before, whose bytes it has just taken.
+pub fn take_slot(page_idx: IVec) -> Option<IVec> {
+    let at = slot_of(page_idx) as usize;
+    let held = slot_page()[at].replace(page_idx);
+    held.filter(|p| TO_XY(*p) != TO_XY(page_idx))
 }
 
-/// Records the blocks a page's lanes were copied into. `own` is false for a
-/// page that is shared rather than held by one tile — it is never released.
-pub fn into_core(page_idx: IVec, blocks: Vec<Block>, own: bool) {
-    if !own {
-        return;
+/// Forgets `page_idx` where it still holds its record.
+pub fn free_slot(page_idx: IVec) {
+    let at = slot_of(page_idx) as usize;
+    if slot_page()[at].is_some_and(|p| TO_XY(p) == TO_XY(page_idx)) {
+        slot_page()[at] = None;
     }
-    let key = TO_XY(page_idx);
-    let r = resident();
-    r.owned.retain(|(p, _)| *p != key);
-    r.owned.push((key, blocks));
 }
 
-/// Hands a page's blocks back once the quarantine has passed. A page it does
-/// not own — the shared ocean page — is left alone.
-pub fn release_terrain(page_idx: IVec, quarantine_ms: f64) {
-    let key = TO_XY(page_idx);
-    let r = resident();
-    let Some(pos) = r.owned.iter().position(|(p, _)| *p == key) else { return };
-    let (_, blocks) = r.owned.swap_remove(pos);
-    let due = now() + quarantine_ms;
-    r.due.extend(blocks.into_iter().map(|b| (due, key, b)));
-}
-
-/// The blocks whose quarantine has passed.
-pub fn take_due_releases() -> Vec<Block> {
-    let r = resident();
-    let t = now();
-    let (due, waiting): (Vec<_>, Vec<_>) = r.due.drain(..).partition(|(at, _, _)| *at <= t);
-    r.due = waiting;
-    due.into_iter().map(|(_, _, b)| b).collect()
-}
-
-/// Gives the page section back the blocks whose page no chunk has mounted any
-/// more, or whose quarantine has passed.
-pub fn release_due_terrain() {
-    let k = kernel();
-    let Some(pool) = k.pools.get_mut(PAGE_POOL as usize) else { return };
-    let sched = &k.sched;
-    let t = now();
-    resident().due.retain(|&(due, page, (at, bytes))| {
-        if due > t && sched.page_mounted(page) {
-            return true;
-        }
-        pool.release(at, bytes);
-        false
-    });
+/// Whether `page_idx` still holds the record its coordinate names.
+pub fn holds_slot(page_idx: IVec) -> bool {
+    slot_page()[slot_of(page_idx) as usize].is_some_and(|p| TO_XY(p) == TO_XY(page_idx))
 }
 
 #[cfg(test)]

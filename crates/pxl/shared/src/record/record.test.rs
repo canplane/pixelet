@@ -195,7 +195,7 @@ fn shipped_palette_ids_are_unique_placeable_values_keep_their_numbers_every_mode
         cube_colors.get("block").unwrap()[&(cube_types::block::red as u32)].unwrap()
     );
     assert_eq!(p.name_of(row(decor_types::tree as u32)).unwrap(), "tree");
-    assert_eq!(p.kind_of(row(CHANNEL_ID_BASE.land + cube_types::land::SAND as u32)).unwrap(), PaletteKind::Ground);
+    assert_eq!(p.kind_of(row(CHANNEL_ID_BASE.land + cube_types::land::sand as u32)).unwrap(), PaletteKind::Ground);
     let trees = p.rows_of_group("tree").unwrap();
     assert_eq!(trees.len(), 1 + 9);
     for r in &trees {

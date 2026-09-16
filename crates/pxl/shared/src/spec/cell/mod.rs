@@ -57,17 +57,17 @@ pub static cell_colors: CellColors = CellColors { cube: &cube_colors };
 // that already aggregates every cell-definition module together.
 // =============================================================================
 
-/// Zero (cube_types::common::VOID) means sparse absence/fallback here, not
+/// Zero (cube_types::common::void) means sparse absence/fallback here, not
 /// explicit air — the only real distinction left (2026-09-06) now that a
 /// real value doesn't need to share a bit with every other real value; see
 /// cube.rs's own top comment.
 pub fn object_value_is_present(value: u32) -> bool {
-    value != cube_types::common::VOID as u32
+    value != cube_types::common::void as u32
 }
 
 /// Explicit object-layer air: retain this leaf and erase lower layers.
 pub fn object_value_is_air(value: u32) -> bool {
-    value == cube_types::common::AIR as u32
+    value == cube_types::common::air as u32
 }
 
 pub fn cube_num_id(id: &str) -> u32 {
@@ -136,31 +136,22 @@ pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| by_num(decor_typ
 // Terrain-styled cube catalog — user-placeable references into cube_types'
 // own land/water/structure/transport channels, derived generically (no
 // hand-typed per-type catalog to keep in sync — 2026-09-06, see
-// issue/20260906-unified-block-palette.md). A terrain-styled id is
-// just `"<channel>.<local key>"`, e.g. "land.GREEN_DEEP" — its own local
-// value (cube_types::land::GREEN_DEEP) is whatever the bake pipeline already
-// uses; the *global* sparse-tree byte a placed cube of this kind actually
-// gets stored as is a separately assigned dense sequence below, since a
-// real terrain cell can hold a value from every channel simultaneously but
-// a placed cube's single global byte can only ever mean one of them.
+// issue/20260906-unified-block-palette.md). Its own local value
+// (cube_types::land::green_deep) is whatever the bake pipeline already uses;
+// the *global* sparse-tree byte a placed cube of this kind actually gets
+// stored as is a separately assigned dense sequence below, since a real
+// terrain cell can hold a value from every channel simultaneously but a
+// placed cube's single global byte can only ever mean one of them.
 // =============================================================================
 
-/// `"<channel>.<local key>"`.
+/// `"<channel>.<local key>"`, e.g. `"land.green_deep"`.
 pub type TerrainStyleCubeId = String;
 
-/// Which cube_types channel+local-value a terrain-styled id stands in for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Which cube_types channel+local-value a terrain-styled cube stands in for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TerrainStyleSource {
     pub channel: GroundChannelKey,
     pub terrain_num_id: u32,
-}
-
-struct TerrainStyle {
-    /// In assignment order, which is the order `terrain_style_cube_for` walks.
-    source: Vec<(TerrainStyleCubeId, TerrainStyleSource)>,
-    to_num: HashMap<TerrainStyleCubeId, u32>,
-    num_to: HashMap<u32, TerrainStyleCubeId>,
-    hex: HashMap<TerrainStyleCubeId, Option<&'static str>>,
 }
 
 /// A channel: its name and its types.
@@ -174,106 +165,152 @@ fn ground_key(channel: &str) -> GroundChannelKey {
     *GROUND_CH_KEYS.iter().find(|k| k.as_str() == channel).unwrap()
 }
 
+// The dense sequence, and it back.
+struct TerrainStyle {
+    /// In assignment order, which is the order the numbering walks.
+    cubes: Vec<PlaceableCube>,
+    to_num: HashMap<TerrainStyleSource, u32>,
+}
+
 static TERRAIN_STYLE: LazyLock<TerrainStyle> = LazyLock::new(|| {
     let mut t = TerrainStyle {
-        source: Vec::new(),
+        cubes: Vec::new(),
         to_num: HashMap::new(),
-        num_to: HashMap::new(),
-        hex: HashMap::new(),
     };
-    let mut next_num = 1;
     for (channel, local_types) in TERRAIN_CHANNELS.iter() {
-        for (local_key, num) in local_types.iter() {
-            let id = format!("{channel}.{local_key}");
-            t.source.push((
-                id.clone(),
-                TerrainStyleSource {
-                    channel: ground_key(channel),
-                    terrain_num_id: *num as u32,
-                },
-            ));
-            t.to_num.insert(id.clone(), next_num);
-            t.num_to.insert(next_num, id);
-            next_num += 1;
+        for (_, num) in local_types.iter() {
+            let source = TerrainStyleSource {
+                channel: ground_key(channel),
+                terrain_num_id: *num as u32,
+            };
+            let Some(cube) = cube_of_source(source) else { continue };
+            t.to_num.insert(source, t.cubes.len() as u32 + 1);
+            t.cubes.push(cube);
         }
-    }
-    // Real swatch colors for every entry above, read straight from cube_colors'
-    // own already-computed palette (no second hand-authored copy to keep in sync).
-    for (id, source) in &t.source {
-        let hex = cube_colors.get(source.channel.as_str()).and_then(|c| c.get(&source.terrain_num_id)).copied().flatten();
-        t.hex.insert(id.clone(), hex);
     }
     t
 });
 
+/// Each channel's numbers back to the name cube_type.json gives them.
+static TYPE_NAME: LazyLock<HashMap<(&'static str, u32), &'static str>> = LazyLock::new(|| {
+    let mut out = HashMap::new();
+    for (channel, entries) in cube_types::CHANNELS.iter() {
+        for (name, num) in entries.iter() {
+            out.insert((*channel, *num as u32), *name);
+        }
+    }
+    out
+});
+
 // =============================================================================
 // Placeable cube catalog — everything mode_bar.tsx's hotbar (cube_ids alone)
-// and palette_modal.tsx's own full grid (this) can offer a user. A separate
+// and drawer_modal.tsx's own full grid (this) can offer a user. A separate
 // concept from cube_ids itself: the hotbar deliberately stays scoped to just
 // the original 15 flat colors (2026-09-06 UX decision — the full catalog
 // lives behind its own modal, not folded into the everyday quick-pick).
 // =============================================================================
 
-/// A CubeColorId or a TerrainStyleCubeId.
+/// What a cube is spelled out as: `"<channel>.<local key>"`.
 pub type PlaceableCubeId = String;
 
-pub fn is_terrain_style_cube(id: &str) -> bool {
-    TERRAIN_STYLE.to_num.contains_key(id)
+/// A placeable cube: a flat colour, or a stand-in for one baked terrain
+/// type. The numbers the catalog declares, never the words they are spelled
+/// out with — those are what `placeable_cube_id` builds, for a label and for
+/// an asset path, and nothing else reads them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaceableCube {
+    Block(cube_types::Block),
+    Land(cube_types::Land),
+    Water(cube_types::Water),
+    Structure(cube_types::Structure),
+    Transport(cube_types::Transport),
 }
 
-/// channel/terrain_num_id a terrain-styled placeable id resolves to — render/layer/object/adapter.ts's own material resolver.
-pub fn terrain_style_cube_source(id: &str) -> TerrainStyleSource {
-    match TERRAIN_STYLE.source.iter().find(|(have, _)| have == id) {
-        Some((_, source)) => *source,
-        None => panic!("no terrain-style source registered for \"{id}\""),
+/// The channel a cube's type belongs to, and the type as its number.
+fn cube_parts(cube: PlaceableCube) -> (&'static str, u32) {
+    match cube {
+        PlaceableCube::Block(t) => ("block", t as u32),
+        PlaceableCube::Land(t) => ("land", t as u32),
+        PlaceableCube::Water(t) => ("water", t as u32),
+        PlaceableCube::Structure(t) => ("structure", t as u32),
+        PlaceableCube::Transport(t) => ("transport", t as u32),
     }
 }
 
-/// The terrain-styled id standing for a real baked (channel, type) pair —
-/// the inverse of terrain_style_cube_source, for callers that hold what the
-/// terrain shows and want the cube that looks like it.
-pub fn terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: u32) -> Option<TerrainStyleCubeId> {
-    TERRAIN_STYLE
-        .source
-        .iter()
-        .find(|(_, s)| s.channel == channel && s.terrain_num_id == terrain_num_id)
-        .map(|(id, _)| id.clone())
+/// The cube standing in for a baked (channel, type), or None where the
+/// channel gives out no such type.
+fn cube_of_source(source: TerrainStyleSource) -> Option<PlaceableCube> {
+    let t = u8::try_from(source.terrain_num_id).ok()?;
+    Some(match source.channel {
+        GroundChannelKey::LAND => PlaceableCube::Land(cube_types::Land::of(t)?),
+        GroundChannelKey::WATER => PlaceableCube::Water(cube_types::Water::of(t)?),
+        GroundChannelKey::STRUCTURE => PlaceableCube::Structure(cube_types::Structure::of(t)?),
+        GroundChannelKey::TRANSPORT => PlaceableCube::Transport(cube_types::Transport::of(t)?),
+    })
 }
 
-pub fn placeable_cube_hex(id: &str) -> Option<&'static str> {
-    if is_terrain_style_cube(id) {
-        TERRAIN_STYLE.hex.get(id).copied().flatten()
-    } else {
-        Some(cube_hex(id))
+/// The id a cube is spelled out under — `"block.red"`, `"land.bare"`.
+/// Exactly two consumers want the words: the locale entry
+/// (`cubes.land.bare`, i18next resolving the dot itself) and the
+/// shipped texture's path. It is what a cube is called, never what it is, so
+/// nothing keys by it.
+///
+/// Every channel alike, block included: the catalog gives block no standing
+/// the other four don't have (cube_type.json lists it as one more channel),
+/// so neither does the spelling.
+pub fn placeable_cube_id(cube: PlaceableCube) -> PlaceableCubeId {
+    let (channel, num) = cube_parts(cube);
+    format!("{channel}.{}", TYPE_NAME[&(channel, num)])
+}
+
+/// The value a leaf holds the cube as: a flat colour's own catalog number,
+/// or the dense one the terrain-styled walk assigns.
+pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
+    match terrain_style_cube_source(cube) {
+        None => cube_parts(cube).1,
+        Some(source) => TERRAIN_STYLE.to_num[&source],
     }
 }
 
-pub fn placeable_cube_num_id(id: &str) -> u32 {
-    if is_terrain_style_cube(id) {
-        TERRAIN_STYLE.to_num[id]
-    } else {
-        cube_num_id(id)
+/// The cube a stored leaf value names, or None for a value that names no
+/// cube — VOID, AIR, a decor kind.
+pub fn placeable_cube_of(num_id: u32) -> Option<PlaceableCube> {
+    if let Some(cube) = num_id.checked_sub(1).and_then(|i| TERRAIN_STYLE.cubes.get(i as usize)) {
+        return Some(*cube);
     }
+    u8::try_from(num_id).ok().and_then(cube_types::Block::of).map(PlaceableCube::Block)
 }
 
-pub fn placeable_cube_id_from_num(num_id: u32) -> PlaceableCubeId {
-    match TERRAIN_STYLE.num_to.get(&num_id) {
-        Some(id) => id.clone(),
-        None => cube_id_from_num(num_id).to_string(),
-    }
+/// Which baked (channel, type) the cube stands in for, None for a flat
+/// colour, which stands in for nothing.
+pub fn terrain_style_cube_source(cube: PlaceableCube) -> Option<TerrainStyleSource> {
+    let (channel, terrain_num_id) = cube_parts(cube);
+    (channel != "block").then(|| TerrainStyleSource {
+        channel: ground_key(channel),
+        terrain_num_id,
+    })
 }
 
-/// Every placeable id, flat colors first (cube_ids' own order) then every
-/// terrain-styled entry, channel by channel (GROUND_CH_KEYS' own order) —
-/// mode_bar.tsx's hotbar keeps using cube_ids alone; this is
-/// palette_modal.tsx's own full-catalog source.
-pub static placeable_cube_ids: LazyLock<Vec<PlaceableCubeId>> = LazyLock::new(|| {
-    let mut out: Vec<PlaceableCubeId> = cube_ids.iter().map(|id| id.to_string()).collect();
-    for channel in GROUND_CH_KEYS {
-        let entries = cube_types::CHANNELS.iter().find(|(ch, _)| *ch == channel.as_str()).unwrap().1;
-        out.extend(entries.iter().map(|(local_key, _)| format!("{}.{local_key}", channel.as_str())));
-    }
-    out
+/// The cube standing in for a real baked (channel, type) pair — the inverse
+/// of terrain_style_cube_source, for callers that hold what the terrain shows
+/// and want the cube that looks like it.
+pub fn terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: u32) -> Option<PlaceableCube> {
+    let source = TerrainStyleSource { channel, terrain_num_id };
+    TERRAIN_STYLE.to_num.contains_key(&source).then(|| cube_of_source(source)).flatten()
+}
+
+/// The swatch colour the catalog gives it — cube_colors is keyed by channel
+/// and number, so this is the palette's own row, not a second table.
+pub fn placeable_cube_hex(cube: PlaceableCube) -> Option<&'static str> {
+    let (channel, num) = cube_parts(cube);
+    cube_colors.get(channel).and_then(|c| c.get(&num)).copied().flatten()
+}
+
+/// Every cube the catalogs give out, flat colours first in the catalog's own
+/// numeric order, then every terrain-styled entry channel by channel.
+pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| {
+    let blocks = cube_ids.iter().filter_map(|id| cube_types::Block::of(cube_num_id(id) as u8).map(PlaceableCube::Block));
+    blocks.chain(TERRAIN_STYLE.cubes.iter().copied()).collect()
 });
 
 #[cfg(test)]

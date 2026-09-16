@@ -8,7 +8,8 @@
 //! display did not have. Both now format what this returns, so a number on
 //! the panel and the same number in a pasted report agree.
 
-use super::ledger::{DrawCensus, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
+use super::demand::Category;
+use super::ledger::{DrawCensus, Failure, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
 use super::tick::PHASES;
 use super::tick::HARD_SLACK_MS;
 
@@ -175,38 +176,41 @@ pub fn tris_text(t: f64) -> String {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskSummary {
-    pub cat: String,
+    /// The category as the record names it — one of the code's own, never a
+    /// copy of it.
+    pub cat: Category,
     pub n: usize,
     pub ok: usize,
     pub aborted: usize,
     pub error: usize,
     /// Latency of the tasks that succeeded, enqueue to settle.
     pub lat: Spread,
-    /// Failures by reason, commonest first — fetch_scheduler.rs's error_reason.
-    pub reasons: Vec<(String, usize)>,
+    /// Failures by reason, commonest first. Counted by the reason's own two
+    /// numbers, so grouping never compares prose.
+    pub reasons: Vec<(Failure, usize)>,
     /// Mean of each phase the demand's run reported, when any did — the number
     /// that says whether the category's static bound label is true.
-    pub phase_mean: Option<Vec<(String, f64)>>,
+    pub phase_mean: Option<Vec<(&'static str, f64)>>,
 }
 
 pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
     struct Group {
-        cat: String,
+        cat: Category,
         lat: Vec<f64>,
         ok: usize,
         aborted: usize,
         error: usize,
-        reasons: Vec<(String, usize)>,
-        phase_sum: Vec<(String, f64)>,
+        reasons: Vec<(Failure, usize)>,
+        phase_sum: Vec<(&'static str, f64)>,
         phase_n: usize,
     }
     let mut by: Vec<Group> = Vec::new();
     for rec in tasks {
-        let g = match by.iter().position(|g| g.cat == rec.category) {
+        let g = match by.iter().position(|g| g.cat == rec.key.category) {
             Some(p) => &mut by[p],
             None => {
                 by.push(Group {
-                    cat: rec.category.to_string(),
+                    cat: rec.key.category,
                     lat: Vec::new(),
                     ok: 0,
                     aborted: 0,
@@ -226,7 +230,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
             Outcome::Aborted => g.aborted += 1,
             Outcome::Error => {
                 g.error += 1;
-                let reason = rec.error.as_deref().unwrap_or("unrecorded").to_string();
+                let reason = rec.fail;
                 match g.reasons.iter_mut().find(|(r, _)| *r == reason) {
                     Some(r) => r.1 += 1,
                     None => g.reasons.push((reason, 1)),
@@ -236,9 +240,9 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
         if let Some(phases) = &rec.phases {
             g.phase_n += 1;
             for (k, v) in phases.iter() {
-                match g.phase_sum.iter_mut().find(|(p, _)| p == k) {
+                match g.phase_sum.iter_mut().find(|(p, _)| *p == k) {
                     Some(s) => s.1 += v,
-                    None => g.phase_sum.push((k.to_string(), v)),
+                    None => g.phase_sum.push((k, v)),
                 }
             }
         }

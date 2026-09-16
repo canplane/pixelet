@@ -377,7 +377,7 @@ fn sweep_unit(x: &mut PoiIndex) {
         // sphere in xyz, and map_center carries the terrain height under it.
         let flat = (j.flat_pos)(pois, r, page_idx);
         let mut ground = PVF3::default();
-        let grounded = with_ele(&mut ground, flat.i, flat.f);
+        let grounded = with_ele(&mut ground, &flat);
 
         // Not snapped here. Which cell a badge stands in depends on its tier
         // and its tier depends on its distance, so the snap belongs to the tick.

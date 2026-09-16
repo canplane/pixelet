@@ -5,9 +5,10 @@
 //! settings — runs the scheduler's pass once, and applies what it told to the
 //! chunk nodes (chunk_node.rs); the shell's renderer then draws the scheduler's
 //! lists. In the report phase it hands the frame's numbers to the ledger.
-//! `chunk_mounts_step` tells the scheduler which pages have a terrain tile,
+//! `chunk_mounts_step` tells the scheduler which page_idxs have a terrain tile,
 //! which is what it mounts chunks from.
 
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
 
 use super::chunk_node::{chunk_page, run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
@@ -19,7 +20,9 @@ use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::lod::set_lod_projection;
+use crate::module::world::poi::use_poi_fetcher;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
+use crate::module::world::terrain::use_tile_fetcher;
 use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
@@ -52,7 +55,7 @@ struct CoreTick {
     /// Whether the scheduler's pass left something new to draw.
     draw: bool,
     pages_revision: Option<u32>,
-    pages: Vec<u64>,
+    page_idxs: Vec<IVec>,
 }
 
 static CORE_TICK: Global<CoreTick> = Global::new();
@@ -64,7 +67,7 @@ fn core_tick() -> &'static mut CoreTick {
         host: HostFrameStat::default(),
         draw: false,
         pages_revision: None,
-        pages: Vec::new(),
+        page_idxs: Vec::new(),
     })
 }
 
@@ -236,12 +239,12 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         poi_count,
         pool: pool_sample(),
         work: work_sample(c),
-        q_terrain: fetch_pending_count("terrain") as f64,
-        q_poi: fetch_pending_count("poi") as f64,
+        q_terrain: fetch_pending_count(use_tile_fetcher::CATEGORY) as f64,
+        q_poi: fetch_pending_count(use_poi_fetcher::CATEGORY) as f64,
     });
 }
 
-/// Tells the scheduler which pages have a terrain tile, whenever the set moves.
+/// Tells the scheduler which page_idxs have a terrain tile, whenever the set moves.
 /// Everything else — which chunks, when — is the scheduler's, from the range
 /// anchor the visible pass writes into the frame.
 pub fn chunk_mounts_step() {
@@ -251,12 +254,12 @@ pub fn chunk_mounts_step() {
         return;
     }
     c.pages_revision = Some(revision);
-    let pages: Vec<u64> = tile_pages().keys().collect();
-    for &gone in c.pages.iter().filter(|p| !pages.contains(p)) {
+    let page_idxs: Vec<IVec> = tile_pages().keys().collect();
+    for &gone in c.page_idxs.iter().filter(|p| !page_idxs.contains(p)) {
         chunk_page(gone, false);
     }
-    for &page in &pages {
+    for &page in &page_idxs {
         chunk_page(page, true);
     }
-    c.pages = pages;
+    c.page_idxs = page_idxs;
 }

@@ -39,9 +39,10 @@ export type KernelExports = {
 
 /** crates/pxl/wasm/src/lib.rs's boot block, word by word: the section the
  * module keeps; where the submission and completion rings are; then the
- * fixed, page and mesh sections, each its offset, bytes and region size;
- * then the quantum the kernel declares, five words in thousandths. */
-export const BOOT = { module_bytes: 0, sq: 1, cq: 2, fixed: 3, page: 6, mesh: 9, quantum: 12, heap: 17 } as const;
+ * fixed section, the terrain slab and the mesh section, each its offset,
+ * bytes and region size; then the quantum the kernel declares, five words in
+ * thousandths. */
+export const BOOT = { module_bytes: 0, sq: 1, cq: 2, fixed: 3, slab: 6, mesh: 9, quantum: 12, heap: 17 } as const;
 const BOOT_WORDS = 18;
 
 /** The boot block, read in place. */

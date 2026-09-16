@@ -6,6 +6,7 @@ pub mod fetch_scheduler;
 pub mod ledger;
 pub mod log;
 pub mod priority;
+pub mod report;
 pub mod summary;
 pub mod tick;
 pub mod trace;

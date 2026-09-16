@@ -64,8 +64,9 @@ static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds
 
 struct State {
     /// The submission ring (glue → core) and the completion ring (core →
-    /// glue), at their fixed places in the fixed section
-    /// (pxl_core::memory's RING_SQ_AT and RING_CQ_AT).
+    /// glue), in blocks of the fixed section taken once. Where in that section
+    /// they sit is the section's to answer, and the boot block carries the
+    /// answer out to the shell.
     sq: Ring,
     /// The completion ring and its spill.
     outbox: Outbox,
@@ -80,11 +81,15 @@ struct State {
 /// dry between ticks.
 pub const RING_CAPACITY: u32 = 4096;
 
+/// A ring's block of the fixed section: how much the rings ask that section
+/// for, which is all the map needs to know about them.
+pub const RING_BYTES: u32 = 1 << 20;
+
 /// Each ring's packet arena: what is left of its block after the header and
 /// the messages. The fixed pool hands out powers of two, so a ring a byte past
 /// its block would take twice the block. A chunk's largest message is under
 /// 128 bytes, so a full ring's packets fit in about half.
-pub const RING_ARENA_BYTES: u32 = memory::RING_BYTES - (RING_HEADER_WORDS + RING_CAPACITY * RING_ENTRY_WORDS) * 4;
+pub const RING_ARENA_BYTES: u32 = RING_BYTES - (RING_HEADER_WORDS + RING_CAPACITY * RING_ENTRY_WORDS) * 4;
 
 /// The ring whose block is at `at`. A pool block starts 8-aligned, so the
 /// ring and every packet in its arena sit where a packet's f64 and u64 lanes
@@ -92,7 +97,7 @@ pub const RING_ARENA_BYTES: u32 = memory::RING_BYTES - (RING_HEADER_WORDS + RING
 fn new_ring(at: u32, capacity: u32) -> Ring {
     // SAFETY: `at` is the fixed pool's block boot took for this ring alone and
     // never gives back, in the module's memory addressed from 0.
-    let buffer = unsafe { ArrayBuffer::from_raw(at as usize as *mut u8, memory::RING_BYTES as usize) };
+    let buffer = unsafe { ArrayBuffer::from_raw(at as usize as *mut u8, RING_BYTES as usize) };
     Ring::init(buffer, 0, capacity, RING_ARENA_BYTES)
 }
 
@@ -123,6 +128,18 @@ extern "C" {
     fn host_now() -> f64;
 }
 
+/// The submission ring's block, the completion ring's and the spill's, taken
+/// from the fixed section the first time a ring is wanted. The map is laid out
+/// here if it has not been: a ring cannot come from a section that has not been
+/// cut, and making that a dependency rather than an order to keep is what
+/// leaves the section free to put them where it likes.
+fn ring_blocks() -> [u32; 3] {
+    memory::map().unwrap_or_else(lay_out);
+    let pool = &mut kernel().pools[memory::FIXED_POOL as usize];
+    assert!(ring_bytes(RING_CAPACITY, RING_ARENA_BYTES) <= RING_BYTES, "a ring outgrows its block");
+    core::array::from_fn(|_| pool.acquire(RING_BYTES).expect("the fixed section has no room for a ring") as u32)
+}
+
 fn state() -> &'static mut State {
     // SAFETY: the module runs on one thread and no export re-enters another,
     // so no two references to the state are live at once.
@@ -132,11 +149,12 @@ fn state() -> &'static mut State {
                 let text = info.to_string();
                 host_panic(text.as_ptr(), text.len());
             }));
+            let [sq, cq, spill] = ring_blocks();
             State {
-                sq: new_ring(memory::RING_SQ_AT, RING_CAPACITY),
+                sq: new_ring(sq, RING_CAPACITY),
                 outbox: Outbox {
-                    cq: new_ring(memory::RING_CQ_AT, RING_CAPACITY),
-                    spill: new_ring(memory::RING_SPILL_AT, RING_CAPACITY),
+                    cq: new_ring(cq, RING_CAPACITY),
+                    spill: new_ring(spill, RING_CAPACITY),
                 },
                 snapshot: 0,
                 boot: [0; BOOT_WORDS],
@@ -247,7 +265,7 @@ pub extern "C" fn boot() -> *const u32 {
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[MODULE_BYTES, sq, cq]);
     s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
-    for (i, sec) in [map.fixed, map.page, map.mesh].into_iter().enumerate() {
+    for (i, sec) in [map.fixed, map.slab, map.mesh].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
@@ -263,7 +281,9 @@ fn lay_out() -> memory::Map {
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = memory::lay_out(given.min(u32::MAX as u64) as u32);
     let k = kernel();
-    for sec in [map.fixed, map.page, map.mesh] {
+    // The slab is no pool: a terrain page's record is its own coordinate, so
+    // only the fixed section and the mesh have one.
+    for sec in [map.fixed, map.mesh] {
         // SAFETY: the memory is this module's own, addressed from 0, and the
         // map gives each pool a range no other pool has.
         k.pools.push(unsafe {
@@ -276,13 +296,6 @@ fn lay_out() -> memory::Map {
                 memory::MIN_BLOCK_BYTES,
             )
         });
-    }
-    // The rings first, so the fixed pool's first two blocks are theirs and
-    // they land where the map says the host will find them.
-    assert!(ring_bytes(RING_CAPACITY, RING_ARENA_BYTES) <= memory::RING_BYTES, "a ring outgrows its block");
-    for at in [memory::RING_SQ_AT, memory::RING_CQ_AT, memory::RING_SPILL_AT] {
-        let got = k.pools[memory::FIXED_POOL as usize].acquire(memory::RING_BYTES);
-        assert_eq!(got, Some(at as usize), "a ring is not where the map puts it");
     }
     // SAFETY: the pools were cut from this module's memory, addressed from 0.
     k.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), memory::FIXED_POOL, memory::MESH_POOL) });
@@ -429,8 +442,8 @@ fn post_event(o: &Outbox, e: Event) {
         Event::Evict { id, step } => signal(o, id, Cmd::TIER_DELETE, 1, |b| {
             b.u32(Some(step));
         }),
-        Event::Mount { id, page, base_x, base_y } => signal(o, id, Cmd::CHUNK_CREATE, 3, |b| {
-            b.u64(Some(page)).u32(Some(base_x)).u32(Some(base_y));
+        Event::Mount { id, page_idx, base_x, base_y } => signal(o, id, Cmd::CHUNK_CREATE, 3, |b| {
+            b.u64(Some(page_idx)).u32(Some(base_x)).u32(Some(base_y));
         }),
         Event::Unmount { id } => o.post(id, Cmd::CHUNK_DELETE as u32, 0, 0, None),
         Event::Decor { id, step, at, bytes } => signal(o, id, Cmd::DECOR_CREATE, 3, |b| {
@@ -464,7 +477,7 @@ fn post_shell(s: &mut State) {
                     ToastTone::Error => 1,
                     ToastTone::Success => 2,
                 };
-                e.bool(Some(true)).str(Some(spec.id)).str(Some(spec.message_key.as_str())).u32(Some(tone));
+                e.bool(Some(true)).str(Some(spec.id)).u32(Some(spec.message as u32)).u32(Some(tone));
             }
             ToastCommand::Dismiss(id) => {
                 e.bool(Some(false)).str(Some(id)).str(Some("")).u32(Some(0));
@@ -499,14 +512,18 @@ fn post_shell(s: &mut State) {
             e.str(Some(ui));
         });
     }
+    // The key crosses as the one word the queue orders by; the shell holds it
+    // as a handle and hands it back, and never reads into it.
     fetch_take_started(|d| {
+        let key = pxl_core::module::world::sched::fetch_scheduler::hash_of(d.key);
         raise(&s.outbox, Cmd::FETCH_CREATE, 2, |e| {
-            e.str(Some(&d.key)).str_display(pxl_core::module::world::fetch::DemandUrl(d));
+            e.u64(Some(key)).str_display(pxl_core::module::world::fetch::DemandUrl(d));
         });
     });
-    fetch_take_aborts(|key| {
+    fetch_take_aborts(|name| {
+        let key = pxl_core::module::world::sched::fetch_scheduler::hash_of(name);
         raise(&s.outbox, Cmd::FETCH_DELETE, 1, |e| {
-            e.str(Some(key));
+            e.u64(Some(key));
         });
     });
     for q in take_load_requests() {
@@ -1181,20 +1198,30 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             }
             return Ok(Some((0, None)));
         }
+        Cmd::WORLD_LONG_FRAME => {
+            let f = fields(pkt)?;
+            pxl_core::module::world::sched::ledger::ledger_record_long_frame(pxl_core::module::world::sched::ledger::LongFrameRecord {
+                source: if u32_at(&f, 0)? == 0 {
+                    pxl_core::module::world::sched::ledger::LongFrameSource::Loaf
+                } else {
+                    pxl_core::module::world::sched::ledger::LongFrameSource::Longtask
+                },
+                t: number_at(&f, 1)?,
+                duration_ms: number_at(&f, 2)?,
+                blocking_ms: number_at(&f, 3)?,
+                script_ms: number_at(&f, 4)?,
+                render_ms: number_at(&f, 5)?,
+            });
+            return Ok(Some((0, None)));
+        }
         Cmd::FETCH_BODY => {
             let f = fields(pkt)?;
-            let key = f.at(0)?;
-            let at = pxl_core::module::world::fetch::fetch_body(key.get_str_ref()?, u32_at(&f, 1)?);
+            let at = pxl_core::module::world::fetch::fetch_body(u64_at(&f, 0)?, u32_at(&f, 1)?);
             return Ok(Some((at as i32, None)));
         }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
-            let (key, error) = (f.at(0)?, f.at(5)?.opt());
-            let error = match &error {
-                Some(c) => Some(c.get_str_ref()?),
-                None => None,
-            };
-            pxl_core::module::world::fetch::fetch_arrived(key.get_str_ref()?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), error, number_at(&f, 6)?);
+            pxl_core::module::world::fetch::fetch_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_UPDATE => {
@@ -1554,7 +1581,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE | Cmd::WORLD_ACTION | Cmd::WORLD_UPDATE | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::FETCH_BODY | Cmd::FETCH_UPDATE | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE | Cmd::GPU_CREATE | Cmd::GPU_DELETE | Cmd::SURFACE_CREATE | Cmd::SURFACE_UPDATE | Cmd::SURFACE_DELETE => return Ok(None),
+        Cmd::WORLD_CREATE | Cmd::WORLD_ACTION | Cmd::WORLD_LONG_FRAME | Cmd::WORLD_UPDATE | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::FETCH_BODY | Cmd::FETCH_UPDATE | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE | Cmd::GPU_CREATE | Cmd::GPU_DELETE | Cmd::SURFACE_CREATE | Cmd::SURFACE_UPDATE | Cmd::SURFACE_DELETE => return Ok(None),
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
         Cmd::WORLD_TOAST | Cmd::WORLD_LOG | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => return Ok(None),
     }

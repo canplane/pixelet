@@ -4,14 +4,14 @@
 //! test (crates/pxl/core/src/world/raycast.rs's hit_decor): the ray against the
 //! triangles of every placed instance the on-screen chunks show, from the same
 //! blocks the renderer draws. What comes back is the chunk it stands in and the
-//! entry's band and packed position in that column, which the object store
-//! turns into the entry's id.
+//! entry's band and packed position in that column, which is the address the
+//! object store files the entry under.
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::mat4::Vec3;
 
 use crate::kernel::kernel;
-use crate::module::world::object::store::entry_id_of;
+use crate::module::world::object::store::EntryAt;
 use crate::module::world::raycast::{ray_hit_decor, RayLike};
 
 // A decor mesh sitting on the ground it also intersects (any tree's own
@@ -26,12 +26,19 @@ use crate::module::world::raycast::{ray_hit_decor, RayLike};
 // terrain win, and larger than the round-off.
 const SAME_SURFACE_EPS: f64 = 1e-3;
 
-/// The id of the placed decor entry the ray strikes within `max_dist`, or None.
+/// Where the placed decor entry the ray strikes within `max_dist` is filed, or
+/// None.
 /// Procedural instances are passed over by the kernel, so a hit on one falls
 /// through to whatever is next along the ray. The ray is in the root frame,
 /// relative to `map_origin`, as the voxel raycast takes it.
-pub fn raycast_decor(origin: Vec3, direction: Vec3, map_origin: IVec, max_dist: f64) -> Option<String> {
+pub fn raycast_decor(origin: Vec3, direction: Vec3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
     let hit = ray_hit_decor(&RayLike { origin, direction }, map_origin, max_dist + SAME_SURFACE_EPS)?;
-    let (base, ..) = kernel().sched.builder.source_of(hit.chunk)?;
-    Some(entry_id_of(base, hit.band, hit.pos))
+    let (_, col_idx, ..) = kernel().sched.builder.source_of(hit.chunk)?;
+    // The lane holds the band's own i32 as a word (world/decor.rs), NO_ENTRY
+    // apart, which the kernel has already passed over.
+    Some(EntryAt {
+        col_idx,
+        band_idx: hit.band as i32,
+        pos: hit.pos,
+    })
 }

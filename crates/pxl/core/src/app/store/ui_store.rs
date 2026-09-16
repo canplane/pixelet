@@ -1,6 +1,6 @@
 // pxl_core/app/store/ui_store.rs
 
-use pxl_shared::spec::cell::{decor_ids, placeable_cube_ids, DecorId, PlaceableCubeId};
+use pxl_shared::spec::cell::{cube_types, decor_ids, placeable_cube_id, placeable_cubes, DecorId, PlaceableCube};
 
 use crate::global::Global;
 use crate::host::{storage_get, storage_set, wall_now};
@@ -30,13 +30,12 @@ pub struct ChatLine {
 const MAX_CHAT_LINES: usize = 10;
 
 // The hotbar: "whatever you actually reached for lately," across cube and
-// decor alike, one shared MRU list. Tagged: a cube id and a decor id are both
-// plain strings with no shared namespace, so telling them apart — and knowing
-// whether picking one sets object_color_id or decor_id — needs the kind
-// alongside the id.
+// decor alike, one shared MRU list. Tagged: a cube and a decor kind are two
+// catalogs — telling them apart, and knowing whether picking one sets
+// object_cube or decor_id, needs the kind alongside.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecentPick {
-    Object(PlaceableCubeId),
+    Object(PlaceableCube),
     Decor(DecorId),
 }
 
@@ -45,14 +44,14 @@ pub enum RecentPick {
 // narrow phone's width.
 const MAX_RECENT_PICKS: usize = 8;
 
-// A pick persisted from an older session can name an id the catalog no longer
-// has — dropped rather than trusted as-is, so a stale entry can't leave a dead
-// id sitting in the hotbar forever.
-fn is_known_pick(pick: &RecentPick) -> bool {
-    match pick {
-        RecentPick::Object(id) => placeable_cube_ids.iter().any(|p| p == id),
-        RecentPick::Decor(id) => decor_ids.contains(id),
-    }
+/// The cube an id names, or None where the catalog has no such id — a pick
+/// persisted from an older session, dropped rather than trusted as-is so a
+/// stale entry cannot leave a dead swatch sitting in the hotbar forever.
+/// Reading storage is the one place the kernel still takes a cube by its id:
+/// a browser's own blob is words, written before the numbering it would
+/// otherwise carry.
+fn cube_of(id: &str) -> Option<PlaceableCube> {
+    placeable_cubes.iter().copied().find(|cube| placeable_cube_id(*cube) == id)
 }
 
 // Only ever inserts a genuinely new pick at the front — re-picking one already
@@ -69,9 +68,9 @@ fn touch_recent(recent_picks: &mut Vec<RecentPick>, pick: RecentPick) {
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiStore {
     pub active_tool: ActiveTool,
-    /// The full placeable catalog: the hotbar only ever sets this to a flat
-    /// colour, but the drawer picks terrain-styled cubes too.
-    pub object_color_id: PlaceableCubeId,
+    /// The hotbar only ever sets this to a flat colour, but the drawer picks
+    /// terrain-styled cubes too.
+    pub object_cube: PlaceableCube,
     pub object_size: f64,
     pub decor_id: DecorId,
     /// Most recent first. select_cube/select_decor are the only way to advance
@@ -91,13 +90,13 @@ const STORAGE_KEY: &str = "pxl:ui_hotbar";
 /// slots either way, so the empty tail read as missing rather than as room.
 fn seed_picks() -> Vec<RecentPick> {
     vec![
-        RecentPick::Object("white".to_string()),
-        RecentPick::Object("land.BARE".to_string()),
-        RecentPick::Object("water.RIVER".to_string()),
-        RecentPick::Object("structure.BUILDING".to_string()),
-        RecentPick::Object("transport.ROAD_DEFAULT".to_string()),
-        RecentPick::Object("red".to_string()),
-        RecentPick::Object("blue".to_string()),
+        RecentPick::Object(PlaceableCube::Block(cube_types::Block::white)),
+        RecentPick::Object(PlaceableCube::Land(cube_types::Land::bare)),
+        RecentPick::Object(PlaceableCube::Water(cube_types::Water::river)),
+        RecentPick::Object(PlaceableCube::Structure(cube_types::Structure::building)),
+        RecentPick::Object(PlaceableCube::Transport(cube_types::Transport::road_default)),
+        RecentPick::Object(PlaceableCube::Block(cube_types::Block::red)),
+        RecentPick::Object(PlaceableCube::Block(cube_types::Block::blue)),
         RecentPick::Decor(decor_ids[0]),
     ]
 }
@@ -106,7 +105,7 @@ impl UiStore {
     fn fresh() -> UiStore {
         UiStore {
             active_tool: ActiveTool::Pointer,
-            object_color_id: "red".to_string(),
+            object_cube: PlaceableCube::Block(cube_types::Block::red),
             object_size: DEFAULT_OBJECT_SIZE,
             decor_id: "tree",
             recent_picks: seed_picks(),
@@ -135,10 +134,10 @@ impl UiStore {
         }
     }
 
-    pub fn select_cube(&mut self, id: &str) {
-        self.object_color_id = id.to_string();
+    pub fn select_cube(&mut self, cube: PlaceableCube) {
+        self.object_cube = cube;
         self.active_tool = ActiveTool::Object;
-        touch_recent(&mut self.recent_picks, RecentPick::Object(id.to_string()));
+        touch_recent(&mut self.recent_picks, RecentPick::Object(cube));
         self.changed();
     }
 
@@ -177,24 +176,32 @@ fn json_string(s: &str) -> String {
     out
 }
 
-// Persisted: object_color_id/decor_id/recent_picks — real picks worth
+// Persisted: object_cube_id/decor_id/recent_picks — real picks worth
 // remembering across a reload. active_tool and chat_lines are deliberately left
 // out: a fresh load should always start at the neutral pointer tool, and chat
 // lines are dev-only dummy data, not user state.
+//
+// A cube is stored under the id the catalog spells it out with, not the
+// number it is held as: a browser's storage outlives the numbering, which is
+// assignment order over a catalog that grows.
+//
+// Version 1 is that id gaining its channel ("block.red", not "red"): a blob
+// written before it resolves to no cube and falls back to the seed, which is
+// what a pick the catalog no longer has does anyway.
 fn save(s: &UiStore) {
     let picks: Vec<String> = s
         .recent_picks
         .iter()
         .map(|p| match p {
-            RecentPick::Object(id) => format!("{{\"kind\":\"object\",\"id\":{}}}", json_string(id)),
+            RecentPick::Object(cube) => format!("{{\"kind\":\"object\",\"id\":{}}}", json_string(&placeable_cube_id(*cube))),
             RecentPick::Decor(id) => format!("{{\"kind\":\"decor\",\"id\":{}}}", json_string(id)),
         })
         .collect();
     storage_set(
         STORAGE_KEY,
         &format!(
-            "{{\"state\":{{\"object_color_id\":{},\"decor_id\":{},\"recent_picks\":[{}]}},\"version\":0}}",
-            json_string(&s.object_color_id),
+            "{{\"state\":{{\"object_cube_id\":{},\"decor_id\":{},\"recent_picks\":[{}]}},\"version\":1}}",
+            json_string(&placeable_cube_id(s.object_cube)),
             json_string(s.decor_id),
             picks.join(",")
         ),
@@ -219,14 +226,15 @@ fn load() -> UiStore {
             arr.items()
                 .filter_map(|p| {
                     let (id, kind) = (p.get("id")?.as_str()?, p.get("kind")?.as_str()?);
-                    let pick = if kind.eq_str("object") {
-                        RecentPick::Object(id.to_string())
+                    // Both arms resolve through the catalog, so a pick it no
+                    // longer has drops here.
+                    if kind.eq_str("object") {
+                        Some(RecentPick::Object(cube_of(&id.to_string())?))
                     } else if kind.eq_str("decor") {
-                        RecentPick::Decor(decor_id_of(id)?)
+                        Some(RecentPick::Decor(decor_id_of(id)?))
                     } else {
-                        return None;
-                    };
-                    is_known_pick(&pick).then_some(pick)
+                        None
+                    }
                 })
                 .collect()
         })
@@ -243,11 +251,8 @@ fn load() -> UiStore {
         }
     }
     s.recent_picks = picks;
-    if let Some(id) = state.get("object_color_id").and_then(|v| v.as_str()) {
-        let pick = RecentPick::Object(id.to_string());
-        if is_known_pick(&pick) {
-            s.object_color_id = id.to_string();
-        }
+    if let Some(cube) = state.get("object_cube_id").and_then(|v| v.as_str()).and_then(|id| cube_of(&id.to_string())) {
+        s.object_cube = cube;
     }
     if let Some(id) = state.get("decor_id").and_then(|v| v.as_str()).and_then(decor_id_of) {
         s.decor_id = id;

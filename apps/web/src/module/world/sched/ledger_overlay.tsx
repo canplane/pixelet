@@ -2,13 +2,18 @@
 
 /**
  * Dev overlay for the kernel's ledger (crates/pxl/core/src/module/world/sched):
- * the recording window and the text side (log.rs) as buttons — a fresh window,
- * the pasteable report, and the live console stream. Gated by
+ * the recording window and the text side as buttons — a fresh window, the
+ * pasteable report, and the live console stream. Gated by
  * `import.meta.env.DEV` and the `show_ledger` setting — off by default.
+ *
+ * It also installs the long-frame observers, which outlive it: they are the
+ * ledger's rather than the panel's, so closing the panel does not stop a
+ * window being recorded.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { install_long_frame_observers } from "./long_frame.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 
 const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90";
@@ -16,6 +21,10 @@ const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-whi
 export function LedgerOverlay() {
   const show = useKernel((s) => s.settings.show_ledger === true);
   const [logging, set_logging] = useState(false);
+
+  // The observers outlive the panel: they are the ledger's, not its, so
+  // closing the panel does not stop a window being recorded.
+  useEffect(install_long_frame_observers, []);
 
   if (!import.meta.env.DEV || !show) return null;
 

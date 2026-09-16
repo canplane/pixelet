@@ -31,6 +31,10 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Quantum } from "@xpute/core/sched/quantum.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { Message } from "@pxl/shared/spec/message.ts";
+import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
+import { type LedgerReport, ledger_report_text } from "@/module/world/sched/ledger_report.ts";
+import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
@@ -43,19 +47,22 @@ import { boot_block, quantum_policy } from "@/wasm/module.ts";
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
-export type RecentPick = { kind: "object" | "decor"; id: string };
+/** A cube crosses as the catalog number a leaf holds it as; the id it is
+ * spelled out under is this side's to read off the same JSON the kernel was
+ * numbered from (@pxl/shared/spec/cell). */
+export type RecentPick = { kind: "object"; num_id: number } | { kind: "decor"; id: string };
 export type ChatLine = { id: number; text: string; ts: number };
 export type SearchRow = { gers_id: string; kind: "poi" | "division"; name: string; subtitle: string; distance: string | null; icon: string; color: string; lon: number; lat: number };
 
 export type UiSnapshot = {
   map: { has_center: boolean; center_lonlat: [number, number] | null; status: "idle" | "loading" | "success" | "error"; is_off_center: boolean };
-  location: { status: PoseStatus; error_key: string | null; has_location: boolean };
+  location: { status: PoseStatus; error: Message | null; has_location: boolean };
   orientation: { status: PoseStatus; heading: number | null };
   view: { dist: number; azimuth: number; polar: number };
   is_follow_mode: boolean;
   camera_busy: boolean;
   fog: string;
-  ui: { active_tool: ActiveTool; object_color_id: string; object_size: number; decor_id: string; recent_picks: RecentPick[]; chat_lines: ChatLine[] };
+  ui: { active_tool: ActiveTool; object_cube_num_id: number; object_size: number; decor_id: string; recent_picks: RecentPick[]; chat_lines: ChatLine[] };
   settings: Record<string, boolean | string>;
   companion: { person_ready: boolean; pet_ready: boolean };
   address: { label: string | null; loading: boolean };
@@ -69,13 +76,14 @@ export type UiSnapshot = {
 
 const INITIAL: UiSnapshot = {
   map: { has_center: false, center_lonlat: null, status: "idle", is_off_center: false },
-  location: { status: "idle", error_key: null, has_location: false },
+  location: { status: "idle", error: null, has_location: false },
   orientation: { status: "idle", heading: null },
   view: { dist: 0, azimuth: 0, polar: 0 },
   is_follow_mode: false,
   camera_busy: false,
   fog: "#000000",
-  ui: { active_tool: "pointer", object_color_id: "red", object_size: 1, decor_id: "tree", recent_picks: [], chat_lines: [] },
+  // A flat colour is held as its own catalog number (spec/cell).
+  ui: { active_tool: "pointer", object_cube_num_id: cube_types.block.red, object_size: 1, decor_id: "tree", recent_picks: [], chat_lines: [] },
   settings: {},
   companion: { person_ready: false, pet_ready: false },
   address: { label: null, loading: false },
@@ -95,7 +103,7 @@ function set_snapshot(text: string): void {
   if (text === snapshot_text) return;
   snapshot_text = text;
   snapshot = JSON.parse(text) as UiSnapshot;
-  if (snapshot.report !== null) void print_report(snapshot.report);
+  if (snapshot.report !== null) void print_report(ledger_report_text(JSON.parse(snapshot.report) as LedgerReport));
   for (const listener of snapshot_listeners) listener();
 }
 
@@ -139,7 +147,7 @@ export function kernel_action(action: KernelAction): boolean {
 
 // ---- toasts ----
 
-export type ToastEvent = { show: true; id: string; message_key: string; tone: number } | { show: false; id: string };
+export type ToastEvent = { show: true; id: string; message: Message; tone: number } | { show: false; id: string };
 
 const toast_listeners = new Set<(e: ToastEvent) => void>();
 const toast_backlog: ToastEvent[] = [];
@@ -166,8 +174,8 @@ const GEOLOCATION = 0;
 function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
   switch (cmd) {
     case Cmd.WORLD_TOAST: {
-      const [show, id, message_key, tone] = f!.get<[boolean, string, string, number]>();
-      emit_toast(show ? { show: true, id, message_key, tone } : { show: false, id });
+      const [show, id, message, tone] = f!.get<[boolean, string, Message, number]>();
+      emit_toast(show ? { show: true, id, message, tone } : { show: false, id });
       return;
     }
     case Cmd.WORLD_LOG:
@@ -193,12 +201,12 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
       orientation_request_permission();
       return;
     case Cmd.FETCH_CREATE: {
-      const [key, url] = f!.get<[string, string]>();
+      const [key, url] = f!.get<[bigint, string]>();
       void run_fetch(key, url);
       return;
     }
     case Cmd.FETCH_DELETE:
-      running.get(f!.at(0).get<string>())?.abort();
+      running.get(f!.at(0).get<bigint>())?.abort();
       return;
     case Cmd.LOAD_CREATE: {
       const [kind, url] = f!.get<[number, string]>();
@@ -321,11 +329,11 @@ export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface 
 
 // ---- fetches: HTTP for the kernel (crates/pxl/core/src/module/world/fetch.rs) ----
 
-const running = new Map<string, AbortController>();
+const running = new Map<bigint, AbortController>();
 
 /** Runs one fetch the kernel started: the response's bytes written into the
  * room the kernel gives them, and the status reported. */
-async function run_fetch(key: string, url: string): Promise<void> {
+async function run_fetch(key: bigint, url: string): Promise<void> {
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
@@ -333,7 +341,7 @@ async function run_fetch(key: string, url: string): Promise<void> {
   let status = 0;
   let at = 0;
   let bytes = 0;
-  let error: string | null = null;
+  let fail: FetchFail = FetchFail.None;
   let net_ms = 0;
   try {
     const t0 = performance.now();
@@ -342,17 +350,28 @@ async function run_fetch(key: string, url: string): Promise<void> {
     net_ms = performance.now() - t0;
     status = res.status;
     if (body.byteLength > 0) {
-      at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str(key).u32(body.byteLength)), (result) => result >>> 0);
-      if (at === 0) throw new Error(`no room for a body of ${body.byteLength} bytes`);
-      new Uint8Array(CORE_KERNEL.memory.buffer, at, body.byteLength).set(body);
-      bytes = body.byteLength;
+      at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.u64(key).u32(body.byteLength)), (result) => result >>> 0);
+      if (at === 0) {
+        outcome = 2;
+        fail = FetchFail.NoRoom;
+      } else {
+        new Uint8Array(CORE_KERNEL.memory.buffer, at, body.byteLength).set(body);
+        bytes = body.byteLength;
+      }
     }
   } catch (err) {
     outcome = signal.aborted ? 1 : 2;
-    if (!signal.aborted) error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    // An abort is the scheduler's own doing and carries no reason. Everything
+    // else is the transport's: a browser raises TypeError for offline, DNS,
+    // CORS and a refused connection alike, and its words for them are this
+    // side's to log — what the kernel needs is which of these happened.
+    if (!signal.aborted) {
+      fail = err instanceof Error && err.name === "TypeError" ? FetchFail.Network : FetchFail.Shell;
+      console.warn(`[fetch] ${key}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    }
   } finally {
     running.delete(key);
-    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(outcome).u32(status).u32(at).u32(bytes).str(error).f64(net_ms)));
+    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(status).u32(at).u32(bytes).u32(fail).f64(net_ms)));
     // Applied now, so the body's room is the kernel's again before the next
     // response asks for its own.
     CORE_BUILD.settle();

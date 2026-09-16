@@ -83,7 +83,7 @@ pub fn map_bootstrap_step() {
 
     let Some(seed) = b.pending else { return };
     let mut probe = seed;
-    let Some(grounded) = ground_pivot(&mut probe, seed.i, seed.f) else { return };
+    let Some(grounded) = ground_pivot(&mut probe, &seed) else { return };
     b.pending = None;
     match use_map_store().map_center {
         None => use_map_store().set_map_center(grounded),

@@ -569,6 +569,10 @@
           "value": 17
         },
         {
+          "name": "LONG_FRAME",
+          "value": 18
+        },
+        {
           "name": "TOAST",
           "value": 19
         },
@@ -1364,6 +1368,18 @@
           "value": 6929,
           "doc": [
             "tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not"
+          ]
+        },
+        {
+          "name": "WORLD_LONG_FRAME",
+          "value": 6930,
+          "doc": [
+            "send · [source u32 (0 loaf, 1 longtask), t f64, duration f64, blocking f64, script f64, render f64]",
+            "",
+            "A frame that blocked the event loop past 50ms, as the shell's own",
+            "observer saw it. The kernel cannot see one: a long animation frame is",
+            "a browser measurement of the whole task, and the tick is only part of",
+            "it. The ledger keeps it beside the frames it did measure."
           ]
         },
         {

@@ -2,13 +2,13 @@
 
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::spec::cell::object_value_is_air;
-use pxl_shared::spec::space::indexer::L2_BASE;
+use pxl_shared::spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use pxl_shared::spec::space::xy::TO_XY;
 
 use crate::module::world::frame::coord::local_world_to_canonical;
-use crate::module::world::object::store::each_column_entry;
+use crate::module::world::object::store::each_col_entry;
 use crate::module::world::terrain::elevation::get_ele_at_local;
 
 // Two Z values within this of each other count as "flush" — guards the climb
@@ -28,22 +28,22 @@ const SAME_SURFACE_EPS: f64 = 1e-6;
 /// chunk within a cell of it; those are read once.
 fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
     let mut boxes = Vec::new();
-    let mut bases: Vec<IVec> = Vec::with_capacity(9);
+    let mut cols: Vec<IVec> = Vec::with_capacity(9);
     for dx in -1..=1 {
         for dy in -1..=1 {
             let probe = [local_x + dx as f64 * U_PER_CELL, local_y + dy as f64 * U_PER_CELL, 0.0];
             let mut corner = PVF3::default();
             local_world_to_canonical(&mut corner, &probe, map_origin);
-            let base = L2_BASE(TO_XY(corner.i));
-            if bases.contains(&base) {
+            let col_idx = L2_IDX(TO_XY(corner.i));
+            if cols.contains(&col_idx) {
                 continue;
             }
-            bases.push(base);
+            cols.push(col_idx);
             // The chunk's corner in the local frame; entries are relative to it.
-            let local = PVF3 { i: ivec::sub(base, map_origin), f: 0 };
+            let local = PVF3 { i: ivec::sub(FROM_L2_IDX(col_idx), map_origin), f: 0 };
             let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
-            each_column_entry(
-                base,
+            each_col_entry(
+                col_idx,
                 &mut |entry| {
                     if object_value_is_air(entry.state) {
                         return;

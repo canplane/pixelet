@@ -54,7 +54,7 @@ pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<PVF3> {
     projection::project(&mut p, hit.box_min[0], hit.box_min[1], -U_PER_CELL);
     p.i = ivec::add(p.i, map_origin);
     let (i, f) = (p.i, p.f);
-    with_ele(&mut p, i, f)
+    with_ele(&mut p, &PVF3 { i, f })
 }
 
 // Tolerance for "same nominal size"/"integer-aligned" comparisons below —

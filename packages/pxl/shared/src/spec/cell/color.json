@@ -1,44 +1,44 @@
 {
   "_meta": { "source": "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked" },
   "land": {
-    "BARE": { "hex": "#EEE5DC" },
-    "SEA": { "hex": "#AAD3DF" },
-    "GREEN_DEEP": { "hex": "#ADD19E" },
-    "GREEN_LIGHT": { "hex": "#C8FACC" },
-    "SAND": { "hex": "#F5E9C6" },
-    "RESIDENTIAL": { "hex": "#E0DFDF" },
-    "COMMERCIAL": { "hex": "#F2DAD9" },
-    "INDUSTRIAL": { "hex": "#EBDBE8" },
-    "SPORTS": { "hex": "#88E0BE" },
-    "EDUCATION": { "hex": "#FFFFE5" },
-    "MEDICAL": { "hex": "#FFFFE5" },
-    "PUBLIC": { "hex": "#FFFFE5" },
-    "APRON": { "hex": "#DADAE0" },
-    "HELIPAD": { "hex": "#BBBBCC" }
+    "bare": { "hex": "#EEE5DC" },
+    "sea": { "hex": "#AAD3DF" },
+    "green_deep": { "hex": "#ADD19E" },
+    "green_light": { "hex": "#C8FACC" },
+    "sand": { "hex": "#F5E9C6" },
+    "residential": { "hex": "#E0DFDF" },
+    "commercial": { "hex": "#F2DAD9" },
+    "industrial": { "hex": "#EBDBE8" },
+    "sports": { "hex": "#88E0BE" },
+    "education": { "hex": "#FFFFE5" },
+    "medical": { "hex": "#FFFFE5" },
+    "public": { "hex": "#FFFFE5" },
+    "apron": { "hex": "#DADAE0" },
+    "helipad": { "hex": "#BBBBCC" }
   },
   "water": {
-    "RIVER": { "hex": "#AAD3DF" },
-    "LAKE": { "hex": "#AAD3DF" },
-    "WETLAND": { "hex": "#AAD3DF" }
+    "river": { "hex": "#AAD3DF" },
+    "lake": { "hex": "#AAD3DF" },
+    "wetland": { "hex": "#AAD3DF" }
   },
   "structure": {
-    "BUILDING": { "hex": "#D9D0C9" },
-    "BUILDING_STATION": { "hex": "#C4B6AB" },
-    "BUILDING_MEDICAL": { "hex": "#D9D0C9" },
-    "BUILDING_EDUCATION": { "hex": "#D9D0C9" },
-    "BUILDING_PUBLIC": { "hex": "#D9D0C9" }
+    "building": { "hex": "#D9D0C9" },
+    "building_station": { "hex": "#C4B6AB" },
+    "building_medical": { "hex": "#D9D0C9" },
+    "building_education": { "hex": "#D9D0C9" },
+    "building_public": { "hex": "#D9D0C9" }
   },
   "transport": {
-    "ROAD_DEFAULT": { "hex": "#FFFFFF" },
-    "ROAD_MOTORWAY": { "hex": "#E892A2" },
-    "ROAD_PRIMARY": { "hex": "#FCD6A4" },
-    "ROAD_SECONDARY": { "hex": "#F7FABF" },
-    "PEDESTRIAN": { "hex": "#DDDDE8" },
-    "PARKING": { "hex": "#EEEEEE" },
-    "RAIL_MAIN": { "hex": "#707070" },
-    "RAIL_SUBWAY": { "hex": "#999999" },
-    "RUNWAY": { "hex": "#BBBBCC" },
-    "TAXIWAY": { "hex": "#BBBBCC" }
+    "road_default": { "hex": "#FFFFFF" },
+    "road_motorway": { "hex": "#E892A2" },
+    "road_primary": { "hex": "#FCD6A4" },
+    "road_secondary": { "hex": "#F7FABF" },
+    "pedestrian": { "hex": "#DDDDE8" },
+    "parking": { "hex": "#EEEEEE" },
+    "rail_main": { "hex": "#707070" },
+    "rail_subway": { "hex": "#999999" },
+    "runway": { "hex": "#BBBBCC" },
+    "taxiway": { "hex": "#BBBBCC" }
   },
   "block": {
     "white": { "hex": "#f7f7f7" },

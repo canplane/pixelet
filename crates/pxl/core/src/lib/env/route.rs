@@ -42,9 +42,9 @@ impl fmt::Display for TileBase {
 
 /// `<base>/<key>`.
 #[derive(Clone, Copy)]
-pub struct Joined<'a, B>(pub B, pub &'a str);
+pub struct Joined<B, K>(pub B, pub K);
 
-impl<B: fmt::Display> fmt::Display for Joined<'_, B> {
+impl<B: fmt::Display, K: fmt::Display> fmt::Display for Joined<B, K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}/{}", self.0, self.1)
     }
