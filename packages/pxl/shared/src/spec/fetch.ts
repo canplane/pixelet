@@ -38,8 +38,9 @@ export const enum FetchFail {
   // ---- 0x03 the bytes arrived and did not hold up ----
   /** The body did not decode as its format. */
   Decode = 0x0301,
-  /** The key named no page. */
-  BadSubject = 0x0302,
-  /** The key named a category nothing serves. */
-  BadCategory = 0x0303,
+  // 0x0302 and 0x0303 are retired. They named a key with no page and a key
+  // with no category, and neither side ever raised one: the shell is handed a
+  // key it was given and hands it back, and the kernel looks the key up before
+  // it starts a demand at all, so by the time a body has arrived there is
+  // nothing left to be wrong about. The numbers stay taken.
 }

@@ -156,15 +156,7 @@ fn failed(category: Category, subject: u64, aborted: bool) {
 /// an older kernel reading a newer shell still counts the failure apart from
 /// the rest.
 fn fetch_fail_of(fail: u32) -> FetchFail {
-    const KNOWN: [FetchFail; 7] = [
-        FetchFail::Network,
-        FetchFail::Shell,
-        FetchFail::Status,
-        FetchFail::NoRoom,
-        FetchFail::Decode,
-        FetchFail::BadSubject,
-        FetchFail::BadCategory,
-    ];
+    const KNOWN: [FetchFail; 5] = [FetchFail::Network, FetchFail::Shell, FetchFail::Status, FetchFail::NoRoom, FetchFail::Decode];
     KNOWN.into_iter().find(|f| *f as u32 == fail).unwrap_or(FetchFail::Shell)
 }
 

@@ -146,10 +146,6 @@ export function fail_text(fail: number, status: number): string {
       return "no_room";
     case 0x0301:
       return "decode";
-    case 0x0302:
-      return "bad_subject";
-    case 0x0303:
-      return "bad_category";
     default:
       return "none";
   }
