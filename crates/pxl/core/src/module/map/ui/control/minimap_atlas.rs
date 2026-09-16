@@ -17,7 +17,7 @@ use crate::global::Global;
 use crate::module::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::module::map::store::use_map_store;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::gpu::layer_table::hex_to_rgb255;
+use crate::render::gpu::layer_table::rgb255;
 
 const ATLAS_PAGE_PX: u32 = 64;
 const SAMPLE_STRIDE: u32 = PAGE_CELL_SPAN / ATLAS_PAGE_PX;
@@ -46,13 +46,13 @@ struct Colors {
 }
 
 fn colors() -> Colors {
-    let base = cube_colors.get("land").and_then(|c| c.get(&(cube_types::land::bare as u32)).copied().flatten()).map_or([0; 3], hex_to_rgb255);
+    let base = cube_colors.get("land").and_then(|c| c.get(&(cube_types::land::bare as u32)).copied().flatten()).map_or([0; 3], |s| rgb255(s.rgb));
     let mut by_channel = [[None; 256]; 4];
     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
         if let Some(table) = cube_colors.get(ch.as_str()) {
-            for (&type_id, hex) in table {
-                if let (Some(hex), true) = (hex, type_id < 256) {
-                    by_channel[slot][type_id as usize] = Some(hex_to_rgb255(hex));
+            for (&type_id, swatch) in table {
+                if let (Some(swatch), true) = (swatch, type_id < 256) {
+                    by_channel[slot][type_id as usize] = Some(rgb255(swatch.rgb));
                 }
             }
         }

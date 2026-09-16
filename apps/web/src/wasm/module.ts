@@ -60,8 +60,8 @@ export type KernelExports = {
  * fixed section, the terrain slab and the mesh section, each its offset,
  * bytes and region size; then the quantum the kernel declares, five words in
  * thousandths. */
-export const BOOT = { module_bytes: 0, sq: 1, cq: 2, fixed: 3, slab: 6, mesh: 9, quantum: 12, heap: 17 } as const;
-const BOOT_WORDS = 18;
+export const BOOT = { module_bytes: 0, sq: 1, cq: 2, slab: 3, heap: 6, quantum: 9, heap_row: 14 } as const;
+const BOOT_WORDS = 15;
 
 /** The boot block, read in place. */
 export function boot_block(pxl: KernelExports): Uint32Array {
@@ -79,7 +79,8 @@ const KERNEL_WASM_URL = new URL("./kernel.wasm", import.meta.url);
 const utf8 = new TextEncoder();
 const utf8_decoder = new TextDecoder();
 
-function text_at(memory: WebAssembly.Memory, at: u32, len: u32): string {
+/** The text at `at`, `len` bytes of UTF-8 in the memory the module shares. */
+export function text_at(memory: WebAssembly.Memory, at: u32, len: u32): string {
   return utf8_decoder.decode(new Uint8Array(memory.buffer, at, len));
 }
 

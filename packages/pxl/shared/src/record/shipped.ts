@@ -22,7 +22,8 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 
-import { cube_colors, cube_types, decor_types } from "../spec/cell/mod.ts";
+import { cube_colors, cube_id_of, cube_types, decor_types } from "../spec/cell/mod.ts";
+import type { Swatch } from "../spec/cell/type.ts";
 import { INGESTED } from "./ingested.ts";
 import { encode_palette, type PaletteEntry, type PaletteKind, PaletteTable } from "./palette.ts";
 
@@ -161,19 +162,19 @@ function model_row(id: u32, kind: PaletteKind, name: string, group: string, pack
 
 function cube_rows(): PaletteEntry[] {
   const rows: PaletteEntry[] = [];
-  const channel = (name: string, base: u32, kind: PaletteKind, types: Record<string, number>, colors: Record<number, string | null>) => {
+  const channel = (name: string, base: u32, kind: PaletteKind, types: Record<string, number>, colors: Record<number, Swatch | null>) => {
     for (const [type_name, local] of Object.entries(types)) {
       rows.push({
         id: base + local,
         kind,
-        name: `${name}.${type_name}`,
+        name: cube_id_of(name, type_name),
         model_hash: 0n,
         model_key: "",
         extent: [1, 1, 1],
         size: 1,
         license: "",
         author: "",
-        color: colors[local] ?? undefined,
+        color: colors[local]?.hex ?? undefined,
       });
     }
   };

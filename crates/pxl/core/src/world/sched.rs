@@ -658,9 +658,7 @@ impl Scheduler {
             }
             // SAFETY: the chunk's page, as its source named it, resident
             // while the chunk is.
-            let a = crate::probe::mark();
             let view = unsafe { Builder::page_view(world, page) };
-            crate::probe::add(17, a);
             // The elevations are the scatter's; a tier no kind is drawn on,
             // or decor switched off, stands only the placed entries, which
             // carry their own height.
@@ -680,11 +678,9 @@ impl Scheduler {
                 show_decor,
                 hide: self.builder.hide_in(col_idx),
             };
-            let a = crate::probe::mark();
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
             let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
-            let a = crate::probe::add(18, a);
             let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
                 self.builder.stat.starved += 1;
                 self.slots[i].refused = Some(crate::host::heap_releases());
@@ -693,10 +689,8 @@ impl Scheduler {
             // SAFETY: a block of the bytes the build asked for, the glue's
             // once handed over.
             unsafe { built.write(world.volumes.mem().add(at)) };
-            let a = crate::probe::add(19, a);
             let before = self.slots[i].retained();
             let handle = self.draw.upload(at as u32, bytes, 0, 0);
-            let a = crate::probe::add(24, a);
             self.slots[i].decor.push(Decor {
                 step,
                 at: at as u32,
@@ -704,9 +698,7 @@ impl Scheduler {
                 handle,
             });
             self.account(i, before);
-            let a = crate::probe::add(25, a);
             emit(Event::Decor { id, step, at: at as u32, bytes });
-            crate::probe::add(26, a);
         }
         true
     }
@@ -876,14 +868,10 @@ impl Scheduler {
             self.recheck_elapsed = 0.0;
         }
 
-        let a = crate::probe::mark();
         self.mount(world, &frame, emit);
-        let a = crate::probe::add(0, a);
         self.refresh(&frame, emit);
-        let a = crate::probe::add(1, a);
         let mut sc = core::mem::take(&mut self.scratch);
         self.order(t0, &mut sc.order, &mut sc.keys);
-        let a = crate::probe::add(2, a);
         let Scratch {
             order,
             visible,
@@ -919,7 +907,6 @@ impl Scheduler {
             self.view_dirty = false;
         }
 
-        let a = crate::probe::add(3, a);
         let pending_total = (visible.len() + offscreen.len()) as u32;
         // A commit on screen may build decor, and a block refused ends the
         // commits this tick as it ends the builds (Builder::tick_capped):
@@ -932,7 +919,6 @@ impl Scheduler {
         let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
         committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
-        let a = crate::probe::add(4, a);
         // The builds, visible pending first in order, with what is left; the
         // chunks a tier landed on are committed after.
         still.clear();
@@ -949,7 +935,6 @@ impl Scheduler {
                 self_record(slots, index, mem, ron, roff, draw, e, emit);
             });
         }
-        let a = crate::probe::add(5, a);
         for &id in landed.iter() {
             if let Some(&i) = self.index.get(&id) {
                 if self.commit(world, i, emit) {
@@ -958,16 +943,11 @@ impl Scheduler {
             }
         }
 
-        let a = crate::probe::add(6, a);
         let freed = self.reclaim(world, order, emit);
         self.scratch = sc;
-        let a = crate::probe::add(7, a);
         self.press(world, t0, freed);
-        let a = crate::probe::add(8, a);
         let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
-        let a = crate::probe::add(9, a);
         self.draw_frame(&frame, world_mem(world));
-        crate::probe::add(10, a);
 
         let mut c = Census { committed, ..Census::default() };
         c.chunks = self.slots.len() as u32;
@@ -1280,18 +1260,12 @@ impl Scheduler {
         if s.refused.is_some_and(|r| r == crate::host::heap_releases()) {
             return false;
         }
-        let a = crate::probe::mark();
         let asked = self.ask(world, i, p, q);
-        let a = crate::probe::add(13, a);
         if !asked || !self.ensure_decor(world, i, [p, q], emit) {
-            crate::probe::add(14, a);
             return false;
         }
-        let a = crate::probe::add(14, a);
         self.trim(i, [p, q], emit);
-        let a = crate::probe::add(15, a);
         self.apply_layout(i, p, q, true, emit);
-        crate::probe::add(16, a);
         self.set_pending(i, false, RELEASE_REQUEST, 0.0);
         true
     }

@@ -21,7 +21,7 @@
 use super::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
 use crate::global::Global;
 use crate::host::{storage_get, storage_set};
-use xpute_core::kit::json::read_json;
+use xpute_core::kit::json::{read_json, Quoted};
 
 const STORAGE_KEY: &str = "pxl:settings";
 
@@ -194,20 +194,6 @@ impl SettingsStore {
     }
 }
 
-fn json_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
 
 fn save(s: &SettingsStore) {
     let body: Vec<String> = s
@@ -216,9 +202,9 @@ fn save(s: &SettingsStore) {
         .map(|(k, v)| {
             let value = match v {
                 SettingValue::Toggle(b) => b.to_string(),
-                SettingValue::Text(t) => json_string(t),
+                SettingValue::Text(t) => Quoted(t).to_string(),
             };
-            format!("{}:{}", json_string(k), value)
+            format!("{}:{}", Quoted(k), value)
         })
         .collect();
     storage_set(STORAGE_KEY, &format!("{{\"state\":{{\"overrides\":{{{}}}}},\"version\":0}}", body.join(",")));

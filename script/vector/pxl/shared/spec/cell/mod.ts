@@ -15,7 +15,7 @@ export function vectors() {
     })),
     colors: Object.entries(cell.cube_colors).map(([channel, colors]) => ({
       channel,
-      colors: Object.entries(colors).map(([num, hex]) => `${num}=${hex ?? "null"}`),
+      colors: Object.entries(colors).map(([num, swatch]) => `${num}=${swatch?.hex ?? "null"}`),
     })),
     cube_ids: cell.cube_ids.map((id) => `${id}=${cell.cube_num_id(id)}=${cell.cube_hex(id)}`),
     decor_ids: cell.decor_ids.map((id) => `${id}=${cell.decor_num_id(id)}`),

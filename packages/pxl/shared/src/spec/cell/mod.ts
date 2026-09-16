@@ -1,9 +1,10 @@
 // @pxl/shared/spec/cell/mod.ts
 // Entry point for the cell model. Assembles and re-exports the modular definitions.
 
-import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
+import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
 
 import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
+import type { Swatch } from "./type.ts";
 import { decor_types, type DecorId } from "./decor.ts";
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
@@ -58,8 +59,18 @@ export function cube_num_id(id: CubeColorId): number {
 }
 
 export function cube_hex(id: CubeColorId): string {
+  return cube_swatch(id).hex;
+}
+
+/** The same swatch packed `0xRRGGBB`, for the callers that light or blend with
+ * it rather than write it down. */
+export function cube_rgb(id: CubeColorId): number {
+  return cube_swatch(id).rgb;
+}
+
+function cube_swatch(id: CubeColorId): Swatch {
   // block carries no sentinels of its own any more — every key is a real color.
-  return cube_colors.block[cube_types.block[id]] as string;
+  return cube_colors.block[cube_types.block[id]] as Swatch;
 }
 
 const NUM_ID_TO_CUBE: readonly CubeColorId[] = (() => {
@@ -155,24 +166,35 @@ function cube_key(channel: string, type: number): string {
   return `${channel}:${type}`;
 }
 
-// The dense sequence, and it back. A cube is built by widening `{channel,
-// type}` from the catalog's own tables, which is where the check that the
-// pair is a real one happens — the cast says the walk is that check.
-const TERRAIN_STYLE_NUM = new Map<string, number>();
-const NUM_TO_TERRAIN_STYLE = new Map<number, PlaceableCube>();
+/** Where a stored leaf's value stops being a number of its own and starts
+ * being a terrain-styled cube's `(channel, type)`.
+ *
+ * Everything the catalogs number directly sits below this: VOID at 0, AIR at
+ * 128, block at 130..144, decor at 228, UNKNOWN at 255 — all of one byte, and
+ * the widest of them is the byte. Above it, a terrain-styled cube is the
+ * channel it stands in for and the type within that channel, which is exactly
+ * what it is, so the value can be read back without a table. */
+export const TERRAIN_STYLE_BASE = 256;
 
-(() => {
-  let next_num = 1;
-  for (const channel of TERRAIN_CHANNELS) {
-    const local_types = cube_types[channel] as Record<string, number>;
-    for (const local_key of Object.keys(local_types)) {
-      const cube = { channel, type: local_types[local_key] } as PlaceableCube;
-      TERRAIN_STYLE_NUM.set(cube_key(channel, local_types[local_key]), next_num);
-      NUM_TO_TERRAIN_STYLE.set(next_num, cube);
-      next_num++;
-    }
-  }
-})();
+/** Every terrain-styled cube, channel by channel, for the callers that want
+ * the catalog walked. The numbering is no longer this walk's to give out:
+ * counting one out as it was met meant a type inserted into cube_type.json
+ * renumbered every type after it, in every other channel too, and a stored
+ * placement then named a different cube than the one that was placed.
+ *
+ * A cube is built by widening `{channel, type}` from the catalog's own tables,
+ * which is where the check that the pair is a real one happens — the cast says
+ * the walk is that check. */
+const TERRAIN_STYLE: PlaceableCube[] = TERRAIN_CHANNELS.flatMap((channel) =>
+  Object.values(cube_types[channel] as Record<string, number>).map((type) => ({ channel, type }) as PlaceableCube)
+);
+
+/** The slot a ground channel is, which is the enum's own order — a bake's
+ * lanes are in it already, so it is a number the format has fixed rather than
+ * one chosen here. */
+function channel_slot(channel: GroundChannelKey): number {
+  return GROUND_CH_KEYS.indexOf(channel);
+}
 
 /** Each channel's numbers back to the name cube_type.json gives them. */
 const TYPE_NAME = new Map<string, string>();
@@ -201,20 +223,33 @@ export type PlaceableCubeId = { [C in PlaceableChannelKey]: `${C}.${ChannelLocal
  * shipped texture's path. It is what a cube is called, never what it is, so
  * nothing keys by it. */
 export function placeable_cube_id(cube: PlaceableCube): PlaceableCubeId {
-  return `${cube.channel}.${TYPE_NAME.get(cube_key(cube.channel, cube.type))!}` as PlaceableCubeId;
+  return cube_id_of(cube.channel, TYPE_NAME.get(cube_key(cube.channel, cube.type))!);
 }
 
-/** The value a leaf holds the cube as: a flat colour's own catalog number,
- * or the dense one the terrain-styled walk assigns. */
+/** How a catalog id is spelled, for the callers that hold the two words
+ * already rather than a cube. The shipped palette is one: it walks every
+ * channel's ENTRIES, `common` included, and `common` is not a `PlaceableCube`,
+ * so it cannot come through the function above — but it must come out spelled
+ * the same, and it was spelling it a second time instead. */
+export function cube_id_of(channel: string, type_name: string): PlaceableCubeId {
+  return `${channel}.${type_name}` as PlaceableCubeId;
+}
+
+/** The value a leaf holds the cube as: a flat colour's own catalog number, or
+ * a terrain-styled cube's channel and type. */
 export function placeable_cube_num_id(cube: PlaceableCube): number {
-  return cube.channel === "block" ? cube.type : TERRAIN_STYLE_NUM.get(cube_key(cube.channel, cube.type))!;
+  return cube.channel === "block" ? cube.type : TERRAIN_STYLE_BASE * (channel_slot(cube.channel) + 1) + cube.type;
 }
 
 /** The cube a stored leaf value names, or null for a value that names no
  * cube — VOID, AIR, a decor kind. */
 export function placeable_cube_of(num_id: number): PlaceableCube | null {
-  const terrain_style = NUM_TO_TERRAIN_STYLE.get(num_id);
-  if (terrain_style) return terrain_style;
+  if (num_id >= TERRAIN_STYLE_BASE) {
+    const channel = GROUND_CH_KEYS[Math.floor(num_id / TERRAIN_STYLE_BASE) - 1];
+    if (channel === undefined) return null;
+    const type = num_id % TERRAIN_STYLE_BASE;
+    return TYPE_NAME.has(cube_key(channel, type)) ? { channel, type } as PlaceableCube : null;
+  }
   return TYPE_NAME.has(cube_key("block", num_id)) ? { channel: "block", type: num_id as CubeTypeOf<"block"> } : null;
 }
 
@@ -228,12 +263,23 @@ export function terrain_style_cube_source(cube: PlaceableCube): { channel: Groun
  * of terrain_style_cube_source, for callers that hold what the terrain shows
  * and want the cube that looks like it. */
 export function terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: number): PlaceableCube | null {
-  return TERRAIN_STYLE_NUM.has(cube_key(channel, terrain_num_id)) ? { channel, type: terrain_num_id } as PlaceableCube : null;
+  return TYPE_NAME.has(cube_key(channel, terrain_num_id)) ? { channel, type: terrain_num_id } as PlaceableCube : null;
 }
 
 /** The swatch colour the catalog gives it — cube_colors is keyed by channel
  * and number, so this is the palette's own row, not a second table. */
 export function placeable_cube_hex(cube: PlaceableCube): string | null {
+  return placeable_cube_swatch(cube)?.hex ?? null;
+}
+
+/** The same swatch as the one number it is, which is what everything that
+ * lights or blends with a colour wants — and what nothing has to parse text to
+ * find out, the catalog's JSON having been packed by the generator. */
+export function placeable_cube_rgb(cube: PlaceableCube): number | null {
+  return placeable_cube_swatch(cube)?.rgb ?? null;
+}
+
+function placeable_cube_swatch(cube: PlaceableCube): Swatch | null {
   return cube_colors[cube.channel]?.[cube.type] ?? null;
 }
 
@@ -241,5 +287,5 @@ export function placeable_cube_hex(cube: PlaceableCube): string | null {
  * numeric order, then every terrain-styled entry channel by channel. */
 export const placeable_cubes: readonly PlaceableCube[] = [
   ...cube_ids.map((id) => ({ channel: "block", type: cube_types.block[id] }) as PlaceableCube),
-  ...NUM_TO_TERRAIN_STYLE.values(),
+  ...TERRAIN_STYLE,
 ];

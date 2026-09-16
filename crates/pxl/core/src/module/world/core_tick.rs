@@ -172,12 +172,9 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     };
 
     let t0 = now();
-    let a = crate::probe::mark();
     let mut events = Vec::new();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now, &mut |e| events.push(e))).unwrap_or(false);
-    let a = crate::probe::add(11, a);
     run_chunk_events(events);
-    crate::probe::add(12, a);
     if draw {
         c.draw = true;
         ctx.invalidate();

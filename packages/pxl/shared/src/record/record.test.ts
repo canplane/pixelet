@@ -113,7 +113,7 @@ Deno.test("shipped palette - ids are unique, placeable values keep their numbers
     seen.add(p.id[i]);
   }
   assertEquals(p.name_of(p.row_of(cube_types.block.red)), "block.red");
-  assertEquals(p.color_of(p.row_of(cube_types.block.red)), cube_colors.block[cube_types.block.red]);
+  assertEquals(p.color_of(p.row_of(cube_types.block.red)), cube_colors.block[cube_types.block.red]?.hex);
   assertEquals(p.name_of(p.row_of(decor_types.tree)), "tree");
   assertEquals(p.kind_of(p.row_of(CHANNEL_ID_BASE.land + cube_types.land.sand)), "ground");
   const trees = p.rows_of_group("tree");

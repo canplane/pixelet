@@ -7,7 +7,7 @@
 
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::bake::ground::shown_ground;
-use pxl_shared::spec::cell::{placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for, PlaceableCube};
+use pxl_shared::spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 use pxl_shared::spec::space::pvf3::fvec;
 use pxl_shared::spec::space::pvf3::ivec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -178,7 +178,7 @@ pub fn hover_cursor_step() {
     // Without a texture the ghost falls back to the thing's own swatch. Nothing
     // resolves a swatch only when the eraser is over decor whose model has not
     // arrived: that box takes ERASE, the tool being what has to read off it.
-    let swatch = cube.and_then(placeable_cube_hex);
+    let swatch = cube.and_then(placeable_cube_rgb);
     let fallback = if active_tool == ActiveTool::Eraser { marker_colors::ERASE } else { marker_colors::ACTION };
 
     // The pointer's bare-terrain ghost sits flush with real geometry and needs
@@ -207,7 +207,7 @@ pub fn hover_cursor_step() {
                         (Some(cube), true) => placeable_cube_num_id(cube),
                         _ => 0,
                     },
-                    rgb: u32::from_str_radix(&swatch.unwrap_or(fallback)[1..], 16).unwrap_or(0),
+                    rgb: swatch.unwrap_or(fallback),
                     coplanar: coplanar_with_terrain,
                 },
             }
