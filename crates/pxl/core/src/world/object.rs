@@ -1,6 +1,4 @@
-//! The object store's records and the object layer's paint:
-//! module/world/object/store.ts's chunk storage, entries and cell index,
-//! and reference/object_layer.ts's paint, in Rust.
+//! The object store's records, and the paint that turns them into voxels.
 //!
 //! One record per L2 chunk column that holds user objects — a palette,
 //! and one sparse octree per 64³ band whose leaves are palette indices —
@@ -8,13 +6,19 @@
 //! lanes (band, packed position, state) and an index of the cells they
 //! fall in. Everything here is numbers: the client lowers a coordinate to
 //! a chunk key, a band and a lattice position before it crosses, and gets
-//! lanes back as views. Why the palette is per chunk, why an entry is at
-//! most a cell, and why the index is rebuilt a chunk at a time are the
-//! TypeScript's, mirrored so a chunk's entries are the same lane for lane
-//! (object_store.test.ts).
+//! lanes back as views.
+//!
+//! The palette is per chunk so a leaf is an index into a table the chunk
+//! carries rather than a value from a catalog that grows; an entry is at
+//! most a cell because everything downstream — the collision neighbourhood,
+//! the raycast's per-cell runs — assumes one, and a leaf covering more is
+//! split into the cells it covers as the lanes are built; and the index is
+//! rebuilt a chunk at a time because a write touches one chunk and the cost
+//! is bounded by what that chunk holds.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use pxl_shared::spec::cell::cube_types;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::{ivec, Ivec};
 use pxl_shared::spec::space::sparse_tree::mem;
@@ -84,11 +88,14 @@ pub fn unpack_pos(pos: u32) -> (u32, u32, u32, i32) {
     )
 }
 
-/// cell/mod.ts's sentinels: the absence a zeroed leaf reads as, the
-/// eraser's "nothing here, on purpose", and the value an entry never is.
-pub const VOID: u32 = 0;
-pub const AIR: u32 = 0x80;
-pub const UNKNOWN: u32 = 0xff;
+/// The catalog's sentinels: the absence a zeroed leaf reads as, the eraser's
+/// "nothing here, on purpose", and the value an entry never is.
+pub const VOID: u32 = cube_types::common::void as u32;
+pub const AIR: u32 = cube_types::common::air as u32;
+pub const UNKNOWN: u32 = cube_types::common::unknown as u32;
+/// A zeroed leaf has to read as the absence, because that is what a tree's
+/// unwritten index is.
+const _: () = assert!(VOID == 0);
 
 struct Chunk {
     /// The column this chunk is, as the key everything about it is filed under.
@@ -440,7 +447,7 @@ pub struct Paint {
     pub refused: bool,
 }
 
-/// A column's entries as voxels of a chunk volume — adapter.ts's paint.
+/// A column's entries painted as voxels of a chunk volume.
 pub struct Painter {
     kinds: Vec<Kind>,
     materials: Vec<u32>,

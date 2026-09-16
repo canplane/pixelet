@@ -1,10 +1,10 @@
-//! A chunk's decor at a tier: module/world/decor/{scatter,decor_layer}.ts's
-//! build, in Rust.
+//! A chunk's decor at a tier.
 //!
 //! Two halves. The procedural one scatters each kind over the chunk's cells
 //! with a random stream seeded from the page, the kind and the cell alone —
-//! the same stream the TypeScript drew, bit for bit, so a tree stands where
-//! it stood — keeps what lands on eligible ground at the kind's density, and
+//! nothing about the view, so a tree stands in the same place however the
+//! chunk was reached — keeps what lands on eligible ground at the density,
+//! and
 //! stands it on the terrain unless a placed object occupies that cell. The
 //! user one is every decor entry the object store holds in the column,
 //! turned and varied by a stream seeded from its own corner. What comes out
@@ -13,18 +13,19 @@
 //! A kind is drawn on a tier only where it is at least two of the tier's
 //! cells across; why, and every other rule, is the TypeScript's.
 
+use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
+use crate::module::world::lod::TARGET_CELL_PX;
+
 use crate::bake::terrain::{ChunkSample, PageView};
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
 use xpute_core::kit::rng::{derive_seed_u64 as derive_seed, u32_to_unit, SplitMix64};
 
-/// decor_kinds.ts's DECOR_MASTER_SEED is written with 80 bits; every use
-/// takes it modulo 2^64 (kit/rng.ts's derive_seed_u64 masks the XOR), so
-/// these are the bits that ever mattered.
+/// The master seed every decor stream derives from. It is written with 80
+/// bits in the catalog and `derive_seed_u64` masks its XOR to 64, so these
+/// are the bits that reach a stream.
 const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
-const SCALE_JITTER: f64 = 0.18;
-const ALIGN_NEIGHBOR_RADIUS: u32 = 3;
 /// NO_ENTRY: a procedural instance resolves to no stored entry.
 ///
 /// `i32::MIN` and not `u32::MAX`, because the word it fills holds a `BandZ` —
@@ -38,7 +39,7 @@ const ALIGN_NEIGHBOR_RADIUS: u32 = 3;
 pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;
 
-/// decor_build.ts's stream: kit/rng.ts's make_rng, drawn as units.
+/// A decor stream: SplitMix64, drawn as units in [0, 1).
 struct Rng(SplitMix64);
 
 impl Rng {
@@ -97,48 +98,18 @@ struct Instance {
     pos: u32,
 }
 
-/// module/world/lod.ts's TARGET_CELL_PX.
-fn target_cell_px() -> f64 {
-    let px_per_unit = 1080.0 / (2.0 * (50.0 * core::f64::consts::PI / 360.0).tan());
-    px_per_unit / 192.0
-}
 
-/// decor_kinds.ts's decor_density: 1, or 0 where the kind is under two of
-/// the tier's cells across.
+
+/// A kind's density on this tier: 1, or 0 where the kind is under two of the
+/// tier's cells across — smaller than that and the instances land closer
+/// together than the tier can resolve.
 pub fn density(extent: f64, step: u32) -> f64 {
-    let t = target_cell_px();
+    let t = TARGET_CELL_PX();
     let projected = (extent / U_PER_CELL) * t / (step as f64);
     if projected < t * 2.0 {
         0.0
     } else {
         1.0
-    }
-}
-
-fn transport_aligned_rotation(transport: &[u8], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
-    let idx = (cell_y * PAGE_CELL_SPAN + cell_x) as usize;
-    let span = PAGE_CELL_SPAN as usize;
-    let (mut h, mut v) = (0, 0);
-    for d in 1..=ALIGN_NEIGHBOR_RADIUS {
-        let du = d as usize;
-        if cell_x >= d && transport[idx - du] != 0 {
-            h += 1;
-        }
-        if cell_x + d < PAGE_CELL_SPAN && transport[idx + du] != 0 {
-            h += 1;
-        }
-        if cell_y >= d && transport[idx - du * span] != 0 {
-            v += 1;
-        }
-        if cell_y + d < PAGE_CELL_SPAN && transport[idx + du * span] != 0 {
-            v += 1;
-        }
-    }
-    let axis = if h > v { core::f64::consts::PI / 2.0 } else { 0.0 };
-    if flip {
-        axis + core::f64::consts::PI
-    } else {
-        axis
     }
 }
 

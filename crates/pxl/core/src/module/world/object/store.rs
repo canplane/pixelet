@@ -40,7 +40,7 @@ use crate::kernel::{kernel, reindex_object};
 use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
-use crate::world::object::{BandZ, Carve};
+use crate::world::object::{unpack_pos, BandZ, Carve, CELL_STEPS, VOID};
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared
@@ -113,10 +113,7 @@ fn storage_key() -> String {
 
 /// Cells along one side of a chunk, and of a band.
 const CHUNK_CELLS: i64 = 1 << L2_SHAMT;
-/// Finest-tier steps along one side of a cell, and of a band.
-const CELL_STEPS: i64 = 1 << -OBJECT_LAYOUT.min;
-const BAND_STEP_MASK: i64 = CELL_STEPS * CHUNK_CELLS - 1;
-const VOID: u32 = cube_types::common::void as u32;
+const BAND_STEP_MASK: i64 = CELL_STEPS as i64 * CHUNK_CELLS - 1;
 
 fn cell_size_fp() -> i64 {
     pvf3::from_real(U_PER_CELL)
@@ -242,12 +239,8 @@ fn local_offset(x: u32, y: u32, z: u32) -> PVF3 {
 // the band, a packed position, the state. A tree walked depth first visits a
 // cell's leaves together, so a cell's entries are one contiguous run.
 //
-// `pos` packs the leaf's band-local position in finest-tier steps — 0..511 on
-// each axis, nine bits each — and its level above the finest in four, as
-// object.rs's pack_pos does.
-
-const POS_BITS: u32 = 9;
-const POS_MASK: u32 = (1 << POS_BITS) - 1;
+// `pos` packs the leaf's band-local position in finest-tier steps and its
+// level above the finest; the kernel's `unpack_pos` reads it back.
 
 /// One finest-tier step, and one band's height, in world units.
 fn step_units() -> f64 {
@@ -303,10 +296,7 @@ impl EntryCursor {
         self.fixed = None;
         self.band_idx = band_idx;
         self.pos = pos;
-        self.x = pos & POS_MASK;
-        self.y = (pos >> POS_BITS) & POS_MASK;
-        self.z = (pos >> (2 * POS_BITS)) & POS_MASK;
-        self.level = (pos >> (3 * POS_BITS)) as i32 + OBJECT_LAYOUT.min;
+        (self.x, self.y, self.z, self.level) = unpack_pos(pos);
         self.lx = self.x as f64 * step_units();
         self.ly = self.y as f64 * step_units();
         self.lz = band_idx as f64 * band_units() + self.z as f64 * step_units();
@@ -328,7 +318,7 @@ impl EntryCursor {
 
     /// The cell the entry is in.
     pub fn cell(&self) -> [i64; 3] {
-        let steps = CELL_STEPS as u32;
+        let steps = CELL_STEPS;
         [
             self.cx0 + (self.x / steps) as i64,
             self.cy0 + (self.y / steps) as i64,

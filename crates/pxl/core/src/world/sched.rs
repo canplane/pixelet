@@ -31,7 +31,7 @@ use crate::world::debug::DebugLines;
 use crate::world::decor::{decor_groups, density as decor_density, Chunk as DecorChunk, DecorBuild, DecorScratch, Kind as DecorKind, Rule as DecorRule};
 use crate::world::environment::Environment;
 use crate::world::ghost::Ghost;
-use crate::world::lod::{Ladder, COARSEST, LOD_STEPS};
+use crate::module::world::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
 use crate::world::marker::Markers;
 use crate::world::model::Models;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
@@ -66,7 +66,7 @@ const MAX_CACHED_TIERS: usize = 4;
 /// A wait halves a chunk's distance key every this many milliseconds.
 const AGE_HALF_MS: f64 = 4000.0;
 /// The byte budget, paid in LOD: when the pool refuses a block and reclaim
-/// found nothing to give back, the ladder is pulled in a step (lod.rs's
+/// found nothing to give back, the ladder is pulled in a step (the module's
 /// pressure) and the set on screen gets coarser until it fits; a step at
 /// most this often, so the coarser layouts have time to land and free
 /// what they replace before the next is taken, and up to three tiers. A
@@ -406,9 +406,9 @@ fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &
 }
 
 /// An evict for every step in `steps`, a set of the steps as bits — each
-/// is a power of two (LOD_STEPS) — finest first.
+/// is a power of two (LOD_STEP_BY_LEVEL) — finest first.
 fn emit_evicts(id: u32, steps: u32, emit: &mut impl FnMut(Event)) {
-    for &step in &LOD_STEPS {
+    for &step in &LOD_STEP_BY_LEVEL {
         if steps & step != 0 {
             emit(Event::Evict { id, step });
         }
