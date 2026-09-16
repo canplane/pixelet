@@ -17,7 +17,7 @@ use crate::bake::terrain::{ChunkSample, PageView};
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 use crate::world::pool::Pool;
-use pxl_shared::spec::space::pvf3::ivec::gather;
+use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
 use xpute_core::kit::rng::{derive_seed_u64 as derive_seed, u32_to_unit, SplitMix64};
 
 /// decor_kinds.ts's DECOR_MASTER_SEED is written with 80 bits; every use
@@ -227,11 +227,11 @@ pub fn decor_groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
 /// What a chunk's decor is built from.
 pub struct Chunk<'a> {
     pub page: &'a PageView<'a>,
-    pub page_idx: u64,
-    /// The column's base: the object store's key, and its X and Y lanes.
-    pub key: u64,
-    pub key_x: i64,
-    pub key_y: i64,
+    pub page_idx: IVec,
+    /// The column this chunk stands in, and its X and Y lanes.
+    pub col_idx: IVec,
+    pub col_x: i64,
+    pub col_y: i64,
     pub tx0: u32,
     pub ty0: u32,
     pub show_decor: bool,
@@ -245,7 +245,7 @@ impl<'s> DecorBuild<'s> {
     pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], chunk: &Chunk, sample: &ChunkSample, store: &Store, step: u32) -> DecorBuild<'s> {
         scratch.clear();
         let page_seed = derive_seed(MASTER_SEED, chunk.page_idx);
-        let lanes = store.chunk_lanes(chunk.key);
+        let lanes = store.chunk_lanes(chunk.col_idx);
         // A chunk with no entry has no cell to look up: most chunks.
         let has_entries = lanes.as_ref().is_some_and(|l| l.count > 0);
         for kind in kinds {
@@ -281,8 +281,8 @@ impl<'s> DecorBuild<'s> {
                     let (x, y, z, level) = unpack_pos(pos);
                     let size = 2f64.powi(level);
                     let corner = gather(
-                        chunk.key_x + (x / CELL_STEPS) as i64,
-                        chunk.key_y + (y / CELL_STEPS) as i64,
+                        chunk.col_x + (x / CELL_STEPS) as i64,
+                        chunk.col_y + (y / CELL_STEPS) as i64,
                         bands[k] as i64 * BAND_CELLS as i64 + (z / CELL_STEPS) as i64,
                     );
                     let mut rng = Rng::new(derive_seed(MASTER_SEED, corner));
@@ -329,7 +329,7 @@ impl<'s> DecorBuild<'s> {
                         };
                         let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
                         let ele = sample.ele[(dy * CHUNK_SPAN + dx) as usize] as i32;
-                        if has_entries && store.cell(chunk.key, dx, dy, ele).is_some_and(|c| c.solid > 0) {
+                        if has_entries && store.cell(chunk.col_idx, dx, dy, ele).is_some_and(|c| c.solid > 0) {
                             continue;
                         }
                         scratch.push(first + variant as usize, Instance {

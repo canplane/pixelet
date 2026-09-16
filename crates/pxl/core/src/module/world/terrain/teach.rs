@@ -22,7 +22,7 @@ pub fn ch_to_class(ch: GroundChannelKey) -> MaterialClass {
 }
 
 /// The bare-ground base every cell starts from, before its channels.
-const BASE_TYPE: usize = cube_types::land::BARE as usize;
+const BASE_TYPE: usize = cube_types::land::bare as usize;
 
 pub fn base_rgb() -> [u8; 3] {
     match ground_color_lookup(GroundChannelKey::LAND) {

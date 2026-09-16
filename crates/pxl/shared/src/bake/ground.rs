@@ -18,7 +18,7 @@ pub use super::format::{GroundChannelKey, GROUND_CH_KEYS};
 
 /// Land with nothing painted still renders as bare ground rather than as
 /// nothing, so LAND alone has a fallback the other channels do not.
-pub const LAND_BASE_TYPE: u32 = cube_types::land::BARE as u32;
+pub const LAND_BASE_TYPE: u32 = cube_types::land::bare as u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ShownGround {

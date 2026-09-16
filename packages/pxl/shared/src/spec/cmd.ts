@@ -193,6 +193,7 @@ export const enum LoadMinor {
 /** The world's own verbs. */
 export const enum WorldMinor {
   ACTION = 0x11,
+  LONG_FRAME = 0x12,
   TOAST = 0x13,
   LOG = 0x14,
   SNAPSHOT = 0x15,
@@ -518,6 +519,13 @@ export const enum Cmd {
   WORLD_UPDATE = 0x1b03,
   /** tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not */
   WORLD_ACTION = 0x1b11,
+  /** send · [source u32 (0 loaf, 1 longtask), t f64, duration f64, blocking f64, script f64, render f64]
+   *
+   * A frame that blocked the event loop past 50ms, as the shell's own
+   * observer saw it. The kernel cannot see one: a long animation frame is
+   * a browser measurement of the whole task, and the tick is only part of
+   * it. The ledger keeps it beside the frames it did measure. */
+  WORLD_LONG_FRAME = 0x1b12,
   /** [left f64, top f64, width f64, height f64] — the canvas's client rect */
   INPUT_UPDATE = 0x1c03,
   /** [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,

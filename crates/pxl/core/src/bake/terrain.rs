@@ -38,7 +38,7 @@ const STRUCTURE: usize = 2;
 const TRANSPORT: usize = 3;
 
 const VOID: u8 = 0;
-/// land.SEA: bare land masked as water-looking, so it recesses like water.
+/// land.sea: bare land masked as water-looking, so it recesses like water.
 const SEA: u8 = 1 | 0x80;
 
 /// What a channel's type byte means: the colour and the texture-array

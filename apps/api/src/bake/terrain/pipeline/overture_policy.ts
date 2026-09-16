@@ -58,18 +58,18 @@ const TREE_COVER_LAND_SUBTYPES = new Set(["tree", "forest", "tree_row", "wood"])
 
 /** Land_use `class` -> land cell, using the values this session's own sample turned up. */
 const LAND_USE_CLASS_MAP: Record<string, u8> = {
-  residential: cube_types.land.RESIDENTIAL,
-  commercial: cube_types.land.COMMERCIAL,
-  retail: cube_types.land.COMMERCIAL,
-  construction: cube_types.land.INDUSTRIAL,
-  park: cube_types.land.GREEN_LIGHT,
-  garden: cube_types.land.GREEN_LIGHT,
-  grass: cube_types.land.GREEN_LIGHT,
-  pedestrian: cube_types.land.GREEN_LIGHT,
-  pitch: cube_types.land.SPORTS,
-  playground: cube_types.land.SPORTS,
-  school: cube_types.land.EDUCATION,
-  hospital: cube_types.land.MEDICAL,
+  residential: cube_types.land.residential,
+  commercial: cube_types.land.commercial,
+  retail: cube_types.land.commercial,
+  construction: cube_types.land.industrial,
+  park: cube_types.land.green_light,
+  garden: cube_types.land.green_light,
+  grass: cube_types.land.green_light,
+  pedestrian: cube_types.land.green_light,
+  pitch: cube_types.land.sports,
+  playground: cube_types.land.sports,
+  school: cube_types.land.education,
+  hospital: cube_types.land.medical,
 };
 
 /** Buildings `class`/`subtype` treated as institutional (against Overture's published schema, not sample-confirmed — see top comment). */
@@ -171,17 +171,17 @@ function calculate_rank(feat: OvertureRawFeature, category: string, is_instituti
 
 function determine_cell_cfg(feat: OvertureRawFeature, category: string, extra: FeatureExtra): CellConfig | null {
   if (category === "water" && feat.theme === OvertureTheme.BASE) {
-    const cell_type = FLOWING_WATER_SUBTYPES.has(feat.subtype ?? "") ? cube_types.water.RIVER : cube_types.water.LAKE;
+    const cell_type = FLOWING_WATER_SUBTYPES.has(feat.subtype ?? "") ? cube_types.water.river : cube_types.water.lake;
     return { cell_type, ch_key: GroundChannelKey.WATER };
   }
 
   if (category === "building" && feat.theme === OvertureTheme.BUILDING) {
     const building_type = feat.class ?? feat.subtype ?? "";
-    let cell_type: u8 = cube_types.structure.BUILDING;
-    if (building_type === "transportation") cell_type = cube_types.structure.BUILDING_STATION;
-    else if (building_type === "medical_care") cell_type = cube_types.structure.BUILDING_MEDICAL;
-    else if (building_type === "education") cell_type = cube_types.structure.BUILDING_EDUCATION;
-    else if (extra.is_institutional) cell_type = cube_types.structure.BUILDING_PUBLIC;
+    let cell_type: u8 = cube_types.structure.building;
+    if (building_type === "transportation") cell_type = cube_types.structure.building_station;
+    else if (building_type === "medical_care") cell_type = cube_types.structure.building_medical;
+    else if (building_type === "education") cell_type = cube_types.structure.building_education;
+    else if (extra.is_institutional) cell_type = cube_types.structure.building_public;
     return { cell_type, ch_key: GroundChannelKey.STRUCTURE };
   }
 
@@ -189,23 +189,23 @@ function determine_cell_cfg(feat: OvertureRawFeature, category: string, extra: F
     const c = feat.class ?? "";
     let cell_type: u8;
     if (feat.subtype === "rail") {
-      cell_type = c === "subway" || c === "light_rail" ? cube_types.transport.RAIL_SUBWAY : cube_types.transport.RAIL_MAIN;
+      cell_type = c === "subway" || c === "light_rail" ? cube_types.transport.rail_subway : cube_types.transport.rail_main;
     } else if (PEDESTRIAN_CLASSES.has(c)) {
-      cell_type = cube_types.transport.PEDESTRIAN;
+      cell_type = cube_types.transport.pedestrian;
     } else if (MOTOR_CLASSES.has(c)) {
-      cell_type = cube_types.transport.ROAD_MOTORWAY;
+      cell_type = cube_types.transport.road_motorway;
     } else if (c === "primary") {
-      cell_type = cube_types.transport.ROAD_PRIMARY;
+      cell_type = cube_types.transport.road_primary;
     } else if (SECONDARY_CLASSES.has(c)) {
-      cell_type = cube_types.transport.ROAD_SECONDARY;
+      cell_type = cube_types.transport.road_secondary;
     } else {
-      cell_type = cube_types.transport.ROAD_DEFAULT;
+      cell_type = cube_types.transport.road_default;
     }
     return { cell_type, ch_key: GroundChannelKey.TRANSPORT };
   }
 
   if (category === "parking") {
-    return { cell_type: cube_types.transport.PARKING, ch_key: GroundChannelKey.TRANSPORT };
+    return { cell_type: cube_types.transport.parking, ch_key: GroundChannelKey.TRANSPORT };
   }
 
   const land_type = resolve_land(feat, category, extra);
@@ -215,18 +215,18 @@ function determine_cell_cfg(feat: OvertureRawFeature, category: string, extra: F
 }
 
 function resolve_land(feat: OvertureRawFeature, category: string, extra: FeatureExtra): u8 | null {
-  if (category === "forest") return cube_types.land.GREEN_DEEP;
+  if (category === "forest") return cube_types.land.green_deep;
 
   if (feat.theme === OvertureTheme.BASE && feat.source === BaseSource.INFRASTRUCTURE && feat.class === "helipad") {
-    return cube_types.land.HELIPAD;
+    return cube_types.land.helipad;
   }
 
   if (feat.theme === OvertureTheme.BASE && feat.source === BaseSource.LAND_USE) {
     const mapped = LAND_USE_CLASS_MAP[feat.class ?? ""];
     if (mapped != null) return mapped;
-    if (extra.is_institutional) return cube_types.land.PUBLIC;
-    if (extra.is_sports) return cube_types.land.SPORTS;
-    return cube_types.land.BARE;
+    if (extra.is_institutional) return cube_types.land.public;
+    if (extra.is_sports) return cube_types.land.sports;
+    return cube_types.land.bare;
   }
 
   return null;

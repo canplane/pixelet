@@ -6,6 +6,7 @@
 //! inside a gesture, and reports events back.
 
 use super::store::{use_device_orientation_store, DevicePoseStatus};
+use pxl_shared::spec::message::Message;
 use crate::global::{now, Global};
 
 /// There's no Permissions-API equivalent for orientation (iOS Safari doesn't
@@ -68,7 +69,7 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
         return true;
     }
     if !platform.supported {
-        store.set_error("device.orientation.unsupported");
+        store.set_error(Message::OrientationUnsupported);
         return false;
     }
     store.set_status(DevicePoseStatus::Loading);
@@ -90,9 +91,9 @@ pub fn orientation_permission(granted: bool, failed: bool) {
         orientation().last_event_at = Some(now());
         store.set_is_tracking_orientation(true);
     } else if failed {
-        store.set_error("device.orientation.permission_error");
+        store.set_error(Message::OrientationPermissionError);
     } else {
-        store.set_error("device.orientation.permission_denied");
+        store.set_error(Message::OrientationPermissionDenied);
     }
 }
 
@@ -154,7 +155,7 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     if t - last > WATCHDOG_TIMEOUT_MS {
         o.commands.push(OrientationCommand::Remove);
         store.set_is_tracking_orientation(false);
-        store.set_error("device.orientation.signal_lost");
+        store.set_error(Message::OrientationSignalLost);
         o.last_event_at = None;
     }
 }

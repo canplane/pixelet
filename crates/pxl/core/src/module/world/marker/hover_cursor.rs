@@ -7,9 +7,10 @@
 
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::bake::ground::shown_ground;
-use pxl_shared::spec::cell::{placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for, PlaceableCubeId};
-use pxl_shared::spec::space::pvf3::fvec::{self, FVec};
-use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
+use pxl_shared::spec::cell::{placeable_cube_hex, placeable_cube_num_id, terrain_style_cube_for, PlaceableCube};
+use pxl_shared::spec::space::pvf3::fvec;
+use pxl_shared::spec::space::pvf3::ivec;
+use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
 use super::style::marker_colors;
 use crate::app::setting::store::use_settings_store;
@@ -25,7 +26,7 @@ use crate::module::world::decor::asset_store::{decor_assets_for, decor_bundle_as
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::object::collision::{is_placement_blocked, PlacementTool};
 use crate::module::world::object::size::DECOR_SIZE;
-use crate::module::world::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryKind};
+use crate::module::world::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
 use crate::module::world::terrain::elevation::get_ground_type;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -36,12 +37,13 @@ enum Ghost {
 }
 
 struct Cursor {
-    /// The hide as last set: the plain id, so an unrelated re-derivation of the
-    /// same cell doesn't clear-then-reset the hide and force a chunk rebuild.
-    virtual_hide_target: Option<String>,
+    /// The hide as last set: the address alone, so an unrelated re-derivation
+    /// of the same cell doesn't clear-then-reset the hide and force a chunk
+    /// rebuild.
+    virtual_hide_target: Option<EntryAt>,
     /// The carve preview as last set: its cell and size, compared as words, so
     /// two hover ticks landing in the same cell skip re-running.
-    carve_preview: Option<(IVec, FVec, f64)>,
+    carve_preview: Option<(PVF3, f64)>,
     ghost: Ghost,
 }
 
@@ -62,7 +64,7 @@ pub fn hover_cursor_step() {
     let map_center = use_map_store().map_center;
     let enable_terrain_carving = settings.enable_terrain_carving;
 
-    let hovered_object = camera.hovered_object_id.as_deref().and_then(get_placed_object);
+    let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
 
     // Eraser's own "dig into the terrain itself" case (camera/input.rs's
     // handle_tap/update_hover) — gated on the same settings flag those use, so
@@ -107,21 +109,21 @@ pub fn hover_cursor_step() {
     // hide lands on the next build of its chunk, a tick or more after the
     // ghost — accepted as-is.
     let virtual_hide_target = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser) => Some(o.id.clone()),
+        (Some(o), ActiveTool::Eraser) => Some(o.at),
         _ => None,
     };
     if c.virtual_hide_target != virtual_hide_target {
-        set_virtual_hide(virtual_hide_target.as_deref());
+        set_virtual_hide(virtual_hide_target);
         c.virtual_hide_target = virtual_hide_target;
     }
 
     // Terrain's own counterpart: eraser hovering bare terrain has no real leaf
     // to hide, so the carve preview injects a real AIR entry into the build at
     // this hover, so whatever's one voxel below shows through the ghost.
-    let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h.i, h.f, preview_size));
+    let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h, preview_size));
     if c.carve_preview != carve_preview {
         match carve_preview {
-            Some((i, f, size)) => set_virtual_carve_preview(i, f, size),
+            Some((at, size)) => set_virtual_carve_preview(&at, size),
             None => clear_virtual_carve_preview(),
         }
         c.carve_preview = carve_preview;
@@ -129,21 +131,21 @@ pub fn hover_cursor_step() {
 
     // Carving bare terrain previews the terrain voxel it removes, as the cube
     // that looks like one: its terrain-styled id.
-    let carved_style_id: Option<PlaceableCubeId> = match (&hovered, digging_terrain) {
+    let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let shown = shown_ground(|ch| get_ground_type(h.i, h.f, ch).unwrap_or(0), show_structures);
+            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), show_structures);
             terrain_style_cube_for(shown.channel, shown.type_id)
         }
         _ => None,
     };
 
     // Pointer always reads as the generic marker color; object placement and
-    // eraser-on-an-object ghost at the real thing's own color_id.
-    let color_id: Option<PlaceableCubeId> = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
+    // eraser-on-an-object ghost at the real thing's own colour.
+    let cube: Option<PlaceableCube> = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(EntryKind::Solid { color_id })) => Some(color_id.clone()),
-        (ActiveTool::Object, _) => Some(ui.object_color_id.clone()),
-        _ => carved_style_id,
+        (_, Some(EntryKind::Solid { cube })) => Some(*cube),
+        (ActiveTool::Object, _) => Some(ui.object_cube),
+        _ => carved_style_cube,
     };
 
     // Which decor kind's own real silhouette this ghost should show, if any.
@@ -176,7 +178,7 @@ pub fn hover_cursor_step() {
     // Without a texture the ghost falls back to the thing's own swatch. Nothing
     // resolves a swatch only when the eraser is over decor whose model has not
     // arrived: that box takes ERASE, the tool being what has to read off it.
-    let swatch = color_id.as_deref().and_then(placeable_cube_hex);
+    let swatch = cube.and_then(placeable_cube_hex);
     let fallback = if active_tool == ActiveTool::Eraser { marker_colors::ERASE } else { marker_colors::ACTION };
 
     // The pointer's bare-terrain ghost sits flush with real geometry and needs
@@ -201,8 +203,8 @@ pub fn hover_cursor_step() {
                 _ => Ghost::Box {
                     at: [x, y, z],
                     size: current_scale,
-                    value: match (&color_id, texture_pack) {
-                        (Some(id), true) => placeable_cube_num_id(id),
+                    value: match (cube, texture_pack) {
+                        (Some(cube), true) => placeable_cube_num_id(cube),
                         _ => 0,
                     },
                     rgb: u32::from_str_radix(&swatch.unwrap_or(fallback)[1..], 16).unwrap_or(0),

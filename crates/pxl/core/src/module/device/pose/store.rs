@@ -5,6 +5,7 @@
 //! what is significant enough to keep is decided here.
 
 use pxl_shared::spec::space::adapter::epsg4326::G4326;
+use pxl_shared::spec::message::Message;
 
 use crate::global::{now, Global};
 
@@ -75,8 +76,8 @@ pub struct DeviceLocationStore {
     pub location: Option<DeviceLocation>,
     /// Overall location-service reception status.
     pub status: DevicePoseStatus,
-    /// System message (error detail, etc).
-    pub error_key: Option<String>,
+    /// What went wrong; the shell turns it into the words it shows.
+    pub error: Option<Message>,
     /// Moves on every change, for the shell's selectors.
     pub revision: u32,
 }
@@ -90,7 +91,7 @@ impl DeviceLocationStore {
             // 1. First-fix pass
             self.location = Some(DeviceLocation { coords, accuracy, course, timestamp });
             self.status = DevicePoseStatus::Ready;
-            self.error_key = None;
+            self.error = None;
             self.revision += 1;
             return;
         };
@@ -121,7 +122,7 @@ impl DeviceLocationStore {
             timestamp,
         });
         self.status = DevicePoseStatus::Ready;
-        self.error_key = None;
+        self.error = None;
         self.revision += 1;
     }
 
@@ -144,12 +145,12 @@ impl DeviceLocationStore {
         }
     }
 
-    pub fn set_error(&mut self, error_key: &str) {
-        if self.status == DevicePoseStatus::Error && self.error_key.as_deref() == Some(error_key) {
+    pub fn set_error(&mut self, error: Message) {
+        if self.status == DevicePoseStatus::Error && self.error == Some(error) {
             return;
         }
         self.status = DevicePoseStatus::Error;
-        self.error_key = Some(error_key.to_string());
+        self.error = Some(error);
         self.revision += 1;
     }
 }
@@ -160,7 +161,8 @@ pub struct DeviceOrientationStore {
     pub is_tracking_orientation: bool,
     pub orientation: Option<DeviceOrientation>,
     pub status: DevicePoseStatus,
-    pub error_key: Option<String>,
+    /// What went wrong; the shell turns it into the words it shows.
+    pub error: Option<Message>,
     pub revision: u32,
 }
 
@@ -172,7 +174,7 @@ impl DeviceOrientationStore {
             self.orientation = Some(DeviceOrientation { heading, beta, gamma, timestamp });
             // orientation data alone is enough to count as usable
             self.status = DevicePoseStatus::Ready;
-            self.error_key = None;
+            self.error = None;
             self.revision += 1;
             return;
         };
@@ -207,12 +209,12 @@ impl DeviceOrientationStore {
         }
     }
 
-    pub fn set_error(&mut self, error_key: &str) {
-        if self.status == DevicePoseStatus::Error && self.error_key.as_deref() == Some(error_key) {
+    pub fn set_error(&mut self, error: Message) {
+        if self.status == DevicePoseStatus::Error && self.error == Some(error) {
             return;
         }
         self.status = DevicePoseStatus::Error;
-        self.error_key = Some(error_key.to_string());
+        self.error = Some(error);
         self.revision += 1;
     }
 }

@@ -13,68 +13,68 @@ export const cube_types = {
      * genuinely no entry at all reads back as this same 0, since a sparse
      * tree's own "nothing stored here" and a dense raster's own "nothing
      * painted here" are the same concept either way). */
-    VOID: 0x00,
+    void: 0x00,
     /** explicit object-layer air: retain this leaf, erase lower layers —
-     * a real, present leaf, unlike VOID above. Only ever a real value
+     * a real, present leaf, unlike void above. Only ever a real value
      * within the object-placement encoding (mod.ts) — no baked terrain
      * channel below can ever actually hold this byte, it's registered
      * here purely as a shared constant. */
-    AIR: 0x80,
+    air: 0x80,
     /** missing / invalid / unresolved data */
-    UNKNOWN: 0xff,
+    unknown: 0xff,
   },
 
   // ---- land ----
 
   land: {
     /** bare ground */
-    BARE: 1,
+    bare: 1,
     /** sea water (MSB-partitioned) */
-    SEA: 129,
+    sea: 129,
 
     // ---- natural ----
 
     /** deep green / forest / mountain */
-    GREEN_DEEP: 10,
+    green_deep: 10,
     /** light green / park / grass */
-    GREEN_LIGHT: 11,
+    green_light: 11,
     /** sand / rock */
-    SAND: 12,
+    sand: 12,
 
     // ---- landuse ----
 
     /** residential area */
-    RESIDENTIAL: 20,
+    residential: 20,
     /** commercial area */
-    COMMERCIAL: 21,
+    commercial: 21,
     /** industrial area */
-    INDUSTRIAL: 22,
+    industrial: 22,
     /** sports area */
-    SPORTS: 23,
+    sports: 23,
     /** education area */
-    EDUCATION: 24,
+    education: 24,
     /** medical area */
-    MEDICAL: 25,
+    medical: 25,
     /** public area */
-    PUBLIC: 26,
+    public: 26,
 
     // ---- aeroway areas ----
 
     /** apron */
-    APRON: 30,
+    apron: 30,
     /** helipad */
-    HELIPAD: 31,
+    helipad: 31,
   },
 
   // ---- water ----
 
   water: {
     /** flowing water */
-    RIVER: 1,
+    river: 1,
     /** still water */
-    LAKE: 2,
+    lake: 2,
     /** wetland */
-    WETLAND: 3,
+    wetland: 3,
   },
 
   // ---- structure ----
@@ -83,15 +83,15 @@ export const cube_types = {
     // ---- buildings ----
 
     /** generic building */
-    BUILDING: 1,
+    building: 1,
     /** station / terminal building */
-    BUILDING_STATION: 2,
+    building_station: 2,
     /** education building */
-    BUILDING_EDUCATION: 3,
+    building_education: 3,
     /** medical building */
-    BUILDING_MEDICAL: 4,
+    building_medical: 4,
     /** public building */
-    BUILDING_PUBLIC: 5,
+    building_public: 5,
   },
 
   // ---- transport ----
@@ -100,36 +100,36 @@ export const cube_types = {
     // ---- roads ----
 
     /** default road */
-    ROAD_DEFAULT: 1,
+    road_default: 1,
     /** motorway */
-    ROAD_MOTORWAY: 2,
+    road_motorway: 2,
     /** primary road */
-    ROAD_PRIMARY: 3,
+    road_primary: 3,
     /** secondary road */
-    ROAD_SECONDARY: 4,
+    road_secondary: 4,
     /** pedestrian path */
-    PEDESTRIAN: 5,
+    pedestrian: 5,
     /** parking area */
-    PARKING: 6,
+    parking: 6,
 
     // ---- rails ----
 
     /** main rail */
-    RAIL_MAIN: 10,
+    rail_main: 10,
     /** subway rail */
-    RAIL_SUBWAY: 11,
+    rail_subway: 11,
 
     // ---- aeroway lines ----
 
     /** runway */
-    RUNWAY: 20,
+    runway: 20,
     /** taxiway */
-    TAXIWAY: 21,
+    taxiway: 21,
   },
 
   // ---- block ----
   // Flat user-painted colors only — no sentinels of its own anymore.
-  // cube_types.common.VOID (sparse-tree absence) and .AIR (explicit erase)
+  // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
   // already cover every non-color case a placed cube's own byte can mean;
   // every real key here is a real, pickable color.
 

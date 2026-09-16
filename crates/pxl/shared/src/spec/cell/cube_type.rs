@@ -6,7 +6,7 @@
 // builds the colours from it and its top comment says what each channel
 // is.
 
-#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use super::r#type::Channels;
 
@@ -20,92 +20,92 @@ pub mod cube_types {
         /// genuinely no entry at all reads back as this same 0, since a sparse
         /// tree's own "nothing stored here" and a dense raster's own "nothing
         /// painted here" are the same concept either way).
-        pub const VOID: u8 = 0x00;
+        pub const void: u8 = 0x00;
         /// explicit object-layer air: retain this leaf, erase lower layers —
-        /// a real, present leaf, unlike VOID above. Only ever a real value
+        /// a real, present leaf, unlike void above. Only ever a real value
         /// within the object-placement encoding (mod.ts) — no baked terrain
         /// channel below can ever actually hold this byte, it's registered
         /// here purely as a shared constant.
-        pub const AIR: u8 = 0x80;
+        pub const air: u8 = 0x80;
         /// missing / invalid / unresolved data
-        pub const UNKNOWN: u8 = 0xff;
+        pub const unknown: u8 = 0xff;
 
         pub const ENTRIES: &[(&str, u8)] = &[
-            ("VOID", VOID),
-            ("AIR", AIR),
-            ("UNKNOWN", UNKNOWN),
+            ("void", void),
+            ("air", air),
+            ("unknown", unknown),
         ];
     }
 
     pub mod land {
         /// bare ground
-        pub const BARE: u8 = 1;
+        pub const bare: u8 = 1;
         /// sea water (MSB-partitioned)
-        pub const SEA: u8 = 129;
+        pub const sea: u8 = 129;
 
         // ---- natural ----
 
         /// deep green / forest / mountain
-        pub const GREEN_DEEP: u8 = 10;
+        pub const green_deep: u8 = 10;
         /// light green / park / grass
-        pub const GREEN_LIGHT: u8 = 11;
+        pub const green_light: u8 = 11;
         /// sand / rock
-        pub const SAND: u8 = 12;
+        pub const sand: u8 = 12;
 
         // ---- landuse ----
 
         /// residential area
-        pub const RESIDENTIAL: u8 = 20;
+        pub const residential: u8 = 20;
         /// commercial area
-        pub const COMMERCIAL: u8 = 21;
+        pub const commercial: u8 = 21;
         /// industrial area
-        pub const INDUSTRIAL: u8 = 22;
+        pub const industrial: u8 = 22;
         /// sports area
-        pub const SPORTS: u8 = 23;
+        pub const sports: u8 = 23;
         /// education area
-        pub const EDUCATION: u8 = 24;
+        pub const education: u8 = 24;
         /// medical area
-        pub const MEDICAL: u8 = 25;
+        pub const medical: u8 = 25;
         /// public area
-        pub const PUBLIC: u8 = 26;
+        pub const public: u8 = 26;
 
         // ---- aeroway areas ----
 
         /// apron
-        pub const APRON: u8 = 30;
+        pub const apron: u8 = 30;
         /// helipad
-        pub const HELIPAD: u8 = 31;
+        pub const helipad: u8 = 31;
 
         pub const ENTRIES: &[(&str, u8)] = &[
-            ("BARE", BARE),
-            ("SEA", SEA),
-            ("GREEN_DEEP", GREEN_DEEP),
-            ("GREEN_LIGHT", GREEN_LIGHT),
-            ("SAND", SAND),
-            ("RESIDENTIAL", RESIDENTIAL),
-            ("COMMERCIAL", COMMERCIAL),
-            ("INDUSTRIAL", INDUSTRIAL),
-            ("SPORTS", SPORTS),
-            ("EDUCATION", EDUCATION),
-            ("MEDICAL", MEDICAL),
-            ("PUBLIC", PUBLIC),
-            ("APRON", APRON),
-            ("HELIPAD", HELIPAD),
+            ("bare", bare),
+            ("sea", sea),
+            ("green_deep", green_deep),
+            ("green_light", green_light),
+            ("sand", sand),
+            ("residential", residential),
+            ("commercial", commercial),
+            ("industrial", industrial),
+            ("sports", sports),
+            ("education", education),
+            ("medical", medical),
+            ("public", public),
+            ("apron", apron),
+            ("helipad", helipad),
         ];
     }
 
     pub mod water {
         /// flowing water
-        pub const RIVER: u8 = 1;
+        pub const river: u8 = 1;
         /// still water
-        pub const LAKE: u8 = 2;
+        pub const lake: u8 = 2;
         /// wetland
-        pub const WETLAND: u8 = 3;
+        pub const wetland: u8 = 3;
 
         pub const ENTRIES: &[(&str, u8)] = &[
-            ("RIVER", RIVER),
-            ("LAKE", LAKE),
-            ("WETLAND", WETLAND),
+            ("river", river),
+            ("lake", lake),
+            ("wetland", wetland),
         ];
     }
 
@@ -113,22 +113,22 @@ pub mod cube_types {
         // ---- buildings ----
 
         /// generic building
-        pub const BUILDING: u8 = 1;
+        pub const building: u8 = 1;
         /// station / terminal building
-        pub const BUILDING_STATION: u8 = 2;
+        pub const building_station: u8 = 2;
         /// education building
-        pub const BUILDING_EDUCATION: u8 = 3;
+        pub const building_education: u8 = 3;
         /// medical building
-        pub const BUILDING_MEDICAL: u8 = 4;
+        pub const building_medical: u8 = 4;
         /// public building
-        pub const BUILDING_PUBLIC: u8 = 5;
+        pub const building_public: u8 = 5;
 
         pub const ENTRIES: &[(&str, u8)] = &[
-            ("BUILDING", BUILDING),
-            ("BUILDING_STATION", BUILDING_STATION),
-            ("BUILDING_EDUCATION", BUILDING_EDUCATION),
-            ("BUILDING_MEDICAL", BUILDING_MEDICAL),
-            ("BUILDING_PUBLIC", BUILDING_PUBLIC),
+            ("building", building),
+            ("building_station", building_station),
+            ("building_education", building_education),
+            ("building_medical", building_medical),
+            ("building_public", building_public),
         ];
     }
 
@@ -136,48 +136,48 @@ pub mod cube_types {
         // ---- roads ----
 
         /// default road
-        pub const ROAD_DEFAULT: u8 = 1;
+        pub const road_default: u8 = 1;
         /// motorway
-        pub const ROAD_MOTORWAY: u8 = 2;
+        pub const road_motorway: u8 = 2;
         /// primary road
-        pub const ROAD_PRIMARY: u8 = 3;
+        pub const road_primary: u8 = 3;
         /// secondary road
-        pub const ROAD_SECONDARY: u8 = 4;
+        pub const road_secondary: u8 = 4;
         /// pedestrian path
-        pub const PEDESTRIAN: u8 = 5;
+        pub const pedestrian: u8 = 5;
         /// parking area
-        pub const PARKING: u8 = 6;
+        pub const parking: u8 = 6;
 
         // ---- rails ----
 
         /// main rail
-        pub const RAIL_MAIN: u8 = 10;
+        pub const rail_main: u8 = 10;
         /// subway rail
-        pub const RAIL_SUBWAY: u8 = 11;
+        pub const rail_subway: u8 = 11;
 
         // ---- aeroway lines ----
 
         /// runway
-        pub const RUNWAY: u8 = 20;
+        pub const runway: u8 = 20;
         /// taxiway
-        pub const TAXIWAY: u8 = 21;
+        pub const taxiway: u8 = 21;
 
         pub const ENTRIES: &[(&str, u8)] = &[
-            ("ROAD_DEFAULT", ROAD_DEFAULT),
-            ("ROAD_MOTORWAY", ROAD_MOTORWAY),
-            ("ROAD_PRIMARY", ROAD_PRIMARY),
-            ("ROAD_SECONDARY", ROAD_SECONDARY),
-            ("PEDESTRIAN", PEDESTRIAN),
-            ("PARKING", PARKING),
-            ("RAIL_MAIN", RAIL_MAIN),
-            ("RAIL_SUBWAY", RAIL_SUBWAY),
-            ("RUNWAY", RUNWAY),
-            ("TAXIWAY", TAXIWAY),
+            ("road_default", road_default),
+            ("road_motorway", road_motorway),
+            ("road_primary", road_primary),
+            ("road_secondary", road_secondary),
+            ("pedestrian", pedestrian),
+            ("parking", parking),
+            ("rail_main", rail_main),
+            ("rail_subway", rail_subway),
+            ("runway", runway),
+            ("taxiway", taxiway),
         ];
     }
 
     // Flat user-painted colors only — no sentinels of its own anymore.
-    // cube_types.common.VOID (sparse-tree absence) and .AIR (explicit erase)
+    // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
     // already cover every non-color case a placed cube's own byte can mean;
     // every real key here is a real, pickable color.
     pub mod block {
@@ -224,4 +224,253 @@ pub mod cube_types {
         ("transport", transport::ENTRIES),
         ("block", block::ENTRIES),
     ];
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Common {
+        /// unset — no data painted at this cell for this channel; also the
+        /// object-placement sparse tree's own absence marker (a cell with
+        /// genuinely no entry at all reads back as this same 0, since a sparse
+        /// tree's own "nothing stored here" and a dense raster's own "nothing
+        /// painted here" are the same concept either way).
+        void = 0x00,
+        /// explicit object-layer air: retain this leaf, erase lower layers —
+        /// a real, present leaf, unlike void above. Only ever a real value
+        /// within the object-placement encoding (mod.ts) — no baked terrain
+        /// channel below can ever actually hold this byte, it's registered
+        /// here purely as a shared constant.
+        air = 0x80,
+        /// missing / invalid / unresolved data
+        unknown = 0xff,
+    }
+
+    impl Common {
+        /// Every type the channel gives out, in the JSON's own order.
+        pub const ALL: [Common; 3] = [
+            Common::void,
+            Common::air,
+            Common::unknown,
+        ];
+
+        /// The type a number names, or none for a number the channel
+        /// does not give out.
+        pub fn of(value: u8) -> Option<Common> {
+            Common::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Land {
+        /// bare ground
+        bare = 1,
+        /// sea water (MSB-partitioned)
+        sea = 129,
+        /// deep green / forest / mountain
+        green_deep = 10,
+        /// light green / park / grass
+        green_light = 11,
+        /// sand / rock
+        sand = 12,
+        /// residential area
+        residential = 20,
+        /// commercial area
+        commercial = 21,
+        /// industrial area
+        industrial = 22,
+        /// sports area
+        sports = 23,
+        /// education area
+        education = 24,
+        /// medical area
+        medical = 25,
+        /// public area
+        public = 26,
+        /// apron
+        apron = 30,
+        /// helipad
+        helipad = 31,
+    }
+
+    impl Land {
+        /// Every type the channel gives out, in the JSON's own order.
+        pub const ALL: [Land; 14] = [
+            Land::bare,
+            Land::sea,
+            Land::green_deep,
+            Land::green_light,
+            Land::sand,
+            Land::residential,
+            Land::commercial,
+            Land::industrial,
+            Land::sports,
+            Land::education,
+            Land::medical,
+            Land::public,
+            Land::apron,
+            Land::helipad,
+        ];
+
+        /// The type a number names, or none for a number the channel
+        /// does not give out.
+        pub fn of(value: u8) -> Option<Land> {
+            Land::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Water {
+        /// flowing water
+        river = 1,
+        /// still water
+        lake = 2,
+        /// wetland
+        wetland = 3,
+    }
+
+    impl Water {
+        /// Every type the channel gives out, in the JSON's own order.
+        pub const ALL: [Water; 3] = [
+            Water::river,
+            Water::lake,
+            Water::wetland,
+        ];
+
+        /// The type a number names, or none for a number the channel
+        /// does not give out.
+        pub fn of(value: u8) -> Option<Water> {
+            Water::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Structure {
+        /// generic building
+        building = 1,
+        /// station / terminal building
+        building_station = 2,
+        /// education building
+        building_education = 3,
+        /// medical building
+        building_medical = 4,
+        /// public building
+        building_public = 5,
+    }
+
+    impl Structure {
+        /// Every type the channel gives out, in the JSON's own order.
+        pub const ALL: [Structure; 5] = [
+            Structure::building,
+            Structure::building_station,
+            Structure::building_education,
+            Structure::building_medical,
+            Structure::building_public,
+        ];
+
+        /// The type a number names, or none for a number the channel
+        /// does not give out.
+        pub fn of(value: u8) -> Option<Structure> {
+            Structure::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Transport {
+        /// default road
+        road_default = 1,
+        /// motorway
+        road_motorway = 2,
+        /// primary road
+        road_primary = 3,
+        /// secondary road
+        road_secondary = 4,
+        /// pedestrian path
+        pedestrian = 5,
+        /// parking area
+        parking = 6,
+        /// main rail
+        rail_main = 10,
+        /// subway rail
+        rail_subway = 11,
+        /// runway
+        runway = 20,
+        /// taxiway
+        taxiway = 21,
+    }
+
+    impl Transport {
+        /// Every type the channel gives out, in the JSON's own order.
+        pub const ALL: [Transport; 10] = [
+            Transport::road_default,
+            Transport::road_motorway,
+            Transport::road_primary,
+            Transport::road_secondary,
+            Transport::pedestrian,
+            Transport::parking,
+            Transport::rail_main,
+            Transport::rail_subway,
+            Transport::runway,
+            Transport::taxiway,
+        ];
+
+        /// The type a number names, or none for a number the channel
+        /// does not give out.
+        pub fn of(value: u8) -> Option<Transport> {
+            Transport::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
+
+    // Flat user-painted colors only — no sentinels of its own anymore.
+    // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
+    // already cover every non-color case a placed cube's own byte can mean;
+    // every real key here is a real, pickable color.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Block {
+        white = 130,
+        grey = 131,
+        dark_grey = 132,
+        black = 133,
+        red = 134,
+        orange = 135,
+        brown = 136,
+        yellow = 137,
+        green = 138,
+        dark_green = 139,
+        cyan = 140,
+        blue = 141,
+        violet = 142,
+        magenta = 143,
+        pink = 144,
+    }
+
+    impl Block {
+        /// Every type the channel gives out, in the JSON's own order.
+        pub const ALL: [Block; 15] = [
+            Block::white,
+            Block::grey,
+            Block::dark_grey,
+            Block::black,
+            Block::red,
+            Block::orange,
+            Block::brown,
+            Block::yellow,
+            Block::green,
+            Block::dark_green,
+            Block::cyan,
+            Block::blue,
+            Block::violet,
+            Block::magenta,
+            Block::pink,
+        ];
+
+        /// The type a number names, or none for a number the channel
+        /// does not give out.
+        pub fn of(value: u8) -> Option<Block> {
+            Block::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
 }

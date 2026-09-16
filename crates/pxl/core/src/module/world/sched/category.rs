@@ -12,6 +12,8 @@
 //! - compute   → WASM + SIMD pays here
 //! - gpu-fill  → fewer post-fx passes / lower dpr / less overdraw
 
+use super::demand::Category;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoundClass {
     Network,
@@ -38,30 +40,30 @@ pub struct CategoryInfo {
     pub note: &'static str,
 }
 
-const CATEGORIES: &[(&str, CategoryInfo)] = &[
+const CATEGORIES: &[(Category, CategoryInfo)] = &[
     (
-        "terrain",
+        Category::Terrain,
         CategoryInfo {
             bound: BoundClass::Network,
             note: "Measured 2026-09-09: 4.2MB/page, mean net 322.5ms vs decode 0.6ms — decode_terrain is an XTP cursor read and is free. The demand is network-bound end to end.",
         },
     ),
     (
-        "poi",
+        Category::Poi,
         CategoryInfo {
             bound: BoundClass::Network,
             note: "Measured 2026-09-09: mean net 269.3ms vs JSON.parse 2.2ms on ~114KB pages (295KB worst). Latency-bound; lever is priority order, not parallelism.",
         },
     ),
     (
-        "geocode",
+        Category::Geocode,
         CategoryInfo {
             bound: BoundClass::Network,
             note: "single-slot latest-wins; one small page lookup, pure RTT. Already debounced upstream, so the lever left is queue priority.",
         },
     ),
     (
-        "search",
+        Category::Search,
         CategoryInfo {
             bound: BoundClass::Network,
             note: "the one feature with no static bake — always a live API round trip, and the user is watching. Runs ahead of every streaming category on purpose.",
@@ -69,6 +71,6 @@ const CATEGORIES: &[(&str, CategoryInfo)] = &[
     ),
 ];
 
-pub fn category_info(category: &str) -> Option<CategoryInfo> {
-    CATEGORIES.iter().find(|(name, _)| *name == category).map(|(_, info)| *info)
+pub fn category_info(category: Category) -> Option<CategoryInfo> {
+    CATEGORIES.iter().find(|(c, _)| *c == category).map(|(_, info)| *info)
 }

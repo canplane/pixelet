@@ -166,7 +166,7 @@ fn input() -> &'static mut Input {
 /// the right answer when it's genuinely closer along the ray than whatever the
 /// voxel raycast found, falling back to ray.rs's solid-object AABB resolution.
 fn resolve_hit_target(hit: &WorldHit, origin: Vec3, direction: Vec3, map_origin: IVec) -> Option<OccupiedEntry> {
-    if let Some(decor) = raycast_decor(origin, direction, map_origin, hit.t).and_then(|id| get_placed_object(&id)) {
+    if let Some(decor) = raycast_decor(origin, direction, map_origin, hit.t).and_then(get_placed_object) {
         return Some(decor);
     }
     resolve_hit_object(hit, map_origin)
@@ -187,7 +187,7 @@ fn handle_tap(hovered: PVF3) {
             // pivoted by the ground's own rule — what every pan, the bootstrap
             // and follow mode set too, so a pan after a terrain tap changes
             // nothing.
-            let hovered_object = use_camera_store().hovered_object_id.as_deref().and_then(get_placed_object);
+            let hovered_object = use_camera_store().hovered_object_at.and_then(get_placed_object);
             let target = match hovered_object {
                 Some(o) => object_center(&o, get_local_world_origin(use_map_store().map_center.as_ref())),
                 None => ground_or_raw(&anchor_center(&hovered)),
@@ -197,13 +197,13 @@ fn handle_tap(hovered: PVF3) {
         ActiveTool::Eraser => {
             // Targets the object the raycast actually struck, not a grid-key
             // lookup — correct for any size, any face.
-            match use_camera_store().hovered_object_id.clone() {
-                Some(id) => remove(&id),
+            match use_camera_store().hovered_object_at {
+                Some(at) => remove(at),
                 // Nothing placed here — dig into the terrain's own real surface,
                 // once the user has opted into that. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
                 // "nothing here on purpose" leaf is the only way to override it.
-                None if use_settings_store().enable_terrain_carving => place_air(hovered.i, hovered.f, object_size),
+                None if use_settings_store().enable_terrain_carving => place_air(&hovered, object_size),
                 None => {}
             }
         }
@@ -213,10 +213,10 @@ fn handle_tap(hovered: PVF3) {
             let map_origin = get_local_world_origin(use_map_store().map_center.as_ref());
             if ui.active_tool == ActiveTool::Decor {
                 if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size, map_origin) {
-                    place_decor(hovered.i, hovered.f, DECOR_SIZE, ui.decor_id);
+                    place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
             } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size, map_origin) {
-                place(hovered.i, hovered.f, object_size, &ui.object_color_id.clone(), use_settings_store().show_structures);
+                place(&hovered, object_size, ui.object_cube, use_settings_store().show_structures);
             }
         }
     }
@@ -488,8 +488,8 @@ fn clear_hovered_once() {
     if camera.hovered_coord.is_some() {
         camera.set_hovered_coord(None);
     }
-    if camera.hovered_object_id.is_some() {
-        camera.set_hovered_object_id(None);
+    if camera.hovered_object_at.is_some() {
+        camera.set_hovered_object_at(None);
     }
 }
 
@@ -514,7 +514,7 @@ fn update_hover(s: &Input) {
     if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
         // The one tool group that wants an ADJACENT empty slot. Decor always
         // places at its own fixed DECOR_SIZE.
-        camera.set_hovered_object_id(None);
+        camera.set_hovered_object_at(None);
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
         // A real struck entry's exact stored AABB, not the hit's own box — that
         // comes back through the u8-packed sub_cell payload, accurate to only
@@ -527,7 +527,7 @@ fn update_hover(s: &Input) {
     // Pointer (recenter on it) and eraser (remove/dig it) both target the struck
     // thing itself.
     let struck = resolve_hit_target(&hit, origin, direction, map_origin);
-    camera.set_hovered_object_id(struck.as_ref().map(|o| o.id.clone()));
+    camera.set_hovered_object_at(struck.as_ref().map(|o| o.at));
     if let Some(o) = struck {
         camera.set_hovered_coord(Some(PVF3 { i: o.i, f: o.f }));
     } else if ui.active_tool == ActiveTool::Eraser && use_settings_store().enable_terrain_carving {

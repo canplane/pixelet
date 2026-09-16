@@ -16,7 +16,11 @@
 //! Readers: the overlay and the text report (log.rs), both through
 //! summary.rs, and the Chrome-trace export (trace.rs).
 
-use super::demand::{DemandKey, ErrorText, Phases};
+use core::fmt;
+
+use pxl_shared::spec::fetch::FetchFail;
+
+use super::demand::{DemandKey, Phases};
 use super::tick::PHASES;
 use crate::global::{now, Global};
 use crate::kernel::kernel;
@@ -41,8 +45,9 @@ impl Outcome {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskRecord {
+    /// The stream and the one thing in it — two numbers, so the ring holds a
+    /// record by value and the summary rolls up by the stream without text.
     pub key: DemandKey,
-    pub category: &'static str,
     pub priority: f64,
     /// monotonic ms at enqueue / first run / settle.
     pub enqueue_ms: f64,
@@ -54,10 +59,30 @@ pub struct TaskRecord {
     /// None when it reported none — the run is then one opaque step.
     pub phases: Option<Phases>,
     pub outcome: Outcome,
-    /// Why it failed, when `outcome` is Error: the HTTP status where there was
-    /// one, otherwise the error's name and the start of its message. The count
-    /// alone could not say whether twelve failures were one cause or twelve.
-    pub error: Option<ErrorText>,
+    /// Why it failed, when `outcome` is Error. The count alone could not say
+    /// whether twelve failures were one cause or twelve.
+    pub fail: Failure,
+}
+
+/// Why a task failed: the reason as its number, and the HTTP status beside it
+/// where the reason was a refused response. Two numbers, so a record is a row
+/// of plain values and the summary counts by them rather than by prose — the
+/// words for a reason are the shell's, as `strerror` is libc's.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Failure {
+    pub fail: FetchFail,
+    pub status: u16,
+}
+
+impl fmt::Display for Failure {
+    /// `status 503`, or the reason's own name where no status says more.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.fail {
+            FetchFail::None => Ok(()),
+            FetchFail::Status => write!(f, "status {}", self.status),
+            fail => f.write_str(fail.as_str()),
+        }
+    }
 }
 
 /// (draws, triangles) by the pipeline a draw names (render/draw.rs), for one

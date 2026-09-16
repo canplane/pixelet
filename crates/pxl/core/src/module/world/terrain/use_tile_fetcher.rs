@@ -10,18 +10,18 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
 
 use super::config::{KEEP_DIST, RESIDENT_PAGES};
-use super::resident::{release_due_terrain, release_terrain, QUARANTINE_MS};
+use super::resident::free_slot;
 use super::store::{tile_pages, use_tile_store};
-use super::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY, OCEAN_KEY};
+use super::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY};
 use crate::global::{now, Global};
 use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::{use_map_store, MapStatus};
 use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
-use crate::module::world::sched::demand::{demand_key, Demand};
+use crate::module::world::sched::demand::{Category, Demand, DemandKey};
 use crate::module::world::sched::fetch_scheduler::{fetch_pending_count, fetch_revision, fetch_running, fetch_sync, page_key};
 
-pub const CATEGORY: &str = "terrain";
+pub const CATEGORY: Category = Category::Terrain;
 
 // The device's own page, when it's outside the fetch range, still has to load
 // so the user marker can ground itself — but it's genuinely far, so it queues
@@ -45,7 +45,6 @@ fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> Vec<Demand> {
         }
         demands.push(Demand {
             key: page_key(CATEGORY, page_idx),
-            category: CATEGORY,
             priority,
         });
     };
@@ -58,7 +57,7 @@ fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> Vec<Demand> {
     // set is kept in the wishlist rather than withdrawn, so a pan does not
     // cancel work it will ask for again — see FETCH_HYSTERESIS.
     for p in pages_to_hold(anchor, KEEP_DIST + FETCH_HYSTERESIS, RESIDENT_PAGES() + 16) {
-        if !held.iter().any(|h| h.page_idx == p.page_idx) && fetch_running(&page_key(CATEGORY, p.page_idx)) {
+        if !held.iter().any(|h| h.page_idx == p.page_idx) && fetch_running(page_key(CATEGORY, p.page_idx)) {
             add(p.page_idx, page_priority(p.dist2));
         }
     }
@@ -82,7 +81,7 @@ fn cleanup_far_tiles(anchor: IVec, pinned_page_idx: Option<IVec>) {
     let mut evict: Vec<IVec> = Vec::new();
     evict.extend(tile_pages().keys().filter(|&p| Some(p) != pinned_page_idx && !holds(p)));
     for page_idx in evict {
-        release_terrain(page_idx, QUARANTINE_MS);
+        free_slot(page_idx);
         use_tile_store().clear_tile(page_idx);
     }
 }
@@ -93,8 +92,8 @@ struct Fetcher {
     ocean_ask_at: f64,
     /// When a page that failed is asked for again. The wishlist is rebuilt
     /// only when the anchor moves, and the scheduler drops a failed demand, so
-    /// a page refused while the view stood still — the page section full of a
-    /// jump's quarantined pages — would stay a hole until the next pan.
+    /// a page whose fetch failed while the view stood still would stay a hole
+    /// until the next pan.
     retry_at: Option<f64>,
 }
 
@@ -109,12 +108,12 @@ fn fetcher() -> &'static mut Fetcher {
     })
 }
 
-/// A terrain page's fetch failed: the wishlist is rebuilt once the quarantine
-/// that most likely refused it has passed, not at once, which would fetch the
-/// same body again into the same full section.
+/// A terrain page's fetch failed: the wishlist is rebuilt after the same wait
+/// the shared tile takes, not at once, which would ask again into whatever
+/// turned it away.
 pub fn terrain_failed() {
     let f = fetcher();
-    f.retry_at.get_or_insert(now() + QUARANTINE_MS);
+    f.retry_at.get_or_insert(now() + OCEAN_RETRY_MS);
 }
 
 /// Asks for the shared ocean tile while pages wait on it and nothing is asking
@@ -124,9 +123,9 @@ fn ocean_step(f: &mut Fetcher) {
     let pending = fetch_pending_count(OCEAN_CATEGORY) > 0;
     if wanted && !pending && now() >= f.ocean_ask_at {
         f.ocean_ask_at = now() + OCEAN_RETRY_MS;
+        // The stream has one member, so its subject names nothing.
         let demand = Demand {
-            key: demand_key(OCEAN_CATEGORY, OCEAN_KEY),
-            category: OCEAN_CATEGORY,
+            key: DemandKey::new(OCEAN_CATEGORY, 0),
             priority: 0.0,
         };
         fetch_sync(OCEAN_CATEGORY, std::slice::from_ref(&demand));
@@ -138,7 +137,6 @@ fn ocean_step(f: &mut Fetcher) {
 /// The tile fetcher's turn.
 pub fn tile_fetcher_step() {
     let f = fetcher();
-    release_due_terrain();
     ocean_step(f);
 
     // map_status follows the terrain queue: LOADING while anything terrain is

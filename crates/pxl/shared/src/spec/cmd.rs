@@ -239,6 +239,7 @@ pub enum LoadMinor {
 #[repr(u32)]
 pub enum WorldMinor {
     ACTION = 0x11,
+    LONG_FRAME = 0x12,
     TOAST = 0x13,
     LOG = 0x14,
     SNAPSHOT = 0x15,
@@ -556,6 +557,13 @@ pub enum Cmd {
     WORLD_UPDATE = 0x1b03,
     /// tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not
     WORLD_ACTION = 0x1b11,
+    /// send · [source u32 (0 loaf, 1 longtask), t f64, duration f64, blocking f64, script f64, render f64]
+    ///
+    /// A frame that blocked the event loop past 50ms, as the shell's own
+    /// observer saw it. The kernel cannot see one: a long animation frame is
+    /// a browser measurement of the whole task, and the tick is only part of
+    /// it. The ledger keeps it beside the frames it did measure.
+    WORLD_LONG_FRAME = 0x1b12,
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
     INPUT_UPDATE = 0x1c03,
     /// [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
@@ -627,7 +635,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 117] = [
+    const ALL: [Cmd; 118] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -719,6 +727,7 @@ impl Cmd {
         Cmd::WORLD_CREATE,
         Cmd::WORLD_UPDATE,
         Cmd::WORLD_ACTION,
+        Cmd::WORLD_LONG_FRAME,
         Cmd::INPUT_UPDATE,
         Cmd::INPUT_POINTER,
         Cmd::INPUT_WHEEL,
@@ -852,6 +861,7 @@ mod test {
             (WORLD_CREATE, Major::WORLD as u32, Minor::CREATE as u32),
             (WORLD_UPDATE, Major::WORLD as u32, Minor::UPDATE as u32),
             (WORLD_ACTION, Major::WORLD as u32, WorldMinor::ACTION as u32),
+            (WORLD_LONG_FRAME, Major::WORLD as u32, WorldMinor::LONG_FRAME as u32),
             (INPUT_UPDATE, Major::INPUT as u32, Minor::UPDATE as u32),
             (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
             (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),

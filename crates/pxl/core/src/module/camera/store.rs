@@ -7,6 +7,7 @@ use super::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POL
 use super::terrain_gate::{allowed_view, ViewTriple};
 use crate::global::Global;
 use crate::module::world::change::request_world_tick;
+use crate::module::world::object::store::EntryAt;
 
 const PI: f64 = core::f64::consts::PI;
 
@@ -64,9 +65,9 @@ pub struct ViewPatch {
 pub struct CameraStore {
     pub camera_status: CameraStatus,
     pub hovered_coord: Option<PVF3>,
-    /// id of the placed object currently under the cursor, if any — see
-    /// camera/ray.rs's PickResult.
-    pub hovered_object_id: Option<String>,
+    /// Where the placed object currently under the cursor is filed, if there
+    /// is one — see camera/ray.rs's PickResult.
+    pub hovered_object_at: Option<EntryAt>,
     /// User/system-facing camera view intent.
     pub view_state: ViewState,
     /// Follow mode flag.
@@ -80,7 +81,7 @@ impl CameraStore {
         CameraStore {
             camera_status: CameraStatus::Idle,
             hovered_coord: None,
-            hovered_object_id: None,
+            hovered_object_at: None,
             view_state: ViewState {
                 dist: DEFAULT_DIST,
                 azimuth: DEFAULT_AZIMUTH,
@@ -109,9 +110,9 @@ impl CameraStore {
         }
     }
 
-    pub fn set_hovered_object_id(&mut self, id: Option<String>) {
-        if self.hovered_object_id != id {
-            self.hovered_object_id = id;
+    pub fn set_hovered_object_at(&mut self, at: Option<EntryAt>) {
+        if self.hovered_object_at != at {
+            self.hovered_object_at = at;
             self.changed();
         }
     }

@@ -1,7 +1,7 @@
-packet_fnv	67d8f3edf415bde1
+packet_fnv	07b427f13498f6a6
 rows.0.id	0
 rows.0.kind	cube
-rows.0.name	common.VOID
+rows.0.name	common.void
 rows.0.model_hash	0
 rows.0.model_key	none
 rows.0.skin_key	none
@@ -15,7 +15,7 @@ rows.0.color	none
 rows.0.group	none
 rows.1.id	128
 rows.1.kind	cube
-rows.1.name	common.AIR
+rows.1.name	common.air
 rows.1.model_hash	0
 rows.1.model_key	none
 rows.1.skin_key	none
@@ -29,7 +29,7 @@ rows.1.color	none
 rows.1.group	none
 rows.2.id	255
 rows.2.kind	cube
-rows.2.name	common.UNKNOWN
+rows.2.name	common.unknown
 rows.2.model_hash	0
 rows.2.model_key	none
 rows.2.skin_key	none
@@ -253,7 +253,7 @@ rows.17.color	#ff8787
 rows.17.group	none
 rows.18.id	257
 rows.18.kind	ground
-rows.18.name	land.BARE
+rows.18.name	land.bare
 rows.18.model_hash	0
 rows.18.model_key	none
 rows.18.skin_key	none
@@ -267,7 +267,7 @@ rows.18.color	#EEE5DC
 rows.18.group	none
 rows.19.id	385
 rows.19.kind	ground
-rows.19.name	land.SEA
+rows.19.name	land.sea
 rows.19.model_hash	0
 rows.19.model_key	none
 rows.19.skin_key	none
@@ -281,7 +281,7 @@ rows.19.color	#AAD3DF
 rows.19.group	none
 rows.20.id	266
 rows.20.kind	ground
-rows.20.name	land.GREEN_DEEP
+rows.20.name	land.green_deep
 rows.20.model_hash	0
 rows.20.model_key	none
 rows.20.skin_key	none
@@ -295,7 +295,7 @@ rows.20.color	#ADD19E
 rows.20.group	none
 rows.21.id	267
 rows.21.kind	ground
-rows.21.name	land.GREEN_LIGHT
+rows.21.name	land.green_light
 rows.21.model_hash	0
 rows.21.model_key	none
 rows.21.skin_key	none
@@ -309,7 +309,7 @@ rows.21.color	#C8FACC
 rows.21.group	none
 rows.22.id	268
 rows.22.kind	ground
-rows.22.name	land.SAND
+rows.22.name	land.sand
 rows.22.model_hash	0
 rows.22.model_key	none
 rows.22.skin_key	none
@@ -323,7 +323,7 @@ rows.22.color	#F5E9C6
 rows.22.group	none
 rows.23.id	276
 rows.23.kind	ground
-rows.23.name	land.RESIDENTIAL
+rows.23.name	land.residential
 rows.23.model_hash	0
 rows.23.model_key	none
 rows.23.skin_key	none
@@ -337,7 +337,7 @@ rows.23.color	#E0DFDF
 rows.23.group	none
 rows.24.id	277
 rows.24.kind	ground
-rows.24.name	land.COMMERCIAL
+rows.24.name	land.commercial
 rows.24.model_hash	0
 rows.24.model_key	none
 rows.24.skin_key	none
@@ -351,7 +351,7 @@ rows.24.color	#F2DAD9
 rows.24.group	none
 rows.25.id	278
 rows.25.kind	ground
-rows.25.name	land.INDUSTRIAL
+rows.25.name	land.industrial
 rows.25.model_hash	0
 rows.25.model_key	none
 rows.25.skin_key	none
@@ -365,7 +365,7 @@ rows.25.color	#EBDBE8
 rows.25.group	none
 rows.26.id	279
 rows.26.kind	ground
-rows.26.name	land.SPORTS
+rows.26.name	land.sports
 rows.26.model_hash	0
 rows.26.model_key	none
 rows.26.skin_key	none
@@ -379,7 +379,7 @@ rows.26.color	#88E0BE
 rows.26.group	none
 rows.27.id	280
 rows.27.kind	ground
-rows.27.name	land.EDUCATION
+rows.27.name	land.education
 rows.27.model_hash	0
 rows.27.model_key	none
 rows.27.skin_key	none
@@ -393,7 +393,7 @@ rows.27.color	#FFFFE5
 rows.27.group	none
 rows.28.id	281
 rows.28.kind	ground
-rows.28.name	land.MEDICAL
+rows.28.name	land.medical
 rows.28.model_hash	0
 rows.28.model_key	none
 rows.28.skin_key	none
@@ -407,7 +407,7 @@ rows.28.color	#FFFFE5
 rows.28.group	none
 rows.29.id	282
 rows.29.kind	ground
-rows.29.name	land.PUBLIC
+rows.29.name	land.public
 rows.29.model_hash	0
 rows.29.model_key	none
 rows.29.skin_key	none
@@ -421,7 +421,7 @@ rows.29.color	#FFFFE5
 rows.29.group	none
 rows.30.id	286
 rows.30.kind	ground
-rows.30.name	land.APRON
+rows.30.name	land.apron
 rows.30.model_hash	0
 rows.30.model_key	none
 rows.30.skin_key	none
@@ -435,7 +435,7 @@ rows.30.color	#DADAE0
 rows.30.group	none
 rows.31.id	287
 rows.31.kind	ground
-rows.31.name	land.HELIPAD
+rows.31.name	land.helipad
 rows.31.model_hash	0
 rows.31.model_key	none
 rows.31.skin_key	none
@@ -449,7 +449,7 @@ rows.31.color	#BBBBCC
 rows.31.group	none
 rows.32.id	513
 rows.32.kind	ground
-rows.32.name	water.RIVER
+rows.32.name	water.river
 rows.32.model_hash	0
 rows.32.model_key	none
 rows.32.skin_key	none
@@ -463,7 +463,7 @@ rows.32.color	#AAD3DF
 rows.32.group	none
 rows.33.id	514
 rows.33.kind	ground
-rows.33.name	water.LAKE
+rows.33.name	water.lake
 rows.33.model_hash	0
 rows.33.model_key	none
 rows.33.skin_key	none
@@ -477,7 +477,7 @@ rows.33.color	#AAD3DF
 rows.33.group	none
 rows.34.id	515
 rows.34.kind	ground
-rows.34.name	water.WETLAND
+rows.34.name	water.wetland
 rows.34.model_hash	0
 rows.34.model_key	none
 rows.34.skin_key	none
@@ -491,7 +491,7 @@ rows.34.color	#AAD3DF
 rows.34.group	none
 rows.35.id	769
 rows.35.kind	ground
-rows.35.name	structure.BUILDING
+rows.35.name	structure.building
 rows.35.model_hash	0
 rows.35.model_key	none
 rows.35.skin_key	none
@@ -505,7 +505,7 @@ rows.35.color	#D9D0C9
 rows.35.group	none
 rows.36.id	770
 rows.36.kind	ground
-rows.36.name	structure.BUILDING_STATION
+rows.36.name	structure.building_station
 rows.36.model_hash	0
 rows.36.model_key	none
 rows.36.skin_key	none
@@ -519,7 +519,7 @@ rows.36.color	#C4B6AB
 rows.36.group	none
 rows.37.id	771
 rows.37.kind	ground
-rows.37.name	structure.BUILDING_EDUCATION
+rows.37.name	structure.building_education
 rows.37.model_hash	0
 rows.37.model_key	none
 rows.37.skin_key	none
@@ -533,7 +533,7 @@ rows.37.color	#D9D0C9
 rows.37.group	none
 rows.38.id	772
 rows.38.kind	ground
-rows.38.name	structure.BUILDING_MEDICAL
+rows.38.name	structure.building_medical
 rows.38.model_hash	0
 rows.38.model_key	none
 rows.38.skin_key	none
@@ -547,7 +547,7 @@ rows.38.color	#D9D0C9
 rows.38.group	none
 rows.39.id	773
 rows.39.kind	ground
-rows.39.name	structure.BUILDING_PUBLIC
+rows.39.name	structure.building_public
 rows.39.model_hash	0
 rows.39.model_key	none
 rows.39.skin_key	none
@@ -561,7 +561,7 @@ rows.39.color	#D9D0C9
 rows.39.group	none
 rows.40.id	1025
 rows.40.kind	ground
-rows.40.name	transport.ROAD_DEFAULT
+rows.40.name	transport.road_default
 rows.40.model_hash	0
 rows.40.model_key	none
 rows.40.skin_key	none
@@ -575,7 +575,7 @@ rows.40.color	#FFFFFF
 rows.40.group	none
 rows.41.id	1026
 rows.41.kind	ground
-rows.41.name	transport.ROAD_MOTORWAY
+rows.41.name	transport.road_motorway
 rows.41.model_hash	0
 rows.41.model_key	none
 rows.41.skin_key	none
@@ -589,7 +589,7 @@ rows.41.color	#E892A2
 rows.41.group	none
 rows.42.id	1027
 rows.42.kind	ground
-rows.42.name	transport.ROAD_PRIMARY
+rows.42.name	transport.road_primary
 rows.42.model_hash	0
 rows.42.model_key	none
 rows.42.skin_key	none
@@ -603,7 +603,7 @@ rows.42.color	#FCD6A4
 rows.42.group	none
 rows.43.id	1028
 rows.43.kind	ground
-rows.43.name	transport.ROAD_SECONDARY
+rows.43.name	transport.road_secondary
 rows.43.model_hash	0
 rows.43.model_key	none
 rows.43.skin_key	none
@@ -617,7 +617,7 @@ rows.43.color	#F7FABF
 rows.43.group	none
 rows.44.id	1029
 rows.44.kind	ground
-rows.44.name	transport.PEDESTRIAN
+rows.44.name	transport.pedestrian
 rows.44.model_hash	0
 rows.44.model_key	none
 rows.44.skin_key	none
@@ -631,7 +631,7 @@ rows.44.color	#DDDDE8
 rows.44.group	none
 rows.45.id	1030
 rows.45.kind	ground
-rows.45.name	transport.PARKING
+rows.45.name	transport.parking
 rows.45.model_hash	0
 rows.45.model_key	none
 rows.45.skin_key	none
@@ -645,7 +645,7 @@ rows.45.color	#EEEEEE
 rows.45.group	none
 rows.46.id	1034
 rows.46.kind	ground
-rows.46.name	transport.RAIL_MAIN
+rows.46.name	transport.rail_main
 rows.46.model_hash	0
 rows.46.model_key	none
 rows.46.skin_key	none
@@ -659,7 +659,7 @@ rows.46.color	#707070
 rows.46.group	none
 rows.47.id	1035
 rows.47.kind	ground
-rows.47.name	transport.RAIL_SUBWAY
+rows.47.name	transport.rail_subway
 rows.47.model_hash	0
 rows.47.model_key	none
 rows.47.skin_key	none
@@ -673,7 +673,7 @@ rows.47.color	#999999
 rows.47.group	none
 rows.48.id	1044
 rows.48.kind	ground
-rows.48.name	transport.RUNWAY
+rows.48.name	transport.runway
 rows.48.model_hash	0
 rows.48.model_key	none
 rows.48.skin_key	none
@@ -687,7 +687,7 @@ rows.48.color	#BBBBCC
 rows.48.group	none
 rows.49.id	1045
 rows.49.kind	ground
-rows.49.name	transport.TAXIWAY
+rows.49.name	transport.taxiway
 rows.49.model_hash	0
 rows.49.model_key	none
 rows.49.skin_key	none

@@ -51,7 +51,7 @@ impl DecorRules {
 fn rule_allows(rule: &DecorChannelRule, t: u32) -> bool {
     match rule {
         DecorChannelRule::Any => true,
-        DecorChannelRule::Void => t == cube_types::common::VOID as u32,
+        DecorChannelRule::Void => t == cube_types::common::void as u32,
         DecorChannelRule::OneOf(types) => types.contains(&t),
     }
 }
@@ -162,7 +162,7 @@ fn transport_aligned_rotation(transport: &[u8], cell_x: u32, cell_y: u32, flip: 
     let span = PAGE_CELL_SPAN as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
     let idx = y * span + x;
-    let void = cube_types::common::VOID;
+    let void = cube_types::common::void;
     let at = |i: i64| transport[i as usize] != void;
     let (mut horizontal_votes, mut vertical_votes) = (0, 0);
     for d in 1..=ALIGN_NEIGHBOR_RADIUS {

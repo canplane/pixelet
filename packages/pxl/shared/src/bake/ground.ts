@@ -21,7 +21,7 @@ export { GROUND_CH_KEYS, GroundChannelKey };
 
 /** Land with nothing painted still renders as bare ground rather than as
  * nothing, so LAND alone has a fallback the other channels do not. */
-export const LAND_BASE_TYPE: number = cube_types.land.BARE;
+export const LAND_BASE_TYPE: number = cube_types.land.bare;
 
 export type ShownGround = { channel: GroundChannelKey; type_id: number };
 

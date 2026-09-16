@@ -117,7 +117,7 @@ SELECT gers_id, 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS
 // from_coast_row() expects (empty result => row dropped => page treated as
 // pure ocean; a result covering the whole envelope => dropped as "nothing
 // to carve, already all land"; anything else => the real partial coastline
-// geometry to carve BARE out of a SEA-filled base).
+// geometry to carve bare out of a sea-filled base).
 const OVERTURE_COAST_SQL = `WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),

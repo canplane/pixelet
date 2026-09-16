@@ -46,7 +46,7 @@ struct Colors {
 }
 
 fn colors() -> Colors {
-    let base = cube_colors.get("land").and_then(|c| c.get(&(cube_types::land::BARE as u32)).copied().flatten()).map_or([0; 3], hex_to_rgb255);
+    let base = cube_colors.get("land").and_then(|c| c.get(&(cube_types::land::bare as u32)).copied().flatten()).map_or([0; 3], hex_to_rgb255);
     let mut by_channel = [[None; 256]; 4];
     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
         if let Some(table) = cube_colors.get(ch.as_str()) {

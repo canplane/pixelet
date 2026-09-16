@@ -56,8 +56,8 @@ export { cube_types };
  * channel can ever actually hold that byte (see cube_types' own top
  * comment), so seeding a color for it here would be dead data. */
 const RASTER_SEED: Record<number, string | null> = {
-  [cube_types.common.VOID]: null,
-  [cube_types.common.UNKNOWN]: "#D9D0CC",
+  [cube_types.common.void]: null,
+  [cube_types.common.unknown]: "#D9D0CC",
 };
 
 // build_colors_from_json processes every channel present in the JSON it's
@@ -69,9 +69,9 @@ const { block: block_palette_json, ...raster_palette_json } = cube_palette_json;
 
 export const cube_colors: Record<string, Record<number, string | null>> = {
   common: {
-    [cube_types.common.VOID]: null,
-    [cube_types.common.AIR]: null,
-    [cube_types.common.UNKNOWN]: "#D9D0CC",
+    [cube_types.common.void]: null,
+    [cube_types.common.air]: null,
+    [cube_types.common.unknown]: "#D9D0CC",
   },
   ...build_colors_from_json(
     { land: cube_types.land, water: cube_types.water, structure: cube_types.structure, transport: cube_types.transport },

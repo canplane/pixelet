@@ -5,6 +5,7 @@
 //! takes `take_geolocation_commands` and reports fixes and errors back.
 
 use super::store::{use_device_location_store, DevicePoseStatus};
+use pxl_shared::spec::message::Message;
 use crate::global::{now, Global};
 
 /// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
@@ -72,7 +73,7 @@ pub fn start_watching(supported: bool) {
     }
     let store = use_device_location_store();
     if !supported {
-        store.set_error("device.geolocation.unsupported");
+        store.set_error(Message::GeolocationUnsupported);
         return;
     }
     store.set_status(DevicePoseStatus::Loading);
@@ -148,10 +149,10 @@ pub fn geolocation_error(code: GeolocationErrorCode) {
     store.set_is_tracking_location(false);
     store.set_error(match code {
         // Actionable, not just descriptive: the one case the user can fix.
-        GeolocationErrorCode::PermissionDenied => "device.geolocation.permission_denied",
-        GeolocationErrorCode::PositionUnavailable => "device.geolocation.position_unavailable",
-        GeolocationErrorCode::Timeout => "device.geolocation.timeout",
-        GeolocationErrorCode::Other => "device.geolocation.generic_error",
+        GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
+        GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
+        GeolocationErrorCode::Timeout => Message::GeolocationTimeout,
+        GeolocationErrorCode::Other => Message::GeolocationGenericError,
     });
     // Permission denial is the user's to undo; anything else is worth another
     // try, since the sensor itself is presumed fine.

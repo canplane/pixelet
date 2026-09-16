@@ -124,11 +124,11 @@ pub const WATER_RECESS_CELLS: i16 = 1;
 /// Mirrors the terrain paint's ground_material_at priority (LAND < WATER <
 /// STRUCTURE < TRANSPORT, last non-VOID wins) enough to answer one question:
 /// does this cell look like open water? SEA is checked separately from the
-/// WATER channel: cube.rs models it as land.SEA (a masked BARE-family id),
+/// WATER channel: cube.rs models it as land.sea (a masked BARE-family id),
 /// not one of WATER's own RIVER/LAKE/WETLAND types.
 pub fn is_water_family_at(ground: &Ground, idx: u32) -> bool {
     let i = idx as usize;
-    let void = cube_types::common::VOID;
+    let void = cube_types::common::void;
     if ground.structure.get(i) != void {
         return false;
     }
@@ -138,7 +138,7 @@ pub fn is_water_family_at(ground: &Ground, idx: u32) -> bool {
     if ground.water.get(i) != void {
         return true;
     }
-    ground.land.get(i) == cube_types::land::SEA
+    ground.land.get(i) == cube_types::land::sea
 }
 
 /// Unpacks a dense (CHUNK_CELL_SPAN x CHUNK_CELL_SPAN) elevation chunk from

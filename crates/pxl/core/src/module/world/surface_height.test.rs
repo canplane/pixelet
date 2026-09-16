@@ -3,6 +3,8 @@
 use super::*;
 use crate::global::serial;
 use crate::module::world::object::store::place;
+use pxl_shared::spec::cell::cube_types::Block;
+use pxl_shared::spec::cell::PlaceableCube;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
 // place()/get_objects_near() are kernel-global state (object/store.rs), not
@@ -14,7 +16,7 @@ const MAP_ORIGIN: IVec = 0;
 fn put_block(x: f64, y: f64, z: f64) {
     let mut corner = PVF3::default();
     pvf3::gather(&mut corner, pvf3::from_real(x), pvf3::from_real(y), pvf3::from_real(z));
-    place(corner.i, corner.f, 1.0, "red", false);
+    place(&corner, 1.0, PlaceableCube::Block(Block::red), false);
 }
 
 fn close(a: f64, b: f64) {

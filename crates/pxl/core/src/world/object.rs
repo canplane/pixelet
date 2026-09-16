@@ -15,6 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::{ivec, Ivec};
 use pxl_shared::spec::space::sparse_tree::mem;
 use pxl_shared::spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
@@ -24,6 +25,15 @@ use crate::bake::volume::{Cell, Volumes, Voxel};
 use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::U_PER_CELL;
 use crate::world::pool::Pool;
+
+/// A cell's Z and a band's, as wide as the coordinate carries them. PVF3
+/// gives Z sixteen bits (pvf3/core.rs's IVEC_Z_W), so a cell's Z is an i16 and
+/// a band's — that Z over BAND_CELLS — is narrower still. They are i32 here
+/// because the arithmetic over them (a band times its cells) leaves the range
+/// a Z has, and a type that cannot hold its own product is worse than a wide
+/// one: what the width is for is written down rather than enforced.
+pub type CellZ = i32;
+pub type BandZ = i32;
 
 /// OBJECT_LAYOUT's finest and coarsest levels: an eighth of a cell, and a
 /// cell. A band tree reaches six levels above that, to the band's 64 cells.
@@ -54,7 +64,7 @@ pub fn pack_pos(x: u32, y: u32, z: u32, level: i32) -> u32 {
 }
 
 /// A lattice position in a band, as its tree's key.
-fn band_key(at: [u32; 3]) -> u64 {
+fn band_key(at: [u32; 3]) -> IVec {
     ivec::gather(at[0] as i64, at[1] as i64, at[2] as i64)
 }
 
@@ -82,20 +92,21 @@ pub const AIR: u32 = 0x80;
 pub const UNKNOWN: u32 = 0xff;
 
 struct Chunk {
-    key: u64,
+    /// The column this chunk is, as the key everything about it is filed under.
+    col_idx: IVec,
     /// Index → state; index 0 is VOID in every chunk.
     palette: Vec<u32>,
     /// The band Z range the chunk's bands lie in; a band inside it may be gone.
-    band_min: i32,
-    band_max: i32,
+    band_min: BandZ,
+    band_max: BandZ,
     /// The entries, derived by `reindex`.
-    e_band: Vec<i32>,
+    e_band: Vec<BandZ>,
     e_pos: Vec<u32>,
     e_state: Vec<u32>,
 }
 
 /// A cell by its column and its absolute cell Z, and its band-local column.
-type CellKey = (u64, i32, u32);
+type CellKey = (IVec, CellZ, u32);
 
 #[derive(Clone, Copy, Default)]
 pub struct CellRec {
@@ -108,7 +119,7 @@ pub struct CellRec {
 /// What a chunk's lanes are, for a reader that takes views.
 pub struct ChunkLanes {
     pub count: u32,
-    pub band_at: *const i32,
+    pub band_at: *const BandZ,
     pub pos_at: *const u32,
     pub state_at: *const u32,
 }
@@ -117,8 +128,8 @@ pub struct Store {
     /// Chunks in the order they were opened, the last moved into a closed
     /// one's place — which is the order the persisted form lists them in.
     chunks: Vec<Chunk>,
-    chunk_at: BTreeMap<u64, u32>,
-    bands: BTreeMap<(u64, i32), SparseTree<u16>>,
+    chunk_at: BTreeMap<IVec, u32>,
+    bands: BTreeMap<(IVec, BandZ), SparseTree<u16>>,
     cells: BTreeMap<CellKey, CellRec>,
     /// Cells whose entries changed since the client last took them, as
     /// band-local (cx, cy) and absolute cell Z rows.
@@ -148,8 +159,8 @@ impl Store {
         self.chunks.len()
     }
 
-    pub fn chunk_key(&self, i: usize) -> u64 {
-        self.chunks[i].key
+    pub fn chunk_key(&self, i: usize) -> IVec {
+        self.chunks[i].col_idx
     }
 
     pub fn band_count(&self) -> usize {
@@ -160,13 +171,13 @@ impl Store {
         self.cells.len()
     }
 
-    fn open_chunk(&mut self, key: u64) -> usize {
-        if let Some(&pos) = self.chunk_at.get(&key) {
+    fn open_chunk(&mut self, col_idx: IVec) -> usize {
+        if let Some(&pos) = self.chunk_at.get(&col_idx) {
             return pos as usize;
         }
         let pos = self.chunks.len();
         self.chunks.push(Chunk {
-            key,
+            col_idx,
             palette: vec![VOID],
             band_min: i32::MAX,
             band_max: i32::MIN,
@@ -174,7 +185,7 @@ impl Store {
             e_pos: Vec::new(),
             e_state: Vec::new(),
         });
-        self.chunk_at.insert(key, pos as u32);
+        self.chunk_at.insert(col_idx, pos as u32);
         pos
     }
 
@@ -183,39 +194,34 @@ impl Store {
     fn close_chunk(&mut self, pos: usize) {
         self.unindex_cells(pos);
         let gone = self.chunks.swap_remove(pos);
-        self.chunk_at.remove(&gone.key);
+        self.chunk_at.remove(&gone.col_idx);
         if pos < self.chunks.len() {
-            self.chunk_at.insert(self.chunks[pos].key, pos as u32);
+            self.chunk_at.insert(self.chunks[pos].col_idx, pos as u32);
         }
     }
 
-    fn open_band(&mut self, cpos: usize, z: i32) {
-        let key = self.chunks[cpos].key;
-        if self.bands.contains_key(&(key, z)) {
+    fn open_band(&mut self, cpos: usize, band_idx: BandZ) {
+        let key = self.chunks[cpos].col_idx;
+        if self.bands.contains_key(&(key, band_idx)) {
             return;
         }
-        self.bands.insert((key, z), sparse_tree::alloc::<u16>(BAND_LAYOUT, 64, None));
+        self.bands.insert((key, band_idx), sparse_tree::alloc::<u16>(BAND_LAYOUT, 64, None));
         let chunk = &mut self.chunks[cpos];
-        chunk.band_min = chunk.band_min.min(z);
-        chunk.band_max = chunk.band_max.max(z);
+        chunk.band_min = chunk.band_min.min(band_idx);
+        chunk.band_max = chunk.band_max.max(band_idx);
     }
 
     /// Removes a band, then tightens its chunk's Z range — and removes the
     /// chunk when nothing is left in it.
-    fn close_band(&mut self, cpos: usize, z: i32) {
-        let key = self.chunks[cpos].key;
-        if let Some(mut tree) = self.bands.remove(&(key, z)) {
+    fn close_band(&mut self, cpos: usize, band_idx: BandZ) {
+        let key = self.chunks[cpos].col_idx;
+        if let Some(mut tree) = self.bands.remove(&(key, band_idx)) {
             sparse_tree::free(&mut tree);
         }
         let chunk = &self.chunks[cpos];
-        let mut lo = i32::MAX;
-        let mut hi = i32::MIN;
-        for bz in chunk.band_min..=chunk.band_max {
-            if self.bands.contains_key(&(key, bz)) {
-                lo = lo.min(bz);
-                hi = hi.max(bz);
-            }
-        }
+        let mut left = self.bands.range((key, chunk.band_min)..=(key, chunk.band_max)).map(|(&(_, bz), _)| bz);
+        let lo = left.next().unwrap_or(BandZ::MAX);
+        let hi = left.next_back().unwrap_or(lo);
         if lo > hi {
             self.close_chunk(cpos);
             return;
@@ -238,9 +244,9 @@ impl Store {
 
     /// The state at a lattice position of band `z` of chunk `key`; VOID
     /// where nothing is.
-    pub fn read(&self, key: u64, z: i32, at: [u32; 3]) -> u32 {
-        let Some(&cpos) = self.chunk_at.get(&key) else { return VOID };
-        let Some(tree) = self.bands.get(&(key, z)) else { return VOID };
+    pub fn read(&self, col_idx: IVec, band_idx: BandZ, at: [u32; 3]) -> u32 {
+        let Some(&cpos) = self.chunk_at.get(&col_idx) else { return VOID };
+        let Some(tree) = self.bands.get(&(col_idx, band_idx)) else { return VOID };
         self.chunks[cpos as usize].palette[mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0) as usize]
     }
 
@@ -248,32 +254,32 @@ impl Store {
     /// `z` of chunk `key`, compacts the band, and drops the band — and the
     /// chunk — once every leaf reads VOID. The entries are not re-derived:
     /// that is `reindex`, once, after however many writes.
-    pub fn write(&mut self, key: u64, z: i32, at: [u32; 3], level: i32, state: u32) {
+    pub fn write(&mut self, col_idx: IVec, band_idx: BandZ, at: [u32; 3], level: i32, state: u32) {
         assert!((MIN_LEVEL..=CELL_LEVEL).contains(&level), "an object level outside its layout");
-        let cpos = match self.chunk_at.get(&key) {
+        let cpos = match self.chunk_at.get(&col_idx) {
             Some(&pos) => pos as usize,
             None if state == VOID => return,
-            None => self.open_chunk(key),
+            None => self.open_chunk(col_idx),
         };
-        if !self.bands.contains_key(&(key, z)) {
+        if !self.bands.contains_key(&(col_idx, band_idx)) {
             if state == VOID {
                 return;
             }
-            self.open_band(cpos, z);
+            self.open_band(cpos, band_idx);
         }
         let idx = self.palette_index(cpos, state);
-        let tree = self.bands.get_mut(&(key, z)).expect("the band just opened");
+        let tree = self.bands.get_mut(&(col_idx, band_idx)).expect("the band just opened");
         mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), idx, level, 0);
         sparse_tree::compact(tree);
         if band_is_empty(tree) {
-            self.close_band(cpos, z);
+            self.close_band(cpos, band_idx);
         }
     }
 
     /// Re-derives one chunk's entries and cells; a chunk that is gone has
     /// nothing to derive, and its cells were unindexed as it closed.
-    pub fn reindex(&mut self, key: u64) {
-        let Some(&cpos) = self.chunk_at.get(&key) else { return };
+    pub fn reindex(&mut self, col_idx: IVec) {
+        let Some(&cpos) = self.chunk_at.get(&col_idx) else { return };
         let cpos = cpos as usize;
         self.unindex_cells(cpos);
         self.derive_entries(cpos);
@@ -287,8 +293,10 @@ impl Store {
         chunk.e_band.clear();
         chunk.e_pos.clear();
         chunk.e_state.clear();
-        for bz in chunk.band_min..=chunk.band_max {
-            let Some(tree) = self.bands.get(&(chunk.key, bz)) else { continue };
+        // One descent to the column's first band, then its bands in order: the
+        // key is the column before the Z, so a column's bands lie together and
+        // the Z between two of them is a step rather than a search.
+        for (&(_, bz), tree) in self.bands.range((chunk.col_idx, chunk.band_min)..=(chunk.col_idx, chunk.band_max)) {
             sparse_tree::walk(tree, &mut |x, y, z, level, idx| {
                 let (x, y, z) = (x as u32, y as u32, z as u32);
                 let val = chunk.palette[idx as usize];
@@ -315,9 +323,9 @@ impl Store {
         }
     }
 
-    fn cell_of(key: u64, band: i32, pos: u32) -> CellKey {
+    fn cell_of(col_idx: IVec, band_idx: BandZ, pos: u32) -> CellKey {
         let (x, y, z, _) = unpack_pos(pos);
-        (key, band * BAND_CELLS as i32 + (z / CELL_STEPS) as i32, ((y / CELL_STEPS) << BAND_SHAMT) | (x / CELL_STEPS))
+        (col_idx, band_idx * BAND_CELLS as i32 + (z / CELL_STEPS) as i32, ((y / CELL_STEPS) << BAND_SHAMT) | (x / CELL_STEPS))
     }
 
     fn touch(&mut self, cell: CellKey) {
@@ -332,7 +340,7 @@ impl Store {
         let mut last: Option<CellKey> = None;
         for k in 0..self.chunks[cpos].e_band.len() {
             let chunk = &self.chunks[cpos];
-            let cell = Self::cell_of(chunk.key, chunk.e_band[k], chunk.e_pos[k]);
+            let cell = Self::cell_of(chunk.col_idx, chunk.e_band[k], chunk.e_pos[k]);
             if last == Some(cell) {
                 continue;
             }
@@ -348,7 +356,7 @@ impl Store {
         let mut open: Option<(CellKey, CellRec)> = None;
         for k in 0..self.chunks[cpos].e_band.len() {
             let chunk = &self.chunks[cpos];
-            let cell = Self::cell_of(chunk.key, chunk.e_band[k], chunk.e_pos[k]);
+            let cell = Self::cell_of(chunk.col_idx, chunk.e_band[k], chunk.e_pos[k]);
             let solid = (chunk.e_state[k] != AIR) as u32;
             if open.is_none_or(|(c, _)| c != cell) {
                 if let Some((c, rec)) = open.take() {
@@ -376,8 +384,8 @@ impl Store {
     }
 
     /// A chunk's entry lanes, or none where the chunk is gone.
-    pub fn chunk_lanes(&self, key: u64) -> Option<ChunkLanes> {
-        let &cpos = self.chunk_at.get(&key)?;
+    pub fn chunk_lanes(&self, col_idx: IVec) -> Option<ChunkLanes> {
+        let &cpos = self.chunk_at.get(&col_idx)?;
         let chunk = &self.chunks[cpos as usize];
         Some(ChunkLanes {
             count: chunk.e_band.len() as u32,
@@ -389,8 +397,8 @@ impl Store {
 
     /// The run of a chunk's entries in the cell at band-local (cx, cy) and
     /// absolute cell Z `cz`.
-    pub fn cell(&self, key: u64, cx: u32, cy: u32, cz: i32) -> Option<CellRec> {
-        self.cells.get(&(key, cz, (cy << BAND_SHAMT) | cx)).copied()
+    pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRec> {
+        self.cells.get(&(col_idx, cz, (cy << BAND_SHAMT) | cx)).copied()
     }
 
     /// Every record gone, as a load that could not be read leaves the world.
@@ -444,9 +452,14 @@ pub struct Painter {
     claimed: BTreeSet<u32>,
 }
 
-const Z_BIAS: i32 = 1 << 19;
+/// What a cell's Z is shifted by to address it unsigned: PVF3 gives Z sixteen
+/// bits, so this is half that range and the sum is one.
+const Z_BIAS: CellZ = 1 << 15;
 
-fn voxel_address(cx: u32, cy: u32, z: i32) -> u32 {
+/// A voxel's address within a paint: its Z above the bias, then its cell in
+/// the band. Sixteen bits of Z over twelve of column is twenty-eight, which is
+/// what the claimed set is keyed by.
+fn voxel_address(cx: u32, cy: u32, z: CellZ) -> u32 {
     (((z + Z_BIAS) as u32) << 12) | (cy << 6) | cx
 }
 
@@ -503,10 +516,10 @@ impl Painter {
     /// refused — after which the rest is not painted, as the volume is
     /// not the composite that was asked for anyway.
     #[allow(clippy::too_many_arguments)]
-    pub fn paint(&mut self, store: &Store, volumes: &mut Volumes, pools: &mut [Pool], volume: usize, key: u64, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
+    pub fn paint(&mut self, store: &Store, volumes: &mut Volumes, pools: &mut [Pool], volume: usize, col_idx: IVec, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
         self.claimed.clear();
         let mut any = false;
-        if let Some(&cpos) = store.chunk_at.get(&key) {
+        if let Some(&cpos) = store.chunk_at.get(&col_idx) {
             let chunk = &store.chunks[cpos as usize];
             for k in 0..chunk.e_band.len() {
                 let (band, pos, state) = (chunk.e_band[k], chunk.e_pos[k], chunk.e_state[k]);
@@ -592,8 +605,8 @@ impl Painter {
 mod tests {
     use super::*;
 
-    fn entries(store: &Store, key: u64) -> Vec<(i32, u32, u32)> {
-        let Some(lanes) = store.chunk_lanes(key) else { return Vec::new() };
+    fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
+        let Some(lanes) = store.chunk_lanes(col_idx) else { return Vec::new() };
         // SAFETY: the lanes are the chunk's own, read before any change.
         unsafe {
             let n = lanes.count as usize;

@@ -1,7 +1,7 @@
 // pxl_core/module/world/terrain/tile_repository.rs
 
 //! Terrain transport's kernel half: where a page is fetched from, and a
-//! fetched body decoded and copied lane by lane into the page section, where
+//! fetched body decoded and copied lane by lane into the slab, where
 //! the kernel reads it (module/world/fetch.rs hands the body over).
 //!
 //! The pre-bake pass skips pure open-ocean pages entirely — about 65% of the
@@ -18,30 +18,39 @@
 
 use pxl_shared::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::{decode_terrain, Ground, Terrain, Tile};
+use pxl_shared::spec::fetch::FetchFail;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
 
-use super::resident::{into_core, Block};
+use super::resident::take_slot;
+use super::slab::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
 use super::store::use_tile_store;
+use crate::module::world::sched::demand::Category;
 use crate::global::{now, Global};
 use crate::kernel::kernel;
 use crate::lib::env::config::TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
-use crate::memory::PAGE_POOL;
+use crate::memory::{self, FIXED_POOL};
 use crate::module::world::sched::demand::Phases;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
 
 /// The category the shared ocean tile is fetched under.
-pub const OCEAN_CATEGORY: &str = "ocean";
+pub const OCEAN_CATEGORY: Category = Category::Ocean;
 
-pub fn tile_url(key: &str) -> Joined<'_, TileBase> {
-    Joined(TILE_BASE_URL(), key)
+pub fn tile_url(page_idx: IVec) -> Joined<TileBase, IVec> {
+    Joined(TILE_BASE_URL(), page_idx)
 }
 
-/// A page's lanes in the page section: land, water, structure and transport,
-/// each PAGE_CELL_SPAN² bytes, and the padded elevation grid.
+/// The shared ocean tile, which the bake writes under a name rather than a
+/// coordinate — one page's worth of open water every open-water page reads.
+pub fn ocean_url() -> Joined<TileBase, &'static str> {
+    Joined(TILE_BASE_URL(), OCEAN_KEY)
+}
+
+/// A page's lanes in the slab: land, water, structure and transport, each
+/// PAGE_CELL_SPAN² bytes, and the padded elevation grid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TerrainLanes {
     pub ground: [usize; 4],
@@ -75,59 +84,70 @@ pub unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
 }
 
 /// A body decoded, refused unless every lane is the page's size.
-fn decode(pkt: U8Array) -> Result<Terrain, String> {
-    let t = decode_terrain(pkt).map_err(|e| e.to_string())?;
+fn decode(pkt: U8Array) -> Result<Terrain, FetchFail> {
+    let t = decode_terrain(pkt).map_err(|_| FetchFail::Decode)?;
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
     let g = &t.ground;
     if [&g.land, &g.water, &g.structure, &g.transport].iter().any(|l| l.length() != cells) || t.ele.length() != samples {
-        return Err("a page whose lanes are not a page's size".to_string());
+        return Err(FetchFail::Decode);
     }
     Ok(t)
 }
 
-/// Copies a decoded page's lanes into blocks of their own in the page section:
-/// per lane, since a whole page would round up to twice what it holds
-/// (resident.rs). None of them is kept when one is refused.
-fn copy_lanes(t: &Terrain) -> Result<(TerrainLanes, [Block; 5]), String> {
-    let pool = kernel().pools.get_mut(PAGE_POOL as usize).ok_or_else(|| "no page section".to_string())?;
+/// The slab's base. None under a native test, which lays no memory out.
+fn slab() -> Option<usize> {
+    memory::map().map(|m| m.slab.offset as usize)
+}
+
+/// A decoded page's lanes, as bytes to be written somewhere.
+fn sources(t: &Terrain) -> [&[u8]; 5] {
     let g = &t.ground;
     let ele = t.ele.as_slice();
     // SAFETY: an i16 lane read as its bytes, where it lies.
     let ele_bytes = unsafe { core::slice::from_raw_parts(ele.as_ptr() as *const u8, ele.len() * 2) };
-    let sources: [&[u8]; 5] = [g.land.as_slice(), g.water.as_slice(), g.structure.as_slice(), g.transport.as_slice(), ele_bytes];
-    let mut blocks = [(0usize, 0u32); 5];
-    for (i, src) in sources.iter().enumerate() {
-        let Some(at) = pool.acquire(src.len() as u32) else {
-            for &(at, bytes) in &blocks[..i] {
-                pool.release(at, bytes);
-            }
-            return Err("the page section is full".to_string());
-        };
-        // SAFETY: `at` is a block of at least `src.len()` bytes the pool just
-        // gave, apart from `src`.
-        unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), at as *mut u8, src.len()) };
-        blocks[i] = (at, src.len() as u32);
+    [g.land.as_slice(), g.water.as_slice(), g.structure.as_slice(), g.transport.as_slice(), ele_bytes]
+}
+
+/// Writes a decoded page into `lanes`, which must be the page's own room.
+fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
+    let at = [lanes.ground[0], lanes.ground[1], lanes.ground[2], lanes.ground[3], lanes.ele];
+    for (src, &to) in sources(t).iter().zip(at.iter()) {
+        // SAFETY: `to` is the page's room in the slab, the lane's own size, and
+        // apart from `src`, which is the decoded body.
+        unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), to as *mut u8, src.len()) };
     }
-    let lanes = TerrainLanes {
-        ground: [blocks[0].0, blocks[1].0, blocks[2].0, blocks[3].0],
-        ele: blocks[4].0,
-    };
-    Ok((lanes, blocks))
+}
+
+/// Where `page_idx` lies in the slab. Its record is its own coordinate reduced
+/// modulo the slab's axis, so this asks for nothing and cannot be refused.
+fn lanes_of(page_idx: IVec) -> Result<TerrainLanes, FetchFail> {
+    let slab = slab().ok_or(FetchFail::NoRoom)?;
+    let slot = super::slab::slot_of(page_idx);
+    Ok(TerrainLanes {
+        ground: [ground_at(slab, slot, 0), ground_at(slab, slot, 1), ground_at(slab, slot, 2), ground_at(slab, slot, 3)],
+        ele: ele_at(slab, slot),
+    })
 }
 
 /// A page's fetched body, decoded and made resident: its lanes owned by the
 /// page until release_terrain.
-pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Result<(), String> {
+pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Result<(), FetchFail> {
     let t0 = now();
     let decoded = decode(pkt)?;
     let t1 = now();
-    let (lanes, blocks) = copy_lanes(&decoded)?;
+    let lanes = lanes_of(page_idx)?;
+    write_lanes(&decoded, lanes);
     phases.push("decode_ms", t1 - t0);
     phases.push("adopt_ms", now() - t1);
-    into_core(page_idx, blocks.to_vec(), true);
-    // SAFETY: the lanes are blocks of the page section this page now owns, at
-    // the page's lane sizes, until release_terrain.
+    // The record carried a page whose bytes this one has just written over.
+    // Only a jump reaches this: inside the load radius no two pages share a
+    // record.
+    if let Some(gone) = take_slot(page_idx) {
+        use_tile_store().clear_tile(gone);
+    }
+    // SAFETY: the lanes are this page's record in the slab, at the page's lane
+    // sizes, until another page's coordinate names the same record.
     let terrain = unsafe { open_terrain(lanes) };
     use_tile_store().set_tile(page_idx, Tile { terrain });
     Ok(())
@@ -156,15 +176,26 @@ pub fn ocean_page(page_idx: IVec) {
     }
 }
 
-/// The shared tile's body: copied into blocks no page owns and nothing
-/// releases, and given to every page waiting on it.
-pub fn adopt_ocean(pkt: U8Array) -> Result<(), String> {
+/// The shared tile's body: written into a record of its own that belongs to no
+/// page and nothing releases, and given to every page waiting on it.
+///
+/// It is not in the slab. Every open-ocean page reads these same bytes, and a
+/// slab record is one page's; a page whose tile is the shared one leaves its
+/// own record untouched.
+pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
     if ocean().terrain.is_some() {
         return Ok(());
     }
-    let (lanes, _) = copy_lanes(&decode(pkt)?)?;
-    // SAFETY: blocks of the page section nothing ever releases, at the page's
-    // lane sizes.
+    let decoded = decode(pkt)?;
+    let pool = kernel().pools.get_mut(FIXED_POOL as usize).ok_or(FetchFail::NoRoom)?;
+    let at = pool.acquire(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
+    let lanes = TerrainLanes {
+        ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
+        ele: record_ele_at(at),
+    };
+    write_lanes(&decoded, lanes);
+    // SAFETY: a record of the fixed section nothing ever releases, at the
+    // page's lane sizes.
     let terrain = unsafe { open_terrain(lanes) };
     let o = ocean();
     for page_idx in o.waiting.drain(..) {

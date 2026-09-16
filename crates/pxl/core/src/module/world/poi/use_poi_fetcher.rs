@@ -21,10 +21,11 @@ use crate::global::Global;
 use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
 use crate::module::world::sched::demand::Demand;
+use crate::module::world::sched::demand::Category;
 use crate::module::world::sched::fetch_scheduler::{fetch_running, fetch_sync, page_key};
 use crate::module::world::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
 
-pub const CATEGORY: &str = "poi";
+pub const CATEGORY: Category = Category::Poi;
 
 // POI sits one behind terrain at equal page distance — the POI layer grounds
 // each badge against that page's terrain, so fetching POI ahead of the ground
@@ -54,7 +55,6 @@ fn poi_demands(anchor: IVec) -> Vec<Demand> {
         }
         demands.push(Demand {
             key: page_key(CATEGORY, page_idx),
-            category: CATEGORY,
             priority: page_priority(dist2) + PRIORITY_BIAS,
         });
     };
@@ -65,7 +65,7 @@ fn poi_demands(anchor: IVec) -> Vec<Demand> {
     }
     // Same in-flight hysteresis as terrain — see FETCH_HYSTERESIS.
     for p in pages_to_hold(anchor, KEEP_DIST + FETCH_HYSTERESIS, RESIDENT_PAGES() + 16) {
-        if !held.iter().any(|h| h.page_idx == p.page_idx) && fetch_running(&page_key(CATEGORY, p.page_idx)) {
+        if !held.iter().any(|h| h.page_idx == p.page_idx) && fetch_running(page_key(CATEGORY, p.page_idx)) {
             add(p.page_idx, p.dist2);
         }
     }

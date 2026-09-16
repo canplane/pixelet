@@ -14,7 +14,7 @@ use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::geocode::label::{assemble_label, primary_lang, Label};
 use crate::module::world::poi::poi_theme::resolve_poi_theme;
-use crate::module::world::sched::demand::{demand_key, Demand, DemandKey};
+use crate::module::world::sched::demand::{Category, Demand, DemandKey};
 use xpute_core::kit::hash::fnv1a64_str;
 use crate::module::world::sched::fetch_scheduler::fetch_sync;
 use crate::module::world::search::repository::{parse_search, search_url, SearchKind, SearchTable, SearchUrl};
@@ -24,7 +24,7 @@ use crate::module::world::search::repository::{parse_search, search_url, SearchK
 // pause, a much shorter rhythm for a search box.
 const DEBOUNCE_MS: f64 = 300.0;
 
-pub const CATEGORY: &str = "search";
+pub const CATEGORY: Category = Category::Search;
 // The most latency-sensitive fetch in the app — a typed query with the user
 // staring at an empty result list — so it outranks even geocode (-5) and
 // every streaming category. Single-slot, so it never occupies more than one of
@@ -118,7 +118,6 @@ pub fn search_step() {
         CATEGORY,
         &[Demand {
             key: query_key(&q),
-            category: CATEGORY,
             priority: PRIORITY,
         }],
     );
@@ -128,12 +127,12 @@ pub fn search_step() {
 /// A query's demand key. The query stands in it as its hash, so a query of
 /// any length is one key; its text is the modal's (`submitted`).
 fn query_key(query: &str) -> DemandKey {
-    demand_key(CATEGORY, format_args!("{:016x}", fnv1a64_str(query)))
+    DemandKey::new(CATEGORY, fnv1a64_str(query))
 }
 
 /// Whether a demand's subject is the query submitted last.
-fn is_submitted(s: &Search, subject: &str) -> bool {
-    s.submitted.as_deref().is_some_and(|q| query_key(q) == demand_key(CATEGORY, subject))
+fn is_submitted(s: &Search, subject: u64) -> bool {
+    s.submitted.as_deref().is_some_and(|q| fnv1a64_str(q) == subject)
 }
 
 /// The URL the submitted search is fetched from.
@@ -144,7 +143,7 @@ pub fn search_request_url() -> SearchUrl<'static> {
 
 /// The shell's answer for the demand whose subject is `subject`: the
 /// response body.
-pub fn search_arrived(subject: &str, body: Option<&str>) {
+pub fn search_arrived(subject: u64, body: Option<&str>) {
     let s = search();
     if !is_submitted(s, subject) {
         return;
@@ -163,7 +162,7 @@ pub fn search_arrived(subject: &str, body: Option<&str>) {
 
 /// The shell's report that the request for `query` failed or was aborted;
 /// loading clears on a real failure, not when superseded.
-pub fn search_failed(subject: &str, aborted: bool) {
+pub fn search_failed(subject: u64, aborted: bool) {
     let s = search();
     if !aborted && is_submitted(s, subject) {
         s.loading = false;

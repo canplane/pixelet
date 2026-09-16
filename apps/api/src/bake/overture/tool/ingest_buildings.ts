@@ -12,7 +12,7 @@
 // which buildings never are. A structure cell only ever needs to know it's a
 // building AND roughly which kind (for cube_types.structure's own small
 // enum) — not its real height — so `class`/`subtype` absence just means
-// "generic BUILDING", not "unusable row"; `building_part` (sub-footprint
+// "generic building", not "unusable row"; `building_part` (sub-footprint
 // height slices, e.g. a tower's individual setback tiers) is skipped for
 // the same reason: this pipeline has nowhere to put finer height data even
 // where it exists.

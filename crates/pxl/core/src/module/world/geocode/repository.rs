@@ -9,6 +9,7 @@
 //! A response is read into a table — parts and their names — cleared before
 //! the next.
 
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 use core::ops::Range;
 
 use xpute_core::kit::json::{read_json, JsonKind, JsonValue};
@@ -112,8 +113,8 @@ impl PartTable {
     }
 }
 
-pub fn geocode_url(key: &str) -> Joined<'_, TileBase> {
-    Joined(GEOCODE_TILE_BASE_URL(), key)
+pub fn geocode_url(page_idx: IVec) -> Joined<TileBase, IVec> {
+    Joined(GEOCODE_TILE_BASE_URL(), page_idx)
 }
 
 /// A response body, as `res.json()` read it, into `table` cleared first: the
