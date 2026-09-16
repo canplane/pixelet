@@ -443,29 +443,32 @@ async function published_outputs(): Promise<Output[]> {
 
 // ---- data specs ----
 //
-// A data spec is a JSON file of named values, written as a TypeScript module
-// of `as const` objects and a Rust module of nested `pub mod`s of
-// constants, each object's keys also listed as its `KEYS`. A leaf is a
-// number, a string, a boolean or an array of one kind of them; a number is
-// an f64 unless a `$type` above it says otherwise ("u8".."u64", "i32",
-// "f32"), and a u64 is written as a hex string. A value that carries its
-// reason is `{ "$value": …, "$doc": [lines] }`; an object's own reason is
-// its `$doc` key. The file's `$doc` heads both modules.
+// A data spec is a JSON file of named values, written as a Rust module of
+// nested `pub mod`s of constants, and — where the shell still reads the same
+// values — as a TypeScript module of `as const` objects; each object's keys
+// are also listed as its `KEYS`. Most of these are the kernel's alone, so
+// they name no `ts` at all.
+//
+// A leaf is a number, a string, a boolean or an array of one kind of them; a
+// number is an f64 unless a `$type` above it says otherwise ("u8".."u64",
+// "i32", "f32"), and a u64 is written as a hex string. A value that carries
+// its reason is `{ "$value": …, "$doc": [lines] }`; an object's own reason is
+// its `$doc` key. The file's `$doc` heads the module.
 
 type DataNode = number | string | boolean | DataNode[] | { [key: string]: DataNode };
 type DataSpec = { $doc?: string[]; $ts?: string; $rs?: string; $ts_header?: string; $rs_header?: string } & Record<string, DataNode>;
 
 const DATA_SPECS: { json: string; ts?: string; rs?: string }[] = [
-  { json: "crates/pxl/core/src/module/camera/config.json", ts: "apps/web/src/module/camera/config.ts", rs: "crates/pxl/core/src/module/camera/config.rs" },
-  { json: "crates/pxl/core/src/module/world/environment/config.json", ts: "apps/web/src/module/world/environment/config.ts", rs: "crates/pxl/core/src/module/world/environment/config.rs" },
-  { json: "crates/pxl/core/src/module/world/environment/theme.json", ts: "apps/web/src/module/world/environment/theme_spec.ts", rs: "crates/pxl/core/src/module/world/environment/theme_spec.rs" },
-  { json: "crates/pxl/core/src/module/world/marker/style.json", ts: "apps/web/src/module/world/marker/style.ts", rs: "crates/pxl/core/src/module/world/marker/style.rs" },
-  { json: "crates/pxl/core/src/module/world/billboard/order.json", ts: "apps/web/src/module/world/billboard/order.ts", rs: "crates/pxl/core/src/module/world/billboard/order.rs" },
-  { json: "crates/pxl/core/src/module/world/decor/kind.json", ts: "apps/web/src/module/world/decor/kind.ts", rs: "crates/pxl/core/src/module/world/decor/kind.rs" },
+  { json: "crates/pxl/core/src/module/camera/config.json", rs: "crates/pxl/core/src/module/camera/config.rs" },
+  { json: "crates/pxl/core/src/module/world/environment/config.json", rs: "crates/pxl/core/src/module/world/environment/config.rs" },
+  { json: "crates/pxl/core/src/module/world/environment/theme.json", rs: "crates/pxl/core/src/module/world/environment/theme_spec.rs" },
+  { json: "crates/pxl/core/src/module/world/marker/style.json", rs: "crates/pxl/core/src/module/world/marker/style.rs" },
+  { json: "crates/pxl/core/src/module/world/billboard/order.json", rs: "crates/pxl/core/src/module/world/billboard/order.rs" },
+  { json: "crates/pxl/core/src/module/world/decor/kind.json", rs: "crates/pxl/core/src/module/world/decor/kind.rs" },
   { json: "crates/pxl/core/src/app/setting/schema.json", ts: "apps/web/src/app/setting/schema_spec.ts", rs: "crates/pxl/core/src/app/setting/schema_spec.rs" },
-  { json: "crates/pxl/core/src/module/world/poi/poi_theme.json", ts: "apps/web/src/module/world/poi/poi_theme_spec.ts", rs: "crates/pxl/core/src/module/world/poi/poi_theme_spec.rs" },
+  { json: "crates/pxl/core/src/module/world/poi/poi_theme.json", rs: "crates/pxl/core/src/module/world/poi/poi_theme_spec.rs" },
   { json: "crates/pxl/core/src/module/world/character/variant.json", ts: "apps/web/src/module/world/character/variant_spec.ts", rs: "crates/pxl/core/src/module/world/character/variant_spec.rs" },
-  { json: "crates/pxl/core/src/module/world/terrain/config.json", ts: "apps/web/src/module/world/terrain/config_spec.ts", rs: "crates/pxl/core/src/module/world/terrain/config_spec.rs" },
+  { json: "crates/pxl/core/src/module/world/terrain/config.json", rs: "crates/pxl/core/src/module/world/terrain/config_spec.rs" },
   { json: "crates/pxl/core/src/render/gpu/api.json", ts: "apps/web/src/wasm/gpu_spec.ts", rs: "crates/pxl/core/src/render/gpu/api_spec.rs" },
   { json: "crates/pxl/core/src/mem.json", ts: "apps/web/src/wasm/mem_spec.ts", rs: "crates/pxl/core/src/mem_spec.rs" },
 ];
