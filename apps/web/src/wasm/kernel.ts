@@ -33,6 +33,7 @@ import { Quantum } from "@xpute/core/sched/quantum.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { Message } from "@pxl/shared/spec/message.ts";
 import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
+import { type LedgerReport, ledger_report_text } from "@/module/world/sched/ledger_report.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
@@ -102,7 +103,7 @@ function set_snapshot(text: string): void {
   if (text === snapshot_text) return;
   snapshot_text = text;
   snapshot = JSON.parse(text) as UiSnapshot;
-  if (snapshot.report !== null) void print_report(snapshot.report);
+  if (snapshot.report !== null) void print_report(ledger_report_text(JSON.parse(snapshot.report) as LedgerReport));
   for (const listener of snapshot_listeners) listener();
 }
 

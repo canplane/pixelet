@@ -34,7 +34,8 @@ use crate::module::world::character::store::use_companion_load_store;
 use crate::module::world::object::store::OBJECT_STORAGE_VERSION;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::view::view;
-use crate::module::world::sched::log::{ledger_report_text, ledger_set_logging, ledger_window_start};
+use crate::module::world::sched::log::{ledger_set_logging, ledger_window_start};
+use crate::module::world::sched::report::ledger_report_json;
 use crate::module::world::terrain::elevation::{get_ele, ground_or_raw};
 use crate::module::world::environment::theme::themes;
 use crate::module::world::environment::theme_clock::use_theme_key;
@@ -45,7 +46,8 @@ struct Shell {
     /// A search jump that landed on a page with no terrain yet: re-grounded
     /// the moment that page's tile arrives, while the map is still there.
     go_to: Option<PVF3>,
-    /// A report asked for, handed over with the next snapshot.
+    /// A report asked for, handed over with the next snapshot: the ledger's
+    /// numbers as one document, which the shell writes the words for.
     report: Option<String>,
 }
 
@@ -397,7 +399,7 @@ pub fn ui_action(text: &str) -> bool {
             search_query(&query);
         }
         "search_close" => search_close(),
-        "ledger_report" => shell().report = Some(ledger_report_text()),
+        "ledger_report" => shell().report = Some(ledger_report_json()),
         "ledger_logging" => {
             let Some(on) = bool_of(&action, "on") else { return false };
             ledger_set_logging(on);

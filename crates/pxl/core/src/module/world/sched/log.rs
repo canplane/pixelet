@@ -1,60 +1,36 @@
 // pxl_core/module/world/sched/log.rs
 
-//! The ledger's text side — the two things the gauge panel can't do:
+//! The ledger's live console stream — what the gauge panel cannot do:
 //!
 //! - a **live console stream** of records as they land, so a stutter can be
 //!   watched happening and correlated against whatever else is logging, rather
 //!   than read off a panel that only shows the settled aggregate.
-//! - a **text report** of the current rings, for pasting into a findings doc.
 //!
-//! Both are dev instruments and neither feeds back into scheduling. The live
-//! stream thresholds frames deliberately: an unfiltered per-frame line would
+//! The report the rings are read as is report.rs, which carries the numbers
+//! and leaves the words to the shell; this side still writes its own lines,
+//! because a console stream is one line at a time and has nowhere to put a
+//! document.
+//!
+//! A dev instrument that never feeds back into scheduling. The live stream
+//! thresholds frames deliberately: an unfiltered per-frame line would
 //! bury everything else in the console within seconds, so only frames that
 //! missed a vsync while moving, or overran the budget, are worth a line —
 //! summary.rs's `missed` and `overran`, the same tests the report counts. The
 //! console itself is the shell's: lines are handed over by `take_log_lines`.
 
-use super::category::category_info;
-use super::fetch_scheduler::{fetch_counts, fetch_credits};
-use super::ledger::{
-    ledger_frame_peak, ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_recording_start, ledger_set_sink, ledger_snapshot, ledger_worst_frames, FrameSample, LedgerSink,
-    LongFrameRecord, LongFrameSource, TaskRecord,
-};
-use super::summary::{census_rows, missed, overran, summarize_frames, summarize_tasks, tris_text, CensusRow, Spread, STARVED_MS, TILE_DECODED_MB};
 use pxl_shared::spec::fetch::FetchFail;
 
 use super::demand::Phases;
-use super::tick::{tick_step_stats, tick_step_stats_reset, PHASES};
-use crate::global::{now, Global};
+use super::ledger::{ledger_recording_start, ledger_set_sink, FrameSample, LedgerSink, LongFrameRecord, LongFrameSource, TaskRecord};
+use super::summary::{missed, overran};
+use super::tick::tick_step_stats_reset;
+use crate::global::Global;
 use crate::kernel::kernel;
-use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
-use crate::module::world::billboard::frustum_budget::billboard_dropped;
-use crate::module::world::chunk_node::{chunk_retention, RETAIN_BUDGET_BYTES};
 use crate::module::world::poi::poi_badge::badge_atlas;
-use crate::module::world::poi::poi_index::PoiIndexStats;
-use crate::module::world::poi::poi_layer::PoiPlaceStats;
 
-const RECENT_TASKS: usize = 20;
-const MB: f64 = 1_048_576.0;
 
 fn n1(n: f64) -> String {
     format!("{n:.1}")
-}
-
-fn share(part: f64, whole: f64) -> f64 {
-    if whole > 0.0 {
-        (part / whole * 100.0).round()
-    } else {
-        0.0
-    }
-}
-
-fn census_text(rows: &[CensusRow]) -> String {
-    rows.iter().map(|(tag, d, t)| format!("{tag} {}/{}", d.round(), tris_text(*t))).collect::<Vec<_>>().join("  ")
-}
-
-fn spread_text(s: &Spread) -> String {
-    format!("p50 {}  p95 {}  max {}", n1(s.p50), n1(s.p95), n1(s.max))
 }
 
 fn phases_text(phases: Option<&Phases>) -> String {
@@ -234,24 +210,7 @@ pub fn ledger_window_start() {
     log().baseline = counters();
 }
 
-fn starved(ms: f64) -> &'static str {
-    if ms > STARVED_MS {
-        " STARVED"
-    } else {
-        ""
-    }
-}
-
 /// Every registered step by mean ms per run, heaviest first.
-fn steps_text() -> String {
-    let mut rows: Vec<_> = tick_step_stats().iter().filter(|s| s.count > 0).collect();
-    if rows.is_empty() {
-        return "none".to_string();
-    }
-    rows.sort_by(|a, b| (b.ms / b.count as f64).total_cmp(&(a.ms / a.count as f64)));
-    rows.iter().map(|s| format!("{}/{} {}/{}", PHASES[s.phase], s.name, n1(s.ms / s.count as f64), n1(s.max_ms))).collect::<Vec<_>>().join("  ")
-}
-
 pub fn ledger_logging() -> bool {
     log().logging
 }
@@ -288,251 +247,4 @@ pub fn ledger_set_logging(on: bool) {
 /// The console lines the stream wrote since the last take.
 pub fn take_log_lines() -> Vec<String> {
     core::mem::take(&mut log().lines)
-}
-
-fn frames_section(frames: &[FrameSample]) -> Vec<String> {
-    let Some(f) = summarize_frames(frames) else { return vec!["frames n=0".to_string()] };
-    let last = &f.last;
-    let c = window_counters();
-    let atlas = badge_atlas().stats();
-    let index = PoiIndexStats::default();
-    let place = PoiPlaceStats::default();
-    let badge_count = 0;
-    let retain = chunk_retention();
-    let bands = c.bands_reused + c.bands_allocated;
-    let census = kernel().sched.census;
-    let counts = fetch_counts();
-
-    vec![
-        format!("frames n={}  over {}s  moving {}  still {}   display {} ms", f.n, n1(f.seconds), f.moving, f.n - f.moving, n1(last.frame_ms)),
-        format!("  dt      {} ms   missed {} ({}% of moving frames)", spread_text(&f.dt), f.missed, share(f.missed as f64, f.moving as f64)),
-        format!("  task    p50 {}  p95 {} ms   (main thread's own rAF task)", n1(f.task.p50), n1(f.task.p95)),
-        format!("  offthd  p50 {}  p95 {} ms   (vsync/compositor/GPU/GC)", n1(f.offthread.p50), n1(f.offthread.p95)),
-        format!("  gpu     p50 {}  p95 {} ms{}", n1(f.gpu.p50), n1(f.gpu.p95), if last.gpu_ms == 0.0 { "   (no renderer yet)" } else { "" }),
-        format!(
-            "  sched   p95 {}  max {} ms   overran {}   budget {}{}   phase p95 {}",
-            n1(f.sched.p95),
-            n1(f.sched.max),
-            f.overran,
-            n1(last.budget_ms),
-            if last.settled { " (still)" } else { "" },
-            f.phases.iter().map(|(k, v)| format!("{k} {}", n1(v.p95))).collect::<Vec<_>>().join("  ")
-        ),
-        format!("  cpu     tick p95 {} ms   (the kernel's tick inside the visible phase)", n1(f.tick.p95)),
-        // Per step, so a phase that costs more than its steps should does not
-        // hide which step is not yielding: a cooperative scheduler is only as
-        // cooperative as its longest step.
-        format!("  steps   {}   (ms per frame, max)", steps_text()),
-        format!(
-            "  gpu     draws {}  tris {}k  buffers {} {}MB  fill {:.1}Mpx",
-            last.draw_calls,
-            (last.triangles / 1000.0).round(),
-            last.buffers,
-            last.buffer_mb,
-            last.px / 1e6
-        ),
-        format!("  targets depth {}MB  msaa {}MB  shadow {}MB  layers {}MB", last.textures_mb.depth, last.textures_mb.msaa, last.textures_mb.shadow, last.textures_mb.layers),
-        format!("  by tag  mean {}   (draws/tris per frame)", census_text(&f.census)),
-        format!("          last {}", census_text(&census_rows(&last.census))),
-        format!("  mem     heap {}MB ({})  tiles {} (~{}MB)  poi {}", last.heap_mb, signed(f.heap_delta), last.tile_pages, last.tile_pages * TILE_DECODED_MB, last.poi_count),
-        format!(
-            "  place   poi {} ms over {} runs   hit {} -> cand {} -> kept {} (+{} absorbed, biggest {}{})   max since load {} ms, hit {}",
-            n1(place.ms),
-            c.place_runs,
-            place.hits,
-            place.candidates,
-            place.kept,
-            place.absorbed,
-            place.biggest,
-            if billboard_dropped() > 0 { format!(", DROPPED {}", billboard_dropped()) } else { String::new() },
-            n1(place.max_ms),
-            place.max_hits
-        ),
-        // Ask-to-commit and frames spanned: a placement is a job of the content
-        // step, so this is its latency under the budget, and the max is the
-        // starvation question.
-        format!(
-            "  wait    place {} ms over {} frames (max {} ms, {} frames)   index {} ms over {} frames (max {} ms, {} frames)",
-            n1(place.wait_ms),
-            place.frames,
-            n1(place.max_wait_ms),
-            place.max_frames,
-            n1(index.wait_ms),
-            index.frames,
-            n1(index.max_wait_ms),
-            index.max_frames
-        ),
-        format!(
-            "  split   sync {} ms (max since load {})   badge {} measured / {} built {}ms total, {} cached",
-            n1(place.sync_ms),
-            n1(place.max_sync_ms),
-            c.badge_metrics,
-            c.badge_builds,
-            n1(c.badge_ms),
-            badge_count
-        ),
-        format!(
-            "  atlas   {}px  {} entries  {} shelves  {}% used  {} repacks  {} rect uploads",
-            atlas.size,
-            atlas.entries,
-            atlas.shelves,
-            share(atlas.used_px as f64, atlas.size as f64 * atlas.size as f64),
-            c.atlas_repacks,
-            c.atlas_uploads
-        ),
-        format!("  faces   kept {} / {} ({}%)  runs culled {}/{}", c.faces_kept, c.faces_possible, share(c.faces_kept, c.faces_possible), c.runs_culled, c.runs_total),
-        format!("  coarse  boxes {}  low fill {} ({}%; a threshold cull would have skipped these)", c.coarse_boxes, c.coarse_low_fill, share(c.coarse_low_fill, c.coarse_boxes)),
-        format!(
-            "  index   poi {} resident  {} rebuilds{}{}",
-            index.indexed,
-            c.index_rebuilds,
-            if index.sweeping > 0 { format!("  sweeping {} units", index.sweeping) } else { String::new() },
-            if index.dropped > 0 { format!("  DROPPED {}", index.dropped) } else { String::new() }
-        ),
-        // The reservation, the module section and each section against its own
-        // range are the shell's own numbers (wasm/core_pool.ts) and are not
-        // the kernel's to state: it was handed them only so it could print
-        // them back, and nothing ever handed them.
-        format!(
-            "  pool    live {}MB  idle {}MB  hit {}%   window scans {} bakes {}",
-            last.pool.live_mb,
-            last.pool.idle_mb,
-            f.pool_hit_pct.map_or("-".to_string(), |p| p.to_string()),
-            f.work.0,
-            f.work.1
-        ),
-        format!("  fetch   queued {} running {} of {}", counts.queued, counts.running, fetch_credits()),
-        // The builds run in the kernel under the tick; what they did this window.
-        format!(
-            "  build   {} direct  {} scans  {} bakes  {} refused a block{}",
-            c.built_direct,
-            c.built_scans,
-            c.built_bakes,
-            c.built_starved,
-            if c.decor_dropped > 0.0 { format!("   DECOR DROPPED {}", c.decor_dropped) } else { String::new() }
-        ),
-        format!("  per     tick/bake {}ms   (workload-normalised; comparable across sessions)", f.tick_per_bake.map_or("-".to_string(), n1)),
-        format!(
-            "  rate    {} bakes/s  {} scans/s   while backlog {} bakes/s  {} scans/s over {}s",
-            n1(f.per_s.1),
-            n1(f.per_s.0),
-            n1(f.backlog_per_s.1),
-            n1(f.backlog_per_s.0),
-            n1(f.backlog_s)
-        ),
-        format!("  bands   reused {} / {} ({}%)  ~1.31MB each; a miss borrows from the core pool", c.bands_reused, bands, share(c.bands_reused, bands)),
-        format!(
-            "  retain  nodes {}  runsets {} ({}MB)  tiers {}  decor {} steps {} instances   kept on-screen {}MB, off-screen {} / {}MB budget",
-            retain.nodes,
-            retain.run_sets,
-            retain.run_set_mb,
-            retain.tiers,
-            retain.decor_steps,
-            retain.decor_instances,
-            (census.retained_on / MB).round(),
-            (census.retained_off / MB).round(),
-            (RETAIN_BUDGET_BYTES() / MB).round()
-        ),
-        format!(
-            "  lod     chunks {}  in-frustum {}  pending {}  settling {}  blending {}  pressure {}",
-            last.lod.chunks, last.lod.in_frustum, last.lod.pending, last.lod.settling, last.lod.blend_active, last.lod.pressure
-        ),
-        format!(
-            "  wait    releases {} pending, oldest {} ms{}   on-screen oldest {} ms{}",
-            last.lod.offscreen_pending,
-            last.lod.oldest_release_ms.round(),
-            starved(last.lod.oldest_release_ms),
-            last.lod.oldest_visible_ms.round(),
-            starved(last.lod.oldest_visible_ms)
-        ),
-        format!("  mounts  this frame +{}/-{} layouts {}   window total +{}/-{}", last.mounts.added, last.mounts.removed, last.mounts.layouts, f.mounts.0, f.mounts.1),
-        format!("  queue   terrain {}  poi {}", last.q_terrain, last.q_poi),
-    ]
-}
-
-/// The window's worst-seen values, including the LOD gauges the frame summary
-/// only reads off the last frame.
-fn peak_section() -> Vec<String> {
-    let p = ledger_frame_peak();
-    vec![
-        "peak (window)".to_string(),
-        format!("  dt {}  sched {}  tick {} ms", n1(p.dt_ms), n1(p.sched_ms), n1(p.tick_ms)),
-        format!("  draws {}  tris {}k  heap {}MB  queue t{}/p{}", p.draw_calls, (p.triangles / 1000.0).round(), p.heap_mb, p.q_terrain, p.q_poi),
-        format!("  lod chunks {}  in-frustum {}  pending {}  settling {}  blending {}  pressure {}", p.chunks, p.in_frustum, p.pending, p.settling, p.blend_active, p.pressure),
-        format!(
-            "  wait releases {} pending, oldest {} ms{}   on-screen oldest {} ms{}",
-            p.offscreen_pending,
-            p.oldest_release_ms.round(),
-            starved(p.oldest_release_ms),
-            p.oldest_visible_ms.round(),
-            starved(p.oldest_visible_ms)
-        ),
-    ]
-}
-
-fn tasks_section(tasks: &[TaskRecord]) -> Vec<String> {
-    if tasks.is_empty() {
-        return vec!["tasks n=0".to_string()];
-    }
-    let mut lines = vec![format!("tasks n={}", tasks.len())];
-    for t in summarize_tasks(tasks) {
-        let bound = category_info(t.cat).map_or("?".to_string(), |c| c.bound.as_str().to_string());
-        lines.push(format!(
-            "  {:<9}{:<9}n={}   p50 {}  p95 {} ms   ok {}  ab {}  err {}{}",
-            t.cat.as_str(),
-            bound,
-            t.n,
-            n1(t.lat.p50),
-            n1(t.lat.p95),
-            t.ok,
-            t.aborted,
-            t.error,
-            if t.reasons.is_empty() { String::new() } else { format!(" ({})", t.reasons.iter().map(|(r, n)| format!("{r} x{n}")).collect::<Vec<_>>().join(", ")) }
-        ));
-        if let Some(means) = &t.phase_mean {
-            let means: Vec<String> = means.iter().map(|(k, v)| format!("{} {}", k.trim_end_matches("_ms"), if *k == "bytes" { v.round().to_string() } else { n1(*v) })).collect();
-            lines.push(format!("  {:<18}mean {}", "", means.join("  ")));
-        }
-    }
-    lines
-}
-
-/// The whole instrument as pasteable text: aggregate summary, then the raw tail
-/// of each ring. Sized to land in a findings doc, not to be a trace — trace.rs
-/// is the machine-readable path.
-pub fn ledger_report_text() -> String {
-    let frames = ledger_frames_snapshot();
-    let tasks = ledger_snapshot();
-    let longs = ledger_long_frames_snapshot();
-
-    let mut out = vec![format!("=== sched/ledger @ t={}ms  build {} {} ({}) ===", n1(now()), BUILD_NUMBER(), BUILD_ID(), BUILD_TIME())];
-    out.extend(frames_section(frames));
-    if !frames.is_empty() {
-        out.extend(peak_section());
-    }
-    out.extend(tasks_section(tasks));
-    // Whether the browser has long-animation-frame entries at all is the
-    // shell's to know; a count of none reads the same either way here.
-    out.push(format!("long frames n={}", longs.len()));
-
-    if !tasks.is_empty() {
-        out.push(format!("--- last {} tasks ---", RECENT_TASKS.min(tasks.len())));
-        for rec in &tasks[tasks.len().saturating_sub(RECENT_TASKS)..] {
-            out.push(task_line(rec));
-        }
-    }
-    let worst = ledger_worst_frames();
-    if !worst.is_empty() {
-        out.push(format!("--- worst {} frames in the window ---", worst.len()));
-        for w in worst {
-            out.push(frame_line(&w.sample, w.prev.as_ref()));
-        }
-    }
-    if !longs.is_empty() {
-        out.push("--- long frames ---".to_string());
-        for l in longs {
-            out.push(long_frame_line(l));
-        }
-    }
-    out.join("\n")
 }
