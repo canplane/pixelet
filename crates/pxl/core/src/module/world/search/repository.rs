@@ -143,8 +143,11 @@ fn read_result(t: &mut PartTable, r: JsonValue) -> Option<SearchResult> {
 /// false where it does not read. Results past what the table holds are left
 /// out.
 pub fn parse_search(table: &mut SearchTable, body: &str) -> bool {
-    table.clear();
+    // Read before the table is cleared: a body that does not parse leaves the
+    // rows it had, which is what the sheet showed before the move — clearing
+    // them would read as "nothing found", which is not what happened.
     let Some(root) = read_json(body).filter(|r| r.kind() == JsonKind::Array) else { return false };
+    table.clear();
     for r in root.items() {
         if table.results.len() == RESULTS {
             break;
