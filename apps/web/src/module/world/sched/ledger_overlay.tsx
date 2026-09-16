@@ -2,29 +2,44 @@
 
 /**
  * Dev overlay for the kernel's ledger (crates/pxl/core/src/module/world/sched):
- * the recording window and the text side as buttons — a fresh window, the
- * pasteable report, and the live console stream. Gated by
+ * the recording window and the text side (log.rs) as buttons — a fresh window,
+ * the pasteable report, and the live console stream. Gated by
  * `import.meta.env.DEV` and the `show_ledger` setting — off by default.
  *
- * It also installs the long-frame observers, which outlive it: they are the
- * ledger's rather than the panel's, so closing the panel does not stop a
- * window being recorded.
+ * It also owns the dev lifecycle the ledger's surfaces share, which runs
+ * whether or not the panel is showing: the long-frame observers, so the ring
+ * is already warm when the panel is opened, and `__pxl_ledger_trace` on
+ * `window`, so a trace can be taken from the console.
  */
 
 import { useEffect, useState } from "react";
 
 import { install_long_frame_observers } from "./long_frame.ts";
+import { ledger_trace_download } from "./trace.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 
 const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90";
 
+type LedgerGlobals = typeof globalThis & { __pxl_ledger_trace?: () => void };
+
 export function LedgerOverlay() {
   const show = useKernel((s) => s.settings.show_ledger === true);
-  const [logging, set_logging] = useState(false);
+  // The kernel starts with the stream on (module/world/world.rs), so the
+  // button opens saying so rather than sending `on: false` on its first press.
+  const [logging, set_logging] = useState(true);
 
   // The observers outlive the panel: they are the ledger's, not its, so
   // closing the panel does not stop a window being recorded.
   useEffect(install_long_frame_observers, []);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const w = globalThis as LedgerGlobals;
+    w.__pxl_ledger_trace = ledger_trace_download;
+    return () => {
+      delete w.__pxl_ledger_trace;
+    };
+  }, []);
 
   if (!import.meta.env.DEV || !show) return null;
 
@@ -37,6 +52,9 @@ export function LedgerOverlay() {
         </button>
         <button type="button" onClick={() => kernel_action({ type: "ledger_report" })} title="print + copy a text report" className={BUTTON}>
           report
+        </button>
+        <button type="button" onClick={ledger_trace_download} title="save the window as a Trace Event Format file for ui.perfetto.dev" className={BUTTON}>
+          trace
         </button>
         <button
           type="button"

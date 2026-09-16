@@ -35,6 +35,12 @@ export type KernelExports = {
   /** Hands the kernel the turn for `vector` (@xpute/core/ipc/cmd.ts's
    * Interrupt). */
   interrupt(vector: u32): u32;
+  /** The ledger's trace: the address of two words, where the Trace Event
+   * Format JSON lies in this memory and how long it is. A range and not a
+   * message because a window's trace runs to tens of megabytes. */
+  ledger_trace(): u32;
+  /** Says the trace has been copied, so the kernel can give its bytes back. */
+  ledger_trace_release(): void;
 };
 
 /** crates/pxl/wasm/src/lib.rs's boot block, word by word: the section the
