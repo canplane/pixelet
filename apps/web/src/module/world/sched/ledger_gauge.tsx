@@ -140,6 +140,12 @@ export function LedgerGauge() {
           <Row k="targets MB" v={`d${f.last.textures_mb.depth} m${f.last.textures_mb.msaa} s${f.last.textures_mb.shadow} l${f.last.textures_mb.layers}`} />
           <Rule />
           <Row k="heap" v={f.last.heap_mb ? `${f.last.heap_mb}MB Δ${f.heap_delta >= 0 ? "+" : ""}${f.heap_delta}` : "n/a"} />
+          {/* One allocator, so idle is what the range has not been reached
+              into rather than what a pool is holding back. Both come from the
+              kernel's own seam to it (host.rs) — the shell never decodes the
+              allocator's bytes, which is what made the last probe read a
+              deleted structure's row for two commits without saying so. */}
+          <Row k="  live/idle" v={`${f.last.pool.live_mb}/${f.last.pool.idle_mb}MB`} warn={f.last.pool.idle_mb <= 0} />
           <Row k="tiles ~mb / poi" v={`${f.last.tile_pages} ~${f.last.tile_pages * TILE_DECODED_MB} / ${f.last.poi_count}`} />
           {
             /* The shell's own number: the reservation is the central scheduler's,
