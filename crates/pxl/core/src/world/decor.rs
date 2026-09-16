@@ -16,7 +16,6 @@
 use crate::bake::terrain::{ChunkSample, PageView};
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use crate::world::object::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
-use crate::world::pool::Pool;
 use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
 use xpute_core::kit::rng::{derive_seed_u64 as derive_seed, u32_to_unit, SplitMix64};
 
@@ -160,12 +159,13 @@ pub struct DecorScratch {
 }
 
 impl DecorScratch {
-    /// Its lanes, taken from `pool`; none when the pool has no room for them.
-    pub fn new(pool: &mut Pool) -> Option<DecorScratch> {
+    /// Its lanes, taken from the heap; none when it has no room for them.
+    pub fn new() -> Option<DecorScratch> {
         let instance_bytes = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
-        let instances = pool.acquire(instance_bytes)?;
-        let Some(groups) = pool.acquire((DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32) else {
-            pool.release(instances, instance_bytes);
+        let instances = crate::bake::volume::take_bytes(instance_bytes as usize)?;
+        let Some(groups) = crate::bake::volume::take_bytes(DECOR_INSTANCES * core::mem::size_of::<u16>()) else {
+            // SAFETY: just taken, above.
+            unsafe { crate::bake::volume::give_bytes(instances, instance_bytes as usize) };
             return None;
         };
         // SAFETY: two blocks of the pool this scratch holds alone and never

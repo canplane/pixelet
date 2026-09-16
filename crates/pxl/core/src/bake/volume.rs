@@ -114,7 +114,7 @@ impl Extras {
 /// A block of `bytes` from the heap, by address — a lane is read where it lies
 /// and the reader is given nothing but a pointer. `BAND_VOXELS` is a power of
 /// two, so the alignment a lane needs is the one the allocator gives.
-fn take_bytes(bytes: usize) -> Option<usize> {
+pub fn take_bytes(bytes: usize) -> Option<usize> {
     // SAFETY: `bytes` is never zero — every lane is a whole band.
     let at = unsafe { alloc(Layout::from_size_align(bytes, 8).expect("a lane's layout")) };
     if at.is_null() {
@@ -128,7 +128,7 @@ fn take_bytes(bytes: usize) -> Option<usize> {
 ///
 /// # Safety
 /// `at` came from `take_bytes(bytes)` and has not been given back.
-unsafe fn give_bytes(at: usize, bytes: usize) {
+pub unsafe fn give_bytes(at: usize, bytes: usize) {
     // SAFETY: the caller's.
     unsafe { dealloc(at as *mut u8, Layout::from_size_align(bytes, 8).expect("a lane's layout")) }
 }

@@ -1928,6 +1928,9 @@ fn install_host() {
     pxl_core::host::set_measure_text(hook_measure_text);
     xpute_core::kit::rng::set_entropy(hook_entropy);
     pxl_core::host::set_heap_used(|| ALLOC.used());
+    pxl_core::host::set_heap_releases(|| ALLOC.releases());
+    pxl_core::host::set_heap_live(|| ALLOC.live());
+    pxl_core::host::set_heap_bytes(|| ALLOC.range_bytes());
     unsafe { xpute_core::sched::tick::ALLOC_PROBE = Some(|| ALLOC.allocs()) };
     pxl_core::module::world::sched::tick::set_step_timing(true);
     install_gpu();

@@ -24,7 +24,6 @@ use crate::bake::terrain::js_round;
 use crate::bake::volume::{Cell, Volumes, Voxel};
 use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::U_PER_CELL;
-use crate::world::pool::Pool;
 
 /// A cell's Z and a band's, as wide as the coordinate carries them. PVF3
 /// gives Z sixteen bits (pvf3/core.rs's IVEC_Z_W), so a cell's Z is an i16 and
@@ -516,7 +515,7 @@ impl Painter {
     /// refused — after which the rest is not painted, as the volume is
     /// not the composite that was asked for anyway.
     #[allow(clippy::too_many_arguments)]
-    pub fn paint(&mut self, store: &Store, volumes: &mut Volumes, pools: &mut [Pool], volume: usize, col_idx: IVec, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
+    pub fn paint(&mut self, store: &Store, volumes: &mut Volumes, volume: usize, col_idx: IVec, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
         self.claimed.clear();
         let mut any = false;
         if let Some(&cpos) = store.chunk_at.get(&col_idx) {
@@ -534,13 +533,13 @@ impl Painter {
                 let ly = y as f64 * STEP_UNITS;
                 let lz = band as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
                 let size = (2.0f64).powi(level);
-                if !self.paint_entry(volumes, pools, volume, lx, ly, lz, size, state, &mut any) {
+                if !self.paint_entry(volumes, volume, lx, ly, lz, size, state, &mut any) {
                     return Paint { any, refused: true };
                 }
             }
         }
         if let Some(c) = carve {
-            if !self.paint_entry(volumes, pools, volume, c.lx, c.ly, c.lz, c.size, AIR, &mut any) {
+            if !self.paint_entry(volumes, volume, c.lx, c.ly, c.lz, c.size, AIR, &mut any) {
                 return Paint { any, refused: true };
             }
         }
@@ -550,7 +549,7 @@ impl Painter {
     /// One entry at a corner relative to the column's base. False when a
     /// paint was refused.
     #[allow(clippy::too_many_arguments)]
-    fn paint_entry(&mut self, volumes: &mut Volumes, pools: &mut [Pool], volume: usize, lx: f64, ly: f64, lz: f64, size: f64, state: u32, any: &mut bool) -> bool {
+    fn paint_entry(&mut self, volumes: &mut Volumes, volume: usize, lx: f64, ly: f64, lz: f64, size: f64, state: u32, any: &mut bool) -> bool {
         let kind = self.kind(state);
         if kind == Kind::Decor || kind == Kind::Untaught {
             return true;
@@ -587,10 +586,10 @@ impl Painter {
                 *any = true;
                 let at = Cell { cx, cy, z };
                 let ok = if self.claimed.contains(&address) && !is_air {
-                    volumes.append_sub_voxel(pools, volume, at, v)
+                    volumes.append_sub_voxel(volume, at, v)
                 } else {
                     self.claimed.insert(address);
-                    volumes.set_voxel(pools, volume, at, v)
+                    volumes.set_voxel(volume, at, v)
                 };
                 if !ok {
                     return false;
