@@ -1,10 +1,8 @@
 //! The pair of packages/xpute/core/src/ds.
 
 pub mod arena;
-pub mod buddy;
 pub mod buddy_tree;
 pub mod deque;
-pub mod fixed_heap;
 pub mod grid_index;
 pub mod handle;
 pub mod heap;

@@ -18,7 +18,8 @@
 //! any past the cap from the mesh section, which may.
 
 use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
-use crate::world::pool::Pool;
+use core::alloc::Layout;
+use std::alloc::{alloc, dealloc};
 
 /// A band is a chunk's span on every axis.
 pub const BAND_SPAN: u32 = crate::space::constant::CHUNK_SPAN;
@@ -109,6 +110,29 @@ impl Extras {
     }
 }
 
+
+/// A block of `bytes` from the heap, by address — a lane is read where it lies
+/// and the reader is given nothing but a pointer. `BAND_VOXELS` is a power of
+/// two, so the alignment a lane needs is the one the allocator gives.
+fn take_bytes(bytes: usize) -> Option<usize> {
+    // SAFETY: `bytes` is never zero — every lane is a whole band.
+    let at = unsafe { alloc(Layout::from_size_align(bytes, 8).expect("a lane's layout")) };
+    if at.is_null() {
+        None
+    } else {
+        Some(at as usize)
+    }
+}
+
+/// Gives back what `take_bytes` returned.
+///
+/// # Safety
+/// `at` came from `take_bytes(bytes)` and has not been given back.
+unsafe fn give_bytes(at: usize, bytes: usize) {
+    // SAFETY: the caller's.
+    unsafe { dealloc(at as *mut u8, Layout::from_size_align(bytes, 8).expect("a lane's layout")) }
+}
+
 /// A cell of the chunk: chunk-local x and y, absolute z.
 #[derive(Clone, Copy)]
 pub struct Cell {
@@ -135,8 +159,6 @@ struct Store {
     layer_idx: usize,
     /// Lazily taken for a band with sub-cell objects; four bytes a voxel.
     sub_cell: Option<(usize, u32)>,
-    /// Which pool the material and layer blocks came from.
-    pool: u32,
     extra: Extras,
 }
 
@@ -176,8 +198,6 @@ pub struct Volumes {
     empty_stores: Vec<usize>,
     volumes: Vec<Option<Volume>>,
     free_ids: Vec<usize>,
-    fixed_pool: u32,
-    mesh_pool: u32,
     /// The current band row, for readers.
     row: [u32; BAND_WORDS],
     pub stat: VolumeStat,
@@ -185,12 +205,11 @@ pub struct Volumes {
 
 impl Volumes {
     /// Over the memory at `mem`, taking the standing stores from
-    /// `fixed_pool` and the rest from `mesh_pool` (ids into the pools handed
-    /// to each call).
+    /// the heap.
     ///
     /// # Safety
-    /// `mem` must be the base of the memory the pools were cut from.
-    pub unsafe fn new(mem: *mut u8, fixed_pool: u32, mesh_pool: u32) -> Volumes {
+    /// `mem` must be the base of the memory the lanes are addressed in.
+    pub unsafe fn new(mem: *mut u8) -> Volumes {
         Volumes {
             mem,
             stores: Vec::new(),
@@ -198,8 +217,6 @@ impl Volumes {
             empty_stores: Vec::new(),
             volumes: Vec::new(),
             free_ids: Vec::new(),
-            fixed_pool,
-            mesh_pool,
             row: [0; BAND_WORDS],
             stat: VolumeStat::default(),
         }
@@ -235,20 +252,19 @@ impl Volumes {
 
     /// A store for a new band: a free one, or one built from the pools —
     /// None when neither pool has room.
-    fn take_store(&mut self, pools: &mut [Pool]) -> Option<usize> {
+    fn take_store(&mut self) -> Option<usize> {
         if let Some(s) = self.free_stores.pop() {
             self.stat.reused += 1;
             return Some(s);
         }
         let held = self.stores.len() - self.empty_stores.len();
-        let pool = if held < POOLED_BANDS { self.fixed_pool } else { self.mesh_pool };
-        let p = &mut pools[pool as usize];
-        let Some(material) = p.acquire((BAND_VOXELS * 4) as u32) else {
+        let Some(material) = take_bytes(BAND_VOXELS * 4) else {
             self.stat.refused += 1;
             return None;
         };
-        let Some(layer_idx) = p.acquire(BAND_VOXELS as u32) else {
-            p.release(material, (BAND_VOXELS * 4) as u32);
+        let Some(layer_idx) = take_bytes(BAND_VOXELS) else {
+            // SAFETY: just taken, above.
+            unsafe { give_bytes(material, BAND_VOXELS * 4) };
             self.stat.refused += 1;
             return None;
         };
@@ -257,14 +273,12 @@ impl Volumes {
             let store = &mut self.stores[s];
             store.material = material;
             store.layer_idx = layer_idx;
-            store.pool = pool;
             return Some(s);
         }
         self.stores.push(Store {
             material,
             layer_idx,
             sub_cell: None,
-            pool,
             extra: Extras::default(),
         });
         Some(self.stores.len() - 1)
@@ -272,43 +286,41 @@ impl Volumes {
 
     /// The band at `band_z`, made if the volume has none there: the index
     /// into the volume's bands, or None when no store could be had.
-    fn get_or_create_band(&mut self, pools: &mut [Pool], id: usize, band_z: i32) -> Option<usize> {
+    fn get_or_create_band(&mut self, id: usize, band_z: i32) -> Option<usize> {
         assert!(!self.volume(id).sealed, "paint into a sealed volume");
         let bands = &self.volume(id).bands;
         let insert_at = bands.iter().position(|b| b.band_z >= band_z).unwrap_or(bands.len());
         if insert_at < bands.len() && bands[insert_at].band_z == band_z {
             return Some(insert_at);
         }
-        let store = self.take_store(pools)?;
+        let store = self.take_store()?;
         // A store keeps whatever its last borrower wrote.
         // SAFETY: the store's lanes are this module's blocks of BAND_VOXELS.
         unsafe {
             core::slice::from_raw_parts_mut(self.material(store), BAND_VOXELS).fill(0);
             core::slice::from_raw_parts_mut(self.layer(store), BAND_VOXELS).fill(NO_LAYER as u8);
         }
-        self.drop_sub_cell(pools, store);
+        self.drop_sub_cell(store);
         self.stores[store].extra.clear();
         self.volume(id).bands.insert(insert_at, Band { band_z, store });
         Some(insert_at)
     }
 
-    fn drop_sub_cell(&mut self, pools: &mut [Pool], store: usize) {
-        if let Some((at, pool)) = self.stores[store].sub_cell.take() {
-            pools[pool as usize].release(at, (BAND_VOXELS * 4) as u32);
+    fn drop_sub_cell(&mut self, store: usize) {
+        if let Some((at, _)) = self.stores[store].sub_cell.take() {
+            // SAFETY: the lane this store took and has not given back.
+            unsafe { give_bytes(at, BAND_VOXELS * 4) };
         }
     }
 
     /// The sub-cell lane of `store`, taken from the mesh pool — or the fixed
     /// one when the mesh section is over — and zeroed, since zero is
     /// SUB_CELL_NONE.
-    fn ensure_sub_cell(&mut self, pools: &mut [Pool], store: usize) -> Option<*mut u8> {
+    fn ensure_sub_cell(&mut self, store: usize) -> Option<*mut u8> {
         if self.stores[store].sub_cell.is_none() {
             let bytes = (BAND_VOXELS * 4) as u32;
-            let (at, pool) = match pools[self.mesh_pool as usize].acquire(bytes) {
-                Some(at) => (at, self.mesh_pool),
-                None => (pools[self.fixed_pool as usize].acquire(bytes)?, self.fixed_pool),
-            };
-            self.stores[store].sub_cell = Some((at, pool));
+            let at = take_bytes(bytes as usize)?;
+            self.stores[store].sub_cell = Some((at, 0));
             // SAFETY: a block of `bytes` this module just took.
             unsafe { core::slice::from_raw_parts_mut(self.mem.wrapping_add(at), bytes as usize).fill(0) };
         }
@@ -322,7 +334,7 @@ impl Volumes {
 
     /// Full replacement at one voxel: later layers overwrite earlier ones.
     /// False when a band could not be made.
-    pub fn set_voxel(&mut self, pools: &mut [Pool], id: usize, at: Cell, v: Voxel) -> bool {
+    pub fn set_voxel(&mut self, id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
         // A column past the band would index the next block in the pool:
         // refused rather than written.
@@ -331,7 +343,7 @@ impl Volumes {
         }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, local_z) = Self::locate(z);
-        let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
+        let Some(b) = self.get_or_create_band(id, band_z) else { return false };
         let store = self.volume(id).bands[b].store;
         let idx = band_voxel_idx(cx, cy, local_z);
         // SAFETY: lanes of BAND_VOXELS; idx is inside a band.
@@ -344,7 +356,7 @@ impl Volumes {
             self.stores[store].extra.remove_at(col, z);
         }
         if sub >> 24 != SUB_CELL_NONE as u32 {
-            let Some(lane) = self.ensure_sub_cell(pools, store) else { return false };
+            let Some(lane) = self.ensure_sub_cell(store) else { return false };
             // SAFETY: the lane is BAND_VOXELS * 4 bytes.
             unsafe {
                 let at = lane.add(idx * 4);
@@ -361,14 +373,14 @@ impl Volumes {
 
     /// Another sub-cell object on a base voxel already claimed in the same
     /// layer.
-    pub fn append_sub_voxel(&mut self, pools: &mut [Pool], id: usize, at: Cell, v: Voxel) -> bool {
+    pub fn append_sub_voxel(&mut self, id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
         if cx >= BAND_SPAN || cy >= BAND_SPAN {
             return false;
         }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, _) = Self::locate(z);
-        let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
+        let Some(b) = self.get_or_create_band(id, band_z) else { return false };
         let store = self.volume(id).bands[b].store;
         let col = (cy & BAND_MASK) * BAND_SPAN + (cx & BAND_MASK);
         self.stores[store].extra.push(col, z, material, layer_idx, sub);
@@ -376,7 +388,7 @@ impl Volumes {
     }
 
     /// Paints one solid column across as many whole bands as it needs.
-    pub fn fill_column(&mut self, pools: &mut [Pool], id: usize, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
+    pub fn fill_column(&mut self, id: usize, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
         let (cx, cy) = column;
         if cx >= BAND_SPAN || cy >= BAND_SPAN {
             return false;
@@ -389,7 +401,7 @@ impl Volumes {
         let (first, _) = Self::locate(z0);
         let (last, _) = Self::locate(z1);
         for band_z in first..=last {
-            let Some(b) = self.get_or_create_band(pools, id, band_z) else { return false };
+            let Some(b) = self.get_or_create_band(id, band_z) else { return false };
             let store = self.volume(id).bands[b].store;
             let local_z0 = if band_z == first { (z0 - band_z * span) as u32 } else { 0 };
             let local_z1 = if band_z == last { (z1 - band_z * span) as u32 } else { BAND_SPAN - 1 };
@@ -420,19 +432,21 @@ impl Volumes {
 
     /// Returns the volume's bands to the stores, and the stores past the
     /// cap to their pools.
-    pub fn release(&mut self, pools: &mut [Pool], id: usize) {
+    pub fn release(&mut self, id: usize) {
         let Some(v) = self.volumes[id].take() else { return };
         for band in v.bands {
             let s = band.store;
             self.stores[s].extra.clear();
-            self.drop_sub_cell(pools, s);
+            self.drop_sub_cell(s);
             if self.free_stores.len() < POOLED_BANDS {
                 self.free_stores.push(s);
             } else {
                 let store = &mut self.stores[s];
-                let p = &mut pools[store.pool as usize];
-                p.release(store.material, (BAND_VOXELS * 4) as u32);
-                p.release(store.layer_idx, BAND_VOXELS as u32);
+                // SAFETY: the lanes this store took and has not given back.
+                unsafe {
+                    give_bytes(store.material, BAND_VOXELS * 4);
+                    give_bytes(store.layer_idx, BAND_VOXELS);
+                }
                 self.empty_stores.push(s);
             }
         }
@@ -444,9 +458,6 @@ impl Volumes {
         self.mem
     }
 
-    pub fn mesh_pool(&self) -> usize {
-        self.mesh_pool as usize
-    }
 
     /// Band `i` of volume `id` as the scan reads it, over the memory.
     ///

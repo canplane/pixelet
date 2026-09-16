@@ -37,30 +37,27 @@ use xpute_core::kit::array::U8Array;
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
 
-extern "C" {
-    static __heap_base: u8;
-}
-
-/// The module's heap: what is left of the module's section after the
-/// linker placed the stack and the data before it (`--stack-first`, the
-/// default; 1 MB of stack), up to the section's end. Sized against what a
-/// chunk's scratch reaches (wasm_bake.test.ts probes it): about 140 bytes
-/// a run at the peak, most of it a vector's old block held while its
-/// doubled replacement is filled, so a 65k-run chunk — whose fine mesh no
-/// longer fits a pool region — takes under 10 MB of the 31 the heap has.
+/// The heap: from the page past the last fixed section to the end of the
+/// memory, ascending. Everything before it is settled at boot — the module's
+/// own stack and data, the fixed section, the terrain slab — so the heap is
+/// what is left, and what is left is whatever the device gave.
+///
+/// The linker's `__heap_base` is not it. That is where the module's data ends,
+/// which is inside the first section and long before the terrain; the heap is
+/// past all of them.
 struct ModuleHeap;
 
-impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
+impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
     fn base() -> usize {
-        core::ptr::addr_of!(__heap_base) as usize
+        memory::HEAP_AT as usize
     }
     fn end() -> usize {
-        MODULE_BYTES as usize
+        core::arch::wasm32::memory_size(0) * (1 << 16)
     }
 }
 
 #[global_allocator]
-static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds::fixed_heap::FixedHeap::new();
+static ALLOC: xpute_core::ds::buddy_tree::BuddyMalloc<ModuleHeap> = xpute_core::ds::buddy_tree::BuddyMalloc::new();
 
 struct State {
     /// The submission ring (glue → core) and the completion ring (core →

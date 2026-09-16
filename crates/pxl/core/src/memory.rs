@@ -27,17 +27,22 @@
 //! the mesh is the same on both: the slab is the terrain a load radius
 //! reaches, not a share of what the device happens to have.
 //!
-//!              offset         end          phone        desktop
-//!   module     0              32 MiB       32 MiB       32 MiB
-//!   fixed      32 MiB         64 MiB       32 MiB       32 MiB
-//!   slab       64 MiB         260.43 MiB   196.43 MiB   196.43 MiB
-//!   (no one's) 260.43 MiB     320 MiB      59.57 MiB    59.57 MiB
+//!              offset         end            phone        desktop
+//!   module     0              32 MiB         32 MiB       32 MiB
+//!   fixed      32 MiB         64 MiB         32 MiB       32 MiB
+//!   slab       64 MiB         260.432 MiB    196.43 MiB   196.43 MiB
+//!   (no one's) 260.432 MiB    260.434 MiB    1,504 B      1,504 B
+//!   mesh       260.434 MiB    —              251.57 MiB   763.57 MiB
 //!
-//! A section begins on a power-of-two boundary and ends where its content
-//! does. Where a section ends is no one's business but its own: nothing starts
-//! there — the mesh's first region is past the slab's end, not at it — so the
-//! slab is the terrain it holds and not a byte more.
-//!   mesh       320 MiB        —            192 MiB      704 MiB
+//! A section begins on a page (PAGE_BYTES) and ends where its content does;
+//! the next begins on the first page past that. Where a section ends is no
+//! one's business but its own, so the slab is the terrain it holds and not a
+//! byte more, and what is left over is under a page.
+//!
+//! What a section does inside its range is its own affair too. The mesh's pool
+//! cuts 64 MB regions and can only cut whole ones, so the tail of its range
+//! past the last it can cut — 59.57 MiB at that region size — goes unused; that
+//! is the pool's number to answer for, not the map's.
 
 use xpute_core::sys::memory::Section;
 
@@ -63,28 +68,32 @@ pub const FIXED_REGION_BYTES: u32 = 16 << 20;
 /// The smallest block a section's pool hands out.
 pub const MIN_BLOCK_BYTES: u32 = 1 << 12;
 
+/// What a section begins and ends on. The same 4 KiB as MIN_BLOCK_BYTES, for
+/// the same reason rather than by coincidence: a pool's block lands at
+/// `section start + n * region_bytes + k * MIN_BLOCK_BYTES`, so a section that
+/// begins on a smaller boundary hands out blocks that do not. Nothing asks for
+/// more — a region size is what a pool cuts inside its own range, not where the
+/// range may begin (xpute ds/buddy.rs's `_locate` reads a region's index off
+/// the address relative to the range's start).
+pub const PAGE_BYTES: u32 = 1 << 12;
 
 
-/// The sections' pools, as the kernel holds them. The slab has none.
-pub const FIXED_POOL: u32 = 0;
-pub const MESH_POOL: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {
     pub fixed: Section,
     pub slab: Section,
-    pub mesh: Section,
+    pub heap: Section,
 }
 
-/// The map over a memory of `bytes`: the module and the fixed section share
-/// the first region, the slab is exactly the terrain it holds, and the mesh
-/// takes every whole region past it.
+/// The map over a memory of `bytes`: the fixed sections first, each beginning
+/// on a page and ending where its content does, and the heap from the page
+/// past the last of them to the end of the memory, ascending.
 ///
-/// The slab is the size of the set the load radius reaches and nothing more,
-/// which is not a whole number of regions; the mesh's pool needs its range to
-/// be whole regions (xpute ds/buddy.rs), so the bytes between the slab's end
-/// and the mesh's first region are no one's. What they are is arithmetic:
-/// with a memory sized to the slab they are none.
+/// Which is the whole of the rule. What is fixed is settled at boot and never
+/// moves; the heap is everything that is not, it starts where they stop, and
+/// it is the only part of the map whose size is what the device happened to
+/// give rather than what the content needs.
 pub fn lay_out(bytes: u32) -> Map {
     let regions = bytes / REGION_BYTES;
     let fixed = Section {
@@ -97,38 +106,41 @@ pub fn lay_out(bytes: u32) -> Map {
         bytes: SLAB_BYTES,
         region_bytes: SLAB_BYTES,
     };
-    let mesh_at = MESH_AT;
     assert!(
-        mesh_at + REGION_BYTES <= regions * REGION_BYTES,
-        "the memory is too small for the terrain the load radius reaches: the slab is {SLAB_BYTES} bytes and the mesh needs a region past it"
+        HEAP_AT + PAGE_BYTES <= regions * REGION_BYTES,
+        "the memory is too small for the terrain the load radius reaches: the slab is {SLAB_BYTES} bytes and the heap begins past it"
     );
     Map {
         fixed,
         slab,
-        mesh: Section {
-            offset: mesh_at,
-            bytes: regions * REGION_BYTES - mesh_at,
-            region_bytes: REGION_BYTES,
+        heap: Section {
+            offset: HEAP_AT,
+            bytes: regions * REGION_BYTES - HEAP_AT,
+            region_bytes: PAGE_BYTES,
         },
     }
 }
 
-/// Where the slab ends, and where the mesh's first whole region begins past
-/// it. The slab is the terrain the load radius reaches and not a round number
-/// of regions, and the mesh's pool takes nothing but whole regions, so the
-/// bytes between the two are no one's. They are the price of the slab being
-/// the set rather than the set being the slab.
+/// Where the last fixed section ends, and where the heap begins past it. The
+/// slab is the terrain the load radius reaches, which is not a round number of
+/// anything, so the heap starts at the first page boundary past it and the
+/// bytes between — under a page — are no one's.
+///
+/// `HEAP_AT` is a constant rather than a field of the map because the heap is
+/// wanted before the map is: the module's global allocator is asked for its
+/// first block by whatever runs first, which is well before anything has laid
+/// the memory out.
 const SLAB_END: u32 = REGION_BYTES + SLAB_BYTES;
-const MESH_AT: u32 = SLAB_END.div_ceil(REGION_BYTES) * REGION_BYTES;
+pub const HEAP_AT: u32 = SLAB_END.div_ceil(PAGE_BYTES) * PAGE_BYTES;
 
 const _: () = assert!(
-    MODULE_BYTES.is_power_of_two() && REGION_BYTES.is_power_of_two() && MESH_AT.is_multiple_of(REGION_BYTES),
-    "a section begins where a power of two does, so an address in it is an offset from a shift"
+    MODULE_BYTES.is_multiple_of(PAGE_BYTES) && REGION_BYTES.is_multiple_of(PAGE_BYTES) && HEAP_AT.is_multiple_of(PAGE_BYTES),
+    "a section begins on a page, so every block in it begins on one"
 );
 
 const _: () = assert!(
-    MESH_AT + REGION_BYTES <= PHONE_BYTES,
-    "the phone's memory does not hold the terrain the load radius reaches and a region of mesh past it"
+    HEAP_AT + PAGE_BYTES <= PHONE_BYTES,
+    "the phone's memory does not hold the terrain the load radius reaches and a page of heap past it"
 );
 
 static MAP: Global<Option<Map>> = Global::new();
