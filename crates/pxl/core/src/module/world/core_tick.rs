@@ -106,15 +106,15 @@ fn work_sample(c: &mut CoreTick) -> WorkSample {
     sample
 }
 
-/// The heap's gauges. One allocator now, so `idle` is what the range has not
-/// been reached into rather than what a pool is holding back, and there are no
-/// hits and misses to count — a request is served or it is refused.
+/// The heap's gauges, straight off the allocator's seam (host.rs). There are
+/// no hits and misses to count — one allocator, and a request is served or it
+/// is refused — and `used` is a high-water mark (`max_ptr - base_ptr`) while
+/// `live` is what is out on loan, so the two are not each other's complement.
 fn pool_sample() -> PoolSample {
-    let live = crate::host::heap_live() as f64;
     PoolSample {
-        live_mb: (live / MB).round(),
-        idle_mb: ((crate::host::heap_bytes() as f64 - live) / MB).round(),
-        ..PoolSample::default()
+        used_mb: (crate::host::heap_used() as f64 / MB).round(),
+        live_mb: (crate::host::heap_live() as f64 / MB).round(),
+        range_mb: (crate::host::heap_bytes() as f64 / MB).round(),
     }
 }
 

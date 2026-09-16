@@ -40,13 +40,18 @@ const LONG_FRAME_MS = 50;
  * frame, puck, companion. Past this it is eating the budget the phases after
  * it receive. */
 const INTERACTION_WARN_MS = 2;
-/** A wait this long is a job the content phase is starving. */
+/** A pending chunk waiting longer than this is being passed over rather than
+ * queued. Ten seconds is above what a full zoom-out's queue takes to drain
+ * (~7 s against one scan slot), so an ordinary backlog never trips it, and
+ * below the sixteen-second wait that ageing exists to prevent: past it, ageing
+ * is not doing its job. */
 const STARVED_MS = 10_000;
 /** A sheet larger than it starts, and this sparse, is one compaction should
  * already have halved. */
 const ATLAS_INITIAL = 1024;
 const ATLAS_SPARSE_PCT = 25;
-/** One tile page's decoded footprint, as summary.rs measures it. */
+/** One decoded terrain page, measured live (~4.03MB) — the multiplier on
+ * tile_pages. */
 const TILE_DECODED_MB = 4;
 
 type Gauge = {
@@ -140,12 +145,13 @@ export function LedgerGauge() {
           <Row k="targets MB" v={`d${f.last.textures_mb.depth} m${f.last.textures_mb.msaa} s${f.last.textures_mb.shadow} l${f.last.textures_mb.layers}`} />
           <Rule />
           <Row k="heap" v={f.last.heap_mb ? `${f.last.heap_mb}MB Δ${f.heap_delta >= 0 ? "+" : ""}${f.heap_delta}` : "n/a"} />
-          {/* One allocator, so idle is what the range has not been reached
-              into rather than what a pool is holding back. Both come from the
-              kernel's own seam to it (host.rs) — the shell never decodes the
-              allocator's bytes, which is what made the last probe read a
-              deleted structure's row for two commits without saying so. */}
-          <Row k="  live/idle" v={`${f.last.pool.live_mb}/${f.last.pool.idle_mb}MB`} warn={f.last.pool.idle_mb <= 0} />
+          {/* Three facts and no derived word: how far the allocator has ever
+              reached into its range, what is on loan now, and the range. All
+              three come from the kernel's own seam to it (host.rs) — the shell
+              never decodes the allocator's bytes, which is what let the last
+              probe read a deleted structure's row for two commits without
+              saying so. */}
+          <Row k="  used/live of" v={`${f.last.pool.used_mb}/${f.last.pool.live_mb} of ${f.last.pool.range_mb}MB`} warn={f.last.pool.used_mb >= f.last.pool.range_mb} />
           <Row k="tiles ~mb / poi" v={`${f.last.tile_pages} ~${f.last.tile_pages * TILE_DECODED_MB} / ${f.last.poi_count}`} />
           {
             /* The shell's own number: the reservation is the central scheduler's,

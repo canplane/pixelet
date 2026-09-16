@@ -71,7 +71,7 @@ export type Frame = {
   poi_count: number;
   textures_mb: { depth: number; msaa: number; shadow: number; layers: number };
   census: [number, number][];
-  pool: { live_mb: number; idle_mb: number; hits: number; misses: number };
+  pool: { used_mb: number; live_mb: number; range_mb: number };
   mounts: { added: number; removed: number; layouts: number };
   lod: Record<string, number>;
   q_terrain: number;
@@ -97,7 +97,6 @@ export type FrameSummary = {
   backlog_per_s: [number, number];
   tick_per_bake: number | null;
   mounts: [number, number];
-  pool_hit_pct: number | null;
   heap_delta: number;
   census: { tag: string; draws: number; tris: number }[];
   last: Frame;
@@ -258,7 +257,7 @@ function frames_section(r: LedgerReport): string[] {
       poi.index.dropped > 0 ? `  DROPPED ${poi.index.dropped}` : ""
     }`,
     // Idle inside the core reservation is the working budget, kept on purpose.
-    `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  hit ${f.pool_hit_pct === null ? "-" : f.pool_hit_pct}%   window scans ${f.work[0]} bakes ${f.work[1]}`,
+    `  heap    used ${last.pool.used_mb}MB  live ${last.pool.live_mb}MB  of ${last.pool.range_mb}MB   window scans ${f.work[0]} bakes ${f.work[1]}`,
     `  fetch   queued ${fetch.queued} running ${fetch.running} of ${fetch.credits}`,
     // The builds run in the kernel under the tick; what they did this window.
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,

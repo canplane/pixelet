@@ -132,11 +132,15 @@ pub struct MountSample {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// The heap, as three facts rather than one derived word: how far the
+/// allocator has ever reached into its range, how much of it is out on loan
+/// right now, and how large the range is. They differ — space reached into and
+/// since given back is under the high-water mark and lent to nobody — and a
+/// single "idle" could only ever name one of the two gaps.
 pub struct PoolSample {
+    pub used_mb: f64,
     pub live_mb: f64,
-    pub idle_mb: f64,
-    pub hits: f64,
-    pub misses: f64,
+    pub range_mb: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
