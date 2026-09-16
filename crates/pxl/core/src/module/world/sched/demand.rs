@@ -11,7 +11,8 @@
 //! issue/20260909-cooperative-scheduler-and-task-ledger.md: a black box the
 //! scheduler drives by key/priority, nothing more.
 
-use core::fmt::{self, Write};
+use core::fmt;
+
 
 
 /// The most sub-timings one run reports.
@@ -45,25 +46,64 @@ impl Phases {
     }
 }
 
-/// A demand's key: `<category>:<subject>` — a page, or what stands for one.
-pub type DemandKey = String;
-
-/// `<category>:<subject>`. The subjects are pages and hashes, well inside a key.
-pub fn demand_key(category: &str, subject: impl fmt::Display) -> DemandKey {
-    let mut key = DemandKey::new();
-    let _ = write!(key, "{category}:{subject}");
-    key
+/// Which stream of deferrable I/O a demand belongs to. Coarse grouping —
+/// scopes sync's diff, and is what map_status and the ledger roll up by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Category {
+    Terrain,
+    /// The one tile every open-water page shares.
+    Ocean,
+    Poi,
+    Search,
+    Geocode,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+impl Category {
+    /// A short name for a report to print, as `Outcome::as_str` is.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Category::Terrain => "terrain",
+            Category::Ocean => "ocean",
+            Category::Poi => "poi",
+            Category::Search => "search",
+            Category::Geocode => "geocode",
+        }
+    }
+}
+
+/// What names one demand: the stream it belongs to, and the one thing in that
+/// stream it is for.
+///
+/// The subject is a page's own coordinate where the stream is pages, the
+/// query's hash where it is a search, and nothing where the stream has one
+/// member. It used to be `"<category>:<subject>"` spelled out, which the
+/// arrival then split back apart and parsed — two numbers folded into text so
+/// that the text could be unfolded into two numbers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DemandKey {
+    pub category: Category,
+    pub subject: u64,
+}
+
+impl DemandKey {
+    pub fn new(category: Category, subject: u64) -> DemandKey {
+        DemandKey { category, subject }
+    }
+}
+
+impl fmt::Display for DemandKey {
+    /// `terrain:3231700000000`, for a report to print.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.category.as_str(), self.subject)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Demand {
     /// Stable identity across sync calls. Two demands sharing a key are the
     /// same work: re-submitting one that is already queued updates its
     /// priority, one already in flight is left alone.
     pub key: DemandKey,
-    /// Coarse grouping — scopes sync's diff, and is what map_status and the
-    /// ledger roll up by.
-    pub category: &'static str,
     /// Lower runs sooner. Convention: the page's Euclidean distance from the
     /// view anchor in whole pages (range.rs's page_priority), so the nearest
     /// page loads first.

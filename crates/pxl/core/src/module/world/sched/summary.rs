@@ -8,6 +8,7 @@
 //! display did not have. Both now format what this returns, so a number on
 //! the panel and the same number in a pasted report agree.
 
+use super::demand::Category;
 use super::ledger::{DrawCensus, Failure, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
 use super::tick::PHASES;
 use super::tick::HARD_SLACK_MS;
@@ -177,7 +178,7 @@ pub fn tris_text(t: f64) -> String {
 pub struct TaskSummary {
     /// The category as the record names it — one of the code's own, never a
     /// copy of it.
-    pub cat: &'static str,
+    pub cat: Category,
     pub n: usize,
     pub ok: usize,
     pub aborted: usize,
@@ -194,7 +195,7 @@ pub struct TaskSummary {
 
 pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
     struct Group {
-        cat: &'static str,
+        cat: Category,
         lat: Vec<f64>,
         ok: usize,
         aborted: usize,
@@ -205,11 +206,11 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
     }
     let mut by: Vec<Group> = Vec::new();
     for rec in tasks {
-        let g = match by.iter().position(|g| g.cat == rec.category) {
+        let g = match by.iter().position(|g| g.cat == rec.key.category) {
             Some(p) => &mut by[p],
             None => {
                 by.push(Group {
-                    cat: rec.category,
+                    cat: rec.key.category,
                     lat: Vec::new(),
                     ok: 0,
                     aborted: 0,

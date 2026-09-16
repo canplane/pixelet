@@ -512,14 +512,18 @@ fn post_shell(s: &mut State) {
             e.str(Some(ui));
         });
     }
+    // The key crosses as the one word the queue orders by; the shell holds it
+    // as a handle and hands it back, and never reads into it.
     fetch_take_started(|d| {
+        let key = pxl_core::module::world::sched::fetch_scheduler::hash_of(d.key);
         raise(&s.outbox, Cmd::FETCH_CREATE, 2, |e| {
-            e.str(Some(&d.key)).str_display(pxl_core::module::world::fetch::DemandUrl(d));
+            e.u64(Some(key)).str_display(pxl_core::module::world::fetch::DemandUrl(d));
         });
     });
-    fetch_take_aborts(|key| {
+    fetch_take_aborts(|name| {
+        let key = pxl_core::module::world::sched::fetch_scheduler::hash_of(name);
         raise(&s.outbox, Cmd::FETCH_DELETE, 1, |e| {
-            e.str(Some(key));
+            e.u64(Some(key));
         });
     });
     for q in take_load_requests() {
@@ -1196,14 +1200,12 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::FETCH_BODY => {
             let f = fields(pkt)?;
-            let key = f.at(0)?;
-            let at = pxl_core::module::world::fetch::fetch_body(key.get_str_ref()?, u32_at(&f, 1)?);
+            let at = pxl_core::module::world::fetch::fetch_body(u64_at(&f, 0)?, u32_at(&f, 1)?);
             return Ok(Some((at as i32, None)));
         }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
-            let key = f.at(0)?;
-            pxl_core::module::world::fetch::fetch_arrived(key.get_str_ref()?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
+            pxl_core::module::world::fetch::fetch_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_UPDATE => {

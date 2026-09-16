@@ -45,8 +45,9 @@ impl Outcome {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskRecord {
+    /// The stream and the one thing in it — two numbers, so the ring holds a
+    /// record by value and the summary rolls up by the stream without text.
     pub key: DemandKey,
-    pub category: &'static str,
     pub priority: f64,
     /// monotonic ms at enqueue / first run / settle.
     pub enqueue_ms: f64,

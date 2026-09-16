@@ -20,7 +20,9 @@ use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::lod::set_lod_projection;
+use crate::module::world::poi::use_poi_fetcher;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
+use crate::module::world::terrain::use_tile_fetcher;
 use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
@@ -237,8 +239,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         poi_count,
         pool: pool_sample(),
         work: work_sample(c),
-        q_terrain: fetch_pending_count("terrain") as f64,
-        q_poi: fetch_pending_count("poi") as f64,
+        q_terrain: fetch_pending_count(use_tile_fetcher::CATEGORY) as f64,
+        q_poi: fetch_pending_count(use_poi_fetcher::CATEGORY) as f64,
     });
 }
 

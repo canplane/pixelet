@@ -11,6 +11,8 @@
 //! is routinely tens of MB — the shell saves it as a file.
 
 use pxl_shared::spec::fetch::FetchFail;
+
+use super::demand::Category;
 use super::ledger::{ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames, FrameSample};
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 
@@ -146,14 +148,15 @@ pub fn ledger_trace_json() -> String {
     let longs = ledger_long_frames_snapshot();
 
     // ---- task spans, one thread per category ----
-    let mut cat_tid: Vec<(String, u32)> = Vec::new();
+    let mut cat_tid: Vec<(Category, u32)> = Vec::new();
     for rec in tasks {
-        let tid = match cat_tid.iter().find(|(c, _)| *c == rec.category) {
+        let cat = rec.key.category;
+        let tid = match cat_tid.iter().find(|(c, _)| *c == cat) {
             Some((_, tid)) => *tid,
             None => {
                 let tid = TID_TASK_BASE + cat_tid.len() as u32;
-                cat_tid.push((rec.category.to_string(), tid));
-                events.push(thread_name(tid, &format!("task: {}", rec.category)));
+                cat_tid.push((cat, tid));
+                events.push(thread_name(tid, &format!("task: {}", cat.as_str())));
                 tid
             }
         };
@@ -174,7 +177,7 @@ pub fn ledger_trace_json() -> String {
             args.push((k.to_string(), json_number(v)));
         }
         events.push(event(
-            &rec.key,
+            &rec.key.to_string(),
             &format!("task,{}", rec.outcome.as_str()),
             "X",
             ms_to_us(rec.enqueue_ms),

@@ -18,6 +18,7 @@ use crate::module::map::store::use_map_store;
 use crate::module::world::geocode::label::{assemble_label, Label};
 use crate::module::world::geocode::repository::{parse_geocode, PartTable, Rows};
 use crate::module::world::sched::demand::Demand;
+use crate::module::world::sched::demand::Category;
 use crate::module::world::sched::fetch_scheduler::{fetch_sync, page_key};
 
 // A short debounce still matters even though the real dedup key is an exact
@@ -25,7 +26,7 @@ use crate::module::world::sched::fetch_scheduler::{fetch_sync, page_key};
 // on the same page as the last one.
 const DEBOUNCE_MS: f64 = 500.0;
 
-pub const CATEGORY: &str = "geocode";
+pub const CATEGORY: Category = Category::Geocode;
 // Ahead of every streaming category (terrain starts at 0, POI at 1) — this is a
 // label the user is waiting to read, not background prefetch, and there is
 // only ever one of it in flight.
@@ -90,7 +91,6 @@ pub fn reverse_geocode_step() {
         CATEGORY,
         &[Demand {
             key: page_key(CATEGORY, page),
-            category: CATEGORY,
             priority: PRIORITY,
         }],
     );

@@ -25,6 +25,7 @@ use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
 use super::resident::take_slot;
 use super::slab::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
 use super::store::use_tile_store;
+use crate::module::world::sched::demand::Category;
 use crate::global::{now, Global};
 use crate::kernel::kernel;
 use crate::lib::env::config::TILE_BASE_URL;
@@ -36,10 +37,16 @@ use crate::module::world::sched::demand::Phases;
 pub const OCEAN_KEY: &str = "_ocean";
 
 /// The category the shared ocean tile is fetched under.
-pub const OCEAN_CATEGORY: &str = "ocean";
+pub const OCEAN_CATEGORY: Category = Category::Ocean;
 
-pub fn tile_url(key: &str) -> Joined<'_, TileBase> {
-    Joined(TILE_BASE_URL(), key)
+pub fn tile_url(page_idx: IVec) -> Joined<TileBase, IVec> {
+    Joined(TILE_BASE_URL(), page_idx)
+}
+
+/// The shared ocean tile, which the bake writes under a name rather than a
+/// coordinate — one page's worth of open water every open-water page reads.
+pub fn ocean_url() -> Joined<TileBase, &'static str> {
+    Joined(TILE_BASE_URL(), OCEAN_KEY)
 }
 
 /// A page's lanes in the slab: land, water, structure and transport, each

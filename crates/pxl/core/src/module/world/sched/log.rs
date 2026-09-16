@@ -533,7 +533,7 @@ fn tasks_section(tasks: &[TaskRecord]) -> Vec<String> {
         let bound = category_info(t.cat).map_or("?".to_string(), |c| c.bound.as_str().to_string());
         lines.push(format!(
             "  {:<9}{:<9}n={}   p50 {}  p95 {} ms   ok {}  ab {}  err {}{}",
-            t.cat,
+            t.cat.as_str(),
             bound,
             t.n,
             n1(t.lat.p50),

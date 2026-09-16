@@ -200,12 +200,12 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
       orientation_request_permission();
       return;
     case Cmd.FETCH_CREATE: {
-      const [key, url] = f!.get<[string, string]>();
+      const [key, url] = f!.get<[bigint, string]>();
       void run_fetch(key, url);
       return;
     }
     case Cmd.FETCH_DELETE:
-      running.get(f!.at(0).get<string>())?.abort();
+      running.get(f!.at(0).get<bigint>())?.abort();
       return;
     case Cmd.LOAD_CREATE: {
       const [kind, url] = f!.get<[number, string]>();
@@ -328,11 +328,11 @@ export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface 
 
 // ---- fetches: HTTP for the kernel (crates/pxl/core/src/module/world/fetch.rs) ----
 
-const running = new Map<string, AbortController>();
+const running = new Map<bigint, AbortController>();
 
 /** Runs one fetch the kernel started: the response's bytes written into the
  * room the kernel gives them, and the status reported. */
-async function run_fetch(key: string, url: string): Promise<void> {
+async function run_fetch(key: bigint, url: string): Promise<void> {
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
@@ -349,7 +349,7 @@ async function run_fetch(key: string, url: string): Promise<void> {
     net_ms = performance.now() - t0;
     status = res.status;
     if (body.byteLength > 0) {
-      at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str(key).u32(body.byteLength)), (result) => result >>> 0);
+      at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.u64(key).u32(body.byteLength)), (result) => result >>> 0);
       if (at === 0) {
         outcome = 2;
         fail = FetchFail.NoRoom;
@@ -370,7 +370,7 @@ async function run_fetch(key: string, url: string): Promise<void> {
     }
   } finally {
     running.delete(key);
-    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(outcome).u32(status).u32(at).u32(bytes).u32(fail).f64(net_ms)));
+    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(status).u32(at).u32(bytes).u32(fail).f64(net_ms)));
     // Applied now, so the body's room is the kernel's again before the next
     // response asks for its own.
     CORE_BUILD.settle();

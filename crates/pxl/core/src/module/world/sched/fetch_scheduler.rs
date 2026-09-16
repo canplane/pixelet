@@ -13,11 +13,11 @@
 //! store.
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
-use xpute_core::kit::hash::fnv1a64_str;
+use xpute_core::kit::hash::fnv1a64_bytes;
 pub use xpute_core::sched::io::IoCounts as FetchCounts;
 use xpute_core::sched::io::{Demand as Queued, IoQueue};
 
-use super::demand::{demand_key, Demand, DemandKey, Phases};
+use super::demand::{Category, Demand, DemandKey, Phases};
 use super::ledger::{ledger_record, Failure, Outcome, TaskRecord};
 use crate::global::Global;
 
@@ -25,24 +25,35 @@ use crate::global::Global;
 /// search. Past it a demand is refused and asked for again.
 const HELD: usize = 128;
 
-/// Names held at once: each key the queue holds, and each it aborted and has
+/// Keys held at once: each one the queue holds, and each it aborted and has
 /// not handed out — at most one of each per slot.
 const NAMES: usize = HELD * 2;
 
-/// Categories: a handful of names.
+/// Categories: a handful.
 const CATEGORIES: usize = 16;
 
 struct Scheduler {
     queue: IoQueue<HELD>,
     credits: u32,
     /// The queue holds a category as its index here.
-    categories: [&'static str; CATEGORIES],
+    categories: [Option<Category>; CATEGORIES],
     category_count: usize,
-    /// The name of every key the queue holds or has aborted, by the name's
-    /// 64-bit hash. A second name under a hash already taken is refused
-    /// rather than confused with the first — not expected among tens of keys.
+    /// Every key the queue holds or has aborted, by its 64-bit hash — the one
+    /// word the queue orders by. A second key under a hash already taken is
+    /// refused rather than confused with the first, which is why the pair is
+    /// kept beside the hash and compared; not expected among tens of keys.
     names: [(u64, DemandKey); NAMES],
     name_count: usize,
+}
+
+/// The one word the queue knows a key by. The pair is hashed rather than
+/// packed: a page's coordinate fills a word on its own, and a search's
+/// subject is already a hash.
+pub fn hash_of(name: DemandKey) -> u64 {
+    let mut bytes = [0u8; 12];
+    bytes[..4].copy_from_slice(&(name.category as u32).to_le_bytes());
+    bytes[4..].copy_from_slice(&name.subject.to_le_bytes());
+    fnv1a64_bytes(&bytes)
 }
 
 static SCHED: Global<Scheduler> = Global::new();
@@ -51,48 +62,51 @@ fn sched() -> &'static mut Scheduler {
     SCHED.get(|| Scheduler {
         queue: IoQueue::new(),
         credits: 0,
-        categories: [""; CATEGORIES],
+        categories: [None; CATEGORIES],
         category_count: 0,
-        names: core::array::from_fn(|_| (0, DemandKey::new())),
+        names: [(0, DemandKey::new(Category::Terrain, 0)); NAMES],
         name_count: 0,
     })
 }
 
-fn category_id(s: &Scheduler, name: &str) -> Option<u32> {
-    s.categories[..s.category_count].iter().position(|n| *n == name).map(|id| id as u32)
+fn category_id(s: &Scheduler, category: Category) -> Option<u32> {
+    s.categories[..s.category_count].iter().position(|c| *c == Some(category)).map(|id| id as u32)
 }
 
-fn category_of(s: &mut Scheduler, name: &'static str) -> u32 {
-    if let Some(id) = category_id(s, name) {
+fn category_of(s: &mut Scheduler, category: Category) -> u32 {
+    if let Some(id) = category_id(s, category) {
         return id;
     }
     assert!(s.category_count < CATEGORIES, "more than {CATEGORIES} fetch categories");
-    s.categories[s.category_count] = name;
+    s.categories[s.category_count] = Some(category);
     s.category_count += 1;
     s.category_count as u32 - 1
 }
 
-fn key_of(s: &mut Scheduler, name: &DemandKey) -> Option<u64> {
-    let key = fnv1a64_str(name);
+fn key_of(s: &mut Scheduler, name: DemandKey) -> Option<u64> {
+    let key = hash_of(name);
     if let Some((_, held)) = s.names[..s.name_count].iter().find(|(k, _)| *k == key) {
-        return (held == name).then_some(key);
+        return (*held == name).then_some(key);
     }
     if s.name_count == NAMES {
         return None;
     }
-    s.names[s.name_count] = (key, name.clone());
+    s.names[s.name_count] = (key, name);
     s.name_count += 1;
     Some(key)
 }
 
-fn name_of(s: &Scheduler, key: u64) -> DemandKey {
-    s.names[..s.name_count].iter().find(|(k, _)| *k == key).map(|(_, n)| n.clone()).unwrap_or_default()
+/// What a hash the queue handed back names, or None where nothing is held
+/// under it.
+pub fn demand_of(key: u64) -> Option<DemandKey> {
+    let s = sched();
+    s.names[..s.name_count].iter().find(|(k, _)| *k == key).map(|(_, n)| *n)
 }
 
-/// The key a name is held under, only when it is that name's.
-fn held_key(s: &Scheduler, name: &str) -> Option<u64> {
-    let key = fnv1a64_str(name);
-    s.names[..s.name_count].iter().any(|(k, n)| *k == key && n.as_str() == name).then_some(key)
+/// The hash a key is held under, only when it is that key's.
+fn held_key(s: &Scheduler, name: DemandKey) -> Option<u64> {
+    let key = hash_of(name);
+    s.names[..s.name_count].iter().any(|(k, n)| *k == key && *n == name).then_some(key)
 }
 
 fn forget_names(s: &mut Scheduler) {
@@ -127,20 +141,19 @@ pub fn fetch_counts() -> FetchCounts {
 }
 
 /// Queued + in-flight demands in one category — map_status reads this.
-pub fn fetch_pending_count(category: &str) -> u32 {
+pub fn fetch_pending_count(category: Category) -> u32 {
     let s = sched();
     category_id(s, category).map_or(0, |id| s.queue.pending_count(id))
 }
 
 /// The shell's report that a started demand settled: its outcome, whatever
 /// split its run measured, and why it failed.
-pub fn fetch_settle(key: &str, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
+pub fn fetch_settle(key: DemandKey, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
     let s = sched();
     // The slot may already be gone: a reset aborts and forgets in one step.
     let Some(settled) = held_key(s, key).and_then(|k| s.queue.settle(k)) else { return };
     ledger_record(TaskRecord {
-        key: DemandKey::from(key),
-        category: s.categories[settled.demand.category as usize],
+        key,
         priority: settled.demand.priority,
         enqueue_ms: settled.enqueue_ms,
         start_ms: Some(settled.start_ms),
@@ -163,23 +176,26 @@ pub fn fetch_pump() {
 /// Each demand the pump started since the last take, for the shell to run.
 pub fn fetch_take_started(mut each: impl FnMut(&Demand)) {
     let s = sched();
-    for d in s.queue.started() {
-        each(&Demand {
-            key: name_of(s, d.key),
-            category: s.categories[d.category as usize],
-            priority: d.priority,
-        });
+    let started: Vec<(u64, f64)> = s.queue.started().iter().map(|d| (d.key, d.priority)).collect();
+    for (key, priority) in started {
+        if let Some(name) = demand_of(key) {
+            each(&Demand { key: name, priority });
+        }
     }
-    s.queue.clear_started();
+    sched().queue.clear_started();
 }
 
 /// Each key yield aborted since the last take, for the shell to cancel; each
 /// is settled by the shell as Aborted.
-pub fn fetch_take_aborts(mut each: impl FnMut(&DemandKey)) {
+pub fn fetch_take_aborts(mut each: impl FnMut(DemandKey)) {
     let s = sched();
-    for &key in s.queue.aborted() {
-        each(&name_of(s, key));
+    let aborted: Vec<u64> = s.queue.aborted().to_vec();
+    for key in aborted {
+        if let Some(name) = demand_of(key) {
+            each(name);
+        }
     }
+    let s = sched();
     s.queue.clear_aborted();
     forget_names(s);
 }
@@ -188,16 +204,16 @@ pub fn fetch_take_aborts(mut each: impl FnMut(&DemandKey)) {
 /// untouched. New keys are queued, keys already queued pick up the new
 /// priority, keys in flight are left running; anything in the category that
 /// isn't in `wanted` is dropped or aborted.
-pub fn fetch_sync(category: &'static str, wanted: &[Demand]) {
+pub fn fetch_sync(category: Category, wanted: &[Demand]) {
     let s = sched();
     let id = category_of(s, category);
     let mut queued = [Queued::default(); HELD];
     let mut n = 0;
     for d in wanted.iter().take(HELD) {
-        let Some(key) = key_of(s, &d.key) else { continue };
+        let Some(key) = key_of(s, d.key) else { continue };
         queued[n] = Queued {
             key,
-            category: category_of(s, d.category),
+            category: category_of(s, d.key.category),
             priority: d.priority,
         };
         n += 1;
@@ -209,7 +225,7 @@ pub fn fetch_sync(category: &'static str, wanted: &[Demand]) {
 /// Whether a demand with this key is in flight right now. Read-only, for a
 /// caller deciding whether to keep asking for something it has already asked
 /// for (see terrain/use_tile_fetcher.rs's in-flight hysteresis).
-pub fn fetch_running(key: &str) -> bool {
+pub fn fetch_running(key: DemandKey) -> bool {
     let s = sched();
     held_key(s, key).is_some_and(|k| s.queue.running(k))
 }
@@ -220,9 +236,9 @@ pub fn fetch_scheduler_reset() {
     sched().queue.reset();
 }
 
-/// A page's demand key: `<category>:<page>`.
-pub fn page_key(category: &str, page_idx: IVec) -> DemandKey {
-    demand_key(category, page_idx)
+/// A page's demand key: the stream, and the page's own coordinate.
+pub fn page_key(category: Category, page_idx: IVec) -> DemandKey {
+    DemandKey::new(category, page_idx)
 }
 
 #[cfg(test)]
