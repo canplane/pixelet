@@ -7,7 +7,7 @@ use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
 
-use crate::module::world::terrain::slab::KEEP_PAGES;
+use crate::module::world::terrain::fixed::KEEP_PAGES;
 
 
 const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
@@ -85,12 +85,12 @@ pub struct PageAt {
 /// continuously as the view moves, and `radius` past KEEP_DIST is how a page
 /// already being fetched stays wanted while the view drifts.
 ///
-/// How far the set can reach is not a distance. The slab holds one record per
+/// How far the set can reach is not a distance. `.fixed.terrain` holds one record per
 /// page the load radius reaches and addresses it by the page's own coordinate
-/// (terrain/slab.rs), so two pages KEEP_PAGES*2+1 apart are one record. The
+/// (terrain/fixed.rs), so two pages KEEP_PAGES*2+1 apart are one record. The
 /// disc alone would hand out both: with the anchor on a page boundary it
-/// reaches four pages back and three forward, and those two are exactly a slab
-/// axis apart. So the scan is the block the slab has records for, and the disc
+/// reaches four pages back and three forward, and those two are exactly a range
+/// axis apart. So the scan is the block the range has records for, and the disc
 /// chooses inside it.
 pub fn pages_in_radius(anchor: IVec, radius: f64) -> Pages {
     let center_page = TO_XY(L3_IDX(anchor));

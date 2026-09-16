@@ -5,8 +5,8 @@
 //! its kernel, laid out once and shared by address.
 //!
 //! A message is what a frame (frame.rs) needs once the transport is shared
-//! memory rather than transfer: no spill, since a packet is as large as a
-//! frame allows; no args/body split, since the packet is a tree and a large
+//! memory rather than transfer: no spill, since a packet is as large as a slot
+//! allows; no args/body split, since the packet is a tree and a large
 //! body is a leaf of it; no worker id, since one ring joins two sides. What
 //! is left is four words:
 //!
@@ -22,42 +22,44 @@
 //! On the completion ring, `RES` tells a reply from a signal the kernel
 //! raised itself. `ACKREQ` on a submission asks for exactly one reply.
 //!
-//! ## Two areas, not one
+//! ## A slot in two places
 //!
-//! The descriptors are a header of eight u32 words and `capacity` messages;
-//! the packets live in an **arena elsewhere in the memory**, `capacity`
-//! frames of `frame_bytes` each. Which is how every ring this is modelled on
+//! A slot is a descriptor of four words and a payload of `slot_bytes`, and the
+//! two lie apart because one is sixteen bytes and the other is thousands: the
+//! descriptors are a header of eight u32 words and `capacity` of them, and the
+//! payloads are `capacity` runs of `slot_bytes` **elsewhere in the memory**. Which is how every ring this is modelled on
 //! is built: virtio's descriptor table, avail and used are three separate
 //! areas, and AF_XDP's rings are one mapping and its UMEM another. The
-//! descriptors are kilobytes and the arena is megabytes, so tying the two
+//! descriptors are kilobytes and the payloads are megabytes, so tying the two
 //! into one block makes the small one as coarse as the large one.
 //!
 //!   0  capacity     a power of two
 //!   1  head         position of the next message to consume
 //!   2  tail         position of the next message to produce
-//!   3  frame_bytes  a power of two, and a multiple of 8
-//!   4  arena_at     where the frames begin
+//!   3  slot_bytes   a power of two, and a multiple of 8
+//!   4  slot_base    where the payloads begin
 //!   5…7 reserved
 //!
-//! ## A frame a slot
+//! ## One payload a slot
 //!
-//! Message `n` writes its packet into frame `n & (capacity - 1)` — the frame
-//! of the slot the message itself takes. A slot holds one live message, so
-//! its frame is free exactly when it is, and there is no second bookkeeping
-//! to keep: no arena cursor, no rewind, no moment at which the producer has
-//! to find the ring empty before it can reuse space. AF_XDP's UMEM is the
-//! same correspondence — a descriptor and the frame it names.
+//! Message `n` takes slot `n & (capacity - 1)` and writes its packet into that
+//! slot's payload — `entry_at` and `slot_at` answer the same `position`. A
+//! slot holds one live message, so its payload is free exactly when it is, and
+//! there is no second bookkeeping to keep: no cursor over a shared area, no
+//! rewind, no moment at which the producer has to find the ring empty before
+//! it can reuse space. AF_XDP's UMEM is the same correspondence — a descriptor
+//! and the buffer it names.
 //!
 //! What that buys is one failure mode. A push fails when the ring is full
 //! (EAGAIN) and for no other reason, so the producer waits and nothing is
-//! dropped. A packet larger than a frame is EMSGSIZE and is refused the same
+//! dropped. A packet larger than a slot is EMSGSIZE and is refused the same
 //! way whatever the ring's state — where it once depended on how much of a
-//! shared arena happened to be left, so the same packet went through or did
-//! not depending on what had been sent before it.
+//! shared area happened to be left, so the same packet went through or did not
+//! depending on what had been sent before it.
 //!
 //! Positions only grow and are taken modulo the capacity when read, so
 //! `tail - head` is what waits. Each side writes only its own words — the
-//! producer the tail and its frames, the consumer the head — so the two
+//! producer the tail and its payloads, the consumer the head — so the two
 //! share the ring without a lock. A packet read by the consumer is valid
 //! until it advances past the message.
 //!
@@ -82,9 +84,9 @@ pub const fn ring_bytes(capacity: u32) -> u32 {
     (RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS) * 4
 }
 
-/// Bytes the arena of a ring of `capacity` frames of `frame_bytes` takes.
-pub const fn arena_bytes(capacity: u32, frame_bytes: u32) -> u32 {
-    capacity * frame_bytes
+/// Bytes the payloads of a ring of `capacity` slots of `slot_bytes` take.
+pub const fn slots_bytes(capacity: u32, slot_bytes: u32) -> u32 {
+    capacity * slot_bytes
 }
 
 /// A packet's bytes: its 16-byte header, then the payload its second word
@@ -100,51 +102,51 @@ pub struct Ring {
     /// `entry_at(slot)`.
     pub words: TypedArray<u32>,
     pub capacity: u32,
-    pub frame_bytes: u32,
+    pub slot_bytes: u32,
     mask: u32,
-    /// The frames, `capacity` of them, wherever in the memory they were put.
-    arena: U8Array,
-    /// Where the frames begin, for the packet word to name one.
-    arena_at: u32,
+    /// The payloads, `capacity` of them, wherever in the memory they were put.
+    slots: U8Array,
+    /// Where they begin, for the packet word to name one.
+    slot_base: u32,
 }
 
 impl Ring {
     /// A ring already laid out: its descriptors at byte `at` of `mem`, its
-    /// arena where its header says.
+    /// payloads where its header says.
     pub fn new(mem: ArrayBuffer, at: u32) -> Ring {
         let head = TypedArray::<u32>::over(mem.clone(), at as usize, RING_HEADER_WORDS as usize);
         let capacity = head[0];
         if capacity == 0 || (capacity & (capacity - 1)) != 0 {
             panic!("ring: capacity {capacity} at {at} is not a power of two");
         }
-        let frame_bytes = head[3];
-        let arena_at = head[4];
+        let slot_bytes = head[3];
+        let slot_base = head[4];
         let words = TypedArray::<u32>::over(mem.clone(), at as usize, (RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS) as usize);
-        let arena = TypedArray::<u8>::over(mem, arena_at as usize, arena_bytes(capacity, frame_bytes) as usize);
+        let slots = TypedArray::<u8>::over(mem, slot_base as usize, slots_bytes(capacity, slot_bytes) as usize);
         Ring {
             words,
             capacity,
-            frame_bytes,
+            slot_bytes,
             mask: capacity - 1,
-            arena,
-            arena_at,
+            slots,
+            slot_base,
         }
     }
 
     /// Lays out an empty ring: `capacity` descriptors at byte `at` of `mem`,
-    /// and as many frames of `frame_bytes` at `arena_at`.
-    pub fn init(mem: ArrayBuffer, at: u32, capacity: u32, arena_at: u32, frame_bytes: u32) -> Ring {
+    /// and as many payloads of `slot_bytes` at `slot_base`.
+    pub fn init(mem: ArrayBuffer, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32) -> Ring {
         if capacity == 0 || (capacity & (capacity - 1)) != 0 {
             panic!("ring: capacity {capacity} is not a power of two");
         }
-        if frame_bytes == 0 || (frame_bytes & (frame_bytes - 1)) != 0 || !frame_bytes.is_multiple_of(8) {
-            panic!("ring: a frame of {frame_bytes} bytes is not a power of two of whole words");
+        if slot_bytes == 0 || (slot_bytes & (slot_bytes - 1)) != 0 || !slot_bytes.is_multiple_of(8) {
+            panic!("ring: a slot of {slot_bytes} bytes is not a power of two of whole words");
         }
         TypedArray::<u8>::over(mem.clone(), at as usize, ring_bytes(capacity) as usize).fill(0);
         let head = TypedArray::<u32>::over(mem.clone(), at as usize, RING_HEADER_WORDS as usize);
         head.put(0, capacity);
-        head.put(3, frame_bytes);
-        head.put(4, arena_at);
+        head.put(3, slot_bytes);
+        head.put(4, slot_base);
         Ring::new(mem, at)
     }
 
@@ -170,17 +172,17 @@ impl Ring {
         RING_HEADER_WORDS + (position & self.mask) * RING_ENTRY_WORDS
     }
 
-    /// Where the frame of the message at `position` starts in the arena. One
-    /// frame a slot, so it is free exactly when the slot is.
-    fn frame_at(&self, position: u32) -> usize {
-        ((position & self.mask) * self.frame_bytes) as usize
+    /// Where the payload of the message at `position` starts, the pair of
+    /// `entry_at`: one a slot, so it is free exactly when the slot is.
+    fn slot_at(&self, position: u32) -> usize {
+        ((position & self.mask) * self.slot_bytes) as usize
     }
 
     // ---- producer ----
 
-    /// Writes one message at the tail, its packet copied into the frame of
+    /// Writes one message at the tail, its packet copied into the payload of
     /// the slot it takes. EAGAIN, and nothing written, when the ring is full;
-    /// EMSGSIZE when the packet is larger than a frame.
+    /// EMSGSIZE when the packet is larger than a slot.
     pub fn push(&self, tag: u32, cmd: u32, flags: u32, packet: Option<&U8Array>, result: i32) -> Errno {
         if self.len() >= self.capacity {
             return Errno::EAGAIN;
@@ -189,14 +191,14 @@ impl Ring {
         let mut packet_at = 0;
         if let Some(packet) = packet {
             let need = packet.byte_length().div_ceil(8) * 8;
-            if need > self.frame_bytes as usize {
+            if need > self.slot_bytes as usize {
                 return Errno::EMSGSIZE;
             }
-            let start = self.frame_at(w[2]);
-            let bytes = self.arena.as_mut_slice();
+            let start = self.slot_at(w[2]);
+            let bytes = self.slots.as_mut_slice();
             bytes[start..start + packet.byte_length()].copy_from_slice(packet.as_slice());
             bytes[start + packet.byte_length()..start + need].fill(0);
-            packet_at = self.arena_at + start as u32;
+            packet_at = self.slot_base + start as u32;
         }
         let at = self.entry_at(w[2]) as usize;
         w[at + RING_TAG as usize] = tag;
@@ -207,19 +209,19 @@ impl Ring {
         Errno::OK
     }
 
-    /// Writes one message at the tail, its packet written in place by
-    /// `write`: handed the whole frame of the slot it takes, it answers the
-    /// packet's length, or none when the packet did not fit one. EAGAIN, and
-    /// nothing written, when the ring is full; EMSGSIZE when it did not fit a
-    /// frame — which does not depend on what was sent before it.
+    /// Writes one message at the tail, its packet written in place by `write`:
+    /// handed the whole payload of the slot it takes, it answers the packet's
+    /// length, or none when the packet did not fit. EAGAIN, and nothing
+    /// written, when the ring is full; EMSGSIZE when it did not fit a slot —
+    /// which does not depend on what was sent before it.
     pub fn push_in_place(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: impl FnOnce(&mut [u8]) -> Option<u32>) -> Errno {
         if self.len() >= self.capacity {
             return Errno::EAGAIN;
         }
         let w = self.words.as_mut_slice();
-        let start = self.frame_at(w[2]);
-        let end = start + self.frame_bytes as usize;
-        let bytes = self.arena.as_mut_slice();
+        let start = self.slot_at(w[2]);
+        let end = start + self.slot_bytes as usize;
+        let bytes = self.slots.as_mut_slice();
         let Some(n) = write(&mut bytes[start..end]) else {
             return Errno::EMSGSIZE;
         };
@@ -229,7 +231,7 @@ impl Ring {
         w[at + RING_TAG as usize] = tag;
         w[at + RING_CMD as usize] = (cmd & 0xffff) | ((flags & 0xffff) << 16);
         w[at + RING_RESULT as usize] = result as u32;
-        w[at + RING_PACKET as usize] = self.arena_at + start as u32;
+        w[at + RING_PACKET as usize] = self.slot_base + start as u32;
         w[2] = w[2].wrapping_add(1);
         Errno::OK
     }
@@ -262,23 +264,23 @@ impl Ring {
         self.words[(at + RING_RESULT) as usize] as i32
     }
 
-    /// The message's packet, a view into its frame valid until `advance`, or
-    /// none when it has none. EBADMSG when it names bytes outside a frame.
+    /// The message's packet, a view into its slot valid until `advance`, or
+    /// none when it has none. EBADMSG when it names bytes outside a slot.
     pub fn packet(&self, at: u32) -> Result<Option<U8Array>, MarshalError> {
         let packet_at = self.words[(at + RING_PACKET) as usize];
         if packet_at == 0 {
             return Ok(None);
         }
-        let bad = || MarshalError::new(Errno::EBADMSG, Some(&format!("ring: message packet at {packet_at} lies outside a frame")), None);
-        let off = packet_at.checked_sub(self.arena_at).ok_or_else(bad)? as usize;
-        if !off.is_multiple_of(self.frame_bytes as usize) || off + 16 > self.arena.byte_length() {
+        let bad = || MarshalError::new(Errno::EBADMSG, Some(&format!("ring: message packet at {packet_at} lies outside a slot")), None);
+        let off = packet_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
+        if !off.is_multiple_of(self.slot_bytes as usize) || off + 16 > self.slots.byte_length() {
             return Err(bad());
         }
-        let bytes = packet_bytes(&self.arena, off);
-        if bytes > self.frame_bytes as u64 {
+        let bytes = packet_bytes(&self.slots, off);
+        if bytes > self.slot_bytes as u64 {
             return Err(bad());
         }
-        Ok(Some(self.arena.subarray(off, off + bytes as usize)))
+        Ok(Some(self.slots.subarray(off, off + bytes as usize)))
     }
 
     /// Consumes the message at the head.

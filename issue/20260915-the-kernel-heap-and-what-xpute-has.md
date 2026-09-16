@@ -138,3 +138,22 @@ Where a capacity carried meaning it stayed as a length check: the ledger's
 rings, a chunk build's decor instances, the scheduler's slots and pages, a
 search's results. Everywhere else, what was refused past a capacity now
 grows; a geocode language tag past sixteen bytes is no longer dropped.
+
+## Where this stands
+
+**Superseded 2026-09-17** by
+[20260917-the-slab-over-the-buddy.md](./20260917-the-slab-over-the-buddy.md),
+in the one part that has moved.
+
+What was found here stands, and is why the removal was dropped: the branch had
+replaced `Vec` and `String` with containers invented for the purpose rather
+than with what `crates/xpute/core` already had, and the counts above are what
+that was decided on. `Quoted` earning its place is the other half of it, and
+the last three copies of a hand-written `json_string` went to it on 09-17.
+
+The heap itself is no longer the one described. `FixedHeap` over the module
+section is gone: the module's allocator is a slab of size classes over a buddy
+of 4 KiB pages, over the whole range past the fixed sections. A reader who
+came here from the working rule that names `FixedHeap` should read that
+document for what the heap is now; this one is the record of a branch that was
+not taken, not of the memory as it stands.

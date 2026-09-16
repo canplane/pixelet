@@ -14,7 +14,8 @@
  * landing reads exactly as the same task does in the report printed later.
  */
 
-import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { CORE_KERNEL } from "@/wasm/core_mem.ts";
+import { range_at, text_at } from "@/wasm/module.ts";
 import { type Frame, frame_line, long_frame_line, type LongFrame, task_line, type TaskRecord } from "./ledger_report.ts";
 
 type LedgerLog = { tasks: TaskRecord[]; frames: Frame[]; longs: LongFrame[] };
@@ -22,9 +23,9 @@ type LedgerLog = { tasks: TaskRecord[]; frames: Frame[]; longs: LongFrame[] };
 /** Prints whatever the stream has kept since the last call. */
 export function ledger_drain_log(): void {
   const at = CORE_KERNEL.ledger_log();
-  const [json_at, bytes] = new Uint32Array(CORE_KERNEL.memory.buffer, at, 2);
+  const [json_at, bytes] = range_at(CORE_KERNEL.memory, at);
   if (bytes === 0) return;
-  const json = new TextDecoder().decode(new Uint8Array(CORE_KERNEL.memory.buffer, json_at, bytes));
+  const json = text_at(CORE_KERNEL.memory, json_at, bytes);
   CORE_KERNEL.ledger_log_release();
   const log = JSON.parse(json) as LedgerLog;
   for (const t of log.tasks) console.log(`[ledger] ${task_line(t)}`);

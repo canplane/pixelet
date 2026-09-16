@@ -20,12 +20,12 @@ function of the two exponents alone. It is a field of a `static`, sized at
 compile time, so the phone carries the same array the desktop does:
 
 | smallest block | `MIN_ALLOC_LOG2` | split bitmap |
-| --- | --- | --- |
-| 16 B | 4 | **8 MiB** |
-| 64 B | 6 | 2 MiB |
-| 256 B | 8 | 512 KiB |
-| 1 KiB | 10 | 128 KiB |
-| **4 KiB** | **12** | **32 KiB** |
+| -------------- | ---------------- | ------------ |
+| 16 B           | 4                | **8 MiB**    |
+| 64 B           | 6                | 2 MiB        |
+| 256 B          | 8                | 512 KiB      |
+| 1 KiB          | 10               | 128 KiB      |
+| **4 KiB**      | **12**           | **32 KiB**   |
 
 Moving the bitmap out of the `static` and into the range — which is what
 `ds/fixed_heap.rs` did, keeping "a bit for every place a block of every class
@@ -136,10 +136,10 @@ least, so that header is at most a sixteenth of what it describes.
 
 That sizes the runs of the classes at and above a page's sixteenth:
 
-| class | 16 | 32 | 64 | 128 | 256 | 512 | 1 KiB | 2 KiB |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| run | 4 KiB | 4 KiB | 4 KiB | 4 KiB | 4 KiB | 8 KiB | 16 KiB | 32 KiB |
-| slots | 256 | 128 | 64 | 32 | 16 | 16 | 16 | 16 |
+| class | 16    | 32    | 64    | 128   | 256   | 512   | 1 KiB  | 2 KiB  |
+| ----- | ----- | ----- | ----- | ----- | ----- | ----- | ------ | ------ |
+| run   | 4 KiB | 4 KiB | 4 KiB | 4 KiB | 4 KiB | 8 KiB | 16 KiB | 32 KiB |
+| slots | 256   | 128   | 64    | 32    | 16    | 16    | 16     | 16     |
 
 ## How a slot finds its run: a mask, not a table
 
@@ -168,6 +168,12 @@ so the pair satisfies any alignment up to a page and refuses one past it.
 
 ## Two things independent of all of the above
 
-- `MAX_ALLOC` is `1 << 30`, exactly `DESKTOP_BYTES`, with nothing tying them
-  together. A change to either alone is silent.
+- ~~`MAX_ALLOC` is `1 << 30`, exactly `DESKTOP_BYTES`, with nothing tying them
+  together. A change to either alone is silent.~~ Closed 09-17 by untying them:
+  `MAX_ALLOC_LOG2` is 31, the C's own, which is the top of what a 32-bit
+  address space holds a whole power of two of and not a claim about any
+  memory. The tree begins as one leaf and doubles only as far as a request
+  takes it, and how much of it is real comes from the range at runtime, so a
+  smaller heap costs only the levels it never reaches. 32 KiB more of split
+  bitmap, and the allocator stops knowing anything about the kernel above it.
 - `4da3ff1` and `7c11e18` change only `ds/buddy.rs`, which `a2b9bd4` deletes.

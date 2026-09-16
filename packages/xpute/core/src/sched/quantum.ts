@@ -9,7 +9,7 @@
  * takes back what the guest spent. A guest's own scheduler (sched/tick.ts)
  * spends the grant in its phases, and a phase spends its share in passes
  * (sched/frame_budget.ts). Memory is granted the same way, once
- * (sys/memory.ts, sys/slab.ts), and I/O by credits (sched/io.ts).
+ * (sys/mem.ts, sys/slab.ts), and I/O by credits (sched/io.ts).
  *
  * The grant is sized from what only the central scheduler sees: the
  * display's frame interval, and what a turn costs outside the guest's slice

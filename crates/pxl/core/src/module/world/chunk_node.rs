@@ -70,7 +70,7 @@ pub fn release_block(at: usize, bytes: u32) {
 /// and refused the fine tiers' blocks 88,000 times in a minute (2026-09-14).
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::memory::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
+    crate::mem::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
 }
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----

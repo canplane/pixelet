@@ -4,7 +4,7 @@
 // to an address its own coordinate names, so there is nothing to arrange and
 // nothing that can be refused.
 
-use super::super::slab::SLAB_AXIS;
+use super::super::fixed::TERRAIN_AXIS;
 use super::*;
 use pxl_shared::spec::space::pvf3::ivec;
 
@@ -25,7 +25,7 @@ fn a_page_takes_the_record_its_coordinate_names() {
 fn a_page_an_axis_away_takes_the_record_and_names_who_held_it() {
     let _g = serial();
     let page = ivec::gather(3, 4, 0);
-    let far = ivec::gather(3 + SLAB_AXIS as i64, 4, 0);
+    let far = ivec::gather(3 + TERRAIN_AXIS as i64, 4, 0);
     free_slot(page);
     take_slot(page);
     assert_eq!(slot_of(far), slot_of(page), "an axis apart is one record");
@@ -38,7 +38,7 @@ fn a_page_an_axis_away_takes_the_record_and_names_who_held_it() {
 fn a_page_forgets_only_the_record_it_still_holds() {
     let _g = serial();
     let page = ivec::gather(7, 8, 0);
-    let far = ivec::gather(7, 8 + SLAB_AXIS as i64, 0);
+    let far = ivec::gather(7, 8 + TERRAIN_AXIS as i64, 0);
     free_slot(page);
     take_slot(page);
     take_slot(far);

@@ -163,9 +163,8 @@ export class CoreRing {
     }
   }
 
-  /** The reply to `tag`, read where it waits in the completion ring. A
-   * message not yet consumed keeps the arena from rewinding, so its packet
-   * stays whole. */
+  /** The reply to `tag`, read where it waits in the completion ring. A message
+   * not yet consumed holds its slot, so its packet stays whole. */
   private take_ahead(tag: u32): void {
     const cq = this.cq;
     for (let pos = cq.head; pos !== cq.tail; pos = (pos + 1) >>> 0) {

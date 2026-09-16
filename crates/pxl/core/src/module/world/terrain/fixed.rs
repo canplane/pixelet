@@ -1,17 +1,21 @@
-// pxl_core/module/world/terrain/slab.rs
+// pxl_core/module/world/terrain/fixed.rs
 
-//! Where a resident terrain page lies: decided by its own coordinate, not by
-//! an allocator.
+//! `.fixed.terrain`: where a resident terrain page lies, decided by its own
+//! coordinate and not by an allocator.
+//!
+//! The first and so far only range of the kernel's `.fixed` section
+//! (pxl_core::memory), which is what the name says — placed once when the
+//! module boots, never freed, and of a size settled at compile time.
 //!
 //! Two stages, and they know nothing of each other.
 //!
-//! The index is the page's L3 coordinate reduced modulo the slab's axis, the
+//! The index is the page's L3 coordinate reduced modulo the range's axis, the
 //! way a clipmap addresses its ring. The axis is the width of the set the load
 //! radius reaches — the anchor's own page and KEEP_PAGES either side — so two
 //! pages share a record only when they lie a whole axis apart, which is further
 //! than the radius reaches. A page arriving therefore overwrites a page that
 //! has already left: eviction needs no list, no quarantine and no spare room,
-//! and the slab is exactly as large as the set it holds.
+//! and the range is exactly as large as the set it holds.
 //!
 //! The routing turns a record and a channel into an address, and it is the only
 //! thing here that knows how the bytes are ordered. The ground is held channel
@@ -36,7 +40,7 @@ pub const KEEP_PAGES: u32 = (KEEP_DIST / PAGE_SPAN) as u32;
 
 const _: () = assert!(
     KEEP_PAGES as f64 * PAGE_SPAN == KEEP_DIST,
-    "terrain: KEEP_DIST must be a whole number of pages, or the slab's axis is not the width of the set it holds"
+    "terrain: KEEP_DIST must be a whole number of pages, or the range's axis is not the width of the set it holds"
 );
 
 const _: () = assert!(
@@ -44,18 +48,18 @@ const _: () = assert!(
     "terrain: a chunk is mounted from a page, so the range chunks are kept to must sit inside the radius pages are loaded from"
 );
 
-/// Records along one axis of the slab.
-pub const SLAB_AXIS: u32 = 2 * KEEP_PAGES + 1;
+/// Records along one axis of the range.
+pub const TERRAIN_AXIS: u32 = 2 * KEEP_PAGES + 1;
 
-/// Records in the slab: exactly the pages the load radius reaches.
-pub const SLAB_SLOTS: u32 = SLAB_AXIS * SLAB_AXIS;
+/// Records in the range: exactly the pages the load radius reaches.
+pub const TERRAIN_SLOTS: u32 = TERRAIN_AXIS * TERRAIN_AXIS;
 
 /// The record `page_idx` lies in. Every page has one; whether the page is
 /// there is the record's own key to say.
 pub fn slot_of(page_idx: IVec) -> u32 {
-    let x = ivec::X(page_idx).rem_euclid(SLAB_AXIS as i64) as u32;
-    let y = ivec::Y(page_idx).rem_euclid(SLAB_AXIS as i64) as u32;
-    y * SLAB_AXIS + x
+    let x = ivec::X(page_idx).rem_euclid(TERRAIN_AXIS as i64) as u32;
+    let y = ivec::Y(page_idx).rem_euclid(TERRAIN_AXIS as i64) as u32;
+    y * TERRAIN_AXIS + x
 }
 
 // ---- The routing ----
@@ -64,7 +68,7 @@ pub fn slot_of(page_idx: IVec) -> u32 {
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
 
 /// One channel across every record.
-pub const GROUND_PLANE_BYTES: u32 = SLAB_SLOTS * GROUND_LANE_BYTES;
+pub const GROUND_PLANE_BYTES: u32 = TERRAIN_SLOTS * GROUND_LANE_BYTES;
 
 /// Every channel's plane, one after another.
 pub const GROUND_BYTES: u32 = GROUND_CH_KEYS.len() as u32 * GROUND_PLANE_BYTES;
@@ -74,10 +78,10 @@ pub const GROUND_BYTES: u32 = GROUND_CH_KEYS.len() as u32 * GROUND_PLANE_BYTES;
 pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 
 /// The elevation across every record.
-pub const ELE_PLANE_BYTES: u32 = SLAB_SLOTS * ELE_LANE_BYTES;
+pub const ELE_PLANE_BYTES: u32 = TERRAIN_SLOTS * ELE_LANE_BYTES;
 
-/// The slab, whole: the terrain section is this and nothing else.
-pub const SLAB_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;
+/// The range, whole: `.fixed.terrain` is this and nothing else.
+pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;
 
 const _: () = assert!(
     GROUND_PLANE_BYTES.is_multiple_of(64),
@@ -99,12 +103,12 @@ pub fn record_ele_at(record: usize) -> usize {
     record + GROUND_CH_KEYS.len() * GROUND_LANE_BYTES as usize
 }
 
-/// Where a record's ground channel lies, `slab` the slab's base.
-pub fn ground_at(slab: usize, slot: u32, channel: usize) -> usize {
-    slab + channel * GROUND_PLANE_BYTES as usize + slot as usize * GROUND_LANE_BYTES as usize
+/// Where a record's ground channel lies, `base` the range's own.
+pub fn ground_at(base: usize, slot: u32, channel: usize) -> usize {
+    base + channel * GROUND_PLANE_BYTES as usize + slot as usize * GROUND_LANE_BYTES as usize
 }
 
-/// Where a record's elevation grid lies, `slab` the slab's base.
-pub fn ele_at(slab: usize, slot: u32) -> usize {
-    slab + GROUND_BYTES as usize + slot as usize * ELE_LANE_BYTES as usize
+/// Where a record's elevation grid lies, `base` the range's own.
+pub fn ele_at(base: usize, slot: u32) -> usize {
+    base + GROUND_BYTES as usize + slot as usize * ELE_LANE_BYTES as usize
 }

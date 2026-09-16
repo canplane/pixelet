@@ -1,11 +1,11 @@
 //! The environment: where the sun and the moon are, and the light, fog and
 //! sky colours the frame is drawn under, eased toward the time of day's
-//! theme. module/map/environment.tsx hands over the inputs — the theme's
+//! theme. module/map/environment.rs hands over the inputs — the theme's
 //! colours when the theme changes, and each tick the observer's latitude
-//! and longitude and the wall clock; the core places the sun and the moon
-//! from the clock, eases everything toward its target, turns the sky's
-//! copies of the directions by the map's azimuth, and writes the result in
-//! the layout the renderer's uniforms take (render/gpu/stage.tsx).
+//! and longitude and the wall clock; this places the sun and the moon from
+//! the clock, eases everything toward its target, turns the sky's copies of
+//! the directions by the map's azimuth, and writes the result in the layout
+//! the renderer's uniforms take (render/gpu/stage.rs).
 //!
 //! The terrain's light is the true, unturned direction: the world turns
 //! under a fixed camera by the azimuth, and a light turned with it would
@@ -51,7 +51,8 @@ const MOON_START_INTENSITY: f64 = 0.3;
 /// How close the stars have to be to where they are going before the
 /// transition counts as done and the tick stops asking for frames.
 const SETTLE_EPS: f64 = 0.005;
-/// environment.tsx's easing: a fraction of the way each frame, delta * 1.5.
+/// The easing: each frame closes `delta * 1.5` of the gap to the target, so
+/// a theme change lands in about a second and a half and never steps.
 const EASE_RATE: f64 = 1.5;
 
 pub struct Environment {
@@ -123,10 +124,13 @@ impl Environment {
     }
 
     /// Sunrise and sunset for the local day starting at `day_start_ms` (Unix
-    /// milliseconds), in hours after it — theme.ts's day and night split.
-    /// Found by sampling the sun's altitude every five minutes and
-    /// interpolating the zero crossings, rather than a second closed-form
-    /// sunrise equation that could disagree with the position formula.
+    /// milliseconds), in hours after it — the split the theme clock keys the
+    /// day's and the night's themes by.
+    ///
+    /// Sampled rather than solved: the sun's altitude every five minutes,
+    /// 288 of them, and the zero crossings interpolated. A closed-form
+    /// sunrise equation would be a second formula that could disagree with
+    /// the position one above it; this cannot, because it is that formula.
     /// 06:00 and 18:00 where the sun does not cross the horizon that day.
     pub fn daylight(&mut self, lat: f64, lon: f64, day_start_ms: f64) {
         const SAMPLES: u32 = 288;
@@ -243,7 +247,7 @@ fn turned(v: [f64; 3], az: f64) -> [f32; 3] {
     [(v[0] * c - v[1] * s) as f32, (v[0] * s + v[1] * c) as f32, v[2] as f32]
 }
 
-// ---- where the sun and the moon are (celestial_position.ts) ----
+// ---- where the sun and the moon are ----
 //
 // The standard low-precision formulas: the sun good to about 0.01°, the
 // moon's single dominant term per angle to roughly 0.3–1°. Degrees until
@@ -310,31 +314,5 @@ pub fn moon_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Seoul, 2024-06-20T03:00:00Z, against celestial_position.ts's
-    /// get_sun_position for the same moment: the port places the sun where
-    /// the TypeScript did, high and a little east of south.
-    #[test]
-    fn sun_matches_the_typescript() {
-        let d = 1_718_852_400_000.0 / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
-        let s = sun_position(d, 37.5665, 126.978);
-        let ts = [13.449099302276881, -23.813088623065383, 96.18762154345812];
-        for k in 0..3 {
-            assert!((s[k] - ts[k]).abs() < 1e-9, "axis {k}: {} vs {}", s[k], ts[k]);
-        }
-    }
-
-    /// Seoul's day of 2024-06-20 (local midnight 2024-06-19T15:00:00Z),
-    /// against celestial_position.ts's get_sunrise_sunset for the same day:
-    /// within a few seconds, the interpolation here being over the sun's
-    /// height rather than its angle.
-    #[test]
-    fn daylight_matches_the_typescript() {
-        let mut env = Environment::default();
-        env.daylight(37.5665, 126.978, 1_718_809_200_000.0);
-        assert!((env.daylight[0] - 5.262678956569208).abs() < 0.002, "sunrise {}", env.daylight[0]);
-        assert!((env.daylight[1] - 19.861559470758326).abs() < 0.002, "sunset {}", env.daylight[1]);
-    }
-}
+#[path = "environment.test.rs"]
+mod test;

@@ -169,6 +169,28 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the POI page's strings and of the string-sequence leaf below; what is built
   to be handed to the shell once (a report, a log line, the snapshot) stays
   on the heap.
+
+  Done 09-16/09-17, in the records the shell reads: a `DemandKey` is a
+  category and a `u64` subject, a failure is `FetchFail`'s number with its
+  status beside it, a `Message` and a `CameraTerrain` are numbers, a
+  placeable cube is a sum type over the catalog's own numbering, and the
+  ledger's report, trace and live stream are documents of numbers the shell
+  writes the words for. A colour is a number too — the catalog's swatches and
+  the themes' lighting are packed by the generator, and nothing in the kernel
+  parses `#rrggbb` any more.
+
+  Not to be done, checked 09-17: the panic messages. They looked like the
+  same kind of thing and are not. 200 runtime sites carry 6,287 bytes of
+  prose, and 188 of them assert an internal invariant — "the cell is
+  indexed", "the direct writer left open" — with runtime values interpolated
+  into a good many ("pipeline {id}: location {location} fed twice"). An errno
+  cannot carry either. The split exists for a consumer that routes on the
+  code, as the shell routes on `FetchFail`; nothing routes on a panic, because
+  the module traps and the client is over. Twelve sites name a resource
+  condition, and of those only four can be reached on a device
+  (`render/gpu/renderer.rs` twice, `render/gpu/api.rs`, the outbox's full
+  spill) — what those want is to refuse rather than trap, the way the decor
+  scratch and the mount pass were made to, not a number nobody reads.
   
 - **Compression, chosen by traffic.** Recorded 2026-09-13, not scheduled:
   [20260913-compression-by-traffic.md](./20260913-compression-by-traffic.md).

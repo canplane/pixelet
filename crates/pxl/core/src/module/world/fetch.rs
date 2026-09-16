@@ -12,8 +12,8 @@
 //! kernel's throughout. Every body is a block of the mesh section: a body is
 //! decoded or read and released in the same command, which is what that section
 //! is for. A terrain body no longer outlives its command — the page it carries
-//! is written into the slab, whose record is the page's own coordinate — and a
-//! POI page still keeps its body as the page, until its per-page index is
+//! is written into `.fixed.terrain`, whose record is the page's own coordinate
+//! — and a POI page still keeps its body as the page, until its per-page index is
 //! rewritten (issue/BACKLOG.md).
 
 use core::fmt;

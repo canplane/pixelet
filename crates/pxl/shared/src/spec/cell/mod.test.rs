@@ -125,7 +125,7 @@ fn the_catalogs_are_what_the_typescript_builds() {
     let colors: Vec<(String, Vec<String>)> = cube_colors
         .0
         .iter()
-        .map(|(ch, c)| (ch.to_string(), c.iter().map(|(n, hex)| format!("{n}={}", hex.unwrap_or("null"))).collect()))
+        .map(|(ch, c)| (ch.to_string(), c.iter().map(|(n, swatch)| format!("{n}={}", swatch.map_or("null", |s| s.hex))).collect()))
         .collect();
     let want: Vec<(String, Vec<String>)> = (0..v.len("colors"))
         .map(|j| {

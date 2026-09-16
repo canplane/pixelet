@@ -19,8 +19,9 @@ use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
 use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use pxl_core::kernel::{kernel, reindex_object, Kernel};
-use pxl_core::memory::{self, MODULE_BYTES};
-use xpute_core::sys::memory::{write_section, SECTION_WORDS};
+use pxl_core::global::Global;
+use pxl_core::mem;
+use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind};
@@ -30,25 +31,70 @@ use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
-use xpute_core::ipc::ring::{arena_bytes, ring_bytes, Ring};
+use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_core::kit::array::ArrayBuffer;
 use xpute_core::kit::array::U8Array;
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
 
-/// The heap: from the page past the last fixed section to the end of the
-/// memory, ascending. Everything before it is settled at boot — the module's
-/// own stack and data, the fixed section, the terrain slab — so the heap is
-/// what is left, and what is left is whatever the device gave.
-///
-/// The linker's `__heap_base` is not it. That is where the module's data ends,
-/// which is inside the first section and long before the terrain; the heap is
-/// past all of them.
+extern "C" {
+    /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
+    /// so where the kernel may begin placing its own ranges. wasm-ld defines
+    /// it, and `--global-base` (build.rs) is what decides where the data it
+    /// measures began.
+    ///
+    /// Not `__heap_base`, though that symbol sits eight bytes further on and
+    /// would do. The linker calls it that because a C runtime starts its
+    /// `sbrk` there; this kernel's heap is past the fixed ranges and past the
+    /// terrain, so borrowing the name would leave `heap` meaning two things
+    /// four megabytes apart.
+    #[allow(non_upper_case_globals)]
+    static __data_end: u8;
+}
+
+/// Where the linker stopped, as an address.
+fn data_end() -> u32 {
+    core::ptr::addr_of!(__data_end) as u32
+}
+
+/// The heap: from the page past the last fixed range to the end of the memory,
+/// ascending. Everything before it is settled before it — the stack, the
+/// rings, the linker's data, and `.fixed` — so the heap is what is left, and
+/// what is left is whatever the device gave.
 struct ModuleHeap;
 
+/// The largest block the heap's tree can describe. Two gigabytes is what a
+/// 32-bit address space holds a whole power of two of, so it is the top of the
+/// shape and not a claim about any device: the tree begins as a single leaf and
+/// doubles only as far as a request makes it, and how much of it is real comes
+/// from `end` at runtime.
+const HEAP_MAX_LOG2: usize = 31;
+
+/// The smallest block, which is the page the rest of the memory is counted in
+/// (mem.json's PAGE_BYTES).
+const HEAP_MIN_LOG2: usize = memory_shift(mem::PAGE_BYTES);
+
+const fn memory_shift(bytes: u32) -> usize {
+    assert!(bytes.is_power_of_two());
+    bytes.trailing_zeros() as usize
+}
+
+/// A bit for every node of the tree that can be a parent. The exponents give
+/// the length and the compiler will not derive it for us, so it is written
+/// once here and `BuddyMalloc` checks it against them on the first request.
+const HEAP_SPLIT_BYTES: usize = (1 << (HEAP_MAX_LOG2 - HEAP_MIN_LOG2)) / 8;
+
 impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
+    const MIN_LOG2: usize = HEAP_MIN_LOG2;
+    const MAX_LOG2: usize = HEAP_MAX_LOG2;
+    type Split = [u8; HEAP_SPLIT_BYTES];
+    const SPLIT_INIT: Self::Split = [0; HEAP_SPLIT_BYTES];
+
     fn base() -> usize {
-        memory::HEAP_AT as usize
+        // A pure function of the linker's answer and the map's constants, with
+        // no state and no order to be in: the first block is asked for long
+        // before anything has laid the memory out.
+        mem::heap_at(data_end()) as usize
     }
     fn end() -> usize {
         core::arch::wasm32::memory_size(0) * (1 << 16)
@@ -88,11 +134,11 @@ const CQ: u32 = 1;
 const SPILL: u32 = 2;
 
 const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
-const _: () = assert!(arena_bytes(RING_CAPACITY, RING_FRAME_BYTES) == RING_ARENA_STRIDE, "a ring's frames are not its stride");
-const _: () = assert!(GLOBAL_BASE <= memory::MODULE_BYTES, "the module's data begins past the section it is in");
+const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
+const _: () = assert!(RING_SLOT_BYTES == mem::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
 
 /// The whole memory as one buffer, which is what a ring's two areas are cut
-/// from: the descriptors near the bottom and the frames past them, at
+/// from: the descriptors near the bottom and the slots' payloads past them, at
 /// addresses build.rs fixed rather than anyone hands out.
 ///
 /// # Safety
@@ -106,7 +152,7 @@ fn new_ring(n: u32) -> Ring {
     // SAFETY: the module's own memory; the two ranges are build.rs's and no
     // one else's, the linker included.
     let mem = unsafe { module_memory() };
-    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_ARENA_AT + n * RING_ARENA_STRIDE, RING_FRAME_BYTES)
+    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES)
 }
 
 /// Where a ring's words start in the memory.
@@ -114,16 +160,11 @@ fn ring_address(ring: &Ring) -> u32 {
     ring.words.as_slice().as_ptr() as u32
 }
 
-/// The module's one state, made on first use. A cell rather than a
-/// `static mut`, whose references the compiler now warns of: the module
-/// is single-threaded and no export re-enters another, which is what
-/// `state()` promises.
-struct Global(core::cell::UnsafeCell<Option<State>>);
-
-// SAFETY: the module runs on one thread; see `state`.
-unsafe impl Sync for Global {}
-
-static STATE: Global = Global(core::cell::UnsafeCell::new(None));
+/// The module's one state, made on first use. xpute's device for it rather
+/// than a `static mut`, whose references the compiler now warns of: the module
+/// is single-threaded and no export re-enters another, which is the promise
+/// `Global` is built on.
+static STATE: Global<State> = Global::new();
 
 extern "C" {
     /// The client's: told a panic's message before the trap, since the trap
@@ -137,26 +178,24 @@ extern "C" {
 }
 
 fn state() -> &'static mut State {
-    // SAFETY: the module runs on one thread and no export re-enters another,
-    // so no two references to the state are live at once.
-    unsafe {
-        (*STATE.0.get()).get_or_insert_with(|| {
-            std::panic::set_hook(Box::new(|info| {
-                let text = info.to_string();
-                host_panic(text.as_ptr(), text.len());
-            }));
-            memory::map().unwrap_or_else(lay_out);
-            State {
-                sq: new_ring(SQ),
-                outbox: Outbox {
-                    cq: new_ring(CQ),
-                    spill: new_ring(SPILL),
-                },
-                snapshot: 0,
-                boot: [0; BOOT_WORDS],
-            }
-        })
-    }
+    STATE.get(|| {
+        std::panic::set_hook(Box::new(|info| {
+            let text = info.to_string();
+            // SAFETY: the client's import, told a message it copies out before
+            // the trap.
+            unsafe { host_panic(text.as_ptr(), text.len()) };
+        }));
+        mem::map().unwrap_or_else(lay_out);
+        State {
+            sq: new_ring(SQ),
+            outbox: Outbox {
+                cq: new_ring(CQ),
+                spill: new_ring(SPILL),
+            },
+            snapshot: 0,
+            boot: [0; BOOT_WORDS],
+        }
+    })
 }
 
 fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
@@ -231,7 +270,7 @@ pub use pxl_core::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TO
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
-// ring's arena, which the kernel reads where it lies. The glue assembles
+// ring's slot, which the kernel reads where it lies. The glue assembles
 // what it submits and takes apart what completes; nothing here is shaped
 // for it. The glue pushes into the submission ring, rings `interrupt`
 // (DRAIN or TICK), and reads the completion ring when the call returns.
@@ -256,12 +295,12 @@ const BOOT_QUANTUM: usize = 9;
 #[no_mangle]
 pub extern "C" fn boot() -> *const u32 {
     install_host();
-    let map = memory::map().unwrap_or_else(lay_out);
+    let map = mem::map().unwrap_or_else(lay_out);
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
-    s.boot[..3].copy_from_slice(&[MODULE_BYTES, sq, cq]);
+    s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
     s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
-    for (i, sec) in [map.slab, map.heap].into_iter().enumerate() {
+    for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
@@ -278,12 +317,12 @@ pub extern "C" fn boot() -> *const u32 {
 /// their contents' own affair; the heap is the one allocator and it knows its
 /// range without being told (`buddy_tree`'s `Range`), so laying out is
 /// recording what the map says and opening the volumes over it.
-fn lay_out() -> memory::Map {
+fn lay_out() -> mem::Map {
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
-    let map = memory::lay_out(given.min(u32::MAX as u64) as u32);
+    let map = mem::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
     kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
-    memory::set_map(map);
+    mem::set_map(map);
     map
 }
 
@@ -302,13 +341,13 @@ pub extern "C" fn interrupt(vector: u32) -> u32 {
     }
 }
 
-/// Bytes a reply's packet may take, which is a ring frame: a packet is at
-/// most a frame, so a reply written past one could never be posted and is
+/// Bytes a reply's packet may take, which is a ring slot's payload: a packet
+/// is at most that, so a reply written past one could never be posted and is
 /// better refused where it is written than where it is pushed. What a command
 /// answers with that cannot be bounded this way — a volume's band rows, the
 /// store's columns, the UI's snapshot — crosses as an address into a block the
 /// kernel holds (`Held`), the way OBJECT_CHUNK's lanes already do.
-const REPLY_BYTES: usize = RING_FRAME_BYTES as usize;
+const REPLY_BYTES: usize = RING_SLOT_BYTES as usize;
 
 /// Bytes the module writes into before it posts them: zeroed statics, so
 /// they lie in the module's data rather than on a heap.
@@ -338,7 +377,7 @@ fn reply(count: u32, f: impl FnOnce(&mut PacketWriter)) -> Option<u32> {
     Some(w.finish().expect("a reply larger than the reply scratch"))
 }
 
-/// A packet's bytes written in place into a ring frame: its length, or none
+/// A packet's bytes written in place into a ring slot: its length, or none
 /// when it did not fit one.
 type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 
@@ -544,7 +583,7 @@ fn post_shell(s: &mut State) {
     let hash = xpute_core::kit::hash::fnv1a64_str(&text);
     if hash != s.snapshot {
         s.snapshot = hash;
-        // The JSON is far past a frame and the shell reads it before the next
+        // The JSON is far past a slot and the shell reads it before the next
         // turn can make another, so it crosses as an address and its bytes.
         // SAFETY: the last snapshot, read by the shell before this one.
         let (at, len) = unsafe { SNAPSHOT.fill(text.len(), |i| text.as_bytes()[i]) };
@@ -1264,7 +1303,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            // A model's bytes are far past a frame, so the shell asks the heap
+            // A model's bytes are far past a slot, so the shell asks the heap
             // for a block (POOL_ACQUIRE), writes them there and names it here;
             // the block is the kernel's to give back once it has read them.
             let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)? as usize);
@@ -1468,7 +1507,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let zone = floats_at(&f, 3, 7)?;
             let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            // SAFETY: the zone's floats, in the arena, until this message is advanced past.
+            // SAFETY: the zone's floats, in the slot, until this message is advanced past.
             unsafe {
                 sched.markers.set_zone(
                     &mut world,
@@ -1492,7 +1531,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::BILLBOARD_UPDATE => {
             let lane = floats_at(&fields(pkt)?, 0, 10)?;
-            // SAFETY: the instances' floats, in the arena, until this message is advanced past.
+            // SAFETY: the instances' floats, in the slot, until this message is advanced past.
             unsafe { sched.billboards.write(&mut world, &mut sched.draw, tag, lane.length() as u32 / 10, lane.as_slice().as_ptr() as usize) };
         }
         Cmd::BILLBOARD_PLACE => {
@@ -1526,7 +1565,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let vertices = floats_at(&f, 3, 6)?;
             let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            // SAFETY: the vertices' floats, in the arena, until this message is advanced past.
+            // SAFETY: the vertices' floats, in the slot, until this message is advanced past.
             unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
         }
         Cmd::ENV_UPDATE => {
@@ -1585,7 +1624,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                     None,
                 ));
             }
-            // SAFETY: the keys' floats, in the arena, until this message is
+            // SAFETY: the keys' floats, in the slot, until this message is
             // advanced past; the channel copies them.
             unsafe {
                 sched.models.channel(
