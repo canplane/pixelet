@@ -29,8 +29,7 @@ use crate::module::map::ui::control::compass::{compass_reset, show_compass};
 use crate::module::map::ui::control::scale_bar::scale_bar;
 use crate::module::map::ui::overlay::search_modal::{search_close, search_query, search_rows, SearchRow};
 use crate::module::map::ui::overlay::use_reverse_geocode::use_reverse_geocode;
-use crate::module::world::character::character_preview::{preview_close, preview_open, preview_rows};
-use crate::module::world::character::store::use_companion_load_store;
+use crate::module::world::character::character_preview::{preview_close, preview_open};
 use crate::module::world::object::store::OBJECT_STORAGE_VERSION;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::view::view;
@@ -144,25 +143,14 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     let camera = use_camera_store();
     let ui = use_ui_store();
     let settings = use_settings_store();
-    let companion = use_companion_load_store();
     let address = use_reverse_geocode(&shell().language);
     let bar = scale_bar(view().height.max(1.0));
 
-    write!(out, "{{\"map\":{{\"has_center\":{},\"center_lonlat\":", map.map_center.is_some())?;
-    match map.map_center {
-        Some(c) => {
-            let mut g = [0.0; 3];
-            epsg4326::unproject(&mut g, c.i, c.f);
-            write!(out, "[{},{}]", Num(g[0]), Num(g[1]))?;
-        }
-        None => out.write_str("null")?,
-    }
-    write!(out, ",\"status\":{},\"is_off_center\":{}}},", Quoted(map.map_status.as_str()), nav.is_off_center)?;
+    write!(out, "{{\"map\":{{\"status\":{},\"is_off_center\":{}}},", Quoted(map.map_status.as_str()), nav.is_off_center)?;
     write!(
         out,
-        "\"location\":{{\"status\":{},\"error\":{},\"has_location\":{}}},",
+        "\"location\":{{\"status\":{},\"has_location\":{}}},",
         Quoted(pose_status_str(location.status)),
-        Or(location.error.map(|m| m as u32)),
         location.location.is_some()
     )?;
     write!(
@@ -173,10 +161,8 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     )?;
     write!(
         out,
-        "\"view\":{{\"dist\":{},\"azimuth\":{},\"polar\":{}}},\"is_follow_mode\":{},",
-        Num(camera.view_state.dist),
+        "\"view\":{{\"azimuth\":{}}},\"is_follow_mode\":{},",
         Num(camera.view_state.azimuth),
-        Num(camera.view_state.polar),
         camera.is_follow_mode
     )?;
     write!(
@@ -216,8 +202,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
             SettingRef::Text(t) => write!(out, "{}:{}", Quoted(key), Quoted(t))?,
         }
     }
-    write!(out, "}},\"companion\":{{\"person_ready\":{},\"pet_ready\":{}}},", companion.person_ready, companion.pet_ready)?;
-    write!(out, "\"address\":{{\"label\":{},\"loading\":{}}},", Or(address.label.map(Quoted)), address.loading)?;
+    write!(out, "}},\"address\":{{\"label\":{}}},", Or(address.label.map(Quoted)))?;
     write!(
         out,
         "\"scale_bar\":{{\"total_meters\":{},\"bar_width_px\":{},\"is_default_zoom\":{},\"label\":{}}},",
@@ -228,14 +213,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     )?;
     write!(out, "\"compass\":{{\"show\":{}}},", show_compass())?;
     write!(out, "\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, Quoted(themes(use_theme_key()).fog))?;
-    out.write_str("\"previews\":[")?;
-    for (i, (id, model, skin)) in preview_rows().enumerate() {
-        if i > 0 {
-            out.write_char(',')?;
-        }
-        write!(out, "{{\"id\":{id},\"model\":{model},\"skin\":{skin}}}")?;
-    }
-    write!(out, "],\"object_storage_version\":{OBJECT_STORAGE_VERSION},\"search\":{{\"results\":[")?;
+    write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION},\"search\":{{\"results\":[")?;
     let (mut rows, mut first) = (Ok(()), true);
     let loading = search_rows(&shell().language, |r| {
         if rows.is_ok() {
