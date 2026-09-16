@@ -153,6 +153,10 @@ pub struct DecorScratch {
     len: usize,
     counts: [u32; DECOR_GROUPS],
     group_count: usize,
+    /// Instances the lanes had no room for, since the kernel started: what a
+    /// chunk shows is short by this many, and the ledger says so rather than
+    /// leaving the gap to be noticed on screen.
+    pub dropped: u32,
 }
 
 impl DecorScratch {
@@ -180,6 +184,7 @@ impl DecorScratch {
             len: 0,
             counts: [0; DECOR_GROUPS],
             group_count: 0,
+            dropped: 0,
         })
     }
 
@@ -190,12 +195,14 @@ impl DecorScratch {
     }
 
     fn push(&mut self, group: usize, instance: Instance) {
-        if self.len < DECOR_INSTANCES {
-            self.instances[self.len] = instance;
-            self.groups[self.len] = group as u16;
-            self.len += 1;
-            self.counts[group] += 1;
+        if self.len == DECOR_INSTANCES {
+            self.dropped += 1;
+            return;
         }
+        self.instances[self.len] = instance;
+        self.groups[self.len] = group as u16;
+        self.len += 1;
+        self.counts[group] += 1;
     }
 }
 

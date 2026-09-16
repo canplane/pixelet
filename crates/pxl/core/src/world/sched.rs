@@ -755,6 +755,12 @@ impl Scheduler {
         }
     }
 
+    /// Decor instances the build's lanes had no room for, since the kernel
+    /// started: the ledger's, so a chunk short of its decor says so.
+    pub fn decor_dropped(&self) -> u32 {
+        self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
+    }
+
     /// Whether a chunk of `page` is still mounted: what reads the page's lanes.
     pub fn page_mounted(&self, page: u64) -> bool {
         self.mounted.range((page, 0, 0)..=(page, u32::MAX, u32::MAX)).next().is_some()
@@ -827,6 +833,15 @@ impl Scheduler {
                     }
                     if mounts >= MAX_MOUNTS_PER_FRAME {
                         // The rest next frame: the key stays unrecorded.
+                        return;
+                    }
+                    if self.slots.len() >= MAX_CHUNKS {
+                        // How many chunks a range holds is the viewport's and the
+                        // anchor's, not a number the kernel hands itself: at the
+                        // ceiling the pass mounts no more and leaves the key
+                        // unrecorded, as it does for the frame's mount budget, so
+                        // the next pass tries again. A trap here would take the
+                        // world down over a tall window.
                         return;
                     }
                     mounts += 1;

@@ -137,6 +137,7 @@ pub struct Counters {
     pub built_scans: f64,
     pub built_bakes: f64,
     pub built_starved: f64,
+    pub decor_dropped: f64,
     pub badge_metrics: f64,
     pub badge_builds: f64,
     pub badge_ms: f64,
@@ -161,6 +162,7 @@ impl Counters {
             built_scans: self.built_scans - b.built_scans,
             built_bakes: self.built_bakes - b.built_bakes,
             built_starved: self.built_starved - b.built_starved,
+            decor_dropped: self.decor_dropped - b.decor_dropped,
             badge_metrics: self.badge_metrics - b.badge_metrics,
             badge_builds: self.badge_builds - b.badge_builds,
             badge_ms: self.badge_ms - b.badge_ms,
@@ -191,6 +193,7 @@ fn counters() -> Counters {
         built_scans: st.scans as f64,
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
+        decor_dropped: k.sched.decor_dropped() as f64,
         badge_metrics: 0.0,
         badge_builds: 0.0,
         badge_ms: 0.0,
@@ -452,7 +455,14 @@ fn frames_section(frames: &[FrameSample]) -> Vec<String> {
         ),
         format!("  fetch   queued {} running {} of {}", counts.queued, counts.running, fetch_credits()),
         // The builds run in the kernel under the tick; what they did this window.
-        format!("  build   {} direct  {} scans  {} bakes  {} refused a block", c.built_direct, c.built_scans, c.built_bakes, c.built_starved),
+        format!(
+            "  build   {} direct  {} scans  {} bakes  {} refused a block{}",
+            c.built_direct,
+            c.built_scans,
+            c.built_bakes,
+            c.built_starved,
+            if c.decor_dropped > 0.0 { format!("   DECOR DROPPED {}", c.decor_dropped) } else { String::new() }
+        ),
         format!("  per     tick/bake {}ms   (workload-normalised; comparable across sessions)", f.tick_per_bake.map_or("-".to_string(), n1)),
         format!(
             "  rate    {} bakes/s  {} scans/s   while backlog {} bakes/s  {} scans/s over {}s",

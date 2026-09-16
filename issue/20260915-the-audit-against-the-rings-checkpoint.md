@@ -59,11 +59,21 @@ when its fix lands.
   (110-156, 199-202), `core_tick.rs:170-175` and about twenty sites in
   `world/sched.rs`.
 - **H3** `pub static mut ALLOC_PROBE` in xpute_core `sched/tick.rs:1646`.
-- **H4** `world/decor.rs` `DecorScratch`: past `DECOR_INSTANCES` (65536) an
+- **H4** ~~`world/decor.rs` `DecorScratch`: past `DECOR_INSTANCES` (65536) an
   instance is dropped silently; past `DECOR_GROUPS` (64) kinds get no
-  group.
-- **H5** `world/sched.rs` asserts `MAX_CHUNKS` (4096, `build.rs:22`) and
-  `MAX_PAGES` (1024).
+  group.~~ The lane's length is the renderer's, so what was wrong was the
+  silence, not the ceiling: `DecorScratch.dropped` counts the instances the
+  lanes had no room for and the ledger's `build` line says `DECOR DROPPED n`.
+  What happens past `DECOR_GROUPS` is the renderer's own `GROUPS`, and it is
+  H11's.
+- **H5** ~~`world/sched.rs` asserts `MAX_CHUNKS` (4096, `build.rs:22`) and
+  `MAX_PAGES` (1024).~~ How many chunks a range holds is the viewport's and
+  the anchor's, not a number the kernel hands itself, so the mount pass stops
+  at `MAX_CHUNKS` and leaves the key unrecorded — the shape the frame's mount
+  budget already had — and the next pass tries again. The `add` assert stays,
+  where reaching it means the caller has a bug rather than that the view
+  grew. `MAX_PAGES` (1024) is not reachable against `RESIDENT_PAGES` (32 at
+  the cap) and is kept as it is.
 - **H6** `fetch_scheduler.rs` `HELD` (128, `take` truncates), `NAMES` (256)
   and `CATEGORIES` (16) asserted; `demand.rs` `PHASES_MAX` (6) drops
   silently; `asset_store` `VARIANTS` (16) asserted.
