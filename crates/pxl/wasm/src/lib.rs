@@ -1984,75 +1984,7 @@ fn install_host() {
     pxl_core::host::set_heap_releases(|| ALLOC.releases());
     pxl_core::host::set_heap_live(|| ALLOC.live());
     pxl_core::host::set_heap_bytes(|| ALLOC.range_bytes());
-    unsafe { xpute_core::sched::tick::ALLOC_PROBE = Some(|| ALLOC.allocs()) };
-    pxl_core::module::world::sched::tick::set_step_timing(true);
     install_gpu();
-}
-
-static mut PROBE_TEXT: [u8; 16384] = [0; 16384];
-
-#[no_mangle]
-pub extern "C" fn probe_reset() {
-    pxl_core::module::world::sched::tick::tick_step_stats_reset();
-    unsafe {
-        pxl_core::probe::COUNTS = [0; 32];
-        pxl_core::probe::BYTES = [0; 32];
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn probe_dump() -> *const u8 {
-    struct W(usize);
-    impl core::fmt::Write for W {
-        fn write_str(&mut self, s: &str) -> core::fmt::Result {
-            let b = s.as_bytes();
-            let end = (self.0 + b.len()).min(16380);
-            unsafe { PROBE_TEXT[self.0 + 4..end + 4].copy_from_slice(&b[..end - self.0]) };
-            self.0 = end;
-            Ok(())
-        }
-    }
-    use core::fmt::Write;
-    let mut w = W(0);
-    for s in pxl_core::module::world::sched::tick::tick_step_stats() {
-        if s.ms > 0.0 {
-            let _ = writeln!(w, "step {} {} allocs {} runs {}", s.phase, s.name, s.ms, s.count);
-        }
-    }
-    for (i, n) in unsafe { pxl_core::probe::COUNTS }.iter().enumerate() {
-        let bytes = unsafe { pxl_core::probe::BYTES[i] };
-        if *n > 0 || bytes > 0 {
-            let _ = writeln!(w, "probe {i} allocs {n} top {bytes}");
-        }
-    }
-    unsafe {
-        PROBE_TEXT[..4].copy_from_slice(&(w.0 as u32).to_le_bytes());
-        core::ptr::addr_of!(PROBE_TEXT) as *const u8
-    }
-}
-
-/// The gauge panel's numbers, and where they lie.
-static GAUGE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
-static GAUGE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
-
-/// What the panel draws, over the last `window_ms`: the address of two words,
-/// where the JSON lies in this memory and how long it is.
-///
-/// The consumer says how much recent past it wants, the way `dmesg` is asked
-/// for a tail rather than the kernel guessing one.
-#[no_mangle]
-pub extern "C" fn ledger_gauge(window_ms: f64) -> *const u32 {
-    let text = GAUGE_TEXT.get(String::new);
-    *text = pxl_core::module::world::sched::report::ledger_gauge_json(window_ms);
-    let range = GAUGE_RANGE.get(|| [0; 2]);
-    *range = [text.as_ptr() as u32, text.len() as u32];
-    range.as_ptr()
-}
-
-/// Gives back what the last read took.
-#[no_mangle]
-pub extern "C" fn ledger_gauge_release() {
-    GAUGE_TEXT.set(String::new());
 }
 
 /// The live stream's records, and where they lie.

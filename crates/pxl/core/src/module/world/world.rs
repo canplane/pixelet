@@ -105,12 +105,8 @@ pub fn world_boot() {
         return;
     }
     *booted = true;
-    let (a, t) = (crate::probe::mark(), crate::probe::top());
     teach_terrain();
-    let (a, t) = (crate::probe::add(27, a), crate::probe::add_bytes(27, t));
     teach_objects();
-    crate::probe::add(28, a);
-    crate::probe::add_bytes(28, t);
 
     on_tick(INTERACTION, camera_input_tick, "input");
     on_tick(INTERACTION, camera_step, "camera");
@@ -131,22 +127,13 @@ pub fn world_turn(platform: Platform) {
     crate::app::shell::shell_step();
     geolocation_step(platform.geolocation);
     orientation_watchdog_step(platform.orientation);
-    let a = crate::probe::mark();
     tile_fetcher_step();
-    crate::probe::add(20, a);
-    let (a, t) = (crate::probe::mark(), crate::probe::top());
     ground_snap_sync_step();
     follow_mode_step();
     theme_clock_step();
-    let (a, t) = (crate::probe::add(30, a), crate::probe::add_bytes(30, t));
     decor_asset_step();
-    crate::probe::add(29, a);
-    crate::probe::add_bytes(29, t);
-    let a = crate::probe::mark();
     chunk_mounts_step();
-    let a = crate::probe::add(22, a);
     chunk_nodes_step();
-    crate::probe::add(23, a);
     hover_cursor_step();
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient null.
@@ -190,10 +177,7 @@ pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Plat
     state.height = height;
     state.dpr = dpr;
     state.elapsed_s += delta;
-    let (a, t) = (crate::probe::mark(), crate::probe::top());
     let mut report = run_tick(state, delta, grant);
-    crate::probe::add(31, a);
-    crate::probe::add_bytes(31, t);
     fetch_pump();
     crate::render::gpu::stage::stage_write();
     crate::render::gpu::renderer::render_frame();
