@@ -145,8 +145,13 @@ when its fix lands.
   command, and a command asks for the frame that answers it.
 - **B3** ~~xpute `run_phase` steps back on a self-unregister;
   `tick.ts:289` spliced and skipped the next step.~~ The Rust is right.
-- **B4** The quantum is observed after the turn and its grant applies to
-  the next; `tick.ts:329-332` observed before sizing.
+- **B4** ~~The quantum is observed after the turn and its grant applies to
+  the next; `tick.ts:329-332` observed before sizing.~~ **Kept as it is**:
+  the kernel does not size a quantum — xpute's `Quantum` has no caller here.
+  The grant is three fields of the `WORLD_UPDATE` packet
+  (`wasm/src/lib.rs:1079`), and a packet is read before the turn it starts,
+  so what it carries is the turn before. In the shell both sat in one
+  function and could be ordered either way.
 - **B5** ~~The frame is drawn after every phase (`world.rs:204-205`);
   `core_tick.tsx:187` drew inside the visible phase.~~ **Kept as it is**: the
   draw list is whole only once every phase has added to it, so a draw inside
@@ -247,8 +252,11 @@ when its fix lands.
   and each change would otherwise rebuild the depth and multisampled colour.
   The wait is not a delay — `request_world_tick` keeps the turns coming, and
   the buffer already made is drawn scaled until the size holds still.
-- **B27** `render/gpu/decor.rs:98-104,116` uploads a texture per group;
-  `decor.ts:117-128` one per image.
+- **B27** ~~`render/gpu/decor.rs:98-104,116` uploads a texture per group;
+  `decor.ts:117-128` one per image.~~ `skin_group` uploads a texture, not
+  just a bind group over one, and `asset_store`'s settle says outright that
+  two kinds may name the same skin. The pass now holds its skins by image,
+  counts the groups on each, and gives a row back when the last leaves it.
 - **B28** ~~An MSAA change keeps the device and rebuilds the pipelines
   (`renderer.rs:573-585,927-929`); `stage.tsx:139-165` made a new
   renderer.~~ **Kept as it is**: a sample count is a pipeline's, and the
