@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { BOUND, fail_text, type FrameSummary, type LongFrame, n1, type Spread, type TaskSummary, tris } from "./ledger_report.ts";
 import { loaf_supported } from "./long_frame.ts";
 import { CORE_KERNEL, CORE_MEMORY } from "@/wasm/core_memory.ts";
+import { range_at, text_at } from "@/wasm/module.ts";
 
 /** How often the panel repaints. */
 const POLL_MS = 500;
@@ -66,9 +67,9 @@ type Gauge = {
 
 function read_gauge(): Gauge | null {
   const at = CORE_KERNEL.ledger_gauge(LIVE_WINDOW_MS);
-  const [json_at, bytes] = new Uint32Array(CORE_KERNEL.memory.buffer, at, 2);
+  const [json_at, bytes] = range_at(CORE_KERNEL.memory, at);
   if (bytes === 0) return null;
-  const json = new TextDecoder().decode(new Uint8Array(CORE_KERNEL.memory.buffer, json_at, bytes));
+  const json = text_at(CORE_KERNEL.memory, json_at, bytes);
   CORE_KERNEL.ledger_gauge_release();
   return JSON.parse(json) as Gauge;
 }
@@ -145,12 +146,14 @@ export function LedgerGauge() {
           <Row k="targets MB" v={`d${f.last.textures_mb.depth} m${f.last.textures_mb.msaa} s${f.last.textures_mb.shadow} l${f.last.textures_mb.layers}`} />
           <Rule />
           <Row k="heap" v={f.last.heap_mb ? `${f.last.heap_mb}MB Δ${f.heap_delta >= 0 ? "+" : ""}${f.heap_delta}` : "n/a"} />
-          {/* Three facts and no derived word: how far the allocator has ever
+          {
+            /* Three facts and no derived word: how far the allocator has ever
               reached into its range, what is on loan now, and the range. All
               three come from the kernel's own seam to it (host.rs) — the shell
               never decodes the allocator's bytes, which is what let the last
               probe read a deleted structure's row for two commits without
-              saying so. */}
+              saying so. */
+          }
           <Row k="  used/live of" v={`${f.last.pool.used_mb}/${f.last.pool.live_mb} of ${f.last.pool.range_mb}MB`} warn={f.last.pool.used_mb >= f.last.pool.range_mb} />
           <Row k="tiles ~mb / poi" v={`${f.last.tile_pages} ~${f.last.tile_pages * TILE_DECODED_MB} / ${f.last.poi_count}`} />
           {

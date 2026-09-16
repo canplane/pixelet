@@ -81,9 +81,25 @@ const KERNEL_WASM_URL = new URL("./kernel.wasm", import.meta.url);
 const utf8 = new TextEncoder();
 const utf8_decoder = new TextDecoder();
 
-/** The text at `at`, `len` bytes of UTF-8 in the memory the module shares. */
+/** The `(at, bytes)` pair at `at`: how the kernel names a run of memory it
+ * built and holds, rather than carrying it through a ring slot. */
+export function range_at(memory: WebAssembly.Memory, at: u32): readonly [u32, u32] {
+  const [lies_at, bytes] = new Uint32Array(memory.buffer, at, 2);
+  return [lies_at, bytes];
+}
+
+/** A range's bytes, where they lie. Valid until the kernel is given them back
+ * or writes them again, so a caller that keeps them copies them first.
+ *
+ * The core memory is reserved here and never shared, so the cast holds; what
+ * it buys is a view the platform accepts where an `ArrayBuffer` is asked for. */
+export function bytes_at(memory: WebAssembly.Memory, at: u32, len: u32): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(memory.buffer as ArrayBuffer, at, len);
+}
+
+/** A range's bytes as text, `len` bytes of UTF-8. */
 export function text_at(memory: WebAssembly.Memory, at: u32, len: u32): string {
-  return utf8_decoder.decode(new Uint8Array(memory.buffer, at, len));
+  return utf8_decoder.decode(bytes_at(memory, at, len));
 }
 
 function storage_read(key: string): string | null {

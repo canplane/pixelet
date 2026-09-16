@@ -18,16 +18,17 @@
  */
 
 import { CORE_KERNEL } from "@/wasm/core_memory.ts";
+import { bytes_at, range_at } from "@/wasm/module.ts";
 
 export function ledger_trace_download(): void {
   const at = CORE_KERNEL.ledger_trace();
-  const [json_at, bytes] = new Uint32Array(CORE_KERNEL.memory.buffer, at, 2);
+  const [json_at, bytes] = range_at(CORE_KERNEL.memory, at);
   const mb = (bytes / 1e6).toFixed(1);
   const name = `pxl-ledger-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
     // The Blob constructor copies its buffer source, which is what lets the
     // kernel have the bytes back on the next line.
-    const url = URL.createObjectURL(new Blob([new Uint8Array(CORE_KERNEL.memory.buffer, json_at, bytes)], { type: "application/json" }));
+    const url = URL.createObjectURL(new Blob([bytes_at(CORE_KERNEL.memory, json_at, bytes)], { type: "application/json" }));
     CORE_KERNEL.ledger_trace_release();
     const a = document.createElement("a");
     a.href = url;
