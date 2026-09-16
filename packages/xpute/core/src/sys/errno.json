@@ -1,0 +1,317 @@
+{
+  "doc": [
+    "POSIX/Linux-aligned negative errno"
+  ],
+  "entries": [
+    {
+      "name": "OK",
+      "value": 0,
+      "doc": "Success"
+    },
+    {
+      "section": "Generic"
+    },
+    {
+      "name": "EPERM",
+      "value": -1,
+      "doc": "Operation not permitted"
+    },
+    {
+      "name": "ENOENT",
+      "value": -2,
+      "doc": "No such file or directory / entry not found"
+    },
+    {
+      "name": "ESRCH",
+      "value": -3,
+      "doc": "No such process"
+    },
+    {
+      "name": "EINTR",
+      "value": -4,
+      "doc": "Interrupted system call"
+    },
+    {
+      "name": "EIO",
+      "value": -5,
+      "doc": "I/O error"
+    },
+    {
+      "name": "ENXIO",
+      "value": -6,
+      "doc": "No such device or address"
+    },
+    {
+      "name": "E2BIG",
+      "value": -7,
+      "doc": "Argument list too long / object too large for fixed local cap"
+    },
+    {
+      "name": "ENOEXEC",
+      "value": -8,
+      "doc": "Exec format error"
+    },
+    {
+      "name": "EBADF",
+      "value": -9,
+      "doc": "Bad file descriptor / bad handle"
+    },
+    {
+      "name": "ECHILD",
+      "value": -10,
+      "doc": "No child processes"
+    },
+    {
+      "name": "EAGAIN",
+      "value": -11,
+      "doc": "Try again / Resource temporarily unavailable"
+    },
+    {
+      "name": "ENOMEM",
+      "value": -12,
+      "doc": "Out of memory"
+    },
+    {
+      "name": "EACCES",
+      "value": -13,
+      "doc": "Permission denied"
+    },
+    {
+      "name": "EFAULT",
+      "value": -14,
+      "doc": "Bad address"
+    },
+    {
+      "name": "EBUSY",
+      "value": -16,
+      "doc": "Device or resource busy"
+    },
+    {
+      "name": "EEXIST",
+      "value": -17,
+      "doc": "File exists / duplicate bind"
+    },
+    {
+      "name": "EXDEV",
+      "value": -18,
+      "doc": "Cross-device link"
+    },
+    {
+      "name": "ENODEV",
+      "value": -19,
+      "doc": "No such device"
+    },
+    {
+      "name": "ENOTDIR",
+      "value": -20,
+      "doc": "Not a directory"
+    },
+    {
+      "name": "EISDIR",
+      "value": -21,
+      "doc": "Is a directory"
+    },
+    {
+      "name": "EINVAL",
+      "value": -22,
+      "doc": "Invalid argument"
+    },
+    {
+      "name": "ENFILE",
+      "value": -23,
+      "doc": "File table overflow (system-wide)"
+    },
+    {
+      "name": "EMFILE",
+      "value": -24,
+      "doc": "Too many open files (process)"
+    },
+    {
+      "name": "ENOTTY",
+      "value": -25,
+      "doc": "Not a tty"
+    },
+    {
+      "name": "EFBIG",
+      "value": -27,
+      "doc": "File too large / payload too large"
+    },
+    {
+      "name": "ENOSPC",
+      "value": -28,
+      "doc": "No space left on device / local mailbox full"
+    },
+    {
+      "name": "ESPIPE",
+      "value": -29,
+      "doc": "Illegal seek"
+    },
+    {
+      "name": "EROFS",
+      "value": -30,
+      "doc": "Read-only file system"
+    },
+    {
+      "name": "EMLINK",
+      "value": -31,
+      "doc": "Too many links"
+    },
+    {
+      "name": "EPIPE",
+      "value": -32,
+      "doc": "Broken pipe"
+    },
+    {
+      "name": "EDOM",
+      "value": -33,
+      "doc": "Math argument out of domain"
+    },
+    {
+      "name": "ERANGE",
+      "value": -34,
+      "doc": "Math result not representable"
+    },
+    {
+      "name": "ENOSYS",
+      "value": -38,
+      "doc": "Function not implemented"
+    },
+    {
+      "section": "Protocol / Message / Encoding"
+    },
+    {
+      "name": "EPROTO",
+      "value": -71,
+      "doc": "Protocol error"
+    },
+    {
+      "name": "EBADMSG",
+      "value": -74,
+      "doc": "Bad message (protocol/frame/payload invalid)"
+    },
+    {
+      "name": "EOVERFLOW",
+      "value": -75,
+      "doc": "Value too large for target type / overflow"
+    },
+    {
+      "name": "EMSGSIZE",
+      "value": -90,
+      "doc": "Message too long / packet too large"
+    },
+    {
+      "name": "ENOTSUP",
+      "value": -95,
+      "doc": "Operation not supported"
+    },
+    {
+      "name": "EILSEQ",
+      "value": -84,
+      "doc": "Illegal byte sequence (decode/encoding failure)"
+    },
+    {
+      "section": "Endpoint / Addressing"
+    },
+    {
+      "name": "EADDRINUSE",
+      "value": -98,
+      "doc": "Address already in use"
+    },
+    {
+      "name": "EADDRNOTAVAIL",
+      "value": -99,
+      "doc": "Cannot assign requested address"
+    },
+    {
+      "section": "Network / Transport (Linux asm-generic/errno.h aligned)"
+    },
+    {
+      "name": "ENETDOWN",
+      "value": -100,
+      "doc": "Network is down"
+    },
+    {
+      "name": "ENETUNREACH",
+      "value": -101,
+      "doc": "Network is unreachable"
+    },
+    {
+      "name": "ENETRESET",
+      "value": -102,
+      "doc": "Network dropped connection because of reset"
+    },
+    {
+      "name": "ECONNABORTED",
+      "value": -103,
+      "doc": "Software caused connection abort"
+    },
+    {
+      "name": "ECONNRESET",
+      "value": -104,
+      "doc": "Connection reset by peer"
+    },
+    {
+      "name": "ENOBUFS",
+      "value": -105,
+      "doc": "No buffer space available"
+    },
+    {
+      "name": "EISCONN",
+      "value": -106,
+      "doc": "Transport endpoint is already connected"
+    },
+    {
+      "name": "ENOTCONN",
+      "value": -107,
+      "doc": "Transport endpoint is not connected"
+    },
+    {
+      "name": "ESHUTDOWN",
+      "value": -108,
+      "doc": "Cannot send after transport endpoint shutdown"
+    },
+    {
+      "name": "ETOOMANYREFS",
+      "value": -109,
+      "doc": "Too many references"
+    },
+    {
+      "name": "ETIMEDOUT",
+      "value": -110,
+      "doc": "Connection timed out"
+    },
+    {
+      "name": "ECONNREFUSED",
+      "value": -111,
+      "doc": "Connection refused"
+    },
+    {
+      "name": "EHOSTDOWN",
+      "value": -112,
+      "doc": "Host is down"
+    },
+    {
+      "name": "EHOSTUNREACH",
+      "value": -113,
+      "doc": "No route to host"
+    },
+    {
+      "name": "EALREADY",
+      "value": -114,
+      "doc": "Operation already in progress"
+    },
+    {
+      "name": "EINPROGRESS",
+      "value": -115,
+      "doc": "Operation now in progress"
+    },
+    {
+      "section": "Lifecycle / Cancellation"
+    },
+    {
+      "name": "ECANCELED",
+      "value": -125,
+      "doc": "Operation canceled"
+    }
+  ]
+}
