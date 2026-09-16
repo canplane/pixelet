@@ -1961,6 +1961,30 @@ pub extern "C" fn probe_dump() -> *const u8 {
     }
 }
 
+/// The gauge panel's numbers, and where they lie.
+static GAUGE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
+static GAUGE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+
+/// What the panel draws, over the last `window_ms`: the address of two words,
+/// where the JSON lies in this memory and how long it is.
+///
+/// The consumer says how much recent past it wants, the way `dmesg` is asked
+/// for a tail rather than the kernel guessing one.
+#[no_mangle]
+pub extern "C" fn ledger_gauge(window_ms: f64) -> *const u32 {
+    let text = GAUGE_TEXT.get(String::new);
+    *text = pxl_core::module::world::sched::report::ledger_gauge_json(window_ms);
+    let range = GAUGE_RANGE.get(|| [0; 2]);
+    *range = [text.as_ptr() as u32, text.len() as u32];
+    range.as_ptr()
+}
+
+/// Gives back what the last read took.
+#[no_mangle]
+pub extern "C" fn ledger_gauge_release() {
+    GAUGE_TEXT.set(String::new());
+}
+
 /// The live stream's records, and where they lie.
 ///
 /// The same range shape as the trace below, for the same reason: this is

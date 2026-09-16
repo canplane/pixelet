@@ -35,6 +35,11 @@ export type KernelExports = {
   /** Hands the kernel the turn for `vector` (@xpute/core/ipc/cmd.ts's
    * Interrupt). */
   interrupt(vector: u32): u32;
+  /** The gauge panel's numbers over the last `window_ms`: the address of two
+   * words, where the JSON lies in this memory and how long it is. */
+  ledger_gauge(window_ms: number): u32;
+  /** Says the panel's numbers have been read, so the kernel can drop them. */
+  ledger_gauge_release(): void;
   /** What the ledger's live stream has kept since the last read: the address
    * of two words, where the JSON lies in this memory and how long it is, zero
    * when nothing is waiting. A range and not a command because instrumentation

@@ -15,7 +15,7 @@
  */
 
 import { CORE_KERNEL } from "@/wasm/core_memory.ts";
-import { type Frame, frame_line, type LongFrame, long_frame_line, type TaskRecord, task_line } from "./ledger_report.ts";
+import { type Frame, frame_line, long_frame_line, type LongFrame, task_line, type TaskRecord } from "./ledger_report.ts";
 
 type LedgerLog = { tasks: TaskRecord[]; frames: Frame[]; longs: LongFrame[] };
 

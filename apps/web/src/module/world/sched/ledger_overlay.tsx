@@ -2,9 +2,9 @@
 
 /**
  * Dev overlay for the kernel's ledger (crates/pxl/core/src/module/world/sched):
- * the recording window and the text side (log.rs) as buttons — a fresh window,
- * the pasteable report, and the live console stream. Gated by
- * `import.meta.env.DEV` and the `show_ledger` setting — off by default.
+ * the recording window and the exports as buttons, over the gauge panel
+ * (ledger_gauge.tsx). Gated by `import.meta.env.DEV` and the `show_ledger`
+ * setting — off by default.
  *
  * It also owns the dev lifecycle the ledger's surfaces share, which runs
  * whether or not the panel is showing: opening the kernel's recording window,
@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from "react";
 
+import { LedgerGauge } from "./ledger_gauge.tsx";
 import { ledger_drain_log } from "./ledger_log.ts";
 import { install_long_frame_observers } from "./long_frame.ts";
 import { ledger_trace_download } from "./trace.ts";
@@ -64,12 +65,32 @@ export function LedgerOverlay() {
   if (!import.meta.env.DEV || !show) return null;
 
   return (
-    <div className="pointer-events-none fixed left-2 top-[84px] z-50 w-[228px] rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
-      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger</div>
+    <div className="pointer-events-none fixed left-2 top-[84px] z-50 max-h-[calc(100dvh-96px)] w-[228px] overflow-hidden rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
+      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger, last 10s</div>
+
+      {
+        /* The buttons come before the numbers: on a phone the panel runs past
+          the bottom of the screen, and what must stay reachable is start/stop
+          and the exports. The body below is clipped rather than scrolled — the
+          panel lets gestures through to the map, and a scrolling body would
+          not. */
+      }
       <div className="mt-1 flex gap-1">
+        {
+          /* start and stop are both present rather than one toggle: the dev
+            overlay opens a window on mount so a cold-load stall is never
+            missed, so a toggle would read "stop" until you had stopped once —
+            and then "start" is the button you cannot find when you want a
+            clean window. */
+        }
         <button type="button" onClick={() => kernel_action({ type: "ledger_window_start" })} title="clear everything and begin a fresh window" className={BUTTON}>
           start
         </button>
+        <button type="button" onClick={() => kernel_action({ type: "ledger_window_stop" })} title="freeze the window so exports are stable while you read them" className={BUTTON}>
+          stop
+        </button>
+      </div>
+      <div className="mt-1 flex gap-1">
         <button type="button" onClick={() => kernel_action({ type: "ledger_report" })} title="print + copy a text report" className={BUTTON}>
           report
         </button>
@@ -88,6 +109,9 @@ export function LedgerOverlay() {
           {logging ? "log on" : "log"}
         </button>
       </div>
+      <div className="my-1 border-t border-white/10" />
+
+      <LedgerGauge />
     </div>
   );
 }

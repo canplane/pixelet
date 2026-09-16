@@ -13,16 +13,16 @@ import { loaf_supported } from "./long_frame.ts";
 
 const MB = 1048576;
 
-const n1 = (n: number) => (n ?? 0).toFixed(1);
+export const n1 = (n: number) => (n ?? 0).toFixed(1);
 const round = (n: number) => Math.round(n ?? 0);
 const share = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 
 /** Triangles read as thousands past a thousand, as the kernel's own summary
  * rounded them. */
-const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
+export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
-type Spread = { p50: number; p95: number; max: number };
+export type Spread = { p50: number; p95: number; max: number };
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 
 /** A wait long enough to be starvation rather than queueing. The kernel's own
@@ -78,7 +78,7 @@ export type Frame = {
   q_poi: number;
 };
 
-type FrameSummary = {
+export type FrameSummary = {
   n: number;
   seconds: number;
   moving: number;
@@ -118,7 +118,7 @@ export type TaskRecord = {
   status: number;
   phases: [string, number][];
 };
-type TaskSummary = {
+export type TaskSummary = {
   category: string;
   n: number;
   ok: number;
@@ -134,7 +134,7 @@ export type LongFrame = { source: string; t: number; duration_ms: number; blocki
 
 /** Why a fetch failed, as `spec/fetch.ts` numbers it. A refusal says its
  * status instead, which is the part that tells one from another. */
-function fail_text(fail: number, status: number): string {
+export function fail_text(fail: number, status: number): string {
   switch (fail) {
     case 0x0101:
       return "network";
@@ -158,7 +158,7 @@ function fail_text(fail: number, status: number): string {
 /** Which optimization lever a hotspot in a category needs — set once from
  * profiling, never fed back into scheduling. The measurements behind each are
  * the note beside it; they were taken on the date it names. */
-const BOUND: Record<string, { bound: string; note: string }> = {
+export const BOUND: Record<string, { bound: string; note: string }> = {
   terrain: {
     bound: "network",
     note: "Measured 2026-09-09: 4.2MB/page, mean net 322.5ms vs decode 0.6ms — decode_terrain is an XTP cursor read and is free. The demand is network-bound end to end.",
@@ -189,26 +189,21 @@ function frame_census(c: [number, number][]): string {
   return census_text(rows);
 }
 
-const phases_text = (p: [string, number][]) =>
-  p.length === 0 ? "" : `  [${p.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? v : n1(v)}`).join(" ")}]`;
+const phases_text = (p: [string, number][]) => p.length === 0 ? "" : `  [${p.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? v : n1(v)}`).join(" ")}]`;
 
 export function task_line(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing = r.start_ms === null ? "" : `  q ${n1(r.start_ms - r.enqueue_ms)} + run ${n1(r.end_ms - r.start_ms)}`;
   const why = r.fail === 0 ? "" : `  [${fail_text(r.fail, r.status)}]`;
-  return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.category}:${r.subject}`.padEnd(34)}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${
-    phases_text(r.phases)
-  }${why}`;
+  return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.category}:${r.subject}`.padEnd(34)}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phases_text(r.phases)}${why}`;
 }
 
 export function frame_line(s: Frame, prev: Frame | null): string {
-  const d = prev === null
-    ? ""
-    : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB`;
+  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB`;
   const offthread = s.dt_ms - s.task_ms;
-  return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthread)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${
-    n1(s.budget_ms)
-  }${s.settled ? " (still)" : ""} (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap ${s.heap_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
+  return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthread)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
+    s.settled ? " (still)" : ""
+  } (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap ${s.heap_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
 }
 
 export const long_frame_line = (l: LongFrame) =>
@@ -223,9 +218,7 @@ function frames_section(r: LedgerReport): string[] {
   const c = r.counters;
   const { atlas, retain, poi, fetch } = r;
   const bands = c.bands_reused + c.bands_allocated;
-  const steps = r.steps.length === 0
-    ? "none"
-    : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
+  const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
   return [
     `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.frame_ms)} ms`,
@@ -233,9 +226,9 @@ function frames_section(r: LedgerReport): string[] {
     `  task    p50 ${n1(f.task.p50)}  p95 ${n1(f.task.p95)} ms   (main thread's own rAF task)`,
     `  offthd  p50 ${n1(f.offthread.p50)}  p95 ${n1(f.offthread.p95)} ms   (vsync/compositor/GPU/GC)`,
     `  gpu     p50 ${n1(f.gpu.p50)}  p95 ${n1(f.gpu.p95)} ms${last.gpu_ms === 0 ? "   (no renderer yet)" : ""}`,
-    `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${
-      last.settled ? " (still)" : ""
-    }   phase p95 ${f.phases.map((p) => `${p.name} ${n1(p.spread.p95)}`).join("  ")}`,
+    `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
+      f.phases.map((p) => `${p.name} ${n1(p.spread.p95)}`).join("  ")
+    }`,
     `  cpu     tick p95 ${n1(f.tick.p95)} ms   (the kernel's tick inside the visible phase)`,
     // Per step, so a phase that costs more than its steps should does not hide
     // which step is not yielding: a cooperative scheduler is only as
@@ -246,7 +239,9 @@ function frames_section(r: LedgerReport): string[] {
     `  by tag  mean ${census_text(f.census)}   (draws/tris per frame)`,
     `          last ${frame_census(last.census)}`,
     `  mem     heap ${last.heap_mb}MB (${signed(f.heap_delta)})  tiles ${last.tile_pages}  poi ${last.poi_count}`,
-    `  place   poi ${n1(poi.place.ms)} ms over ${c.place_runs} runs   hit ${poi.place.hits} -> cand ${poi.place.candidates} -> kept ${poi.place.kept} (+${poi.place.absorbed} absorbed, biggest ${poi.place.biggest}${
+    `  place   poi ${
+      n1(poi.place.ms)
+    } ms over ${c.place_runs} runs   hit ${poi.place.hits} -> cand ${poi.place.candidates} -> kept ${poi.place.kept} (+${poi.place.absorbed} absorbed, biggest ${poi.place.biggest}${
       poi.dropped > 0 ? `, DROPPED ${poi.dropped}` : ""
     })   max since load ${n1(poi.place.max_ms)} ms, hit ${poi.place.max_hits}`,
     // Ask-to-commit and frames spanned: a placement is a job of the content
@@ -258,35 +253,29 @@ function frames_section(r: LedgerReport): string[] {
     `  split   sync ${n1(poi.place.sync_ms)} ms (max since load ${n1(poi.place.max_sync_ms)})   badge ${c.badge_metrics} measured / ${c.badge_builds} built ${
       n1(c.badge_ms)
     }ms total, ${poi.badge_count} cached`,
-    `  atlas   ${atlas.size}px  ${atlas.entries} entries  ${atlas.shelves} shelves  ${share(atlas.used_px, atlas.size * atlas.size)}% used  ${c.atlas_repacks} repacks  ${c.atlas_uploads} rect uploads`,
+    `  atlas   ${atlas.size}px  ${atlas.entries} entries  ${atlas.shelves} shelves  ${
+      share(atlas.used_px, atlas.size * atlas.size)
+    }% used  ${c.atlas_repacks} repacks  ${c.atlas_uploads} rect uploads`,
     `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${share(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
-    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${
-      share(c.coarse_low_fill, c.coarse_boxes)
-    }%; a threshold cull would have skipped these)`,
+    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${share(c.coarse_low_fill, c.coarse_boxes)}%; a threshold cull would have skipped these)`,
     `  index   poi ${poi.index.indexed} resident  ${c.index_rebuilds} rebuilds${poi.index.sweeping > 0 ? `  sweeping ${poi.index.sweeping} units` : ""}${
       poi.index.dropped > 0 ? `  DROPPED ${poi.index.dropped}` : ""
     }`,
     // Idle inside the core reservation is the working budget, kept on purpose.
-    `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  hit ${f.pool_hit_pct === null ? "-" : f.pool_hit_pct}%   window scans ${f.work[0]} bakes ${
-      f.work[1]
-    }`,
+    `  pool    live ${last.pool.live_mb}MB  idle ${last.pool.idle_mb}MB  hit ${f.pool_hit_pct === null ? "-" : f.pool_hit_pct}%   window scans ${f.work[0]} bakes ${f.work[1]}`,
     `  fetch   queued ${fetch.queued} running ${fetch.running} of ${fetch.credits}`,
     // The builds run in the kernel under the tick; what they did this window.
-    `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${
-      c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""
-    }`,
+    `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,
     `  per     tick/bake ${f.tick_per_bake === null ? "-" : n1(f.tick_per_bake)}ms   (workload-normalised; comparable across sessions)`,
-    `  rate    ${n1(f.per_s[1])} bakes/s  ${n1(f.per_s[0])} scans/s   while backlog ${n1(f.backlog_per_s[1])} bakes/s  ${n1(f.backlog_per_s[0])} scans/s over ${
-      n1(f.backlog_s)
-    }s`,
+    `  rate    ${n1(f.per_s[1])} bakes/s  ${n1(f.per_s[0])} scans/s   while backlog ${n1(f.backlog_per_s[1])} bakes/s  ${n1(f.backlog_per_s[0])} scans/s over ${n1(f.backlog_s)}s`,
     `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the core pool`,
     `  retain  nodes ${retain.nodes}  runsets ${retain.run_sets} (${retain.run_set_mb}MB)  tiers ${retain.tiers}  decor ${retain.decor_steps} steps ${retain.decor_instances} instances   kept on-screen ${
       round(retain.on_bytes / MB)
     }MB, off-screen ${round(retain.off_bytes / MB)} / ${round(retain.budget_bytes / MB)}MB budget`,
     `  lod     chunks ${last.lod.chunks}  in-frustum ${last.lod.in_frustum}  pending ${last.lod.pending}  settling ${last.lod.settling}  blending ${last.lod.blend_active}  pressure ${last.lod.pressure}`,
-    `  wait    releases ${last.lod.offscreen_pending} pending, oldest ${round(last.lod.oldest_release_ms)} ms${
-      starved(last.lod.oldest_release_ms)
-    }   on-screen oldest ${round(last.lod.oldest_visible_ms)} ms${starved(last.lod.oldest_visible_ms)}`,
+    `  wait    releases ${last.lod.offscreen_pending} pending, oldest ${round(last.lod.oldest_release_ms)} ms${starved(last.lod.oldest_release_ms)}   on-screen oldest ${
+      round(last.lod.oldest_visible_ms)
+    } ms${starved(last.lod.oldest_visible_ms)}`,
     `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} layouts ${last.mounts.layouts}   window total +${f.mounts[0]}/-${f.mounts[1]}`,
     `  queue   terrain ${last.q_terrain}  poi ${last.q_poi}`,
   ];
@@ -300,9 +289,9 @@ function peak_section(p: Peak): string[] {
     `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  tick ${n1(p.tick_ms)} ms`,
     `  draws ${p.draw_calls}  tris ${round(p.triangles / 1000)}k  heap ${p.heap_mb}MB  queue t${p.q_terrain}/p${p.q_poi}`,
     `  lod chunks ${p.chunks}  in-frustum ${p.in_frustum}  pending ${p.pending}  settling ${p.settling}  blending ${p.blend_active}  pressure ${p.pressure}`,
-    `  wait releases ${p.offscreen_pending} pending, oldest ${round(p.oldest_release_ms)} ms${starved(p.oldest_release_ms)}   on-screen oldest ${
-      round(p.oldest_visible_ms)
-    } ms${starved(p.oldest_visible_ms)}`,
+    `  wait releases ${p.offscreen_pending} pending, oldest ${round(p.oldest_release_ms)} ms${starved(p.oldest_release_ms)}   on-screen oldest ${round(p.oldest_visible_ms)} ms${
+      starved(p.oldest_visible_ms)
+    }`,
   ];
 }
 
