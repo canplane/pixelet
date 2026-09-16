@@ -61,19 +61,26 @@ when its fix lands.
 - **H3** `pub static mut ALLOC_PROBE` in xpute_core `sched/tick.rs:1646`.
 - **H4** ~~`world/decor.rs` `DecorScratch`: past `DECOR_INSTANCES` (65536) an
   instance is dropped silently; past `DECOR_GROUPS` (64) kinds get no
-  group.~~ The lane's length is the renderer's, so what was wrong was the
-  silence, not the ceiling: `DecorScratch.dropped` counts the instances the
-  lanes had no room for and the ledger's `build` line says `DECOR DROPPED n`.
-  What happens past `DECOR_GROUPS` is the renderer's own `GROUPS`, and it is
-  H11's.
+  group.~~ `DECOR_INSTANCES` is the length of two lanes taken once from the
+  mesh section and never given back (`decor.rs:164-180`), so raising it is
+  spending that section, not editing a number — what was wrong was the
+  silence, not the ceiling. `DecorScratch.dropped` counts the instances the
+  lanes had no room for, `Scheduler::decor_dropped` carries it into the
+  window's counters, and the ledger's `build` line says `DECOR DROPPED n`.
+  What happens past `DECOR_GROUPS` (64, the renderer's `GROUPS`) is H11's.
 - **H5** ~~`world/sched.rs` asserts `MAX_CHUNKS` (4096, `build.rs:22`) and
   `MAX_PAGES` (1024).~~ How many chunks a range holds is the viewport's and
   the anchor's, not a number the kernel hands itself, so the mount pass stops
   at `MAX_CHUNKS` and leaves the key unrecorded — the shape the frame's mount
   budget already had — and the next pass tries again. The `add` assert stays,
   where reaching it means the caller has a bug rather than that the view
-  grew. `MAX_PAGES` (1024) is not reachable against `RESIDENT_PAGES` (32 at
-  the cap) and is kept as it is.
+  grew. `MAX_PAGES` (1024) is kept as it is, for a different reason than
+  first written: the kernel's own teller mirrors `tile_pages` and tells a
+  page gone as well as present (`core_tick.rs:255-260`), so that path stays
+  inside `RESIDENT_PAGES` (32 at the cap) — but the shell can also say so
+  itself, through `PAGE_CREATE` / `PAGE_DELETE` (`wasm/src/lib.rs:1277`), and
+  a thousand pages created and never deleted is that caller being wrong, not
+  the view growing. The assert says so, as `Scheduler::add`'s does.
 - **H6** ~~`fetch_scheduler.rs` `HELD` (128, `take` truncates), `NAMES` (256)
   and `CATEGORIES` (16) asserted; `demand.rs` `PHASES_MAX` (6) drops
   silently; `asset_store` `VARIANTS` (16) asserted.~~ **Kept as it is**: a
@@ -102,10 +109,17 @@ when its fix lands.
   alias says only what it is.
 - **H10** ~~`render/gpu/pipeline.rs:32-33,78,114` `LAYOUTS` (32) and `BUILT`
   (48) asserted; `pipeline.ts` kept maps.~~ **Kept as it is**: a key is a
-  pipeline, a format and a sample count, and all three are the code's. There
-  are fifteen `PIPELINE_*`, every `build` call passes `format::CANVAS`, and a
-  count is one or the device's MSAA — thirty keys against `BUILT`'s 48. Only
-  a new pipeline can reach the assert, which is what an assert is for.
+  pipeline, a format and a sample count, and none of the three is grown by
+  what the user does. The twenty-nine `build` calls name fifteen
+  `PIPELINE_*`, each always with the one format it draws into — `CANVAS`,
+  except `PIPELINE_MIPS`, which `layers.rs:43` builds into `RGBA8_SRGB` at
+  one sample — and a sample count that is `4` or `1` as the MSAA setting
+  stands (`renderer.rs:923`). That is twenty-nine keys the code can ask for,
+  against `BUILT`'s 48, and the layouts are derived from those same records,
+  so `LAYOUTS` is fixed by the code in the same way. An entry is never
+  evicted, so the tables hold every key the code can ask for at once — and
+  only a change to the shader records themselves adds one, which is what an
+  assert is for.
 - **H11** ~~`badges.rs:38,291` `SETS` (32) stops drawing sets past it;
   `render/gpu/decor.rs:29,93` `GROUPS` (64) gives groups past it no model;
   `skinned.rs:23,77-78` `SKINS` (16) leaves a seventeenth model's actor
@@ -115,8 +129,12 @@ when its fix lands.
   of the four are the code's: a billboard set is made in two places
   (`chat_bubble.rs:121`, `poi_layer.rs:246`) and each makes one, `GROUPS` is
   the decor registry's four kinds by their variants, and the blocks the draw
-  list names are the chunks (`MAX_CHUNKS`, 4096) and a handful beside them,
-  against 16384 slots that `remove` gives back. `SKINS` was the one that
+  list names are recorded by one caller (`renderer.rs:943`, the list's upload
+  rows) and given back by `remove`. How many there are is the tiers and decor
+  steps the live nodes hold — a node keeps one of each per `LodStep` and lets
+  a step go on eviction — which is not a number to be derived from
+  `MAX_CHUNKS` but the one the ledger's retain line reports; the assert is
+  what watches it. `SKINS` was the one that
   could be pressed: nothing tells the pass a model went away, so the table
   never freed a slot and the character preview walks more shipped variants
   (twelve people, twenty-four pets) than it has slots — a seventeenth drew
