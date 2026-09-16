@@ -19,6 +19,7 @@ use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
 use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use pxl_core::kernel::{kernel, reindex_object, Kernel};
+use pxl_core::global::Global;
 use pxl_core::memory;
 use xpute_core::sys::memory::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
@@ -133,16 +134,11 @@ fn ring_address(ring: &Ring) -> u32 {
     ring.words.as_slice().as_ptr() as u32
 }
 
-/// The module's one state, made on first use. A cell rather than a
-/// `static mut`, whose references the compiler now warns of: the module
-/// is single-threaded and no export re-enters another, which is what
-/// `state()` promises.
-struct Global(core::cell::UnsafeCell<Option<State>>);
-
-// SAFETY: the module runs on one thread; see `state`.
-unsafe impl Sync for Global {}
-
-static STATE: Global = Global(core::cell::UnsafeCell::new(None));
+/// The module's one state, made on first use. xpute's device for it rather
+/// than a `static mut`, whose references the compiler now warns of: the module
+/// is single-threaded and no export re-enters another, which is the promise
+/// `Global` is built on.
+static STATE: Global<State> = Global::new();
 
 extern "C" {
     /// The client's: told a panic's message before the trap, since the trap
@@ -156,26 +152,24 @@ extern "C" {
 }
 
 fn state() -> &'static mut State {
-    // SAFETY: the module runs on one thread and no export re-enters another,
-    // so no two references to the state are live at once.
-    unsafe {
-        (*STATE.0.get()).get_or_insert_with(|| {
-            std::panic::set_hook(Box::new(|info| {
-                let text = info.to_string();
-                host_panic(text.as_ptr(), text.len());
-            }));
-            memory::map().unwrap_or_else(lay_out);
-            State {
-                sq: new_ring(SQ),
-                outbox: Outbox {
-                    cq: new_ring(CQ),
-                    spill: new_ring(SPILL),
-                },
-                snapshot: 0,
-                boot: [0; BOOT_WORDS],
-            }
-        })
-    }
+    STATE.get(|| {
+        std::panic::set_hook(Box::new(|info| {
+            let text = info.to_string();
+            // SAFETY: the client's import, told a message it copies out before
+            // the trap.
+            unsafe { host_panic(text.as_ptr(), text.len()) };
+        }));
+        memory::map().unwrap_or_else(lay_out);
+        State {
+            sq: new_ring(SQ),
+            outbox: Outbox {
+                cq: new_ring(CQ),
+                spill: new_ring(SPILL),
+            },
+            snapshot: 0,
+            boot: [0; BOOT_WORDS],
+        }
+    })
 }
 
 fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {

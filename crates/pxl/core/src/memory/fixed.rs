@@ -19,33 +19,21 @@
 //!                    (module/world/terrain/fixed.rs), so nothing in it is
 //!                    allocated, asked for or refused.
 
-use super::{map, page_up};
+use xpute_core::sys::memory::{nth_at, span_of};
+
+use super::{map, PAGE_BYTES};
 use crate::module::world::terrain::fixed::TERRAIN_BYTES;
 
 /// Each range's bytes, in address order. What a range holds is its own
 /// affair; this says how many bytes it takes and nothing more.
 const RANGES: [u32; 1] = [TERRAIN_BYTES];
 
-/// What `.fixed` spans: each range rounded up to a page, since the next begins
-/// on one. The last range's own rounding is in here too, which is what makes
-/// this the offset of the page the heap starts on.
-pub const BYTES: u32 = {
-    let (mut span, mut i) = (0, 0);
-    while i < RANGES.len() {
-        span += page_up(RANGES[i]);
-        i += 1;
-    }
-    span
-};
+/// What `.fixed` spans, which is where the heap begins past it.
+pub const BYTES: u32 = span_of(&RANGES, PAGE_BYTES);
 
 /// Where the nth range begins, `base` being where `.fixed` does.
 const fn range_at(base: u32, n: usize) -> u32 {
-    let (mut at, mut i) = (base, 0);
-    while i < n {
-        at += page_up(RANGES[i]);
-        i += 1;
-    }
-    at
+    nth_at(base, &RANGES, PAGE_BYTES, n)
 }
 
 /// Where `.fixed.terrain` lies, once the module has laid its memory out.

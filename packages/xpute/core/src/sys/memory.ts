@@ -1,16 +1,20 @@
 // @xpute/core/sys/memory.ts
 
 /**
- * A linear memory cut into sections: the mechanism under a kernel's memory
- * map.
+ * Ranges laid end to end in a linear memory: the mechanism under a kernel's
+ * memory map.
+ *
+ * A linker script's job, and its shape. `ld` places output sections in the
+ * order the script gives, each at a `. = ALIGN(n)` boundary, and answers where
+ * each one landed; which sections there are, what they hold and what `n` is
+ * are the script's. Nothing here knows what a range holds either — it is told
+ * a base, a unit and a list of sizes.
  *
  * The central scheduler reserves the memory — one fixed `WebAssembly.Memory`,
  * `initial == maximum`, never grown, since a grown memory detaches every view
  * and a resizable buffer is slower to read and refused by WebGPU — and gives
- * it to the kernel. The kernel lays out everything inside it: a section is a
- * range of whole regions, each the range one pool cuts, none borrowing from
- * another. What the sections are for, and how many regions each takes, is the
- * kernel's policy, not this file's.
+ * it to the kernel. What the ranges are for, and how large each one is, is the
+ * kernel's policy (crates/pxl/core/src/memory.rs).
  */
 
 import type { u32 } from "../kit/word.ts";
@@ -20,45 +24,47 @@ import { Errno } from "./errno.ts";
 /** A WebAssembly page. */
 export const WASM_PAGE_BYTES: u32 = 1 << 16;
 
-/** Words a section takes in a boot block: its offset, bytes and region size. */
+/** Words a section takes in a boot block: its offset, bytes and alignment. */
 export const SECTION_WORDS: u32 = 3;
 
-export type Section = { offset: u32; bytes: u32; region_bytes: u32 };
+export type Section = {
+  offset: u32;
+  bytes: u32;
+  /** The boundary the section begins on, and so the one the next begins on
+   * past where this one's content ends. */
+  align: u32;
+};
 
-/**
- * Sections over a memory of `bytes`, in address order. The first starts past
- * `front_bytes` — what the module keeps for itself — and ends at region
- * `regions[0]`, cut in `first_region_bytes`; each next takes `regions[i]`
- * regions; one more takes every whole region left, at least one.
- */
-export function lay_out(bytes: u32, front_bytes: u32, region_bytes: u32, first_region_bytes: u32, regions: readonly u32[]): Section[] {
-  const total = Math.floor(bytes / region_bytes);
-  const asked = regions.reduce((a, b) => a + b, 0);
-  const first_end = regions[0] * region_bytes;
-  if (regions.length === 0 || front_bytes >= first_end || front_bytes % first_region_bytes !== 0 || (first_end - front_bytes) % first_region_bytes !== 0) {
-    throw new MarshalError(Errno.EINVAL, `memory: a first section of ${regions[0]} regions past ${front_bytes} bytes is not whole ${first_region_bytes}-byte regions`);
-  }
-  if (total < asked + 1) throw new MarshalError(Errno.EINVAL, `memory: ${total} regions for sections asking ${asked} and one more`);
-  const out: Section[] = [{ offset: front_bytes, bytes: first_end - front_bytes, region_bytes: first_region_bytes }];
-  let end = first_end;
-  for (let i = 1; i < regions.length; i++) {
-    out.push({ offset: end, bytes: regions[i] * region_bytes, region_bytes });
-    end += regions[i] * region_bytes;
-  }
-  out.push({ offset: end, bytes: total * region_bytes - end, region_bytes });
-  return out;
+/** `n` at the next multiple of `unit`, which is where the range holding `n`
+ * bytes ends and the one after it may begin. */
+export function align_up(n: u32, unit: u32): u32 {
+  return Math.ceil(n / unit) * unit;
+}
+
+/** What `sizes` span when laid end to end, each beginning on `unit`. The last
+ * one's own rounding is in here too, which is what makes this the offset of
+ * the boundary whatever follows them starts on. */
+export function span_of(sizes: readonly u32[], unit: u32): u32 {
+  let span = 0;
+  for (const size of sizes) span += align_up(size, unit);
+  return span;
+}
+
+/** Where the `n`th of `sizes` begins, laid from `base` on `unit`. */
+export function nth_at(base: u32, sizes: readonly u32[], unit: u32, n: number): u32 {
+  return base + span_of(sizes.slice(0, n), unit);
 }
 
 /** Writes a section's words at `at`. */
 export function write_section(words: Uint32Array, at: u32, s: Section): void {
   words[at] = s.offset;
   words[at + 1] = s.bytes;
-  words[at + 2] = s.region_bytes;
+  words[at + 2] = s.align;
 }
 
 /** The section whose words are at `at`. */
 export function read_section(words: ArrayLike<u32>, at: u32): Section {
-  return { offset: words[at], bytes: words[at + 1], region_bytes: words[at + 2] };
+  return { offset: words[at], bytes: words[at + 1], align: words[at + 2] };
 }
 
 /**

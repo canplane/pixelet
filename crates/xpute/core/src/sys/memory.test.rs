@@ -2,49 +2,45 @@
 
 use super::*;
 
-const R: u32 = 1 << 26;
+const PAGE: u32 = 1 << 12;
 
 #[test]
-fn memory_sections_are_whole_regions_in_address_order_past_the_front_the_last_taking_what_is_left() {
-    let mut out = [Section::default(); 3];
-    lay_out(8 * R + 123, 32 << 20, R, 16 << 20, &[1, 3], &mut out);
-    assert_eq!(
-        out,
-        [
-            Section {
-                offset: 32 << 20,
-                bytes: 32 << 20,
-                region_bytes: 16 << 20
-            },
-            Section {
-                offset: R,
-                bytes: 3 * R,
-                region_bytes: R
-            },
-            Section {
-                offset: 4 * R,
-                bytes: 4 * R,
-                region_bytes: R
-            },
-        ]
-    );
+fn memory_a_range_ends_at_the_boundary_the_next_one_begins_on() {
+    assert_eq!(align_up(0, PAGE), 0);
+    assert_eq!(align_up(1, PAGE), PAGE);
+    assert_eq!(align_up(PAGE - 1, PAGE), PAGE);
+    assert_eq!(align_up(PAGE, PAGE), PAGE, "a boundary is already one");
+    assert_eq!(align_up(PAGE + 1, PAGE), 2 * PAGE);
+}
+
+#[test]
+fn memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overlap() {
+    let sizes = [PAGE, 1, 3 * PAGE + 1, 0];
+    let base = 8 * PAGE;
+    let at: Vec<u32> = (0..sizes.len()).map(|n| nth_at(base, &sizes, PAGE, n)).collect();
+    assert_eq!(at, [8 * PAGE, 9 * PAGE, 10 * PAGE, 14 * PAGE]);
+    for (i, &a) in at.iter().enumerate() {
+        assert!(a.is_multiple_of(PAGE), "{i}");
+        assert!(a + sizes[i] <= nth_at(base, &sizes, PAGE, i + 1), "{i}: runs into the next");
+    }
+    assert_eq!(span_of(&sizes, PAGE), 6 * PAGE, "the last one's rounding is in the span");
+    assert_eq!(nth_at(base, &sizes, PAGE, sizes.len()), base + span_of(&sizes, PAGE), "and one past the last is where the span ends");
+}
+
+#[test]
+fn memory_nothing_laid_spans_nothing() {
+    assert_eq!(span_of(&[], PAGE), 0);
+    assert_eq!(nth_at(64, &[], PAGE, 0), 64);
 }
 
 #[test]
 fn memory_a_section_s_words_read_back_as_they_were_written() {
     let mut words = [0u32; 2 * SECTION_WORDS as usize];
     let s = Section {
-        offset: R,
-        bytes: 2 * R,
-        region_bytes: R,
+        offset: 1 << 26,
+        bytes: 2 << 26,
+        align: PAGE,
     };
     write_section(&mut words, SECTION_WORDS as usize, s);
     assert_eq!(read_section(&words, SECTION_WORDS as usize), s);
-}
-
-#[test]
-#[should_panic]
-fn memory_too_few_regions_for_the_sections_is_refused() {
-    let mut out = [Section::default(); 3];
-    lay_out(2 * R, 32 << 20, R, 16 << 20, &[1, 1], &mut out);
 }

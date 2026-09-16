@@ -48,7 +48,7 @@
 //! one's business but its own, so the terrain is what it holds and not a byte
 //! more, and what is left over is under a page.
 
-use xpute_core::sys::memory::Section;
+use xpute_core::sys::memory::{align_up, Section};
 
 pub mod fixed;
 
@@ -63,12 +63,11 @@ const _: () = assert!(
     "the heap's smallest block is the page the sections are laid out on"
 );
 
-/// `n` at the page every range in the memory begins on. The one place the
-/// rule is written: a range starts here, the next starts at this past where
-/// this one's content ends, and what is left over is under a page and no
-/// one's.
+/// `n` at the page. The kernel's one application of xpute's `align_up`: the
+/// unit every range in this memory begins on is PAGE_BYTES and nothing else,
+/// so the choice is made here once rather than passed at each call.
 pub const fn page_up(n: u32) -> u32 {
-    n.div_ceil(PAGE_BYTES) * PAGE_BYTES
+    align_up(n, PAGE_BYTES)
 }
 
 /// What `.fixed` spans, which is what the heap begins past. Whose ranges add
@@ -129,12 +128,12 @@ pub fn lay_out(bytes: u32, data_end: u32) -> Map {
         fixed: Section {
             offset: fixed_at(data_end),
             bytes: FIXED_BYTES,
-            region_bytes: PAGE_BYTES,
+            align: PAGE_BYTES,
         },
         heap: Section {
             offset: heap,
             bytes: regions * REGION_BYTES - heap,
-            region_bytes: PAGE_BYTES,
+            align: PAGE_BYTES,
         },
     }
 }
