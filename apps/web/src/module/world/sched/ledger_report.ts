@@ -9,6 +9,8 @@
 // Pasteable text, sized to land in a findings doc; trace.rs is the
 // machine-readable path.
 
+import { loaf_supported } from "./long_frame.ts";
+
 const MB = 1048576;
 
 const n1 = (n: number) => (n ?? 0).toFixed(1);
@@ -328,7 +330,7 @@ export function ledger_report_text(r: LedgerReport): string {
   out.push(...frames_section(r));
   if (r.peak !== null) out.push(...peak_section(r.peak));
   out.push(...tasks_section(r));
-  out.push(`long frames n=${r.longs.length}`);
+  out.push(`long frames n=${r.longs.length}${loaf_supported() ? "" : " (LoAF unsupported; longtask only)"}`);
 
   if (r.recent.length > 0) {
     out.push(`--- last ${r.recent.length} tasks ---`);

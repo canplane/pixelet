@@ -1198,6 +1198,22 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             }
             return Ok(Some((0, None)));
         }
+        Cmd::WORLD_LONG_FRAME => {
+            let f = fields(pkt)?;
+            pxl_core::module::world::sched::ledger::ledger_record_long_frame(pxl_core::module::world::sched::ledger::LongFrameRecord {
+                source: if u32_at(&f, 0)? == 0 {
+                    pxl_core::module::world::sched::ledger::LongFrameSource::Loaf
+                } else {
+                    pxl_core::module::world::sched::ledger::LongFrameSource::Longtask
+                },
+                t: number_at(&f, 1)?,
+                duration_ms: number_at(&f, 2)?,
+                blocking_ms: number_at(&f, 3)?,
+                script_ms: number_at(&f, 4)?,
+                render_ms: number_at(&f, 5)?,
+            });
+            return Ok(Some((0, None)));
+        }
         Cmd::FETCH_BODY => {
             let f = fields(pkt)?;
             let at = pxl_core::module::world::fetch::fetch_body(u64_at(&f, 0)?, u32_at(&f, 1)?);
@@ -1565,7 +1581,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE | Cmd::WORLD_ACTION | Cmd::WORLD_UPDATE | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::FETCH_BODY | Cmd::FETCH_UPDATE | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE | Cmd::GPU_CREATE | Cmd::GPU_DELETE | Cmd::SURFACE_CREATE | Cmd::SURFACE_UPDATE | Cmd::SURFACE_DELETE => return Ok(None),
+        Cmd::WORLD_CREATE | Cmd::WORLD_ACTION | Cmd::WORLD_LONG_FRAME | Cmd::WORLD_UPDATE | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::FETCH_BODY | Cmd::FETCH_UPDATE | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE | Cmd::GPU_CREATE | Cmd::GPU_DELETE | Cmd::SURFACE_CREATE | Cmd::SURFACE_UPDATE | Cmd::SURFACE_DELETE => return Ok(None),
         Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
         Cmd::WORLD_TOAST | Cmd::WORLD_LOG | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => return Ok(None),
     }
