@@ -1,104 +1,38 @@
 // pxl_core/module/world/sched/log.rs
 
-//! The ledger's live console stream — what the gauge panel cannot do:
+//! The ledger's live stream — what the gauge panel cannot do: records as they
+//! land, so a stutter can be watched happening and correlated against whatever
+//! else is logging, rather than read off a panel that only shows the settled
+//! aggregate.
 //!
-//! - a **live console stream** of records as they land, so a stutter can be
-//!   watched happening and correlated against whatever else is logging, rather
-//!   than read off a panel that only shows the settled aggregate.
+//! What is streamed is what was measured. The lines a person reads are the
+//! shell's (apps/web/src/module/world/sched/ledger_report.ts), the same
+//! formatters the report already uses, so a streamed task and a reported one
+//! read alike without this side knowing a word of it.
 //!
-//! The report the rings are read as is report.rs, which carries the numbers
-//! and leaves the words to the shell; this side still writes its own lines,
-//! because a console stream is one line at a time and has nowhere to put a
-//! document.
+//! It does not go out on the ring. The ring is the control path — ordered,
+//! back-pressured, and full is fatal: `Outbox::post` asserts when the
+//! completion queue and its spill are both full, so a debug line could take
+//! the module down, and the moment logging is turned on is exactly the moment
+//! instrumentation would be competing for arena bytes with the fetch burst it
+//! was turned on to watch. This is what every operating system separates —
+//! ftrace and perf mmap their own per-CPU buffers, printk keeps `log_buf` and
+//! is read through /dev/kmsg, eBPF has its own ring — so the stream is a
+//! buffer the consumer reads at its own pace, through pxl-wasm's `ledger_log`.
 //!
-//! A dev instrument that never feeds back into scheduling. The live stream
-//! thresholds frames deliberately: an unfiltered per-frame line would
-//! bury everything else in the console within seconds, so only frames that
-//! missed a vsync while moving, or overran the budget, are worth a line —
-//! summary.rs's `missed` and `overran`, the same tests the report counts. The
-//! console itself is the shell's: lines are handed over by `take_log_lines`.
+//! A dev instrument that never feeds back into scheduling. The stream
+//! thresholds frames deliberately: an unfiltered per-frame record would bury
+//! everything else within seconds, so only frames that missed a vsync while
+//! moving, or overran the budget, are kept — summary.rs's `missed` and
+//! `overran`, the same tests the report counts.
 
-use pxl_shared::spec::fetch::FetchFail;
-
-use super::demand::Phases;
-use super::ledger::{ledger_recording_start, ledger_set_sink, FrameSample, LedgerSink, LongFrameRecord, LongFrameSource, TaskRecord};
+use super::ledger::{ledger_recording_start, ledger_set_sink, FrameSample, LedgerSink, LongFrameRecord, TaskRecord};
 use super::summary::{missed, overran};
 use super::tick::tick_step_stats_reset;
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::module::world::poi::poi_badge::badge_atlas;
 
-
-fn n1(n: f64) -> String {
-    format!("{n:.1}")
-}
-
-fn phases_text(phases: Option<&Phases>) -> String {
-    let Some(phases) = phases.filter(|p| !p.is_empty()) else { return String::new() };
-    let parts: Vec<String> = phases.iter().map(|(k, v)| format!("{} {}", k.trim_end_matches("_ms"), if k == "bytes" { v.to_string() } else { n1(v) })).collect();
-    format!("  [{}]", parts.join(" "))
-}
-
-fn task_line(rec: &TaskRecord) -> String {
-    let total = rec.end_ms - rec.enqueue_ms;
-    let timing = match rec.start_ms {
-        Some(start) => format!(" q{} r{}", n1(start - rec.enqueue_ms), n1(rec.end_ms - start)),
-        None => String::new(),
-    };
-    format!(
-        "[{:>9}] {:<34} {:<7} {:>8}ms{timing} p{}{}{}",
-        n1(rec.enqueue_ms),
-        rec.key,
-        rec.outcome.as_str(),
-        n1(total),
-        rec.priority,
-        phases_text(rec.phases.as_ref()),
-        if rec.fail.fail == FetchFail::None { String::new() } else { format!("  [{}]", rec.fail) }
-    )
-}
-
-fn signed(n: f64) -> String {
-    if n >= 0.0 {
-        format!("+{n}")
-    } else {
-        format!("{n}")
-    }
-}
-
-/// `prev` is the frame immediately before this one in the ring, when known —
-/// buffers/heap only mean something as deltas. A frame that stalls with no
-/// mounts and a small scheduler pass has to be spending the time on something it
-/// *created*, and this is where that shows up.
-fn frame_line(s: &FrameSample, prev: Option<&FrameSample>) -> String {
-    let d = prev.map_or(String::new(), |p| format!("  Δbuf {} Δbuf_mb {} Δheap {}MB", signed(s.buffers - p.buffers), signed(s.buffer_mb - p.buffer_mb), signed(s.heap_mb - p.heap_mb)));
-    format!(
-        "[{:>9}] dt {} = task {} + offthread {}  gpu {}  sched {}/{}{} (tick {})  draws {} tris {}k  buf {}  heap {}MB  mount +{}/-{} layouts {}{d}",
-        n1(s.t),
-        n1(s.dt_ms),
-        n1(s.task_ms),
-        n1((s.dt_ms - s.task_ms).max(0.0)),
-        n1(s.gpu_ms),
-        n1(s.sched_ms),
-        n1(s.budget_ms),
-        if s.settled { " still" } else { "" },
-        n1(s.cpu.tick_ms),
-        s.draw_calls,
-        (s.triangles / 1000.0).round(),
-        s.buffers,
-        s.heap_mb,
-        s.mounts.added,
-        s.mounts.removed,
-        s.mounts.layouts
-    )
-}
-
-fn long_frame_line(l: &LongFrameRecord) -> String {
-    let source = match l.source {
-        LongFrameSource::Loaf => "loaf",
-        LongFrameSource::Longtask => "longtask",
-    };
-    format!("[{:>9}] {source:<8} {}ms  script {}  render {}  blocking {}", n1(l.t), n1(l.duration_ms), n1(l.script_ms), n1(l.render_ms), n1(l.blocking_ms))
-}
 
 /// The side counters printed beside the rings, cumulative from load.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -182,10 +116,18 @@ fn counters() -> Counters {
     }
 }
 
+/// What the stream holds for the shell to come and get. A consumer that stops
+/// reading must not grow the heap the thing being measured allocates from, so
+/// each is capped and the oldest goes — printk's ring loses the oldest line
+/// too, rather than the producer waiting on the reader.
+const PENDING: usize = 512;
+
 struct Log {
     baseline: Counters,
     logging: bool,
-    lines: Vec<String>,
+    tasks: Vec<TaskRecord>,
+    frames: Vec<FrameSample>,
+    longs: Vec<LongFrameRecord>,
 }
 
 static LOG: Global<Log> = Global::new();
@@ -194,7 +136,9 @@ fn log() -> &'static mut Log {
     LOG.get(|| Log {
         baseline: counters(),
         logging: false,
-        lines: Vec::new(),
+        tasks: Vec::new(),
+        frames: Vec::new(),
+        longs: Vec::new(),
     })
 }
 
@@ -215,18 +159,25 @@ pub fn ledger_logging() -> bool {
     log().logging
 }
 
+fn keep<T>(held: &mut Vec<T>, one: T) {
+    if held.len() == PENDING {
+        held.remove(0);
+    }
+    held.push(one);
+}
+
 fn log_task(rec: &TaskRecord) {
-    log().lines.push(format!("[ledger] {}", task_line(rec)));
+    keep(&mut log().tasks, rec.clone());
 }
 
 fn log_frame(s: &FrameSample) {
     if missed(s) || overran(s) {
-        log().lines.push(format!("[ledger] {}", frame_line(s, None)));
+        keep(&mut log().frames, *s);
     }
 }
 
 fn log_long_frame(l: &LongFrameRecord) {
-    log().lines.push(format!("[ledger] {}", long_frame_line(l)));
+    keep(&mut log().longs, *l);
 }
 
 /// Turns the live console stream on/off by installing (or clearing) the
@@ -244,7 +195,15 @@ pub fn ledger_set_logging(on: bool) {
     }));
 }
 
-/// The console lines the stream wrote since the last take.
-pub fn take_log_lines() -> Vec<String> {
-    core::mem::take(&mut log().lines)
+/// The records the stream kept since the last take, cleared by taking.
+pub fn take_log_records() -> (Vec<TaskRecord>, Vec<FrameSample>, Vec<LongFrameRecord>) {
+    let l = log();
+    (core::mem::take(&mut l.tasks), core::mem::take(&mut l.frames), core::mem::take(&mut l.longs))
+}
+
+/// Whether anything is waiting, so a turn that has nothing to say costs the
+/// shell no call.
+pub fn log_pending() -> bool {
+    let l = log();
+    !l.tasks.is_empty() || !l.frames.is_empty() || !l.longs.is_empty()
 }

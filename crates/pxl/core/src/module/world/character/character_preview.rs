@@ -87,7 +87,7 @@ pub fn preview_close(id: u32) {
     let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return };
     let case = c.cases.remove(pos);
     if let Some(actor) = case.actor {
-        with_world(|world, sched| sched.models.remove_actor(world, &mut sched.draw, actor));
+        with_world(|_world, sched| sched.models.remove_actor(&mut sched.draw, actor));
     }
 }
 

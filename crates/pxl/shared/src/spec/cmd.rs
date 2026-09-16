@@ -618,7 +618,10 @@ pub enum Cmd {
     /// [show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a
     /// toast shown or dismissed
     WORLD_TOAST = 0x1b13,
-    /// [line str] — a console line
+    /// retired — the ledger's stream is read through pxl-wasm's
+    /// `ledger_log`, not raised here. The number stays taken: an old shell
+    /// reads a number a new kernel sends, so one that has meant something
+    /// must never come to mean another thing
     WORLD_LOG = 0x1b14,
     /// [ui str] — app/shell.rs's snapshot, when it changed
     WORLD_SNAPSHOT = 0x1b15,

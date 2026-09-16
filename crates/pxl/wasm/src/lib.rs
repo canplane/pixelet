@@ -24,7 +24,6 @@ use xpute_core::sys::memory::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind};
-use pxl_core::world::pool::Pool;
 use pxl_core::world::raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
@@ -37,30 +36,32 @@ use xpute_core::kit::array::U8Array;
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
 
-extern "C" {
-    static __heap_base: u8;
-}
-
-/// The module's heap: what is left of the module's section after the
-/// linker placed the stack and the data before it (`--stack-first`, the
-/// default; 1 MB of stack), up to the section's end. Sized against what a
-/// chunk's scratch reaches (wasm_bake.test.ts probes it): about 140 bytes
-/// a run at the peak, most of it a vector's old block held while its
-/// doubled replacement is filled, so a 65k-run chunk — whose fine mesh no
-/// longer fits a pool region — takes under 10 MB of the 31 the heap has.
+/// The heap: from the page past the last fixed section to the end of the
+/// memory, ascending. Everything before it is settled at boot — the module's
+/// own stack and data, the fixed section, the terrain slab — so the heap is
+/// what is left, and what is left is whatever the device gave.
+///
+/// The linker's `__heap_base` is not it. That is where the module's data ends,
+/// which is inside the first section and long before the terrain; the heap is
+/// past all of them.
 struct ModuleHeap;
 
-impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
+impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
     fn base() -> usize {
-        core::ptr::addr_of!(__heap_base) as usize
+        memory::HEAP_AT as usize
     }
     fn end() -> usize {
-        MODULE_BYTES as usize
+        core::arch::wasm32::memory_size(0) * (1 << 16)
     }
 }
 
+/// The module's one allocator: a slab of size classes over a buddy of 4 KiB
+/// pages, both over the range above. The buddy is what the sections' blocks
+/// come from; the slab is what a `Vec` or a `String` comes from, and it
+/// borrows and returns whole runs of pages to the same buddy, so neither level
+/// can starve while the other has room.
 #[global_allocator]
-static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds::fixed_heap::FixedHeap::new();
+static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
 
 struct State {
     /// The submission ring (glue → core) and the completion ring (core →
@@ -130,14 +131,18 @@ extern "C" {
 
 /// The submission ring's block, the completion ring's and the spill's, taken
 /// from the fixed section the first time a ring is wanted. The map is laid out
-/// here if it has not been: a ring cannot come from a section that has not been
-/// cut, and making that a dependency rather than an order to keep is what
-/// leaves the section free to put them where it likes.
+/// here if it has not been: the heap begins past the sections, so it cannot
+/// hand out a ring before they have been cut.
 fn ring_blocks() -> [u32; 3] {
     memory::map().unwrap_or_else(lay_out);
-    let pool = &mut kernel().pools[memory::FIXED_POOL as usize];
     assert!(ring_bytes(RING_CAPACITY, RING_ARENA_BYTES) <= RING_BYTES, "a ring outgrows its block");
-    core::array::from_fn(|_| pool.acquire(RING_BYTES).expect("the fixed section has no room for a ring") as u32)
+    core::array::from_fn(|_| {
+        // SAFETY: a block of the heap the rings hold for the module's life and
+        // never give back, RING_BYTES long.
+        let at = unsafe { ALLOC.malloc(RING_BYTES as usize) };
+        assert!(!at.is_null(), "the heap has no room for a ring");
+        at as u32
+    })
 }
 
 fn state() -> &'static mut State {
@@ -209,7 +214,7 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
     }
 }
 
-/// The volumes once `boot` cut them from the pools; by the field, so the
+/// The volumes once `boot` opened them; by the field, so the
 /// state's other fields stay borrowable beside them.
 fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
     volumes.as_mut().expect("a volume before boot")
@@ -265,7 +270,7 @@ pub extern "C" fn boot() -> *const u32 {
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[MODULE_BYTES, sq, cq]);
     s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
-    for (i, sec) in [map.fixed, map.slab, map.mesh].into_iter().enumerate() {
+    for (i, sec) in [map.fixed, map.slab, map.heap].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
@@ -276,29 +281,17 @@ pub extern "C" fn boot() -> *const u32 {
 }
 
 /// Cuts the memory the central scheduler gave into the kernel's map, and
-/// makes the sections' pools and the volumes over them.
+/// makes the volumes over it.
+///
+/// Nothing is cut here any more. The sections are ranges the map names and
+/// their contents' own affair; the heap is the one allocator and it knows its
+/// range without being told (`buddy_tree`'s `Range`), so laying out is
+/// recording what the map says and opening the volumes over it.
 fn lay_out() -> memory::Map {
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = memory::lay_out(given.min(u32::MAX as u64) as u32);
-    let k = kernel();
-    // The slab is no pool: a terrain page's record is its own coordinate, so
-    // only the fixed section and the mesh have one.
-    for sec in [map.fixed, map.mesh] {
-        // SAFETY: the memory is this module's own, addressed from 0, and the
-        // map gives each pool a range no other pool has.
-        k.pools.push(unsafe {
-            Pool::new(
-                core::ptr::null_mut(),
-                (sec.offset + sec.bytes) as usize,
-                sec.offset as usize,
-                sec.bytes as usize,
-                sec.region_bytes,
-                memory::MIN_BLOCK_BYTES,
-            )
-        });
-    }
-    // SAFETY: the pools were cut from this module's memory, addressed from 0.
-    k.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), memory::FIXED_POOL, memory::MESH_POOL) });
+    // SAFETY: the memory is this module's own, addressed from 0.
+    kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
     memory::set_map(map);
     map
 }
@@ -497,11 +490,6 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
         }
     }
-    for line in pxl_core::module::world::sched::log::take_log_lines() {
-        raise(&s.outbox, Cmd::WORLD_LOG, 1, |e| {
-            e.str(Some(line.as_str()));
-        });
-    }
     let mut text = String::new();
     pxl_core::app::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
     let ui = text.as_str();
@@ -618,12 +606,6 @@ fn volume_at(f: &BranchCursor, i: u32) -> Result<usize, MarshalError> {
         0 => Err(MarshalError::new(Errno::EINVAL, Some("volume 0"), None)),
         id => Ok(id as usize - 1),
     }
-}
-
-/// The pool a packet's first child names.
-fn pool_at<'a>(k: &'a mut Kernel, f: &BranchCursor) -> Result<&'a mut Pool, MarshalError> {
-    let id = u32_at(f, 0)?;
-    k.pools.get_mut(id as usize).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some(&format!("no pool {id}")), None))
 }
 
 /// A ray as a query's packet carries it: the map origin, the origin, the
@@ -825,31 +807,30 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 }),
             )));
         }
+        // There is one heap now, so the pool a packet names is ignored: every
+        // one of these answers for it.
         Cmd::POOL_READ => {
-            let f = fields(pkt)?;
-            return Ok(Some((pool_at(k, &f)?.stat_words() as usize as i32, None)));
+            return Ok(Some((ALLOC.stat() as usize as i32, None)));
         }
         Cmd::POOL_ACQUIRE => {
             let f = fields(pkt)?;
             let bytes = u32_at(&f, 1)?;
-            return Ok(Some((pool_at(k, &f)?.acquire(bytes).map_or(0, |at| at as i32), None)));
+            // SAFETY: the heap's own range; the caller keeps what it is given.
+            return Ok(Some((unsafe { ALLOC.malloc(bytes as usize) } as i32, None)));
         }
         Cmd::POOL_RELEASE => {
             let f = fields(pkt)?;
-            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
-            if !pool_at(k, &f)?.release(at, bytes) {
-                return Err(MarshalError::new(
-                    Errno::EINVAL,
-                    Some(&format!("a {bytes}B block at {at} its pool does not hold, or holds already")),
-                    None,
-                ));
-            }
+            let at = u32_at(&f, 1)? as usize;
+            let bytes = u32_at(&f, 2)? as usize;
+            // SAFETY: the caller's — a block this heap gave and has not taken
+            // back, at the size it was asked for.
+            unsafe { ALLOC.free(at as *mut u8, bytes) };
             return Ok(Some((0, None)));
         }
         Cmd::POOL_FREE => {
-            let f = fields(pkt)?;
-            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
-            return Ok(Some((pool_at(k, &f)?.is_free(at, bytes) as i32, None)));
+            // Whether a block is free is not a question this heap answers: it
+            // keeps no bit that says so of a block that is out.
+            return Ok(Some((0, None)));
         }
         Cmd::VOLUME_STAT => {
             let at = &volumes_of(&mut k.volumes)?.stat as *const _ as usize;
@@ -876,7 +857,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::VOLUME_DELETE => {
             let id = volume_at(&fields(pkt)?, 0)?;
-            volumes_of(&mut k.volumes)?.release(&mut k.pools, id);
+            volumes_of(&mut k.volumes)?.release(id);
             return Ok(Some((0, None)));
         }
         Cmd::VOLUME_FILL => {
@@ -888,7 +869,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 sub: 0,
             };
             let (cx, cy, z0, z1) = (u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?, i32_at(&f, 4)?);
-            let ok = volumes_of(&mut k.volumes)?.fill_column(&mut k.pools, id, (cx, cy), z0, z1, voxel);
+            let ok = volumes_of(&mut k.volumes)?.fill_column(id, (cx, cy), z0, z1, voxel);
             return Ok(Some((ok as i32, None)));
         }
         Cmd::VOLUME_VOXEL | Cmd::VOLUME_SUB_VOXEL => {
@@ -906,9 +887,9 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             };
             let v = volumes_of(&mut k.volumes)?;
             let ok = if cmd == Cmd::VOLUME_VOXEL {
-                v.set_voxel(&mut k.pools, id, cell, voxel)
+                v.set_voxel(id, cell, voxel)
             } else {
-                v.append_sub_voxel(&mut k.pools, id, cell, voxel)
+                v.append_sub_voxel(id, cell, voxel)
             };
             return Ok(Some((ok as i32, None)));
         }
@@ -1039,7 +1020,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::TERRAIN_PAINT => {
             let id = volume_at(&fields(pkt)?, 0)?;
             let v = volumes_of(&mut k.volumes)?;
-            return Ok(Some((k.chunk.paint(v, &mut k.pools, id) as i32, None)));
+            return Ok(Some((k.chunk.paint(v, id) as i32, None)));
         }
         Cmd::OBJECT_PAINT => {
             let f = fields(pkt)?;
@@ -1058,7 +1039,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 None => None,
             };
             let v = volumes_of(&mut k.volumes)?;
-            let made = k.painter.paint(&k.objects, v, &mut k.pools, id, key, hide, carve);
+            let made = k.painter.paint(&k.objects, v, id, key, hide, carve);
             return Ok(Some(((made.any as u32 | ((made.refused as u32) << 1)) as i32, None)));
         }
         Cmd::RAY_COLUMN => {
@@ -1418,7 +1399,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
             sched.ghost.set_decor(&mut world, &mut sched.draw, at, u32_at(&f, 3)?, number_at(&f, 4)? as f32);
         }
-        Cmd::GHOST_DELETE => sched.ghost.clear(&mut world, &mut sched.draw),
+        Cmd::GHOST_DELETE => sched.ghost.clear(&mut sched.draw),
         Cmd::PUCK_UPDATE => {
             let f = fields(pkt)?;
             let zone = floats_at(&f, 3, 7)?;
@@ -1440,7 +1421,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             sched.markers.set_beacon([number_at(&f, 0)?, number_at(&f, 1)?], bool_at(&f, 2)?);
         }
-        Cmd::PUCK_DELETE => sched.markers.clear(&mut world, &mut sched.draw),
+        Cmd::PUCK_DELETE => sched.markers.clear(&mut sched.draw),
         Cmd::BILLBOARD_CREATE => {
             let order = u32_at(&fields(pkt)?, 0)?;
             return Ok(Some((sched.billboards.new_set(order) as i32, None)));
@@ -1458,7 +1439,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             sched.billboards.follow(tag, u32_at(&f, 0)?, number_at(&f, 1)?);
         }
-        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut world, &mut sched.draw, tag),
+        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut sched.draw, tag),
         Cmd::ACTOR_CREATE => {
             let model = u32_at(&fields(pkt)?, 0)?;
             return Ok(Some((sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32), None)));
@@ -1476,7 +1457,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             sched.models.play(tag, u32_at(&f, 0)?, number_at(&f, 1)? as f32);
         }
-        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut world, &mut sched.draw, tag),
+        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut sched.draw, tag),
         Cmd::DEBUG_UPDATE => {
             let f = fields(pkt)?;
             let vertices = floats_at(&f, 3, 6)?;
@@ -1496,7 +1477,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::MODEL_CREATE => {
             let f = fields(pkt)?;
-            let Some((id, at)) = sched.models.new_model(&mut world, u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
+            let Some((id, at)) = sched.models.new_model(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
                 return Ok(Some((-1, None)));
             };
             return Ok(Some((
@@ -1645,7 +1626,6 @@ fn parts<'a>(k: &'a mut Kernel, events: &'a Outbox) -> Parts<'a> {
     Parts {
         world: World {
             volumes: opened(&mut k.volumes),
-            pools: &mut k.pools,
             materials: &k.terrain,
             store: &k.objects,
             painter: &mut k.painter,
@@ -1931,6 +1911,9 @@ fn install_host() {
     pxl_core::host::set_measure_text(hook_measure_text);
     xpute_core::kit::rng::set_entropy(hook_entropy);
     pxl_core::host::set_heap_used(|| ALLOC.used());
+    pxl_core::host::set_heap_releases(|| ALLOC.releases());
+    pxl_core::host::set_heap_live(|| ALLOC.live());
+    pxl_core::host::set_heap_bytes(|| ALLOC.range_bytes());
     unsafe { xpute_core::sched::tick::ALLOC_PROBE = Some(|| ALLOC.allocs()) };
     pxl_core::module::world::sched::tick::set_step_timing(true);
     install_gpu();
@@ -1976,4 +1959,95 @@ pub extern "C" fn probe_dump() -> *const u8 {
         PROBE_TEXT[..4].copy_from_slice(&(w.0 as u32).to_le_bytes());
         core::ptr::addr_of!(PROBE_TEXT) as *const u8
     }
+}
+
+/// The gauge panel's numbers, and where they lie.
+static GAUGE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
+static GAUGE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+
+/// What the panel draws, over the last `window_ms`: the address of two words,
+/// where the JSON lies in this memory and how long it is.
+///
+/// The consumer says how much recent past it wants, the way `dmesg` is asked
+/// for a tail rather than the kernel guessing one.
+#[no_mangle]
+pub extern "C" fn ledger_gauge(window_ms: f64) -> *const u32 {
+    let text = GAUGE_TEXT.get(String::new);
+    *text = pxl_core::module::world::sched::report::ledger_gauge_json(window_ms);
+    let range = GAUGE_RANGE.get(|| [0; 2]);
+    *range = [text.as_ptr() as u32, text.len() as u32];
+    range.as_ptr()
+}
+
+/// Gives back what the last read took.
+#[no_mangle]
+pub extern "C" fn ledger_gauge_release() {
+    GAUGE_TEXT.set(String::new());
+}
+
+/// The live stream's records, and where they lie.
+///
+/// The same range shape as the trace below, for the same reason: this is
+/// instrumentation, and instrumentation does not go out on the control ring.
+/// It used to — a line per settled task, raised as `WORLD_LOG` every tick —
+/// and that gave a debug feature the ring's failure policy, which is that
+/// `Outbox::post` asserts when the completion queue and its spill are both
+/// full. Turning the stream on during a fetch burst is the case that fills
+/// them, and it is also the only case anyone turns it on for.
+static LOG_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
+static LOG_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+
+/// What the stream has kept since the shell last came for it: the address of
+/// two words, where the JSON lies in this memory and how long it is. Zero
+/// length when there is nothing waiting, which a shell polling every frame is
+/// asking for most of the time.
+#[no_mangle]
+pub extern "C" fn ledger_log() -> *const u32 {
+    let text = LOG_TEXT.get(String::new);
+    *text = if pxl_core::module::world::sched::log::log_pending() {
+        pxl_core::module::world::sched::report::ledger_log_json()
+    } else {
+        String::new()
+    };
+    let range = LOG_RANGE.get(|| [0; 2]);
+    *range = [text.as_ptr() as u32, text.len() as u32];
+    range.as_ptr()
+}
+
+/// Gives back what the last read took.
+#[no_mangle]
+pub extern "C" fn ledger_log_release() {
+    LOG_TEXT.set(String::new());
+}
+
+/// The trace the shell saves, and where it lies.
+///
+/// It is held between the two calls below rather than rebuilt, because the
+/// range handed out has to stay good until the shell has copied the bytes.
+static TRACE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
+static TRACE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+
+/// The ledger's window as Chrome's Trace Event Format, for ui.perfetto.dev:
+/// the address of two words, where the JSON lies in this memory and how long
+/// it is.
+///
+/// A range rather than a message. Recording covers the whole window
+/// (sched/ledger.rs), so a trace is routinely tens of megabytes — past a ring
+/// block, and past what the completion queue is for. The shell reads the two
+/// words, copies the bytes out, and says it is done with `ledger_trace_release`.
+#[no_mangle]
+pub extern "C" fn ledger_trace() -> *const u32 {
+    let text = TRACE_TEXT.get(String::new);
+    *text = pxl_core::module::world::sched::trace::ledger_trace_json();
+    let range = TRACE_RANGE.get(|| [0; 2]);
+    *range = [text.as_ptr() as u32, text.len() as u32];
+    range.as_ptr()
+}
+
+/// Gives back what the last trace took, once the shell has copied it. Tens of
+/// megabytes of the heap otherwise stay held until the next trace is asked
+/// for, on the heap the thing being measured allocates from.
+#[no_mangle]
+pub extern "C" fn ledger_trace_release() {
+    TRACE_TEXT.set(String::new());
 }

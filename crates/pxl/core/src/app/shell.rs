@@ -34,6 +34,7 @@ use crate::module::world::character::store::use_companion_load_store;
 use crate::module::world::object::store::OBJECT_STORAGE_VERSION;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::view::view;
+use crate::module::world::sched::ledger::ledger_recording_stop;
 use crate::module::world::sched::log::{ledger_set_logging, ledger_window_start};
 use crate::module::world::sched::report::ledger_report_json;
 use crate::module::world::terrain::elevation::{get_ele, ground_or_raw};
@@ -405,6 +406,7 @@ pub fn ui_action(text: &str) -> bool {
             ledger_set_logging(on);
         }
         "ledger_window_start" => ledger_window_start(),
+        "ledger_window_stop" => ledger_recording_stop(),
         _ => return false,
     }
     request_world_tick();

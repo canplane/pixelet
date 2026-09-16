@@ -15,7 +15,6 @@
 use crate::bake::volume::{Volumes, Voxel};
 use crate::bake::voxel::NO_LAYER;
 use crate::space::constant::{CHUNK_CELLS, CHUNK_SPAN, PAGE_CELL_SPAN};
-use crate::world::pool::Pool;
 
 /// A page's cells on a side, and its elevation raster's samples on a side
 /// before and after the padding the bicubic reads past the edge.
@@ -215,7 +214,7 @@ impl ChunkSample {
     }
 
     /// Paints every column into `volume`, floor to top.
-    pub fn paint(&self, volumes: &mut Volumes, pools: &mut [Pool], volume: usize) -> bool {
+    pub fn paint(&self, volumes: &mut Volumes, volume: usize) -> bool {
         for cy in 0..CHUNK_SPAN {
             for cx in 0..CHUNK_SPAN {
                 let i = (cy * CHUNK_SPAN + cx) as usize;
@@ -224,7 +223,7 @@ impl ChunkSample {
                     layer_idx: self.layer_idx[i],
                     sub: 0,
                 };
-                if !volumes.fill_column(pools, volume, (cx, cy), self.floor, self.ele[i] as i32 - 1, v) {
+                if !volumes.fill_column(volume, (cx, cy), self.floor, self.ele[i] as i32 - 1, v) {
                     return false;
                 }
             }

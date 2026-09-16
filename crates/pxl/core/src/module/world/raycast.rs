@@ -43,7 +43,6 @@ pub fn ray_hit_world(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<W
     let k = kernel();
     let mut world = World {
         volumes: k.volumes.as_mut()?,
-        pools: &mut k.pools,
         materials: &k.terrain,
         store: &k.objects,
         painter: &mut k.painter,
@@ -66,7 +65,6 @@ pub fn ray_hit_decor(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<D
     let k = kernel();
     let world = World {
         volumes: k.volumes.as_mut()?,
-        pools: &mut k.pools,
         materials: &k.terrain,
         store: &k.objects,
         painter: &mut k.painter,

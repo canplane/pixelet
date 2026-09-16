@@ -54,7 +54,7 @@ impl Ghost {
             return;
         }
         let bytes = mesh_words(LONE_BOX_VERTICES, LONE_BOX_INDICES) * 4;
-        let Some(block) = self.replace(world, draw, shape, bytes) else { return };
+        let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, bytes as usize / 4) };
         write_lone_box(m, size, rgb, layer);
@@ -73,23 +73,24 @@ impl Ghost {
         }
         // A group of one: five float lanes, the flags in a word, band, pos.
         let bytes = 8 * 4;
-        let Some(block) = self.replace(world, draw, shape, bytes) else { return };
+        let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: as for the box.
         let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, 8) };
         m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), 1f32.to_bits(), 0, NO_ENTRY, 0]);
         self.upload(draw, 0, 0);
     }
 
-    pub fn clear(&mut self, world: &mut World, draw: &mut DrawList) {
+    pub fn clear(&mut self, draw: &mut DrawList) {
         if let Some(h) = self.held.take() {
             draw.free(h.handle);
-            world.pools[world.volumes.mesh_pool()].release(h.at, h.bytes);
+            // SAFETY: the block the ghost took and has not given back.
+            unsafe { crate::bake::volume::give_bytes(h.at, h.bytes as usize) };
         }
     }
 
-    fn replace(&mut self, world: &mut World, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {
-        self.clear(world, draw);
-        let at = world.pools[world.volumes.mesh_pool()].acquire(bytes)?;
+    fn replace(&mut self, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {
+        self.clear(draw);
+        let at = crate::bake::volume::take_bytes(bytes as usize)?;
         self.held = Some(Held { shape, at, bytes, handle: 0 });
         Some(at)
     }

@@ -2,41 +2,100 @@
 
 /**
  * Dev overlay for the kernel's ledger (crates/pxl/core/src/module/world/sched):
- * the recording window and the text side as buttons — a fresh window, the
- * pasteable report, and the live console stream. Gated by
- * `import.meta.env.DEV` and the `show_ledger` setting — off by default.
+ * the recording window and the exports as buttons, over the gauge panel
+ * (ledger_gauge.tsx). Gated by `import.meta.env.DEV` and the `show_ledger`
+ * setting — off by default.
  *
- * It also installs the long-frame observers, which outlive it: they are the
- * ledger's rather than the panel's, so closing the panel does not stop a
- * window being recorded.
+ * It also owns the dev lifecycle the ledger's surfaces share, which runs
+ * whether or not the panel is showing: opening the kernel's recording window,
+ * which is off until something asks for it; the long-frame observers, so the
+ * ring is already warm when the panel is opened; and `__pxl_ledger_trace` on
+ * `window`, so a trace can be taken from the console.
  */
 
 import { useEffect, useState } from "react";
 
+import { LedgerGauge } from "./ledger_gauge.tsx";
+import { ledger_drain_log } from "./ledger_log.ts";
 import { install_long_frame_observers } from "./long_frame.ts";
+import { ledger_trace_download } from "./trace.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 
+/** How often the stream is collected while it is on. */
+const DRAIN_MS = 500;
+
 const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90";
+
+type LedgerGlobals = typeof globalThis & { __pxl_ledger_trace?: () => void };
 
 export function LedgerOverlay() {
   const show = useKernel((s) => s.settings.show_ledger === true);
   const [logging, set_logging] = useState(false);
 
-  // The observers outlive the panel: they are the ledger's, not its, so
-  // closing the panel does not stop a window being recorded.
-  useEffect(install_long_frame_observers, []);
+  // Nothing is pushed: the kernel keeps the records and this comes for them,
+  // in batches rather than per frame — the stream is read while watching, and
+  // a drain that ran on every frame would be instrumentation paced by the
+  // thing it measures. The buffer is capped, so a slow reader loses the
+  // oldest rather than growing the kernel's heap.
+  useEffect(() => {
+    if (!logging) return;
+    const id = setInterval(ledger_drain_log, DRAIN_MS);
+    return () => clearInterval(id);
+  }, [logging]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    // The kernel records nothing until something asks, so that a client with no
+    // overlay pays for none of it. This is the asking, and it happens on mount
+    // rather than when the panel is opened: what makes a ledger worth having is
+    // that the minute before you went looking is already in it.
+    kernel_action({ type: "ledger_window_start" });
+    // The observers outlive the panel — they are the ledger's, not its, so
+    // closing the panel does not stop a window being recorded — but they do
+    // not outlive dev. Each long frame they see is a WORLD_LONG_FRAME on the
+    // submission ring, and a client with no overlay has nothing to send it to.
+    install_long_frame_observers();
+    const w = globalThis as LedgerGlobals;
+    w.__pxl_ledger_trace = ledger_trace_download;
+    return () => {
+      delete w.__pxl_ledger_trace;
+    };
+  }, []);
 
   if (!import.meta.env.DEV || !show) return null;
 
   return (
-    <div className="pointer-events-none fixed left-2 top-[84px] z-50 w-[228px] rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
-      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger</div>
+    <div className="pointer-events-none fixed left-2 top-[84px] z-50 max-h-[calc(100dvh-96px)] w-[228px] overflow-hidden rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
+      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger, last 10s</div>
+
+      {
+        /* The buttons come before the numbers: on a phone the panel runs past
+          the bottom of the screen, and what must stay reachable is start/stop
+          and the exports. The body below is clipped rather than scrolled — the
+          panel lets gestures through to the map, and a scrolling body would
+          not. */
+      }
       <div className="mt-1 flex gap-1">
+        {
+          /* start and stop are both present rather than one toggle: the dev
+            overlay opens a window on mount so a cold-load stall is never
+            missed, so a toggle would read "stop" until you had stopped once —
+            and then "start" is the button you cannot find when you want a
+            clean window. */
+        }
         <button type="button" onClick={() => kernel_action({ type: "ledger_window_start" })} title="clear everything and begin a fresh window" className={BUTTON}>
           start
         </button>
+        <button type="button" onClick={() => kernel_action({ type: "ledger_window_stop" })} title="freeze the window so exports are stable while you read them" className={BUTTON}>
+          stop
+        </button>
+      </div>
+      <div className="mt-1 flex gap-1">
         <button type="button" onClick={() => kernel_action({ type: "ledger_report" })} title="print + copy a text report" className={BUTTON}>
           report
+        </button>
+        <button type="button" onClick={ledger_trace_download} title="save the window as a Trace Event Format file for ui.perfetto.dev" className={BUTTON}>
+          trace
         </button>
         <button
           type="button"
@@ -50,6 +109,9 @@ export function LedgerOverlay() {
           {logging ? "log on" : "log"}
         </button>
       </div>
+      <div className="my-1 border-t border-white/10" />
+
+      <LedgerGauge />
     </div>
   );
 }

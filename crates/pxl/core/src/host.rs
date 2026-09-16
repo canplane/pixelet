@@ -114,3 +114,47 @@ pub fn set_heap_used(used: fn() -> usize) {
 pub fn heap_used() -> usize {
     (HEAP_USED.get(|| no_heap))()
 }
+
+static HEAP_RELEASES: Global<fn() -> u32> = Global::new();
+
+fn no_releases() -> u32 {
+    0
+}
+
+/// Installs the reading a build refused a block waits on: the count of blocks
+/// the heap has taken back. It moves when, and only when, a request refused
+/// before might now be served, which is what makes it a signal and not a
+/// gauge.
+pub fn set_heap_releases(releases: fn() -> u32) {
+    HEAP_RELEASES.set(releases);
+}
+
+/// Blocks the heap has taken back; 0 where there is no heap.
+pub fn heap_releases() -> u32 {
+    (HEAP_RELEASES.get(|| no_releases))()
+}
+
+static HEAP_LIVE: Global<fn() -> usize> = Global::new();
+
+/// Installs the reading a pressure test compares: the bytes handed out and not
+/// yet given back.
+pub fn set_heap_live(live: fn() -> usize) {
+    HEAP_LIVE.set(live);
+}
+
+/// The bytes the heap has handed out and not taken back; 0 where there is none.
+pub fn heap_live() -> usize {
+    (HEAP_LIVE.get(|| no_heap))()
+}
+
+static HEAP_BYTES: Global<fn() -> usize> = Global::new();
+
+/// Installs the size of the range the heap was given.
+pub fn set_heap_bytes(bytes: fn() -> usize) {
+    HEAP_BYTES.set(bytes);
+}
+
+/// The bytes of the range the heap was given; 0 where there is none.
+pub fn heap_bytes() -> usize {
+    (HEAP_BYTES.get(|| no_heap))()
+}

@@ -193,7 +193,7 @@ impl Walker {
 
     fn release(&mut self) {
         if let Some(held) = self.held.take() {
-            with_world(|world, sched| sched.models.remove_actor(world, &mut sched.draw, held.actor));
+            with_world(|_world, sched| sched.models.remove_actor(&mut sched.draw, held.actor));
         }
         self.set_ready(false);
     }

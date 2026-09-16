@@ -12,7 +12,6 @@
 //! cancels an upload not yet taken: the block is the glue's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
-use crate::world::pool::Pool;
 
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.
@@ -236,17 +235,17 @@ pub struct Held {
 
 impl Held {
     /// Copies `len` bytes at `lane` of `mem` into the block, growing it
-    /// from `pool` first when it must; false when the pool refused, the
+    /// from the heap first when it must; false when it refused, the
     /// block then gone.
     ///
     /// # Safety
-    /// `lane` addresses `len` bytes in `mem`, which the pool's blocks are in.
-    pub unsafe fn write(&mut self, draw: &mut DrawList, pool: &mut Pool, mem: *mut u8, lane: usize, len: u32) -> bool {
+    /// `lane` addresses `len` bytes in `mem`, which the heap's blocks are in.
+    pub unsafe fn write(&mut self, draw: &mut DrawList, mem: *mut u8, lane: usize, len: u32) -> bool {
         let need = len.max(4);
         if need > self.bytes {
-            self.free(draw, pool);
+            self.free(draw);
             let bytes = need.next_power_of_two();
-            let Some(at) = pool.acquire(bytes) else { return false };
+            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return false };
             self.at = at;
             self.bytes = bytes;
         }
@@ -259,11 +258,12 @@ impl Held {
         true
     }
 
-    /// Lets the block go, on the renderer and in the pool.
-    pub fn free(&mut self, draw: &mut DrawList, pool: &mut Pool) {
+    /// Lets the block go, on the renderer and in the heap.
+    pub fn free(&mut self, draw: &mut DrawList) {
         if self.bytes > 0 {
             draw.free(self.handle);
-            pool.release(self.at, self.bytes);
+            // SAFETY: the block this lane took and has not given back.
+            unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
             self.bytes = 0;
             self.handle = 0;
         }

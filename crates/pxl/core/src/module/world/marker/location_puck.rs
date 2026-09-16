@@ -84,7 +84,6 @@ fn world_of<R>(f: impl FnOnce(&mut World, &mut crate::world::sched::Scheduler) -
     let volumes = k.volumes.as_mut()?;
     let mut world = World {
         volumes,
-        pools: &mut k.pools,
         materials: &k.terrain,
         store: &k.objects,
         painter: &mut k.painter,
@@ -164,6 +163,6 @@ fn clear(p: &mut Puck) {
     }
     p.shown = false;
     p.zone_for = None;
-    world_of(|world, sched| sched.markers.clear(world, &mut sched.draw));
+    world_of(|_world, sched| sched.markers.clear(&mut sched.draw));
     request_world_tick();
 }

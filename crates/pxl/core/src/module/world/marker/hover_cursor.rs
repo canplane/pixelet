@@ -216,7 +216,7 @@ pub fn hover_cursor_step() {
     };
     if c.ghost != ghost {
         let written = with_world(|world, sched| match &ghost {
-            Ghost::None => sched.ghost.clear(world, &mut sched.draw),
+            Ghost::None => sched.ghost.clear(&mut sched.draw),
             Ghost::Decor { at, group, rotation } => sched.ghost.set_decor(world, &mut sched.draw, *at, *group, *rotation as f32),
             Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, *at, *size, *value, *rgb, *coplanar),
         });

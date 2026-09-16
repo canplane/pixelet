@@ -1,6 +1,5 @@
 // pxl_core/module/world/sched.rs
 
-pub mod category;
 pub mod demand;
 pub mod fetch_scheduler;
 pub mod ledger;

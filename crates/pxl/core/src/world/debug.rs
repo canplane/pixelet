@@ -25,9 +25,8 @@ impl DebugLines {
     /// # Safety
     /// `lane` addresses vertex_cnt * DEBUG_VERTEX_FLOATS f32s in the memory.
     pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: [f64; 3], vertex_cnt: u32, lane: usize) {
-        let pool = &mut world.pools[world.volumes.mesh_pool()];
         let len = (vertex_cnt as usize * DEBUG_VERTEX_FLOATS * 4) as u32;
-        let written = self.held.write(draw, pool, world.volumes.mem(), lane, len);
+        let written = self.held.write(draw, world.volumes.mem(), lane, len);
         self.vertex_cnt = if written { vertex_cnt } else { 0 };
         self.origin = origin;
     }

@@ -178,9 +178,6 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
       emit_toast(show ? { show: true, id, message, tone } : { show: false, id });
       return;
     }
-    case Cmd.WORLD_LOG:
-      console.log(f!.at(0).get<string>());
-      return;
     case Cmd.WORLD_SNAPSHOT:
       set_snapshot(f!.at(0).get<string>());
       return;

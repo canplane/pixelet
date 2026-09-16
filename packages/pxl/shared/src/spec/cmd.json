@@ -1536,7 +1536,10 @@
           "name": "WORLD_LOG",
           "value": 6932,
           "doc": [
-            "[line str] — a console line"
+            "retired — the ledger's stream is read through pxl-wasm's",
+            "`ledger_log`, not raised here. The number stays taken: an old shell",
+            "reads a number a new kernel sends, so one that has meant something",
+            "must never come to mean another thing"
           ]
         },
         {

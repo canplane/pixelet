@@ -33,7 +33,6 @@ use super::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_
 use crate::app::setting::store::use_settings_store;
 use crate::global::Global;
 use crate::kernel::kernel;
-use crate::memory::{FIXED_POOL, MESH_POOL};
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::preview_rows;
 use crate::module::world::character::companion::companion_skins;
@@ -124,12 +123,12 @@ pub struct Scratch {
 impl Scratch {
     pub fn take(&mut self, bytes: u32) -> &'static mut [u8] {
         if bytes > self.bytes {
-            let pool = &mut kernel().pools[MESH_POOL as usize];
             if self.bytes > 0 {
-                pool.release(self.at, self.bytes);
+                // SAFETY: the block this scratch held alone.
+                unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
             }
             let size = bytes.next_power_of_two().max(4096);
-            self.at = pool.acquire(size).expect("the mesh section has no room for the renderer's scratch");
+            self.at = crate::bake::volume::take_bytes(size as usize).expect("the heap has no room for the renderer's scratch");
             self.bytes = size;
         }
         // SAFETY: a block of the mesh section this scratch holds alone, at
@@ -140,7 +139,8 @@ impl Scratch {
     /// Gives the block back.
     pub fn free(&mut self) {
         if self.bytes > 0 {
-            kernel().pools[MESH_POOL as usize].release(self.at, self.bytes);
+            // SAFETY: the block this scratch held alone.
+            unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
             self.bytes = 0;
         }
     }
@@ -185,8 +185,8 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let at = kernel().pools[FIXED_POOL as usize].acquire((BLOCK_SLOTS * 4) as u32).expect("the fixed section has no room for the renderer's blocks");
-    // SAFETY: a block of the fixed section, never given back, BLOCK_SLOTS words.
+    let at = crate::bake::volume::take_bytes(BLOCK_SLOTS * 4).expect("the heap has no room for the renderer's blocks");
+    // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);
     lane
