@@ -180,9 +180,11 @@ when its fix lands.
   counted as chars rather than UTF-16 units.
 - **B13** `camera/input.rs:116,330-333` pairs the two lowest pointer ids;
   `input.tsx:209,355-358` the two earliest pressed.
-- **B14** `decor/asset_store.rs:95-119` retries a variant only when
+- **B14** ~~`decor/asset_store.rs:95-119` retries a variant only when
   `load_revision` moves, so a model the pool refused waits for another
-  load.
+  load.~~ A refusal is the mesh pool having no room, which nothing else
+  reports, so the turn that met one leaves the revision unconsumed and the
+  next turn asks again.
 - ~~**B15**~~ `use_follow_mode.rs:62-71` sets the grace deadline once;
   `use_follow_mode.ts:67-84` restarted 12 s on each status change.
 - ~~**B16**~~ `search_modal.rs:69-119` leaves the last query in flight while
@@ -223,8 +225,12 @@ when its fix lands.
   converted per read~~ (each accessor is read once, straight into its
   lane's type); integer casts saturate where typed arrays wrapped; a JSON
   chunk that is not UTF-8 reads as missing (`:133,139`).
-- **B26** `renderer.rs:867-889` resizes a surface's targets after
-  `SETTLE_TURNS` turns at the new size; `renderer.ts:242-268` in the frame.
+- **B26** ~~`renderer.rs:867-889` resizes a surface's targets after
+  `SETTLE_TURNS` turns at the new size; `renderer.ts:242-268` in the frame.~~
+  **Kept as it is**: a drag on a window edge changes the size every frame,
+  and each change would otherwise rebuild the depth and multisampled colour.
+  The wait is not a delay — `request_world_tick` keeps the turns coming, and
+  the buffer already made is drawn scaled until the size holds still.
 - **B27** `render/gpu/decor.rs:98-104,116` uploads a texture per group;
   `decor.ts:117-128` one per image.
 - **B28** An MSAA change keeps the device and rebuilds the pipelines
