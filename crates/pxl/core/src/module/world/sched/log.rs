@@ -528,7 +528,7 @@ fn tasks_section(tasks: &[TaskRecord]) -> Vec<String> {
     }
     let mut lines = vec![format!("tasks n={}", tasks.len())];
     for t in summarize_tasks(tasks) {
-        let bound = category_info(&t.cat).map_or("?".to_string(), |c| c.bound.as_str().to_string());
+        let bound = category_info(t.cat).map_or("?".to_string(), |c| c.bound.as_str().to_string());
         lines.push(format!(
             "  {:<9}{:<9}n={}   p50 {}  p95 {} ms   ok {}  ab {}  err {}{}",
             t.cat,
@@ -542,7 +542,7 @@ fn tasks_section(tasks: &[TaskRecord]) -> Vec<String> {
             if t.reasons.is_empty() { String::new() } else { format!(" ({})", t.reasons.iter().map(|(r, n)| format!("{r} x{n}")).collect::<Vec<_>>().join(", ")) }
         ));
         if let Some(means) = &t.phase_mean {
-            let means: Vec<String> = means.iter().map(|(k, v)| format!("{} {}", k.trim_end_matches("_ms"), if k == "bytes" { v.round().to_string() } else { n1(*v) })).collect();
+            let means: Vec<String> = means.iter().map(|(k, v)| format!("{} {}", k.trim_end_matches("_ms"), if *k == "bytes" { v.round().to_string() } else { n1(*v) })).collect();
             lines.push(format!("  {:<18}mean {}", "", means.join("  ")));
         }
     }

@@ -158,9 +158,9 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     write!(out, ",\"status\":{},\"is_off_center\":{}}},", Quoted(map.map_status.as_str()), nav.is_off_center)?;
     write!(
         out,
-        "\"location\":{{\"status\":{},\"error_key\":{},\"has_location\":{}}},",
+        "\"location\":{{\"status\":{},\"error\":{},\"has_location\":{}}},",
         Quoted(pose_status_str(location.status)),
-        Or(location.error_key.as_deref().map(Quoted)),
+        Or(location.error.map(|m| m as u32)),
         location.location.is_some()
     )?;
     write!(

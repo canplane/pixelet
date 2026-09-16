@@ -175,7 +175,9 @@ pub fn tris_text(t: f64) -> String {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskSummary {
-    pub cat: String,
+    /// The category as the record names it — one of the code's own, never a
+    /// copy of it.
+    pub cat: &'static str,
     pub n: usize,
     pub ok: usize,
     pub aborted: usize,
@@ -186,18 +188,18 @@ pub struct TaskSummary {
     pub reasons: Vec<(String, usize)>,
     /// Mean of each phase the demand's run reported, when any did — the number
     /// that says whether the category's static bound label is true.
-    pub phase_mean: Option<Vec<(String, f64)>>,
+    pub phase_mean: Option<Vec<(&'static str, f64)>>,
 }
 
 pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
     struct Group {
-        cat: String,
+        cat: &'static str,
         lat: Vec<f64>,
         ok: usize,
         aborted: usize,
         error: usize,
         reasons: Vec<(String, usize)>,
-        phase_sum: Vec<(String, f64)>,
+        phase_sum: Vec<(&'static str, f64)>,
         phase_n: usize,
     }
     let mut by: Vec<Group> = Vec::new();
@@ -206,7 +208,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
             Some(p) => &mut by[p],
             None => {
                 by.push(Group {
-                    cat: rec.category.to_string(),
+                    cat: rec.category,
                     lat: Vec::new(),
                     ok: 0,
                     aborted: 0,
@@ -236,9 +238,9 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
         if let Some(phases) = &rec.phases {
             g.phase_n += 1;
             for (k, v) in phases.iter() {
-                match g.phase_sum.iter_mut().find(|(p, _)| p == k) {
+                match g.phase_sum.iter_mut().find(|(p, _)| *p == k) {
                     Some(s) => s.1 += v,
-                    None => g.phase_sum.push((k.to_string(), v)),
+                    None => g.phase_sum.push((k, v)),
                 }
             }
         }

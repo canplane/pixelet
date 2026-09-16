@@ -1,6 +1,7 @@
 // @pxl/web/module/map/ui/toast/toast_controller.tsx
 
 import { useEffect, useRef } from "react";
+import { message_key } from "@/module/map/ui/toast/message_key.ts";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, MapPinOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -68,7 +69,7 @@ export function ToastController() {
           index={index}
           stackSize={stackSize}
           isRemoving={isRemoving}
-          message={t_ref.current(e.message_key)}
+          message={t_ref.current(message_key(e.message) ?? "")}
           statusColor={is_error ? "bg-red-500" : is_success ? "bg-[#34C759]" : "bg-[#34C759]/30"}
           icon={<StatusIcon>{is_error ? <MapPinOff key={`${e.id}-error-icon`} className="w-4 h-4 text-red-500" /> : is_success ? SuccessIcon : LoadingIcon}</StatusIcon>}
           backgroundColor={is_error ? "bg-red-50" : undefined}

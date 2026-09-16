@@ -25,13 +25,52 @@ use xpute_core::kit::json::read_json;
 
 const STORAGE_KEY: &str = "pxl:settings";
 
+/// What the camera does about terrain in its way, as schema.json's
+/// `camera_terrain` offers it. The setting crosses as its own text — that is
+/// what a stored choice is — and is read as this everywhere past `apply`, so
+/// nothing downstream compares strings to decide how the camera behaves.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CameraTerrain {
+    /// The camera goes where it is pointed, terrain or not.
+    Through,
+    /// Terrain holds a control back.
+    Stop,
+    /// Terrain is answered by pitching the view up instead, with every
+    /// control still granted.
+    #[default]
+    Climb,
+}
+
+impl CameraTerrain {
+    /// The choice `text` names, or the default where it names none: a stored
+    /// choice the schema no longer offers reads as the default rather than as
+    /// a fourth behaviour.
+    fn of(text: &str) -> CameraTerrain {
+        match text {
+            "through" => CameraTerrain::Through,
+            "stop" => CameraTerrain::Stop,
+            _ => CameraTerrain::Climb,
+        }
+    }
+
+    /// The name the schema offers it under, which is what a stored choice and
+    /// the sheet's own radio both read.
+    fn as_str(self) -> &'static str {
+        match self {
+            CameraTerrain::Through => "through",
+            CameraTerrain::Stop => "stop",
+            CameraTerrain::Climb => "climb",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SettingsStore {
     pub show_poi: bool,
     pub show_decor: bool,
     pub show_structures: bool,
     pub lock_camera_tilt: bool,
-    pub camera_terrain: String,
+    pub camera_terrain: CameraTerrain,
     pub ground_snap: bool,
     pub enable_terrain_carving: bool,
     pub show_edge_shade: bool,
@@ -57,7 +96,7 @@ impl SettingsStore {
             show_decor: false,
             show_structures: false,
             lock_camera_tilt: false,
-            camera_terrain: String::new(),
+            camera_terrain: CameraTerrain::default(),
             ground_snap: false,
             enable_terrain_carving: false,
             show_edge_shade: false,
@@ -85,7 +124,7 @@ impl SettingsStore {
             ("show_decor", SettingValue::Toggle(v)) => self.show_decor = v,
             ("show_structures", SettingValue::Toggle(v)) => self.show_structures = v,
             ("lock_camera_tilt", SettingValue::Toggle(v)) => self.lock_camera_tilt = v,
-            ("camera_terrain", SettingValue::Text(v)) => self.camera_terrain = v,
+            ("camera_terrain", SettingValue::Text(v)) => self.camera_terrain = CameraTerrain::of(&v),
             ("ground_snap", SettingValue::Toggle(v)) => self.ground_snap = v,
             ("enable_terrain_carving", SettingValue::Toggle(v)) => self.enable_terrain_carving = v,
             ("show_edge_shade", SettingValue::Toggle(v)) => self.show_edge_shade = v,
@@ -109,7 +148,7 @@ impl SettingsStore {
             "show_decor" => SettingRef::Toggle(self.show_decor),
             "show_structures" => SettingRef::Toggle(self.show_structures),
             "lock_camera_tilt" => SettingRef::Toggle(self.lock_camera_tilt),
-            "camera_terrain" => SettingRef::Text(&self.camera_terrain),
+            "camera_terrain" => SettingRef::Text(self.camera_terrain.as_str()),
             "ground_snap" => SettingRef::Toggle(self.ground_snap),
             "enable_terrain_carving" => SettingRef::Toggle(self.enable_terrain_carving),
             "show_edge_shade" => SettingRef::Toggle(self.show_edge_shade),

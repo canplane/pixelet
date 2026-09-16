@@ -31,6 +31,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Quantum } from "@xpute/core/sched/quantum.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { Message } from "@pxl/shared/spec/message.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
@@ -49,7 +50,7 @@ export type SearchRow = { gers_id: string; kind: "poi" | "division"; name: strin
 
 export type UiSnapshot = {
   map: { has_center: boolean; center_lonlat: [number, number] | null; status: "idle" | "loading" | "success" | "error"; is_off_center: boolean };
-  location: { status: PoseStatus; error_key: string | null; has_location: boolean };
+  location: { status: PoseStatus; error: Message | null; has_location: boolean };
   orientation: { status: PoseStatus; heading: number | null };
   view: { dist: number; azimuth: number; polar: number };
   is_follow_mode: boolean;
@@ -69,7 +70,7 @@ export type UiSnapshot = {
 
 const INITIAL: UiSnapshot = {
   map: { has_center: false, center_lonlat: null, status: "idle", is_off_center: false },
-  location: { status: "idle", error_key: null, has_location: false },
+  location: { status: "idle", error: null, has_location: false },
   orientation: { status: "idle", heading: null },
   view: { dist: 0, azimuth: 0, polar: 0 },
   is_follow_mode: false,
@@ -139,7 +140,7 @@ export function kernel_action(action: KernelAction): boolean {
 
 // ---- toasts ----
 
-export type ToastEvent = { show: true; id: string; message_key: string; tone: number } | { show: false; id: string };
+export type ToastEvent = { show: true; id: string; message: Message; tone: number } | { show: false; id: string };
 
 const toast_listeners = new Set<(e: ToastEvent) => void>();
 const toast_backlog: ToastEvent[] = [];
@@ -166,8 +167,8 @@ const GEOLOCATION = 0;
 function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
   switch (cmd) {
     case Cmd.WORLD_TOAST: {
-      const [show, id, message_key, tone] = f!.get<[boolean, string, string, number]>();
-      emit_toast(show ? { show: true, id, message_key, tone } : { show: false, id });
+      const [show, id, message, tone] = f!.get<[boolean, string, Message, number]>();
+      emit_toast(show ? { show: true, id, message, tone } : { show: false, id });
       return;
     }
     case Cmd.WORLD_LOG:

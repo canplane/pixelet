@@ -16,7 +16,7 @@ use xpute_core::kit::math::wrap;
 
 use super::config::camera_cfg;
 use super::orbit::{orbit_local_offset, rotate2};
-use crate::app::setting::store::use_settings_store;
+use crate::app::setting::store::{use_settings_store, CameraTerrain};
 use crate::module::map::store::use_map_store;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::terrain::elevation::get_ele_at_local;
@@ -105,7 +105,7 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the heightfield walk, not its result.
     // `climb` grants every control too — it answers terrain by pitching the
     // view, not by holding a control back.
-    if use_settings_store().camera_terrain != "stop" {
+    if use_settings_store().camera_terrain != CameraTerrain::Stop {
         return *to;
     }
 

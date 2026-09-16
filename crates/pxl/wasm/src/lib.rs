@@ -477,7 +477,7 @@ fn post_shell(s: &mut State) {
                     ToastTone::Error => 1,
                     ToastTone::Success => 2,
                 };
-                e.bool(Some(true)).str(Some(spec.id)).str(Some(spec.message_key.as_str())).u32(Some(tone));
+                e.bool(Some(true)).str(Some(spec.id)).u32(Some(spec.message as u32)).u32(Some(tone));
             }
             ToastCommand::Dismiss(id) => {
                 e.bool(Some(false)).str(Some(id)).str(Some("")).u32(Some(0));

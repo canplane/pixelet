@@ -2,4 +2,5 @@
 
 pub mod cell;
 pub mod cmd;
+pub mod message;
 pub mod space;
