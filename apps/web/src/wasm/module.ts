@@ -35,6 +35,13 @@ export type KernelExports = {
   /** Hands the kernel the turn for `vector` (@xpute/core/ipc/cmd.ts's
    * Interrupt). */
   interrupt(vector: u32): u32;
+  /** What the ledger's live stream has kept since the last read: the address
+   * of two words, where the JSON lies in this memory and how long it is, zero
+   * when nothing is waiting. A range and not a command because instrumentation
+   * does not belong on the control ring. */
+  ledger_log(): u32;
+  /** Says the stream's records have been read, so the kernel can drop them. */
+  ledger_log_release(): void;
   /** The ledger's trace: the address of two words, where the Trace Event
    * Format JSON lies in this memory and how long it is. A range and not a
    * message because a window's trace runs to tens of megabytes. */

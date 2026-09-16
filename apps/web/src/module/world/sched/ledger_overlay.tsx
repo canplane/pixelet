@@ -14,9 +14,13 @@
 
 import { useEffect, useState } from "react";
 
+import { ledger_drain_log } from "./ledger_log.ts";
 import { install_long_frame_observers } from "./long_frame.ts";
 import { ledger_trace_download } from "./trace.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
+
+/** How often the stream is collected while it is on. */
+const DRAIN_MS = 500;
 
 const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90";
 
@@ -31,6 +35,17 @@ export function LedgerOverlay() {
   // The observers outlive the panel: they are the ledger's, not its, so
   // closing the panel does not stop a window being recorded.
   useEffect(install_long_frame_observers, []);
+
+  // Nothing is pushed: the kernel keeps the records and this comes for them,
+  // in batches rather than per frame — the stream is read while watching, and
+  // a drain that ran on every frame would be instrumentation paced by the
+  // thing it measures. The buffer is capped, so a slow reader loses the
+  // oldest rather than growing the kernel's heap.
+  useEffect(() => {
+    if (!logging) return;
+    const id = setInterval(ledger_drain_log, DRAIN_MS);
+    return () => clearInterval(id);
+  }, [logging]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;

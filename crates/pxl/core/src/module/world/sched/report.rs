@@ -14,7 +14,7 @@ use core::fmt::{self, Write};
 use super::ledger::{
     ledger_frame_peak, ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames, FrameSample, LongFrameRecord, LongFrameSource, TaskRecord,
 };
-use super::log::window_counters;
+use super::log::{take_log_records, window_counters};
 use super::summary::{summarize_frames, summarize_tasks, FrameSummary, Spread, TaskSummary};
 use crate::global::now;
 use crate::kernel::kernel;
@@ -250,6 +250,41 @@ fn frames_summary<W: Write>(out: &mut W, f: &FrameSummary) -> fmt::Result {
     out.write_str("],\"last\":")?;
     frame(out, &f.last)?;
     out.write_char('}')
+}
+
+/// What the live stream kept since the shell last came for it, as the same
+/// records the report carries — so the shell's formatters draw a streamed task
+/// and a reported one with the one piece of code (ledger_report.ts).
+pub fn ledger_log_json() -> String {
+    let (tasks, frames, longs) = take_log_records();
+    let mut out = String::new();
+    let _ = log_records(&mut out, &tasks, &frames, &longs);
+    out
+}
+
+fn log_records<W: Write>(out: &mut W, tasks: &[TaskRecord], frames: &[FrameSample], longs: &[LongFrameRecord]) -> fmt::Result {
+    out.write_str("{\"tasks\":[")?;
+    for (i, r) in tasks.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        task(out, r)?;
+    }
+    out.write_str("],\"frames\":[")?;
+    for (i, f) in frames.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        frame(out, f)?;
+    }
+    out.write_str("],\"longs\":[")?;
+    for (i, l) in longs.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        long_frame(out, l)?;
+    }
+    out.write_str("]}")
 }
 
 /// The whole instrument as one document of numbers, for the shell to read.

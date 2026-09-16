@@ -490,11 +490,6 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
         }
     }
-    for line in pxl_core::module::world::sched::log::take_log_lines() {
-        raise(&s.outbox, Cmd::WORLD_LOG, 1, |e| {
-            e.str(Some(line.as_str()));
-        });
-    }
     let mut text = String::new();
     pxl_core::app::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
     let ui = text.as_str();
@@ -1964,6 +1959,41 @@ pub extern "C" fn probe_dump() -> *const u8 {
         PROBE_TEXT[..4].copy_from_slice(&(w.0 as u32).to_le_bytes());
         core::ptr::addr_of!(PROBE_TEXT) as *const u8
     }
+}
+
+/// The live stream's records, and where they lie.
+///
+/// The same range shape as the trace below, for the same reason: this is
+/// instrumentation, and instrumentation does not go out on the control ring.
+/// It used to — a line per settled task, raised as `WORLD_LOG` every tick —
+/// and that gave a debug feature the ring's failure policy, which is that
+/// `Outbox::post` asserts when the completion queue and its spill are both
+/// full. Turning the stream on during a fetch burst is the case that fills
+/// them, and it is also the only case anyone turns it on for.
+static LOG_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
+static LOG_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+
+/// What the stream has kept since the shell last came for it: the address of
+/// two words, where the JSON lies in this memory and how long it is. Zero
+/// length when there is nothing waiting, which a shell polling every frame is
+/// asking for most of the time.
+#[no_mangle]
+pub extern "C" fn ledger_log() -> *const u32 {
+    let text = LOG_TEXT.get(String::new);
+    *text = if pxl_core::module::world::sched::log::log_pending() {
+        pxl_core::module::world::sched::report::ledger_log_json()
+    } else {
+        String::new()
+    };
+    let range = LOG_RANGE.get(|| [0; 2]);
+    *range = [text.as_ptr() as u32, text.len() as u32];
+    range.as_ptr()
+}
+
+/// Gives back what the last read took.
+#[no_mangle]
+pub extern "C" fn ledger_log_release() {
+    LOG_TEXT.set(String::new());
 }
 
 /// The trace the shell saves, and where it lies.

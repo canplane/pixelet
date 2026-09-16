@@ -50,7 +50,7 @@ export type LedgerReport = {
   longs: LongFrame[];
 };
 
-type Frame = {
+export type Frame = {
   t: number;
   dt_ms: number;
   frame_ms: number;
@@ -105,7 +105,7 @@ type FrameSummary = {
 
 type Peak = Record<string, number>;
 type PoiStats = { badge_count: number; dropped: number; place: Record<string, number>; index: Record<string, number> };
-type TaskRecord = {
+export type TaskRecord = {
   category: string;
   subject: number;
   priority: number;
@@ -128,7 +128,7 @@ type TaskSummary = {
   reasons: { fail: number; status: number; n: number }[];
   phase_mean: [string, number][] | null;
 };
-type LongFrame = { source: string; t: number; duration_ms: number; blocking_ms: number; script_ms: number; render_ms: number };
+export type LongFrame = { source: string; t: number; duration_ms: number; blocking_ms: number; script_ms: number; render_ms: number };
 
 // ---- the words ----
 
@@ -192,7 +192,7 @@ function frame_census(c: [number, number][]): string {
 const phases_text = (p: [string, number][]) =>
   p.length === 0 ? "" : `  [${p.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? v : n1(v)}`).join(" ")}]`;
 
-function task_line(r: TaskRecord): string {
+export function task_line(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing = r.start_ms === null ? "" : `  q ${n1(r.start_ms - r.enqueue_ms)} + run ${n1(r.end_ms - r.start_ms)}`;
   const why = r.fail === 0 ? "" : `  [${fail_text(r.fail, r.status)}]`;
@@ -201,7 +201,7 @@ function task_line(r: TaskRecord): string {
   }${why}`;
 }
 
-function frame_line(s: Frame, prev: Frame | null): string {
+export function frame_line(s: Frame, prev: Frame | null): string {
   const d = prev === null
     ? ""
     : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB`;
@@ -211,7 +211,7 @@ function frame_line(s: Frame, prev: Frame | null): string {
   }${s.settled ? " (still)" : ""} (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap ${s.heap_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
 }
 
-const long_frame_line = (l: LongFrame) =>
+export const long_frame_line = (l: LongFrame) =>
   `[${n1(l.t).padStart(9)}] ${l.source.padEnd(8)} ${n1(l.duration_ms)} ms  blocking ${n1(l.blocking_ms)}  script ${n1(l.script_ms)}  render ${n1(l.render_ms)}`;
 
 // ---- the sections ----
