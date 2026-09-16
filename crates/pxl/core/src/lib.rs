@@ -18,7 +18,6 @@ pub mod lib {
     pub mod env;
 }
 pub mod memory;
-pub mod probe;
 pub mod module;
 pub mod render;
 pub mod space;

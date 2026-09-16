@@ -160,10 +160,25 @@ async function cmd_outputs(): Promise<Output[]> {
 
 // ---- the cell catalogs ----
 
-type ColorSpec = { _meta?: { description?: string; source?: string } } & Record<string, Record<string, { hex: string; note?: string }>>;
+type ColorSpec = { _meta?: { description?: string; source?: string } } & Record<string, Record<string, { hex: string; rgb?: number; note?: string }>>;
 
 async function read_json<T>(path: string): Promise<T> {
   return JSON.parse(await Deno.readTextFile(join(root, path)));
+}
+
+/** `#RRGGBB` as the one number it is. The JSON is written in hex because a
+ * person picks a colour that way; nothing downstream reads it back as text. */
+function packed(hex: string): number {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (m === null) throw new Error(`color JSON: "${hex}" is not #RRGGBB`);
+  return parseInt(m[1], 16);
+}
+
+/** A `$type: "rgb"` leaf: written `#RRGGBB` because a person picks a colour
+ * that way, emitted as the one number it is because nothing that lights or
+ * blends with it wants text. */
+function rgb_literal(hex: string): string {
+  return `0x${packed(hex).toString(16).padStart(6, "0")}`;
 }
 
 async function color_outputs(): Promise<Output[]> {
@@ -179,10 +194,15 @@ async function color_outputs(): Promise<Output[]> {
     "// replace them, which is why this table lives with the type numbering in",
     "// spec/cell rather than beside the pack's images.",
   ];
-  const ts = ["// @pxl/shared/spec/cell/color.ts", ...head, "", "export default " + JSON.stringify(spec, null, 2).replace(/"([A-Za-z_][A-Za-z0-9_]*)":/g, "$1:").replace(/\n(\s*)\}/g, ",\n$1}").replace(/\n(\s*)\]/g, ",\n$1]") + ";"];
+  const packed_spec: ColorSpec = { ...spec };
+  for (const [ch, entries] of Object.entries(spec)) {
+    if (ch === "_meta") continue;
+    packed_spec[ch] = Object.fromEntries(Object.entries(entries as Record<string, { hex: string; note?: string }>).map(([n, e]) => [n, { ...e, rgb: packed(e.hex) }]));
+  }
+  const ts = ["// @pxl/shared/spec/cell/color.ts", ...head, "", "export default " + JSON.stringify(packed_spec, null, 2).replace(/"([A-Za-z_][A-Za-z0-9_]*)":/g, "$1:").replace(/\n(\s*)\}/g, ",\n$1}").replace(/\n(\s*)\]/g, ",\n$1]") + ";"];
   const rs = ["// pxl_shared/spec/cell/color.rs", ...head, "//", "// `default` is the TypeScript module's default export, the colour file", "// cube.rs builds its colours from.", "", "#![allow(non_upper_case_globals)]", ""];
   rs.push("use super::r#type::{ColorJsonEntry, ColorJsonFile, ColorJsonMeta};", "");
-  rs.push("const fn e(hex: &'static str) -> ColorJsonEntry {", "    ColorJsonEntry { hex, note: None }", "}", "");
+  rs.push("const fn e(hex: &'static str, rgb: u32) -> ColorJsonEntry {", "    ColorJsonEntry { hex, rgb, note: None }", "}", "");
   rs.push("pub const default: ColorJsonFile = ColorJsonFile {");
   const opt = (s?: string) => (s === undefined ? "None" : `Some(${JSON.stringify(s)})`);
   rs.push(spec._meta ? `    _meta: Some(ColorJsonMeta { description: ${opt(spec._meta.description)}, source: ${opt(spec._meta.source)} }),` : "    _meta: None,");
@@ -191,7 +211,12 @@ async function color_outputs(): Promise<Output[]> {
     if (ch === "_meta") continue;
     rs.push(`        (`, `            ${JSON.stringify(ch)},`, "            &[");
     for (const [name, entry] of Object.entries(entries as Record<string, { hex: string; note?: string }>)) {
-      rs.push(entry.note === undefined ? `                (${JSON.stringify(name)}, e(${JSON.stringify(entry.hex)})),` : `                (${JSON.stringify(name)}, ColorJsonEntry { hex: ${JSON.stringify(entry.hex)}, note: Some(${JSON.stringify(entry.note)}) }),`);
+      const rgb = `0x${packed(entry.hex).toString(16).padStart(6, "0")}`;
+      rs.push(
+        entry.note === undefined
+          ? `                (${JSON.stringify(name)}, e(${JSON.stringify(entry.hex)}, ${rgb})),`
+          : `                (${JSON.stringify(name)}, ColorJsonEntry { hex: ${JSON.stringify(entry.hex)}, rgb: ${rgb}, note: Some(${JSON.stringify(entry.note)}) }),`,
+      );
     }
     rs.push("            ],", "        ),");
   }
@@ -427,7 +452,7 @@ function ts_literal(n: DataNode, type: string, indent: string): string {
   if (is_leaf_wrapper(n)) return ts_literal(n.$value, (n.$type as string) ?? type, indent);
   if (typeof n === "number") return `${n} as number`;
   if (typeof n === "boolean") return String(n);
-  if (typeof n === "string") return type === "u64" ? `${n}n` : JSON.stringify(n);
+  if (typeof n === "string") return type === "u64" ? `${n}n` : type === "rgb" ? rgb_literal(n) : JSON.stringify(n);
   if (Array.isArray(n)) return `[${n.map((e) => ts_literal(e, type, indent)).join(", ")}]`;
   const inner = indent + "  ";
   const t = (n.$type as unknown as string) ?? type;
@@ -445,7 +470,11 @@ function ts_literal(n: DataNode, type: string, indent: string): string {
 
 function rs_scalar(n: number | string | boolean, type: string): { ty: string; lit: string } {
   if (typeof n === "boolean") return { ty: "bool", lit: String(n) };
-  if (typeof n === "string") return type === "u64" ? { ty: "u64", lit: n } : { ty: "&str", lit: JSON.stringify(n) };
+  if (typeof n === "string") {
+    if (type === "u64") return { ty: "u64", lit: n };
+    if (type === "rgb") return { ty: "u32", lit: rgb_literal(n) };
+    return { ty: "&str", lit: JSON.stringify(n) };
+  }
   if (type === "f64" || type === "f32") return { ty: type, lit: Number.isInteger(n) ? `${n}.0` : String(n) };
   return { ty: type, lit: String(n) };
 }

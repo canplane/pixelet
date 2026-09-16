@@ -118,10 +118,33 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **Placed objects come back moved after a reload.** Found 2026-09-14: a
   wall of fifteen cubes (five along X, three up Z) reloads as thirteen
-  cells on one Z layer spread along Y. `decode_objects` turns a
-  `Placement` row back through `local_world_to_canonical` (the
-  projection), which is not the inverse of the page-local offset
-  `encode_objects` writes. In since v7.
+  cells on one Z layer spread along Y. In since v7.
+
+  The cause first written here — that `local_world_to_canonical` is not the
+  inverse of the page-local offset `encode_objects` writes — does not hold
+  against the code as it stands (read 2026-09-17, by reading only; the
+  symptom has not been reproduced since). Five links of that path were
+  checked and each is symmetric:
+
+  - the page base is `FROM_L3_IDX(page_idx)` on both sides, and `page_idx`
+    is written and read as the same `u64`;
+  - the fixed-point identity holds. `pvf3::to_real(pvf3::X(v))` is
+    `(i * ONE + f) / ONE`, `ONE` is `2^FRAC_W` and an fvec lane is an
+    unsigned residue in `[0, ONE)`, so it equals
+    `projection::unproject_comp(i, f)` — which `project` inverts;
+  - `ivec::sub` is per-lane with sign extension (`as_int_n`), not a packed
+    subtract that could borrow across lanes;
+  - the anchor is the same PVF3 on both sides: the encoder writes
+    `entry.corner()` and `write_object_value` takes the corner as given;
+  - `lower` and `corner` are inverses — `pvf3::sh` by `-OBJECT_LAYOUT.min`
+    one way and `+min` the other.
+
+  What is not ruled out: `x`/`y`/`z` are `F32Array` lanes
+  (`record/placement.rs`), so a coordinate's precision is f32's at page-local
+  magnitudes; and a chunk's entry lanes hold one entry per cell for a leaf
+  larger than one, each carrying `entry.size`, so what a large leaf is on the
+  way back out is worth checking. Fifteen becoming thirteen is two placements
+  landing on one cell, which is what either of those would do.
 
 - **The POI index with its pages, and POI back on.** Disconnected
   2026-09-15: the index took about 20 MB of the 32 MB module heap before a

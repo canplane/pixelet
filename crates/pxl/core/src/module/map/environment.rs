@@ -45,8 +45,8 @@ const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
 pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
     let t = themes(key);
     let mut k = 0;
-    let mut rgb = |lane: &mut [f32; THEME_FLOATS], hex: &str| {
-        for v in linear_rgb(hex) {
+    let mut rgb = |lane: &mut [f32; THEME_FLOATS], packed: u32| {
+        for v in linear_rgb(packed) {
             lane[k] = v as f32;
             k += 1;
         }

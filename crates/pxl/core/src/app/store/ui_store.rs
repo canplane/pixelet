@@ -4,7 +4,7 @@ use pxl_shared::spec::cell::{cube_types, decor_ids, placeable_cube_id, placeable
 
 use crate::global::Global;
 use crate::host::{storage_get, storage_set, wall_now};
-use xpute_core::kit::json::{read_json, JsonStr};
+use xpute_core::kit::json::{read_json, JsonStr, Quoted};
 use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -162,19 +162,6 @@ impl UiStore {
     }
 }
 
-fn json_string(s: &str) -> String {
-    let mut out = String::from("\"");
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
 
 // Persisted: object_cube_id/decor_id/recent_picks — real picks worth
 // remembering across a reload. active_tool and chat_lines are deliberately left
@@ -193,16 +180,16 @@ fn save(s: &UiStore) {
         .recent_picks
         .iter()
         .map(|p| match p {
-            RecentPick::Object(cube) => format!("{{\"kind\":\"object\",\"id\":{}}}", json_string(&placeable_cube_id(*cube))),
-            RecentPick::Decor(id) => format!("{{\"kind\":\"decor\",\"id\":{}}}", json_string(id)),
+            RecentPick::Object(cube) => format!("{{\"kind\":\"object\",\"id\":{}}}", Quoted(placeable_cube_id(*cube))),
+            RecentPick::Decor(id) => format!("{{\"kind\":\"decor\",\"id\":{}}}", Quoted(id)),
         })
         .collect();
     storage_set(
         STORAGE_KEY,
         &format!(
             "{{\"state\":{{\"object_cube_id\":{},\"decor_id\":{},\"recent_picks\":[{}]}},\"version\":1}}",
-            json_string(&placeable_cube_id(s.object_cube)),
-            json_string(s.decor_id),
+            Quoted(placeable_cube_id(s.object_cube)),
+            Quoted(s.decor_id),
             picks.join(",")
         ),
     );

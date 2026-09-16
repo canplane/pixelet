@@ -1047,9 +1047,10 @@
           "value": 6146,
           "doc": [
             "tag call · [volume u32] → result: its band count; with bands, [rows",
-            "u32[]]: BAND_WORDS words a band — band_z, the material, layer and",
-            "sub-cell lanes' addresses (0 for none), the extras' count and their five",
-            "lanes' addresses — valid until the volume is painted again"
+            "u32, count u32]: where BAND_WORDS words a band lie — band_z, the",
+            "material, layer and sub-cell lanes' addresses (0 for none), the extras'",
+            "count and their five lanes' addresses. Past a ring frame, so the rows",
+            "are a block the kernel holds, valid until the next VOLUME_READ"
           ]
         },
         {
@@ -1326,8 +1327,9 @@
           "name": "OBJECT_COLUMNS",
           "value": 2067,
           "doc": [
-            "tag call · no packet → [keys u64[]]: the columns holding objects, in",
-            "the store's order"
+            "tag call · no packet → [keys u32, count u32]: where the columns holding",
+            "objects lie, in the store's order, as u64s in a block the kernel holds,",
+            "valid until the next OBJECT_COLUMNS"
           ]
         },
         {
@@ -1465,7 +1467,9 @@
           "name": "LOAD_UPDATE",
           "value": 7939,
           "doc": [
-            "[url str, bytes u8[]] — a model's bytes"
+            "[url str, at u32, bytes u32] — a model's bytes, past a ring frame, so",
+            "the shell asks the heap for a block (POOL_ACQUIRE), writes them there",
+            "and names it here; the kernel gives the block back once it has read it"
           ]
         },
         {
@@ -1546,7 +1550,9 @@
           "name": "WORLD_SNAPSHOT",
           "value": 6933,
           "doc": [
-            "[ui str] — app/shell.rs's snapshot, when it changed"
+            "[at u32, len u32] — app/shell.rs's snapshot, when it changed: UTF-8",
+            "past a ring frame, so it is a block the kernel holds, valid until the",
+            "next snapshot"
           ]
         },
         {

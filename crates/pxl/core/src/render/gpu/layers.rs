@@ -13,11 +13,11 @@
 //! chain is drawn on the device, a level from the one above (Mips).
 
 use pxl_shared::record::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
-use pxl_shared::spec::cell::{cube_hex, cube_ids};
+use pxl_shared::spec::cell::{cube_rgb, cube_ids};
 
 use super::api::{object, texture_usage, GpuApi};
 use super::api_spec::{address, compare, dimension, filter, format, load, resource};
-use super::layer_table::{hex_to_rgb255, GROUND_LAYER_META, OBJECT_LAYER_IDX};
+use super::layer_table::{rgb255, GROUND_LAYER_META, OBJECT_LAYER_IDX};
 use super::paint::Paint;
 use super::pipeline::Pipelines;
 use crate::lib::env::route::asset_url;
@@ -82,13 +82,13 @@ impl Mips {
 }
 
 /// Every layer: its channel, its type, its index, and its colour.
-fn each_layer(mut f: impl FnMut(&str, &str, u32, &str)) {
+fn each_layer(mut f: impl FnMut(&str, &str, u32, u32)) {
     for m in GROUND_LAYER_META.iter() {
-        f(m.ch_key.as_str(), m.type_key, m.layer_index, m.hex_color);
+        f(m.ch_key.as_str(), m.type_key, m.layer_index, m.rgb);
     }
     for id in cube_ids.iter() {
         if let Some(layer) = OBJECT_LAYER_IDX(id) {
-            f("block", id, layer, cube_hex(id));
+            f("block", id, layer, cube_rgb(id));
         }
     }
 }
@@ -121,8 +121,8 @@ impl Layers {
             (tex, view)
         };
         let ((top, top_view), (side, side_view)) = (make(), make());
-        each_layer(|_, _, layer, hex| {
-            let [r, gr, b] = hex_to_rgb255(hex);
+        each_layer(|_, _, layer, rgb| {
+            let [r, gr, b] = rgb255(rgb);
             for px in fill.chunks_exact_mut(4) {
                 px.copy_from_slice(&[r, gr, b, 255]);
             }

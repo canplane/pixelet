@@ -26,7 +26,16 @@ const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 const SCALE_JITTER: f64 = 0.18;
 const ALIGN_NEIGHBOR_RADIUS: u32 = 3;
 /// NO_ENTRY: a procedural instance resolves to no stored entry.
-pub const NO_ENTRY: u32 = 0xffff_ffff;
+///
+/// `i32::MIN` and not `u32::MAX`, because the word it fills holds a `BandZ` —
+/// an `i32` — cast to `u32`, and the band below the origin is -1, which casts
+/// to exactly `u32::MAX`. A decor placed there read as procedural: the raycast
+/// passes over NO_ENTRY (world/raycast.rs), so the hit never resolved to its
+/// entry and the thing could not be picked or erased. Any value a band can
+/// take has to stay out of the sentinel, and a band is `z >> BAND_SHAMT` over
+/// a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it fits in ten bits
+/// signed and nothing reaches `i32::MIN`.
+pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;
 
 /// decor_build.ts's stream: kit/rng.ts's make_rng, drawn as units.

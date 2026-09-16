@@ -29,7 +29,7 @@
 // VOID/UNKNOWN specifically) — it merges the two explicitly there instead
 // of relying on the data itself already being merged.
 
-import { build_colors_from_json } from "./type.ts";
+import { build_colors_from_json, type Swatch } from "./type.ts";
 
 // One shared palette module for every channel below (2026-09-06) — mirrors
 // cube_types' own merge of terrain.ts + objects.ts into one file. A plain
@@ -55,9 +55,9 @@ export { cube_types };
  * happened to render last. AIR is deliberately not included: no raster
  * channel can ever actually hold that byte (see cube_types' own top
  * comment), so seeding a color for it here would be dead data. */
-const RASTER_SEED: Record<number, string | null> = {
+const RASTER_SEED: Record<number, Swatch | null> = {
   [cube_types.common.void]: null,
-  [cube_types.common.unknown]: "#D9D0CC",
+  [cube_types.common.unknown]: { hex: "#D9D0CC", rgb: 0xd9d0cc },
 };
 
 // build_colors_from_json processes every channel present in the JSON it's
@@ -67,11 +67,11 @@ const RASTER_SEED: Record<number, string | null> = {
 // land/water/structure/transport.
 const { block: block_palette_json, ...raster_palette_json } = cube_palette_json;
 
-export const cube_colors: Record<string, Record<number, string | null>> = {
+export const cube_colors: Record<string, Record<number, Swatch | null>> = {
   common: {
     [cube_types.common.void]: null,
     [cube_types.common.air]: null,
-    [cube_types.common.unknown]: "#D9D0CC",
+    [cube_types.common.unknown]: { hex: "#D9D0CC", rgb: 0xd9d0cc },
   },
   ...build_colors_from_json(
     { land: cube_types.land, water: cube_types.water, structure: cube_types.structure, transport: cube_types.transport },

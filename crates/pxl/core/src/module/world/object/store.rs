@@ -83,12 +83,19 @@ pub type ObjectAir = ObjectLayerEntry;
 /// shared fields (i/f/size/at).
 pub type OccupiedEntry = ObjectLayerEntry;
 
+// v8 (2026-09-17): a terrain-styled cube's leaf value is its channel and its
+// type (spec/cell's TERRAIN_STYLE_BASE), not a number counted out as the
+// catalog was walked. A v7 blob's terrain-styled values are 1..32 in walk
+// order and name different cubes under the new rule, which is exactly the
+// case this version exists for.
+//
 // v7 (2026-09-13): one Placement record per page in a page-keyed container
 // (the persistence section below) — the same form every placed thing has.
+//
 // Not migrated. Bump this again whenever a future change makes an older
 // entry's encoding mean something different from what it meant when it was
 // written.
-pub const OBJECT_STORAGE_VERSION: u32 = 7;
+pub const OBJECT_STORAGE_VERSION: u32 = 8;
 
 fn storage_key() -> String {
     format!("pxl:object:v{OBJECT_STORAGE_VERSION}")

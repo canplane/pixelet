@@ -28,7 +28,8 @@
 
 use super::ledger::{ledger_recording_start, ledger_set_sink, FrameSample, LedgerSink, LongFrameRecord, TaskRecord};
 use super::summary::{missed, overran};
-use super::tick::tick_step_stats_reset;
+use super::ledger::ledger_recording_stop;
+use super::tick::{set_step_timing, tick_step_stats_reset};
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::module::world::poi::poi_badge::badge_atlas;
@@ -148,10 +149,22 @@ pub fn window_counters() -> Counters {
 }
 
 /// Clears the ledger and opens a fresh window, side counters included.
+///
+/// Timing the steps one by one starts here rather than at boot, for the same
+/// reason recording does: it is a clock read on either side of every step of
+/// every phase of every tick, and only the report reads the result.
 pub fn ledger_window_start() {
     ledger_recording_start();
     tick_step_stats_reset();
+    set_step_timing(true);
     log().baseline = counters();
+}
+
+/// Freezes the window, so an export taken afterwards sees exactly this data,
+/// and stops paying for the timing that fills it.
+pub fn ledger_window_stop() {
+    ledger_recording_stop();
+    set_step_timing(false);
 }
 
 /// Every registered step by mean ms per run, heaviest first.

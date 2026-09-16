@@ -2,9 +2,8 @@
 
 use super::*;
 
-/// The fewest regions a map can be cut from: the module and the fixed section
-/// take the first, the slab runs into the fifth, and the mesh needs one past
-/// it.
+/// The fewest regions a map can be cut from: the module's own takes the first,
+/// the slab runs into the fifth, and the heap needs one past it.
 const MIN_REGIONS: u32 = 6;
 
 #[test]
@@ -19,16 +18,14 @@ fn the_slab_is_the_terrain_it_holds_and_nothing_more() {
 fn every_map_is_the_sections_in_address_order_past_the_module_s() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES);
-        assert_eq!(m.fixed.offset, MODULE_BYTES);
-        assert_eq!(m.fixed.offset + m.fixed.bytes, REGION_BYTES);
-        assert_eq!(m.slab.offset, REGION_BYTES);
+        assert_eq!(m.slab.offset, MODULE_BYTES);
         assert!(m.heap.offset >= m.slab.offset + m.slab.bytes, "{n} regions");
         assert_eq!(m.heap.offset + m.heap.bytes, n * REGION_BYTES, "{n} regions");
     }
 }
 
 #[test]
-fn the_heap_holds_a_region_its_pool_can_cut_however_the_slab_before_it_ends() {
+fn the_heap_holds_a_whole_region_however_the_slab_before_it_ends() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES);
         assert!(m.heap.bytes >= REGION_BYTES, "{n} regions");
@@ -42,10 +39,10 @@ fn a_memory_s_bytes_past_its_last_whole_region_are_left_out() {
 }
 
 #[test]
-fn every_section_begins_on_a_page_so_every_block_a_pool_hands_out_does() {
+fn every_section_begins_on_a_page_so_every_block_in_it_does() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES);
-        for s in [m.fixed, m.slab, m.heap] {
+        for s in [m.slab, m.heap] {
             assert!(s.offset.is_multiple_of(PAGE_BYTES), "{n} regions: {s:?}");
         }
     }
@@ -57,7 +54,6 @@ fn every_section_begins_on_a_page_so_every_block_a_pool_hands_out_does() {
 fn no_section_leaves_more_than_a_page_behind_it() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES);
-        assert!(m.slab.offset - (m.fixed.offset + m.fixed.bytes) < PAGE_BYTES, "{n} regions");
         assert!(m.heap.offset - (m.slab.offset + m.slab.bytes) < PAGE_BYTES, "{n} regions");
     }
 }

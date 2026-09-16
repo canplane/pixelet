@@ -75,7 +75,7 @@ function terrain_body(seed: u32): Uint8Array {
 
 /** A response as the driver reports one: the body written into the room the
  * kernel gives it. */
-const heap_row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap], 2);
+const heap_row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 2);
 let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 
@@ -218,7 +218,7 @@ Deno.test("kernel - a fetched page's body is the kernel's: its room comes back t
 });
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
-  const row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap], 2);
+  const row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 2);
   for (let i = 0; i < 200; i++) turn();
   const [top, requests] = [row[0], row[1]];
   for (let i = 0; i < 100; i++) turn();
@@ -226,7 +226,7 @@ Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
 });
 
 Deno.test("kernel - heap requests along the event paths", () => {
-  const row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap], 2);
+  const row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 2);
   for (let i = 0; i < 50; i++) turn();
   let mark = row[1];
   const since = () => {

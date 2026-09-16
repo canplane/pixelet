@@ -11,6 +11,7 @@
 //! is routinely tens of MB — the shell saves it as a file.
 
 use pxl_shared::spec::fetch::FetchFail;
+use xpute_core::kit::json::Quoted;
 
 use super::demand::Category;
 use super::ledger::{ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames, FrameSample};
@@ -44,24 +45,9 @@ fn json_number(n: f64) -> String {
     }
 }
 
-fn json_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
 
 fn object(fields: &[(String, String)]) -> String {
-    let body: Vec<String> = fields.iter().map(|(k, v)| format!("{}:{}", json_string(k), v)).collect();
+    let body: Vec<String> = fields.iter().map(|(k, v)| format!("{}:{}", Quoted(k), v)).collect();
     format!("{{{}}}", body.join(","))
 }
 
@@ -71,7 +57,7 @@ fn field(k: &str, v: String) -> (String, String) {
 
 #[allow(clippy::too_many_arguments)]
 fn event(name: &str, cat: &str, ph: &str, ts: f64, dur: Option<f64>, tid: u32, args: Option<String>) -> String {
-    let mut fields = vec![field("name", json_string(name)), field("cat", json_string(cat)), field("ph", json_string(ph)), field("ts", json_number(ts))];
+    let mut fields = vec![field("name", Quoted(name).to_string()), field("cat", Quoted(cat).to_string()), field("ph", Quoted(ph).to_string()), field("ts", json_number(ts))];
     if let Some(dur) = dur {
         fields.push(field("dur", json_number(dur)));
     }
@@ -84,7 +70,7 @@ fn event(name: &str, cat: &str, ph: &str, ts: f64, dur: Option<f64>, tid: u32, a
 }
 
 fn thread_name(tid: u32, name: &str) -> String {
-    event("thread_name", "__metadata", "M", 0.0, None, tid, Some(object(&[field("name", json_string(name))])))
+    event("thread_name", "__metadata", "M", 0.0, None, tid, Some(object(&[field("name", Quoted(name).to_string())])))
 }
 
 /// One frame's numbers as trace args — the counter track and the worst-frame
@@ -161,14 +147,14 @@ pub fn ledger_trace_json() -> String {
             }
         };
         let mut args = vec![
-            field("outcome", json_string(rec.outcome.as_str())),
+            field("outcome", Quoted(rec.outcome.as_str()).to_string()),
             field("priority", json_number(rec.priority)),
             field("queued_ms", rec.start_ms.map_or("null".to_string(), |s| fixed(s - rec.enqueue_ms, 1))),
             field("ran_ms", rec.start_ms.map_or("null".to_string(), |s| fixed(rec.end_ms - s, 1))),
             field("transport_ms", json_number(rec.transport_ms)),
         ];
         if rec.fail.fail != FetchFail::None {
-            args.push(field("fail", json_string(rec.fail.fail.as_str())));
+            args.push(field("fail", Quoted(rec.fail.fail.as_str()).to_string()));
             if rec.fail.status != 0 {
                 args.push(field("status", json_number(rec.fail.status as f64)));
             }
@@ -225,6 +211,6 @@ pub fn ledger_trace_json() -> String {
 
     // Chrome's trace format keeps a top-level `metadata` object; a trace read
     // back later names the build it came from.
-    let metadata = object(&[field("build_number", json_string(BUILD_NUMBER())), field("build_id", json_string(BUILD_ID())), field("build_time", json_string(BUILD_TIME()))]);
+    let metadata = object(&[field("build_number", Quoted(BUILD_NUMBER()).to_string()), field("build_id", Quoted(BUILD_ID()).to_string()), field("build_time", Quoted(BUILD_TIME()).to_string())]);
     format!("{{\"traceEvents\":[{}],\"displayTimeUnit\":\"ms\",\"metadata\":{}}}", events.join(","), metadata)
 }

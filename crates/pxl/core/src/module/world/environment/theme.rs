@@ -25,27 +25,27 @@ impl WorldThemeKey {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SkyColors {
-    pub top: &'static str,
-    pub middle: &'static str,
-    pub horizon: &'static str,
+    pub top: u32,
+    pub middle: u32,
+    pub horizon: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
-    pub color: &'static str,
+    pub color: u32,
     pub intensity: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hemisphere {
-    pub sky: &'static str,
-    pub ground: &'static str,
+    pub sky: u32,
+    pub ground: u32,
     pub intensity: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldTheme {
-    pub fog: &'static str,
+    pub fog: u32,
     pub sky: SkyColors,
     pub ambient: Light,
     pub hemisphere: Hemisphere,

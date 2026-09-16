@@ -425,9 +425,10 @@ pub enum Cmd {
     /// tag call · no packet → result: a volume with no bands, its id (never 0)
     VOLUME_CREATE = 0x1801,
     /// tag call · [volume u32] → result: its band count; with bands, [rows
-    /// u32[]]: BAND_WORDS words a band — band_z, the material, layer and
-    /// sub-cell lanes' addresses (0 for none), the extras' count and their five
-    /// lanes' addresses — valid until the volume is painted again
+    /// u32, count u32]: where BAND_WORDS words a band lie — band_z, the
+    /// material, layer and sub-cell lanes' addresses (0 for none), the extras'
+    /// count and their five lanes' addresses. Past a ring frame, so the rows
+    /// are a block the kernel holds, valid until the next VOLUME_READ
     VOLUME_READ = 0x1802,
     /// [volume u32] — its bands to the stores up to their cap, the rest to the
     /// pools
@@ -535,8 +536,9 @@ pub enum Cmd {
     /// tag call · [key u64, cx u32, cy u32, cz i32] → result 1 where the cell
     /// holds entries, 0 where not; with them, [start u32, count u32, solid u32]
     OBJECT_CELL = 0x0812,
-    /// tag call · no packet → [keys u64[]]: the columns holding objects, in
-    /// the store's order
+    /// tag call · no packet → [keys u32, count u32]: where the columns holding
+    /// objects lie, in the store's order, as u64s in a block the kernel holds,
+    /// valid until the next OBJECT_COLUMNS
     OBJECT_COLUMNS = 0x0813,
     /// tag call · no packet → [chunks u32, bands u32, cells u32]
     OBJECT_STAT = 0x0814,
@@ -593,7 +595,9 @@ pub enum Cmd {
     /// u32 (0 for none), error str | null, net_ms f64] — a started fetch finished; what the
     /// status and the body mean is the kernel's
     FETCH_UPDATE = 0x1e03,
-    /// [url str, bytes u8[]] — a model's bytes
+    /// [url str, at u32, bytes u32] — a model's bytes, past a ring frame, so
+    /// the shell asks the heap for a block (POOL_ACQUIRE), writes them there
+    /// and names it here; the kernel gives the block back once it has read it
     LOAD_UPDATE = 0x1f03,
     /// [url str, handle u32] — an image decoded and held by the shell
     LOAD_IMAGE = 0x1f10,
@@ -623,7 +627,9 @@ pub enum Cmd {
     /// reads a number a new kernel sends, so one that has meant something
     /// must never come to mean another thing
     WORLD_LOG = 0x1b14,
-    /// [ui str] — app/shell.rs's snapshot, when it changed
+    /// [at u32, len u32] — app/shell.rs's snapshot, when it changed: UTF-8
+    /// past a ring frame, so it is a block the kernel holds, valid until the
+    /// next snapshot
     WORLD_SNAPSHOT = 0x1b15,
     /// [sensor u32 (0 geolocation, 1 orientation)] — start watching
     SENSOR_CREATE = 0x1d01,

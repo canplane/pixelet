@@ -154,8 +154,6 @@ impl<S> TickContext<'_, S> {
 
 pub type TickStep<S> = fn(&mut TickContext<S>);
 
-pub static mut ALLOC_PROBE: Option<fn() -> usize> = None;
-
 /// Wall time per step, cumulative until reset. The phase totals can say a
 /// phase is heavy and not which of its steps is; this can. Two registrations
 /// under one name in one phase add into one row.
@@ -296,10 +294,9 @@ impl<S, const N: usize> Tick<S, N> {
                 continue;
             }
             if self.step_timing {
-                let a0 = unsafe { ALLOC_PROBE.map_or(0, |f| f()) };
+                let t = now();
                 (r.step)(ctx);
-                let a1 = unsafe { ALLOC_PROBE.map_or(0, |f| f()) };
-                self.record(r.phase, r.name, (a1 - a0) as f64);
+                self.record(r.phase, r.name, now() - t);
             } else {
                 (r.step)(ctx);
             }
