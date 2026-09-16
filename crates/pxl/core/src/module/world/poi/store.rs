@@ -8,8 +8,6 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 use super::repository::ResidentPoiPage;
 use crate::global::Global;
-use crate::kernel::kernel;
-use crate::memory::MESH_POOL;
 use crate::module::world::change::POI_PAGE;
 use crate::module::world::page_table::PageTable;
 
@@ -56,7 +54,8 @@ pub fn clear_pois(page_idx: IVec) {
 /// is disconnected until its per-page index is rewritten (issue/BACKLOG.md),
 /// and the page section is the terrain slab now.
 fn release(held: ResidentPoiPage) {
-    if let (Some((at, bytes)), Some(pool)) = (held.block, kernel().pools.get_mut(MESH_POOL as usize)) {
-        pool.release(at, bytes);
+    if let Some((at, bytes)) = held.block {
+        // SAFETY: the page's own block, taken when it arrived.
+        unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
     }
 }

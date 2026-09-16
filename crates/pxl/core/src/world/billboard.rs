@@ -65,9 +65,8 @@ impl Billboards {
     /// `lane` addresses count * BILLBOARD_FLOATS f32s in the memory.
     pub unsafe fn write(&mut self, world: &mut World, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
         let Some(Some(s)) = self.sets.get_mut(id as usize) else { return };
-        let pool = &mut world.pools[world.volumes.mesh_pool()];
         let len = (count as usize * BILLBOARD_FLOATS * 4) as u32;
-        let written = s.held.write(draw, pool, world.volumes.mem(), lane, len);
+        let written = s.held.write(draw, world.volumes.mem(), lane, len);
         s.count = if written { count } else { 0 };
     }
 
@@ -85,10 +84,10 @@ impl Billboards {
         }
     }
 
-    pub fn remove(&mut self, world: &mut World, draw: &mut DrawList, id: u32) {
+    pub fn remove(&mut self, draw: &mut DrawList, id: u32) {
         let Some(slot) = self.sets.get_mut(id as usize) else { return };
         if let Some(mut s) = slot.take() {
-            s.held.free(draw, &mut world.pools[world.volumes.mesh_pool()]);
+            s.held.free(draw);
         }
     }
 

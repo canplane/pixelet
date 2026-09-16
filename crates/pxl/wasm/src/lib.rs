@@ -24,7 +24,6 @@ use xpute_core::sys::memory::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind};
-use pxl_core::world::pool::Pool;
 use pxl_core::world::raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
@@ -127,14 +126,18 @@ extern "C" {
 
 /// The submission ring's block, the completion ring's and the spill's, taken
 /// from the fixed section the first time a ring is wanted. The map is laid out
-/// here if it has not been: a ring cannot come from a section that has not been
-/// cut, and making that a dependency rather than an order to keep is what
-/// leaves the section free to put them where it likes.
+/// here if it has not been: the heap begins past the sections, so it cannot
+/// hand out a ring before they have been cut.
 fn ring_blocks() -> [u32; 3] {
     memory::map().unwrap_or_else(lay_out);
-    let pool = &mut kernel().pools[memory::FIXED_POOL as usize];
     assert!(ring_bytes(RING_CAPACITY, RING_ARENA_BYTES) <= RING_BYTES, "a ring outgrows its block");
-    core::array::from_fn(|_| pool.acquire(RING_BYTES).expect("the fixed section has no room for a ring") as u32)
+    core::array::from_fn(|_| {
+        // SAFETY: a block of the heap the rings hold for the module's life and
+        // never give back, RING_BYTES long.
+        let at = unsafe { ALLOC.malloc(RING_BYTES as usize) };
+        assert!(!at.is_null(), "the heap has no room for a ring");
+        at as u32
+    })
 }
 
 fn state() -> &'static mut State {
@@ -206,7 +209,7 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
     }
 }
 
-/// The volumes once `boot` cut them from the pools; by the field, so the
+/// The volumes once `boot` opened them; by the field, so the
 /// state's other fields stay borrowable beside them.
 fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
     volumes.as_mut().expect("a volume before boot")
@@ -262,7 +265,7 @@ pub extern "C" fn boot() -> *const u32 {
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[MODULE_BYTES, sq, cq]);
     s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
-    for (i, sec) in [map.fixed, map.slab, map.mesh].into_iter().enumerate() {
+    for (i, sec) in [map.fixed, map.slab, map.heap].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
@@ -273,29 +276,17 @@ pub extern "C" fn boot() -> *const u32 {
 }
 
 /// Cuts the memory the central scheduler gave into the kernel's map, and
-/// makes the sections' pools and the volumes over them.
+/// makes the volumes over it.
+///
+/// Nothing is cut here any more. The sections are ranges the map names and
+/// their contents' own affair; the heap is the one allocator and it knows its
+/// range without being told (`buddy_tree`'s `Range`), so laying out is
+/// recording what the map says and opening the volumes over it.
 fn lay_out() -> memory::Map {
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = memory::lay_out(given.min(u32::MAX as u64) as u32);
-    let k = kernel();
-    // The slab is no pool: a terrain page's record is its own coordinate, so
-    // only the fixed section and the mesh have one.
-    for sec in [map.fixed, map.mesh] {
-        // SAFETY: the memory is this module's own, addressed from 0, and the
-        // map gives each pool a range no other pool has.
-        k.pools.push(unsafe {
-            Pool::new(
-                core::ptr::null_mut(),
-                (sec.offset + sec.bytes) as usize,
-                sec.offset as usize,
-                sec.bytes as usize,
-                sec.region_bytes,
-                memory::MIN_BLOCK_BYTES,
-            )
-        });
-    }
-    // SAFETY: the pools were cut from this module's memory, addressed from 0.
-    k.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), memory::FIXED_POOL, memory::MESH_POOL) });
+    // SAFETY: the memory is this module's own, addressed from 0.
+    kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
     memory::set_map(map);
     map
 }
@@ -617,12 +608,6 @@ fn volume_at(f: &BranchCursor, i: u32) -> Result<usize, MarshalError> {
     }
 }
 
-/// The pool a packet's first child names.
-fn pool_at<'a>(k: &'a mut Kernel, f: &BranchCursor) -> Result<&'a mut Pool, MarshalError> {
-    let id = u32_at(f, 0)?;
-    k.pools.get_mut(id as usize).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some(&format!("no pool {id}")), None))
-}
-
 /// A ray as a query's packet carries it: the map origin, the origin, the
 /// direction and the distance.
 fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
@@ -822,31 +807,30 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 }),
             )));
         }
+        // There is one heap now, so the pool a packet names is ignored: every
+        // one of these answers for it.
         Cmd::POOL_READ => {
-            let f = fields(pkt)?;
-            return Ok(Some((pool_at(k, &f)?.stat_words() as usize as i32, None)));
+            return Ok(Some((ALLOC.stat() as usize as i32, None)));
         }
         Cmd::POOL_ACQUIRE => {
             let f = fields(pkt)?;
             let bytes = u32_at(&f, 1)?;
-            return Ok(Some((pool_at(k, &f)?.acquire(bytes).map_or(0, |at| at as i32), None)));
+            // SAFETY: the heap's own range; the caller keeps what it is given.
+            return Ok(Some((unsafe { ALLOC.malloc(bytes as usize) } as i32, None)));
         }
         Cmd::POOL_RELEASE => {
             let f = fields(pkt)?;
-            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
-            if !pool_at(k, &f)?.release(at, bytes) {
-                return Err(MarshalError::new(
-                    Errno::EINVAL,
-                    Some(&format!("a {bytes}B block at {at} its pool does not hold, or holds already")),
-                    None,
-                ));
-            }
+            let at = u32_at(&f, 1)? as usize;
+            // SAFETY: the caller's — a block this heap gave and has not taken
+            // back. `free` reads the size from the block's own header, so the
+            // packet's third child is no longer read.
+            unsafe { ALLOC.free(at as *mut u8) };
             return Ok(Some((0, None)));
         }
         Cmd::POOL_FREE => {
-            let f = fields(pkt)?;
-            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
-            return Ok(Some((pool_at(k, &f)?.is_free(at, bytes) as i32, None)));
+            // Whether a block is free is not a question this heap answers: it
+            // keeps no bit that says so of a block that is out.
+            return Ok(Some((0, None)));
         }
         Cmd::VOLUME_STAT => {
             let at = &volumes_of(&mut k.volumes)?.stat as *const _ as usize;
@@ -873,7 +857,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::VOLUME_DELETE => {
             let id = volume_at(&fields(pkt)?, 0)?;
-            volumes_of(&mut k.volumes)?.release(&mut k.pools, id);
+            volumes_of(&mut k.volumes)?.release(id);
             return Ok(Some((0, None)));
         }
         Cmd::VOLUME_FILL => {
@@ -885,7 +869,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 sub: 0,
             };
             let (cx, cy, z0, z1) = (u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?, i32_at(&f, 4)?);
-            let ok = volumes_of(&mut k.volumes)?.fill_column(&mut k.pools, id, (cx, cy), z0, z1, voxel);
+            let ok = volumes_of(&mut k.volumes)?.fill_column(id, (cx, cy), z0, z1, voxel);
             return Ok(Some((ok as i32, None)));
         }
         Cmd::VOLUME_VOXEL | Cmd::VOLUME_SUB_VOXEL => {
@@ -903,9 +887,9 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             };
             let v = volumes_of(&mut k.volumes)?;
             let ok = if cmd == Cmd::VOLUME_VOXEL {
-                v.set_voxel(&mut k.pools, id, cell, voxel)
+                v.set_voxel(id, cell, voxel)
             } else {
-                v.append_sub_voxel(&mut k.pools, id, cell, voxel)
+                v.append_sub_voxel(id, cell, voxel)
             };
             return Ok(Some((ok as i32, None)));
         }
@@ -1036,7 +1020,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::TERRAIN_PAINT => {
             let id = volume_at(&fields(pkt)?, 0)?;
             let v = volumes_of(&mut k.volumes)?;
-            return Ok(Some((k.chunk.paint(v, &mut k.pools, id) as i32, None)));
+            return Ok(Some((k.chunk.paint(v, id) as i32, None)));
         }
         Cmd::OBJECT_PAINT => {
             let f = fields(pkt)?;
@@ -1055,7 +1039,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 None => None,
             };
             let v = volumes_of(&mut k.volumes)?;
-            let made = k.painter.paint(&k.objects, v, &mut k.pools, id, key, hide, carve);
+            let made = k.painter.paint(&k.objects, v, id, key, hide, carve);
             return Ok(Some(((made.any as u32 | ((made.refused as u32) << 1)) as i32, None)));
         }
         Cmd::RAY_COLUMN => {
@@ -1415,7 +1399,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
             sched.ghost.set_decor(&mut world, &mut sched.draw, at, u32_at(&f, 3)?, number_at(&f, 4)? as f32);
         }
-        Cmd::GHOST_DELETE => sched.ghost.clear(&mut world, &mut sched.draw),
+        Cmd::GHOST_DELETE => sched.ghost.clear(&mut sched.draw),
         Cmd::PUCK_UPDATE => {
             let f = fields(pkt)?;
             let zone = floats_at(&f, 3, 7)?;
@@ -1437,7 +1421,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             sched.markers.set_beacon([number_at(&f, 0)?, number_at(&f, 1)?], bool_at(&f, 2)?);
         }
-        Cmd::PUCK_DELETE => sched.markers.clear(&mut world, &mut sched.draw),
+        Cmd::PUCK_DELETE => sched.markers.clear(&mut sched.draw),
         Cmd::BILLBOARD_CREATE => {
             let order = u32_at(&fields(pkt)?, 0)?;
             return Ok(Some((sched.billboards.new_set(order) as i32, None)));
@@ -1455,7 +1439,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             sched.billboards.follow(tag, u32_at(&f, 0)?, number_at(&f, 1)?);
         }
-        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut world, &mut sched.draw, tag),
+        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut sched.draw, tag),
         Cmd::ACTOR_CREATE => {
             let model = u32_at(&fields(pkt)?, 0)?;
             return Ok(Some((sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32), None)));
@@ -1473,7 +1457,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             sched.models.play(tag, u32_at(&f, 0)?, number_at(&f, 1)? as f32);
         }
-        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut world, &mut sched.draw, tag),
+        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut sched.draw, tag),
         Cmd::DEBUG_UPDATE => {
             let f = fields(pkt)?;
             let vertices = floats_at(&f, 3, 6)?;
@@ -1493,7 +1477,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::MODEL_CREATE => {
             let f = fields(pkt)?;
-            let Some((id, at)) = sched.models.new_model(&mut world, u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
+            let Some((id, at)) = sched.models.new_model(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
                 return Ok(Some((-1, None)));
             };
             return Ok(Some((
@@ -1642,7 +1626,6 @@ fn parts<'a>(k: &'a mut Kernel, events: &'a Outbox) -> Parts<'a> {
     Parts {
         world: World {
             volumes: opened(&mut k.volumes),
-            pools: &mut k.pools,
             materials: &k.terrain,
             store: &k.objects,
             painter: &mut k.painter,

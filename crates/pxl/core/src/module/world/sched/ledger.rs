@@ -23,8 +23,6 @@ use pxl_shared::spec::fetch::FetchFail;
 use super::demand::{DemandKey, Phases};
 use super::tick::PHASES;
 use crate::global::{now, Global};
-use crate::kernel::kernel;
-use crate::memory::FIXED_POOL;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -282,14 +280,13 @@ fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// A lane of the fixed section for `cap` records, zeroed; none where there is
-/// no section (a native test), and then nothing is recorded into it. A minute
-/// of frame samples is megabytes, which the module heap is not for.
+/// A lane for `cap` records, zeroed; none where there is no heap yet (a native
+/// test), and then nothing is recorded into it.
 fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
     let bytes = cap * core::mem::size_of::<T>();
-    let Some(at) = kernel().pools.get_mut(FIXED_POOL as usize).and_then(|p| p.acquire(bytes as u32)) else { return &mut [] };
-    // SAFETY: a block of the fixed section this lane holds alone and never
-    // gives back, `bytes` long and aligned past a record's alignment; zeroed,
+    let Some(at) = crate::bake::volume::take_bytes(bytes) else { return &mut [] };
+    // SAFETY: a block this lane holds alone and never gives back, `bytes` long
+    // and aligned past a record's alignment; zeroed,
     // which is a valid record for the plain numbers, flags and field-less
     // enums the rings hold.
     unsafe {

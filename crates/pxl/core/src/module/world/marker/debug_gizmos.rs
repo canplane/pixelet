@@ -236,7 +236,6 @@ fn set_lines(at: [f64; 3], vertices: &[f32]) {
     let Some(volumes) = k.volumes.as_mut() else { return };
     let mut world = World {
         volumes,
-        pools: &mut k.pools,
         materials: &k.terrain,
         store: &k.objects,
         painter: &mut k.painter,

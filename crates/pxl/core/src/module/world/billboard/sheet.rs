@@ -43,7 +43,6 @@ pub fn write_billboard_set(set: u32, lane: &[f32]) {
     let Some(volumes) = k.volumes.as_mut() else { return };
     let mut world = World {
         volumes,
-        pools: &mut k.pools,
         materials: &k.terrain,
         store: &k.objects,
         painter: &mut k.painter,
@@ -57,14 +56,6 @@ pub fn write_billboard_set(set: u32, lane: &[f32]) {
 
 pub fn remove_billboard_set(set: u32) {
     let k = kernel();
-    let Some(volumes) = k.volumes.as_mut() else { return };
-    let mut world = World {
-        volumes,
-        pools: &mut k.pools,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
     let sched = &mut k.sched;
-    sched.billboards.remove(&mut world, &mut sched.draw, set);
+    sched.billboards.remove(&mut sched.draw, set);
 }

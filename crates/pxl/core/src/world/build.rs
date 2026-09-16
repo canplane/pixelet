@@ -267,7 +267,7 @@ impl Builder {
         c.want = want;
         let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.step));
         if stale {
-            self.abort_bake(world);
+            self.abort_bake();
         }
         if want == [0, 0] {
             self.abort_scan_of(world, id);
@@ -282,7 +282,7 @@ impl Builder {
     fn drop_work(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(Event)) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake(world);
+            self.abort_bake();
         }
         if let Some(c) = self.chunks.get_mut(&id) {
             if let Some(r) = c.runs.take() {
@@ -307,7 +307,7 @@ impl Builder {
         self.stat.starved += 1;
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake(world);
+            self.abort_bake();
         }
         let releases = crate::host::heap_releases();
         if let Some(c) = self.chunks.get_mut(&id) {
@@ -315,7 +315,7 @@ impl Builder {
         }
     }
 
-    fn abort_bake(&mut self, world: &mut World) {
+    fn abort_bake(&mut self) {
         if let Some(job) = self.bake_job.take() {
             self.bake.abort();
             if let Some((at, bytes)) = job.mesh {
@@ -553,11 +553,10 @@ impl Builder {
                 mesh: None,
             });
         }
-        let pool = world.volumes.mesh_pool();
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                let Some(at) = world.pools[pool].acquire(words * 4) else {
+                let Some(at) = crate::bake::volume::take_bytes(words as usize * 4) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };

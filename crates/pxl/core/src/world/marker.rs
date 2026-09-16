@@ -51,8 +51,8 @@ impl Markers {
         let bytes = (count as usize * ZONE_INSTANCE_FLOATS * 4).max(4) as u32;
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
-            self.clear(world, draw);
-            let Some(at) = world.pools[world.volumes.mesh_pool()].acquire(bytes) else { return };
+            self.clear(draw);
+            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return };
             self.puck = Some(Puck {
                 at,
                 bytes,
@@ -95,10 +95,11 @@ impl Markers {
         }
     }
 
-    pub fn clear(&mut self, world: &mut World, draw: &mut DrawList) {
+    pub fn clear(&mut self, draw: &mut DrawList) {
         if let Some(p) = self.puck.take() {
             draw.free(p.handle);
-            world.pools[world.volumes.mesh_pool()].release(p.at, p.bytes);
+            // SAFETY: the block this marker took and has not given back.
+            unsafe { crate::bake::volume::give_bytes(p.at, p.bytes as usize) };
         }
     }
 

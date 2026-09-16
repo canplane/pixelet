@@ -172,7 +172,7 @@ impl Raycast {
     /// The nearest box within `max_dist` along the ray from `o` in
     /// direction `d`, both relative to `origin` (the map origin, in units)
     /// on X and Y, or none. Chunks the scheduler holds are tested; a
-    /// chunk with no page, or whose composite the pool refused, holds
+    /// chunk with no page, or whose composite the heap refused, holds
     /// nothing.
     pub fn hit(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: [f64; 3], d: [f64; 3], max_dist: f64) -> Option<Hit> {
         let (dx, dy) = (d[0], d[1]);
@@ -204,7 +204,7 @@ impl Raycast {
         let (volume, temporary) = self.acquire(world, sched, id)?;
         let hit = self.hit_chunk(world, volume, o, d, bx - origin[0], by - origin[1], max_dist);
         if temporary {
-            world.volumes.release(world.pools, volume);
+            world.volumes.release(volume);
         }
         hit
     }
@@ -246,7 +246,7 @@ impl Raycast {
 
     fn remove(&mut self, world: &mut World, k: usize) {
         let e = self.entries.swap_remove(k);
-        world.volumes.release(world.pools, e.volume);
+        world.volumes.release(e.volume);
     }
 
     /// Cell-DDA through one chunk at (chunk_ox, chunk_oy) of the ray's

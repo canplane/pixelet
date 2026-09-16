@@ -105,6 +105,7 @@ pub fn world_boot() {
         return;
     }
     *booted = true;
+    crate::module::world::sched::log::ledger_set_logging(true);
     let (a, t) = (crate::probe::mark(), crate::probe::top());
     teach_terrain();
     let (a, t) = (crate::probe::add(27, a), crate::probe::add_bytes(27, t));

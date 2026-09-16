@@ -257,7 +257,6 @@ impl Volumes {
             self.stat.reused += 1;
             return Some(s);
         }
-        let held = self.stores.len() - self.empty_stores.len();
         let Some(material) = take_bytes(BAND_VOXELS * 4) else {
             self.stat.refused += 1;
             return None;

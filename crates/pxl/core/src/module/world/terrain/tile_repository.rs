@@ -27,10 +27,9 @@ use super::slab::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYT
 use super::store::use_tile_store;
 use crate::module::world::sched::demand::Category;
 use crate::global::{now, Global};
-use crate::kernel::kernel;
 use crate::lib::env::config::TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
-use crate::memory::{self, FIXED_POOL};
+use crate::memory;
 use crate::module::world::sched::demand::Phases;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
@@ -187,15 +186,13 @@ pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
         return Ok(());
     }
     let decoded = decode(pkt)?;
-    let pool = kernel().pools.get_mut(FIXED_POOL as usize).ok_or(FetchFail::NoRoom)?;
-    let at = pool.acquire(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
+    let at = crate::bake::volume::take_bytes(RECORD_BYTES as usize).ok_or(FetchFail::NoRoom)?;
     let lanes = TerrainLanes {
         ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
         ele: record_ele_at(at),
     };
     write_lanes(&decoded, lanes);
-    // SAFETY: a record of the fixed section nothing ever releases, at the
-    // page's lane sizes.
+    // SAFETY: a record nothing ever releases, at the page's lane sizes.
     let terrain = unsafe { open_terrain(lanes) };
     let o = ocean();
     for page_idx in o.waiting.drain(..) {

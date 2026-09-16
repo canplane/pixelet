@@ -220,10 +220,10 @@ fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 impl Models {
     /// A model of `vertex_cnt` vertices, `index_cnt` indices and `joint_cnt`
     /// joints, its mesh block acquired: its id and the block's address, for
-    /// the glue to write; none when the pool refused.
-    pub fn new_model(&mut self, world: &mut World, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
+    /// the glue to write; none when the heap refused.
+    pub fn new_model(&mut self, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
         let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
-        let at = world.pools[world.volumes.mesh_pool()].acquire(bytes)?;
+        let at = crate::bake::volume::take_bytes(bytes as usize)?;
         let j = joint_cnt as usize;
         let model = Model {
             at,
@@ -339,16 +339,17 @@ impl Models {
     }
 
     /// Lets a model go, and every actor of it.
-    pub fn remove_model(&mut self, world: &mut World, draw: &mut DrawList, model: u32) {
+    pub fn remove_model(&mut self, draw: &mut DrawList, model: u32) {
         for a in 0..self.actors.len() {
             if self.actors[a].as_ref().is_some_and(|x| x.model == model) {
-                self.remove_actor(world, draw, a as u32);
+                self.remove_actor(draw, a as u32);
             }
         }
         if let Some(slot) = self.models.get_mut(model as usize) {
             if let Some(m) = slot.take() {
                 draw.free(m.handle);
-                world.pools[world.volumes.mesh_pool()].release(m.at, m.bytes);
+                // SAFETY: the block this model took and has not given back.
+                unsafe { crate::bake::volume::give_bytes(m.at, m.bytes as usize) };
             }
         }
     }
@@ -356,7 +357,7 @@ impl Models {
     pub fn new_actor(&mut self, world: &mut World, draw: &mut DrawList, model: u32) -> Option<u32> {
         let joints = self.models.get(model as usize)?.as_ref()?.parent.len();
         let palette_bytes = (joints.max(1) * 16 * 4) as u32;
-        let palette_at = world.pools[world.volumes.mesh_pool()].acquire(palette_bytes)?;
+        let palette_at = crate::bake::volume::take_bytes(palette_bytes as usize)?;
         // SAFETY: the block just acquired; identity joints until the first tick.
         unsafe {
             let p = core::slice::from_raw_parts_mut(world.volumes.mem().add(palette_at) as *mut f32, palette_bytes as usize / 4);
@@ -417,11 +418,12 @@ impl Models {
         a.fade_len = if a.previous.is_some() { fade_s.max(0.0) } else { 0.0 };
     }
 
-    pub fn remove_actor(&mut self, world: &mut World, draw: &mut DrawList, id: u32) {
+    pub fn remove_actor(&mut self, draw: &mut DrawList, id: u32) {
         if let Some(slot) = self.actors.get_mut(id as usize) {
             if let Some(a) = slot.take() {
                 draw.free(a.palette_handle);
-                world.pools[world.volumes.mesh_pool()].release(a.palette_at, a.palette_bytes);
+                // SAFETY: the block this asset took and has not given back.
+                unsafe { crate::bake::volume::give_bytes(a.palette_at, a.palette_bytes as usize) };
             }
         }
     }
