@@ -6,22 +6,22 @@
 
 export const themes = {
   morning: {
-    fog: "#e9dccb",
+    fog: 0xe9dccb,
     sky: {
       colors: {
-        top: "#f7d9bc",
-        middle: "#f9e7d2",
-        horizon: "#fff6ea",
+        top: 0xf7d9bc,
+        middle: 0xf9e7d2,
+        horizon: 0xfff6ea,
       },
     },
     lighting: {
       ambient: {
-        color: "#fff2e3",
+        color: 0xfff2e3,
         intensity: 0.62 as number,
       },
       hemisphere: {
-        sky: "#fff3df",
-        ground: "#d8b894",
+        sky: 0xfff3df,
+        ground: 0xd8b894,
         intensity: 0.78 as number,
       },
       /** Lowered from full strength to avoid blown-out highlights on
@@ -29,55 +29,55 @@ export const themes = {
        * hemisphere are the soft fill and weren't what read as harsh. Landed
        * near 62% of the original, a ratio morning/day/evening share. */
       directional: {
-        color: "#ffd9a8",
+        color: 0xffd9a8,
         intensity: 0.45 as number,
       },
     },
   },
   day: {
-    fog: "#c8def0",
+    fog: 0xc8def0,
     sky: {
       colors: {
-        top: "#b9ddff",
-        middle: "#dff1ff",
-        horizon: "#f8fcff",
+        top: 0xb9ddff,
+        middle: 0xdff1ff,
+        horizon: 0xf8fcff,
       },
     },
     lighting: {
       ambient: {
-        color: "#f9fcff",
+        color: 0xf9fcff,
         intensity: 0.68 as number,
       },
       hemisphere: {
-        sky: "#edf6ff",
-        ground: "#c2cbd3",
+        sky: 0xedf6ff,
+        ground: 0xc2cbd3,
         intensity: 0.82 as number,
       },
       /** Directional light only, same reasoning as morning — ~61% of full
        * strength, in step with the other daylight themes. */
       directional: {
-        color: "#fff8ef",
+        color: 0xfff8ef,
         intensity: 0.5 as number,
       },
     },
   },
   evening: {
-    fog: "#c9865f",
+    fog: 0xc9865f,
     sky: {
       colors: {
-        top: "#6f4d4d",
-        middle: "#c9865f",
-        horizon: "#ffd7b0",
+        top: 0x6f4d4d,
+        middle: 0xc9865f,
+        horizon: 0xffd7b0,
       },
     },
     lighting: {
       ambient: {
-        color: "#ffe4cd",
+        color: 0xffe4cd,
         intensity: 0.58 as number,
       },
       hemisphere: {
-        sky: "#ffb874",
-        ground: "#6a3920",
+        sky: 0xffb874,
+        ground: 0x6a3920,
         intensity: 0.82 as number,
       },
       /** Directional light only, same pass as day. Landed at ~53% of full
@@ -85,35 +85,35 @@ export const themes = {
        * day(0.5)->evening->night(0.15) taper falls in roughly even steps
        * (0.15, 0.20) instead of a small step then a big one. */
       directional: {
-        color: "#ffc29d",
+        color: 0xffc29d,
         intensity: 0.35 as number,
       },
     },
   },
   night: {
-    fog: "#1e293b",
+    fog: 0x1e293b,
     sky: {
       colors: {
-        top: "#0b1220",
-        middle: "#172338",
-        horizon: "#243248",
+        top: 0x0b1220,
+        middle: 0x172338,
+        horizon: 0x243248,
       },
     },
     lighting: {
       ambient: {
-        color: "#24304a",
+        color: 0x24304a,
         intensity: 0.4 as number,
       },
       hemisphere: {
-        sky: "#314764",
-        ground: "#0b1322",
+        sky: 0x314764,
+        ground: 0x0b1322,
         intensity: 0.68 as number,
       },
       /** The one theme where directional intensity was raised rather than
        * cut like the daytime themes above — moonlight needs to read as
        * present at all, not toned down from an already-low baseline. */
       directional: {
-        color: "#5a6d8d",
+        color: 0x5a6d8d,
         intensity: 0.15 as number,
       },
     },

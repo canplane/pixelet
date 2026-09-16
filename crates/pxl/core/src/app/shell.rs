@@ -212,7 +212,11 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         Quoted(bar.label)
     )?;
     write!(out, "\"compass\":{{\"show\":{}}},", show_compass())?;
-    write!(out, "\"camera_busy\":{},\"fog\":{},", camera.camera_status != CameraStatus::Idle, Quoted(themes(use_theme_key()).fog))?;
+    // The fog is the one theme colour the shell paints too, so it crosses as
+    // the CSS colour a stylesheet takes. The kernel holds it as the number it
+    // lights with (environment/theme.json's `$type: "rgb"`); spelling it out
+    // is this one writer's job, the way the shipped palette's is.
+    write!(out, "\"camera_busy\":{},\"fog\":\"#{:06x}\",", camera.camera_status != CameraStatus::Idle, themes(use_theme_key()).fog)?;
     write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION},\"search\":{{\"results\":[")?;
     let (mut rows, mut first) = (Ok(()), true);
     let loading = search_rows(&shell().language, |r| {
