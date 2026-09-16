@@ -16,7 +16,11 @@ use crate::module::world::terrain::elevation::ground_pivot;
 // location puck naturally has nothing to show and the GPS recenter button
 // naturally stays disabled too — both fall out for free from the existing
 // state combination.
-const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
+/// Where the map starts when there is no fix: Seoul City Hall, longitude
+/// first as a G4326 is. Three things need it before `map_center` exists — the
+/// seed here, the sun and moon the first frames are lit by, and the theme
+/// clock's day-or-night — so it is one constant and they read it.
+pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 fn fallback_seed() -> PVF3 {
     let mut out = PVF3::default();

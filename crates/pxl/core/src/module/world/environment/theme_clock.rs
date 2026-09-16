@@ -24,10 +24,9 @@ use crate::module::map::store::use_map_store;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 
-// The same Seoul fallback the map bootstrap uses before a real GPS fix (or that
-// fallback itself) resolves map_center.
-const FALLBACK_LAT: f64 = 37.5665;
-const FALLBACK_LON: f64 = 126.978;
+// The map's own fallback, so a theme is chosen for a real place before
+// map_center exists.
+use crate::module::map::navigation::use_map_bootstrap::FALLBACK_G4326;
 
 fn compute_theme_key() -> WorldThemeKey {
     let (lon, lat) = match use_map_store().map_center {
@@ -36,7 +35,7 @@ fn compute_theme_key() -> WorldThemeKey {
             epsg4326::unproject(&mut g, center.i, center.f);
             (g[0], g[1])
         }
-        None => (FALLBACK_LON, FALLBACK_LAT),
+        None => (FALLBACK_G4326[0], FALLBACK_G4326[1]),
     };
     let t = local_time();
     let environment = &mut kernel().sched.environment;

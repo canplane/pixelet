@@ -21,12 +21,9 @@ use crate::module::world::environment::theme_clock::use_theme_key;
 use crate::render::gpu::color::linear_rgb;
 use crate::world::environment::THEME_FLOATS;
 
-// Same Seoul coordinate use_map_bootstrap.rs seeds map_center with before a
-// real GPS fix (or that fallback itself) resolves — reused here so the very
-// first frame(s), before map_center is available, still get a real location
-// instead of computing sun/moon position for (0,0).
-const FALLBACK_LAT: f64 = 37.5665;
-const FALLBACK_LON: f64 = 126.978;
+// The map's own fallback, so the first frames before map_center exists light
+// the world from a real place instead of computing sun and moon for (0, 0).
+use crate::module::map::navigation::use_map_bootstrap::FALLBACK_G4326;
 
 /// The sky is the inside of a sphere centred on the world origin, and must stay
 /// inside the camera's far clip plane. The camera itself can sit up to MAX_DIST
@@ -99,8 +96,8 @@ pub fn map_environment_step() {
     let e = ENVIRONMENT.get(|| Environment {
         theme_key: None,
         observed_centre: None,
-        observed_lat: FALLBACK_LAT,
-        observed_lon: FALLBACK_LON,
+        observed_lat: FALLBACK_G4326[1],
+        observed_lon: FALLBACK_G4326[0],
         clock_frame_at: 0.0,
     });
     let sched = &mut kernel().sched;
