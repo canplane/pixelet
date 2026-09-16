@@ -349,18 +349,24 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
                 _ => continue,
             };
             let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else { continue };
-            let times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
+            let mut times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
             let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)?;
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
             let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
                 // In-tangent, value, out-tangent per key: the value.
-                values = (0..times.len()).flat_map(|t| values[t * width * 3 + width..t * width * 3 + width * 2].to_vec()).collect();
+                values = (0..times.len()).filter_map(|t| values.get(t * width * 3 + width..t * width * 3 + width * 2)).flatten().copied().collect();
             }
+            // The draw reads a channel's keys as `keys * width` floats by
+            // pointer, so a file whose output is shorter than its input claims
+            // is read for the keys it actually carries rather than past the end
+            // of them.
+            let keys = times.len().min(values.len() / width);
+            times.truncate(keys);
+            values.truncate(keys * width);
             if let Some(&last) = times.last() {
                 duration = duration.max(last as f64);
             }
-            values.truncate(times.len() * width);
             channels.push(GltfChannel {
                 node: node as u32,
                 path,

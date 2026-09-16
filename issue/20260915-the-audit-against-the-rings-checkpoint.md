@@ -216,11 +216,14 @@ when its fix lands.
   (BACKLOG), which ends the question instead of patching it.
 - ~~**B23**~~ `poi_layer.rs:547-564` asks for placement on every camera store
   revision; `poi_layer.tsx:632-635` on the view state.
-- **B24** A channel's values are read as `key_cnt * width` floats by
+- **B24** ~~A channel's values are read as `key_cnt * width` floats by
   pointer (`model_asset.rs:195`, `world/model.rs:283-290`) from a `Vec`
   `truncate` never grows (`gltf.rs:401`); a CUBICSPLINE slice panics on a
   short output (`gltf.rs:396`). The TypeScript's subarrays clamped.
-  Malformed assets only.
+  Malformed assets only.~~ The spline reads its keys through `get` rather
+  than by slicing, and the key count is now the lesser of what the input and
+  the output carry, with both cut to it — so the pointer read is short by
+  construction instead of clamped at the far end.
 - **B25** ~~`gltf.rs:193,260-274` caches accessors as `Vec<f64>`, cloned and
   converted per read~~ (each accessor is read once, straight into its
   lane's type); integer casts saturate where typed arrays wrapped; a JSON
