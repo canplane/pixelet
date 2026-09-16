@@ -220,7 +220,10 @@ fn shift_of(bytes: u32) -> u32 {
 /// block is only written to while it is free, and a borrower gets its bytes
 /// dirty in any case. `is_free` answers "is the block of order k at this
 /// offset free" in O(1) — the buddy test on release needs exactly that
-/// question, and it cannot be read off the list without walking it.
+/// question, and it cannot be read off the list without walking it. It is a
+/// bit a block and not a byte: a byte costs the region's bytes over the
+/// minimum block, which is a fiftieth of the region at a page and an eighth of
+/// it at sixteen bytes — the size a global allocator's smallest class needs.
 ///
 /// Offsets on the lists are region-relative and word-aligned by
 /// construction (the minimum order is at least eight bytes); NIL marks a
@@ -233,7 +236,10 @@ struct Region {
     words: TypedArray<u32>,
     /// Offset of the first free block of each order, or NIL.
     head: Vec<u32>,
-    is_free: Vec<Vec<u8>>,
+    /// A bit per block per order, order 0 first: order k's bits start at
+    /// `bit_at[k]` and there are `1 << (max_order - k)` of them.
+    is_free: Vec<u8>,
+    bit_at: Vec<u32>,
     /// Bytes carved into live blocks; a region with 0 is fully reclaimable.
     used_bytes: u32,
     min_shift: u32,
@@ -256,11 +262,18 @@ impl Region {
         let bytes = 1u32 << (min_shift + max_order);
         let buf = backing.unwrap_or_else(|| ArrayBuffer::new(bytes as usize));
         let words = TypedArray::<u32>::over(buf.clone(), base as usize, (bytes >> 2) as usize);
+        let mut bit_at = Vec::with_capacity(max_order as usize + 1);
+        let mut bits = 0u32;
+        for k in 0..=max_order {
+            bit_at.push(bits);
+            bits += 1 << (max_order - k);
+        }
         let mut region = Region {
             buf,
             words,
             head: vec![NIL; max_order as usize + 1],
-            is_free: (0..=max_order).map(|k| vec![0u8; 1 << (max_order - k)]).collect(),
+            is_free: vec![0u8; bits.div_ceil(8) as usize],
+            bit_at,
             used_bytes: 0,
             min_shift,
             max_order,
@@ -280,7 +293,7 @@ impl Region {
             words.put((next >> 2) as usize + 1, offset);
         }
         self.head[order as usize] = offset;
-        self.is_free[order as usize][(offset >> (self.min_shift + order)) as usize] = 1;
+        self.set_free(order, offset, true);
     }
 
     fn mark_used(&mut self, order: u32, offset: u32) {
@@ -296,7 +309,7 @@ impl Region {
         if next != NIL {
             words.put((next >> 2) as usize + 1, prev);
         }
-        self.is_free[order as usize][(offset >> (self.min_shift + order)) as usize] = 0;
+        self.set_free(order, offset, false);
     }
 
     /// Offset of a free block of exactly `order`, splitting a larger one if
@@ -321,9 +334,26 @@ impl Region {
         offset as i64
     }
 
+    /// Which bit says the block of `order` at `offset` is free: the byte it
+    /// lies in, and its mask.
+    fn bit(&self, order: u32, offset: u32) -> (usize, u8) {
+        let i = self.bit_at[order as usize] + (offset >> (self.min_shift + order));
+        ((i >> 3) as usize, 1 << (i & 7))
+    }
+
+    fn set_free(&mut self, order: u32, offset: u32, on: bool) {
+        let (byte, mask) = self.bit(order, offset);
+        if on {
+            self.is_free[byte] |= mask;
+        } else {
+            self.is_free[byte] &= !mask;
+        }
+    }
+
     /// Whether the block of `order` at `offset` is itself on a free list.
     fn is_block_free(&self, order: u32, offset: u32) -> bool {
-        self.is_free[order as usize][(offset >> (self.min_shift + order)) as usize] == 1
+        let (byte, mask) = self.bit(order, offset);
+        self.is_free[byte] & mask != 0
     }
 
     /// Returns a block and merges it upward as far as its buddies allow.
@@ -332,7 +362,7 @@ impl Region {
         let mut at = offset;
         while k < self.max_order {
             let buddy = at ^ (1 << (self.min_shift + k));
-            if self.is_free[k as usize][(buddy >> (self.min_shift + k)) as usize] != 1 {
+            if !self.is_block_free(k, buddy) {
                 break;
             }
             self.mark_used(k, buddy);
