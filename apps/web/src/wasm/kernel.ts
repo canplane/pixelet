@@ -33,7 +33,7 @@ import { Quantum } from "@xpute/core/sched/quantum.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { Message } from "@pxl/shared/spec/message.ts";
 import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
-import { type LedgerReport, ledger_report_text } from "@/module/world/sched/ledger_report.ts";
+import { ledger_report_text, type LedgerReport } from "@/module/world/sched/ledger_report.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
@@ -41,7 +41,7 @@ import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 import { CORE_KERNEL } from "@/wasm/core_memory.ts";
 import { acquire_device, bind_surface, register_image, unbind_surface } from "@/wasm/gpu.ts";
-import { boot_block, quantum_policy } from "@/wasm/module.ts";
+import { boot_block, quantum_policy, text_at } from "@/wasm/module.ts";
 
 // ---- the snapshot the UI renders (crates/pxl/core/src/app/shell.rs) ----
 
@@ -178,9 +178,14 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
       emit_toast(show ? { show: true, id, message, tone } : { show: false, id });
       return;
     }
-    case Cmd.WORLD_SNAPSHOT:
-      set_snapshot(f!.at(0).get<string>());
+    case Cmd.WORLD_SNAPSHOT: {
+      // The JSON is far past a ring frame, so the kernel names the block it
+      // holds it in. It is the kernel's and stays valid until it makes the
+      // next one, which is a turn away.
+      const [at, len] = f!.get<[number, number]>();
+      set_snapshot(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0));
       return;
+    }
     case Cmd.WORLD_UPDATE: {
       const [asked, used_ms, settled] = f!.get<[boolean, number, boolean]>();
       last_report = { asked, used_ms, settled };
@@ -385,7 +390,13 @@ async function load_model(url: string): Promise<void> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`gltf: ${url} ${res.status}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.str(url).u8_array(bytes)));
+    // A model is far past a ring frame, so it crosses by address: the heap is
+    // asked for a block, the bytes are written into it, and the kernel gives
+    // it back once it has read them.
+    const at = CORE_BUILD.call(Cmd.POOL_ACQUIRE, packet((b) => b.u32(0).u32(bytes.byteLength)), (result) => result >>> 0);
+    if (at === 0) throw new Error(`gltf: ${url} has no room for ${bytes.byteLength} bytes`);
+    new Uint8Array(CORE_KERNEL.memory.buffer, at, bytes.byteLength).set(bytes);
+    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.str(url).u32(at).u32(bytes.byteLength)));
   } catch (err) {
     console.error(`[kernel] ${err instanceof Error ? err.message : String(err)}`);
     CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.str(url)));

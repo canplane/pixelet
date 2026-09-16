@@ -8,13 +8,12 @@
 //!
 //! Sections, in address order:
 //!
-//!   module   the module's stack and data, where a wasm32 linker puts them
-//!            (`--stack-first`, then data). Not the module's heap: that is
-//!            past every fixed section, at HEAP_AT.
-//!   fixed    what is allocated once and never freed: the renderer's blocks
-//!            and whatever else is settled at boot. Where inside it each of
-//!            those sits is that section's own affair — the map gives it a
-//!            range and asks nothing more.
+//!   module   the stack at the bottom (`--stack-first`, so an overflow wraps
+//!            past zero and traps), the rings at addresses pxl-wasm's
+//!            build.rs fixes, and then the module's own data and bss, which
+//!            the same build.rs keeps out of the rings' way with
+//!            `--global-base`. Not the module's heap: that is past the slab,
+//!            at HEAP_AT.
 //!   slab     the resident terrain, one record a page. Not a pool: a page's
 //!            record is its own coordinate reduced modulo the slab's axis
 //!            (module/world/terrain/slab.rs), so nothing here is allocated,
@@ -30,8 +29,7 @@
 //! reaches, not a share of what the device happens to have.
 //!
 //!              offset         end            phone        desktop
-//!   module     0              32 MiB         32 MiB       32 MiB
-//!   fixed      32 MiB         64 MiB         32 MiB       32 MiB
+//!   module     0              64 MiB         64 MiB       64 MiB
 //!   slab       64 MiB         260.432 MiB    196.43 MiB   196.43 MiB
 //!   (no one's) 260.432 MiB    260.434 MiB    1,504 B      1,504 B
 //!   heap       260.434 MiB    —              251.57 MiB   763.57 MiB
@@ -57,12 +55,12 @@ pub const DESKTOP_BYTES: u32 = 1024 << 20;
 /// for its own range — so this is a placement grid and nothing else.
 pub const REGION_BYTES: u32 = 1 << 26;
 
-/// The module's own section, from address 0.
-pub const MODULE_BYTES: u32 = 32 << 20;
-
-/// The unit the fixed section is counted in, carried in its `Section` for the
-/// boot block to report.
-pub const FIXED_REGION_BYTES: u32 = 16 << 20;
+/// The module's own section, from address 0: the stack, the rings and the
+/// module's data. Two regions that grow without moving each other — the rings
+/// have everything under pxl-wasm build.rs's `--global-base` and the data
+/// everything over it — so this is the sum of the two and not a number either
+/// of them has to fit alone.
+pub const MODULE_BYTES: u32 = 64 << 20;
 
 /// What a section begins on, and the smallest block the heap's buddy hands
 /// out — the same 4 KiB as xpute `ds/buddy_tree.rs`'s MIN_ALLOC, for the same
@@ -79,14 +77,13 @@ const _: () = assert!(
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {
-    pub fixed: Section,
     pub slab: Section,
     pub heap: Section,
 }
 
-/// The map over a memory of `bytes`: the fixed sections first, each beginning
-/// on a page and ending where its content does, and the heap from the page
-/// past the last of them to the end of the memory, ascending.
+/// The map over a memory of `bytes`: the module's own section, then the slab,
+/// each beginning on a page and ending where its content does, and the heap
+/// from the page past the last of them to the end of the memory, ascending.
 ///
 /// Which is the whole of the rule. What is fixed is settled at boot and never
 /// moves; the heap is everything that is not, it starts where they stop, and
@@ -94,13 +91,8 @@ pub struct Map {
 /// give rather than what the content needs.
 pub fn lay_out(bytes: u32) -> Map {
     let regions = bytes / REGION_BYTES;
-    let fixed = Section {
-        offset: MODULE_BYTES,
-        bytes: REGION_BYTES - MODULE_BYTES,
-        region_bytes: FIXED_REGION_BYTES,
-    };
     let slab = Section {
-        offset: REGION_BYTES,
+        offset: MODULE_BYTES,
         bytes: SLAB_BYTES,
         region_bytes: SLAB_BYTES,
     };
@@ -109,7 +101,6 @@ pub fn lay_out(bytes: u32) -> Map {
         "the memory is too small for the terrain the load radius reaches: the slab is {SLAB_BYTES} bytes and the heap begins past it"
     );
     Map {
-        fixed,
         slab,
         heap: Section {
             offset: HEAP_AT,
@@ -128,7 +119,7 @@ pub fn lay_out(bytes: u32) -> Map {
 /// wanted before the map is: the module's global allocator is asked for its
 /// first block by whatever runs first, which is well before anything has laid
 /// the memory out.
-const SLAB_END: u32 = REGION_BYTES + SLAB_BYTES;
+const SLAB_END: u32 = MODULE_BYTES + SLAB_BYTES;
 pub const HEAP_AT: u32 = SLAB_END.div_ceil(PAGE_BYTES) * PAGE_BYTES;
 
 const _: () = assert!(

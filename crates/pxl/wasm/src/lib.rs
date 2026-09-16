@@ -30,7 +30,7 @@ use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
-use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
+use xpute_core::ipc::ring::{arena_bytes, ring_bytes, Ring};
 use xpute_core::kit::array::ArrayBuffer;
 use xpute_core::kit::array::U8Array;
 use xpute_core::sys::errno::Errno;
@@ -77,29 +77,36 @@ struct State {
     boot: [u32; BOOT_WORDS],
 }
 
-/// Messages each ring holds: a page mounting is 64 chunks a frame, each
-/// with its tiers, decor and layout to come, and the glue reads the ring
-/// dry between ticks.
-pub const RING_CAPACITY: u32 = 4096;
+// The front of the memory: where the rings are and where the linker was told
+// its own data may begin. Written by build.rs, which emits the same numbers
+// as `--global-base`, so the two cannot disagree.
+include!(concat!(env!("OUT_DIR"), "/ring_layout.rs"));
 
-/// A ring's block of the fixed section: how much the rings ask that section
-/// for, which is all the map needs to know about them.
-pub const RING_BYTES: u32 = 1 << 20;
+/// The three rings, in the order their descriptors and frames are laid out.
+const SQ: u32 = 0;
+const CQ: u32 = 1;
+const SPILL: u32 = 2;
 
-/// Each ring's packet arena: what is left of its block after the header and
-/// the messages. The fixed pool hands out powers of two, so a ring a byte past
-/// its block would take twice the block. A chunk's largest message is under
-/// 128 bytes, so a full ring's packets fit in about half.
-pub const RING_ARENA_BYTES: u32 = RING_BYTES - (RING_HEADER_WORDS + RING_CAPACITY * RING_ENTRY_WORDS) * 4;
+const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
+const _: () = assert!(arena_bytes(RING_CAPACITY, RING_FRAME_BYTES) == RING_ARENA_STRIDE, "a ring's frames are not its stride");
+const _: () = assert!(GLOBAL_BASE <= memory::MODULE_BYTES, "the module's data begins past the section it is in");
 
-/// The ring whose block is at `at`. A pool block starts 8-aligned, so the
-/// ring and every packet in its arena sit where a packet's f64 and u64 lanes
-/// need them.
-fn new_ring(at: u32, capacity: u32) -> Ring {
-    // SAFETY: `at` is the fixed pool's block boot took for this ring alone and
-    // never gives back, in the module's memory addressed from 0.
-    let buffer = unsafe { ArrayBuffer::from_raw(at as usize as *mut u8, RING_BYTES as usize) };
-    Ring::init(buffer, 0, capacity, RING_ARENA_BYTES)
+/// The whole memory as one buffer, which is what a ring's two areas are cut
+/// from: the descriptors near the bottom and the frames past them, at
+/// addresses build.rs fixed rather than anyone hands out.
+///
+/// # Safety
+/// The module's own memory, addressed from 0.
+unsafe fn module_memory() -> ArrayBuffer {
+    unsafe { ArrayBuffer::from_raw(core::ptr::null_mut(), core::arch::wasm32::memory_size(0) * (1 << 16)) }
+}
+
+/// The nth ring, laid out empty.
+fn new_ring(n: u32) -> Ring {
+    // SAFETY: the module's own memory; the two ranges are build.rs's and no
+    // one else's, the linker included.
+    let mem = unsafe { module_memory() };
+    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_ARENA_AT + n * RING_ARENA_STRIDE, RING_FRAME_BYTES)
 }
 
 /// Where a ring's words start in the memory.
@@ -129,22 +136,6 @@ extern "C" {
     fn host_now() -> f64;
 }
 
-/// The submission ring's block, the completion ring's and the spill's, taken
-/// from the fixed section the first time a ring is wanted. The map is laid out
-/// here if it has not been: the heap begins past the sections, so it cannot
-/// hand out a ring before they have been cut.
-fn ring_blocks() -> [u32; 3] {
-    memory::map().unwrap_or_else(lay_out);
-    assert!(ring_bytes(RING_CAPACITY, RING_ARENA_BYTES) <= RING_BYTES, "a ring outgrows its block");
-    core::array::from_fn(|_| {
-        // SAFETY: a block of the heap the rings hold for the module's life and
-        // never give back, RING_BYTES long.
-        let at = unsafe { ALLOC.malloc(RING_BYTES as usize) };
-        assert!(!at.is_null(), "the heap has no room for a ring");
-        at as u32
-    })
-}
-
 fn state() -> &'static mut State {
     // SAFETY: the module runs on one thread and no export re-enters another,
     // so no two references to the state are live at once.
@@ -154,12 +145,12 @@ fn state() -> &'static mut State {
                 let text = info.to_string();
                 host_panic(text.as_ptr(), text.len());
             }));
-            let [sq, cq, spill] = ring_blocks();
+            memory::map().unwrap_or_else(lay_out);
             State {
-                sq: new_ring(sq, RING_CAPACITY),
+                sq: new_ring(SQ),
                 outbox: Outbox {
-                    cq: new_ring(cq, RING_CAPACITY),
-                    spill: new_ring(spill, RING_CAPACITY),
+                    cq: new_ring(CQ),
+                    spill: new_ring(SPILL),
                 },
                 snapshot: 0,
                 boot: [0; BOOT_WORDS],
@@ -252,13 +243,13 @@ pub use pxl_core::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TO
 /// central scheduler (xpute_core::sched::quantum's QuantumPolicy): margin
 /// share, min, max and batch ms, and the outside smoothing, each in
 /// thousandths.
-pub const BOOT_WORDS: usize = 18;
+pub const BOOT_WORDS: usize = 15;
 
-/// The boot word holding the address of the module heap's row (FixedHeap's
-/// `stat`): the top it has cut to and the requests it has served.
-const BOOT_HEAP: usize = 17;
+/// The boot word holding the address of the heap's row (`BuddyMalloc`'s
+/// `stat`): the range it spans, the top it has reached and what it has served.
+const BOOT_HEAP: usize = 14;
 
-const BOOT_QUANTUM: usize = 12;
+const BOOT_QUANTUM: usize = 9;
 
 /// Lays out the memory the module was given, the first time, and hands out
 /// the boot block's address: what the shell reads once, before any ring.
@@ -270,7 +261,7 @@ pub extern "C" fn boot() -> *const u32 {
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[MODULE_BYTES, sq, cq]);
     s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
-    for (i, sec) in [map.fixed, map.slab, map.heap].into_iter().enumerate() {
+    for (i, sec) in [map.slab, map.heap].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
@@ -311,9 +302,13 @@ pub extern "C" fn interrupt(vector: u32) -> u32 {
     }
 }
 
-/// Bytes a reply's packet may take: the most a command answers with is a
-/// volume's band rows, a few thousand words.
-const REPLY_BYTES: usize = 1 << 18;
+/// Bytes a reply's packet may take, which is a ring frame: a packet is at
+/// most a frame, so a reply written past one could never be posted and is
+/// better refused where it is written than where it is pushed. What a command
+/// answers with that cannot be bounded this way — a volume's band rows, the
+/// store's columns, the UI's snapshot — crosses as an address into a block the
+/// kernel holds (`Held`), the way OBJECT_CHUNK's lanes already do.
+const REPLY_BYTES: usize = RING_FRAME_BYTES as usize;
 
 /// Bytes the module writes into before it posts them: zeroed statics, so
 /// they lie in the module's data rather than on a heap.
@@ -327,6 +322,12 @@ unsafe impl<const N: usize> Sync for Scratch<N> {}
 /// command's result once it is known.
 static REPLY: Scratch<REPLY_BYTES> = Scratch(core::cell::UnsafeCell::new([0; REPLY_BYTES]));
 
+/// A volume's band rows, the object store's columns and the UI's snapshot:
+/// what a reply or a signal names instead of carrying.
+static ROWS: Held<u32> = Held::new();
+static COLUMNS: Held<u64> = Held::new();
+static SNAPSHOT: Held<u8> = Held::new();
+
 /// A reply's packet of `count` children written by `f` into the reply
 /// scratch: its length, for `apply` to answer with.
 fn reply(count: u32, f: impl FnOnce(&mut PacketWriter)) -> Option<u32> {
@@ -337,9 +338,40 @@ fn reply(count: u32, f: impl FnOnce(&mut PacketWriter)) -> Option<u32> {
     Some(w.finish().expect("a reply larger than the reply scratch"))
 }
 
-/// A packet's bytes written in place into what a ring has left: its length,
-/// or none when it did not fit.
+/// A packet's bytes written in place into a ring frame: its length, or none
+/// when it did not fit one.
 type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
+
+/// What a reply names rather than carries: a block the kernel holds and grows,
+/// valid until the next reply of the same command fills it again. Which is the
+/// same promise OBJECT_CHUNK's lanes make — the shell reads the rows before it
+/// asks for more, and there is no block to hand back.
+struct Held<T>(core::cell::UnsafeCell<Vec<T>>);
+
+// SAFETY: the module runs on one thread, and what is held is read before
+// anything fills it again.
+unsafe impl<T> Sync for Held<T> {}
+
+impl<T: Copy + Default> Held<T> {
+    const fn new() -> Held<T> {
+        Held(core::cell::UnsafeCell::new(Vec::new()))
+    }
+
+    /// Fills it with `len` of `value`, and answers where it lies and how many.
+    ///
+    /// # Safety
+    /// Nothing may hold a reference into it from an earlier fill.
+    unsafe fn fill(&self, len: usize, mut value: impl FnMut(usize) -> T) -> (u32, u32) {
+        // SAFETY: see Sync.
+        let v = unsafe { &mut *self.0.get() };
+        v.clear();
+        v.resize(len, T::default());
+        for (i, slot) in v.iter_mut().enumerate() {
+            *slot = value(i);
+        }
+        (v.as_ptr() as u32, len as u32)
+    }
+}
 
 /// Where what the kernel posts goes: the completion ring while it has room
 /// and nothing waits before it, otherwise the spill ring behind it, so what
@@ -364,6 +396,18 @@ impl Outbox {
         assert!(e == Errno::OK, "the completion ring and its spill are full: 0x{cmd:x} has nowhere to go (errno {})", e as i32);
     }
 
+    /// Whether another command's worth of signals has somewhere to go. What
+    /// `drain` stops on: a command that has not been applied can be left in
+    /// the submission ring for the next call, where what it would have raised
+    /// cannot be left anywhere.
+    ///
+    /// The margin is the spill rather than the completion ring, so the shell
+    /// is asked to read before anything is at risk — io_uring answers a
+    /// submission `-EBUSY` while its backlog stands, for the same reason.
+    fn has_room(&self) -> bool {
+        self.spill.len() + MOST_SIGNALS <= self.spill.capacity
+    }
+
     /// Moves what fits of the spill into the completion ring, in order.
     fn flush(&self) {
         loop {
@@ -380,6 +424,11 @@ impl Outbox {
         }
     }
 }
+
+/// Signals one command may raise before `drain` checks again. A build's tick
+/// is the many-signalled one and it is not a submission, so this bounds a
+/// single command rather than a turn.
+const MOST_SIGNALS: u32 = 64;
 
 /// A signal about `tag` with a packet of `count` children written by `f`.
 fn signal(o: &Outbox, tag: u32, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
@@ -492,12 +541,15 @@ fn post_shell(s: &mut State) {
     }
     let mut text = String::new();
     pxl_core::app::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
-    let ui = text.as_str();
-    let hash = xpute_core::kit::hash::fnv1a64_str(ui);
+    let hash = xpute_core::kit::hash::fnv1a64_str(&text);
     if hash != s.snapshot {
         s.snapshot = hash;
-        raise(&s.outbox, Cmd::WORLD_SNAPSHOT, 1, |e| {
-            e.str(Some(ui));
+        // The JSON is far past a frame and the shell reads it before the next
+        // turn can make another, so it crosses as an address and its bytes.
+        // SAFETY: the last snapshot, read by the shell before this one.
+        let (at, len) = unsafe { SNAPSHOT.fill(text.len(), |i| text.as_bytes()[i]) };
+        raise(&s.outbox, Cmd::WORLD_SNAPSHOT, 2, |e| {
+            e.u32(Some(at)).u32(Some(len));
         });
     }
     // The key crosses as the one word the queue orders by; the shell holds it
@@ -790,10 +842,12 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::OBJECT_COLUMNS => {
             let o = &k.objects;
+            // SAFETY: the keys of the last OBJECT_COLUMNS, read before this one.
+            let (at, len) = unsafe { COLUMNS.fill(o.chunk_count(), |i| o.chunk_key(i)) };
             return Ok(Some((
                 0,
-                reply(1, |b| {
-                    b.u64_array_with(o.chunk_count() as u32, |i| o.chunk_key(i as _));
+                reply(2, |b| {
+                    b.u32(Some(at)).u32(Some(len));
                 }),
             )));
         }
@@ -844,14 +898,16 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             if count == 0 {
                 return Ok(Some((0, None)));
             }
-            // The words, not the row's address: a row is written into one
-            // scratch the volumes keep, so every band's address would be the
-            // last band's.
-            let words = VOLUME_BAND_WORDS as u32;
+            // The rows are copied out rather than named one by one: a row is
+            // written into one scratch the volumes keep, so every band's
+            // address would be the last band's.
+            let words = VOLUME_BAND_WORDS;
+            // SAFETY: the rows of the last VOLUME_READ, read before this one.
+            let (at, len) = unsafe { ROWS.fill(count * words, |i| v.band_row(id, i / words)[i % words]) };
             return Ok(Some((
                 count as i32,
-                reply(1, |b| {
-                    b.u32_array_with(count as u32 * words, |i| v.band_row(id, (i / words) as _)[(i % words) as usize]);
+                reply(2, |b| {
+                    b.u32(Some(at)).u32(Some(len));
                 }),
             )));
         }
@@ -1208,8 +1264,16 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            let bytes = bytes_at(&f, 1, usize::MAX)?;
-            pxl_core::render::gltf::load::gltf_arrived(url.get_str_ref()?, bytes.as_slice());
+            // A model's bytes are far past a frame, so the shell asks the heap
+            // for a block (POOL_ACQUIRE), writes them there and names it here;
+            // the block is the kernel's to give back once it has read them.
+            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)? as usize);
+            // SAFETY: a block this heap gave the shell, of `bytes`, written
+            // and not read by anyone else.
+            let body = unsafe { core::slice::from_raw_parts(at as *const u8, bytes) };
+            pxl_core::render::gltf::load::gltf_arrived(url.get_str_ref()?, body);
+            // SAFETY: the same block, at the size it was asked for.
+            unsafe { ALLOC.free(at as *mut u8, bytes) };
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_IMAGE => {
@@ -1579,6 +1643,12 @@ fn drain(s: &mut State) -> u32 {
     let tail = s.outbox.cq.tail();
     s.outbox.flush();
     loop {
+        if !s.outbox.has_room() {
+            // Backpressure rather than a panic: what is left stays in the
+            // submission ring, in order, and the shell reads the completions
+            // before it is drained again.
+            break;
+        }
         let at = s.sq.peek();
         if at < 0 {
             break;
