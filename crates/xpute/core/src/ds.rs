@@ -2,6 +2,7 @@
 
 pub mod arena;
 pub mod buddy;
+pub mod buddy_tree;
 pub mod deque;
 pub mod fixed_heap;
 pub mod grid_index;

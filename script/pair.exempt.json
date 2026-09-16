@@ -17,5 +17,6 @@
   "packages/xpute/core/src/kit/hash.ts#sha256_hex": "WebCrypto's digest: the host's.",
   "crates/xpute/core/src/vector.rs": "The vectors' reader, test-only; its writer is script/pair.ts, not a file of the kit.",
   "packages/xpute/core/src/sys/memory.ts#reserve_memory": "The central scheduler's reservation of a WebAssembly.Memory: the host's. The module is given its memory and lays out what is inside it.",
-  "packages/xpute/core/src/sys/slab.ts": "The central scheduler's little memory: ArrayBuffers moved between the host's threads by transfer. The host's; the module never holds one."
+  "packages/xpute/core/src/sys/slab.ts": "The central scheduler's little memory: ArrayBuffers moved between the host's threads by transfer. The host's; the module never holds one.",
+  "crates/xpute/core/src/ds/buddy_tree.rs": "evanw/buddy-malloc in Rust: a buddy over one fixed range as a linearized binary tree, with the growth and the per-allocation header taken out. The pair of a C file, not of a TypeScript one — the host has no use for it, since the range it manages is the module's own memory."
 }
