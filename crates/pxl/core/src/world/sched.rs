@@ -358,6 +358,10 @@ pub struct Scheduler {
     scratch: Scratch,
 }
 
+/// Empty by default: the tick takes it out with `mem::take` and puts it back,
+/// so what `Default` makes is thrown away each tick, and allocating there
+/// would allocate every tick.
+#[derive(Default)]
 struct Scratch {
     order: Vec<usize>,
     keys: Vec<Keyed>,
@@ -366,20 +370,6 @@ struct Scratch {
     eligible: Vec<usize>,
     still: Vec<u32>,
     landed: Vec<u32>,
-}
-
-impl Default for Scratch {
-    fn default() -> Self {
-        Scratch {
-            order: Vec::with_capacity(MAX_CHUNKS),
-            keys: Vec::with_capacity(MAX_CHUNKS),
-            visible: Vec::with_capacity(MAX_CHUNKS),
-            offscreen: Vec::with_capacity(MAX_CHUNKS),
-            eligible: Vec::with_capacity(MAX_CHUNKS),
-            still: Vec::with_capacity(MAX_CHUNKS),
-            landed: Vec::with_capacity(MAX_CHUNKS),
-        }
-    }
 }
 
 impl Default for Scheduler {
@@ -655,6 +645,15 @@ impl Scheduler {
         let (key_x, key_y) = (ivec::X(base), ivec::Y(base));
         let page_idx = ivec::gather(key_x >> PAGE_SHAMT, key_y >> PAGE_SHAMT, 0);
         let mut sampled = false;
+        let pool = world.volumes.mesh_pool();
+        if self.decor_scratch.is_none() {
+            self.decor_scratch = DecorScratch::new(&mut world.pools[pool]);
+            if self.decor_scratch.is_none() {
+                self.builder.stat.starved += 1;
+                self.slots[i].refused = Some(world.pools[pool].releases);
+                return false;
+            }
+        }
         for step in steps {
             if step == 0 || self.slots[i].decor.iter().any(|d| d.step == step) {
                 continue;
@@ -684,11 +683,10 @@ impl Scheduler {
                 hide: self.builder.hide_in(base),
             };
             let a = crate::probe::mark();
-            let scratch = self.decor_scratch.get_or_insert_with(DecorScratch::new);
+            let Some(scratch) = self.decor_scratch.as_mut() else { return false };
             let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
             let a = crate::probe::add(18, a);
-            let pool = world.volumes.mesh_pool();
             let Some(at) = world.pools[pool].acquire(bytes) else {
                 self.builder.stat.starved += 1;
                 self.slots[i].refused = Some(world.pools[pool].releases);
@@ -755,6 +753,17 @@ impl Scheduler {
             self.pages_revision = self.pages_revision.wrapping_add(1);
             self.view_dirty = true;
         }
+    }
+
+    /// Decor instances the build's lanes had no room for, since the kernel
+    /// started: the ledger's, so a chunk short of its decor says so.
+    pub fn decor_dropped(&self) -> u32 {
+        self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
+    }
+
+    /// Whether a chunk of `page` is still mounted: what reads the page's lanes.
+    pub fn page_mounted(&self, page: u64) -> bool {
+        self.mounted.range((page, 0, 0)..=(page, u32::MAX, u32::MAX)).next().is_some()
     }
 
     /// module/world/frame/range.ts's rule, a page and a chunk at a time: a chunk
@@ -824,6 +833,15 @@ impl Scheduler {
                     }
                     if mounts >= MAX_MOUNTS_PER_FRAME {
                         // The rest next frame: the key stays unrecorded.
+                        return;
+                    }
+                    if self.slots.len() >= MAX_CHUNKS {
+                        // How many chunks a range holds is the viewport's and the
+                        // anchor's, not a number the kernel hands itself: at the
+                        // ceiling the pass mounts no more and leaves the key
+                        // unrecorded, as it does for the frame's mount budget, so
+                        // the next pass tries again. A trap here would take the
+                        // world down over a tall window.
                         return;
                     }
                     mounts += 1;

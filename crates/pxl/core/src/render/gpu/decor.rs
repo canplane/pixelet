@@ -9,8 +9,10 @@
 //! A model is the scheduler's (world/model.rs), registered by the decor asset
 //! store and drawn from the same block the kernel holds its triangles in for
 //! the hit test — the vertex lanes of model_asset.rs's layout, and the indices
-//! past them. A group's skin is the image its variant loaded, by group: every
-//! bundle's variants in bundle order, the order the kinds were taught.
+//! past them. The groups are every bundle's variants in bundle order, the order
+//! the kinds were taught; a group's skin is the image its variant loaded, held
+//! by image rather than by group, since two variants — two kinds, even — may
+//! name the same skin and a texture is uploaded per row, not per group.
 
 use super::api::{buffer_usage, object, release, GpuApi};
 use super::api_spec::{address, compare, filter, format, resource};
@@ -28,13 +30,32 @@ use crate::world::model::MODEL_VERTEX_WORDS;
 const DRAW_UNIFORM_BYTES: u32 = 32;
 const GROUPS: usize = 64;
 
-#[derive(Clone, Copy, Default)]
+/// No skin row taken yet.
+const NO_SKIN: usize = usize::MAX;
+
+#[derive(Clone, Copy)]
 struct Group {
     /// The model's mesh block, by the draw list's handle, and its skin's image.
     mesh: u32,
     image: Option<u32>,
-    /// The skin on the device: texture, view, group.
-    skin: [u32; 3],
+    /// The skin row this group draws with.
+    skin: usize,
+}
+
+impl Default for Group {
+    fn default() -> Group {
+        Group { mesh: 0, image: None, skin: NO_SKIN }
+    }
+}
+
+/// One image on the device, shared by every group whose variant names it.
+#[derive(Clone, Copy, Default)]
+struct Skin {
+    image: u32,
+    /// Texture, view, group.
+    ids: [u32; 3],
+    /// Groups drawing with this row; the row goes back when the last leaves.
+    uses: u32,
 }
 
 fn is_decor(pipeline: u32) -> bool {
@@ -54,6 +75,7 @@ pub struct DecorPass {
     draw_group: u32,
     scratch: Scratch,
     groups: [Group; GROUPS],
+    skins: [Skin; GROUPS],
 }
 
 impl DecorPass {
@@ -74,6 +96,7 @@ impl DecorPass {
             draw_group: 0,
             scratch: Scratch::default(),
             groups: [Group::default(); GROUPS],
+            skins: [Skin::default(); GROUPS],
         }
     }
 
@@ -95,12 +118,10 @@ impl DecorPass {
                 }
                 let mesh = model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
                 let image = entry.skins.get(v).copied().flatten();
-                let gr = &mut self.groups[group];
+                let gr = self.groups[group];
                 if gr.mesh != mesh || gr.image != image {
-                    for id in gr.skin.into_iter().rev() {
-                        release(id);
-                    }
-                    *gr = Group { mesh, image, skin: [0; 3] };
+                    self.groups[group] = Group { mesh, image, skin: NO_SKIN };
+                    self.release_skin(gr.skin);
                 }
                 group += 1;
             }
@@ -110,12 +131,37 @@ impl DecorPass {
     /// A group's model block and counts and its skin's group, the skin made on
     /// first use once its image is here.
     fn model_of(&mut self, g: &GpuApi, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
-        let gr = self.groups.get_mut(group as usize)?;
+        let gr = *self.groups.get(group as usize)?;
         let (buffer, vertex_cnt, index_cnt) = blocks.get(gr.mesh)?;
-        if gr.skin[2] == 0 {
-            gr.skin = skin_group(g, self.lit.layouts[2], self.sampler, gr.image?)?;
+        let at = if gr.skin == NO_SKIN { self.take_skin(g, gr.image?)? } else { gr.skin };
+        self.groups[group as usize].skin = at;
+        Some((buffer, vertex_cnt, index_cnt, self.skins[at].ids[2]))
+    }
+
+    /// The row `image` is on, made on first use and shared from then on: two
+    /// variants naming one skin are one texture on the device.
+    fn take_skin(&mut self, g: &GpuApi, image: u32) -> Option<usize> {
+        if let Some(at) = self.skins.iter().position(|s| s.uses > 0 && s.image == image) {
+            self.skins[at].uses += 1;
+            return Some(at);
         }
-        Some((buffer, vertex_cnt, index_cnt, gr.skin[2]))
+        let at = self.skins.iter().position(|s| s.uses == 0)?;
+        let ids = skin_group(g, self.lit.layouts[2], self.sampler, image)?;
+        self.skins[at] = Skin { image, ids, uses: 1 };
+        Some(at)
+    }
+
+    /// One group less on a row; its texture, view and group go back once the
+    /// last group has left it.
+    fn release_skin(&mut self, at: usize) {
+        let Some(s) = self.skins.get_mut(at) else { return };
+        s.uses = s.uses.saturating_sub(1);
+        if s.uses == 0 {
+            for id in s.ids.into_iter().rev() {
+                release(id);
+            }
+            *s = Skin::default();
+        }
     }
 
     /// Triangles one instance of `group` draws; 0 while it loads.

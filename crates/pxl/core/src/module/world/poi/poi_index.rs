@@ -58,12 +58,8 @@ const PAGE_U: f64 = L3_RANGE as f64;
 /// every resident page: sweeping all of them would put the whole resident
 /// world through a structure whose capacity is meant to be constant.
 fn page_radius() -> i64 {
-    ((residency() / PAGE_U).ceil() as i64).min(PAGE_RADIUS_MAX)
+    (residency() / PAGE_U).ceil() as i64
 }
-
-/// The widest sweep a job has room for. The reach follows the viewport's
-/// height; four pages hold a disc over four times the reference one.
-const PAGE_RADIUS_MAX: i64 = 4;
 
 /// Capacity is the design, not a guess at the data: a fixed ceiling is what
 /// keeps the live object count independent of how much world has been
@@ -298,7 +294,10 @@ pub fn sync_poi_index(map_center: &PVF3, map_origin: IVec, to_local: ToLocal, fl
         };
         gx * gx + gy * gy
     };
-    pages.sort_unstable_by(|a, b| page_gap2(a).total_cmp(&page_gap2(b)));
+    // Stable: pages at the same gap — the four around a corner — are swept in
+    // the order they were collected, so a rebuild reaches the same records in
+    // the same order and a capacity refusal falls on the same one.
+    pages.sort_by(|a, b| page_gap2(a).total_cmp(&page_gap2(b)));
     let r = residency();
     x.job = Some(Job {
         pages_revision,
@@ -363,13 +362,15 @@ fn sweep_unit(x: &mut PoiIndex) {
         if x.seen.find(id_hash as i64) >= 0 {
             continue;
         }
-        // Refused before it is seen: `seen` is sized to the capacity over an
-        // allocator that gives nothing back, so it must never have to grow.
+        // Seen before it is refused: a record the capacity turns away is still
+        // one this rebuild has met, and leaving it unseen lets the same place
+        // in again from the next page it was baked into — which evicts the
+        // badge the first one is already drawing.
+        x.seen.insert(id_hash as i64);
         if lanes.count() >= CAPACITY {
             lanes.dropped += 1;
             continue;
         }
-        x.seen.insert(id_hash as i64);
 
         // Grounded here rather than per tick, which is the whole point of doing
         // it at build time — and what makes the index isotropic: the query is a

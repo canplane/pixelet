@@ -54,7 +54,9 @@ impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
     fn base() -> usize {
         core::ptr::addr_of!(__heap_base) as usize
     }
-    const END: usize = MODULE_BYTES as usize;
+    fn end() -> usize {
+        MODULE_BYTES as usize
+    }
 }
 
 #[global_allocator]
@@ -189,15 +191,15 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
     }
 }
 
-/// The volumes once VOLUME_POOLS made them; by the field, so the state's
-/// other fields stay borrowable beside them.
+/// The volumes once `boot` cut them from the pools; by the field, so the
+/// state's other fields stay borrowable beside them.
 fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
-    volumes.as_mut().expect("VOLUME_POOLS before any volume")
+    volumes.as_mut().expect("a volume before boot")
 }
 
-/// The volumes for a command: EINVAL before VOLUME_POOLS.
+/// The volumes for a command: EINVAL before `boot`.
 fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalError> {
-    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before VOLUME_POOLS"), None))
+    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before boot"), None))
 }
 
 // ---- Objects ----
@@ -1174,6 +1176,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             pxl_core::module::device::pose::use_geolocation::geolocation_visibility(visible, platform.geolocation);
             if visible {
                 pxl_core::module::device::pose::use_device_orientation::orientation_visible();
+            } else {
+                pxl_core::module::world::object::store::flush_save();
             }
             return Ok(Some((0, None)));
         }

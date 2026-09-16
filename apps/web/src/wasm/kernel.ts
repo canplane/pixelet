@@ -510,10 +510,17 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       send_rect(element);
       request_frame();
     };
+    // Applied at once: a hidden page gets no animation frame, and hiding is
+    // the last moment a phone's tab is sure to get for the pending save.
+    const send_visibility = (visible: boolean) => {
+      CORE_BUILD.send(0, Cmd.SENSOR_VISIBILITY, packet((b) => b.bool(visible)));
+      CORE_BUILD.settle();
+    };
     const on_visibility = () => {
-      CORE_BUILD.send(0, Cmd.SENSOR_VISIBILITY, packet((b) => b.bool(document.visibilityState === "visible")));
+      send_visibility(document.visibilityState === "visible");
       request_frame();
     };
+    const on_page_hide = () => send_visibility(false);
     const on_language = (language: string) => send_language(language);
 
     element.addEventListener("pointerdown", on_down);
@@ -526,6 +533,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     globalThis.addEventListener("pointerup", on_up);
     globalThis.addEventListener("pointercancel", on_up);
     document.addEventListener("visibilitychange", on_visibility);
+    globalThis.addEventListener("pagehide", on_page_hide);
     i18next.on("languageChanged", on_language);
     const observer = new ResizeObserver(on_resize);
     observer.observe(element);
@@ -554,6 +562,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
       i18next.off("languageChanged", on_language);
+      globalThis.removeEventListener("pagehide", on_page_hide);
       document.removeEventListener("visibilitychange", on_visibility);
       globalThis.removeEventListener("pointercancel", on_up);
       globalThis.removeEventListener("pointerup", on_up);

@@ -7,11 +7,15 @@
 //! (`fetch_arrived`). Which category a key is, what a 404 means and how a
 //! body decodes are decided here.
 //!
-//! A body's room is a block of the page section the kernel acquires and the
-//! shell only writes into, the way a device writes into a buffer its driver
-//! allocated. The block is the kernel's throughout: a POI page keeps it as
-//! the page; every other body is decoded or read, and released in the same
-//! command.
+//! A body's room is a block the kernel acquires and the shell only writes into,
+//! the way a device writes into a buffer its driver allocated. The block is the
+//! kernel's throughout: a POI page keeps it as the page, so a POI body is a
+//! block of the page section; every other body is decoded or read and released
+//! in the same command, so it is a block of the mesh section, which is what
+//! churns. A terrain body in the page section was an 8 MB block (4.2 MB,
+//! rounded) the resident page count never counted: with the pages' 1 MB lanes
+//! spread over the section and six bodies in flight, a body found no 8 MB piece
+//! and its page was refused, and a pan left chunks with no page to build from.
 
 use core::fmt::{self, Write};
 
@@ -22,7 +26,7 @@ use xpute_core::kit::hash::fnv1a64_str;
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::lib::env::config::PUBLISHED_TILES;
-use crate::memory::PAGE_POOL;
+use crate::memory::{MESH_POOL, PAGE_POOL};
 use crate::module::map::ui::overlay::{search_modal, use_reverse_geocode};
 use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store, use_poi_fetcher};
@@ -31,8 +35,17 @@ use crate::module::world::sched::fetch_scheduler::fetch_settle;
 use crate::module::world::sched::ledger::Outcome;
 use crate::module::world::terrain::{tile_repository, use_tile_fetcher};
 
-/// A block of the page section: its address and size.
+/// A body's block: its address and size.
 type Block = (usize, u32);
+
+/// The section a category's bodies are held in: a POI page keeps its body.
+fn body_pool(category: &str) -> u32 {
+    if category == use_poi_fetcher::CATEGORY {
+        PAGE_POOL
+    } else {
+        MESH_POOL
+    }
+}
 
 /// Bodies given room and not yet reported: the fetches in flight, with room
 /// to spare. A body past them is refused room, and its fetch fails.
@@ -62,10 +75,11 @@ impl fmt::Display for DemandUrl<'_> {
 }
 
 /// Room for `bytes` of `key`'s response body: the block's address, or 0 when
-/// the page section has none.
+/// its section has none.
 pub fn fetch_body(key: &str, bytes: u32) -> u32 {
     let Some(slot) = bodies().iter().position(|(_, b)| b.1 == 0) else { return 0 };
-    let Some(pool) = kernel().pools.get_mut(PAGE_POOL as usize) else { return 0 };
+    let category = key.split_once(':').map_or("", |(c, _)| c);
+    let Some(pool) = kernel().pools.get_mut(body_pool(category) as usize) else { return 0 };
     let Some(at) = pool.acquire(bytes) else { return 0 };
     bodies()[slot] = (fnv1a64_str(key), (at, bytes));
     at as u32
@@ -82,16 +96,16 @@ fn take_body(key: &str, at: u32, bytes: u32) -> Option<Block> {
     Some((at as usize, bytes))
 }
 
-fn release(block: Option<Block>) {
-    if let (Some((at, bytes)), Some(pool)) = (block, kernel().pools.get_mut(PAGE_POOL as usize)) {
+fn release(category: &str, block: Option<Block>) {
+    if let (Some((at, bytes)), Some(pool)) = (block, kernel().pools.get_mut(body_pool(category) as usize)) {
         pool.release(at, bytes);
     }
 }
 
 /// A body's bytes, read where the shell wrote them.
 fn view((at, bytes): Block) -> U8Array {
-    // SAFETY: the block is one the page pool gave `fetch_body` for this body
-    // alone, `bytes` long, and it is not released while the view is read.
+    // SAFETY: the block is one `fetch_body` acquired for this body alone,
+    // `bytes` long, and it is not released while the view is read.
     let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, bytes as usize) };
     U8Array::over(buffer, 0, bytes as usize)
 }
@@ -128,11 +142,11 @@ pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), err
             }
         },
         1 => {
-            release(block);
+            release(category, block);
             (Outcome::Aborted, None)
         }
         _ => {
-            release(block);
+            release(category, block);
             (Outcome::Error, error.map(ErrorText::from))
         }
     };
@@ -144,6 +158,7 @@ pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), err
 
 fn failed(category: &str, subject: &str, aborted: bool) {
     match category {
+        use_tile_fetcher::CATEGORY if !aborted => use_tile_fetcher::terrain_failed(),
         search_modal::CATEGORY => search_modal::search_failed(subject, aborted),
         use_reverse_geocode::CATEGORY => {
             if let Ok(page) = subject.parse::<IVec>() {
@@ -172,7 +187,7 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
                 Some(b) if ok => tile_repository::adopt_terrain(page, view(b), phases),
                 _ => Err(refused()),
             });
-            release(block);
+            release(category, block);
             result
         }
         tile_repository::OCEAN_CATEGORY => {
@@ -180,20 +195,20 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
                 Some(b) if ok => tile_repository::adopt_ocean(view(b)),
                 _ => Err(refused()),
             };
-            release(block);
+            release(category, block);
             result
         }
         use_poi_fetcher::CATEGORY => {
             let page = match page_of(subject) {
                 Ok(page) => page,
                 Err(e) => {
-                    release(block);
+                    release(category, block);
                     return Err(e);
                 }
             };
             match block {
                 _ if absent => {
-                    release(block);
+                    release(category, block);
                     poi_store::set_pois(page, poi_repository::empty_page().map_err(|e| e.to_string())?);
                     Ok(())
                 }
@@ -205,12 +220,12 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
                         Ok(())
                     }
                     Err(e) => {
-                        release(block);
+                        release(category, block);
                         Err(e.to_string())
                     }
                 },
                 _ => {
-                    release(block);
+                    release(category, block);
                     Err(refused())
                 }
             }
@@ -224,7 +239,7 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
                 }
                 _ => Err(refused()),
             };
-            release(block);
+            release(category, block);
             result
         }
         use_reverse_geocode::CATEGORY => {
@@ -236,11 +251,11 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
                 Some(b) if ok => text(b).map(|body| use_reverse_geocode::reverse_geocode_arrived(page, Some(body))),
                 _ => Err(refused()),
             });
-            release(block);
+            release(category, block);
             result
         }
         _ => {
-            release(block);
+            release(category, block);
             Err("no such category".to_string())
         }
     }

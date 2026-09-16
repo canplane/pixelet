@@ -91,9 +91,31 @@ struct Fetcher {
     last: Option<(IVec, Option<IVec>)>,
     fetch_revision: u32,
     ocean_ask_at: f64,
+    /// When a page that failed is asked for again. The wishlist is rebuilt
+    /// only when the anchor moves, and the scheduler drops a failed demand, so
+    /// a page refused while the view stood still — the page section full of a
+    /// jump's quarantined pages — would stay a hole until the next pan.
+    retry_at: Option<f64>,
 }
 
 static FETCHER: Global<Fetcher> = Global::new();
+
+fn fetcher() -> &'static mut Fetcher {
+    FETCHER.get(|| Fetcher {
+        last: None,
+        fetch_revision: u32::MAX,
+        ocean_ask_at: 0.0,
+        retry_at: None,
+    })
+}
+
+/// A terrain page's fetch failed: the wishlist is rebuilt once the quarantine
+/// that most likely refused it has passed, not at once, which would fetch the
+/// same body again into the same full section.
+pub fn terrain_failed() {
+    let f = fetcher();
+    f.retry_at.get_or_insert(now() + QUARANTINE_MS);
+}
 
 /// Asks for the shared ocean tile while pages wait on it and nothing is asking
 /// already, and withdraws the ask once none do.
@@ -115,11 +137,7 @@ fn ocean_step(f: &mut Fetcher) {
 
 /// The tile fetcher's turn.
 pub fn tile_fetcher_step() {
-    let f = FETCHER.get(|| Fetcher {
-        last: None,
-        fetch_revision: u32::MAX,
-        ocean_ask_at: 0.0,
-    });
+    let f = fetcher();
     release_due_terrain();
     ocean_step(f);
 
@@ -144,6 +162,10 @@ pub fn tile_fetcher_step() {
     // marker silently vanishes until the camera pans back near it.
     let device_page_idx = use_map_navigation().device_coord.map(|c| TO_XY(L3_IDX(c.i)));
     let Some(anchor) = use_range_anchor() else { return };
+    if f.retry_at.is_some_and(|at| now() >= at) {
+        f.retry_at = None;
+        f.last = None;
+    }
     if f.last == Some((anchor, device_page_idx)) {
         return;
     }

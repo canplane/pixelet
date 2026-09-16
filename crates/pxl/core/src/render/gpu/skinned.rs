@@ -28,6 +28,9 @@ struct Skin {
     image: u32,
     /// Texture, view, group.
     ids: [u32; 3],
+    /// When the slot was last asked for, so the one longest unasked is the one
+    /// a new model takes.
+    seq: u32,
 }
 
 pub struct SkinnedPass {
@@ -42,6 +45,8 @@ pub struct SkinnedPass {
     draw_group: u32,
     scratch: Scratch,
     skins: [Skin; SKINS],
+    /// Counts `set_skin` calls, to stamp the slot each one lands in.
+    seq: u32,
 }
 
 impl SkinnedPass {
@@ -63,6 +68,7 @@ impl SkinnedPass {
             draw_group: 0,
             scratch: Scratch::default(),
             skins: [Skin::default(); SKINS],
+            seq: 0,
         }
     }
 
@@ -74,10 +80,22 @@ impl SkinnedPass {
     /// Model `model`'s skin; the same image again changes nothing, and one not
     /// yet arrived is asked for again next frame.
     pub fn set_skin(&mut self, g: &GpuApi, model: u32, image: u32) {
-        let at = self.skins.iter().position(|s| s.model == model && s.ids[2] != 0).or_else(|| self.skins.iter().position(|s| s.ids[2] == 0));
-        let Some(at) = at else { return };
+        let at = self
+            .skins
+            .iter()
+            .position(|s| s.model == model && s.ids[2] != 0)
+            .or_else(|| self.skins.iter().position(|s| s.ids[2] == 0))
+            // Nothing tells the pass a model is gone, so a slot is never freed
+            // on its own: with the table full a new model would go untextured
+            // for good. The character preview walks every shipped variant,
+            // more of them than there are slots. The slot asked for longest
+            // ago is the one no longer drawn.
+            .unwrap_or_else(|| self.skins.iter().enumerate().min_by_key(|(_, s)| s.seq).map_or(0, |(i, _)| i));
+        self.seq += 1;
+        let seq = self.seq;
         let s = &mut self.skins[at];
         if s.model == model && s.image == image && s.ids[2] != 0 {
+            s.seq = seq;
             return;
         }
         for id in s.ids.into_iter().rev() {
@@ -85,7 +103,7 @@ impl SkinnedPass {
         }
         *s = Skin::default();
         if let Some(ids) = skin_group(g, self.lit.layouts[2], self.sampler, image) {
-            *s = Skin { model, image, ids };
+            *s = Skin { model, image, ids, seq };
         }
     }
 

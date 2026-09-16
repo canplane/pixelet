@@ -29,8 +29,10 @@ struct Follow {
     was_following: bool,
     last_device: Option<PVF3>,
     last_heading: Option<f64>,
-    /// When follow mode gives up, while a sensor is away from READY.
+    /// When follow mode gives up, while a sensor is away from READY, and the
+    /// pair of statuses that deadline was set for.
     grace_due: Option<f64>,
+    grace_for: Option<(DevicePoseStatus, DevicePoseStatus)>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
@@ -44,6 +46,7 @@ pub fn follow_mode_step() {
         last_device: None,
         last_heading: None,
         grace_due: None,
+        grace_for: None,
     });
     let camera = use_camera_store();
     let is_follow_mode = camera.is_follow_mode;
@@ -59,15 +62,25 @@ pub fn follow_mode_step() {
     // random. The exit still has to happen eventually: without it, follow mode
     // stays on with dead sensors, the camera freezes, and the disabled button
     // cannot be used to back out.
-    let ready = use_device_location_store().status == DevicePoseStatus::Ready && use_device_orientation_store().status == DevicePoseStatus::Ready;
+    let status = (use_device_location_store().status, use_device_orientation_store().status);
+    let ready = status == (DevicePoseStatus::Ready, DevicePoseStatus::Ready);
     if is_follow_mode && !ready {
-        let due = *f.grace_due.get_or_insert(now() + SENSOR_GRACE_MS);
-        if now() >= due {
+        // The grace starts over whenever either status moves, not only when it
+        // first leaves READY: a sensor that goes from LOADING to ERROR is a
+        // fresh gap with its own retry ahead of it, and the deadline inherited
+        // from the gap before would fire in the middle of it.
+        if f.grace_for != Some(status) {
+            f.grace_for = Some(status);
+            f.grace_due = Some(now() + SENSOR_GRACE_MS);
+        }
+        if f.grace_due.is_some_and(|due| now() >= due) {
             f.grace_due = None;
+            f.grace_for = None;
             camera.set_is_follow_mode(false);
         }
     } else {
         f.grace_due = None;
+        f.grace_for = None;
     }
 
     // dropping the smoothing anchor on exit means re-entering follow mode snaps

@@ -19,7 +19,6 @@ use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::lod::set_lod_projection;
-use crate::module::world::poi::store::poi_pages;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
 use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
@@ -78,6 +77,12 @@ pub fn set_host_frame_stat(stat: HostFrameStat) {
 /// The whole turn just run: the strobe in, the tick, the draw and submit.
 pub fn set_host_task_ms(task_ms: f64) {
     core_tick().host.task_ms = task_ms;
+    // The turn's own task time is only known once the turn is over, by which
+    // point its frame is recorded; without this the number would be read as
+    // the next frame's and every frame would carry the one before it.
+    if let Some(frame) = crate::module::world::sched::ledger::ledger_last_frame() {
+        frame.task_ms = task_ms;
+    }
 }
 
 /// Whether the last pass left something new to draw; reading clears it.
@@ -190,7 +195,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
     let node_work = take_node_counts();
-    let poi_count: f64 = poi_pages().entries().map(|(_, resident)| resident.page.len as f64).sum();
+    let poi_count: f64 = 0.0;
     let host = c.host.clone();
     ledger_record_frame(FrameSample {
         t: now(),

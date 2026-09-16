@@ -6,25 +6,29 @@
 //! map_center, no ground-following, no catch-up walk — a display case, not a
 //! world entity.
 //!
-//! The case's drawing is the renderer's (render/gpu/preview.ts): an actor stood
-//! far below the world, where nothing looks, drawn into the case's own canvas
-//! alone each frame. The model is registered once more for the cases, so the
+//! The case's drawing is the renderer's (render/gpu/renderer.rs's draw_cases):
+//! an actor stood far below the world, where nothing looks, drawn into the
+//! case's own canvas alone each frame. The model is registered once more for the cases, so the
 //! walker's own draws of the same variant are not mistaken for it, at one unit
 //! tall: the case compares silhouettes side by side, not relative scale.
 
 use std::collections::HashMap;
 
+use pxl_shared::spec::space::pvf3::ivec;
+
 use super::variant::{CharacterVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS};
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
+use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
+use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::sched::tick::TickContext;
 use crate::render::gltf::load::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 const IDLE_CLIP: &str = "idle";
-/// How far below the world origin a case's actor stands: past any terrain, and
+/// How far below the map origin a case's actor stands: past any terrain, and
 /// past the fog, so the world never draws it.
 const CASE_DEPTH_U: f64 = 100_000.0;
 
@@ -95,6 +99,12 @@ pub fn preview_step(ctx: &mut TickContext) {
     if c.cases.is_empty() {
         return;
     }
+    // Under the map origin rather than the lattice's: the case's own view takes
+    // the actor's place back out either way, but it reads that place from the
+    // draw's f32 uniform, and the absolute origin can be millions of units from
+    // the render frame's, where a float no longer resolves a model a unit tall.
+    let origin = get_local_world_origin(use_map_store().map_center.as_ref());
+    let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
     for case in &mut c.cases {
         if case.model.is_none() {
             let url = &case.variant.model_url;
@@ -122,7 +132,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         let Some(actor) = case.actor else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
         if let Some(a) = kernel().sched.models.actor(actor) {
-            a.at = [0.0, 0.0, -CASE_DEPTH_U];
+            a.at = at;
             a.rotation_z = case.spin as f32;
             a.visible = true;
         }

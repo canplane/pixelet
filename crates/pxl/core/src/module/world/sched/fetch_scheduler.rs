@@ -143,13 +143,23 @@ pub fn error_reason(name: &str, message: &str) -> ErrorText {
     while let Some(off) = message[at..].find("http ") {
         let start = at + off;
         let digits = &message[start + 5..];
-        let boundary_before = start == 0 || !bytes[start - 1].is_ascii_alphanumeric();
-        if boundary_before && digits.len() >= 3 && digits.as_bytes()[..3].iter().all(u8::is_ascii_digit) && digits.as_bytes().get(3).is_none_or(|c| !c.is_ascii_alphanumeric()) {
+        // A word character, as the boundary this reads for was written: an
+        // underscore is one, so `x_http 503` names no status.
+        let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+        let boundary_before = start == 0 || !word(bytes[start - 1]);
+        if boundary_before && digits.len() >= 3 && digits.as_bytes()[..3].iter().all(u8::is_ascii_digit) && digits.as_bytes().get(3).is_none_or(|c| !word(*c)) {
             return message[start..start + 8].to_string();
         }
         at = start + 5;
     }
-    for c in name.chars().chain(": ".chars()).chain(message.chars()).take(80) {
+    // Eighty as the shell counts a string's length, so one reason reads the
+    // same on both sides of the ring; a character is never cut in half.
+    let mut units = 0;
+    for c in name.chars().chain(": ".chars()).chain(message.chars()) {
+        units += c.len_utf16();
+        if units > 80 {
+            break;
+        }
         out.push(c);
     }
     out

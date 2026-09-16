@@ -11,6 +11,7 @@
 
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
+use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
 use crate::global::{now, Global};
 use crate::module::map::store::use_map_store;
@@ -44,8 +45,10 @@ struct Geocode {
     /// received for. It exists to stop the same page being asked about twice,
     /// so it is released again the moment an attempt stops being one.
     submitted_page: Option<IVec>,
-    /// The page the centre is on, and since when.
+    /// The page the centre is on, and since the centre last moved.
     page: Option<(IVec, f64)>,
+    /// The centre as last seen: what the debounce waits to stand still.
+    last_center: Option<PVF3>,
 }
 
 static GEOCODE: Global<Geocode> = Global::new();
@@ -57,6 +60,7 @@ fn geocode() -> &'static mut Geocode {
         loading: false,
         submitted_page: None,
         page: None,
+        last_center: None,
     })
 }
 
@@ -68,7 +72,12 @@ pub fn reverse_geocode_step() {
     let g = geocode();
     let Some(center) = use_map_store().map_center else { return };
     let page_idx = L3_IDX(center.i);
-    if g.page.map(|(p, _)| p) != Some(page_idx) {
+    // The debounce waits on the centre standing still, not on the page: a pan
+    // that crosses into a page and keeps going would otherwise ask about a page
+    // it is already leaving, since the page under it does not change again
+    // until it is gone.
+    if g.last_center != Some(center) {
+        g.last_center = Some(center);
         g.page = Some((page_idx, now()));
     }
     let Some((page, since)) = g.page else { return };

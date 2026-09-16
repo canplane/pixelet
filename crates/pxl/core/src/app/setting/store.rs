@@ -21,6 +21,7 @@
 use super::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
 use crate::global::Global;
 use crate::host::{storage_get, storage_set};
+use xpute_core::kit::json::read_json;
 
 const STORAGE_KEY: &str = "pxl:settings";
 
@@ -187,59 +188,20 @@ fn save(s: &SettingsStore) {
 /// The overrides object of a persisted blob, as pairs of a key and a boolean
 /// or string value; anything else in it is skipped.
 fn parse_overrides(raw: &str) -> Vec<(String, SettingValue)> {
-    let mut out = Vec::new();
-    let Some(start) = raw.find("\"overrides\"") else { return out };
-    let rest = &raw[start + "\"overrides\"".len()..];
-    let Some(open) = rest.find('{') else { return out };
-    let mut chars = rest[open + 1..].chars().peekable();
-    let read_string = |chars: &mut std::iter::Peekable<std::str::Chars>| -> Option<String> {
-        let mut s = String::new();
-        loop {
-            match chars.next()? {
-                '"' => return Some(s),
-                '\\' => match chars.next()? {
-                    'n' => s.push('\n'),
-                    't' => s.push('\t'),
-                    'u' => {
-                        let hex: String = (0..4).filter_map(|_| chars.next()).collect();
-                        s.push(char::from_u32(u32::from_str_radix(&hex, 16).ok()?)?);
-                    }
-                    c => s.push(c),
-                },
-                c => s.push(c),
-            }
-        }
+    let Some(overrides) = read_json(raw).and_then(|j| j.get("state")).and_then(|state| state.get("overrides")) else {
+        return Vec::new();
     };
-    loop {
-        while chars.peek().is_some_and(|c| c.is_whitespace() || *c == ',') {
-            chars.next();
-        }
-        match chars.next() {
-            Some('"') => {}
-            _ => return out,
-        }
-        let Some(key) = read_string(&mut chars) else { return out };
-        while chars.peek().is_some_and(|c| c.is_whitespace() || *c == ':') {
-            chars.next();
-        }
-        match chars.peek() {
-            Some('"') => {
-                chars.next();
-                let Some(v) = read_string(&mut chars) else { return out };
-                out.push((key, SettingValue::Text(v)));
-            }
-            Some('t') | Some('f') => {
-                let word: String = std::iter::from_fn(|| chars.next_if(|c| c.is_ascii_alphabetic())).collect();
-                out.push((key, SettingValue::Toggle(word == "true")));
-            }
-            _ => {
-                // Neither a boolean nor a string: skipped to the next pair.
-                while chars.peek().is_some_and(|c| *c != ',' && *c != '}') {
-                    chars.next();
-                }
-            }
-        }
-    }
+    overrides
+        .fields()
+        .filter_map(|(key, value)| {
+            let held = match (value.as_bool(), value.as_str()) {
+                (Some(on), _) => SettingValue::Toggle(on),
+                (_, Some(text)) => SettingValue::Text(text.to_string()),
+                _ => return None,
+            };
+            Some((key.to_string(), held))
+        })
+        .collect()
 }
 
 fn load() -> SettingsStore {

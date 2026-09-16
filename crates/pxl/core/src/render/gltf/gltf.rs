@@ -13,8 +13,6 @@
 //! file holds them, in the file's own frame, and whoever registers the model
 //! (render/gpu/model_asset.rs) decides how it stands.
 
-use std::collections::HashMap;
-
 use xpute_core::kit::mat4::{mat4, mat4_mul, Mat4};
 
 use xpute_core::kit::json::{read_json, JsonValue};
@@ -174,32 +172,21 @@ fn floats<const N: usize>(v: Option<JsonValue>, default: [f64; N]) -> [f64; N] {
     out
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum As {
-    F32,
-    U32,
-    U16,
-}
-
-enum Elements {
-    F32(Vec<f32>),
-    U32(Vec<u32>),
-    U16(Vec<u16>),
-}
-
+/// Accessors read straight into the lanes the parsed document keeps. Each use
+/// reads its own: the document owns its lanes, so a cache of what was read
+/// would only hold a second copy of every accessor while the parse runs.
 struct Reader<'a> {
     json: JsonValue<'a>,
     buffers: &'a [&'a [u8]],
-    cache: HashMap<(usize, As), Vec<f64>>,
 }
 
 impl Reader<'_> {
-    /// An accessor's elements, tightly packed, as numbers.
-    fn values(&mut self, index: usize) -> Result<Vec<f64>, String> {
+    /// An accessor's elements, tightly packed, each as `convert` makes it.
+    fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, String> {
         let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| format!("gltf: no accessor {index}"))?;
         let count = num(a.get("count")).unwrap_or(0.0) as usize;
         let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
-        let mut out = vec![0.0; count * width];
+        let mut out = vec![T::default(); count * width];
         if let Some(bv_index) = num(a.get("bufferView")) {
             let bv = self.json.get("bufferViews").and_then(|x| x.at(bv_index as usize)).ok_or_else(|| format!("gltf: no buffer view {bv_index}"))?;
             let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
@@ -248,7 +235,7 @@ impl Reader<'_> {
                         5125 => u32_le(buffer, at) as f64,
                         _ => f32::from_le_bytes([buffer[at], buffer[at + 1], buffer[at + 2], buffer[at + 3]]) as f64,
                     };
-                    out[e * width + c] = v;
+                    out[e * width + c] = convert(v);
                 }
             }
         }
@@ -257,46 +244,21 @@ impl Reader<'_> {
         Ok(out)
     }
 
-    fn read(&mut self, index: usize, as_: As) -> Result<Elements, String> {
-        let values = match self.cache.get(&(index, as_)) {
-            Some(v) => v.clone(),
-            None => {
-                let v = self.values(index)?;
-                self.cache.insert((index, as_), v.clone());
-                v
-            }
-        };
-        Ok(match as_ {
-            As::F32 => Elements::F32(values.into_iter().map(|v| v as f32).collect()),
-            As::U32 => Elements::U32(values.into_iter().map(|v| v as u32).collect()),
-            As::U16 => Elements::U16(values.into_iter().map(|v| v as u16).collect()),
-        })
+    fn f32s(&self, index: usize) -> Result<Vec<f32>, String> {
+        self.read(index, |v| v as f32)
     }
 
-    fn f32s(&mut self, index: usize) -> Result<Vec<f32>, String> {
-        match self.read(index, As::F32)? {
-            Elements::F32(v) => Ok(v),
-            _ => unreachable!(),
-        }
+    fn u32s(&self, index: usize) -> Result<Vec<u32>, String> {
+        self.read(index, |v| v as u32)
     }
 
-    fn u32s(&mut self, index: usize) -> Result<Vec<u32>, String> {
-        match self.read(index, As::U32)? {
-            Elements::U32(v) => Ok(v),
-            _ => unreachable!(),
-        }
-    }
-
-    fn u16s(&mut self, index: usize) -> Result<Vec<u16>, String> {
-        match self.read(index, As::U16)? {
-            Elements::U16(v) => Ok(v),
-            _ => unreachable!(),
-        }
+    fn u16s(&self, index: usize) -> Result<Vec<u16>, String> {
+        self.read(index, |v| v as u16)
     }
 }
 
 fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
-    let mut r = Reader { json, buffers, cache: HashMap::new() };
+    let r = Reader { json, buffers };
 
     let mut meshes = Vec::new();
     for m in arr(json.get("meshes")) {
@@ -387,18 +349,24 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
                 _ => continue,
             };
             let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else { continue };
-            let times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
+            let mut times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
             let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)?;
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
             let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
                 // In-tangent, value, out-tangent per key: the value.
-                values = (0..times.len()).flat_map(|t| values[t * width * 3 + width..t * width * 3 + width * 2].to_vec()).collect();
+                values = (0..times.len()).filter_map(|t| values.get(t * width * 3 + width..t * width * 3 + width * 2)).flatten().copied().collect();
             }
+            // The draw reads a channel's keys as `keys * width` floats by
+            // pointer, so a file whose output is shorter than its input claims
+            // is read for the keys it actually carries rather than past the end
+            // of them.
+            let keys = times.len().min(values.len() / width);
+            times.truncate(keys);
+            values.truncate(keys * width);
             if let Some(&last) = times.last() {
                 duration = duration.max(last as f64);
             }
-            values.truncate(times.len() * width);
             channels.push(GltfChannel {
                 node: node as u32,
                 path,
