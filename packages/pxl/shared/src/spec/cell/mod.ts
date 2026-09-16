@@ -201,7 +201,16 @@ export type PlaceableCubeId = { [C in PlaceableChannelKey]: `${C}.${ChannelLocal
  * shipped texture's path. It is what a cube is called, never what it is, so
  * nothing keys by it. */
 export function placeable_cube_id(cube: PlaceableCube): PlaceableCubeId {
-  return `${cube.channel}.${TYPE_NAME.get(cube_key(cube.channel, cube.type))!}` as PlaceableCubeId;
+  return cube_id_of(cube.channel, TYPE_NAME.get(cube_key(cube.channel, cube.type))!);
+}
+
+/** How a catalog id is spelled, for the callers that hold the two words
+ * already rather than a cube. The shipped palette is one: it walks every
+ * channel's ENTRIES, `common` included, and `common` is not a `PlaceableCube`,
+ * so it cannot come through the function above — but it must come out spelled
+ * the same, and it was spelling it a second time instead. */
+export function cube_id_of(channel: string, type_name: string): PlaceableCubeId {
+  return `${channel}.${type_name}` as PlaceableCubeId;
 }
 
 /** The value a leaf holds the cube as: a flat colour's own catalog number,

@@ -22,7 +22,7 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { fnv1a64_str } from "@xpute/core/kit/hash.ts";
 
-import { cube_colors, cube_types, decor_types } from "../spec/cell/mod.ts";
+import { cube_colors, cube_id_of, cube_types, decor_types } from "../spec/cell/mod.ts";
 import { INGESTED } from "./ingested.ts";
 import { encode_palette, type PaletteEntry, type PaletteKind, PaletteTable } from "./palette.ts";
 
@@ -166,7 +166,7 @@ function cube_rows(): PaletteEntry[] {
       rows.push({
         id: base + local,
         kind,
-        name: `${name}.${type_name}`,
+        name: cube_id_of(name, type_name),
         model_hash: 0n,
         model_key: "",
         extent: [1, 1, 1],

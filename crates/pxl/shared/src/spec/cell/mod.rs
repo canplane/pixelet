@@ -260,7 +260,17 @@ fn cube_of_source(source: TerrainStyleSource) -> Option<PlaceableCube> {
 /// so neither does the spelling.
 pub fn placeable_cube_id(cube: PlaceableCube) -> PlaceableCubeId {
     let (channel, num) = cube_parts(cube);
-    format!("{channel}.{}", TYPE_NAME[&(channel, num)])
+    cube_id_of(channel, TYPE_NAME[&(channel, num)])
+}
+
+/// How a catalog id is spelled, for the callers that hold the two words
+/// already rather than a cube. The shipped palette is one: it walks every
+/// channel's ENTRIES, `common` included, and `common` is not a
+/// `PlaceableCube`, so it cannot come through the function above — but it
+/// must come out spelled the same, and it was spelling it a second time
+/// instead.
+pub fn cube_id_of(channel: &str, type_name: &str) -> PlaceableCubeId {
+    format!("{channel}.{type_name}")
 }
 
 /// The value a leaf holds the cube as: a flat colour's own catalog number,

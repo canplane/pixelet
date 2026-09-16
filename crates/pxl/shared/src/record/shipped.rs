@@ -22,7 +22,7 @@ use std::sync::LazyLock;
 use xpute_core::kit::hash::fnv1a64_str;
 
 use crate::spec::cell::r#type::ChannelColors;
-use crate::spec::cell::{cube_colors, cube_types, decor_types};
+use crate::spec::cell::{cube_colors, cube_id_of, cube_types, decor_types};
 
 use super::ingested::{IngestedAsset, INGESTED};
 use super::palette::{encode_palette, PaletteEntry, PaletteKind, PaletteTable};
@@ -212,7 +212,7 @@ fn cube_rows() -> Vec<PaletteEntry> {
             rows.push(PaletteEntry {
                 id: base + local,
                 kind,
-                name: format!("{name}.{type_name}"),
+                name: cube_id_of(name, type_name),
                 model_hash: 0,
                 model_key: String::new(),
                 skin_key: None,
