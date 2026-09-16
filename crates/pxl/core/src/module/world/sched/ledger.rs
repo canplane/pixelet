@@ -368,6 +368,14 @@ struct Ledger {
     sink: LedgerSink,
     /// Explicit recording window: stopping freezes the data so an export is
     /// stable while it is being read; restarting clears and begins a fresh one.
+    ///
+    /// Off until someone asks. Nothing in the world reads the ledger — the one
+    /// caller outside the instrument writes a turn's task time back into the
+    /// frame it belongs to and does nothing when there is no frame — so a
+    /// client with no dev overlay should be paying for none of this, and until
+    /// this was gated it paid for all of it: the rings are 2.06 MiB of frames,
+    /// 368 KiB of tasks and 48 KiB of long frames, taken on the first record
+    /// and, being lanes, never given back.
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
@@ -380,7 +388,7 @@ static LEDGER: Global<Ledger> = Global::new();
 
 fn ledger() -> &'static mut Ledger {
     LEDGER.get(|| Ledger {
-        task_ring: Vec::with_capacity(TASK_LIMIT),
+        task_ring: Vec::new(),
         frame_ring: &mut [],
         frame_len: 0,
         long_frame_ring: &mut [],
@@ -390,11 +398,11 @@ fn ledger() -> &'static mut Ledger {
         long_frame_head: 0,
         truncated: false,
         sink: LedgerSink::default(),
-        recording: true,
+        recording: false,
         started_at: now(),
         stopped_at: None,
         frame_peak: FramePeak::default(),
-        worst_frames: Vec::with_capacity(WORST_CAP),
+        worst_frames: Vec::new(),
     })
 }
 
@@ -419,9 +427,12 @@ pub fn ledger_recording_state() -> RecordingState {
     }
 }
 
-/// Clears everything and opens a fresh window.
+/// Clears everything and opens a fresh window, taking the room the rings need
+/// if this is the first one.
 pub fn ledger_recording_start() {
     let l = ledger();
+    l.task_ring.reserve_exact(TASK_LIMIT.saturating_sub(l.task_ring.capacity()));
+    l.worst_frames.reserve_exact(WORST_CAP.saturating_sub(l.worst_frames.capacity()));
     l.task_ring.clear();
     (l.frame_len, l.long_frame_len) = (0, 0);
     (l.task_head, l.frame_head, l.long_frame_head) = (0, 0, 0);

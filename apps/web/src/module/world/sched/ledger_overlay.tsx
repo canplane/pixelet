@@ -7,8 +7,9 @@
  * `import.meta.env.DEV` and the `show_ledger` setting — off by default.
  *
  * It also owns the dev lifecycle the ledger's surfaces share, which runs
- * whether or not the panel is showing: the long-frame observers, so the ring
- * is already warm when the panel is opened, and `__pxl_ledger_trace` on
+ * whether or not the panel is showing: opening the kernel's recording window,
+ * which is off until something asks for it; the long-frame observers, so the
+ * ring is already warm when the panel is opened; and `__pxl_ledger_trace` on
  * `window`, so a trace can be taken from the console.
  */
 
@@ -28,13 +29,7 @@ type LedgerGlobals = typeof globalThis & { __pxl_ledger_trace?: () => void };
 
 export function LedgerOverlay() {
   const show = useKernel((s) => s.settings.show_ledger === true);
-  // The kernel starts with the stream on (module/world/world.rs), so the
-  // button opens saying so rather than sending `on: false` on its first press.
-  const [logging, set_logging] = useState(true);
-
-  // The observers outlive the panel: they are the ledger's, not its, so
-  // closing the panel does not stop a window being recorded.
-  useEffect(install_long_frame_observers, []);
+  const [logging, set_logging] = useState(false);
 
   // Nothing is pushed: the kernel keeps the records and this comes for them,
   // in batches rather than per frame — the stream is read while watching, and
@@ -49,6 +44,16 @@ export function LedgerOverlay() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
+    // The kernel records nothing until something asks, so that a client with no
+    // overlay pays for none of it. This is the asking, and it happens on mount
+    // rather than when the panel is opened: what makes a ledger worth having is
+    // that the minute before you went looking is already in it.
+    kernel_action({ type: "ledger_window_start" });
+    // The observers outlive the panel — they are the ledger's, not its, so
+    // closing the panel does not stop a window being recorded — but they do
+    // not outlive dev. Each long frame they see is a WORLD_LONG_FRAME on the
+    // submission ring, and a client with no overlay has nothing to send it to.
+    install_long_frame_observers();
     const w = globalThis as LedgerGlobals;
     w.__pxl_ledger_trace = ledger_trace_download;
     return () => {
