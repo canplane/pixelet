@@ -8,7 +8,7 @@ use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::mat4::Vec3;
 
-use crate::kernel::kernel;
+use crate::sys::kernel::kernel;
 use crate::render::mesh::voxel::MaterialClass;
 use crate::world::build::World;
 use crate::world::raycast::{hit_decor, DecorHit};

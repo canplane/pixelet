@@ -32,7 +32,7 @@ use super::poi_index::{
 };
 use super::store::revision as poi_revision;
 use crate::app::setting::store::use_settings_store;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::module::camera::store::{use_camera_store, ViewState};
 use crate::module::map::store::use_map_store;
 use crate::module::world::billboard::atlas::NO_SLOT;

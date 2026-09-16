@@ -5,7 +5,7 @@
 //! `__PUBLISHED_TILES__`), and the shell hands them over once at boot.
 
 use super::route::{tile_base, TileBase, TileKind};
-use crate::global::Global;
+use crate::sys::global::Global;
 
 #[derive(Clone, Debug, Default)]
 pub struct BuildInfo {

@@ -17,8 +17,8 @@ use super::ledger::{
 };
 use super::log::{take_log_records, window_counters};
 use super::summary::{summarize_frames, summarize_tasks, FrameSummary, Spread, TaskSummary};
-use crate::global::now;
-use crate::kernel::kernel;
+use crate::sys::global::now;
+use crate::sys::kernel::kernel;
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 use crate::module::world::billboard::frustum_budget::billboard_dropped;
 use crate::module::world::chunk_node::{chunk_retention, RETAIN_BUDGET_BYTES};

@@ -13,7 +13,7 @@ use super::config::{KEEP_DIST, RESIDENT_PAGES};
 use super::resident::free_slot;
 use super::store::{tile_pages, use_tile_store};
 use super::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY};
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::{use_map_store, MapStatus};
 use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};

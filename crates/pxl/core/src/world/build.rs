@@ -308,7 +308,7 @@ impl Builder {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        let releases = crate::host::heap_releases();
+        let releases = crate::sys::host::heap_releases();
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
@@ -384,7 +384,7 @@ impl Builder {
         if c.wanted().next().is_none() {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == crate::host::heap_releases()) {
+        if c.refused.is_some_and(|r| r == crate::sys::host::heap_releases()) {
             return Progress::Blocked;
         }
         if c.runs.is_none() {

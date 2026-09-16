@@ -16,8 +16,8 @@ use xpute_core::kit::hash::fnv1a64_str;
 
 use super::decor_kinds::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::module::world::change::{bump_world, DECOR_ASSET};
 use crate::render::gltf::load::{load_failed, load_gltf, load_image, load_revision};
 use crate::render::gpu::model_asset::register_model;

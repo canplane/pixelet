@@ -4,7 +4,7 @@
 // read as its revisions moving, which is what chunk_node.rs follows.
 
 use super::*;
-use crate::global::serial;
+use crate::sys::global::serial;
 use crate::module::world::object::collision::find_overlapping_object;
 use crate::module::world::object::size::DECOR_SIZE;
 use pxl_shared::spec::cell::cube_types::Block;

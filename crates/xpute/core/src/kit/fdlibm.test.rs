@@ -2,7 +2,7 @@
 // (no pair: fdlibm.rs is JavaScript's Math, ported)
 
 use super::*;
-use crate::vector::Vector;
+use crate::sys::vector::Vector;
 
 /// script/vector/xpute/core/kit/fdlibm.ts's output: V8's Math.
 const VECTOR: &str = include_str!("../../vector/kit/fdlibm.tsv");

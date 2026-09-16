@@ -1,7 +1,7 @@
 // pxl_core/module/world/lod.test.rs
 
 use super::*;
-use crate::global::serial;
+use crate::sys::global::serial;
 
 // These are explicit world-space thresholds. They must not move when L2's
 // ownership/remesh size changes.

@@ -31,7 +31,7 @@ const VECTOR: &str = include_str!("../../../../vector/spec/space/sparse_tree/tre
 
 #[test]
 fn sparse_tree_computes_what_the_typescript_computes() {
-    let v = xpute_core::vector::Vector::load(VECTOR);
+    let v = xpute_core::sys::vector::Vector::load(VECTOR);
     v.each("", |k| {
         let layout = SparseTreeLayout {
             dim: v.u32(&format!("{k}.dim")),

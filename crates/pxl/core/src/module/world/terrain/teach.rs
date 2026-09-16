@@ -8,7 +8,7 @@
 use pxl_shared::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_shared::spec::cell::cube_types;
 
-use crate::kernel::kernel;
+use crate::sys::kernel::kernel;
 use crate::render::gpu::layer_table::{ground_color_lookup, ground_layer_index_lookup};
 use crate::render::mesh::voxel::{MaterialClass, MaterialClasses, NO_LAYER};
 

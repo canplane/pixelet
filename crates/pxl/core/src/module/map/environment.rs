@@ -9,9 +9,9 @@
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
-use crate::global::Global;
-use crate::host::wall_now;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::host::wall_now;
+use crate::sys::kernel::kernel;
 use crate::module::camera::config::camera_cfg;
 use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;

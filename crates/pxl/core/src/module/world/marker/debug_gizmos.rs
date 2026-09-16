@@ -19,8 +19,8 @@ use pxl_shared::spec::space::v3::{floor3n, V3};
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::kit::mat4::{mat4_transform_point, Mat4, Vec3};
 
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::view::view;
 use crate::module::world::terrain::elevation::{get_ele, with_ele};

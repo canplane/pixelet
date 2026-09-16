@@ -32,7 +32,7 @@ use xpute_core::ds::spatial_hash::SpatialHash;
 
 use super::poi_badge::evict_poi_badges;
 use super::store::poi_pages;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::module::world::billboard::distance_fade::fade_end_u;
 use crate::module::world::sched::tick::FrameBudget;
 use crate::module::world::terrain::elevation::with_ele;

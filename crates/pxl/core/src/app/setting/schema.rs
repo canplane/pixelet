@@ -10,7 +10,7 @@
 //! stored. See store.rs for why that matters.
 
 use super::schema_spec::SETTINGS as S;
-use crate::host::handheld;
+use crate::sys::host::handheld;
 
 /// Rough per-frame cost, shown as a badge on the row.
 pub type SettingCost = &'static str;

@@ -2,7 +2,7 @@
 
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
-use crate::global::Global;
+use crate::sys::global::Global;
 
 /// Data loading lifecycle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

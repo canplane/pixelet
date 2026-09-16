@@ -19,8 +19,8 @@
 //! across the move.
 
 use super::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
-use crate::global::Global;
-use crate::host::{storage_get, storage_set};
+use crate::sys::global::Global;
+use crate::sys::host::{storage_get, storage_set};
 use xpute_core::kit::json::{read_json, Quoted};
 
 const STORAGE_KEY: &str = "pxl:settings";

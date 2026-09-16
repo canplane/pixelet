@@ -17,7 +17,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 use super::store::{clear_pois, get_pois, poi_pages};
 use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
 use crate::module::world::sched::demand::Demand;

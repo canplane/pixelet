@@ -1,6 +1,8 @@
-// xpute_core/vector.rs
+// xpute_core/sys/vector.rs
 // (no pair: the writer is script/pair.ts, which flattens what a generator
 // under script/vector/ returns)
+
+#![cfg(any(test, feature = "vector"))]
 
 //! The reader of the vectors: lines of `path<TAB>value`, the path the keys
 //! and indices down to the value joined by dots. A split per line and no

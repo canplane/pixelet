@@ -9,7 +9,7 @@ use core::fmt::{self, Write};
 
 use pxl_shared::spec::space::adapter::epsg4326;
 
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::geocode::label::{assemble_label, primary_lang, Label};

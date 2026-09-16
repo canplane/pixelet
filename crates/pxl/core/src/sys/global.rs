@@ -1,4 +1,4 @@
-// pxl_core/global.rs
+// pxl_core/sys/global.rs
 
 //! The kernel's names for the substrate's one-value-per-module device
 //! (xpute sys/global.rs) and its clock, so a file wanting either asks the

@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use pxl_shared::spec::space::pvf3::ivec;
 
 use super::variant::{CharacterVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS};
-use crate::global::Global;
-use crate::kernel::{kernel, with_world};
+use crate::sys::global::Global;
+use crate::sys::kernel::{kernel, with_world};
 use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::get_local_world_origin;

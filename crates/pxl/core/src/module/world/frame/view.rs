@@ -21,7 +21,7 @@ use xpute_core::kit::mat4::{
     Mat4, Vec3,
 };
 
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::orbit_local_offset;
 use crate::module::world::environment::config::render_cfg;

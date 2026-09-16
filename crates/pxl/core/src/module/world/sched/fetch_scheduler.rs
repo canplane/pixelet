@@ -19,7 +19,7 @@ use xpute_core::sched::io::{Demand as Queued, IoQueue};
 
 use super::demand::{Category, Demand, DemandKey, Phases};
 use super::ledger::{ledger_record, Failure, Outcome, TaskRecord};
-use crate::global::Global;
+use crate::sys::global::Global;
 
 /// Demands held at once: the pages near the view in each category, and a
 /// search. Past it a demand is refused and asked for again.

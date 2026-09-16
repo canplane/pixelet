@@ -30,8 +30,8 @@ use super::ledger::{ledger_recording_start, ledger_set_sink, FrameSample, Ledger
 use super::summary::{missed, overran};
 use super::ledger::ledger_recording_stop;
 use super::tick::{set_step_timing, tick_step_stats_reset};
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::module::world::poi::poi_badge::badge_atlas;
 
 

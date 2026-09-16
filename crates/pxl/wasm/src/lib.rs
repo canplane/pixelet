@@ -18,8 +18,8 @@ use pxl_core::bake::scan::{BandView, ExtraView, ScanStep};
 use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
 use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
-use pxl_core::kernel::{kernel, reindex_object, Kernel};
-use pxl_core::global::Global;
+use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
+use pxl_core::sys::global::Global;
 use pxl_core::mem;
 use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
@@ -264,7 +264,7 @@ fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalErro
 // (module/world/object/store.ts). Writes, reads and the reference paint
 // alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
 
-pub use pxl_core::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
+pub use pxl_core::sys::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
 
 // ---- Rings ----
 //
@@ -1187,7 +1187,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 build_number: f.at(3)?.get_str()?,
                 published_tiles: bool_at(&f, 4)?,
             });
-            pxl_core::host::set_handheld(bool_at(&f, 5)?);
+            pxl_core::sys::host::set_handheld(bool_at(&f, 5)?);
             pxl_core::module::world::object::store::load();
             return Ok(Some((0, None)));
         }
@@ -1825,7 +1825,7 @@ fn tick(s: &mut State) -> u32 {
 
 // ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
 
-// ---- The host's hooks (pxl_core::host, pxl_core::global) ----
+// ---- The host's hooks (pxl_core::sys::host, pxl_core::sys::global) ----
 
 extern "C" {
     /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
@@ -1981,11 +1981,11 @@ fn hook_storage_set(key: &str, value: &str) {
     unsafe { host_storage_set(key.as_ptr(), key.len(), value.as_ptr(), value.len()) }
 }
 
-fn hook_local_time() -> pxl_core::host::LocalTime {
+fn hook_local_time() -> pxl_core::sys::host::LocalTime {
     let mut t = [0.0f64; 5];
     // SAFETY: the host writes five doubles into `t`.
     unsafe { host_local_time(t.as_mut_ptr()) };
-    pxl_core::host::LocalTime {
+    pxl_core::sys::host::LocalTime {
         unix_ms: t[0],
         hours: t[1],
         minutes: t[2],
@@ -2007,18 +2007,18 @@ fn hook_entropy() -> u64 {
 /// Hands the kernel the host's clock, storage, local time, text measure and
 /// entropy, before anything reads them.
 fn install_host() {
-    pxl_core::global::set_clock(hook_now);
-    pxl_core::host::set_storage(pxl_core::host::Storage {
+    pxl_core::sys::global::set_clock(hook_now);
+    pxl_core::sys::host::set_storage(pxl_core::sys::host::Storage {
         get: hook_storage_get,
         set: hook_storage_set,
     });
-    pxl_core::host::set_local_time(hook_local_time);
-    pxl_core::host::set_measure_text(hook_measure_text);
+    pxl_core::sys::host::set_local_time(hook_local_time);
+    pxl_core::sys::host::set_measure_text(hook_measure_text);
     xpute_core::kit::rng::set_entropy(hook_entropy);
-    pxl_core::host::set_heap_used(|| ALLOC.used());
-    pxl_core::host::set_heap_releases(|| ALLOC.releases());
-    pxl_core::host::set_heap_live(|| ALLOC.live());
-    pxl_core::host::set_heap_bytes(|| ALLOC.range_bytes());
+    pxl_core::sys::host::set_heap_used(|| ALLOC.used());
+    pxl_core::sys::host::set_heap_releases(|| ALLOC.releases());
+    pxl_core::sys::host::set_heap_live(|| ALLOC.live());
+    pxl_core::sys::host::set_heap_bytes(|| ALLOC.range_bytes());
     install_gpu();
 }
 
@@ -2031,8 +2031,8 @@ fn install_host() {
 /// `Outbox::post` asserts when the completion queue and its spill are both
 /// full. Turning the stream on during a fetch burst is the case that fills
 /// them, and it is also the only case anyone turns it on for.
-static LOG_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
-static LOG_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+static LOG_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
+static LOG_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
 
 /// What the stream has kept since the shell last came for it: the address of
 /// two words, where the JSON lies in this memory and how long it is. Zero
@@ -2061,8 +2061,8 @@ pub extern "C" fn ledger_log_release() {
 ///
 /// It is held between the two calls below rather than rebuilt, because the
 /// range handed out has to stay good until the shell has copied the bytes.
-static TRACE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
-static TRACE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+static TRACE_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
+static TRACE_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
 
 /// The ledger's window as Chrome's Trace Event Format, for ui.perfetto.dev:
 /// the address of two words, where the JSON lies in this memory and how long

@@ -655,7 +655,7 @@ impl Scheduler {
             self.decor_scratch = DecorScratch::new();
             if self.decor_scratch.is_none() {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::host::heap_releases());
+                self.slots[i].refused = Some(crate::sys::host::heap_releases());
                 return false;
             }
         }
@@ -690,7 +690,7 @@ impl Scheduler {
             let bytes = built.bytes();
             let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::host::heap_releases());
+                self.slots[i].refused = Some(crate::sys::host::heap_releases());
                 return false;
             };
             // SAFETY: a block of the bytes the build asked for, the glue's
@@ -1279,7 +1279,7 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
-        if s.refused.is_some_and(|r| r == crate::host::heap_releases()) {
+        if s.refused.is_some_and(|r| r == crate::sys::host::heap_releases()) {
             return false;
         }
         let asked = self.ask(world, i, p, q);
@@ -1408,7 +1408,7 @@ impl Scheduler {
 
 /// Whether the heap is live past MESH_PRESSURE.
 fn mesh_pressed(_world: &World) -> bool {
-    crate::host::heap_live() as f64 > crate::host::heap_bytes() as f64 * MESH_PRESSURE
+    crate::sys::host::heap_live() as f64 > crate::sys::host::heap_bytes() as f64 * MESH_PRESSURE
 }
 
 /// Ids the module gives the chunks it mounts, apart from any the glue adds.

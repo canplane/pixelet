@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::spec::cell::cube::cube_types;
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/record/texture.tsv");
 

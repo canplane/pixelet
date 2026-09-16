@@ -6,3 +6,4 @@ pub mod errno;
 pub mod error;
 pub mod global;
 pub mod mem;
+pub mod vector;

@@ -26,7 +26,7 @@ use super::resident::take_slot;
 use super::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
 use super::store::use_tile_store;
 use crate::module::world::sched::demand::Category;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::lib::env::config::TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
 use crate::mem;

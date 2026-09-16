@@ -23,7 +23,7 @@ use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::sched::quantum::Grant;
 
 use crate::app::setting::store::use_settings_store;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::lib::env::config::APP_ENV;
 use crate::module::camera::input::camera_input_step;
 use crate::module::camera::use_camera::camera_step;

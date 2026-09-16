@@ -18,7 +18,7 @@ use super::store::{use_camera_store, CameraStatus, ViewPatch};
 use super::terrain_gate::{allowed_pan, ViewTriple};
 use crate::app::setting::store::use_settings_store;
 use crate::app::store::ui_store::{use_ui_store, ActiveTool};
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::map::store::use_map_store;
 use crate::module::world::decor::decor_hit::raycast_decor;
 use crate::module::world::frame::coord::get_local_world_origin;

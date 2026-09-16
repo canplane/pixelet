@@ -99,7 +99,7 @@ fn placeable_cube_num_id_a_terrain_styled_cube_never_collides_with_a_flat_color_
 /// script/vector/pxl/shared/spec/cell/mod.ts's output.
 const VECTOR: &str = include_str!("../../../vector/spec/cell/mod.tsv");
 
-fn list(v: &xpute_core::vector::Vector, base: &str) -> Vec<&'static str> {
+fn list(v: &xpute_core::sys::vector::Vector, base: &str) -> Vec<&'static str> {
     if !v.has(&format!("{base}.0")) {
         return Vec::new();
     }
@@ -108,7 +108,7 @@ fn list(v: &xpute_core::vector::Vector, base: &str) -> Vec<&'static str> {
 
 #[test]
 fn the_catalogs_are_what_the_typescript_builds() {
-    let v = xpute_core::vector::Vector::load(VECTOR);
+    let v = xpute_core::sys::vector::Vector::load(VECTOR);
     let channels: Vec<(String, Vec<String>)> = cube_types::CHANNELS
         .iter()
         .map(|(ch, types)| (ch.to_string(), types.iter().map(|(n, x)| format!("{n}={x}")).collect()))

@@ -1,4 +1,4 @@
-// pxl_core/kernel.rs
+// pxl_core/sys/kernel.rs
 //
 // The kernel's one state: every structure the world is made of — the bakes,
 // the volumes and the pools they draw on, the terrain tables, the object
@@ -11,7 +11,7 @@ use crate::bake::mesher::BakeContext;
 use crate::bake::scan::{ColumnRuns, ScanContext};
 use crate::bake::terrain::{ChunkSample, Materials};
 use crate::bake::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::world::object::{Painter, Store};
 use crate::world::raycast::Raycast;
 use crate::world::sched::Scheduler;

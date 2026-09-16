@@ -6,7 +6,7 @@
 
 use super::decor_kinds::{bind_palette, DecorKindBundle};
 use super::boat_kind::{BOAT_KIND, BOAT_RULES};
-use crate::global::Global;
+use crate::sys::global::Global;
 
 static BUNDLE: Global<DecorKindBundle> = Global::new();
 

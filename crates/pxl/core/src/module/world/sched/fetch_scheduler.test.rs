@@ -5,7 +5,7 @@
 // the credits the central scheduler grants, and the ledger's record.
 
 use super::*;
-use crate::global::serial;
+use crate::sys::global::serial;
 use crate::module::world::sched::ledger::{ledger_recording_start, ledger_snapshot, Failure, Outcome};
 use crate::module::world::sched::summary::summarize_tasks;
 use pxl_shared::spec::fetch::FetchFail;

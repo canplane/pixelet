@@ -1,11 +1,11 @@
-// pxl_core/host.rs
+// pxl_core/sys/host.rs
 //
 // What the kernel asks of the host that is not a command it answers: the
 // browser's key-value storage, where the object store keeps its blob. The
 // host installs the calls before the first turn; a native test runs on the
 // defaults, which keep nothing.
 
-use crate::global::Global;
+use crate::sys::global::Global;
 
 pub struct Storage {
     pub get: fn(key: &str) -> Option<String>,

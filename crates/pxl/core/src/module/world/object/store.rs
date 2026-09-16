@@ -34,9 +34,9 @@ use xpute_core::kit::hash::fnv1a64_bytes;
 use xpute_core::sys::error::MarshalError;
 
 use crate::bake::terrain::js_round;
-use crate::global::{now, Global};
-use crate::host::{storage_get, storage_set};
-use crate::kernel::{kernel, reindex_object};
+use crate::sys::global::{now, Global};
+use crate::sys::host::{storage_get, storage_set};
+use crate::sys::kernel::{kernel, reindex_object};
 use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;

@@ -32,8 +32,8 @@ use super::path::{heading_to, init_settle_tracker, sample_walk_plan, update_sett
 use super::store::use_companion_load_store;
 use super::variant::{find_person_variant, find_pet_variant, CharacterVariant};
 use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
-use crate::kernel::{kernel, with_world};
+use crate::sys::global::Global;
+use crate::sys::kernel::{kernel, with_world};
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::damp_alpha;
 use crate::module::camera::store::use_camera_store;
@@ -208,7 +208,7 @@ impl Walker {
         // linger are spans of real time; the tick's elapsed is a sum of deltas
         // clamped at 0.1 s, which stretches every one of them across a gap
         // where the world did not tick.
-        let now = crate::global::now() / 1000.0;
+        let now = crate::sys::global::now() / 1000.0;
         let rebased = map_origin != self.prev_map_origin;
         let (px, py, is_walking);
 

@@ -55,12 +55,13 @@
 use xpute_core::sys::mem::{align_up, Section};
 
 pub mod fixed;
+pub mod spec;
 
-use crate::global::Global;
+use crate::sys::global::Global;
 
 // The numbers the map is made of are mem.json's, since the shell and the
-// linker read the same ones (mem_spec.rs).
-pub use crate::mem_spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
+// linker read the same ones (mem/spec.rs).
+pub use crate::mem::spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
 
 /// `n` at the page. The kernel's one application of xpute's `align_up`: the
 /// unit every range in this memory begins on is PAGE_BYTES and nothing else,

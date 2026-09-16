@@ -13,7 +13,7 @@ use super::car_decor::CAR_DECOR_BUNDLE;
 use super::decor_kinds::{teach_decor_kinds, DecorKindBundle};
 use super::train_decor::TRAIN_DECOR_BUNDLE;
 use super::tree_decor::TREE_DECOR_BUNDLE;
-use crate::global::Global;
+use crate::sys::global::Global;
 
 static TAUGHT: Global<bool> = Global::new();
 

@@ -2,7 +2,7 @@
 // (no pair: constant.ts has no test file)
 
 use super::*;
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/bake/constant.tsv");
 

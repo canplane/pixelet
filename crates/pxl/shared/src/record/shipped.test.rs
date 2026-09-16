@@ -3,7 +3,7 @@
 
 use super::*;
 use xpute_core::kit::hash::fnv1a_64_hex;
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/record/shipped.tsv");
 

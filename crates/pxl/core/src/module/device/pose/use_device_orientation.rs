@@ -7,7 +7,7 @@
 
 use super::store::{use_device_orientation_store, DevicePoseStatus};
 use pxl_shared::spec::message::Message;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 
 /// There's no Permissions-API equivalent for orientation (iOS Safari doesn't
 /// expose one at all — permission there is only ever regrantable via a fresh

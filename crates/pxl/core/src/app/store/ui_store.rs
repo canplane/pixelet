@@ -2,8 +2,8 @@
 
 use pxl_shared::spec::cell::{cube_types, decor_ids, placeable_cube_id, placeable_cubes, DecorId, PlaceableCube};
 
-use crate::global::Global;
-use crate::host::{storage_get, storage_set, wall_now};
+use crate::sys::global::Global;
+use crate::sys::host::{storage_get, storage_set, wall_now};
 use xpute_core::kit::json::{read_json, JsonStr, Quoted};
 use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
 

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use super::gltf::{parse_gltf, Gltf};
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::world::change::request_world_tick;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

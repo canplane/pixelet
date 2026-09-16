@@ -21,7 +21,7 @@ use core::fmt;
 use pxl_shared::spec::fetch::FetchFail;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
 
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::lib::env::config::PUBLISHED_TILES;
 use crate::module::map::ui::overlay::{search_modal, use_reverse_geocode};
 use crate::module::world::geocode::repository::geocode_url;

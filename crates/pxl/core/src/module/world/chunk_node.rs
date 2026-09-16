@@ -25,8 +25,8 @@ use pxl_shared::spec::space::xy::TO_XY;
 
 use crate::app::setting::store::use_settings_store;
 use crate::module::world::change::{world_changes, TERRAIN_PAGE};
-use crate::global::{now, Global};
-use crate::kernel::{kernel, with_world};
+use crate::sys::global::{now, Global};
+use crate::sys::kernel::{kernel, with_world};
 use crate::module::world::lod::LodStep;
 use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, objects_revision};
 use crate::module::world::terrain::store::{tile_pages, use_tile_store};

@@ -13,8 +13,8 @@ use pxl_shared::spec::space::pvf3::{fvec, ivec};
 
 use super::chunk_node::{chunk_page, run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
 use crate::app::setting::store::use_settings_store;
-use crate::global::{now, Global};
-use crate::kernel::{kernel, with_world};
+use crate::sys::global::{now, Global};
+use crate::sys::kernel::{kernel, with_world};
 use crate::module::map::store::use_map_store;
 use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::range::{range_anchor_of, RANGE_HYSTERESIS};
@@ -112,9 +112,9 @@ fn work_sample(c: &mut CoreTick) -> WorkSample {
 /// `live` is what is out on loan, so the two are not each other's complement.
 fn pool_sample() -> PoolSample {
     PoolSample {
-        used_mb: (crate::host::heap_used() as f64 / MB).round(),
-        live_mb: (crate::host::heap_live() as f64 / MB).round(),
-        range_mb: (crate::host::heap_bytes() as f64 / MB).round(),
+        used_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
+        live_mb: (crate::sys::host::heap_live() as f64 / MB).round(),
+        range_mb: (crate::sys::host::heap_bytes() as f64 / MB).round(),
     }
 }
 

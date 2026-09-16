@@ -11,8 +11,8 @@
 
 pub use super::order::BILLBOARD_ORDER;
 use super::atlas::BillboardAtlas;
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::world::build::World;
 
 static SHEET: Global<BillboardAtlas> = Global::new();

@@ -31,8 +31,8 @@ use super::skinned::SkinnedPass;
 use super::stage::{stage_lane, STAGE_AT};
 use super::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
 use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::preview_rows;
 use crate::module::world::character::companion::companion_skins;
@@ -852,7 +852,7 @@ impl Renderer {
                 layers: (self.layers.bytes as f64 / MB).round(),
             },
             px,
-            heap_mb: (crate::host::heap_used() as f64 / MB).round(),
+            heap_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
             task_ms: 0.0,
             census,
         });

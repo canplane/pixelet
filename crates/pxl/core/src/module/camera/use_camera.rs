@@ -8,7 +8,7 @@ use super::orbit::damp_alpha;
 use super::store::use_camera_store;
 use super::terrain_gate::climb_polar;
 use crate::app::setting::store::{use_settings_store, CameraTerrain};
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::map::store::use_map_store;
 use crate::module::world::frame::view::{view, view_compose};
 use crate::module::world::sched::tick::TickContext;

@@ -17,7 +17,7 @@ use xpute_core::kit::json::Quoted;
 use crate::app::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::app::setting::store::use_settings_store;
 use crate::app::store::ui_store::{use_ui_store, ActiveTool, RecentPick};
-use crate::global::Global;
+use crate::sys::global::Global;
 use xpute_core::kit::json::{read_json, JsonValue};
 use crate::module::camera::store::{use_camera_store, CameraStatus};
 use crate::module::device::pose::store::{use_device_location_store, use_device_orientation_store, DevicePoseStatus};

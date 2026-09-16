@@ -12,12 +12,12 @@
 //
 // The numbers themselves are not decided here either. They are mem.json's,
 // the same file the map and the shell read, included below rather than copied
-// (script/spec.ts writes mem_spec.rs; `deno task check:spec` fails where
+// (script/spec.ts writes mem/spec.rs; `deno task check:spec` fails where
 // what is on disk is not what the JSON writes).
 
 use std::io::Write;
 
-#[path = "../core/src/mem_spec.rs"]
+#[path = "../core/src/mem/spec.rs"]
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PAGE_BYTES, PHONE_BYTES, RING_CAPACITY, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES};
@@ -66,7 +66,7 @@ fn main() {
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
     println!("cargo:rustc-link-arg=--initial-memory={MIN_MEMORY_BYTES}");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../core/src/mem_spec.rs");
+    println!("cargo:rerun-if-changed=../core/src/mem/spec.rs");
 
     let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("ring_layout.rs");
     let mut f = std::fs::File::create(&out).unwrap();

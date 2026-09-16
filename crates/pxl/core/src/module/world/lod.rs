@@ -23,7 +23,7 @@
 use pxl_shared::bake::constant::U_PER_CELL;
 use xpute_core::kit::fdlibm;
 
-use crate::global::Global;
+use crate::sys::global::Global;
 
 /// XY sampling stride in L1 blocks inside one 64x64 chunk.
 pub const LOD_STEP_BY_LEVEL: [LodStep; 7] = [1, 2, 4, 8, 16, 32, 64];

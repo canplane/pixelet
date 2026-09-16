@@ -7,7 +7,7 @@
 use pxl_shared::spec::space::adapter::epsg4326::G4326;
 use pxl_shared::spec::message::Message;
 
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DevicePoseStatus {

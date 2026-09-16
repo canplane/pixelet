@@ -13,7 +13,7 @@ use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::module::map::store::use_map_store;
 use crate::module::world::geocode::label::{assemble_label, Label};
 use crate::module::world::geocode::repository::{parse_geocode, PartTable, Rows};

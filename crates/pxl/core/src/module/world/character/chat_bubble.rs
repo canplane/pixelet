@@ -9,8 +9,8 @@
 //! speech-bubble shape the shell paints.
 
 use crate::app::store::ui_store::use_ui_store;
-use crate::global::Global;
-use crate::host::{measure_text, wall_now};
+use crate::sys::global::Global;
+use crate::sys::host::{measure_text, wall_now};
 use crate::module::world::billboard::atlas::{DrawSpec, NO_SLOT};
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::module::world::billboard::canvas_text::wrap_text;

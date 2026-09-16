@@ -1,7 +1,7 @@
 // pxl_core/module/world/surface_height.test.rs
 
 use super::*;
-use crate::global::serial;
+use crate::sys::global::serial;
 use crate::module::world::object::store::place;
 use pxl_shared::spec::cell::cube_types::Block;
 use pxl_shared::spec::cell::PlaceableCube;

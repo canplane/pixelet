@@ -6,7 +6,7 @@
 
 use super::decor_kinds::{bind_palette, DecorKindBundle};
 use super::car_kind::{CAR_KIND, CAR_RULES};
-use crate::global::Global;
+use crate::sys::global::Global;
 
 static BUNDLE: Global<DecorKindBundle> = Global::new();
 

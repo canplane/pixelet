@@ -1,7 +1,7 @@
 // pxl_core/module/world/page_table.test.rs
 
 use super::*;
-use crate::global::serial;
+use crate::sys::global::serial;
 use crate::module::world::change::{world_changes, TERRAIN_PAGE};
 use pxl_shared::spec::space::pvf3::ivec;
 

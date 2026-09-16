@@ -8,7 +8,7 @@
 //! would freeze before a later language change.
 
 use pxl_shared::spec::message::Message;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 use crate::module::device::pose::store::{use_device_location_store, DevicePoseStatus};
 use crate::module::map::store::{use_map_store, MapStatus};
 use crate::module::world::character::store::use_companion_load_store;

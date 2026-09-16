@@ -8,7 +8,7 @@
 //! uniform buffers and draws; it decides nothing.
 
 use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::map::environment::SKY_DOME_SCALE;
 use crate::module::world::environment::config::rim_cfg;
 use crate::module::world::frame::view::view;

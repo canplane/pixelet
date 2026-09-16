@@ -19,7 +19,7 @@ use super::api_spec::{address, compare, filter, format, resource};
 use super::pipeline::{Built, Pipelines};
 use super::renderer::{frame_group, put_f32, put_u32, skin_group, Blocks, Scratch};
 use super::shadow::Shadow;
-use crate::kernel::kernel;
+use crate::sys::kernel::kernel;
 use crate::module::world::decor::asset_store::decor_bundle_assets;
 use crate::render::draw::{DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
 use crate::render::shader::PIPELINE_DECOR_DEPTH;

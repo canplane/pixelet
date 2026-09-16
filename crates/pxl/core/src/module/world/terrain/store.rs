@@ -18,7 +18,7 @@
 use pxl_shared::bake::format::Tile;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::world::change::TERRAIN_PAGE;
 use crate::module::world::page_table::PageTable;
 

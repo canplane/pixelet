@@ -22,7 +22,7 @@ use pxl_shared::spec::fetch::FetchFail;
 
 use super::demand::{DemandKey, Phases};
 use super::tick::PHASES;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {

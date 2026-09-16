@@ -12,8 +12,8 @@ use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use pxl_shared::spec::space::v3::{add3, center3n, floor3n, V3};
 
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::environment::config::render_cfg::FOG_FAR;
 use crate::module::world::environment::theme::WorldThemeKey;

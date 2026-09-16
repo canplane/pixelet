@@ -26,8 +26,8 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use super::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 use crate::lib::env::route::asset_url;
 use crate::module::world::lod::{LodStep, TARGET_CELL_PX};
 use crate::world::decor::{Kind as DecorKind, Rule as DecorRule};

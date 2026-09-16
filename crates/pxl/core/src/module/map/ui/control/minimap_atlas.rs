@@ -13,7 +13,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use xpute_core::kit::math::clamp;
 
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::module::map::store::use_map_store;
 use crate::module::world::terrain::store::tile_pages;

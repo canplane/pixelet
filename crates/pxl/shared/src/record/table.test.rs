@@ -4,7 +4,7 @@
 use super::*;
 use xpute_core::kit::array::{F32Array, I64Array, U32Array};
 use xpute_core::kit::encoding::bytes_to_hex;
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/record/table.tsv");
 

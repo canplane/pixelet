@@ -10,7 +10,7 @@
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::mat4::Vec3;
 
-use crate::kernel::kernel;
+use crate::sys::kernel::kernel;
 use crate::module::world::object::store::EntryAt;
 use crate::module::world::raycast::{ray_hit_decor, RayLike};
 

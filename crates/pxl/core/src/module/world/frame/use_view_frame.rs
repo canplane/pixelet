@@ -11,7 +11,7 @@ use xpute_core::kit::math::wrap;
 
 use super::coord::get_local_world_origin;
 use super::view::{view, view_compose};
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::camera::config::camera_cfg::smooth::{POS_DAMP, ROT_DAMP};
 use crate::module::camera::orbit::damp_alpha;
 use crate::module::camera::store::use_camera_store;

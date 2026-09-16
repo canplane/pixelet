@@ -6,7 +6,7 @@
 
 use super::store::{use_device_location_store, DevicePoseStatus};
 use pxl_shared::spec::message::Message;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 
 /// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
 /// the session: indoors, in a tunnel, between buildings, a fix simply does not

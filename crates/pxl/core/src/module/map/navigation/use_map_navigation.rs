@@ -3,7 +3,7 @@
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
-use crate::global::Global;
+use crate::sys::global::Global;
 use crate::module::device::pose::store::use_device_location_store;
 use crate::module::map::store::use_map_store;
 
