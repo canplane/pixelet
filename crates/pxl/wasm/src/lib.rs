@@ -191,15 +191,15 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
     }
 }
 
-/// The volumes once VOLUME_POOLS made them; by the field, so the state's
-/// other fields stay borrowable beside them.
+/// The volumes once `boot` cut them from the pools; by the field, so the
+/// state's other fields stay borrowable beside them.
 fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
-    volumes.as_mut().expect("VOLUME_POOLS before any volume")
+    volumes.as_mut().expect("a volume before boot")
 }
 
-/// The volumes for a command: EINVAL before VOLUME_POOLS.
+/// The volumes for a command: EINVAL before `boot`.
 fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalError> {
-    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before VOLUME_POOLS"), None))
+    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before boot"), None))
 }
 
 // ---- Objects ----

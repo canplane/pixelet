@@ -74,18 +74,33 @@ when its fix lands.
   where reaching it means the caller has a bug rather than that the view
   grew. `MAX_PAGES` (1024) is not reachable against `RESIDENT_PAGES` (32 at
   the cap) and is kept as it is.
-- **H6** `fetch_scheduler.rs` `HELD` (128, `take` truncates), `NAMES` (256)
+- **H6** ~~`fetch_scheduler.rs` `HELD` (128, `take` truncates), `NAMES` (256)
   and `CATEGORIES` (16) asserted; `demand.rs` `PHASES_MAX` (6) drops
-  silently; `asset_store` `VARIANTS` (16) asserted.
+  silently; `asset_store` `VARIANTS` (16) asserted.~~ **Kept as it is**: a
+  category reaches the scheduler only as a `&'static str` the code names —
+  terrain, ocean, poi, geocode, search — so `CATEGORIES` counts code, and
+  `NAMES` is `HELD * 2` because the queue holds at most one name per slot and
+  one aborted. `VARIANTS` is asserted against the registry's own bundles,
+  whose largest kind has nine. `HELD`'s truncation is the refusal the
+  constant already documents: the fetcher's next wishlist asks again, which
+  is what terrain's `retry_at` now makes sure of. `PHASES_MAX` leaves out a
+  seventh sub-timing, and a run's phases are literals in the code, so it
+  costs a line of the report and nothing the world runs on.
 - **H7** `ledger.rs:199-209` keeps a one-minute window capped at
   2048 / 4096 / 1024; `ledger.ts:196-198` kept the session
   (200k / 500k / 50k).
-- **H8** `wasm/src/lib.rs:192-200` names `VOLUME_POOLS`, a command no
-  longer in `spec/cmd.rs`.
-- **H9** `frame/range.rs:111-115` `PAGES_IN_RADIUS` is unused, and `Pages`
-  is documented as inline while it is a `Vec`.
-- **H10** `render/gpu/pipeline.rs:32-33,78,114` `LAYOUTS` (32) and `BUILT`
-  (48) asserted; `pipeline.ts` kept maps.
+- **H8** ~~`wasm/src/lib.rs:192-200` names `VOLUME_POOLS`, a command no
+  longer in `spec/cmd.rs`.~~ The volumes are cut in `boot`, and the three
+  places say so.
+- **H9** ~~`frame/range.rs:111-115` `PAGES_IN_RADIUS` is unused, and `Pages`
+  is documented as inline while it is a `Vec`.~~ The constant is gone and the
+  alias says only what it is.
+- **H10** ~~`render/gpu/pipeline.rs:32-33,78,114` `LAYOUTS` (32) and `BUILT`
+  (48) asserted; `pipeline.ts` kept maps.~~ **Kept as it is**: a key is a
+  pipeline, a format and a sample count, and all three are the code's. There
+  are fifteen `PIPELINE_*`, every `build` call passes `format::CANVAS`, and a
+  count is one or the device's MSAA — thirty keys against `BUILT`'s 48. Only
+  a new pipeline can reach the assert, which is what an assert is for.
 - **H11** `badges.rs:38,291` `SETS` (32) stops drawing sets past it;
   `render/gpu/decor.rs:29,93` `GROUPS` (64) gives groups past it no model;
   `skinned.rs:23,77-78` `SKINS` (16) leaves a seventeenth model's actor
@@ -95,18 +110,18 @@ when its fix lands.
 
 ## B. Behaviour that differs
 
-- **B1** `fetch_scheduler.rs:160-177` `fetch_settle` records nothing in the
+- **B1** ~~`fetch_scheduler.rs:160-177` `fetch_settle` records nothing in the
   ledger when the row is gone; `fetch_scheduler.ts:158-177` recorded every
-  settle. **Not reachable**: read against xpute's `sched/io.rs`, the row is
+  settle.~~ **Not reachable**: read against xpute's `sched/io.rs`, the row is
   gone in one case only. `sync` removes a row that is QUEUED, and a queued
   demand has never been handed to the shell (`pump` is what starts one), so
   no settle can arrive for it; a RUNNING row it no longer wants keeps its row
   and only takes `abort_sent`, so the shell's settle still finds it and is
   recorded. `IoQueue::reset` is the one call that drops rows in flight, and
   its only caller is `fetch_scheduler_reset`, which says it is the tests'.
-- **B2** The fetch pump runs at the end of a turn (`world.rs:164,203`); a
+- **B2** ~~The fetch pump runs at the end of a turn (`world.rs:164,203`); a
   settle between turns waits for the next. The checkpoint pumped on every
-  settle. **Kept as it is**: xpute's `sched/io.rs` states the rule and what
+  settle.~~ **Kept as it is**: xpute's `sched/io.rs` states the rule and what
   it was measured against — with a pump per submission the category that
   synced first filled every slot before another had submitted anything, and a
   page at priority 1 sat 358 ms behind pages at priority 2 (the same

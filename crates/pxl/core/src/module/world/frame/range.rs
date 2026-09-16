@@ -108,10 +108,7 @@ pub fn pages_in_radius(anchor: IVec, radius: f64) -> Pages {
     out
 }
 
-/// Pages a disc can hold here: a radius past four pages comes nowhere near.
-pub const PAGES_IN_RADIUS: usize = 256;
-
-/// A set of pages, nearest first, kept inline.
+/// A set of pages, nearest first.
 pub type Pages = Vec<PageAt>;
 
 /// The pages a view holds: the nearest `count` of those whose square comes
