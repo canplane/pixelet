@@ -1,6 +1,4 @@
-//! The world's one raycast: module/camera/ray.ts's ray_hit_world and
-//! reference/chunk_raycast.ts's ray_hit_chunk, with
-//! compositor.ts's little cache of composites, in the core.
+//! The world's one raycast, and the little cache of composites it walks.
 //!
 //! A ray walks the chunks its XY projection crosses (a DDA a chunk wide),
 //! and in each the cells it crosses (a DDA a cell wide), testing exactly
@@ -57,7 +55,9 @@ struct Slab {
     sign: f64,
 }
 
-/// Ray/AABB slab test, as chunk_raycast.ts has it.
+/// Ray/AABB slab test: the entry and exit parameters along the ray, and
+/// which axis the entry was on — the caller wants the axis to know which
+/// face was hit.
 fn ray_aabb(o: &[f64; 3], d: &[f64; 3], min: &[f64; 3], max: &[f64; 3]) -> Option<Slab> {
     let mut t_enter = f64::NEG_INFINITY;
     let mut t_exit = f64::INFINITY;
@@ -94,8 +94,8 @@ fn ray_aabb(o: &[f64; 3], d: &[f64; 3], min: &[f64; 3], max: &[f64; 3]) -> Optio
     })
 }
 
-/// The box run `i` of the column is, chunk-local: chunk_raycast.ts's
-/// run_box.
+/// The box run `i` of the column is, chunk-local: a whole cell where the run
+/// carries no sub-cell size, and the sub-cell's own box where it does.
 fn run_box(cx: u32, cy: u32, runs: &ColumnRuns, i: usize) -> ([f64; 3], [f64; 3]) {
     let sub = runs.sub[i];
     let sub_sz = (sub >> 24) as u8;
@@ -249,8 +249,9 @@ impl Raycast {
         world.volumes.release(e.volume);
     }
 
-    /// Cell-DDA through one chunk at (chunk_ox, chunk_oy) of the ray's
-    /// space: chunk_raycast.ts's ray_hit_chunk.
+    /// Cell-DDA through one chunk at (chunk_ox, chunk_oy) of the ray's space,
+    /// testing every run of each cell it steps into and stopping at the
+    /// nearest hit.
     #[allow(clippy::too_many_arguments)]
     fn hit_chunk(&mut self, world: &mut World, volume: usize, o: &[f64; 3], d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
         // SAFETY: the composite is sealed and held until released here or kept.
@@ -316,19 +317,6 @@ impl Raycast {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_slab_test_names_the_entered_face() {
-        let s = ray_aabb(&[0.5, 0.5, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).unwrap();
-        assert_eq!((s.t, s.axis, s.sign), (4.0, 2, 1.0));
-        assert!(ray_aabb(&[2.0, 0.5, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).is_none());
-        // Behind the origin.
-        assert!(ray_aabb(&[0.5, 0.5, -5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 0.0], &[1.0, 1.0, 1.0]).is_none());
-    }
-}
 
 // ---- the decor ----
 
@@ -519,3 +507,7 @@ mod decor_tests {
         assert!(!ray_meets_sphere(&[-10.0, 0.5, 0.0], &[1.0, 0.0, 0.0], 1.0, 5.0));
     }
 }
+
+#[cfg(test)]
+#[path = "raycast.test.rs"]
+mod test;

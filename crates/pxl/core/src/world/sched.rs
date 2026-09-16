@@ -1,7 +1,14 @@
 //! The chunks' scheduler: which chunks are on screen, which tier each shows,
-//! what to build and in what order, and what to give back — what
-//! module/world/chunk_stage.tsx's visible pass, chunk_node.ts's recheck and
-//! commit, sched/chunk_table.ts and sched/priority.ts did, in the core.
+//! what to build and in what order, and what to give back.
+//!
+//! A tick is four passes over the slots. `mount` decides which chunks exist
+//! at all, by range from the anchor; `refresh` measures each against the
+//! frame and flips its IN_FRUSTUM; `recheck` asks the ladder for the tier
+//! that distance wants and marks the slot pending when its layout is not
+//! that; `commit` applies a layout whose tiers are all in hand, or releases
+//! one that has gone off screen. What is committed first is `priority`'s
+//! order, and a build that is refused for want of memory waits for the heap
+//! to release something before it is tried again.
 //!
 //! The glue says which chunks exist and what they are made of, writes the
 //! frame — the camera, the anchor root's matrix, the frustum — where the
@@ -9,8 +16,7 @@
 //! group shown or hidden, the layout it should show (its tiers), how the two
 //! tiers of a blend are weighted, a tier's mesh handed over and a tier to
 //! let go. The glue holds the meshes and the scene; the core holds every
-//! decision about them. Why each rule is what it is lives in the TypeScript
-//! it came from; the history there is the reasoning here.
+//! decision about them.
 
 use core::fmt::Write;
 
@@ -756,10 +762,13 @@ impl Scheduler {
         self.mounted.range((page_idx, 0, 0)..=(page_idx, u32::MAX, u32::MAX)).next().is_some()
     }
 
-    /// module/world/frame/range.ts's rule, a page and a chunk at a time: a chunk
-    /// whose square is within the radius of the anchor is mounted, and one
-    /// already mounted is kept until it is past the radius and the
-    /// hysteresis; a page with no tile, or out past both, mounts nothing.
+    /// Which chunks exist, a page and a chunk at a time: one whose square is
+    /// within `render_dist` of the anchor is mounted, and one already mounted
+    /// is kept until it is past `render_dist + range_hysteresis` — the two
+    /// radii are what stops a chunk on the edge mounting and unmounting as
+    /// the view breathes. A page with no tile, or out past both, mounts
+    /// nothing. The whole pass is skipped while the anchor, the two radii and
+    /// the page set are the ones it last ran for.
     fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
         let key = (anchor, frame.render_dist, frame.range_hysteresis, self.page_idxs_revision);
@@ -1023,8 +1032,10 @@ impl Scheduler {
         }
     }
 
-    /// Where every chunk is and whether it is on screen, from the anchor
-    /// root's matrix: sched/chunk_table.ts's refresh.
+    /// Where every chunk is and whether it is on screen, measured against the
+    /// frame. A slot that crosses the frustum's edge moves its retained bytes
+    /// between the on-screen and off-screen totals and says so with a
+    /// `Visible` event, which is what the retention budget is spent from.
     fn refresh(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
         for i in 0..self.slots.len() {
             let (visible, _, d2, ld2) = measure(frame, &self.slots[i]);
@@ -1104,7 +1115,14 @@ impl Scheduler {
         });
     }
 
-    /// chunk_node.ts's recheck: the tier wanted, the blend, what to commit.
+    /// The tier this slot should be showing, and whether that makes it
+    /// pending.
+    ///
+    /// Off screen it wants the coarsest tier and a release. On screen the
+    /// ladder answers for its distance — one tier, or two and a weight while
+    /// it crosses — and the slot is pending when what it shows is not that.
+    /// SETTLING is pending with a layout already up, so a frame can tell a
+    /// chunk that is changing tier from one that has nothing to show yet.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64, frame: &Frame, emit: &mut impl FnMut(Event)) {
         if !self.slots[i].has(IN_FRUSTUM) {
             self.slots[i].desired = (COARSEST, 0);
@@ -1237,8 +1255,11 @@ impl Scheduler {
         self.account(i, before);
     }
 
-    /// chunk_node.ts's commit: a release off screen, a layout on it whose
-    /// tiers are all in hand.
+    /// Applies what `recheck` asked for, if it can: off screen, the coarsest
+    /// tier and the memory back; on screen, the desired layout once every
+    /// tier it names is built. A request that was refused for want of a block
+    /// is not retried until the heap has released something, so a full heap
+    /// costs one attempt rather than one per frame.
     fn commit(&mut self, world: &mut World, i: usize, emit: &mut impl FnMut(Event)) -> bool {
         let s = &self.slots[i];
         if !s.has(PENDING) {
@@ -1407,8 +1428,10 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.show_decor == b.show_decor
 }
 
-/// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over the
-/// key chunk_node.ts named it by, `<page index>:<base x>,<base y>`.
+/// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over
+/// `<page index>:<base x>,<base y>`, so neighbouring chunks cross a tier
+/// boundary at different moments instead of the whole ring switching at
+/// once.
 fn blend_hash(page_idx: IVec, bx: u32, by: u32) -> u32 {
     /// FNV-1a over what is written, as it is written.
     struct Fnv(u32);
@@ -1436,8 +1459,8 @@ pub struct Priority {
     pub pending_since: f64,
 }
 
-/// The order, as sched/priority.ts had it: the slots' holders, then what is
-/// on screen nearest to where the camera is heading, then what is off it
+/// The order work is taken in: the slots' holders, then what is on screen
+/// nearest to where the camera is heading, then what is off it
 /// farthest first — a release takes memory from what is least likely to be
 /// wanted again; a wait halves the distance key every AGE_HALF_MS, within
 /// its class; at the same key, a hole before a chunk asking to be sharper.
@@ -1566,67 +1589,5 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn p(in_frustum: bool, lead_distance2: f64) -> Priority {
-        Priority {
-            holds: false,
-            in_frustum,
-            empty: false,
-            lead_distance2,
-            pending_since: -1.0,
-        }
-    }
-
-    fn ordered(items: &[(&'static str, Priority)], now: f64) -> Vec<&'static str> {
-        let mut v = items.to_vec();
-        v.sort_by(|a, b| priority(&a.1, &b.1, now));
-        v.into_iter().map(|(n, _)| n).collect()
-    }
-
-    #[test]
-    fn slot_holders_then_on_screen_then_nearest() {
-        let items = [
-            ("far refine", p(true, 900.0)),
-            ("near hidden", Priority { empty: true, ..p(false, 1.0) }),
-            ("holder", Priority { holds: true, ..p(false, 5000.0) }),
-            ("near refine", p(true, 4.0)),
-            ("far hole", Priority { empty: true, ..p(true, 2500.0) }),
-        ];
-        assert_eq!(ordered(&items, 0.0), ["holder", "near refine", "far refine", "far hole", "near hidden"]);
-    }
-
-    #[test]
-    fn a_near_coarse_chunk_goes_before_a_far_empty_one_and_a_hole_wins_a_tie() {
-        assert_eq!(
-            ordered(&[("far, empty", Priority { empty: true, ..p(true, 1e6) }), ("near, coarse", p(true, 100.0))], 0.0),
-            ["near, coarse", "far, empty"]
-        );
-        assert_eq!(ordered(&[("coarse", p(true, 400.0)), ("empty", Priority { empty: true, ..p(true, 400.0) })], 0.0), ["empty", "coarse"]);
-    }
-
-    #[test]
-    fn a_wait_overtakes_after_log2_of_how_much_farther_and_never_lifts_onto_the_screen() {
-        let first_at = |now: f64| {
-            let far = Priority {
-                pending_since: 0.0,
-                ..p(true, 64.0 * 64.0)
-            };
-            let near = Priority {
-                pending_since: now,
-                ..p(true, 8.0 * 8.0)
-            };
-            ordered(&[("near, fresh", near), ("far, waiting", far)], now)[0]
-        };
-        assert_eq!(first_at(3.0 * AGE_HALF_MS - 1.0), "near, fresh");
-        assert_eq!(first_at(3.0 * AGE_HALF_MS + 1.0), "far, waiting");
-        let aged_release = Priority { pending_since: 0.0, ..p(false, 1.0) };
-        let fresh_build = Priority { pending_since: 1e6, ..p(true, 1e12) };
-        assert_eq!(ordered(&[("release", aged_release), ("build", fresh_build)], 1e6)[0], "build");
-        assert_eq!(ordered(&[("near", p(false, 4.0)), ("far", p(false, 900.0))], 0.0), ["far", "near"]);
-        let a = Priority { pending_since: 100.0, ..p(true, 9.0) };
-        let b = Priority { pending_since: 100.0, ..p(true, 4.0) };
-        assert_eq!(ordered(&[("a", a), ("b", b)], 5000.0)[0], "b");
-    }
-}
+#[path = "sched.test.rs"]
+mod test;

@@ -1,14 +1,15 @@
-//! A chunk's bands to its column runs: reference/voxel_scan.ts's
-//! whole-chunk scan, in Rust.
+//! A chunk's bands to its column runs: the whole-chunk scan.
 //!
-//! The same walk in the same steps — a row of columns a step, each column
-//! read bottom to top across its bands, a run opened at its first voxel and
-//! extended while the material holds, a band's overflow sub-voxels pushed
-//! after its voxels — so the run set comes out byte for byte the set the
-//! TypeScript scan packs, in column_run.ts's layout. Why a run is emitted
-//! when it opens rather than when it closes, and why the sub-voxels trail
-//! their band, is in the TypeScript (RunSink), which stays the reference
-//! until it is gone.
+//! A row of columns a step, each column read bottom to top across its bands,
+//! a run opened at its first voxel and extended while the material holds, a
+//! band's overflow sub-voxels pushed after its voxels. The set is packed in
+//! bake/run_set.rs's layout.
+//!
+//! A run is emitted when it opens rather than when it closes because the
+//! sink writes forward only: a run's length is patched into the word already
+//! written once the run ends, which is what lets the walk and the packing be
+//! one pass. The sub-voxels trail their band for the same reason — they are
+//! found after the band's voxels and are appended where the walk is.
 //!
 //! The runs are gathered into one vector of structs as the walk finds them,
 //! since the count is known only at the end; the set they are packed into
@@ -30,7 +31,7 @@ const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 const COLUMN_CNT: usize = BAND_SPAN2;
 const SCAN_ROWS_PER_STEP: u32 = 8;
 
-/// One band's overflow sub-voxels, sorted by column (volume.ts, SubVoxels).
+/// One band's overflow sub-voxels, sorted by column (bake/volume.rs's Extras).
 pub struct ExtraView<'a> {
     pub col: &'a [u32],
     pub z: &'a [i32],
@@ -39,7 +40,7 @@ pub struct ExtraView<'a> {
     pub sub: &'a [u32],
 }
 
-/// One band as the scan reads it (volume.ts, VoxelBand): materials packed
+/// One band as the scan reads it (bake/volume.rs's Band): materials packed
 /// `0xCC_RRGGBB`, zero for air; four sub-cell bytes a voxel when the band
 /// has any.
 pub struct BandView<'a> {
@@ -225,8 +226,8 @@ impl ScanContext {
         run_set_bytes(self.runs.len() as u32, BAND_SPAN)
     }
 
-    /// Packs the walked runs into `bytes` bytes at `ptr`, in column_run.ts's
-    /// layout, after `ScanStep::NeedSet`.
+    /// Packs the walked runs into `bytes` bytes at `ptr`, in
+    /// bake/run_set.rs's layout, after `ScanStep::NeedSet`.
     ///
     /// # Safety
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
