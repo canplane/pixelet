@@ -100,64 +100,66 @@
       "tagline": "현실 세계를 캔버스 삼아 가상의 블록을 쌓는 프로젝트입니다."
     }
   },
-  "object_colors": {
-    "white": "흰색",
-    "grey": "회색",
-    "dark_grey": "진회색",
-    "black": "검정",
-    "red": "빨강",
-    "orange": "주황",
-    "brown": "갈색",
-    "yellow": "노랑",
-    "green": "초록",
-    "dark_green": "진초록",
-    "cyan": "시안",
-    "blue": "파랑",
-    "violet": "보라",
-    "magenta": "마젠타",
-    "pink": "분홍",
+  "cubes": {
+    "block": {
+      "white": "흰색",
+      "grey": "회색",
+      "dark_grey": "진회색",
+      "black": "검정",
+      "red": "빨강",
+      "orange": "주황",
+      "brown": "갈색",
+      "yellow": "노랑",
+      "green": "초록",
+      "dark_green": "진초록",
+      "cyan": "시안",
+      "blue": "파랑",
+      "violet": "보라",
+      "magenta": "마젠타",
+      "pink": "분홍"
+    },
     "land": {
-      "BARE": "맨땅",
-      "SEA": "바다",
-      "GREEN_DEEP": "숲",
-      "GREEN_LIGHT": "잔디",
-      "SAND": "모래",
-      "RESIDENTIAL": "주거지역",
-      "COMMERCIAL": "상업지역",
-      "INDUSTRIAL": "공업지역",
-      "SPORTS": "체육시설",
-      "EDUCATION": "교육시설",
-      "MEDICAL": "의료시설",
-      "PUBLIC": "공공시설",
-      "APRON": "계류장",
-      "HELIPAD": "헬리패드"
+      "bare": "맨땅",
+      "sea": "바다",
+      "green_deep": "숲",
+      "green_light": "잔디",
+      "sand": "모래",
+      "residential": "주거지역",
+      "commercial": "상업지역",
+      "industrial": "공업지역",
+      "sports": "체육시설",
+      "education": "교육시설",
+      "medical": "의료시설",
+      "public": "공공시설",
+      "apron": "계류장",
+      "helipad": "헬리패드"
     },
     "water": {
-      "RIVER": "강",
-      "LAKE": "호수",
-      "WETLAND": "습지"
+      "river": "강",
+      "lake": "호수",
+      "wetland": "습지"
     },
     "structure": {
-      "BUILDING": "건물",
-      "BUILDING_STATION": "역사",
-      "BUILDING_EDUCATION": "교육시설 건물",
-      "BUILDING_MEDICAL": "의료시설 건물",
-      "BUILDING_PUBLIC": "공공시설 건물"
+      "building": "건물",
+      "building_station": "역사",
+      "building_education": "교육시설 건물",
+      "building_medical": "의료시설 건물",
+      "building_public": "공공시설 건물"
     },
     "transport": {
-      "ROAD_DEFAULT": "도로",
-      "ROAD_MOTORWAY": "고속도로",
-      "ROAD_PRIMARY": "주요도로",
-      "ROAD_SECONDARY": "보조도로",
-      "PEDESTRIAN": "보행로",
-      "PARKING": "주차장",
-      "RAIL_MAIN": "철도",
-      "RAIL_SUBWAY": "지하철",
-      "RUNWAY": "활주로",
-      "TAXIWAY": "유도로"
+      "road_default": "도로",
+      "road_motorway": "고속도로",
+      "road_primary": "주요도로",
+      "road_secondary": "보조도로",
+      "pedestrian": "보행로",
+      "parking": "주차장",
+      "rail_main": "철도",
+      "rail_subway": "지하철",
+      "runway": "활주로",
+      "taxiway": "유도로"
     }
   },
-  "object_decors": {
+  "decors": {
     "tree": "나무"
   },
   "drawer_modal": {
@@ -170,7 +172,7 @@
       "character": "캐릭터"
     },
     "sections": {
-      "colors": "색상",
+      "block": "색상",
       "land": "육지",
       "water": "수역",
       "structure": "건물",

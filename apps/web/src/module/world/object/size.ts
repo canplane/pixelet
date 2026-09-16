@@ -2,7 +2,7 @@
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constant.ts";
-import type { PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { placeable_cube_id, type PlaceableCube, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 
 /**
  * Placeable cube sizes — grid-aligned steps down from one terrain cell
@@ -57,6 +57,6 @@ const DEFAULT_ACTIVE_SCALES: readonly ObjectScaleExponent[] = [0, -1, -2, -3];
  * can now surface a terrain-styled pick too. */
 const ACTIVE_SCALES: Partial<Record<PlaceableCubeId, readonly ObjectScaleExponent[]>> = {};
 
-export function object_scale_exponents(id: PlaceableCubeId): readonly ObjectScaleExponent[] {
-  return ACTIVE_SCALES[id] ?? DEFAULT_ACTIVE_SCALES;
+export function object_scale_exponents(cube: PlaceableCube): readonly ObjectScaleExponent[] {
+  return ACTIVE_SCALES[placeable_cube_id(cube)] ?? DEFAULT_ACTIVE_SCALES;
 }

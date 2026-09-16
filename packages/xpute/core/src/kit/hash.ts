@@ -21,6 +21,17 @@ export function fnv1a64_str(s: string): bigint {
   return h;
 }
 
+/** The same word over a byte string, for an id built from numbers rather
+ * than spelled out as text. */
+export function fnv1a64_bytes(bytes: Bytes): bigint {
+  let h = FNV64_OFFSET;
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= BigInt(bytes[i]);
+    h = BigInt.asUintN(64, h * FNV64_PRIME);
+  }
+  return h;
+}
+
 // ============ FNV-1a 64-bit (8 bytes output) ============
 
 type FNVState = { h1: u32; h2: u32; p: u32 };

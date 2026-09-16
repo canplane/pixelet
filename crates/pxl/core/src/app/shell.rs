@@ -8,7 +8,7 @@
 
 use core::fmt::{self, Write};
 
-use pxl_shared::spec::cell::decor_ids;
+use pxl_shared::spec::cell::{decor_ids, placeable_cube_num_id, placeable_cube_of};
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -179,9 +179,9 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     )?;
     write!(
         out,
-        "\"ui\":{{\"active_tool\":{},\"object_color_id\":{},\"object_size\":{},\"decor_id\":{},\"recent_picks\":[",
+        "\"ui\":{{\"active_tool\":{},\"object_cube_num_id\":{},\"object_size\":{},\"decor_id\":{},\"recent_picks\":[",
         Quoted(active_tool_str(ui.active_tool)),
-        Quoted(&ui.object_color_id),
+        placeable_cube_num_id(ui.object_cube),
         Num(ui.object_size),
         Quoted(ui.decor_id)
     )?;
@@ -190,7 +190,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
             out.write_char(',')?;
         }
         match p {
-            RecentPick::Object(id) => write!(out, "{{\"kind\":\"object\",\"id\":{}}}", Quoted(id))?,
+            RecentPick::Object(cube) => write!(out, "{{\"kind\":\"object\",\"num_id\":{}}}", placeable_cube_num_id(*cube))?,
             RecentPick::Decor(id) => write!(out, "{{\"kind\":\"decor\",\"id\":{}}}", Quoted(id))?,
         }
     }
@@ -319,8 +319,8 @@ pub fn ui_action(text: &str) -> bool {
             use_ui_store().set_object_size(size);
         }
         "select_cube" => {
-            let Some(id) = text_of(&action, "id") else { return false };
-            use_ui_store().select_cube(&id);
+            let Some(cube) = f64_of(&action, "num_id").and_then(|n| placeable_cube_of(n as u32)) else { return false };
+            use_ui_store().select_cube(cube);
         }
         "select_decor" => {
             let Some(id) = text_of(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else { return false };

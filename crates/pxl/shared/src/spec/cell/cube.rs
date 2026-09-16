@@ -52,7 +52,7 @@ use super::r#type::{build_colors_from_json, ChannelColors, Channels, Colors};
 /// channel can ever actually hold that byte (see cube_types' own top
 /// comment), so seeding a color for it here would be dead data.
 fn RASTER_SEED() -> ChannelColors {
-    BTreeMap::from([(cube_types::common::VOID as u32, None), (cube_types::common::UNKNOWN as u32, Some("#D9D0CC"))])
+    BTreeMap::from([(cube_types::common::void as u32, None), (cube_types::common::unknown as u32, Some("#D9D0CC"))])
 }
 
 pub static cube_colors: LazyLock<Colors> = LazyLock::new(|| {
@@ -77,9 +77,9 @@ pub static cube_colors: LazyLock<Colors> = LazyLock::new(|| {
         ("transport", cube_types::transport::ENTRIES),
     ];
     let common = BTreeMap::from([
-        (cube_types::common::VOID as u32, None),
-        (cube_types::common::AIR as u32, None),
-        (cube_types::common::UNKNOWN as u32, Some("#D9D0CC")),
+        (cube_types::common::void as u32, None),
+        (cube_types::common::air as u32, None),
+        (cube_types::common::unknown as u32, Some("#D9D0CC")),
     ]);
     let mut out = Colors(vec![("common", common)]);
     out.0.extend(build_colors_from_json(raster_types, &raster, &RASTER_SEED()).0);

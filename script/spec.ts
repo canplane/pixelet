@@ -216,7 +216,8 @@ async function cube_type_outputs(): Promise<Output[]> {
     "// is.",
   ];
   const ts = ["// @pxl/shared/spec/cell/cube_type.ts", ...head, "", "export const cube_types = {"];
-  const rs = ["// pxl_shared/spec/cell/cube_type.rs", ...head, "", "#![allow(non_upper_case_globals)]", "", "use super::r#type::Channels;", ""];
+  const enums: string[] = [];
+  const rs = ["// pxl_shared/spec/cell/cube_type.rs", ...head, "", "#![allow(non_camel_case_types, non_upper_case_globals)]", "", "use super::r#type::Channels;", ""];
   rs.push("/// The catalog: a module per channel, each type a constant, and `ENTRIES`", "/// the channel as the object's keys walk it. `CHANNELS` is `cube_types`", "/// itself, walked.", "pub mod cube_types {");
   spec.channels.forEach((ch, ci) => {
     if (ci > 0) ts.push("", `  // ---- ${ch.name} ----`);
@@ -227,6 +228,7 @@ async function cube_type_outputs(): Promise<Output[]> {
     for (const l of ch.note ?? []) rs.push(l === "" ? "    //" : `    // ${l}`);
     rs.push(`    pub mod ${ch.name} {`);
     const names: string[] = [];
+    const types: { name: string; lit: string; doc?: string[] }[] = [];
     ch.entries.forEach((e, ei) => {
       if ("section" in e) {
         if (ei > 0) {
@@ -243,12 +245,36 @@ async function cube_type_outputs(): Promise<Output[]> {
       ts.push(`    ${e.name}: ${lit},`);
       rs.push(`        pub const ${e.name}: u8 = ${lit};`);
       names.push(e.name);
+      types.push({ name: e.name, lit, doc: e.doc });
     });
     ts.push("  },");
     rs.push("", `        pub const ENTRIES: &[(&str, u8)] = &[`, ...names.map((n) => `            (${JSON.stringify(n)}, ${n}),`), "        ];", "    }");
+    // The same channel as one type, for Rust, which names a member of a closed
+    // set with an enum rather than with the text the JSON spells it out under.
+    // TypeScript already has this: `cube_types.land` IS the closed set there,
+    // its keys checked by `keyof typeof`.
+    const e = pascal(ch.name);
+    enums.push("");
+    for (const l of ch.note ?? []) enums.push(l === "" ? "    //" : `    // ${l}`);
+    enums.push("    #[derive(Clone, Copy, Debug, PartialEq, Eq)]", "    #[repr(u8)]", `    pub enum ${e} {`);
+    for (const t of types) {
+      if (t.doc) enums.push(...rs_doc(t.doc, "        "));
+      enums.push(`        ${t.name} = ${t.lit},`);
+    }
+    enums.push("    }", "");
+    enums.push(`    impl ${e} {`, "        /// Every type the channel gives out, in the JSON's own order.", `        pub const ALL: [${e}; ${types.length}] = [`, ...types.map((t) => `            ${e}::${t.name},`), "        ];", "");
+    enums.push(
+      "        /// The type a number names, or none for a number the channel",
+      "        /// does not give out.",
+      `        pub fn of(value: u8) -> Option<${e}> {`,
+      `            ${e}::ALL.into_iter().find(|t| *t as u8 == value)`,
+      "        }",
+      "    }",
+    );
   });
   ts.push("} as const satisfies Record<string, Record<string, number>>;");
-  rs.push("", "    pub const CHANNELS: &super::Channels = &[", ...spec.channels.map((ch) => `        (${JSON.stringify(ch.name)}, ${ch.name}::ENTRIES),`), "    ];", "}");
+  rs.push("", "    pub const CHANNELS: &super::Channels = &[", ...spec.channels.map((ch) => `        (${JSON.stringify(ch.name)}, ${ch.name}::ENTRIES),`), "    ];");
+  rs.push(...enums, "}");
   return [
     { path: "packages/pxl/shared/src/spec/cell/cube_type.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/shared/src/spec/cell/cube_type.rs", text: rs.join("\n") + "\n" },

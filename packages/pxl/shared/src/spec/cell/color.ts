@@ -14,106 +14,106 @@ export default {
     source: "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked",
   },
   land: {
-    BARE: {
+    bare: {
       hex: "#EEE5DC",
     },
-    SEA: {
+    sea: {
       hex: "#AAD3DF",
     },
-    GREEN_DEEP: {
+    green_deep: {
       hex: "#ADD19E",
     },
-    GREEN_LIGHT: {
+    green_light: {
       hex: "#C8FACC",
     },
-    SAND: {
+    sand: {
       hex: "#F5E9C6",
     },
-    RESIDENTIAL: {
+    residential: {
       hex: "#E0DFDF",
     },
-    COMMERCIAL: {
+    commercial: {
       hex: "#F2DAD9",
     },
-    INDUSTRIAL: {
+    industrial: {
       hex: "#EBDBE8",
     },
-    SPORTS: {
+    sports: {
       hex: "#88E0BE",
     },
-    EDUCATION: {
+    education: {
       hex: "#FFFFE5",
     },
-    MEDICAL: {
+    medical: {
       hex: "#FFFFE5",
     },
-    PUBLIC: {
+    public: {
       hex: "#FFFFE5",
     },
-    APRON: {
+    apron: {
       hex: "#DADAE0",
     },
-    HELIPAD: {
+    helipad: {
       hex: "#BBBBCC",
     },
   },
   water: {
-    RIVER: {
+    river: {
       hex: "#AAD3DF",
     },
-    LAKE: {
+    lake: {
       hex: "#AAD3DF",
     },
-    WETLAND: {
+    wetland: {
       hex: "#AAD3DF",
     },
   },
   structure: {
-    BUILDING: {
+    building: {
       hex: "#D9D0C9",
     },
-    BUILDING_STATION: {
+    building_station: {
       hex: "#C4B6AB",
     },
-    BUILDING_MEDICAL: {
+    building_medical: {
       hex: "#D9D0C9",
     },
-    BUILDING_EDUCATION: {
+    building_education: {
       hex: "#D9D0C9",
     },
-    BUILDING_PUBLIC: {
+    building_public: {
       hex: "#D9D0C9",
     },
   },
   transport: {
-    ROAD_DEFAULT: {
+    road_default: {
       hex: "#FFFFFF",
     },
-    ROAD_MOTORWAY: {
+    road_motorway: {
       hex: "#E892A2",
     },
-    ROAD_PRIMARY: {
+    road_primary: {
       hex: "#FCD6A4",
     },
-    ROAD_SECONDARY: {
+    road_secondary: {
       hex: "#F7FABF",
     },
-    PEDESTRIAN: {
+    pedestrian: {
       hex: "#DDDDE8",
     },
-    PARKING: {
+    parking: {
       hex: "#EEEEEE",
     },
-    RAIL_MAIN: {
+    rail_main: {
       hex: "#707070",
     },
-    RAIL_SUBWAY: {
+    rail_subway: {
       hex: "#999999",
     },
-    RUNWAY: {
+    runway: {
       hex: "#BBBBCC",
     },
-    TAXIWAY: {
+    taxiway: {
       hex: "#BBBBCC",
     },
   },

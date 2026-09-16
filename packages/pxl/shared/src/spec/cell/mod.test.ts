@@ -2,35 +2,39 @@
 
 import { assertEquals, assertNotEquals, assertThrows } from "@std/assert";
 
+import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
+
 import { cube_types } from "./cube.ts";
 import {
   cube_hex,
   cube_id_from_num,
   cube_ids,
   cube_num_id,
-  is_terrain_style_cube,
   object_value_is_air,
   object_value_is_present,
   placeable_cube_hex,
-  placeable_cube_id_from_num,
-  placeable_cube_ids,
+  placeable_cube_id,
   placeable_cube_num_id,
+  placeable_cube_of,
+  placeable_cubes,
+  terrain_style_cube_for,
+  terrain_style_cube_source,
 } from "./mod.ts";
 
-Deno.test("cube_types.common.VOID - is zero, sparse-tree absence", () => {
-  assertEquals(cube_types.common.VOID, 0);
-  assertEquals(object_value_is_present(cube_types.common.VOID), false);
+Deno.test("cube_types.common.void - is zero, sparse-tree absence", () => {
+  assertEquals(cube_types.common.void, 0);
+  assertEquals(object_value_is_present(cube_types.common.void), false);
 });
 
 Deno.test("object_value_is_present - anything but VOID is present", () => {
-  assertEquals(object_value_is_present(cube_types.common.AIR), true);
+  assertEquals(object_value_is_present(cube_types.common.air), true);
   assertEquals(object_value_is_present(cube_types.block.white), true);
 });
 
-Deno.test("cube_types.common.AIR/UNKNOWN - the two reserved sentinels", () => {
-  assertEquals(cube_types.common.AIR, 0x80);
-  assertEquals(cube_types.common.UNKNOWN, 0xff);
-  assertEquals(object_value_is_air(cube_types.common.AIR), true);
+Deno.test("cube_types.common.air/UNKNOWN - the two reserved sentinels", () => {
+  assertEquals(cube_types.common.air, 0x80);
+  assertEquals(cube_types.common.unknown, 0xff);
+  assertEquals(object_value_is_air(cube_types.common.air), true);
   assertEquals(object_value_is_air(cube_types.block.white), false);
 });
 
@@ -55,43 +59,45 @@ Deno.test("cube_ids - no two entries collide on the same numeric id", () => {
   }
 });
 
-Deno.test("placeable_cube_* - round-trips a terrain-styled id derived from cube_types' own land/water/structure/transport channels", () => {
-  const id = "land.GREEN_DEEP" as const;
-  assertEquals(is_terrain_style_cube(id), true);
-  const num_id = placeable_cube_num_id(id);
-  assertEquals(placeable_cube_id_from_num(num_id), id);
-  assertNotEquals(placeable_cube_hex(id), null);
+Deno.test("placeable_cube_* - round-trips a terrain-styled cube derived from cube_types' own land/water/structure/transport channels", () => {
+  const cube = terrain_style_cube_for(GroundChannelKey.LAND, cube_types.land.green_deep)!;
+  assertEquals(placeable_cube_id(cube), "land.green_deep");
+  const num_id = placeable_cube_num_id(cube);
+  assertEquals(placeable_cube_of(num_id), cube);
+  assertNotEquals(placeable_cube_hex(cube), null);
 });
 
-Deno.test("placeable_cube_* - a flat color id still routes through cube_num_id/cube_hex, not the terrain-style path", () => {
-  assertEquals(is_terrain_style_cube("white"), false);
-  assertEquals(placeable_cube_num_id("white"), cube_num_id("white"));
-  assertEquals(placeable_cube_hex("white"), cube_hex("white"));
+Deno.test("placeable_cube_* - a flat color still routes through cube_num_id/cube_hex, not the terrain-style path", () => {
+  const white = placeable_cube_of(cube_types.block.white)!;
+  assertEquals(terrain_style_cube_source(white), null);
+  assertEquals(placeable_cube_num_id(white), cube_num_id("white"));
+  assertEquals(placeable_cube_hex(white), cube_hex("white"));
 });
 
-Deno.test("placeable_cube_ids - every flat color and every terrain-styled entry, no duplicates", () => {
+Deno.test("placeable_cubes - every flat color and every terrain-styled entry, no duplicates", () => {
   const seen = new Set<string>();
-  for (const id of placeable_cube_ids) {
+  for (const cube of placeable_cubes) {
+    const id = placeable_cube_id(cube);
     assertEquals(seen.has(id), false, `duplicate placeable id ${id}`);
     seen.add(id);
   }
   // Every terrain-styled entry adds to cube_ids' own 15 flat colors, never replaces one.
-  assertEquals(seen.size, placeable_cube_ids.length);
-  assertEquals(placeable_cube_ids.length > cube_ids.length, true);
-  // Every flat color is present...
-  for (const id of cube_ids) assertEquals(seen.has(id), true);
+  assertEquals(seen.size, placeable_cubes.length);
+  assertEquals(placeable_cubes.length > cube_ids.length, true);
+  // Every flat color is present, under the block channel like any other...
+  for (const id of cube_ids) assertEquals(seen.has(`block.${id}`), true);
   // ...and at least one terrain-styled entry per channel is present.
-  assertEquals(seen.has("land.GREEN_DEEP"), true);
-  assertEquals(seen.has("water.RIVER"), true);
-  assertEquals(seen.has("structure.BUILDING"), true);
-  assertEquals(seen.has("transport.ROAD_DEFAULT"), true);
+  assertEquals(seen.has("land.green_deep"), true);
+  assertEquals(seen.has("water.river"), true);
+  assertEquals(seen.has("structure.building"), true);
+  assertEquals(seen.has("transport.road_default"), true);
 });
 
-Deno.test("placeable_cube_num_id - a terrain-styled id never collides with a flat color's own global byte", () => {
+Deno.test("placeable_cube_num_id - a terrain-styled cube never collides with a flat color's own global byte", () => {
   const seen = new Set<number>();
-  for (const id of placeable_cube_ids) {
-    const num_id = placeable_cube_num_id(id);
-    assertEquals(seen.has(num_id), false, `duplicate global byte ${num_id} (${id})`);
+  for (const cube of placeable_cubes) {
+    const num_id = placeable_cube_num_id(cube);
+    assertEquals(seen.has(num_id), false, `duplicate global byte ${num_id} (${placeable_cube_id(cube)})`);
     seen.add(num_id);
   }
 });

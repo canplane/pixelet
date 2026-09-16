@@ -44,7 +44,7 @@ pub fn get_ele(at: &PVF3) -> Option<f64> {
 /// (LAND/WATER/STRUCTURE/TRANSPORT) — get_ele's own sibling, same tile/tx/ty
 /// lookup, just reading `.ground[channel]` instead of sampling `.ele`. Used
 /// by object/store.rs's place() to tell whether a terrain-styled pick would
-/// actually change anything — painting "land.GREEN_DEEP" over ground the bake
+/// actually change anything — painting "land.green_deep" over ground the bake
 /// already recorded as GREEN_DEEP land paints nothing new.
 pub fn get_ground_type(at: &PVF3, channel: GroundChannelKey) -> Option<u32> {
     let tile = use_tile_store().get_tile(L3_IDX(at.i))?;

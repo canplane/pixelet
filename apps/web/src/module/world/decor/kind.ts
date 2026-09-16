@@ -11,10 +11,10 @@ export const decor_kinds = {
   /** Trees on green/forest terrain, and only where nothing else (water, a
    * structure, a road) already claims the cell — the same "what actually
    * renders there" precedence the terrain paint applies, since a cell whose
-   * land channel says GREEN_LIGHT but whose transport channel is a road is a
+   * land channel says green_light but whose transport channel is a road is a
    * road, not grass.
    *
-   * BARE is included alongside the two explicit GREEN_* types even though its
+   * bare is included alongside the two explicit GREEN_* types even though its
    * own name says "bare ground": it's the fallback land type for any cell
    * with no real landuse tag, and this pack's actual land_bare.png texture is
    * a grassy yellow-green speckle nearly indistinguishable from
@@ -39,7 +39,7 @@ export const decor_kinds = {
     orientation: "random",
     decor_id: "tree",
     rules: {
-      land: ["GREEN_LIGHT", "GREEN_DEEP", "BARE"],
+      land: ["green_light", "green_deep", "bare"],
       water: "void",
       structure: "void",
       transport: "void",
@@ -64,7 +64,7 @@ export const decor_kinds = {
     orientation: "random",
     rules: {
       land: "any",
-      water: ["RIVER", "LAKE"],
+      water: ["river", "lake"],
       structure: "void",
       transport: "void",
     },
@@ -92,10 +92,10 @@ export const decor_kinds = {
       land: "any",
       water: "any",
       structure: "any",
-      transport: ["ROAD_MOTORWAY", "ROAD_PRIMARY", "ROAD_SECONDARY"],
+      transport: ["road_motorway", "road_primary", "road_secondary"],
     },
   },
-  /** Occasional trains on rail lines. RAIL_MAIN only (not RAIL_SUBWAY —
+  /** Occasional trains on rail lines. rail_main only (not RAIL_SUBWAY —
    * that's underground, wrong context for a surface-scattered prop). Same
    * "align_transport" reasoning as car applies: a train lying across the rail
    * sideways would read as derailed. Only the transport channel matters. */
@@ -111,7 +111,7 @@ export const decor_kinds = {
       land: "any",
       water: "any",
       structure: "any",
-      transport: ["RAIL_MAIN"],
+      transport: ["rail_main"],
     },
   },
 } as const;

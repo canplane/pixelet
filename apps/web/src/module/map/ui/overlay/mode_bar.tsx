@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text_field.tsx";
 import { useAppContext } from "@/app/provider/app_context.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
-import { type DecorId, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { type DecorId, placeable_cube_id, placeable_cube_num_id, placeable_cube_of, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/module/world/object/size.ts";
 import { cube_swatch_style } from "./cube_swatch.ts";
 
@@ -38,8 +38,8 @@ function size_button_dims(i: number): string {
 // Tier index i is exponent -i (object_scale_exponents), sign-flipped and
 // sorted here for display only — item_refs/drag_index/on_up still index by
 // tier (OBJECT_SIZES' own index), not by render position.
-function size_tiers_for(id: PlaceableCubeId): number[] {
-  return object_scale_exponents(id).map((exp) => -exp).sort((a, b) => b - a);
+function size_tiers_for(cube: PlaceableCube): number[] {
+  return object_scale_exponents(cube).map((exp) => -exp).sort((a, b) => b - a);
 }
 
 type SizeFlyoutAnchor = { left: f64; bottom: f64 };
@@ -187,15 +187,15 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
   );
 }
 
-function ColorSwatchButton({ id }: { id: PlaceableCubeId }) {
+function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.ui.active_tool);
-  const object_color_id = useKernel((s) => s.ui.object_color_id);
+  const object_cube_num_id = useKernel((s) => s.ui.object_cube_num_id);
   const object_size = useKernel((s) => s.ui.object_size);
-  const select_cube = (cube: PlaceableCubeId) => kernel_action({ type: "select_cube", id: cube });
+  const select_cube = (pick: PlaceableCube) => kernel_action({ type: "select_cube", num_id: placeable_cube_num_id(pick) });
 
-  const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => select_cube(id));
-  const tiers = size_tiers_for(id);
+  const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => select_cube(cube));
+  const tiers = size_tiers_for(cube);
 
   return (
     <div className="relative w-[38px] h-[38px] flex items-center justify-center">
@@ -204,14 +204,14 @@ function ColorSwatchButton({ id }: { id: PlaceableCubeId }) {
         type="button"
         onPointerDown={on_pointer_down}
         className="w-[38px] h-[38px] flex items-center justify-center cursor-pointer shrink-0 touch-pan-x"
-        title={t(`object_colors.${id}`)}
+        title={t(`cubes.${placeable_cube_id(cube)}`)}
       >
         <span
           ref={button_ref}
-          style={cube_swatch_style(id)}
+          style={cube_swatch_style(cube)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            activeTool === "object" && object_color_id === id ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === "object" && object_cube_num_id === placeable_cube_num_id(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -239,7 +239,7 @@ function DecorIconButton({ id }: { id: DecorId }) {
         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
         active ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
       )}
-      title={t(`object_decors.${id}`)}
+      title={t(`decors.${id}`)}
     >
       <Icon className="w-5 h-5" strokeWidth={2} />
     </button>
@@ -508,7 +508,11 @@ export function ModeBar() {
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {recent_picks.map((pick) => pick.kind === "object" ? <ColorSwatchButton key={`object:${pick.id}`} id={pick.id as PlaceableCubeId} /> : <DecorIconButton key={`decor:${pick.id}`} id={pick.id as DecorId} />)}
+                    {recent_picks.map((pick) =>
+                      pick.kind === "object"
+                        ? <ColorSwatchButton key={`object:${pick.num_id}`} cube={placeable_cube_of(pick.num_id)!} />
+                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id as DecorId} />
+                    )}
                   </div>
 
                   <div className="w-px h-7 bg-white/15 shrink-0" />

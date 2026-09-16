@@ -64,11 +64,11 @@ function terrain_body(seed: u32): Uint8Array {
   for (let i = 0; i < ele.length; i++) ele[i] = 10 + (next() % 30);
   const land = new Uint8Array(cells), water = new Uint8Array(cells), structure = new Uint8Array(cells), transport = new Uint8Array(cells);
   for (let i = 0; i < cells; i++) {
-    land[i] = next() % 3 === 0 ? cube_types.land.BARE : cube_types.land.GREEN_LIGHT;
+    land[i] = next() % 3 === 0 ? cube_types.land.bare : cube_types.land.green_light;
     const r = next() % 50;
-    water[i] = r === 0 ? cube_types.water.RIVER : 0;
-    structure[i] = r === 1 ? cube_types.structure.BUILDING : 0;
-    transport[i] = r === 2 ? cube_types.transport.ROAD_MOTORWAY : 0;
+    water[i] = r === 0 ? cube_types.water.river : 0;
+    structure[i] = r === 1 ? cube_types.structure.building : 0;
+    transport[i] = r === 2 ? cube_types.transport.road_motorway : 0;
   }
   return encode_terrain(ele, { land, water, structure, transport });
 }

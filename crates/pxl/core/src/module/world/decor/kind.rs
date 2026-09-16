@@ -13,10 +13,10 @@ pub mod decor_kinds {
     /// Trees on green/forest terrain, and only where nothing else (water, a
     /// structure, a road) already claims the cell — the same "what actually
     /// renders there" precedence the terrain paint applies, since a cell whose
-    /// land channel says GREEN_LIGHT but whose transport channel is a road is a
+    /// land channel says green_light but whose transport channel is a road is a
     /// road, not grass.
     ///
-    /// BARE is included alongside the two explicit GREEN_* types even though its
+    /// bare is included alongside the two explicit GREEN_* types even though its
     /// own name says "bare ground": it's the fallback land type for any cell
     /// with no real landuse tag, and this pack's actual land_bare.png texture is
     /// a grassy yellow-green speckle nearly indistinguishable from
@@ -41,7 +41,7 @@ pub mod decor_kinds {
         pub const orientation: &str = "random";
         pub const decor_id: &str = "tree";
         pub mod rules {
-            pub const land: &[&str] = &["GREEN_LIGHT", "GREEN_DEEP", "BARE"];
+            pub const land: &[&str] = &["green_light", "green_deep", "bare"];
             pub const water: &str = "void";
             pub const structure: &str = "void";
             pub const transport: &str = "void";
@@ -68,7 +68,7 @@ pub mod decor_kinds {
         pub const orientation: &str = "random";
         pub mod rules {
             pub const land: &str = "any";
-            pub const water: &[&str] = &["RIVER", "LAKE"];
+            pub const water: &[&str] = &["river", "lake"];
             pub const structure: &str = "void";
             pub const transport: &str = "void";
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
@@ -98,12 +98,12 @@ pub mod decor_kinds {
             pub const land: &str = "any";
             pub const water: &str = "any";
             pub const structure: &str = "any";
-            pub const transport: &[&str] = &["ROAD_MOTORWAY", "ROAD_PRIMARY", "ROAD_SECONDARY"];
+            pub const transport: &[&str] = &["road_motorway", "road_primary", "road_secondary"];
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
         }
         pub const KEYS: &[&str] = &["tag", "density", "variant_count", "orientation", "rules"];
     }
-    /// Occasional trains on rail lines. RAIL_MAIN only (not RAIL_SUBWAY —
+    /// Occasional trains on rail lines. rail_main only (not RAIL_SUBWAY —
     /// that's underground, wrong context for a surface-scattered prop). Same
     /// "align_transport" reasoning as car applies: a train lying across the rail
     /// sideways would read as derailed. Only the transport channel matters.
@@ -119,7 +119,7 @@ pub mod decor_kinds {
             pub const land: &str = "any";
             pub const water: &str = "any";
             pub const structure: &str = "any";
-            pub const transport: &[&str] = &["RAIL_MAIN"];
+            pub const transport: &[&str] = &["rail_main"];
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
         }
         pub const KEYS: &[&str] = &["tag", "density", "variant_count", "orientation", "rules"];

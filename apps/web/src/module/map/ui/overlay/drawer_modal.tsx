@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
 import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
-import { decor_ids, type DecorId, is_terrain_style_cube, placeable_cube_ids, type PlaceableCubeId, terrain_style_cube_source } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, type DecorId, placeable_cube_id, placeable_cube_num_id, type PlaceableCube, placeable_cubes } from "@pxl/shared/spec/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
@@ -22,52 +22,47 @@ export type DrawerModalProps = {
 /** The full catalog's own grouping — mode_bar.tsx's hotbar stays a flat
  * scrolling strip (no sections, that's the point of a hotbar), but a grid
  * with 30+ terrain-styled entries alongside the original 15 colors reads as
- * noise without headers. "colors" first (the original, most-used set), then
- * one section per cube.ts channel, in the same LAND/WATER/STRUCTURE/
- * TRANSPORT order reference/terrain_layer.ts's own GROUND_CH_KEYS uses. */
-const SECTION_ORDER = ["colors", GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
+ * noise without headers. A section is a cube channel and nothing else, block
+ * first (the original, most-used set) then the four ground channels in the
+ * LAND/WATER/STRUCTURE/TRANSPORT order GROUND_CH_KEYS uses. */
+const SECTION_ORDER = ["block", GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
 type SectionKey = (typeof SECTION_ORDER)[number];
 
-function section_of(id: PlaceableCubeId): SectionKey {
-  return is_terrain_style_cube(id) ? terrain_style_cube_source(id).channel : "colors";
-}
-
-function group_by_section(ids: readonly PlaceableCubeId[]): Map<SectionKey, PlaceableCubeId[]> {
-  const out = new Map<SectionKey, PlaceableCubeId[]>();
-  for (const id of ids) {
-    const key = section_of(id);
+function group_by_section(cubes: readonly PlaceableCube[]): Map<SectionKey, PlaceableCube[]> {
+  const out = new Map<SectionKey, PlaceableCube[]>();
+  for (const cube of cubes) {
+    const key: SectionKey = cube.channel;
     const list = out.get(key);
-    if (list) list.push(id);
-    else out.set(key, [id]);
+    if (list) list.push(cube);
+    else out.set(key, [cube]);
   }
   return out;
 }
 
-/** A terrain-styled id is `"<channel>.<LOCAL_KEY>"` (cell/mod.ts), e.g.
- * "land.GREEN_DEEP" — i18next's own default "." keySeparator resolves that
- * straight into the nested `object_colors.land.GREEN_DEEP` locale entry
- * (en.json/ko.json), no different from how a flat color id ("white")
- * resolves into `object_colors.white` sitting right beside it. */
-function cube_label(t: (key: string) => string, id: PlaceableCubeId): string {
-  return t(`object_colors.${id}`);
+/** A cube id is `"<channel>.<LOCAL_KEY>"` (cell/mod.ts), e.g.
+ * "land.green_deep" or "block.white" — i18next's own default "."
+ * keySeparator resolves that straight into the nested
+ * `cubes.land.green_deep` locale entry (en.json/ko.json). */
+function cube_label(t: (key: string) => string, cube: PlaceableCube): string {
+  return t(`cubes.${placeable_cube_id(cube)}`);
 }
 
-function CubeSwatchButton({ id, onPick }: { id: PlaceableCubeId; onPick: (id: PlaceableCubeId) => void }) {
+function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube: PlaceableCube) => void }) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.ui.active_tool);
-  const object_color_id = useKernel((s) => s.ui.object_color_id);
-  const active = activeTool === "object" && object_color_id === id;
-  const label = cube_label(t, id);
+  const object_cube_num_id = useKernel((s) => s.ui.object_cube_num_id);
+  const active = activeTool === "object" && object_cube_num_id === placeable_cube_num_id(cube);
+  const label = cube_label(t, cube);
 
   return (
     <button
       type="button"
-      onClick={() => onPick(id)}
+      onClick={() => onPick(cube)}
       className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-accent transition-colors cursor-pointer"
       title={label}
     >
       <span
-        style={cube_swatch_style(id)}
+        style={cube_swatch_style(cube)}
         className={cn(
           "w-8 h-8 rounded-md transition-transform",
           active ? "ring-2 ring-foreground ring-offset-1 ring-offset-background scale-105" : "ring-1 ring-border",
@@ -92,7 +87,7 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
       type="button"
       onClick={() => onPick(id)}
       className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-accent transition-colors cursor-pointer"
-      title={t(`object_decors.${id}`)}
+      title={t(`decors.${id}`)}
     >
       <span
         className={cn(
@@ -103,7 +98,7 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
         <Icon className="w-4 h-4" strokeWidth={2} />
       </span>
       <span className="text-[10px] leading-tight text-muted-foreground text-center line-clamp-1 w-full">
-        {t(`object_decors.${id}`)}
+        {t(`decors.${id}`)}
       </span>
     </button>
   );
@@ -121,13 +116,13 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
 export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
   const { open, onOpenChange } = props;
   const { t } = useTranslation();
-  const select_cube = (id: PlaceableCubeId) => kernel_action({ type: "select_cube", id });
+  const select_cube = (cube: PlaceableCube) => kernel_action({ type: "select_cube", num_id: placeable_cube_num_id(cube) });
   const select_decor = (id: DecorId) => kernel_action({ type: "select_decor", id });
 
-  const sections = group_by_section(placeable_cube_ids);
+  const sections = group_by_section(placeable_cubes);
 
-  function pick_cube(id: PlaceableCubeId): void {
-    select_cube(id);
+  function pick_cube(cube: PlaceableCube): void {
+    select_cube(cube);
     onOpenChange(false);
   }
 
@@ -165,13 +160,13 @@ export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
           >
             <TabsContent value="cube" className="flex flex-col gap-4">
               {SECTION_ORDER.map((section) => {
-                const ids = sections.get(section);
-                if (!ids || ids.length === 0) return null;
+                const cubes = sections.get(section);
+                if (!cubes || cubes.length === 0) return null;
                 return (
                   <div key={section}>
                     <h3 className="text-xs font-medium text-muted-foreground mb-2">{t(`drawer_modal.sections.${section}`)}</h3>
                     <div className="grid grid-cols-5 gap-1">
-                      {ids.map((id) => <CubeSwatchButton key={id} id={id} onPick={pick_cube} />)}
+                      {cubes.map((cube) => <CubeSwatchButton key={placeable_cube_id(cube)} cube={cube} onPick={pick_cube} />)}
                     </div>
                   </div>
                 );
