@@ -18,7 +18,8 @@
 //! let go. The glue holds the meshes and the scene; the core holds every
 //! decision about them.
 
-use core::fmt::Write;
+
+use xpute_core::kit::hash::fnv1a64_str;
 
 use crate::bake::terrain::ChunkSample;
 use std::collections::BTreeMap;
@@ -498,13 +499,13 @@ impl Scheduler {
     /// guessed from the last frame, so the first recheck's hysteresis starts
     /// from where the camera is.
     #[allow(clippy::too_many_arguments)]
-    pub fn add(&mut self, id: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: u32) {
+    fn add(&mut self, id: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64) {
         self.builder.add(id, base, tx0, ty0);
         let mut slot = Slot {
             id,
             base_x,
             base_y,
-            stable_hash: stable_hash as f64 / 4_294_967_296.0,
+            stable_hash,
             bc: [CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0.0],
             radius: APPROXIMATE_CHUNK_RADIUS,
             distance2: f64::INFINITY,
@@ -850,7 +851,7 @@ impl Scheduler {
                     let (wx, wy) = ((px << PAGE_SHAMT) + bx as i64, (py << PAGE_SHAMT) + by as i64);
                     let base = ivec::gather(wx, wy, 0);
                     emit(Event::Mount { id, page_idx, base_x: bx, base_y: by });
-                    self.add(id, base, wx as f64, wy as f64, bx, by, blend_hash(page_idx, bx, by));
+                    self.add(id, base, wx as f64, wy as f64, bx, by, blend_point(page_idx, bx, by));
                     self.mounted.insert((page_idx, bx, by), id);
                 }
             }
@@ -1428,25 +1429,14 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.show_decor == b.show_decor
 }
 
-/// The hash that picks a chunk's side of a per-chunk blend: FNV-1a over
-/// `<page index>:<base x>,<base y>`, so neighbouring chunks cross a tier
-/// boundary at different moments instead of the whole ring switching at
-/// once.
-fn blend_hash(page_idx: IVec, bx: u32, by: u32) -> u32 {
-    /// FNV-1a over what is written, as it is written.
-    struct Fnv(u32);
-    impl Write for Fnv {
-        fn write_str(&mut self, s: &str) -> core::fmt::Result {
-            for b in s.bytes() {
-                self.0 ^= b as u32;
-                self.0 = self.0.wrapping_mul(16777619);
-            }
-            Ok(())
-        }
-    }
-    let mut h = Fnv(2166136261);
-    let _ = write!(h, "{page_idx}:{bx},{by}");
-    h.0
+/// Where a chunk sits in `[0, 1)`, from `<page index>:<base x>,<base y>`.
+///
+/// `recheck` compares this against the blend's weight, so neighbouring chunks
+/// cross a tier boundary at different moments instead of the whole ring
+/// switching at once. It only has to be spread and to be the same for a chunk
+/// every time it is mounted; nothing reads the number itself.
+fn blend_point(page_idx: IVec, bx: u32, by: u32) -> f64 {
+    fnv1a64_str(&format!("{page_idx}:{bx},{by}")) as f64 / 2f64.powi(64)
 }
 
 /// What a chunk's place in the order is decided by.

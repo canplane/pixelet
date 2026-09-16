@@ -253,8 +253,9 @@ pub enum Cmd {
     NOP = 0x0000,
 
     // ---- shell → kernel ----
-    /// tag chunk · [base u64, tx0 u32, ty0 u32, base_x i32, base_y i32,
-    /// stable_hash u32]
+    /// tag chunk · [page_idx u64, base_x u32, base_y u32] — a chunk the
+    /// kernel mounted. Raised, never submitted: the scheduler decides what is
+    /// resident and where it sits
     CHUNK_CREATE = 0x0101,
     /// tag chunk · [page: [land u32, water u32, structure u32, transport u32,
     /// ele u32] addresses | null, show_structures bool]
@@ -449,7 +450,7 @@ pub enum Cmd {
     /// allocated, reused, refused
     VOLUME_STAT = 0x1815,
     /// tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0
-    /// while a bake is open — of the run set at `at`, in column_run.ts's layout,
+    /// while a bake is open — of the run set at `at`, in the run set's own layout,
     /// which the shell keeps until the bake closes
     BAKE_CREATE = 0x1901,
     /// tag call · no packet → result: the step's; wanting a block, [words u32]:
@@ -497,7 +498,7 @@ pub enum Cmd {
 
     // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
     //
-    // CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted
+    // CHUNK_CREATE: tag chunk · [page_idx u64, base_x u32, base_y u32] — mounted
     // CHUNK_DELETE: tag chunk · no packet — unmounted
     /// tag chunk · [on bool]
     CHUNK_VISIBLE = 0x0111,
