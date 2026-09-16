@@ -91,8 +91,9 @@ pub struct BuddyOptions {
     /// allocated once the backing is used up. The backing must never be
     /// resized — a view into a detached buffer reads as length zero.
     pub backing: Option<ArrayBuffer>,
-    /// The range of the backing this pool may carve: a start offset and a byte
-    /// length, both multiples of `region_bytes`. Several pools over one memory
+    /// The range of the backing this pool may carve: a start offset, which a
+    /// block must be able to land on (`min_block_bytes`), and a byte length,
+    /// whose tail past the last whole region is never cut. Several pools over one memory
     /// take disjoint ranges — the sections of a core memory — and none can
     /// reach another's. Defaults to the whole backing.
     pub backing_offset: Option<u32>,
@@ -370,9 +371,8 @@ pub struct BuddyAllocator {
     _backing_used: u32,
     /// Indices of regions carved from the backing — never reclaimed.
     _backed: HashSet<usize>,
-    /// Region index by where it starts in the backing, and by its own buffer —
-    /// how an address (a buffer and a byte offset) finds its region.
-    _backed_at: HashMap<u32, usize>,
+    /// Region index by its own buffer — how a plain region's address finds it.
+    /// A backed region needs none: `_locate` reads its index off the address.
     _plain_at: HashMap<usize, usize>,
     /// Buffers handed out whole — a spill is released by address too.
     _spills: HashSet<usize>,
@@ -404,9 +404,12 @@ impl BuddyAllocator {
         if kernel.is_some() && backing.is_none() {
             return Err(MarshalError::new(Errno::EINVAL, Some("pool: a kernel needs the backing it runs over"), None));
         }
-        // An explicit range must be whole regions; the default is however many
-        // whole regions the backing holds past the offset, which for a backing
-        // smaller than a region is none.
+        // The range starts where a block can and runs as far as it is given;
+        // the tail past its last whole region is never cut, which is what the
+        // default takes as the length. A start that is not a whole number of
+        // regions is fine — `_locate` reads a region's index off the address
+        // relative to the start, so a caller cutting sections out of one memory
+        // can end each where its content does.
         let offset = opts.backing_offset.unwrap_or(0);
         let whole = match &backing {
             None => 0,
@@ -417,10 +420,10 @@ impl BuddyAllocator {
         };
         let bytes = opts.backing_bytes.unwrap_or(whole);
         if let Some(b) = &backing {
-            if !offset.is_multiple_of(region_bytes) || !bytes.is_multiple_of(region_bytes) || (offset as usize + bytes as usize) > b.byte_length() {
+            if !offset.is_multiple_of(min_block_bytes) || (offset as usize + bytes as usize) > b.byte_length() {
                 return Err(MarshalError::new(
                     Errno::EINVAL,
-                    Some(&format!("pool: backing range {offset}+{bytes} is not whole regions inside {}", b.byte_length())),
+                    Some(&format!("pool: backing range {offset}+{bytes} is not a block-aligned range inside {}", b.byte_length())),
                     None,
                 ));
             }
@@ -450,7 +453,6 @@ impl BuddyAllocator {
             _backing: backing,
             _kernel: kernel,
             _backed: HashSet::new(),
-            _backed_at: HashMap::new(),
             _plain_at: HashMap::new(),
             _spills: HashSet::new(),
             _order_bits: shift_of(_max_order + 2),
@@ -603,7 +605,6 @@ impl BuddyAllocator {
         };
         if backed {
             self._backed.insert(i);
-            self._backed_at.insert(region.base, i);
         } else {
             self._plain_at.insert(region.buf.id(), i);
         }
@@ -717,9 +718,21 @@ impl BuddyAllocator {
     // from the backing, one step from the byte address a WASM side would use.
 
     /// The region an address falls in, or -1 when it is in none.
+    ///
+    /// A backed region's index is arithmetic, not a lookup: bases step by
+    /// `region_bytes` from `_backing_offset`, and a backed region holds its
+    /// slot for the pool's life (`_reclaim_empty` skips `_backed`) while a
+    /// plain one is only ever cut after the backing is used up — so the nth
+    /// region cut is index n. Reading the index off the address instead of a
+    /// map is also what lets the range start anywhere a block can: a map keyed
+    /// one way and read another silently loses every block in a range whose
+    /// offset is not a whole number of regions.
     fn _locate(&self, buf: &ArrayBuffer, byte_offset: u32) -> i64 {
         if self._backing.as_ref().is_some_and(|b| buf.is(b)) {
-            return self._backed_at.get(&(byte_offset - (byte_offset % self.region_bytes))).map_or(-1, |&i| i as i64);
+            if byte_offset < self._backing_offset || byte_offset >= self._backing_used {
+                return -1;
+            }
+            return ((byte_offset - self._backing_offset) / self.region_bytes) as i64;
         }
         self._plain_at.get(&buf.id()).map_or(-1, |&i| i as i64)
     }
