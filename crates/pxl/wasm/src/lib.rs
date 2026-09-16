@@ -1202,12 +1202,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
-            let (key, error) = (f.at(0)?, f.at(5)?.opt());
-            let error = match &error {
-                Some(c) => Some(c.get_str_ref()?),
-                None => None,
-            };
-            pxl_core::module::world::fetch::fetch_arrived(key.get_str_ref()?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), error, number_at(&f, 6)?);
+            let key = f.at(0)?;
+            pxl_core::module::world::fetch::fetch_arrived(key.get_str_ref()?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_UPDATE => {

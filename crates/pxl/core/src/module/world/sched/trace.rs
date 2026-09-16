@@ -10,6 +10,7 @@
 //! Dev instrument. Recording covers the whole window (ledger.rs), so a trace
 //! is routinely tens of MB — the shell saves it as a file.
 
+use pxl_shared::spec::fetch::FetchFail;
 use super::ledger::{ledger_frames_snapshot, ledger_long_frames_snapshot, ledger_snapshot, ledger_worst_frames, FrameSample};
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 
@@ -163,8 +164,11 @@ pub fn ledger_trace_json() -> String {
             field("ran_ms", rec.start_ms.map_or("null".to_string(), |s| fixed(rec.end_ms - s, 1))),
             field("transport_ms", json_number(rec.transport_ms)),
         ];
-        if let Some(error) = &rec.error {
-            args.push(field("error", json_string(error)));
+        if rec.fail.fail != FetchFail::None {
+            args.push(field("fail", json_string(rec.fail.fail.as_str())));
+            if rec.fail.status != 0 {
+                args.push(field("status", json_number(rec.fail.status as f64)));
+            }
         }
         for (k, v) in rec.phases.iter().flat_map(|p| p.iter()) {
             args.push((k.to_string(), json_number(v)));

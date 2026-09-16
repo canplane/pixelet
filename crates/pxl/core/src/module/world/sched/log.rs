@@ -21,6 +21,8 @@ use super::ledger::{
     LongFrameRecord, LongFrameSource, TaskRecord,
 };
 use super::summary::{census_rows, missed, overran, summarize_frames, summarize_tasks, tris_text, CensusRow, Spread, STARVED_MS, TILE_DECODED_MB};
+use pxl_shared::spec::fetch::FetchFail;
+
 use super::demand::Phases;
 use super::tick::{tick_step_stats, tick_step_stats_reset, PHASES};
 use crate::global::{now, Global};
@@ -75,7 +77,7 @@ fn task_line(rec: &TaskRecord) -> String {
         n1(total),
         rec.priority,
         phases_text(rec.phases.as_ref()),
-        rec.error.as_ref().map_or(String::new(), |e| format!("  [{e}]"))
+        if rec.fail.fail == FetchFail::None { String::new() } else { format!("  [{}]", rec.fail) }
     )
 }
 

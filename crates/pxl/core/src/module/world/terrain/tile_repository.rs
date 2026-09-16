@@ -18,6 +18,7 @@
 
 use pxl_shared::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::{decode_terrain, Ground, Terrain, Tile};
+use pxl_shared::spec::fetch::FetchFail;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
 
@@ -76,13 +77,13 @@ pub unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
 }
 
 /// A body decoded, refused unless every lane is the page's size.
-fn decode(pkt: U8Array) -> Result<Terrain, String> {
-    let t = decode_terrain(pkt).map_err(|e| e.to_string())?;
+fn decode(pkt: U8Array) -> Result<Terrain, FetchFail> {
+    let t = decode_terrain(pkt).map_err(|_| FetchFail::Decode)?;
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
     let g = &t.ground;
     if [&g.land, &g.water, &g.structure, &g.transport].iter().any(|l| l.length() != cells) || t.ele.length() != samples {
-        return Err("a page whose lanes are not a page's size".to_string());
+        return Err(FetchFail::Decode);
     }
     Ok(t)
 }
@@ -113,8 +114,8 @@ fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
 
 /// Where `page_idx` lies in the slab. Its record is its own coordinate reduced
 /// modulo the slab's axis, so this asks for nothing and cannot be refused.
-fn lanes_of(page_idx: IVec) -> Result<TerrainLanes, String> {
-    let slab = slab().ok_or_else(|| "no terrain slab".to_string())?;
+fn lanes_of(page_idx: IVec) -> Result<TerrainLanes, FetchFail> {
+    let slab = slab().ok_or(FetchFail::NoRoom)?;
     let slot = super::slab::slot_of(page_idx);
     Ok(TerrainLanes {
         ground: [ground_at(slab, slot, 0), ground_at(slab, slot, 1), ground_at(slab, slot, 2), ground_at(slab, slot, 3)],
@@ -124,7 +125,7 @@ fn lanes_of(page_idx: IVec) -> Result<TerrainLanes, String> {
 
 /// A page's fetched body, decoded and made resident: its lanes owned by the
 /// page until release_terrain.
-pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Result<(), String> {
+pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Result<(), FetchFail> {
     let t0 = now();
     let decoded = decode(pkt)?;
     let t1 = now();
@@ -174,13 +175,13 @@ pub fn ocean_page(page_idx: IVec) {
 /// It is not in the slab. Every open-ocean page reads these same bytes, and a
 /// slab record is one page's; a page whose tile is the shared one leaves its
 /// own record untouched.
-pub fn adopt_ocean(pkt: U8Array) -> Result<(), String> {
+pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
     if ocean().terrain.is_some() {
         return Ok(());
     }
     let decoded = decode(pkt)?;
-    let pool = kernel().pools.get_mut(FIXED_POOL as usize).ok_or_else(|| "no fixed section".to_string())?;
-    let at = pool.acquire(RECORD_BYTES).ok_or_else(|| "the fixed section has no room for the shared ocean tile".to_string())?;
+    let pool = kernel().pools.get_mut(FIXED_POOL as usize).ok_or(FetchFail::NoRoom)?;
+    let at = pool.acquire(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
     let lanes = TerrainLanes {
         ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
         ele: record_ele_at(at),

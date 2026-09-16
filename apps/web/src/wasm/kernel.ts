@@ -33,6 +33,7 @@ import { Quantum } from "@xpute/core/sched/quantum.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { Message } from "@pxl/shared/spec/message.ts";
 import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
+import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
@@ -339,7 +340,7 @@ async function run_fetch(key: string, url: string): Promise<void> {
   let status = 0;
   let at = 0;
   let bytes = 0;
-  let error: string | null = null;
+  let fail: FetchFail = FetchFail.None;
   let net_ms = 0;
   try {
     const t0 = performance.now();
@@ -349,16 +350,27 @@ async function run_fetch(key: string, url: string): Promise<void> {
     status = res.status;
     if (body.byteLength > 0) {
       at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str(key).u32(body.byteLength)), (result) => result >>> 0);
-      if (at === 0) throw new Error(`no room for a body of ${body.byteLength} bytes`);
-      new Uint8Array(CORE_KERNEL.memory.buffer, at, body.byteLength).set(body);
-      bytes = body.byteLength;
+      if (at === 0) {
+        outcome = 2;
+        fail = FetchFail.NoRoom;
+      } else {
+        new Uint8Array(CORE_KERNEL.memory.buffer, at, body.byteLength).set(body);
+        bytes = body.byteLength;
+      }
     }
   } catch (err) {
     outcome = signal.aborted ? 1 : 2;
-    if (!signal.aborted) error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    // An abort is the scheduler's own doing and carries no reason. Everything
+    // else is the transport's: a browser raises TypeError for offline, DNS,
+    // CORS and a refused connection alike, and its words for them are this
+    // side's to log — what the kernel needs is which of these happened.
+    if (!signal.aborted) {
+      fail = err instanceof Error && err.name === "TypeError" ? FetchFail.Network : FetchFail.Shell;
+      console.warn(`[fetch] ${key}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    }
   } finally {
     running.delete(key);
-    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(outcome).u32(status).u32(at).u32(bytes).str(error).f64(net_ms)));
+    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(outcome).u32(status).u32(at).u32(bytes).u32(fail).f64(net_ms)));
     // Applied now, so the body's room is the kernel's again before the next
     // response asks for its own.
     CORE_BUILD.settle();

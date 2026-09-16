@@ -7,7 +7,9 @@
 
 use super::*;
 use crate::global::serial;
-use crate::module::world::sched::ledger::{ledger_recording_start, ledger_snapshot, Outcome};
+use crate::module::world::sched::ledger::{ledger_recording_start, ledger_snapshot, Failure, Outcome};
+use crate::module::world::sched::summary::summarize_tasks;
+use pxl_shared::spec::fetch::FetchFail;
 
 fn d(key: &str, category: &'static str, priority: f64) -> Demand {
     Demand {
@@ -49,7 +51,7 @@ fn fetch_scheduler_a_started_demand_goes_out_under_the_name_and_category_it_was_
     let mut out = Vec::new();
     fetch_take_started(|d| out.push(d.clone()));
     assert_eq!(out, vec![x.clone()]);
-    fetch_settle(&x.key, Outcome::Ok, None, None);
+    fetch_settle(&x.key, Outcome::Ok, None, Failure::default());
     assert_eq!(fetch_pending_count("search"), 0);
 }
 
@@ -61,7 +63,7 @@ fn fetch_scheduler_starts_no_more_than_the_credits_the_central_scheduler_granted
     fetch_sync("credit", &h);
     assert_eq!(started(), ["credit:0", "credit:1"]);
     set_fetch_credits(0);
-    fetch_settle("credit:0", Outcome::Ok, None, None);
+    fetch_settle("credit:0", Outcome::Ok, None, Failure::default());
     assert!(started().is_empty());
 }
 
@@ -74,7 +76,7 @@ fn fetch_scheduler_an_aborted_demand_goes_out_under_its_name_and_settles_under_i
     fetch_sync("yield", std::slice::from_ref(&keep));
     assert_eq!(aborts(), vec![drop.key.to_string()]);
     assert!(fetch_running(&drop.key));
-    fetch_settle(&drop.key, Outcome::Aborted, None, None);
+    fetch_settle(&drop.key, Outcome::Aborted, None, Failure::default());
     assert!(!fetch_running(&drop.key));
     assert_eq!(fetch_pending_count("yield"), 1);
 }
@@ -87,10 +89,10 @@ fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     let (done, killed) = (d("ledger:ok", cat, 0.0), d("ledger:killed", cat, 1.0));
     fetch_sync(cat, &[done.clone(), killed.clone()]);
     started();
-    fetch_settle(&done.key, Outcome::Ok, None, None);
+    fetch_settle(&done.key, Outcome::Ok, None, Failure::default());
     fetch_sync(cat, std::slice::from_ref(&done)); // drops `killed`
     for key in aborts() {
-        fetch_settle(&key, Outcome::Aborted, None, None);
+        fetch_settle(&key, Outcome::Aborted, None, Failure::default());
     }
     let mine: Vec<_> = ledger_snapshot().iter().filter(|r| r.category == cat).collect();
     assert_eq!(mine.iter().find(|r| r.key == done.key).map(|r| r.outcome), Some(Outcome::Ok));
@@ -98,10 +100,31 @@ fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     assert!(mine.iter().all(|r| r.start_ms.is_some()));
 }
 
+/// What the reason's two numbers have to keep apart, now that nothing
+/// compares prose: one refused status from another, and a refusal from a
+/// transport failure.
 #[test]
-fn error_reason_an_http_failure_is_grouped_by_its_status_anything_else_by_its_kind() {
-    assert_eq!(error_reason("Error", "[geocode/5788:1842:0] http 503").as_str(), "http 503");
-    assert_eq!(error_reason("Error", "[tile/1:2:0] http 429").as_str(), "http 429");
-    assert_eq!(error_reason("TypeError", "Failed to fetch").as_str(), "TypeError: Failed to fetch");
-    assert_eq!(error_reason("string", "boom").as_str(), "string: boom");
+fn a_failure_is_grouped_by_its_reason_and_its_status_not_by_any_text() {
+    let _g = serial();
+    let cat = "reason";
+    ledger_recording_start();
+    let fails = [
+        Failure { fail: FetchFail::Status, status: 503 },
+        Failure { fail: FetchFail::Status, status: 503 },
+        Failure { fail: FetchFail::Status, status: 429 },
+        Failure { fail: FetchFail::Network, status: 0 },
+    ];
+    for (i, fail) in fails.into_iter().enumerate() {
+        let demand = d(&format!("{cat}:{i}"), cat, 0.0);
+        fetch_sync(cat, &[demand.clone()]);
+        started();
+        fetch_settle(&demand.key, Outcome::Error, None, fail);
+    }
+    let mine: Vec<_> = ledger_snapshot().iter().filter(|r| r.category == cat).cloned().collect();
+    let summary = summarize_tasks(&mine);
+    let reasons = &summary.iter().find(|s| s.cat == cat).expect("the category").reasons;
+    assert_eq!(reasons.len(), 3, "503, 429 and network are three reasons");
+    assert_eq!(reasons[0], (Failure { fail: FetchFail::Status, status: 503 }, 2), "commonest first");
+    assert_eq!(Failure { fail: FetchFail::Status, status: 503 }.to_string(), "status 503");
+    assert_eq!(Failure { fail: FetchFail::Network, status: 0 }.to_string(), "network");
 }

@@ -8,7 +8,7 @@
 //! display did not have. Both now format what this returns, so a number on
 //! the panel and the same number in a pasted report agree.
 
-use super::ledger::{DrawCensus, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
+use super::ledger::{DrawCensus, Failure, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
 use super::tick::PHASES;
 use super::tick::HARD_SLACK_MS;
 
@@ -184,8 +184,9 @@ pub struct TaskSummary {
     pub error: usize,
     /// Latency of the tasks that succeeded, enqueue to settle.
     pub lat: Spread,
-    /// Failures by reason, commonest first — fetch_scheduler.rs's error_reason.
-    pub reasons: Vec<(String, usize)>,
+    /// Failures by reason, commonest first. Counted by the reason's own two
+    /// numbers, so grouping never compares prose.
+    pub reasons: Vec<(Failure, usize)>,
     /// Mean of each phase the demand's run reported, when any did — the number
     /// that says whether the category's static bound label is true.
     pub phase_mean: Option<Vec<(&'static str, f64)>>,
@@ -198,7 +199,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
         ok: usize,
         aborted: usize,
         error: usize,
-        reasons: Vec<(String, usize)>,
+        reasons: Vec<(Failure, usize)>,
         phase_sum: Vec<(&'static str, f64)>,
         phase_n: usize,
     }
@@ -228,7 +229,7 @@ pub fn summarize_tasks(tasks: &[TaskRecord]) -> Vec<TaskSummary> {
             Outcome::Aborted => g.aborted += 1,
             Outcome::Error => {
                 g.error += 1;
-                let reason = rec.error.as_deref().unwrap_or("unrecorded").to_string();
+                let reason = rec.fail;
                 match g.reasons.iter_mut().find(|(r, _)| *r == reason) {
                     Some(r) => r.1 += 1,
                     None => g.reasons.push((reason, 1)),

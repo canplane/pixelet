@@ -48,9 +48,6 @@ impl Phases {
 /// A demand's key: `<category>:<subject>` — a page, or what stands for one.
 pub type DemandKey = String;
 
-/// Why a task failed, as the ledger keeps it: 80 characters at most.
-pub type ErrorText = String;
-
 /// `<category>:<subject>`. The subjects are pages and hashes, well inside a key.
 pub fn demand_key(category: &str, subject: impl fmt::Display) -> DemandKey {
     let mut key = DemandKey::new();

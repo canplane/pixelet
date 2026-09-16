@@ -16,8 +16,9 @@
 //! POI page still keeps its body as the page, until its per-page index is
 //! rewritten (issue/BACKLOG.md).
 
-use core::fmt::{self, Write};
+use core::fmt;
 
+use pxl_shared::spec::fetch::FetchFail;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
 use xpute_core::kit::hash::fnv1a64_str;
@@ -29,9 +30,9 @@ use crate::memory::MESH_POOL;
 use crate::module::map::ui::overlay::{search_modal, use_reverse_geocode};
 use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store, use_poi_fetcher};
-use crate::module::world::sched::demand::{Demand, ErrorText, Phases};
+use crate::module::world::sched::demand::{Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::fetch_settle;
-use crate::module::world::sched::ledger::Outcome;
+use crate::module::world::sched::ledger::{Failure, Outcome};
 use crate::module::world::terrain::{tile_repository, use_tile_fetcher};
 
 /// A body's block: its address and size.
@@ -100,20 +101,20 @@ fn view((at, bytes): Block) -> U8Array {
 }
 
 /// A body's text, read where the shell wrote it.
-fn text<'a>((at, bytes): Block) -> Result<&'a str, String> {
+fn text<'a>((at, bytes): Block) -> Result<&'a str, FetchFail> {
     // SAFETY: as `view`'s: the block is this body's alone, and it is released
     // only after the text has been read.
     let raw = unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) };
-    core::str::from_utf8(raw).map_err(|_| "a body that is not UTF-8".to_string())
+    core::str::from_utf8(raw).map_err(|_| FetchFail::Decode)
 }
 
-fn page_of(subject: &str) -> Result<IVec, String> {
-    subject.parse().map_err(|_| format!("{subject} is not a page"))
+fn page_of(subject: &str) -> Result<IVec, FetchFail> {
+    subject.parse().map_err(|_| FetchFail::BadSubject)
 }
 
 /// The shell's report that a started demand's fetch finished: `outcome` 0
 /// with the response's status and body, 1 aborted, 2 failed with `error`.
-pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), error: Option<&str>, net_ms: f64) {
+pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), fail: u32, net_ms: f64) {
     let block = take_body(key, body.0, body.1);
     let (category, subject) = key.split_once(':').unwrap_or(("", key));
     let mut phases = Phases::default();
@@ -121,28 +122,26 @@ pub fn fetch_arrived(key: &str, outcome: u32, status: u32, body: (u32, u32), err
     if let Some((_, bytes)) = block {
         phases.push("bytes", bytes as f64);
     }
-    let (outcome, error) = match outcome {
+    let (outcome, fail) = match outcome {
         0 => match answer(category, subject, status, block, &mut phases) {
-            Ok(()) => (Outcome::Ok, None),
-            Err(message) => {
-                let mut text = ErrorText::new();
-                let _ = write!(text, "Error: [{category}/{subject}] {message}");
-                (Outcome::Error, Some(text))
-            }
+            Ok(()) => (Outcome::Ok, FetchFail::None),
+            Err(fail) => (Outcome::Error, fail),
         },
         1 => {
             release(block);
-            (Outcome::Aborted, None)
+            (Outcome::Aborted, FetchFail::None)
         }
+        // The shell's own failure, as the number it sent. A code this build
+        // does not know reads as one the shell raised rather than as none.
         _ => {
             release(block);
-            (Outcome::Error, error.map(ErrorText::from))
+            (Outcome::Error, fetch_fail_of(fail))
         }
     };
     if outcome != Outcome::Ok {
         failed(category, subject, outcome == Outcome::Aborted);
     }
-    fetch_settle(key, outcome, Some(phases), error);
+    fetch_settle(key, outcome, Some(phases), Failure { fail, status: status as u16 });
 }
 
 fn failed(category: &str, subject: &str, aborted: bool) {
@@ -160,12 +159,28 @@ fn failed(category: &str, subject: &str, aborted: bool) {
 
 /// What a response means for its category. The body is released here, unless
 /// a POI page keeps it.
-fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phases: &mut Phases) -> Result<(), String> {
+/// The reason a number names, or `Shell` for one this build does not know —
+/// an older kernel reading a newer shell still counts the failure apart from
+/// the rest.
+fn fetch_fail_of(fail: u32) -> FetchFail {
+    const KNOWN: [FetchFail; 7] = [
+        FetchFail::Network,
+        FetchFail::Shell,
+        FetchFail::Status,
+        FetchFail::NoRoom,
+        FetchFail::Decode,
+        FetchFail::BadSubject,
+        FetchFail::BadCategory,
+    ];
+    KNOWN.into_iter().find(|f| *f as u32 == fail).unwrap_or(FetchFail::Shell)
+}
+
+fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phases: &mut Phases) -> Result<(), FetchFail> {
     // Only a static tile origin has no object for a page; against the live
     // API a 404 is a genuine error (tile_repository.rs).
     let absent = status == 404 && PUBLISHED_TILES();
     let ok = (200..300).contains(&status);
-    let refused = || format!("http {status}");
+    let refused = || FetchFail::Status;
     match category {
         use_tile_fetcher::CATEGORY => {
             let result = page_of(subject).and_then(|page| match block {
@@ -198,7 +213,7 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
             match block {
                 _ if absent => {
                     release(block);
-                    poi_store::set_pois(page, poi_repository::empty_page().map_err(|e| e.to_string())?);
+                    poi_store::set_pois(page, poi_repository::empty_page().map_err(|_| FetchFail::Decode)?);
                     Ok(())
                 }
                 // SAFETY: the block is the page section's, given for this body
@@ -208,9 +223,9 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
                         poi_store::set_pois(page, resident);
                         Ok(())
                     }
-                    Err(e) => {
+                    Err(_) => {
                         release(block);
-                        Err(e.to_string())
+                        Err(FetchFail::Decode)
                     }
                 },
                 _ => {
@@ -245,7 +260,7 @@ fn answer(category: &str, subject: &str, status: u32, block: Option<Block>, phas
         }
         _ => {
             release(block);
-            Err("no such category".to_string())
+            Err(FetchFail::BadCategory)
         }
     }
 }
