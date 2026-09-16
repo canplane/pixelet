@@ -1,8 +1,8 @@
-//! A chunk's column runs: reference/column_run.ts's layout.
+//! A chunk's column runs.
 //!
-//! The bytes are the TypeScript run set's bytes, lanes in carve order —
-//! widest element first — so a set copied out of a pool block reads here
-//! without translation.
+//! One block of lanes in carve order, widest element first, so a set read
+//! back out of the block it was written into needs no translation and the
+//! views below are the block itself.
 
 /// Views over one run set's lanes.
 pub struct RunSet<'a> {

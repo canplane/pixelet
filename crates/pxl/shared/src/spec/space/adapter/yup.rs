@@ -4,8 +4,7 @@
 //! meets this project's.
 //!
 //! **Nothing imports this today, and that is the expected state, not rot.**
-//! The engine is natively Z-up: `bootstrap/three.ts` sets
-//! `THREE.Object3D.DEFAULT_UP` to (0, 0, 1) globally, and the 2026-04 Z-up
+//! The engine is natively Z-up throughout, and the 2026-04 Z-up
 //! unification deleted the per-subsystem Y-up adaptations that used to call
 //! helpers like these. Inside the engine there is no longer anywhere for a
 //! conversion to happen — ENU maps straight onto the render axes.

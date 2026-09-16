@@ -4,7 +4,7 @@
 //
 // Every scattered decor kind's seed and placement rules. A rule is per
 // ground channel: "any", "void", or the channel's types by cube_types name.
-// decor_kinds.ts and scatter.ts stay generic, so a later kind (a fence along
+// The scatter stays generic, so a later kind (a fence along
 // a road edge, a candle inside a structure, ...) is one more entry here.
 
 #![allow(non_upper_case_globals, non_snake_case, dead_code, clippy::excessive_precision)]

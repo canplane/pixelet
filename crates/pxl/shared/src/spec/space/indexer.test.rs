@@ -26,8 +26,8 @@ fn indexer_l3_is_a_signed_1024_cubed_addressing_level_same_shape_as_l2() {
     let addr = ivec::gather(-1, 2049, 1801);
     assert_eq!(L3_RANGE, 1024);
     assert_eq!(L2_SPAN_IN_L3, 16);
-    // Z participates like X/Y — no XY-only narrowing at this level (that's
-    // terrain_page.ts's own policy, tested separately).
+    // Z participates like X/Y — no XY-only narrowing at this level, which is
+    // the terrain page's own policy and tested with it.
     assert_eq!(ivec::repr(L3_BASE(addr)), "-1024:2048:1024");
     assert_eq!(ivec::repr(L3_CENTER(addr)), "-512:2560:1536");
     assert_eq!(ivec::repr(L3_LIMIT(addr)), "0:3072:2048");

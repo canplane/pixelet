@@ -1,7 +1,7 @@
 //! The location puck: the device's interaction zone as a ring of cell boxes
 //! laid over the ground, and a beacon above it that eases toward the fix,
-//! spins and bobs. module/world/marker/location_puck.tsx decides where the
-//! device is and which cells the zone covers at what height; the core holds
+//! spins and bobs. module/world/marker/location_puck.rs decides where the
+//! device is and which cells the zone covers at what height; this holds
 //! them, animates the beacon each tick, and lists their draws.
 
 use crate::render::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
@@ -12,9 +12,9 @@ use crate::world::sched::Frame;
 /// (3), and which of its top, bottom, right and left edges border the ring
 /// (4).
 pub const ZONE_INSTANCE_FLOATS: usize = 7;
-/// location_puck.tsx's constants: the beacon's height above the ground, how
-/// fast it eases toward the fix, past what distance it jumps instead, and
-/// how far away it stops being drawn.
+/// The beacon's height above the ground, how fast it eases toward the fix,
+/// past what distance it jumps instead, and how far away it stops being
+/// drawn.
 const BEACON_Z_BIAS: f64 = 0.5;
 const BEACON_SMOOTH_RATE: f64 = 6.0;
 

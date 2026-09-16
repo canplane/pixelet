@@ -1,5 +1,4 @@
-//! A terrain page's chunk as the render pipeline reads it:
-//! module/world/terrain/elevation_sample.ts and reference/terrain_layer.ts, in Rust.
+//! A terrain page's chunk as the render pipeline reads it.
 //!
 //! A page is a heightmap — four ground channels of one type byte a cell,
 //! and a coarse elevation raster sampled bicubically at cell centres to the
@@ -7,10 +6,14 @@
 //! (the last non-void channel wins, in the channels' fixed order) and one
 //! top. That is what the terrain layer paints into a volume, one solid
 //! column a cell from a floor shared by the chunk, and what the direct path
-//! writes as one run a column without a volume. Why the floor is
-//! band-aligned, why water-family cells sit a cell lower, and why the
-//! sampling is what it is are the TypeScript's, mirrored so a chunk read
-//! here is byte for byte the chunk read there (terrain.test.ts).
+//! writes as one run a column without a volume.
+//!
+//! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
+//! floored to CHUNK_SPAN) because a volume allocates in whole bands: a floor
+//! anywhere inside one would open a band below it for the few voxels that
+//! cross. Water-family cells sit WATER_RECESS_CELLS below their sampled
+//! height so a shoreline reads as water meeting land rather than as two
+//! surfaces at the same level.
 
 use crate::bake::volume::{Volumes, Voxel};
 use crate::bake::voxel::NO_LAYER;

@@ -1,8 +1,8 @@
-// pxl_core/memory/fixed.rs
+// pxl_core/mem/fixed.rs
 
 //! What is in `.fixed`, and where each of its ranges begins.
 //!
-//! The map above (memory.rs) knows `.fixed` as one span between the module's
+//! The map above (mem.rs) knows `.fixed` as one span between the module's
 //! data and the heap — how wide it is, and that it begins on a page. What is
 //! inside it is here, so that adding a range is a line in this file and
 //! nothing in the map.
@@ -19,7 +19,7 @@
 //!                    (module/world/terrain/fixed.rs), so nothing in it is
 //!                    allocated, asked for or refused.
 
-use xpute_core::sys::memory::{nth_at, span_of};
+use xpute_core::sys::mem::{nth_at, span_of};
 
 use super::{map, PAGE_BYTES};
 use crate::module::world::terrain::fixed::TERRAIN_BYTES;

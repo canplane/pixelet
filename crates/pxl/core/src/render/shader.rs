@@ -263,9 +263,8 @@ pub fn pipeline(id: u32) -> Vec<u32> {
     match id {
         crate::render::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
         crate::render::draw::PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
-        // The hover ghost: biased toward the eye as hover_cursor.tsx's
-        // polygon offsets were — slightly clear of a surface, strongly in
-        // one.
+        // The hover ghost, biased toward the eye: slightly clear of a
+        // surface it sits on, strongly clear of one it sits in.
         crate::render::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(), &chunk_groups()),
         crate::render::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(), &chunk_groups()),
         crate::render::draw::PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),

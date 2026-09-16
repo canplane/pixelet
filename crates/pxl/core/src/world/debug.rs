@@ -1,8 +1,7 @@
 //! The dev gizmos: line segments over the world, drawn on top of everything
-//! — the frame's origins, page corners and the map centre that
-//! module/world/marker/debug_layer.tsx lays out. The glue writes the
-//! segments whenever what they mark moves; the core holds them as a block
-//! and lists their draw each frame, placed against the frame's origin.
+//! — the frame's origins, page corners and the map centre. The segments are
+//! written whenever what they mark moves; this holds them as a block and
+//! lists their draw each frame, placed against the frame's origin.
 
 use crate::render::draw::{DrawList, Held, PIPELINE_DEBUG};
 use crate::world::build::World;

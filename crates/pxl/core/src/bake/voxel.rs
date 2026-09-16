@@ -1,5 +1,4 @@
-//! What a voxel's bytes mean — the part of render/mesh/voxel.ts the
-//! mesher reads.
+//! What a voxel's bytes mean, as the mesher reads them.
 
 /// A run whose material is a placed object: exempt from hiding its
 /// neighbours' faces, and drawn with its bottom face.

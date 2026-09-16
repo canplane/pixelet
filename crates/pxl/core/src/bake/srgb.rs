@@ -1,5 +1,4 @@
-//! sRGB byte to linear, as a table of the values V8's `Math.pow` produces:
-//! reference/chunk_mesher.ts's SRGB_TO_LINEAR, which computes it.
+//! sRGB byte to linear, as a table of 256 values.
 //!
 //! Written out rather than computed: `pow` is a transcendental function and
 //! two libms may disagree in the last bit, which would break the mesh's

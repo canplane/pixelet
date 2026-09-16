@@ -66,7 +66,7 @@ pub fn view_rotation_step(ctx: &mut TickContext) {
 }
 
 /// The "frame_translation" step of the interaction phase: toward the map
-/// centre, in the floating origin world.tsx derived from it.
+/// centre, in the floating origin taken from it.
 pub fn view_translation_step(ctx: &mut TickContext) {
     let Some(map_center) = use_map_store().map_center else { return };
     let map_origin = get_local_world_origin(Some(&map_center));

@@ -17,9 +17,9 @@ use std::sync::LazyLock;
 
 use super::ingested::{Sheet, INGESTED, SHEET};
 
-/// Which of a box's images this is. The split is the renderer's own:
-/// chunk_material.ts calls a face lateral at `abs(normal.z) < 0.5`, so a
-/// bottom face wears the top image just as the top face does.
+/// Which of a box's images this is. The split is the renderer's own: a face
+/// is lateral at `abs(normal.z) < 0.5`, so a bottom face wears the top image
+/// just as the top face does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CubeFace {
     Top,

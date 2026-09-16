@@ -154,8 +154,8 @@ pub fn L4_CENTER(addr: IVec) -> IVec {
 /// All three axes, symmetric. A cell is a cube and its centre is its centre —
 /// X/Y quantised while Z is left raw (or the reverse) is two coordinate
 /// systems in one point, and everything that marks a cell here already avoids
-/// it: object/geometry.ts's anchor_center adds the half on every axis, and
-/// hover, placed cubes and the location puck all read a cell the same way.
+/// it: a cell's anchor centre adds the half on every axis, and hover, placed
+/// cubes and the location puck all read a cell the same way.
 pub fn SPAN_CENTER(out: &mut PVF3, addr: IVec, shamt: u32) -> &mut PVF3 {
     out.i = if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt) as i64) };
     out.f = 0;

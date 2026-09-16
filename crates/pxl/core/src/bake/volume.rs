@@ -1,5 +1,4 @@
-//! The render-time volume for one 64×64 chunk: reference/volume.ts,
-//! in Rust, with its memory the core's.
+//! The render-time volume for one 64×64 chunk.
 //!
 //! World layers paint into whole 64³ signed-Z bands, and the scan and the
 //! raycast read the same flat lanes back; a band is allocated in full even
@@ -7,15 +6,14 @@
 //! bands. What a band is made of and why (materials packed `0xCC_RRGGBB`,
 //! a layer byte apart so the direct payload is five bytes a voxel, sub-cell
 //! bytes only for bands that hold sub-cell objects, the overflow list for
-//! objects sharing a base voxel) is the TypeScript's; this mirrors it so
-//! the scan of a volume painted here is byte for byte the scan of one
-//! painted there.
+//! objects sharing a base voxel) is what bake/scan.rs reads back, so the two
+//! agree on the payload's shape and nothing between them converts.
 //!
-//! Bands are stores kept for reuse — a composite produces several, one
-//! chunk at a time, and building them fresh was measured as the heap's
-//! worst churn — and a store's lanes are blocks of the pools the client
-//! cut: the standing stores from the fixed section, which never runs out,
-//! any past the cap from the mesh section, which may.
+//! Bands are stores kept for reuse. A composite produces several, one chunk
+//! at a time, and building them fresh was measured as the heap's worst churn,
+//! so up to POOLED_BANDS of them are held with their lanes and handed to the
+//! next band that needs one; past that a released store gives its lanes back
+//! and is refilled when it is next taken.
 
 use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
 use core::alloc::Layout;
@@ -32,7 +30,9 @@ pub fn band_voxel_idx(x: u32, y: u32, z: u32) -> usize {
     ((y * BAND_SPAN + x) * BAND_SPAN + z) as usize
 }
 
-/// How many band stores to keep for reuse: volume.ts's MAX_POOLED_BANDS.
+/// How many band stores keep their lanes when their band is released. Past
+/// this a store gives its lanes back and takes them again when it is next
+/// used, so the list never grows past the most bands alive at once.
 pub const POOLED_BANDS: usize = 16;
 
 /// The overflow when several sub-cell objects share one base voxel: the
@@ -90,9 +90,9 @@ impl Extras {
         self.sub.truncate(w);
     }
 
-    /// By column, every lane together, stably — a column's own entries stay
-    /// in the order they were appended, as volume.ts's insertion sort keeps
-    /// them.
+    /// By column, every lane together, stably: a column's own entries stay in
+    /// the order they were appended, which is the order the scan reads them
+    /// back in.
     fn sort_by_column(&mut self) {
         let mut order: Vec<usize> = (0..self.len()).collect();
         order.sort_by_key(|&i| self.col[i]);
@@ -174,8 +174,9 @@ pub struct Volume {
     pub sealed: bool,
 }
 
-/// What a band's row says to a reader: volume.ts's VoxelBand as ten words,
-/// the same row wasm_scan.ts writes for a band of its own.
+/// What a band's row says to a reader, as ten words: the band's Z, its three
+/// lane addresses (the sub-cell one 0 where the band has none), the extras'
+/// count and their five lane addresses.
 pub const BAND_WORDS: usize = 10;
 
 #[derive(Clone, Copy, Default, Debug)]

@@ -1,6 +1,5 @@
-//! A chunk's build, from its sources to its meshes: what
-//! module/world/chunk_node.ts's commit did a chunk at a time under the
-//! frame's budget, in the core.
+//! A chunk's build, from its sources to its meshes, a chunk at a time under
+//! the frame's budget.
 //!
 //! The glue says which chunks exist, what each is made of (its terrain
 //! page's lanes and the settings that change what they paint), and which
@@ -400,7 +399,7 @@ impl Builder {
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
         // A column with nothing placed is one run of terrain, floor to top,
         // whichever way it is made: the direct runs and the scan bake the
-        // same mesh at every tier (core_build.test.ts), and the scan's
+        // same mesh at every tier, and the scan's
         // exactness — a cube carving the terrain, a sub-cell object — is
         // only ever about what is placed. The direct path used to stop at
         // step 8 on the principle that the fine tiers keep the voxel

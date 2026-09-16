@@ -1,5 +1,5 @@
 {
-  "$doc": ["The world's time-of-day themes, by WorldThemeKey's value (theme.ts)."],
+  "$doc": ["The world's time-of-day themes, by WorldThemeKey's value."],
   "themes": {
     "morning": {
       "fog": { "$value": "#e9dccb", "$type": "rgb" },

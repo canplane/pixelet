@@ -9,7 +9,7 @@
 //! straight at its target. World content rotates by azimuth under this fixed
 //! camera instead (module/world/frame/view.rs, stepped by use_view_frame.rs) — the
 //! ground spins, not the eye. Anything needing "which way is the camera
-//! effectively facing" (the sky dome's sun/moon sweep in environment.tsx) has
+//! effectively facing" — the sky dome's sun and moon sweep — has
 //! no single camera transform to read that off of — only this rotate2
 //! primitive, signed for the conversion direction: world_frame_ref's own
 //! rotation.z is always exactly +azimuth, so matching the ground's own

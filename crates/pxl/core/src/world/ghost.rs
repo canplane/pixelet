@@ -1,6 +1,6 @@
 //! The hover ghost: what a placement or an erase would change, drawn half
-//! transparent where the cursor is. module/world/marker/hover_cursor.tsx
-//! decides which ghost and where; what it is drawn from is the core's — a
+//! transparent where the cursor is. module/world/marker/hover_cursor.rs
+//! decides which ghost and where; what it is drawn from is here — a
 //! box written in the mesher's layout (mesher.rs's write_lone_box), so a
 //! ghost cube is lit, textured and edge-shaded by the chunk shader exactly
 //! as the cube it previews, or one decor instance in a block of decor.rs's

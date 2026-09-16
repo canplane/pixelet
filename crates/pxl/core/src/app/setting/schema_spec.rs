@@ -17,7 +17,7 @@
 /// drawer's Character tab (character/character_picker.tsx).
 pub const SETTING_SECTIONS: &[&str] = &["display", "camera", "editing", "lighting", "quality", "debug", "character"];
 
-/// What terrain does to the camera (camera/terrain_gate.ts).
+/// What terrain does to the camera.
 ///
 ///   through — nothing. The eye goes wherever the controls put it, ground
 ///             included, where the terrain shell has no inward-facing
@@ -129,7 +129,7 @@ pub mod SETTINGS {
         pub const cost: &str = "med";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
-    /// Four samples a pixel for the frame's colour and depth (renderer.ts):
+    /// Four samples a pixel for the frame's colour and depth:
     /// the largest allocation the page makes — 32 bytes a device pixel, a
     /// hundred megabytes on a phone at its native density — for edges the
     /// far terrain's boxes would otherwise shimmer at. Off on a phone, whose
@@ -143,7 +143,7 @@ pub mod SETTINGS {
         pub const cost: &str = "high";
         pub const KEYS: &[&str] = &["kind", "default", "handheld_default", "section", "cost"];
     }
-    /// marker/debug_gizmos.tsx: frame origins, page corners, map centre, the rings.
+    /// The debug gizmos: frame origins, page corners, the map centre and the rings.
     pub mod show_debug_objects {
         pub const kind: &str = "toggle";
         pub const default: bool = false;
@@ -151,7 +151,7 @@ pub mod SETTINGS {
         pub const dev: bool = true;
         pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
     }
-    /// The sched/ledger.ts corner panel. The console stream is a button on it.
+    /// The scheduler ledger's corner panel. The console stream is a button on it.
     pub mod show_ledger {
         pub const kind: &str = "toggle";
         pub const default: bool = false;

@@ -1,19 +1,15 @@
-//! A chunk's column runs to one mesh: reference/chunk_mesher.ts,
-//! in Rust.
+//! A chunk's column runs to one mesh.
 //!
-//! The same phases in the same steps — face masks, then greedy merge, then
-//! emit; a coarse tier first summarises its cells into a run set of its own
-//! and bakes that — so a cursor stepped under the frame budget advances as
-//! far per step as the TypeScript one does, and the mesh comes out byte for
-//! byte the same. Why each mask bit, merge rule and coarse quirk is what it
-//! is lives in the TypeScript, which stays the reference until it is gone.
+//! Three phases, each resumable: face masks, then a greedy merge, then the
+//! emit. A coarse tier summarises its cells into a run set of its own first
+//! and bakes that. The bake is a cursor the caller steps under a frame
+//! budget, so a chunk can take as many frames as it needs without holding
+//! the tick.
 //!
-//! What the port does not carry over: the scratch is plain vectors owned by
-//! the context rather than lanes carved from the core memory. The mesh is
-//! written where the caller says — a block from the mesh section, in the
-//! TypeScript's layout — which the caller provides once the bake knows the
-//! mesh's size (`Step::NeedMesh`) and may fail to, as a pool refuses; the
-//! bake then waits at that step, as the TypeScript one does.
+//! The scratch is plain vectors owned by the context. The mesh itself is
+//! written where the caller says: it is asked for a block once the bake
+//! knows the mesh's size (`Step::NeedMesh`), and the bake waits at that step
+//! for as long as the answer is that there is no room.
 
 use crate::bake::run_set::{OwnedRunSet, RunSet};
 use crate::bake::srgb::SRGB_TO_LINEAR;
@@ -94,8 +90,8 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 pub const F32_PER_VERTEX: u32 = 3 + 3 + 3 + 3 + 3 + 4 + 1;
 pub const VIS_F32_PER_VERTEX: u32 = 1;
 
-/// Words a mesh of `vertex_cnt` vertices and `index_cnt` indices takes, in
-/// chunk_mesher.ts#carve_baked_mesh's layout.
+/// Words a mesh of `vertex_cnt` vertices and `index_cnt` indices takes: the
+/// vertices' floats and their visibility float, then the indices.
 pub fn mesh_words(vertex_cnt: u32, index_cnt: u32) -> u32 {
     vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) + index_cnt
 }
