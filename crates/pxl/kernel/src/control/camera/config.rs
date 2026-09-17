@@ -21,6 +21,14 @@ pub const VIEW_DIST: f64 = 4096.0;
 /// Default tilt angle in degrees from the ground plane.
 pub const DEFAULT_TILT_DEG: f64 = 30.0;
 
+/// The shallowest tilt in degrees from the ground plane: where a drag toward
+/// the horizon stops. Mapbox GL JS caps pitch at 85 degrees from vertical,
+/// its maxPitch's default and ceiling alike, and MapLibre GL JS calls
+/// anything past 85 experimental: past it the ground is a line and the
+/// frame is sky, and an eye held above terrain (terrain_gate.rs's
+/// EYE_CLEARANCE_U) is caught by the ground at ever shorter distances.
+pub const MIN_TILT_DEG: f64 = 5.0;
+
 pub mod camera_cfg {
     pub mod projection {
         pub const FOV: f64 = 50.0;
@@ -43,8 +51,8 @@ pub mod camera_cfg {
         /// 512 * 2; see MIN_DIST.
         pub const MAX_DIST: f64 = 1024.0;
         pub const MIN_POLAR: f64 = 0.001;
-        /// PI / 2.05.
-        pub const MAX_POLAR: f64 = 0.7662421106316569;
+        /// (90 - MIN_TILT_DEG) * PI / 180.
+        pub const MAX_POLAR: f64 = 1.4835298641951802;
         pub const KEYS: &[&str] = &["DEFAULT_DIST", "DEFAULT_AZIMUTH", "DEFAULT_POLAR", "MIN_DIST", "MAX_DIST", "MIN_POLAR", "MAX_POLAR"];
     }
     pub mod input {

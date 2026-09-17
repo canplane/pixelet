@@ -134,7 +134,6 @@ struct Input {
     drag_pending: bool,
     pending_pan_dx: f64,
     pending_pan_dy: f64,
-    pending_rotate_dy: f64,
     pending_client_x: f64,
     pending_client_y: f64,
     // Wheel/trackpad-pinch zoom — the more likely culprit for LOD-storm lag,
@@ -145,6 +144,9 @@ struct Input {
     // ---- rotate-drag ----
     rotate_start_angle: f64,
     rotate_start_azimuth: f64,
+    /// The pitch when the drag began: a tilt is the drag's whole vertical
+    /// travel from there, as a pinch's is from its fingers' first midpoint.
+    rotate_start_polar: f64,
     rotate_anchored: bool,
     rotate_drag_start_x: f64,
     rotate_drag_start_y: f64,
@@ -179,12 +181,12 @@ fn input() -> &'static mut Input {
         drag_pending: false,
         pending_pan_dx: 0.0,
         pending_pan_dy: 0.0,
-        pending_rotate_dy: 0.0,
         pending_client_x: 0.0,
         pending_client_y: 0.0,
         pending_wheel_delta_y: None,
         rotate_start_angle: 0.0,
         rotate_start_azimuth: 0.0,
+        rotate_start_polar: 0.0,
         rotate_anchored: false,
         rotate_drag_start_x: 0.0,
         rotate_drag_start_y: 0.0,
@@ -315,14 +317,16 @@ fn do_pan(dx: f64, dy: f64) {
 /// Azimuth tracks the cursor's angle around screen center since drag-start
 /// (arcball-style), not a fixed px/degree rate — screen center is the fixed
 /// pivot since the camera always looks at map_center. World rotates opposite the
-/// cursor's angle delta. Polar (tilt) keeps a fixed-rate drag — there's no
-/// natural anchor for tilt. The anchor is captured lazily, once the cursor
-/// clears MIN_ROTATE_RADIUS_PX from center, since atan2 is degenerate at the
-/// pivot. The gesture commits to whichever axis dominates past
-/// AXIS_LOCK_THRESHOLD_PX and keeps it: an off-center "straight down" drag still
-/// sweeps some angle around center, which read as an unrelated spin once polar
-/// saturated.
-fn do_rotate(s: &mut Input, client_x: f64, client_y: f64, dy: f64) {
+/// cursor's angle delta. Polar (tilt) is a fixed rate, but likewise from the
+/// drag's start, not stepped from the store's last value: the store rounds
+/// polar to 0.01 rad, and a frame's worth of a slow drag is under half a step,
+/// which rounded back to nothing — a slow tilt did not move. The azimuth
+/// anchor is captured lazily, once the cursor clears MIN_ROTATE_RADIUS_PX from
+/// center, since atan2 is degenerate at the pivot. The gesture commits to
+/// whichever axis dominates past AXIS_LOCK_THRESHOLD_PX and keeps it: an
+/// off-center "straight down" drag still sweeps some angle around center,
+/// which read as an unrelated spin once polar saturated.
+fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::None {
         let total_dx = client_x - s.rotate_drag_start_x;
         let total_dy = client_y - s.rotate_drag_start_y;
@@ -340,7 +344,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64, dy: f64) {
         // fixed-tilt UX, not yet a decided product change.
         if !settings_store().lock_camera_tilt {
             camera.set_view_state(ViewPatch {
-                polar: Some(view_state.polar + dy * tilt_gain()),
+                polar: Some(s.rotate_start_polar + (client_y - s.rotate_drag_start_y) * tilt_gain()),
                 ..Default::default()
             });
         }
@@ -474,6 +478,7 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
         s.rotate_axis_lock = RotateAxisLock::None;
         s.rotate_drag_start_x = client_x;
         s.rotate_drag_start_y = client_y;
+        s.rotate_start_polar = camera.view_state.polar;
     }
     update_pointer(s, client_x, client_y);
     camera.camera_status = CameraStatus::Drag;
@@ -513,21 +518,17 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
         return;
     }
 
-    let dy = client_y - s.last_y;
     if (client_x - s.tap_start_x).hypot(client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
         s.did_drag = true;
     }
-    let dx = client_x - s.last_x;
+    if s.drag_mode == DragMode::Pan {
+        s.pending_pan_dx += client_x - s.last_x;
+        s.pending_pan_dy += client_y - s.last_y;
+    }
     s.last_x = client_x;
     s.last_y = client_y;
     s.pending_client_x = client_x;
     s.pending_client_y = client_y;
-    if s.drag_mode == DragMode::Rotate {
-        s.pending_rotate_dy += dy;
-    } else {
-        s.pending_pan_dx += dx;
-        s.pending_pan_dy += dy;
-    }
     s.drag_pending = true;
 }
 
@@ -665,15 +666,14 @@ pub fn camera_input_step() {
         match s.drag_mode {
             DragMode::Pan => do_pan(s.pending_pan_dx, s.pending_pan_dy),
             DragMode::Rotate => {
-                let (x, y, dy) = (s.pending_client_x, s.pending_client_y, s.pending_rotate_dy);
-                do_rotate(s, x, y, dy);
+                let (x, y) = (s.pending_client_x, s.pending_client_y);
+                do_rotate(s, x, y);
             }
             DragMode::Pinch => update_pinch(s),
             DragMode::None => {}
         }
         s.pending_pan_dx = 0.0;
         s.pending_pan_dy = 0.0;
-        s.pending_rotate_dy = 0.0;
     }
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
         let camera = camera_store();

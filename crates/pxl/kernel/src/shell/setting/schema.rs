@@ -104,9 +104,9 @@ const fn number(key: &'static str, default: u32, section: &'static str) -> Setti
 
 /// Every setting, as schema.json declares it, in declaration order.
 pub const SETTINGS: [Setting; 17] = [
-    toggle("show_poi", S::show_poi::default, S::show_poi::section, Some(S::show_poi::cost), false),
+    toggle("show_poi", S::show_poi::default, S::show_poi::section, Some(S::show_poi::cost), S::show_poi::dev),
     toggle("show_decor", S::show_decor::default, S::show_decor::section, Some(S::show_decor::cost), false),
-    toggle("show_structures", S::show_structures::default, S::show_structures::section, None, S::show_structures::dev),
+    toggle("show_structures", S::show_structures::default, S::show_structures::section, None, false),
     toggle("lock_camera_tilt", S::lock_camera_tilt::default, S::lock_camera_tilt::section, None, false),
     Setting {
         key: "camera_terrain",
