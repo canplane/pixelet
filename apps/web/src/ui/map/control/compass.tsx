@@ -1,11 +1,11 @@
-// @pxl/web/module/map/ui/control/compass.tsx
+// @pxl/web/ui/map/control/compass.tsx
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_action, useKernel } from "@/wasm/kernel.ts";
+import { kernel_action, useKernel } from "@/kernel/kernel.ts";
 
-import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
-import { CircularButton } from "@/shared/ui/shadcn/circular_button.tsx";
+import { MotionContainer } from "@/kit/ui/motion/motion_container.tsx";
+import { CircularButton } from "@/kit/ui/shadcn/circular_button.tsx";
 
 export function MapCompass() {
   const { t } = useTranslation();

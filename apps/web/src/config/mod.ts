@@ -1,4 +1,4 @@
-// @pxl/web/lib/env/mod.ts
+// @pxl/web/config/mod.ts
 
 import * as mustv from "./must.ts";
 

@@ -6,7 +6,7 @@
 //! aggregate.
 //!
 //! What is streamed is what was measured. The lines a person reads are the
-//! shell's (apps/web/src/module/world/sched/ledger_report.ts), the same
+//! shell's (apps/web/src/dev/ledger/report.ts), the same
 //! formatters the report already uses, so a streamed task and a reported one
 //! read alike without this side knowing a word of it.
 //!

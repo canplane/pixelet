@@ -1,13 +1,13 @@
-// @pxl/web/app/setting/section.tsx
+// @pxl/web/ui/setting/section.tsx
 
 import type { LucideIcon } from "lucide-react";
 import { Bug, Eye, Gauge, Move3d, Pickaxe, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type SettingKey, SETTINGS, settings_in, type SettingSection, type ToggleKey } from "./schema.ts";
-import { SectionTitle, SettingRadioRow, SettingRow } from "./setting_row.tsx";
-import { kernel_action, useKernel } from "@/wasm/kernel.ts";
+import { type SettingKey, SETTINGS, settings_in, type SettingSection, type ToggleKey } from "../../catalog/setting/schema.ts";
+import { SectionTitle, SettingRadioRow, SettingRow } from "./row.tsx";
+import { kernel_action, useKernel } from "@/kernel/kernel.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
   display: Eye,

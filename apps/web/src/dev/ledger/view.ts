@@ -1,11 +1,11 @@
-// @pxl/web/module/world/sched/ledger_view.ts
+// @pxl/web/dev/ledger/view.ts
 
 /**
  * The kernel's ledger, read where it lies. `ledger_read` hands over the
  * address of a few words — the summary block over a window, and the frame,
  * task and worst-frame rings — and `ledger_log` the rows the live stream
  * kept; everything is laid out as ledger.json says and read here through
- * views over the module's memory, into the shapes ledger_report.ts formats.
+ * views over the module's memory, into the shapes report.ts formats.
  *
  * Nothing crosses the ring and nothing is built in the kernel for a read, so
  * looking at the instrument allocates nothing from the heap it measures. The
@@ -13,11 +13,11 @@
  * copies what it keeps into plain objects before returning.
  */
 
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
-import { CORE_KERNEL } from "@/wasm/core_mem.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
+import { CORE_KERNEL } from "@/kernel/core_mem.ts";
 
-import type { Frame, FrameSummary, LedgerReport, LongFrame, Spread, TaskRecord, TaskSummary } from "./ledger_report.ts";
-import { CATEGORY_NAMES, CENSUS_TAGS, FRAME, LOG, OUTCOME_NAMES, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, TASK_SUMMARY, WORST } from "./ledger_spec.ts";
+import type { Frame, FrameSummary, LedgerReport, LongFrame, Spread, TaskRecord, TaskSummary } from "./report.ts";
+import { CATEGORY_NAMES, CENSUS_TAGS, FRAME, LOG, OUTCOME_NAMES, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, TASK_SUMMARY, WORST } from "./spec.ts";
 import { long_frames_since } from "./long_frame.ts";
 
 const WORD = 8;

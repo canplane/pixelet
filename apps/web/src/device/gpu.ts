@@ -1,4 +1,4 @@
-// @pxl/web/wasm/gpu.ts
+// @pxl/web/device/gpu.ts
 
 /**
  * The host's WebGPU: the device, and the calls the kernel's renderer makes
@@ -18,7 +18,7 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { handle_slot } from "@xpute/core/ds/handle.ts";
 
-import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/wasm/gpu_spec.ts";
+import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/device/gpu_spec.ts";
 
 type GpuObject =
   | GPUBuffer

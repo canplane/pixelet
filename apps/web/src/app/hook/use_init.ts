@@ -1,4 +1,4 @@
-// @pxl/web/app/hook/use_app_init.ts
+// @pxl/web/app/hook/use_init.ts
 
 import { useState } from "react";
 

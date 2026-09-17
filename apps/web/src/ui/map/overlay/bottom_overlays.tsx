@@ -1,10 +1,10 @@
-// @pxl/web/module/map/ui/overlay/bottom_overlays.tsx
+// @pxl/web/ui/map/overlay/bottom_overlays.tsx
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { use_camera_busy_interaction_style } from "@/module/camera/use_camera_busy_interaction_style.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { use_camera_busy_interaction_style } from "@/ui/map/use_camera_busy_interaction_style.ts";
 import { ModeBar } from "./mode_bar.tsx";
 
-// How far off the screen bottom this positions ModeBar — app_layout.tsx
+// How far off the screen bottom this positions ModeBar — app/layout.tsx
 // reads this (together with mode_bar.tsx's own MODE_BAR_HEIGHT_PX) to keep
 // Toaster clear of it.
 export const BOTTOM_OFFSET_PX = 16;

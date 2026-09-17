@@ -13,5 +13,6 @@
 pub mod BILLBOARD_ORDER {
     pub const poi: u32 = 0;
     pub const chat: u32 = 1;
-    pub const KEYS: &[&str] = &["poi", "chat"];
+    pub const debug: u32 = 2;
+    pub const KEYS: &[&str] = &["poi", "chat", "debug"];
 }

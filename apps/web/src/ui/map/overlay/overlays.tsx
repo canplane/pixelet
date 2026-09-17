@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/overlay/overlays.tsx
+// @pxl/web/ui/map/overlay/overlays.tsx
 
 import { useVisualViewport } from "./use_visual_viewport.ts";
 

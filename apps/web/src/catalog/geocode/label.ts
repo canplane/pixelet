@@ -1,4 +1,4 @@
-// @pxl/web/module/world/geocode/label.ts
+// @pxl/web/catalog/geocode/label.ts
 //
 // Shared with search_modal.tsx: a GeocodePart[] chain (this app's own
 // region/county/… division data) needs the same "pick a language, then

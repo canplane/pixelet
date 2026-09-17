@@ -1,8 +1,8 @@
-// @pxl/web/app/setting/section/disclaimer_section.tsx
+// @pxl/web/ui/setting/section/disclaimer.tsx
 
 import { Trans, useTranslation } from "react-i18next";
 
-import { SectionTitle } from "@/app/setting/setting_row.tsx";
+import { SectionTitle } from "@/ui/setting/row.tsx";
 
 export function DisclaimerSection() {
   const { t } = useTranslation();

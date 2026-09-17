@@ -1,11 +1,11 @@
-// @pxl/web/module/map/ui/control/scale_bar.tsx
+// @pxl/web/ui/map/control/scale_bar.tsx
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_action, useKernel } from "@/wasm/kernel.ts";
+import { kernel_action, useKernel } from "@/kernel/kernel.ts";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { MotionContainer } from "@/shared/ui/motion/motion_container.tsx";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { MotionContainer } from "@/kit/ui/motion/motion_container.tsx";
 
 const SCALE_BAR_TICK_PX = 6;
 const SCALE_BAR_PAD_PX = 3;

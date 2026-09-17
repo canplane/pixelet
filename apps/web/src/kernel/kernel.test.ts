@@ -1,7 +1,7 @@
-// @pxl/web/wasm/kernel.test.ts
+// @pxl/web/kernel/kernel.test.ts
 
 /**
- * The kernel driven the way wasm/kernel.ts drives it, without a page: the
+ * The kernel driven the way kernel/kernel.ts drives it, without a page: the
  * boot, a map centre, the world's turns rung, the fetches it starts
  * answered from fixtures through the bodies the host holds, and what
  * comes back — what was drawn, the map's status, the UI's snapshot and its
@@ -16,9 +16,9 @@ import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { encode_poi_page, encode_terrain } from "@pxl/shared/bake/format.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
-import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
-import { CORE_KERNEL } from "@/wasm/core_mem.ts";
-import { BOOT, boot_block, hold_body, text_at } from "@/wasm/module.ts";
+import { CORE_BUILD, packet } from "@/kernel/core_build.ts";
+import { CORE_KERNEL } from "@/kernel/core_mem.ts";
+import { BOOT, boot_block, hold_body, text_at } from "@/kernel/module.ts";
 
 function rng(seed: u32): () => u32 {
   let s = seed >>> 0 || 1;

@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/overlay/mode_bar.tsx
+// @pxl/web/ui/map/overlay/mode_bar.tsx
 
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -7,12 +7,12 @@ import { Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, Send, TreePin
 import { useTranslation } from "react-i18next";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { cn } from "@/shared/lib/util/cn.ts";
-import { TextField } from "@/shared/ui/text_field.tsx";
-import { useAppContext } from "@/app/provider/app_context.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { TextField } from "@/kit/ui/text_field.tsx";
+import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { type DecorId, placeable_cube_id, type PlaceableCube, placeable_cubes } from "@pxl/shared/spec/cell/mod.ts";
-import { object_scale_exponents, OBJECT_SIZES } from "@/module/world/object/size.ts";
+import { type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
+import { object_scale_exponents, OBJECT_SIZES } from "@/catalog/object/size.ts";
 import { cube_swatch_style } from "./cube_swatch.ts";
 
 type ModeId = "message" | "palette";
@@ -25,7 +25,7 @@ const SEND_FADE_MS = 200;
 
 // Mirrors the h-12 pills below (Tailwind's JIT scanner can't take this as a
 // variable, so it stays a literal class there — see this file's own note a
-// few lines down) — app_layout.tsx reads this to keep Toaster clear of
+// few lines down) — app/layout.tsx reads this to keep Toaster clear of
 // wherever BottomOverlays ends up placing this bar.
 export const MODE_BAR_HEIGHT_PX = 48;
 

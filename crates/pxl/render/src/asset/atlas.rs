@@ -68,6 +68,8 @@ pub enum DrawSpec {
     Cluster { label: String, logical_w: f64 },
     /// The notched speech bubble and its wrapped lines.
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
+    /// A line of small text on nothing: the dev gizmos' labels.
+    Text { text: String, logical_w: f64 },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

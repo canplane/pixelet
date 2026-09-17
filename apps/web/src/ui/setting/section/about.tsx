@@ -1,12 +1,12 @@
-// @pxl/web/app/setting/section/about_section.tsx
+// @pxl/web/ui/setting/section/about.tsx
 
 import { Box } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { SectionTitle } from "@/app/setting/setting_row.tsx";
-import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
-import { PUBLISHED_VERSION } from "@/lib/env/route.ts";
-import { useKernel } from "@/wasm/kernel.ts";
+import { SectionTitle } from "@/ui/setting/row.tsx";
+import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
+import { PUBLISHED_VERSION } from "@/config/route.ts";
+import { useKernel } from "@/kernel/kernel.ts";
 
 const env_label: string = APP_ENV.charAt(0).toUpperCase() + APP_ENV.slice(1);
 

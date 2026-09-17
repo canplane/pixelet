@@ -1,7 +1,7 @@
-// @pxl/web/module/world/sched/ledger_report.ts
+// @pxl/web/dev/ledger/report.ts
 //
 // The ledger's report, written from the numbers the kernel measured and the
-// shell read in place (ledger_view.ts). Every word here is this side's: the
+// shell read in place (view.ts). Every word here is this side's: the
 // column titles, the units, and the asides that say what a line means. The
 // kernel carries none of them, the way libc rather than the kernel carries
 // what an errno reads as.
@@ -9,7 +9,7 @@
 // Pasteable text, sized to land in a findings doc; trace.ts is the
 // machine-readable path.
 
-import { CENSUS_TAGS } from "./ledger_spec.ts";
+import { CENSUS_TAGS } from "./spec.ts";
 import { loaf_supported } from "./long_frame.ts";
 
 const MB = 1048576;
@@ -31,7 +31,7 @@ const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.ma
 const STARVED_MS = 2000;
 const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
-// ---- what the ledger holds, as ledger_view.ts reads it ----
+// ---- what the ledger holds, as view.ts reads it ----
 
 export type LedgerReport = {
   t: number;

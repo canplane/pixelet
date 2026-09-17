@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/pagination/infinite_scroll.tsx
+// @pxl/web/kit/ui/pagination/infinite_scroll.tsx
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 

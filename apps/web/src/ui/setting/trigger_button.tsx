@@ -1,10 +1,10 @@
-// @pxl/web/app/setting/trigger_button.tsx
+// @pxl/web/ui/setting/trigger_button.tsx
 
 import { Menu } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { useAppContext } from "@/app/provider/app_context.ts";
-import { CircularButton } from "@/shared/ui/shadcn/circular_button.tsx";
+import { useAppContext } from "@/app/provider/context.ts";
+import { CircularButton } from "@/kit/ui/shadcn/circular_button.tsx";
 
 export function SettingsTriggerButton() {
   const { ui } = useAppContext();

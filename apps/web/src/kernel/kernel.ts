@@ -1,4 +1,4 @@
-// @pxl/web/wasm/kernel.ts
+// @pxl/web/kernel/kernel.ts
 
 /**
  * The central scheduler's driver of the kernel (crates/pxl/kernel behind
@@ -9,7 +9,7 @@
  * (WORLD_UPDATE: the viewport, the gap, the frame interval as measured, the
  * I/O credits). In that turn the kernel applies what waits on the submission
  * ring, runs its tick, draws its canvases through the host's WebGPU
- * (wasm/gpu.ts), and leaves on the completion ring what it asks of the host —
+ * (device/gpu.ts), and leaves on the completion ring what it asks of the host —
  * the sensors' watches, console lines, the UI's snapshot when it
  * changed, the fetches to start and cancel, the loads — which the host reads
  * before the ring returns; the return is when the kernel wants its next turn.
@@ -37,13 +37,13 @@ import type { Message } from "@pxl/shared/spec/message.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 import { load_key } from "@pxl/shared/asset/load.ts";
 
-import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
-import { asset_url } from "@/lib/env/route.ts";
-import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
-import { CORE_KERNEL } from "@/wasm/core_mem.ts";
-import { acquire_device, bind_surface, register_image, unbind_surface } from "@/wasm/gpu.ts";
-import { boot_block, hold_body, quantum_policy, text_at } from "@/wasm/module.ts";
+import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
+import { asset_url } from "@/config/route.ts";
+import { HANDHELD } from "@/kit/lib/browser/handheld.ts";
+import { CORE_BUILD, packet } from "@/kernel/core_build.ts";
+import { CORE_KERNEL } from "@/kernel/core_mem.ts";
+import { acquire_device, bind_surface, register_image, unbind_surface } from "@/device/gpu.ts";
+import { boot_block, hold_body, quantum_policy, text_at } from "@/kernel/module.ts";
 
 // ---- the snapshot the UI renders (crates/pxl/kernel/src/shell/shell.rs) ----
 

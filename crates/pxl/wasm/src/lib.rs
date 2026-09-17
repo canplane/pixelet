@@ -796,7 +796,7 @@ extern "C" {
     fn host_body_read(body: u32, dst: *mut u8, len: usize);
 }
 
-// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/wasm/gpu.ts) ----
+// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/device/gpu.ts) ----
 
 extern "C" {
     #[link_name = "gpu_reset"]

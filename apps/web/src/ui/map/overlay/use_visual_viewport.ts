@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/overlay/use_visual_viewport.ts
+// @pxl/web/ui/map/overlay/use_visual_viewport.ts
 
 import { useEffect } from "react";
 

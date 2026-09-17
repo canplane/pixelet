@@ -1,4 +1,4 @@
-// @pxl/web/module/world/sched/ledger_log.ts
+// @pxl/web/dev/ledger/log.ts
 
 /**
  * The ledger's live console stream, read out of the module's memory rather
@@ -15,8 +15,8 @@
  * landing reads exactly as the same task does in the report printed later.
  */
 
-import { frame_line, long_frame_line, task_line } from "./ledger_report.ts";
-import { ledger_log_take } from "./ledger_view.ts";
+import { frame_line, long_frame_line, task_line } from "./report.ts";
+import { ledger_log_take } from "./view.ts";
 import { set_long_frame_sink } from "./long_frame.ts";
 
 /** Prints whatever the stream has kept since the last call. */
