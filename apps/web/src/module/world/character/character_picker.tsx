@@ -108,9 +108,13 @@ function PetPicker(props: PetPickerProps) {
  * DecorGridButton, which close it) since browsing/comparing several variants
  * is the expected flow, not "equip once then go place it." */
 export function CharacterPicker() {
-  const person_variant_key = useKernel((s) => String(s.settings.person_variant_key ?? ""));
-  const pet_variant_key = useKernel((s) => String(s.settings.pet_variant_key ?? ""));
-  const set_setting = (key: string, value: string) => kernel_action({ type: "set_setting", key, value });
+  // The settings hold a variant as its number; the picker reads its key off
+  // the same catalog the kernel was numbered from.
+  const person_variant = useKernel((s) => Number(s.settings.person_variant ?? -1));
+  const pet_variant = useKernel((s) => Number(s.settings.pet_variant ?? -1));
+  const person_variant_key = [...PERSON_VARIANTS_FEMALE, ...PERSON_VARIANTS_MALE].find((v) => v.number === person_variant)?.key ?? "";
+  const pet_variant_key = PET_VARIANTS.find((v) => v.number === pet_variant)?.key ?? "";
+  const set_setting = (key: string, value: number) => kernel_action({ type: "set_setting", key, value });
 
   // Opens on whichever gender the current selection already belongs to,
   // not always "female" — so a male variant picked earlier doesn't look
@@ -121,8 +125,8 @@ export function CharacterPicker() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PersonPicker gender={gender} on_gender_change={set_gender} selected_key={person_variant_key} on_select={(key) => set_setting("person_variant_key", key)} />
-      <PetPicker selected_key={pet_variant_key} on_select={(key) => set_setting("pet_variant_key", key)} />
+      <PersonPicker gender={gender} on_gender_change={set_gender} selected_key={person_variant_key} on_select={(key) => set_setting("person_variant", find_person_variant(key).number)} />
+      <PetPicker selected_key={pet_variant_key} on_select={(key) => set_setting("pet_variant", (PET_VARIANTS.find((v) => v.key === key) ?? PET_VARIANTS[0]).number)} />
     </div>
   );
 }

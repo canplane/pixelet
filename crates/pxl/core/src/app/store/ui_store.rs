@@ -1,7 +1,7 @@
 // pxl_core/app/store/ui_store.rs
 
-use pxl_shared::spec::cell::{cube_types, decor_ids, placeable_cube_id, placeable_cubes, DecorId, PlaceableCube};
-use xpute_core::kit::json::{read_json, JsonStr, Quoted};
+use pxl_shared::spec::cell::{cube_types, decor_ids, decor_num_id, placeable_cube_id, placeable_cubes, DecorId, PlaceableCube};
+use xpute_core::kit::json::{read_json, Quoted};
 
 use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
 use crate::sys::global::Global;
@@ -106,7 +106,7 @@ impl UiStore {
             active_tool: ActiveTool::Pointer,
             object_cube: PlaceableCube::Block(cube_types::Block::red),
             object_size: DEFAULT_OBJECT_SIZE,
-            decor_id: "tree",
+            decor_id: DecorId::tree,
             recent_picks: seed_picks(),
             chat_lines: Vec::new(),
             next_chat_line_id: 0,
@@ -158,22 +158,24 @@ fn save(s: &UiStore) {
         .iter()
         .map(|p| match p {
             RecentPick::Object(cube) => format!("{{\"kind\":\"object\",\"id\":{}}}", Quoted(placeable_cube_id(*cube))),
-            RecentPick::Decor(id) => format!("{{\"kind\":\"decor\",\"id\":{}}}", Quoted(id)),
+            RecentPick::Decor(id) => format!("{{\"kind\":\"decor\",\"num_id\":{}}}", decor_num_id(*id)),
         })
         .collect();
     storage_set(
         STORAGE_KEY,
         &format!(
-            "{{\"state\":{{\"object_cube_id\":{},\"decor_id\":{},\"recent_picks\":[{}]}},\"version\":1}}",
+            "{{\"state\":{{\"object_cube_id\":{},\"decor_num_id\":{},\"recent_picks\":[{}]}},\"version\":1}}",
             Quoted(placeable_cube_id(s.object_cube)),
-            Quoted(s.decor_id),
+            decor_num_id(s.decor_id),
             picks.join(",")
         ),
     );
 }
 
-fn decor_id_of(id: JsonStr) -> Option<DecorId> {
-    decor_ids.iter().copied().find(|d| id.eq_str(d))
+/// The decor kind a persisted number names, or None where decor.json no
+/// longer gives it out.
+fn decor_id_of(num_id: f64) -> Option<DecorId> {
+    u8::try_from(num_id as u32).ok().and_then(DecorId::of)
 }
 
 // A blind merge is fine for always-valid fields, not here: a persisted id
@@ -189,13 +191,13 @@ fn load() -> UiStore {
         .map(|arr| {
             arr.items()
                 .filter_map(|p| {
-                    let (id, kind) = (p.get("id")?.as_str()?, p.get("kind")?.as_str()?);
+                    let kind = p.get("kind")?.as_str()?;
                     // Both arms resolve through the catalog, so a pick it no
                     // longer has drops here.
                     if kind.eq_str("object") {
-                        Some(RecentPick::Object(cube_of(&id.to_string())?))
+                        Some(RecentPick::Object(cube_of(&p.get("id")?.as_str()?.to_string())?))
                     } else if kind.eq_str("decor") {
-                        Some(RecentPick::Decor(decor_id_of(id)?))
+                        Some(RecentPick::Decor(decor_id_of(p.get("num_id")?.as_f64()?)?))
                     } else {
                         None
                     }
@@ -218,7 +220,7 @@ fn load() -> UiStore {
     if let Some(cube) = state.get("object_cube_id").and_then(|v| v.as_str()).and_then(|id| cube_of(&id.to_string())) {
         s.object_cube = cube;
     }
-    if let Some(id) = state.get("decor_id").and_then(|v| v.as_str()).and_then(decor_id_of) {
+    if let Some(id) = state.get("decor_num_id").and_then(|v| v.as_f64()).and_then(decor_id_of) {
         s.decor_id = id;
     }
     s

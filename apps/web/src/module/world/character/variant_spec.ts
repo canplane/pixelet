@@ -78,6 +78,11 @@ export const groups = {
   },
 } as const;
 
+export const Group = {
+  person: 0,
+  pet: 1,
+} as const;
+
 /** The clip a character stands in, "idle", by its index in both packs' animations. */
 export const IDLE_CLIP: u32 = 1 as number;
 

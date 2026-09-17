@@ -35,7 +35,7 @@ import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { Message } from "@pxl/shared/spec/message.ts";
-import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
+import { cube_types, decor_types } from "@pxl/shared/spec/cell/mod.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
@@ -52,7 +52,7 @@ export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 /** A cube crosses as the catalog number a leaf holds it as; the id it is
  * spelled out under is this side's to read off the same JSON the kernel was
  * numbered from (@pxl/shared/spec/cell). */
-export type RecentPick = { kind: "object"; num_id: number } | { kind: "decor"; id: string };
+export type RecentPick = { kind: "object"; num_id: number } | { kind: "decor"; num_id: number };
 export type ChatLine = { id: number; text: string; ts: number };
 export type SearchRow = { gers_id: string; kind: "poi" | "division"; name: string; subtitle: string; distance: string | null; icon: string; color: string; lon: number; lat: number };
 
@@ -64,8 +64,8 @@ export type UiSnapshot = {
   is_follow_mode: boolean;
   camera_busy: boolean;
   fog: string;
-  ui: { active_tool: ActiveTool; object_cube_num_id: number; object_size: number; decor_id: string; recent_picks: RecentPick[]; chat_lines: ChatLine[] };
-  settings: Record<string, boolean | string>;
+  ui: { active_tool: ActiveTool; object_cube_num_id: number; object_size: number; decor_num_id: number; recent_picks: RecentPick[]; chat_lines: ChatLine[] };
+  settings: Record<string, boolean | string | number>;
   address: { label: string | null };
   scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean; label: string };
   compass: { show: boolean };
@@ -82,7 +82,7 @@ const INITIAL: UiSnapshot = {
   camera_busy: false,
   fog: "#000000",
   // A flat colour is held as its own catalog number (spec/cell).
-  ui: { active_tool: "pointer", object_cube_num_id: cube_types.block.red, object_size: 1, decor_id: "tree", recent_picks: [], chat_lines: [] },
+  ui: { active_tool: "pointer", object_cube_num_id: cube_types.block.red, object_size: 1, decor_num_id: decor_types.tree, recent_picks: [], chat_lines: [] },
   settings: {},
   address: { label: null },
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true, label: "" },

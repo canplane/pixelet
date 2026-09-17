@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text_field.tsx";
 import { useAppContext } from "@/app/provider/app_context.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
-import { type DecorId, placeable_cube_id, placeable_cube_num_id, placeable_cube_of, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
+import { type DecorId, decor_id_from_num, decor_num_id, placeable_cube_id, placeable_cube_num_id, placeable_cube_of, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/module/world/object/size.ts";
 import { cube_swatch_style } from "./cube_swatch.ts";
 
@@ -226,10 +226,10 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
 function DecorIconButton({ id }: { id: DecorId }) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.ui.active_tool);
-  const decor_id = useKernel((s) => s.ui.decor_id);
-  const select_decor = (decor: DecorId) => kernel_action({ type: "select_decor", id: decor });
+  const decor = useKernel((s) => s.ui.decor_num_id);
+  const select_decor = (pick: DecorId) => kernel_action({ type: "select_decor", num_id: decor_num_id(pick) });
   const Icon = DECOR_ICONS[id];
-  const active = activeTool === "decor" && decor_id === id;
+  const active = activeTool === "decor" && decor === decor_num_id(id);
 
   return (
     <button
@@ -511,7 +511,7 @@ export function ModeBar() {
                     {recent_picks.map((pick) =>
                       pick.kind === "object"
                         ? <ColorSwatchButton key={`object:${pick.num_id}`} cube={placeable_cube_of(pick.num_id)!} />
-                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id as DecorId} />
+                        : <DecorIconButton key={`decor:${pick.num_id}`} id={decor_id_from_num(pick.num_id)} />
                     )}
                   </div>
 

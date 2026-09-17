@@ -647,6 +647,12 @@ async function data_outputs(): Promise<Output[]> {
           body.push(`export const ${name}${annot && annot !== "u64" ? `: ${annot}` : ""} = ${ts_literal(n, t, "")};`);
         } else {
           body.push(`export const ${name} = ${ts_literal(n, "f64", "")} as const;`);
+          // A set numbered by its entries' `$number`, as the Rust enum is:
+          // its members' numbers, the way decor.ts lists decor_types.
+          const entries = typeof n === "object" && !Array.isArray(n) ? Object.entries(n).filter(([k]) => !k.startsWith("$")) : [];
+          if (d.enums && entries.length > 0 && entries.every(([, v]) => typeof v === "object" && !Array.isArray(v) && typeof (v as Record<string, DataNode>).$number === "number")) {
+            body.push("", `export const ${enum_name(name)} = {`, ...entries.map(([k, v]) => `  ${k}: ${(v as Record<string, DataNode>).$number},`), "} as const;");
+          }
         }
       }
       if (uses_word.size > 0) ts.push("", `import type { ${[...uses_word].sort().join(", ")} } from "@xpute/core/kit/word.ts";`);

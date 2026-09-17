@@ -152,14 +152,16 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
-  person_variant_key: {
-    kind: "text",
-    default: "female-2",
+  person_variant: {
+    kind: "number",
+    /** female-2, by its number in variant.json's person keys. */
+    default: 1 as number,
     section: "character",
   },
-  pet_variant_key: {
-    kind: "text",
-    default: "chick",
+  pet_variant: {
+    kind: "number",
+    /** chick, by its number in variant.json's pet keys. */
+    default: 5 as number,
     section: "character",
   },
 } as const;

@@ -8,7 +8,7 @@
 
 use core::fmt::{self, Write};
 
-use pxl_shared::spec::cell::{decor_ids, placeable_cube_num_id, placeable_cube_of};
+use pxl_shared::spec::cell::{decor_num_id, placeable_cube_num_id, placeable_cube_of, DecorId};
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -29,6 +29,7 @@ use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode;
 use crate::module::map::ui::overlay::search_modal::{search_close, search_query, search_rows, SearchRow};
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::{preview_close, preview_open};
+use crate::module::world::character::variant::CharacterGroup;
 use crate::module::world::environment::theme::themes;
 use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::frame::view::view;
@@ -156,11 +157,11 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     write!(out, "\"view\":{{\"azimuth\":{}}},\"is_follow_mode\":{},", Num(camera.view_state.azimuth), camera.is_follow_mode)?;
     write!(
         out,
-        "\"ui\":{{\"active_tool\":{},\"object_cube_num_id\":{},\"object_size\":{},\"decor_id\":{},\"recent_picks\":[",
+        "\"ui\":{{\"active_tool\":{},\"object_cube_num_id\":{},\"object_size\":{},\"decor_num_id\":{},\"recent_picks\":[",
         Quoted(active_tool_str(ui.active_tool)),
         placeable_cube_num_id(ui.object_cube),
         Num(ui.object_size),
-        Quoted(ui.decor_id)
+        decor_num_id(ui.decor_id)
     )?;
     for (i, p) in ui.recent_picks.iter().enumerate() {
         if i > 0 {
@@ -168,7 +169,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         }
         match p {
             RecentPick::Object(cube) => write!(out, "{{\"kind\":\"object\",\"num_id\":{}}}", placeable_cube_num_id(*cube))?,
-            RecentPick::Decor(id) => write!(out, "{{\"kind\":\"decor\",\"id\":{}}}", Quoted(id))?,
+            RecentPick::Decor(id) => write!(out, "{{\"kind\":\"decor\",\"num_id\":{}}}", decor_num_id(*id))?,
         }
     }
     out.write_str("],\"chat_lines\":[")?;
@@ -189,6 +190,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         match value {
             SettingRef::Toggle(b) => write!(out, "{}:{b}", Quoted(key))?,
             SettingRef::Text(t) => write!(out, "{}:{}", Quoted(key), Quoted(t))?,
+            SettingRef::Number(n) => write!(out, "{}:{n}", Quoted(key))?,
         }
     }
     write!(out, "}},\"address\":{{\"label\":{}}},", Or(address.label.map(Quoted)))?;
@@ -271,9 +273,10 @@ pub fn ui_action(text: &str) -> bool {
     match kind.as_str() {
         "set_setting" => {
             let (Some(key), Some(value)) = (text_of(&action, "key"), action.get("value")) else { return false };
-            let value = match (value.as_bool(), value.as_str()) {
-                (Some(b), _) => SettingValue::Toggle(b),
-                (_, Some(s)) => SettingValue::Text(s.to_string()),
+            let value = match (value.as_bool(), value.as_str(), value.as_f64()) {
+                (Some(b), _, _) => SettingValue::Toggle(b),
+                (_, Some(s), _) => SettingValue::Text(s.to_string()),
+                (_, _, Some(n)) => SettingValue::Number(n as u32),
                 _ => return false,
             };
             settings_store().set_setting(&key, value);
@@ -297,7 +300,7 @@ pub fn ui_action(text: &str) -> bool {
             ui_store().select_cube(cube);
         }
         "select_decor" => {
-            let Some(id) = text_of(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else {
+            let Some(id) = f64_of(&action, "num_id").and_then(|n| u8::try_from(n as u32).ok()).and_then(DecorId::of) else {
                 return false;
             };
             ui_store().select_decor(id);
@@ -359,8 +362,14 @@ pub fn ui_action(text: &str) -> bool {
             orientation_unsubscribe();
         }
         "preview_open" => {
-            let (Some(id), Some(key)) = (f64_of(&action, "id"), text_of(&action, "key")) else { return false };
-            if !preview_open(id as u32, &key) {
+            let (Some(id), Some(group), Some(number)) = (
+                f64_of(&action, "id"),
+                f64_of(&action, "group").and_then(|g| u8::try_from(g as u32).ok()).and_then(CharacterGroup::of),
+                f64_of(&action, "number").and_then(|n| u8::try_from(n as u32).ok()),
+            ) else {
+                return false;
+            };
+            if !preview_open(id as u32, group, number) {
                 return false;
             }
         }
