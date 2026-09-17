@@ -25,6 +25,7 @@ use pxl_shared::bake::constant::CHUNK_CELL_SPAN;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::hash::fnv1a64_str;
+use xpute_core::sched::frame_budget::{run_under_budget, BudgetOpts};
 use xpute_core::sys::mem::alloc;
 
 use crate::module::map::environment::EnvironmentDraw;
@@ -386,24 +387,17 @@ impl Default for Scheduler {
     }
 }
 
-/// Runs `step` over `items` under a budget: the first item always, then
-/// until `cap` items did something or the budget is spent, and never past a
-/// hard deadline once one item was tried. How many did something.
-fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, mut step: impl FnMut(T) -> bool) -> u32 {
-    let mut ran = 0;
-    for (visited, &id) in items.iter().enumerate() {
-        let t = now();
-        if visited > 0 && t >= hard {
-            break;
-        }
-        if ran > 0 && (ran >= cap || t >= deadline) {
-            break;
-        }
-        if step(id) {
-            ran += 1;
-        }
-    }
-    ran
+/// xpute's pass over `items` against the tick's absolute deadlines: the first
+/// item always, then until `cap` items did something or the budget is spent,
+/// and never past the hard deadline once one was tried. How many did something.
+fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, step: impl FnMut(T) -> bool) -> u32 {
+    let at = now();
+    let opts = BudgetOpts {
+        budget_ms: deadline - at,
+        hard_budget_ms: Some(hard - at),
+        max_steps: Some(cap),
+    };
+    run_under_budget(items.iter().copied(), step, opts).ran
 }
 
 /// An evict for every step in `steps`, a set of the steps as bits — each
