@@ -67,7 +67,11 @@ const MAX_SHAMT: u32 = 6;
 /// tiers. The level it last showed is its record's one-byte state.
 fn tier_shamt(dist: f64, i: u32) -> u32 {
     let last = poi_tier(i);
-    let current = if last == NO_TIER { LOD_STEP_BY_LEVEL[LOD_STEP_BY_LEVEL.len() - 1] } else { LOD_STEP_BY_LEVEL[last as usize] };
+    let current = if last == NO_TIER {
+        LOD_STEP_BY_LEVEL[LOD_STEP_BY_LEVEL.len() - 1]
+    } else {
+        LOD_STEP_BY_LEVEL[last as usize]
+    };
     let level = get_lod_level(lod_step_at(dist.max(1e-3), current));
     if level != last {
         set_poi_tier(i, level);
@@ -527,7 +531,10 @@ fn commit_stage(t: f64) {
 fn pick_of(nodes: &CellNodes, node: u32, absorbed_extra: u32, map_origin: IVec) -> Option<PoiPick> {
     let n = node as usize;
     let shamt = nodes.shamt[n] as u32;
-    let base = ivec::add(map_origin, ivec::gather((nodes.key_x[n] as i64) << shamt, (nodes.key_y[n] as i64) << shamt, (nodes.key_z[n] as i64) << shamt));
+    let base = ivec::add(
+        map_origin,
+        ivec::gather((nodes.key_x[n] as i64) << shamt, (nodes.key_y[n] as i64) << shamt, (nodes.key_z[n] as i64) << shamt),
+    );
     let mut anchor = PVF3::default();
     SPAN_CENTER(&mut anchor, base, shamt);
     let [lx, ly, lz] = local_pos_from_absolute(&anchor, map_origin);

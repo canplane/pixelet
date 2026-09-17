@@ -185,7 +185,9 @@ impl Walker {
             return;
         }
         let (Some(model), Some(skin)) = (model_for(variant), load_image(&variant.skin_url)) else { return };
-        let Some(Some(actor)) = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, model.model)) else { return };
+        let Some(Some(actor)) = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, model.model)) else {
+            return;
+        };
         self.held = Some(Held { actor, model, skin });
         self.pose = [target.x, target.y, 0.0, self.pose[3]];
         self.set_ready(true);
@@ -309,7 +311,11 @@ impl Walker {
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().sched;
         if let Some(a) = sched.models.actor(held.actor) {
-            a.at = [ivec::to_real(ivec::X(map_origin)) + px, ivec::to_real(ivec::Y(map_origin)) + py, ivec::to_real(ivec::Z(map_origin)) + self.pose[2]];
+            a.at = [
+                ivec::to_real(ivec::X(map_origin)) + px,
+                ivec::to_real(ivec::Y(map_origin)) + py,
+                ivec::to_real(ivec::Z(map_origin)) + self.pose[2],
+            ];
             a.rotation_z = self.pose[3] as f32;
             a.visible = true;
         }
@@ -366,7 +372,9 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let settings = use_settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (find_person_variant(&settings.person_variant_key), find_pet_variant(&settings.pet_variant_key)) else { return };
+    let (Some(person_variant), Some(pet_variant)) = (find_person_variant(&settings.person_variant_key), find_pet_variant(&settings.pet_variant_key)) else {
+        return;
+    };
     let is_follow_mode = use_camera_store().is_follow_mode;
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
@@ -375,7 +383,10 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     // Only the person talks — the pet doesn't get a chat bubble.
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
-    let pet_target = Vec2 { x: p.center_x + PET_OFFSET.x, y: p.center_y + PET_OFFSET.y };
+    let pet_target = Vec2 {
+        x: p.center_x + PET_OFFSET.x,
+        y: p.center_y + PET_OFFSET.y,
+    };
     let pet = walker_for(&mut c.pet, pet_variant, Role::Pet, pet_target, p.map_origin);
     pet.step(ctx, pet_variant, p.origin_page_idx_xy, p.map_origin, pet_target, p.center_z, is_follow_mode);
 }

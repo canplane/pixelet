@@ -86,7 +86,14 @@ pub mod camera_cfg {
         /// a stationary click. Small enough that an intentional drag still starts
         /// panning immediately, large enough to absorb that jitter.
         pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
-        pub const KEYS: &[&str] = &["TILT_SWEEP_FRACTION", "DOLLY_GAIN", "MIN_ROTATE_RADIUS_PX", "MIN_TWIST_DIST_PX", "AXIS_LOCK_THRESHOLD_PX", "TAP_DRAG_THRESHOLD_PX"];
+        pub const KEYS: &[&str] = &[
+            "TILT_SWEEP_FRACTION",
+            "DOLLY_GAIN",
+            "MIN_ROTATE_RADIUS_PX",
+            "MIN_TWIST_DIST_PX",
+            "AXIS_LOCK_THRESHOLD_PX",
+            "TAP_DRAG_THRESHOLD_PX",
+        ];
     }
     pub mod smooth {
         pub const ROT_DAMP: f64 = 10.0;

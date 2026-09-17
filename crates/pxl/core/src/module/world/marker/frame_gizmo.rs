@@ -71,7 +71,10 @@ impl Sketch {
         let mut s = 0.0;
         while s < len {
             let e = len.min(s + DASH);
-            self.line([from[0] + d[0] * s, from[1] + d[1] * s, from[2] + d[2] * s], [from[0] + d[0] * e, from[1] + d[1] * e, from[2] + d[2] * e]);
+            self.line(
+                [from[0] + d[0] * s, from[1] + d[1] * s, from[2] + d[2] * s],
+                [from[0] + d[0] * e, from[1] + d[1] * e, from[2] + d[2] * e],
+            );
             s += DASH + GAP;
         }
     }
@@ -90,7 +93,16 @@ impl Sketch {
 
     pub fn r#box(&mut self, base: V3, span: f64, label: Option<&str>) {
         let c = |x: f64, y: f64, z: f64| -> V3 { [base[0] + x * span, base[1] + y * span, base[2] + z * span] };
-        let corners = [c(0.0, 0.0, 0.0), c(1.0, 0.0, 0.0), c(1.0, 1.0, 0.0), c(0.0, 1.0, 0.0), c(0.0, 0.0, 1.0), c(1.0, 0.0, 1.0), c(1.0, 1.0, 1.0), c(0.0, 1.0, 1.0)];
+        let corners = [
+            c(0.0, 0.0, 0.0),
+            c(1.0, 0.0, 0.0),
+            c(1.0, 1.0, 0.0),
+            c(0.0, 1.0, 0.0),
+            c(0.0, 0.0, 1.0),
+            c(1.0, 0.0, 1.0),
+            c(1.0, 1.0, 1.0),
+            c(0.0, 1.0, 1.0),
+        ];
         for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)] {
             self.line(corners[a], corners[b]);
         }
@@ -271,7 +283,10 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<PVF3>, map_origin: IVec)
     g.built_for = Some(key);
     let mut s = sketch_map(&center, map_origin);
     sketch_frames(&mut s);
-    set_lines([ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))], &s.vertices);
+    set_lines(
+        [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))],
+        &s.vertices,
+    );
     g.drawn = s;
     g.shown = true;
     request_world_tick();

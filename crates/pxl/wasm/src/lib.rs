@@ -321,7 +321,10 @@ pub extern "C" fn boot() -> *const u32 {
 /// recording what the map says and opening the volumes over it.
 fn lay_out() -> mem::Map {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    assert!(stack_high == pxl_core::mem::spec::STACK_BYTES, "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES");
+    assert!(
+        stack_high == pxl_core::mem::spec::STACK_BYTES,
+        "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
+    );
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = mem::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
@@ -544,8 +547,8 @@ fn post_shell(s: &mut State) {
     use pxl_core::module::device::pose::use_device_orientation::{take_orientation_commands, OrientationCommand};
     use pxl_core::module::device::pose::use_geolocation::{take_geolocation_commands, GeolocationCommand};
     use pxl_core::module::map::ui::toast::toast_controller::{take_toast_commands, ToastCommand, ToastTone};
-    use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
     use pxl_core::module::world::gltf_cache::{take_load_requests, LoadKind};
+    use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
@@ -1665,7 +1668,28 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE | Cmd::WORLD_ACTION | Cmd::WORLD_LONG_FRAME | Cmd::WORLD_UPDATE | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::FETCH_BODY | Cmd::FETCH_UPDATE | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE | Cmd::GPU_CREATE | Cmd::GPU_DELETE | Cmd::SURFACE_CREATE | Cmd::SURFACE_UPDATE | Cmd::SURFACE_DELETE => return Ok(None),
+        Cmd::WORLD_CREATE
+        | Cmd::WORLD_ACTION
+        | Cmd::WORLD_LONG_FRAME
+        | Cmd::WORLD_UPDATE
+        | Cmd::INPUT_UPDATE
+        | Cmd::INPUT_POINTER
+        | Cmd::INPUT_WHEEL
+        | Cmd::SENSOR_UPDATE
+        | Cmd::SENSOR_ERROR
+        | Cmd::SENSOR_ORIENTATION
+        | Cmd::SENSOR_PERMISSION
+        | Cmd::SENSOR_VISIBILITY
+        | Cmd::FETCH_BODY
+        | Cmd::FETCH_UPDATE
+        | Cmd::LOAD_UPDATE
+        | Cmd::LOAD_IMAGE
+        | Cmd::LOAD_DELETE
+        | Cmd::GPU_CREATE
+        | Cmd::GPU_DELETE
+        | Cmd::SURFACE_CREATE
+        | Cmd::SURFACE_UPDATE
+        | Cmd::SURFACE_DELETE => return Ok(None),
         Cmd::CHUNK_CREATE | Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
         Cmd::WORLD_TOAST | Cmd::WORLD_LOG | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => return Ok(None),
     }

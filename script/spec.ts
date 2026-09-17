@@ -592,7 +592,25 @@ async function data_outputs(): Promise<Output[]> {
 
 const GENERATORS: (() => Promise<Output[]>)[] = [cmd_outputs, errno_outputs, color_outputs, cube_type_outputs, decor_outputs, published_outputs, data_outputs];
 
-const outputs = (await Promise.all(GENERATORS.map((g) => g()))).flat();
+/** A Rust output as `cargo fmt` leaves it, so formatting the crates does not
+ * make a generated file stale. */
+async function formatted(o: Output): Promise<Output> {
+  if (!o.path.endsWith(".rs")) return o;
+  const child = new Deno.Command("rustfmt", {
+    args: ["--edition", "2021", "--emit", "stdout", "--config-path", join(root, "crates/rustfmt.toml")],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  }).spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(o.text));
+  await writer.close();
+  const { code, stdout, stderr } = await child.output();
+  if (code !== 0) throw new Error(`rustfmt ${o.path}: ${new TextDecoder().decode(stderr)}`);
+  return { path: o.path, text: new TextDecoder().decode(stdout) };
+}
+
+const outputs = await Promise.all((await Promise.all(GENERATORS.map((g) => g()))).flat().map(formatted));
 if (Deno.args.includes("--write")) {
   for (const o of outputs) {
     await Deno.mkdir(dirname(join(root, o.path)), { recursive: true });

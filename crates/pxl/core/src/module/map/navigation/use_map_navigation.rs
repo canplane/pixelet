@@ -55,8 +55,5 @@ pub fn use_map_navigation() -> MapNavigation {
         _ => *off = false,
     }
 
-    MapNavigation {
-        device_coord,
-        is_off_center: *off,
-    }
+    MapNavigation { device_coord, is_off_center: *off }
 }

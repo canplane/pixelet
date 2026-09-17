@@ -9,4 +9,3 @@ fn typed_alloc_the_heap_allocator_is_new_ctor_n() {
     assert_eq!(view.length(), 8);
     assert_eq!(view.as_slice(), &[0.0; 8]);
 }
-

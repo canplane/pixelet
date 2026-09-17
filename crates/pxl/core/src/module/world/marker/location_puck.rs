@@ -54,7 +54,12 @@ fn zone_samples() -> Vec<ZoneSample> {
             let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
             out.push(ZoneSample {
                 off: [dx * U_PER_CELL, dy * U_PER_CELL, -U_PER_CELL],
-                borders: [flag(d_top > ZONE_RADIUS2_CELL), flag(d_bottom > ZONE_RADIUS2_CELL), flag(d_right > ZONE_RADIUS2_CELL), flag(d_left > ZONE_RADIUS2_CELL)],
+                borders: [
+                    flag(d_top > ZONE_RADIUS2_CELL),
+                    flag(d_bottom > ZONE_RADIUS2_CELL),
+                    flag(d_right > ZONE_RADIUS2_CELL),
+                    flag(d_left > ZONE_RADIUS2_CELL),
+                ],
             });
         }
     }
@@ -137,12 +142,24 @@ pub fn location_puck_step(device_coord: Option<PVF3>) {
             let delta_ele = get_ele(&coord).unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
-            lane.extend([v[0] as f32, v[1] as f32, v[2] as f32, s.borders[0] as f32, s.borders[1] as f32, s.borders[2] as f32, s.borders[3] as f32]);
+            lane.extend([
+                v[0] as f32,
+                v[1] as f32,
+                v[2] as f32,
+                s.borders[0] as f32,
+                s.borders[1] as f32,
+                s.borders[2] as f32,
+                s.borders[3] as f32,
+            ]);
         }
         let count = p.samples.len() as u32;
         world_of(|world, sched| {
             // SAFETY: the zone's floats are in the kernel's memory, read before this returns.
-            unsafe { sched.markers.set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL, FOG_FAR) };
+            unsafe {
+                sched
+                    .markers
+                    .set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL, FOG_FAR)
+            };
         });
         p.shown = true;
         request_world_tick();

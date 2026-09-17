@@ -10,8 +10,8 @@
 
 use super::demand::Category;
 use super::ledger::{DrawCensus, Failure, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};
-use super::tick::PHASES;
 use super::tick::HARD_SLACK_MS;
+use super::tick::PHASES;
 
 /// Percentile over an already-sorted array; 0 for an empty one.
 pub fn pct(sorted: &[f64], q: f64) -> f64 {
@@ -115,11 +115,18 @@ pub fn summarize_frames(frames: &[FrameSample]) -> Option<FrameSummary> {
         gpu: of(&|f| f.gpu_ms, &all),
         sched: of(&|f| f.sched_ms, &all),
         tick: of(&|f| f.cpu.tick_ms, &all),
-        phases: PHASES.iter().enumerate().map(|(k, name)| (name.to_string(), spread(frames.iter().map(|f| f.phases[k]).collect()))).collect(),
+        phases: PHASES
+            .iter()
+            .enumerate()
+            .map(|(k, name)| (name.to_string(), spread(frames.iter().map(|f| f.phases[k]).collect())))
+            .collect(),
         work,
         per_s: (work.0 / seconds, work.1 / seconds),
         backlog_s,
-        backlog_per_s: (backlog.iter().map(|f| f.work.scans).sum::<f64>() / backlog_s, backlog.iter().map(|f| f.work.bakes).sum::<f64>() / backlog_s),
+        backlog_per_s: (
+            backlog.iter().map(|f| f.work.scans).sum::<f64>() / backlog_s,
+            backlog.iter().map(|f| f.work.bakes).sum::<f64>() / backlog_s,
+        ),
         tick_per_bake: (work.1 > 0.0).then(|| tick_ms / work.1),
         mounts: (sum(&|f| f.mounts.added), sum(&|f| f.mounts.removed)),
         census: census_mean(frames),

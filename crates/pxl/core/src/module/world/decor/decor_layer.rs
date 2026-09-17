@@ -305,16 +305,19 @@ impl<'s> DecorBuild<'s> {
                     let rotation = rng.unit() * core::f64::consts::PI * 2.0;
                     let hidden = chunk.hide == Some((bands[k], pos));
                     let h = size / 2.0;
-                    scratch.push(first + variant as usize, Instance {
-                        x: (x as f64 * STEP_UNITS + h) as f32,
-                        y: (y as f64 * STEP_UNITS + h) as f32,
-                        z: (bands[k] as f64 * BAND_CELLS as f64 + z as f64 * STEP_UNITS) as f32,
-                        rotation: rotation as f32,
-                        scale: 1.0,
-                        flags: if hidden { HIDDEN_FLAG } else { 0 },
-                        band: bands[k] as u32,
-                        pos,
-                    });
+                    scratch.push(
+                        first + variant as usize,
+                        Instance {
+                            x: (x as f64 * STEP_UNITS + h) as f32,
+                            y: (y as f64 * STEP_UNITS + h) as f32,
+                            z: (bands[k] as f64 * BAND_CELLS as f64 + z as f64 * STEP_UNITS) as f32,
+                            rotation: rotation as f32,
+                            scale: 1.0,
+                            flags: if hidden { HIDDEN_FLAG } else { 0 },
+                            band: bands[k] as u32,
+                            pos,
+                        },
+                    );
                 }
             }
 
@@ -347,16 +350,19 @@ impl<'s> DecorBuild<'s> {
                         if has_entries && store.cell(chunk.col_idx, dx, dy, ele).is_some_and(|c| c.solid > 0) {
                             continue;
                         }
-                        scratch.push(first + variant as usize, Instance {
-                            x: (dx as f64 + 0.5) as f32,
-                            y: (dy as f64 + 0.5) as f32,
-                            z: ele as f32,
-                            rotation: rotation as f32,
-                            scale: scale as f32,
-                            flags: 0,
-                            band: NO_ENTRY,
-                            pos: 0,
-                        });
+                        scratch.push(
+                            first + variant as usize,
+                            Instance {
+                                x: (dx as f64 + 0.5) as f32,
+                                y: (dy as f64 + 0.5) as f32,
+                                z: ele as f32,
+                                rotation: rotation as f32,
+                                scale: scale as f32,
+                                flags: 0,
+                                band: NO_ENTRY,
+                                pos: 0,
+                            },
+                        );
                     }
                 }
             }

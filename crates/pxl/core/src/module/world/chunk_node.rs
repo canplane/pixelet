@@ -197,7 +197,12 @@ type Queue = VecDeque<Event>;
 fn page_lanes(tile: &Tile) -> PageLanes {
     let g = &tile.terrain.ground;
     PageLanes {
-        ground: [g.land.as_slice().as_ptr() as usize, g.water.as_slice().as_ptr() as usize, g.structure.as_slice().as_ptr() as usize, g.transport.as_slice().as_ptr() as usize],
+        ground: [
+            g.land.as_slice().as_ptr() as usize,
+            g.water.as_slice().as_ptr() as usize,
+            g.structure.as_slice().as_ptr() as usize,
+            g.transport.as_slice().as_ptr() as usize,
+        ],
         ele: tile.terrain.ele.as_slice().as_ptr() as usize,
     }
 }

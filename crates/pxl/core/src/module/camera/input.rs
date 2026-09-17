@@ -262,7 +262,14 @@ fn do_pan(dx: f64, dy: f64) {
     let desired = if use_settings_store().ground_snap { ground_or_raw(&next_center) } else { next_center };
     // Gated after the snap, not before: the snap moves the target's Z, and the
     // eye rides on it. Panning is the one control that moves the target.
-    use_map_store().set_map_center(allowed_pan(ViewTriple { dist: view_state.dist, polar: view_state.polar, azimuth: view_state.azimuth }, &desired));
+    use_map_store().set_map_center(allowed_pan(
+        ViewTriple {
+            dist: view_state.dist,
+            polar: view_state.polar,
+            azimuth: view_state.azimuth,
+        },
+        &desired,
+    ));
 }
 
 /// Azimuth tracks the cursor's angle around screen center since drag-start

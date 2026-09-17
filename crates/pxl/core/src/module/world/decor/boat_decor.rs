@@ -3,9 +3,9 @@
 //! The boat kind as a bundle: boat_kind.rs's placement rules bound to the
 //! models kind.json lists for it.
 
-use super::kind::decor_kinds::boat as S;
 use super::boat_kind::{BOAT_KIND, BOAT_RULES};
 use super::decor_layer::{bind_models, DecorKindBundle};
+use super::kind::decor_kinds::boat as S;
 use crate::sys::global::Global;
 
 static BUNDLE: Global<DecorKindBundle> = Global::new();

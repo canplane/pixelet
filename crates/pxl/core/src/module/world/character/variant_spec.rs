@@ -14,8 +14,23 @@
 pub mod PERSON {
     /// World units tall — one cell.
     pub const size: f64 = 1.0;
-    pub const keys: &[&str] = &["female-1", "female-2", "female-3", "female-4", "female-5", "female-6", "male-1", "male-2", "male-3", "male-4", "male-5", "male-6"];
-    pub const models: &[&str] = &["actor/kenney_mini_characters/female-a.glb", "actor/kenney_mini_characters/female-b.glb", "actor/kenney_mini_characters/female-c.glb", "actor/kenney_mini_characters/female-d.glb", "actor/kenney_mini_characters/female-e.glb", "actor/kenney_mini_characters/female-f.glb", "actor/kenney_mini_characters/male-a.glb", "actor/kenney_mini_characters/male-b.glb", "actor/kenney_mini_characters/male-c.glb", "actor/kenney_mini_characters/male-d.glb", "actor/kenney_mini_characters/male-e.glb", "actor/kenney_mini_characters/male-f.glb"];
+    pub const keys: &[&str] = &[
+        "female-1", "female-2", "female-3", "female-4", "female-5", "female-6", "male-1", "male-2", "male-3", "male-4", "male-5", "male-6",
+    ];
+    pub const models: &[&str] = &[
+        "actor/kenney_mini_characters/female-a.glb",
+        "actor/kenney_mini_characters/female-b.glb",
+        "actor/kenney_mini_characters/female-c.glb",
+        "actor/kenney_mini_characters/female-d.glb",
+        "actor/kenney_mini_characters/female-e.glb",
+        "actor/kenney_mini_characters/female-f.glb",
+        "actor/kenney_mini_characters/male-a.glb",
+        "actor/kenney_mini_characters/male-b.glb",
+        "actor/kenney_mini_characters/male-c.glb",
+        "actor/kenney_mini_characters/male-d.glb",
+        "actor/kenney_mini_characters/male-e.glb",
+        "actor/kenney_mini_characters/male-f.glb",
+    ];
     pub const skin: &str = "actor/kenney_mini_characters/colormap.png";
     pub const KEYS: &[&str] = &["size", "keys", "models", "skin"];
 }
@@ -24,8 +39,58 @@ pub mod PERSON {
 pub mod PET {
     /// World units tall — a quarter cell, the step OBJECT_SIZES also takes.
     pub const size: f64 = 0.25;
-    pub const keys: &[&str] = &["beaver", "bee", "bunny", "cat", "caterpillar", "chick", "cow", "crab", "deer", "dog", "elephant", "fish", "fox", "giraffe", "hog", "koala", "lion", "monkey", "panda", "parrot", "penguin", "pig", "polar", "tiger"];
-    pub const models: &[&str] = &["actor/kenney_cube_pets/beaver.glb", "actor/kenney_cube_pets/bee.glb", "actor/kenney_cube_pets/bunny.glb", "actor/kenney_cube_pets/cat.glb", "actor/kenney_cube_pets/caterpillar.glb", "actor/kenney_cube_pets/chick.glb", "actor/kenney_cube_pets/cow.glb", "actor/kenney_cube_pets/crab.glb", "actor/kenney_cube_pets/deer.glb", "actor/kenney_cube_pets/dog.glb", "actor/kenney_cube_pets/elephant.glb", "actor/kenney_cube_pets/fish.glb", "actor/kenney_cube_pets/fox.glb", "actor/kenney_cube_pets/giraffe.glb", "actor/kenney_cube_pets/hog.glb", "actor/kenney_cube_pets/koala.glb", "actor/kenney_cube_pets/lion.glb", "actor/kenney_cube_pets/monkey.glb", "actor/kenney_cube_pets/panda.glb", "actor/kenney_cube_pets/parrot.glb", "actor/kenney_cube_pets/penguin.glb", "actor/kenney_cube_pets/pig.glb", "actor/kenney_cube_pets/polar.glb", "actor/kenney_cube_pets/tiger.glb"];
+    pub const keys: &[&str] = &[
+        "beaver",
+        "bee",
+        "bunny",
+        "cat",
+        "caterpillar",
+        "chick",
+        "cow",
+        "crab",
+        "deer",
+        "dog",
+        "elephant",
+        "fish",
+        "fox",
+        "giraffe",
+        "hog",
+        "koala",
+        "lion",
+        "monkey",
+        "panda",
+        "parrot",
+        "penguin",
+        "pig",
+        "polar",
+        "tiger",
+    ];
+    pub const models: &[&str] = &[
+        "actor/kenney_cube_pets/beaver.glb",
+        "actor/kenney_cube_pets/bee.glb",
+        "actor/kenney_cube_pets/bunny.glb",
+        "actor/kenney_cube_pets/cat.glb",
+        "actor/kenney_cube_pets/caterpillar.glb",
+        "actor/kenney_cube_pets/chick.glb",
+        "actor/kenney_cube_pets/cow.glb",
+        "actor/kenney_cube_pets/crab.glb",
+        "actor/kenney_cube_pets/deer.glb",
+        "actor/kenney_cube_pets/dog.glb",
+        "actor/kenney_cube_pets/elephant.glb",
+        "actor/kenney_cube_pets/fish.glb",
+        "actor/kenney_cube_pets/fox.glb",
+        "actor/kenney_cube_pets/giraffe.glb",
+        "actor/kenney_cube_pets/hog.glb",
+        "actor/kenney_cube_pets/koala.glb",
+        "actor/kenney_cube_pets/lion.glb",
+        "actor/kenney_cube_pets/monkey.glb",
+        "actor/kenney_cube_pets/panda.glb",
+        "actor/kenney_cube_pets/parrot.glb",
+        "actor/kenney_cube_pets/penguin.glb",
+        "actor/kenney_cube_pets/pig.glb",
+        "actor/kenney_cube_pets/polar.glb",
+        "actor/kenney_cube_pets/tiger.glb",
+    ];
     pub const skin: &str = "actor/kenney_cube_pets/colormap.png";
     pub const KEYS: &[&str] = &["size", "keys", "models", "skin"];
 }

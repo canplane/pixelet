@@ -66,7 +66,11 @@ fn page_table_a_table_with_a_world_topic_writes_its_pages_to_the_change_log() {
     table.set(page(5, 6, 3), 2);
     table.set(page(7, 8, 0), 3);
     assert_eq!(table.revision(), before + 3);
-    assert_eq!(world_changes().revision_of(TERRAIN_PAGE, page(5, 6, 0) as i64) as u64, before as u64 + 2, "each page once per write, Z ignored");
+    assert_eq!(
+        world_changes().revision_of(TERRAIN_PAGE, page(5, 6, 0) as i64) as u64,
+        before as u64 + 2,
+        "each page once per write, Z ignored"
+    );
     table.clear(page(7, 8, 0));
     assert_eq!(world_changes().revision_of(TERRAIN_PAGE, page(7, 8, 0) as i64) as u64, 0, "a page that left is forgotten");
 }

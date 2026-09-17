@@ -80,7 +80,11 @@ fn store() -> &'static mut Store {
             let n = bundle.variants.len();
             assert!(n <= VARIANTS, "decor: {} has {n} variants, room for {VARIANTS}", bundle.kind);
             let none = vec![None; n];
-            DecorBundleAssets { bundle, models: none.clone(), skins: none }
+            DecorBundleAssets {
+                bundle,
+                models: none.clone(),
+                skins: none,
+            }
         };
         Store {
             entries: DECOR_BUNDLES().map(entry),

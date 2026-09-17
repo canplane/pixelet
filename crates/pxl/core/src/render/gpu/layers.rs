@@ -65,7 +65,11 @@ impl Mips {
                 let group = object();
                 (g.bind_group)(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
                 let pass = object();
-                (g.pass)(pass, encoder, &super::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, super::api::NONE, super::api::NONE));
+                (g.pass)(
+                    pass,
+                    encoder,
+                    &super::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, super::api::NONE, super::api::NONE),
+                );
                 (g.set_pipeline)(pass, self.pipeline);
                 (g.set_bind_group)(pass, 0, group, &[]);
                 (g.draw)(pass, 3, 1, 0, 0);
@@ -162,7 +166,9 @@ impl Layers {
         let (cell, size) = (SHIPPED_SHEET.cell as f32, LAYER_TEX_SZ as f32);
         for (tex, face) in [(self.top, CubeFace::Top), (self.side, CubeFace::Side)] {
             each_layer(|channel, type_key, layer, _| {
-                let Some(tile) = shipped_texture_tile(channel, type_key, face).or_else(|| shipped_texture_tile(channel, type_key, CubeFace::Top)) else { return };
+                let Some(tile) = shipped_texture_tile(channel, type_key, face).or_else(|| shipped_texture_tile(channel, type_key, CubeFace::Top)) else {
+                    return;
+                };
                 let mut p = Paint::new();
                 p.size(LAYER_TEX_SZ, LAYER_TEX_SZ);
                 p.image(image, tile.x as f32, tile.y as f32, cell, cell, 0.0, 0.0, size, size);

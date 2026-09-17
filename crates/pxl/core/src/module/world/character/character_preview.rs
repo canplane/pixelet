@@ -57,11 +57,7 @@ fn cases() -> &'static mut Cases {
 }
 
 fn variant_of(key: &str) -> Option<&'static CharacterVariant> {
-    PET_VARIANTS()
-        .iter()
-        .chain(PERSON_VARIANTS_FEMALE())
-        .chain(PERSON_VARIANTS_MALE())
-        .find(|v| v.key == key)
+    PET_VARIANTS().iter().chain(PERSON_VARIANTS_FEMALE()).chain(PERSON_VARIANTS_MALE()).find(|v| v.key == key)
 }
 
 /// Opens case `id` over the variant named `key`; a case already open under

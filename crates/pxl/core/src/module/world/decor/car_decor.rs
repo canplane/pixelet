@@ -3,9 +3,9 @@
 //! The car kind as a bundle: car_kind.rs's placement rules bound to the
 //! models kind.json lists for it.
 
-use super::kind::decor_kinds::car as S;
 use super::car_kind::{CAR_KIND, CAR_RULES};
 use super::decor_layer::{bind_models, DecorKindBundle};
+use super::kind::decor_kinds::car as S;
 use crate::sys::global::Global;
 
 static BUNDLE: Global<DecorKindBundle> = Global::new();

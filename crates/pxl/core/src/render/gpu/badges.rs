@@ -242,11 +242,24 @@ impl BadgePass {
             }
             self.levels = mip_levels(flush.size, flush.size);
             self.sheet = object();
-            (g.texture)(self.sheet, flush.size, flush.size, 1, format::RGBA8_SRGB, self.levels, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT);
+            (g.texture)(
+                self.sheet,
+                flush.size,
+                flush.size,
+                1,
+                format::RGBA8_SRGB,
+                self.levels,
+                1,
+                texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT,
+            );
             self.sheet_view = object();
             (g.view)(self.sheet_view, self.sheet, dimension::D2, 0, self.levels, 0, 1);
             self.sheet_group = object();
-            (g.bind_group)(self.sheet_group, self.built.layouts[1], &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+            (g.bind_group)(
+                self.sheet_group,
+                self.built.layouts[1],
+                &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
+            );
             atlas.live()
         } else {
             flush.dirty

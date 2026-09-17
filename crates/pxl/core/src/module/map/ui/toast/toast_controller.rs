@@ -141,16 +141,17 @@ pub fn toast_controller_step() {
 
 /// What the shell should show or dismiss, in order.
 pub fn take_toast_commands() -> Vec<ToastCommand> {
-    CONTROLLER.get(|| Controller {
-        shown_location: false,
-        location_for: None,
-        world_for: None,
-        was_world_loading: false,
-        companion_first_load_done: false,
-        dismiss_world_at: None,
-        commands: Vec::new(),
-    })
-    .commands
-    .drain(..)
-    .collect()
+    CONTROLLER
+        .get(|| Controller {
+            shown_location: false,
+            location_for: None,
+            world_for: None,
+            was_world_loading: false,
+            companion_first_load_done: false,
+            dismiss_world_at: None,
+            commands: Vec::new(),
+        })
+        .commands
+        .drain(..)
+        .collect()
 }

@@ -16,7 +16,6 @@
 
 use crate::kit::array::{AnyElement, ArrayBuffer, ArrayBufferView, Kind, TypedArray};
 
-
 pub trait TypedAlloc {
     /// A zeroed view of `length` elements of `kind`: `take` with the
     /// constructor erased, so an allocator can be held as `dyn TypedAlloc`.

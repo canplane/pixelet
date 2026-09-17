@@ -198,7 +198,44 @@ pub mod CATEGORY_THEME {
         pub const color: &str = "#7986cb";
         pub const KEYS: &[&str] = &["icon", "color"];
     }
-    pub const KEYS: &[&str] = &["hospital", "clinic", "pharmacy", "dentist", "restaurant", "cafe", "fast_food", "bar", "pub", "bank", "atm", "school", "university", "college", "kindergarten", "library", "supermarket", "convenience", "mall", "department_store", "clothes", "subway", "station", "bus_station", "fuel", "parking", "hotel", "guest_house", "park", "museum", "attraction", "place_of_worship", "police", "fire_station", "post_office", "townhall"];
+    pub const KEYS: &[&str] = &[
+        "hospital",
+        "clinic",
+        "pharmacy",
+        "dentist",
+        "restaurant",
+        "cafe",
+        "fast_food",
+        "bar",
+        "pub",
+        "bank",
+        "atm",
+        "school",
+        "university",
+        "college",
+        "kindergarten",
+        "library",
+        "supermarket",
+        "convenience",
+        "mall",
+        "department_store",
+        "clothes",
+        "subway",
+        "station",
+        "bus_station",
+        "fuel",
+        "parking",
+        "hotel",
+        "guest_house",
+        "park",
+        "museum",
+        "attraction",
+        "place_of_worship",
+        "police",
+        "fire_station",
+        "post_office",
+        "townhall",
+    ];
 }
 
 pub mod DEFAULT_THEME {

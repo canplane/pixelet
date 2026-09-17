@@ -4,8 +4,8 @@
 
 use core::fmt::{self, Write};
 
-pub use pxl_shared::bake::published::{BakeKind as TileKind, PUBLISHED_VERSION};
 use pxl_shared::asset::ingested::{IngestedAsset, INGESTED};
+pub use pxl_shared::bake::published::{BakeKind as TileKind, PUBLISHED_VERSION};
 
 /// Everything the server answers. The app routes on paths of its own, so a
 /// relay tells a deep link from a server request by this root alone.

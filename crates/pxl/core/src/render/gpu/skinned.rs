@@ -159,7 +159,9 @@ impl SkinnedPass {
             }
             let offset = slot * self.stride;
             slot += 1;
-            let (Some((mesh, vertex_cnt, index_cnt)), Some(skin)) = (blocks.get(d[0]), self.skin_of(d[2])) else { continue };
+            let (Some((mesh, vertex_cnt, index_cnt)), Some(skin)) = (blocks.get(d[0]), self.skin_of(d[2])) else {
+                continue;
+            };
             let Some(palette) = blocks.group(g, d[1], self.lit.layouts[3]) else { continue };
             if self.draw_group == 0 {
                 continue;

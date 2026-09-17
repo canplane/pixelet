@@ -158,12 +158,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         Quoted(pose_status_str(orientation.status)),
         Or(orientation.orientation.and_then(|o| o.heading).map(Num))
     )?;
-    write!(
-        out,
-        "\"view\":{{\"azimuth\":{}}},\"is_follow_mode\":{},",
-        Num(camera.view_state.azimuth),
-        camera.is_follow_mode
-    )?;
+    write!(out, "\"view\":{{\"azimuth\":{}}},\"is_follow_mode\":{},", Num(camera.view_state.azimuth), camera.is_follow_mode)?;
     write!(
         out,
         "\"ui\":{{\"active_tool\":{},\"object_cube_num_id\":{},\"object_size\":{},\"decor_id\":{},\"recent_picks\":[",
@@ -302,11 +297,15 @@ pub fn ui_action(text: &str) -> bool {
             use_ui_store().set_object_size(size);
         }
         "select_cube" => {
-            let Some(cube) = f64_of(&action, "num_id").and_then(|n| placeable_cube_of(n as u32)) else { return false };
+            let Some(cube) = f64_of(&action, "num_id").and_then(|n| placeable_cube_of(n as u32)) else {
+                return false;
+            };
             use_ui_store().select_cube(cube);
         }
         "select_decor" => {
-            let Some(id) = text_of(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else { return false };
+            let Some(id) = text_of(&action, "id").and_then(|id| decor_ids.iter().copied().find(|d| *d == id.as_str())) else {
+                return false;
+            };
             use_ui_store().select_decor(id);
         }
         "append_chat_line" => {

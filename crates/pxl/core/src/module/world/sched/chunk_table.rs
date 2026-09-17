@@ -652,7 +652,9 @@ impl Scheduler {
     /// A chunk with no page has no decor to build.
     fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], emit: &mut impl FnMut(Event)) -> bool {
         let id = self.slots[i].id;
-        let Some((base, col_idx, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else { return true };
+        let Some((base, col_idx, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else {
+            return true;
+        };
         let show_decor = self.frame.is_some_and(|f| f.show_decor);
         let (col_x, col_y) = (ivec::X(base), ivec::Y(base));
         let page_idx = ivec::gather(col_x >> PAGE_SHAMT, col_y >> PAGE_SHAMT, 0);
@@ -704,12 +706,7 @@ impl Scheduler {
             unsafe { built.write(world.volumes.mem().add(at)) };
             let before = self.slots[i].retained();
             let handle = self.draw.upload(at as u32, bytes, 0, 0);
-            self.slots[i].decor.push(Decor {
-                step,
-                at: at as u32,
-                bytes,
-                handle,
-            });
+            self.slots[i].decor.push(Decor { step, at: at as u32, bytes, handle });
             self.account(i, before);
             emit(Event::Decor { id, step, at: at as u32, bytes });
         }

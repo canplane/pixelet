@@ -181,5 +181,23 @@ pub mod SETTINGS {
         pub const section: &str = "character";
         pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
-    pub const KEYS: &[&str] = &["show_poi", "show_decor", "show_structures", "lock_camera_tilt", "camera_terrain", "ground_snap", "enable_terrain_carving", "show_edge_shade", "show_rim_light", "show_shadow_map", "texture_pack", "msaa", "show_debug_objects", "show_ledger", "pixel_dither", "person_variant_key", "pet_variant_key"];
+    pub const KEYS: &[&str] = &[
+        "show_poi",
+        "show_decor",
+        "show_structures",
+        "lock_camera_tilt",
+        "camera_terrain",
+        "ground_snap",
+        "enable_terrain_carving",
+        "show_edge_shade",
+        "show_rim_light",
+        "show_shadow_map",
+        "texture_pack",
+        "msaa",
+        "show_debug_objects",
+        "show_ledger",
+        "pixel_dither",
+        "person_variant_key",
+        "pet_variant_key",
+    ];
 }

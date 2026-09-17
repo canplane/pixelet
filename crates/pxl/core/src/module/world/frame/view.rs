@@ -126,7 +126,11 @@ pub fn view_resize(width: f64, height: f64) {
 pub fn view_compose() {
     let v = view();
     let o = orbit_local_offset(v.dist, v.polar);
-    v.eye = Vec3 { x: 0.0, y: -o.horiz_dist, z: o.vert_dist };
+    v.eye = Vec3 {
+        x: 0.0,
+        y: -o.horiz_dist,
+        z: o.vert_dist,
+    };
     mat4_look_at(&mut v.view_matrix, v.eye, ORIGIN, UP);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);

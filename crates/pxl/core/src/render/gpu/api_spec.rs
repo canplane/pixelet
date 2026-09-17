@@ -101,7 +101,31 @@ pub mod paint {
     pub const FILL_TEXT: u32 = 22;
     /// image, sx, sy, sw, sh, dx, dy, dw, dh
     pub const IMAGE: u32 = 23;
-    pub const KEYS: &[&str] = &["SIZE", "SAVE", "RESTORE", "TRANSLATE", "SCALE", "SMOOTHING", "FILL_STYLE", "STROKE_STYLE", "LINE_WIDTH", "FONT", "TEXT_ALIGN", "TEXT_BASELINE", "BEGIN_PATH", "ROUND_RECT", "ARC", "MOVE_TO", "LINE_TO", "CLOSE_PATH", "FILL", "STROKE", "FILL_RECT", "FILL_TEXT", "IMAGE"];
+    pub const KEYS: &[&str] = &[
+        "SIZE",
+        "SAVE",
+        "RESTORE",
+        "TRANSLATE",
+        "SCALE",
+        "SMOOTHING",
+        "FILL_STYLE",
+        "STROKE_STYLE",
+        "LINE_WIDTH",
+        "FONT",
+        "TEXT_ALIGN",
+        "TEXT_BASELINE",
+        "BEGIN_PATH",
+        "ROUND_RECT",
+        "ARC",
+        "MOVE_TO",
+        "LINE_TO",
+        "CLOSE_PATH",
+        "FILL",
+        "STROKE",
+        "FILL_RECT",
+        "FILL_TEXT",
+        "IMAGE",
+    ];
 }
 
 /// A pipeline record's codes (render/shader.rs): the topology, the cull mode, the
@@ -142,5 +166,38 @@ pub mod record {
     pub const SAMPLER: u32 = 6;
     pub const SAMPLER_COMPARISON: u32 = 7;
     pub const FRAME_DEPTH: u32 = 8;
-    pub const KEYS: &[&str] = &["TRIANGLES", "STRIP", "LINES", "CULL_NONE", "CULL_BACK", "ALWAYS", "GREATER", "GREATER_EQUAL", "LESS", "NO_DEPTH", "OPAQUE", "ALPHA", "FRAME_SAMPLES", "ONE_SAMPLE", "PER_VERTEX", "F32", "F32X2", "F32X3", "F32X4", "U32X4", "VERTEX", "FRAGMENT", "BOTH", "UNIFORM", "UNIFORM_DYNAMIC", "STORAGE", "TEXTURE", "TEXTURE_ARRAY", "DEPTH", "SAMPLER", "SAMPLER_COMPARISON", "FRAME_DEPTH"];
+    pub const KEYS: &[&str] = &[
+        "TRIANGLES",
+        "STRIP",
+        "LINES",
+        "CULL_NONE",
+        "CULL_BACK",
+        "ALWAYS",
+        "GREATER",
+        "GREATER_EQUAL",
+        "LESS",
+        "NO_DEPTH",
+        "OPAQUE",
+        "ALPHA",
+        "FRAME_SAMPLES",
+        "ONE_SAMPLE",
+        "PER_VERTEX",
+        "F32",
+        "F32X2",
+        "F32X3",
+        "F32X4",
+        "U32X4",
+        "VERTEX",
+        "FRAGMENT",
+        "BOTH",
+        "UNIFORM",
+        "UNIFORM_DYNAMIC",
+        "STORAGE",
+        "TEXTURE",
+        "TEXTURE_ARRAY",
+        "DEPTH",
+        "SAMPLER",
+        "SAMPLER_COMPARISON",
+        "FRAME_DEPTH",
+    ];
 }

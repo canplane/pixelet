@@ -26,8 +26,8 @@ use pxl_shared::bake::format::PoiPage;
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_RANGE};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
-use pxl_shared::spec::space::xy::TO_XY;
 use pxl_shared::spec::space::v3::V3;
+use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::ds::map::{I64Keys, IndexedMap};
 use xpute_core::ds::spatial_hash::SpatialHash;
 

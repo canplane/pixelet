@@ -239,7 +239,11 @@ impl Blocks {
         let buffer = object();
         // Every block is usable every way a draw reads one: a mesh's lanes as
         // vertices and indices, a decor block's as storage.
-        (g.buffer)(buffer, buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        (g.buffer)(
+            buffer,
+            buffer_size(self.len[i]),
+            buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
         (g.write_buffer)(buffer, 0, memory(self.at[i], self.len[i] & !3));
         self.buffer[i] = buffer;
         self.group[i] = 0;
@@ -408,7 +412,12 @@ impl DebugPass {
         (g.bind_group)(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         let draw_group = object();
         (g.bind_group)(draw_group, built.layouts[1], &buffer_entry(0, draw_buffer));
-        DebugPass { built, draw_buffer, frame_group, draw_group }
+        DebugPass {
+            built,
+            draw_buffer,
+            frame_group,
+            draw_group,
+        }
     }
 
     /// The frame's segments into the open pass; how many vertices.
@@ -525,9 +534,20 @@ impl Renderer {
             query_set,
             chunk,
             chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples),
-            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples)],
+            ghost: [
+                pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
+                pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
+            ],
             decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, device.align),
-            skinned: SkinnedPass::new(g, &mut pipelines, samples, frame_buffer, shadow.entries(1), Some((shadow.light_frame, shadow.blank_entries(1))), device.align),
+            skinned: SkinnedPass::new(
+                g,
+                &mut pipelines,
+                samples,
+                frame_buffer,
+                shadow.entries(1),
+                Some((shadow.light_frame, shadow.blank_entries(1))),
+                device.align,
+            ),
             puck: PuckPass::new(g, &mut pipelines, samples, frame_buffer),
             badges: BadgePass::new(g, &mut pipelines, samples),
             debug: DebugPass::new(g, &mut pipelines, samples, frame_buffer),
@@ -576,7 +596,10 @@ impl Renderer {
         let p = &mut self.pipelines;
         self.chunk = p.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
         self.chunk_depth = p.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples);
-        self.ghost = [p.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples), p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples)];
+        self.ghost = [
+            p.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
+            p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
+        ];
         self.sky_built = p.build(g, PIPELINE_SKY, format::CANVAS, samples);
         self.decor.set_samples(g, p, samples);
         self.skinned.set_samples(g, p, samples);
@@ -728,7 +751,11 @@ impl Renderer {
         let (color, resolve) = if world.msaa_view != 0 { (world.msaa_view, canvas_view) } else { (canvas_view, 0) };
         let q = self.query_set;
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, q, if q != 0 { 0 } else { NONE }, NONE));
+        (g.pass)(
+            pass,
+            encoder,
+            &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, q, if q != 0 { 0 } else { NONE }, NONE),
+        );
         (g.set_pipeline)(pass, self.sky_built.pipeline);
         (g.set_bind_group)(pass, 0, self.sky_group, &[]);
         (g.draw)(pass, 3, 1, 0, 0);
@@ -772,7 +799,9 @@ impl Renderer {
             }
             // The case's actor's draw, and where it stands; nothing drawn until
             // the actor has one.
-            let Some(own) = draws.chunks_exact(DRAW_WORDS).find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else { continue };
+            let Some(own) = draws.chunks_exact(DRAW_WORDS).find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else {
+                continue;
+            };
             targets(g, s, 1);
             let slot = xpute_core::ds::handle::handle_slot(id) as usize;
             if self.cases[slot].is_none() {
@@ -894,7 +923,16 @@ fn targets(g: &GpuApi, s: &mut Surface, samples: u32) {
         release(id);
     }
     s.depth = object();
-    (g.texture)(s.depth, width, height, 1, format::DEPTH32, 1, samples, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+    (g.texture)(
+        s.depth,
+        width,
+        height,
+        1,
+        format::DEPTH32,
+        1,
+        samples,
+        texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
+    );
     s.depth_view = object();
     (g.view)(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
     if samples > 1 {

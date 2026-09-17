@@ -11,7 +11,12 @@ fn close(a: f64, b: f64) {
 }
 
 fn plan(start: Vec2, target: Vec2, duration: f64) -> WalkPlan {
-    WalkPlan { start, target, start_time: 0.0, duration }
+    WalkPlan {
+        start,
+        target,
+        start_time: 0.0,
+        duration,
+    }
 }
 
 #[test]

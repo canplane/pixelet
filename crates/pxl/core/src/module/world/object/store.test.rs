@@ -145,13 +145,17 @@ fn object_store_entries_a_column_walk_s_chunk_local_corner_agrees_with_the_absol
     let col_idx = TO_XY(c.i);
     let base = object_col_idx_of(L3_IDX(col_idx), L2_IDX_IN_L3(col_idx));
     let mut seen = 0;
-    each_col_entry(base, &mut |e| {
-        seen += 1;
-        assert_eq!(ivec::Z(e.corner().i), 130);
-        assert_eq!(e.lx, (x0 % 64) as f64);
-        assert_eq!(e.ly, 5.0);
-        assert_eq!(e.lz, 130.0);
-    }, false);
+    each_col_entry(
+        base,
+        &mut |e| {
+            seen += 1;
+            assert_eq!(ivec::Z(e.corner().i), 130);
+            assert_eq!(e.lx, (x0 % 64) as f64);
+            assert_eq!(e.ly, 5.0);
+            assert_eq!(e.lz, 130.0);
+        },
+        false,
+    );
     assert_eq!(seen, 1);
 }
 
@@ -185,17 +189,30 @@ fn object_store_revisions_a_column_s_revisions_move_on_its_own_changes_on_the_ri
     let objects1 = object_col_revision(col_idx);
     let solid = corner(100_021, 0, 0);
     place(&solid, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    assert!(object_col_revision(L2_IDX(TO_XY(solid.i))) > if L2_IDX(TO_XY(solid.i)) == col_idx { objects1 } else { objects0 }, "objects channel moved");
+    assert!(
+        object_col_revision(L2_IDX(TO_XY(solid.i))) > if L2_IDX(TO_XY(solid.i)) == col_idx { objects1 } else { objects0 },
+        "objects channel moved"
+    );
 }
 
 #[test]
 fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_puts_every_object_back_where_it_was() {
     let _g = serial();
     let a = corner(5000, 7000, 12);
-    let b = PVF3 { i: ivec::gather(5001, 7000, 12), f: fvec::gather(fvec::from_real(0.25), 0, 0) };
+    let b = PVF3 {
+        i: ivec::gather(5001, 7000, 12),
+        f: fvec::gather(fvec::from_real(0.25), 0, 0),
+    };
     place(&a, 1.0, PlaceableCube::Block(Block::red), false);
     place(&b, 0.25, PlaceableCube::Block(Block::blue), false);
-    place_decor(&PVF3 { i: ivec::gather(5000, 7001, 12), f: 0 }, DECOR_SIZE, "tree");
+    place_decor(
+        &PVF3 {
+            i: ivec::gather(5000, 7001, 12),
+            f: 0,
+        },
+        DECOR_SIZE,
+        "tree",
+    );
     let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
     let before: Vec<_> = get_objects_near(&a, 1.0).iter().map(shape).collect();
     assert_eq!(before.len(), 3);

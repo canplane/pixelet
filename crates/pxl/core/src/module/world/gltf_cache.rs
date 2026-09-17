@@ -68,7 +68,10 @@ pub fn load_gltf(url: &str) -> Option<Rc<Gltf>> {
         Some(_) => None,
         None => {
             l.gltf.insert(url.to_string(), Entry::Pending);
-            l.requests.push(LoadRequest { kind: LoadKind::Gltf, url: url.to_string() });
+            l.requests.push(LoadRequest {
+                kind: LoadKind::Gltf,
+                url: url.to_string(),
+            });
             None
         }
     }
@@ -82,7 +85,10 @@ pub fn load_image(url: &str) -> Option<u32> {
         Some(_) => None,
         None => {
             l.image.insert(url.to_string(), Entry::Pending);
-            l.requests.push(LoadRequest { kind: LoadKind::Image, url: url.to_string() });
+            l.requests.push(LoadRequest {
+                kind: LoadKind::Image,
+                url: url.to_string(),
+            });
             None
         }
     }

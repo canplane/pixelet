@@ -40,7 +40,10 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
             }
             cols.push(col_idx);
             // The chunk's corner in the local frame; entries are relative to it.
-            let local = PVF3 { i: ivec::sub(FROM_L2_IDX(col_idx), map_origin), f: 0 };
+            let local = PVF3 {
+                i: ivec::sub(FROM_L2_IDX(col_idx), map_origin),
+                f: 0,
+            };
             let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
             each_col_entry(
                 col_idx,

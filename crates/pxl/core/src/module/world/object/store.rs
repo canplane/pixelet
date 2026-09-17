@@ -360,7 +360,9 @@ impl EntryCursor {
     pub fn object(&self) -> ObjectLayerEntry {
         let PVF3 { i, f } = self.corner();
         let kind = if object_value_is_decor(self.state) {
-            EntryKind::Decor { decor_id: decor_id_from_num(self.state) }
+            EntryKind::Decor {
+                decor_id: decor_id_from_num(self.state),
+            }
         } else if object_value_is_air(self.state) {
             EntryKind::Air
         } else {
@@ -917,7 +919,11 @@ fn place_value_is_redundant(at: &PVF3, size: f64, cube: PlaceableCube, show_stru
 /// terrain would already show, this writes VOID — the same absence remove()
 /// itself produces.
 pub fn place(at: &PVF3, size: f64, cube: PlaceableCube, show_structures: bool) {
-    let val = if place_value_is_redundant(at, size, cube, show_structures) { VOID } else { placeable_cube_num_id(cube) };
+    let val = if place_value_is_redundant(at, size, cube, show_structures) {
+        VOID
+    } else {
+        placeable_cube_num_id(cube)
+    };
     write_object_value(at, size, val);
 }
 

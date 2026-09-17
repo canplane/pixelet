@@ -157,7 +157,9 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
 /// worked. Jumps do not come through here — a search result or a GPS recentre
 /// is a destination the user named, not a path they dragged.
 pub fn allowed_pan(view: ViewTriple, to_center: &PVF3) -> PVF3 {
-    let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else { return *to_center };
+    let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
+        return *to_center;
+    };
     let reached = allowed_step(&to_pose, &from_pose);
     if reached == to_pose {
         return *to_center;

@@ -37,11 +37,31 @@ pub mod decor_kinds {
         /// The kind's variants, each a model by its path under asset/, in the
         /// order the scatter picks among them: the fantasy town kit's five trees
         /// and the graveyard kit's four pines.
-        pub const models: &[&str] = &["decor/kenney_fantasy_town/tree.glb", "decor/kenney_fantasy_town/tree-high.glb", "decor/kenney_fantasy_town/tree-crooked.glb", "decor/kenney_fantasy_town/tree-high-round.glb", "decor/kenney_fantasy_town/tree-high-crooked.glb", "decor/kenney_graveyard_kit/pine.glb", "decor/kenney_graveyard_kit/pine-crooked.glb", "decor/kenney_graveyard_kit/pine-fall.glb", "decor/kenney_graveyard_kit/pine-fall-crooked.glb"];
+        pub const models: &[&str] = &[
+            "decor/kenney_fantasy_town/tree.glb",
+            "decor/kenney_fantasy_town/tree-high.glb",
+            "decor/kenney_fantasy_town/tree-crooked.glb",
+            "decor/kenney_fantasy_town/tree-high-round.glb",
+            "decor/kenney_fantasy_town/tree-high-crooked.glb",
+            "decor/kenney_graveyard_kit/pine.glb",
+            "decor/kenney_graveyard_kit/pine-crooked.glb",
+            "decor/kenney_graveyard_kit/pine-fall.glb",
+            "decor/kenney_graveyard_kit/pine-fall-crooked.glb",
+        ];
         /// Each variant's colormap, row for row with `models`: the Kenney packs keep
         /// the texture outside the glb and share it across the pack, and a kind's
         /// variants can come from more than one pack.
-        pub const skins: &[&str] = &["decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_graveyard_kit/colormap.png", "decor/kenney_graveyard_kit/colormap.png", "decor/kenney_graveyard_kit/colormap.png", "decor/kenney_graveyard_kit/colormap.png"];
+        pub const skins: &[&str] = &[
+            "decor/kenney_fantasy_town/colormap.png",
+            "decor/kenney_fantasy_town/colormap.png",
+            "decor/kenney_fantasy_town/colormap.png",
+            "decor/kenney_fantasy_town/colormap.png",
+            "decor/kenney_fantasy_town/colormap.png",
+            "decor/kenney_graveyard_kit/colormap.png",
+            "decor/kenney_graveyard_kit/colormap.png",
+            "decor/kenney_graveyard_kit/colormap.png",
+            "decor/kenney_graveyard_kit/colormap.png",
+        ];
         pub const orientation: &str = "random";
         pub const decor_id: &str = "tree";
         pub mod rules {
@@ -67,8 +87,18 @@ pub mod decor_kinds {
         /// to 1/4 of the first-pass value (0.015) after that read as boats covering
         /// the water, not scattered on it.
         pub const density: f64 = 0.002;
-        pub const models: &[&str] = &["decor/kenney_watercraft_pack/boat-row-small.glb", "decor/kenney_watercraft_pack/boat-fishing-small.glb", "decor/kenney_watercraft_pack/boat-sail-a.glb", "decor/kenney_watercraft_pack/boat-speed-a.glb"];
-        pub const skins: &[&str] = &["decor/kenney_watercraft_pack/colormap.png", "decor/kenney_watercraft_pack/colormap.png", "decor/kenney_watercraft_pack/colormap.png", "decor/kenney_watercraft_pack/colormap.png"];
+        pub const models: &[&str] = &[
+            "decor/kenney_watercraft_pack/boat-row-small.glb",
+            "decor/kenney_watercraft_pack/boat-fishing-small.glb",
+            "decor/kenney_watercraft_pack/boat-sail-a.glb",
+            "decor/kenney_watercraft_pack/boat-speed-a.glb",
+        ];
+        pub const skins: &[&str] = &[
+            "decor/kenney_watercraft_pack/colormap.png",
+            "decor/kenney_watercraft_pack/colormap.png",
+            "decor/kenney_watercraft_pack/colormap.png",
+            "decor/kenney_watercraft_pack/colormap.png",
+        ];
         pub const orientation: &str = "random";
         pub mod rules {
             pub const land: &str = "any";
@@ -95,8 +125,20 @@ pub mod decor_kinds {
         /// Much sparser than trees/boats: a highway with a car every couple of
         /// cells would read as gridlock, not ambient traffic.
         pub const density: f64 = 0.004;
-        pub const models: &[&str] = &["decor/kenney_car_kit/sedan.glb", "decor/kenney_car_kit/suv.glb", "decor/kenney_car_kit/van.glb", "decor/kenney_car_kit/hatchback-sports.glb", "decor/kenney_car_kit/taxi.glb"];
-        pub const skins: &[&str] = &["decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png"];
+        pub const models: &[&str] = &[
+            "decor/kenney_car_kit/sedan.glb",
+            "decor/kenney_car_kit/suv.glb",
+            "decor/kenney_car_kit/van.glb",
+            "decor/kenney_car_kit/hatchback-sports.glb",
+            "decor/kenney_car_kit/taxi.glb",
+        ];
+        pub const skins: &[&str] = &[
+            "decor/kenney_car_kit/colormap.png",
+            "decor/kenney_car_kit/colormap.png",
+            "decor/kenney_car_kit/colormap.png",
+            "decor/kenney_car_kit/colormap.png",
+            "decor/kenney_car_kit/colormap.png",
+        ];
         pub const orientation: &str = "align_transport";
         pub mod rules {
             pub const land: &str = "any";
@@ -116,8 +158,18 @@ pub mod decor_kinds {
         /// Very sparse, deliberately — trains are meant to read as occasional, not
         /// as a train sitting on every visible stretch of track.
         pub const density: f64 = 0.004;
-        pub const models: &[&str] = &["decor/kenney_train_kit/train-locomotive-a.glb", "decor/kenney_train_kit/train-locomotive-b.glb", "decor/kenney_train_kit/train-diesel-a.glb", "decor/kenney_train_kit/train-electric-city-a.glb"];
-        pub const skins: &[&str] = &["decor/kenney_train_kit/colormap.png", "decor/kenney_train_kit/colormap.png", "decor/kenney_train_kit/colormap.png", "decor/kenney_train_kit/colormap.png"];
+        pub const models: &[&str] = &[
+            "decor/kenney_train_kit/train-locomotive-a.glb",
+            "decor/kenney_train_kit/train-locomotive-b.glb",
+            "decor/kenney_train_kit/train-diesel-a.glb",
+            "decor/kenney_train_kit/train-electric-city-a.glb",
+        ];
+        pub const skins: &[&str] = &[
+            "decor/kenney_train_kit/colormap.png",
+            "decor/kenney_train_kit/colormap.png",
+            "decor/kenney_train_kit/colormap.png",
+            "decor/kenney_train_kit/colormap.png",
+        ];
         pub const orientation: &str = "align_transport";
         pub mod rules {
             pub const land: &str = "any";

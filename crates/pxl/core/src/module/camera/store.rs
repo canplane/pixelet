@@ -139,7 +139,10 @@ impl CameraStore {
             return;
         }
         let reached = allowed_view(ViewState { dist, ..from }.triple(), from.triple());
-        self.commit_view(ViewState { dist: norm_dist(reached.dist), ..from });
+        self.commit_view(ViewState {
+            dist: norm_dist(reached.dist),
+            ..from
+        });
     }
 
     // azimuth-only: "align north" is what both the dedicated compass button
