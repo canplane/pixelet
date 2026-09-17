@@ -1,0 +1,42 @@
+{
+  "settings": {
+    "display": {
+      "show_poi": {
+        "label": "장소 표시",
+        "description": "지도 위에 주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
+      }
+    },
+    "camera": {
+      "ground_snap": {
+        "label": "고도 접지 고정",
+        "description": "지도를 움직이는 동안 카메라 초점의 고도를 실제 지형 높이에 맞춰 고정합니다."
+      }
+    },
+    "debug": {
+      "section_title": "디버그",
+      "section_caption": "개발 빌드에서만 보이는 진단 도구입니다",
+      "show_debug_objects": {
+        "label": "디버그 기즈모",
+        "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
+      },
+      "show_ledger": {
+        "label": "스케줄러 레저",
+        "description": "월드 스케줄러의 프레임 페이싱, GPU 부하, fetch 큐 깊이, 태스크 레이턴시를 보여주는 구석 패널입니다. 리포트, 트레이스, 콘솔 로그 버튼이 함께 있습니다."
+      },
+      "pixel_dither": {
+        "label": "LOD 크로스페이드 (픽셀 단위)",
+        "description": "청크를 통째로 전환하는 대신, 두 LOD를 겹치는 디더 패턴으로 녹아들게 합니다. 가장 가까운 세 경계(192/384/768)에서만 동작합니다. 전환 중인 청크를 두 번 그리고, TAA가 없어 카메라가 움직이면 패턴이 기어다닙니다."
+      },
+      "dummy_toast": {
+        "label": "테스트 토스트 알림",
+        "description": "UI 테스트용 샘플 토스트 알림을 화면에 출력합니다.",
+        "message": "더미 토스트 {{index}}"
+      }
+    }
+  },
+  "map": {
+    "chat": {
+      "self_label": "나"
+    }
+  }
+}

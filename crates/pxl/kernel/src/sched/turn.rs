@@ -59,8 +59,6 @@ pub struct Platform {
     pub orientation: OrientationPlatform,
 }
 
-static BOOTED: Global<bool> = Global::new();
-
 /// The companion's place, from map_center in the local floating-origin frame —
 /// wherever the camera actually is, not the L4 tile's centre up to 2048u away.
 fn companion_props() -> Option<CompanionProps> {
@@ -95,14 +93,11 @@ fn environment_tick(_: &mut TickContext) {
     map_environment_step();
 }
 
-/// Teaches the build its tables — before the first page is told — and registers
-/// the tick's steps. Once.
-pub fn world_boot() {
-    let booted = BOOTED.get(|| false);
-    if *booted {
-        return;
-    }
-    *booted = true;
+/// The kernel's boot, once, from the module's: the build taught its tables —
+/// before the first page is told — the tick's steps registered, and the tasks
+/// spawned. Nothing runs until the first poll; the frame task waits for the
+/// first frame the host asks, so the boot has to come from outside a frame.
+pub fn boot() {
     teach_terrain();
     teach_objects();
 
@@ -150,7 +145,6 @@ fn world_tasks() {
 /// The effects' turn, before the tick.
 pub fn world_turn() {
     let platform = world_platform();
-    world_boot();
     map_navigation_step();
     map_bootstrap_step();
     crate::shell::shell::shell_step();

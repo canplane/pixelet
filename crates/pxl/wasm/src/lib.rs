@@ -218,7 +218,14 @@ const BOOT_QUANTUM: usize = 9;
 pub extern "C" fn boot() -> *const u32 {
     install_host();
     executor::install();
-    let map = section::map().unwrap_or_else(lay_out);
+    // The shell calls boot() again for the block's address (module.ts's
+    // boot_block), so the kernel boots with the layout, the first time only:
+    // a second boot would spawn its tasks past the pool.
+    let map = section::map().unwrap_or_else(|| {
+        let map = lay_out();
+        pxl_kernel::sched::turn::boot();
+        map
+    });
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
