@@ -12,9 +12,9 @@
 
 use xpute_core::ipc::change::{ChangeLog, Revision, Topic};
 
-use xpute_core::sched::quantum::NO_WAKE;
+use xpute_core::sched::edge::Edge;
 
-use crate::sys::global::{now, Global};
+use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
 
 /// A column's cube content (object/store.rs), keyed by column base.
@@ -38,33 +38,28 @@ pub fn world_changes() -> &'static mut ChangeLog {
     &mut kernel().changes
 }
 
-static TICK_REQUESTED: Global<bool> = Global::new();
-static WAKE_AT: Global<f64> = Global::new();
+/// Tasks the kernel's turn can hold parked for the next one.
+const PARKED: usize = 32;
+
+static EDGE: Global<Edge<PARKED>> = Global::new();
+
+/// The kernel's side of the turn (xpute_core::sched::edge): the doorbell
+/// rises and falls it, and a task yields against it.
+pub fn world_edge() -> &'static mut Edge<PARKED> {
+    EDGE.get(Edge::new)
+}
 
 /// Asks for the frame that delivers changes made in the kernel — the store's
 /// own bumps — the way bump_world does for a change made here.
 pub fn request_world_tick() {
-    TICK_REQUESTED.set(true);
+    world_edge().ask_next();
 }
 
 /// Asks for a turn once the host clock reaches `at`: a wait only time ends —
 /// a debounce, a retry, a dismissal. The earliest asked wins, and a wait
 /// still pending when its turn comes asks again.
 pub fn wake_at(at: f64) {
-    let wake = WAKE_AT.get(|| f64::INFINITY);
-    *wake = wake.min(at);
-}
-
-/// When the next turn is wanted, in ms from now: 0 for the next frame,
-/// NO_WAKE for none. What the falling edge carries; reading clears it.
-pub fn take_wake() -> f64 {
-    let asked = core::mem::take(TICK_REQUESTED.get(|| false));
-    let at = core::mem::replace(WAKE_AT.get(|| f64::INFINITY), f64::INFINITY);
-    match () {
-        _ if asked => 0.0,
-        _ if at.is_finite() => (at - now()).max(0.0),
-        _ => NO_WAKE,
-    }
+    world_edge().wake_at(at);
 }
 
 /// Records a change to world state and asks for the frame that delivers it.

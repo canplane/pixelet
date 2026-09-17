@@ -107,9 +107,6 @@ struct State {
     outbox: Outbox,
     /// The UI snapshot last posted, by hash: one is posted only when it changed.
     snapshot: u64,
-    /// The turn's rising edge and its quota, as the doorbell was rung.
-    edge_at: f64,
-    quota_ms: f64,
     /// The block `boot` hands out.
     boot: [u32; BOOT_WORDS],
 }
@@ -184,8 +181,6 @@ fn state() -> &'static mut State {
                 spill: new_ring(SPILL),
             },
             snapshot: 0,
-            edge_at: 0.0,
-            quota_ms: 0.0,
             boot: [0; BOOT_WORDS],
         }
     })
@@ -264,10 +259,9 @@ fn lay_out() -> mem::Map {
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     let s = state();
-    s.edge_at = now();
-    s.quota_ms = quota_ms;
+    pxl_core::module::world::change::world_edge().rise(quota_ms);
     drain(s);
-    pxl_core::module::world::change::take_wake()
+    pxl_core::module::world::change::world_edge().fall()
 }
 
 /// The UI's snapshot: what WORLD_SNAPSHOT names instead of carrying.
@@ -475,11 +469,6 @@ fn post_turn(s: &mut State) {
     });
 }
 
-fn now() -> f64 {
-    // SAFETY: the import is the client's clock and reads nothing of ours.
-    unsafe { host_now() }
-}
-
 /// A packet's branch of children, refused when the command needs one and
 /// the message has none.
 fn fields(pkt: &Option<U8Array>) -> Result<BranchCursor, MarshalError> {
@@ -541,7 +530,8 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 interactive: bool_at(&f, 8)?,
                 credits: u32_at(&f, 9)?,
             };
-            pxl_core::module::world::world::world_frame(host, s.quota_ms, s.edge_at);
+            let edge = pxl_core::module::world::change::world_edge();
+            pxl_core::module::world::world::world_frame(host, edge.quota_ms(), edge.edge_at());
             post_turn(s);
             Ok(Some(0))
         }
