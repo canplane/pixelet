@@ -1,8 +1,8 @@
-// pxl_core/module/world/frame/use_range_anchor.rs
+// pxl_core/module/world/frame/range_anchor.rs
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 
-use crate::module::map::store::use_map_store;
+use crate::module::map::store::map_store;
 use crate::render::chunk_range::range_anchor_of;
 
 /// The one anchor every range is measured from: what mounts, what is fetched,
@@ -14,6 +14,6 @@ use crate::render::chunk_range::range_anchor_of;
 /// spinning at a wide zoom would sweep pages in and out of the cache. What the
 /// camera itself measures is visibility and tier — see
 /// issue/20260912-what-to-render-when.md.
-pub fn use_range_anchor() -> Option<IVec> {
-    use_map_store().map_center.map(|c| range_anchor_of(c.i))
+pub fn range_anchor() -> Option<IVec> {
+    map_store().map_center.map(|c| range_anchor_of(c.i))
 }

@@ -1,13 +1,13 @@
-// pxl_core/module/map/navigation/use_follow_mode.rs
+// pxl_core/module/map/navigation/follow_mode.rs
 
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use xpute_core::kit::math::wrap;
 
-use super::use_map_navigation::use_map_navigation;
-use crate::app::setting::store::use_settings_store;
-use crate::module::camera::store::{use_camera_store, ViewPatch};
-use crate::module::device::pose::store::{use_device_location_store, use_device_orientation_store, DevicePoseStatus};
-use crate::module::map::store::use_map_store;
+use super::map_navigation::map_navigation;
+use crate::app::setting::store::settings_store;
+use crate::module::camera::store::{camera_store, ViewPatch};
+use crate::module::device::pose::store::{device_location_store, device_orientation_store, DevicePoseStatus};
+use crate::module::map::store::map_store;
 use crate::module::world::terrain::elevation::ground_or_raw;
 use crate::sys::global::{now, Global};
 
@@ -48,10 +48,10 @@ pub fn follow_mode_step() {
         grace_due: None,
         grace_for: None,
     });
-    let camera = use_camera_store();
+    let camera = camera_store();
     let is_follow_mode = camera.is_follow_mode;
-    let heading = use_device_orientation_store().orientation.and_then(|o| o.heading);
-    let device_coord = use_map_navigation().device_coord;
+    let heading = device_orientation_store().orientation.and_then(|o| o.heading);
+    let device_coord = map_navigation().device_coord;
 
     // Follow mode needs both sensors to mean anything: it's position (GPS)
     // fused with heading (compass). The tracking button only lets the user
@@ -62,7 +62,7 @@ pub fn follow_mode_step() {
     // random. The exit still has to happen eventually: without it, follow mode
     // stays on with dead sensors, the camera freezes, and the disabled button
     // cannot be used to back out.
-    let status = (use_device_location_store().status, use_device_orientation_store().status);
+    let status = (device_location_store().status, device_orientation_store().status);
     let ready = status == (DevicePoseStatus::Ready, DevicePoseStatus::Ready);
     if is_follow_mode && !ready {
         // The grace starts over whenever either status moves, not only when it
@@ -76,7 +76,7 @@ pub fn follow_mode_step() {
         if f.grace_due.is_some_and(|due| now() >= due) {
             f.grace_due = None;
             f.grace_for = None;
-            camera.set_is_follow_mode(false);
+            camera.is_follow_mode = false;
         }
     } else {
         f.grace_due = None;
@@ -100,7 +100,7 @@ pub fn follow_mode_step() {
     // for the same reason pan and the recenter button use it: device_coord's
     // Z is raw GPS altitude, not baked terrain height.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
-        use_map_store().set_map_center(if use_settings_store().ground_snap { ground_or_raw(&device) } else { device });
+        map_store().map_center = Some(if settings_store().ground_snap { ground_or_raw(&device) } else { device });
     }
     f.last_device = device_coord;
 

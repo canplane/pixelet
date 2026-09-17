@@ -5,25 +5,22 @@
 //! settings — runs the scheduler's pass once, and applies what it told to the
 //! chunk nodes (chunk_node.rs); the shell's renderer then draws the scheduler's
 //! lists. In the report phase it hands the frame's numbers to the ledger.
-//! `chunk_mounts_step` tells the scheduler which page_idxs have a terrain tile,
-//! which is what it mounts chunks from.
 
-use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
 
-use super::chunk_node::{chunk_page, run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
-use crate::app::setting::store::use_settings_store;
-use crate::module::map::store::use_map_store;
+use super::chunk_node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
+use crate::app::setting::store::settings_store;
+use crate::module::map::store::map_store;
 use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::view::{view, view_resize};
-use crate::module::world::poi::use_poi_fetcher;
+use crate::module::world::poi::poi_fetcher;
 use crate::module::world::sched::chunk_table::Frame;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
 use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::module::world::terrain::store::tile_pages;
-use crate::module::world::terrain::use_tile_fetcher;
+use crate::module::world::terrain::tile_fetcher;
 use crate::render::chunk_range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::render::lod::set_lod_projection;
 use crate::sys::global::{now, Global};
@@ -54,8 +51,6 @@ struct CoreTick {
     host: HostFrameStat,
     /// Whether the scheduler's pass left something new to draw.
     draw: bool,
-    pages_revision: Option<u32>,
-    page_idxs: Vec<IVec>,
 }
 
 static CORE_TICK: Global<CoreTick> = Global::new();
@@ -66,8 +61,6 @@ fn core_tick() -> &'static mut CoreTick {
         last_work: (0, 0),
         host: HostFrameStat::default(),
         draw: false,
-        pages_revision: None,
-        page_idxs: Vec::new(),
     })
 }
 
@@ -134,7 +127,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     // Where the camera is heading — see sched/priority.rs. The scheduler orders
     // the work by it; the tier each chunk picks still comes from the camera as
     // drawn.
-    let target = use_map_store().map_center;
+    let target = map_store().map_center;
     let origin = v.origin;
     let lead = match &target {
         Some(t) => {
@@ -150,7 +143,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         None => v.eye,
     };
 
-    let settings = use_settings_store();
+    let settings = settings_store();
     let range_anchor = target.map(|t| range_anchor_of(t.i));
     let frame = Frame {
         root: v.root,
@@ -233,27 +226,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         poi_count,
         pool: pool_sample(),
         work: work_sample(c),
-        q_terrain: fetch_pending_count(use_tile_fetcher::CATEGORY) as f64,
-        q_poi: fetch_pending_count(use_poi_fetcher::CATEGORY) as f64,
+        q_terrain: fetch_pending_count(tile_fetcher::CATEGORY) as f64,
+        q_poi: fetch_pending_count(poi_fetcher::CATEGORY) as f64,
     });
-}
-
-/// Tells the scheduler which page_idxs have a terrain tile, whenever the set moves.
-/// Everything else — which chunks, when — is the scheduler's, from the range
-/// anchor the visible pass writes into the frame.
-pub fn chunk_mounts_step() {
-    let c = core_tick();
-    let revision = tile_pages().revision();
-    if c.pages_revision == Some(revision) {
-        return;
-    }
-    c.pages_revision = Some(revision);
-    let page_idxs: Vec<IVec> = tile_pages().keys().collect();
-    for &gone in c.page_idxs.iter().filter(|p| !page_idxs.contains(p)) {
-        chunk_page(gone, false);
-    }
-    for &page in &page_idxs {
-        chunk_page(page, true);
-    }
-    c.page_idxs = page_idxs;
 }

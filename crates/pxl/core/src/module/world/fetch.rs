@@ -23,13 +23,13 @@ use xpute_core::kit::array::{ArrayBuffer, U8Array};
 use xpute_core::sys::mem::{alloc, free, Block};
 
 use crate::lib::env::config::PUBLISHED_TILES;
-use crate::module::map::ui::overlay::{search_modal, use_reverse_geocode};
+use crate::module::map::ui::overlay::{reverse_geocode, search_modal};
 use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store};
 use crate::module::world::sched::demand::{Category, Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::{demand_of, fetch_settle};
 use crate::module::world::sched::ledger::{Failure, Outcome};
-use crate::module::world::terrain::{tile_repository, use_tile_fetcher};
+use crate::module::world::terrain::{tile_fetcher, tile_repository};
 use crate::sys::global::Global;
 
 /// Bodies given room and not yet reported: the fetches in flight, with room
@@ -141,9 +141,9 @@ pub fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail
 
 fn failed(category: Category, subject: u64, aborted: bool) {
     match category {
-        Category::Terrain if !aborted => use_tile_fetcher::terrain_failed(),
+        Category::Terrain if !aborted => tile_fetcher::terrain_failed(),
         Category::Search => search_modal::search_failed(subject, aborted),
-        Category::Geocode => use_reverse_geocode::reverse_geocode_failed(subject, aborted),
+        Category::Geocode => reverse_geocode::reverse_geocode_failed(subject, aborted),
         _ => {}
     }
 }
@@ -226,10 +226,10 @@ fn answer(category: Category, subject: u64, status: u32, block: Option<Block>, p
         Category::Geocode => {
             let result = match block {
                 _ if status == 404 => {
-                    use_reverse_geocode::reverse_geocode_arrived(subject, None);
+                    reverse_geocode::reverse_geocode_arrived(subject, None);
                     Ok(())
                 }
-                Some(b) if ok => text(b).map(|body| use_reverse_geocode::reverse_geocode_arrived(subject, Some(body))),
+                Some(b) if ok => text(b).map(|body| reverse_geocode::reverse_geocode_arrived(subject, Some(body))),
                 _ => Err(refused()),
             };
             release(block);

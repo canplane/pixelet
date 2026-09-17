@@ -9,9 +9,9 @@
 
 use pxl_shared::spec::message::Message;
 
-use crate::module::device::pose::store::{use_device_location_store, DevicePoseStatus};
-use crate::module::map::store::{use_map_store, MapStatus};
-use crate::module::world::character::store::use_companion_load_store;
+use crate::module::device::pose::store::{device_location_store, DevicePoseStatus};
+use crate::module::map::store::{map_store, MapStatus};
+use crate::module::world::character::store::companion_load_store;
 use crate::sys::global::{now, Global};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,7 +66,7 @@ pub fn toast_controller_step() {
         commands: Vec::new(),
     });
 
-    let location = use_device_location_store();
+    let location = device_location_store();
     let location_now = (location.status, location.error);
     if c.location_for != Some(location_now) {
         c.location_for = Some(location_now);
@@ -91,8 +91,8 @@ pub fn toast_controller_step() {
         }
     }
 
-    let map_status = use_map_store().map_status;
-    let companion = use_companion_load_store();
+    let map_status = map_store().map_status;
+    let companion = companion_load_store();
     let companion_loading = !companion.person_ready || !companion.pet_ready;
     if c.world_for != Some((map_status, companion_loading)) {
         c.world_for = Some((map_status, companion_loading));

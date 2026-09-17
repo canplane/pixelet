@@ -78,8 +78,6 @@ pub struct DeviceLocationStore {
     pub status: DevicePoseStatus,
     /// What went wrong; the shell turns it into the words it shows.
     pub error: Option<Message>,
-    /// Moves on every change, for the shell's selectors.
-    pub revision: u32,
 }
 
 impl DeviceLocationStore {
@@ -92,7 +90,6 @@ impl DeviceLocationStore {
             self.location = Some(DeviceLocation { coords, accuracy, course, timestamp });
             self.status = DevicePoseStatus::Ready;
             self.error = None;
-            self.revision += 1;
             return;
         };
 
@@ -123,7 +120,6 @@ impl DeviceLocationStore {
         });
         self.status = DevicePoseStatus::Ready;
         self.error = None;
-        self.revision += 1;
     }
 
     pub fn set_is_tracking_location(&mut self, enabled: bool) {
@@ -135,14 +131,6 @@ impl DeviceLocationStore {
         if !enabled {
             self.location = None;
         }
-        self.revision += 1;
-    }
-
-    pub fn set_status(&mut self, status: DevicePoseStatus) {
-        if self.status != status {
-            self.status = status;
-            self.revision += 1;
-        }
     }
 
     pub fn set_error(&mut self, error: Message) {
@@ -151,7 +139,6 @@ impl DeviceLocationStore {
         }
         self.status = DevicePoseStatus::Error;
         self.error = Some(error);
-        self.revision += 1;
     }
 }
 
@@ -163,7 +150,6 @@ pub struct DeviceOrientationStore {
     pub status: DevicePoseStatus,
     /// What went wrong; the shell turns it into the words it shows.
     pub error: Option<Message>,
-    pub revision: u32,
 }
 
 impl DeviceOrientationStore {
@@ -175,7 +161,6 @@ impl DeviceOrientationStore {
             // orientation data alone is enough to count as usable
             self.status = DevicePoseStatus::Ready;
             self.error = None;
-            self.revision += 1;
             return;
         };
 
@@ -188,7 +173,6 @@ impl DeviceOrientationStore {
             return;
         }
         self.orientation = Some(DeviceOrientation { heading, beta, gamma, timestamp });
-        self.revision += 1;
     }
 
     pub fn set_is_tracking_orientation(&mut self, enabled: bool) {
@@ -199,14 +183,6 @@ impl DeviceOrientationStore {
         if !enabled {
             self.orientation = None;
         }
-        self.revision += 1;
-    }
-
-    pub fn set_status(&mut self, status: DevicePoseStatus) {
-        if self.status != status {
-            self.status = status;
-            self.revision += 1;
-        }
     }
 
     pub fn set_error(&mut self, error: Message) {
@@ -215,19 +191,16 @@ impl DeviceOrientationStore {
         }
         self.status = DevicePoseStatus::Error;
         self.error = Some(error);
-        self.revision += 1;
     }
 }
 
 static LOCATION: Global<DeviceLocationStore> = Global::new();
 static ORIENTATION: Global<DeviceOrientationStore> = Global::new();
 
-/// `useDeviceLocationStore.getState()`.
-pub fn use_device_location_store() -> &'static mut DeviceLocationStore {
+pub fn device_location_store() -> &'static mut DeviceLocationStore {
     LOCATION.get(DeviceLocationStore::default)
 }
 
-/// `useDeviceOrientationStore.getState()`.
-pub fn use_device_orientation_store() -> &'static mut DeviceOrientationStore {
+pub fn device_orientation_store() -> &'static mut DeviceOrientationStore {
     ORIENTATION.get(DeviceOrientationStore::default)
 }

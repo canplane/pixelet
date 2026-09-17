@@ -8,7 +8,7 @@
 //! the chat lines, the show/expire timer, and laying out the notched
 //! speech-bubble shape the shell paints.
 
-use crate::app::store::ui_store::use_ui_store;
+use crate::app::store::ui_store::ui_store;
 use crate::module::world::billboard::atlas::{DrawSpec, NO_SLOT};
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::module::world::billboard::canvas_text::wrap_text;
@@ -95,7 +95,7 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
     // Driven by the line's wall-clock ts, so this stays correct across a
     // character swap, which would otherwise make an old, already-dismissed line
     // look brand new again.
-    let visible = use_ui_store().chat_lines.last().filter(|l| l.ts + SHOW_DURATION_MS - wall_now() > 0.0).map(|l| l.text.clone());
+    let visible = ui_store().chat_lines.last().filter(|l| l.ts + SHOW_DURATION_MS - wall_now() > 0.0).map(|l| l.text.clone());
     let want = actor.zip(visible);
 
     if want != b.shown {

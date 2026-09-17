@@ -9,7 +9,7 @@
 
 use xpute_core::kit::mat4::{mat4, mat4_mul};
 
-use crate::app::setting::store::use_settings_store;
+use crate::app::setting::store::settings_store;
 use crate::module::map::environment::SKY_DOME_SCALE;
 use crate::module::world::environment::config::rim_cfg;
 use crate::module::world::frame::view::view;
@@ -69,7 +69,7 @@ pub fn stage_lane() -> &'static [f64; STAGE_WORDS] {
 /// Writes the frame's uniforms from the view and the settings as they stand.
 pub fn stage_write() {
     let v = view();
-    let settings = use_settings_store();
+    let settings = settings_store();
     let s = stage();
     let mut m = mat4();
     mat4_mul(&mut m, &v.view_matrix, &v.root);

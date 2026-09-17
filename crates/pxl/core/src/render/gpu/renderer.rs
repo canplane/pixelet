@@ -31,7 +31,7 @@ use super::shadow::Shadow;
 use super::skinned::SkinnedPass;
 use super::stage::{stage_lane, STAGE_AT};
 use super::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
-use crate::app::setting::store::use_settings_store;
+use crate::app::setting::store::settings_store;
 use crate::module::map::environment::ENV_OTHER_LIGHT;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::preview_rows;
@@ -959,7 +959,7 @@ pub fn render_frame() {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()));
         return;
     };
-    let samples = if use_settings_store().msaa { 4 } else { 1 };
+    let samples = if settings_store().msaa { 4 } else { 1 };
     let slot = RENDERER.get(|| None);
     let r = slot.get_or_insert_with(|| Renderer::new(g, device, samples));
     blocks().restore(g);

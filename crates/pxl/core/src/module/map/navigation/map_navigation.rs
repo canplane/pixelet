@@ -1,10 +1,10 @@
-// pxl_core/module/map/navigation/use_map_navigation.rs
+// pxl_core/module/map/navigation/map_navigation.rs
 
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
-use crate::module::device::pose::store::use_device_location_store;
-use crate::module::map::store::use_map_store;
+use crate::module::device::pose::store::device_location_store;
+use crate::module::map::store::map_store;
 use crate::sys::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -19,13 +19,13 @@ static OFF_CENTER: Global<bool> = Global::new();
 
 /// Device location projected into canonical PVF3 world space, and whether
 /// the map centre has wandered off it.
-pub fn use_map_navigation() -> MapNavigation {
-    let device_coord = use_device_location_store().location.map(|location| {
+pub fn map_navigation() -> MapNavigation {
+    let device_coord = device_location_store().location.map(|location| {
         let mut out = PVF3::default();
         epsg4326::project(&mut out, &location.coords);
         out
     });
-    let map_center = use_map_store().map_center;
+    let map_center = map_store().map_center;
 
     // Off-center hysteresis over horizontal (X/Y only) distance, not full 3D.
     // device_coord's Z is raw GPS altitude while map_center's Z is baked

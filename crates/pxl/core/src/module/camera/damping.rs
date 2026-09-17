@@ -1,4 +1,4 @@
-// pxl_core/module/camera/use_camera.rs
+// pxl_core/module/camera/damping.rs
 
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use xpute_core::kit::math::clamp;
@@ -6,10 +6,10 @@ use xpute_core::kit::math::clamp;
 use super::config::camera_cfg::smooth::CAM_DAMP;
 use super::config::camera_cfg::view::{MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use super::orbit::damp_alpha;
-use super::store::use_camera_store;
+use super::store::camera_store;
 use super::terrain_gate::climb_polar;
-use crate::app::setting::store::{use_settings_store, CameraTerrain};
-use crate::module::map::store::use_map_store;
+use crate::app::setting::store::{settings_store, CameraTerrain};
+use crate::module::map::store::map_store;
 use crate::module::world::frame::view::{view, view_compose};
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::terrain::store::tile_pages;
@@ -79,7 +79,7 @@ fn step_state() -> &'static mut CameraStep {
 }
 
 fn climb_polar_memo(memo: &mut ClimbMemo, dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let centre = use_map_store().map_center;
+    let centre = map_store().map_center;
     let revision = tile_pages().revision();
     if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && centre == memo.centre && revision == memo.revision {
         return memo.polar_out;
@@ -100,7 +100,7 @@ fn climb_polar_memo(memo: &mut ClimbMemo, dist: f64, polar: f64, azimuth: f64) -
 /// into the view (module/world/frame/view.rs): the "camera" step of the
 /// interaction phase.
 pub fn camera_step(ctx: &mut TickContext) {
-    let view_state = use_camera_store().view_state;
+    let view_state = camera_store().view_state;
     let s = step_state();
 
     if !s.did_init {
@@ -131,7 +131,7 @@ pub fn camera_step(ctx: &mut TickContext) {
     // absolute angle through a second lag gave tilt an inertia rotation does
     // not have. Outside climb mode the offset is zero and the drawn pitch is
     // exactly the damped control.
-    let want_climb = if use_settings_store().camera_terrain == CameraTerrain::Climb {
+    let want_climb = if settings_store().camera_terrain == CameraTerrain::Climb {
         climb_polar_memo(&mut s.memo, s.dist, s.polar, view_state.azimuth) - s.polar
     } else {
         0.0

@@ -26,11 +26,11 @@ use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::sys::mem::{alloc, free, Block};
 
-use crate::app::setting::store::use_settings_store;
+use crate::app::setting::store::settings_store;
 use crate::module::world::change::{world_changes, TERRAIN_PAGE};
-use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, objects_revision, Store};
+use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store};
 use crate::module::world::sched::chunk_table::Event;
-use crate::module::world::terrain::store::{tile_pages, use_tile_store};
+use crate::module::world::terrain::store::tile_store;
 use crate::render::layer::object::adapter::{Carve, Painter};
 use crate::render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
 use crate::render::layer::pipeline::volume::Volumes;
@@ -120,9 +120,10 @@ pub struct ChunkRetention {
 
 struct Nodes {
     nodes: HashMap<u32, ChunkNode>,
-    /// The world-wide sources as last seen: a change in any is when the nodes
-    /// look at their own.
-    seen: Option<(u32, u32, u32)>,
+    /// Set where a chunk's sources change — a column written, a terrain page
+    /// come or gone, the two settings a chunk paints with — and taken when
+    /// the nodes next look at their own.
+    sources_changed: bool,
     /// Chunks whose layout named tiers they do not hold, rebuilt after the
     /// events that found it — a rebuild would re-enter them.
     rebuild: Vec<u32>,
@@ -133,7 +134,7 @@ static NODES: Global<Nodes> = Global::new();
 fn nodes() -> &'static mut Nodes {
     NODES.get(|| Nodes {
         nodes: HashMap::new(),
-        seen: None,
+        sources_changed: false,
         rebuild: Vec::new(),
     })
 }
@@ -218,7 +219,7 @@ impl ChunkNode {
     fn new(id: u32, page_idx: IVec, base_x: u32, base_y: u32) -> ChunkNode {
         let page_off = ivec::gather(base_x as i64, base_y as i64, 0);
         let col_idx = object_col_idx_of(page_idx, page_off);
-        let settings = use_settings_store();
+        let settings = settings_store();
         ChunkNode {
             page_idx,
             base_i: ivec::add(FROM_L3_IDX(page_idx), page_off),
@@ -249,7 +250,7 @@ impl ChunkNode {
 
     /// Tells the scheduler what this chunk is made of now.
     fn tell_source(&mut self, queue: &mut Queue) {
-        let page = use_tile_store().get_tile(self.page_idx).map(page_lanes);
+        let page = tile_store().get_tile(self.page_idx).map(page_lanes);
         let (id, show) = (self.id, self.show_structures);
         with_world(|world, sched| sched.source(world, id, page, show, &mut |e| queue.push_back(e)));
         self.generation += 1;
@@ -267,7 +268,7 @@ impl ChunkNode {
     /// because a newly placed cube can occlude a scattered decor candidate.
     fn on_source_change(&mut self, queue: &mut Queue) {
         let tile = tile_revision(self.page_idx);
-        let show_structures = use_settings_store().show_structures;
+        let show_structures = settings_store().show_structures;
         let objects_revision = object_col_revision(self.col_idx);
         if self.tile == tile && self.show_structures == show_structures && self.objects_revision == objects_revision {
             return;
@@ -285,7 +286,7 @@ impl ChunkNode {
     /// split exists to avoid.
     fn on_decor_change(&mut self, queue: &mut Queue) {
         let revision = decor_col_revision(self.col_idx);
-        let show_decor = use_settings_store().show_decor;
+        let show_decor = settings_store().show_decor;
         if revision == self.decor_revision && show_decor == self.show_decor {
             return;
         }
@@ -420,13 +421,17 @@ fn dispatch(e: Event, queue: &mut Queue) {
 
 /// The nodes' turn: a settings change, a tile arriving or leaving, or an object
 /// change reaches every node, which compares its own sources against them.
+/// A chunk's sources changed somewhere: the nodes look at their own next turn.
+pub fn chunk_sources_changed() {
+    nodes().sources_changed = true;
+}
+
 pub fn chunk_nodes_step() {
     let n = nodes();
-    let seen = (use_settings_store().revision, tile_pages().revision(), objects_revision());
-    if n.seen == Some(seen) {
+    if !n.sources_changed {
         return;
     }
-    n.seen = Some(seen);
+    n.sources_changed = false;
     let mut queue = Queue::new();
     let ids: Vec<u32> = n.nodes.keys().copied().collect();
     for id in ids {

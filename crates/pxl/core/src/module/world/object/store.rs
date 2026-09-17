@@ -36,6 +36,7 @@ use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
 use xpute_core::sys::error::MarshalError;
 
 use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
+use crate::module::world::chunk_node::chunk_sources_changed;
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
 use crate::render::layer::object::adapter::Carve;
@@ -416,6 +417,7 @@ pub fn objects_revision() -> u32 {
 }
 
 fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
+    chunk_sources_changed();
     if objects {
         bump_world(OBJECT_COLUMN, col_idx);
     }

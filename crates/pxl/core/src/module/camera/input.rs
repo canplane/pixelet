@@ -17,11 +17,11 @@ use xpute_core::kit::mat4::Vec3;
 
 use super::config::camera_cfg;
 use super::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
-use super::store::{use_camera_store, CameraStatus, ViewPatch};
+use super::store::{camera_store, CameraStatus, ViewPatch};
 use super::terrain_gate::{allowed_pan, ViewTriple};
-use crate::app::setting::store::use_settings_store;
-use crate::app::store::ui_store::{use_ui_store, ActiveTool};
-use crate::module::map::store::use_map_store;
+use crate::app::setting::store::settings_store;
+use crate::app::store::ui_store::{ui_store, ActiveTool};
+use crate::module::map::store::map_store;
 use crate::module::world::decor::decor_hit::raycast_decor;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::frame::view::{view, view_ray_local};
@@ -176,7 +176,7 @@ fn resolve_hit_target(hit: &WorldHit, origin: Vec3, direction: Vec3, map_origin:
 /// placed object if there's one under the cursor, the terrain's own real surface
 /// otherwise).
 fn handle_tap(hovered: PVF3) {
-    let ui = use_ui_store();
+    let ui = ui_store();
     let object_size = ui.object_size;
 
     match ui.active_tool {
@@ -186,36 +186,36 @@ fn handle_tap(hovered: PVF3) {
             // pivoted by the ground's own rule — what every pan, the bootstrap
             // and follow mode set too, so a pan after a terrain tap changes
             // nothing.
-            let hovered_object = use_camera_store().hovered_object_at.and_then(get_placed_object);
+            let hovered_object = camera_store().hovered_object_at.and_then(get_placed_object);
             let target = match hovered_object {
-                Some(o) => object_center(&o, get_local_world_origin(use_map_store().map_center.as_ref())),
+                Some(o) => object_center(&o, get_local_world_origin(map_store().map_center.as_ref())),
                 None => ground_or_raw(&anchor_center(&hovered)),
             };
-            use_map_store().set_map_center(target);
+            map_store().map_center = Some(target);
         }
         ActiveTool::Eraser => {
             // Targets the object the raycast actually struck, not a grid-key
             // lookup — correct for any size, any face.
-            match use_camera_store().hovered_object_at {
+            match camera_store().hovered_object_at {
                 Some(at) => remove(at),
                 // Nothing placed here — dig into the terrain's own real surface,
                 // once the user has opted into that. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
                 // "nothing here on purpose" leaf is the only way to override it.
-                None if use_settings_store().enable_terrain_carving => place_air(&hovered, object_size),
+                None if settings_store().enable_terrain_carving => place_air(&hovered, object_size),
                 None => {}
             }
         }
         ActiveTool::Decor | ActiveTool::Object => {
             // Still guard against the candidate slot being occupied since the
             // last hover update.
-            let map_origin = get_local_world_origin(use_map_store().map_center.as_ref());
+            let map_origin = get_local_world_origin(map_store().map_center.as_ref());
             if ui.active_tool == ActiveTool::Decor {
                 if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size, map_origin) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
             } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size, map_origin) {
-                place(&hovered, object_size, ui.object_cube, use_settings_store().show_structures);
+                place(&hovered, object_size, ui.object_cube, settings_store().show_structures);
             }
         }
     }
@@ -240,8 +240,8 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
 
 /// Shared pan implementation — driven by either a mouse left-drag or a single touch.
 fn do_pan(dx: f64, dy: f64) {
-    let view_state = use_camera_store().view_state;
-    let Some(map_center) = use_map_store().map_center else { return };
+    let view_state = camera_store().view_state;
+    let Some(map_center) = map_store().map_center else { return };
 
     let view_h = 2.0 * view_state.dist * (FOV * core::f64::consts::PI / 360.0).tan();
     let units_per_px = view_h / view().height;
@@ -259,10 +259,10 @@ fn do_pan(dx: f64, dy: f64) {
     // ground_or_raw shares the exact same "zero Z, then sample real terrain
     // height" step every map_center-setting interaction that respects
     // ground_snap goes through.
-    let desired = if use_settings_store().ground_snap { ground_or_raw(&next_center) } else { next_center };
+    let desired = if settings_store().ground_snap { ground_or_raw(&next_center) } else { next_center };
     // Gated after the snap, not before: the snap moves the target's Z, and the
     // eye rides on it. Panning is the one control that moves the target.
-    use_map_store().set_map_center(allowed_pan(
+    map_store().map_center = Some(allowed_pan(
         ViewTriple {
             dist: view_state.dist,
             polar: view_state.polar,
@@ -292,13 +292,13 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64, dy: f64) {
         s.rotate_axis_lock = if total_dy.abs() > total_dx.abs() { RotateAxisLock::Tilt } else { RotateAxisLock::Rotate };
     }
 
-    let camera = use_camera_store();
+    let camera = camera_store();
     let view_state = camera.view_state;
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
         // lock_camera_tilt only gates this write — an experiment toggle for a
         // fixed-tilt UX, not yet a decided product change.
-        if !use_settings_store().lock_camera_tilt {
+        if !settings_store().lock_camera_tilt {
             camera.set_view_state(ViewPatch {
                 polar: Some(view_state.polar + dy * tilt_gain()),
                 ..Default::default()
@@ -347,13 +347,13 @@ fn begin_pinch(s: &mut Input) {
     // The twist angle is re-anchored lazily once the fingers are far enough
     // apart for it to be reliable.
     s.twist_anchored = false;
-    let camera = use_camera_store();
+    let camera = camera_store();
     s.pinch_start_view_dist = camera.view_state.dist;
     s.pinch_start_azimuth = camera.view_state.azimuth;
     s.pinch_start_polar = camera.view_state.polar;
     s.drag_mode = DragMode::Pinch;
     s.did_drag = true;
-    camera.set_hovered_coord(None);
+    camera.hovered_coord = None;
 }
 
 /// Pinch (zoom), twist (azimuth), and two-finger vertical drag (tilt) — the
@@ -369,7 +369,7 @@ fn update_pinch(s: &mut Input) {
     let next_dist = s.pinch_start_view_dist * (s.pinch_start_dist / dist);
     let next_polar = s.pinch_start_polar + (midpoint_y - s.pinch_start_midpoint_y) * tilt_gain();
 
-    let camera = use_camera_store();
+    let camera = camera_store();
     let mut next_azimuth = s.pinch_start_azimuth;
     if dist >= MIN_TWIST_DIST_PX {
         let angle = (p1.y - p0.y).atan2(p1.x - p0.x);
@@ -387,18 +387,18 @@ fn update_pinch(s: &mut Input) {
     camera.set_view_state(ViewPatch {
         dist: Some(next_dist),
         azimuth: Some(next_azimuth),
-        polar: (!use_settings_store().lock_camera_tilt).then_some(next_polar),
+        polar: (!settings_store().lock_camera_tilt).then_some(next_polar),
     });
 }
 
 /// A pointer went down on the canvas.
 pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
     let s = input();
-    let camera = use_camera_store();
+    let camera = camera_store();
     if kind == PointerKind::Touch {
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
-        camera.set_camera_status(CameraStatus::Drag);
-        camera.set_is_follow_mode(false);
+        camera.camera_status = CameraStatus::Drag;
+        camera.is_follow_mode = false;
         match s.active_pointers.len() {
             1 => {
                 s.drag_mode = DragMode::Pan;
@@ -435,8 +435,8 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
         s.rotate_drag_start_y = client_y;
     }
     update_pointer(s, client_x, client_y);
-    camera.set_camera_status(CameraStatus::Drag);
-    camera.set_is_follow_mode(false);
+    camera.camera_status = CameraStatus::Drag;
+    camera.is_follow_mode = false;
 }
 
 /// A pointer moved.
@@ -490,24 +490,24 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
 }
 
 fn clear_hovered_once() {
-    let camera = use_camera_store();
+    let camera = camera_store();
     if camera.hovered_coord.is_some() {
-        camera.set_hovered_coord(None);
+        camera.hovered_coord = None;
     }
     if camera.hovered_object_at.is_some() {
-        camera.set_hovered_object_at(None);
+        camera.hovered_object_at = None;
     }
 }
 
 fn update_hover(s: &Input) {
-    let Some(map_center) = use_map_store().map_center else {
+    let Some(map_center) = map_store().map_center else {
         return clear_hovered_once();
     };
     let mut origin = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
     let mut direction = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
     view_ray_local(s.pointer_x, s.pointer_y, &mut origin, &mut direction);
 
-    let ui = use_ui_store();
+    let ui = ui_store();
     let map_origin = get_local_world_origin(Some(&map_center));
     // One unified raycast — terrain (top or a wall) and any placed object all
     // come back as the same WorldHit, all boxes in the same voxel field.
@@ -515,35 +515,35 @@ fn update_hover(s: &Input) {
         return clear_hovered_once();
     };
     let hit = pick.hit;
-    let camera = use_camera_store();
+    let camera = camera_store();
 
     if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
         // The one tool group that wants an ADJACENT empty slot. Decor always
         // places at its own fixed DECOR_SIZE.
-        camera.set_hovered_object_at(None);
+        camera.hovered_object_at = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
         // A real struck entry's exact stored AABB, not the hit's own box — that
         // comes back through the u8-packed sub_cell payload, accurate to only
         // ~1/510 of a cell, which let stacked sub-cell placements drift.
         let precise_box = resolve_hit_target(&hit, origin, direction, map_origin).map(|o| object_aabb(&o, map_origin));
-        camera.set_hovered_coord(Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref())));
+        camera.hovered_coord = Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref()));
         return;
     }
 
     // Pointer (recenter on it) and eraser (remove/dig it) both target the struck
     // thing itself.
     let struck = resolve_hit_target(&hit, origin, direction, map_origin);
-    camera.set_hovered_object_at(struck.as_ref().map(|o| o.at));
+    camera.hovered_object_at = struck.as_ref().map(|o| o.at);
     if let Some(o) = struck {
-        camera.set_hovered_coord(Some(PVF3 { i: o.i, f: o.f }));
-    } else if ui.active_tool == ActiveTool::Eraser && use_settings_store().enable_terrain_carving {
+        camera.hovered_coord = Some(PVF3 { i: o.i, f: o.f });
+    } else if ui.active_tool == ActiveTool::Eraser && settings_store().enable_terrain_carving {
         // Bare terrain under the eraser wants the struck voxel's OWN corner
         // (real, possibly dug-into height included), not the baked-elevation
         // "flush on top" slot.
-        camera.set_hovered_coord(Some(world_struck_corner(&hit, ui.object_size, map_origin)));
+        camera.hovered_coord = Some(world_struck_corner(&hit, ui.object_size, map_origin));
     } else {
         match world_hover_pvf3(&hit, map_origin) {
-            Some(grounded) => camera.set_hovered_coord(Some(grounded)),
+            Some(grounded) => camera.hovered_coord = Some(grounded),
             None => clear_hovered_once(),
         }
     }
@@ -552,7 +552,7 @@ fn update_hover(s: &Input) {
 fn tap_if_still(s: &Input, mode: DragMode) {
     if !s.did_drag && mode == DragMode::Pan {
         update_hover(s);
-        if let Some(hovered) = use_camera_store().hovered_coord {
+        if let Some(hovered) = camera_store().hovered_coord {
             handle_tap(hovered);
         }
     }
@@ -561,14 +561,14 @@ fn tap_if_still(s: &Input, mode: DragMode) {
 /// A pointer went up, or was cancelled.
 pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
     let s = input();
-    let camera = use_camera_store();
+    let camera = camera_store();
     if kind == PointerKind::Touch {
         s.active_pointers.remove(&pointer_id);
         match s.active_pointers.len() {
             0 => {
                 let mode = s.drag_mode;
                 s.drag_mode = DragMode::None;
-                camera.set_camera_status(CameraStatus::Idle);
+                camera.camera_status = CameraStatus::Idle;
                 if mode != DragMode::None {
                     tap_if_still(s, mode);
                 }
@@ -592,7 +592,7 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
     }
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
-    camera.set_camera_status(CameraStatus::Idle);
+    camera.camera_status = CameraStatus::Idle;
     tap_if_still(s, mode);
 }
 
@@ -633,7 +633,7 @@ pub fn camera_input_step() {
         s.pending_rotate_dy = 0.0;
     }
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
-        let camera = use_camera_store();
+        let camera = camera_store();
         camera.set_view_state(ViewPatch {
             dist: Some(camera.view_state.dist * (delta_y * DOLLY_GAIN).exp()),
             ..Default::default()

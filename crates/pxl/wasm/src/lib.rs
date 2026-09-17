@@ -544,8 +544,8 @@ fn post_event(o: &Outbox, e: Event) {
 /// toasts, the sensors' watches, console lines, the UI's snapshot when it
 /// changed, the fetches to start and cancel, and the loads.
 fn post_shell(s: &mut State) {
-    use pxl_core::module::device::pose::use_device_orientation::{take_orientation_commands, OrientationCommand};
-    use pxl_core::module::device::pose::use_geolocation::{take_geolocation_commands, GeolocationCommand};
+    use pxl_core::module::device::pose::device_orientation::{take_orientation_commands, OrientationCommand};
+    use pxl_core::module::device::pose::geolocation::{take_geolocation_commands, GeolocationCommand};
     use pxl_core::module::map::ui::toast::toast_controller::{take_toast_commands, ToastCommand, ToastTone};
     use pxl_core::module::world::gltf_cache::{take_load_requests, LoadKind};
     use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
@@ -1171,7 +1171,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let platform = pxl_core::module::world::world::Platform {
                 geolocation: bool_at(&f, 4)?,
-                orientation: pxl_core::module::device::pose::use_device_orientation::OrientationPlatform {
+                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
                     supported: bool_at(&f, 5)?,
                     needs_permission: bool_at(&f, 6)?,
                 },
@@ -1239,11 +1239,11 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::SENSOR_UPDATE => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_core::module::device::pose::use_geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
+            pxl_core::module::device::pose::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
             return Ok(Some((0, None)));
         }
         Cmd::SENSOR_ERROR => {
-            use pxl_core::module::device::pose::use_geolocation::{geolocation_error, GeolocationErrorCode};
+            use pxl_core::module::device::pose::geolocation::{geolocation_error, GeolocationErrorCode};
             let code = match u32_at(&fields(pkt)?, 0)? {
                 1 => GeolocationErrorCode::PermissionDenied,
                 2 => GeolocationErrorCode::PositionUnavailable,
@@ -1256,7 +1256,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::SENSOR_ORIENTATION => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_core::module::device::pose::use_device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
+            pxl_core::module::device::pose::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
             return Ok(Some((0, None)));
         }
         Cmd::SENSOR_PERMISSION => {
@@ -1264,18 +1264,18 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let (granted, failed) = (bool_at(&f, 1)?, bool_at(&f, 2)?);
             let platform = pxl_core::module::world::world::world_platform();
             match (u32_at(&f, 0)?, granted) {
-                (0, true) => pxl_core::module::device::pose::use_geolocation::geolocation_permission_granted(platform.geolocation),
+                (0, true) => pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation),
                 (0, false) => {}
-                _ => pxl_core::module::device::pose::use_device_orientation::orientation_permission(granted, failed),
+                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(granted, failed),
             }
             return Ok(Some((0, None)));
         }
         Cmd::SENSOR_VISIBILITY => {
             let visible = bool_at(&fields(pkt)?, 0)?;
             let platform = pxl_core::module::world::world::world_platform();
-            pxl_core::module::device::pose::use_geolocation::geolocation_visibility(visible, platform.geolocation);
+            pxl_core::module::device::pose::geolocation::geolocation_visibility(visible, platform.geolocation);
             if visible {
-                pxl_core::module::device::pose::use_device_orientation::orientation_visible();
+                pxl_core::module::device::pose::device_orientation::orientation_visible();
             } else {
                 pxl_core::module::world::object::store::flush_save();
             }

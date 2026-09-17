@@ -111,6 +111,7 @@ pub fn kernel() -> &'static mut Kernel {
 /// its corner.
 pub fn reindex_object(k: &mut Kernel, key: u64) {
     k.objects.reindex(key);
+    crate::module::world::chunk_node::chunk_sources_changed();
     k.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
     k.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
     let (at, n) = k.objects.take_touched();

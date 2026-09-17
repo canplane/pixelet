@@ -156,7 +156,7 @@ pub const FETCH_HYSTERESIS: f64 = PAGE_SPAN;
 
 /// Fetch order for a page, as a scheduler priority: its distance in whole
 /// pages, doubled so a second subsystem can interleave at equal distance
-/// (POI sits one behind terrain — see use_poi_fetcher.rs).
+/// (POI sits one behind terrain — see poi_fetcher.rs).
 pub fn page_priority(dist2: f64) -> f64 {
     js_round(dist2.sqrt() / PAGE_SPAN) * 2.0
 }

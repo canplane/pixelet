@@ -21,6 +21,7 @@
 use xpute_core::kit::json::{read_json, Quoted};
 
 use super::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
+use crate::module::world::chunk_node::chunk_sources_changed;
 use crate::sys::global::Global;
 use crate::sys::host::{storage_get, storage_set};
 
@@ -86,8 +87,6 @@ pub struct SettingsStore {
     pub pet_variant_key: String,
     /// The user's layer: only what differs from the defaults.
     pub overrides: Vec<(SettingKey, SettingValue)>,
-    /// Moves on every change, for the shell's selectors.
-    pub revision: u32,
 }
 
 impl SettingsStore {
@@ -111,7 +110,6 @@ impl SettingsStore {
             person_variant_key: String::new(),
             pet_variant_key: String::new(),
             overrides: Vec::new(),
-            revision: 0,
         };
         for (key, value) in DEFAULT_SETTINGS() {
             s.write(key, value);
@@ -183,8 +181,10 @@ impl SettingsStore {
         if value != default {
             self.overrides.push((key, value.clone()));
         }
+        if key == "show_structures" || key == "show_decor" {
+            chunk_sources_changed();
+        }
         self.write(key, value);
-        self.revision += 1;
         save(self);
     }
 
@@ -245,7 +245,6 @@ fn load() -> SettingsStore {
 
 static SETTINGS_STORE: Global<SettingsStore> = Global::new();
 
-/// `useSettingsStore.getState()`.
-pub fn use_settings_store() -> &'static mut SettingsStore {
+pub fn settings_store() -> &'static mut SettingsStore {
     SETTINGS_STORE.get(load)
 }

@@ -14,10 +14,10 @@ use pxl_shared::spec::space::v3::V3;
 use xpute_core::sys::mem::{alloc, free};
 
 use super::style::marker_colors;
-use crate::app::setting::store::use_settings_store;
-use crate::app::store::ui_store::{use_ui_store, ActiveTool};
-use crate::module::camera::store::use_camera_store;
-use crate::module::map::store::use_map_store;
+use crate::app::setting::store::settings_store;
+use crate::app::store::ui_store::{ui_store, ActiveTool};
+use crate::module::camera::store::camera_store;
+use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::chunk_node::World;
 use crate::module::world::decor::asset_store::{decor_assets_for, decor_bundle_assets};
@@ -62,12 +62,12 @@ pub fn hover_cursor_step() {
         carve_preview: None,
         ghost: Ghost::None,
     });
-    let camera = use_camera_store();
-    let ui = use_ui_store();
-    let settings = use_settings_store();
+    let camera = camera_store();
+    let ui = ui_store();
+    let settings = settings_store();
     let hovered = camera.hovered_coord;
     let active_tool = ui.active_tool;
-    let map_center = use_map_store().map_center;
+    let map_center = map_store().map_center;
     let enable_terrain_carving = settings.enable_terrain_carving;
 
     let hovered_object = camera.hovered_object_at.and_then(get_placed_object);

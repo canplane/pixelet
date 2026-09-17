@@ -1,4 +1,4 @@
-// pxl_core/module/world/frame/use_view_frame.rs
+// pxl_core/module/world/frame/view_frame.rs
 
 //! The root frame's two damped halves (module/world/frame/view.rs): its turn
 //! about Z toward the controls' azimuth, and its translation toward putting
@@ -13,12 +13,12 @@ use super::coord::get_local_world_origin;
 use super::view::{view, view_compose};
 use crate::module::camera::config::camera_cfg::smooth::{POS_DAMP, ROT_DAMP};
 use crate::module::camera::orbit::damp_alpha;
-use crate::module::camera::store::use_camera_store;
-use crate::module::map::store::use_map_store;
+use crate::module::camera::store::camera_store;
+use crate::module::map::store::map_store;
 use crate::module::world::sched::tick::TickContext;
 use crate::sys::global::Global;
 
-// see use_camera.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
+// see damping.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
 // asking for frames.
 const AZIMUTH_EPS: f64 = 0.0001;
 const POS_EPS: f64 = 0.0005;
@@ -41,7 +41,7 @@ fn steps() -> &'static mut FrameSteps {
 
 /// The "frame_rotation" step of the interaction phase.
 pub fn view_rotation_step(ctx: &mut TickContext) {
-    let azimuth = use_camera_store().view_state.azimuth;
+    let azimuth = camera_store().view_state.azimuth;
     let s = steps();
     let v = view();
     if !s.rotation_init {
@@ -68,7 +68,7 @@ pub fn view_rotation_step(ctx: &mut TickContext) {
 /// The "frame_translation" step of the interaction phase: toward the map
 /// centre, in the floating origin taken from it.
 pub fn view_translation_step(ctx: &mut TickContext) {
-    let Some(map_center) = use_map_store().map_center else { return };
+    let Some(map_center) = map_store().map_center else { return };
     let map_origin = get_local_world_origin(Some(&map_center));
     let s = steps();
     let v = view();

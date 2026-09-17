@@ -28,13 +28,12 @@ use pxl_shared::spec::space::v3::V3;
 
 use super::poi_badge::{cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H};
 use super::poi_index::{
-    invalidate_poi_index, poi_cell_x, poi_cell_y, poi_cell_z, poi_grounded, poi_index_stats, poi_index_sweep, poi_page, poi_rec, poi_tiebreak, poi_tier, poi_x, poi_y, poi_z, query_poi_index,
-    set_poi_tier, sync_poi_index, NO_TIER,
+    poi_cell_x, poi_cell_y, poi_cell_z, poi_grounded, poi_index_stats, poi_index_sweep, poi_page, poi_rec, poi_tiebreak, poi_tier, poi_x, poi_y, poi_z, query_poi_index, set_poi_tier, sync_poi_index,
+    NO_TIER,
 };
-use super::store::revision as poi_revision;
-use crate::app::setting::store::use_settings_store;
-use crate::module::camera::store::{use_camera_store, ViewState};
-use crate::module::map::store::use_map_store;
+use crate::app::setting::store::settings_store;
+use crate::module::camera::store::{camera_store, ViewState};
+use crate::module::map::store::map_store;
 use crate::module::world::billboard::atlas::NO_SLOT;
 use crate::module::world::billboard::batch::BillboardBatch;
 use crate::module::world::billboard::cell_node::CellNodes;
@@ -44,7 +43,6 @@ use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::frame::view::view;
 use crate::module::world::sched::tick::{FrameBudget, TickContext};
-use crate::module::world::terrain::store::tile_pages;
 use crate::render::lod::{fade_end_u, get_lod_level, lod_step_at, BADGE_SHAMT_OVER_CUBE, LOD_STEP_BY_LEVEL};
 use crate::sys::global::{now, Global};
 
@@ -195,7 +193,7 @@ struct Layer {
     badge_set: Option<u32>,
     stats: PoiPlaceStats,
     /// The inputs a placement depends on, as last seen.
-    seen: Option<(ViewState, Option<PVF3>, u32, bool, u32)>,
+    seen: Option<(ViewState, Option<PVF3>, bool)>,
 }
 
 static LAYER: Global<Layer> = Global::new();
@@ -553,22 +551,16 @@ fn pick_of(nodes: &CellNodes, node: u32, absorbed_extra: u32, map_origin: IVec) 
 /// arriving is what grounds an entry indexed before its tile did, so the
 /// response to it is to rebuild the index and re-place.
 pub fn poi_layer_watch_step() {
-    // The view rather than the store's revision: a rotate or a zoom changes
-    // what is in frustum without moving the centre, which is why the view is
-    // watched at all — while the revision also moves for what the camera knows
-    // and no placement reads, the hover coordinate under the pointer above all.
-    let view_state = use_camera_store().view_state;
-    let map_center = use_map_store().map_center;
-    let revision = poi_revision();
-    let show_poi = use_settings_store().show_poi;
-    let tiles = tile_pages().revision();
+    // The view as well as the centre: a rotate or a zoom changes what is in
+    // frustum without moving the centre. Pages coming and going ask for
+    // placement where they change (poi/store.rs, terrain/store.rs).
+    let view_state = camera_store().view_state;
+    let map_center = map_store().map_center;
+    let show_poi = settings_store().show_poi;
     let l = layer();
-    let now_seen = (view_state, map_center, revision, show_poi, tiles);
+    let now_seen = (view_state, map_center, show_poi);
     if l.seen == Some(now_seen) {
         return;
-    }
-    if l.seen.is_some_and(|(_, _, _, _, t)| t != tiles) {
-        invalidate_poi_index();
     }
     l.seen = Some(now_seen);
     poi_place_request();
@@ -592,7 +584,7 @@ pub fn poi_index_step(ctx: &mut TickContext) {
 pub fn poi_place_tick_step(ctx: &mut TickContext) {
     poi_layer_watch_step();
     let v = view();
-    poi_place_step(&ctx.budget, now(), use_map_store().map_center, use_settings_store().show_poi, v.width, v.height);
+    poi_place_step(&ctx.budget, now(), map_store().map_center, settings_store().show_poi, v.width, v.height);
     if poi_place_busy() {
         ctx.invalidate();
     }

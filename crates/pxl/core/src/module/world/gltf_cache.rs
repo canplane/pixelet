@@ -11,15 +11,15 @@
 //! colour conversion and no premultiplied alpha. A consumer polls: None while
 //! the load is in flight or has failed.
 
-use pxl_shared::spec::space::v3::V3;
-
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use pxl_shared::spec::space::v3::V3;
 use xpute_core::sys::mem::{alloc, free};
 
 use crate::module::world::change::request_world_tick;
 use crate::module::world::chunk_node::World;
+use crate::module::world::decor::asset_store::decor_assets_arrived;
 use crate::render::draw::{DrawList, PIPELINE_SKINNED};
 use crate::render::gltf::gltf::{parse_gltf, Gltf};
 use crate::sys::global::Global;
@@ -46,7 +46,6 @@ struct Loader {
     gltf: HashMap<String, Entry<Rc<Gltf>>>,
     image: HashMap<String, Entry<u32>>,
     requests: Vec<LoadRequest>,
-    revision: u32,
 }
 
 static LOADER: Global<Loader> = Global::new();
@@ -56,7 +55,6 @@ fn loader() -> &'static mut Loader {
         gltf: HashMap::new(),
         image: HashMap::new(),
         requests: Vec::new(),
-        revision: 0,
     })
 }
 
@@ -100,11 +98,6 @@ pub fn load_failed(url: &str) -> bool {
     matches!(l.gltf.get(url), Some(Entry::Failed)) || matches!(l.image.get(url), Some(Entry::Failed))
 }
 
-/// Moves on every arrival and every failure.
-pub fn load_revision() -> u32 {
-    loader().revision
-}
-
 /// The URLs to fetch, drained by the shell.
 pub fn take_load_requests() -> Vec<LoadRequest> {
     core::mem::take(&mut loader().requests)
@@ -118,7 +111,7 @@ pub fn gltf_arrived(url: &str, bytes: &[u8]) {
         Err(_) => Entry::Failed,
     };
     l.gltf.insert(url.to_string(), entry);
-    l.revision += 1;
+    decor_assets_arrived();
     request_world_tick();
 }
 
@@ -126,7 +119,7 @@ pub fn gltf_arrived(url: &str, bytes: &[u8]) {
 pub fn image_arrived(url: &str, handle: u32) {
     let l = loader();
     l.image.insert(url.to_string(), Entry::Ready(handle));
-    l.revision += 1;
+    decor_assets_arrived();
     request_world_tick();
 }
 
@@ -139,7 +132,7 @@ pub fn load_rejected(url: &str) {
     if l.image.contains_key(url) {
         l.image.insert(url.to_string(), Entry::Failed);
     }
-    l.revision += 1;
+    decor_assets_arrived();
 }
 
 // ---- the models as the kernel holds them ----

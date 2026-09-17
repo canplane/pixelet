@@ -1,11 +1,11 @@
-// pxl_core/module/map/navigation/use_map_bootstrap.rs
+// pxl_core/module/map/navigation/map_bootstrap.rs
 
 use pxl_shared::spec::space::adapter::epsg4326::{self, G4326};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
-use super::use_map_navigation::use_map_navigation;
-use crate::module::device::pose::store::{use_device_location_store, DevicePoseStatus};
-use crate::module::map::store::use_map_store;
+use super::map_navigation::map_navigation;
+use crate::module::device::pose::store::{device_location_store, DevicePoseStatus};
+use crate::module::map::store::map_store;
 use crate::module::world::terrain::elevation::ground_pivot;
 use crate::sys::global::Global;
 
@@ -44,8 +44,8 @@ static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
 /// Seeds and grounds map_center: the bootstrap's turn.
 pub fn map_bootstrap_step() {
-    let device_coord = use_map_navigation().device_coord;
-    let location_status = use_device_location_store().status;
+    let device_coord = map_navigation().device_coord;
+    let location_status = device_location_store().status;
     let b = BOOTSTRAP.get(|| Bootstrap { last: None, pending: None });
 
     if b.last != Some((device_coord, location_status)) {
@@ -63,20 +63,20 @@ pub fn map_bootstrap_step() {
                 pvf3::gather(&mut s, pvf3::X(&device), pvf3::Y(&device), 0);
                 Some(s)
             }
-            None if use_map_store().map_center.is_none() && location_status == DevicePoseStatus::Error => Some(fallback),
+            None if map_store().map_center.is_none() && location_status == DevicePoseStatus::Error => Some(fallback),
             None => None,
         };
         if let Some(seed) = seed {
             // sitting exactly at the fallback seed counts as "nothing real yet"
             // too — otherwise a real fix landing after the fallback kicked in
             // would never actually take over.
-            match use_map_store().map_center {
+            match map_store().map_center {
                 None => {
-                    use_map_store().set_map_center(seed);
+                    map_store().map_center = Some(seed);
                     b.pending = Some(seed);
                 }
                 Some(cur) if is_at(&cur, &fallback) => {
-                    use_map_store().set_map_center(seed);
+                    map_store().map_center = Some(seed);
                     b.pending = Some(seed);
                 }
                 Some(cur) if is_at(&cur, &seed) => b.pending = Some(seed),
@@ -89,9 +89,9 @@ pub fn map_bootstrap_step() {
     let mut probe = seed;
     let Some(grounded) = ground_pivot(&mut probe, &seed) else { return };
     b.pending = None;
-    match use_map_store().map_center {
-        None => use_map_store().set_map_center(grounded),
-        Some(cur) if is_at(&cur, &fallback_seed()) || is_at(&cur, &seed) => use_map_store().set_map_center(grounded),
+    match map_store().map_center {
+        None => map_store().map_center = Some(grounded),
+        Some(cur) if is_at(&cur, &fallback_seed()) || is_at(&cur, &seed) => map_store().map_center = Some(grounded),
         Some(_) => {}
     }
 }

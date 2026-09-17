@@ -1,4 +1,4 @@
-// pxl_core/module/device/pose/use_geolocation.rs
+// pxl_core/module/device/pose/geolocation.rs
 
 //! The device's GPS sensor, as decisions: when a watch should run, what an
 //! error means, and when to try again. The watch itself is the shell's — it
@@ -6,7 +6,7 @@
 
 use pxl_shared::spec::message::Message;
 
-use super::store::{use_device_location_store, DevicePoseStatus};
+use super::store::{device_location_store, DevicePoseStatus};
 use crate::sys::global::{now, Global};
 
 /// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
@@ -72,12 +72,12 @@ pub fn start_watching(supported: bool) {
     if g.watching {
         return;
     }
-    let store = use_device_location_store();
+    let store = device_location_store();
     if !supported {
         store.set_error(Message::GeolocationUnsupported);
         return;
     }
-    store.set_status(DevicePoseStatus::Loading);
+    store.status = DevicePoseStatus::Loading;
     store.set_is_tracking_location(true);
     g.watching = true;
     g.commands.push(GeolocationCommand::Start);
@@ -90,7 +90,7 @@ pub fn stop_watching() {
     if g.watching {
         g.watching = false;
         g.commands.push(GeolocationCommand::Stop);
-        use_device_location_store().set_is_tracking_location(false);
+        device_location_store().set_is_tracking_location(false);
     }
 }
 
@@ -109,9 +109,9 @@ pub fn geolocation_unsubscribe() {
     g.subscribers = g.subscribers.saturating_sub(1);
     if g.subscribers == 0 {
         stop_watching();
-        let store = use_device_location_store();
+        let store = device_location_store();
         if store.status != DevicePoseStatus::Idle {
-            store.set_status(DevicePoseStatus::Idle);
+            store.status = DevicePoseStatus::Idle;
         }
     }
 }
@@ -130,7 +130,7 @@ pub fn geolocation_visibility(visible: bool, supported: bool) {
 /// access from outside the app — without this a denial leaves the store stuck
 /// in ERROR until the page reloads.
 pub fn geolocation_permission_granted(supported: bool) {
-    if !use_device_location_store().is_tracking_location {
+    if !device_location_store().is_tracking_location {
         start_watching(supported);
     }
 }
@@ -138,7 +138,7 @@ pub fn geolocation_permission_granted(supported: bool) {
 /// A fix from the watch. The adapter normalizes across browsers: lat/lng are
 /// required, altitude can be absent, accuracy and heading are guarded too.
 pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, heading: Option<f64>) {
-    use_device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, heading);
+    device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, heading);
 }
 
 /// An error from the watch. The watch is stopped by the shell before this — a
@@ -146,7 +146,7 @@ pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, acc
 pub fn geolocation_error(code: GeolocationErrorCode) {
     let g = geolocation();
     g.watching = false;
-    let store = use_device_location_store();
+    let store = device_location_store();
     store.set_is_tracking_location(false);
     store.set_error(match code {
         // Actionable, not just descriptive: the one case the user can fix.

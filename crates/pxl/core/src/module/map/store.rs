@@ -34,29 +34,12 @@ pub struct MapStore {
     // ---- Navigation & Coordinate ----
     /// Canonical absolute target.
     pub map_center: Option<PVF3>,
-
-    /// Moves on every change, for the shell's selectors.
-    pub revision: u32,
 }
 
-impl MapStore {
-    pub fn set_map_status(&mut self, status: MapStatus) {
-        if self.map_status != status {
-            self.map_status = status;
-            self.revision += 1;
-        }
-    }
-
-    /// Stores absolute PVF3 without rebasing/localization.
-    pub fn set_map_center(&mut self, map_center: PVF3) {
-        self.map_center = Some(map_center);
-        self.revision += 1;
-    }
-}
+impl MapStore {}
 
 static MAP_STORE: Global<MapStore> = Global::new();
 
-/// `useMapStore.getState()`.
-pub fn use_map_store() -> &'static mut MapStore {
+pub fn map_store() -> &'static mut MapStore {
     MAP_STORE.get(MapStore::default)
 }

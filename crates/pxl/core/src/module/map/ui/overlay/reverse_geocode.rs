@@ -1,4 +1,4 @@
-// pxl_core/module/map/ui/overlay/use_reverse_geocode.rs
+// pxl_core/module/map/ui/overlay/reverse_geocode.rs
 
 //! Neighborhood label for the current map_center, baked per L3 page from
 //! Overture's Divisions theme. Page-keyed like POI, so the "have we already
@@ -13,7 +13,7 @@ use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
-use crate::module::map::store::use_map_store;
+use crate::module::map::store::map_store;
 use crate::module::world::geocode::label::{assemble_label, Label};
 use crate::module::world::geocode::repository::{parse_geocode, PartTable, Rows};
 use crate::module::world::sched::demand::{Category, Demand};
@@ -70,7 +70,7 @@ fn geocode() -> &'static mut Geocode {
 /// one quota with terrain and POI.
 pub fn reverse_geocode_step() {
     let g = geocode();
-    let Some(center) = use_map_store().map_center else { return };
+    let Some(center) = map_store().map_center else { return };
     let page_idx = L3_IDX(center.i);
     // The debounce waits on the centre standing still, not on the page: a pan
     // that crosses into a page and keeps going would otherwise ask about a page
@@ -125,7 +125,7 @@ pub struct ReverseGeocodeResult<'a> {
 }
 
 /// The label against `language`, and whether a request is in flight.
-pub fn use_reverse_geocode(language: &str) -> ReverseGeocodeResult<'static> {
+pub fn reverse_geocode(language: &str) -> ReverseGeocodeResult<'static> {
     let g: &'static _ = geocode();
     ReverseGeocodeResult {
         label: g.parts.map(|parts| assemble_label(&g.table, parts, language)),

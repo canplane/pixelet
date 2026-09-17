@@ -72,8 +72,6 @@ pub struct CameraStore {
     pub view_state: ViewState,
     /// Follow mode flag.
     pub is_follow_mode: bool,
-    /// Moves on every change, for the shell's selectors.
-    pub revision: u32,
 }
 
 impl CameraStore {
@@ -88,32 +86,6 @@ impl CameraStore {
                 polar: DEFAULT_POLAR,
             },
             is_follow_mode: false,
-            revision: 0,
-        }
-    }
-
-    fn changed(&mut self) {
-        self.revision += 1;
-    }
-
-    pub fn set_camera_status(&mut self, camera_status: CameraStatus) {
-        if self.camera_status != camera_status {
-            self.camera_status = camera_status;
-            self.changed();
-        }
-    }
-
-    pub fn set_hovered_coord(&mut self, hovered_coord: Option<PVF3>) {
-        if self.hovered_coord != hovered_coord {
-            self.hovered_coord = hovered_coord;
-            self.changed();
-        }
-    }
-
-    pub fn set_hovered_object_at(&mut self, at: Option<EntryAt>) {
-        if self.hovered_object_at != at {
-            self.hovered_object_at = at;
-            self.changed();
         }
     }
 
@@ -163,13 +135,6 @@ impl CameraStore {
         });
     }
 
-    pub fn set_is_follow_mode(&mut self, is_follow_mode: bool) {
-        if self.is_follow_mode != is_follow_mode {
-            self.is_follow_mode = is_follow_mode;
-            self.changed();
-        }
-    }
-
     /// A view state change wakes the damping loop, which only runs when a
     /// frame is asked for.
     fn commit_view(&mut self, next: ViewState) {
@@ -177,14 +142,12 @@ impl CameraStore {
             return;
         }
         self.view_state = next;
-        self.changed();
         request_world_tick();
     }
 }
 
 static CAMERA_STORE: Global<CameraStore> = Global::new();
 
-/// `useCameraStore.getState()`.
-pub fn use_camera_store() -> &'static mut CameraStore {
+pub fn camera_store() -> &'static mut CameraStore {
     CAMERA_STORE.get(CameraStore::new)
 }

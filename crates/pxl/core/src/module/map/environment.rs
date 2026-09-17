@@ -10,13 +10,13 @@ use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
 use crate::module::camera::config::camera_cfg;
-use crate::module::map::navigation::use_map_bootstrap::FALLBACK_G4326;
-use crate::module::map::store::use_map_store;
+use crate::module::map::navigation::map_bootstrap::FALLBACK_G4326;
+use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::environment::celestial_position::{moon_position, sun_position};
 use crate::module::world::environment::config::{light_cfg, render_cfg};
 use crate::module::world::environment::theme::{themes, WorldThemeKey};
-use crate::module::world::environment::theme_clock::use_theme_key;
+use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::sched::chunk_table::Frame;
 use crate::render::gpu::color::linear_rgb;
 use crate::sys::global::Global;
@@ -103,7 +103,7 @@ pub fn map_environment_step() {
     });
     let sched = &mut kernel().sched;
 
-    let theme_key = use_theme_key();
+    let theme_key = theme_key();
     if e.theme_key != Some(theme_key) {
         e.theme_key = Some(theme_key);
         let mut lane = [0.0f32; THEME_FLOATS];
@@ -112,7 +112,7 @@ pub fn map_environment_step() {
         request_world_tick();
     }
 
-    let centre = use_map_store().map_center;
+    let centre = map_store().map_center;
     if centre != e.observed_centre {
         e.observed_centre = centre;
         if let Some(c) = centre {

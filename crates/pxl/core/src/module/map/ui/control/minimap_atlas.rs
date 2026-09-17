@@ -14,7 +14,7 @@ use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use xpute_core::kit::math::clamp;
 
 use crate::module::camera::config::camera_cfg::view::DEFAULT_DIST;
-use crate::module::map::store::use_map_store;
+use crate::module::map::store::map_store;
 use crate::module::world::terrain::store::tile_pages;
 use crate::render::layer::terrain::shader_meta::rgb255;
 use crate::sys::global::Global;
@@ -86,13 +86,13 @@ struct Atlas {
 static ATLAS: Global<Atlas> = Global::new();
 
 /// The minimap's image as it stands, rebaked when its inputs moved.
-pub fn use_minimap_atlas() -> Option<&'static MinimapAtlas> {
+pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
     let a = ATLAS.get(|| Atlas {
         colors: colors(),
         image: None,
         baked_for: None,
     });
-    let map_center = use_map_store().map_center?;
+    let map_center = map_store().map_center?;
     let key = (tile_pages().revision(), L3_IDX(map_center.i));
     if a.baked_for != Some(key) {
         a.baked_for = Some(key);

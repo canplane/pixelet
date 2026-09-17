@@ -16,7 +16,7 @@ use crate::module::world::change::request_world_tick;
 use crate::module::world::chunk_node::World;
 use crate::module::world::environment::config::render_cfg::FOG_FAR;
 use crate::module::world::environment::theme::WorldThemeKey;
-use crate::module::world::environment::theme_clock::use_theme_key;
+use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::sched::chunk_table::Frame;
 use crate::module::world::terrain::elevation::get_ele;
 use crate::module::world::terrain::store::tile_pages;
@@ -169,7 +169,7 @@ pub fn location_puck_step(device_coord: Option<PVF3>) {
     // boxes; the beacon has no such constraint, so this adds the remainder back
     // — otherwise it would quantize to whole-cell jumps instead of moving
     // smoothly.
-    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], use_theme_key() == WorldThemeKey::Night);
+    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == WorldThemeKey::Night);
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
         kernel().sched.markers.set_beacon(beacon.0, beacon.1);

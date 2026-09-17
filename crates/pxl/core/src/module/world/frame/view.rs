@@ -10,7 +10,7 @@
 //! under it instead: the root frame everything is placed in is the map's
 //! azimuth about Z, then a translation that puts the map centre at the
 //! origin. Each of those is damped toward its control by its own step
-//! (camera/use_camera.rs, frame/use_view_frame.rs), and whichever moved
+//! (camera/damping.rs, frame/view_frame.rs), and whichever moved
 //! composes the matrices again.
 //!
 //! Held here the matrices are current the moment a step writes them.

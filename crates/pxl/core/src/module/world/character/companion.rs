@@ -29,12 +29,12 @@ use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 
 use super::chat_bubble::chat_bubble_step;
 use super::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
-use super::store::use_companion_load_store;
+use super::store::companion_load_store;
 use super::variant::{find_person_variant, find_pet_variant, CharacterVariant};
-use crate::app::setting::store::use_settings_store;
+use crate::app::setting::store::settings_store;
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::damp_alpha;
-use crate::module::camera::store::use_camera_store;
+use crate::module::camera::store::camera_store;
 use crate::module::world::frame::view::view;
 use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::module::world::object::store::objects_revision;
@@ -81,7 +81,7 @@ const SETTLE_DELAY_S: f64 = 0.15;
 // Follow mode only: glides toward the target with a plain per-frame
 // exponential lerp at the SAME rate the world scroll damps. Because the two run
 // at the same rate toward the same point, they cancel: the character's world
-// position stays at screen center. use_follow_mode.rs drops its own position
+// position stays at screen center. follow_mode.rs drops its own position
 // EMA to match, so this lerp is the one and only position-smoothing stage.
 const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 
@@ -170,10 +170,10 @@ impl Walker {
     }
 
     fn set_ready(&self, ready: bool) {
-        let store = use_companion_load_store();
+        let store = companion_load_store();
         match self.role {
-            Role::Person => store.set_person_ready(ready),
-            Role::Pet => store.set_pet_ready(ready),
+            Role::Person => store.person_ready = ready,
+            Role::Pet => store.pet_ready = ready,
         }
     }
 
@@ -371,11 +371,11 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         chat_bubble_step(None, 0.0);
         return;
     };
-    let settings = use_settings_store();
+    let settings = settings_store();
     let (Some(person_variant), Some(pet_variant)) = (find_person_variant(&settings.person_variant_key), find_pet_variant(&settings.pet_variant_key)) else {
         return;
     };
-    let is_follow_mode = use_camera_store().is_follow_mode;
+    let is_follow_mode = camera_store().is_follow_mode;
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
     let person = walker_for(&mut c.person, person_variant, Role::Person, person_target, p.map_origin);

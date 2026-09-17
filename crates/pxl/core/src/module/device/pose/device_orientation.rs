@@ -1,4 +1,4 @@
-// pxl_core/module/device/pose/use_device_orientation.rs
+// pxl_core/module/device/pose/device_orientation.rs
 
 //! The device's compass sensor, as decisions: the heading an event means, when
 //! to start listening, and when a silent sensor counts as lost. The listener is
@@ -7,7 +7,7 @@
 
 use pxl_shared::spec::message::Message;
 
-use super::store::{use_device_orientation_store, DevicePoseStatus};
+use super::store::{device_orientation_store, DevicePoseStatus};
 use crate::sys::global::{now, Global};
 
 /// There's no Permissions-API equivalent for orientation (iOS Safari doesn't
@@ -59,13 +59,13 @@ fn orientation() -> &'static mut Orientation {
 pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
     orientation().last_event_at = Some(now());
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
-    use_device_orientation_store().set_orientation(heading, beta, gamma);
+    device_orientation_store().set_orientation(heading, beta, gamma);
 }
 
 /// Requests the sensor, guarded against duplicate activation: true when it is
 /// tracking or has been asked for.
 pub fn request_orientation(platform: OrientationPlatform) -> bool {
-    let store = use_device_orientation_store();
+    let store = device_orientation_store();
     if store.is_tracking_orientation {
         return true;
     }
@@ -73,7 +73,7 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
         store.set_error(Message::OrientationUnsupported);
         return false;
     }
-    store.set_status(DevicePoseStatus::Loading);
+    store.status = DevicePoseStatus::Loading;
     let o = orientation();
     if platform.needs_permission {
         o.commands.push(OrientationCommand::RequestPermission);
@@ -87,7 +87,7 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
 
 /// iOS's answer to the permission request.
 pub fn orientation_permission(granted: bool, failed: bool) {
-    let store = use_device_orientation_store();
+    let store = device_orientation_store();
     if granted {
         orientation().last_event_at = Some(now());
         store.set_is_tracking_orientation(true);
@@ -101,7 +101,7 @@ pub fn orientation_permission(granted: bool, failed: bool) {
 /// A subscriber arrived; auto-started on platforms that allow it.
 pub fn orientation_subscribe(platform: OrientationPlatform) {
     orientation().subscribers += 1;
-    if !use_device_orientation_store().is_tracking_orientation && !platform.needs_permission {
+    if !device_orientation_store().is_tracking_orientation && !platform.needs_permission {
         request_orientation(platform);
     }
 }
@@ -112,12 +112,12 @@ pub fn orientation_unsubscribe() {
     o.subscribers = o.subscribers.saturating_sub(1);
     if o.subscribers == 0 {
         o.commands.push(OrientationCommand::Remove);
-        let store = use_device_orientation_store();
+        let store = device_orientation_store();
         if store.is_tracking_orientation {
             store.set_is_tracking_orientation(false);
         }
         if store.status != DevicePoseStatus::Idle {
-            store.set_status(DevicePoseStatus::Idle);
+            store.status = DevicePoseStatus::Idle;
         }
     }
 }
@@ -145,7 +145,7 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
         return;
     }
     o.watchdog_at = t + WATCHDOG_INTERVAL_MS;
-    let store = use_device_orientation_store();
+    let store = device_orientation_store();
     if !store.is_tracking_orientation {
         if !platform.needs_permission {
             request_orientation(platform);
