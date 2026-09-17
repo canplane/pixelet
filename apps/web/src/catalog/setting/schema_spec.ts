@@ -47,7 +47,7 @@ export const SETTINGS = {
    * either way (overture_policy.ts); this is a render decision. */
   show_structures: {
     kind: "toggle",
-    default: false,
+    default: true,
     section: "display",
     dev: true,
   },

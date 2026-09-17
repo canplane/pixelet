@@ -49,7 +49,7 @@
     "show_structures": {
       "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (overture_policy.ts); this is a render decision."],
       "kind": "toggle",
-      "default": false,
+      "default": true,
       "section": "display",
       "dev": true
     },
