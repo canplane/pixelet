@@ -2,7 +2,7 @@
 
 //! The texture pack as two 2D array textures on the device — a top and a side
 //! face per layer, one layer per ground type and cube colour, indexed by the
-//! layer indices the mesher bakes into a vertex's taps (layer/terrain/shader_meta.rs). Every
+//! layer indices the mesher bakes into a vertex's taps (mesh/paint/palette/shader_meta.rs). Every
 //! layer starts as its flat colour, and the pack's sheet replaces them tile by
 //! tile once it arrives; a side with no tile of its own wears the top's, the
 //! rule the shader assumes.
@@ -15,13 +15,13 @@
 use pxl_shared::asset::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
 use pxl_shared::spec::cell::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
-use super::api::{object, texture_usage, GpuApi};
-use super::api_spec::{address, compare, dimension, filter, format, load, resource};
-use super::paint::Paint;
-use super::pipeline::Pipelines;
-use crate::layer::terrain::shader_meta::{rgb255, GROUND_LAYER_META};
-use crate::shader::PIPELINE_MIPS;
-use crate::tex_array::OBJECT_LAYER_IDX;
+use crate::frame::shader::record::PIPELINE_MIPS;
+use crate::gpu::api::{object, texture_usage, GpuApi};
+use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use crate::gpu::paint::Paint;
+use crate::gpu::pipeline::Pipelines;
+use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
+use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
 /// The tile edge in texels (apps/api's download_texture_pack.ts's TILE_SIZE).
 pub const LAYER_TEX_SZ: u32 = 256;
@@ -66,7 +66,7 @@ impl Mips {
                 (g.pass)(
                     pass,
                     encoder,
-                    &super::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, super::api::NONE, super::api::NONE),
+                    &crate::gpu::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, crate::gpu::api::NONE, crate::gpu::api::NONE),
                 );
                 (g.set_pipeline)(pass, self.pipeline);
                 (g.set_bind_group)(pass, 0, group, &[]);
@@ -75,12 +75,12 @@ impl Mips {
                 // The encoder keeps what it recorded: a view, a group or a pass
                 // let go now is gone from the table, not from the commands.
                 for id in [pass, group, target, above] {
-                    super::api::release(id);
+                    crate::gpu::api::release(id);
                 }
             }
         }
         (g.submit)(encoder);
-        super::api::release(encoder);
+        crate::gpu::api::release(encoder);
     }
 }
 

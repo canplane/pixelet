@@ -2,22 +2,22 @@
 //
 // The kernel's one state: the volumes, the terrain tables, the object store
 // and its painter, the scheduler, the change log and the raycast — as one
-// value made on first use. The modules (module/, app/) read and write it
+// value made on first use. The kernel's modules read and write it
 // directly, and hand the view (pxl-render) what it draws; pxl-wasm keeps only
 // the rings and hands commands to it.
 
-use pxl_render::layer::object::adapter::Painter;
-use pxl_render::layer::pipeline::volume::Volumes;
-use pxl_render::layer::terrain::adapter::Materials;
+use pxl_render::mesh::paint::object::adapter::Painter;
+use pxl_render::mesh::paint::terrain::adapter::Materials;
+use pxl_render::mesh::volume::Volumes;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
 
-use crate::module::world::chunk_raycast::Raycast;
-use crate::module::world::object::store::Store;
-use crate::module::world::sched::chunk_table::Scheduler;
+use crate::layer::object::store::Store;
 use crate::sys::global::Global;
+use crate::world::chunk::raycast::Raycast;
+use crate::world::chunk::table::Scheduler;
 
-/// module/world/change.rs's WorldTopic numbers the store bumps, and the
+/// world/change.rs's WorldTopic numbers the store bumps, and the
 /// log's shape.
 pub const TOPIC_OBJECT_COLUMN: u32 = 0;
 pub const TOPIC_DECOR_COLUMN: u32 = 1;
@@ -35,7 +35,7 @@ pub struct Kernel {
     pub painter: Painter,
     /// The chunks' builds.
     pub sched: Scheduler,
-    /// The world's change log (module/world/change.rs's topics).
+    /// The world's change log (world/change.rs's topics).
     pub changes: ChangeLog,
     /// The world's raycast and its kept composites.
     pub raycast: Raycast,
@@ -71,7 +71,7 @@ pub fn kernel() -> &'static mut Kernel {
 /// its corner.
 pub fn reindex_object(k: &mut Kernel, key: u64) {
     k.objects.reindex(key);
-    crate::module::world::chunk_node::chunk_sources_changed();
+    crate::world::chunk::node::chunk_sources_changed();
     k.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
     k.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
     let (at, n) = k.objects.take_touched();
@@ -86,10 +86,10 @@ pub fn reindex_object(k: &mut Kernel, key: u64) {
 
 /// The kernel's world and its scheduler, borrowed together for a call that
 /// builds, draws or reads the volumes; None before the volumes are opened.
-pub fn with_world<R>(f: impl FnOnce(&mut crate::module::world::chunk_node::World, &mut crate::module::world::sched::chunk_table::Scheduler) -> R) -> Option<R> {
+pub fn with_world<R>(f: impl FnOnce(&mut crate::world::chunk::node::World, &mut crate::world::chunk::table::Scheduler) -> R) -> Option<R> {
     let k = kernel();
     let volumes = k.volumes.as_mut()?;
-    let mut world = crate::module::world::chunk_node::World {
+    let mut world = crate::world::chunk::node::World {
         volumes,
         materials: &k.terrain,
         store: &k.objects,

@@ -19,9 +19,9 @@
 
 use xpute_core::kit::mat4::{mat4, mat4_look_at, mat4_mul, Mat4, Vec3};
 
-use super::api::{buffer_usage, bytes, object, pass_desc, texture_usage, GpuApi, NONE};
-use super::api_spec::{address, compare, dimension, filter, format, load, resource};
-use crate::shader::{FRAME_AT, FRAME_FLOATS};
+use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS};
+use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, GpuApi, NONE};
+use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 
 const HALF_EXTENT: f64 = 200.0;
 const LIGHT_DISTANCE: f64 = 1200.0;

@@ -561,24 +561,24 @@ type DataSpec = { $doc?: string[]; $ts?: string; $rs?: string; $ts_header?: stri
 
 /** `enums`: the spec's closed sets are also written as Rust enums (see rs_items). */
 const DATA_SPECS: { json: string; ts?: string; rs?: string; enums?: true }[] = [
-  { json: "crates/pxl/core/src/module/camera/config.json", rs: "crates/pxl/core/src/module/camera/config.rs" },
-  { json: "crates/pxl/core/src/module/world/environment/config.json", rs: "crates/pxl/core/src/module/world/environment/config.rs" },
-  { json: "crates/pxl/core/src/module/world/environment/theme.json", rs: "crates/pxl/core/src/module/world/environment/theme_spec.rs", enums: true },
-  { json: "crates/pxl/render/src/marker/style.json", rs: "crates/pxl/render/src/marker/style.rs" },
-  { json: "crates/pxl/core/src/module/world/billboard/order.json", rs: "crates/pxl/core/src/module/world/billboard/order.rs" },
-  { json: "crates/pxl/core/src/module/world/decor/kind.json", rs: "crates/pxl/core/src/module/world/decor/kind.rs", enums: true },
-  { json: "crates/pxl/core/src/app/setting/schema.json", ts: "apps/web/src/app/setting/schema_spec.ts", rs: "crates/pxl/core/src/app/setting/schema_spec.rs" },
-  { json: "crates/pxl/core/src/module/world/poi/poi_theme.json", ts: "apps/web/src/module/world/poi/poi_theme_spec.ts", rs: "crates/pxl/core/src/module/world/poi/poi_theme_spec.rs" },
+  { json: "crates/pxl/core/src/control/camera/config.json", rs: "crates/pxl/core/src/control/camera/config.rs" },
+  { json: "crates/pxl/core/src/layer/environment/config.json", rs: "crates/pxl/core/src/layer/environment/config.rs" },
+  { json: "crates/pxl/core/src/layer/environment/theme.json", rs: "crates/pxl/core/src/layer/environment/theme_spec.rs", enums: true },
+  { json: "crates/pxl/render/src/look/style.json", rs: "crates/pxl/render/src/look/style.rs" },
+  { json: "crates/pxl/core/src/layer/billboard/order.json", rs: "crates/pxl/core/src/layer/billboard/order.rs" },
+  { json: "crates/pxl/core/src/layer/decor/kind/kind.json", rs: "crates/pxl/core/src/layer/decor/kind/spec.rs", enums: true },
+  { json: "crates/pxl/core/src/shell/setting/schema.json", ts: "apps/web/src/app/setting/schema_spec.ts", rs: "crates/pxl/core/src/shell/setting/schema_spec.rs" },
+  { json: "crates/pxl/core/src/layer/poi/theme.json", ts: "apps/web/src/module/world/poi/poi_theme_spec.ts", rs: "crates/pxl/core/src/layer/poi/theme_spec.rs" },
   {
-    json: "crates/pxl/core/src/module/world/character/variant.json",
+    json: "crates/pxl/core/src/layer/character/variant.json",
     ts: "apps/web/src/module/world/character/variant_spec.ts",
-    rs: "crates/pxl/core/src/module/world/character/variant_spec.rs",
+    rs: "crates/pxl/core/src/layer/character/variant_spec.rs",
     enums: true,
   },
-  { json: "crates/pxl/core/src/module/world/terrain/config.json", rs: "crates/pxl/core/src/module/world/terrain/config_spec.rs" },
+  { json: "crates/pxl/core/src/layer/terrain/config.json", rs: "crates/pxl/core/src/layer/terrain/config_spec.rs" },
   { json: "crates/pxl/render/src/gpu/api.json", ts: "apps/web/src/wasm/gpu_spec.ts", rs: "crates/pxl/render/src/gpu/api_spec.rs" },
-  { json: "crates/pxl/core/src/module/world/sched/ledger.json", ts: "apps/web/src/module/world/sched/ledger_spec.ts", rs: "crates/pxl/core/src/module/world/sched/ledger_spec.rs" },
-  { json: "crates/pxl/core/src/mem/mem.json", ts: "apps/web/src/wasm/mem_spec.ts", rs: "crates/pxl/core/src/mem/spec.rs" },
+  { json: "crates/pxl/core/src/sched/ledger/ledger.json", ts: "apps/web/src/module/world/sched/ledger_spec.ts", rs: "crates/pxl/core/src/sched/ledger/spec.rs" },
+  { json: "crates/pxl/core/src/sys/mem/mem.json", ts: "apps/web/src/wasm/mem_spec.ts", rs: "crates/pxl/core/src/sys/mem/spec.rs" },
 ];
 
 function is_leaf_wrapper(n: DataNode): n is { $value: DataNode; $doc?: string[]; $type?: string } {

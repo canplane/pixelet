@@ -10,8 +10,8 @@
 
 use core::marker::PhantomData;
 
-use super::api::GpuApi;
-use super::api_spec::paint as op;
+use crate::gpu::api::GpuApi;
+use crate::gpu::api_spec::paint as op;
 
 const PAINT_WORDS: usize = 512;
 

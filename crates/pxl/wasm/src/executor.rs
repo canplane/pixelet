@@ -17,8 +17,8 @@
 //! executor takes has nothing to exclude.
 
 use embassy_executor::raw::Executor as Raw;
-use pxl_core::module::world::change::TASKS;
 use pxl_core::sys::global::Global;
+use pxl_core::world::change::TASKS;
 use xpute_core::sched::task::{set_executor, Executor, Priority, Task};
 
 struct OneThread;

@@ -7,16 +7,11 @@
 //! model and nothing of the kernel (pxl-core): the kernel decides what and
 //! when, and hands a frame what it reads (`gpu::renderer::FrameInput`).
 
-pub mod billboard;
-pub mod draw;
-pub mod environment;
-pub mod gltf;
+pub mod asset;
+pub mod frame;
 pub mod gpu;
-pub mod layer;
-pub mod lod;
-pub mod marker;
-pub mod shader;
-pub mod tex_array;
+pub mod look;
+pub mod mesh;
 
 /// Serializes the native checks that touch the view's globals: they run on
 /// several threads, and a `Global` is for one.

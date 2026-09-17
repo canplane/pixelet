@@ -5,11 +5,10 @@
 //! is the one crate that does — so the same code runs under `cargo test`
 //! natively and inside the module the client loads.
 
-pub mod app;
-/// apps/web/src/lib, inline so the directory is not taken for the crate root.
-pub mod lib {
-    pub mod env;
-}
-pub mod mem;
-pub mod module;
+pub mod control;
+pub mod io;
+pub mod layer;
+pub mod sched;
+pub mod shell;
 pub mod sys;
+pub mod world;

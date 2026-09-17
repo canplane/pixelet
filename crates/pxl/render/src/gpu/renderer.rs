@@ -21,24 +21,24 @@ use xpute_core::kit::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_pers
 use xpute_core::sys::global::Global;
 use xpute_core::sys::mem::{alloc, free};
 
-use super::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, GpuApi, NONE};
-use super::api_spec::{dimension, format, load, resource};
-use super::badges::BadgePass;
-use super::decor::DecorPass;
-use super::layers::{Layers, Mips, LAYER_TEX_SZ};
-use super::pipeline::{Built, Pipelines};
-use super::puck::PuckPass;
-use super::shadow::Shadow;
-use super::skinned::SkinnedPass;
-use super::stage::{stage_lane, STAGE_AT};
-use super::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
-use crate::billboard::atlas::BillboardAtlas;
-use crate::draw::{
+use crate::asset::atlas::BillboardAtlas;
+use crate::frame::draw::{
     DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
     PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::environment::ENV_OTHER_LIGHT;
-use crate::shader::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY};
+use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY};
+use crate::frame::stage::{stage_lane, STAGE_AT};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, GpuApi, NONE};
+use crate::gpu::api_spec::{dimension, format, load, resource};
+use crate::gpu::layers::{Layers, Mips, LAYER_TEX_SZ};
+use crate::gpu::pass::badges::BadgePass;
+use crate::gpu::pass::decor::DecorPass;
+use crate::gpu::pass::puck::PuckPass;
+use crate::gpu::pass::skinned::SkinnedPass;
+use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::shadow::Shadow;
+use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
+use crate::look::environment::ENV_OTHER_LIGHT;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -74,7 +74,7 @@ pub type Frame = [f32; FRAME_FLOATS as usize];
 pub struct FrameInput<'a> {
     /// The draw list's lanes, as the scheduler's `DrawList::take` gave them.
     pub lists: [usize; 10],
-    /// The environment's lane (environment.rs), ENV_FLOATS floats.
+    /// The environment's lane (look/environment.rs), ENV_FLOATS floats.
     pub environment: &'a [f32],
     /// Each decor group's model block, by the list's handle (0 while it
     /// loads), and its skin's image, in group order.
@@ -875,7 +875,7 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE.x + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE.y + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE.z + actor[2]) as f32;
-            // No fog: the near and far pushed out of reach (crates/pxl/core/src/module/map/environment.rs's
+            // No fog: the near and far pushed out of reach (crates/pxl/core/src/layer/environment/state.rs's
             // fog_near and fog_far in the run).
             u[ENV + 7] = 1e9;
             u[ENV + 11] = 2e9;

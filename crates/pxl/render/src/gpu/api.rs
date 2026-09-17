@@ -142,7 +142,7 @@ pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
 
 /// A group's entry over a buffer, whole.
 pub fn buffer_entry(binding: u32, buffer: u32) -> [u32; 5] {
-    [binding, super::api_spec::resource::BUFFER, buffer, 0, 0]
+    [binding, crate::gpu::api_spec::resource::BUFFER, buffer, 0, 0]
 }
 
 /// A render pass's description: colour (and its resolve), cleared to

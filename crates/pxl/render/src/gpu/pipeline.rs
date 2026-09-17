@@ -6,8 +6,8 @@
 //! declares the same group gets the same layout and a bind group made for one
 //! serves the others.
 
-use super::api::{object, GpuApi};
-use crate::shader::{pipeline as record_of, source, ONE_SAMPLE, SHADERS};
+use crate::frame::shader::record::{pipeline as record_of, source, ONE_SAMPLE, SHADERS};
+use crate::gpu::api::{object, GpuApi};
 
 /// Group layouts a pipeline has at most, and vertex lanes.
 pub const GROUPS: usize = 4;

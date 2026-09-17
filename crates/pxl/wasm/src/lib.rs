@@ -2,7 +2,7 @@
 //!
 //! No wasm-bindgen. The central scheduler gives the module its memory, and
 //! the module lays out everything inside it when it is booted (`boot`,
-//! pxl_core::mem); the shell reads the boot block once, and everything after
+//! pxl_core::sys::mem); the shell reads the boot block once, and everything after
 //! crosses in the rings in that memory: a command and its packet in, its
 //! reply and the kernel's signals out, and `interrupt` to hand over the turn.
 //!
@@ -10,10 +10,10 @@
 
 mod executor;
 
-use pxl_core::mem;
 use pxl_core::sys::global::Global;
 use pxl_core::sys::kernel::kernel;
-use pxl_render::layer::pipeline::volume::Volumes;
+use pxl_core::sys::mem::section;
+use pxl_render::mesh::volume::Volumes;
 use pxl_shared::spec::cmd::Cmd;
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::frame::FrameFlag;
@@ -62,7 +62,7 @@ const HEAP_MAX_LOG2: usize = 31;
 
 /// The smallest block, which is the page the rest of the memory is counted in
 /// (mem.json's PAGE_BYTES).
-const HEAP_MIN_LOG2: usize = memory_shift(mem::PAGE_BYTES);
+const HEAP_MIN_LOG2: usize = memory_shift(section::PAGE_BYTES);
 
 const fn memory_shift(bytes: u32) -> usize {
     assert!(bytes.is_power_of_two());
@@ -84,7 +84,7 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
         // A pure function of the linker's answer and the map's constants, with
         // no state and no order to be in: the first block is asked for long
         // before anything has laid the memory out.
-        mem::heap_at(data_end()) as usize
+        section::heap_at(data_end()) as usize
     }
     fn end() -> usize {
         core::arch::wasm32::memory_size(0) * (1 << 16)
@@ -125,7 +125,7 @@ const SPILL: u32 = 2;
 
 const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
 const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
-const _: () = assert!(RING_SLOT_BYTES == mem::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
+const _: () = assert!(RING_SLOT_BYTES == section::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
 
 /// The whole memory as one buffer, which is what a ring's two areas are cut
 /// from: the descriptors near the bottom and the slots' payloads past them, at
@@ -175,7 +175,7 @@ fn state() -> &'static mut State {
             // the trap.
             unsafe { host_panic(text.as_ptr(), text.len()) };
         }));
-        mem::map().unwrap_or_else(lay_out);
+        section::map().unwrap_or_else(lay_out);
         State {
             sq: new_ring(SQ),
             outbox: Outbox {
@@ -218,7 +218,7 @@ const BOOT_QUANTUM: usize = 9;
 pub extern "C" fn boot() -> *const u32 {
     install_host();
     executor::install();
-    let map = mem::map().unwrap_or_else(lay_out);
+    let map = section::map().unwrap_or_else(lay_out);
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
@@ -226,7 +226,7 @@ pub extern "C" fn boot() -> *const u32 {
     for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
-    let q = pxl_core::module::world::sched::tick::QUANTUM;
+    let q = pxl_core::sched::tick::QUANTUM;
     for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
         s.boot[BOOT_QUANTUM + i] = (v * 1000.0).round() as u32;
     }
@@ -240,17 +240,17 @@ pub extern "C" fn boot() -> *const u32 {
 /// their contents' own affair; the heap is the one allocator and it knows its
 /// range without being told (`buddy_tree`'s `Range`), so laying out is
 /// recording what the map says and opening the volumes over it.
-fn lay_out() -> mem::Map {
+fn lay_out() -> section::Map {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
     assert!(
-        stack_high == pxl_core::mem::spec::STACK_BYTES,
+        stack_high == pxl_core::sys::mem::spec::STACK_BYTES,
         "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
     );
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
-    let map = mem::lay_out(given.min(u32::MAX as u64) as u32, data_end());
+    let map = section::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
     kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
-    mem::set_map(map);
+    section::set_map(map);
     map
 }
 
@@ -262,9 +262,9 @@ fn lay_out() -> mem::Map {
 /// turn rung with no quota and no frame only applies what waits.
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
-    use pxl_core::module::world::world::{take_world_drawn, world_frame_waiting};
+    use pxl_core::sched::turn::{take_world_drawn, world_frame_waiting};
     let s = state();
-    pxl_core::module::world::change::world_edge().rise(quota_ms);
+    pxl_core::world::change::world_edge().rise(quota_ms);
     drain(s);
     if quota_ms > 0.0 || world_frame_waiting() {
         xpute_core::sched::task::poll();
@@ -272,7 +272,7 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     if take_world_drawn() {
         post_turn(s);
     }
-    pxl_core::module::world::change::world_fall()
+    pxl_core::world::change::world_fall()
 }
 
 /// The UI's snapshot: what WORLD_SNAPSHOT names instead of carrying.
@@ -330,11 +330,11 @@ impl Outbox {
             None => r.push(tag, cmd, flags, None, result),
         };
         if self.spill.is_empty() && push(&self.cq) == Errno::OK {
-            pxl_core::module::world::sched::ledger::ledger_note_rings(self.cq.len(), 0);
+            pxl_core::sched::ledger::record::ledger_note_rings(self.cq.len(), 0);
             return;
         }
         let e = push(&self.spill);
-        pxl_core::module::world::sched::ledger::ledger_note_rings(self.cq.len(), self.spill.len());
+        pxl_core::sched::ledger::record::ledger_note_rings(self.cq.len(), self.spill.len());
         assert!(e == Errno::OK, "the completion ring and its spill are full: 0x{cmd:x} has nowhere to go (errno {})", e as i32);
     }
 
@@ -391,10 +391,10 @@ fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
 /// the sensors' watches, console lines, the UI's snapshot when it
 /// changed, the fetches to start and cancel, and the loads.
 fn post_shell(s: &mut State) {
-    use pxl_core::module::device::pose::device_orientation::{take_orientation_commands, OrientationCommand};
-    use pxl_core::module::device::pose::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use pxl_core::module::world::gltf_cache::{take_load_requests, LoadKind};
-    use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
+    use pxl_core::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
+    use pxl_core::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
+    use pxl_core::io::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
+    use pxl_core::io::load::{take_load_requests, LoadKind};
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
@@ -416,7 +416,7 @@ fn post_shell(s: &mut State) {
         }
     }
     let mut text = String::new();
-    pxl_core::app::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
+    pxl_core::shell::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
     let hash = xpute_core::kit::hash::fnv1a64_str(&text);
     if hash != s.snapshot {
         s.snapshot = hash;
@@ -431,13 +431,13 @@ fn post_shell(s: &mut State) {
     // The key crosses as the one word the queue orders by; the shell holds it
     // as a handle and hands it back, and never reads into it.
     fetch_take_started(|d| {
-        let key = pxl_core::module::world::sched::fetch_scheduler::hash_of(d.key);
+        let key = pxl_core::io::fetch_scheduler::hash_of(d.key);
         raise(&s.outbox, Cmd::FETCH_CREATE, 2, |e| {
-            e.u64(Some(key)).str_display(pxl_core::module::world::fetch::DemandUrl(d));
+            e.u64(Some(key)).str_display(pxl_core::io::fetch::DemandUrl(d));
         });
     });
     fetch_take_aborts(|name| {
-        let key = pxl_core::module::world::sched::fetch_scheduler::hash_of(name);
+        let key = pxl_core::io::fetch_scheduler::hash_of(name);
         raise(&s.outbox, Cmd::FETCH_DELETE, 1, |e| {
             e.u64(Some(key));
         });
@@ -493,8 +493,8 @@ fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
 }
 
 /// A load by its number, refused where the number names none.
-fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_core::module::world::gltf_cache::Load, MarshalError> {
-    pxl_core::module::world::gltf_cache::Load::of(u32_at(b, i)?).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("no such load"), None))
+fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_core::io::load::Load, MarshalError> {
+    pxl_core::io::load::Load::of(u32_at(b, i)?).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("no such load"), None))
 }
 
 /// Applies one submission: its reply's value, or none for a command nobody
@@ -512,7 +512,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::WORLD_UPDATE => {
             let f = fields(pkt)?;
-            let host = pxl_core::module::world::world::HostFrame {
+            let host = pxl_core::sched::turn::HostFrame {
                 width: number_at(&f, 0)?,
                 height: number_at(&f, 1)?,
                 dpr: number_at(&f, 2)?,
@@ -521,12 +521,12 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 interactive: bool_at(&f, 5)?,
                 credits: u32_at(&f, 6)?,
             };
-            pxl_core::module::world::world::world_frame_asked(host);
+            pxl_core::sched::turn::world_frame_asked(host);
             Ok(Some(0))
         }
         Cmd::WORLD_CREATE => {
             let f = fields(pkt)?;
-            pxl_core::lib::env::config::set_build_info(pxl_core::lib::env::config::BuildInfo {
+            pxl_core::shell::config::env::set_build_info(pxl_core::shell::config::env::BuildInfo {
                 app_env: f.at(0)?.get_str()?,
                 build_time: f.at(1)?.get_str()?,
                 build_id: f.at(2)?.get_str()?,
@@ -534,26 +534,26 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 published_tiles: bool_at(&f, 4)?,
             });
             pxl_core::sys::host::set_handheld(bool_at(&f, 5)?);
-            pxl_core::module::world::world::set_world_platform(pxl_core::module::world::world::Platform {
+            pxl_core::sched::turn::set_world_platform(pxl_core::sched::turn::Platform {
                 geolocation: bool_at(&f, 6)?,
-                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
+                orientation: pxl_core::control::sensor::device_orientation::OrientationPlatform {
                     supported: bool_at(&f, 7)?,
                     needs_permission: bool_at(&f, 8)?,
                 },
             });
-            pxl_core::module::world::object::store::load();
+            pxl_core::layer::object::store::load();
             Ok(Some(0))
         }
         Cmd::WORLD_ACTION => {
             let f = fields(pkt)?;
             let text = f.at(0)?;
-            pxl_core::app::shell::ui_action(text.get_str_ref()?);
+            pxl_core::shell::shell::ui_action(text.get_str_ref()?);
             post_shell(s);
             Ok(Some(0))
         }
         Cmd::INPUT_UPDATE => {
             let f = fields(pkt)?;
-            pxl_core::module::camera::input::camera_input_rect(pxl_core::module::camera::input::Rect {
+            pxl_core::control::camera::input::camera_input_rect(pxl_core::control::camera::input::Rect {
                 left: number_at(&f, 0)?,
                 top: number_at(&f, 1)?,
                 width: number_at(&f, 2)?,
@@ -562,7 +562,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::INPUT_POINTER => {
-            use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
+            use pxl_core::control::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
             use pxl_shared::spec::cell::{placeable_cube_of, DecorId};
             let f = fields(pkt)?;
             let kind = match u32_at(&f, 1)? {
@@ -601,27 +601,27 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::INPUT_TRACKING => {
-            use pxl_core::app::shell::{tracking_action, Tracking};
+            use pxl_core::shell::shell::{tracking_action, Tracking};
             tracking_action(match u32_at(&fields(pkt)?, 0)? {
                 0 => Tracking::Recenter,
                 1 => Tracking::Follow,
                 _ => Tracking::Unfollow,
             });
-            pxl_core::module::world::change::request_world_tick();
+            pxl_core::world::change::request_world_tick();
             Ok(Some(0))
         }
         Cmd::INPUT_WHEEL => {
-            pxl_core::module::camera::input::camera_wheel(number_at(&fields(pkt)?, 0)?);
+            pxl_core::control::camera::input::camera_wheel(number_at(&fields(pkt)?, 0)?);
             Ok(Some(0))
         }
         Cmd::SENSOR_UPDATE => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_core::module::device::pose::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
+            pxl_core::control::sensor::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
             Ok(Some(0))
         }
         Cmd::SENSOR_ERROR => {
-            use pxl_core::module::device::pose::geolocation::{geolocation_error, GeolocationErrorCode};
+            use pxl_core::control::sensor::geolocation::{geolocation_error, GeolocationErrorCode};
             let code = match u32_at(&fields(pkt)?, 0)? {
                 1 => GeolocationErrorCode::PermissionDenied,
                 2 => GeolocationErrorCode::PositionUnavailable,
@@ -634,11 +634,11 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         Cmd::SENSOR_ORIENTATION => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_core::module::device::pose::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
+            pxl_core::control::sensor::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
             Ok(Some(0))
         }
         Cmd::SENSOR_PERMISSION => {
-            use pxl_core::module::device::pose::store::PermissionAnswer;
+            use pxl_core::control::sensor::store::PermissionAnswer;
             let f = fields(pkt)?;
             let answer = match u32_at(&f, 1)? {
                 0 => PermissionAnswer::Asking,
@@ -646,53 +646,53 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 2 => PermissionAnswer::Denied,
                 _ => PermissionAnswer::Failed,
             };
-            let platform = pxl_core::module::world::world::world_platform();
+            let platform = pxl_core::sched::turn::world_platform();
             match u32_at(&f, 0)? {
                 0 => {
                     if answer == PermissionAnswer::Granted {
-                        pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation);
+                        pxl_core::control::sensor::geolocation::geolocation_permission_granted(platform.geolocation);
                     }
                 }
-                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(answer),
+                _ => pxl_core::control::sensor::device_orientation::orientation_permission(answer),
             }
             Ok(Some(0))
         }
         Cmd::SENSOR_VISIBILITY => {
             let visible = bool_at(&fields(pkt)?, 0)?;
-            let platform = pxl_core::module::world::world::world_platform();
-            pxl_core::module::device::pose::geolocation::geolocation_visibility(visible, platform.geolocation);
+            let platform = pxl_core::sched::turn::world_platform();
+            pxl_core::control::sensor::geolocation::geolocation_visibility(visible, platform.geolocation);
             if visible {
-                pxl_core::module::device::pose::device_orientation::orientation_visible();
+                pxl_core::control::sensor::device_orientation::orientation_visible();
             } else {
-                pxl_core::module::world::object::store::flush_save();
+                pxl_core::layer::object::store::flush_save();
             }
             Ok(Some(0))
         }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
-            pxl_core::module::world::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
+            pxl_core::io::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
             Ok(Some(0))
         }
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
             // A model's bytes are far past a slot: the host holds them, and
             // the models' task reads them on a turn's quota.
-            pxl_core::module::world::gltf_cache::gltf_arrived(load_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
+            pxl_core::io::load::gltf_arrived(load_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
             Ok(Some(0))
         }
         Cmd::LOAD_IMAGE => {
             let f = fields(pkt)?;
-            pxl_core::module::world::gltf_cache::image_arrived(load_at(&f, 0)?, u32_at(&f, 1)?);
+            pxl_core::io::load::image_arrived(load_at(&f, 0)?, u32_at(&f, 1)?);
             Ok(Some(0))
         }
         Cmd::LOAD_DELETE => {
-            pxl_core::module::world::gltf_cache::load_rejected(load_at(&fields(pkt)?, 0)?);
+            pxl_core::io::load::load_rejected(load_at(&fields(pkt)?, 0)?);
             Ok(Some(0))
         }
         Cmd::GPU_CREATE => {
             let f = fields(pkt)?;
             pxl_render::gpu::renderer::gpu_created(u32_at(&f, 0)?, bool_at(&f, 1)?);
-            pxl_core::module::world::change::request_world_tick();
+            pxl_core::world::change::request_world_tick();
             Ok(Some(0))
         }
         Cmd::GPU_DELETE => {
@@ -702,14 +702,14 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         Cmd::SURFACE_CREATE => {
             let handle = pxl_render::gpu::surface::surface_create(u32_at(&fields(pkt)?, 0)?);
             if handle != 0 {
-                pxl_core::module::world::change::request_world_tick();
+                pxl_core::world::change::request_world_tick();
             }
             Ok(Some(handle as i32))
         }
         Cmd::SURFACE_UPDATE => {
             let f = fields(pkt)?;
             if pxl_render::gpu::surface::surface_update(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, number_at(&f, 3)?) {
-                pxl_core::module::world::change::request_world_tick();
+                pxl_core::world::change::request_world_tick();
             }
             Ok(Some(0))
         }
@@ -984,10 +984,10 @@ fn install_host() {
 /// until the next turn.
 #[no_mangle]
 pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
-    use pxl_core::module::world::sched::ledger::{ledger_frames, ledger_tasks, ledger_worst};
-    use pxl_core::module::world::sched::ledger_spec::READ;
+    use pxl_core::sched::ledger::record::{ledger_frames, ledger_tasks, ledger_worst};
+    use pxl_core::sched::ledger::spec::READ;
     static WORDS: pxl_core::sys::global::Global<[u32; READ::WORDS as usize]> = pxl_core::sys::global::Global::new();
-    let summary = pxl_core::module::world::sched::summary::ledger_summarize(window_ms);
+    let summary = pxl_core::sched::ledger::summary::ledger_summarize(window_ms);
     let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
     let w = WORDS.get(|| [0; READ::WORDS as usize]);
     w[READ::summary_at as usize] = summary.as_ptr() as u32;
@@ -1007,9 +1007,9 @@ pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
 /// asking about most of the time.
 #[no_mangle]
 pub extern "C" fn ledger_log() -> *const u32 {
-    use pxl_core::module::world::sched::ledger_spec::LOG;
+    use pxl_core::sched::ledger::spec::LOG;
     static WORDS: pxl_core::sys::global::Global<[u32; LOG::WORDS as usize]> = pxl_core::sys::global::Global::new();
-    let (tasks, frames) = pxl_core::module::world::sched::log::ledger_log_rows();
+    let (tasks, frames) = pxl_core::sched::ledger::log::ledger_log_rows();
     let w = WORDS.get(|| [0; LOG::WORDS as usize]);
     w[LOG::tasks_at as usize] = tasks.as_ptr() as u32;
     w[LOG::tasks_count as usize] = tasks.len() as u32;
@@ -1021,5 +1021,5 @@ pub extern "C" fn ledger_log() -> *const u32 {
 /// Forgets what the stream kept, once the shell has read it.
 #[no_mangle]
 pub extern "C" fn ledger_log_clear() {
-    pxl_core::module::world::sched::log::ledger_log_clear();
+    pxl_core::sched::ledger::log::ledger_log_clear();
 }

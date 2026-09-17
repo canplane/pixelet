@@ -72,6 +72,34 @@ cannot pass on the kernel's behalf.
   the raycast over the view's volumes, and a model's registration into the
   scheduler's blocks (`module/world/model_asset.rs`).
 
+## The trees, by kind
+
+The kernel's tree was the TypeScript app's (`app/`, `lib/env`, `module/{camera,
+device, map, world}`), and `module/world/` held a scheduler, a ledger, the
+fetches, the turn and every layer side by side. Both crates were sorted by what
+a thing is instead, and a crate's root holds its directories and their barrels.
+
+- **pxl-core:** `sys` (the kernel's state, the host, the memory), `sched` (the
+  turn, the tick, priorities, the ledger), `world` (the change log, the frame,
+  the chunks and their scheduler, the resident pages), `layer` (what stands in
+  the world: terrain, objects, decor, POI, characters, billboards, markers,
+  the environment), `io` (fetches, their scheduler, loads, a model's
+  registration), `control` (what moves the world: the camera, the sensors,
+  navigation) and `shell` (what the shell reads and asks: the snapshot, the
+  config, the settings, the map's controls).
+- **pxl-render:** `mesh` (voxels to a mesh, and the paint of terrain, objects
+  and the palette into voxels), `asset` (glTF, the billboards' atlas), `look`
+  (LOD, the light, colour, the markers' style), `frame` (the draw list, the
+  stage, the shaders) and `gpu` (the device, and a pass for each of badges,
+  decor, the puck and actors).
+
+A file inside a directory that already names its concept lost the prefix it
+carried (`chunk_node` is `world/chunk/node`, `gltf_cache` is `io/load`,
+`ledger_spec` is `sched/ledger/spec`, `poi_layer` is `layer/poi/placement`,
+`decor_layer` is `layer/decor/build`). A decor kind is one file under
+`layer/decor/kind/` — its seed and rules and its bundle together, beside the
+spec `kind.json` generates — where it was a `_kind` file and a `_decor` file.
+
 ## What is not done
 
 - `pxl-shared` still holds what only the offline bake reads (its raw rows and

@@ -1,6 +1,6 @@
 // The module imports its memory: the central scheduler gives it one
 // (@xpute/core/sys/mem.ts's reserve_memory), and the kernel lays out
-// everything inside it (pxl_core::mem, over xpute_core::sys::mem).
+// everything inside it (pxl_core::sys::mem, over xpute_core::sys::mem).
 //
 // What is below is the front of that memory, and it is here rather than in the
 // source because half of it is linker flags. The rings sit at addresses both
@@ -17,7 +17,7 @@
 
 use std::io::Write;
 
-#[path = "../core/src/mem/spec.rs"]
+#[path = "../core/src/sys/mem/spec.rs"]
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PAGE_BYTES, PHONE_BYTES, RING_CAPACITY, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES};
@@ -68,7 +68,7 @@ fn main() {
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
     println!("cargo:rustc-link-arg=--initial-memory={MIN_MEMORY_BYTES}");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../core/src/mem/spec.rs");
+    println!("cargo:rerun-if-changed=../core/src/sys/mem/spec.rs");
 
     let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("ring_layout.rs");
     let mut f = std::fs::File::create(&out).unwrap();

@@ -5,7 +5,7 @@
  * clip while slowly spinning in place, so a pick can actually be seen before
  * committing to it. The canvas is handed to the kernel as a case; the actor,
  * its model, its spin and the drawing are the kernel's
- * (crates/pxl/core/src/module/world/character/character_preview.rs,
+ * (crates/pxl/core/src/layer/character/character_preview.rs,
  * render/gpu/renderer.rs).
  */
 

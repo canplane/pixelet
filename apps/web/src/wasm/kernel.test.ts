@@ -39,7 +39,7 @@ type Snapshot = {
  * and the stream the URL says it belongs to. */
 type Fetched = { key: bigint; url: string; category: string };
 
-/** The stream a fetch's URL is for (crates/pxl/core/src/lib/env/route.rs). */
+/** The stream a fetch's URL is for (crates/pxl/core/src/shell/config/route.rs). */
 function category_of(url: string): string {
   if (url.endsWith("/_ocean")) return "ocean";
   return url.split("/")[3];
