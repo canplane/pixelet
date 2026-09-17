@@ -40,7 +40,7 @@ export function TrackingButton() {
     <CircularButton
       className="w-12 h-12"
       shadow={false}
-      onClick={() => kernel_tracking()}
+      onClick={() => void kernel_tracking(!can_show_location_control && !is_follow_mode)}
       isActive={is_follow_mode}
       disabled={!is_enabled || is_loading}
       title={title}

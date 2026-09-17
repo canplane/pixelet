@@ -4,9 +4,9 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { decor_ids, type DecorId, decor_num_id, placeable_cube_id, placeable_cube_num_id, type PlaceableCubeId, placeable_cubes } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, decor_num_id, type DecorId, placeable_cube_id, placeable_cube_num_id, placeable_cubes, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
 import { DEFAULT_OBJECT_SIZE } from "@/module/world/object/size.ts";
-import { kernel_action } from "@/wasm/kernel.ts";
+import { kernel_action, kernel_hold } from "@/wasm/kernel.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 
@@ -60,12 +60,6 @@ function touch_recent(recent_picks: readonly RecentPick[], pick: RecentPick): Re
   return [pick, ...recent_picks].slice(0, MAX_RECENT_PICKS);
 }
 
-/** The kernel places by the cube's catalog number (spec/cell). */
-function send_cube(id: PlaceableCubeId): void {
-  const cube = placeable_cubes.find((c) => placeable_cube_id(c) === id);
-  if (cube) kernel_action({ type: "select_cube", num_id: placeable_cube_num_id(cube) });
-}
-
 type UiState = {
   activeTool: ActiveTool;
   set_activeTool: (activeTool: ActiveTool) => void;
@@ -104,7 +98,6 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   activeTool: "pointer",
   set_activeTool: (activeTool) => {
     set({ activeTool });
-    kernel_action({ type: "set_active_tool", tool: activeTool });
   },
 
   object_color_id: "block.red",
@@ -112,7 +105,6 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   object_size: DEFAULT_OBJECT_SIZE,
   set_object_size: (object_size) => {
     set({ object_size });
-    kernel_action({ type: "set_object_size", size: object_size });
   },
 
   decor_id: "tree",
@@ -144,7 +136,6 @@ export const useUiStore = create<UiState>()(persist((set) => ({
       activeTool: "object",
       recent_picks: touch_recent(state.recent_picks, { kind: "object", id }),
     }));
-    send_cube(id);
   },
   select_decor: (id) => {
     set((state) => ({
@@ -152,7 +143,6 @@ export const useUiStore = create<UiState>()(persist((set) => ({
       activeTool: "decor",
       recent_picks: touch_recent(state.recent_picks, { kind: "decor", id }),
     }));
-    kernel_action({ type: "select_decor", num_id: decor_num_id(id) });
   },
 
   chatLines: [],
@@ -197,12 +187,18 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   },
 }));
 
-// The kernel starts from its own defaults: what this store restored is sent
-// once, the picks first (each switches the tool) and the tool last.
-{
-  const s = useUiStore.getState();
-  send_cube(s.object_color_id);
-  kernel_action({ type: "select_decor", num_id: decor_num_id(s.decor_id) });
-  kernel_action({ type: "set_object_size", size: s.object_size });
-  kernel_action({ type: "set_active_tool", tool: s.activeTool });
+// What the pointer holds crosses to the kernel with each pointer event, by
+// the catalog's numbers (spec/cell): the object tool holds the cube, the decor
+// tool the decor kind.
+const TOOL_NUMBER: Record<ActiveTool, number> = { pointer: 0, object: 1, decor: 2, eraser: 3 };
+
+function hold(s: UiState): void {
+  const cube = placeable_cubes.find((c) => placeable_cube_id(c) === s.object_color_id);
+  const value = s.activeTool === "object" ? (cube ? placeable_cube_num_id(cube) : 0) : s.activeTool === "decor" ? decor_num_id(s.decor_id) : 0;
+  kernel_hold(TOOL_NUMBER[s.activeTool], value, s.object_size);
 }
+
+hold(useUiStore.getState());
+useUiStore.subscribe((s, prev) => {
+  if (s.activeTool !== prev.activeTool || s.object_color_id !== prev.object_color_id || s.decor_id !== prev.decor_id || s.object_size !== prev.object_size) hold(s);
+});

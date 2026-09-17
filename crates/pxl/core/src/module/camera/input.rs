@@ -4,12 +4,19 @@
 //! and tap. The shell forwards the raw pointer and wheel events it receives on
 //! the canvas; everything they mean is decided here, and the store writes they
 //! make are coalesced to once a frame (`camera_input_step`).
+//!
+//! What the pointer holds — the tool, and for placing, what and how big —
+//! comes with each pointer event, as a modifier key does: the pick is the
+//! shell's, and the kernel keeps only the last event's. When the pick changes
+//! under a pointer that has not moved, the shell sends that pointer's move
+//! again, as a browser synthesizes a mouse move to re-resolve hover.
 
 use std::collections::BTreeMap;
 
 use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 use camera_cfg::projection::FOV;
 use camera_cfg::view::{MAX_POLAR, MIN_POLAR};
+use pxl_shared::spec::cell::{cube_types, DecorId, PlaceableCube};
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -20,14 +27,13 @@ use super::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hove
 use super::store::{camera_store, CameraStatus, ViewPatch};
 use super::terrain_gate::{allowed_pan, ViewTriple};
 use crate::app::setting::store::settings_store;
-use crate::app::store::ui_store::{ui_store, ActiveTool};
 use crate::module::map::store::map_store;
 use crate::module::world::decor::decor_hit::raycast_decor;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::frame::view::{view, view_ray_local};
 use crate::module::world::object::collision::{is_placement_blocked, PlacementTool};
 use crate::module::world::object::geometry::{anchor_center, object_aabb, object_center};
-use crate::module::world::object::size::DECOR_SIZE;
+use crate::module::world::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::module::world::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
 use crate::module::world::terrain::elevation::ground_or_raw;
 use crate::render::layer::pipeline::chunk_raycast::WorldHit;
@@ -48,6 +54,37 @@ enum RotateAxisLock {
     None,
     Tilt,
     Rotate,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActiveTool {
+    #[default]
+    Pointer,
+    Object,
+    Decor,
+    Eraser,
+}
+
+/// What the pointer holds, as INPUT_POINTER carries it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Holding {
+    pub active_tool: ActiveTool,
+    /// The hotbar only ever sets this to a flat colour, but the drawer picks
+    /// terrain-styled cubes too.
+    pub object_cube: PlaceableCube,
+    pub object_size: f64,
+    pub decor_id: DecorId,
+}
+
+impl Default for Holding {
+    fn default() -> Holding {
+        Holding {
+            active_tool: ActiveTool::Pointer,
+            object_cube: PlaceableCube::Block(cube_types::Block::red),
+            object_size: DEFAULT_OBJECT_SIZE,
+            decor_id: DecorId::tree,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +110,8 @@ struct PointerPos {
 }
 
 struct Input {
+    /// What the last pointer event held.
+    holding: Holding,
     drag_mode: DragMode,
     did_drag: bool,
     pointer_x: f64,
@@ -126,6 +165,7 @@ static INPUT: Global<Input> = Global::new();
 
 fn input() -> &'static mut Input {
     INPUT.get(|| Input {
+        holding: Holding::default(),
         drag_mode: DragMode::None,
         did_drag: false,
         pointer_x: 0.0,
@@ -176,7 +216,7 @@ fn resolve_hit_target(hit: &WorldHit, origin: Vec3, direction: Vec3, map_origin:
 /// placed object if there's one under the cursor, the terrain's own real surface
 /// otherwise).
 fn handle_tap(hovered: PVF3) {
-    let ui = ui_store();
+    let ui = input().holding;
     let object_size = ui.object_size;
 
     match ui.active_tool {
@@ -392,8 +432,9 @@ fn update_pinch(s: &mut Input) {
 }
 
 /// A pointer went down on the canvas.
-pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
+pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64, holding: Holding) {
     let s = input();
+    s.holding = holding;
     let camera = camera_store();
     if kind == PointerKind::Touch {
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
@@ -440,8 +481,9 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
 }
 
 /// A pointer moved.
-pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64) {
+pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64, holding: Holding) {
     let s = input();
+    s.holding = holding;
     if kind == PointerKind::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
             *pt = PointerPos { x: client_x, y: client_y };
@@ -507,7 +549,7 @@ fn update_hover(s: &Input) {
     let mut direction = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
     view_ray_local(s.pointer_x, s.pointer_y, &mut origin, &mut direction);
 
-    let ui = ui_store();
+    let ui = s.holding;
     let map_origin = get_local_world_origin(Some(&map_center));
     // One unified raycast — terrain (top or a wall) and any placed object all
     // come back as the same WorldHit, all boxes in the same voxel field.
@@ -559,8 +601,9 @@ fn tap_if_still(s: &Input, mode: DragMode) {
 }
 
 /// A pointer went up, or was cancelled.
-pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
+pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
     let s = input();
+    s.holding = holding;
     let camera = camera_store();
     if kind == PointerKind::Touch {
         s.active_pointers.remove(&pointer_id);
@@ -639,4 +682,9 @@ pub fn camera_input_step() {
             ..Default::default()
         });
     }
+}
+
+/// What the last pointer event held: what the hover cursor previews.
+pub fn holding() -> Holding {
+    input().holding
 }

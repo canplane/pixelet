@@ -2,12 +2,14 @@
 
 //! The device's compass sensor, as decisions: the heading an event means, when
 //! to start listening, and when a silent sensor counts as lost. The listener is
-//! the shell's — it takes `take_orientation_commands`, asks iOS's permission
-//! inside a gesture, and reports events back.
+//! the shell's — it takes `take_orientation_commands` and reports events back.
+//! So is iOS's permission: a prompt belongs to the gesture that raised it, the
+//! way a page's handler calls `requestPermission` and the browser answers, and
+//! the kernel hears only the answer (`orientation_permission`).
 
 use pxl_shared::spec::message::Message;
 
-use super::store::{device_orientation_store, DevicePoseStatus};
+use super::store::{device_orientation_store, DevicePoseStatus, PermissionAnswer};
 use crate::module::world::change::wake_at;
 use crate::sys::global::{now, Global};
 
@@ -23,8 +25,6 @@ const WATCHDOG_INTERVAL_MS: f64 = 3000.0;
 pub enum OrientationCommand {
     /// Listen: `absolute` for deviceorientationabsolute where the browser has it.
     Listen,
-    /// Ask iOS's permission, inside the current user gesture, then listen.
-    RequestPermission,
     Remove,
 }
 
@@ -64,7 +64,9 @@ pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>
 }
 
 /// Requests the sensor, guarded against duplicate activation: true when it is
-/// tracking or has been asked for.
+/// tracking or listening has been asked for. Where the platform gates it behind
+/// a permission, only the shell's prompt can start it, so this is false until
+/// that answer has arrived.
 pub fn request_orientation(platform: OrientationPlatform) -> bool {
     let store = device_orientation_store();
     if store.is_tracking_orientation {
@@ -74,28 +76,33 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
         store.set_error(Message::OrientationUnsupported);
         return false;
     }
-    store.status = DevicePoseStatus::Loading;
-    let o = orientation();
     if platform.needs_permission {
-        o.commands.push(OrientationCommand::RequestPermission);
         return false;
     }
+    store.status = DevicePoseStatus::Loading;
+    let o = orientation();
     o.commands.push(OrientationCommand::Listen);
     o.last_event_at = Some(now());
     store.set_is_tracking_orientation(true);
     true
 }
 
-/// iOS's answer to the permission request.
-pub fn orientation_permission(granted: bool, failed: bool) {
+/// Where the shell's permission prompt stands. A granted prompt has already
+/// started the shell's listener.
+pub fn orientation_permission(answer: PermissionAnswer) {
     let store = device_orientation_store();
-    if granted {
-        orientation().last_event_at = Some(now());
-        store.set_is_tracking_orientation(true);
-    } else if failed {
-        store.set_error(Message::OrientationPermissionError);
-    } else {
-        store.set_error(Message::OrientationPermissionDenied);
+    match answer {
+        PermissionAnswer::Asking => {
+            if !store.is_tracking_orientation {
+                store.status = DevicePoseStatus::Loading;
+            }
+        }
+        PermissionAnswer::Granted => {
+            orientation().last_event_at = Some(now());
+            store.set_is_tracking_orientation(true);
+        }
+        PermissionAnswer::Denied => store.set_error(Message::OrientationPermissionDenied),
+        PermissionAnswer::Failed => store.set_error(Message::OrientationPermissionError),
     }
 }
 

@@ -3,7 +3,7 @@
 import { Compass, Locate } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { kernel_action, type PoseStatus, useKernel } from "@/wasm/kernel.ts";
+import { kernel_enable_sensors, type PoseStatus, useKernel } from "@/wasm/kernel.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 
@@ -23,7 +23,8 @@ function status_class(status: PoseStatus): string {
 
 // DeviceOrientationEvent.requestPermission() only runs inside a direct user
 // gesture on iOS Safari, and the kernel deliberately doesn't auto-start it
-// there, so this control is the only route to that permission.
+// there, so this control and the tracking button are the routes to that
+// permission.
 export function SensorStatus() {
   const { t } = useTranslation();
 
@@ -44,7 +45,7 @@ export function SensorStatus() {
   return (
     <button
       type="button"
-      onClick={() => kernel_action({ type: "enable_sensors" })}
+      onClick={kernel_enable_sensors}
       className="flex items-center gap-2 -m-2 p-2 cursor-pointer pointer-events-auto"
       title={t("map.sensors.enable")}
       aria-label={t("map.sensors.enable")}

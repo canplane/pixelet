@@ -8,7 +8,6 @@
 
 use core::fmt::{self, Write};
 
-use pxl_shared::spec::cell::{placeable_cube_of, DecorId};
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -16,7 +15,6 @@ use xpute_core::kit::json::{read_json, JsonValue, Quoted};
 
 use crate::app::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::app::setting::store::settings_store;
-use crate::app::store::ui_store::{ui_store, ActiveTool};
 use crate::module::camera::store::{camera_store, CameraStatus};
 use crate::module::device::pose::device_orientation::{orientation_subscribe, orientation_unsubscribe, request_orientation, OrientationPlatform};
 use crate::module::device::pose::geolocation::{geolocation_subscribe, geolocation_unsubscribe, start_watching};
@@ -81,16 +79,6 @@ impl<T: fmt::Display> fmt::Display for Or<T> {
             Some(v) => v.fmt(f),
             None => f.write_str("null"),
         }
-    }
-}
-
-fn active_tool_of(s: &str) -> Option<ActiveTool> {
-    match s {
-        "pointer" => Some(ActiveTool::Pointer),
-        "object" => Some(ActiveTool::Object),
-        "decor" => Some(ActiveTool::Decor),
-        "eraser" => Some(ActiveTool::Eraser),
-        _ => None,
     }
 }
 
@@ -241,29 +229,9 @@ pub fn ui_action(text: &str) -> bool {
             let Some(key) = text_of(&action, "key") else { return false };
             settings_store().toggle_setting(&key);
         }
-        "set_active_tool" => {
-            let Some(tool) = text_of(&action, "tool").and_then(|t| active_tool_of(&t)) else { return false };
-            ui_store().active_tool = tool;
-        }
-        "set_object_size" => {
-            let Some(size) = f64_of(&action, "size") else { return false };
-            ui_store().object_size = size;
-        }
-        "select_cube" => {
-            let Some(cube) = f64_of(&action, "num_id").and_then(|n| placeable_cube_of(n as u32)) else {
-                return false;
-            };
-            ui_store().select_cube(cube);
-        }
-        "select_decor" => {
-            let Some(id) = f64_of(&action, "num_id").and_then(|n| u8::try_from(n as u32).ok()).and_then(DecorId::of) else {
-                return false;
-            };
-            ui_store().select_decor(id);
-        }
         "append_chat_line" => {
             let Some(text) = text_of(&action, "text") else { return false };
-            ui_store().append_chat_line(&text);
+            crate::module::world::character::chat_bubble::append_chat_line(&text);
         }
         "set_is_follow_mode" => {
             let Some(on) = bool_of(&action, "on") else { return false };
@@ -287,8 +255,8 @@ pub fn ui_action(text: &str) -> bool {
             shell().go_to = (grounded == target).then_some(target);
         }
         "enable_sensors" => {
-            // Orientation first: Safari consumes the gesture's activation, so a
-            // permission request reached later can be refused as outside it.
+            // Where iOS gates the compass, the shell prompted in the click and
+            // this starts nothing for it; its answer arrives on its own.
             let platform = world_platform();
             request_orientation(platform.orientation);
             start_watching(platform.geolocation);

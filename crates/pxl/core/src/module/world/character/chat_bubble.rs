@@ -8,7 +8,6 @@
 //! the chat lines, the show/expire timer, and laying out the notched
 //! speech-bubble shape the shell paints.
 
-use crate::app::store::ui_store::ui_store;
 use crate::module::world::billboard::atlas::{DrawSpec, NO_SLOT};
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::module::world::billboard::canvas_text::wrap_text;
@@ -17,8 +16,29 @@ use crate::render::gpu::surface::DPR_MAX;
 use crate::sys::global::Global;
 use crate::sys::host::{measure_text, wall_now};
 
+// ts (wall clock at append) lets the bubble derive its own remaining show
+// time from wall-clock, not from when it happened to start showing — without
+// it, a character swap resets its state and it has no way to tell an old,
+// already-dismissed line apart from a brand new one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatLine {
+    pub text: String,
+    pub ts: f64,
+}
+
+/// The last line the shell sent; the chat log itself is the shell's.
+static CHAT_LINE: Global<Option<ChatLine>> = Global::new();
+
+/// A line the shell's chat appended.
+pub fn append_chat_line(text: &str) {
+    *CHAT_LINE.get(|| None) = Some(ChatLine {
+        text: text.to_string(),
+        ts: wall_now(),
+    });
+}
+
 // A new chat line shows for this long, then the bubble disappears — chat itself
-// has no such expiry, so this is tracked here, not in the UI store.
+// has no such expiry, so this is tracked here, not in the shell's chat log.
 const SHOW_DURATION_MS: f64 = 8000.0;
 
 fn font() -> String {
@@ -92,7 +112,7 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
     // Driven by the line's wall-clock ts, so this stays correct across a
     // character swap, which would otherwise make an old, already-dismissed line
     // look brand new again.
-    let visible = ui_store().chat_line.as_ref().filter(|l| l.ts + SHOW_DURATION_MS - wall_now() > 0.0).map(|l| l.text.clone());
+    let visible = CHAT_LINE.get(|| None).as_ref().filter(|l| l.ts + SHOW_DURATION_MS - wall_now() > 0.0).map(|l| l.text.clone());
     let want = actor.zip(visible);
 
     if want != b.shown {

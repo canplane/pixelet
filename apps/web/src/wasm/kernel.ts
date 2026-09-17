@@ -106,26 +106,41 @@ export function useKernel<T>(select: (s: UiSnapshot) => T): T {
 export type KernelAction = { type: string; [key: string]: unknown };
 
 /** Applies one UI action in the kernel, rung at once with no quota: what it
- * asks of the host is heard inside the call — a sensor permission has to be
- * asked inside the gesture that led to it. */
+ * asks of the host is heard inside the call, including an unsubscribe sent
+ * after the strobe has stopped. */
 export function kernel_action(action: KernelAction): void {
   CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))));
   CORE_BUILD.ring(0);
   request_frame();
 }
 
-/** The tracking button, rung at once like an action: the compass's permission
- * has to be asked inside the gesture that led to it. */
-export function kernel_tracking(): void {
+/** The tracking button. Entering follow mode needs the compass, so where iOS
+ * gates it, the prompt runs here, inside the click, and the kernel hears the
+ * answer before the press — the way a page's handler awaits
+ * `requestPermission` and the browser only reports the outcome. */
+export async function kernel_tracking(entering_follow: boolean): Promise<void> {
+  if (entering_follow && !(await orientation_permit())) {
+    console.error("[orientation] could not start the sensor.");
+    return;
+  }
   CORE_BUILD.send(0, Cmd.INPUT_TRACKING);
-  CORE_BUILD.ring(0);
+  strobe.input();
   request_frame();
+}
+
+/** The sensor button: the compass's prompt, where iOS gates it, is raised
+ * synchronously in the click — Safari consumes the gesture's activation, so
+ * one reached after an await can be refused — and the rest follows. */
+export function kernel_enable_sensors(): void {
+  void orientation_permit();
+  kernel_action({ type: "enable_sensors" });
 }
 
 // ---- what the kernel asks: the completion ring's signals ----
 
 /** crates/pxl/wasm/src/lib.rs's sensor numbers. */
 const GEOLOCATION = 0;
+const ORIENTATION = 1;
 
 function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
   switch (cmd) {
@@ -146,9 +161,6 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
     case Cmd.SENSOR_DELETE:
       if (f!.at(0).get<number>() === GEOLOCATION) geolocation_stop();
       else orientation_remove();
-      return;
-    case Cmd.SENSOR_PERMISSION:
-      orientation_request_permission();
       return;
     case Cmd.FETCH_CREATE: {
       const [key, url] = f!.get<[bigint, string]>();
@@ -391,18 +403,34 @@ function orientation_listen(): void {
   listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
 }
 
-function orientation_request_permission(): void {
-  (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!().then(
+/** crates/pxl/core/src/module/device/pose/store.rs's PermissionAnswer. */
+const PERMISSION_ASKING = 0, PERMISSION_GRANTED = 1, PERMISSION_DENIED = 2, PERMISSION_FAILED = 3;
+
+function send_permission(sensor: number, answer: number): void {
+  CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(sensor).u32(answer)));
+  request_frame();
+}
+
+/**
+ * Whether the compass may be listened to, prompting where iOS gates it. The
+ * prompt is called before anything is awaited, so it stays inside the gesture
+ * that called this; a listener already running needs no prompt.
+ */
+function orientation_permit(): Promise<boolean> {
+  if (!orientation_needs_permission() || orientation_event !== null) return Promise.resolve(true);
+  const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
+  send_permission(ORIENTATION, PERMISSION_ASKING);
+  return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) listen_orientation("deviceorientation");
-      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(granted).bool(false)));
-      request_frame();
+      send_permission(ORIENTATION, granted ? PERMISSION_GRANTED : PERMISSION_DENIED);
+      return granted;
     },
     (err) => {
       console.error("[kernel] orientation permission error:", err);
-      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(false).bool(true)));
-      request_frame();
+      send_permission(ORIENTATION, PERMISSION_FAILED);
+      return false;
     },
   );
 }
@@ -419,11 +447,36 @@ function send_rect(element: HTMLElement): void {
   CORE_BUILD.send(0, Cmd.INPUT_UPDATE, packet((b) => b.f64(r.left).f64(r.top).f64(r.width).f64(r.height)));
 }
 
-function send_pointer(phase: number, e: PointerEvent): void {
-  const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
-  CORE_BUILD.send(0, Cmd.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(e.pointerId).i32(e.button).f64(e.clientX).f64(e.clientY)));
+/** What the pointer holds: a tool, the placeable cube's or decor's catalog
+ * number, and the object size. The kernel keeps no pick of its own; each
+ * pointer event carries this. */
+type Holding = { tool: u32; value: u32; size: number };
+
+let holding: Holding = { tool: 0, value: 0, size: 0 };
+/** The last hovering pointer, while it is over the canvas. */
+let last_hover: { kind: number; id: number; button: number; x: number; y: number } | null = null;
+
+function send_pointer_at(phase: number, kind: number, id: number, button: number, x: number, y: number): void {
+  CORE_BUILD.send(0, Cmd.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).f64(holding.size)));
   strobe.input();
   request_frame();
+}
+
+function send_pointer(phase: number, e: PointerEvent): void {
+  const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
+  last_hover = phase === 3 || kind === 1 ? null : { kind, id: e.pointerId, button: e.button, x: e.clientX, y: e.clientY };
+  send_pointer_at(phase, kind, e.pointerId, e.button, e.clientX, e.clientY);
+}
+
+/**
+ * Sets what the pointer holds. A hover under a still pointer would otherwise
+ * show the old pick until the pointer moves, so a move at the last position
+ * is sent, as a browser synthesizes a mouse move when what is under a still
+ * cursor changes.
+ */
+export function kernel_hold(tool: u32, value: u32, size: number): void {
+  holding = { tool, value, size };
+  if (last_hover) send_pointer_at(1, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
 
 /**
@@ -484,8 +537,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     // from outside the app, since nothing else would ask again.
     let permission: PermissionStatus | null = null;
     const on_permission = () => {
-      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(0).bool(permission?.state === "granted").bool(false)));
-      request_frame();
+      send_permission(GEOLOCATION, permission?.state === "granted" ? PERMISSION_GRANTED : PERMISSION_DENIED);
     };
     navigator.permissions?.query({ name: "geolocation" }).then((status) => {
       permission = status;

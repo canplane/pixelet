@@ -85,12 +85,15 @@ pub enum Cmd {
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
     INPUT_UPDATE = 0x1c03,
     /// [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
-    /// button i32, x f64, y f64] — a pointer event on the canvas, in client pixels
+    /// button i32, x f64, y f64, tool u32 (0 pointer, 1 object, 2 decor, 3 eraser), value u32 (the
+    /// placeable cube's or the decor's catalog number), size f64] — a pointer event on the canvas,
+    /// in client pixels, with what the pointer holds; the shell sends a move at the last position
+    /// when the holding changes, as a browser synthesizes a mouse move
     INPUT_POINTER = 0x1c10,
     /// [delta_y f64]
     INPUT_WHEEL = 0x1c11,
     /// no packet — the tracking button: back to the device when the map is off it, else
-    /// follow mode on (the compass asked for first) or off again
+    /// follow mode on (where the compass is listened to) or off again
     INPUT_TRACKING = 0x1c12,
     /// [lon f64, lat f64, altitude f64, accuracy f64, heading f64] — a GPS fix; NaN where the
     /// browser gave none
@@ -101,8 +104,8 @@ pub enum Cmd {
     /// [webkit_compass_heading f64, alpha f64, beta f64, gamma f64] — an orientation
     /// event; NaN where the browser gave none
     SENSOR_ORIENTATION = 0x1d11,
-    /// [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]; as a signal,
-    /// [sensor u32] — ask the user's permission, inside the gesture the action came from
+    /// [sensor u32 (0 geolocation, 1 orientation), answer u32 (0 asking, 1 granted, 2 denied,
+    /// 3 failed)] — a permission as the shell's prompt or the browser's change reported it
     SENSOR_PERMISSION = 0x1d12,
     /// [visible bool] — the tab's visibility; the host rings the doorbell for it at once,
     /// since a hidden page gets no frame and hiding is the save's last sure moment

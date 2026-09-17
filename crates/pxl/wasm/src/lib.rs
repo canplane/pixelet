@@ -412,7 +412,6 @@ fn post_shell(s: &mut State) {
     for c in take_orientation_commands() {
         match c {
             OrientationCommand::Listen => sensor(Cmd::SENSOR_CREATE, ORIENTATION),
-            OrientationCommand::RequestPermission => sensor(Cmd::SENSOR_PERMISSION, ORIENTATION),
             OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
         }
     }
@@ -564,7 +563,8 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::INPUT_POINTER => {
-            use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, PointerKind};
+            use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
+            use pxl_shared::spec::cell::{placeable_cube_of, DecorId};
             let f = fields(pkt)?;
             let kind = match u32_at(&f, 1)? {
                 1 => PointerKind::Touch,
@@ -572,10 +572,31 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 _ => PointerKind::Mouse,
             };
             let (id, button, x, y) = (i32_at(&f, 2)?, i32_at(&f, 3)?, number_at(&f, 4)?, number_at(&f, 5)?);
+            let (tool, value, size) = (u32_at(&f, 6)?, u32_at(&f, 7)?, number_at(&f, 8)?);
+            let mut holding = Holding {
+                object_size: size,
+                ..Holding::default()
+            };
+            match tool {
+                1 => {
+                    holding.active_tool = ActiveTool::Object;
+                    if let Some(cube) = placeable_cube_of(value) {
+                        holding.object_cube = cube;
+                    }
+                }
+                2 => {
+                    holding.active_tool = ActiveTool::Decor;
+                    if let Some(decor) = u8::try_from(value).ok().and_then(DecorId::of) {
+                        holding.decor_id = decor;
+                    }
+                }
+                3 => holding.active_tool = ActiveTool::Eraser,
+                _ => {}
+            }
             match u32_at(&f, 0)? {
-                0 => camera_pointer_down(kind, id, button, x, y),
-                1 => camera_pointer_move(kind, id, x, y),
-                2 => camera_pointer_up(kind, id),
+                0 => camera_pointer_down(kind, id, button, x, y, holding),
+                1 => camera_pointer_move(kind, id, x, y, holding),
+                2 => camera_pointer_up(kind, id, holding),
                 _ => camera_pointer_out(),
             }
             Ok(Some(0))
@@ -583,9 +604,6 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         Cmd::INPUT_TRACKING => {
             pxl_core::app::shell::tracking_action();
             pxl_core::module::world::change::request_world_tick();
-            // What it asks of the host (the compass's permission) is heard
-            // inside the gesture that led to it.
-            post_shell(s);
             Ok(Some(0))
         }
         Cmd::INPUT_WHEEL => {
@@ -616,13 +634,22 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::SENSOR_PERMISSION => {
+            use pxl_core::module::device::pose::store::PermissionAnswer;
             let f = fields(pkt)?;
-            let (granted, failed) = (bool_at(&f, 1)?, bool_at(&f, 2)?);
+            let answer = match u32_at(&f, 1)? {
+                0 => PermissionAnswer::Asking,
+                1 => PermissionAnswer::Granted,
+                2 => PermissionAnswer::Denied,
+                _ => PermissionAnswer::Failed,
+            };
             let platform = pxl_core::module::world::world::world_platform();
-            match (u32_at(&f, 0)?, granted) {
-                (0, true) => pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation),
-                (0, false) => {}
-                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(granted, failed),
+            match u32_at(&f, 0)? {
+                0 => {
+                    if answer == PermissionAnswer::Granted {
+                        pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation);
+                    }
+                }
+                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(answer),
             }
             Ok(Some(0))
         }
