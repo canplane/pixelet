@@ -2,19 +2,17 @@
 
 //! The world's fetches at the shell's edge. The shell runs HTTP and nothing
 //! else: for a demand the scheduler started it is told the URL
-//! (`demand_url`); when a response arrives it asks for room for the body
-//! (`fetch_body`), writes the bytes there, and reports the status
-//! (`fetch_arrived`). Which category a key is, what a 404 means and how a
-//! body decodes are decided here.
+//! (`demand_url`); when a response arrives it keeps the body and reports the
+//! status and the body's length (`fetch_arrived`), and the kernel, in its own
+//! turn, takes a block and has the host copy the body into it — the way a
+//! driver reads what a device holds. Which category a key is, what a 404 means
+//! and how a body decodes are decided here.
 //!
-//! A body's room is a block the kernel acquires and the shell only writes into,
-//! the way a device writes into a buffer its driver allocated. The block is the
-//! kernel's throughout. Every body is a block of the mesh section: a body is
-//! decoded or read and released in the same command, which is what that section
-//! is for. A terrain body does not outlive its command — the page it carries
-//! is written into `.fixed.terrain`, whose record is the page's own coordinate
-//! — and a POI page still keeps its body as the page, until its per-page index is
-//! rewritten (issue/BACKLOG.md).
+//! Every body is a heap block the kernel owns throughout. A body is decoded or
+//! read and released in the same command. A terrain body does not outlive its
+//! command — the page it carries is written into `.fixed.terrain`, whose
+//! record is the page's own coordinate — and a POI page still keeps its body
+//! as the page, until its per-page index is rewritten (issue/BACKLOG.md).
 
 use core::fmt;
 
@@ -30,17 +28,7 @@ use crate::module::world::sched::demand::{Category, Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::{demand_of, fetch_settle};
 use crate::module::world::sched::ledger::{Failure, Outcome};
 use crate::module::world::terrain::{tile_fetcher, tile_repository};
-use crate::sys::global::Global;
-
-/// Bodies given room and not yet reported: the fetches in flight, with room
-/// to spare. A body past them is refused room, and its fetch fails.
-const BODIES: usize = 16;
-
-static BODIES_HELD: Global<[(u64, Block); BODIES]> = Global::new();
-
-fn bodies() -> &'static mut [(u64, Block); BODIES] {
-    BODIES_HELD.get(|| [(0, (0, 0)); BODIES])
-}
+use crate::sys::host::body_read;
 
 /// Where a started demand is fetched from, as it is written where it is sent.
 pub struct DemandUrl<'a>(pub &'a Demand);
@@ -59,35 +47,32 @@ impl fmt::Display for DemandUrl<'_> {
     }
 }
 
-/// Room for `bytes` of `key`'s response body: the block's address, or 0 when
-/// its section has none.
-pub fn fetch_body(key: u64, bytes: u32) -> u32 {
-    let Some(slot) = bodies().iter().position(|(_, b)| b.1 == 0) else { return 0 };
-    let Some(block) = alloc(bytes) else { return 0 };
-    bodies()[slot] = (key, block);
-    block.0 as u32
-}
-
-/// The body the shell reports, only when it is one given room for `key`.
-fn take_body(key: u64, at: u32, bytes: u32) -> Option<Block> {
+/// The body the host holds as `body`, `bytes` long, copied into a block of
+/// its own: None when there is none, NoRoom when the heap has no block for it.
+/// The host lets the body go either way.
+fn receive((body, bytes): (u32, u32)) -> Result<Option<Block>, FetchFail> {
     if bytes == 0 {
-        return None;
+        return Ok(None);
     }
-    let slot = bodies().iter().position(|&(h, b)| h == key && b == (at as usize, bytes))?;
-    bodies()[slot] = (0, (0, 0));
-    Some((at as usize, bytes))
+    let Some(block) = alloc(bytes) else {
+        body_read(body, &mut []);
+        return Err(FetchFail::NoRoom);
+    };
+    // SAFETY: a block just acquired, `bytes` long, and no one else's.
+    body_read(body, unsafe { core::slice::from_raw_parts_mut(block.0 as *mut u8, bytes as usize) });
+    Ok(Some(block))
 }
 
 fn release(block: Option<Block>) {
     if let Some(block) = block {
-        // SAFETY: a body's block, given room by `fetch_body` and reported once.
+        // SAFETY: a body's block, acquired by `receive` and released once.
         unsafe { free(block) };
     }
 }
 
-/// A body's bytes, read where the shell wrote them.
+/// A body's bytes, read where the host copied them.
 fn view((at, bytes): Block) -> U8Array {
-    // SAFETY: the block is one `fetch_body` acquired for this body alone,
+    // SAFETY: the block is one `receive` acquired for this body alone,
     // `bytes` long, and it is not released while the view is read.
     let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, bytes as usize) };
     U8Array::over(buffer, 0, bytes as usize)
@@ -102,9 +87,13 @@ fn text<'a>((at, bytes): Block) -> Result<&'a str, FetchFail> {
 }
 
 /// The shell's report that a started demand's fetch finished: `outcome` 0
-/// with the response's status and body, 1 aborted, 2 failed with `error`.
+/// with the response's status and the body it holds, `(body, bytes)`, 1
+/// aborted, 2 failed with `fail`.
 pub fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u32, net_ms: f64) {
-    let block = take_body(key, body.0, body.1);
+    let (outcome, fail, block) = match receive(body) {
+        Ok(block) => (outcome, fail, block),
+        Err(no_room) => (2, no_room as u32, None),
+    };
     // A hash the scheduler no longer holds is one a reset forgot; its body is
     // already back.
     let Some(name) = demand_of(key) else {

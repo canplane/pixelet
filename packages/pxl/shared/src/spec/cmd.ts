@@ -507,15 +507,15 @@ export const enum Cmd {
    * object store loaded */
   WORLD_CREATE = 0x1b01,
   /** [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
-   * orientation_permission bool, slice_ms f64, batch_ms f64, frame_ms f64, credits u32]
-   * — the central scheduler's strobe: the effects' turn, then the tick's phases on the
-   * grant, the fetches within the credits; the viewport in CSS pixels. The turn leaves
-   * its signals on the completion ring, drawn by the kernel, and last this command's own
-   * as a signal: [asked bool, used_ms f64, settled bool, draws u32] — a turn after this one
-   * was asked for, what the tick spent, whether it ran on the batch quantum, and the
-   * draws it listed */
+   * orientation_permission bool, frame_ms f64, interactive bool, credits u32] — the
+   * frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
+   * phases on what is left of the quota, the fetches within the credits; the viewport in
+   * CSS pixels, the frame interval and the turn as the host measured them. The turn
+   * leaves its signals on the completion ring, drawn by the kernel, and last this
+   * command's own as a signal: [draws u32] */
   WORLD_UPDATE = 0x1b03,
-  /** tag call · [action str (JSON, app/shell.rs)] → result: 1 applied, 0 not */
+  /** [action str (JSON, app/shell.rs)] — the UI's action; the host rings the doorbell for it at once,
+   * so what it asks of the host is heard inside the gesture that led to it */
   WORLD_ACTION = 0x1b11,
   /** send · [source u32 (0 loaf, 1 longtask), t f64, duration f64, blocking f64, script f64, render f64]
    *
@@ -543,19 +543,16 @@ export const enum Cmd {
   /** [sensor u32 (0 geolocation, 1 orientation), granted bool, failed bool]; as a signal,
    * [sensor u32] — ask the user's permission, inside the gesture the action came from */
   SENSOR_PERMISSION = 0x1d12,
-  /** [visible bool] — the tab's visibility */
+  /** [visible bool] — the tab's visibility; the host rings the doorbell for it at once,
+   * since a hidden page gets no frame and hiding is the save's last sure moment */
   SENSOR_VISIBILITY = 0x1d13,
-  /** tag call · [key str, bytes u32] → result: the address of room for the response's
-   * body in the page section, 0 refused — the shell writes the bytes there and nothing
-   * else */
-  FETCH_BODY = 0x1e10,
-  /** [key str, outcome u32 (0 ok, 1 aborted, 2 error), status u32, body_at u32, body_bytes
-   * u32 (0 for none), error str | null, net_ms f64] — a started fetch finished; what the
+  /** [key u64, outcome u32 (0 ok, 1 aborted, 2 error), status u32, body u32, body_bytes
+   * u32 (0 for none), fail u32, net_ms f64] — a started fetch finished, its body held by
+   * the host as `body` until the kernel reads it (the `body_read` import); what the
    * status and the body mean is the kernel's */
   FETCH_UPDATE = 0x1e03,
-  /** [url str, at u32, bytes u32] — a model's bytes, past a ring frame, so
-   * the shell asks the heap for a block (POOL_ACQUIRE), writes them there
-   * and names it here; the kernel gives the block back once it has read it */
+  /** [url str, body u32, bytes u32] — a model's bytes, held by the host as `body`
+   * until the kernel reads them (the `body_read` import) */
   LOAD_UPDATE = 0x1f03,
   /** [url str, handle u32] — an image decoded and held by the shell */
   LOAD_IMAGE = 0x1f10,

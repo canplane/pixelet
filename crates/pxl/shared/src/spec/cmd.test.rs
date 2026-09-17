@@ -107,7 +107,6 @@ fn every_number_is_its_major_and_minor() {
         (SENSOR_ORIENTATION, Major::SENSOR as u32, SensorMinor::ORIENTATION as u32),
         (SENSOR_PERMISSION, Major::SENSOR as u32, SensorMinor::PERMISSION as u32),
         (SENSOR_VISIBILITY, Major::SENSOR as u32, SensorMinor::VISIBILITY as u32),
-        (FETCH_BODY, Major::FETCH as u32, FetchMinor::BODY as u32),
         (FETCH_UPDATE, Major::FETCH as u32, Minor::UPDATE as u32),
         (LOAD_UPDATE, Major::LOAD as u32, Minor::UPDATE as u32),
         (LOAD_IMAGE, Major::LOAD as u32, LoadMinor::IMAGE as u32),

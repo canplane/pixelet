@@ -19,7 +19,6 @@
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::xy::TO_XY;
-use xpute_core::sched::quantum::Grant;
 
 use crate::app::setting::store::settings_store;
 use crate::lib::env::config::APP_ENV;
@@ -34,10 +33,10 @@ use crate::module::map::navigation::map_navigation::{map_navigation, map_navigat
 use crate::module::map::store::map_store;
 use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode_step;
 use crate::module::map::ui::toast::toast_controller::toast_controller_step;
-use crate::module::world::change::take_tick_request;
+use crate::module::world::change::request_world_tick;
 use crate::module::world::character::companion::{companion_step, CompanionProps};
 use crate::module::world::chunk_node::chunk_nodes_step;
-use crate::module::world::chunk_stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms};
+use crate::module::world::chunk_stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, take_draw};
 use crate::module::world::decor::asset_store::decor_asset_step;
 use crate::module::world::environment::theme_clock::theme_clock_step;
 use crate::module::world::frame::coord::get_local_world_origin;
@@ -161,10 +160,36 @@ pub fn world_platform() -> Platform {
     })
 }
 
-/// The turn the central scheduler strobed: the effects, then the tick's phases
-/// on its grant, and the fetches they asked for within its credits. What the
-/// tick spent, and whether a turn after this one was asked for.
-pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Platform, grant: Grant, credits: u32) -> TickReport {
+/// What the host tells a frame: the viewport, the gap since the last, and how
+/// it sees the turn.
+pub struct HostFrame {
+    pub width: f64,
+    pub height: f64,
+    pub dpr: f64,
+    pub delta: f64,
+    pub platform: Platform,
+    pub frame_ms: f64,
+    pub interactive: bool,
+    /// The fetches the kernel may have in flight.
+    pub credits: u32,
+}
+
+/// The frame of the turn the central scheduler strobed at `edge_at` with
+/// `quota_ms`: the effects, then the tick's phases on what is left of the
+/// quota, and the fetches they asked for within the credits. A pass that
+/// asked for a turn after this one, or left something new to draw, asks for
+/// the next edge.
+pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
+    let HostFrame {
+        width,
+        height,
+        dpr,
+        delta,
+        platform,
+        frame_ms,
+        interactive,
+        credits,
+    } = host;
     let t0 = now();
     *PLATFORM.get(|| None) = Some(platform);
     set_fetch_credits(credits);
@@ -174,11 +199,15 @@ pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Plat
     state.height = height;
     state.dpr = dpr;
     state.elapsed_s += delta;
-    let mut report = run_tick(state, delta, grant);
+    state.frame_ms = frame_ms;
+    state.interactive = interactive;
+    let report = run_tick(state, delta, quota_ms, edge_at);
     fetch_pump();
     crate::render::gpu::stage::stage_write();
     crate::render::gpu::renderer::render_frame();
     set_host_task_ms(now() - t0);
-    report.invalidated |= take_tick_request();
+    if report.invalidated || take_draw() {
+        request_world_tick();
+    }
     report
 }

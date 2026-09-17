@@ -35,7 +35,7 @@ use xpute_core::kit::array::{F32Array, U32Array};
 use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
 use xpute_core::sys::error::MarshalError;
 
-use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
+use crate::module::world::change::{bump_world, request_world_tick, wake_at, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::module::world::chunk_node::chunk_sources_changed;
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
@@ -821,11 +821,13 @@ fn save() {
     }
 }
 
-/// Saves if the pending save is due: the turn's, on the shell's heartbeat when
-/// nothing else asks for one.
+/// Saves if the pending save is due, and asks for the turn it falls due on
+/// if not.
 pub fn flush_save_if_due() {
-    if store_state().save_due_ms.is_some_and(|due| now() >= due) {
-        flush_save();
+    match store_state().save_due_ms {
+        Some(due) if now() >= due => flush_save(),
+        Some(due) => wake_at(due),
+        None => {}
     }
 }
 

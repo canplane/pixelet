@@ -190,8 +190,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     ledger_record_frame(FrameSample {
         t: now(),
         dt_ms: ctx.delta * 1000.0,
-        frame_ms: ctx.frame_ms,
-        settled: ctx.settled,
+        frame_ms: ctx.state.frame_ms,
+        settled: !ctx.state.interactive,
         sched_ms: now() - frame_t0,
         budget_ms: ctx.budget.total_ms,
         phases: ctx.phase_ms,

@@ -2,8 +2,8 @@
 
 /**
  * The kernel driven the way wasm/kernel.ts drives it, without a page: the
- * boot, a map centre, strobes of the world's turn, the fetches it starts
- * answered from fixtures through the room it gives their bodies, and what
+ * boot, a map centre, the world's turns rung, the fetches it starts
+ * answered from fixtures through the bodies the host holds, and what
  * comes back — chunks mounted and drawn, the map's status, the UI's snapshot
  * and its actions.
  */
@@ -19,7 +19,7 @@ import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 import { CORE_KERNEL } from "@/wasm/core_mem.ts";
-import { BOOT, boot_block } from "@/wasm/module.ts";
+import { BOOT, boot_block, hold_body } from "@/wasm/module.ts";
 
 function rng(seed: u32): () => u32 {
   let s = seed >>> 0 || 1;
@@ -46,9 +46,9 @@ let fetched: Fetched[] = [];
 let loads: string[] = [];
 let draws = 0;
 
-CORE_BUILD.shell = (_tag, cmd, f) => {
+CORE_BUILD.signal = (_tag, cmd, f) => {
   if (cmd === Cmd.WORLD_SNAPSHOT) snapshot = JSON.parse(f!.at(0).get<string>()) as Snapshot;
-  else if (cmd === Cmd.WORLD_UPDATE) draws = f!.at(3).get<number>();
+  else if (cmd === Cmd.WORLD_UPDATE) draws = f!.at(0).get<number>();
   else if (cmd === Cmd.FETCH_CREATE) {
     const [key, url] = f!.get<[string, string]>();
     fetched.push({ key, url });
@@ -73,8 +73,7 @@ function terrain_body(seed: u32): Uint8Array {
   return encode_terrain(ele, { land, water, structure, transport });
 }
 
-/** A response as the driver reports one: the body written into the room the
- * kernel gives it. */
+/** A response as the driver reports one: the body held for the kernel. */
 const heap_row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 2);
 let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
@@ -90,20 +89,15 @@ function answer(key: string, status: number, body: Uint8Array | null): void {
 }
 
 function answer_once(key: string, status: number, body: Uint8Array | null): void {
-  let at = 0;
   const bytes = body?.byteLength ?? 0;
-  if (body !== null && bytes > 0) {
-    at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str(key).u32(bytes)), (r) => r >>> 0);
-    assert(at !== 0, `room for ${key}'s body`);
-    new Uint8Array(CORE_KERNEL.memory.buffer, at, bytes).set(body);
-  }
-  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(0).u32(status).u32(at).u32(at === 0 ? 0 : bytes).str(null).f64(0)));
-  CORE_BUILD.settle();
+  const held = body !== null && bytes > 0 ? hold_body(body) : 0;
+  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(0).u32(status).u32(held).u32(bytes).u32(0).f64(0)));
+  CORE_BUILD.ring(0);
 }
 
 function fail(key: string): void {
-  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(2).u32(0).u32(0).u32(0).str("test").f64(0)));
-  CORE_BUILD.settle();
+  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str(key).u32(2).u32(0).u32(0).u32(0).u32(0).f64(0)));
+  CORE_BUILD.ring(0);
 }
 
 /** What a search is answered with; with none, a search fails. */
@@ -114,7 +108,8 @@ function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
   const requests = heap_row[1];
-  CORE_BUILD.strobe(Cmd.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).bool(false).bool(false).bool(false).f64(8).f64(12).f64(1000 / 60).u32(6)));
+  CORE_BUILD.send(0, Cmd.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).bool(false).bool(false).bool(false).f64(1000 / 60).bool(true).u32(6)));
+  CORE_BUILD.ring(8);
   strobe_requests += heap_row[1] - requests;
   const started = fetched;
   for (const f of started) {
@@ -131,8 +126,9 @@ function turn(delta = 1 / 60): Turn {
   return { snapshot, fetched: started, draws };
 }
 
-function action(a: Record<string, unknown>): boolean {
-  return CORE_BUILD.call(Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(a))), (r) => r === 1);
+function action(a: Record<string, unknown>): void {
+  CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(a))));
+  CORE_BUILD.ring(0);
 }
 
 CORE_BUILD.call(
@@ -154,7 +150,7 @@ console.log(`fixed pool: ${CORE_BUILD.call(Cmd.POOL_READ, packet((p) => p.u32(0)
 }
 
 Deno.test("kernel - a map centre fetches its terrain, mounts its chunks and draws them, and the map settles to success", () => {
-  assertEquals(action({ type: "go_to", lon: 126.978, lat: 37.5665 }), true);
+  action({ type: "go_to", lon: 126.978, lat: 37.5665 });
   let first = turn();
   assert(first.snapshot.map.has_center, "the centre is set");
   const statuses = new Set<string>([first.snapshot.map.status]);
@@ -178,18 +174,16 @@ Deno.test("kernel - a map centre fetches its terrain, mounts its chunks and draw
   assertEquals(first.snapshot.map.status, "success");
 });
 
-Deno.test("kernel - the settings actions reach the snapshot, and an action that does not read is refused", () => {
+Deno.test("kernel - the settings actions reach the snapshot", () => {
   const before = turn().snapshot.settings.show_poi;
-  assertEquals(action({ type: "toggle_setting", key: "show_poi" }), true);
+  action({ type: "toggle_setting", key: "show_poi" });
   assertEquals(turn().snapshot.settings.show_poi, !before);
-  assertEquals(action({ type: "set_setting", key: "show_poi", value: before }), true);
+  action({ type: "set_setting", key: "show_poi", value: before });
   assertEquals(turn().snapshot.settings.show_poi, before);
-  assertEquals(action({ type: "no_such_action" }), false);
-  assertEquals(action({ type: "set_object_size" }), false);
 });
 
 Deno.test("kernel - a search query becomes one search demand after its debounce, with the query and the centre in its URL", () => {
-  assertEquals(action({ type: "search_query", query: "city hall" }), true);
+  action({ type: "search_query", query: "city hall" });
   assert(turn().snapshot.search.loading);
   const start = performance.now();
   let demand: Fetched | undefined;
@@ -200,21 +194,7 @@ Deno.test("kernel - a search query becomes one search demand after its debounce,
   assertEquals(demand.key, `search:${fnv1a64_str("city hall").toString(16).padStart(16, "0")}`, "the query stands in the key as its hash");
   assert(demand.url.includes("q=city+hall"), demand.url);
   assert(demand.url.includes("near="), demand.url);
-  assertEquals(action({ type: "search_close" }), true);
-});
-
-Deno.test("kernel - a fetched page's body is the kernel's: its room comes back to the page section once the page is resident", () => {
-  const stat = () => CORE_BUILD.call(Cmd.POOL_READ, packet((p) => p.u32(1)), (at) => new Uint32Array(CORE_KERNEL.memory.buffer, at >>> 0, 12).slice());
-  const body = terrain_body(7);
-  const before = stat();
-  const at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str("terrain:1").u32(body.byteLength)), (r) => r >>> 0);
-  assert(at !== 0, "room for a body");
-  assert(stat().some((v, i) => v !== before[i]), "the room is the page section's");
-  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str("terrain:1").u32(1).u32(0).u32(at).u32(body.byteLength).str(null).f64(0)));
-  CORE_BUILD.settle();
-  assertEquals(CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.str("terrain:1").u32(body.byteLength)), (r) => r >>> 0), at, "an aborted body's room is given back, and given again");
-  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.str("terrain:1").u32(1).u32(0).u32(at).u32(body.byteLength).str(null).f64(0)));
-  CORE_BUILD.settle();
+  action({ type: "search_close" });
 });
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
@@ -234,7 +214,7 @@ Deno.test("kernel - heap requests along the event paths", () => {
     mark = row[1];
     return n;
   };
-  assertEquals(action({ type: "search_query", query: "gangnam station" }), true);
+  action({ type: "search_query", query: "gangnam station" });
   const typed = since();
   search_body = new TextEncoder().encode(JSON.stringify([
     { gers_id: "g1", kind: "poi", name: "Gangnam Station", category: "train_station", context: [{ name: "서울" }, { name: "강남구", common: { en: "Gangnam-gu" } }], lon: 127.02, lat: 37.49 },
@@ -246,7 +226,7 @@ Deno.test("kernel - heap requests along the event paths", () => {
   const answered = since();
   const shown = turn().snapshot.search.results.length;
   const after = since();
-  assertEquals(action({ type: "search_close" }), true);
+  action({ type: "search_close" });
   search_body = null;
   turn();
   since();
@@ -255,7 +235,7 @@ Deno.test("kernel - heap requests along the event paths", () => {
   // deno-lint-ignore no-explicit-any
   const k = CORE_KERNEL as any;
   k.probe_reset();
-  assertEquals(action({ type: "go_to", lon: 127.3, lat: 36.35 }), true);
+  action({ type: "go_to", lon: 127.3, lat: 36.35 });
   let load = 0;
   for (let i = 0; i < 200; i++) turn();
   load = since();

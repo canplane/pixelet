@@ -3,7 +3,7 @@
 // A step is a plain fn, so what a step sees goes in the state it runs over.
 
 use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use super::*;
 use crate::sys::clock::set_clock;
@@ -25,20 +25,14 @@ struct Seen {
     b: f64,
     runs: u32,
     id: u32,
-    moving: bool,
 }
 
 const POLICY: TickPolicy = TickPolicy {
-    settle_ms: 150.0,
     hard_slack_ms: 4.0,
     content_share: 0.2,
 };
 
-const GRANT: Grant = Grant {
-    slice_ms: 6.0,
-    batch_ms: 12.0,
-    frame_ms: 1000.0 / 60.0,
-};
+const QUOTA_MS: f64 = 6.0;
 
 fn tick() -> Tick<Seen, 8> {
     set_clock(wall_clock);
@@ -54,7 +48,7 @@ fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
     t.on_tick(VISIBLE, |c| c.state.order.push("visible"), "t");
     t.on_tick(INTERACTION, |c| c.state.order.push("interaction"), "t");
     let mut s = Seen::default();
-    t.run(&mut s, 0.016, GRANT);
+    t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, PHASES);
 }
 
@@ -65,7 +59,7 @@ fn tick_within_a_phase_steps_run_in_registration_order() {
     t.on_tick(VISIBLE, |c| c.state.order.push("2"), "t");
     t.on_tick(VISIBLE, |c| c.state.order.push("3"), "t");
     let mut s = Seen::default();
-    t.run(&mut s, 0.016, GRANT);
+    t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, ["1", "2", "3"]);
 }
 
@@ -75,7 +69,7 @@ fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_g
     t.on_tick(VISIBLE, |c| burn(c.budget.total_ms * 0.75), "t");
     t.on_tick(CONTENT, |c| c.state.a = c.budget.remaining(), "t");
     let mut s = Seen { a: -1.0, ..Default::default() };
-    let report = t.run(&mut s, 0.016, GRANT);
+    let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a >= 0.0);
     assert!(s.a <= report.budget_ms * 0.3, "content saw {} of {}", s.a, report.budget_ms);
 }
@@ -101,7 +95,7 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
     );
     t.on_tick(CONTENT, |c| c.state.b = c.budget.remaining(), "t");
     let mut s = Seen::default();
-    let report = t.run(&mut s, 0.016, GRANT);
+    let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a <= report.budget_ms * 0.8 + 0.01, "visible saw {} of {}", s.a, report.budget_ms);
     assert!(s.b >= report.budget_ms * 0.1, "content saw {} of {}", s.b, report.budget_ms);
 }
@@ -119,8 +113,8 @@ fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
         "t",
     );
     let mut s = Seen { id, ..Default::default() };
-    t.run(&mut s, 0.016, GRANT);
-    t.run(&mut s, 0.016, GRANT);
+    t.run(&mut s, 0.016, QUOTA_MS, now());
+    t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.runs, 1);
 }
 
@@ -139,7 +133,7 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
     );
     t.on_tick(VISIBLE, |c| c.state.order.push("third"), "t");
     let mut s = Seen { id: first, ..Default::default() };
-    t.run(&mut s, 0.016, GRANT);
+    t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, ["first", "second", "third"]);
 }
 
@@ -156,7 +150,7 @@ fn tick_the_report_phase_sees_every_phase_before_it() {
         "t",
     );
     let mut s = Seen { a: -1.0, ..Default::default() };
-    t.run(&mut s, 0.016, GRANT);
+    t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a >= 2.0, "visible {}", s.a);
     assert_eq!(s.b, 0.0);
 }
@@ -194,7 +188,7 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
         "t",
     );
     let mut s = Seen::default();
-    let report = t.run(&mut s, 0.016, GRANT);
+    let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.runs >= 1, "forward progress");
     assert!(s.runs < 2000, "the storm was cut short");
     assert!(
@@ -223,7 +217,7 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
         "t",
     );
     let mut s = Seen::default();
-    let report = t.run(&mut s, 0.016, GRANT);
+    let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(
         report.phase_ms[VISIBLE] <= report.budget_ms + POLICY.hard_slack_ms + COST + 1.0,
         "visible {} over budget {}",
@@ -233,30 +227,14 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
 }
 
 #[test]
-fn tick_a_view_that_has_held_still_runs_on_the_batch_quantum_and_loses_it_the_turn_it_moves() {
+fn tick_what_the_turn_spent_before_the_tick_comes_off_the_budget() {
     let mut t = tick();
-    t.on_tick(
-        INTERACTION,
-        |c| {
-            if c.state.moving {
-                c.view_moving();
-            }
-        },
-        "t",
-    );
-    let mut s = Seen { moving: true, ..Default::default() };
-    let while_moving = t.run(&mut s, 1.0 / 60.0, GRANT);
-    s.moving = false;
-    // Held still, but not yet for long enough: a pause inside a drag.
-    let paused = t.run(&mut s, 1.0 / 60.0, GRANT);
-    std::thread::sleep(Duration::from_millis(200));
-    let still = t.run(&mut s, 1.0 / 60.0, GRANT);
-    s.moving = true;
-    let again = t.run(&mut s, 1.0 / 60.0, GRANT);
-    assert!(!while_moving.settled && while_moving.budget_ms == GRANT.slice_ms);
-    assert!(!paused.settled);
-    assert!(still.settled && still.budget_ms == GRANT.batch_ms);
-    assert!(!again.settled && again.budget_ms == GRANT.slice_ms);
+    t.on_tick(VISIBLE, |c| c.state.a = c.budget.remaining(), "t");
+    let edge = now();
+    burn(2.0);
+    let mut s = Seen::default();
+    t.run(&mut s, 1.0 / 60.0, QUOTA_MS, edge);
+    assert!(s.a <= QUOTA_MS * 0.8 - 2.0 + 0.01, "visible saw {}", s.a);
 }
 
 #[test]
@@ -264,8 +242,7 @@ fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
     let mut t = tick();
     t.on_tick(
         INTERACTION,
-        |c| {
-            c.view_moving();
+        |_| {
             burn(1.5);
         },
         "t",
@@ -279,7 +256,7 @@ fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
         "t",
     );
     let mut s = Seen::default();
-    t.run(&mut s, 1.0 / 60.0, GRANT);
+    t.run(&mut s, 1.0 / 60.0, QUOTA_MS, now());
     assert!(s.a <= s.b - 1.5, "visible saw {} of {}", s.a, s.b);
 }
 

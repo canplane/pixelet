@@ -12,14 +12,14 @@ use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use crate::module::camera::config::camera_cfg;
 use crate::module::map::navigation::map_bootstrap::FALLBACK_G4326;
 use crate::module::map::store::map_store;
-use crate::module::world::change::request_world_tick;
+use crate::module::world::change::{request_world_tick, wake_at};
 use crate::module::world::environment::celestial_position::{moon_position, sun_position};
 use crate::module::world::environment::config::{light_cfg, render_cfg};
 use crate::module::world::environment::theme::{themes, WorldThemeKey};
 use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::sched::chunk_table::Frame;
 use crate::render::gpu::color::linear_rgb;
-use crate::sys::global::Global;
+use crate::sys::global::{now, Global};
 use crate::sys::host::wall_now;
 use crate::sys::kernel::kernel;
 
@@ -127,8 +127,8 @@ pub fn map_environment_step() {
 
     if unix_ms - e.clock_frame_at >= ENV_CLOCK_FRAME_MS {
         e.clock_frame_at = unix_ms;
-        request_world_tick();
     }
+    wake_at(now() + e.clock_frame_at + ENV_CLOCK_FRAME_MS - unix_ms);
 }
 
 // ---- the environment as the kernel eases it ----

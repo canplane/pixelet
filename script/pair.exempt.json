@@ -16,6 +16,8 @@
   "packages/xpute/core/src/kit/hash.ts#sha256_hex": "WebCrypto's digest: the host's.",
   "crates/xpute/core/src/sys/vector.rs": "The vectors' reader, test-only; its writer is script/pair.ts, not a file of the kit.",
   "packages/xpute/core/src/sys/mem.ts#reserve_memory": "The central scheduler's reservation of a WebAssembly.Memory: the host's. The module is given its memory and lays out what is inside it.",
+  "packages/xpute/core/src/ipc/doorbell.ts": "The host's end of a guest's rings: it rings the guest and reads what comes back. The guest is rung, never rings; its end is the rings themselves (ipc/ring.rs) and its own export.",
+  "packages/xpute/core/src/sched/strobe.ts": "The central scheduler's clock for a guest, on the host's animation frames and timers. The guest is strobed, never strobes.",
   "packages/xpute/core/src/sys/slab.ts": "The central scheduler's little memory: ArrayBuffers moved between the host's threads by transfer. The host's; the module never holds one.",
   "crates/xpute/core/src/ds/buddy_tree.rs": "evanw/buddy-malloc in Rust: a buddy over one fixed range as a linearized binary tree, with the growth and the per-allocation header taken out. The pair of a C file, not of a TypeScript one — the host has no use for it, since the range it manages is the module's own memory.",
   "crates/xpute/core/src/ds/slab.rs": "Size classes over ds/buddy_tree.rs, the pair of a level Linux keeps in the kernel: the module's own `#[global_allocator]`, over the one linear memory it was given. The host allocates with `new`, so there is nothing here for it.",

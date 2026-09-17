@@ -34,17 +34,3 @@ export function cmd_major(c: u32): u32 {
 export function cmd_minor(c: u32): u32 {
   return c & 0xff;
 }
-
-/**
- * What a turn handed to the kernel is for: the one argument of its
- * doorbell. The messages cross in the rings; the doorbell carries only this
- * number, so the passage stays one and knows nothing of the domain.
- */
-export const enum Interrupt {
-  /** Apply the submissions waiting; the answer is how many messages that
-   * posted. */
-  DRAIN = 0,
-  /** Drain, then the kernel's own pass over its work; the answer is the
-   * kernel's. */
-  TICK = 1,
-}

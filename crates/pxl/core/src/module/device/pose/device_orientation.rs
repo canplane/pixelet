@@ -8,6 +8,7 @@
 use pxl_shared::spec::message::Message;
 
 use super::store::{device_orientation_store, DevicePoseStatus};
+use crate::module::world::change::wake_at;
 use crate::sys::global::{now, Global};
 
 /// There's no Permissions-API equivalent for orientation (iOS Safari doesn't
@@ -142,9 +143,11 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     let o = orientation();
     let t = now();
     if t < o.watchdog_at {
+        wake_at(o.watchdog_at);
         return;
     }
     o.watchdog_at = t + WATCHDOG_INTERVAL_MS;
+    wake_at(o.watchdog_at);
     let store = device_orientation_store();
     if !store.is_tracking_orientation {
         if !platform.needs_permission {

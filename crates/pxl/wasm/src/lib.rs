@@ -27,7 +27,6 @@ use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
-use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
@@ -121,6 +120,9 @@ struct State {
     outbox: Outbox,
     /// The UI snapshot last posted, by hash: one is posted only when it changed.
     snapshot: u64,
+    /// The turn's rising edge and its quota, as the doorbell was rung.
+    edge_at: f64,
+    quota_ms: f64,
     /// The block `boot` hands out.
     boot: [u32; BOOT_WORDS],
 }
@@ -195,6 +197,8 @@ fn state() -> &'static mut State {
                 spill: new_ring(SPILL),
             },
             snapshot: 0,
+            edge_at: 0.0,
+            quota_ms: 0.0,
             boot: [0; BOOT_WORDS],
         }
     })
@@ -274,16 +278,15 @@ pub use pxl_core::sys::kernel::{JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJE
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
 // ring's slot, which the kernel reads where it lies. The shell assembles
 // what it submits and takes apart what completes; nothing here is shaped
-// for it. The shell pushes into the submission ring, rings `interrupt`
-// (DRAIN), and reads the completion ring when the call returns.
+// for it. The shell pushes into the submission ring, rings `interrupt` with
+// the turn's quota, and reads the completion ring when the call returns.
 
 /// Words in the boot block: the section the module keeps for itself at the
 /// front of the memory; where the submission ring and the completion ring
 /// are; then the fixed, page and mesh sections, each its offset, its bytes
 /// and its pool's region size; then the quantum the kernel declares to the
 /// central scheduler (xpute_core::sched::quantum's QuantumPolicy): margin
-/// share, min, max and batch ms, and the outside smoothing, each in
-/// thousandths.
+/// share, min, max and batch ms, and the settle time, each in thousandths.
 pub const BOOT_WORDS: usize = 15;
 
 /// The boot word holding the address of the heap's row (`BuddyMalloc`'s
@@ -306,7 +309,7 @@ pub extern "C" fn boot() -> *const u32 {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
-    for (i, v) in [q.margin_share, q.min_ms, q.max_ms, q.batch_ms, q.outside_ema].into_iter().enumerate() {
+    for (i, v) in [q.margin_share, q.min_ms, q.max_ms, q.batch_ms, q.settle_ms].into_iter().enumerate() {
         s.boot[BOOT_QUANTUM + i] = (v * 1000.0).round() as u32;
     }
     s.boot.as_ptr()
@@ -333,17 +336,19 @@ fn lay_out() -> mem::Map {
     map
 }
 
-/// The doorbell. The vector says what the turn is for
-/// (xpute_core::ipc::cmd::Interrupt): DRAIN applies the submissions waiting
-/// and answers how many messages it posted. Any other vector answers
-/// u32::MAX.
+/// The doorbell: the rising edge of a turn, with the time it may take. The
+/// kernel applies the submissions waiting — a frame among them runs its tick
+/// on what is left of `quota_ms` — and the return is the falling edge: when
+/// the kernel wants the next turn, in ms from now, 0 for the next frame and
+/// xpute_core::sched::quantum's NO_WAKE for none. A turn rung with no quota
+/// only applies what waits.
 #[no_mangle]
-pub extern "C" fn interrupt(vector: u32) -> u32 {
+pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     let s = state();
-    match vector {
-        v if v == Interrupt::DRAIN as u32 => drain(s),
-        _ => u32::MAX,
-    }
+    s.edge_at = now();
+    s.quota_ms = quota_ms;
+    drain(s);
+    pxl_core::module::world::change::take_wake()
 }
 
 /// Bytes a reply's packet may take, which is a ring slot's payload: a packet
@@ -621,16 +626,13 @@ fn post_shell(s: &mut State) {
     }
 }
 
-/// The end of a strobed turn, the kernel having drawn it: what it asks of the
-/// shell, and last the turn's report — whether another turn was asked for,
-/// what the tick spent, whether it ran on the batch quantum, and the draws.
-fn post_turn(s: &mut State, report: pxl_core::module::world::sched::tick::TickReport) {
+/// The end of a frame, the kernel having drawn it: what it asks of the shell,
+/// and last the draws it listed.
+fn post_turn(s: &mut State) {
     post_shell(s);
-    // A pass that left something new to draw asks for the turn that draws it.
-    let asked = report.invalidated | pxl_core::module::world::chunk_stage::take_draw();
     let draws = kernel().sched.draw.draw_count();
-    raise(&s.outbox, Cmd::WORLD_UPDATE, 4, |b| {
-        b.bool(Some(asked)).f64(Some(report.total_ms)).bool(Some(report.settled)).u32(Some(draws));
+    raise(&s.outbox, Cmd::WORLD_UPDATE, 1, |b| {
+        b.u32(Some(draws));
     });
 }
 
@@ -1163,13 +1165,18 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                     needs_permission: bool_at(&f, 6)?,
                 },
             };
-            let grant = xpute_core::sched::quantum::Grant {
-                slice_ms: number_at(&f, 7)?,
-                batch_ms: number_at(&f, 8)?,
-                frame_ms: number_at(&f, 9)?,
+            let host = pxl_core::module::world::world::HostFrame {
+                width: number_at(&f, 0)?,
+                height: number_at(&f, 1)?,
+                dpr: number_at(&f, 2)?,
+                delta: number_at(&f, 3)?,
+                platform,
+                frame_ms: number_at(&f, 7)?,
+                interactive: bool_at(&f, 8)?,
+                credits: u32_at(&f, 9)?,
             };
-            let report = pxl_core::module::world::world::world_frame(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?, number_at(&f, 3)?, platform, grant, u32_at(&f, 10)?);
-            post_turn(s, report);
+            pxl_core::module::world::world::world_frame(host, s.quota_ms, s.edge_at);
+            post_turn(s);
             return Ok(Some((0, None)));
         }
         Cmd::WORLD_CREATE => {
@@ -1188,9 +1195,9 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::WORLD_ACTION => {
             let f = fields(pkt)?;
             let text = f.at(0)?;
-            let applied = pxl_core::app::shell::ui_action(text.get_str_ref()?);
+            pxl_core::app::shell::ui_action(text.get_str_ref()?);
             post_shell(s);
-            return Ok(Some((applied as i32, None)));
+            return Ok(Some((0, None)));
         }
         Cmd::INPUT_UPDATE => {
             let f = fields(pkt)?;
@@ -1284,11 +1291,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             });
             return Ok(Some((0, None)));
         }
-        Cmd::FETCH_BODY => {
-            let f = fields(pkt)?;
-            let at = pxl_core::module::world::fetch::fetch_body(u64_at(&f, 0)?, u32_at(&f, 1)?);
-            return Ok(Some((at as i32, None)));
-        }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
             pxl_core::module::world::fetch::fetch_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
@@ -1297,16 +1299,11 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            // A model's bytes are far past a slot, so the shell asks the heap
-            // for a block (POOL_ACQUIRE), writes them there and names it here;
-            // the block is the kernel's to give back once it has read them.
-            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)? as usize);
-            // SAFETY: a block this heap gave the shell, of `bytes`, written
-            // and not read by anyone else.
-            let body = unsafe { core::slice::from_raw_parts(at as *const u8, bytes) };
-            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, body);
-            // SAFETY: the same block, at the size it was asked for.
-            unsafe { ALLOC.free(at as *mut u8, bytes) };
+            // A model's bytes are far past a slot: the host holds them, and
+            // they are read here, in the kernel's turn.
+            let mut body = vec![0u8; u32_at(&f, 2)? as usize];
+            pxl_core::sys::host::body_read(u32_at(&f, 1)?, &mut body);
+            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, &body);
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_IMAGE => {
@@ -1666,7 +1663,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::SENSOR_ORIENTATION
         | Cmd::SENSOR_PERMISSION
         | Cmd::SENSOR_VISIBILITY
-        | Cmd::FETCH_BODY
         | Cmd::FETCH_UPDATE
         | Cmd::LOAD_UPDATE
         | Cmd::LOAD_IMAGE
@@ -1812,6 +1808,10 @@ extern "C" {
     /// 32 random bits.
     #[link_name = "entropy"]
     fn host_entropy() -> u32;
+    /// Copies the body the host holds as `body` into `dst`, `len` bytes, and
+    /// lets it go; a `len` of 0 only lets it go.
+    #[link_name = "body_read"]
+    fn host_body_read(body: u32, dst: *mut u8, len: usize);
 }
 
 // ---- The host's WebGPU (pxl_core::render::gpu::api, apps/web/src/wasm/gpu.ts) ----
@@ -1964,6 +1964,11 @@ fn hook_measure_text(font: &str, text: &str) -> f64 {
     unsafe { host_measure_text(font.as_ptr(), font.len(), text.as_ptr(), text.len()) }
 }
 
+fn hook_body_read(body: u32, dst: &mut [u8]) {
+    // SAFETY: the host writes `dst.len()` bytes at most into `dst`.
+    unsafe { host_body_read(body, dst.as_mut_ptr(), dst.len()) }
+}
+
 fn hook_entropy() -> u64 {
     // SAFETY: an import with no arguments.
     unsafe { ((host_entropy() as u64) << 32) | host_entropy() as u64 }
@@ -1979,6 +1984,7 @@ fn install_host() {
     });
     pxl_core::sys::host::set_local_time(hook_local_time);
     pxl_core::sys::host::set_measure_text(hook_measure_text);
+    pxl_core::sys::host::set_body_read(hook_body_read);
     xpute_core::kit::rng::set_entropy(hook_entropy);
     pxl_core::sys::host::set_heap_used(|| ALLOC.used());
     pxl_core::sys::host::set_heap_releases(|| ALLOC.releases());

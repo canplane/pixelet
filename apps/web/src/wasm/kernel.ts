@@ -4,21 +4,24 @@
  * The central scheduler's driver of the kernel (crates/pxl/core behind
  * crates/pxl/wasm), and the devices it runs for it: nothing decided here.
  *
- * Each animation frame is one strobe (WORLD_UPDATE) carrying the grant
- * (@xpute/core/sched/quantum.ts) and the I/O credits. In that turn the kernel
- * applies what waits on the submission ring, runs its tick, draws its
- * canvases through the host's WebGPU (wasm/gpu.ts), and leaves on the
- * completion ring what it asks of the host — toasts, the sensors' watches,
- * console lines, the UI's snapshot when it changed, the fetches to start and
- * cancel, the loads, and last the turn's report — which the host reads before
- * the strobe returns. What arrives later — a response, a sensor fix, a
- * pointer — is submitted and asks for the next frame.
+ * The turns are the strobe's (@xpute/core/sched/strobe.ts): a frame rings
+ * the doorbell with a quota after submitting what the frame carries
+ * (WORLD_UPDATE: the viewport, the gap, the frame interval as measured, the
+ * I/O credits). In that turn the kernel applies what waits on the submission
+ * ring, runs its tick, draws its canvases through the host's WebGPU
+ * (wasm/gpu.ts), and leaves on the completion ring what it asks of the host —
+ * toasts, the sensors' watches, console lines, the UI's snapshot when it
+ * changed, the fetches to start and cancel, the loads — which the host reads
+ * before the ring returns; the return is when the kernel wants its next turn.
+ * What arrives later — a response, a sensor fix, a pointer — is submitted
+ * and asks for the next frame.
  *
  * A canvas is the kernel's once handed over (`open_surface`): the page lays it
  * out, and nothing here draws in it.
  *
- * A fetch is HTTP and nothing more: the kernel names the URL, gives room for
- * the body in its own memory, and decides what the status and the bytes mean.
+ * A fetch is HTTP and nothing more: the kernel names the URL, reads the body
+ * the host holds in its own turn, and decides what the status and the bytes
+ * mean.
  *
  * The UI is a display and an interrupt source: it renders `useKernel`'s
  * snapshot and applies `kernel_action`s.
@@ -29,7 +32,7 @@ import i18next from "i18next";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
-import { Quantum } from "@xpute/core/sched/quantum.ts";
+import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { Message } from "@pxl/shared/spec/message.ts";
 import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
@@ -41,7 +44,7 @@ import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { acquire_device, bind_surface, register_image, unbind_surface } from "@/wasm/gpu.ts";
-import { boot_block, quantum_policy, text_at } from "@/wasm/module.ts";
+import { boot_block, hold_body, quantum_policy, text_at } from "@/wasm/module.ts";
 
 // ---- the snapshot the UI renders (crates/pxl/core/src/app/shell.rs) ----
 
@@ -132,13 +135,13 @@ export function useKernel<T>(select: (s: UiSnapshot) => T): T {
 
 export type KernelAction = { type: string; [key: string]: unknown };
 
-/** Applies one UI action in the kernel. What it asks of the host is heard
- * inside the call — a sensor permission has to be asked inside the gesture
- * that led to it. Whether the action read. */
-export function kernel_action(action: KernelAction): boolean {
-  const applied = CORE_BUILD.call(Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))), (result) => result === 1);
+/** Applies one UI action in the kernel, rung at once with no quota: what it
+ * asks of the host is heard inside the call — a sensor permission has to be
+ * asked inside the gesture that led to it. */
+export function kernel_action(action: KernelAction): void {
+  CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))));
+  CORE_BUILD.ring(0);
   request_frame();
-  return applied;
 }
 
 // ---- toasts ----
@@ -162,8 +165,6 @@ function emit_toast(e: ToastEvent): void {
 
 // ---- what the kernel asks: the completion ring's signals ----
 
-let last_report = { asked: false, used_ms: 0, settled: true };
-
 /** crates/pxl/wasm/src/lib.rs's sensor numbers. */
 const GEOLOCATION = 0;
 
@@ -182,11 +183,8 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
       set_snapshot(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0));
       return;
     }
-    case Cmd.WORLD_UPDATE: {
-      const [asked, used_ms, settled] = f!.get<[boolean, number, boolean]>();
-      last_report = { asked, used_ms, settled };
+    case Cmd.WORLD_UPDATE:
       return;
-    }
     case Cmd.SENSOR_CREATE:
       if (f!.at(0).get<number>() === GEOLOCATION) geolocation_start();
       else orientation_listen();
@@ -215,19 +213,15 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-CORE_BUILD.shell = on_signal;
+CORE_BUILD.signal = on_signal;
 
 // ---- the turn ----
 
-type Driver = { element: HTMLElement; last: number };
-
-let driver: Driver | null = null;
-let pending = 0;
+let driver: HTMLElement | null = null;
 
 /** Asks for a frame: the next animation frame strobes the kernel. */
 export function request_frame(): void {
-  if (pending || driver === null) return;
-  pending = requestAnimationFrame(frame);
+  strobe.request();
 }
 
 type IOSOrientationEvent = DeviceOrientationEvent & { webkitCompassHeading?: number };
@@ -245,35 +239,27 @@ function dpr(): number {
   return globalThis.devicePixelRatio || 1;
 }
 
-/** The central scheduler's grant for each of the kernel's turns, sized by
- * the quantum the kernel declared at boot. */
-const quantum = new Quantum(quantum_policy(boot_block(CORE_KERNEL)));
-
 /** Fetches the kernel may have in flight at once: a browser opens about six
  * connections to an origin, and matching that keeps the kernel's queue — not
  * the socket pool — as what orders the work. */
 const NET_CREDITS = 6;
 
-function frame(now: number): void {
-  pending = 0;
-  const d = driver;
-  if (d === null) return;
-  const delta = Math.min(0.1, Math.max(0, (now - d.last) / 1000));
-  d.last = now;
-  const width = Math.max(1, d.element.clientWidth);
-  const height = Math.max(1, d.element.clientHeight);
-  const grant = quantum.grant();
-  const t0 = performance.now();
-  CORE_BUILD.strobe(
+/** The central scheduler's turns for the kernel, sized by the quantum the
+ * kernel declared at boot; each frame carries the viewport it runs in. */
+const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (grant, delta_s) => {
+  const element = driver;
+  if (element === null) return;
+  const width = Math.max(1, element.clientWidth);
+  const height = Math.max(1, element.clientHeight);
+  CORE_BUILD.send(
+    0,
     Cmd.WORLD_UPDATE,
     packet((b) =>
-      b.f64(width).f64(height).f64(dpr()).f64(delta).bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
-        .f64(grant.slice_ms).f64(grant.batch_ms).f64(grant.frame_ms).u32(NET_CREDITS)
+      b.f64(width).f64(height).f64(dpr()).f64(delta_s).bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
+        .f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)
     ),
   );
-  quantum.observe({ delta_s: delta, turn_ms: performance.now() - t0, used_ms: last_report.used_ms, interactive: !last_report.settled });
-  if (last_report.asked) request_frame();
-}
+}, (run) => requestAnimationFrame(run));
 
 // ---- surfaces: the canvases the kernel draws (crates/pxl/core/src/render/gpu/surface.rs) ----
 
@@ -337,7 +323,7 @@ async function run_fetch(key: bigint, url: string): Promise<void> {
   const signal = controller.signal;
   let outcome = 0;
   let status = 0;
-  let at = 0;
+  let held = 0;
   let bytes = 0;
   let fail: FetchFail = FetchFail.None;
   let net_ms = 0;
@@ -348,14 +334,8 @@ async function run_fetch(key: bigint, url: string): Promise<void> {
     net_ms = performance.now() - t0;
     status = res.status;
     if (body.byteLength > 0) {
-      at = CORE_BUILD.call(Cmd.FETCH_BODY, packet((b) => b.u64(key).u32(body.byteLength)), (result) => result >>> 0);
-      if (at === 0) {
-        outcome = 2;
-        fail = FetchFail.NoRoom;
-      } else {
-        new Uint8Array(CORE_KERNEL.memory.buffer, at, body.byteLength).set(body);
-        bytes = body.byteLength;
-      }
+      held = hold_body(body);
+      bytes = body.byteLength;
     }
   } catch (err) {
     outcome = signal.aborted ? 1 : 2;
@@ -369,10 +349,7 @@ async function run_fetch(key: bigint, url: string): Promise<void> {
     }
   } finally {
     running.delete(key);
-    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(status).u32(at).u32(bytes).u32(fail).f64(net_ms)));
-    // Applied now, so the body's room is the kernel's again before the next
-    // response asks for its own.
-    CORE_BUILD.settle();
+    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(status).u32(held).u32(bytes).u32(fail).f64(net_ms)));
     request_frame();
   }
 }
@@ -386,13 +363,9 @@ async function load_model(url: string): Promise<void> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`gltf: ${url} ${res.status}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    // A model is far past a ring frame, so it crosses by address: the heap is
-    // asked for a block, the bytes are written into it, and the kernel gives
-    // it back once it has read them.
-    const at = CORE_BUILD.call(Cmd.POOL_ACQUIRE, packet((b) => b.u32(0).u32(bytes.byteLength)), (result) => result >>> 0);
-    if (at === 0) throw new Error(`gltf: ${url} has no room for ${bytes.byteLength} bytes`);
-    new Uint8Array(CORE_KERNEL.memory.buffer, at, bytes.byteLength).set(bytes);
-    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.str(url).u32(at).u32(bytes.byteLength)));
+    // A model is far past a ring frame: the host holds it, and the kernel
+    // reads it in its turn.
+    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.str(url).u32(hold_body(bytes)).u32(bytes.byteLength)));
   } catch (err) {
     console.error(`[kernel] ${err instanceof Error ? err.message : String(err)}`);
     CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.str(url)));
@@ -495,12 +468,9 @@ function send_rect(element: HTMLElement): void {
 function send_pointer(phase: number, e: PointerEvent): void {
   const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
   CORE_BUILD.send(0, Cmd.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(e.pointerId).i32(e.button).f64(e.clientX).f64(e.clientY)));
+  strobe.input();
   request_frame();
 }
-
-/** Timers the kernel keeps — a debounce, a retry, a toast's dismissal — are
- * read on its turns, so a still view still gets one this often. */
-const HEARTBEAT_MS = 250;
 
 function send_language(language: string | undefined): void {
   if (!language) return;
@@ -514,7 +484,7 @@ function send_language(language: string | undefined): void {
 export function KernelDriver({ element }: { element: HTMLElement | null }): null {
   useLayoutEffect(() => {
     if (!element) return;
-    driver = { element, last: performance.now() };
+    driver = element;
 
     const on_down = (e: PointerEvent) => {
       send_rect(element);
@@ -526,6 +496,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     const on_wheel = (e: WheelEvent) => {
       if (e.ctrlKey) e.preventDefault();
       CORE_BUILD.send(0, Cmd.INPUT_WHEEL, packet((b) => b.f64(e.deltaY)));
+      strobe.input();
       request_frame();
     };
     const on_context_menu = (e: MouseEvent) => e.preventDefault();
@@ -533,11 +504,12 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       send_rect(element);
       request_frame();
     };
-    // Applied at once: a hidden page gets no animation frame, and hiding is
-    // the last moment a phone's tab is sure to get for the pending save.
+    // Rung at once with no quota: a hidden page gets no animation frame, and
+    // hiding is the last moment a phone's tab is sure to get for the pending
+    // save.
     const send_visibility = (visible: boolean) => {
       CORE_BUILD.send(0, Cmd.SENSOR_VISIBILITY, packet((b) => b.bool(visible)));
-      CORE_BUILD.settle();
+      CORE_BUILD.ring(0);
     };
     const on_visibility = () => {
       send_visibility(document.visibilityState === "visible");
@@ -576,11 +548,10 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     send_rect(element);
     send_language(i18next.language);
     kernel_action({ type: "sensors_subscribe", geolocation: "geolocation" in navigator, orientation: orientation_supported(), needs_permission: orientation_needs_permission() });
-    const heartbeat = setInterval(request_frame, HEARTBEAT_MS);
-    request_frame();
+    strobe.start();
 
     return () => {
-      clearInterval(heartbeat);
+      strobe.stop();
       kernel_action({ type: "sensors_unsubscribe" });
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
@@ -596,8 +567,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       element.removeEventListener("pointerleave", on_leave);
       element.removeEventListener("pointermove", on_move);
       element.removeEventListener("pointerdown", on_down);
-      if (pending) cancelAnimationFrame(pending);
-      pending = 0;
       driver = null;
     };
   }, [element]);

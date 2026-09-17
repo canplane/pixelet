@@ -39,6 +39,22 @@ pub fn storage_set(key: &str, value: &str) {
     (storage().set)(key, value)
 }
 
+static BODY_READ: Global<fn(body: u32, dst: &mut [u8])> = Global::new();
+
+fn read_nothing(_: u32, _: &mut [u8]) {}
+
+/// Installs the host's read of a body it holds for the kernel (a response, a
+/// model file): copies it into `dst` and lets it go.
+pub fn set_body_read(read: fn(body: u32, dst: &mut [u8])) {
+    BODY_READ.set(read);
+}
+
+/// Copies body `body` into `dst`, which is its length, and the host lets it
+/// go; an empty `dst` only lets it go.
+pub fn body_read(body: u32, dst: &mut [u8]) {
+    (BODY_READ.get(|| read_nothing))(body, dst)
+}
+
 static HANDHELD: Global<bool> = Global::new();
 
 /// Installs whether the device is a phone or a tablet (shared/lib/browser/handheld).

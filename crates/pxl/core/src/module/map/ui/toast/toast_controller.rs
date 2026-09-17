@@ -11,6 +11,7 @@ use pxl_shared::spec::message::Message;
 
 use crate::module::device::pose::store::{device_location_store, DevicePoseStatus};
 use crate::module::map::store::{map_store, MapStatus};
+use crate::module::world::change::wake_at;
 use crate::module::world::character::store::companion_load_store;
 use crate::sys::global::{now, Global};
 
@@ -133,9 +134,13 @@ pub fn toast_controller_step() {
         }
     }
 
-    if c.dismiss_world_at.is_some_and(|at| now() >= at) {
-        c.dismiss_world_at = None;
-        c.commands.push(ToastCommand::Dismiss("world-status"));
+    match c.dismiss_world_at {
+        Some(at) if now() >= at => {
+            c.dismiss_world_at = None;
+            c.commands.push(ToastCommand::Dismiss("world-status"));
+        }
+        Some(at) => wake_at(at),
+        None => {}
     }
 }
 

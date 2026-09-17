@@ -32,9 +32,9 @@ export type KernelExports = {
   /** Lays out the memory the module was given, the first time; the boot
    * block's address. */
   boot(): u32;
-  /** Hands the kernel the turn for `vector` (@xpute/core/ipc/cmd.ts's
-   * Interrupt). */
-  interrupt(vector: u32): u32;
+  /** Hands the kernel a turn of `quota_ms`; when it wants the next, in ms
+   * (@xpute/core/sched/quantum.ts). */
+  interrupt(quota_ms: number): number;
   /** The gauge panel's numbers over the last `window_ms`: the address of two
    * words, where the JSON lies in this memory and how long it is. */
   ledger_gauge(window_ms: number): u32;
@@ -73,12 +73,25 @@ export function boot_block(pxl: KernelExports): Uint32Array {
 /** The quantum the kernel declared, for the central scheduler to grant by. */
 export function quantum_policy(boot: Uint32Array): QuantumPolicy {
   const at = (i: number) => boot[BOOT.quantum + i] / 1000;
-  return { margin_share: at(0), min_ms: at(1), max_ms: at(2), batch_ms: at(3), outside_ema: at(4) };
+  return { margin_share: at(0), min_ms: at(1), max_ms: at(2), batch_ms: at(3), settle_ms: at(4) };
 }
 
 const KERNEL_WASM_URL = new URL("./kernel.wasm", import.meta.url);
 
 const utf8 = new TextEncoder();
+
+/** Bodies the host holds for the kernel — a response, a model file — until
+ * the kernel reads them in its turn (the `body_read` import). */
+const bodies = new Map<u32, Uint8Array>();
+let next_body: u32 = 1;
+
+/** Holds `bytes` for the kernel: the number a command names them by. */
+export function hold_body(bytes: Uint8Array): u32 {
+  const body = next_body;
+  next_body = (next_body + 1) >>> 0 || 1;
+  bodies.set(body, bytes);
+  return body;
+}
 const utf8_decoder = new TextDecoder();
 
 /** The `(at, bytes)` pair at `at`: how the kernel names a run of memory it
@@ -167,6 +180,12 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
         return ctx.measureText(s).width;
       },
       entropy: () => crypto.getRandomValues(new Uint32Array(1))[0],
+      // A body the host holds, copied where the kernel asks and let go.
+      body_read: (body: u32, dst: u32, len: u32) => {
+        const bytes = bodies.get(body);
+        bodies.delete(body);
+        if (bytes !== undefined && len > 0) new Uint8Array(memory.buffer, dst, len).set(bytes.subarray(0, len));
+      },
       // The renderer's WebGPU (crates/pxl/core/src/render/gpu/api.rs).
       ...gpu_imports(memory),
     },
