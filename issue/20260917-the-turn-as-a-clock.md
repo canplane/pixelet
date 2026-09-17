@@ -117,24 +117,37 @@ Taken the same day, on the same rule the allocator follows: `GlobalAlloc` is
 the interface, the slab and the buddy are xpute's parts, `pxl-wasm` installs
 one, and `pxl-core` allocates without naming it.
 
-- **The interface is xpute's and names no executor.** `sched/edge.rs` holds
-  the quota as a deadline on the host clock, a fixed table of tasks parked
-  for the next rising edge (woken there, never by themselves, so no
-  executor re-polls them past the quota), `yield_if_spent` and `next_turn`,
-  a `Notify` a task with nothing to do waits on without asking for a turn,
-  `wake_at`, and the falling edge's value. A task is a plain `async fn`.
+- **The interface is xpute's and names no executor.** `sched/task.rs` is
+  `Executor` — spawn a type-erased future at a priority, poll, pending —
+  with one install point, as `GlobalAlloc` and `#[global_allocator]` are.
+  `sched/edge.rs` holds the quota as a deadline on the host clock, a table of
+  tasks parked for the next rising edge (woken there, never by themselves,
+  so no executor re-polls them past the quota), `yield_if_spent` and
+  `next_turn`, a `Notify` a task with nothing to do waits on without asking
+  for a turn, `wake_at`, and the falling edge's value. The table is the
+  guest's task count: a task is parked at most once, and one past it aborts.
 - **The executor is `pxl-wasm`'s: embassy's raw executor**, no platform
-  feature, so no wasm-bindgen. The pender only records that a task was
-  queued. A task's pool and its `#[task]` attribute are the module's, so
-  `pxl-core` never names embassy.
-- **Where the tasks run:** `world_frame` takes the module's poll as a hook and
-  calls it after the tick's phases and before the fetch pump and the draw.
-  A turn with no frame runs no task and asks for the next edge for the ones
-  it woke.
+  feature, so no wasm-bindgen, installed once at boot. One embassy task type
+  awaits whatever task is spawned, pooled as many times as the kernel
+  declares (`TASKS`), so a task added in `pxl-core` touches nothing here. The
+  pender only records that a task was queued.
+- **A priority from the start, relied on by nothing.** Every spawn carries
+  one and embassy's queue does not keep it; an executor that orders by it can
+  be installed later without a spawn changing. Until then, work that has an
+  order within a turn runs in one task, in that order.
+- **Nothing runs every turn on its own.** Keeping a "must run" part of the
+  turn apart from the tasks was an RTOS's distinction this kernel has no use
+  for: a turn whose draw is skipped is a frame late, which an overrun already
+  is. The frame is a task — the effects, the tick's phases, the fetch pump,
+  the draw, in that order — and the doorbell polls the tasks on its quota, or
+  whenever the host asked for a frame, so a quota overrun to nothing still
+  draws. A turn with no quota and no frame runs no task and asks for the next
+  edge for the ones it woke.
 - **What moved into tasks:** a fetch's body (read, decoded, settled), a
-  model's parse, and the chunk builds. The drain only queues arrivals, and
-  the tick leaves the build task its order. Each unit is one step, at least
-  one a turn.
+  model's parse, the chunk builds, the decor models' registration and the
+  store's save. The drain only queues arrivals, the tick leaves the build task
+  its order, and the frame only checks whether a save or a registration is
+  wanted.
 - **No measured number.** The quota is a share of the frame the display
   sets: the frame less the margin while interactive, `batch_frames` frames
   otherwise. `min_ms`, `max_ms` and `batch_ms` are gone, and a pass's first
@@ -149,11 +162,11 @@ one, and `pxl-core` allocates without naming it.
 - **A placement's immediate build** (`build_now`) still builds to the end at
   once. The chunk releases what it shows before rebuilding, so deferring the
   build to a task would show a hole, not a late frame.
-- **The effects in `world_turn`** still run whole every frame: among them
-  the store's save encoding and the decor models' registration.
-- **The tick's phase runner stays** for what must run every frame. The
-  ledger's per-step times still come from it; embassy's `trace` hooks would
-  give per-task times, each needing a name as a number.
+- **The tick's phase runner stays** inside the frame task, as the order its
+  steps run in. The ledger's per-step times still come from it; the other
+  tasks' times are not recorded. Embassy's `trace` hooks would give per-task
+  times, each needing a name as a number, and an ordering executor would let
+  the phases become task priorities.
 - **The content phase is empty** while POI is off (BACKLOG P1).
 
 Nothing in these passes has been run; each passed clippy and `check` on its
