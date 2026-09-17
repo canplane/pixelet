@@ -5,8 +5,8 @@ import { persist } from "zustand/middleware";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { decor_ids, decor_num_id, type DecorId, placeable_cube_id, placeable_cube_num_id, placeable_cubes, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import { DEFAULT_OBJECT_SIZE } from "@/module/world/object/size.ts";
-import { kernel_action, kernel_hold } from "@/wasm/kernel.ts";
+import { DEFAULT_OBJECT_SIZE } from "@/catalog/object/size.ts";
+import { kernel_action, kernel_hold } from "@/kernel/kernel.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 

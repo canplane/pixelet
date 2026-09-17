@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/pagination/show_more.tsx
+// @pxl/web/kit/ui/pagination/show_more.tsx
 
 import { type ReactNode, useEffect, useState } from "react";
 

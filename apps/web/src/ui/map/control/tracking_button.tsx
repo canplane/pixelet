@@ -1,12 +1,12 @@
-// @pxl/web/module/map/ui/control/tracking_button.tsx
+// @pxl/web/ui/map/control/tracking_button.tsx
 
 import { Compass, Loader2, Locate, Navigation } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { kernel_tracking, TRACKING_FOLLOW, TRACKING_RECENTER, TRACKING_UNFOLLOW, useKernel } from "@/wasm/kernel.ts";
+import { kernel_tracking, TRACKING_FOLLOW, TRACKING_RECENTER, TRACKING_UNFOLLOW, useKernel } from "@/kernel/kernel.ts";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { CircularButton } from "@/shared/ui/shadcn/circular_button.tsx";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { CircularButton } from "@/kit/ui/shadcn/circular_button.tsx";
 
 export function TrackingButton() {
   const { t } = useTranslation();

@@ -1,10 +1,10 @@
-// @pxl/web/app/setting/section/language_section.tsx
+// @pxl/web/ui/setting/section/language.tsx
 
 import { Languages } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { SectionTitle } from "@/app/setting/setting_row.tsx";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { SectionTitle } from "@/ui/setting/row.tsx";
 
 const SUPPORTED_LANGUAGES = [
   { code: "en", label_key: "settings.language.english" },

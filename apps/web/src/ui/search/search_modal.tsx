@@ -1,16 +1,16 @@
-// @pxl/web/module/map/ui/overlay/search_modal.tsx
+// @pxl/web/ui/search/search_modal.tsx
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
-import { TextField } from "@/shared/ui/text_field.tsx";
-import { kernel_action, kernel_snapshot } from "@/wasm/kernel.ts";
-import { resolve_poi_theme } from "@/module/world/poi/poi_theme.ts";
-import { assemble_label } from "@/module/world/geocode/label.ts";
-import { fetch_search, type SearchResult } from "@/module/world/search/repository.ts";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/kit/ui/shadcn/sheet.tsx";
+import { TextField } from "@/kit/ui/text_field.tsx";
+import { kernel_action, kernel_snapshot } from "@/kernel/kernel.ts";
+import { resolve_poi_theme } from "@/catalog/poi/theme.ts";
+import { assemble_label } from "@/catalog/geocode/label.ts";
+import { fetch_search, type SearchResult } from "@/catalog/search/repository.ts";
 
 // Debounced like use_reverse_geocode.ts's own DEBOUNCE_MS, but shorter:
 // that one waits for panning to *settle* on a new page; this waits for
@@ -278,7 +278,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
           {poi_results.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
           {poi_results.map((r) => {
             // Same emoji/color table poi_layer.tsx's own map badge uses
-            // (poi_theme.ts's own doc comment on why emoji beats a Lucide
+            // (catalog/poi/theme.ts's own doc comment on why emoji beats a Lucide
             // glyph at this size).
             const theme = resolve_poi_theme(r.category);
             return (

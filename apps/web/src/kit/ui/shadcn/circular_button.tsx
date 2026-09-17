@@ -1,6 +1,6 @@
 import * as React from "react";
-import { Button } from "@/shared/ui/shadcn/button.tsx";
-import { cn } from "@/shared/lib/util/cn.ts";
+import { Button } from "@/kit/ui/shadcn/button.tsx";
+import { cn } from "@/kit/lib/util/cn.ts";
 
 interface CircularButtonProps extends React.ComponentProps<typeof Button> {
   isActive?: boolean;

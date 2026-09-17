@@ -1,6 +1,6 @@
-// @pxl/web/page/map_page.tsx
+// @pxl/web/app/page/map_page.tsx
 
-import { MapView } from "../module/map/map_view.tsx";
+import { MapView } from "../../ui/map/view.tsx";
 
 /** Map page */
 function MapPage() {

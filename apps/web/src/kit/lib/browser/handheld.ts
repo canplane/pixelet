@@ -1,4 +1,4 @@
-// @pxl/web/shared/lib/browser/handheld.ts
+// @pxl/web/kit/lib/browser/handheld.ts
 
 /**
  * Whether this device is a phone or tablet, for the few ceilings that are

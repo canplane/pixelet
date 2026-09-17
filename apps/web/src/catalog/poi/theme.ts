@@ -1,6 +1,6 @@
-// @pxl/web/module/world/poi/poi_theme.ts
+// @pxl/web/catalog/poi/theme.ts
 
-import { CATEGORY_THEME, DEFAULT_THEME } from "./poi_theme_spec.ts";
+import { CATEGORY_THEME, DEFAULT_THEME } from "./theme_spec.ts";
 
 /**
  * Category -> icon/color lookup for poi_layer.tsx's badge — the one visual

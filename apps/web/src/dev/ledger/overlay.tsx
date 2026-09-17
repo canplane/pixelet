@@ -1,9 +1,9 @@
-// @pxl/web/module/world/sched/ledger_overlay.tsx
+// @pxl/web/dev/ledger/overlay.tsx
 
 /**
  * Dev overlay for the kernel's ledger (crates/pxl/kernel/src/module/world/sched):
  * the recording window and the exports as buttons, over the gauge panel
- * (ledger_gauge.tsx). Gated by `import.meta.env.DEV` and the `show_ledger`
+ * (gauge.tsx). Gated by `import.meta.env.DEV` and the `show_ledger`
  * setting — off by default.
  *
  * It also owns the dev lifecycle the ledger's surfaces share, which runs
@@ -15,13 +15,13 @@
 
 import { useEffect, useState } from "react";
 
-import { LedgerGauge } from "./ledger_gauge.tsx";
-import { ledger_drain_log, ledger_log_long_frames } from "./ledger_log.ts";
-import { ledger_report_print, ledger_report_text } from "./ledger_report.ts";
-import { ledger_report_read } from "./ledger_view.ts";
+import { LedgerGauge } from "./gauge.tsx";
+import { ledger_drain_log, ledger_log_long_frames } from "./log.ts";
+import { ledger_report_print, ledger_report_text } from "./report.ts";
+import { ledger_report_read } from "./view.ts";
 import { install_long_frame_observers, long_frames_clear } from "./long_frame.ts";
 import { ledger_trace_download } from "./trace.ts";
-import { kernel_action, useKernel } from "@/wasm/kernel.ts";
+import { kernel_action, useKernel } from "@/kernel/kernel.ts";
 
 /** How often the stream is collected while it is on. */
 const DRAIN_MS = 500;

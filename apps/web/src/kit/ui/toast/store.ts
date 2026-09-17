@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/toast/store.ts
+// @pxl/web/kit/ui/toast/store.ts
 
 import type { ReactNode } from "react";
 

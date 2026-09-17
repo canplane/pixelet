@@ -1,4 +1,4 @@
-// @pxl/web/module/world/character/variant.ts
+// @pxl/web/catalog/character/variant.ts
 
 /**
  * The characters a player can be, as variant.json lists them: a group's keys
@@ -15,7 +15,7 @@
 import type { f64 } from "@xpute/core/kit/word.ts";
 
 import { INGESTED } from "@pxl/shared/asset/ingested.ts";
-import { asset_url } from "@/lib/env/route.ts";
+import { asset_url } from "@/config/route.ts";
 import { DEFAULT_PERSON_VARIANT_KEY as PERSON_KEY, DEFAULT_PET_VARIANT_KEY as PET_KEY, Group, groups, PERSON_GENDER_PREFIXES } from "./variant_spec.ts";
 
 export type CharacterVariant = {

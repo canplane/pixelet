@@ -1,15 +1,15 @@
-// @pxl/web/app/ui/app_layout.tsx
+// @pxl/web/app/layout.tsx
 
 import type { ReactNode } from "react";
 
-import { AppContext } from "../provider/app_context.ts";
+import { AppContext } from "./provider/context.ts";
 
-import { useAppInit } from "../hook/use_app_init.ts";
-import { useUiController } from "../hook/use_ui_controller.ts";
-import { ModalManager } from "../provider/modal_manager.tsx";
-import { Toaster } from "@/shared/ui/toast/toaster.tsx";
-import { BOTTOM_OFFSET_PX } from "@/module/map/ui/overlay/bottom_overlays.tsx";
-import { MODE_BAR_HEIGHT_PX } from "@/module/map/ui/overlay/mode_bar.tsx";
+import { useAppInit } from "./hook/use_init.ts";
+import { useUiController } from "./hook/use_ui_controller.ts";
+import { ModalManager } from "./provider/modal_manager.tsx";
+import { Toaster } from "@/kit/ui/toast/toaster.tsx";
+import { BOTTOM_OFFSET_PX } from "@/ui/map/overlay/bottom_overlays.tsx";
+import { MODE_BAR_HEIGHT_PX } from "@/ui/map/overlay/mode_bar.tsx";
 
 // Toaster itself has no feature-specific knowledge — this is the composition
 // root, so it's the one place allowed to know the map's mode bar exists and

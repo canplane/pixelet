@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/toast/message_key.ts
+// @pxl/web/locale/message_key.ts
 
 /**
  * The locale key a kernel message reads as — `strerror` to the kernel's

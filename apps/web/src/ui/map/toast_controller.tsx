@@ -1,15 +1,15 @@
-// @pxl/web/module/map/ui/toast/toast_controller.tsx
+// @pxl/web/ui/map/toast_controller.tsx
 
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, MapPinOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { message_key as location_message_key } from "@/module/map/ui/toast/message_key.ts";
-import { useKernel } from "@/wasm/kernel.ts";
+import { message_key as location_message_key } from "@/locale/message_key.ts";
+import { useKernel } from "@/kernel/kernel.ts";
 
-import { Toast } from "@/shared/ui/toast/toast.tsx";
-import { toastCustom, toastDismiss } from "@/shared/ui/toast/store.ts";
+import { Toast } from "@/kit/ui/toast/toast.tsx";
+import { toastCustom, toastDismiss } from "@/kit/ui/toast/store.ts";
 
 const LoadingIcon = (
   <motion.div

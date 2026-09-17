@@ -12,7 +12,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
-import { DEV_PROXY_ROUTES } from "./src/lib/env/route.ts";
+import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,7 +111,7 @@ const remoteOriginDefault = "https://plei.me";
 // and the world at module load, and its importers are component modules Vite
 // hot-swaps, so a hot update ran that boot again against the one kernel the
 // memory holds — a second device beside the renderer's objects on the first.
-const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/", "/apps/web/src/wasm/"];
+const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/", "/apps/web/src/kernel/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");

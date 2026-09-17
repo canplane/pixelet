@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/overlay/use_reverse_geocode.ts
+// @pxl/web/ui/map/overlay/use_reverse_geocode.ts
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,8 +7,8 @@ import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
 import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
 import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
-import { fetch_geocode, type GeocodePart } from "@/module/world/geocode/repository.ts";
-import { assemble_label } from "@/module/world/geocode/label.ts";
+import { fetch_geocode, type GeocodePart } from "@/catalog/geocode/repository.ts";
+import { assemble_label } from "@/catalog/geocode/label.ts";
 
 // A short debounce still matters even though the real dedup key below is
 // now an exact page_idx (not a rounded lat/lon string): panning fires

@@ -1,4 +1,4 @@
-// @pxl/web/shared/lib/browser/download.ts
+// @pxl/web/kit/lib/browser/download.ts
 
 /**
  * Saves the given Blob or Uint8Array data as a local file via the browser's download mechanism.

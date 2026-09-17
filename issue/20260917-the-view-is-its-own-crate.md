@@ -125,3 +125,21 @@ The TypeScript package keeps `@pxl/shared` for now. Once the server and the
 bake tools are Rust, what the shell still reads of it (the command numbers,
 the catalogs, the assets' paths) is generated into the web app from the JSON
 the way the other `*_spec.ts` files are, and the package goes.
+
+## The spec's source and the shell's tree
+
+The JSON every language is generated from lay beside whichever code first
+read it — the kernel's and the view's modules, and the TypeScript packages the
+server's move will retire. It is one tree at the root now, `spec/`: pxl-spec's
+at the top (`cmd.json`, `cell/`, `bake/`), and `kernel/`, `render/` and
+`xpute/` below, each at the path of the module it generates. `script/spec.ts`
+is the only reader.
+
+The web app's tree was the React app it grew from (`app/`, `bootstrap/`,
+`lib/env`, `module/`, `feature/`, `page/`, `shared/`, `wasm/`). It is sorted
+by what the shell does instead: `kernel` (the driver of the kernel and its
+module), `device` (the host's WebGPU), `config`, `locale`, `app` (the entry,
+the router, the pages, the providers, the store, the style), `ui` (the
+screens), `catalog` (the data the screens show), `dev` (the ledger's tools)
+and `kit` (the shared parts). A file whose directory names its concept lost
+the prefix, as in the crates.

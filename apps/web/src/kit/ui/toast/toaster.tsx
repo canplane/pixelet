@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/toast/toaster.tsx
+// @pxl/web/kit/ui/toast/toaster.tsx
 // Renders the toast list directly — no Sonner or similar library. Sonner's own
 // positioning/stacking/swipe-dismiss fought this app's card-deck + swipe-to-rotate
 // toast feature, so this owns layout end to end instead.

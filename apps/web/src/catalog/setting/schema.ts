@@ -1,4 +1,4 @@
-// @pxl/web/app/setting/schema.ts
+// @pxl/web/catalog/setting/schema.ts
 
 /**
  * Every setting the app has, declared once: its default, its kind, and
@@ -18,7 +18,7 @@
  * nor its name.
  */
 
-import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
+import { HANDHELD } from "@/kit/lib/browser/handheld.ts";
 
 import { CAMERA_TERRAIN_MODES as MODES, SETTINGS as SPEC } from "./schema_spec.ts";
 

@@ -1,19 +1,19 @@
-// @pxl/web/module/map/map_view.tsx
+// @pxl/web/ui/map/view.tsx
 
 /**
  * The map as the page shows it: the world's canvas, handed to the kernel,
  * and the overlays on top. The camera and its input, the world, the
  * environment, the fetches that follow the view and the drawing are the
- * kernel's turn (wasm/kernel.ts); this lays out the canvas and the chrome.
+ * kernel's turn (kernel/kernel.ts); this lays out the canvas and the chrome.
  */
 
 import { useEffect, useRef, useState } from "react";
 
-import { KernelDriver, open_surface, SURFACE_WORLD, useKernel } from "@/wasm/kernel.ts";
-import { LedgerOverlay } from "@/module/world/sched/ledger_overlay.tsx";
+import { KernelDriver, open_surface, SURFACE_WORLD, useKernel } from "@/kernel/kernel.ts";
+import { LedgerOverlay } from "@/dev/ledger/overlay.tsx";
 
-import { Overlays } from "./ui/overlay/overlays.tsx";
-import { ToastController } from "./ui/toast/toast_controller.tsx";
+import { Overlays } from "./overlay/overlays.tsx";
+import { ToastController } from "./toast_controller.tsx";
 
 export function MapView() {
   const fog = useKernel((s) => s.fog);

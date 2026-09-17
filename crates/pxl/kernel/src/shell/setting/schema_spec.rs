@@ -14,7 +14,7 @@
 
 /// The sheet's sections, in the order they are shown. `character` is not a
 /// section of the sheet at all — its two settings are picked from the
-/// drawer's Character tab (character/character_picker.tsx).
+/// drawer's Character tab (ui/character/picker.tsx).
 pub const SETTING_SECTIONS: &[&str] = &["display", "camera", "editing", "lighting", "quality", "debug", "character"];
 
 /// What terrain does to the camera.

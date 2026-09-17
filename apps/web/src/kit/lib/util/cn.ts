@@ -1,4 +1,4 @@
-// @pxl/web/shared/lib/util/cn.ts
+// @pxl/web/kit/lib/util/cn.ts
 
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";

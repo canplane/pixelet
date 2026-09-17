@@ -41,6 +41,7 @@ follow that rather than improvising SQL against the raw tables.
 
 ```
 asset                   the shipped models and texture pack; data, not code — nothing imports it
+spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
 crates/xpute/core       the generic runtime kit in Rust; no domain
@@ -90,8 +91,8 @@ The destination — a Rust core compiled to WASM, drawing through WebGPU,
 three.js gone, iOS 26 and iPhone 11 as the floor
 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
 — is where the client stands since 2026-09-14: the core builds, decides
-and lists what to draw, and `apps/web/src/render/gpu/` executes the list
-and decides nothing. What is still TypeScript is glue and the pieces not
+and lists what to draw, and the renderer (`crates/pxl/render/src/gpu/`)
+executes the list through the host's WebGPU and decides nothing. What is still TypeScript is glue and the pieces not
 yet moved, listed in P0 of [issue/BACKLOG.md](./issue/BACKLOG.md): a piece
 is first cut out behind a boundary that carries typed arrays, still in
 TypeScript, and only then does what sits behind the boundary become Rust.
@@ -221,7 +222,7 @@ Two rules that came out of doing it:
 **Every source file opens with a comment naming its own logical path:**
 
 ```ts
-// @pxl/web/module/world/terrain/use_tile_fetcher.ts
+// @pxl/web/ui/map/view.tsx
 ```
 
 This is the import-map path, not the filesystem path — extension included, so
@@ -231,7 +232,7 @@ all, then the file's path under `src/`: `// pxl-spec/space/indexer.rs`. A
 comment that names a crate by name uses the same hyphenated form; only a
 `::` path, which is code, keeps the underscore.
 
-The one exception is `shared/ui/shadcn/`, where no file carries a header —
+The one exception is `kit/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather
 than inconsistently so. Don't mass-add headers there, and don't read its
 absence as licence to drop them anywhere else.
