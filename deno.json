@@ -66,8 +66,6 @@
     // Formatting is checked first, against crates/rustfmt.toml; the generated
     // `.rs` files pass it because script/spec.ts writes them through rustfmt.
     "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
-    // The vectors the TypeScript writes are what the Rust tests read (script/pair.ts).
-    "vector": "deno run -A script/pair.ts --write",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.
     "check:spec": "deno run -A script/spec.ts",
@@ -107,8 +105,7 @@
     // testing
     "@std/assert": "jsr:@std/assert@^1",
 
-    // script/pair.ts
-    "@std/fs": "jsr:@std/fs@^1",
+    // script/spec.ts, script/locale.ts
     "@std/path": "jsr:@std/path@^1",
 
     // build tools
@@ -126,8 +123,8 @@
     "lineWidth": 200,
     "proseWrap": "preserve",
 
-    // The vectors are what script/pair.ts writes, and are checked byte for
-    // byte as written; formatting them would fail that check.
+    // The vectors are committed as they were written and read byte for byte
+    // by the Rust tests; formatting them would break that.
     "exclude": ["node_modules/", "dist/", "crates/**/vector/"]
   },
 

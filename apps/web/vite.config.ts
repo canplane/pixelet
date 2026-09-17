@@ -3,7 +3,7 @@
 import { defineConfig, type HmrContext, loadEnv, type Plugin } from "vite";
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -93,6 +93,98 @@ function build_stamp(): Plugin {
         }
         next();
       });
+    },
+  };
+}
+
+/**
+ * A `const enum` is a compile-time name for a number, and a published bundle
+ * should hold the number alone. It does not: Vite transpiles each file on its
+ * own with esbuild and bundles the results with Rollup, so nothing ever sees
+ * the declaration and its use at once, and esbuild — which inlines a const
+ * enum perfectly well when it bundles — emits the runtime object instead,
+ * reverse mapping and all. A build carried every command's and every errno's
+ * name as a string that way (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`).
+ *
+ * What a per-file pass cannot do is done by reading the declarations up front:
+ * every member of every `export const enum` under `roots`, then each member
+ * access replaced by its value and the declarations struck. The sources keep
+ * their enums; only the bundle loses them.
+ *
+ * It refuses rather than guesses. A member whose value is not a plain literal
+ * or arithmetic over literals leaves its whole enum alone, and an access left
+ * behind after the declaration went is a build error, never a bundle that
+ * reaches a browser and throws.
+ */
+function const_enum(roots: string[]): Plugin {
+  const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
+  /** Numbers, strings and arithmetic over them, and nothing that runs. */
+  const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
+  const enums = new Map<string, Map<string, string>>();
+
+  for (const root of roots) {
+    const stack = [root];
+    while (stack.length) {
+      const dir = stack.pop()!;
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== "node_modules") stack.push(full);
+          continue;
+        }
+        if (!/\.tsx?$/.test(e.name) || e.name.includes(".test.")) continue;
+        for (const [, name, body] of readFileSync(full, "utf8").matchAll(DECL)) {
+          const members = new Map<string, string>();
+          let whole = true;
+          for (let line of body.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")) {
+            line = line.replace(/\/\/.*/, "").trim().replace(/,$/, "");
+            if (!line || line.startsWith("*")) continue;
+            const at = line.indexOf("=");
+            const key = at < 0 ? "" : line.slice(0, at).trim();
+            const value = at < 0 ? "" : line.slice(at + 1).trim();
+            if (!/^\w+$/.test(key) || !VALUE.test(value)) {
+              whole = false;
+              break;
+            }
+            members.set(key, /^["']/.test(value) ? value : String(Function(`return (${value})`)()));
+          }
+          if (whole) enums.set(name, members);
+        }
+      }
+    }
+  }
+
+  return {
+    name: "const-enum",
+    // Before esbuild erases the types: the declarations are still here.
+    enforce: "pre",
+    transform(code, id) {
+      if (!/\.tsx?$/.test(id) || id.includes("node_modules")) return null;
+      let out = code;
+      const struck: string[] = [];
+      for (const [name, members] of enums) {
+        if (!out.includes(name)) continue;
+        for (const [key, value] of members) out = out.replaceAll(`${name}.${key}`, value);
+        struck.push(name);
+      }
+      if (!struck.length) return null;
+      out = out.replace(DECL, "");
+      // The name is gone from the module that had it, so it has to go from
+      // every clause that imported it too, or the bundler is left binding an
+      // export nobody declares.
+      out = out.replace(/import\s*\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g, (whole, clause: string, from: string) => {
+        const kept = clause
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s && !struck.includes(s.replace(/^type\s+/, "")));
+        if (kept.length === clause.split(",").map((s) => s.trim()).filter(Boolean).length) return whole;
+        return kept.length ? `import { ${kept.join(", ")} } from ${from};` : "";
+      });
+      for (const name of struck) {
+        const left = new RegExp(`\\b${name}\\.\\w`).exec(out);
+        if (left) throw new Error(`const-enum: ${id} still reads ${left[0]} after ${name} was inlined`);
+      }
+      return { code: out, map: null };
     },
   };
 }
@@ -227,6 +319,7 @@ export default defineConfig(({ mode }) => {
 
     plugins: [
       build_stamp(),
+      const_enum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")]),
       deno(),
       react(),
       tailwindcss(), // Tailwind

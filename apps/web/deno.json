@@ -38,7 +38,10 @@
     // the three steps above under it — see script/deploy.ts.
     "deploy": "deno run -A script/deploy.ts",
 
-    "check": "deno check src/index.ts",
+    // Through build:wasm, as dev, build and test are: the module's minified
+    // ABI is written beside it (src/kernel/abi.ts) and the shell imports it,
+    // so a checkout that has never built cannot be type-checked without it.
+    "check": { "command": "deno check src/index.ts", "dependencies": ["build:wasm"] },
     // Pure-logic modules: none of them touches the DOM or the GPU, so plain
     // `deno test` works with no browser harness, over the module built for
     // it. What needs a canvas is verified live.

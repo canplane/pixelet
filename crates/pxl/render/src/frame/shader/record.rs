@@ -31,8 +31,11 @@ pub const SHADER_DEBUG: u32 = 8;
 pub const SHADER_MIPS: u32 = 9;
 pub const SHADERS: u32 = 10;
 
+/// A shader's pieces, as build.rs wrote them: the files beside this one with
+/// their comments and indentation off, since what ships is what the GPU
+/// compiles and the GPU does not read the prose.
 macro_rules! wgsl {
-    ($($name:literal),+) => { concat!($(include_str!(concat!($name, ".wgsl")), "\n"),+) };
+    ($($name:literal),+) => { concat!($(include_str!(concat!(env!("OUT_DIR"), "/shader/", $name, ".wgsl")), "\n"),+) };
 }
 
 /// A shader's WGSL; empty for a kind that is not one.
