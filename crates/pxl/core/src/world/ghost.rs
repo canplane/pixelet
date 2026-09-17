@@ -1,16 +1,16 @@
 //! The hover ghost: what a placement or an erase would change, drawn half
 //! transparent where the cursor is. module/world/marker/hover_cursor.rs
 //! decides which ghost and where; what it is drawn from is here — a
-//! box written in the mesher's layout (mesher.rs's write_lone_box), so a
+//! box written in the mesher's layout (chunk_mesher.rs's write_lone_box), so a
 //! ghost cube is lit, textured and edge-shaded by the chunk shader exactly
 //! as the cube it previews, or one decor instance in a block of decor.rs's
 //! layout, drawn by decor's shader from the same model a placed one uses.
 
-use crate::bake::mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
-use crate::bake::voxel::NO_LAYER;
+use crate::render::layer::pipeline::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
+use crate::render::layer::pipeline::volume::NO_LAYER;
 use crate::render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use crate::world::build::World;
-use crate::world::decor::NO_ENTRY;
+use crate::module::world::decor::instance::NO_ENTRY;
 
 pub const GHOST_OPACITY: f32 = 0.5;
 
@@ -84,13 +84,13 @@ impl Ghost {
         if let Some(h) = self.held.take() {
             draw.free(h.handle);
             // SAFETY: the block the ghost took and has not given back.
-            unsafe { crate::bake::volume::give_bytes(h.at, h.bytes as usize) };
+            unsafe { xpute_core::sys::mem::give_block((h.at, h.bytes)) };
         }
     }
 
     fn replace(&mut self, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {
         self.clear(draw);
-        let at = crate::bake::volume::take_bytes(bytes as usize)?;
+        let (at, bytes) = xpute_core::sys::mem::take_block(bytes)?;
         self.held = Some(Held { shape, at, bytes, handle: 0 });
         Some(at)
     }

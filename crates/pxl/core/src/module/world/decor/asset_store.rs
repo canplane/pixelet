@@ -8,7 +8,7 @@
 //!
 //! A model is registered with the scheduler's models as it arrives
 //! (render/gpu/model_asset.rs), so the kernel holds its triangles for the
-//! eraser's hit test (crates/pxl/core/src/world/raycast.rs) and the renderer
+//! eraser's hit test (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order.
 

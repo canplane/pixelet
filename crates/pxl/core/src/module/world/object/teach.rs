@@ -8,7 +8,7 @@ use pxl_shared::spec::cell::{cube_types, decor_ids, decor_num_id, placeable_cube
 
 use crate::sys::kernel::kernel;
 use crate::module::world::object::material::resolve_solid_material;
-use crate::render::mesh::voxel::{pack_material, NO_LAYER};
+use crate::render::layer::pipeline::volume::{pack_material, NO_LAYER};
 use crate::world::object::Kind;
 
 /// Teaches the painter every state the catalog can put in a leaf: each

@@ -1,3 +1,5 @@
+// pxl_core/render/layer/pipeline/volume.rs
+
 //! The render-time volume for one 64×64 chunk.
 //!
 //! World layers paint into whole 64³ signed-Z bands, and the scan and the
@@ -15,15 +17,103 @@
 //! next band that needs one; past that a released store gives its lanes back
 //! and is refilled when it is next taken.
 
-use crate::bake::voxel::{NO_LAYER, SUB_CELL_NONE};
-use core::alloc::Layout;
-use std::alloc::{alloc, dealloc};
+use xpute_core::sys::mem::{give_block, take_block, Block};
+
+// ---- the voxel ----
+//
+// What one voxel's bytes mean: its material class and colour packed into a
+// word, its texture layer, and the inset of a box that fills only part of
+// its cell. Pure encoding, shared by the volume that stores voxels, the
+// scan that reads them into runs and the mesher that draws the runs.
+
+/// A run whose material is a placed object: exempt from hiding its
+/// neighbours' faces, and drawn with its bottom face.
+pub const MATERIAL_OBJECT: u8 = 5;
+/// A coarse tier's cells, whatever they summarise.
+pub const MATERIAL_LAND: u8 = 1;
+
+/// No texture-array layer applies; use the material's flat RGB.
+pub const NO_LAYER: u32 = 255;
+
+/// A full-cell run: no inset.
+pub const SUB_CELL_NONE: u8 = 0;
+const SUB_CELL_SCALE: f64 = 256.0;
+/// The largest packed value, read as exactly 1 rather than 255/256.
+///
+/// An offset of 1 is meaningless, so `unpack_sub_cell_fraction` never needs
+/// to express it. A *size* of 1 is not: coarse LOD fits a box to what is
+/// actually inside a cell, and a box that fills one axis while shrinking
+/// another is the ordinary case, not an edge one. Reading the top value as
+/// full costs a comparison and keeps 0 free as SUB_CELL_NONE.
+const SUB_CELL_FULL: u8 = 255;
+
+/// A fraction of a cell packed into a byte, rounded to the nearest 1/256.
+/// JavaScript's `Math.round` breaks ties upward and Rust's `round` away from
+/// zero; for the non-negative fractions this packs, the two agree.
+pub fn pack_sub_cell_fraction(fraction: f64) -> u32 {
+    ((fraction * SUB_CELL_SCALE).round()).clamp(0.0, SUB_CELL_SCALE - 1.0) as u32
+}
+
+pub fn unpack_sub_cell_fraction(packed: u8) -> f64 {
+    packed as f64 / SUB_CELL_SCALE
+}
+
+pub fn unpack_sub_cell_size(packed: u8) -> f64 {
+    if packed == SUB_CELL_FULL {
+        1.0
+    } else {
+        packed as f64 / SUB_CELL_SCALE
+    }
+}
+
+/// `MaterialClass`.
+pub type MaterialClass = u32;
+
+#[allow(non_snake_case)]
+pub mod MaterialClasses {
+    pub const AIR: u32 = 0;
+    pub const LAND: u32 = 1;
+    pub const WATER: u32 = 2;
+    pub const TRANSPORT: u32 = 3;
+    pub const STRUCTURE: u32 = 4;
+    pub const OBJECT: u32 = 5;
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VoxelMaterial {
+    pub material_class: MaterialClass,
+    pub r: u32,
+    pub g: u32,
+    pub b: u32,
+    pub layer_idx: u32,
+}
+
+pub fn pack_material(material: &VoxelMaterial) -> u32 {
+    ((material.material_class & 255) << 24) | ((material.r & 255) << 16) | ((material.g & 255) << 8) | (material.b & 255)
+}
+
+pub fn unpack_material(packed: u32, layer_idx: u32) -> VoxelMaterial {
+    VoxelMaterial {
+        material_class: packed >> 24,
+        r: (packed >> 16) & 255,
+        g: (packed >> 8) & 255,
+        b: packed & 255,
+        layer_idx,
+    }
+}
+
+// ---- the volume ----
 
 /// A band is a chunk's span on every axis.
 pub const BAND_SPAN: u32 = crate::space::constant::CHUNK_SPAN;
 const BAND_MASK: u32 = BAND_SPAN - 1;
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 pub const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;
+/// A band's lanes: a word of material, a byte of layer and a word of
+/// sub-cell a voxel.
+const MATERIAL_BYTES: u32 = BAND_VOXELS as u32 * 4;
+const LAYER_BYTES: u32 = BAND_VOXELS as u32;
+const SUB_CELL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 
 /// Column-major band-local index: Z is contiguous for paint, scan and raycast.
 pub fn band_voxel_idx(x: u32, y: u32, z: u32) -> usize {
@@ -110,29 +200,6 @@ impl Extras {
     }
 }
 
-
-/// A block of `bytes` from the heap, by address — a lane is read where it lies
-/// and the reader is given nothing but a pointer. `BAND_VOXELS` is a power of
-/// two, so the alignment a lane needs is the one the allocator gives.
-pub fn take_bytes(bytes: usize) -> Option<usize> {
-    // SAFETY: `bytes` is never zero — every lane is a whole band.
-    let at = unsafe { alloc(Layout::from_size_align(bytes, 8).expect("a lane's layout")) };
-    if at.is_null() {
-        None
-    } else {
-        Some(at as usize)
-    }
-}
-
-/// Gives back what `take_bytes` returned.
-///
-/// # Safety
-/// `at` came from `take_bytes(bytes)` and has not been given back.
-pub unsafe fn give_bytes(at: usize, bytes: usize) {
-    // SAFETY: the caller's.
-    unsafe { dealloc(at as *mut u8, Layout::from_size_align(bytes, 8).expect("a lane's layout")) }
-}
-
 /// A cell of the chunk: chunk-local x and y, absolute z.
 #[derive(Clone, Copy)]
 pub struct Cell {
@@ -158,7 +225,7 @@ struct Store {
     material: usize,
     layer_idx: usize,
     /// Lazily taken for a band with sub-cell objects; four bytes a voxel.
-    sub_cell: Option<(usize, u32)>,
+    sub_cell: Option<Block>,
     extra: Extras,
 }
 
@@ -258,13 +325,13 @@ impl Volumes {
             self.stat.reused += 1;
             return Some(s);
         }
-        let Some(material) = take_bytes(BAND_VOXELS * 4) else {
+        let Some((material, _)) = take_block(MATERIAL_BYTES) else {
             self.stat.refused += 1;
             return None;
         };
-        let Some(layer_idx) = take_bytes(BAND_VOXELS) else {
+        let Some((layer_idx, _)) = take_block(LAYER_BYTES) else {
             // SAFETY: just taken, above.
-            unsafe { give_bytes(material, BAND_VOXELS * 4) };
+            unsafe { give_block((material, MATERIAL_BYTES)) };
             self.stat.refused += 1;
             return None;
         };
@@ -307,9 +374,9 @@ impl Volumes {
     }
 
     fn drop_sub_cell(&mut self, store: usize) {
-        if let Some((at, _)) = self.stores[store].sub_cell.take() {
+        if let Some(block) = self.stores[store].sub_cell.take() {
             // SAFETY: the lane this store took and has not given back.
-            unsafe { give_bytes(at, BAND_VOXELS * 4) };
+            unsafe { give_block(block) };
         }
     }
 
@@ -318,9 +385,8 @@ impl Volumes {
     /// SUB_CELL_NONE.
     fn ensure_sub_cell(&mut self, store: usize) -> Option<*mut u8> {
         if self.stores[store].sub_cell.is_none() {
-            let bytes = (BAND_VOXELS * 4) as u32;
-            let at = take_bytes(bytes as usize)?;
-            self.stores[store].sub_cell = Some((at, 0));
+            let (at, bytes) = take_block(SUB_CELL_BYTES)?;
+            self.stores[store].sub_cell = Some((at, bytes));
             // SAFETY: a block of `bytes` this module just took.
             unsafe { core::slice::from_raw_parts_mut(self.mem.wrapping_add(at), bytes as usize).fill(0) };
         }
@@ -444,8 +510,8 @@ impl Volumes {
                 let store = &mut self.stores[s];
                 // SAFETY: the lanes this store took and has not given back.
                 unsafe {
-                    give_bytes(store.material, BAND_VOXELS * 4);
-                    give_bytes(store.layer_idx, BAND_VOXELS);
+                    give_block((store.material, MATERIAL_BYTES));
+                    give_block((store.layer_idx, LAYER_BYTES));
                 }
                 self.empty_stores.push(s);
             }
@@ -457,7 +523,6 @@ impl Volumes {
     pub fn mem(&self) -> *mut u8 {
         self.mem
     }
-
 
     /// Band `i` of volume `id` as the scan reads it, over the memory.
     ///

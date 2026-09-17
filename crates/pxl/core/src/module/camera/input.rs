@@ -27,7 +27,7 @@ use crate::module::world::object::collision::{is_placement_blocked, PlacementToo
 use crate::module::world::object::geometry::{anchor_center, object_aabb, object_center};
 use crate::module::world::object::size::DECOR_SIZE;
 use crate::module::world::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
-use crate::module::world::raycast::WorldHit;
+use crate::render::layer::pipeline::chunk_raycast::WorldHit;
 use crate::module::world::terrain::elevation::ground_or_raw;
 
 use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};

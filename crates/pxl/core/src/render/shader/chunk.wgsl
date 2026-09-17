@@ -21,7 +21,7 @@ struct Draw {
 @group(0) @binding(5) var layers_side: texture_2d_array<f32>;
 @group(0) @binding(6) var layer_sampler: sampler;
 
-// voxel.rs's NO_LAYER: a tap past the last layer means the vertex colour.
+// volume.rs's NO_LAYER: a tap past the last layer means the vertex colour.
 const NO_LAYER: f32 = 255.0;
 
 struct VertexIn {

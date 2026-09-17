@@ -1,3 +1,5 @@
+// pxl_core/render/layer/pipeline/chunk_mesher.rs
+
 //! A chunk's column runs to one mesh.
 //!
 //! Three phases, each resumable: face masks, then a greedy merge, then the
@@ -13,7 +15,7 @@
 
 use crate::bake::run_set::{OwnedRunSet, RunSet};
 use crate::bake::srgb::SRGB_TO_LINEAR;
-use crate::bake::voxel::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
+use crate::render::layer::pipeline::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::{CHUNK_SPAN, U_PER_CELL};
 use xpute_core::kit::fdlibm;
 
@@ -92,6 +94,11 @@ pub const VIS_F32_PER_VERTEX: u32 = 1;
 
 /// Words a mesh of `vertex_cnt` vertices and `index_cnt` indices takes: the
 /// vertices' floats and their visibility float, then the indices.
+///
+/// One block for every lane: they share a lifetime exactly (the whole mesh
+/// dies at once, when its owner does), so one allocation rather than eight —
+/// measured: a zoom-out that rebuilds ~2000 chunks moved +344MB in a single
+/// frame, 8.4s of it off-thread, when each lane was its own.
 pub fn mesh_words(vertex_cnt: u32, index_cnt: u32) -> u32 {
     vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) + index_cnt
 }

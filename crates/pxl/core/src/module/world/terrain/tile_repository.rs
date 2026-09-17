@@ -186,7 +186,7 @@ pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
         return Ok(());
     }
     let decoded = decode(pkt)?;
-    let at = crate::bake::volume::take_bytes(RECORD_BYTES as usize).ok_or(FetchFail::NoRoom)?;
+    let (at, _) = xpute_core::sys::mem::take_block(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
     let lanes = TerrainLanes {
         ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
         ele: record_ele_at(at),

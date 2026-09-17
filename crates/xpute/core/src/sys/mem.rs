@@ -68,6 +68,39 @@ pub fn read_section(words: &[u32], at: usize) -> Section {
     }
 }
 
+/// A block of the heap: where it lies in the memory, and its bytes.
+///
+/// Two numbers rather than a `Vec` or a slice, because what holds a block
+/// names it by number — a list that uploads it, a table of a chunk's
+/// tiers, a host that writes into the memory at an offset — and the size
+/// travels with the address, since giving a block back needs both.
+pub type Block = (usize, u32);
+
+/// Every lane element a block is cut into — bytes up to `f64`, `u64` and
+/// records of them — aligns within this.
+const BLOCK_ALIGN: usize = 8;
+
+/// A block of `bytes` from the module's allocator. None when it has no room,
+/// and for zero bytes, which an allocator is never asked for.
+pub fn take_block(bytes: u32) -> Option<Block> {
+    if bytes == 0 {
+        return None;
+    }
+    let layout = std::alloc::Layout::from_size_align(bytes as usize, BLOCK_ALIGN).ok()?;
+    // SAFETY: a layout of non-zero size.
+    let at = unsafe { std::alloc::alloc(layout) };
+    (!at.is_null()).then_some((at as usize, bytes))
+}
+
+/// Gives a block back.
+///
+/// # Safety
+/// `block` came from `take_block` and has not been given back.
+pub unsafe fn give_block((at, bytes): Block) {
+    // SAFETY: the caller's; `take_block` made this layout for this address.
+    unsafe { std::alloc::dealloc(at as *mut u8, std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
+}
+
 #[cfg(test)]
 #[path = "mem.test.rs"]
 mod test;

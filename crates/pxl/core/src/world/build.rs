@@ -17,6 +17,7 @@
 use std::collections::BTreeMap;
 use pxl_shared::spec::space::indexer::L2_IDX;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
+use xpute_core::sys::mem::Block;
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
 /// three thousand, and the glue's own chunks come on top. The mount pass stops
@@ -24,11 +25,11 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 /// assert past it says the caller has a bug, not that the view grew.
 pub const MAX_CHUNKS: usize = 4096;
 
-use crate::bake::mesher::{mesh_words, BakeContext, Step};
+use crate::render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
 use crate::bake::run_set::RunSet;
 use crate::bake::scan::{BandView, ScanContext, ScanStep};
 use crate::bake::terrain::{ChunkSample, Materials, PageView, CHANNELS, ELE_PADDED_SPAN};
-use crate::bake::volume::Volumes;
+use crate::render::layer::pipeline::volume::Volumes;
 use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use crate::world::object::{Carve, Painter, Store};
 
@@ -108,7 +109,7 @@ struct BakeJob {
     id: u32,
     step: u32,
     generation: u32,
-    mesh: Option<(usize, u32)>,
+    mesh: Option<Block>,
 }
 
 /// Where a chunk got to in one advance.
@@ -286,7 +287,7 @@ impl Builder {
         if let Some(c) = self.chunks.get_mut(&id) {
             if let Some(r) = c.runs.take() {
                 // SAFETY: a block this build took and has not given back.
-                unsafe { crate::bake::volume::give_bytes(r.at, r.bytes as usize) };
+                unsafe { xpute_core::sys::mem::give_block((r.at, r.bytes)) };
                 emit(Event::Runs { id, bytes: 0 });
             }
         }
@@ -317,9 +318,9 @@ impl Builder {
     fn abort_bake(&mut self) {
         if let Some(job) = self.bake_job.take() {
             self.bake.abort();
-            if let Some((at, bytes)) = job.mesh {
+            if let Some(mesh) = job.mesh {
                 // SAFETY: a block this build took and has not given back.
-                unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
+                unsafe { xpute_core::sys::mem::give_block(mesh) };
             }
         }
     }
@@ -433,7 +434,7 @@ impl Builder {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => unreachable!("a scan is finished when its set is provided"),
             ScanStep::NeedSet(bytes) => {
-                let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
+                let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
@@ -511,7 +512,7 @@ impl Builder {
             }
         }
         let bytes = self.direct.close_direct();
-        let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
+        let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else {
             self.direct.abort();
             self.refuse(world, id);
             return Progress::Blocked;
@@ -555,14 +556,14 @@ impl Builder {
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                let Some(at) = crate::bake::volume::take_bytes(words as usize * 4) else {
+                let Some(mesh) = xpute_core::sys::mem::take_block(words * 4) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
                 // SAFETY: a block of the words asked for, the bake's until it
                 // is finished and handed over, or aborted and released.
-                unsafe { self.bake.provide_mesh(world.volumes.mem().add(at) as *mut u32, words) };
-                self.bake_job.as_mut().unwrap().mesh = Some((at, words * 4));
+                unsafe { self.bake.provide_mesh(world.volumes.mem().add(mesh.0) as *mut u32, words) };
+                self.bake_job.as_mut().unwrap().mesh = Some(mesh);
                 Progress::Busy
             }
             Step::Done => {
@@ -588,7 +589,7 @@ impl Builder {
                 if c.wanted().next().is_none() {
                     if let Some(r) = c.runs.take_if(|r| r.direct) {
                         // SAFETY: a block this build took and has not given back.
-                        unsafe { crate::bake::volume::give_bytes(r.at, r.bytes as usize) };
+                        unsafe { xpute_core::sys::mem::give_block((r.at, r.bytes)) };
                         emit(Event::Runs { id, bytes: 0 });
                     }
                 }

@@ -15,7 +15,6 @@ pub mod marker;
 pub mod object;
 pub mod page_table;
 pub mod poi;
-pub mod raycast;
 pub mod sched;
 pub mod search;
 pub mod surface_height;

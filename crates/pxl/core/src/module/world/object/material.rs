@@ -6,7 +6,7 @@
 use pxl_shared::spec::cell::{placeable_cube_id, placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
 
 use crate::render::gpu::layer_table::{ground_color_lookup, ground_layer_index_lookup, rgb255, OBJECT_LAYER_IDX};
-use crate::render::mesh::voxel::{MaterialClasses, VoxelMaterial, NO_LAYER};
+use crate::render::layer::pipeline::volume::{MaterialClasses, VoxelMaterial, NO_LAYER};
 
 /// A placed "solid" cube's own real color/layer_idx — either a flat color or,
 /// for a terrain-styled pick (2026-09-06), the exact same color/layer_idx

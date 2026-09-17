@@ -15,8 +15,8 @@
 //! height so a shoreline reads as water meeting land rather than as two
 //! surfaces at the same level.
 
-use crate::bake::volume::{Volumes, Voxel};
-use crate::bake::voxel::NO_LAYER;
+use crate::render::layer::pipeline::volume::{Volumes, Voxel, NO_LAYER};
+use crate::render::layer::terrain::elevation::{sample_ele, WATER_RECESS_CELLS};
 use crate::space::constant::{CHUNK_CELLS, CHUNK_SPAN, PAGE_CELL_SPAN};
 
 /// A page's cells on a side, and its elevation raster's samples on a side
@@ -24,13 +24,10 @@ use crate::space::constant::{CHUNK_CELLS, CHUNK_SPAN, PAGE_CELL_SPAN};
 pub const PAGE_ELE_SPAN: u32 = 64;
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
-const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN as f64 / PAGE_ELE_SPAN as f64;
 
 /// How far below the chunk's lowest cell the shared floor sits, before it
 /// is rounded down to a band.
 const TERRAIN_Z_MARGIN: i32 = 4;
-/// How much a water-family cell sits below its sampled height.
-const WATER_RECESS_CELLS: i32 = 1;
 
 /// The channels, in override order: a later one's non-void type wins.
 pub const CHANNELS: usize = 4;
@@ -100,48 +97,6 @@ pub fn js_round(x: f64) -> f64 {
     }
 }
 
-fn clamp(x: i32, lo: i32, hi: i32) -> i32 {
-    x.max(lo).min(hi)
-}
-
-/// Bicubic sample of the padded elevation raster at cell (tx, ty)'s centre.
-pub fn sample_ele(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
-    let sx = (tx as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-    let sy = (ty as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-    let sx0 = sx.floor() as i32;
-    let sy0 = sy.floor() as i32;
-    let fdx = sx - sx0 as f64;
-    let fdy = sy - sy0 as f64;
-
-    let x2 = fdx * fdx;
-    let x3 = x2 * fdx;
-    let wx = [-0.5 * x3 + x2 - 0.5 * fdx, 1.5 * x3 - 2.5 * x2 + 1.0, -1.5 * x3 + 2.0 * x2 + 0.5 * fdx, 0.5 * x3 - 0.5 * x2];
-    let y2 = fdy * fdy;
-    let y3 = y2 * fdy;
-    let wy = [-0.5 * y3 + y2 - 0.5 * fdy, 1.5 * y3 - 2.5 * y2 + 1.0, -1.5 * y3 + 2.0 * y2 + 0.5 * fdy, 0.5 * y3 - 0.5 * y2];
-
-    let span = ELE_PADDED_SPAN as i32;
-    let at = |x: i32, y: i32| page_ele[(y * span + x) as usize] as f64;
-
-    if sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3 {
-        let row = |y: i32| at(sx0 - 1, y) * wx[0] + at(sx0, y) * wx[1] + at(sx0 + 1, y) * wx[2] + at(sx0 + 2, y) * wx[3];
-        let out = row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3];
-        return js_round(out) as i16;
-    }
-
-    let mut out = 0.0;
-    for j in 0..4 {
-        let py = clamp(sy0 - 1 + j, 0, span - 1);
-        let mut row_out = 0.0;
-        for i in 0..4 {
-            let px = clamp(sx0 - 1 + i, 0, span - 1);
-            row_out += at(px, py) * wx[i as usize];
-        }
-        out += row_out * wy[j as usize];
-    }
-    js_round(out) as i16
-}
-
 /// One chunk of a page, sampled: a material and a top a cell, and the
 /// floor the columns share.
 pub struct ChunkSample {
@@ -206,7 +161,7 @@ impl ChunkSample {
                 let mut ele = sample_ele(page.ele, tx, ty) as i32;
                 let water_family = types[STRUCTURE] == VOID && types[TRANSPORT] == VOID && (types[WATER] != VOID || types[LAND] == SEA);
                 if water_family {
-                    ele -= WATER_RECESS_CELLS;
+                    ele -= WATER_RECESS_CELLS as i32;
                 }
                 self.ele[i] = ele as i16;
                 min_ele = min_ele.min(ele);

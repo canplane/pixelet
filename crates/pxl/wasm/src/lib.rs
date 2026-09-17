@@ -12,11 +12,11 @@
 //! One bake is open at a time, as with the TypeScript context; the module is
 //! single-threaded, so the state is a plain global.
 
-use pxl_core::bake::mesher::Step;
+use pxl_core::render::layer::pipeline::chunk_mesher::Step;
 use pxl_core::bake::run_set::{run_set_bytes, RunSet};
 use pxl_core::bake::scan::{BandView, ExtraView, ScanStep};
 use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
-use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+use pxl_core::render::layer::pipeline::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
 use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
 use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
 use pxl_core::sys::global::Global;
@@ -25,7 +25,7 @@ use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
 use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
 use pxl_core::world::object::{Carve, Kind};
-use pxl_core::world::raycast::Raycast;
+use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
 use pxl_core::world::sched::{Event, Frame, Scheduler};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
@@ -224,7 +224,7 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
         table
             .chunks_exact(BAND_WORDS)
             .map(|w| {
-                let voxels = pxl_core::bake::volume::BAND_VOXELS;
+                let voxels = pxl_core::render::layer::pipeline::volume::BAND_VOXELS;
                 let extras = w[4] as usize;
                 BandView {
                     band_z: w[0] as i32,
@@ -1432,7 +1432,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::DECOR_READ => {
             let r = ray_at(&fields(pkt)?)?;
-            let Some(h) = pxl_core::world::raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
+            let Some(h) = pxl_core::render::layer::pipeline::chunk_raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
                 return Ok(Some((0, None)));
             };
             return Ok(Some((

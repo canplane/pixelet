@@ -219,7 +219,7 @@ const LIT_FRAME: [[u32; 3]; 3] = [[0, BOTH, UNIFORM], [1, FRAGMENT, DEPTH], [2, 
 /// A skin and its sampler.
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
-/// The chunk's lanes as the mesher lays them out (mesher.rs): position,
+/// The chunk's lanes as the mesher lays them out (chunk_mesher.rs): position,
 /// normal, local_pos, box_scale, rgb, layer_taps, faces — a vertex slot a
 /// lane, at the lane's offset from the vertex count.
 fn chunk_lanes() -> Vec<Vec<u32>> {

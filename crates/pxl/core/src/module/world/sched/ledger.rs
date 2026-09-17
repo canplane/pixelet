@@ -288,7 +288,7 @@ fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
 /// test), and then nothing is recorded into it.
 fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
     let bytes = cap * core::mem::size_of::<T>();
-    let Some(at) = crate::bake::volume::take_bytes(bytes) else { return &mut [] };
+    let Some((at, _)) = u32::try_from(bytes).ok().and_then(xpute_core::sys::mem::take_block) else { return &mut [] };
     // SAFETY: a block this lane holds alone and never gives back, `bytes` long
     // and aligned past a record's alignment; zeroed,
     // which is a valid record for the plain numbers, flags and field-less

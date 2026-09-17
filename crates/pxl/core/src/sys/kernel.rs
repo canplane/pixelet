@@ -7,13 +7,13 @@
 // read and write it directly, as their TypeScript read its stores; pxl-wasm
 // keeps only the rings and hands commands to it.
 
-use crate::bake::mesher::BakeContext;
+use crate::render::layer::pipeline::chunk_mesher::BakeContext;
 use crate::bake::scan::{ColumnRuns, ScanContext};
 use crate::bake::terrain::{ChunkSample, Materials};
-use crate::bake::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
+use crate::render::layer::pipeline::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
 use crate::sys::global::Global;
 use crate::world::object::{Painter, Store};
-use crate::world::raycast::Raycast;
+use crate::render::layer::pipeline::chunk_raycast::Raycast;
 use crate::world::sched::Scheduler;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};

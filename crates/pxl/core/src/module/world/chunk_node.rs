@@ -44,7 +44,7 @@ pub struct MeshBlock {
 }
 
 /// A chunk's decor at one tier: one block of the mesh section holding every
-/// group's lanes (render/mesh/decor_block.rs).
+/// group's lanes (module/world/decor/instance.rs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DecorBlock {
     pub at: usize,
@@ -55,7 +55,7 @@ pub struct DecorBlock {
 /// afterwards.
 pub fn release_block(at: usize, bytes: u32) {
     // SAFETY: a block this chunk took and has not given back.
-    unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
+    unsafe { xpute_core::sys::mem::give_block((at, bytes)) };
 }
 
 /// How much built work chunks may keep *while off screen*: run sets and cached
@@ -151,7 +151,7 @@ pub fn chunk_retention() -> ChunkRetention {
             // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
             // for as long as the node holds this decor.
             let words: &[u32] = unsafe { core::slice::from_raw_parts(d.at as *const u32, d.bytes as usize / 4) };
-            out.decor_instances += crate::world::decor::decor_groups(words).map(|(_, n)| n).sum::<u32>();
+            out.decor_instances += crate::module::world::decor::instance::decor_groups(words).map(|(_, n)| n).sum::<u32>();
         }
     }
     out.run_set_mb = (run_bytes as f64 / 1_048_576.0).round() as u32;

@@ -28,7 +28,8 @@ use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE
 use crate::world::billboard::Billboards;
 use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World, MAX_CHUNKS};
 use crate::world::debug::DebugLines;
-use crate::world::decor::{decor_groups, density as decor_density, Chunk as DecorChunk, DecorBuild, DecorScratch, Kind as DecorKind, Rule as DecorRule};
+use crate::module::world::decor::instance::{decor_groups, DecorScratch};
+use crate::world::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::world::environment::Environment;
 use crate::world::ghost::Ghost;
 use crate::module::world::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
@@ -688,7 +689,7 @@ impl Scheduler {
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
             let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
-            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else {
+            let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else {
                 self.builder.stat.starved += 1;
                 self.slots[i].refused = Some(crate::sys::host::heap_releases());
                 return false;

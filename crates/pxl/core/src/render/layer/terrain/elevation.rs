@@ -1,4 +1,4 @@
-// pxl_core/module/world/terrain/elevation_sample.rs
+// pxl_core/render/layer/terrain/elevation.rs
 
 //! Coordinate prefix rules:
 //! - c (chunk)  : chunk lattice index (e.g. cx, cy)
@@ -172,5 +172,5 @@ pub fn dense_ele_region<'a>(page_ele: &[i16], tx0: u32, ty0: u32, span: u32, gro
 }
 
 #[cfg(test)]
-#[path = "elevation_sample.test.rs"]
+#[path = "elevation.test.rs"]
 mod test;

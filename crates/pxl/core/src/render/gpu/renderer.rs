@@ -125,11 +125,10 @@ impl Scratch {
         if bytes > self.bytes {
             if self.bytes > 0 {
                 // SAFETY: the block this scratch held alone.
-                unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
+                unsafe { xpute_core::sys::mem::give_block((self.at, self.bytes)) };
             }
             let size = bytes.next_power_of_two().max(4096);
-            self.at = crate::bake::volume::take_bytes(size as usize).expect("the heap has no room for the renderer's scratch");
-            self.bytes = size;
+            (self.at, self.bytes) = xpute_core::sys::mem::take_block(size).expect("the heap has no room for the renderer's scratch");
         }
         // SAFETY: a block of the mesh section this scratch holds alone, at
         // least `bytes` long.
@@ -140,7 +139,7 @@ impl Scratch {
     pub fn free(&mut self) {
         if self.bytes > 0 {
             // SAFETY: the block this scratch held alone.
-            unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
+            unsafe { xpute_core::sys::mem::give_block((self.at, self.bytes)) };
             self.bytes = 0;
         }
     }
@@ -185,7 +184,7 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let at = crate::bake::volume::take_bytes(BLOCK_SLOTS * 4).expect("the heap has no room for the renderer's blocks");
+    let (at, _) = xpute_core::sys::mem::take_block((BLOCK_SLOTS * 4) as u32).expect("the heap has no room for the renderer's blocks");
     // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);

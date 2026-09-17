@@ -23,15 +23,14 @@
 //! volume on a hover and reads the answer once.
 
 use crate::bake::run_set::run_set_bytes;
-use crate::bake::volume::{BAND_SPAN, BAND_VOXELS};
-use crate::bake::voxel::{MATERIAL_OBJECT, SUB_CELL_NONE};
+use crate::render::layer::pipeline::volume::{BAND_SPAN, BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
 
 /// Cells on a band's side; a chunk is one column of bands.
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 const COLUMN_CNT: usize = BAND_SPAN2;
 const SCAN_ROWS_PER_STEP: u32 = 8;
 
-/// One band's overflow sub-voxels, sorted by column (bake/volume.rs's Extras).
+/// One band's overflow sub-voxels, sorted by column (render/layer/pipeline/volume.rs's Extras).
 pub struct ExtraView<'a> {
     pub col: &'a [u32],
     pub z: &'a [i32],
@@ -40,7 +39,7 @@ pub struct ExtraView<'a> {
     pub sub: &'a [u32],
 }
 
-/// One band as the scan reads it (bake/volume.rs's Band): materials packed
+/// One band as the scan reads it (render/layer/pipeline/volume.rs's Band): materials packed
 /// `0xCC_RRGGBB`, zero for air; four sub-cell bytes a voxel when the band
 /// has any.
 pub struct BandView<'a> {

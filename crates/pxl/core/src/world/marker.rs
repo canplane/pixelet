@@ -52,7 +52,7 @@ impl Markers {
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
             self.clear(draw);
-            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return };
+            let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else { return };
             self.puck = Some(Puck {
                 at,
                 bytes,
@@ -99,7 +99,7 @@ impl Markers {
         if let Some(p) = self.puck.take() {
             draw.free(p.handle);
             // SAFETY: the block this marker took and has not given back.
-            unsafe { crate::bake::volume::give_bytes(p.at, p.bytes as usize) };
+            unsafe { xpute_core::sys::mem::give_block((p.at, p.bytes)) };
         }
     }
 

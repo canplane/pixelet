@@ -14,6 +14,7 @@
 //! cells across; why, and every other rule, is the TypeScript's.
 
 use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
+use crate::module::world::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::module::world::lod::TARGET_CELL_PX;
 
 use crate::bake::terrain::{ChunkSample, PageView};
@@ -26,19 +27,6 @@ use xpute_core::kit::rng::{derive_seed_u64 as derive_seed, u32_to_unit, SplitMix
 /// bits in the catalog and `derive_seed_u64` masks its XOR to 64, so these
 /// are the bits that reach a stream.
 const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
-/// NO_ENTRY: a procedural instance resolves to no stored entry.
-///
-/// `i32::MIN` and not `u32::MAX`, because the word it fills holds a `BandZ` —
-/// an `i32` — cast to `u32`, and the band below the origin is -1, which casts
-/// to exactly `u32::MAX`. A decor placed there read as procedural: the raycast
-/// passes over NO_ENTRY (world/raycast.rs), so the hit never resolved to its
-/// entry and the thing could not be picked or erased. Any value a band can
-/// take has to stay out of the sentinel, and a band is `z >> BAND_SHAMT` over
-/// a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it fits in ten bits
-/// signed and nothing reaches `i32::MIN`.
-pub const NO_ENTRY: u32 = i32::MIN as u32;
-pub const HIDDEN_FLAG: u8 = 1;
-
 /// A decor stream: SplitMix64, drawn as units in [0, 1).
 struct Rng(SplitMix64);
 
@@ -85,21 +73,6 @@ pub struct Kind {
     pub rules: [Rule; 4],
 }
 
-/// One instance, as the lanes hold it.
-#[derive(Clone, Copy)]
-struct Instance {
-    x: f32,
-    y: f32,
-    z: f32,
-    rotation: f32,
-    scale: f32,
-    flags: u8,
-    band: u32,
-    pos: u32,
-}
-
-
-
 /// A kind's density on this tier: 1, or 0 where the kind is under two of the
 /// tier's cells across — smaller than that and the instances land closer
 /// together than the tier can resolve.
@@ -113,95 +86,9 @@ pub fn density(extent: f64, step: u32) -> f64 {
     }
 }
 
-/// Groups one block holds at most: as many as the renderer's decor pass draws.
-pub const DECOR_GROUPS: usize = 64;
-
-/// Instances one chunk's decor holds at most at a tier: a kind scatters at
-/// most one to a cell, and the placed entries come past them. What does not
-/// fit is left out.
-const DECOR_INSTANCES: usize = 1 << 16;
-
-/// Where a chunk's instances are gathered, in the order they are made, before
-/// they are laid into its block group by group: two lanes in blocks of the mesh
-/// section, taken once and kept by the scheduler, so a build takes nothing of
-/// its own and the megabytes they are sit outside the module heap.
-pub struct DecorScratch {
-    instances: &'static mut [Instance],
-    /// The group each instance is in.
-    groups: &'static mut [u16],
-    len: usize,
-    counts: [u32; DECOR_GROUPS],
-    group_count: usize,
-    /// Instances the lanes had no room for, since the kernel started: what a
-    /// chunk shows is short by this many, and the ledger says so rather than
-    /// leaving the gap to be noticed on screen.
-    pub dropped: u32,
-}
-
-impl DecorScratch {
-    /// Its lanes, taken from the heap; none when it has no room for them.
-    pub fn new() -> Option<DecorScratch> {
-        let instance_bytes = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
-        let instances = crate::bake::volume::take_bytes(instance_bytes as usize)?;
-        let Some(groups) = crate::bake::volume::take_bytes(DECOR_INSTANCES * core::mem::size_of::<u16>()) else {
-            // SAFETY: just taken, above.
-            unsafe { crate::bake::volume::give_bytes(instances, instance_bytes as usize) };
-            return None;
-        };
-        // SAFETY: two blocks of the pool this scratch holds alone and never
-        // gives back, each DECOR_INSTANCES of its lane's element and aligned
-        // past it; the elements are plain numbers, and none is read before a
-        // build has written it.
-        let (instances, groups) = unsafe {
-            (
-                core::slice::from_raw_parts_mut(instances as *mut Instance, DECOR_INSTANCES),
-                core::slice::from_raw_parts_mut(groups as *mut u16, DECOR_INSTANCES),
-            )
-        };
-        Some(DecorScratch {
-            instances,
-            groups,
-            len: 0,
-            counts: [0; DECOR_GROUPS],
-            group_count: 0,
-            dropped: 0,
-        })
-    }
-
-    fn clear(&mut self) {
-        self.len = 0;
-        self.counts = [0; DECOR_GROUPS];
-        self.group_count = 0;
-    }
-
-    fn push(&mut self, group: usize, instance: Instance) {
-        if self.len == DECOR_INSTANCES {
-            self.dropped += 1;
-            return;
-        }
-        self.instances[self.len] = instance;
-        self.groups[self.len] = group as u16;
-        self.len += 1;
-        self.counts[group] += 1;
-    }
-}
-
 /// A chunk's decor at a tier, gathered and ready to be laid into its block.
 pub struct DecorBuild<'s> {
     scratch: &'s DecorScratch,
-}
-
-/// Each group's first lane word in a block and its count, in group order, as
-/// the block's own header says: what a draw of the group reads its instances
-/// by.
-pub fn decor_groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
-    let groups = words.first().map_or(0, |&g| g as usize);
-    let mut at = 1 + groups;
-    words.get(1..1 + groups).unwrap_or(&[]).iter().map(move |&n| {
-        let (first, n) = (at, n as usize);
-        at += 7 * n + n.div_ceil(4);
-        (first as u32, n as u32)
-    })
 }
 
 /// What a chunk's decor is built from.

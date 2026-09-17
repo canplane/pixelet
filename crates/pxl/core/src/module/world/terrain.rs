@@ -3,7 +3,6 @@
 pub mod config;
 pub mod config_spec;
 pub mod elevation;
-pub mod elevation_sample;
 pub mod fixed;
 pub mod resident;
 pub mod store;

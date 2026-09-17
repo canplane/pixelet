@@ -25,8 +25,7 @@ use pxl_shared::spec::space::sparse_tree::mem;
 use pxl_shared::spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
 
 use crate::bake::terrain::js_round;
-use crate::bake::volume::{Cell, Volumes, Voxel};
-use crate::bake::voxel::{pack_sub_cell_fraction, NO_LAYER, SUB_CELL_NONE};
+use crate::render::layer::pipeline::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 use crate::space::constant::U_PER_CELL;
 
 /// A cell's Z and a band's, as wide as the coordinate carries them. PVF3

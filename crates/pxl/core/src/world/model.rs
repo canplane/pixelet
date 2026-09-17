@@ -43,7 +43,7 @@ struct Clip {
     channels: Vec<Channel>,
 }
 
-/// Where a model's mesh is and how big, for a hit test (raycast.rs).
+/// Where a model's mesh is and how big, for a hit test (render/layer/pipeline/chunk_raycast.rs).
 #[derive(Clone, Copy)]
 pub struct MeshRef {
     pub at: usize,
@@ -223,7 +223,7 @@ impl Models {
     /// the glue to write; none when the heap refused.
     pub fn new_model(&mut self, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
         let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
-        let at = crate::bake::volume::take_bytes(bytes as usize)?;
+        let (at, bytes) = xpute_core::sys::mem::take_block(bytes)?;
         let j = joint_cnt as usize;
         let model = Model {
             at,
@@ -349,7 +349,7 @@ impl Models {
             if let Some(m) = slot.take() {
                 draw.free(m.handle);
                 // SAFETY: the block this model took and has not given back.
-                unsafe { crate::bake::volume::give_bytes(m.at, m.bytes as usize) };
+                unsafe { xpute_core::sys::mem::give_block((m.at, m.bytes)) };
             }
         }
     }
@@ -357,7 +357,7 @@ impl Models {
     pub fn new_actor(&mut self, world: &mut World, draw: &mut DrawList, model: u32) -> Option<u32> {
         let joints = self.models.get(model as usize)?.as_ref()?.parent.len();
         let palette_bytes = (joints.max(1) * 16 * 4) as u32;
-        let palette_at = crate::bake::volume::take_bytes(palette_bytes as usize)?;
+        let (palette_at, palette_bytes) = xpute_core::sys::mem::take_block(palette_bytes)?;
         // SAFETY: the block just acquired; identity joints until the first tick.
         unsafe {
             let p = core::slice::from_raw_parts_mut(world.volumes.mem().add(palette_at) as *mut f32, palette_bytes as usize / 4);
@@ -423,7 +423,7 @@ impl Models {
             if let Some(a) = slot.take() {
                 draw.free(a.palette_handle);
                 // SAFETY: the block this asset took and has not given back.
-                unsafe { crate::bake::volume::give_bytes(a.palette_at, a.palette_bytes as usize) };
+                unsafe { xpute_core::sys::mem::give_block((a.palette_at, a.palette_bytes)) };
             }
         }
     }

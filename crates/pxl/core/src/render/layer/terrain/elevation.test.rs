@@ -1,4 +1,4 @@
-// pxl_core/module/world/terrain/elevation_sample.test.rs
+// pxl_core/render/layer/terrain/elevation.test.rs
 
 use super::*;
 use pxl_shared::bake::constant::ELE_PADDED_SPAN;

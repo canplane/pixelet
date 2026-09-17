@@ -54,8 +54,8 @@ pub fn clear_pois(page_idx: IVec) {
 /// is disconnected until its per-page index is rewritten (issue/BACKLOG.md),
 /// and the page section is `.fixed.terrain` now.
 fn release(held: ResidentPoiPage) {
-    if let Some((at, bytes)) = held.block {
+    if let Some(block) = held.block {
         // SAFETY: the page's own block, taken when it arrived.
-        unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
+        unsafe { xpute_core::sys::mem::give_block(block) };
     }
 }

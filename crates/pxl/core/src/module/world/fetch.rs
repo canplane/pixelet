@@ -20,6 +20,7 @@ use core::fmt;
 
 use pxl_shared::spec::fetch::FetchFail;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
+use xpute_core::sys::mem::Block;
 
 use crate::sys::global::Global;
 use crate::lib::env::config::PUBLISHED_TILES;
@@ -30,9 +31,6 @@ use crate::module::world::sched::demand::{Category, Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::{demand_of, fetch_settle};
 use crate::module::world::sched::ledger::{Failure, Outcome};
 use crate::module::world::terrain::{tile_repository, use_tile_fetcher};
-
-/// A body's block: its address and size.
-type Block = (usize, u32);
 
 /// Bodies given room and not yet reported: the fetches in flight, with room
 /// to spare. A body past them is refused room, and its fetch fails.
@@ -65,9 +63,9 @@ impl fmt::Display for DemandUrl<'_> {
 /// its section has none.
 pub fn fetch_body(key: u64, bytes: u32) -> u32 {
     let Some(slot) = bodies().iter().position(|(_, b)| b.1 == 0) else { return 0 };
-    let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return 0 };
-    bodies()[slot] = (key, (at, bytes));
-    at as u32
+    let Some(block) = xpute_core::sys::mem::take_block(bytes) else { return 0 };
+    bodies()[slot] = (key, block);
+    block.0 as u32
 }
 
 /// The body the shell reports, only when it is one given room for `key`.
@@ -81,9 +79,9 @@ fn take_body(key: u64, at: u32, bytes: u32) -> Option<Block> {
 }
 
 fn release(block: Option<Block>) {
-    if let Some((at, bytes)) = block {
+    if let Some(block) = block {
         // SAFETY: a body's block, given room by `fetch_body` and reported once.
-        unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
+        unsafe { xpute_core::sys::mem::give_block(block) };
     }
 }
 

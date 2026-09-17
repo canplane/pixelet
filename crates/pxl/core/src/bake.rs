@@ -1,10 +1,8 @@
-//! The bake: from a chunk's sources to its mesh — the voxel, the volume, the
-//! runs, the scan, the mesher, the terrain paint.
+//! The bake: from a chunk's sources to its runs — the runs, the scan, the
+//! terrain paint. The voxel, the volume and the mesher are
+//! render/layer/pipeline's.
 
-pub mod mesher;
 pub mod run_set;
 pub mod scan;
 pub mod srgb;
 pub mod terrain;
-pub mod volume;
-pub mod voxel;

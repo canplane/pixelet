@@ -10,7 +10,7 @@ use pxl_shared::spec::cell::cube_types;
 
 use crate::sys::kernel::kernel;
 use crate::render::gpu::layer_table::{ground_color_lookup, ground_layer_index_lookup};
-use crate::render::mesh::voxel::{MaterialClass, MaterialClasses, NO_LAYER};
+use crate::render::layer::pipeline::volume::{MaterialClass, MaterialClasses, NO_LAYER};
 
 pub fn ch_to_class(ch: GroundChannelKey) -> MaterialClass {
     match ch {

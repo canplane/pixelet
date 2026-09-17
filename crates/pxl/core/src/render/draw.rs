@@ -224,7 +224,7 @@ impl Held {
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
-            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return false };
+            let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else { return false };
             self.at = at;
             self.bytes = bytes;
         }
@@ -242,7 +242,7 @@ impl Held {
         if self.bytes > 0 {
             draw.free(self.handle);
             // SAFETY: the block this lane took and has not given back.
-            unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
+            unsafe { xpute_core::sys::mem::give_block((self.at, self.bytes)) };
             self.bytes = 0;
             self.handle = 0;
         }

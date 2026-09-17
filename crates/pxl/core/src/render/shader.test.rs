@@ -31,7 +31,7 @@ fn every_shader_compiles() {
 /// by.
 #[test]
 fn the_face_bits_are_the_meshers() {
-    use crate::bake::mesher as m;
+    use crate::render::layer::pipeline::chunk_mesher as m;
     let (module, _) = compile(SHADER_CHUNK);
     let value = |name: &str| -> u32 {
         let (_, c) = module

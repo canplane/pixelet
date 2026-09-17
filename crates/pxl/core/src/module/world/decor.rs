@@ -8,6 +8,7 @@ pub mod car_kind;
 pub mod decor_hit;
 pub mod decor_kinds;
 pub mod decor_registry;
+pub mod instance;
 pub mod kind;
 pub mod scatter;
 pub mod train_decor;
