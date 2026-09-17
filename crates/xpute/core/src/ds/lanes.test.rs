@@ -1,4 +1,4 @@
-// xpute_core/ds/lanes.test.rs
+// xpute-core/ds/lanes.test.rs
 
 use super::*;
 

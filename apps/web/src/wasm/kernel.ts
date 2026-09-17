@@ -1,7 +1,7 @@
 // @pxl/web/wasm/kernel.ts
 
 /**
- * The central scheduler's driver of the kernel (crates/pxl/core behind
+ * The central scheduler's driver of the kernel (crates/pxl/kernel behind
  * crates/pxl/wasm), and the devices it runs for it: nothing decided here.
  *
  * The turns are the strobe's (@xpute/core/sched/strobe.ts): a frame rings
@@ -43,7 +43,7 @@ import { CORE_KERNEL } from "@/wasm/core_mem.ts";
 import { acquire_device, bind_surface, register_image, unbind_surface } from "@/wasm/gpu.ts";
 import { boot_block, hold_body, quantum_policy, text_at } from "@/wasm/module.ts";
 
-// ---- the snapshot the UI renders (crates/pxl/core/src/app/shell.rs) ----
+// ---- the snapshot the UI renders (crates/pxl/kernel/src/shell/shell.rs) ----
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
 export type UiSnapshot = {
@@ -114,7 +114,7 @@ export function kernel_action(action: KernelAction): void {
   request_frame();
 }
 
-/** The tracking button's press: crates/pxl/core/src/app/shell.rs's Tracking. */
+/** The tracking button's press: crates/pxl/kernel/src/shell/shell.rs's Tracking. */
 export const TRACKING_RECENTER = 0, TRACKING_FOLLOW = 1, TRACKING_UNFOLLOW = 2;
 
 /** The tracking button. Following needs the compass, so where iOS gates it,
@@ -227,7 +227,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   );
 }, (run) => requestAnimationFrame(run));
 
-// ---- surfaces: the canvases the kernel draws (crates/pxl/core/src/render/gpu/surface.rs) ----
+// ---- surfaces: the canvases the kernel draws (crates/pxl/render/src/gpu/surface.rs) ----
 
 /** What a surface shows: surface.rs's ROLE_WORLD and ROLE_CASE. */
 export const SURFACE_WORLD = 0;
@@ -277,7 +277,7 @@ export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface 
   };
 }
 
-// ---- fetches: HTTP for the kernel (crates/pxl/core/src/module/world/fetch.rs) ----
+// ---- fetches: HTTP for the kernel (crates/pxl/kernel/src/io/fetch.rs) ----
 
 const running = new Map<bigint, AbortController>();
 
@@ -320,7 +320,7 @@ async function run_fetch(key: bigint, url: string): Promise<void> {
   }
 }
 
-// ---- loads (crates/pxl/core/src/render/gltf/load.rs) ----
+// ---- loads (crates/pxl/kernel/src/io/load.rs) ----
 
 let next_image = 1;
 
@@ -356,7 +356,7 @@ async function load_image(url: string): Promise<void> {
   request_frame();
 }
 
-// ---- sensors (crates/pxl/core/src/module/device/pose) ----
+// ---- sensors (crates/pxl/kernel/src/module/device/pose) ----
 
 let geolocation_watch: number | null = null;
 
@@ -403,7 +403,7 @@ function orientation_listen(): void {
   listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
 }
 
-/** crates/pxl/core/src/module/device/pose/store.rs's PermissionAnswer. */
+/** crates/pxl/kernel/src/control/sensor/store.rs's PermissionAnswer. */
 const PERMISSION_ASKING = 0, PERMISSION_GRANTED = 1, PERMISSION_DENIED = 2, PERMISSION_FAILED = 3;
 
 function send_permission(sensor: number, answer: number): void {

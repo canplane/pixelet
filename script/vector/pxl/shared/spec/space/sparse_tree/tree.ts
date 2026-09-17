@@ -2,7 +2,7 @@
 //
 // A sequence of writes at every level into trees of both dims, then what
 // read, walk, compact and encode give — for
-// crates/pxl/shared/src/spec/space/sparse_tree/tree.test.rs.
+// crates/pxl/spec/src/space/sparse_tree/tree.test.rs.
 
 import { type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import * as sparse_tree from "@pxl/shared/spec/space/sparse_tree/tree.ts";

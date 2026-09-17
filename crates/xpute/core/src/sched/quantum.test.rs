@@ -1,4 +1,4 @@
-// xpute_core/sched/quantum.test.rs
+// xpute-core/sched/quantum.test.rs
 
 use super::*;
 

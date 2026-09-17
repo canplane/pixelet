@@ -1,4 +1,4 @@
-// xpute_core/ds/spatial_hash.rs
+// xpute-core/ds/spatial_hash.rs
 
 //! Broadphase index for sparse, moving points in 3D, rebuilt every frame and
 //! allocating nothing while it does.

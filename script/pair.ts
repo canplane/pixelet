@@ -20,7 +20,7 @@
 //   but letters and digits as one underscore).
 // - Every vector generator under script/vector/ (a `.ts` at the mirrored
 //   path, exporting `vectors()`) writes what the TypeScript computes for a
-//   fixed input set, as `path<TAB>value` lines; the file it writes under the crate's `vector/` (crates/xpute/core/vector, crates/pxl/shared/vector)
+//   fixed input set, as `path<TAB>value` lines; the file it writes under the crate's `vector/` (crates/xpute/core/vector, crates/pxl/spec/vector)
 //   must be committed as written (`deno task vector` writes them) and read
 //   by a Rust test through `include_str!`.
 //
@@ -45,7 +45,7 @@ type Tree = {
 
 const TREES: Tree[] = [
   { ts: "packages/xpute/core/src", rs: "crates/xpute/core/src", required: [""], vector: "crates/xpute/core/vector" },
-  { ts: "packages/pxl/shared/src", rs: "crates/pxl/shared/src", required: [""], vector: "crates/pxl/shared/vector" },
+  { ts: "packages/pxl/shared/src", rs: "crates/pxl/spec/src", required: [""], vector: "crates/pxl/spec/vector" },
 ];
 
 const EXEMPT_PATH = "script/pair.exempt.json";

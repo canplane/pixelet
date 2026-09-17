@@ -113,7 +113,7 @@ export const enum Cmd {
   /** [load u32] — a load failed */
   LOAD_DELETE = 0x1f04,
   /** [min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's
-   * renderer is made on it (render/gpu/renderer.rs) */
+   * renderer is made on it (crates/pxl/render/src/gpu/renderer.rs) */
   GPU_CREATE = 0x2001,
   /** no packet — the device went away, and every object on it */
   GPU_DELETE = 0x2004,

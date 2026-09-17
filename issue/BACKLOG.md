@@ -12,7 +12,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
-  and through by 2026-09-15: the kernel (`crates/pxl/core`, built by
+  and through by 2026-09-15: the kernel (`crates/pxl/kernel`, built by
   `crates/pxl/wasm` into one module whose exports are `boot` and
   `interrupt`) builds and schedules the chunks, holds the world, the camera,
   the map, the stores and the fetch scheduler, and lists what to draw; the
@@ -218,7 +218,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   reset.
 
 - **The scheduler's port, read against the TypeScript it replaced.**
-  Read line for line on 2026-09-14 after the move (crates/pxl/core/src/world/sched.rs
+  Read line for line on 2026-09-14 after the move (crates/pxl/kernel/src/world/sched.rs
   against 9ff57fe's chunk_node.ts, chunk_stage.tsx, chunk_table.ts,
   priority.ts). Fixed: the reclaim walked the order backwards and gave back
   the nearest off-screen chunk first (core_sched.test.ts now pins farthest

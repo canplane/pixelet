@@ -1,4 +1,4 @@
-// xpute_core/kit/json.test.rs
+// xpute-core/kit/json.test.rs
 // (no pair: json.rs is the host's JSON, ported for the records' tags)
 
 use super::*;

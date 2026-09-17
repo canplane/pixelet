@@ -1,4 +1,4 @@
-// xpute_core/sched/quantum.rs
+// xpute-core/sched/quantum.rs
 
 //! The central scheduler's grant: the outermost of the scheduler's three
 //! levels.

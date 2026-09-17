@@ -1,4 +1,4 @@
-// xpute_core/kit/fdlibm.test.rs
+// xpute-core/kit/fdlibm.test.rs
 // (no pair: fdlibm.rs is JavaScript's Math, ported)
 
 use super::*;

@@ -1,7 +1,7 @@
 // script/vector/pxl/shared/spec/space/indexer.ts
 //
 // Every level helper over addresses on both sides of every seam, and
-// SPAN_CENTER at every shift, for crates/pxl/shared/src/spec/space/indexer.test.rs.
+// SPAN_CENTER at every shift, for crates/pxl/spec/src/space/indexer.test.rs.
 
 import * as ix from "@pxl/shared/spec/space/indexer.ts";
 import { ivec, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";

@@ -1,4 +1,4 @@
-// xpute_core/sched/task.rs
+// xpute-core/sched/task.rs
 
 //! The executor a guest's tasks run on, installed once, the way a global
 //! allocator is: `Executor` is the interface, as `GlobalAlloc` is; the module

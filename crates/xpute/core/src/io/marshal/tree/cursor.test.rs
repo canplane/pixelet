@@ -1,4 +1,4 @@
-// xpute_core/io/marshal/tree/cursor.test.rs
+// xpute-core/io/marshal/tree/cursor.test.rs
 // (no pair: the TypeScript tree has no test file)
 
 use super::*;

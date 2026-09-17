@@ -1,4 +1,4 @@
-// xpute_core/sys/mem.test.rs
+// xpute-core/sys/mem.test.rs
 
 use super::*;
 
