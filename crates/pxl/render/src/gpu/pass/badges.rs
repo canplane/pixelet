@@ -110,6 +110,19 @@ fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
+// ---- a label (crates/pxl/kernel/src/layer/marker/frame_gizmo.rs) ----
+
+const LABEL_FONT: &str = concat!("400 10px ", font_family!());
+const LABEL_H: f32 = 12.0;
+
+fn label<'a>(p: &mut Paint<'a>, text: &'a str, logical_w: f32) {
+    p.font(LABEL_FONT);
+    p.text_align(CENTER);
+    p.text_baseline(MIDDLE);
+    p.fill_style("#000");
+    p.fill_text(text, logical_w / 2.0, LABEL_H / 2.0);
+}
+
 // ---- a speech bubble (crates/pxl/kernel/src/layer/character/chat_bubble.rs) ----
 
 const BUBBLE_FONT: &str = concat!("600 14px ", font_family!());
@@ -277,6 +290,7 @@ impl BadgePass {
                 DrawSpec::PoiBadge { icon, color, name, logical_w } => place(&mut p, icon, color, name, *logical_w as f32),
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
+                DrawSpec::Text { text, logical_w } => label(&mut p, text, *logical_w as f32),
             }
             p.restore();
             p.run(g);

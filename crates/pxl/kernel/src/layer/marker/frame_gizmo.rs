@@ -5,12 +5,14 @@
 //! centre corners, and the two frames' gyro rings — one fixed to the screen
 //! whatever the azimuth, one turning with the map so its vertex points north —
 //! as line segments the kernel holds and the renderer draws over everything
-//! (the second half), with labels at points the shell projects and shows as
-//! DOM over the canvas. The map's part is rebuilt when
-//! the map moves, the frames' part when the view does; both go to the kernel
-//! as one set.
+//! (the second half), with labels at points drawn as billboards: a line of
+//! text a label in the one sheet (layer/billboard/sheet.rs), one set standing
+//! where the lines do. The map's part is rebuilt when the map moves, the
+//! frames' part when the view does; both go to the kernel as one set.
 
+use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
+use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L1_IDX_IN_L4, L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -20,9 +22,12 @@ use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
 use xpute_core::kit::mat4::{mat4_transform_point, Mat4, Vec3};
 
+use crate::layer::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
+use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
 use crate::layer::terrain::store::tile_pages;
 use crate::sys::global::Global;
+use crate::sys::host::measure_text;
 use crate::sys::kernel::kernel;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
@@ -35,6 +40,11 @@ const GAP: f64 = 0.2;
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
+/// A label's text, as the view paints it (gpu/pass/badges.rs's LABEL_FONT and
+/// LABEL_H): the width is measured here at the same font.
+const LABEL_FONT_PX: u32 = 10;
+const LABEL_H: f64 = 12.0;
+const LABEL_PAD_X: f64 = 2.0;
 
 /// A label, at a point of the root frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -240,9 +250,92 @@ struct Gizmos {
     built_for: Option<(PVF3, IVec, u32, [f64; 4])>,
     drawn: Sketch,
     shown: bool,
+    /// The labels' billboard set, and each drawn label's slot of the sheet
+    /// with its logical width, in the sketch's order; a label the sheet had
+    /// no room for has NO_SLOT.
+    set: Option<u32>,
+    slots: Vec<(i32, f64)>,
+    /// The sheet's generation the instances were written against: a repack
+    /// moves every rectangle, and the instances are written again.
+    written: Option<u32>,
 }
 
 static GIZMOS: Global<Gizmos> = Global::new();
+
+fn gizmos() -> &'static mut Gizmos {
+    GIZMOS.get(|| Gizmos {
+        built_for: None,
+        drawn: Sketch::default(),
+        shown: false,
+        set: None,
+        slots: Vec::new(),
+        written: None,
+    })
+}
+
+/// Lets the labels' set and slots go.
+fn drop_labels(g: &mut Gizmos) {
+    if let Some(set) = g.set.take() {
+        remove_billboard_set(set);
+    }
+    for (slot, _) in g.slots.drain(..) {
+        if slot != NO_SLOT {
+            billboard_sheet().release(slot as u32);
+        }
+    }
+    g.written = None;
+}
+
+/// Paints the drawn sketch's labels into the sheet and stands their set at
+/// `origin`; the instances follow on the next `write_labels`.
+fn make_labels(g: &mut Gizmos, origin: V3) {
+    drop_labels(g);
+    if g.drawn.labels.is_empty() {
+        return;
+    }
+    let font = format!("{FONT_WEIGHT_REGULAR} {LABEL_FONT_PX}px {FONT_FAMILY}");
+    let sheet = billboard_sheet();
+    for label in &g.drawn.labels {
+        let logical_w = measure_text(&font, &label.text).ceil() + LABEL_PAD_X * 2.0;
+        let slot = sheet.add(logical_w * DPR_MAX, LABEL_H * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
+        g.slots.push((slot, logical_w));
+    }
+    let set = new_billboard_set(BILLBOARD_ORDER::debug);
+    place_billboard_set(set, origin);
+    g.set = Some(set);
+}
+
+/// Writes the labels' instances, once per sheet generation: each label's
+/// point, its logical size, its rectangle of the sheet, centred on the point.
+fn write_labels(g: &mut Gizmos) {
+    let Some(set) = g.set else { return };
+    let sheet = billboard_sheet();
+    let generation = sheet.sheet_generation();
+    if g.written == Some(generation) {
+        return;
+    }
+    g.written = Some(generation);
+    let mut lane: Vec<f32> = Vec::with_capacity(g.slots.len() * 10);
+    for (label, &(slot, logical_w)) in g.drawn.labels.iter().zip(&g.slots) {
+        if slot == NO_SLOT {
+            continue;
+        }
+        let s = slot as u32;
+        lane.extend_from_slice(&[
+            label.at[0] as f32,
+            label.at[1] as f32,
+            label.at[2] as f32,
+            logical_w as f32,
+            LABEL_H as f32,
+            sheet.u0(s) as f32,
+            sheet.v0(s) as f32,
+            sheet.u1(s) as f32,
+            sheet.v1(s) as f32,
+            0.5,
+        ]);
+    }
+    write_billboard_set(set, &lane);
+}
 
 fn set_lines(at: V3, vertices: &[f32]) {
     let k = kernel();
@@ -261,14 +354,11 @@ fn set_lines(at: V3, vertices: &[f32]) {
 /// The gizmos' turn, while `show` is on: the set rebuilt when the map or the
 /// view moved, and gone when `show` turns off.
 pub fn debug_gizmos_step(show: bool, map_center: Option<PVF3>, map_origin: IVec) {
-    let g = GIZMOS.get(|| Gizmos {
-        built_for: None,
-        drawn: Sketch::default(),
-        shown: false,
-    });
+    let g = gizmos();
     let Some(center) = map_center.filter(|_| show) else {
         if g.shown {
             set_lines([0.0; 3], &[]);
+            drop_labels(g);
             g.shown = false;
             g.built_for = None;
             g.drawn = Sketch::default();
@@ -278,31 +368,24 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<PVF3>, map_origin: IVec)
     let v = view();
     let key = (center, map_origin, tile_pages().revision(), [v.azimuth, v.tx, v.ty, v.tz]);
     if g.built_for == Some(key) {
+        write_labels(g);
         return;
     }
     g.built_for = Some(key);
     let mut s = sketch_map(&center, map_origin);
     sketch_frames(&mut s);
-    set_lines(
-        [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))],
-        &s.vertices,
-    );
+    let origin = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
+    set_lines(origin, &s.vertices);
     g.drawn = s;
     g.shown = true;
+    make_labels(g, origin);
+    write_labels(g);
     request_world_tick();
 }
 
-/// The labels of the drawn sketch, for the shell to project each frame.
+/// The labels of the drawn sketch.
 pub fn debug_labels() -> &'static [Label] {
-    GIZMOS
-        .get(|| Gizmos {
-            built_for: None,
-            drawn: Sketch::default(),
-            shown: false,
-        })
-        .drawn
-        .labels
-        .as_slice()
+    gizmos().drawn.labels.as_slice()
 }
 
 // ---- the gizmos as the kernel holds them ----
