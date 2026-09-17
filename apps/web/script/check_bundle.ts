@@ -42,8 +42,11 @@ const DEV_MARKERS = ["dev/test", "development"];
  *
  * These have to be literals that survive minification, not paths the app
  * composes at runtime: `/api/tiles` is built from a template literal that
- * esbuild leaves unfolded, so it never appears contiguously. */
-const SENTINELS = ['"/api"', "_ocean"];
+ * esbuild leaves unfolded, so it never appears contiguously. The shell's
+ * sentinel is looked for in the JavaScript, the kernel's in its module: the
+ * terrain's page names are the kernel's (layer/terrain/tile_repository.rs). */
+const SENTINELS = ['"/api"'];
+const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
   if (o !== null && typeof o === "object") {
@@ -67,12 +70,26 @@ async function read_bundle(): Promise<string> {
   return out;
 }
 
-const bundle = await read_bundle();
+/** The kernel's module, as bytes read one to a character: its string data
+ * lies in it uncompressed. */
+async function read_kernel(): Promise<string> {
+  const modules: string[] = [];
+  for await (const entry of Deno.readDir(`${DIST}/assets`)) {
+    if (entry.isFile && entry.name.endsWith(".wasm")) modules.push(entry.name);
+  }
+  if (modules.length !== 1) throw new Error(`expected one kernel module under ${DIST}/assets, found ${modules.length}`);
+  return new TextDecoder("latin1").decode(await Deno.readFile(`${DIST}/assets/${modules[0]}`));
+}
 
-for (const s of SENTINELS) {
-  if (!bundle.includes(s)) {
-    console.error(`[check_bundle] sentinel ${JSON.stringify(s)} missing — the bundle is not what this expects, so a pass would mean nothing`);
-    Deno.exit(1);
+const bundle = await read_bundle();
+const kernel = await read_kernel();
+
+for (const [where, text, sentinels] of [["bundle", bundle, SENTINELS], ["kernel", kernel, KERNEL_SENTINELS]] as const) {
+  for (const s of sentinels) {
+    if (!text.includes(s)) {
+      console.error(`[check_bundle] sentinel ${JSON.stringify(s)} missing from the ${where} — the build is not what this expects, so a pass would mean nothing`);
+      Deno.exit(1);
+    }
   }
 }
 
