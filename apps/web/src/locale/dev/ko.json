@@ -1,9 +1,9 @@
 {
   "settings": {
     "display": {
-      "show_structures": {
-        "label": "건물 표시",
-        "description": "지형 위에 건물을 그릴지 설정합니다."
+      "show_poi": {
+        "label": "장소 표시",
+        "description": "지도 위에 주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
       }
     },
     "camera": {

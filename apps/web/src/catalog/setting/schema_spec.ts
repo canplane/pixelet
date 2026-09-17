@@ -35,6 +35,7 @@ export const SETTINGS = {
     default: true,
     section: "display",
     cost: "low",
+    dev: true,
   },
   /** Procedurally scattered decor only; what the player placed stays. */
   show_decor: {
@@ -49,7 +50,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: true,
     section: "display",
-    dev: true,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a map view is expected to

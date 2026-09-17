@@ -37,7 +37,8 @@ pub mod SETTINGS {
         pub const default: bool = true;
         pub const section: &str = "display";
         pub const cost: &str = "low";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
+        pub const dev: bool = true;
+        pub const KEYS: &[&str] = &["kind", "default", "section", "cost", "dev"];
     }
     /// Procedurally scattered decor only; what the player placed stays.
     pub mod show_decor {
@@ -53,8 +54,7 @@ pub mod SETTINGS {
         pub const kind: &str = "toggle";
         pub const default: bool = true;
         pub const section: &str = "display";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
+        pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to

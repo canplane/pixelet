@@ -1,9 +1,9 @@
 {
   "settings": {
     "display": {
-      "show_structures": {
-        "label": "Render Buildings",
-        "description": "Toggles whether buildings are rendered on top of the terrain."
+      "show_poi": {
+        "label": "Show Places",
+        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
       }
     },
     "camera": {

@@ -17,13 +17,13 @@
     "display": {
       "section_title": "Display",
       "section_caption": "What the world shows",
-      "show_poi": {
-        "label": "Show Places",
-        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
-      },
       "show_decor": {
         "label": "Scattered decor",
         "description": "Draws the trees and vehicles scattered procedurally over the terrain. Anything you placed yourself stays either way."
+      },
+      "show_structures": {
+        "label": "Render Buildings",
+        "description": "Toggles whether buildings are rendered on top of the terrain."
       }
     },
     "camera": {
