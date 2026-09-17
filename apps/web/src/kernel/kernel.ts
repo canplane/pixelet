@@ -363,7 +363,7 @@ async function load_image(load: number): Promise<void> {
   request_frame();
 }
 
-// ---- sensors (crates/pxl/kernel/src/module/device/pose) ----
+// ---- sensors (crates/pxl/kernel/src/control/sensor) ----
 
 let geolocation_watch: number | null = null;
 

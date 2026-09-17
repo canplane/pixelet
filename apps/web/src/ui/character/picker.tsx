@@ -8,13 +8,10 @@ import { CharacterPreview } from "@/ui/character/preview.tsx";
 import { kernel_action, useKernel } from "@/kernel/kernel.ts";
 import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/catalog/character/variant.ts";
 
-// Moved out of app/setting/section/ (2026-09-07): person/pet variant is a
-// companion *appearance* pick, not a setting you configure once and forget —
+// Not a setting: person/pet variant is a companion *appearance* pick, the
 // same "which of these do I want equipped" shape as a cube color or decor
-// kind, just always-on-one-of-each instead of placed-many. It now lives in
-// drawer_modal.tsx's own Character tab, and this file moved alongside the
-// rest of the character world module (preview.tsx, companion.tsx)
-// since it's no longer a settings-modal-specific component.
+// kind, just always-on-one-of-each instead of placed-many — so it lives in
+// drawer_modal.tsx's Character tab rather than the settings sheet.
 
 // Every chip in this component — gender, person variant, pet variant alike —
 // shares this exact class, not just a visually-similar one, since the point

@@ -195,7 +195,7 @@ pub fn load_rejected(load: Load) {
 // and the instances placed in the world that animate it.
 //
 // A model is parsed from bytes the shell fetches — the core does not read
-// files. Its mesh is one block of the mesh section in a layout a draw reads
+// files. Its mesh is one heap block in a layout a draw reads
 // lane by lane (positions, normals, UVs, four joints and four weights a
 // vertex, then the indices); its skeleton is each joint's parent, its rest
 // pose and its inverse bind matrix, the vertices already in the space the

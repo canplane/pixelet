@@ -57,7 +57,7 @@ function build_number(): string {
 
 /**
  * `virtual:pxl-build` — what a build is: when it was built, which source,
- * which official number (lib/env/config.ts reads it). A module rather than
+ * which official number (config/deploy.ts reads it). A module rather than
  * `define` constants so that a dev server gives every page load the values
  * as they are then, not as they were when the server started: the module is
  * dropped from the graph on each navigation and computed again on import,

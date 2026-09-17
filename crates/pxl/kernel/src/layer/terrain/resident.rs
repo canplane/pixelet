@@ -10,9 +10,9 @@
 //! Either way the record is overwritten where it lies.
 //!
 //! That leaves one thing to keep: which page a record carries, so the store can
-//! let go of a page whose bytes have been taken from under it. It replaces the
-//! quarantine the pool needed — a released block could be handed to a different
-//! page and written while an old reader still held it, and an address that is a
+//! let go of a page whose bytes have been taken from under it. No quarantine is
+//! needed: an allocated block, once released, could be handed to a different
+//! page and written while an old reader still held it, but an address that is a
 //! page's own coordinate cannot be handed to anyone else.
 
 use pxl_spec::space::pvf3::ivec::IVec;

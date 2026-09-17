@@ -60,12 +60,12 @@ function frame_at(w: Float64Array, o: number): Frame {
     poi_count: at(FRAME.poi_count),
     textures_mb: { depth: at(FRAME.tex_depth), msaa: at(FRAME.tex_msaa), shadow: at(FRAME.tex_shadow), layers: at(FRAME.tex_layers) },
     census: CENSUS_TAGS.map((_, k) => [at(FRAME.census + 2 * k), at(FRAME.census + 2 * k + 1)] as [number, number]),
-    pool: {
-      used_mb: at(FRAME.pool_used_mb),
-      live_mb: at(FRAME.pool_live_mb),
-      range_mb: at(FRAME.pool_range_mb),
-      refusals: at(FRAME.pool_refusals),
-      largest_free_mb: at(FRAME.pool_largest_free_mb),
+    heap: {
+      used_mb: at(FRAME.heap_used_mb),
+      live_mb: at(FRAME.heap_live_mb),
+      range_mb: at(FRAME.heap_range_mb),
+      refusals: at(FRAME.heap_refusals),
+      largest_free_mb: at(FRAME.heap_largest_free_mb),
     },
     rings: { cq_peak: at(FRAME.ring_cq_peak), spill_peak: at(FRAME.ring_spill_peak) },
     mounts: { added: at(FRAME.mounts_added), removed: at(FRAME.mounts_removed), layouts: at(FRAME.mounts_layouts) },

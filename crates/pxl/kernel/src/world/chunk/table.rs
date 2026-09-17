@@ -58,21 +58,21 @@ const MAX_RELEASES_PER_FRAME: u32 = 2;
 const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 /// Off-screen chunks that may give their built work back in one frame, and
 /// how many more when a block was refused this frame: a refusal is a build
-/// on screen going nowhere, and the pool has no spill to fall back on.
+/// on screen going nowhere, and the heap has no spill to fall back on.
 const MAX_RECLAIMS_PER_FRAME: u32 = 16;
 const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 /// Chunks mounted in one frame: a page comes into range as 256, and the
 /// chunk nodes make a node for each, which is a frame's worth of work.
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
-/// The mesh section's live share past which off-screen chunks are reclaimed
+/// The heap's live share past which off-screen chunks are reclaimed
 /// whatever the retain budget says.
-const MESH_PRESSURE: f64 = 0.9;
+const HEAP_PRESSURE: f64 = 0.9;
 /// Tiers one chunk may keep: the active pair, the off-screen tier, and one
 /// of hysteresis.
 const MAX_CACHED_TIERS: usize = 4;
 /// A wait halves a chunk's distance key every this many milliseconds.
 const AGE_HALF_MS: f64 = 4000.0;
-/// The byte budget, paid in LOD: when the pool refuses a block and reclaim
+/// The byte budget, paid in LOD: when the heap refuses a block and reclaim
 /// found nothing to give back, the ladder is pulled in a step (the module's
 /// pressure) and the set on screen gets coarser until it fits; a step at
 /// most this often, so the coarser layouts have time to land and free
@@ -622,7 +622,7 @@ impl Scheduler {
     /// scan and the bake slot first, advanced for what is left of the turn's
     /// quota and at least one step, and the chunks a tier landed on
     /// committed. Whether any did work; none did when all are built, blocked,
-    /// or a block was refused — the pool is the same until the next tick
+    /// or a block was refused — the heap is the same until the next tick
     /// reclaims.
     pub fn build_step(&mut self, world: &mut World, budget_ms: f64, emit: &mut impl FnMut(Event)) -> bool {
         let mem = world_mem(world);
@@ -955,7 +955,7 @@ impl Scheduler {
         let pending_total = (visible.len() + offscreen.len()) as u32;
         // A commit on screen may build decor, and a block refused ends the
         // commits this tick as it ends the builds (Builder::tick_capped):
-        // the pool is the same until reclaim, and the decor is scattered
+        // the heap is the same until reclaim, and the decor is scattered
         // before its block is asked for.
         let starved = self.builder.stat.starved;
         let mut committed = under_budget(visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| {
@@ -1366,17 +1366,16 @@ impl Scheduler {
         true
     }
 
-    /// The retain budget: off-screen built work past it, or the mesh section
-    /// past MESH_PRESSURE, is given back farthest first. A block refused
-    /// since the last pass is pressure too, whatever the numbers say: the
-    /// section has room in bytes but not in one piece, and what gives it
+    /// The retain budget: off-screen built work past it, or the heap past
+    /// HEAP_PRESSURE, is given back farthest first. A block refused since the
+    /// last pass is pressure too, whatever the numbers say: the heap has room in bytes but not in one piece, and what gives it
     /// back in pieces that join is the off-screen work, farthest first.
     fn reclaim(&mut self, world: &mut World, order: &[usize], emit: &mut impl FnMut(Event)) -> u32 {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
         let refused = self.builder.stat.starved != self.refused_seen;
         self.refused_seen = self.builder.stat.starved;
         self.refused_last = refused;
-        let pressed = mesh_pressed;
+        let pressed = heap_pressed;
         let cap = if refused { MAX_RECLAIMS_WHEN_REFUSED } else { MAX_RECLAIMS_PER_FRAME };
         let mut freed = 0;
         // The order already puts off-screen chunks farthest first.
@@ -1481,7 +1480,7 @@ impl Scheduler {
         let pressure = self.ladder.pressure();
         let next = if self.refused_last && freed == 0 && pressure < MAX_PRESSURE && now - self.pressure_at >= PRESSURE_STEP_MS {
             pressure + 1
-        } else if pressure > 0 && now - self.refused_at >= PRESSURE_RELIEF_MS && now - self.pressure_at >= PRESSURE_RELIEF_MS && !mesh_pressed(world) {
+        } else if pressure > 0 && now - self.refused_at >= PRESSURE_RELIEF_MS && now - self.pressure_at >= PRESSURE_RELIEF_MS && !heap_pressed(world) {
             pressure - 1
         } else {
             return;
@@ -1493,9 +1492,9 @@ impl Scheduler {
     }
 }
 
-/// Whether the heap is live past MESH_PRESSURE.
-fn mesh_pressed(_world: &World) -> bool {
-    crate::sys::host::heap_live() as f64 > crate::sys::host::heap_bytes() as f64 * MESH_PRESSURE
+/// Whether the heap is live past HEAP_PRESSURE.
+fn heap_pressed(_world: &World) -> bool {
+    crate::sys::host::heap_live() as f64 > crate::sys::host::heap_bytes() as f64 * HEAP_PRESSURE
 }
 
 /// Ids the scheduler gives the chunks it mounts.

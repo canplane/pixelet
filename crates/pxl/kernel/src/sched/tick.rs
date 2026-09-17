@@ -56,7 +56,7 @@ pub const POLICY: TickPolicy = TickPolicy {
 
 pub const HARD_SLACK_MS: f64 = POLICY.hard_slack_ms;
 
-/// The steps world.rs registers at boot, with room to spare.
+/// The steps sched/turn.rs registers at boot, with room to spare.
 const STEPS: usize = 32;
 
 static TICK: Global<Tick<TickState, STEPS>> = Global::new();

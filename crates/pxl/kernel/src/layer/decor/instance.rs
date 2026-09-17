@@ -77,7 +77,7 @@ impl DecorScratch {
         let instances = Guard::alloc(instance_bytes)?;
         let (groups, _) = alloc((DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32)?;
         let instances = instances.keep();
-        // SAFETY: two blocks of the pool this scratch holds alone and never
+        // SAFETY: two heap blocks this scratch holds alone and never
         // gives back, each DECOR_INSTANCES of its lane's element and aligned
         // past it; the elements are plain numbers, and none is read before a
         // build has written it.

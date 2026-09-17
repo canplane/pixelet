@@ -53,7 +53,7 @@ pub static cell_colors: CellColors = CellColors { cube: &cube_colors };
 // =============================================================================
 // Object-layer codec — cube.rs/decor.rs are pure data (their own top doc
 // comments); the actual encode/decode logic for their shared sparse-tree
-// storage (object/store.ts, apps/web) lives here instead, the one place
+// storage (pxl-kernel's layer/object/store.rs) lives here instead, the one place
 // that already aggregates every cell-definition module together.
 // =============================================================================
 

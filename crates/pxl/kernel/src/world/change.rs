@@ -38,7 +38,7 @@ pub fn world_changes() -> &'static mut ChangeLog {
     &mut kernel().changes
 }
 
-/// The tasks the kernel spawns (world.rs's `world_tasks`), with room: the
+/// The tasks the kernel spawns (sched/turn.rs's `world_tasks`), with room: the
 /// edge parks each at most once, and an executor sizes its pool by it.
 pub const TASKS: usize = 8;
 

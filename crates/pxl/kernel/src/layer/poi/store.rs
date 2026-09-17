@@ -49,9 +49,8 @@ pub fn clear_pois(page_idx: IVec) {
     }
 }
 
-/// Gives a page's block back, with the page. The mesh section holds it: POI
-/// is disconnected until its per-page index is rewritten (issue/BACKLOG.md),
-/// and the page section is `.fixed.terrain` now.
+/// Gives a page's heap block back, with the page. POI is disconnected until
+/// its per-page index is rewritten (issue/BACKLOG.md).
 fn release(held: ResidentPoiPage) {
     if let Some(block) = held.block {
         // SAFETY: the page's own block, taken when it arrived.

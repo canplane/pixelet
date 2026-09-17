@@ -41,7 +41,7 @@ struct Store {
     /// variants' assets arrive: the snapshot is the store itself.
     entries: [DecorBundleAssets; 4],
     /// Set when a model or a skin arrives or fails, and kept while a model the
-    /// mesh pool refused is still waiting for room.
+    /// heap refused is still waiting for room.
     arrived: bool,
 }
 
@@ -120,7 +120,7 @@ pub async fn decor_asset_task() {
     loop {
         notified(wanted).await;
         store().arrived = false;
-        // A model the mesh pool had no room for: the flag is set again, and
+        // A model the heap had no room for: the flag is set again, and
         // the frame after — which may have room — asks again.
         let mut refused = false;
         for b in 0..store().entries.len() {

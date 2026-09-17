@@ -7,7 +7,7 @@
  * The kernel sends a number and never the words (@pxl/shared/spec/message.ts
  * says why). This is the one place that knows which words a number stands
  * for, and it is here rather than beside the enum because the words are the
- * shell's: bootstrap/locale holds them, in every language.
+ * shell's: locale/ holds them, in every language.
  */
 
 import { Message } from "@pxl/shared/spec/message.ts";
