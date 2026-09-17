@@ -169,15 +169,17 @@ pub mod SETTINGS {
         pub const dev: bool = true;
         pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
     }
-    pub mod person_variant_key {
-        pub const kind: &str = "text";
-        pub const default: &str = "female-2";
+    pub mod person_variant {
+        pub const kind: &str = "number";
+        /// female-2, by its number in variant.json's person keys.
+        pub const default: u8 = 1;
         pub const section: &str = "character";
         pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
-    pub mod pet_variant_key {
-        pub const kind: &str = "text";
-        pub const default: &str = "chick";
+    pub mod pet_variant {
+        pub const kind: &str = "number";
+        /// chick, by its number in variant.json's pet keys.
+        pub const default: u8 = 5;
         pub const section: &str = "character";
         pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
@@ -197,7 +199,7 @@ pub mod SETTINGS {
         "show_debug_objects",
         "show_ledger",
         "pixel_dither",
-        "person_variant_key",
-        "pet_variant_key",
+        "person_variant",
+        "pet_variant",
     ];
 }

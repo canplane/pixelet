@@ -12,29 +12,28 @@
 //! walker's own draws of the same variant are not mistaken for it, at one unit
 //! tall: the case compares silhouettes side by side, not relative scale.
 
-use std::collections::HashMap;
-
+use pxl_shared::asset::ingested::Asset;
 use pxl_shared::spec::space::pvf3::ivec;
 
-use super::variant::{CharacterVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS};
+use super::variant::{character_variant, CharacterGroup, CharacterVariant};
+use super::variant_spec::IDLE_CLIP;
 use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::get_local_world_origin;
-use crate::module::world::gltf_cache::{load_gltf, load_image};
+use crate::module::world::gltf_cache::{load_gltf, load_image, Load};
 use crate::module::world::sched::tick::TickContext;
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
 use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
-const IDLE_CLIP: &str = "idle";
 /// How far below the map origin a case's actor stands: past any terrain, and
 /// past the fog, so the world never draws it.
 const CASE_DEPTH_U: f64 = 100_000.0;
 
 struct Case {
     id: u32,
-    variant: &'static CharacterVariant,
+    variant: CharacterVariant,
     actor: Option<u32>,
     model: Option<ModelHandle>,
     skin: Option<u32>,
@@ -43,8 +42,8 @@ struct Case {
 
 struct Cases {
     cases: Vec<Case>,
-    /// The cases' own registration of a model, one unit tall, by URL.
-    models: HashMap<String, Option<ModelHandle>>,
+    /// The cases' own registration of a model, one unit tall, by asset.
+    models: Vec<(Asset, Option<ModelHandle>)>,
 }
 
 static CASES: Global<Cases> = Global::new();
@@ -52,19 +51,15 @@ static CASES: Global<Cases> = Global::new();
 fn cases() -> &'static mut Cases {
     CASES.get(|| Cases {
         cases: Vec::new(),
-        models: HashMap::new(),
+        models: Vec::new(),
     })
 }
 
-fn variant_of(key: &str) -> Option<&'static CharacterVariant> {
-    PET_VARIANTS().iter().chain(PERSON_VARIANTS_FEMALE()).chain(PERSON_VARIANTS_MALE()).find(|v| v.key == key)
-}
-
-/// Opens case `id` over the variant named `key`; a case already open under
+/// Opens case `id` over variant `number` of `group`; a case already open under
 /// `id` is replaced.
-pub fn preview_open(id: u32, key: &str) -> bool {
+pub fn preview_open(id: u32, group: CharacterGroup, number: u8) -> bool {
     preview_close(id);
-    let Some(variant) = variant_of(key) else { return false };
+    let Some(variant) = character_variant(group, number) else { return false };
     cases().cases.push(Case {
         id,
         variant,
@@ -103,25 +98,25 @@ pub fn preview_step(ctx: &mut TickContext) {
     let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
     for case in &mut c.cases {
         if case.model.is_none() {
-            let url = &case.variant.model_url;
-            case.model = match c.models.get(url) {
-                Some(handle) => handle.clone(),
-                None => load_gltf(url).and_then(|gltf| {
+            let asset = case.variant.model;
+            case.model = match c.models.iter().find(|(a, _)| *a == asset) {
+                Some((_, handle)) => handle.clone(),
+                None => load_gltf(Load::Asset(asset)).and_then(|gltf| {
                     let handle = register_model(&gltf, Some(1.0));
-                    c.models.insert(url.clone(), handle.clone());
+                    c.models.push((asset, handle.clone()));
                     handle
                 }),
             };
         }
         if case.skin.is_none() {
-            case.skin = load_image(&case.variant.skin_url);
+            case.skin = load_image(Load::Asset(case.variant.skin));
         }
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, case.skin) {
                 let id = model.model;
                 case.actor = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, id)).flatten();
-                if let (Some(actor), Some(&idle)) = (case.actor, model.clips.get(IDLE_CLIP)) {
-                    kernel().sched.models.play(actor, idle, 0.0);
+                if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
+                    kernel().sched.models.play(actor, IDLE_CLIP, 0.0);
                 }
             }
         }

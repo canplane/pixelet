@@ -34,6 +34,8 @@ import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "npm:sharp@0.33";
 
+import { cube_types } from "@pxl/shared/spec/cell/cube_type.ts";
+
 import { render_rust_table, render_table, type Sheet } from "../table.ts";
 
 const ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
@@ -232,7 +234,7 @@ async function ingest_sheet(rows: Ingested[]): Promise<Sheet> {
 const rows = await ingest();
 const sheet = await ingest_sheet(rows);
 await Deno.writeTextFile(TABLE_PATH, render_table(rows, sheet));
-await Deno.writeTextFile(RUST_TABLE_PATH, render_rust_table(rows, sheet));
+await Deno.writeTextFile(RUST_TABLE_PATH, render_rust_table(rows, sheet, cube_types));
 const total = rows.reduce((n, r) => n + r.bytes, 0);
 console.log(
   `[ingest] ${rows.length} assets, ${(total / 1024 / 1024).toFixed(1)} MiB, sheet ${sheet.tiles.length} tiles ${(sheet.bytes / 1024).toFixed(0)} KiB -> ${

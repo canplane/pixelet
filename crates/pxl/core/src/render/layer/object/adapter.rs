@@ -40,6 +40,15 @@ pub struct Paint {
     pub refused: bool,
 }
 
+/// Where a step of a paint got to.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Painted {
+    /// The entry the next step starts at.
+    More(usize),
+    Done,
+    Refused,
+}
+
 /// A column's entries painted as voxels of a chunk volume.
 pub struct Painter {
     kinds: Vec<Kind>,
@@ -116,43 +125,77 @@ impl Painter {
     /// not the composite that was asked for anyway.
     #[allow(clippy::too_many_arguments)]
     pub fn paint(&mut self, store: &Store, volumes: &mut Volumes, volume: usize, col_idx: IVec, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
-        self.claimed.clear();
+        let mut claimed = core::mem::take(&mut self.claimed);
+        claimed.clear();
         let mut any = false;
-        if let Some(&cpos) = store.chunk_at.get(&col_idx) {
-            let chunk = &store.chunks[cpos as usize];
-            for k in 0..chunk.e_band.len() {
-                let (band, pos, state) = (chunk.e_band[k], chunk.e_pos[k], chunk.e_state[k]);
-                if hide == Some((band, pos)) {
-                    continue;
-                }
-                let x = pos & POS_MASK;
-                let y = (pos >> POS_BITS) & POS_MASK;
-                let z = (pos >> (2 * POS_BITS)) & POS_MASK;
-                let level = (pos >> (3 * POS_BITS)) as i32 + MIN_LEVEL;
-                let lx = x as f64 * STEP_UNITS;
-                let ly = y as f64 * STEP_UNITS;
-                let lz = band as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
-                let size = (2.0f64).powi(level);
-                if !self.paint_entry(volumes, volume, lx, ly, lz, size, state, &mut any) {
-                    return Paint { any, refused: true };
-                }
-            }
+        let mut refused = matches!(self.paint_entries(store, volumes, volume, col_idx, hide, 0, usize::MAX, &mut claimed, &mut any), Painted::Refused);
+        if !refused {
+            refused = !self.paint_carve(volumes, volume, carve, &mut claimed, &mut any);
         }
-        if let Some(c) = carve {
-            if !self.paint_entry(volumes, volume, c.lx, c.ly, c.lz, c.size, AIR, &mut any) {
-                return Paint { any, refused: true };
-            }
-        }
-        Paint { any, refused: false }
+        self.claimed = claimed;
+        Paint { any, refused }
     }
 
-    /// One entry at a corner relative to the column's base. False when a
-    /// paint was refused.
+    /// Paints the column's entries from the `from`th, until the voxels set
+    /// pass `voxels`, with the claims of the paint they continue: a paint
+    /// cut into steps, each bounded by `voxels` and one entry past it — an
+    /// entry sets at most a band's cells. The carve preview is not an entry;
+    /// `paint_carve` ends the paint.
     #[allow(clippy::too_many_arguments)]
-    fn paint_entry(&mut self, volumes: &mut Volumes, volume: usize, lx: f64, ly: f64, lz: f64, size: f64, state: u32, any: &mut bool) -> bool {
+    pub fn paint_entries(
+        &self,
+        store: &Store,
+        volumes: &mut Volumes,
+        volume: usize,
+        col_idx: IVec,
+        hide: Option<(i32, u32)>,
+        from: usize,
+        voxels: usize,
+        claimed: &mut BTreeSet<u32>,
+        any: &mut bool,
+    ) -> Painted {
+        let Some(&cpos) = store.chunk_at.get(&col_idx) else { return Painted::Done };
+        let chunk = &store.chunks[cpos as usize];
+        let mut set = 0;
+        for k in from..chunk.e_band.len() {
+            if set >= voxels {
+                return Painted::More(k);
+            }
+            let (band, pos, state) = (chunk.e_band[k], chunk.e_pos[k], chunk.e_state[k]);
+            if hide == Some((band, pos)) {
+                continue;
+            }
+            let x = pos & POS_MASK;
+            let y = (pos >> POS_BITS) & POS_MASK;
+            let z = (pos >> (2 * POS_BITS)) & POS_MASK;
+            let level = (pos >> (3 * POS_BITS)) as i32 + MIN_LEVEL;
+            let lx = x as f64 * STEP_UNITS;
+            let ly = y as f64 * STEP_UNITS;
+            let lz = band as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
+            let size = (2.0f64).powi(level);
+            match self.paint_entry(volumes, volume, lx, ly, lz, size, state, claimed, any) {
+                Some(n) => set += n + 1,
+                None => return Painted::Refused,
+            }
+        }
+        Painted::Done
+    }
+
+    /// The carve preview painted as air, last. False when a paint was refused.
+    pub fn paint_carve(&self, volumes: &mut Volumes, volume: usize, carve: Option<Carve>, claimed: &mut BTreeSet<u32>, any: &mut bool) -> bool {
+        match carve {
+            Some(c) => self.paint_entry(volumes, volume, c.lx, c.ly, c.lz, c.size, AIR, claimed, any).is_some(),
+            None => true,
+        }
+    }
+
+    /// One entry at a corner relative to the column's base: the voxels it
+    /// set, or none when a paint was refused.
+    #[allow(clippy::too_many_arguments)]
+    fn paint_entry(&self, volumes: &mut Volumes, volume: usize, lx: f64, ly: f64, lz: f64, size: f64, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
         let kind = self.kind(state);
         if kind == Kind::Decor || kind == Kind::Untaught {
-            return true;
+            return Some(0);
         }
         let is_sub_cell = size < U_PER_CELL;
         let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { round_half_up(v / U_PER_CELL) };
@@ -160,7 +203,7 @@ impl Painter {
         let cy0 = cell_of(ly).max(0.0) as u32;
         let z = cell_of(lz) as i32;
         if cx0 >= BAND_CELLS || cy0 >= BAND_CELLS {
-            return true;
+            return Some(0);
         }
         let sz_cells = (round_half_up(size / U_PER_CELL) as u32).max(1);
         let cx1 = (cx0 + sz_cells).min(BAND_CELLS);
@@ -185,17 +228,17 @@ impl Painter {
                 let address = voxel_address(cx, cy, z);
                 *any = true;
                 let at = Cell { cx, cy, z };
-                let ok = if self.claimed.contains(&address) && !is_air {
+                let ok = if claimed.contains(&address) && !is_air {
                     volumes.append_sub_voxel(volume, at, v)
                 } else {
-                    self.claimed.insert(address);
+                    claimed.insert(address);
                     volumes.set_voxel(volume, at, v)
                 };
                 if !ok {
-                    return false;
+                    return None;
                 }
             }
         }
-        true
+        Some(((cx1 - cx0) * (cy1 - cy0)) as usize)
     }
 }

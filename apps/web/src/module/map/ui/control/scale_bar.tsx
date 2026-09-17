@@ -12,7 +12,8 @@ const SCALE_BAR_PAD_PX = 3;
 
 export function MapScaleBar() {
   const { t } = useTranslation();
-  const { bar_width_px, is_default_zoom, label } = useKernel((s) => s.scale_bar);
+  const { total_meters, bar_width_px, is_default_zoom } = useKernel((s) => s.scale_bar);
+  const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
   const reset_dist = () => kernel_action({ type: "reset_dist" });
 
   return (

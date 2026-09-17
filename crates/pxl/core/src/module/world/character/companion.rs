@@ -23,21 +23,20 @@
 //! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
 //! both CC0, both real glTF.
 
-use std::collections::HashMap;
-
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 
 use super::chat_bubble::chat_bubble_step;
 use super::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use super::store::companion_load_store;
-use super::variant::{find_person_variant, find_pet_variant, CharacterVariant};
+use super::variant::{character_variant, CharacterGroup, CharacterVariant};
+use super::variant_spec::IDLE_CLIP;
 use crate::app::setting::store::settings_store;
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::damp_alpha;
 use crate::module::camera::store::camera_store;
 use crate::module::world::change::wake_at;
 use crate::module::world::frame::view::view;
-use crate::module::world::gltf_cache::{load_gltf, load_image};
+use crate::module::world::gltf_cache::{load_gltf, load_image, Load};
 use crate::module::world::object::store::objects_revision;
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::surface_height::get_surface_z_at_local;
@@ -47,22 +46,22 @@ use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 
 /// A variant's model in the scheduler, registered once per model and height
-/// whoever asks first; None inside while it failed. By URL, then by height's
+/// whoever asks first; None inside while it failed. By asset, then by height's
 /// bits, so a walker asking every turn while its model is away looks up by
 /// what it already holds.
-type ModelHandles = HashMap<String, Vec<(u64, Option<ModelHandle>)>>;
+type ModelHandles = Vec<(Load, u64, Option<ModelHandle>)>;
 
 static MODEL_HANDLES: Global<ModelHandles> = Global::new();
 
 fn model_for(variant: &CharacterVariant) -> Option<ModelHandle> {
-    let handles = MODEL_HANDLES.get(HashMap::new);
-    let height = variant.height_u.to_bits();
-    if let Some((_, entry)) = handles.get(variant.model_url.as_str()).and_then(|by_height| by_height.iter().find(|(h, _)| *h == height)) {
+    let handles = MODEL_HANDLES.get(Vec::new);
+    let (load, height) = (Load::Asset(variant.model), variant.height_u.to_bits());
+    if let Some((_, _, entry)) = handles.iter().find(|(l, h, _)| *l == load && *h == height) {
         return entry.clone();
     }
-    let gltf = load_gltf(&variant.model_url)?;
+    let gltf = load_gltf(load)?;
     let handle = register_model(&gltf, Some(variant.height_u));
-    handles.entry(variant.model_url.clone()).or_default().push((height, handle.clone()));
+    handles.push((load, height, handle.clone()));
     handle
 }
 
@@ -99,14 +98,6 @@ const FOLLOW_FACING: f64 = core::f64::consts::PI;
 const FOLLOW_WALK_EPS: f64 = 0.03;
 const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
-const IDLE_CLIP: &str = "idle";
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Role {
-    Person,
-    Pet,
-}
-
 struct Held {
     actor: u32,
     model: ModelHandle,
@@ -124,12 +115,13 @@ struct Surface {
 }
 
 struct Walker {
-    variant_key: String,
-    role: Role,
+    /// The variant it walks as: its group, which is also its role, and number.
+    variant: CharacterVariant,
     held: Option<Held>,
     /// Where the walker stands in the root frame and which way it faces.
     pose: [f64; 4],
-    actor_clip: Option<String>,
+    /// The clip the actor plays, by its animation's index.
+    actor_clip: Option<u32>,
     was_follow_mode: bool,
     walk_plan: Option<WalkPlan>,
     settle: SettleTracker,
@@ -145,10 +137,9 @@ struct Walker {
 }
 
 impl Walker {
-    fn new(variant: &CharacterVariant, role: Role, target: Vec2, map_origin: IVec) -> Walker {
+    fn new(variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> Walker {
         Walker {
-            variant_key: variant.key.clone(),
-            role,
+            variant: *variant,
             held: None,
             pose: [0.0; 4],
             actor_clip: None,
@@ -172,9 +163,9 @@ impl Walker {
 
     fn set_ready(&self, ready: bool) {
         let store = companion_load_store();
-        match self.role {
-            Role::Person => store.person_ready = ready,
-            Role::Pet => store.pet_ready = ready,
+        match self.variant.group {
+            CharacterGroup::person => store.person_ready = ready,
+            CharacterGroup::pet => store.pet_ready = ready,
         }
     }
 
@@ -185,7 +176,9 @@ impl Walker {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(skin)) = (model_for(variant), load_image(&variant.skin_url)) else { return };
+        let (Some(model), Some(skin)) = (model_for(variant), load_image(Load::Asset(variant.skin))) else {
+            return;
+        };
         let Some(Some(actor)) = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, model.model)) else {
             return;
         };
@@ -324,11 +317,11 @@ impl Walker {
             a.visible = true;
         }
         let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
-        if self.actor_clip.as_deref() != Some(clip) {
-            if let Some(&index) = held.model.clips.get(clip) {
-                sched.models.play(held.actor, index, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
+        if self.actor_clip != Some(clip) {
+            if clip < held.model.clip_count {
+                sched.models.play(held.actor, clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
             }
-            self.actor_clip = Some(clip.to_string());
+            self.actor_clip = Some(clip);
         }
         // The next frame is the scheduler's to ask for: an actor playing a clip
         // keeps the tick awake (gltf_cache.rs), and nothing here moves otherwise.
@@ -353,14 +346,14 @@ pub struct CompanionProps {
     pub center_z: f64,
 }
 
-fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, role: Role, target: Vec2, map_origin: IVec) -> &'a mut Walker {
+fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Walker {
     // A variant switch replaces the walker, which always starts unloaded.
-    if slot.as_ref().is_some_and(|w| w.variant_key != variant.key) {
+    if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
         if let Some(mut old) = slot.take() {
             old.release();
         }
     }
-    slot.get_or_insert_with(|| Walker::new(variant, role, target, map_origin))
+    slot.get_or_insert_with(|| Walker::new(variant, target, map_origin))
 }
 
 /// The companion's turn, in the interaction phase; None removes it.
@@ -376,13 +369,17 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let settings = settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (find_person_variant(&settings.person_variant_key), find_pet_variant(&settings.pet_variant_key)) else {
+    let (Some(person_variant), Some(pet_variant)) = (
+        character_variant(CharacterGroup::person, settings.person_variant),
+        character_variant(CharacterGroup::pet, settings.pet_variant),
+    ) else {
         return;
     };
+    let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let is_follow_mode = camera_store().is_follow_mode;
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
-    let person = walker_for(&mut c.person, person_variant, Role::Person, person_target, p.map_origin);
+    let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
     person.step(ctx, person_variant, p.origin_page_idx_xy, p.map_origin, person_target, p.center_z, is_follow_mode);
     // Only the person talks — the pet doesn't get a chat bubble.
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
@@ -391,7 +388,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         x: p.center_x + PET_OFFSET.x,
         y: p.center_y + PET_OFFSET.y,
     };
-    let pet = walker_for(&mut c.pet, pet_variant, Role::Pet, pet_target, p.map_origin);
+    let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
     pet.step(ctx, pet_variant, p.origin_page_idx_xy, p.map_origin, pet_target, p.center_z, is_follow_mode);
 }
 

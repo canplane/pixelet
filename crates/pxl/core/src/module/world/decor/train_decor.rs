@@ -5,6 +5,7 @@
 
 use super::decor_layer::{bind_models, DecorKindBundle};
 use super::kind::decor_kinds::train as S;
+use super::kind::DecorKind;
 use super::train_kind::{TRAIN_KIND, TRAIN_RULES};
 use crate::sys::global::Global;
 
@@ -12,5 +13,5 @@ static BUNDLE: Global<DecorKindBundle> = Global::new();
 
 #[allow(non_snake_case)]
 pub fn TRAIN_DECOR_BUNDLE() -> &'static DecorKindBundle {
-    BUNDLE.get(|| bind_models("train", TRAIN_KIND(), TRAIN_RULES(), S::models, S::skins, None))
+    BUNDLE.get(|| bind_models(DecorKind::train, TRAIN_KIND(), TRAIN_RULES(), &S::models, &S::skins, None))
 }

@@ -3,7 +3,7 @@
 //! A placed cube's material — what the kernel is taught for its kind
 //! (teach.rs).
 
-use pxl_shared::spec::cell::{placeable_cube_id, placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
+use pxl_shared::spec::cell::{placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
 
 use crate::render::layer::pipeline::volume::{MaterialClasses, VoxelMaterial, NO_LAYER};
 use crate::render::layer::terrain::shader_meta::{ground_color_lookup, ground_layer_index_lookup, rgb255};
@@ -36,8 +36,11 @@ pub fn resolve_solid_material(cube: PlaceableCube) -> VoxelMaterial {
         r: r as u32,
         g: g as u32,
         b: b as u32,
-        // The layer array is built by walking cube_ids (render/gpu/layers.rs),
-        // so the index into it is that walk's, which goes by the id.
-        layer_idx: OBJECT_LAYER_IDX(&placeable_cube_id(cube)).unwrap_or(NO_LAYER),
+        // The layer array is built by walking the blocks (render/gpu/layers.rs),
+        // so the index into it is that walk's.
+        layer_idx: match cube {
+            PlaceableCube::Block(block) => OBJECT_LAYER_IDX(block).unwrap_or(NO_LAYER),
+            _ => NO_LAYER,
+        },
     }
 }

@@ -4,7 +4,7 @@
 //! and why. Deliberately asset-free: the models are bound in boat_decor.rs.
 
 use super::kind::decor_kinds::boat as S;
-use super::scatter::{eligibility_of, rule_of, rule_word, DecorKindSeed, DecorOrientationMode, DecorRules};
+use super::scatter::{eligibility_of, rules_of, DecorKindSeed, DecorRules};
 
 #[allow(non_snake_case)]
 pub fn BOAT_KIND() -> DecorKindSeed {
@@ -12,18 +12,13 @@ pub fn BOAT_KIND() -> DecorKindSeed {
         tag: S::tag,
         density: S::density,
         variant_count: S::models.len() as u32,
-        orientation: DecorOrientationMode::of(S::orientation),
+        orientation: S::orientation,
     }
 }
 
 #[allow(non_snake_case)]
 pub fn BOAT_RULES() -> DecorRules {
-    DecorRules {
-        land: rule_word(S::rules::land),
-        water: rule_of("water", S::rules::water),
-        structure: rule_word(S::rules::structure),
-        transport: rule_word(S::rules::transport),
-    }
+    rules_of(&S::rules::void, &[], &S::rules::water.map(|t| t as u32), &[], &[])
 }
 
 pub fn is_boat_eligible(land: u32, water: u32, structure: u32, transport: u32) -> bool {

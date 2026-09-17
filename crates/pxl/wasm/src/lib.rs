@@ -368,7 +368,7 @@ impl Outbox {
 }
 
 /// Signals one command may raise before `drain` checks again. A frame is the
-/// many-signalled one — its toasts, sensor asks, snapshot, fetches and loads —
+/// many-signalled one — its sensor asks, snapshot, fetches and loads —
 /// so this bounds a single command rather than a turn.
 const MOST_SIGNALS: u32 = 64;
 
@@ -388,12 +388,11 @@ fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
 }
 
 /// What the kernel asks of the shell since it last asked, raised as signals:
-/// toasts, the sensors' watches, console lines, the UI's snapshot when it
+/// the sensors' watches, console lines, the UI's snapshot when it
 /// changed, the fetches to start and cancel, and the loads.
 fn post_shell(s: &mut State) {
     use pxl_core::module::device::pose::device_orientation::{take_orientation_commands, OrientationCommand};
     use pxl_core::module::device::pose::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use pxl_core::module::map::ui::toast::toast_controller::{take_toast_commands, ToastCommand, ToastTone};
     use pxl_core::module::world::gltf_cache::{take_load_requests, LoadKind};
     use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
 
@@ -404,21 +403,6 @@ fn post_shell(s: &mut State) {
             e.u32(Some(which));
         })
     };
-    for c in take_toast_commands() {
-        raise(&s.outbox, Cmd::WORLD_TOAST, 4, |e| match &c {
-            ToastCommand::Show(spec) => {
-                let tone = match spec.tone {
-                    ToastTone::Loading => 0,
-                    ToastTone::Error => 1,
-                    ToastTone::Success => 2,
-                };
-                e.bool(Some(true)).str(Some(spec.id)).u32(Some(spec.message as u32)).u32(Some(tone));
-            }
-            ToastCommand::Dismiss(id) => {
-                e.bool(Some(false)).str(Some(id)).str(Some("")).u32(Some(0));
-            }
-        });
-    }
     for c in take_geolocation_commands() {
         match c {
             GeolocationCommand::Start => sensor(Cmd::SENSOR_CREATE, GEOLOCATION),
@@ -428,7 +412,6 @@ fn post_shell(s: &mut State) {
     for c in take_orientation_commands() {
         match c {
             OrientationCommand::Listen => sensor(Cmd::SENSOR_CREATE, ORIENTATION),
-            OrientationCommand::RequestPermission => sensor(Cmd::SENSOR_PERMISSION, ORIENTATION),
             OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
         }
     }
@@ -465,7 +448,7 @@ fn post_shell(s: &mut State) {
             LoadKind::Image => 1,
         };
         raise(&s.outbox, Cmd::LOAD_CREATE, 2, |e| {
-            e.u32(Some(kind)).str(Some(q.url.as_str()));
+            e.u32(Some(kind)).u32(Some(q.load.number()));
         });
     }
 }
@@ -509,6 +492,11 @@ fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
     b.at(i)?.get_bool()
 }
 
+/// A load by its number, refused where the number names none.
+fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_core::module::world::gltf_cache::Load, MarshalError> {
+    pxl_core::module::world::gltf_cache::Load::of(u32_at(b, i)?).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("no such load"), None))
+}
+
 /// Applies one submission: its reply's value, or none for a command nobody
 /// numbers or a signal submitted as a command, which replies ENOSYS; a packet
 /// that does not read as the command's replies with its errno.
@@ -524,22 +512,14 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::WORLD_UPDATE => {
             let f = fields(pkt)?;
-            let platform = pxl_core::module::world::world::Platform {
-                geolocation: bool_at(&f, 4)?,
-                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
-                    supported: bool_at(&f, 5)?,
-                    needs_permission: bool_at(&f, 6)?,
-                },
-            };
             let host = pxl_core::module::world::world::HostFrame {
                 width: number_at(&f, 0)?,
                 height: number_at(&f, 1)?,
                 dpr: number_at(&f, 2)?,
                 delta: number_at(&f, 3)?,
-                platform,
-                frame_ms: number_at(&f, 7)?,
-                interactive: bool_at(&f, 8)?,
-                credits: u32_at(&f, 9)?,
+                frame_ms: number_at(&f, 4)?,
+                interactive: bool_at(&f, 5)?,
+                credits: u32_at(&f, 6)?,
             };
             pxl_core::module::world::world::world_frame_asked(host);
             Ok(Some(0))
@@ -554,6 +534,13 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 published_tiles: bool_at(&f, 4)?,
             });
             pxl_core::sys::host::set_handheld(bool_at(&f, 5)?);
+            pxl_core::module::world::world::set_world_platform(pxl_core::module::world::world::Platform {
+                geolocation: bool_at(&f, 6)?,
+                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
+                    supported: bool_at(&f, 7)?,
+                    needs_permission: bool_at(&f, 8)?,
+                },
+            });
             pxl_core::module::world::object::store::load();
             Ok(Some(0))
         }
@@ -575,7 +562,8 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::INPUT_POINTER => {
-            use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, PointerKind};
+            use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
+            use pxl_shared::spec::cell::{placeable_cube_of, DecorId};
             let f = fields(pkt)?;
             let kind = match u32_at(&f, 1)? {
                 1 => PointerKind::Touch,
@@ -583,12 +571,43 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 _ => PointerKind::Mouse,
             };
             let (id, button, x, y) = (i32_at(&f, 2)?, i32_at(&f, 3)?, number_at(&f, 4)?, number_at(&f, 5)?);
+            let (tool, value, size) = (u32_at(&f, 6)?, u32_at(&f, 7)?, number_at(&f, 8)?);
+            let mut holding = Holding {
+                object_size: size,
+                ..Holding::default()
+            };
+            match tool {
+                1 => {
+                    holding.active_tool = ActiveTool::Object;
+                    if let Some(cube) = placeable_cube_of(value) {
+                        holding.object_cube = cube;
+                    }
+                }
+                2 => {
+                    holding.active_tool = ActiveTool::Decor;
+                    if let Some(decor) = u8::try_from(value).ok().and_then(DecorId::of) {
+                        holding.decor_id = decor;
+                    }
+                }
+                3 => holding.active_tool = ActiveTool::Eraser,
+                _ => {}
+            }
             match u32_at(&f, 0)? {
-                0 => camera_pointer_down(kind, id, button, x, y),
-                1 => camera_pointer_move(kind, id, x, y),
-                2 => camera_pointer_up(kind, id),
+                0 => camera_pointer_down(kind, id, button, x, y, holding),
+                1 => camera_pointer_move(kind, id, x, y, holding),
+                2 => camera_pointer_up(kind, id, holding),
                 _ => camera_pointer_out(),
             }
+            Ok(Some(0))
+        }
+        Cmd::INPUT_TRACKING => {
+            use pxl_core::app::shell::{tracking_action, Tracking};
+            tracking_action(match u32_at(&fields(pkt)?, 0)? {
+                0 => Tracking::Recenter,
+                1 => Tracking::Follow,
+                _ => Tracking::Unfollow,
+            });
+            pxl_core::module::world::change::request_world_tick();
             Ok(Some(0))
         }
         Cmd::INPUT_WHEEL => {
@@ -619,13 +638,22 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::SENSOR_PERMISSION => {
+            use pxl_core::module::device::pose::store::PermissionAnswer;
             let f = fields(pkt)?;
-            let (granted, failed) = (bool_at(&f, 1)?, bool_at(&f, 2)?);
+            let answer = match u32_at(&f, 1)? {
+                0 => PermissionAnswer::Asking,
+                1 => PermissionAnswer::Granted,
+                2 => PermissionAnswer::Denied,
+                _ => PermissionAnswer::Failed,
+            };
             let platform = pxl_core::module::world::world::world_platform();
-            match (u32_at(&f, 0)?, granted) {
-                (0, true) => pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation),
-                (0, false) => {}
-                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(granted, failed),
+            match u32_at(&f, 0)? {
+                0 => {
+                    if answer == PermissionAnswer::Granted {
+                        pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation);
+                    }
+                }
+                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(answer),
             }
             Ok(Some(0))
         }
@@ -647,22 +675,18 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
-            let url = f.at(0)?;
             // A model's bytes are far past a slot: the host holds them, and
             // the models' task reads them on a turn's quota.
-            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, u32_at(&f, 1)?, u32_at(&f, 2)?);
+            pxl_core::module::world::gltf_cache::gltf_arrived(load_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
             Ok(Some(0))
         }
         Cmd::LOAD_IMAGE => {
             let f = fields(pkt)?;
-            let url = f.at(0)?;
-            pxl_core::module::world::gltf_cache::image_arrived(url.get_str_ref()?, u32_at(&f, 1)?);
+            pxl_core::module::world::gltf_cache::image_arrived(load_at(&f, 0)?, u32_at(&f, 1)?);
             Ok(Some(0))
         }
         Cmd::LOAD_DELETE => {
-            let f = fields(pkt)?;
-            let url = f.at(0)?;
-            pxl_core::module::world::gltf_cache::load_rejected(url.get_str_ref()?);
+            pxl_core::module::world::gltf_cache::load_rejected(load_at(&fields(pkt)?, 0)?);
             Ok(Some(0))
         }
         Cmd::GPU_CREATE => {
@@ -689,7 +713,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             }
             Ok(Some(0))
         }
-        Cmd::WORLD_TOAST | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => Ok(None),
+        Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => Ok(None),
     }
 }
 

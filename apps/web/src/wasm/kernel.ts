@@ -10,7 +10,7 @@
  * I/O credits). In that turn the kernel applies what waits on the submission
  * ring, runs its tick, draws its canvases through the host's WebGPU
  * (wasm/gpu.ts), and leaves on the completion ring what it asks of the host —
- * toasts, the sensors' watches, console lines, the UI's snapshot when it
+ * the sensors' watches, console lines, the UI's snapshot when it
  * changed, the fetches to start and cancel, the loads — which the host reads
  * before the ring returns; the return is when the kernel wants its next turn.
  * What arrives later — a response, a sensor fix, a pointer — is submitted
@@ -28,14 +28,12 @@
  */
 
 import { useLayoutEffect, useSyncExternalStore } from "react";
-import i18next from "i18next";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
-import { Message } from "@pxl/shared/spec/message.ts";
-import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
+import type { Message } from "@pxl/shared/spec/message.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
@@ -48,46 +46,35 @@ import { boot_block, hold_body, quantum_policy, text_at } from "@/wasm/module.ts
 // ---- the snapshot the UI renders (crates/pxl/core/src/app/shell.rs) ----
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
-export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
-/** A cube crosses as the catalog number a leaf holds it as; the id it is
- * spelled out under is this side's to read off the same JSON the kernel was
- * numbered from (@pxl/shared/spec/cell). */
-export type RecentPick = { kind: "object"; num_id: number } | { kind: "decor"; id: string };
-export type ChatLine = { id: number; text: string; ts: number };
-export type SearchRow = { gers_id: string; kind: "poi" | "division"; name: string; subtitle: string; distance: string | null; icon: string; color: string; lon: number; lat: number };
-
 export type UiSnapshot = {
-  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean };
-  location: { status: PoseStatus; has_location: boolean };
+  /** `center` is the map centre as [lon, lat]. */
+  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null };
+  /** `error` is what went wrong, as @pxl/shared/spec/message's number. */
+  location: { status: PoseStatus; has_location: boolean; error: Message | null };
+  companion: { person_ready: boolean; pet_ready: boolean };
   orientation: { status: PoseStatus; heading: number | null };
   view: { azimuth: number };
   is_follow_mode: boolean;
   camera_busy: boolean;
   fog: string;
-  ui: { active_tool: ActiveTool; object_cube_num_id: number; object_size: number; decor_id: string; recent_picks: RecentPick[]; chat_lines: ChatLine[] };
-  settings: Record<string, boolean | string>;
-  address: { label: string | null };
-  scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean; label: string };
+  settings: Record<string, boolean | string | number>;
+  scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean };
   compass: { show: boolean };
-  search: { loading: boolean; results: SearchRow[] };
   object_storage_version: number;
 };
 
 const INITIAL: UiSnapshot = {
-  map: { status: "idle", is_off_center: false },
-  location: { status: "idle", has_location: false },
+  map: { status: "idle", is_off_center: false, center: null },
+  location: { status: "idle", has_location: false, error: null },
+  companion: { person_ready: false, pet_ready: false },
   orientation: { status: "idle", heading: null },
   view: { azimuth: 0 },
   is_follow_mode: false,
   camera_busy: false,
   fog: "#000000",
-  // A flat colour is held as its own catalog number (spec/cell).
-  ui: { active_tool: "pointer", object_cube_num_id: cube_types.block.red, object_size: 1, decor_id: "tree", recent_picks: [], chat_lines: [] },
   settings: {},
-  address: { label: null },
-  scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true, label: "" },
+  scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
   compass: { show: false },
-  search: { loading: false, results: [] },
   object_storage_version: 0,
 };
 
@@ -119,45 +106,47 @@ export function useKernel<T>(select: (s: UiSnapshot) => T): T {
 export type KernelAction = { type: string; [key: string]: unknown };
 
 /** Applies one UI action in the kernel, rung at once with no quota: what it
- * asks of the host is heard inside the call — a sensor permission has to be
- * asked inside the gesture that led to it. */
+ * asks of the host is heard inside the call, including the sensors' close sent
+ * after the strobe has stopped. */
 export function kernel_action(action: KernelAction): void {
   CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))));
   CORE_BUILD.ring(0);
   request_frame();
 }
 
-// ---- toasts ----
+/** The tracking button's press: crates/pxl/core/src/app/shell.rs's Tracking. */
+export const TRACKING_RECENTER = 0, TRACKING_FOLLOW = 1, TRACKING_UNFOLLOW = 2;
 
-export type ToastEvent = { show: true; id: string; message: Message; tone: number } | { show: false; id: string };
-
-const toast_listeners = new Set<(e: ToastEvent) => void>();
-const toast_backlog: ToastEvent[] = [];
-
-/** Hears the kernel's toasts; the ones raised before anyone listened first. */
-export function on_toast(listener: (e: ToastEvent) => void): () => void {
-  toast_listeners.add(listener);
-  for (const e of toast_backlog.splice(0)) listener(e);
-  return () => toast_listeners.delete(listener);
+/** The tracking button. Following needs the compass, so where iOS gates it,
+ * the prompt runs here, inside the click, and the kernel hears the answer
+ * before the press — the way a page's handler awaits `requestPermission` and
+ * the browser only reports the outcome. */
+export async function kernel_tracking(tracking: u32): Promise<void> {
+  if (tracking === TRACKING_FOLLOW && !(await orientation_permit())) {
+    console.error("[orientation] could not start the sensor.");
+    return;
+  }
+  CORE_BUILD.send(0, Cmd.INPUT_TRACKING, packet((b) => b.u32(tracking)));
+  strobe.input();
+  request_frame();
 }
 
-function emit_toast(e: ToastEvent): void {
-  if (toast_listeners.size === 0) toast_backlog.push(e);
-  for (const listener of toast_listeners) listener(e);
+/** The sensor button: the compass's prompt, where iOS gates it, is raised
+ * synchronously in the click — Safari consumes the gesture's activation, so
+ * one reached after an await can be refused — and the rest follows. */
+export function kernel_enable_sensors(): void {
+  void orientation_permit();
+  kernel_action({ type: "enable_sensors" });
 }
 
 // ---- what the kernel asks: the completion ring's signals ----
 
 /** crates/pxl/wasm/src/lib.rs's sensor numbers. */
 const GEOLOCATION = 0;
+const ORIENTATION = 1;
 
 function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
   switch (cmd) {
-    case Cmd.WORLD_TOAST: {
-      const [show, id, message, tone] = f!.get<[boolean, string, Message, number]>();
-      emit_toast(show ? { show: true, id, message, tone } : { show: false, id });
-      return;
-    }
     case Cmd.WORLD_SNAPSHOT: {
       // The JSON is far past a ring frame, so the kernel names the block it
       // holds it in. It is the kernel's and stays valid until it makes the
@@ -175,9 +164,6 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
     case Cmd.SENSOR_DELETE:
       if (f!.at(0).get<number>() === GEOLOCATION) geolocation_stop();
       else orientation_remove();
-      return;
-    case Cmd.SENSOR_PERMISSION:
-      orientation_request_permission();
       return;
     case Cmd.FETCH_CREATE: {
       const [key, url] = f!.get<[bigint, string]>();
@@ -237,10 +223,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   CORE_BUILD.send(
     0,
     Cmd.WORLD_UPDATE,
-    packet((b) =>
-      b.f64(width).f64(height).f64(dpr()).f64(delta_s).bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
-        .f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)
-    ),
+    packet((b) => b.f64(width).f64(height).f64(dpr()).f64(delta_s).f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)),
   );
 }, (run) => requestAnimationFrame(run));
 
@@ -420,18 +403,34 @@ function orientation_listen(): void {
   listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
 }
 
-function orientation_request_permission(): void {
-  (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!().then(
+/** crates/pxl/core/src/module/device/pose/store.rs's PermissionAnswer. */
+const PERMISSION_ASKING = 0, PERMISSION_GRANTED = 1, PERMISSION_DENIED = 2, PERMISSION_FAILED = 3;
+
+function send_permission(sensor: number, answer: number): void {
+  CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(sensor).u32(answer)));
+  request_frame();
+}
+
+/**
+ * Whether the compass may be listened to, prompting where iOS gates it. The
+ * prompt is called before anything is awaited, so it stays inside the gesture
+ * that called this; a listener already running needs no prompt.
+ */
+function orientation_permit(): Promise<boolean> {
+  if (!orientation_needs_permission() || orientation_event !== null) return Promise.resolve(true);
+  const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
+  send_permission(ORIENTATION, PERMISSION_ASKING);
+  return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) listen_orientation("deviceorientation");
-      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(granted).bool(false)));
-      request_frame();
+      send_permission(ORIENTATION, granted ? PERMISSION_GRANTED : PERMISSION_DENIED);
+      return granted;
     },
     (err) => {
       console.error("[kernel] orientation permission error:", err);
-      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(1).bool(false).bool(true)));
-      request_frame();
+      send_permission(ORIENTATION, PERMISSION_FAILED);
+      return false;
     },
   );
 }
@@ -448,21 +447,41 @@ function send_rect(element: HTMLElement): void {
   CORE_BUILD.send(0, Cmd.INPUT_UPDATE, packet((b) => b.f64(r.left).f64(r.top).f64(r.width).f64(r.height)));
 }
 
-function send_pointer(phase: number, e: PointerEvent): void {
-  const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
-  CORE_BUILD.send(0, Cmd.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(e.pointerId).i32(e.button).f64(e.clientX).f64(e.clientY)));
+/** What the pointer holds: a tool, the placeable cube's or decor's catalog
+ * number, and the object size. The kernel keeps no pick of its own; each
+ * pointer event carries this. */
+type Holding = { tool: u32; value: u32; size: number };
+
+let holding: Holding = { tool: 0, value: 0, size: 0 };
+/** The last hovering pointer, while it is over the canvas. */
+let last_hover: { kind: number; id: number; button: number; x: number; y: number } | null = null;
+
+function send_pointer_at(phase: number, kind: number, id: number, button: number, x: number, y: number): void {
+  CORE_BUILD.send(0, Cmd.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).f64(holding.size)));
   strobe.input();
   request_frame();
 }
 
-function send_language(language: string | undefined): void {
-  if (!language) return;
-  kernel_action({ type: "set_language", lang: language.split("-")[0].toLowerCase() });
+function send_pointer(phase: number, e: PointerEvent): void {
+  const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
+  last_hover = phase === 3 || kind === 1 ? null : { kind, id: e.pointerId, button: e.button, x: e.clientX, y: e.clientY };
+  send_pointer_at(phase, kind, e.pointerId, e.button, e.clientX, e.clientY);
+}
+
+/**
+ * Sets what the pointer holds. A hover under a still pointer would otherwise
+ * show the old pick until the pointer moves, so a move at the last position
+ * is sent, as a browser synthesizes a mouse move when what is under a still
+ * cursor changes.
+ */
+export function kernel_hold(tool: u32, value: u32, size: number): void {
+  holding = { tool, value, size };
+  if (last_hover) send_pointer_at(1, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
 
 /**
  * The one frame loop over `element`: the kernel's turns, the pointer's events
- * on it, the tab's visibility, the sensors' subscription and the language.
+ * on it, the tab's visibility and the sensors' open and close.
  */
 export function KernelDriver({ element }: { element: HTMLElement | null }): null {
   useLayoutEffect(() => {
@@ -499,7 +518,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       request_frame();
     };
     const on_page_hide = () => send_visibility(false);
-    const on_language = (language: string) => send_language(language);
 
     element.addEventListener("pointerdown", on_down);
     element.addEventListener("pointermove", on_move);
@@ -512,7 +530,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     globalThis.addEventListener("pointercancel", on_up);
     document.addEventListener("visibilitychange", on_visibility);
     globalThis.addEventListener("pagehide", on_page_hide);
-    i18next.on("languageChanged", on_language);
     const observer = new ResizeObserver(on_resize);
     observer.observe(element);
 
@@ -520,8 +537,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     // from outside the app, since nothing else would ask again.
     let permission: PermissionStatus | null = null;
     const on_permission = () => {
-      CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(0).bool(permission?.state === "granted").bool(false)));
-      request_frame();
+      send_permission(GEOLOCATION, permission?.state === "granted" ? PERMISSION_GRANTED : PERMISSION_DENIED);
     };
     navigator.permissions?.query({ name: "geolocation" }).then((status) => {
       permission = status;
@@ -529,16 +545,14 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     }).catch(() => {});
 
     send_rect(element);
-    send_language(i18next.language);
-    kernel_action({ type: "sensors_subscribe", geolocation: "geolocation" in navigator, orientation: orientation_supported(), needs_permission: orientation_needs_permission() });
+    kernel_action({ type: "sensors_open" });
     strobe.start();
 
     return () => {
       strobe.stop();
-      kernel_action({ type: "sensors_unsubscribe" });
+      kernel_action({ type: "sensors_close" });
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
-      i18next.off("languageChanged", on_language);
       globalThis.removeEventListener("pagehide", on_page_hide);
       document.removeEventListener("visibilitychange", on_visibility);
       globalThis.removeEventListener("pointercancel", on_up);
@@ -580,6 +594,9 @@ gpu_boot();
 
 CORE_BUILD.call(
   Cmd.WORLD_CREATE,
-  packet((b) => b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)),
+  packet((b) =>
+    b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)
+      .bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
+  ),
   (result) => result,
 );

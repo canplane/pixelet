@@ -17,7 +17,7 @@
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::Tile;
@@ -26,10 +26,10 @@ use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use xpute_core::sys::mem::{alloc, free, Block};
 
 use crate::app::setting::store::settings_store;
-use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store};
+use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store, BAND_CELLS};
 use crate::module::world::sched::chunk_table::Event;
 use crate::module::world::terrain::store::tile_store;
-use crate::render::layer::object::adapter::{Carve, Painter};
+use crate::render::layer::object::adapter::{Carve, Painted, Painter};
 use crate::render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
 use crate::render::layer::pipeline::volume::Volumes;
 use crate::render::layer::pipeline::voxel_scan::{BandView, RunSet, ScanContext, ScanStep};
@@ -529,9 +529,35 @@ impl Chunk {
     }
 }
 
+#[derive(Clone, Copy)]
 struct ScanJob {
     id: u32,
     volume: usize,
+    /// The objects' paint into the volume, until it is finished and the scan
+    /// begins.
+    paint: Option<PaintJob>,
+}
+
+/// A chunk's objects painted a step at a time: the entry the next step
+/// starts at; the column's revisions it began on, since a store written
+/// between steps has moved the entries under it and the paint begins again;
+/// and the drawn build's edits as they were then, as a source change for
+/// new ones drops the job anyway.
+#[derive(Clone, Copy)]
+struct PaintJob {
+    next: usize,
+    revision: (u32, u32),
+    hide: Option<(i32, u32)>,
+    carve: Option<Carve>,
+}
+
+/// The voxels a step of a paint sets before it stops: a band's cells, which
+/// is also the most one entry sets, so a step sets at most twice this
+/// whatever the column holds.
+const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
+
+fn column_revision(col_idx: IVec) -> (u32, u32) {
+    (object_col_revision(col_idx), decor_col_revision(col_idx))
 }
 
 struct BakeJob {
@@ -584,6 +610,8 @@ pub struct Builder {
     carve: Option<(IVec, Carve)>,
     /// The scan job's bands, kept between the scan's steps.
     bands: Vec<BandView<'static>>,
+    /// The scan job's paint's claimed voxels, kept between its steps.
+    claimed: BTreeSet<u32>,
     pub stat: BuildStat,
 }
 
@@ -606,6 +634,7 @@ impl Builder {
             hide: None,
             carve: None,
             bands: Vec::new(),
+            claimed: BTreeSet::new(),
             stat: BuildStat::default(),
         }
     }
@@ -624,7 +653,7 @@ impl Builder {
     pub fn compose_real(&mut self, world: &mut World, id: u32) -> Option<(usize, u32)> {
         let c = self.chunks.get(&id)?;
         let (page, generation) = (c.page?, c.generation);
-        let volume = self.compose(world, id, page, false)?;
+        let volume = self.compose(world, id, page)?;
         Some((volume, generation))
     }
 
@@ -843,21 +872,25 @@ impl Builder {
             if self.scan_job.is_some() {
                 return Progress::Blocked;
             }
-            match self.compose(world, id, page, true) {
-                Some(volume) => {
-                    // SAFETY: the volume was just composed and is held by the
-                    // scan job until the scan finishes.
-                    unsafe { world.volumes.band_views(volume, &mut self.bands) };
-                    assert!(self.scan.begin(&self.bands), "a scan open with no job naming it");
-                    self.scan_job = Some(ScanJob { id, volume });
-                }
-                None => {
-                    self.refuse(world, id);
-                    return Progress::Blocked;
-                }
-            }
+            let col_idx = c.col_idx;
+            let Some(volume) = self.paint_terrain(world, id, page) else {
+                self.refuse(world, id);
+                return Progress::Blocked;
+            };
+            self.claimed.clear();
+            let paint = PaintJob {
+                next: 0,
+                revision: column_revision(col_idx),
+                hide: self.hide.filter(|h| h.0 == col_idx).map(|h| (h.1, h.2)),
+                carve: self.carve.filter(|c| c.0 == col_idx).map(|c| c.1),
+            };
+            self.scan_job = Some(ScanJob { id, volume, paint: Some(paint) });
+            return Progress::Busy;
         }
-        let volume = self.scan_job.as_ref().unwrap().volume;
+        let ScanJob { volume, paint, .. } = *self.scan_job.as_ref().unwrap();
+        if let Some(paint) = paint {
+            return self.advance_paint(world, id, volume, paint);
+        }
         // SAFETY: the scan job's volume, held until the scan finishes.
         unsafe { world.volumes.band_views(volume, &mut self.bands) };
         match self.scan.step(&self.bands) {
@@ -901,28 +934,72 @@ impl Builder {
     }
 
     /// Paints the terrain and then the objects into a new volume, sealed;
-    /// none when a paint was refused. With `edits`, the drawn build's hide
-    /// and carve; without, the real set — what a raycast tests.
-    fn compose(&mut self, world: &mut World, id: u32, page: PageLanes, edits: bool) -> Option<usize> {
-        let c = &self.chunks[&id];
-        let (col_idx, tx0, ty0, show) = (c.col_idx, c.tx0, c.ty0, c.show_structures);
-        // SAFETY: the chunk's page, as its source named it, resident while
-        // the chunk is.
-        let view = unsafe { Self::page_view(world, page) };
-        self.sample.read(&view, world.materials, tx0, ty0, show);
-        let volume = world.volumes.open();
-        let mut ok = self.sample.paint(world.volumes, volume);
-        if ok {
-            let hide = self.hide.filter(|h| edits && h.0 == col_idx).map(|h| (h.1, h.2));
-            let carve = self.carve.filter(|c| edits && c.0 == col_idx).map(|c| c.1);
-            ok = !world.painter.paint(world.store, world.volumes, volume, col_idx, hide, carve).refused;
-        }
-        if !ok {
+    /// none when a paint was refused. The real set, no edits — what a raycast
+    /// tests, and needs whole in the frame that asks.
+    fn compose(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<usize> {
+        let col_idx = self.chunks[&id].col_idx;
+        let volume = self.paint_terrain(world, id, page)?;
+        if world.painter.paint(world.store, world.volumes, volume, col_idx, None, None).refused {
             world.volumes.release(volume);
             return None;
         }
         world.volumes.seal(volume);
         Some(volume)
+    }
+
+    /// A new volume with the chunk's terrain painted in, open; none when a
+    /// paint was refused.
+    fn paint_terrain(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<usize> {
+        let c = &self.chunks[&id];
+        let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
+        // SAFETY: the chunk's page, as its source named it, resident while
+        // the chunk is.
+        let view = unsafe { Self::page_view(world, page) };
+        self.sample.read(&view, world.materials, tx0, ty0, show);
+        let volume = world.volumes.open();
+        if !self.sample.paint(world.volumes, volume) {
+            world.volumes.release(volume);
+            return None;
+        }
+        Some(volume)
+    }
+
+    /// A step of the scan job's paint of the chunk's objects. Once every
+    /// entry and the carve are painted, the volume is sealed and the scan
+    /// begins on it.
+    fn advance_paint(&mut self, world: &mut World, id: u32, volume: usize, mut paint: PaintJob) -> Progress {
+        let col_idx = self.chunks[&id].col_idx;
+        if column_revision(col_idx) != paint.revision {
+            self.abort_scan_of(world, id);
+            return Progress::Busy;
+        }
+        let mut any = false;
+        match world
+            .painter
+            .paint_entries(world.store, world.volumes, volume, col_idx, paint.hide, paint.next, PAINT_VOXELS, &mut self.claimed, &mut any)
+        {
+            Painted::Refused => {
+                self.refuse(world, id);
+                return Progress::Blocked;
+            }
+            Painted::More(next) => {
+                paint.next = next;
+                self.scan_job.as_mut().unwrap().paint = Some(paint);
+                return Progress::Busy;
+            }
+            Painted::Done => {}
+        }
+        if !world.painter.paint_carve(world.volumes, volume, paint.carve, &mut self.claimed, &mut any) {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
+        world.volumes.seal(volume);
+        // SAFETY: the volume was just sealed and is held by the scan job
+        // until the scan finishes.
+        unsafe { world.volumes.band_views(volume, &mut self.bands) };
+        assert!(self.scan.begin(&self.bands), "a scan open with no job naming it");
+        self.scan_job.as_mut().unwrap().paint = None;
+        Progress::Busy
     }
 
     fn direct_runs(&mut self, world: &mut World, id: u32, page: PageLanes, emit: &mut impl FnMut(BuildEvent)) -> Progress {

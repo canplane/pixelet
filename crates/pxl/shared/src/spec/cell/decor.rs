@@ -8,11 +8,26 @@
 // though the two never collide in practice (each placed leaf holds one
 // value from exactly one of the two catalogs) — just so a raw byte's value
 // alone still hints at which catalog it came from during debugging.
-#[allow(non_upper_case_globals)]
+#[allow(non_upper_case_globals, non_camel_case_types)]
 pub mod decor_types {
     pub const tree: u8 = 228;
 
-    pub const ENTRIES: &[(&str, u8)] = &[("tree", tree)];
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum Decor {
+        tree = 228,
+    }
+
+    impl Decor {
+        /// Every kind the catalog gives out, in the JSON's own order.
+        pub const ALL: [Decor; 1] = [Decor::tree];
+
+        /// The kind a number names, or none for a number the catalog does not
+        /// give out.
+        pub fn of(value: u8) -> Option<Decor> {
+            Decor::ALL.into_iter().find(|t| *t as u8 == value)
+        }
+    }
 }
 
-pub type DecorId = &'static str;
+pub type DecorId = decor_types::Decor;

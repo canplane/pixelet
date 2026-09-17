@@ -22,27 +22,32 @@ pub enum SettingKind {
     Toggle,
     Choice,
     Text,
+    Number,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SettingValue {
     Toggle(bool),
     Text(String),
+    Number(u32),
 }
 
-/// A setting's value where it lies: a toggle, or a text setting's string.
+/// A setting's value where it lies: a toggle, a text setting's string, or a
+/// number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingRef<'a> {
     Toggle(bool),
     Text(&'a str),
+    Number(u32),
 }
 
 /// What schema.json declares a setting's default to be: a toggle's, with a
-/// handheld device's own where it has one, or a text's.
+/// handheld device's own where it has one, a text's, or a number's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingDefault {
     Toggle { desktop: bool, handheld: bool },
     Text(&'static str),
+    Number(u32),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -62,6 +67,7 @@ impl Setting {
         match self.default {
             SettingDefault::Toggle { desktop, handheld: h } => SettingValue::Toggle(if handheld() { h } else { desktop }),
             SettingDefault::Text(t) => SettingValue::Text(t.to_string()),
+            SettingDefault::Number(n) => SettingValue::Number(n),
         }
     }
 }
@@ -84,11 +90,11 @@ const fn toggle(key: &'static str, default: bool, section: &'static str, cost: O
     }
 }
 
-const fn text(key: &'static str, default: &'static str, section: &'static str) -> Setting {
+const fn number(key: &'static str, default: u32, section: &'static str) -> Setting {
     Setting {
         key,
-        kind: SettingKind::Text,
-        default: SettingDefault::Text(default),
+        kind: SettingKind::Number,
+        default: SettingDefault::Number(default),
         section,
         cost: None,
         dev: false,
@@ -127,8 +133,8 @@ pub const SETTINGS: [Setting; 17] = [
     toggle("show_debug_objects", S::show_debug_objects::default, S::show_debug_objects::section, None, S::show_debug_objects::dev),
     toggle("show_ledger", S::show_ledger::default, S::show_ledger::section, None, S::show_ledger::dev),
     toggle("pixel_dither", S::pixel_dither::default, S::pixel_dither::section, None, S::pixel_dither::dev),
-    text("person_variant_key", S::person_variant_key::default, S::person_variant_key::section),
-    text("pet_variant_key", S::pet_variant_key::default, S::pet_variant_key::section),
+    number("person_variant", S::person_variant::default as u32, S::person_variant::section),
+    number("pet_variant", S::pet_variant::default as u32, S::pet_variant::section),
 ];
 
 /// `SETTING_KEYS`.
@@ -156,6 +162,7 @@ pub fn is_valid_setting(key: &str, value: &SettingValue) -> bool {
         (SettingKind::Toggle, SettingValue::Toggle(_)) => true,
         (SettingKind::Choice, SettingValue::Text(v)) => setting.options.contains(&v.as_str()),
         (SettingKind::Text, SettingValue::Text(_)) => true,
+        (SettingKind::Number, SettingValue::Number(_)) => true,
         _ => false,
     }
 }

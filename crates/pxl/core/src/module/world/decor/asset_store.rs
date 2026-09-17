@@ -13,13 +13,13 @@
 //! variant's place across every kind, in registry order. The registering is
 //! `decor_asset_task`'s, a variant at a time on a turn's quota.
 
-use xpute_core::kit::hash::fnv1a64_str;
+use pxl_shared::asset::ingested::Asset;
 use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 
 use super::decor_layer::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
 use crate::module::world::change::{bump_world, world_edge, DECOR_ASSET};
-use crate::module::world::gltf_cache::{load_failed, load_gltf, load_image};
+use crate::module::world::gltf_cache::{load_failed, load_gltf, load_image, Load};
 use crate::render::gpu::model_asset::register_model;
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
@@ -47,22 +47,22 @@ struct Store {
 
 static STORE: Global<Store> = Global::new();
 
-/// Writes what arrived for `url` into every variant naming it, across every
+/// Writes what arrived for `asset` into every variant naming it, across every
 /// kind: two kinds may name the same model or the same skin, and both should
 /// reach one object.
-fn settle(entries: &mut [DecorBundleAssets], url: &str, value: u32, skin: bool) {
+fn settle(entries: &mut [DecorBundleAssets], asset: Asset, value: u32, skin: bool) {
     for entry in entries {
         for (v, variant) in entry.bundle.variants.iter().enumerate() {
             match skin {
-                true if variant.skin_url == url => entry.skins[v] = Some(value),
-                false if variant.model_url == url => entry.models[v] = Some(value),
+                true if variant.skin == asset => entry.skins[v] = Some(value),
+                false if variant.model == asset => entry.models[v] = Some(value),
                 _ => {}
             }
         }
     }
 }
 
-fn publish(s: &mut Store, url: &str) {
+fn publish(s: &mut Store, asset: Asset) {
     // The group each variant is drawn as, told to the scheduler for its hit test.
     let mut group = 0u32;
     for entry in &s.entries {
@@ -73,14 +73,14 @@ fn publish(s: &mut Store, url: &str) {
             group += 1;
         }
     }
-    bump_world(DECOR_ASSET, fnv1a64_str(url));
+    bump_world(DECOR_ASSET, asset as u64);
 }
 
 fn store() -> &'static mut Store {
     STORE.get(|| {
         let entry = |bundle: &'static DecorKindBundle| {
             let n = bundle.variants.len();
-            assert!(n <= VARIANTS, "decor: {} has {n} variants, room for {VARIANTS}", bundle.kind);
+            assert!(n <= VARIANTS, "decor: {:?} has {n} variants, room for {VARIANTS}", bundle.kind);
             let none = vec![None; n];
             DecorBundleAssets {
                 bundle,
@@ -128,21 +128,22 @@ pub async fn decor_asset_task() {
             for (v, variant) in bundle.variants.iter().enumerate() {
                 yield_if_spent(world_edge).await;
                 let s = store();
-                if s.entries[b].models[v].is_none() && !load_failed(&variant.model_url) {
-                    if let Some(gltf) = load_gltf(&variant.model_url) {
+                let (model, skin) = (Load::Asset(variant.model), Load::Asset(variant.skin));
+                if s.entries[b].models[v].is_none() && !load_failed(model) {
+                    if let Some(gltf) = load_gltf(model) {
                         match register_model(&gltf, None) {
                             Some(handle) => {
-                                settle(&mut s.entries, &variant.model_url, handle.model, false);
-                                publish(s, &variant.model_url);
+                                settle(&mut s.entries, variant.model, handle.model, false);
+                                publish(s, variant.model);
                             }
                             None => refused = true,
                         }
                     }
                 }
-                if s.entries[b].skins[v].is_none() && !load_failed(&variant.skin_url) {
-                    if let Some(image) = load_image(&variant.skin_url) {
-                        settle(&mut s.entries, &variant.skin_url, image, true);
-                        publish(s, &variant.skin_url);
+                if s.entries[b].skins[v].is_none() && !load_failed(skin) {
+                    if let Some(image) = load_image(skin) {
+                        settle(&mut s.entries, variant.skin, image, true);
+                        publish(s, variant.skin);
                     }
                 }
             }

@@ -12,6 +12,14 @@
 //! Nothing here is Y-up or Z-up: the vertices, poses and keys come out as the
 //! file holds them, in the file's own frame, and whoever registers the model
 //! (render/gpu/model_asset.rs) decides how it stands.
+//!
+//! The parse is a future that awaits `pause` between its units — an
+//! accessor's elements a slice at a time, a node, a skin, a channel — so a
+//! file's size, which is its author's, never decides how long one poll of it
+//! runs. What `pause` waits for is the caller's: a turn's quota, or nothing.
+//! One JSON lookup is not cut; it reads the document's text once.
+
+use core::future::Future;
 
 use xpute_core::kit::mat4::{mat4, mat4_mul, Mat4};
 
@@ -32,7 +40,6 @@ pub struct GltfPrimitive {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GltfNode {
-    pub name: String,
     pub parent: i32,
     pub children: Vec<u32>,
     pub mesh: i32,
@@ -71,8 +78,8 @@ pub struct GltfChannel {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// An animation, by its place in the file's `animations`.
 pub struct GltfAnimation {
-    pub name: String,
     pub duration: f64,
     pub channels: Vec<GltfChannel>,
 }
@@ -115,8 +122,14 @@ fn u32_le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
 }
 
-/// Parses a `.glb`, or a `.gltf` document whose buffers are `external_buffers`.
-pub fn parse_gltf(bytes: &[u8], external_buffers: &[&[u8]]) -> Result<Gltf, String> {
+/// An accessor's elements converted between two pauses. An element is at
+/// most sixteen components of a fixed conversion each, so a slice is bounded
+/// by this and not by the accessor's count.
+const ELEMENTS_PER_PAUSE: usize = 1 << 12;
+
+/// Parses a `.glb`, or a `.gltf` document whose buffers are `external_buffers`,
+/// awaiting `pause` between its units.
+pub async fn parse_gltf<P: Future<Output = ()>>(bytes: &[u8], external_buffers: &[&[u8]], pause: impl Fn() -> P) -> Result<Gltf, String> {
     if bytes.len() >= 12 && u32_le(bytes, 0) == GLB_MAGIC {
         let length = (u32_le(bytes, 8) as usize).min(bytes.len());
         let mut at = 12;
@@ -138,11 +151,11 @@ pub fn parse_gltf(bytes: &[u8], external_buffers: &[&[u8]]) -> Result<Gltf, Stri
         let json = read_json(text).ok_or("gltf: the JSON chunk does not parse")?;
         let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
         buffers.extend_from_slice(external_buffers);
-        read_document(json, &buffers)
+        read_document(json, &buffers, &pause).await
     } else {
         let text = core::str::from_utf8(bytes).map_err(|_| "gltf: not UTF-8")?;
         let json = read_json(text).ok_or("gltf: the document does not parse")?;
-        read_document(json, external_buffers)
+        read_document(json, external_buffers, &pause).await
     }
 }
 
@@ -175,14 +188,16 @@ fn floats<const N: usize>(v: Option<JsonValue>, default: [f64; N]) -> [f64; N] {
 /// Accessors read straight into the lanes the parsed document keeps. Each use
 /// reads its own: the document owns its lanes, so a cache of what was read
 /// would only hold a second copy of every accessor while the parse runs.
-struct Reader<'a> {
+struct Reader<'a, F> {
     json: JsonValue<'a>,
     buffers: &'a [&'a [u8]],
+    pause: &'a F,
 }
 
-impl Reader<'_> {
+impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
     /// An accessor's elements, tightly packed, each as `convert` makes it.
-    fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, String> {
+    async fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, String> {
+        (self.pause)().await;
         let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| format!("gltf: no accessor {index}"))?;
         let count = num(a.get("count")).unwrap_or(0.0) as usize;
         let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
@@ -201,6 +216,9 @@ impl Reader<'_> {
             let base = num(bv.get("byteOffset")).unwrap_or(0.0) as usize + num(a.get("byteOffset")).unwrap_or(0.0) as usize;
             let norm = a.get("normalized").and_then(|n| n.as_bool()) == Some(true);
             for e in 0..count {
+                if e > 0 && e % ELEMENTS_PER_PAUSE == 0 {
+                    (self.pause)().await;
+                }
                 for c in 0..width {
                     let at = base + e * stride + c * comp;
                     let v = match component_type {
@@ -248,21 +266,29 @@ impl Reader<'_> {
         Ok(out)
     }
 
-    fn f32s(&self, index: usize) -> Result<Vec<f32>, String> {
-        self.read(index, |v| v as f32)
+    async fn f32s(&self, index: usize) -> Result<Vec<f32>, String> {
+        self.read(index, |v| v as f32).await
     }
 
-    fn u32s(&self, index: usize) -> Result<Vec<u32>, String> {
-        self.read(index, |v| v as u32)
+    async fn u32s(&self, index: usize) -> Result<Vec<u32>, String> {
+        self.read(index, |v| v as u32).await
     }
 
-    fn u16s(&self, index: usize) -> Result<Vec<u16>, String> {
-        self.read(index, |v| v as u16)
+    async fn u16s(&self, index: usize) -> Result<Vec<u16>, String> {
+        self.read(index, |v| v as u16).await
+    }
+
+    /// An attribute's accessor read when the primitive names one.
+    async fn f32s_of(&self, index: Option<usize>) -> Result<Option<Vec<f32>>, String> {
+        match index {
+            Some(i) => self.f32s(i).await.map(Some),
+            None => Ok(None),
+        }
     }
 }
 
-fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
-    let r = Reader { json, buffers };
+async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>, buffers: &[&[u8]], pause: &F) -> Result<Gltf, String> {
+    let r = Reader { json, buffers, pause };
 
     let mut meshes = Vec::new();
     for m in arr(json.get("meshes")) {
@@ -274,17 +300,21 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
                 continue;
             }
             let Some(position_at) = attr("POSITION") else { continue };
-            let position = r.f32s(position_at)?;
+            let position = r.f32s(position_at).await?;
             let count = position.len() / 3;
             let index = match num(p.get("indices")) {
-                Some(i) => r.u32s(i as usize)?,
+                Some(i) => r.u32s(i as usize).await?,
                 None => (0..count as u32).collect(),
             };
+            let joints = match attr("JOINTS_0") {
+                Some(i) => Some(r.u16s(i).await?),
+                None => None,
+            };
             prims.push(GltfPrimitive {
-                normal: attr("NORMAL").map(|i| r.f32s(i)).transpose()?,
-                uv: attr("TEXCOORD_0").map(|i| r.f32s(i)).transpose()?,
-                joints: attr("JOINTS_0").map(|i| r.u16s(i)).transpose()?,
-                weights: attr("WEIGHTS_0").map(|i| r.f32s(i)).transpose()?,
+                normal: r.f32s_of(attr("NORMAL")).await?,
+                uv: r.f32s_of(attr("TEXCOORD_0")).await?,
+                joints,
+                weights: r.f32s_of(attr("WEIGHTS_0")).await?,
                 position,
                 index,
                 material: num(p.get("material")).map_or(-1, |v| v as i32),
@@ -302,48 +332,47 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
             }
         }
     }
-    let nodes = raw_nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| {
-            let translation = floats(n.get("translation"), [0.0; 3]);
-            let rotation = floats(n.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
-            let scale = floats(n.get("scale"), [1.0; 3]);
-            let mut local = mat4();
-            if n.get("matrix").is_some() {
-                local = floats(n.get("matrix"), local);
-            } else {
-                compose_trs(&mut local, &translation, &rotation, &scale);
-            }
-            GltfNode {
-                name: n.get("name").and_then(|v| v.as_str()).map_or(String::new(), |s| s.to_string()),
-                parent: parents[i],
-                children: arr(n.get("children")).filter_map(|c| c.as_f64()).map(|c| c as u32).collect(),
-                mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
-                skin: num(n.get("skin")).map_or(-1, |v| v as i32),
-                local,
-                translation,
-                rotation,
-                scale,
-            }
-        })
-        .collect();
+    let mut nodes = Vec::with_capacity(raw_nodes.len());
+    for (i, n) in raw_nodes.iter().enumerate() {
+        pause().await;
+        let translation = floats(n.get("translation"), [0.0; 3]);
+        let rotation = floats(n.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
+        let scale = floats(n.get("scale"), [1.0; 3]);
+        let mut local = mat4();
+        if n.get("matrix").is_some() {
+            local = floats(n.get("matrix"), local);
+        } else {
+            compose_trs(&mut local, &translation, &rotation, &scale);
+        }
+        nodes.push(GltfNode {
+            parent: parents[i],
+            children: arr(n.get("children")).filter_map(|c| c.as_f64()).map(|c| c as u32).collect(),
+            mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
+            skin: num(n.get("skin")).map_or(-1, |v| v as i32),
+            local,
+            translation,
+            rotation,
+            scale,
+        });
+    }
 
     let mut skins = Vec::new();
     for s in arr(json.get("skins")) {
+        pause().await;
         let joints: Vec<u32> = arr(s.get("joints")).filter_map(|j| j.as_f64()).map(|j| j as u32).collect();
         let inverse_bind = match num(s.get("inverseBindMatrices")) {
-            Some(i) => r.f32s(i as usize)?,
+            Some(i) => r.f32s(i as usize).await?,
             None => joints.iter().flat_map(|_| [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]).collect(),
         };
         skins.push(GltfSkin { joints, inverse_bind });
     }
 
     let mut animations = Vec::new();
-    for (k, a) in arr(json.get("animations")).enumerate() {
+    for a in arr(json.get("animations")) {
         let mut duration = 0.0f64;
         let mut channels = Vec::new();
         for c in arr(a.get("channels")) {
+            pause().await;
             let Some(target) = c.get("target") else { continue };
             let Some(node) = num(target.get("node")) else { continue };
             let path = match plain(target.get("path")) {
@@ -355,8 +384,8 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
             let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else {
                 continue;
             };
-            let mut times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
-            let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)?;
+            let mut times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize).await?;
+            let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize).await?;
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
             let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
@@ -385,11 +414,7 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
                 values,
             });
         }
-        animations.push(GltfAnimation {
-            name: a.get("name").and_then(|v| v.as_str()).map_or_else(|| format!("animation_{k}"), |s| s.to_string()),
-            duration,
-            channels,
-        });
+        animations.push(GltfAnimation { duration, channels });
     }
 
     let scene_index = num(json.get("scene")).unwrap_or(0.0) as usize;

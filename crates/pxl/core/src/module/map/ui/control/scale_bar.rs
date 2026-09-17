@@ -39,22 +39,6 @@ pub struct ScaleBar {
     pub total_meters: f64,
     pub bar_width_px: f64,
     pub is_default_zoom: bool,
-    pub label: ScaleLabel,
-}
-
-/// A length in metres as the bar's label says it. SI units are
-/// case-sensitive: m (meter) != M (mega), km != KM.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ScaleLabel(pub f64);
-
-impl core::fmt::Display for ScaleLabel {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.0 >= 1000.0 {
-            write!(f, "{}km", self.0 / 1000.0)
-        } else {
-            write!(f, "{}m", self.0)
-        }
-    }
 }
 
 /// The scale bar for a viewport `screen_height` CSS pixels tall.
@@ -79,6 +63,5 @@ pub fn scale_bar(screen_height: f64) -> ScaleBar {
         total_meters,
         bar_width_px: if real_m_per_px > 0.0 { total_meters / real_m_per_px } else { 0.0 },
         is_default_zoom: (dist - camera_cfg::view::DEFAULT_DIST).abs() < 1.0,
-        label: ScaleLabel(total_meters),
     }
 }

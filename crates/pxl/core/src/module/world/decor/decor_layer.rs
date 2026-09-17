@@ -23,14 +23,15 @@ use pxl_shared::spec::cell::{decor_num_id, DecorId};
 use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
 use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
+use super::kind::DecorKind;
 use super::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::lib::env::route::{shipped_asset, shipped_asset_url};
 use crate::module::world::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::module::world::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 use crate::render::layer::terrain::adapter::{ChunkSample, PageView};
 use crate::render::lod::{LodStep, TARGET_CELL_PX};
 use crate::sys::kernel::kernel;
+use pxl_shared::asset::ingested::Asset;
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
 // derives from (alongside its own seed tag). Changing this reshuffles every
@@ -71,18 +72,18 @@ pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
 }
 
 /// One variant of a kind: its model and the skin it is drawn with.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DecorVariantAsset {
-    pub model_url: String,
+    pub model: Asset,
     /// Not necessarily shared across a kind's other variants: a kind's variants
     /// may come from different packs with different colormaps.
-    pub skin_url: String,
+    pub skin: Asset,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecorKindBundle {
-    /// The kind's name — kind.json's key, and the draw census's tag.
-    pub kind: &'static str,
+    /// The kind: kind.json's entry, and the draw census's tag.
+    pub kind: DecorKind,
     pub seed: DecorKindSeed,
     /// Where the kind stands, as the scheduler is taught it.
     pub rules: DecorRules,
@@ -100,22 +101,15 @@ pub struct DecorKindBundle {
 }
 
 /// Binds a kind's seed and rules to its models: each variant a model and a
-/// skin fetched by content key, `models` and `skins` row for row as kind.json
-/// lists them, and the kind's extent measured over all of them.
-pub fn bind_models(kind: &'static str, seed: DecorKindSeed, rules: DecorRules, models: &[&str], skins: &[&str], decor_id: Option<DecorId>) -> DecorKindBundle {
-    assert_eq!(models.len(), skins.len(), "decor: kind.json lists {} models for {kind} and {} skins", models.len(), skins.len());
-    let variants = models
-        .iter()
-        .zip(skins)
-        .map(|(model, skin)| DecorVariantAsset {
-            model_url: shipped_asset_url(model),
-            skin_url: shipped_asset_url(skin),
-        })
-        .collect();
+/// skin, `models` and `skins` row for row as kind.json lists them, and the
+/// kind's extent measured over all of them.
+pub fn bind_models(kind: DecorKind, seed: DecorKindSeed, rules: DecorRules, models: &[Asset], skins: &[Asset], decor_id: Option<DecorId>) -> DecorKindBundle {
+    assert_eq!(models.len(), skins.len(), "decor: kind.json lists {} models for {kind:?} and {} skins", models.len(), skins.len());
+    let variants = models.iter().zip(skins).map(|(&model, &skin)| DecorVariantAsset { model, skin }).collect();
     // Math.max: a NaN extent stays NaN rather than being dropped.
     let extent = models
         .iter()
-        .flat_map(|m| shipped_asset(m).extent.unwrap_or([0.0; 3]))
+        .flat_map(|m| m.ingested().extent.unwrap_or([0.0; 3]))
         .fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) });
     DecorKindBundle {
         kind,

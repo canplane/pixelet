@@ -49,7 +49,9 @@ pub enum GeolocationErrorCode {
 }
 
 struct Geolocation {
-    subscribers: u32,
+    /// Whether the map wants the sensor: what a return to the foreground
+    /// resumes.
+    open: bool,
     watching: bool,
     retry_at: Option<f64>,
     commands: Vec<GeolocationCommand>,
@@ -59,7 +61,7 @@ static GEOLOCATION: Global<Geolocation> = Global::new();
 
 fn geolocation() -> &'static mut Geolocation {
     GEOLOCATION.get(|| Geolocation {
-        subscribers: 0,
+        open: false,
         watching: false,
         retry_at: None,
         commands: Vec::new(),
@@ -95,26 +97,17 @@ pub fn stop_watching() {
     }
 }
 
-/// A subscriber arrived; the first starts the sensor.
-pub fn geolocation_subscribe(supported: bool) {
-    let g = geolocation();
-    g.subscribers += 1;
-    if g.subscribers == 1 {
-        start_watching(supported);
-    }
+/// The map opened: the sensor starts.
+pub fn geolocation_open(supported: bool) {
+    geolocation().open = true;
+    start_watching(supported);
 }
 
-/// A subscriber left; the last stops the sensor.
-pub fn geolocation_unsubscribe() {
-    let g = geolocation();
-    g.subscribers = g.subscribers.saturating_sub(1);
-    if g.subscribers == 0 {
-        stop_watching();
-        let store = device_location_store();
-        if store.status != DevicePoseStatus::Idle {
-            store.status = DevicePoseStatus::Idle;
-        }
-    }
+/// The map closed: the sensor stops.
+pub fn geolocation_close() {
+    geolocation().open = false;
+    stop_watching();
+    device_location_store().status = DevicePoseStatus::Idle;
 }
 
 /// The tab's visibility: paused in the background to save battery, resumed on
@@ -122,7 +115,7 @@ pub fn geolocation_unsubscribe() {
 pub fn geolocation_visibility(visible: bool, supported: bool) {
     if !visible {
         stop_watching();
-    } else if geolocation().subscribers > 0 {
+    } else if geolocation().open {
         start_watching(supported);
     }
 }

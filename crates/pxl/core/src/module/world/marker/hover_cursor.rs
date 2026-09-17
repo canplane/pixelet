@@ -15,7 +15,7 @@ use xpute_core::sys::mem::{alloc, free};
 
 use super::style::marker_colors;
 use crate::app::setting::store::settings_store;
-use crate::app::store::ui_store::{ui_store, ActiveTool};
+use crate::module::camera::input::{holding, ActiveTool};
 use crate::module::camera::store::camera_store;
 use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
@@ -63,7 +63,7 @@ pub fn hover_cursor_step() {
         ghost: Ghost::None,
     });
     let camera = camera_store();
-    let ui = ui_store();
+    let ui = holding();
     let settings = settings_store();
     let hovered = camera.hovered_coord;
     let active_tool = ui.active_tool;
