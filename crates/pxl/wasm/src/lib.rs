@@ -8,6 +8,8 @@
 //!
 //! The module is single-threaded, so the state is a plain global.
 
+mod executor;
+
 use pxl_core::mem;
 use pxl_core::render::layer::pipeline::volume::Volumes;
 use pxl_core::sys::global::Global;
@@ -252,7 +254,8 @@ fn lay_out() -> mem::Map {
 
 /// The doorbell: the rising edge of a turn, with the time it may take. The
 /// kernel applies the submissions waiting — a frame among them runs its tick
-/// on what is left of `quota_ms` — and the return is the falling edge: when
+/// on what is left of `quota_ms` — then polls the tasks queued for the turn
+/// (executor.rs), and the return is the falling edge: when
 /// the kernel wants the next turn, in ms from now, 0 for the next frame and
 /// xpute_core::sched::quantum's NO_WAKE for none. A turn rung with no quota
 /// only applies what waits.
@@ -261,6 +264,7 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     let s = state();
     pxl_core::module::world::change::world_edge().rise(quota_ms);
     drain(s);
+    executor::poll();
     pxl_core::module::world::change::world_edge().fall()
 }
 
