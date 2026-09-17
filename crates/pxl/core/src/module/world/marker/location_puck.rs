@@ -169,7 +169,7 @@ pub fn location_puck_step(device_coord: Option<PVF3>) {
     // boxes; the beacon has no such constraint, so this adds the remainder back
     // — otherwise it would quantize to whole-cell jumps instead of moving
     // smoothly.
-    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == WorldThemeKey::Night);
+    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == WorldThemeKey::night);
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
         kernel().sched.markers.set_beacon(beacon.0, beacon.1);

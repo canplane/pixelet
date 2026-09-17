@@ -3,7 +3,7 @@
 
 #![allow(non_upper_case_globals)]
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use crate::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
@@ -31,12 +31,12 @@ pub struct CellTypes {
     pub cube: &'static Channels,
 
     /// User-placed decor kinds
-    pub decor: &'static [(&'static str, u8)],
+    pub decor: &'static [decor_types::Decor],
 }
 
 pub const cell_types: CellTypes = CellTypes {
     cube: cube_types::CHANNELS,
-    decor: decor_types::ENTRIES,
+    decor: &decor_types::Decor::ALL,
 };
 
 // =============================================================================
@@ -114,33 +114,33 @@ pub fn cube_id_from_num(num_id: u32) -> CubeColorId {
 /// Every real cube color id in encoded numeric-id order.
 pub static cube_ids: LazyLock<Vec<CubeColorId>> = LazyLock::new(|| by_num(cube_types::block::ENTRIES).into_iter().map(|(name, _)| name).collect());
 
-static DECOR_NUM_IDS: LazyLock<HashSet<u32>> = LazyLock::new(|| decor_types::ENTRIES.iter().map(|(_, num)| *num as u32).collect());
-
 /// A cube-catalog value and a decor-catalog one share the same numeric
 /// range (both plain small numbers, no distinguishing bit) — this is the
 /// one place that tells the two apart, same role object_value_is_air plays
 /// for AIR within the cube catalog itself.
 pub fn object_value_is_decor(value: u32) -> bool {
-    DECOR_NUM_IDS.contains(&value)
+    u8::try_from(value).ok().and_then(decor_types::Decor::of).is_some()
 }
 
-pub fn decor_num_id(id: &str) -> u32 {
-    match decor_types::ENTRIES.iter().find(|(name, _)| *name == id) {
-        Some((_, num)) => *num as u32,
-        None => panic!("no decor kind named {id}"),
-    }
+/// The value a leaf holds a decor kind as.
+pub fn decor_num_id(id: DecorId) -> u32 {
+    id as u32
 }
 
-/// Numeric id -> decor name — the reverse of decor_num_id, used to decode a packed decor leaf back into a PlacedDecor's own DecorId.
+/// The decor kind a packed leaf holds, the reverse of decor_num_id.
 pub fn decor_id_from_num(num_id: u32) -> DecorId {
-    match by_num(decor_types::ENTRIES).iter().find(|(_, num)| *num == num_id) {
-        Some((name, _)) => name,
+    match u8::try_from(num_id).ok().and_then(decor_types::Decor::of) {
+        Some(id) => id,
         None => panic!("no decor kind registered for numeric id {num_id}"),
     }
 }
 
-/// Every real decor id in encoded numeric-id order — mode_bar.tsx's decor buttons iterate this, same shape as cube_ids.
-pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| by_num(decor_types::ENTRIES).into_iter().map(|(name, _)| name).collect());
+/// Every decor kind in encoded numeric-id order — mode_bar.tsx's decor buttons iterate this, same shape as cube_ids.
+pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
+    let mut ids = decor_types::Decor::ALL.to_vec();
+    ids.sort_by_key(|id| *id as u8);
+    ids
+});
 
 // =============================================================================
 // Terrain-styled cube catalog — user-placeable references into cube_types'
@@ -339,6 +339,32 @@ pub fn terrain_style_cube_source(cube: PlaceableCube) -> Option<TerrainStyleSour
 pub fn terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: u32) -> Option<PlaceableCube> {
     let source = TerrainStyleSource { channel, terrain_num_id };
     cube_of_source(source)
+}
+
+/// A ground channel's types as numbers: `common`'s first, then the channel's
+/// own, each in cube_type.json's order — for a caller that walks a channel
+/// without naming it.
+pub fn ground_channel_types(channel: GroundChannelKey) -> Vec<u8> {
+    let own: Vec<u8> = match channel {
+        GroundChannelKey::LAND => cube_types::Land::ALL.iter().map(|t| *t as u8).collect(),
+        GroundChannelKey::WATER => cube_types::Water::ALL.iter().map(|t| *t as u8).collect(),
+        GroundChannelKey::STRUCTURE => cube_types::Structure::ALL.iter().map(|t| *t as u8).collect(),
+        GroundChannelKey::TRANSPORT => cube_types::Transport::ALL.iter().map(|t| *t as u8).collect(),
+    };
+    cube_types::Common::ALL.iter().map(|t| *t as u8).chain(own).collect()
+}
+
+/// A ground channel's colours by type, as the catalog gives them.
+pub fn ground_channel_colors(channel: GroundChannelKey) -> Option<&'static r#type::ChannelColors> {
+    cube_colors.get(channel.as_str())
+}
+
+/// The flat colours, in their numbers' order: the layer arrays' order for
+/// placed blocks.
+pub fn block_cubes() -> Vec<cube_types::Block> {
+    let mut blocks = cube_types::Block::ALL.to_vec();
+    blocks.sort_by_key(|b| *b as u8);
+    blocks
 }
 
 /// The swatch colour the catalog gives it — cube_colors is keyed by channel

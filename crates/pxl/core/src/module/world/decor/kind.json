@@ -1,12 +1,14 @@
 {
   "$doc": [
     "Every scattered decor kind's seed and placement rules. A rule is per",
-    "ground channel: \"any\", \"void\", or the channel's types by cube_types name.",
-    "The scatter stays generic, so a later kind (a fence along",
+    "ground channel: the channel's types it stands on by cube_types name, the",
+    "channels that must hold nothing (`void`), and any other channel is",
+    "anything. The scatter stays generic, so a later kind (a fence along",
     "a road edge, a candle inside a structure, ...) is one more entry here."
   ],
   "decor_kinds": {
     "tree": {
+      "$number": 0,
       "$doc": [
         "Trees on green/forest terrain, and only where nothing else (water, a",
         "structure, a road) already claims the cell — the same \"what actually",
@@ -57,7 +59,8 @@
           "decor/kenney_graveyard_kit/pine-crooked.glb",
           "decor/kenney_graveyard_kit/pine-fall.glb",
           "decor/kenney_graveyard_kit/pine-fall-crooked.glb"
-        ]
+        ],
+        "$type": "pxl_shared::asset::ingested::Asset"
       },
       "skins": {
         "$doc": [
@@ -75,18 +78,38 @@
           "decor/kenney_graveyard_kit/colormap.png",
           "decor/kenney_graveyard_kit/colormap.png",
           "decor/kenney_graveyard_kit/colormap.png"
-        ]
+        ],
+        "$type": "pxl_shared::asset::ingested::Asset"
       },
-      "orientation": "random",
-      "decor_id": "tree",
+      "orientation": {
+        "$type": "crate::module::world::decor::scatter::DecorOrientationMode",
+        "$value": "Random"
+      },
+      "decor_id": {
+        "$type": "pxl_shared::spec::cell::decor_types::Decor",
+        "$value": "tree"
+      },
       "rules": {
-        "land": ["green_light", "green_deep", "bare"],
-        "water": "void",
-        "structure": "void",
-        "transport": "void"
+        "land": {
+          "$type": "pxl_shared::spec::cell::cube_types::Land",
+          "$value": [
+            "green_light",
+            "green_deep",
+            "bare"
+          ]
+        },
+        "void": {
+          "$type": "pxl_shared::bake::format::GroundChannelKey",
+          "$value": [
+            "WATER",
+            "STRUCTURE",
+            "TRANSPORT"
+          ]
+        }
       }
     },
     "boat": {
+      "$number": 1,
       "$doc": [
         "Small boats on open water. Open river/lake water only — WETLAND is",
         "excluded (too shallow/marshy for a boat to sit in), and",
@@ -95,7 +118,10 @@
         "actually render as itself, not water, at that cell — a boat there would",
         "visually float on top of a bridge instead of the water beneath it."
       ],
-      "tag": { "$value": "0xb0a75eed0002dec0", "$type": "u64" },
+      "tag": {
+        "$value": "0xb0a75eed0002dec0",
+        "$type": "u64"
+      },
       "density": {
         "$value": 0.002,
         "$doc": [
@@ -106,22 +132,47 @@
           "the water, not scattered on it."
         ]
       },
-      "models": [
-        "decor/kenney_watercraft_pack/boat-row-small.glb",
-        "decor/kenney_watercraft_pack/boat-fishing-small.glb",
-        "decor/kenney_watercraft_pack/boat-sail-a.glb",
-        "decor/kenney_watercraft_pack/boat-speed-a.glb"
-      ],
-      "skins": [
-        "decor/kenney_watercraft_pack/colormap.png",
-        "decor/kenney_watercraft_pack/colormap.png",
-        "decor/kenney_watercraft_pack/colormap.png",
-        "decor/kenney_watercraft_pack/colormap.png"
-      ],
-      "orientation": "random",
-      "rules": { "land": "any", "water": ["river", "lake"], "structure": "void", "transport": "void" }
+      "models": {
+        "$type": "pxl_shared::asset::ingested::Asset",
+        "$value": [
+          "decor/kenney_watercraft_pack/boat-row-small.glb",
+          "decor/kenney_watercraft_pack/boat-fishing-small.glb",
+          "decor/kenney_watercraft_pack/boat-sail-a.glb",
+          "decor/kenney_watercraft_pack/boat-speed-a.glb"
+        ]
+      },
+      "skins": {
+        "$type": "pxl_shared::asset::ingested::Asset",
+        "$value": [
+          "decor/kenney_watercraft_pack/colormap.png",
+          "decor/kenney_watercraft_pack/colormap.png",
+          "decor/kenney_watercraft_pack/colormap.png",
+          "decor/kenney_watercraft_pack/colormap.png"
+        ]
+      },
+      "orientation": {
+        "$type": "crate::module::world::decor::scatter::DecorOrientationMode",
+        "$value": "Random"
+      },
+      "rules": {
+        "water": {
+          "$type": "pxl_shared::spec::cell::cube_types::Water",
+          "$value": [
+            "river",
+            "lake"
+          ]
+        },
+        "void": {
+          "$type": "pxl_shared::bake::format::GroundChannelKey",
+          "$value": [
+            "STRUCTURE",
+            "TRANSPORT"
+          ]
+        }
+      }
     },
     "car": {
+      "$number": 2,
       "$doc": [
         "Ambient cars on major roads. Motorway/primary/secondary only,",
         "deliberately: ordinary neighborhood streets and pedestrian ways",
@@ -135,54 +186,101 @@
         "renders (and therefore counts) as that road type regardless of whatever",
         "land/water/structure value sits underneath it."
       ],
-      "tag": { "$value": "0x0ca5eed00003dec0", "$type": "u64" },
+      "tag": {
+        "$value": "0x0ca5eed00003dec0",
+        "$type": "u64"
+      },
       "density": {
         "$value": 0.004,
-        "$doc": ["Much sparser than trees/boats: a highway with a car every couple of", "cells would read as gridlock, not ambient traffic."]
+        "$doc": [
+          "Much sparser than trees/boats: a highway with a car every couple of",
+          "cells would read as gridlock, not ambient traffic."
+        ]
       },
-      "models": [
-        "decor/kenney_car_kit/sedan.glb",
-        "decor/kenney_car_kit/suv.glb",
-        "decor/kenney_car_kit/van.glb",
-        "decor/kenney_car_kit/hatchback-sports.glb",
-        "decor/kenney_car_kit/taxi.glb"
-      ],
-      "skins": [
-        "decor/kenney_car_kit/colormap.png",
-        "decor/kenney_car_kit/colormap.png",
-        "decor/kenney_car_kit/colormap.png",
-        "decor/kenney_car_kit/colormap.png",
-        "decor/kenney_car_kit/colormap.png"
-      ],
-      "orientation": "align_transport",
-      "rules": { "land": "any", "water": "any", "structure": "any", "transport": ["road_motorway", "road_primary", "road_secondary"] }
+      "models": {
+        "$type": "pxl_shared::asset::ingested::Asset",
+        "$value": [
+          "decor/kenney_car_kit/sedan.glb",
+          "decor/kenney_car_kit/suv.glb",
+          "decor/kenney_car_kit/van.glb",
+          "decor/kenney_car_kit/hatchback-sports.glb",
+          "decor/kenney_car_kit/taxi.glb"
+        ]
+      },
+      "skins": {
+        "$type": "pxl_shared::asset::ingested::Asset",
+        "$value": [
+          "decor/kenney_car_kit/colormap.png",
+          "decor/kenney_car_kit/colormap.png",
+          "decor/kenney_car_kit/colormap.png",
+          "decor/kenney_car_kit/colormap.png",
+          "decor/kenney_car_kit/colormap.png"
+        ]
+      },
+      "orientation": {
+        "$type": "crate::module::world::decor::scatter::DecorOrientationMode",
+        "$value": "AlignTransport"
+      },
+      "rules": {
+        "transport": {
+          "$type": "pxl_shared::spec::cell::cube_types::Transport",
+          "$value": [
+            "road_motorway",
+            "road_primary",
+            "road_secondary"
+          ]
+        }
+      }
     },
     "train": {
+      "$number": 3,
       "$doc": [
         "Occasional trains on rail lines. rail_main only (not RAIL_SUBWAY —",
         "that's underground, wrong context for a surface-scattered prop). Same",
         "\"align_transport\" reasoning as car applies: a train lying across the rail",
         "sideways would read as derailed. Only the transport channel matters."
       ],
-      "tag": { "$value": "0x7ba15eed0004dec0", "$type": "u64" },
+      "tag": {
+        "$value": "0x7ba15eed0004dec0",
+        "$type": "u64"
+      },
       "density": {
         "$value": 0.004,
-        "$doc": ["Very sparse, deliberately — trains are meant to read as occasional, not", "as a train sitting on every visible stretch of track."]
+        "$doc": [
+          "Very sparse, deliberately — trains are meant to read as occasional, not",
+          "as a train sitting on every visible stretch of track."
+        ]
       },
-      "models": [
-        "decor/kenney_train_kit/train-locomotive-a.glb",
-        "decor/kenney_train_kit/train-locomotive-b.glb",
-        "decor/kenney_train_kit/train-diesel-a.glb",
-        "decor/kenney_train_kit/train-electric-city-a.glb"
-      ],
-      "skins": [
-        "decor/kenney_train_kit/colormap.png",
-        "decor/kenney_train_kit/colormap.png",
-        "decor/kenney_train_kit/colormap.png",
-        "decor/kenney_train_kit/colormap.png"
-      ],
-      "orientation": "align_transport",
-      "rules": { "land": "any", "water": "any", "structure": "any", "transport": ["rail_main"] }
+      "models": {
+        "$type": "pxl_shared::asset::ingested::Asset",
+        "$value": [
+          "decor/kenney_train_kit/train-locomotive-a.glb",
+          "decor/kenney_train_kit/train-locomotive-b.glb",
+          "decor/kenney_train_kit/train-diesel-a.glb",
+          "decor/kenney_train_kit/train-electric-city-a.glb"
+        ]
+      },
+      "skins": {
+        "$type": "pxl_shared::asset::ingested::Asset",
+        "$value": [
+          "decor/kenney_train_kit/colormap.png",
+          "decor/kenney_train_kit/colormap.png",
+          "decor/kenney_train_kit/colormap.png",
+          "decor/kenney_train_kit/colormap.png"
+        ]
+      },
+      "orientation": {
+        "$type": "crate::module::world::decor::scatter::DecorOrientationMode",
+        "$value": "AlignTransport"
+      },
+      "rules": {
+        "transport": {
+          "$type": "pxl_shared::spec::cell::cube_types::Transport",
+          "$value": [
+            "rail_main"
+          ]
+        }
+      }
     }
   }
 }

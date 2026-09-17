@@ -6,11 +6,12 @@
 use super::boat_kind::{BOAT_KIND, BOAT_RULES};
 use super::decor_layer::{bind_models, DecorKindBundle};
 use super::kind::decor_kinds::boat as S;
+use super::kind::DecorKind;
 use crate::sys::global::Global;
 
 static BUNDLE: Global<DecorKindBundle> = Global::new();
 
 #[allow(non_snake_case)]
 pub fn BOAT_DECOR_BUNDLE() -> &'static DecorKindBundle {
-    BUNDLE.get(|| bind_models("boat", BOAT_KIND(), BOAT_RULES(), S::models, S::skins, None))
+    BUNDLE.get(|| bind_models(DecorKind::boat, BOAT_KIND(), BOAT_RULES(), &S::models, &S::skins, None))
 }

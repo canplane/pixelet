@@ -14,6 +14,7 @@
 //! arrays and numbers, so it can be read head-on.
 
 use pxl_shared::bake::constant::PAGE_CELL_SPAN;
+use pxl_shared::bake::format::GroundChannelKey;
 use pxl_shared::spec::cell::cube_types;
 
 /// What a channel's type must be for a kind to stand on the cell: anything,
@@ -36,10 +37,8 @@ pub struct DecorRules {
     pub transport: DecorChannelRule,
 }
 
-pub const DECOR_RULE_CHANNELS: [&str; 4] = ["land", "water", "structure", "transport"];
-
 impl DecorRules {
-    /// A channel's rule by name, in DECOR_RULE_CHANNELS' order.
+    /// A channel's rule, in GROUND_CH_KEYS' order.
     pub fn channel(&self, index: usize) -> &DecorChannelRule {
         match index {
             0 => &self.land,
@@ -58,24 +57,25 @@ fn rule_allows(rule: &DecorChannelRule, t: u32) -> bool {
     }
 }
 
-/// A channel's rule as kind.json writes it — "any", "void", or the channel's
-/// types by cube_types name — in the numbers a cell's channel holds.
-pub fn rule_of(channel: &str, names: &[&str]) -> DecorChannelRule {
-    let types = cube_types::CHANNELS.iter().find(|(name, _)| *name == channel).map_or(&[][..], |(_, t)| t);
-    DecorChannelRule::OneOf(
-        names
-            .iter()
-            .map(|name| types.iter().find(|(n, _)| n == name).unwrap_or_else(|| panic!("decor kind rule names no {channel} type {name}")).1 as u32)
-            .collect(),
-    )
-}
-
-/// A channel's "any" or "void".
-pub fn rule_word(word: &str) -> DecorChannelRule {
-    if word == "void" {
-        DecorChannelRule::Void
-    } else {
-        DecorChannelRule::Any
+/// A kind's rules as kind.json writes them, in the numbers a cell's channels
+/// hold: each channel's types where it lists them, nothing painted for the
+/// channels its `void` names, and anything else.
+pub fn rules_of(void: &[GroundChannelKey], land: &[u32], water: &[u32], structure: &[u32], transport: &[u32]) -> DecorRules {
+    let types = [land, water, structure, transport];
+    let rule = |channel: GroundChannelKey| {
+        if void.contains(&channel) {
+            DecorChannelRule::Void
+        } else if types[channel as usize].is_empty() {
+            DecorChannelRule::Any
+        } else {
+            DecorChannelRule::OneOf(types[channel as usize].to_vec())
+        }
+    };
+    DecorRules {
+        land: rule(GroundChannelKey::LAND),
+        water: rule(GroundChannelKey::WATER),
+        structure: rule(GroundChannelKey::STRUCTURE),
+        transport: rule(GroundChannelKey::TRANSPORT),
     }
 }
 
@@ -99,16 +99,6 @@ pub fn eligibility_of(rules: &DecorRules, land: u32, water: u32, structure: u32,
 pub enum DecorOrientationMode {
     Random,
     AlignTransport,
-}
-
-impl DecorOrientationMode {
-    pub fn of(word: &str) -> DecorOrientationMode {
-        if word == "align_transport" {
-            DecorOrientationMode::AlignTransport
-        } else {
-            DecorOrientationMode::Random
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -936,7 +936,7 @@ pub fn place(at: &PVF3, size: f64, cube: PlaceableCube, show_structures: bool) {
 
 /// Same write path as place(), just tagged with a decor kind instead of a
 /// color.
-pub fn place_decor(at: &PVF3, size: f64, decor_id: &str) {
+pub fn place_decor(at: &PVF3, size: f64, decor_id: DecorId) {
     write_object_value(at, size, decor_num_id(decor_id));
 }
 

@@ -1,27 +1,9 @@
 // pxl_core/module/world/environment/theme.rs
 
-use super::theme_spec::{daylight_split, themes as T};
+use super::theme_spec::{daylight_split, themes as T, Theme};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum WorldThemeKey {
-    Morning,
-    #[default]
-    Day,
-    Evening,
-    Night,
-}
-
-impl WorldThemeKey {
-    /// The name the UI snapshot carries, and theme.json's key.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            WorldThemeKey::Morning => "morning",
-            WorldThemeKey::Day => "day",
-            WorldThemeKey::Evening => "evening",
-            WorldThemeKey::Night => "night",
-        }
-    }
-}
+/// A time-of-day theme: theme.json's `themes`, by its member.
+pub type WorldThemeKey = Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SkyColors {
@@ -78,14 +60,14 @@ macro_rules! theme {
     };
 }
 
+/// Every theme, at its number (theme.json's `$number`).
+const THEMES: [WorldTheme; Theme::ALL.len()] = [theme!(morning), theme!(day), theme!(evening), theme!(night)];
+
+const _: () = assert!(Theme::morning as usize == 0 && Theme::day as usize == 1 && Theme::evening as usize == 2 && Theme::night as usize == 3);
+
 /// `themes[key]`.
 pub fn themes(key: WorldThemeKey) -> WorldTheme {
-    match key {
-        WorldThemeKey::Morning => theme!(morning),
-        WorldThemeKey::Day => theme!(day),
-        WorldThemeKey::Evening => theme!(evening),
-        WorldThemeKey::Night => theme!(night),
-    }
+    THEMES[key as usize]
 }
 
 /// Theme derived from the current hour and the real sunrise/sunset for wherever
@@ -94,14 +76,14 @@ pub fn themes(key: WorldThemeKey) -> WorldTheme {
 /// scaled to however long daylight actually is today.
 pub fn get_theme_key(hour: f64, sunrise_hour: f64, sunset_hour: f64) -> WorldThemeKey {
     if hour < sunrise_hour || hour >= sunset_hour {
-        return WorldThemeKey::Night;
+        return WorldThemeKey::night;
     }
     let daylight_fraction = (hour - sunrise_hour) / (sunset_hour - sunrise_hour);
     if daylight_fraction < daylight_split::MORNING_END {
-        WorldThemeKey::Morning
+        WorldThemeKey::morning
     } else if daylight_fraction < daylight_split::DAY_END {
-        WorldThemeKey::Day
+        WorldThemeKey::day
     } else {
-        WorldThemeKey::Evening
+        WorldThemeKey::evening
     }
 }
