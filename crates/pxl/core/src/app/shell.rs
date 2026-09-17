@@ -16,8 +16,8 @@ use xpute_core::kit::json::{read_json, JsonValue, Quoted};
 use crate::app::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::app::setting::store::settings_store;
 use crate::module::camera::store::{camera_store, CameraStatus};
-use crate::module::device::pose::device_orientation::{orientation_subscribe, orientation_unsubscribe, request_orientation, OrientationPlatform};
-use crate::module::device::pose::geolocation::{geolocation_subscribe, geolocation_unsubscribe, start_watching};
+use crate::module::device::pose::device_orientation::{orientation_close, orientation_open, request_orientation};
+use crate::module::device::pose::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::module::device::pose::store::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::module::map::navigation::map_navigation::map_navigation;
 use crate::module::map::store::map_store;
@@ -33,7 +33,7 @@ use crate::module::world::frame::view::view;
 use crate::module::world::object::store::OBJECT_STORAGE_VERSION;
 use crate::module::world::sched::log::{ledger_set_logging, ledger_window_start, ledger_window_stop};
 use crate::module::world::terrain::elevation::{get_ele, ground_or_raw};
-use crate::module::world::world::{set_world_platform, world_platform, Platform};
+use crate::module::world::world::world_platform;
 use crate::sys::global::Global;
 
 struct Shell {
@@ -176,36 +176,44 @@ fn f64_of(action: &JsonValue, key: &str) -> Option<f64> {
 fn bool_of(action: &JsonValue, key: &str) -> Option<bool> {
     action.get(key)?.as_bool()
 }
-/// The tracking button: back to the device when the map is off it, else
-/// follow mode on — the compass sensor asked for first — or off again
-/// (INPUT_TRACKING).
-pub fn tracking_action() {
-    let location = device_location_store();
-    let is_enabled = location.status == DevicePoseStatus::Ready && location.location.is_some();
-    let is_loading = location.status == DevicePoseStatus::Loading;
-    if !is_enabled || is_loading {
-        return;
-    }
+/// What the tracking button did, as the button showed it (INPUT_TRACKING).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tracking {
+    /// Back to the device.
+    Recenter,
+    /// Follow mode on, where the compass is listened to.
+    Follow,
+    /// Follow mode off, north up again.
+    Unfollow,
+}
+
+/// The tracking button's press. Which of the three it is was decided by the
+/// shell from the state it drew the button in: the press means what the user
+/// saw, and entering follow mode is also what the shell's compass prompt has
+/// to be raised for.
+pub fn tracking_action(tracking: Tracking) {
     let camera = camera_store();
-    let nav = map_navigation();
-    if nav.is_off_center && !camera.is_follow_mode {
-        if let Some(device) = nav.device_coord {
-            // device_coord's Z is the device's raw GPS altitude, not the map's
-            // baked terrain height — ground_or_raw applies the same terrain
-            // sample a pan uses, so this recenter lands where panning would.
-            let target = if settings_store().ground_snap { ground_or_raw(&device) } else { device };
-            map_store().map_center = Some(target);
+    match tracking {
+        Tracking::Recenter => {
+            if let Some(device) = map_navigation().device_coord {
+                // device_coord's Z is the device's raw GPS altitude, not the
+                // map's baked terrain height — ground_or_raw applies the same
+                // terrain sample a pan uses, so this recenter lands where
+                // panning would.
+                let target = if settings_store().ground_snap { ground_or_raw(&device) } else { device };
+                map_store().map_center = Some(target);
+            }
+            camera.is_follow_mode = false;
         }
-        camera.is_follow_mode = false;
-        return;
-    }
-    if !camera.is_follow_mode {
-        if request_orientation(world_platform().orientation) {
-            camera.is_follow_mode = true;
+        Tracking::Follow => {
+            if request_orientation(world_platform().orientation) {
+                camera.is_follow_mode = true;
+            }
         }
-    } else {
-        camera.is_follow_mode = false;
-        camera.reset_azimuth();
+        Tracking::Unfollow => {
+            camera.is_follow_mode = false;
+            camera.reset_azimuth();
+        }
     }
 }
 
@@ -233,10 +241,6 @@ pub fn ui_action(text: &str) -> bool {
             let Some(text) = text_of(&action, "text") else { return false };
             crate::module::world::character::chat_bubble::append_chat_line(&text);
         }
-        "set_is_follow_mode" => {
-            let Some(on) = bool_of(&action, "on") else { return false };
-            camera_store().is_follow_mode = on;
-        }
         "reset_dist" => camera_store().reset_dist(),
         "compass_reset" => compass_reset(),
         "go_to" => {
@@ -261,23 +265,14 @@ pub fn ui_action(text: &str) -> bool {
             request_orientation(platform.orientation);
             start_watching(platform.geolocation);
         }
-        "sensors_subscribe" => {
-            // Sent before the first frame, which is what tells the kernel the
-            // platform otherwise: the action carries it.
-            let platform = Platform {
-                geolocation: bool_of(&action, "geolocation").unwrap_or(false),
-                orientation: OrientationPlatform {
-                    supported: bool_of(&action, "orientation").unwrap_or(false),
-                    needs_permission: bool_of(&action, "needs_permission").unwrap_or(false),
-                },
-            };
-            set_world_platform(platform);
-            geolocation_subscribe(platform.geolocation);
-            orientation_subscribe(platform.orientation);
+        "sensors_open" => {
+            let platform = world_platform();
+            geolocation_open(platform.geolocation);
+            orientation_open(platform.orientation);
         }
-        "sensors_unsubscribe" => {
-            geolocation_unsubscribe();
-            orientation_unsubscribe();
+        "sensors_close" => {
+            geolocation_close();
+            orientation_close();
         }
         "preview_open" => {
             let (Some(id), Some(group), Some(number)) = (

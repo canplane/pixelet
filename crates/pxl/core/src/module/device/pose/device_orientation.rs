@@ -38,7 +38,6 @@ pub struct OrientationPlatform {
 }
 
 struct Orientation {
-    subscribers: u32,
     last_event_at: Option<f64>,
     watchdog_at: f64,
     commands: Vec<OrientationCommand>,
@@ -48,7 +47,6 @@ static ORIENTATION: Global<Orientation> = Global::new();
 
 fn orientation() -> &'static mut Orientation {
     ORIENTATION.get(|| Orientation {
-        subscribers: 0,
         last_event_at: None,
         watchdog_at: 0.0,
         commands: Vec::new(),
@@ -106,28 +104,17 @@ pub fn orientation_permission(answer: PermissionAnswer) {
     }
 }
 
-/// A subscriber arrived; auto-started on platforms that allow it.
-pub fn orientation_subscribe(platform: OrientationPlatform) {
-    orientation().subscribers += 1;
-    if !device_orientation_store().is_tracking_orientation && !platform.needs_permission {
-        request_orientation(platform);
-    }
+/// The map opened: started where the platform allows it without a prompt.
+pub fn orientation_open(platform: OrientationPlatform) {
+    request_orientation(platform);
 }
 
-/// A subscriber left; the last removes the listener.
-pub fn orientation_unsubscribe() {
-    let o = orientation();
-    o.subscribers = o.subscribers.saturating_sub(1);
-    if o.subscribers == 0 {
-        o.commands.push(OrientationCommand::Remove);
-        let store = device_orientation_store();
-        if store.is_tracking_orientation {
-            store.set_is_tracking_orientation(false);
-        }
-        if store.status != DevicePoseStatus::Idle {
-            store.status = DevicePoseStatus::Idle;
-        }
-    }
+/// The map closed: the listener is removed.
+pub fn orientation_close() {
+    orientation().commands.push(OrientationCommand::Remove);
+    let store = device_orientation_store();
+    store.set_is_tracking_orientation(false);
+    store.status = DevicePoseStatus::Idle;
 }
 
 /// Browsers throttle or stop dispatching deviceorientation for backgrounded

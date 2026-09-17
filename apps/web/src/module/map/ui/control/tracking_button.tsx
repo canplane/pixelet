@@ -3,7 +3,7 @@
 import { Compass, Loader2, Locate, Navigation } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { kernel_tracking, useKernel } from "@/wasm/kernel.ts";
+import { kernel_tracking, TRACKING_FOLLOW, TRACKING_RECENTER, TRACKING_UNFOLLOW, useKernel } from "@/wasm/kernel.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { CircularButton } from "@/shared/ui/shadcn/circular_button.tsx";
@@ -40,7 +40,7 @@ export function TrackingButton() {
     <CircularButton
       className="w-12 h-12"
       shadow={false}
-      onClick={() => void kernel_tracking(!can_show_location_control && !is_follow_mode)}
+      onClick={() => void kernel_tracking(can_show_location_control ? TRACKING_RECENTER : is_follow_mode ? TRACKING_UNFOLLOW : TRACKING_FOLLOW)}
       isActive={is_follow_mode}
       disabled={!is_enabled || is_loading}
       title={title}

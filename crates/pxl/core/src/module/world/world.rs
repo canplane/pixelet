@@ -148,7 +148,8 @@ fn world_tasks() {
 }
 
 /// The effects' turn, before the tick.
-pub fn world_turn(platform: Platform) {
+pub fn world_turn() {
+    let platform = world_platform();
     world_boot();
     map_navigation_step();
     map_bootstrap_step();
@@ -171,12 +172,13 @@ pub fn world_turn(platform: Platform) {
 static TICK_STATE: Global<TickState> = Global::new();
 static PLATFORM: Global<Option<Platform>> = Global::new();
 
-/// Tells the kernel the platform before its first frame.
+/// Tells the kernel the platform, once, at boot: what a device offers does not
+/// change while the page runs.
 pub fn set_world_platform(platform: Platform) {
     *PLATFORM.get(|| None) = Some(platform);
 }
 
-/// The platform as the last frame was told it.
+/// The platform as the boot told it.
 pub fn world_platform() -> Platform {
     PLATFORM.get(|| None).unwrap_or(Platform {
         geolocation: false,
@@ -194,7 +196,6 @@ pub struct HostFrame {
     pub height: f64,
     pub dpr: f64,
     pub delta: f64,
-    pub platform: Platform,
     pub frame_ms: f64,
     pub interactive: bool,
     /// The fetches the kernel may have in flight.
@@ -253,15 +254,13 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         height,
         dpr,
         delta,
-        platform,
         frame_ms,
         interactive,
         credits,
     } = host;
     let t0 = now();
-    *PLATFORM.get(|| None) = Some(platform);
     set_fetch_credits(credits);
-    world_turn(platform);
+    world_turn();
     let state = TICK_STATE.get(TickState::default);
     state.width = width;
     state.height = height;

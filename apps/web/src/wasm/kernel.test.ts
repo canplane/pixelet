@@ -11,7 +11,6 @@
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { fnv1a64_bytes, fnv1a64_str } from "@xpute/core/kit/hash.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { encode_poi_page, encode_terrain } from "@pxl/shared/bake/format.ts";
@@ -32,9 +31,8 @@ function rng(seed: u32): () => u32 {
 }
 
 type Snapshot = {
-  map: { has_center: boolean; center_lonlat: [number, number] | null; status: string };
-  settings: Record<string, boolean | string>;
-  search: { loading: boolean; results: unknown[] };
+  map: { status: string; is_off_center: boolean; center: [number, number] | null };
+  settings: Record<string, boolean | string | number>;
 };
 
 /** A started fetch: the key the kernel hands out and takes back, its URL,
@@ -43,29 +41,15 @@ type Fetched = { key: bigint; url: string; category: string };
 
 /** The stream a fetch's URL is for (crates/pxl/core/src/lib/env/route.rs). */
 function category_of(url: string): string {
-  if (url.startsWith("/api/search")) return "search";
   if (url.endsWith("/_ocean")) return "ocean";
   return url.split("/")[3];
-}
-
-/** crates/pxl/core/src/module/world/sched/demand.rs's Category, in order. */
-const SEARCH_CATEGORY = 3;
-
-/** fetch_scheduler.rs's hash_of: the category as a u32 and the subject as a
- * u64, both little-endian, under FNV-1a. */
-function key_of(category: number, subject: bigint): bigint {
-  const bytes = new Uint8Array(12);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, category, true);
-  view.setBigUint64(4, subject, true);
-  return fnv1a64_bytes(bytes);
 }
 
 type Turn = { snapshot: Snapshot; fetched: Fetched[]; draws: number };
 
 let snapshot: Snapshot | null = null;
 let fetched: Fetched[] = [];
-let loads: string[] = [];
+let loads: number[] = [];
 let draws = 0;
 
 CORE_BUILD.signal = (_tag, cmd, f) => {
@@ -76,7 +60,7 @@ CORE_BUILD.signal = (_tag, cmd, f) => {
   else if (cmd === Cmd.FETCH_CREATE) {
     const [key, url] = f!.get<[bigint, string]>();
     fetched.push({ key, url, category: category_of(url) });
-  } else if (cmd === Cmd.LOAD_CREATE) loads.push(f!.at(1).get<string>());
+  } else if (cmd === Cmd.LOAD_CREATE) loads.push(f!.at(1).get<number>());
 };
 
 /** A page's body as the bake encodes it: a rolling elevation raster and
@@ -123,26 +107,21 @@ function fail(f: Fetched): void {
   CORE_BUILD.ring(0);
 }
 
-/** What a search is answered with; with none, a search fails. */
-let search_body: Uint8Array | null = null;
-
 /** One frame as the driver runs it, with every fetch answered at once. */
 function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
   const requests = heap_row[HEAP_REQUESTS];
-  CORE_BUILD.send(0, Cmd.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).bool(false).bool(false).bool(false).f64(1000 / 60).bool(true).u32(6)));
+  CORE_BUILD.send(0, Cmd.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).f64(1000 / 60).bool(true).u32(6)));
   CORE_BUILD.ring(8);
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
   for (const f of started) {
     if (f.category === "terrain") answer(f, 200, terrain_body(Number(BigInt(f.url.slice(f.url.lastIndexOf("/") + 1)) & 0xffffn)));
     else if (f.category === "poi") answer(f, 200, encode_poi_page([]));
-    else if (f.category === "geocode") answer(f, 404, null);
-    else if (f.category === "search" && search_body !== null) answer(f, 200, search_body);
     else fail(f);
   }
-  for (const url of loads) CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.str(url)));
+  for (const load of loads) CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return { snapshot, fetched: started, draws };
 }
@@ -154,7 +133,7 @@ function action(a: Record<string, unknown>): void {
 
 CORE_BUILD.call(
   Cmd.WORLD_CREATE,
-  packet((b) => b.str("test").str("2026-09-15T00:00:00Z").str("r0-test").str("b?").bool(false).bool(false)),
+  packet((b) => b.str("test").str("2026-09-15T00:00:00Z").str("r0-test").str("b?").bool(false).bool(false).bool(false).bool(false).bool(false)),
   (r) => r,
 );
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
@@ -164,7 +143,7 @@ console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, t
 Deno.test("kernel - a map centre fetches its terrain and draws it, and the map settles to success", () => {
   action({ type: "go_to", lon: 126.978, lat: 37.5665 });
   let first = turn();
-  assert(first.snapshot.map.has_center, "the centre is set");
+  assert(first.snapshot.map.center !== null, "the centre is set");
   const statuses = new Set<string>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
   let terrain_urls = first.fetched.filter((f) => f.category === "terrain").map((f) => f.url);
@@ -192,21 +171,6 @@ Deno.test("kernel - the settings actions reach the snapshot", () => {
   assertEquals(turn().snapshot.settings.show_poi, before);
 });
 
-Deno.test("kernel - a search query becomes one search demand after its debounce, with the query and the centre in its URL", () => {
-  action({ type: "search_query", query: "city hall" });
-  assert(turn().snapshot.search.loading);
-  const start = performance.now();
-  let demand: Fetched | undefined;
-  while (!demand && performance.now() - start < 2000) {
-    demand = turn().fetched.find((f) => f.category === "search");
-  }
-  assert(demand, "the search was asked for");
-  assertEquals(demand.key, key_of(SEARCH_CATEGORY, fnv1a64_str("city hall")), "the query stands in the key as its hash");
-  assert(demand.url.includes("q=city+hall"), demand.url);
-  assert(demand.url.includes("near="), demand.url);
-  action({ type: "search_close" });
-});
-
 Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
   for (let i = 0; i < 200; i++) turn();
   const [top, requests] = [heap_row[HEAP_TOP], heap_row[HEAP_REQUESTS]];
@@ -222,28 +186,12 @@ Deno.test("kernel - heap requests along the event paths", () => {
     mark = heap_row[HEAP_REQUESTS];
     return n;
   };
-  action({ type: "search_query", query: "gangnam station" });
-  const typed = since();
-  search_body = new TextEncoder().encode(JSON.stringify([
-    { gers_id: "g1", kind: "poi", name: "Gangnam Station", category: "train_station", context: [{ name: "서울" }, { name: "강남구", common: { en: "Gangnam-gu" } }], lon: 127.02, lat: 37.49 },
-  ]));
-  const start = performance.now();
-  let asked = false;
-  while (!asked && performance.now() - start < 2000) asked = turn().fetched.some((f) => f.category === "search");
-  assert(asked, "the search was asked for");
-  const answered = since();
-  const shown = turn().snapshot.search.results.length;
-  const after = since();
-  action({ type: "search_close" });
-  search_body = null;
-  turn();
-  since();
   strobe_requests = 0;
   for (const k of Object.keys(answer_requests)) delete answer_requests[k];
   action({ type: "go_to", lon: 127.3, lat: 36.35 });
   let load = 0;
   for (let i = 0; i < 200; i++) turn();
   load = since();
-  console.log(`heap: typed ${typed}, fetched and answered ${answered}, the turn showing ${shown} ${after}, a far jump and its load ${load}`);
+  console.log(`heap: a far jump and its load ${load}`);
   console.log(`heap: the load's strobes ${strobe_requests}, its answers ${JSON.stringify(answer_requests)}`);
 });

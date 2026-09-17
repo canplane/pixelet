@@ -476,7 +476,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; enums?: true }[] = [
   { json: "crates/pxl/core/src/module/world/billboard/order.json", rs: "crates/pxl/core/src/module/world/billboard/order.rs" },
   { json: "crates/pxl/core/src/module/world/decor/kind.json", rs: "crates/pxl/core/src/module/world/decor/kind.rs", enums: true },
   { json: "crates/pxl/core/src/app/setting/schema.json", ts: "apps/web/src/app/setting/schema_spec.ts", rs: "crates/pxl/core/src/app/setting/schema_spec.rs" },
-  { json: "crates/pxl/core/src/module/world/poi/poi_theme.json", rs: "crates/pxl/core/src/module/world/poi/poi_theme_spec.rs" },
+  { json: "crates/pxl/core/src/module/world/poi/poi_theme.json", ts: "apps/web/src/module/world/poi/poi_theme_spec.ts", rs: "crates/pxl/core/src/module/world/poi/poi_theme_spec.rs" },
   { json: "crates/pxl/core/src/module/world/character/variant.json", ts: "apps/web/src/module/world/character/variant_spec.ts", rs: "crates/pxl/core/src/module/world/character/variant_spec.rs", enums: true },
   { json: "crates/pxl/core/src/module/world/terrain/config.json", rs: "crates/pxl/core/src/module/world/terrain/config_spec.rs" },
   { json: "crates/pxl/core/src/render/gpu/api.json", ts: "apps/web/src/wasm/gpu_spec.ts", rs: "crates/pxl/core/src/render/gpu/api_spec.rs" },

@@ -68,11 +68,12 @@ pub enum Cmd {
 
     // ---- the world's turn: the shell's events in, the kernel's asks out ----
     /// [app_env str, build_time str, build_id str, build_number str, published_tiles bool,
-    /// handheld bool] — the shell's boot: what the bundler defined and the device; the
-    /// object store loaded
+    /// handheld bool, geolocation bool, orientation bool, orientation_permission bool] — the
+    /// shell's boot: what the bundler defined and what the device offers; the object store
+    /// loaded
     WORLD_CREATE = 0x1b01,
-    /// [width f64, height f64, dpr f64, delta_s f64, geolocation bool, orientation bool,
-    /// orientation_permission bool, frame_ms f64, interactive bool, credits u32] — the
+    /// [width f64, height f64, dpr f64, delta_s f64, frame_ms f64, interactive bool,
+    /// credits u32] — the
     /// frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits; the viewport in
     /// CSS pixels, the frame interval and the turn as the host measured them. The turn
@@ -80,7 +81,7 @@ pub enum Cmd {
     /// command's own as a signal: [draws u32]
     WORLD_UPDATE = 0x1b03,
     /// [action str (JSON, app/shell.rs)] — the UI's action; the host rings the doorbell for it at once,
-    /// so what it asks of the host is heard inside the gesture that led to it
+    /// so what it asks of the host is heard before the call returns
     WORLD_ACTION = 0x1b11,
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
     INPUT_UPDATE = 0x1c03,
@@ -92,8 +93,8 @@ pub enum Cmd {
     INPUT_POINTER = 0x1c10,
     /// [delta_y f64]
     INPUT_WHEEL = 0x1c11,
-    /// no packet — the tracking button: back to the device when the map is off it, else
-    /// follow mode on (where the compass is listened to) or off again
+    /// [tracking u32 (0 recenter, 1 follow, 2 unfollow)] — the tracking button's press, as
+    /// the button showed it
     INPUT_TRACKING = 0x1c12,
     /// [lon f64, lat f64, altitude f64, accuracy f64, heading f64] — a GPS fix; NaN where the
     /// browser gave none

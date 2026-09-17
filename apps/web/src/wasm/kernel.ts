@@ -106,7 +106,7 @@ export function useKernel<T>(select: (s: UiSnapshot) => T): T {
 export type KernelAction = { type: string; [key: string]: unknown };
 
 /** Applies one UI action in the kernel, rung at once with no quota: what it
- * asks of the host is heard inside the call, including an unsubscribe sent
+ * asks of the host is heard inside the call, including the sensors' close sent
  * after the strobe has stopped. */
 export function kernel_action(action: KernelAction): void {
   CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))));
@@ -114,16 +114,19 @@ export function kernel_action(action: KernelAction): void {
   request_frame();
 }
 
-/** The tracking button. Entering follow mode needs the compass, so where iOS
- * gates it, the prompt runs here, inside the click, and the kernel hears the
- * answer before the press — the way a page's handler awaits
- * `requestPermission` and the browser only reports the outcome. */
-export async function kernel_tracking(entering_follow: boolean): Promise<void> {
-  if (entering_follow && !(await orientation_permit())) {
+/** The tracking button's press: crates/pxl/core/src/app/shell.rs's Tracking. */
+export const TRACKING_RECENTER = 0, TRACKING_FOLLOW = 1, TRACKING_UNFOLLOW = 2;
+
+/** The tracking button. Following needs the compass, so where iOS gates it,
+ * the prompt runs here, inside the click, and the kernel hears the answer
+ * before the press — the way a page's handler awaits `requestPermission` and
+ * the browser only reports the outcome. */
+export async function kernel_tracking(tracking: u32): Promise<void> {
+  if (tracking === TRACKING_FOLLOW && !(await orientation_permit())) {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  CORE_BUILD.send(0, Cmd.INPUT_TRACKING);
+  CORE_BUILD.send(0, Cmd.INPUT_TRACKING, packet((b) => b.u32(tracking)));
   strobe.input();
   request_frame();
 }
@@ -220,10 +223,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   CORE_BUILD.send(
     0,
     Cmd.WORLD_UPDATE,
-    packet((b) =>
-      b.f64(width).f64(height).f64(dpr()).f64(delta_s).bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
-        .f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)
-    ),
+    packet((b) => b.f64(width).f64(height).f64(dpr()).f64(delta_s).f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)),
   );
 }, (run) => requestAnimationFrame(run));
 
@@ -481,7 +481,7 @@ export function kernel_hold(tool: u32, value: u32, size: number): void {
 
 /**
  * The one frame loop over `element`: the kernel's turns, the pointer's events
- * on it, the tab's visibility and the sensors' subscription.
+ * on it, the tab's visibility and the sensors' open and close.
  */
 export function KernelDriver({ element }: { element: HTMLElement | null }): null {
   useLayoutEffect(() => {
@@ -545,12 +545,12 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     }).catch(() => {});
 
     send_rect(element);
-    kernel_action({ type: "sensors_subscribe", geolocation: "geolocation" in navigator, orientation: orientation_supported(), needs_permission: orientation_needs_permission() });
+    kernel_action({ type: "sensors_open" });
     strobe.start();
 
     return () => {
       strobe.stop();
-      kernel_action({ type: "sensors_unsubscribe" });
+      kernel_action({ type: "sensors_close" });
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
       globalThis.removeEventListener("pagehide", on_page_hide);
@@ -594,6 +594,9 @@ gpu_boot();
 
 CORE_BUILD.call(
   Cmd.WORLD_CREATE,
-  packet((b) => b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)),
+  packet((b) =>
+    b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)
+      .bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
+  ),
   (result) => result,
 );

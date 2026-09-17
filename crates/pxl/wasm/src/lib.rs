@@ -512,22 +512,14 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::WORLD_UPDATE => {
             let f = fields(pkt)?;
-            let platform = pxl_core::module::world::world::Platform {
-                geolocation: bool_at(&f, 4)?,
-                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
-                    supported: bool_at(&f, 5)?,
-                    needs_permission: bool_at(&f, 6)?,
-                },
-            };
             let host = pxl_core::module::world::world::HostFrame {
                 width: number_at(&f, 0)?,
                 height: number_at(&f, 1)?,
                 dpr: number_at(&f, 2)?,
                 delta: number_at(&f, 3)?,
-                platform,
-                frame_ms: number_at(&f, 7)?,
-                interactive: bool_at(&f, 8)?,
-                credits: u32_at(&f, 9)?,
+                frame_ms: number_at(&f, 4)?,
+                interactive: bool_at(&f, 5)?,
+                credits: u32_at(&f, 6)?,
             };
             pxl_core::module::world::world::world_frame_asked(host);
             Ok(Some(0))
@@ -542,6 +534,13 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 published_tiles: bool_at(&f, 4)?,
             });
             pxl_core::sys::host::set_handheld(bool_at(&f, 5)?);
+            pxl_core::module::world::world::set_world_platform(pxl_core::module::world::world::Platform {
+                geolocation: bool_at(&f, 6)?,
+                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
+                    supported: bool_at(&f, 7)?,
+                    needs_permission: bool_at(&f, 8)?,
+                },
+            });
             pxl_core::module::world::object::store::load();
             Ok(Some(0))
         }
@@ -602,7 +601,12 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
             Ok(Some(0))
         }
         Cmd::INPUT_TRACKING => {
-            pxl_core::app::shell::tracking_action();
+            use pxl_core::app::shell::{tracking_action, Tracking};
+            tracking_action(match u32_at(&fields(pkt)?, 0)? {
+                0 => Tracking::Recenter,
+                1 => Tracking::Follow,
+                _ => Tracking::Unfollow,
+            });
             pxl_core::module::world::change::request_world_tick();
             Ok(Some(0))
         }
