@@ -2,9 +2,8 @@
 
 //! The decor layer: what real GLB models stand where. The first half is the
 //! kinds, taught to the scheduler as data — each kind's extent, density, the
-//! channels it scatters on, its variants and their palette rows — and the
-//! falloff by tier the build uses; the second is the build, a chunk's decor at
-//! a tier.
+//! channels it scatters on and its variants — and the falloff by tier the
+//! build uses; the second is the build, a chunk's decor at a tier.
 //!
 //! No decoration is ever stored: scatter.rs's placement is a pure function of
 //! terrain + a fixed seed, recomputed on demand. A cell that currently holds a
@@ -20,20 +19,17 @@
 //! build next to the scattered instances, not kept in a separate store.
 
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
-use pxl_shared::record::palette::PaletteTable;
-use pxl_shared::record::shipped::shipped_palette;
 use pxl_shared::spec::cell::{decor_num_id, DecorId};
 use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
 use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use super::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::lib::env::route::asset_url;
+use crate::lib::env::route::{shipped_asset, shipped_asset_url};
 use crate::module::world::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::module::world::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 use crate::render::layer::terrain::adapter::{ChunkSample, PageView};
 use crate::render::lod::{LodStep, TARGET_CELL_PX};
-use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
@@ -86,59 +82,50 @@ pub struct DecorVariantAsset {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecorKindBundle {
-    /// The kind's name — the palette group, and the draw census's tag.
+    /// The kind's name — kind.json's key, and the draw census's tag.
     pub kind: &'static str,
     pub seed: DecorKindSeed,
     /// Where the kind stands, as the scheduler is taught it.
     pub rules: DecorRules,
-    /// One entry per variant_count, from the palette's rows for this kind —
+    /// One entry per model kind.json lists for this kind, in its order —
     /// each variant carries its own skin: a kind's variants can (and for trees,
     /// do) span more than one pack, each with its own colormap atlas.
     pub variants: Vec<DecorVariantAsset>,
     /// Which object store decor value a user-placed instance of this kind is
     /// tagged with — none for a kind with no user-placeable equivalent yet.
     pub decor_id: Option<DecorId>,
-    /// The palette rows of this kind's variants, in variant order.
-    pub palette_rows: Vec<u32>,
+    /// The largest dimension over every variant's model, in world units: what
+    /// the range criterion reads, since it asks how large the kind is to the eye
+    /// and a kind is drawn as any of its variants.
+    pub extent: f64,
 }
 
-static PALETTE: Global<PaletteTable> = Global::new();
-
-/// The shipped palette, decoded once.
-pub fn palette() -> &'static PaletteTable {
-    PALETTE.get(shipped_palette)
-}
-
-/// Binds a bundle to the palette: its variants — the palette's model rows for
-/// this kind, in row order, each a model and a skin fetched by content key.
-/// The seed's variant_count is checked against the palette so the scatter's
-/// pick and the palette's list cannot drift apart silently.
-pub fn bind_palette(kind: &'static str, seed: DecorKindSeed, rules: DecorRules, decor_id: Option<DecorId>) -> DecorKindBundle {
-    let p = palette();
-    let rows: Vec<u32> = p.rows_of_group(kind).unwrap_or_default().into_iter().filter(|&row| p.model_key_of(row).is_ok_and(|k| !k.is_empty())).collect();
-    assert_eq!(rows.len() as u32, seed.variant_count, "decor: palette lists {} models for {kind}, kind.json's variant_count is {}", rows.len(), seed.variant_count);
-    let variants = rows
+/// Binds a kind's seed and rules to its models: each variant a model and a
+/// skin fetched by content key, `models` and `skins` row for row as kind.json
+/// lists them, and the kind's extent measured over all of them.
+pub fn bind_models(kind: &'static str, seed: DecorKindSeed, rules: DecorRules, models: &[&str], skins: &[&str], decor_id: Option<DecorId>) -> DecorKindBundle {
+    assert_eq!(models.len(), skins.len(), "decor: kind.json lists {} models for {kind} and {} skins", models.len(), skins.len());
+    let variants = models
         .iter()
-        .map(|&row| DecorVariantAsset {
-            model_url: asset_url(&p.model_key_of(row).unwrap_or_default()).to_string(),
-            skin_url: asset_url(&p.skin_key_of(row).unwrap_or_default()).to_string(),
+        .zip(skins)
+        .map(|(model, skin)| DecorVariantAsset {
+            model_url: shipped_asset_url(model),
+            skin_url: shipped_asset_url(skin),
         })
         .collect();
+    // Math.max: a NaN extent stays NaN rather than being dropped.
+    let extent = models
+        .iter()
+        .flat_map(|m| shipped_asset(m).extent.unwrap_or([0.0; 3]))
+        .fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) });
     DecorKindBundle {
         kind,
         seed,
         rules,
         variants,
         decor_id,
-        palette_rows: rows,
+        extent,
     }
-}
-
-/// The extent the range criterion reads: the largest dimension over every
-/// variant, since the criterion asks how large the kind is to the eye and a
-/// kind is drawn as any of its variants.
-pub fn kind_extent(bundle: &DecorKindBundle) -> f64 {
-    bundle.palette_rows.iter().map(|&row| palette().extent_max(row) as f64).fold(0.0, f64::max)
 }
 
 /// Teaches the scheduler every kind, in bundle order — the order of the groups
@@ -153,7 +140,7 @@ pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
             density: bundle.seed.density,
             variant_count: bundle.seed.variant_count,
             align_transport: bundle.seed.orientation == DecorOrientationMode::AlignTransport,
-            extent: kind_extent(bundle),
+            extent: bundle.extent,
             decor_value: bundle.decor_id.map(decor_num_id),
             rules: [Rule::Any; 4],
         });

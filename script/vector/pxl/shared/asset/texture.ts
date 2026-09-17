@@ -1,9 +1,9 @@
-// script/vector/pxl/shared/record/texture.ts
+// script/vector/pxl/shared/asset/texture.ts
 //
 // The texture key and sheet tile of every cube type on both faces, for
-// crates/pxl/shared/src/record/texture.test.rs.
+// crates/pxl/shared/src/asset/texture.test.rs.
 
-import { SHIPPED_SHEET, shipped_texture_key, shipped_texture_tile } from "@pxl/shared/record/texture.ts";
+import { SHIPPED_SHEET, shipped_texture_key, shipped_texture_tile } from "@pxl/shared/asset/texture.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 export function vectors() {

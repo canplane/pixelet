@@ -12,7 +12,7 @@
 //! different texel and the ground crawls. WebGPU has no generateMipmap, so the
 //! chain is drawn on the device, a level from the one above (Mips).
 
-use pxl_shared::record::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
+use pxl_shared::asset::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
 use pxl_shared::spec::cell::{cube_ids, cube_rgb};
 
 use super::api::{object, texture_usage, GpuApi};

@@ -19,8 +19,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_shared::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
 use pxl_shared::bake::ground::shown_ground;
-use pxl_shared::record::placement::{encode_placements, Placement, PlacementTable};
-use pxl_shared::record::table::RecordSource;
 use pxl_shared::spec::cell::{
     cube_types, decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, DecorId, PlaceableCube,
 };
@@ -33,8 +31,8 @@ use pxl_shared::spec::space::sparse_tree::mem;
 use pxl_shared::spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_core::kit::array::{F32Array, U32Array};
 use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
-use xpute_core::kit::hash::fnv1a64_bytes;
 use xpute_core::sys::error::MarshalError;
 
 use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
@@ -87,6 +85,11 @@ pub type ObjectAir = ObjectLayerEntry;
 /// shared fields (i/f/size/at).
 pub type OccupiedEntry = ObjectLayerEntry;
 
+// v9 (2026-09-17): a page is five bare lanes — x, y, z, size, value — with no
+// record header, column names or id and heading lanes (the persistence
+// section below). A v8 blob is a self-describing table this code does not
+// read.
+//
 // v8 (2026-09-17): a terrain-styled cube's leaf value is its channel and its
 // type (spec/cell's TERRAIN_STYLE_BASE), not a number counted out as the
 // catalog was walked. A v7 blob's terrain-styled values are 1..32 in walk
@@ -99,7 +102,7 @@ pub type OccupiedEntry = ObjectLayerEntry;
 // Not migrated. Bump this again whenever a future change makes an older
 // entry's encoding mean something different from what it meant when it was
 // written.
-pub const OBJECT_STORAGE_VERSION: u32 = 8;
+pub const OBJECT_STORAGE_VERSION: u32 = 9;
 
 fn storage_key() -> String {
     format!("pxl:object:v{OBJECT_STORAGE_VERSION}")
@@ -676,19 +679,17 @@ pub fn decor_col_revision(col_idx: IVec) -> u32 {
 
 // ---- Persistence ----
 
-// One Placement record per page, in a container that names the page:
-//   [page_idx u64, placements pkt, page_idx u64, placements pkt, ...]
-// The record is pxl_shared::record::placement's — the one form every placed
-// thing has — with positions page-local to FROM_L3_IDX(page_idx). A row's
-// value is the catalog value the store writes (a block colour, AIR, a decor
-// kind), which is its palette id; its id is the hash of the entry's address.
-// The store carries no heading: a placed decor's facing is derived from its
-// position (decor_kinds.rs's user_decor_pick), so the row's heading is
-// written as zero and not read back.
+// A page's entries as five lanes, in a container that names the page:
+//   [[page_idx u64, x f32[], y f32[], z f32[], size f32[], value u32[]], ...]
+// Positions are page-local to FROM_L3_IDX(page_idx); a value is the catalog
+// value the store writes (a block colour, AIR, a decor kind). Nothing else is
+// kept: a placed decor's facing is derived from its position
+// (decor_layer.rs's user_decor_pick), and an entry's address is rebuilt from
+// where it lies. The layout is the code below and the version in the storage
+// key; a blob from another layout is under another key and is never read.
 //
 // Positions round-trip exactly: the store's steps are binary fractions of a
-// cell, and a page-local f32 holds any such value under 1024
-// (issue/20260913-everything-is-a-file-the-placement-and-the-palette.md).
+// cell, and a page-local f32 holds any such value under 1024.
 
 /// The columns holding objects, in the kernel's order — for a walk over
 /// everything placed, which is what a save is.
@@ -697,27 +698,33 @@ pub fn object_cols() -> Vec<IVec> {
     (0..objects.chunk_count()).map(|i| objects.chunk_key(i)).collect()
 }
 
-/// The id a stored row carries: the FNV-1a of the entry's address, which is
-/// what issue/20260913-everything-is-a-file-the-placement-and-the-palette.md
-/// has an atom's identity be. Written for the record's id lane and never read
-/// back — a load rebuilds the address from the position the row also carries.
-fn id_of(at: EntryAt) -> u64 {
-    let mut bytes = [0u8; 16];
-    bytes[..8].copy_from_slice(&at.col_idx.to_le_bytes());
-    bytes[8..12].copy_from_slice(&at.band_idx.to_le_bytes());
-    bytes[12..].copy_from_slice(&at.pos.to_le_bytes());
-    fnv1a64_bytes(&bytes)
+/// One page's entries, a lane a field.
+#[derive(Default)]
+struct PageRows {
+    x: Vec<f32>,
+    y: Vec<f32>,
+    z: Vec<f32>,
+    size: Vec<f32>,
+    value: Vec<u32>,
+}
+
+fn f32_lane(v: &[f32]) -> F32Array {
+    let a = F32Array::new(v.len());
+    for (i, x) in v.iter().enumerate() {
+        a.put(i, *x);
+    }
+    a
 }
 
 pub fn encode_objects() -> Result<String, MarshalError> {
-    let mut by_page: Vec<(IVec, Vec<Placement>)> = Vec::new();
+    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
     for col_idx in object_cols() {
         let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
         let page_base = FROM_L3_IDX(page_idx);
         let slot = match by_page.iter().position(|(p, _)| *p == page_idx) {
             Some(slot) => slot,
             None => {
-                by_page.push((page_idx, Vec::new()));
+                by_page.push((page_idx, PageRows::default()));
                 by_page.len() - 1
             }
         };
@@ -730,41 +737,35 @@ pub fn encode_objects() -> Result<String, MarshalError> {
                     i: ivec::sub(corner.i, page_base),
                     f: corner.f,
                 };
-                rows.push(Placement {
-                    id: entry.at().map_or(0, id_of),
-                    x: pvf3::to_real(pvf3::X(&local)),
-                    y: pvf3::to_real(pvf3::Y(&local)),
-                    z: pvf3::to_real(pvf3::Z(&local)),
-                    size: entry.size,
-                    heading: 0.0,
-                    value: entry.state,
-                    scale: None,
-                    rotation: None,
-                    tags: None,
-                });
+                rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
+                rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
+                rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
+                rows.size.push(entry.size as f32);
+                rows.value.push(entry.state);
             },
             false,
         );
     }
-    let mut packets = Vec::new();
-    for (page_idx, rows) in &by_page {
-        if !rows.is_empty() {
-            packets.push((*page_idx, encode_placements(rows)?));
-        }
-    }
     let mut tree = TreeView::new();
-    let mut failed = None;
     tree.branch(Some(&mut |b| {
-        for (page_idx, pkt) in &packets {
-            b.u64(Some(*page_idx));
-            if let Err(e) = b.graft(pkt.clone()) {
-                failed = Some(e);
+        for (page_idx, rows) in &by_page {
+            if rows.value.is_empty() {
+                continue;
             }
+            let value = U32Array::new(rows.value.len());
+            for (i, v) in rows.value.iter().enumerate() {
+                value.put(i, *v);
+            }
+            b.branch(Some(&mut |p| {
+                p.u64(Some(*page_idx))
+                    .f32_array(Some(&f32_lane(&rows.x)))
+                    .f32_array(Some(&f32_lane(&rows.y)))
+                    .f32_array(Some(&f32_lane(&rows.z)))
+                    .f32_array(Some(&f32_lane(&rows.size)))
+                    .u32_array(Some(&value));
+            }));
         }
     }));
-    if let Some(e) = failed {
-        return Err(e);
-    }
     let pkt = encoder().encode(
         &tree,
         TreeEncoderOptions {
@@ -780,18 +781,17 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     let root = TreeReader::new(bytes)?.read_branch()?;
     store_state().restoring = true;
     let result = (|| {
-        let mut k = 0;
-        while k + 1 < root.len {
-            let page_idx = root.at(k)?.get_bigint()? as u64;
-            let page_base = FROM_L3_IDX(page_idx);
-            let table = PlacementTable::new(RecordSource::Branch(root.at_branch(k + 1)?))?;
-            for r in 0..table.count as usize {
-                let local = [table.x.get(r) as f64, table.y.get(r) as f64, table.z.get(r) as f64];
+        for k in 0..root.len {
+            let page = root.at_branch(k)?;
+            let page_base = FROM_L3_IDX(page.at(0)?.get_bigint()? as u64);
+            let (x, y, z) = (page.at(1)?.get_array::<f32>()?, page.at(2)?.get_array::<f32>()?, page.at(3)?.get_array::<f32>()?);
+            let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
+            for r in 0..value.length() {
+                let local = [x.get(r) as f64, y.get(r) as f64, z.get(r) as f64];
                 let mut corner = PVF3::default();
                 local_world_to_canonical(&mut corner, &local, page_base);
-                write_object_value(&corner, table.size.get(r) as f64, table.value.get(r));
+                write_object_value(&corner, size.get(r) as f64, value.get(r));
             }
-            k += 2;
         }
         Ok(())
     })();

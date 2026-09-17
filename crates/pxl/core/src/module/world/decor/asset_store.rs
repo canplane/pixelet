@@ -22,7 +22,7 @@ use crate::render::gpu::model_asset::register_model;
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
 
-/// Variants a kind has room for; the palette's largest kind has nine.
+/// Variants a kind has room for; kind.json's largest kind has nine.
 const VARIANTS: usize = 16;
 
 #[derive(Clone)]

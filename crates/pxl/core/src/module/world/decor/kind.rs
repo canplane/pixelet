@@ -34,10 +34,14 @@ pub mod decor_kinds {
         /// spacing (which a much higher density would read as, given every eligible
         /// cell is only 1u wide).
         pub const density: f64 = 0.04;
-        /// The palette's model rows for "tree" (5 fantasy-town-kit + 4
-        /// graveyard-kit pines) — a fact of this spec, which bind_palette asserts
-        /// the palette agrees with.
-        pub const variant_count: u32 = 9;
+        /// The kind's variants, each a model by its path under asset/, in the
+        /// order the scatter picks among them: the fantasy town kit's five trees
+        /// and the graveyard kit's four pines.
+        pub const models: &[&str] = &["decor/kenney_fantasy_town/tree.glb", "decor/kenney_fantasy_town/tree-high.glb", "decor/kenney_fantasy_town/tree-crooked.glb", "decor/kenney_fantasy_town/tree-high-round.glb", "decor/kenney_fantasy_town/tree-high-crooked.glb", "decor/kenney_graveyard_kit/pine.glb", "decor/kenney_graveyard_kit/pine-crooked.glb", "decor/kenney_graveyard_kit/pine-fall.glb", "decor/kenney_graveyard_kit/pine-fall-crooked.glb"];
+        /// Each variant's colormap, row for row with `models`: the Kenney packs keep
+        /// the texture outside the glb and share it across the pack, and a kind's
+        /// variants can come from more than one pack.
+        pub const skins: &[&str] = &["decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_fantasy_town/colormap.png", "decor/kenney_graveyard_kit/colormap.png", "decor/kenney_graveyard_kit/colormap.png", "decor/kenney_graveyard_kit/colormap.png", "decor/kenney_graveyard_kit/colormap.png"];
         pub const orientation: &str = "random";
         pub const decor_id: &str = "tree";
         pub mod rules {
@@ -47,7 +51,7 @@ pub mod decor_kinds {
             pub const transport: &str = "void";
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
         }
-        pub const KEYS: &[&str] = &["tag", "density", "variant_count", "orientation", "decor_id", "rules"];
+        pub const KEYS: &[&str] = &["tag", "density", "models", "skins", "orientation", "decor_id", "rules"];
     }
     /// Small boats on open water. Open river/lake water only — WETLAND is
     /// excluded (too shallow/marshy for a boat to sit in), and
@@ -63,8 +67,8 @@ pub mod decor_kinds {
         /// to 1/4 of the first-pass value (0.015) after that read as boats covering
         /// the water, not scattered on it.
         pub const density: f64 = 0.002;
-        /// The palette's model rows for "boat".
-        pub const variant_count: u32 = 4;
+        pub const models: &[&str] = &["decor/kenney_watercraft_pack/boat-row-small.glb", "decor/kenney_watercraft_pack/boat-fishing-small.glb", "decor/kenney_watercraft_pack/boat-sail-a.glb", "decor/kenney_watercraft_pack/boat-speed-a.glb"];
+        pub const skins: &[&str] = &["decor/kenney_watercraft_pack/colormap.png", "decor/kenney_watercraft_pack/colormap.png", "decor/kenney_watercraft_pack/colormap.png", "decor/kenney_watercraft_pack/colormap.png"];
         pub const orientation: &str = "random";
         pub mod rules {
             pub const land: &str = "any";
@@ -73,7 +77,7 @@ pub mod decor_kinds {
             pub const transport: &str = "void";
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
         }
-        pub const KEYS: &[&str] = &["tag", "density", "variant_count", "orientation", "rules"];
+        pub const KEYS: &[&str] = &["tag", "density", "models", "skins", "orientation", "rules"];
     }
     /// Ambient cars on major roads. Motorway/primary/secondary only,
     /// deliberately: ordinary neighborhood streets and pedestrian ways
@@ -91,8 +95,8 @@ pub mod decor_kinds {
         /// Much sparser than trees/boats: a highway with a car every couple of
         /// cells would read as gridlock, not ambient traffic.
         pub const density: f64 = 0.004;
-        /// The palette's model rows for "car".
-        pub const variant_count: u32 = 5;
+        pub const models: &[&str] = &["decor/kenney_car_kit/sedan.glb", "decor/kenney_car_kit/suv.glb", "decor/kenney_car_kit/van.glb", "decor/kenney_car_kit/hatchback-sports.glb", "decor/kenney_car_kit/taxi.glb"];
+        pub const skins: &[&str] = &["decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png", "decor/kenney_car_kit/colormap.png"];
         pub const orientation: &str = "align_transport";
         pub mod rules {
             pub const land: &str = "any";
@@ -101,7 +105,7 @@ pub mod decor_kinds {
             pub const transport: &[&str] = &["road_motorway", "road_primary", "road_secondary"];
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
         }
-        pub const KEYS: &[&str] = &["tag", "density", "variant_count", "orientation", "rules"];
+        pub const KEYS: &[&str] = &["tag", "density", "models", "skins", "orientation", "rules"];
     }
     /// Occasional trains on rail lines. rail_main only (not RAIL_SUBWAY —
     /// that's underground, wrong context for a surface-scattered prop). Same
@@ -112,8 +116,8 @@ pub mod decor_kinds {
         /// Very sparse, deliberately — trains are meant to read as occasional, not
         /// as a train sitting on every visible stretch of track.
         pub const density: f64 = 0.004;
-        /// The palette's model rows for "train".
-        pub const variant_count: u32 = 4;
+        pub const models: &[&str] = &["decor/kenney_train_kit/train-locomotive-a.glb", "decor/kenney_train_kit/train-locomotive-b.glb", "decor/kenney_train_kit/train-diesel-a.glb", "decor/kenney_train_kit/train-electric-city-a.glb"];
+        pub const skins: &[&str] = &["decor/kenney_train_kit/colormap.png", "decor/kenney_train_kit/colormap.png", "decor/kenney_train_kit/colormap.png", "decor/kenney_train_kit/colormap.png"];
         pub const orientation: &str = "align_transport";
         pub mod rules {
             pub const land: &str = "any";
@@ -122,7 +126,7 @@ pub mod decor_kinds {
             pub const transport: &[&str] = &["rail_main"];
             pub const KEYS: &[&str] = &["land", "water", "structure", "transport"];
         }
-        pub const KEYS: &[&str] = &["tag", "density", "variant_count", "orientation", "rules"];
+        pub const KEYS: &[&str] = &["tag", "density", "models", "skins", "orientation", "rules"];
     }
     pub const KEYS: &[&str] = &["tree", "boat", "car", "train"];
 }

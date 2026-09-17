@@ -1,11 +1,11 @@
-// pxl_shared/record/ingested.test.rs
+// pxl_shared/asset/ingested.test.rs
 // (no pair: ingested.ts is generated and has no test file)
 
 use xpute_core::sys::vector::Vector;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/record/ingested.tsv");
+const VECTOR: &str = include_str!("../../vector/asset/ingested.tsv");
 
 #[test]
 fn the_generated_table_is_the_typescript_s_row_for_row() {

@@ -73,36 +73,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   between the powers of two, or a large-block region — once the pressure
   has been seen doing its work.
 
-- **"Everything is a file": the Placement and the palette.** Decided
-  2026-09-13, first:
-  [20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md).
-  One `Placement` record for every placed thing (id u64, page-local
-  f32 position, span, ENU heading, palette id; ancillary scale,
-  rotation, tags) and one global `Palette` record whose rows point at
-  models by content hash in the bucket. Done 2026-09-13: the column layer
-  (`record/table.ts`), both records with tests, the shipped palette as a
-  record built from the cell constants with every model's measured
-  extent, the decor bundles bound to it, and the object store's persisted
-  form as one `Placement` record per page in a page-keyed container (v7;
-  positions round-trip exactly, since the store's steps are binary
-  fractions and a page-local `f32` holds them). Left, in order:
-  - **The scatter emits `Placement`** when something across a boundary
-    reads it — a server; until then the instance lanes are the same
-    columns and a packet would be a copy nobody opens.
-  - **The ingest route** (`POST /api/models`): validate, hash, measure,
-    store, insert a palette row from `USER_ID_BASE`. The bucket path it
-    stands on is done (2026-09-13, evening): every shipped model, skin
-    and texture is `asset/<sha256>` in the bucket, ingested from the
-    top-level `asset/` tree by `deno task ingest:asset`, and the shipped
-    palette's `model_key`/`skin_key`/`model_hash` are filled from the
-    generated table.
-
 - **XTP: a string-sequence leaf.** A `str` sequence leaf — one UTF-8 blob
   plus a u32 offsets lane — in place of one `str` node per string. A new
   type code, so existing packets still read. Per string today is an 8-byte
   header, a NUL and word padding (the POI repack: 60 MB gzipped against
-  51 MB of JSON) and one node object at encode. The column-table layer it
-  was paired with is built (`record/table.ts`).
+  51 MB of JSON) and one node object at encode.
 - **XTP encoder without per-leaf objects.** A node object per leaf and a
   closure per scalar at encode; mechanical, format-unchanged. Measured on
   the rings (2026-09-14,
@@ -139,8 +114,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   - `lower` and `corner` are inverses — `pvf3::sh` by `-OBJECT_LAYOUT.min`
     one way and `+min` the other.
 
-  What is not ruled out: `x`/`y`/`z` are `F32Array` lanes
-  (`record/placement.rs`), so a coordinate's precision is f32's at page-local
+  What is not ruled out: `x`/`y`/`z` are `f32` lanes in the saved form
+  (`object/store.rs`), so a coordinate's precision is f32's at page-local
   magnitudes; and a chunk's entry lanes hold one entry per cell for a leaf
   larger than one, each carrying `entry.size`, so what a large leaf is on the
   way back out is worth checking. Fifteen becoming thirteen is two placements
@@ -191,7 +166,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (`render/gpu/renderer.rs` twice, `render/gpu/api.rs`, the outbox's full
   spill) — what those want is to refuse rather than trap, the way the decor
   scratch and the mount pass were made to, not a number nobody reads.
-  
+
 - **Compression, chosen by traffic.** Recorded 2026-09-13, not scheduled:
   [20260913-compression-by-traffic.md](./20260913-compression-by-traffic.md).
   Brotli q11 takes a third off the baked terrain pages and a fifth off POI

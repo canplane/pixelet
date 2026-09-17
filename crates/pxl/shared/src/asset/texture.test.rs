@@ -1,12 +1,12 @@
-// pxl_shared/record/texture.test.rs
-// (no pair: texture.ts's tests are record.test.ts, mirrored beside this)
+// pxl_shared/asset/texture.test.rs
+// (no pair: texture.ts's tests are asset.test.ts, mirrored beside this)
 
 use xpute_core::sys::vector::Vector;
 
 use super::*;
 use crate::spec::cell::cube::cube_types;
 
-const VECTOR: &str = include_str!("../../vector/record/texture.tsv");
+const VECTOR: &str = include_str!("../../vector/asset/texture.tsv");
 
 #[test]
 fn the_texture_keys_and_tiles_are_the_typescript_s() {

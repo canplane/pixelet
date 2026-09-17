@@ -1,10 +1,10 @@
-// script/vector/pxl/shared/record/ingested.ts
+// script/vector/pxl/shared/asset/ingested.ts
 //
 // The ingested table and the sheet, row for row, so the generated Rust
 // table is held to the generated TypeScript one, for
-// crates/pxl/shared/src/record/ingested.test.rs.
+// crates/pxl/shared/src/asset/ingested.test.rs.
 
-import { INGESTED, SHEET } from "@pxl/shared/record/ingested.ts";
+import { INGESTED, SHEET } from "@pxl/shared/asset/ingested.ts";
 import { f64_bits } from "../../../../vector.ts";
 
 export function vectors() {

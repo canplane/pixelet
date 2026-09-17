@@ -5,6 +5,7 @@
 use core::fmt::{self, Write};
 
 pub use pxl_shared::bake::published::{BakeKind as TileKind, PUBLISHED_VERSION};
+use pxl_shared::asset::ingested::{IngestedAsset, INGESTED};
 
 /// Everything the server answers. The app routes on paths of its own, so a
 /// relay tells a deep link from a server request by this root alone.
@@ -60,6 +61,21 @@ pub fn asset_url(key: &str) -> Url {
     let mut url = Url::new();
     let _ = write!(url, "{TILE_ROOT}/{key}");
     url
+}
+
+/// A shipped asset's row, by its path under asset/: the bucket key the asset
+/// ingest gave its bytes, their size and a model's extent. A path the ingest
+/// has not seen is a build that shipped a catalog ahead of its assets.
+pub fn shipped_asset(path: &str) -> IngestedAsset {
+    match INGESTED.get(path) {
+        Some(row) => *row,
+        None => panic!("{path} is not in pxl_shared::asset::ingested — run the asset ingest"),
+    }
+}
+
+/// Where a shipped asset is fetched from, by its path under asset/.
+pub fn shipped_asset_url(path: &str) -> Url {
+    asset_url(shipped_asset(path).key)
 }
 
 pub const SEARCH_URL: &str = "/api/search";

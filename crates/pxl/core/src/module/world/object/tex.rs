@@ -1,6 +1,6 @@
 // pxl_core/module/world/object/tex.rs
 
-use pxl_shared::record::texture::{shipped_texture_key, CubeFace};
+use pxl_shared::asset::texture::{shipped_texture_key, CubeFace};
 use pxl_shared::spec::cell::{placeable_cube_id, PlaceableCube};
 
 /// The shipped image a cube of this kind renders with on this face. A cube's
